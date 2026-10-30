@@ -42,6 +42,8 @@ type GateConfig struct {
 	TDD bool
 	// Remote is git.remote: where the gate and the train fetch from and push to.
 	Remote string
+	// RemoteErr is an invalid git.remote: nothing runs git on it.
+	RemoteErr error
 
 	legacy     bool       // Full came from refactor.verifyCommands
 	legacyOnce *sync.Once // shared by copies, so the warning prints once per read
@@ -84,7 +86,6 @@ func (e Env) GateConfig(root string) GateConfig {
 func ParseGateConfig(cfg any) GateConfig {
 	labels := roundcfg.LabelsOf(cfg)
 	c := GateConfig{
-		Remote:          config.GitRemote(cfg),
 		E2E:             commandList(cfg, "test.e2e"),
 		CIChecks:        commandList(cfg, "test.ciChecks"),
 		Tracker:         tracker.SettingsFromConfig(cfg),
@@ -100,6 +101,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
+	c.Remote, c.RemoteErr = config.GitRemote(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)

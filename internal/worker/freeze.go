@@ -145,7 +145,10 @@ func (e Env) recoveryHead(ctx context.Context, root, base string) (string, error
 	if code != 0 {
 		return "", fail(exitcode.ExitResolution, "cannot resolve base HEAD")
 	}
-	name := e.Remote(root)
+	name, err := e.Remote(root)
+	if err != nil {
+		return "", fail(exitcode.ExitRefused, err.Error())
+	}
 	if _, code := e.runGit(ctx, root, "remote", "get-url", name); code == 0 {
 		if _, code := e.runGit(ctx, root, "fetch", name, base); code != 0 {
 			return "", fail(exitcode.ExitRefused, "cannot fetch frozen base; freeze kept")

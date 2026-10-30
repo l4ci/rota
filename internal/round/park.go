@@ -17,6 +17,10 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
+// remote is the configured git remote (git.remote, origin when unset), refused
+// when it is not a valid remote name.
+func (e Env) remote(root string) (string, error) { return config.GitRemote(e.Worker.Config(root)) }
+
 // Parked is what Park did to a slot's worktree.
 type Parked struct {
 	Branch   string // the work branch the slot was on (or recorded)
@@ -108,7 +112,10 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 		p.Head = headOf("HEAD")
 		return p, nil
 	}
-	remote := config.GitRemote(e.Worker.Config(root))
+	remote, err := e.remote(root)
+	if err != nil {
+		return p, unavailable("%v", err)
+	}
 	if _, _, code := e.gitOut(ctx, wt, "rev-parse", "--verify", "-q", "refs/heads/"+branch); code != 0 {
 		return p, unavailable("branch %s of slot %s does not exist", branch, name)
 	}

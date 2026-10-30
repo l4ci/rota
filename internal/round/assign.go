@@ -12,7 +12,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
@@ -686,6 +685,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if err := e.roundCfgErr(); err != nil {
 		return res, err
 	}
+	if _, err := e.remote(root); err != nil {
+		return res, blocked(BlockFetch, "%v", err)
+	}
 	frozen, err := landfreeze.Load(ctx, e.Git, root)
 	if err != nil {
 		return res, blocked(blockedby.Freeze, "%s", landfreeze.UnreadableLine(err))
@@ -1324,7 +1326,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, decisionContext: run.decisionContext, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Remote: config.GitRemote(e.Worker.Config(root)), Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

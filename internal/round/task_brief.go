@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
@@ -26,10 +25,15 @@ func (e Env) taskBrief(ctx context.Context, root string, be Board, in taskBriefS
 	if len(in.bundle) > 0 {
 		bundle = bundleBrief(be, append([]string{in.id}, in.bundle...))
 	}
+	remote, _ := e.remote(root) // Assign and Transfer refuse an invalid git.remote before a brief is built
+	in.tier.Remote = remote
 	text := pointerBrief(in.agent, in.id, in.branch, in.contract, in.siblings, in.decisions, in.decisionContext,
 		outOfScope(be, in.id), touches(be, in.id), steps, withheld, bundle, in.tier)
 	if hb := latestHandoffBranch(be, in.id); hb != "" {
-		text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
+		if remote == "" {
+			remote = "origin"
+		}
+		text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (%s/%s); fetch it before you start over.\n", hb, remote, hb)
 	}
 	return text
 }
@@ -74,7 +78,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	}
 	o.Task, o.Branch = s.Task(), s.Branch()
 	t := tierBrief{Kind: o.Kind, Tier: s.Tier(), Model: o.Model, Default: set.Tier, Reason: s.TierReason(),
-		Table: set.Models[o.Kind], Pick: pick.String(), Decision: decision, Smoke: s.SmokeSection(), Attempt: s.Attempt(), FullOnly: set.FullOnly, TDD: set.TDD, Remote: config.GitRemote(e.Worker.Config(root))}
+		Table: set.Models[o.Kind], Pick: pick.String(), Decision: decision, Smoke: s.SmokeSection(), Attempt: s.Attempt(), FullOnly: set.FullOnly, TDD: set.TDD}
 	if bo := reg.BestOf(s.Task()); bo != nil {
 		for _, other := range bo.Attempts {
 			if other.Slot != o.Slot {

@@ -644,6 +644,9 @@ func (g *gate) stepReleaseExternal() error {
 
 // stepForge picks the provider and opens its forge.
 func (g *gate) stepForge() (bool, error) {
+	if err := g.in.cfg.RemoteErr; err != nil {
+		return true, fail(exitcode.ExitRefused, err.Error())
+	}
 	if err := g.in.cfg.sourceErr; err != nil {
 		return true, fail(exitcode.ExitInternal, err.Error())
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/worker"
@@ -96,7 +95,10 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	if want == "" {
 		want = s.HomeBase()
 	}
-	remote := config.GitRemote(e.Worker.Config(root))
+	remote, err := e.remote(root)
+	if err != nil {
+		return err
+	}
 	if f.to != "" {
 		if _, err := e.fetchBase(ctx, root, f.to); err != nil {
 			return err
