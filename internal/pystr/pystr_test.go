@@ -76,3 +76,15 @@ func TestSplitCSV(t *testing.T) {
 		t.Errorf("empty = %#v, want non-nil empty", got)
 	}
 }
+
+func TestParseDate(t *testing.T) {
+	for in, ok := range map[string]bool{
+		"2026-10-02": true, " 2026-10-02 ": true, "20261002": true,
+		"2026-1-2": false, "2026-13-01": false, "2026-02-30": false, "": false, "yesterday": false,
+		"2026-10-02T10:00:00": false, "٢٠٢٦-١٠-٠٢": false, "0000-01-01": false,
+	} {
+		if _, got := ParseDate(in); got != ok {
+			t.Errorf("ParseDate(%q) ok = %v, want %v", in, got, ok)
+		}
+	}
+}
