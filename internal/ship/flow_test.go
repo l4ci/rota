@@ -365,29 +365,24 @@ func TestClosesLines(t *testing.T) {
 type fakeReopener struct {
 	name    string
 	changed bool
+	active  map[string]bool
 	opened  []string
 }
 
 func (f *fakeReopener) Capabilities() backlog.Capabilities {
 	return backlog.Capabilities{IssueIDs: f.name != "file"}
 }
+func (f *fakeReopener) Active(id string) bool { return f.active[id] }
 func (f *fakeReopener) Reopen(id string) (bool, error) {
 	f.opened = append(f.opened, id)
 	return f.changed, nil
 }
 
+// Restore decides through the port alone: no BACKLOG.md exists under the root.
 func TestRestore(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	backlogMD := "## Active\n\n- **[B01]** open\n\n## Completed\n\n- **[B02]** done\n"
-	if err := os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte(backlogMD), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	var warn strings.Builder
-	r := &fakeReopener{name: "file", changed: true}
-	if err := Restore(r, root, []string{"B01", "B02"}, &warn); err != nil {
+	r := &fakeReopener{name: "file", changed: true, active: map[string]bool{"B01": true}}
+	if err := Restore(r, t.TempDir(), []string{"B01", "B02"}, &warn); err != nil {
 		t.Fatal(err)
 	}
 	// B01 is already active in a file backlog: no reopen, a noop line.

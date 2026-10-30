@@ -44,18 +44,6 @@ func ListDocs(dir string) ([]Doc, error) {
 // .rota/repos.json (internal/repos).
 func Repos(root string) map[string]string { return repos.Paths(root) }
 
-// SplitCSV splits a comma list, trimming blanks and dropping empties
-// (hvlib_repos.parse_repos_csv).
-func SplitCSV(s string) []string {
-	out := []string{}
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // AppendSection splices addition into the body of "## <name>" just before
 // the next "## " heading (or at EOF), like hvlib_section.append_to_section:
 // the body gains a newline first if it lacks one. A missing section is
