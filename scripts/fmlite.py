@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # fmlite: a small, strict YAML-subset reader for the front matter of the docs
 # pages, so scripts need no PyYAML (CI has none). Import it:
-#   from fmlite import load_front_matter, parse, FmError
+#   from fmlite import load_front_matter, FmError
 #
 # Subset: a top-level mapping; nested mappings by indentation; block lists
 # ("- item", "- key: v" with following indented keys); flow lists of bare
@@ -234,11 +234,6 @@ class _Parser:
             result.append(self.scalar(i, content))
             i += 1
         return result, i
-
-
-def parse(text, path='<string>'):
-    """Parse a bare mapping document (no --- fences)."""
-    return _parse_lines(text.split('\n'), path, 1)
 
 
 def _parse_lines(lines, path, first):

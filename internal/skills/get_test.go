@@ -44,8 +44,12 @@ func TestGetAndStubbed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Digest() != s.StubDigest() || st.Digest() == s.Digest() {
-		t.Error("a stub set's digest is the stub digest, not the full set's")
+	rep, err := s.Status(nil, "v")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Digest() != rep.StubDigest || st.Digest() == s.Digest() {
+		t.Error("a stub set's digest is the report's stub digest, not the full set's")
 	}
 	b, _ := st.Skill("rota-a")
 	if !strings.HasPrefix(string(b), "---\nname: rota-a\ndescription: A.\n---\n") || !strings.Contains(string(b), "rota skills get rota-a") {

@@ -95,16 +95,6 @@ func (s *Set) Stubbed() (*Set, error) {
 	return out, nil
 }
 
-// StubDigest identifies what a stub install of the set writes; "" when a
-// skill has no frontmatter to keep.
-func (s *Set) StubDigest() string {
-	st, err := s.Stubbed()
-	if err != nil {
-		return ""
-	}
-	return st.digest
-}
-
 func stub(skill string, full []byte) ([]byte, error) {
 	rest, ok := strings.CutPrefix(string(full), "---\n")
 	fm, _, ok2 := strings.Cut(rest, "\n---\n")
