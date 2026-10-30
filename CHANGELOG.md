@@ -47,8 +47,8 @@ Orca as a worker host, a one-line agent install, and stricter gates on what coun
 
 ### New
 
-- **Change tiers.** `rota change classify` puts a branch's diff in the `docs`, `small` or `full` tier from `change.docsPaths`, `change.riskyPaths`, `change.smallBelow` and the PR's `Door: one-way` line, and says why (#2348).
-- **The gate and train size their checks by tier.** With `test.docs` or `test.small` set, a docs-only or small change runs those in place of `test.full` and `test.e2e`; the train uses its highest member tier. `GATE-TIER` notes and `tier` and `skipped` in `--json` and the ledger show what ran. Under `test.fullWhere: ci` and on a `VERIFY-AGAIN` re-verify the full run stays (#2348).
+- **Change tiers.** `rota change classify` puts a branch's diff in the `docs`, `small` or `full` tier from `change.docsPaths`, `change.riskyPaths`, `change.smallPaths`, `change.smallBelow` and the PR's `Door: one-way` line, and says why. Only Markdown and image files are docs; a risky path also forces review depth `full` (#2348).
+- **The gate and train size their checks by tier.** With `test.docs` or `test.small` set, a docs-only or small change runs those in place of `test.full` and `test.e2e`; the train classifies its members' combined diff once, lines summed. `GATE-TIER` notes and `tier` and `skipped` in `--json` and the ledger show what ran. Under `test.fullWhere: ci` and on a `VERIFY-AGAIN` re-verify the full run stays (#2348).
 - **`rota work start` and `rota ship finish`.** One call opens a `/rota-work` cycle (clean-tree guard, sibling sweep, branch, status entry, claim); one call closes a `/rota-ship` cycle (status removal, file-backend completion, learn, docs and release triggers, reported and never dispatched). Round workers and umbrella projects keep the step-by-step path (#2349).
 
 ### Changed

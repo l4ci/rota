@@ -5,6 +5,7 @@ package change
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 )
@@ -49,6 +50,9 @@ type Policy struct {
 	DocsPaths  []string
 	RiskyPaths []string
 	SmallBelow int
+	// SmallPaths are the globs the small tier's check covers; a diff with a file
+	// outside them is never small. Empty turns the small tier off.
+	SmallPaths []string
 }
 
 // DefaultDocsPaths is change.docsPaths when unset.
@@ -69,6 +73,8 @@ type Result struct {
 	Reason string
 	Files  []string
 	Lines  int
+	// Risky is true when a change.riskyPaths glob decided the tier.
+	Risky bool
 }
 
 // Classify picks the tier. The rules, first match wins: a one-way Door, then
@@ -84,16 +90,21 @@ func Classify(in Input, p Policy) Result {
 		return full(nil, "PR body says Door: one-way")
 	}
 	if risky := matching(in.Files, p.RiskyPaths, true); len(risky) > 0 {
-		return full(risky, "matches change.riskyPaths: "+list(risky))
+		r := full(risky, "matches change.riskyPaths: "+list(risky))
+		r.Risky = true
+		return r
 	}
 	if len(in.Files) == 0 {
 		return full(nil, "no changed files")
 	}
-	code := matching(in.Files, p.DocsPaths, false)
+	code := slices.DeleteFunc(slices.Clone(in.Files), func(f string) bool { return isDoc(f, p.DocsPaths) })
 	if len(code) == 0 {
 		return Result{Tier: TierDocs, Reason: "docs-only change: " + list(in.Files), Files: in.Files, Lines: in.Lines}
 	}
 	if p.SmallBelow > 0 && in.Lines >= 0 && in.Lines < p.SmallBelow {
+		if unmapped := matching(code, p.SmallPaths, false); len(unmapped) > 0 {
+			return full(unmapped, "change.smallPaths does not cover: "+list(unmapped))
+		}
 		return Result{Tier: TierSmall, Reason: fmt.Sprintf("%d changed lines, under change.smallBelow %d: %s", in.Lines, p.SmallBelow, list(code)), Files: code, Lines: in.Lines}
 	}
 	why := "not documentation: " + list(code)
@@ -101,6 +112,16 @@ func Classify(in Input, p Policy) Result {
 		why = fmt.Sprintf("%d changed lines, not under change.smallBelow %d; %s", in.Lines, p.SmallBelow, why)
 	}
 	return full(code, why)
+}
+
+// docExts are the file types the docs tier admits: Markdown and images.
+var docExts = []string{".md", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+// isDoc reports whether f is documentation: a docs glob matches it and it is a
+// Markdown or image file. A script or source file under docs/ is code.
+func isDoc(f string, globs []string) bool {
+	return slices.Contains(docExts, strings.ToLower(path.Ext(f))) &&
+		slices.ContainsFunc(globs, func(g string) bool { return Match(g, f) })
 }
 
 // matching is the files some glob matches (want true) or none does (false).

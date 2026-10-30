@@ -49,7 +49,7 @@ func RemoteBase(ctx context.Context, run Runner, dir, base string) string {
 // ChangedPaths lists the paths `git diff --name-only <span>` reports, one per
 // line, trimmed, blanks dropped. A non-zero exit is an error.
 func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, error) {
-	res, err := run(ctx, dir, "diff", "--name-only", span)
+	res, err := run(ctx, dir, "diff", "--name-only", "--end-of-options", span)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 // counts as touching it. -z keeps git from C-quoting unusual names, which no
 // glob would match. A non-zero exit is an error.
 func DiffFiles(ctx context.Context, run Runner, dir, span string) ([]string, error) {
-	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--no-renames", span)
+	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--no-renames", "--end-of-options", span)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func DiffFiles(ctx context.Context, run Runner, dir, span string) ([]string, err
 // ChangedLines counts the added and deleted lines `git diff --numstat <span>`
 // reports. A non-zero exit is an error.
 func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error) {
-	res, err := run(ctx, dir, "diff", "--numstat", span)
+	res, err := run(ctx, dir, "diff", "--numstat", "--end-of-options", span)
 	if err != nil {
 		return 0, err
 	}
@@ -103,7 +103,7 @@ func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error
 // change: counted is false when numstat marks an entry binary (dashes), which
 // a binary file or a -diff .gitattributes entry does and which counts for 0.
 func ChangedLinesCounted(ctx context.Context, run Runner, dir, span string) (lines int, counted bool, err error) {
-	res, err := run(ctx, dir, "diff", "--numstat", span)
+	res, err := run(ctx, dir, "diff", "--numstat", "--end-of-options", span)
 	if err != nil {
 		return 0, false, err
 	}

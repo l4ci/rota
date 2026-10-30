@@ -92,3 +92,45 @@ func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 		t.Fatalf("a synced train verified as %q", tr.res.Tier)
 	}
 }
+
+// Members that are each small are classified together: their lines add up, so
+// three 90-line members under smallBelow 100 are a full train.
+func TestTrainTierSumsMemberLines(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q", "-b", "main")
+	run("commit", "-q", "--allow-empty", "-m", "base")
+	base := run("rev-parse", "main")
+	var heads []string
+	for _, n := range []string{"a", "b", "c"} {
+		run("checkout", "-q", "-b", n, base)
+		if err := os.WriteFile(filepath.Join(dir, n+".go"), []byte(strings.Repeat("x\n", 90)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", n+".go")
+		run("commit", "-q", "-m", n)
+		heads = append(heads, run("rev-parse", n))
+	}
+	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"small":["true"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`))
+	pick := func(n int) *trainRun {
+		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}
+		for i := 0; i < n; i++ {
+			tr.res.Members = append(tr.res.Members, TrainMember{Target: "m", Branch: "m", Tier: "small"})
+		}
+		tr.pickTier()
+		return tr
+	}
+	if tr := pick(1); tr.res.Tier != "small" {
+		t.Fatalf("one 90-line member: tier %q, want small", tr.res.Tier)
+	}
+	if tr := pick(3); tr.res.Tier != "full" || tr.tierCfg != nil {
+		t.Fatalf("three 90-line members: tier %q, want full", tr.res.Tier)
+	}
+}

@@ -14,6 +14,7 @@ const (
 	ChangeDocsPathsKey  = "change.docsPaths"
 	ChangeRiskyPathsKey = "change.riskyPaths"
 	ChangeSmallBelowKey = "change.smallBelow"
+	ChangeSmallPathsKey = "change.smallPaths"
 )
 
 // ChangePolicyOf reads the change.* keys from the merged config. An error
@@ -25,6 +26,9 @@ func ChangePolicyOf(cfg any) (change.Policy, error) {
 		return change.Policy{}, err
 	}
 	if p.RiskyPaths, err = changeGlobs(cfg, ChangeRiskyPathsKey); err != nil {
+		return change.Policy{}, err
+	}
+	if p.SmallPaths, err = changeGlobs(cfg, ChangeSmallPathsKey); err != nil {
 		return change.Policy{}, err
 	}
 	v, _ := Value(cfg, ChangeSmallBelowKey)
@@ -91,7 +95,7 @@ func smallBelow(v any) (int, error) {
 // key is not one of them.
 func validateChange(key string, value any) (ok bool, err error) {
 	switch key {
-	case ChangeDocsPathsKey, ChangeRiskyPathsKey:
+	case ChangeDocsPathsKey, ChangeRiskyPathsKey, ChangeSmallPathsKey:
 		_, err = parseChangeGlobs(key, value)
 	case ChangeSmallBelowKey:
 		_, err = smallBelow(value)

@@ -303,9 +303,10 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `change.docsPaths` | project (tracked) | list | `["*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"]` |  | Globs of documentation files. A diff whose every file matches one is the docs tier: the gate runs test.docs and review depth is none. * matches within a path segment, ** across directories; a glob with no slash matches at the root only (*.md is README.md, not docs/a.md); no braces. |
-| `change.riskyPaths` | project (tracked) | list | `[]` |  | Globs of files that always get the full tier: test.full and the ship.review depth, whatever else the diff holds. Same glob grammar as change.docsPaths. |
-| `change.smallBelow` | project (tracked) | int | `0` |  | A code diff with fewer changed lines than this, and no risky file, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off. |
+| `change.docsPaths` | project (tracked) | list | `["*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"]` |  | Globs of documentation files. A diff whose every file is a Markdown or image file (.md, .png, .jpg, .jpeg, .gif, .svg, .webp) matching one is the docs tier; a script or source file under docs/ is code: the gate runs test.docs and review depth is none. * matches within a path segment, ** across directories; a glob with no slash matches at the root only (*.md is README.md, not docs/a.md); no braces. |
+| `change.riskyPaths` | project (tracked) | list | `[]` |  | Globs of files that always get the full tier: test.full and review depth full, whatever else the diff holds. Same glob grammar as change.docsPaths. |
+| `change.smallPaths` | project (tracked) | list | `[]` |  | Globs of the files test.small covers. A code diff with a file outside them is never the small tier. Empty turns the small tier off. Same glob grammar as change.docsPaths. |
+| `change.smallBelow` | project (tracked) | int | `0` |  | A code diff with fewer changed lines than this, and every file covered by change.smallPaths, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off. |
 
 ### forge
 

@@ -149,7 +149,23 @@
       "docs/reference/labels.md",
       "docs/contributing/contract/**",
       "docs/usage/brainstorm.md",
-      "docs/usage/configuration.md"
+      "docs/usage/configuration.md",
+      "install.sh",
+      "hooks/**",
+      "plugin/**",
+      "plugins/**",
+      ".claude-plugin/**",
+      "internal/hooks/**",
+      "internal/host/**",
+      "test/sections/**",
+      "scripts/**"
+    ],
+    "smallPaths": [
+      "**/*.go",
+      "**/testdata/**",
+      "test/lib/**",
+      "test/fakes/**",
+      "test/e2e/**"
     ]
   }
 }
