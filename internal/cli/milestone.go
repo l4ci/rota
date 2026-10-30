@@ -7,12 +7,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	ms "github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 // Glue for the milestone group. Every verb works on a milestone.Store
@@ -107,7 +107,7 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		id, err := st.Add(*title, *summary, artifact.SplitCSV(*depends), *kind)
+		id, err := st.Add(*title, *summary, pystr.SplitCSV(*depends), *kind)
 		if err != nil {
 			return milestoneFail(err, "")
 		}
