@@ -190,6 +190,15 @@ old: hv-merge [--repo <repo>] <branch> < <body-file>
 shim: `--body-file` goes to the old stdin. `sha` is the last stdout line (`git log -1 --format=%h`). `base` is `hv-base-branch`. The shim removes the branch's worktree first (the old `hv-worktree-clear` pre-step, which runs inside the old helper), then merges, deletes the branch. Old exit 1 is split by message.
 note: the merge message is the body; its subject must start `merge: ` for `rota ship undo` to recognise the cycle. The old helper did not check it, and the contract does not either. Mutation is `git checkout <base>`, `git merge --no-ff`, `git branch -d`.
 
+### rota ship finish
+rota ship finish [<branch>] [--commit <sha>]
+repo: scoped
+data: {"branch": string, "base": string, "commit": string, "status": {"removed": number, "handoffRemoved": bool}, "items": {"referenced": []string, "completed": []string, "alreadyDone": []string, "unproven": []string, "unknown": []string, "skipped": string|null}, "signals": {"items": number, "files": number, "debugCycles": number}, "learn": {"action": "fire"|"skip", "reason": string, "nudge": string}, "docs": {"action": "fire"|"skip", "reason": string}, "release": {"action": "fire"|"skip", "reason": string, "message": string}, "autonomy": "off"|"roundtrip"|"auto", "changed": bool}
+exit: 2 when more than one branch is given, or at an umbrella root without --repo; 3 when the branch is gone and `--commit` (default `HEAD`) is not a merge commit, or no base branch resolves; 4 when `ROTA_SLOT` is set (`blockedBy: "round worker"`) or the project is an umbrella (`blockedBy: "umbrella"`), before any change; 4 when a referenced item has no proof row (`blockedBy: "proof missing"`), after everything else ran, with the same data and the IDs in `items.unproven`; 5 when git fails
+note: the bookkeeping tail of `/rota-ship` (Steps 7 to 9.5) in one call. It removes the branch's `status.json` entry and handoff note, completes still-open referenced items at `commit` on the file backend (`items.skipped` is `"issue backend"` on a tracker, where the PR merge closes them), and evaluates the post-cycle trigger gate (`skills/references/post-cycle-trigger-gate.md`, *The condition*): `learn` fires on 2+ referenced items, 5+ touched files or 2+ debug hypothesis cycles for a referenced bug; `docs` is `skip` unless `docs.afterWork` is on, then the same gate; `release` fires when `rota release pending` has `shouldNudge` and a `lastTag`, and `message` is its message. It never dispatches a skill: the caller acts on `fire`.
+note: the cycle is the branch's commits against the base while the branch exists (PR path); after `rota ship merge` deleted it, the merge commit `M` (`--commit`, default `HEAD`) as `M^1..M^2`, and `commit` is `M`. On the PR path `commit` is the branch tip.
+note: idempotent. A run that removes no status entry and completes no item reports `changed: false` and every gate `skip` with reason `already finished`.
+
 ### rota ship pr-merge
 rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer> | --approval <escalation> | --escalate]
 repo: scoped

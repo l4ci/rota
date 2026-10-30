@@ -31,6 +31,7 @@ func shipCommands() *Command {
 		{Name: "pr", Summary: "push a branch and open a PR or MR", Repo: true, Verb: shipPR},
 		{Name: "merge", Summary: "merge a branch into the base branch with --no-ff", Repo: true, Verb: shipMerge},
 		{Name: "strategy", Summary: "how the branch lands: direct, pr, or unset (a local forge is always direct)", Repo: true, Verb: shipStrategy},
+		{Name: "finish", Summary: "end-of-cycle bookkeeping: status, items and the post-cycle gates", Repo: true, Verb: shipFinish},
 		{Name: "pr-merge", Summary: "merge a PR in issue mode", Repo: true, Verb: shipPRMerge},
 		{Name: "undo", Summary: "roll back the last cycle merge on the base branch", Repo: true, Verb: shipUndo},
 	}}
