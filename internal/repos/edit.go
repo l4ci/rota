@@ -58,10 +58,8 @@ func Add(root, path, name string) (r Repo, changed bool, err error) {
 			return Repo{}, false, fmt.Errorf("%w: %s is registered as %s", ErrConflict, path, have.Name)
 		}
 	}
-	entry := jsonx.NewObject()
-	entry.Set("name", name)
-	entry.Set("path", r.Rel)
-	if err := edit(root, func(entries []any) []any { return append(entries, entry) }); err != nil {
+	entry := newEntry(name, r.Rel)
+	if err := edit(root, false, func(entries []any) []any { return append(entries, entry) }); err != nil {
 		return Repo{}, false, err
 	}
 	return r, true, nil
@@ -79,7 +77,7 @@ func Remove(root, name string) (Repo, error) {
 	if gone.Name == "" {
 		return Repo{}, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
-	err := edit(root, func(entries []any) []any {
+	err := edit(root, false, func(entries []any) []any {
 		var keep []any
 		for _, e := range entries {
 			if o, ok := e.(*jsonx.Object); ok {
@@ -94,18 +92,61 @@ func Remove(root, name string) (Repo, error) {
 	return gone, err
 }
 
+// SetTopLevel makes names the registered top-level sub-repos: each gets a
+// `./<name>` entry unless an entry of that name is already there (kept as it
+// is, so a nested registration keeps its path), and an entry shaped
+// `./<other>` for a name not in names is dropped as stale. Every other entry
+// is kept. A registry that is not a JSON object is replaced, which is what
+// re-running `rota init umbrella` over a corrupt file has always done.
+func SetTopLevel(root string, names []string) error {
+	want := map[string]bool{}
+	for _, n := range names {
+		want[n] = true
+	}
+	return edit(root, true, func(entries []any) []any {
+		var out []any
+		have := map[string]bool{}
+		for _, e := range entries {
+			n := entryName(e)
+			if o, ok := e.(*jsonx.Object); ok && !want[n] {
+				if p, _ := o.Get("path"); p == "./"+n {
+					continue
+				}
+			}
+			have[n] = true
+			out = append(out, e)
+		}
+		for _, n := range names {
+			if !have[n] {
+				out = append(out, newEntry(n, "./"+n))
+				have[n] = true
+			}
+		}
+		return out
+	})
+}
+
+func newEntry(name, rel string) *jsonx.Object {
+	entry := jsonx.NewObject()
+	entry.Set("name", name)
+	entry.Set("path", rel)
+	return entry
+}
+
 // edit rewrites repos.json with fn applied to its entry list, sorted by name.
 // A registry that exists but is not a JSON object is an error rather than
-// something to overwrite.
-func edit(root string, fn func([]any) []any) error {
+// something to overwrite, unless replaceCorrupt.
+func edit(root string, replaceCorrupt bool, fn func([]any) []any) error {
 	path := rotatree.Repos(root)
 	reg := jsonx.NewObject()
 	if _, err := os.Stat(path); err == nil {
 		o, ok := fsio.LoadJSON(path, nil).(*jsonx.Object)
-		if !ok {
+		switch {
+		case ok:
+			reg = o
+		case !replaceCorrupt:
 			return fmt.Errorf("%s is not a valid JSON object", path)
 		}
-		reg = o
 	}
 	list, _ := reg.Get("repos")
 	entries, _ := list.([]any)
