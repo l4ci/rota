@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -118,7 +119,7 @@ func entryOf(fm map[string]any, stem, milestone, unit, kind string) Entry {
 		Created: frontmatter.Str(fm, "created"), Repos: []string{}}
 	switch r := fm["repo"].(type) {
 	case string:
-		e.Repos = artifact.SplitCSV(r)
+		e.Repos = pystr.SplitCSV(r)
 	case []string:
 		e.Repos = append(e.Repos, r...)
 	}
