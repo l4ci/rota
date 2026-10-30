@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -528,5 +529,38 @@ func TestUpdateCommandSkipsSkillsUpdateForCurrentStubs(t *testing.T) {
 	skillsRunDeps(t, d, home, "", work, "skills", "install", "--agent", "codex", "--full")
 	if c := cmd(); !strings.Contains(c, "rota skills update") {
 		t.Errorf("full root: %q", c)
+	}
+}
+
+// A link inside a fence or code span is not a link: `skills links` is the one
+// definition the footer and test/validate-skills.py share.
+func TestSkillsLinks(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	body := "[a](a.md) [r](references/r.md#sec) `[c](code.md)`\n```\n[f](fenced.md)\n```\n[web](https://x.io/w.md)\n"
+	if err := os.WriteFile(filepath.Join(work, "SKILL.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "empty.md"), []byte("none\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, env, errOut := skillsRun(t, home, work, "skills", "links", "SKILL.md", "empty.md")
+	if code != 0 {
+		t.Fatalf("links %d %s", code, errOut)
+	}
+	files, _ := skData(env)["files"].([]any)
+	if len(files) != 2 {
+		t.Fatalf("%v", skData(env))
+	}
+	first := files[0].(map[string]any)
+	if first["file"] != "SKILL.md" || fmt.Sprint(first["links"]) != "[a.md references/r.md]" {
+		t.Errorf("SKILL.md links = %v", first)
+	}
+	if l, _ := files[1].(map[string]any)["links"].([]any); len(l) != 0 {
+		t.Errorf("empty.md links = %v", l)
+	}
+	for _, args := range [][]string{{"skills", "links"}, {"skills", "links", "missing.md"}} {
+		if code, _, _ = skillsRun(t, home, work, args...); code == 0 {
+			t.Errorf("%v exited 0", args)
+		}
 	}
 }

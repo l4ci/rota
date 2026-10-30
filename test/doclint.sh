@@ -16,6 +16,16 @@ TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 SK='SKILL''.md'
 
+# validate-skills.py reads relative links through `rota skills links`, so every
+# run of it below needs a binary; build one here.
+if [ -z "${ROTA_BIN:-}" ]; then
+  ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
+  (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
+    -o "$TMP/rota" ./cmd/rota) || fail "go build ./cmd/rota failed"
+  ROTA_BIN="$TMP/rota"
+fi
+export ROTA_BIN
+
 echo "doclint: skills and references pass the validator; the prose lint catches drift (#173)"
 
 # ── skills and references pass the validator ────────────────────────────────
@@ -61,6 +71,18 @@ printf 'When a rule needs recording, tell the user to type `/rota-decide`.\n' > 
 RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
 [ "$RC" = 0 ] || fail "chain lint rejected an explicit offer (rc $RC): $OUT"
 pass "the chain lint fails a line that runs a flagged skill, in shared references too, and passes an explicit offer"
+
+# A link inside a fence is not a link (#2417): the validator takes link detection
+# from `rota skills links`, so a fenced `](x.md)` neither satisfies "every sibling is
+# linked" nor counts as a broken sibling link.
+FL="$TMP/fence"; mkdir -p "$FL"
+cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$FL/"
+printf 'Extracted detail for the fence fixture.\n' > "$FL/skills/rota-work/fence-only.md"
+printf '\n```\n[fenced](fence-only.md) [gone](gone.md)\n```\n' >> "$FL/skills/rota-work/$SK"
+RC=0; OUT="$(cd "$FL" && ROTA_DOCLINT_PROSE=off python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+[ "$RC" = 1 ] && grep -qF "fence-only.md: not linked from" <<<"$OUT" && ! grep -qF "gone.md" <<<"$OUT" \
+  || fail "a fenced link counted as a link in the validator (rc $RC): $OUT"
+pass "the validator ignores links inside a fence"
 
 # A minimal skill tree has no authoring-conventions.md: the flagged-list check skips it
 # (section 94 lints such a fixture). It stays strict when the file exists (below).
@@ -126,12 +148,6 @@ pass "the validator does not walk the project tree recursively"
 # ── every `rota <group> <verb>` the skill and the docs name exists ──────────
 # test/lint-verbs.py resolves a verb when `rota <words> --help` descends the
 # tree (see its header). The lint must also be able to fail.
-if [ -z "${ROTA_BIN:-}" ]; then
-  ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
-  (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
-    -o "$TMP/rota" ./cmd/rota) || fail "go build ./cmd/rota failed"
-  ROTA_BIN="$TMP/rota"
-fi
 # Decision shape is a merge gate, including historical entries. Missing dates
 # are notices so existing undated boundaries remain usable.
 OUT="$("$ROTA_BIN" -C "$REPO" decisions check 2>&1)" || fail "DECISIONS.md is malformed: $OUT"
