@@ -76,37 +76,35 @@ func ClaudeDir(getenv func(string) string, home string) string {
 // whose base is unknown is left out. HOME comes from getenv.
 func InstalledRoots(getenv func(string) string, top string) []string {
 	home := getenv("HOME")
-	var out []string
-	if top != "" {
-		out = append(out, filepath.Join(top, ".claude", "skills"), filepath.Join(top, ".agents", "skills"))
-	}
+	var dirs []string
 	if d := ClaudeDir(getenv, home); d != "" {
-		out = append(out, filepath.Join(d, "skills"))
+		dirs = []string{d}
 	}
-	if home != "" {
-		out = append(out, filepath.Join(home, ".agents", "skills"))
+	var out []string
+	for _, c := range []struct{ scope, agent string }{{Project, ""}, {User, Claude}, {User, Codex}} {
+		if c.scope == Project && top == "" {
+			continue
+		}
+		rs, err := Roots(c.scope, c.agent, home, dirs, top)
+		if err != nil {
+			continue
+		}
+		for _, r := range rs {
+			out = append(out, r.Path)
+		}
 	}
 	return out
 }
 
 // Roots lists the roots for a scope ("" for both) and agent ("" or "all" for
-// both). The user Claude root is <claudeDir>/skills, the user Codex root
-// <home>/.agents/skills, the project roots <top>/.claude/skills and
-// <top>/.agents/skills. top is the git toplevel, "" outside a work tree:
-// project roots are then skipped for scope "" and an error for scope
-// "project". A user root whose base is unknown is ErrNoHome.
-func Roots(scope, agent, home, claudeDir, top string) ([]Root, error) {
-	var dirs []string
-	if claudeDir != "" {
-		dirs = []string{claudeDir}
-	}
-	return RootsFor(scope, agent, home, dirs, top)
-}
-
-// RootsFor is Roots with several Claude config dirs: user scope yields one
-// Claude root per dir, in order. No dirs means the user Claude root is unknown
-// (ErrNoHome).
-func RootsFor(scope, agent, home string, claudeDirs []string, top string) ([]Root, error) {
+// both): the one place skill root paths are spelled. The user Claude root is
+// <dir>/skills for each of claudeDirs, in order (the current config dir plus
+// any account dirs), the user Codex root <home>/.agents/skills, the project
+// roots <top>/.claude/skills and <top>/.agents/skills. top is the git
+// toplevel, "" outside a work tree: project roots are then skipped for scope
+// "" and an error for scope "project". A user root whose base is unknown (no
+// claudeDirs for Claude, no home for Codex) is ErrNoHome.
+func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, error) {
 	var out []Root
 	for _, sc := range []string{User, Project} {
 		if scope != "" && scope != sc {
