@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,7 +192,7 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 			if need != tc.active || len(attn) != 0 {
 				t.Errorf("NeedsWatch = %v %v, want %v and no attention", need, attn, tc.active)
 			}
-			d := Digest(root, 2, false)
+			d := Digest(context.Background(), git.Exec, root, 2, false)
 			if strings.Contains(d, "dana") != tc.active || strings.Contains(d, "#31") != tc.active || strings.Contains(d, "ben") {
 				t.Errorf("digest slot visibility: %q", d)
 			}
@@ -205,19 +206,19 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 	if !need || len(attn) != 1 || attn[0] != "ben done" {
 		t.Fatalf("%v %v", need, attn)
 	}
-	if d := Digest(root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
+	if d := Digest(context.Background(), git.Exec, root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
 		t.Fatalf("digest %q", d)
 	}
 }
 
 func TestExitDigest(t *testing.T) {
 	root := t.TempDir()
-	if got, want := ExitDigest(root, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
+	if got, want := ExitDigest(context.Background(), git.Exec, root, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
 		t.Errorf("empty round exit digest = %q, want %q", got, want)
 	}
 	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
 	want := "rota round 2: dana done #31 https://x/pull/7 (needs you); 1 escalation(s) pending. Watch exiting; re-arm `rota round watch`."
-	if got := ExitDigest(root, 2); got != want {
+	if got := ExitDigest(context.Background(), git.Exec, root, 2); got != want {
 		t.Errorf("active round exit digest = %q, want %q", got, want)
 	}
 }
@@ -289,7 +290,7 @@ func TestCarryKeepsReviewEntries(t *testing.T) {
 func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
 	root := t.TempDir()
 	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
-	if got := Digest(root, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
+	if got := Digest(context.Background(), git.Exec, root, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
 		t.Errorf("digest = %q", got)
 	}
 }
@@ -298,7 +299,7 @@ func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
 func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
 	root := t.TempDir()
 	writeRegistry(t, root, `{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
-	if d := Digest(root, 1, true); strings.Contains(d, "needs you") {
+	if d := Digest(context.Background(), git.Exec, root, 1, true); strings.Contains(d, "needs you") {
 		t.Fatalf("digest %q", d)
 	}
 	if _, attn := NeedsWatch(root); len(attn) != 0 {

@@ -330,8 +330,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 			"additionalContext": line,
 		}}), nil
 	}
-	frozen, freezeErr := landfreeze.Read(rotastate.File(hc.commonDir, "freeze.json"))
-	activeFreeze := freezeErr != nil || (frozen != nil && frozen.Active)
+	activeFreeze := landfreeze.Frozen(c.Context(), c.deps().Git, hc.root)
 	marker, armed := roundwatch.Armed(hc.lease, hc.commonDir)
 	interval := roundwatch.DefaultHeartbeat
 	if armed && marker.Heartbeat > 0 {
@@ -344,7 +343,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	if need, _ := roundwatch.NeedsWatch(hc.root); !need && !activeFreeze && waitLine == "" {
 		return Result{}, nil
 	}
-	digest := roundwatch.Digest(hc.root, hc.who.Lease.Round, armed)
+	digest := roundwatch.Digest(c.Context(), c.deps().Git, hc.root, hc.who.Lease.Round, armed)
 	if waitLine != "" {
 		digest += " " + waitLine + "."
 	}

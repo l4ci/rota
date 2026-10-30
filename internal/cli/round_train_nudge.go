@@ -17,8 +17,8 @@ import (
 )
 
 // waitingPR is a PR that waits for a merge: a done slot's PR or one parked in
-// the review queue. Reviewed is true when a review verdict is recorded at its
-// head and none blocks the gate, the state the train needs from every member.
+// the review queue. The readiness fields come from roundtick.ReadinessOf,
+// the one rule the tick and the nudge share.
 type waitingPR struct {
 	PR, Base   string
 	Reviewed   bool
@@ -227,30 +227,19 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 		return head
 	}
 	vc := shipVerdict(c, root, root)
-	reviewed := func(branch, issue, target, pr string, doneAt time.Time) (bool, time.Time) {
+	reviewed := func(branch, issue, target, pr string, doneAt time.Time) roundtick.Readiness {
 		if branch == "" {
-			return false, time.Time{}
+			return roundtick.Readiness{}
 		}
 		r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", branch)
 		if err != nil || r.ExitCode != 0 {
-			return false, time.Time{}
+			return roundtick.Readiness{}
 		}
-		head := strings.TrimSpace(r.Stdout)
-		if n, ok := worker.PRRefNumber(pr); ok {
-			for _, name := range []string{target, pr, fmt.Sprintf("#%d", n), fmt.Sprint(n)} {
-				if _, held := roundtick.HoldReason(state.Held, state.FailedHeads, name, fmt.Sprintf("%d:%s", n, head)); held {
-					return false, time.Time{}
-				}
-			}
-		}
-		if bh := bounceHead(issue); bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
-			return false, time.Time{} // sent back and not yet pushed to
-		}
-		if reviewOff {
-			return !trainBlocked(vc.Store, branch), doneAt
-		}
-		ready := len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch)
-		return ready, reviewReadySince(vc.Store.Branches[verdict.BranchKey("", branch)], head)
+		return roundtick.ReadinessOf(roundtick.ReadinessInput{
+			Head: strings.TrimSpace(r.Stdout), PR: pr, Names: []string{target}, State: state,
+			BounceHead: bounceHead(issue), ReviewOff: reviewOff, DoneAt: doneAt,
+			Records: vc.Store.Branches[verdict.BranchKey("", branch)],
+		})
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
@@ -261,34 +250,17 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 					at = doneAt
 				}
 			}
-			ready, since := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
-			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: ready, ReadySince: since, Immediate: reviewOff && ready && since.IsZero()})
+			rd := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
+			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
-			ready, since := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
-			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: ready, ReadySince: since, Immediate: reviewOff && ready && since.IsZero()})
+			rd := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
+			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
-}
-
-// reviewReadySince uses the last current-head review prerequisite, so an old
-// PR or a review of a previous head cannot make a fresh review expire early.
-func reviewReadySince(records []verdict.Record, head string) time.Time {
-	var since time.Time
-	list := verdict.ForHead(records, head)
-	for _, kind := range append([]string{verdict.ReviewSpec, verdict.ReviewQuality, verdict.ReviewCross, verdict.SecondOpinion}, verdict.LensKinds...) {
-		r, ok := verdict.Latest(list, kind)
-		if !ok || !verdict.AtHead(r, head) {
-			continue
-		}
-		if at, err := stamp.Parse(r.RecordedAt); err == nil && at.After(since) {
-			since = at
-		}
-	}
-	return since
 }
 
 // openOnly drops the PRs the forge no longer lists as open: gate and train
@@ -336,16 +308,6 @@ func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
 		}
 	}
 	return waiting
-}
-
-// trainBlocked is true when the branch's recorded verdicts would block the
-// gate or bounce the PR: a FAIL (review or second opinion) or a review with a
-// blocking finding keeps it out of a nudged train, a clean CONCERNS and PASS
-// let it in.
-func trainBlocked(store verdict.Store, branch string) bool {
-	list := store.Branches[verdict.BranchKey("", branch)]
-	_, blocked := verdict.BlockingAnyHead(list)
-	return blocked
 }
 
 // trainNudgeData is the nudges as the `trainNudge` JSON array, nil when none.
