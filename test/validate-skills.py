@@ -92,22 +92,44 @@ BLOCK_SCALARS = {">", "|", ">-", "|-", ">+", "|+"}
 
 def spec_fields(text):
     """Top-level frontmatter as {key: value}, folding indented continuation
-    lines into the value; None without a frontmatter block."""
+    lines into the value; None without a frontmatter block. A folded block
+    (> or >-) follows YAML and scripts/fmlite.py: lines join with a space and
+    a blank line is a newline."""
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None
-    out, key = {}, None
+    out, key, folded, cont = {}, None, False, []
+
+    def flush():
+        if key is None or not cont:
+            return
+        if folded:
+            paras, cur = [], []
+            for c in cont:
+                if c:
+                    cur.append(c)
+                else:
+                    paras.append(" ".join(cur))
+                    cur = []
+            paras.append(" ".join(cur))
+            out[key] = "\n".join(paras).strip("\n")
+        else:
+            out[key] = (out[key] + " " + " ".join(c for c in cont if c)).strip()
+
     for line in lines[1:]:
         if line.strip() == "---":
+            flush()
             return out
         m = re.match(r"^([A-Za-z0-9_-]+):[ \t]*(.*)$", line)
         if m:
+            flush()
             key, val = m.group(1), m.group(2).strip()
+            cont, folded = [], val[:1] == ">"
             if len(val) > 1 and val[0] == val[-1] and val[0] in "\"'":
                 val = val[1:-1]
             out[key] = "" if val in BLOCK_SCALARS else val
-        elif key and line[:1] in (" ", "\t"):
-            out[key] = (out[key] + " " + line.strip()).strip()
+        elif key and (line[:1] in (" ", "\t") or not line.strip()):
+            cont.append(line.strip())
     return None
 
 
@@ -645,9 +667,17 @@ def layout_only(skills_dir):
     sys.exit(1 if issues else 0)
 
 
+def print_fields(path):
+    """--fields <SKILL.md>: the parsed top-level fields as JSON (the seam test compares them)."""
+    print(json.dumps(spec_fields(Path(path).read_text(encoding="utf-8"))))
+    sys.exit(0)
+
+
 try:
     if len(sys.argv) == 3 and sys.argv[1] == "--layout":
         layout_only(sys.argv[2])
+    if len(sys.argv) == 3 and sys.argv[1] == "--fields":
+        print_fields(sys.argv[2])
     main()
 except Exception as exc:
     print(f"validate-skills: ERROR {exc}", file=sys.stderr)

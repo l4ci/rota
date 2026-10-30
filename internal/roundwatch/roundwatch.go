@@ -420,12 +420,7 @@ func roundState(root string, round int) string {
 		}
 		parts = append(parts, p)
 	}
-	pending := 0
-	for _, e := range escalation.Load(root) {
-		if e.Status == escalation.StatusPending {
-			pending++
-		}
-	}
+	pending := len(escalation.LoadOpen(root))
 	if pending > 0 {
 		parts = append(parts, fmt.Sprintf("%d escalation(s) pending", pending))
 	}
@@ -459,10 +454,8 @@ func NeedsWatch(root string) (bool, []string) {
 			attn = append(attn, s.Name()+" "+st)
 		}
 	}
-	for _, e := range escalation.Load(root) {
-		if e.Status == escalation.StatusPending {
-			need = true
-		}
+	if len(escalation.LoadOpen(root)) > 0 {
+		need = true
 	}
 	return need, attn
 }

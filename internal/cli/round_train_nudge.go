@@ -78,9 +78,13 @@ func (n trainNudge) Text() string {
 }
 
 func readyTrainNudges(c *Ctx, root string) []trainNudge {
-	// Advisory: an unrelated invalid round key must not hide legacy nudges.
-	set, _ := c.deps().tolerantRoundSettings(root)
-	ns := trainNudgesWithFill(waitingPRs(c, root), set.TrainFill, c.deps().Now())
+	// An invalid train key is refused as the tick refuses it; an unrelated
+	// invalid round key must not hide legacy nudges, so read only these keys.
+	fill, err := roundcfg.TrainFillFromConfig(c.deps().Config(root))
+	if err != nil {
+		return nil
+	}
+	ns := trainNudgesWithFill(waitingPRs(c, root), fill, c.deps().Now())
 	if len(ns) > 0 {
 		n := freeSlotAssignment(c, root)
 		for i := range ns {
@@ -93,8 +97,8 @@ func readyTrainNudges(c *Ctx, root string) []trainNudge {
 // trainHoldingLines reads current progress without consuming changed-only
 // notices or running a tick. Status can show elapsed time while watch sleeps.
 func trainHoldingLines(c *Ctx, root string) []string {
-	set, ok := c.deps().tolerantRoundSettings(root)
-	if !ok || !set.TrainFill.Enabled() {
+	fill, err := roundcfg.TrainFillFromConfig(c.deps().Config(root))
+	if err != nil || !fill.Enabled() {
 		return nil
 	}
 	type group struct {
@@ -124,8 +128,8 @@ func trainHoldingLines(c *Ctx, root string) []string {
 	var lines []string
 	for _, base := range bases {
 		g := groups[base]
-		if set.TrainFill.Due(g.count, g.oldest, now) == "" {
-			lines = append(lines, set.TrainFill.Holding(base, g.count, g.oldest, now))
+		if fill.Due(g.count, g.oldest, now) == "" {
+			lines = append(lines, fill.Holding(base, g.count, g.oldest, now))
 		}
 	}
 	return lines
@@ -212,7 +216,7 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 	reg := worker.LoadRegistryTolerant(root)
 	cfg := c.deps().Config(root)
 	policy, _ := config.ReviewPolicyOf(cfg)
-	fill := roundcfg.TrainFill{Max: config.IntOr(cfg, config.RoundTrainMaxKey, 0, config.MaxInt), Minutes: config.IntOr(cfg, config.RoundTrainFillMinutesKey, 0, config.MaxInt)}
+	fill, _ := roundcfg.TrainFillFromConfig(cfg) // callers refuse a bad value before this
 	reviewOff := fill.Enabled() && policy.Default == config.DepthNone
 	store, _ := c.deps().workerEnv().BounceStore(root)
 	bounceHead := func(issue string) string {
