@@ -39,7 +39,7 @@ func Tree() *Command {
 	root.Subs = append(root.Subs, debugCommands()...)
 	root.Subs = append(root.Subs, spikeCommands()...)
 	root.Subs = append(root.Subs, withReadOnly(itemCommands(), backlogCommands(), configCommands(), issuesCommands())...)
-	root.Subs = append(root.Subs, workerCommands(), testCommands())
+	root.Subs = append(root.Subs, workerCommands(), workCommands(), testCommands())
 	root.Subs = append(root.Subs, roundCommands(), receiptCommands())
 	root.Subs = append(root.Subs, trackerCommands(), gitCommands())
 	root.Subs = append(root.Subs, labelsCommands())

@@ -143,6 +143,7 @@ const (
 	MergeSubject        = "merge subject"
 	PostMergeCommits    = "post-merge commits"
 	PRMode              = "pr mode"
+	RoundWorker         = "round worker"
 )
 
 // All is every declared blockedBy value, each once.
@@ -161,6 +162,6 @@ func All() []string {
 		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
 		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
 		AccountConflict, ConfigConflict, ConfigMigration, BothDirs, DirtyTree, LockHeld, BackupDir, Worktree,
-		Attempt, BaseBranch, NotOnBaseBranch, DirtyTreeShip, NotAMerge, MergeSubject, PostMergeCommits, PRMode,
+		Attempt, BaseBranch, NotOnBaseBranch, DirtyTreeShip, NotAMerge, MergeSubject, PostMergeCommits, PRMode, RoundWorker,
 	}
 }
