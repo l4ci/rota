@@ -116,3 +116,24 @@ func TestBlocksFailureDoesNotStopTheRest(t *testing.T) {
 		t.Errorf("blocks %+v", b.Blocks)
 	}
 }
+
+// TestCoreFilesAreSeeded pins the check list to the seed declaration: Init
+// seeds every required file, and the required set is today's seven.
+func TestCoreFilesAreSeeded(t *testing.T) {
+	want := []string{"DECISIONS.md", "BACKLOG.md", "KNOWLEDGE.md", "MILESTONES.md", "counters.json", "config.json", "status.json"}
+	if !reflect.DeepEqual(CoreFiles, want) {
+		t.Fatalf("CoreFiles = %v, want %v", CoreFiles, want)
+	}
+	dir := t.TempDir()
+	if _, err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if r := checkDir(dir, nil); !r.Initialized || len(r.Missing) != 0 {
+		t.Fatalf("fresh Init fails Check: %+v", r)
+	}
+	for _, f := range seedFiles {
+		if _, err := os.Stat(filepath.Join(dir, ".rota", f.name)); err != nil {
+			t.Errorf("seed %s not written: %v", f.name, err)
+		}
+	}
+}
