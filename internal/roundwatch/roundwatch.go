@@ -373,8 +373,8 @@ func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/"
 
 // Digest is the one-line round state the prompt hook shows: each active
 // slot with its issue and PR, the open escalations and whether a watch is armed.
-func Digest(root string, round int, armed bool) string {
-	line := roundState(root, round)
+func Digest(ctx context.Context, run git.Runner, root string, round int, armed bool) string {
+	line := roundState(ctx, run, root, round)
 	if armed {
 		return line + ". Watch armed."
 	}
@@ -382,13 +382,13 @@ func Digest(root string, round int, armed bool) string {
 }
 
 // ExitDigest describes the round as its watch returns and must be re-armed.
-func ExitDigest(root string, round int) string {
-	return roundState(root, round) + ". Watch exiting; re-arm `rota round watch`."
+func ExitDigest(ctx context.Context, run git.Runner, root string, round int) string {
+	return roundState(ctx, run, root, round) + ". Watch exiting; re-arm `rota round watch`."
 }
 
-func roundState(root string, round int) string {
+func roundState(ctx context.Context, run git.Runner, root string, round int) string {
 	var parts []string
-	if frozen, err := landfreeze.Load(context.Background(), git.Exec, root); err != nil {
+	if frozen, err := landfreeze.Load(ctx, run, root); err != nil {
 		if !errors.Is(err, rotastate.ErrNotRepo) {
 			parts = append(parts, landfreeze.UnreadableLine(err))
 		}

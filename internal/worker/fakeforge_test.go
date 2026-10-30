@@ -11,9 +11,30 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/l4ci/rota/internal/tracker"
 )
+
+// fakeForgeModes lists the world.mode values this fake understands. It is the
+// in-process twin of test/fakes/fake_forge.py, which smoke sections 68 and 89
+// drive as a gh/glab CLI; TestForgeModesMatchPythonFake keeps the two lists equal.
+var fakeForgeModes = []string{"ok", "race", "fail", "noop", "elsewhere", "ff", "squash"}
+
+func TestForgeModesMatchPythonFake(t *testing.T) {
+	src, err := os.ReadFile("../../test/fakes/fake_forge.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^MODES = \((.*)\)$`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("fake_forge.py declares no MODES tuple")
+	}
+	py := strings.Split(strings.NewReplacer(`"`, "", " ", "").Replace(string(m[1])), ",")
+	if !slices.Equal(py, fakeForgeModes) {
+		t.Fatalf("forge fake modes drifted: python %v, go %v", py, fakeForgeModes)
+	}
+}
 
 // fakeForge is the gate's Forge over a world's bare origin: one PR whose state
 // lives in the world's forge DB, and a merge that really lands on the origin.

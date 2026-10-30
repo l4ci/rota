@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Fake gh and glab for the worker gate: one PR (gh) or MR (glab) over a real bare origin.
 
-Same script as smoke section 68 builds inline. Env: FORGE_TOOL (gh|glab), FORGE_DB (json
-state file), FORGE_LOG (argv log), FORGE_MODE (ok, race, fail, noop, elsewhere, ff, squash).
+Smoke sections 68 and 89 drive this script; internal/worker/fakeforge_test.go is its
+in-process twin, and TestForgeModesMatchPythonFake pins both to the MODES tuple below.
+Env: FORGE_TOOL (gh|glab), FORGE_DB (json state file), FORGE_LOG (argv log), FORGE_MODE
+(one of MODES).
 Merging clones FORGE_DB's origin into a temp dir and pushes there, so it needs git only.
 Safe by construction: it never touches herdr, tmux or a network.
 """
 import json, os, subprocess, sys, tempfile
 
+MODES = ("ok", "race", "fail", "noop", "elsewhere", "ff", "squash")
+
 tool, args = os.environ["FORGE_TOOL"], sys.argv[1:]
 dbp, mode = os.environ["FORGE_DB"], os.environ.get("FORGE_MODE", "ok")
+if mode not in MODES:
+    print("fake forge: unknown FORGE_MODE %r (want one of %s)" % (mode, ", ".join(MODES)), file=sys.stderr); sys.exit(2)
 db = json.load(open(dbp))
 with open(os.environ["FORGE_LOG"], "a") as f:
     f.write(tool + " " + " ".join(args) + "\n")
@@ -43,9 +49,10 @@ def merge():
     db["state"] = "MERGED"; save()
 
 if tool == "gh" and args[:2] == ["pr", "view"]:
-    print(json.dumps({"headRefName": db["head"], "headRefOid": db["sha"], "baseRefName": db["base"],
-                      "state": db["state"], "body": db["body"],
-                      "mergeCommit": {"oid": db["merge"]} if db["merge"] else None}))
+    if "body" in args: print(db["body"])
+    else: print(json.dumps({"headRefName": db["head"], "headRefOid": db["sha"], "baseRefName": db["base"],
+                            "state": db["state"], "body": db["body"],
+                            "mergeCommit": {"oid": db["merge"]} if db["merge"] else None}))
 elif tool == "gh" and args[:2] == ["pr", "merge"]:
     merge()
 elif tool == "glab" and args[:1] == ["api"]:

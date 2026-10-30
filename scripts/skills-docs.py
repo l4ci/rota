@@ -224,7 +224,7 @@ def render_readme(meta, chains):
     return out
 
 
-def render_chains(meta, chains, root=None):
+def render_chains(meta, chains):
     out = []
     for c in chains:
         out.append('### ' + c['title'])

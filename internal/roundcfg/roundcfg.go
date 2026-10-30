@@ -66,6 +66,10 @@ type Settings struct {
 	Slots       int
 	Brief       string
 	SharedPaths []string
+	// Tests is test.fast, test.full and work.tdd; Labels the issues.labels
+	// roles a round and the gate act on.
+	Tests  Tests
+	Labels Labels
 	// BlockScopeOverlap is round.scopeOverlap == block: a clash on declared
 	// scopes fails the overlap check like a shared path. Warn (default) only reports.
 	BlockScopeOverlap bool
@@ -187,10 +191,20 @@ func ValidScope(s string) bool {
 	return false
 }
 
+// Lenient is the gate's read of the shared-path, test and label keys: only
+// SharedPaths, Tests and Labels are set, every other field is zero. It never
+// fails; a malformed value reads as empty (Tests.Err and Tests.TDDErr keep
+// the reason), so the merge gate is not blocked by a config error FromConfig
+// reports elsewhere.
+func Lenient(cfg any) Settings {
+	paths, _ := sharedPaths(cfg)
+	return Settings{SharedPaths: paths, Tests: parseTests(cfg), Labels: labelsOf(cfg)}
+}
+
 // FromConfig reads and validates the round.* keys from an already loaded
 // config, for a caller that holds one.
 func FromConfig(cfg any) (Settings, error) {
-	var s Settings
+	s := Lenient(cfg)
 	if err := checkEnum(cfg, config.RoundScopeKey); err != nil {
 		return s, err
 	}
@@ -216,7 +230,7 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	s.Brief = config.String(cfg, config.RoundBriefKey)
-	if s.SharedPaths, err = sharedPaths(cfg); err != nil {
+	if _, err = sharedPaths(cfg); err != nil {
 		return s, err
 	}
 	if err := checkEnum(cfg, config.RoundScopeOverlapKey); err != nil {
@@ -291,7 +305,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if err := loadTiers(cfg, &s); err != nil {
 		return s, err
 	}
-	t := ParseTests(cfg)
+	t := s.Tests
 	if t.Err != nil {
 		return s, t.Err
 	}
@@ -501,8 +515,8 @@ type Tests struct {
 	Err, TDDErr error
 }
 
-// ParseTests reads the test commands and work.tdd from a loaded config.
-func ParseTests(cfg any) Tests {
+// parseTests reads the test commands and work.tdd from a loaded config.
+func parseTests(cfg any) Tests {
 	var t Tests
 	var errFast, errFull error
 	t.Fast, errFast = list(cfg, "test.fast")
@@ -523,17 +537,9 @@ func ParseTests(cfg any) Tests {
 // FullOnly is true when test.fast is empty but a full command is set.
 func (t Tests) FullOnly() bool { return len(t.Fast) == 0 && len(t.Full) > 0 }
 
-// SharedPaths reads round.sharedPaths from a loaded config: the globs two
-// branches may both touch without counting as an overlap. An unreadable value
-// yields none, so a caller that only filters (the merge gate) is not blocked by
-// a config error that Load reports elsewhere.
-func SharedPaths(cfg any) []string {
-	paths, _ := sharedPaths(cfg)
-	return paths
-}
-
-// sharedPaths is the one reader of round.sharedPaths: Load reports its error,
-// SharedPaths drops it.
+// sharedPaths is the one reader of round.sharedPaths, the globs two branches
+// may both touch without counting as an overlap: FromConfig reports its error,
+// Lenient drops it.
 func sharedPaths(cfg any) ([]string, error) { return list(cfg, config.RoundSharedPathsKey) }
 
 // Labels are the issues.labels roles a round and the gate act on, with the
@@ -542,9 +548,9 @@ type Labels struct {
 	InProgress, NeedsHuman, NeedsReview string
 }
 
-// LabelsOf reads issue labels for round and gate consumers from a loaded config.
+// labelsOf reads issue labels for round and gate consumers from a loaded config.
 // Other consumers, such as backlog operations, may read these roles directly.
-func LabelsOf(cfg any) Labels {
+func labelsOf(cfg any) Labels {
 	return Labels{
 		InProgress:  config.Label(cfg, "inProgress"),
 		NeedsHuman:  config.Label(cfg, "needsHuman"),

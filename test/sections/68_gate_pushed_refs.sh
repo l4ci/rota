@@ -2,7 +2,7 @@ echo "worker gate — pushed refs, PR identity, merge confirmed on base (github 
 # The gate merges what was PUSHED, so it must judge origin/<base> vs origin/<branch>
 # after a fetch, refuse a PR that is not the verified branch, and confirm the merge
 # commit really sits on origin/<base>. Each case builds a fresh bare origin plus a
-# gate checkout; a fake gh/glab (one python script) plays the forge and can lie in the
+# gate checkout; a fake gh/glab (test/fakes/fake_forge.py) plays the forge and can lie in the
 # ways a real one does: report success while merging nothing (glab auto-merge), or
 # merge into another branch (a stacked PR).
 
@@ -11,61 +11,7 @@ trap 'rm -rf "$TMP_GT"' EXIT
 
 GT_BIN="$TMP_GT/fakebin"; mkdir -p "$GT_BIN"
 REAL_GIT="$(command -v git)"
-cat > "$GT_BIN/forge.py" <<'PYEOF'
-import json, os, subprocess, sys, tempfile
-
-tool, args = os.environ["FORGE_TOOL"], sys.argv[1:]
-dbp, mode = os.environ["FORGE_DB"], os.environ.get("FORGE_MODE", "ok")
-db = json.load(open(dbp))
-with open(os.environ["FORGE_LOG"], "a") as f:
-    f.write(tool + " " + " ".join(args) + "\n")
-
-def save(): json.dump(db, open(dbp, "w"))
-
-def merge():
-    # A real forge refuses a merge whose pin is missing or is not the PR's head.
-    flag = "--match-head-commit" if tool == "gh" else "--sha"
-    pin = args[args.index(flag) + 1] if flag in args else None
-    if mode == "race":
-        db["sha"] = "f" * 40  # someone pushed after the gate's check
-    if pin != db["sha"]:
-        print("simulated: head commit %s does not match the pin %s" % (db["sha"], pin), file=sys.stderr); sys.exit(1)
-    if mode == "fail":
-        print("simulated: merge blocked by branch protection", file=sys.stderr); sys.exit(1)
-    if mode == "noop":
-        return
-    target = "stack" if mode == "elsewhere" else db["base"]
-    with tempfile.TemporaryDirectory() as t:
-        def g(*a): return subprocess.run(["git", "-c", "user.name=f", "-c", "user.email=f@f", *a],
-                                         cwd=t, check=True, capture_output=True, text=True).stdout.strip()
-        subprocess.run(["git", "clone", "-q", db["origin"], t], check=True)
-        if mode == "elsewhere": g("checkout", "-q", "-b", "stack", "origin/" + db["base"])
-        if mode == "ff":  # fast-forward method: no merge commit on the MR
-            g("merge", "--ff-only", "-q", "origin/" + db["head"])
-        else:
-            g("merge", "--no-ff", "-q", "-m", "merge pr", "origin/" + db["head"])
-            db["merge"] = g("rev-parse", "HEAD")
-        g("push", "-q", "origin", target)
-    db["state"] = "MERGED"; save()
-
-if tool == "gh" and args[:2] == ["pr", "view"]:
-    if "body" in args: print(db["body"])
-    else: print(json.dumps({"headRefName": db["head"], "headRefOid": db["sha"], "baseRefName": db["base"],
-                            "state": db["state"], "body": db["body"], "mergeCommit": {"oid": db["merge"]} if db["merge"] else None}))
-elif tool == "gh" and args[:2] == ["pr", "merge"]:
-    merge()
-elif tool == "glab" and args[:1] == ["api"]:
-    squash = mode == "squash"
-    print(json.dumps({"source_branch": db["head"], "sha": db["sha"], "target_branch": db["base"],
-                      "state": {"OPEN": "opened", "MERGED": "merged"}.get(db["state"], "closed"),
-                      "description": db["body"],
-                      "merge_commit_sha": None if squash or not db["merge"] else db["merge"],
-                      "squash_commit_sha": db["merge"] if squash and db["merge"] else None}))
-elif tool == "glab" and args[:2] == ["mr", "merge"]:
-    merge()
-else:
-    print("fake forge: unsupported: %s" % args, file=sys.stderr); sys.exit(2)
-PYEOF
+cp "$TESTDIR/fakes/fake_forge.py" "$GT_BIN/forge.py"
 for t in gh glab; do printf '#!/usr/bin/env bash\nFORGE_TOOL=%s exec python3 "%s/forge.py" "$@"\n' "$t" "$GT_BIN" > "$GT_BIN/$t"; chmod +x "$GT_BIN/$t"; done
 # broken-check shim: a git whose merge-base always dies with 128
 mkdir -p "$TMP_GT/brokengit"

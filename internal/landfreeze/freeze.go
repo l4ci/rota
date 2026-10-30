@@ -82,6 +82,18 @@ func Load(ctx context.Context, run git.Runner, root string) (*Record, error) {
 	return Read(p)
 }
 
+// Frozen is the one answer to "may a landing be blocked right now": true when
+// any freeze is active, and also when the record cannot be read, since an
+// unreadable freeze must not look like a clear one. Outside a repo there is no
+// freeze. The git runner resolves the shared state dir, so a fake works.
+func Frozen(ctx context.Context, run git.Runner, root string) bool {
+	r, err := Load(ctx, run, root)
+	if err != nil {
+		return !errors.Is(err, rotastate.ErrNotRepo)
+	}
+	return r.Frozen()
+}
+
 func Save(path string, r *Record) error {
 	return fsio.WriteJSONAtomic(path, r)
 }

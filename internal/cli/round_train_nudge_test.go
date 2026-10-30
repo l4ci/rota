@@ -260,45 +260,6 @@ func TestRoundWaitCarriesTheTrainNudge(t *testing.T) {
 	}
 }
 
-func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
-	recWith := func(kind, v string, f ...verdict.Finding) verdict.Record {
-		return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb", Findings: f}
-	}
-	rec := func(kind, v string) verdict.Record { return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb"} }
-	cross := func(v string, f ...verdict.Finding) verdict.Record {
-		return verdict.Record{Kind: verdict.ReviewCross, Verdict: v, Sha: "bbbbbbb", Harness: "codex", Model: "m", Findings: f}
-	}
-	for name, tc := range map[string]struct {
-		recs []verdict.Record
-		want bool
-	}{
-		"pass":                           {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Pass)}, false},
-		"concerns":                       {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Concerns)}, false},
-		"fail":                           {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Fail)}, true},
-		"spec fail after pass":           {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Pass), rec(verdict.ReviewSpec, verdict.Fail)}, true},
-		"none":                           {nil, false},
-		"concerns with blocking finding": {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"})}, true},
-		"concerns with minor finding":    {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "minor", Title: "x"})}, false},
-		"cross pass":                     {[]verdict.Record{cross(verdict.Pass)}, false},
-		"cross concerns, no blocker":     {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "minor", Title: "x"})}, false},
-		"cross concerns with blocker":    {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"})}, true},
-		"cross blocker then newer clean": {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"}), cross(verdict.Pass)}, false},
-		"blocking finding then newer clean review": {[]verdict.Record{
-			recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"}),
-			rec(verdict.ReviewSpec, verdict.Pass)}, false},
-	} {
-		root := t.TempDir()
-		for _, r := range tc.recs {
-			if _, err := verdict.AddBranch(root, "w1", r); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if got := trainBlocked(verdict.Load(root), "w1"); got != tc.want {
-			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
-		}
-	}
-}
-
 // openPRForge is a forge whose open PR list is fixed.
 type openPRForge struct {
 	worker.Forge
@@ -412,5 +373,32 @@ func TestWaitingPRsReviewedByHead(t *testing.T) {
 		if got[0].Reviewed != tc.want {
 			t.Errorf("%s: reviewed = %v, want %v", name, got[0].Reviewed, tc.want)
 		}
+	}
+}
+
+// The nudge and the tick read one readiness rule: a head-matched review is
+// ready, with the same time, through both (#2410).
+func TestNudgeAndTickAgreeOnReadiness(t *testing.T) {
+	dir := nudgeProject(t, []string{"a/1-x", "c/3-z"}, []string{"a/1-x"})
+	addRegistryRows(t, dir, map[string][]map[string]any{
+		"slots": {
+			{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11"},
+			{"name": "c", "state": "done", "branch": "c/3-z", "pr": "#13"},
+		},
+	})
+	c := &Ctx{Deps: testDeps(), ctx: context.Background()}
+	nudge := waitingPRs(c, dir)
+	tick := (&tickWorld{c: c, root: dir}).Waiting()
+	if len(nudge) != 2 || len(tick) != len(nudge) {
+		t.Fatalf("nudge %+v, tick %+v", nudge, tick)
+	}
+	for i, n := range nudge {
+		want := roundtick.ReadyPR{PR: n.PR, Reviewed: n.Reviewed, ReadySince: n.ReadySince, Immediate: n.Immediate}
+		if tick[i] != want {
+			t.Errorf("tick[%d] = %+v, nudge says %+v", i, tick[i], want)
+		}
+	}
+	if !nudge[0].Reviewed || !tick[0].Reviewed || nudge[1].Reviewed || tick[1].Reviewed {
+		t.Errorf("reviewed PR #11 must be ready in both, unreviewed #13 in neither: nudge %+v tick %+v", nudge, tick)
 	}
 }

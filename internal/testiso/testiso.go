@@ -6,6 +6,10 @@
 // name is unguessable (no pre-planted config in shared tmp) and nothing leaks.
 // A test that needs a global config sets ROTA_CONFIG_DIR (or XDG_CONFIG_HOME)
 // itself with t.Setenv.
+//
+// The same init scrubs the host-session variables (HERDR_*, TMUX*) by prefix,
+// so a test never inherits the herdr or tmux pane a round runs in. Tripwire
+// (tripwire.go) puts fake host binaries first on PATH for TestMains.
 package testiso
 
 import (
@@ -14,6 +18,7 @@ import (
 )
 
 func init() {
+	scrubHostEnv()
 	d, err := os.MkdirTemp("", "rota-test-no-global-")
 	if err != nil {
 		panic(err)
