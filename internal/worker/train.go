@@ -574,7 +574,7 @@ func (t *trainRun) syncBase() (bool, error) {
 		return t.broke(fmt.Sprintf("git rev-parse %s exited %d", from, code))
 	}
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, t.scratch, args...) }
-	if err := land.MergeLocal(run, sha, fmt.Sprintf("sync %s into %s", o.SyncBase, o.Base), land.RecoveryGit(ctx, e.Git, t.scratch)); err != nil {
+	if err := land.MergeLocal(run, sha, land.SyncSubject(o.SyncBase, o.Base), land.RecoveryGit(ctx, e.Git, t.scratch)); err != nil {
 		var ce *land.ConflictError
 		if errors.As(err, &ce) {
 			res.Verdict = GateMergeFailed
@@ -1098,7 +1098,7 @@ func (e Env) mergeTrain(ctx context.Context, scratch, base string, ms []TrainMem
 	tips[0], _ = e.git(scratch, "rev-parse", "HEAD")
 	for i, m := range ms {
 		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-		if err := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, base), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
+		if err := land.MergeLocal(run, heads[i], land.TrainSubject(m.Branch, base), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
 			return tips, i, err, ""
 		}
 		var code int
