@@ -257,3 +257,28 @@ func TestOrcaDefaultReapUsesTabCapability(t *testing.T) {
 		t.Fatalf("tabs=%+v err=%v", tabs, err)
 	}
 }
+
+func TestReapApplyCatchesAnAgentThatAppearsAfterFind(t *testing.T) {
+	root, deps := reapProject(t, nil, true)
+	calls := 0
+	inner := deps.ReapEnv
+	deps.ReapEnv = func(ctx context.Context, r string) (round.Env, reap.HostOps) {
+		e, ops := inner(ctx, r)
+		e.Snapshot = func(context.Context) ([]host.Agent, error) {
+			calls++
+			if calls == 1 { // Find's read: no agent in old yet
+				return nil, nil
+			}
+			return []host.Agent{{Tab: "w3:t1", Name: "late", Cwd: filepath.Join(root, ".worktrees", "old"), Status: "working"}}, nil
+		}
+		return e, ops
+	}
+	code, out, _ := rotaInWith(t, deps, root, "--json", "reap", "--apply", "--kind", "worktree")
+	d := data(t, out)
+	if code == 0 || len(d["failed"].([]any)) == 0 {
+		t.Fatalf("apply = %d %v", code, d)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".worktrees", "old")); err != nil {
+		t.Fatal("worktree with a late agent was removed")
+	}
+}
