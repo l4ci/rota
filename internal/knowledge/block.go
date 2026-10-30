@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -42,11 +43,11 @@ func UmbrellaOnlyBlock(key string) bool { return blockKinds[key].umbrellaOnly }
 // instructions file. A missing source file just yields no topics.
 func (s Store) BlockInputs(key, scope string) (topics []string, target string, err error) {
 	topicsOf := func(path string) []string {
-		raw, err := readTextBytes(path)
+		raw, err := fsio.ReadText(path)
 		if err != nil {
 			return nil
 		}
-		text := string(raw)
+		text := raw
 		topics := section.Topics(text)
 		if key == "decisions" {
 			topics = decisionSections(ActiveDecisions(text))

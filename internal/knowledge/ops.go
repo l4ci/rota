@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -100,7 +101,7 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 		return AddResult{}, notFound("topic '%s' not found in %s", topic, target)
 	}
 	lower := strings.ToLower(title)
-	for _, line := range section.Lines(content[start:end]) {
+	for _, line := range pystr.Splitlines(content[start:end]) {
 		if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil && strings.ToLower(m[1]) == lower {
 			// Like the old helper, a repeat still registers the title in the
 			// sidecar, so a bullet that predates tiering gets tracked.
@@ -187,7 +188,7 @@ func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, 
 			}
 			continue
 		}
-		for _, line := range section.Lines(content[st:en]) {
+		for _, line := range pystr.Splitlines(content[st:en]) {
 			stripped := strings.TrimSpace(line)
 			if strings.HasPrefix(stripped, "- ") && strings.Contains(stripped, fragment) {
 				hits = append(hits, hit{f, content, stripped})
