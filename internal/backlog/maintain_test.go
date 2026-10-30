@@ -3,8 +3,8 @@ package backlog
 import (
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -187,42 +187,13 @@ func TestRefactorAgeBadShapes(t *testing.T) {
 
 // ---- drift ---------------------------------------------------------------------
 
-func gitRepo(t *testing.T, dir string) {
-	t.Helper()
-	for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"config", "user.name", "T"}, {"config", "user.email", "t@example.com"}, {"config", "commit.gpgsign", "false"}} {
-		gitIn(t, dir, a...)
-	}
-}
-
-func gitIn(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func commit(t *testing.T, dir, subject, file, content string) string {
-	t.Helper()
-	p := filepath.Join(dir, file)
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte(content), 0o644)
-	gitIn(t, dir, "add", file)
-	gitIn(t, dir, "commit", "-q", "-m", subject)
-	return gitIn(t, dir, "rev-parse", "--short", "HEAD")
-}
-
 func TestDrift(t *testing.T) {
 	f := fileBackend(t, "")
-	gitRepo(t, f.Root)
-	h1 := commit(t, f.Root, "chore: init", "a.txt", "x")
-	commit(t, f.Root, "fix: [B01] early", "b.txt", "x")
-	h3 := commit(t, f.Root, "feat: [B02] [F01] done", "c.txt", "x")
-	commit(t, f.Root, "feat: [B01] and [B02] again [X9] [B05]", "src/lex.go", "func ParserCore() {}\n")
+	gittest.Init(t, f.Root, "main")
+	h1 := gittest.Commit(t, f.Root, "chore: init", "a.txt", "x")
+	gittest.Commit(t, f.Root, "fix: [B01] early", "b.txt", "x")
+	h3 := gittest.Commit(t, f.Root, "feat: [B02] [F01] done", "c.txt", "x")
+	gittest.Commit(t, f.Root, "feat: [B01] and [B02] again [X9] [B05]", "src/lex.go", "func ParserCore() {}\n")
 	md := "# TODO\n\n## Bugs\n" +
 		"- **[B01] [P1] Early.** x Since: " + h3 + "\n" + // the fix predates the anchor
 		"- **[B02] [P1] Both.** y Since: " + h1 + "\n" +
@@ -280,10 +251,10 @@ func TestDriftUmbrellaTargets(t *testing.T) {
 	web, api := filepath.Join(f.Root, "web"), filepath.Join(f.Root, "api")
 	for _, d := range []string{web, api} {
 		os.MkdirAll(d, 0o755)
-		gitRepo(t, d)
+		gittest.Init(t, d, "main")
 	}
-	commit(t, web, "fix: [B01] web", "f.txt", "x")
-	commit(t, api, "fix: [B01] api", "f.txt", "x")
+	gittest.Commit(t, web, "fix: [B01] web", "f.txt", "x")
+	gittest.Commit(t, api, "fix: [B01] api", "f.txt", "x")
 	drift, _, err := f.Drift([]Target{{Name: "web", Dir: web}, {Name: "api", Dir: api}})
 	if err != nil || len(drift) != 1 || len(drift[0].Commits) != 2 {
 		t.Fatalf("drift = %+v %v", drift, err)

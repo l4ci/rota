@@ -3,6 +3,7 @@ package worker
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,8 +111,8 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 				os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(doc), 0o644)
 			}
 			os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
-			gitq(t, w.dir, "add", "local.txt")
-			gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+			gittest.Run(t, w.dir, "add", "local.txt")
+			gittest.Run(t, w.dir, "commit", "-q", "-m", "local only commit")
 			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: arg, Base: "main"})
 			if err != nil {
 				t.Fatal(err)

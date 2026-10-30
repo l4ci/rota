@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ func TestFreezeVerifiedRecovery(t *testing.T) {
 	w, p := frozenWorld(t)
 	e := w.env(false)
 	r, err := e.Freeze(bg, w.dir, FreezeOpts{Verify: true})
-	if err != nil || r.Active || r.ClearedBy == "" || r.ClearedSHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+	if err != nil || r.Active || r.ClearedBy == "" || r.ClearedSHA != gittest.Run(t, w.dir, "rev-parse", "HEAD") {
 		t.Fatalf("green recovery: %+v %v", r, err)
 	}
 	stored, err := landfreeze.Read(p)
@@ -64,11 +65,11 @@ func TestFreezeRecoveryRefusesDirtyOrWrongBranch(t *testing.T) {
 			case "dirty":
 				os.WriteFile(filepath.Join(w.dir, "seed.txt"), []byte("dirty"), 0644)
 			case "branch":
-				gitq(t, w.dir, "checkout", "-q", "-b", "other")
+				gittest.Run(t, w.dir, "checkout", "-q", "-b", "other")
 			case "stale-origin":
 				advanceMainOn(w, "more.txt")
 			case "moved-during-verify":
-				w.setConfig(`{"test":{"full":["git -c user.name=t -c user.email=t@t commit --allow-empty -m moved"]}}`)
+				w.setConfig(`{"test":{"full":["git commit --allow-empty -m moved"]}}`)
 			}
 			if _, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Verify: true}); err == nil {
 				t.Fatal("unsafe base cleared freeze")
@@ -84,7 +85,7 @@ func TestFreezeRecoveryRefusesDirtyOrWrongBranch(t *testing.T) {
 func TestFreezeSharedAcrossLinkedWorktrees(t *testing.T) {
 	w, p := frozenWorld(t)
 	wt := filepath.Join(t.TempDir(), "linked")
-	gitq(t, w.dir, "worktree", "add", "-q", "--detach", wt)
+	gittest.Run(t, w.dir, "worktree", "add", "-q", "--detach", wt)
 	r, err := w.env(false).Freeze(bg, wt, FreezeOpts{RepairIssue: "99"})
 	if err != nil || r.RepairIssue != "99" {
 		t.Fatalf("linked repair: %+v %v", r, err)
@@ -101,7 +102,7 @@ func TestFreezeSharedAcrossLinkedWorktrees(t *testing.T) {
 
 func TestFreezeClearDeletedBase(t *testing.T) {
 	w, p := frozenWorld(t)
-	gitq(t, w.dir, "branch", "gone")
+	gittest.Run(t, w.dir, "branch", "gone")
 	r, err := landfreeze.Read(p)
 	if err != nil {
 		t.Fatal(err)
@@ -110,12 +111,12 @@ func TestFreezeClearDeletedBase(t *testing.T) {
 	if err := landfreeze.Save(p, r); err != nil {
 		t.Fatal(err)
 	}
-	gitq(t, w.dir, "branch", "-d", "gone")
+	gittest.Run(t, w.dir, "branch", "-d", "gone")
 	cleared, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Clear: true, Reason: "base was deleted"})
 	if err != nil {
 		t.Fatalf("manual clear must not resolve deleted base: %v", err)
 	}
-	if cleared.Active || cleared.Base != "gone" || cleared.ClearedSHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+	if cleared.Active || cleared.Base != "gone" || cleared.ClearedSHA != gittest.Run(t, w.dir, "rev-parse", "HEAD") {
 		t.Fatalf("clear must retain cause and record operator HEAD: %+v", cleared)
 	}
 	audit, err := os.ReadFile(filepath.Join(w.dir, ".rota", "gate-audit.jsonl"))
@@ -130,10 +131,10 @@ func TestFreezeClearDeletedBase(t *testing.T) {
 
 func TestFreezeClearRecordsExistingBase(t *testing.T) {
 	w, p := frozenWorld(t)
-	base := gitq(t, w.dir, "rev-parse", "main")
-	gitq(t, w.dir, "checkout", "-q", "-b", "unrelated")
-	gitq(t, w.dir, "commit", "-q", "--allow-empty", "-m", "unrelated work")
-	if base == gitq(t, w.dir, "rev-parse", "HEAD") {
+	base := gittest.Run(t, w.dir, "rev-parse", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "-b", "unrelated")
+	gittest.Run(t, w.dir, "commit", "-q", "--allow-empty", "-m", "unrelated work")
+	if base == gittest.Run(t, w.dir, "rev-parse", "HEAD") {
 		t.Fatal("fixture must have an unrelated operator HEAD")
 	}
 	cleared, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Clear: true, Reason: "known obsolete check"})

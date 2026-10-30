@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,7 +56,7 @@ func TestDebugIssueAliases(t *testing.T) {
 	}
 	debugIssueRun(t, deps, root, 4, "counter", "record-attempt", "--hypothesis", "h", "--commit", "abc")
 	debugIssueRun(t, deps, root, 0, "counter", "clear")
-	gitIn(t, root, "checkout", "-b", "another-session")
+	gittest.Run(t, root, "checkout", "-b", "another-session")
 	for _, ref := range []string{"9", "#9", "B9", "b09"} {
 		debugIssueRun(t, deps, root, 4, "counter", "init", ref)
 	}
@@ -106,8 +107,8 @@ func TestDebugUmbrellaIdentities(t *testing.T) {
 	for _, mode := range []string{"fresh", "legacy", "qualified-legacy"} {
 		t.Run(mode, func(t *testing.T) {
 			root, deps, _, _ := umbrellaProject(t)
-			gitIn(t, root, "init")
-			gitIn(t, root, "commit", "--allow-empty", "-m", "initial")
+			gittest.Run(t, root, "init")
+			gittest.Run(t, root, "commit", "--allow-empty", "-m", "initial")
 			if mode == "legacy" {
 				b3Fails(t, root, "#1", 3)
 			}

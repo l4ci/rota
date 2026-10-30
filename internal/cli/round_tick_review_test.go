@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"io"
 	"path/filepath"
 	"strings"
@@ -25,9 +26,9 @@ func TestAutopilotReviewProbeLetsPRStateReachGate(t *testing.T) {
 			const branch = "ben/2185-x"
 			dir := nudgeProject(t, []string{branch}, nil)
 			remote := t.TempDir()
-			gitT(t, remote, "init", "--bare", "-q")
-			gitT(t, dir, "remote", "add", "origin", remote)
-			gitT(t, dir, "push", "-q", "origin", "main", branch)
+			gittest.Run(t, remote, "init", "--bare", "-q")
+			gittest.Run(t, dir, "remote", "add", "origin", remote)
+			gittest.Run(t, dir, "push", "-q", "origin", "main", branch)
 			write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"},"ship":{"review":"full"}}`)
 			addRegistryRows(t, dir, map[string][]map[string]any{
 				"slots": {{"name": "ben", "state": "done", "branch": branch, "pr": "#11", "task": "2185"}},

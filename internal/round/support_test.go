@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -191,12 +192,9 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 	t.Helper()
 	f := newAssignFixture(t)
 	origin := filepath.Join(gitTemp(t), "origin.git")
-	sh(t, f.root, "clone", "-q", "--bare", f.root, origin)
-	sh(t, f.root, "remote", "add", "origin", origin)
-	sh(t, f.root, "fetch", "-q", "origin")
-	// The resume merge commits as the user, as a worker's commits do.
-	sh(t, f.root, "config", "user.email", "t@t")
-	sh(t, f.root, "config", "user.name", "t")
+	gittest.Run(t, f.root, "clone", "-q", "--bare", f.root, origin)
+	gittest.Run(t, f.root, "remote", "add", "origin", origin)
+	gittest.Run(t, f.root, "fetch", "-q", "origin")
 	writeFile(t, filepath.Join(f.root, ".rota", "config.json"), cfg)
 	writeFile(t, filepath.Join(f.root, ".rota", "config.local.json"), `{"round":{"role":"support"}}`)
 	set, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(f.root)))
@@ -236,13 +234,11 @@ func writeFile(t *testing.T, path, body string) {
 func pushToOrigin(t *testing.T, origin, file, body string) string {
 	t.Helper()
 	clone := filepath.Join(gitTemp(t), "c")
-	sh(t, filepath.Dir(clone), "clone", "-q", origin, clone)
-	sh(t, clone, "config", "user.email", "t@t")
-	sh(t, clone, "config", "user.name", "t")
+	gittest.Run(t, filepath.Dir(clone), "clone", "-q", origin, clone)
 	writeFile(t, filepath.Join(clone, file), body)
-	sh(t, clone, "add", file)
-	sh(t, clone, "commit", "-q", "-m", "landed on main elsewhere")
-	sh(t, clone, "push", "-q", "origin", "HEAD:main")
+	gittest.Run(t, clone, "add", file)
+	gittest.Run(t, clone, "commit", "-q", "-m", "landed on main elsewhere")
+	gittest.Run(t, clone, "push", "-q", "origin", "HEAD:main")
 	res, _ := git.Exec(bg, clone, "rev-parse", "HEAD")
 	return strings.TrimSpace(res.Stdout)
 }
@@ -291,7 +287,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 // cuts from the stale local base.
 func TestSupportAssignFetchFailureRefuses(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
-	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(gitTemp(t), "gone.git"))
+	gittest.Run(t, f.root, "remote", "set-url", "origin", filepath.Join(gitTemp(t), "gone.git"))
 	if _, err := f.assign("12", "", nil); blockedBy(t, err) != BlockFetch {
 		t.Fatalf("fetch failure: %v", err)
 	}
@@ -313,8 +309,8 @@ func TestSupportResumeMergesOriginOrRefusesOnConflict(t *testing.T) {
 	}
 	wt := filepath.Join(f.root, ".worktrees", "mac-ben")
 	writeFile(t, filepath.Join(wt, "work"), "mine")
-	sh(t, wt, "add", "work")
-	sh(t, wt, "commit", "-q", "-m", "worker commit")
+	gittest.Run(t, wt, "add", "work")
+	gittest.Run(t, wt, "commit", "-q", "-m", "worker commit")
 
 	landed := pushToOrigin(t, origin, "other", "theirs")
 	if _, err := f.assign("12", "mac-ben", nil); err != nil {
@@ -358,8 +354,8 @@ func TestSupportResumeRefusesDirtyWorktree(t *testing.T) {
 	}
 	wt := filepath.Join(f.root, ".worktrees", "mac-ben")
 	writeFile(t, filepath.Join(wt, "work"), "mine")
-	sh(t, wt, "add", "work")
-	sh(t, wt, "commit", "-q", "-m", "worker commit")
+	gittest.Run(t, wt, "add", "work")
+	gittest.Run(t, wt, "commit", "-q", "-m", "worker commit")
 	writeFile(t, filepath.Join(wt, "work"), "uncommitted")
 	pushToOrigin(t, origin, "other", "theirs")
 	before, _ := git.Exec(bg, wt, "rev-parse", "HEAD")

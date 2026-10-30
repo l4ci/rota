@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 )
 
@@ -278,9 +279,7 @@ func TestInitChangedWhenOnlyAMigrationWrote(t *testing.T) {
 // Runtime verification evidence stays per-developer after initialization.
 func TestInitIgnoresVerificationState(t *testing.T) {
 	dir := t.TempDir()
-	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
+	gittest.Init(t, dir, "main")
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -303,9 +302,7 @@ func TestInitIgnoresVerificationState(t *testing.T) {
 // per-developer: git ignores either, so a fold never dirties the tree.
 func TestInitIgnoresClaimedHitBuffer(t *testing.T) {
 	dir := t.TempDir()
-	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
+	gittest.Init(t, dir, "main")
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)
 	}

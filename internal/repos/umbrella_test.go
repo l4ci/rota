@@ -2,22 +2,11 @@ package repos
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
-
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
 
 func umbrella(t *testing.T, reg string, subs ...string) string {
 	t.Helper()
@@ -26,8 +15,8 @@ func umbrella(t *testing.T, reg string, subs ...string) string {
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(reg), 0o644)
 	for _, s := range subs {
 		os.MkdirAll(filepath.Join(root, s), 0o755)
-		gitIn(t, filepath.Join(root, s), "init", "-q", "-b", "main")
-		gitIn(t, filepath.Join(root, s), "commit", "-q", "--allow-empty", "-m", "init")
+		gittest.Init(t, filepath.Join(root, s), "main")
+		gittest.Run(t, filepath.Join(root, s), "commit", "-q", "--allow-empty", "-m", "init")
 	}
 	return root
 }
@@ -59,7 +48,7 @@ func TestWhichInsideAndOutside(t *testing.T) {
 	if _, err := Which(root); !errors.Is(err, ErrNotGit) {
 		t.Errorf("umbrella root: %v", err)
 	}
-	gitIn(t, root, "init", "-q", "-b", "main")
+	gittest.Init(t, root, "main")
 	if _, err := Which(root); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("umbrella root as repo: %v", err)
 	}
@@ -68,7 +57,7 @@ func TestWhichInsideAndOutside(t *testing.T) {
 func TestWhichLayoutBWorktree(t *testing.T) {
 	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
 	wt := filepath.Join(root, "web-wt")
-	gitIn(t, filepath.Join(root, "web"), "worktree", "add", "-q", "-b", "feat/x", wt)
+	gittest.Run(t, filepath.Join(root, "web"), "worktree", "add", "-q", "-b", "feat/x", wt)
 	r, err := Which(wt)
 	if err != nil || r.Name != "web" || r.Path != filepath.Join(root, "web") {
 		t.Errorf("worktree: %+v %v", r, err)

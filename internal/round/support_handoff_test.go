@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -22,19 +23,19 @@ func supportHandoffFixture(t *testing.T) (string, Env, *fakeRemote) {
 	t.Helper()
 	root, e, fb := unregFixture(t)
 	origin := filepath.Join(gitTemp(t), "origin.git")
-	sh(t, root, "clone", "-q", "--bare", root, origin)
-	sh(t, root, "remote", "add", "origin", origin)
+	gittest.Run(t, root, "clone", "-q", "--bare", root, origin)
+	gittest.Run(t, root, "remote", "add", "origin", origin)
 	for _, br := range []string{"mac-ben/612-thing", "mac-kit/614-busy", "mac-nia"} {
 		wt := filepath.Join(t.TempDir(), "wt")
-		sh(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
 		writeFile(t, filepath.Join(wt, "work-"+strings.ReplaceAll(br, "/", "-")), br)
-		sh(t, wt, "add", ".")
-		sh(t, wt, "commit", "-q", "-m", "support work")
-		sh(t, root, "push", "-q", "origin", br)
-		sh(t, root, "worktree", "remove", "--force", wt)
-		sh(t, root, "branch", "-q", "-D", br)
+		gittest.Run(t, wt, "add", ".")
+		gittest.Run(t, wt, "commit", "-q", "-m", "support work")
+		gittest.Run(t, root, "push", "-q", "origin", br)
+		gittest.Run(t, root, "worktree", "remove", "--force", wt)
+		gittest.Run(t, root, "branch", "-q", "-D", br)
 	}
-	sh(t, root, "update-ref", "-d", "refs/remotes/origin/mac-ben/612-thing")
+	gittest.Run(t, root, "update-ref", "-d", "refs/remotes/origin/mac-ben/612-thing")
 	fb.add("614", "Busy", "M01", false, "## Acceptance\n- [ ] ok\n")
 	fb.add("615", "Odd", "M01", false, "## Acceptance\n- [ ] ok\n")
 	fb.prs = []tracker.PR{

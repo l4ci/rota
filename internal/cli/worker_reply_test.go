@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func TestWorkerReplyPostsWithMarker(t *testing.T) {
@@ -56,7 +58,7 @@ func TestWorkerReplyFromSlotWorktree(t *testing.T) {
 				t.Fatal(err)
 			}
 			wt := filepath.Join(main, ".worktrees", slot)
-			gitT(t, main, "worktree", "add", "-q", "-b", slot+"/577-x", wt)
+			gittest.Run(t, main, "worktree", "add", "-q", "-b", slot+"/577-x", wt)
 			if err := os.MkdirAll(filepath.Join(wt, ".rota"), 0o755); err != nil {
 				t.Fatal(err)
 			}

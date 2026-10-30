@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/update"
 )
@@ -148,9 +148,7 @@ func TestSkillsProjectScope(t *testing.T) {
 		t.Errorf("outside git: %d", code)
 	}
 	repo := t.TempDir()
-	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
-		t.Skipf("git init: %v %s", err, out)
-	}
+	gittest.Init(t, repo, "main")
 	sub := filepath.Join(repo, "a", "b")
 	os.MkdirAll(sub, 0o755)
 	code, env, errOut := skillsRun(t, home, sub, "skills", "install", "--scope", "project", "--agent", "claude")
@@ -339,9 +337,7 @@ func TestSkillsCurrentAccountFlag(t *testing.T) {
 func TestSkillsProjectScopeIgnoresAccounts(t *testing.T) {
 	home := t.TempDir()
 	proj, a, _, _ := accountProject(t, home)
-	if out, err := exec.Command("git", "-C", proj, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("%v %s", err, out)
-	}
+	gittest.Init(t, proj, "main")
 	_, env, _ := skillsRun(t, home, proj, "skills", "install", "--agent", "claude", "--scope", "project")
 	if rs := skData(env)["roots"].([]any); len(rs) != 1 {
 		t.Errorf("%v", rs)

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -25,18 +26,18 @@ func (f sectionPRForge) PRView(context.Context, int) (tracker.PRInfo, error) {
 func TestWorkerSectionsRefusalData(t *testing.T) {
 	dir := workerProject(t, `{"forge":{"provider":"github"},"ship":{"review":"none"},"test":{"full":["false"]}}`)
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	gitT(t, dir, "init", "-q", "--bare", "-b", "main", origin)
-	gitT(t, dir, "remote", "add", "origin", origin)
-	gitT(t, dir, "push", "-q", "origin", "main")
+	gittest.Run(t, dir, "init", "-q", "--bare", "-b", "main", origin)
+	gittest.Run(t, dir, "remote", "add", "origin", origin)
+	gittest.Run(t, dir, "push", "-q", "origin", "main")
 	deps := testDeps()
 	if code, out, errs := rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main"); code != 0 {
 		t.Fatalf("pool: %d %s %s", code, out, errs)
 	}
-	gitT(t, dir, "push", "-q", "origin", "rota-worker/w1")
+	gittest.Run(t, dir, "push", "-q", "origin", "rota-worker/w1")
 	if _, err := worker.UpdateSlot(dir, "w1", func(s *worker.Slot) { s.SetPR("https://github.com/o/r/pull/7") }); err != nil {
 		t.Fatal(err)
 	}
-	sha := strings.TrimSpace(gitT(t, dir, "rev-parse", "origin/rota-worker/w1"))
+	sha := strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "origin/rota-worker/w1"))
 	for _, tc := range []struct{ body, reason string }{
 		{"## Rulings\nNone\n", blockedby.AssumptionsMissing},
 		{"## Assumptions\nNone\n", blockedby.RulingsMissing},

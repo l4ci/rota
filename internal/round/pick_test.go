@@ -45,7 +45,7 @@ func newPickFx(t *testing.T) *pickFx {
 	f.env.Forge = f.forge
 	f.benBr, f.danaBr = f.slot("ben").Branch(), "dana/12-second-attempt"
 	f.danaWT = f.wt("dana")
-	sh(t, f.danaWT, "switch", "-q", "-c", f.danaBr)
+	gittest.Run(t, f.danaWT, "switch", "-q", "-c", f.danaBr)
 	f.hold(t, "dana", "busy", "")
 	f.be.claims["12"] = "ben@1"
 	if err := worker.Update(f.root, func(d *worker.Doc) {

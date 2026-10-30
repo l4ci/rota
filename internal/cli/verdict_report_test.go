@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"path/filepath"
 	"slices"
@@ -34,7 +35,7 @@ func TestVerdictReportPendingKeepsRecord(t *testing.T) {
 func TestVerdictReportFileUpsertAndRetry(t *testing.T) {
 	dir := fileDeferredRepo(t)
 	write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Tasks\n\n- **[T01] [Minor] Report target.** Evidence\n\n## Completed\n")
-	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "Implement [T01]")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "Implement [T01]")
 	artifact := ".rota/qa-runs/run/check/output.txt"
 	write(t, filepath.Join(dir, artifact), "check passed\n")
 	body := writeBody(t, t.TempDir(), `{"summary":"go test passed", "findings":[{"severity":"info","title":"go test ./internal/verdict", "detail":"PASS: .rota/qa-runs/run/check/output.txt"}]}`)
@@ -48,7 +49,7 @@ func TestVerdictReportFileUpsertAndRetry(t *testing.T) {
 	if strings.Count(text, "<!-- rota:report qa sha=") != 1 || !strings.Contains(text, "CONCERNS") || !strings.Contains(text, "### Artifacts\n\n- `"+artifact+"`") {
 		t.Fatalf("want one updated report citing existing artifact:\n%s", text)
 	}
-	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "More [T01]")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "More [T01]")
 	if code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS"); code != 0 {
 		t.Fatal(errs)
 	}
@@ -66,7 +67,7 @@ func TestVerdictReportFileUpsertAndRetry(t *testing.T) {
 func TestVerdictReportIssueTargetsAndPendingRetry(t *testing.T) {
 	dir := verdictRepo(t)
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"issues":{"source":"github"},"forge":{"provider":"github"},"ship":{"review":"none"}}`)
-	gitIn(t, dir, "branch", "-m", "ben/7-report")
+	gittest.Run(t, dir, "branch", "-m", "ben/7-report")
 	items := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "lead", State: "open"}, {Key: tracker.NumKey(8), Title: "linked", State: "open"}}}
 	notes := []tracker.Comment{}
 	offline := false
@@ -136,7 +137,7 @@ func TestVerdictReportIssueTargetsAndPendingRetry(t *testing.T) {
 		}
 	}
 	t.Logf("same kind/sha reports: PR=%d item7=%d item8=%d", len(notes), len(items.Issues[0].Comments), len(items.Issues[1].Comments))
-	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "new head")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "new head")
 	offline = true
 	o := run("PASS")
 	if o.code != 0 || data(t, o.stdout)["report"] != "pending" {
@@ -173,7 +174,7 @@ func TestVerdictArtifactsOnlyExistingCitations(t *testing.T) {
 func TestVerdictReportIgnoresForkPR(t *testing.T) {
 	dir := verdictRepo(t)
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"issues":{"source":"github"},"forge":{"provider":"github"}}`)
-	gitIn(t, dir, "branch", "-m", "ben/7-report")
+	gittest.Run(t, dir, "branch", "-m", "ben/7-report")
 	items := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "lead"}, {Key: tracker.NumKey(8), Title: "unrelated"}}}
 	posted := []string{}
 	fake := &forge{answer: func(_ string, args []string) (string, string, int) {
@@ -201,7 +202,7 @@ func TestShipPRPostsPrePRVerdict(t *testing.T) {
 	work := shipFixture(t, `{"forge":{"provider":"github"},"issues":{"source":"github"},"ship":{"review":"none"}}`)
 	const branch = "ben/7-report"
 	shipBranchOf(t, work, branch, [3]string{"x.txt", "work", ""})
-	gitT(t, work, "checkout", "-q", branch)
+	gittest.Run(t, work, "checkout", "-q", branch)
 	items := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "lead", State: "open"}}}
 	opened := false
 	var notes []string

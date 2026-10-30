@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +75,7 @@ func TestGateClaimPasses(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			branch := "mac-ben/5-work"
-			gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
+			gittest.Run(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
 			w.forge("head", branch)
 			w.setPRBody("Closes #5")
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
@@ -176,7 +177,7 @@ func TestGateClaimStore(t *testing.T) {
 
 func TestGateClaimSkipsWithoutPR(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"w1","branch":"w1","task":"5","claimId":"ben@3"}]}`), 0600)
 	src := &claimIssues{bodies: []string{"<!-- rota:claim dana@5 -->"}}
@@ -200,7 +201,7 @@ func TestGateClaimSkipsUnrecordedClaim(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			branch := "fixforward/5-work"
-			gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
+			gittest.Run(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
 			w.forge("head", branch)
 			w.setPRBody("Closes #5")
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)

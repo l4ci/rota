@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -65,11 +65,7 @@ func adoptProject(t *testing.T) (string, *Deps) {
 	deps := testDeps()
 	dir := workerProject(t, `{}`)
 	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("## Bugs\n- **[B01] [P1] a.** x Captured: 2026-01-01\n- **[B02] [P1] b.** y Captured: 2026-01-01\n"), 0o644)
-	c := exec.Command("git", "worktree", "add", "-q", "-b", "codex/b01-a", filepath.Join(dir, ".worktrees", "cx"), "HEAD")
-	c.Dir = dir
-	if out, err := c.CombinedOutput(); err != nil {
-		t.Fatalf("%v %s", err, out)
-	}
+	gittest.Run(t, dir, "worktree", "add", "-q", "-b", "codex/b01-a", filepath.Join(dir, ".worktrees", "cx"), "HEAD")
 	return dir, deps
 }
 

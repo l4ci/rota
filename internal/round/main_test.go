@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
@@ -29,6 +30,7 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 	}
+	gittest.SetIdentity() // the code under test commits and merges as the process
 	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	code := m.Run()
 	if b, err := os.ReadFile(hit); err == nil {

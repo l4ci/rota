@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -21,31 +22,14 @@ type repo struct {
 }
 
 func newRepo(t *testing.T) *repo {
-	r := &repo{t: t, dir: t.TempDir()}
-	r.git("init", "-q", "-b", "main")
-	r.git("config", "user.email", "t@example.com")
-	r.git("config", "user.name", "t")
+	r := &repo{t: t, dir: gittest.TempDir(t)}
+	gittest.Init(t, r.dir, "main")
 	r.commit("work.txt", "base\n")
 	return r
 }
 
-func (r *repo) git(args ...string) string {
-	r.t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = r.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		r.t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func (r *repo) commit(file, body string) {
-	if err := os.WriteFile(filepath.Join(r.dir, file), []byte(body), 0o644); err != nil {
-		r.t.Fatal(err)
-	}
-	r.git("add", file)
-	r.git("commit", "-qm", "edit "+file)
+	gittest.Commit(r.t, r.dir, "edit "+file, file, body)
 }
 
 func (r *repo) run(args ...string) (git.Result, error) {
@@ -104,11 +88,11 @@ func TestLocalAndForgeAgree(t *testing.T) {
 
 	t.Run("a push after the pin does not land", func(t *testing.T) {
 		r := newRepo(t)
-		r.git("checkout", "-q", "-b", "feat")
+		gittest.Run(r.t, r.dir, "checkout", "-q", "-b", "feat")
 		r.commit("feat.txt", "verified\n")
-		pin := r.git("rev-parse", "HEAD")
+		pin := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
 		r.commit("late.txt", "pushed after the check\n") // the branch moves on
-		r.git("checkout", "-q", "main")
+		gittest.Run(r.t, r.dir, "checkout", "-q", "main")
 		if err := MergeLocal(r.run, pin, "merge feat", r.run); err != nil {
 			t.Fatal(err)
 		}
@@ -130,22 +114,22 @@ func TestLocalAndForgeAgree(t *testing.T) {
 
 	t.Run("a conflict aborts and leaves the tree as it was", func(t *testing.T) {
 		r := newRepo(t)
-		r.git("checkout", "-q", "-b", "feat")
+		gittest.Run(r.t, r.dir, "checkout", "-q", "-b", "feat")
 		r.commit("work.txt", "feat side\n")
-		pin := r.git("rev-parse", "HEAD")
-		r.git("checkout", "-q", "main")
+		pin := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
+		gittest.Run(r.t, r.dir, "checkout", "-q", "main")
 		r.commit("work.txt", "main side\n")
-		before := r.git("rev-parse", "HEAD")
+		before := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
 
 		err := MergeLocal(r.run, pin, "merge feat", r.run)
 		var ce *ConflictError
 		if !errors.As(err, &ce) {
 			t.Fatalf("err = %v, want *ConflictError", err)
 		}
-		if after := r.git("rev-parse", "HEAD"); after != before {
+		if after := gittest.Run(r.t, r.dir, "rev-parse", "HEAD"); after != before {
 			t.Errorf("HEAD moved: %s -> %s", before, after)
 		}
-		if st := r.git("status", "--porcelain"); st != "" {
+		if st := gittest.Run(r.t, r.dir, "status", "--porcelain"); st != "" {
 			t.Errorf("tree dirty after abort: %q", st)
 		}
 	})
@@ -210,12 +194,12 @@ func TestInterruptedMergeRestoresTree(t *testing.T) {
 	for _, failure := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(failure.Error(), func(t *testing.T) {
 			r := newRepo(t)
-			r.git("checkout", "-q", "-b", "feat")
+			gittest.Run(r.t, r.dir, "checkout", "-q", "-b", "feat")
 			r.commit("work.txt", "feature\n")
-			pin := r.git("rev-parse", "HEAD")
-			r.git("checkout", "-q", "main")
+			pin := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
+			gittest.Run(r.t, r.dir, "checkout", "-q", "main")
 			r.commit("work.txt", "main\n")
-			before := r.git("rev-parse", "HEAD")
+			before := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			run := func(args ...string) (git.Result, error) {
@@ -226,7 +210,7 @@ func TestInterruptedMergeRestoresTree(t *testing.T) {
 				if res.ExitCode != 1 {
 					t.Fatalf("expected actual conflict, got %+v", res)
 				}
-				r.git("rev-parse", "--verify", "MERGE_HEAD")
+				gittest.Run(r.t, r.dir, "rev-parse", "--verify", "MERGE_HEAD")
 				cancel()
 				return res, failure
 			}
@@ -248,7 +232,7 @@ func TestInterruptedMergeRestoresTree(t *testing.T) {
 			if errors.As(err, &ce) {
 				t.Fatalf("recovery failed: %v", err)
 			}
-			if r.git("rev-parse", "HEAD") != before || r.git("status", "--porcelain") != "" {
+			if gittest.Run(r.t, r.dir, "rev-parse", "HEAD") != before || gittest.Run(r.t, r.dir, "status", "--porcelain") != "" {
 				t.Fatal("tree was not restored")
 			}
 			res, err := r.run("rev-parse", "--verify", "-q", "MERGE_HEAD")

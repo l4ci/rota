@@ -3,12 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
@@ -233,11 +233,7 @@ func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 	deps := supportBounceDeps(fk, fake)
 	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","maxBounces":3}}`)
 	for _, b := range []string{"mac-kit/31-thing", "mac-kit/32-other"} {
-		c := exec.Command("git", "branch", b)
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("%v %s", err, out)
-		}
+		gittest.Run(t, dir, "branch", b)
 	}
 	if err := worker.RegisterExternal(dir, "ext-1", "mac-kit/31-thing", "", "main", "31", "https://github.com/o/r/pull/70"); err != nil {
 		t.Fatal(err)

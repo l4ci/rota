@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,8 +17,8 @@ func TestReviewScaffoldingNoBaseDoesNotAssumeMain(t *testing.T) {
 	d := t.TempDir()
 	repo := filepath.Join(d, "r")
 	gittest.Init(t, repo, "work")
-	gitT(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
-	gitT(t, repo, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, repo, "checkout", "-q", "-b", "feat")
 	o := trRun(t, repo, "", "review", "scaffolding", "feat")
 	if o.code != 3 || !strings.Contains(o.stderr+o.stdout, "could not determine base branch") {
 		t.Fatalf("code=%d out=%q err=%q; want exit 3 naming the unresolved base", o.code, o.stdout, o.stderr)
@@ -33,7 +32,7 @@ func TestHandoffFileUnresolvedBaseHasNoPath(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		gittest.Init(t, dir, "work")
-		gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+		gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 		os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 		cfgPath := filepath.Join(dir, ".rota", "config.json")
 		os.WriteFile(cfgPath, []byte(cfg), 0o644)
@@ -48,7 +47,7 @@ func TestHandoffFileUnresolvedBaseHasNoPath(t *testing.T) {
 func TestDefaultRoundEnvConfiguredBaseMissing(t *testing.T) {
 	dir := t.TempDir()
 	gittest.Init(t, dir, "master")
-	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"gone"}}`), 0o644)
 	e := defaultRoundEnv(context.Background(), dir, defaultDeps(), false)
@@ -64,13 +63,13 @@ func noBaseRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	gittest.Init(t, dir, "work")
-	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	return dir
 }
 
 func TestReviewScaffoldingBaseFlagBypassesUnresolvedBase(t *testing.T) {
 	repo := noBaseRepo(t)
-	gitT(t, repo, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, repo, "checkout", "-q", "-b", "feat")
 	o := trRun(t, repo, "", "review", "scaffolding", "--base", "work", "feat")
 	if o.code != 0 {
 		t.Fatalf("code=%d out=%q err=%q; --base should need no resolved base", o.code, o.stdout, o.stderr)
@@ -97,7 +96,7 @@ func missingBaseProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	gittest.Init(t, dir, "master")
-	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"gone"}}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
@@ -110,8 +109,7 @@ func TestRoundStartRefusesConfiguredBaseMissing(t *testing.T) {
 	if code != 3 || !strings.Contains(errOut, "git.baseBranch") {
 		t.Fatalf("code=%d out=%q err=%q; want exit 3 naming git.baseBranch", code, out, errOut)
 	}
-	parks, _ := exec.Command("git", "-C", dir, "branch", "--list", "park/*").Output()
-	if strings.TrimSpace(string(parks)) != "" {
+	if parks := gittest.Run(t, dir, "branch", "--list", "park/*"); parks != "" {
 		t.Errorf("refused start still cut park branches: %q", parks)
 	}
 }

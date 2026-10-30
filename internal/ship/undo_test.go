@@ -238,8 +238,6 @@ func TestPlanUndoLandingSubjects(t *testing.T) {
 				}
 			}
 			sh("init", "-q", "-b", "main")
-			sh("config", "user.email", "t@t")
-			sh("config", "user.name", "t")
 			sh("commit", "-q", "--allow-empty", "-m", "seed")
 			sh("checkout", "-q", "-b", "work")
 			sh("commit", "-q", "--allow-empty", "-m", "work")

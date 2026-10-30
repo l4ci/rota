@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastatetest"
 )
@@ -148,19 +149,10 @@ func TestReleaseAndClearStale(t *testing.T) {
 // Every worktree of a repo shares one common dir, hence one lease.
 func TestCommonDirIsSharedAcrossWorktrees(t *testing.T) {
 	repo := t.TempDir()
-	run := func(dir string, args ...string) {
-		t.Helper()
-		c := exec.Command("git", args...)
-		c.Dir = dir
-		c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	run(repo, "init", "-q", "-b", "main")
-	run(repo, "commit", "-q", "--allow-empty", "-m", "x")
+	gittest.Init(t, repo, "main")
+	gittest.Run(t, repo, "commit", "-q", "--allow-empty", "-m", "x")
 	wt := filepath.Join(t.TempDir(), "wt")
-	run(repo, "worktree", "add", "-q", wt, "-b", "other")
+	gittest.Run(t, repo, "worktree", "add", "-q", wt, "-b", "other")
 
 	a, err := rotastatetest.CommonDir(repo)
 	if err != nil {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,11 +15,11 @@ import (
 // against the base, with the deciding files, and fails closed to full.
 func TestChangeClassify(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-docs")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-docs")
 	write(t, filepath.Join(root, "README.md"), "moved image\n")
 	write(t, filepath.Join(root, "docs", "a.md"), "a\n")
-	gitT(t, root, "add", "README.md", "docs/a.md")
-	gitT(t, root, "commit", "-q", "-m", "docs")
+	gittest.Run(t, root, "add", "README.md", "docs/a.md")
+	gittest.Run(t, root, "commit", "-q", "-m", "docs")
 	prs, prCode := `[]`, 0
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -87,8 +88,8 @@ func TestChangeClassify(t *testing.T) {
 
 	// any unrecognised file makes it full
 	write(t, filepath.Join(root, "main.go"), "package main\n")
-	gitT(t, root, "add", "main.go")
-	gitT(t, root, "commit", "-q", "-m", "code")
+	gittest.Run(t, root, "add", "main.go")
+	gittest.Run(t, root, "commit", "-q", "-m", "code")
 	if _, d, _ := classify("--json"); d["tier"] != "full" || files(d) != "main.go" {
 		t.Errorf("code file: %v", d)
 	}
@@ -99,7 +100,7 @@ func TestChangeClassify(t *testing.T) {
 	}
 	cfg("")
 	// --base moves the span: against the docs commit only main.go changed
-	gitT(t, root, "branch", "docs-done", "HEAD~1")
+	gittest.Run(t, root, "branch", "docs-done", "HEAD~1")
 	if _, d, _ := classify("--json", "--base", "docs-done"); d["tier"] != "full" || d["base"] != "docs-done" || files(d) != "main.go" {
 		t.Errorf("--base: %v", d)
 	}

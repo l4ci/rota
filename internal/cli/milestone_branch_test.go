@@ -2,39 +2,30 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-)
 
-func branchGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	c := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
-	c.Dir = dir
-	out, err := c.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v %s", args, err, out)
-	}
-	return string(out)
-}
+	"github.com/l4ci/rota/internal/gittest"
+)
 
 // branchRepo is a repo whose base is main, with a bare origin holding main.
 func branchRepo(t *testing.T) (dir, origin string) {
 	t.Helper()
 	dir = gitRepo(t)
 	origin, _ = filepath.EvalSymlinks(t.TempDir())
-	branchGit(t, origin, "init", "-q", "--bare")
-	branchGit(t, dir, "branch", "main")
-	branchGit(t, dir, "remote", "add", "origin", origin)
-	branchGit(t, dir, "push", "-q", "origin", "main")
+	gittest.Run(t, origin, "init", "-q", "--bare")
+	gittest.Quiet(t, origin)
+	gittest.Run(t, dir, "branch", "main")
+	gittest.Run(t, dir, "remote", "add", "origin", origin)
+	gittest.Run(t, dir, "push", "-q", "origin", "main")
 	rotaIn(t, dir, "milestone", "add", "--title", "First", "--summary", "S")
 	return dir, origin
 }
 
 func remoteHas(t *testing.T, origin, branch string) bool {
 	t.Helper()
-	return strings.TrimSpace(branchGit(t, origin, "branch", "--list", branch)) != ""
+	return strings.TrimSpace(gittest.Run(t, origin, "branch", "--list", branch)) != ""
 }
 
 func milestoneStatusOf(t *testing.T, dir, id string) string {
@@ -56,20 +47,20 @@ func TestMilestoneActivateCutsBranchFromBase(t *testing.T) {
 	if !remoteHas(t, origin, "milestone/M01") {
 		t.Fatal("milestone/M01 not on origin")
 	}
-	if got, want := strings.TrimSpace(branchGit(t, origin, "rev-parse", "milestone/M01")), strings.TrimSpace(branchGit(t, origin, "rev-parse", "main")); got != want {
+	if got, want := strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "milestone/M01")), strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "main")); got != want {
 		t.Errorf("branch at %s, base at %s", got, want)
 	}
 }
 
 func TestMilestoneActivateReusesExistingBranch(t *testing.T) {
 	dir, origin := branchRepo(t)
-	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "work")
-	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
-	want := strings.TrimSpace(branchGit(t, origin, "rev-parse", "milestone/M01"))
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "work")
+	gittest.Run(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
+	want := strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "milestone/M01"))
 	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "active"); code != 0 {
 		t.Fatalf("activate: %d %s %s", code, out, errOut)
 	}
-	if got := strings.TrimSpace(branchGit(t, origin, "rev-parse", "milestone/M01")); got != want {
+	if got := strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "milestone/M01")); got != want {
 		t.Errorf("branch moved from %s to %s", want, got)
 	}
 }
@@ -116,7 +107,7 @@ func TestMilestoneArchivedKeepRenamesAndUntagsItems(t *testing.T) {
 		t.Fatalf("archive keep: %d %s %s", code, out, errOut)
 	}
 	if remoteHas(t, origin, "milestone/M01") || !remoteHas(t, origin, "archive/milestone/M01") {
-		t.Errorf("branches on origin: %s", branchGit(t, origin, "branch", "--list"))
+		t.Errorf("branches on origin: %s", gittest.Run(t, origin, "branch", "--list"))
 	}
 	if _, out, _ := rotaIn(t, dir, "backlog", "ids", "--milestone", "M01"); strings.TrimSpace(out) != "" {
 		t.Errorf("items still tagged M01: %q", out)
@@ -129,7 +120,7 @@ func TestMilestoneArchivedDeleteRemovesBranch(t *testing.T) {
 	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "archived", "--branch", "delete"); code != 0 {
 		t.Fatalf("archive delete: %d %s %s", code, out, errOut)
 	}
-	if out := branchGit(t, origin, "branch", "--list", "*milestone/M01"); strings.TrimSpace(out) != "" {
+	if out := gittest.Run(t, origin, "branch", "--list", "*milestone/M01"); strings.TrimSpace(out) != "" {
 		t.Errorf("branches left: %s", out)
 	}
 }
@@ -137,15 +128,15 @@ func TestMilestoneArchivedDeleteRemovesBranch(t *testing.T) {
 func TestMilestonePlannedFromActive(t *testing.T) {
 	dir, origin := branchRepo(t)
 	rotaIn(t, dir, "milestone", "status", "M01", "--to", "active")
-	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "milestone work")
-	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "milestone work")
+	gittest.Run(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
 	if code, _, _ := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code != 4 {
 		t.Fatalf("planned with commits: exit %d, want 4", code)
 	}
 	if s := milestoneStatusOf(t, dir, "M01"); s != "active" || !remoteHas(t, origin, "milestone/M01") {
 		t.Fatalf("refusal changed state: status %q", s)
 	}
-	branchGit(t, dir, "push", "-q", "-f", "origin", "main:refs/heads/milestone/M01")
+	gittest.Run(t, dir, "push", "-q", "-f", "origin", "main:refs/heads/milestone/M01")
 	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code != 0 {
 		t.Fatalf("planned without commits: %d %s %s", code, out, errOut)
 	}
@@ -158,9 +149,9 @@ func TestMilestonePlannedFromActive(t *testing.T) {
 func behindRepo(t *testing.T) (dir, origin string) {
 	t.Helper()
 	dir, origin = branchRepo(t)
-	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "merged upstream")
-	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
-	branchGit(t, dir, "fetch", "-q", "origin")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "merged upstream")
+	gittest.Run(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	gittest.Run(t, dir, "fetch", "-q", "origin")
 	return dir, origin
 }
 
@@ -169,7 +160,7 @@ func TestMilestoneActivateCutsFromOriginBase(t *testing.T) {
 	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "active"); code != 0 {
 		t.Fatalf("activate: %d %s %s", code, out, errOut)
 	}
-	if got, want := strings.TrimSpace(branchGit(t, origin, "rev-parse", "milestone/M01")), strings.TrimSpace(branchGit(t, origin, "rev-parse", "main")); got != want {
+	if got, want := strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "milestone/M01")), strings.TrimSpace(gittest.Run(t, origin, "rev-parse", "main")); got != want {
 		t.Errorf("branch at %s, origin base at %s", got, want)
 	}
 }
@@ -177,11 +168,11 @@ func TestMilestoneActivateCutsFromOriginBase(t *testing.T) {
 func TestMilestonePlannedMeasuresAgainstOriginBase(t *testing.T) {
 	dir, origin := branchRepo(t)
 	rotaIn(t, dir, "milestone", "status", "M01", "--to", "active")
-	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "milestone work")
-	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "milestone work")
+	gittest.Run(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
 	// The work reached origin/main, while the local main stays behind.
-	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
-	branchGit(t, dir, "fetch", "-q", "origin")
+	gittest.Run(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	gittest.Run(t, dir, "fetch", "-q", "origin")
 	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code != 0 {
 		t.Fatalf("planned: %d %s %s", code, out, errOut)
 	}

@@ -4,13 +4,13 @@ import (
 	"context"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // umbrellaProject is an issue-mode umbrella with git sub-repos web and api and
@@ -37,9 +37,7 @@ func umbrellaProject(t *testing.T) (root string, deps *Deps, fakes map[string]*t
 		if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
-			t.Fatalf("git init: %v\n%s", err, out)
-		}
+		gittest.Init(t, dir, "main")
 		reg = append(reg, `{"name": "`+name+`", "path": "`+name+`"}`)
 	}
 	if err := os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [`+strings.Join(reg, ",")+`]}`), 0o644); err != nil {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/ledger"
 )
 
@@ -14,7 +15,7 @@ import (
 func tierWorld(t *testing.T, files map[string]string) *world {
 	t.Helper()
 	w := newWorld(t, ghURL)
-	gitq(t, w.worker, "reset", "-q", "--hard", "origin/main")
+	gittest.Run(t, w.worker, "reset", "-q", "--hard", "origin/main")
 	for f, body := range files {
 		p := filepath.Join(w.worker, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -23,11 +24,11 @@ func tierWorld(t *testing.T, files map[string]string) *world {
 		if err := os.WriteFile(p, []byte(body+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		gitq(t, w.worker, "add", f)
+		gittest.Run(t, w.worker, "add", f)
 	}
-	gitq(t, w.worker, "commit", "-q", "-m", "change")
-	gitq(t, w.worker, "push", "-q", "-f", "origin", "w1")
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "change")
+	gittest.Run(t, w.worker, "push", "-q", "-f", "origin", "w1")
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	return w
 }
 

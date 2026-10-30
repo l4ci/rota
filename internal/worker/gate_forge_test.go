@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,7 +20,7 @@ import (
 func TestGateLocalForgeMergesDirectlyAndNeverLooksForAPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.setConfig(`{"forge":{"provider":"local"},"test":{"full":["true"]}}`)
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	e := w.env(false)
 	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
 		t.Errorf("the gate asked for a %s forge; a local forge has none", provider)
@@ -37,8 +38,8 @@ func TestGateLocalForgeMergesDirectlyAndNeverLooksForAPR(t *testing.T) {
 // With no origin remote, auto is local too.
 func TestGateAutoForgeWithNoRemoteIsLocal(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
-	gitq(t, w.dir, "remote", "remove", "origin")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "remote", "remove", "origin")
 	e := w.env(false)
 	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
 		t.Errorf("the gate asked for a %s forge with no remote", provider)
@@ -95,7 +96,7 @@ func TestGateUnknownOriginRefusesBlockedByForge(t *testing.T) {
 	w := newWorld(t, "7")
 	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 	const odd = "https://git.example.com/o/r.git"
-	gitq(t, w.dir, "remote", "set-url", "origin", odd)
+	gittest.Run(t, w.dir, "remote", "set-url", "origin", odd)
 	e := w.env(false)
 	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
 		t.Errorf("the gate built a %s forge for an origin naming none", provider)
@@ -112,7 +113,7 @@ func TestGateUnknownOriginRefusesBlockedByForge(t *testing.T) {
 // own forge, and reads origin through Env.Git for the kind it is given.
 func TestDetectProvider(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "remote", "set-url", "origin", "https://git.example.com/o/r.git")
+	gittest.Run(t, w.dir, "remote", "set-url", "origin", "https://git.example.com/o/r.git")
 	e := w.env(false).WithDefaults()
 	ctx := context.Background()
 	for _, c := range []struct {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -26,7 +26,7 @@ import (
 // The actual autopilot wiring must return promptly and preserve the train nudge.
 func TestAutopilotTickDefersManualGate(t *testing.T) {
 	f := newScopeFx(t, "warn", "")
-	gitIn(t, f.root, "branch", "-M", "main")
+	gittest.Run(t, f.root, "branch", "-M", "main")
 	autopilotOn(t, f.root)
 	if _, err := config.Set(f.root, "ship.mergeApproval", "none"); err != nil {
 		t.Fatal(err)
@@ -35,17 +35,13 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, branch := range []string{"ben/1-x", "dana/2-y"} {
-		gitIn(t, f.root, "branch", branch)
+		gittest.Run(t, f.root, "branch", branch)
 	}
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	gitIn(t, f.root, "init", "--bare", origin)
-	gitIn(t, f.root, "remote", "add", "origin", origin)
-	gitIn(t, f.root, "push", "origin", "main", "ben/1-x", "dana/2-y")
-	headOut, err := exec.Command("git", "-C", f.root, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	head := strings.TrimSpace(string(headOut))
+	gittest.Run(t, f.root, "init", "--bare", origin)
+	gittest.Run(t, f.root, "remote", "add", "origin", origin)
+	gittest.Run(t, f.root, "push", "origin", "main", "ben/1-x", "dana/2-y")
+	head := gittest.Run(t, f.root, "rev-parse", "HEAD")
 	prs := []map[string]any{
 		{"number": 11, "headRefName": "ben/1-x", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "", "url": "https://github.com/o/r/pull/11"},
 		{"number": 12, "headRefName": "dana/2-y", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "", "url": "https://github.com/o/r/pull/12"},

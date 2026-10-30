@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -251,8 +252,8 @@ func TestAssignOverlapAndAcceptOverlap(t *testing.T) {
 	// A tracked file both issues name.
 	os.MkdirAll(filepath.Join(f.root, "internal", "cli"), 0o755)
 	os.WriteFile(filepath.Join(f.root, "internal", "cli", "round.go"), []byte("x"), 0o644)
-	sh(t, f.root, "add", "internal/cli/round.go")
-	sh(t, f.root, "commit", "-q", "-m", "round.go")
+	gittest.Run(t, f.root, "add", "internal/cli/round.go")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "round.go")
 	// ben re-provisioned off the new main so both slots see it.
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)

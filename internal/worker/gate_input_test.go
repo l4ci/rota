@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func TestGateTakesItsInputFromTheEnvSeam(t *testing.T) {
 			if err := os.Remove(filepath.Join(w.dir, ".rota", "config.json")); err != nil {
 				t.Fatal(err)
 			}
-			gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+			gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 			var ran []string
 			e := w.env(false)
 			e.GateInput = memInput("injected-check")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"path/filepath"
@@ -23,9 +24,9 @@ func trainWorld(t *testing.T, verify string, branches ...string) *world {
 	w := newWorld(t, "")
 	var slots []string
 	for _, b := range branches {
-		gitq(t, w.dir, "checkout", "-q", "-b", b, "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "-b", b, "main")
 		trainWrite(t, w, b+".txt", b)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 		slots = append(slots, fmt.Sprintf(`{"name":"%s","branch":"%s"}`, b, b))
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
@@ -37,8 +38,8 @@ func trainWorld(t *testing.T, verify string, branches ...string) *world {
 func trainWrite(t *testing.T, w *world, file, body string) {
 	t.Helper()
 	os.WriteFile(filepath.Join(w.dir, file), []byte(body+"\n"), 0o644)
-	gitq(t, w.dir, "add", file)
-	gitq(t, w.dir, "commit", "-q", "-m", "add "+file)
+	gittest.Run(t, w.dir, "add", file)
+	gittest.Run(t, w.dir, "commit", "-q", "-m", "add "+file)
 }
 
 func (w *world) onMain(file string) bool {
@@ -72,7 +73,7 @@ func TestTrainLandsAll(t *testing.T) {
 			t.Errorf("%s is not on main", f)
 		}
 	}
-	if out := gitq(t, w.dir, "worktree", "list"); strings.Count(out, "\n") != 0 {
+	if out := gittest.Run(t, w.dir, "worktree", "list"); strings.Count(out, "\n") != 0 {
 		t.Errorf("scratch worktree left behind:\n%s", out)
 	}
 }
@@ -117,9 +118,9 @@ func TestTrainLandGreen(t *testing.T) {
 func TestTrainConflict(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	for _, b := range []string{"b1", "b2"} { // both rewrite the same new file differently
-		gitq(t, w.dir, "checkout", "-q", b)
+		gittest.Run(t, w.dir, "checkout", "-q", b)
 		trainWrite(t, w, "clash.txt", b)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 	}
 	// An order the caller chose is not retried: the conflict names the member.
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Order: []string{"b1", "b2"}})
@@ -143,10 +144,10 @@ func TestTrainSharedFileCleanMerge(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	lines := "a\n" + strings.Repeat("-\n", 19) + "z\n"
 	trainWrite(t, w, "shared.txt", strings.TrimSuffix(lines, "\n"))
-	gitq(t, w.dir, "checkout", "-q", "b2")
-	gitq(t, w.dir, "merge", "-q", "main", "-m", "sync")
+	gittest.Run(t, w.dir, "checkout", "-q", "b2")
+	gittest.Run(t, w.dir, "merge", "-q", "main", "-m", "sync")
 	trainWrite(t, w, "shared.txt", strings.TrimSuffix("A\n"+lines[2:], "\n"))
-	gitq(t, w.dir, "checkout", "-q", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	trainWrite(t, w, "shared.txt", strings.TrimSuffix(lines[:len(lines)-2]+"Z\n", "\n"))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b2.txt") {
@@ -156,7 +157,7 @@ func TestTrainSharedFileCleanMerge(t *testing.T) {
 
 func TestTrainBaseMoved(t *testing.T) {
 	// the base moves while the train verifies: the verified tree is not what would land
-	cmd := fmt.Sprintf("git -c user.name=t -c user.email=t@t -C %s commit -q --allow-empty -m moved", "WDIR")
+	cmd := fmt.Sprintf("git -C %s commit -q --allow-empty -m moved", "WDIR")
 	w := trainWorld(t, "true", "b1", "b2")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, strings.Replace(cmd, "WDIR", w.dir, 1)))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
@@ -219,7 +220,7 @@ func TestTrainSecondLandingFails(t *testing.T) {
 func TestTrainForeignCommitBetweenLandings(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2", "b3")
 	// a foreign commit lands on main right after the first landing
-	w.hook(t, "post-merge", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ ! -f foreign.txt ] && { echo x > foreign.txt && git add foreign.txt && git -c user.name=t -c user.email=t@t commit -q -m foreign; }; exit 0`)
+	w.hook(t, "post-merge", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ ! -f foreign.txt ] && { echo x > foreign.txt && git add foreign.txt && git commit -q -m foreign; }; exit 0`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 	if err != nil || res.Verdict != GateBaseMoved || strings.Join(res.Landed, ",") != "b1" || res.Culprit != "b2" {
 		t.Fatalf("%+v %v", res, err)
@@ -520,9 +521,9 @@ func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
 		t.Fatalf("same key should hit its passing prefix: %+v", res)
 	}
 	same := runs(t, counter)
-	gitq(t, w.dir, "checkout", "-q", "b1") // a changed member head
+	gittest.Run(t, w.dir, "checkout", "-q", "b1") // a changed member head
 	trainWrite(t, w, "b1-more.txt", "more")
-	gitq(t, w.dir, "checkout", "-q", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	res, _ := w.train(TrainOpts{Targets: targets})
 	if len(res.CacheHits) != 0 {
 		t.Errorf("a changed head must miss: %v", res.CacheHits)
@@ -655,10 +656,10 @@ func orderWorld(t *testing.T) *world {
 	w := trainWorld(t, "true", "b1", "b2", "b3")
 	trainWrite(t, w, "shared.txt", strings.TrimSuffix(strings.Repeat("-\n", 20), "\n"))
 	edit := func(b, body string) {
-		gitq(t, w.dir, "checkout", "-q", b)
-		gitq(t, w.dir, "merge", "-q", "main", "-m", "sync")
+		gittest.Run(t, w.dir, "checkout", "-q", b)
+		gittest.Run(t, w.dir, "merge", "-q", "main", "-m", "sync")
 		trainWrite(t, w, "shared.txt", body)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 	}
 	edit("b1", strings.Repeat("A\n", 5)+strings.TrimSuffix(strings.Repeat("-\n", 15), "\n"))
 	edit("b2", strings.TrimSuffix(strings.Repeat("-\n", 19)+"Z", "\n"))
@@ -716,9 +717,9 @@ func TestTrainOrderFlagMustNameEveryMemberOnce(t *testing.T) {
 func TestTrainSharedPathConflictStopsBeforeLanding(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	for _, b := range []string{"b1", "b2"} {
-		gitq(t, w.dir, "checkout", "-q", b)
+		gittest.Run(t, w.dir, "checkout", "-q", b)
 		trainWrite(t, w, "clash.txt", b)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateOrder || res.Changed || w.onMain("b1.txt") || !strings.Contains(res.Err, "b1") || !strings.Contains(res.Err, "b2") {
@@ -827,13 +828,13 @@ func TestTrainDropsLandedQueuedPR(t *testing.T) {
 func slicePRTrain(t *testing.T) *world {
 	t.Helper()
 	w := newWorld(t, "")
-	gitq(t, w.worker, "checkout", "-q", "-b", "w2", "main")
+	gittest.Run(t, w.worker, "checkout", "-q", "-b", "w2", "main")
 	os.WriteFile(filepath.Join(w.worker, "work2.txt"), []byte("work2\n"), 0o644)
-	gitq(t, w.worker, "add", "work2.txt")
-	gitq(t, w.worker, "commit", "-q", "-m", "work2")
-	gitq(t, w.worker, "push", "-q", "origin", "w2")
+	gittest.Run(t, w.worker, "add", "work2.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "work2")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
 	w.forge("head#8", "w2")
-	w.forge("sha#8", gitq(t, w.worker, "rev-parse", "HEAD"))
+	w.forge("sha#8", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	pr := func(n int) string { return fmt.Sprintf("https://github.com/o/r/pull/%d", n) }
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(
 		`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q},{"name":"w2","branch":"w2","task":"#6","pr":%q}]}`, pr(7), pr(8))), 0o644)
@@ -890,16 +891,16 @@ func planWorld(t *testing.T) *world {
 	t.Helper()
 	w := trainWorld(t, "false", "b1", "b2", "b3")
 	for _, b := range []string{"b1", "b2"} {
-		gitq(t, w.dir, "checkout", "-q", b)
+		gittest.Run(t, w.dir, "checkout", "-q", b)
 		trainWrite(t, w, "clash.txt", b)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 	}
 	return w
 }
 
 func TestTrainPlanNamesLargestConflictFreeSubset(t *testing.T) {
 	w := planWorld(t)
-	before := gitq(t, w.dir, "rev-parse", "main")
+	before := gittest.Run(t, w.dir, "rev-parse", "main")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Plan: true})
 	if err != nil || res.Plan == nil || res.Changed || len(res.Landed) != 0 {
 		t.Fatalf("%+v %v", res, err)
@@ -917,7 +918,7 @@ func TestTrainPlanNamesLargestConflictFreeSubset(t *testing.T) {
 	if want := "rota worker train --base main --order b1,b3 b1 b3"; p.Command != want {
 		t.Errorf("command %q, want %q", p.Command, want)
 	}
-	if after := gitq(t, w.dir, "rev-parse", "main"); after != before || w.onMain("b3.txt") {
+	if after := gittest.Run(t, w.dir, "rev-parse", "main"); after != before || w.onMain("b3.txt") {
 		t.Error("a plan must push and land nothing")
 	}
 }
@@ -1003,7 +1004,7 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 				}
 				return realGit(ctx, dir, args...)
 			}
-			before := gitq(t, w.dir, "rev-parse", "main")
+			before := gittest.Run(t, w.dir, "rev-parse", "main")
 			var verdict, message string
 			var changed bool
 			var err error
@@ -1019,7 +1020,7 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 			if err != nil || verdict != GateCheckBroke || changed || !strings.Contains(message, wantMessage) {
 				t.Fatalf("verdict=%s changed=%v message=%q err=%v", verdict, changed, message, err)
 			}
-			if after := gitq(t, w.dir, "rev-parse", "main"); after != before {
+			if after := gittest.Run(t, w.dir, "rev-parse", "main"); after != before {
 				t.Errorf("main moved: %s -> %s", before, after)
 			}
 		})
@@ -1032,9 +1033,9 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 func syncWorld(t *testing.T, verify string, branches ...string) *world {
 	t.Helper()
 	w := trainWorld(t, verify, branches...)
-	gitq(t, w.dir, "branch", "milestone/M01", "main")
+	gittest.Run(t, w.dir, "branch", "milestone/M01", "main")
 	trainWrite(t, w, "main2.txt", "main2")
-	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
+	gittest.Run(t, w.dir, "checkout", "-q", "milestone/M01")
 	return w
 }
 
@@ -1054,19 +1055,19 @@ func TestTrainSyncsTheBaseIntoTheMilestone(t *testing.T) {
 			t.Errorf("%s is not on the milestone", f)
 		}
 	}
-	if out := gitq(t, w.dir, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
+	if out := gittest.Run(t, w.dir, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
 		t.Errorf("no sync merge on the milestone:\n%s", out)
 	}
 }
 
 func TestTrainSyncRedLeavesTheMilestoneUnchanged(t *testing.T) {
 	w := syncWorld(t, "false", "b1")
-	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	before := gittest.Run(t, w.dir, "rev-parse", "milestone/M01")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
 	if err != nil || res.Verdict != GateVerifyFailed {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before {
+	if after := gittest.Run(t, w.dir, "rev-parse", "milestone/M01"); after != before {
 		t.Errorf("milestone moved on a red train: %s -> %s", before, after)
 	}
 }
@@ -1074,10 +1075,10 @@ func TestTrainSyncRedLeavesTheMilestoneUnchanged(t *testing.T) {
 func TestTrainSyncConflictNamesMilestoneAndPaths(t *testing.T) {
 	w := syncWorld(t, "true", "b1")
 	trainWrite(t, w, "seed.txt", "milestone side")
-	gitq(t, w.dir, "checkout", "-q", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	trainWrite(t, w, "seed.txt", "main side")
-	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
-	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	gittest.Run(t, w.dir, "checkout", "-q", "milestone/M01")
+	before := gittest.Run(t, w.dir, "rev-parse", "milestone/M01")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
 	if err != nil || res.Verdict != GateMergeFailed {
 		t.Fatalf("%+v %v", res, err)
@@ -1085,7 +1086,7 @@ func TestTrainSyncConflictNamesMilestoneAndPaths(t *testing.T) {
 	if !strings.Contains(res.Err, "milestone/M01") || !strings.Contains(res.Err, "seed.txt") || !strings.Contains(res.Err, "main") {
 		t.Errorf("error should name the milestone, the base and the conflicting path: %s", res.Err)
 	}
-	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before || w.onMain("b1.txt") {
+	if after := gittest.Run(t, w.dir, "rev-parse", "milestone/M01"); after != before || w.onMain("b1.txt") {
 		t.Errorf("a sync conflict must push nothing")
 	}
 }
@@ -1100,23 +1101,23 @@ func syncPRWorld(t *testing.T, verify string) *world {
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, verify))
 	w.setPRBody("Closes #5\n")
 	w.forge("base", "milestone/M01")
-	gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
 	os.WriteFile(filepath.Join(w.worker, "main2.txt"), []byte("main2\n"), 0o644)
-	gitq(t, w.worker, "checkout", "-q", "-b", "advance", "origin/main")
-	gitq(t, w.worker, "add", "main2.txt")
-	gitq(t, w.worker, "commit", "-q", "-m", "main2")
-	gitq(t, w.worker, "push", "-q", "origin", "advance:main")
-	gitq(t, w.dir, "fetch", "-q", "origin")
-	gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01", "origin/milestone/M01")
+	gittest.Run(t, w.worker, "checkout", "-q", "-b", "advance", "origin/main")
+	gittest.Run(t, w.worker, "add", "main2.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "main2")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "advance:main")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin")
+	gittest.Run(t, w.dir, "checkout", "-q", "-b", "milestone/M01", "origin/milestone/M01")
 	return w
 }
 
 func (w *world) originRev(ref string) string {
-	return gitq(w.t, w.origin, "rev-parse", ref)
+	return gittest.Run(w.t, w.origin, "rev-parse", ref)
 }
 
 func (w *world) originHas(ref, file string) bool {
-	out := gitq(w.t, w.origin, "ls-tree", "--name-only", ref)
+	out := gittest.Run(w.t, w.origin, "ls-tree", "--name-only", ref)
 	return slices.Contains(strings.Fields(out), file)
 }
 
@@ -1129,7 +1130,7 @@ func TestTrainSyncPushesTheBaseIntoOriginMilestoneForPRs(t *testing.T) {
 	if !w.originHas("milestone/M01", "main2.txt") {
 		t.Error("the sync merge never reached origin/milestone/M01")
 	}
-	if out := gitq(t, w.origin, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
+	if out := gittest.Run(t, w.origin, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
 		t.Errorf("no sync merge on origin's milestone:\n%s", out)
 	}
 }

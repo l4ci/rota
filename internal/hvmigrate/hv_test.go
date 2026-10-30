@@ -131,11 +131,6 @@ func TestRewriteSettingsDropsHvHookNextToRotaOne(t *testing.T) {
 
 // ---- end to end ------------------------------------------------------------
 
-func gitIn(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	return gittest.Run(t, dir, args...)
-}
-
 func write(t *testing.T, path, text string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
@@ -160,15 +155,15 @@ func sha(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToSt
 // hvProject writes a committed hv-era project into dir.
 func hvProject(t *testing.T, dir string) {
 	t.Helper()
-	gitIn(t, dir, "init", "-q")
+	gittest.Init(t, dir, "main")
 	write(t, filepath.Join(dir, ".gitignore"), "# ── hv ──\n.hv/bin/\n.hv/status.json\n.worktrees/\n")
 	write(t, filepath.Join(dir, "AGENTS.md"), "# P\n<!-- hv-knowledge-start -->\n## Project Knowledge\n<!-- hv-knowledge-end -->\n<!-- hv:decisions:start -->\nold\n<!-- hv:decisions:end -->\n<!-- hv-skills-start -->\n## hv\nold\n<!-- hv-skills-end -->\n")
 	write(t, filepath.Join(dir, ".hv", "config.json"), `{"hvSkills":{"version":"4.9.0"}}`+"\n")
 	write(t, filepath.Join(dir, ".hv", "BACKLOG.md"), "# TODO\n- Detail: `.hv/features/F1.md`\n")
 	write(t, filepath.Join(dir, ".hv", "features", "F1.md"), "<!-- hv:fields 1/2 -->\nbody\n")
 	write(t, filepath.Join(dir, ".hv", "handoff", "main.md"), "<!-- hv-handoff: orchestrator -->\n")
-	gitIn(t, dir, "add", "-A")
-	gitIn(t, dir, "commit", "-qm", "init")
+	gittest.Run(t, dir, "add", "-A")
+	gittest.Run(t, dir, "commit", "-qm", "init")
 }
 
 // hvSkillsRoot writes an hv install into root with one edited file, and a user
@@ -209,7 +204,7 @@ func TestRunHvDryRunWritesNothing(t *testing.T) {
 	hvProject(t, dir)
 	hvSkillsRoot(t, filepath.Join(home, ".claude", "skills"))
 	write(t, filepath.Join(home, ".claude", "settings.json"), hvSettings)
-	gitIn(t, dir, "branch", "hv-worker/a-1")
+	gittest.Run(t, dir, "branch", "hv-worker/a-1")
 	before := snapshot(t, dir)
 	beforeHome := snapshot(t, home)
 	rep, err := RunHv(hvOpts(t, dir, home))
@@ -432,8 +427,8 @@ func TestRunHvMigratesRegisteredSubRepoWithItsOwnBackup(t *testing.T) {
 	hvProject(t, sub)
 	write(t, filepath.Join(dir, ".hv", "repos.json"), `{"repos":[{"name":"web","path":"web"}]}`)
 	write(t, filepath.Join(dir, ".gitignore"), "# ── hv ──\n.hv/bin/\nweb/\n")
-	gitIn(t, dir, "add", "-A")
-	gitIn(t, dir, "commit", "-qm", "umbrella")
+	gittest.Run(t, dir, "add", "-A")
+	gittest.Run(t, dir, "commit", "-qm", "umbrella")
 	o := hvOpts(t, dir, home)
 	o.Apply = true
 	rep, err := RunHv(o)

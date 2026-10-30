@@ -3,8 +3,8 @@ package spike
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -36,20 +36,11 @@ func TestAddAndFinishStampInjectedClock(t *testing.T) {
 	}
 }
 
-func run(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	c := exec.Command("git", args...)
-	c.Dir = dir
-	if out, err := c.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v %s", args, err, out)
-	}
-}
-
 func repo(t *testing.T) string {
 	t.Helper()
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
-	run(t, dir, "init", "-q", "-b", "main")
-	run(t, dir, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "i")
+	gittest.Init(t, dir, "main")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "i")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o777)
 	return dir
 }
@@ -167,8 +158,8 @@ func umbrella(t *testing.T) (root, sub string) {
 	root, _ = filepath.EvalSymlinks(t.TempDir())
 	sub = filepath.Join(root, "web")
 	os.MkdirAll(sub, 0o777)
-	run(t, sub, "init", "-q", "-b", "main")
-	run(t, sub, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "i")
+	gittest.Init(t, sub, "main")
+	gittest.Run(t, sub, "commit", "-q", "--allow-empty", "-m", "i")
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
 	return
