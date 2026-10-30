@@ -65,7 +65,9 @@ for f in "$@"; do
     go.mod|go.sum) go_all=1 ;;
     *.go)
       d="$(dirname "$f")"
-      [ -d "$d" ] || continue
+      # A deleted or moved package leaves importers nobody can name here, so
+      # run everything rather than nothing.
+      [ -d "$d" ] || { go_all=1; continue; }
       case "$f" in
         *_test.go) if [ "$d" = "." ]; then add_pkg "."; else add_pkg "./$d"; fi ;;
         *) add_src_pkg "$d" ;;
