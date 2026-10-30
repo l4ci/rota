@@ -278,23 +278,9 @@ func SetOverview(root, text string) (changed bool, err error) {
 	return
 }
 
-// SetStatus changes a milestone's frontmatter status, then regenerates the
-// overview and the vision block (Index), as hv-vision-status did on every
-// call. changed reports the status line only.
-func SetStatus(root, id, status string) (changed bool, err error) {
-	if changed, err = setStatus(root, id, status); err != nil {
-		return false, err
-	}
-	_, err = Index(root)
-	return changed, err
-}
-
-// setStatus is SetStatus without the Index pass.
-func setStatus(root, id, status string) (changed bool, err error) {
-	return setStatusWithItems(root, id, status, nil)
-}
-
-func setStatusWithItems(root, id, status string, closedItems func(string) ([]string, error)) (changed bool, err error) {
+// setStatus changes a milestone's frontmatter status. closedItems supplies the
+// closed child bullets of a shipped summary; nil records none.
+func setStatus(root, id, status string, closedItems func(string) ([]string, error)) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
 	}
@@ -318,7 +304,7 @@ func setStatusWithItems(root, id, status string, closedItems func(string) ([]str
 			return nil
 		}
 		if status == "shipped" {
-			closed := closedItemBullets(content)
+			var closed []string
 			if closedItems != nil {
 				var err error
 				closed, err = closedItems(id)

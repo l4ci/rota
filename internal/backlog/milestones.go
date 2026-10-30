@@ -104,6 +104,28 @@ func selectNativeMilestone(found []tracker.Milestone, mid, assignedTitle string)
 	return best
 }
 
+// nativeStateOf is the native milestone state a tracking-issue status maps to.
+func nativeStateOf(status string) string {
+	if status == "shipped" || status == "archived" {
+		return "closed"
+	}
+	return "open"
+}
+
+// highestMilestoneNumber is the highest NN over the M<NN> title prefixes of
+// found, 0 when none parses.
+func highestMilestoneNumber(found []tracker.Milestone) int {
+	highest := 0
+	for _, nm := range found {
+		if id, _, ok := parseMSTitle(nm.Title); ok {
+			if n, err := Atoi(id[1:]); err == nil {
+				highest = max(highest, n)
+			}
+		}
+	}
+	return highest
+}
+
 // trackingIssues is {MNN: issue} for every tracking issue, open and closed.
 // The lowest open number wins per MNN (the lowest closed when none is open);
 // duplicates are reported through Warn.
@@ -178,15 +200,7 @@ func (b *Issues) NextMilestoneID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	highest := 0
-	for _, nm := range found {
-		if id, _, ok := parseMSTitle(nm.Title); ok {
-			if n, err := Atoi(id[1:]); err == nil {
-				highest = max(highest, n)
-			}
-		}
-	}
-	return fmt.Sprintf("M%02d", highest+1), nil
+	return fmt.Sprintf("M%02d", highestMilestoneNumber(found)+1), nil
 }
 
 // MilestoneAdd creates the native milestone and its tracking issue and
@@ -334,7 +348,8 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 			return err
 		}
 	}
-	wantClosed := status == "shipped" || status == "archived"
+	want := nativeStateOf(status)
+	wantClosed := want == "closed"
 	reason := tracker.CloseCompleted
 	if status == "archived" {
 		reason = tracker.CloseNotPlanned
@@ -353,10 +368,6 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 	nm, err := b.nativeMilestone(mt, mid, is)
 	if err != nil {
 		return err
-	}
-	want := "open"
-	if wantClosed {
-		want = "closed"
 	}
 	if nm != nil && nm.State != want {
 		return mt.EditMilestone(b.ctx(), nm.Number, tracker.MilestoneEdit{State: &want})

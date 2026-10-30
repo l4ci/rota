@@ -41,22 +41,3 @@ func ShippedSummary(body string, closed []string) string {
 	b.WriteString(decisions + "\n")
 	return b.String()
 }
-
-// closedItemBullets reads the generated file-mode Items list when no backlog
-// reader was supplied (the standalone milestone API).
-func closedItemBullets(body string) []string {
-	var out []string
-	for _, line := range strings.Split(section.Body(body, ItemsHeading), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") {
-			continue
-		}
-		for _, reason := range []string{"done", "dropped", "handed-off", "blocked"} {
-			if strings.HasSuffix(line, " ("+reason+")") {
-				out = append(out, line)
-				break
-			}
-		}
-	}
-	return out
-}
