@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/l4ci/rota/internal/tracker"
@@ -43,13 +42,7 @@ func TestGateRecoversPRVerdicts(t *testing.T) {
 			e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
 				return &verdictReportForge{fakeForge: &fakeForge{w: w, provider: provider}, notes: notes}, nil
 			}
-			block := func(branch, head string) error {
-				if r, ok := verdict.Blocking(verdict.Load(w.dir).Branches[branch]); ok {
-					return fmt.Errorf("%s remote FAIL", r.Kind)
-				}
-				return nil
-			}
-			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, ReviewsOnly: tc.reviewsOnly, CheckReviews: true, Verdict: block})
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, ReviewsOnly: tc.reviewsOnly, CheckReviews: true})
 			if res.Verdict != tc.want {
 				t.Fatalf("want %s: %+v err=%v", tc.want, res, err)
 			}
