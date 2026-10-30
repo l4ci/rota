@@ -703,11 +703,20 @@ func (e Env) git(dir string, args ...string) (string, int) {
 // runGit is the one git adapter of package worker: git on ctx, a failure to
 // start as exit 127, stdout trimmed of one trailing newline.
 func (e Env) runGit(ctx context.Context, dir string, args ...string) (string, int) {
+	out, code, _ := e.runGitErr(ctx, dir, args...)
+	return out, code
+}
+
+// runGitErr is runGit with the typed start failure kept: err is git.ErrNoGit
+// or the context's error when git did not run (code is then 127), nil when it
+// ran, whatever its exit status. Callers that must tell "no git" or a
+// cancelled run from a git exit status use this one.
+func (e Env) runGitErr(ctx context.Context, dir string, args ...string) (string, int, error) {
 	res, err := e.Git(ctx, dir, args...)
 	if err != nil {
-		return "", 127
+		return "", 127, err
 	}
-	return strings.TrimRight(res.Stdout, "\n"), res.ExitCode
+	return strings.TrimRight(res.Stdout, "\n"), res.ExitCode, nil
 }
 
 // Env is what the worker operations touch outside their own memory. Every

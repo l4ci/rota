@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).
@@ -93,7 +94,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		paths, err := c.deps().Repo(t.Dir).ChangedPaths(ctx, diffSpan)
+		paths, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, diffSpan)
 		if err != nil {
 			return Result{}, diffErr(err)
 		}

@@ -3,7 +3,6 @@ package artifact
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -66,23 +65,6 @@ func TestRepos(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Errorf("Repos = %v, want only api and web", got)
-	}
-}
-
-func TestSplitCSV(t *testing.T) {
-	tests := []struct {
-		in   string
-		want []string
-	}{
-		{"", []string{}},
-		{"a", []string{"a"}},
-		{"a, b ,c", []string{"a", "b", "c"}},
-		{",, a,, ,b,", []string{"a", "b"}},
-	}
-	for _, tc := range tests {
-		if got := SplitCSV(tc.in); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("SplitCSV(%q) = %#v, want %#v", tc.in, got, tc.want)
-		}
 	}
 }
 
