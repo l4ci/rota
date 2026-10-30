@@ -582,24 +582,6 @@ func (u *Umbrella) ReleaseNotes(mid string) ([]NoteSection, error) {
 	return viaRepo(u, func(_ string, s *Issues) ([]NoteSection, error) { return s.releaseNotes(mid, true) })
 }
 
-// natives maps each sub-repo that has milestone mid to its native milestone,
-// open ones first (UmbrellaBackend._natives).
-func (u *Umbrella) natives(mid string) (map[string]*tracker.Milestone, error) {
-	out := map[string]*tracker.Milestone{}
-	err := u.eachRepo(func(name string, s *Issues) error {
-		mt, err := s.milestoneTracker()
-		if err != nil {
-			return err
-		}
-		nm, err := s.nativeMilestone(mt, mid, Issue{})
-		if nm != nil {
-			out[name] = nm
-		}
-		return err
-	})
-	return out, err
-}
-
 // ReleaseClose closes out mid in the --repo sub-repo: it labels and comments
 // the completed issues and closes that sub-repo's native milestone. The
 // tracking issue ships (with every other native milestone closed) only once
@@ -616,19 +598,21 @@ func (u *Umbrella) ReleaseClose(mid, tag string) (issues int, changed bool, err 
 	if issues, err = cp.labelReleased(mid, tag, true); err != nil {
 		return issues, wc.n > 0, err
 	}
-	// natives reads every sub-repo, so one whose forge fails stops the close
-	// after the labels and comments went out. That is safe: they are skipped
-	// when present, so a re-run picks up where this one stopped.
-	nat, err := u.natives(mid)
+	// fetchNatives reads every sub-repo, so one whose forge fails stops the
+	// close after the labels and comments went out. That is safe: they are
+	// skipped when present, so a re-run picks up where this one stopped.
+	set, err := u.fetchNatives()
 	if err != nil {
 		return issues, wc.n > 0, err
 	}
-	if ms := nat[name]; ms != nil && ms.State != "closed" {
+	nat := set.of(mid)
+	if ms, ok := nat[name]; ok && ms.State != "closed" {
 		closed := "closed"
 		if err := wc.EditMilestone(u.ctx(), ms.Number, tracker.MilestoneEdit{State: &closed}); err != nil {
 			return issues, true, err
 		}
 		ms.State = "closed"
+		nat[name] = ms
 	}
 	for _, ms := range nat {
 		if ms.State != "closed" {
