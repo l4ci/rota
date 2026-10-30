@@ -217,3 +217,27 @@ func commandList(cfg any, key string) []string {
 	}
 	return cmds
 }
+
+// forTier is the config a change of tier t verifies with: Full is test.docs or
+// test.small, with {files} expanded to files, and E2E is cleared. ran names the
+// list that runs and skipped the tiers it replaced. A full tier, or a tier
+// whose own list is empty, keeps c unchanged: ran is test.full, skipped nil.
+func (c GateConfig) forTier(t change.Tier, files []string) (cfg GateConfig, ran string, skipped []string) {
+	var cmds []string
+	switch t {
+	case change.TierDocs:
+		cmds, ran = c.Docs, "test.docs"
+	case change.TierSmall:
+		cmds, ran = c.Small, "test.small"
+	}
+	if len(cmds) == 0 {
+		return c, tierFull, nil
+	}
+	cfg = c
+	cfg.Full, cfg.E2E = expandTierFiles(cmds, files), nil
+	skipped = []string{tierFull}
+	if len(c.E2E) > 0 {
+		skipped = append(skipped, tierE2E)
+	}
+	return cfg, ran, skipped
+}

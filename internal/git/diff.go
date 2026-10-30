@@ -68,9 +68,11 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 // DiffFiles lists every path `git diff <span>` touches, both names of a
 // rename (--no-renames), so a file moved out of a protected directory still
 // counts as touching it. -z keeps git from C-quoting unusual names, which no
-// glob would match. A non-zero exit is an error.
-func DiffFiles(ctx context.Context, run Runner, dir, span string) ([]string, error) {
-	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--no-renames", span)
+// glob would match. opts go before the span (e.g. --diff-filter=d to leave out
+// deleted files). A non-zero exit is an error.
+func DiffFiles(ctx context.Context, run Runner, dir string, optsAndSpan ...string) ([]string, error) {
+	span := optsAndSpan[len(optsAndSpan)-1]
+	res, err := run(ctx, dir, append([]string{"diff", "--name-only", "-z", "--no-renames"}, optsAndSpan...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +99,26 @@ func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error
 		return 0, &ExitError{"diff --numstat " + span, res.ExitCode, res.Stderr}
 	}
 	return CountLines(res.Stdout), nil
+}
+
+// ChangedLinesCounted is ChangedLines that says when the count is not the whole
+// change: counted is false when numstat marks an entry binary (dashes), which
+// a binary file or a -diff .gitattributes entry does and which counts for 0.
+func ChangedLinesCounted(ctx context.Context, run Runner, dir, span string) (lines int, counted bool, err error) {
+	res, err := run(ctx, dir, "diff", "--numstat", span)
+	if err != nil {
+		return 0, false, err
+	}
+	if res.ExitCode != 0 {
+		return 0, false, &ExitError{"diff --numstat " + span, res.ExitCode, res.Stderr}
+	}
+	counted = true
+	for _, l := range strings.Split(res.Stdout, "\n") {
+		if f := strings.Fields(l); len(f) >= 2 && (f[0] == "-" || f[1] == "-") {
+			counted = false
+		}
+	}
+	return CountLines(res.Stdout), counted, nil
 }
 
 // CountLines sums the added and deleted lines of `git diff --numstat` output.

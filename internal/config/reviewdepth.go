@@ -247,20 +247,21 @@ func (p ReviewPolicy) Resolve(changed int, labels []string) (ReviewDepth, string
 // A label that maps to none is final. Otherwise the base depth (label, size or
 // default) is raised, never lowered, by a one-way Door line in the PR body, a
 // diff outside the issue's declared files, or a changed path matching a paths
-// glob. The change tier (#2348) comes before the raises: a docs-tier diff is
-// none, and a small one caps the base and scope drift at light. A label still
-// decides the base, and a docs-tier diff never counts as drift.
+// glob. The change tier (#2348) sets the base before the raises: a docs-tier
+// diff is none and a small one caps the base and scope drift at light. A label
+// still decides the base, a docs-tier diff never counts as drift, and the Door
+// line and the paths globs still raise any tier.
 func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	base := p.base(in.Changed, in.Labels)
 	if base.Signal == SignalLabel && base.Depth == DepthNone {
 		return base
 	}
 	labelled := base.Signal == SignalLabel
-	if in.Tier == change.TierDocs && !labelled {
-		return ReviewDecision{DepthNone, SignalTier, "docs-only change (tier docs)"}
-	}
 	driftCap := DepthFull
-	if in.Tier == change.TierSmall {
+	switch {
+	case in.Tier == change.TierDocs && !labelled:
+		base = ReviewDecision{DepthNone, SignalTier, "docs-only change (tier docs)"}
+	case in.Tier == change.TierSmall:
 		driftCap = DepthLight
 		if !labelled && base.Depth.rank() > DepthLight.rank() {
 			base = ReviewDecision{DepthLight, SignalTier, "small change (tier small)"}
