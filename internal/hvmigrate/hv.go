@@ -906,11 +906,20 @@ func legacySkillRoots(o HvOptions, projs []*hvProj) []skills.Root {
 			}
 		}
 	}
-	if user, err := skills.Roots(skills.User, "all", o.Home, o.ClaudeDir, ""); err == nil {
+	var dirs []string
+	if o.ClaudeDir != "" {
+		dirs = append(dirs, o.ClaudeDir)
+	}
+	for _, p := range projs {
+		for _, a := range p.plan.accounts {
+			dirs = append(dirs, fsio.ExpandHome(a, o.Home))
+		}
+	}
+	if user, err := skills.Roots(skills.User, "all", o.Home, dirs, ""); err == nil {
 		collect(user)
 	}
 	for _, p := range projs {
-		if proj, err := skills.Roots(skills.Project, "all", o.Home, o.ClaudeDir, projectTop(p.dir)); err == nil {
+		if proj, err := skills.Roots(skills.Project, "all", o.Home, dirs, projectTop(p.dir)); err == nil {
 			collect(proj)
 		}
 	}
