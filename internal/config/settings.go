@@ -1,9 +1,12 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // MaxInt is the upper bound of every unbounded integer setting.
@@ -62,6 +65,46 @@ func String(cfg any, key string) string {
 	}
 	s, _ := v.(string)
 	return s
+}
+
+// badRefComponent matches what git's ref-component rules forbid in a name: "..",
+// "@{", a bare "@", a trailing dot or lock suffix, an empty path segment, a segment
+// starting with ".". This validates a name; it builds no file.
+var badRefComponent = regexp.MustCompile(`\.\.|@\{|^@$|\.$|\.lock$|^/|/$|//|/\.`)
+
+// ValidGitRemote refuses a value that is not a safe git remote name: empty,
+// a leading "-" (git would read it as an option), whitespace, control
+// characters, or what git's ref-component rules forbid.
+func ValidGitRemote(name string) error {
+	switch {
+	case name == "":
+		return errors.New("a remote name cannot be empty")
+	case strings.HasPrefix(name, "-"):
+		return errors.New("a remote name cannot start with '-': git would read it as an option")
+	}
+	for _, r := range name {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune("~^:?*[\\", r) {
+			return fmt.Errorf("a remote name cannot contain %q", r)
+		}
+	}
+	if badRefComponent.MatchString(name) {
+		return errors.New("a remote name must be a valid git ref component")
+	}
+	return nil
+}
+
+// GitRemote is the git remote round workers fetch from and push to: git.remote,
+// origin when unset. A set value that is not a valid remote name is an error:
+// no git runs on it.
+func GitRemote(cfg any) (string, error) {
+	raw := String(cfg, GitRemoteKey)
+	if strings.TrimSpace(raw) == "" {
+		return "origin", nil
+	}
+	if err := ValidGitRemote(raw); err != nil {
+		return "", fmt.Errorf("%w for %s: %v (rota config set %s origin)", ErrBadValue, GitRemoteKey, err, GitRemoteKey)
+	}
+	return raw, nil
 }
 
 // StringIfSet returns a string key as written, "" when it is absent or not a

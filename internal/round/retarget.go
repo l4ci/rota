@@ -95,12 +95,16 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	if want == "" {
 		want = s.HomeBase()
 	}
+	remote, err := e.remote(root)
+	if err != nil {
+		return err
+	}
 	if f.to != "" {
 		if _, err := e.fetchBase(ctx, root, f.to); err != nil {
 			return err
 		}
-	} else if res, err := e.Git(ctx, root, "fetch", "-q", "origin", want); err != nil || res.ExitCode != 0 {
-		return fmt.Errorf("could not fetch origin/%s: %s", want, gitWhy(res.Stderr, err))
+	} else if res, err := e.Git(ctx, root, "fetch", "-q", remote, want); err != nil || res.ExitCode != 0 {
+		return fmt.Errorf("could not fetch %s/%s: %s", remote, want, gitWhy(res.Stderr, err))
 	}
 	if err := e.Forge.PRSetBase(ctx, n, want); err != nil {
 		return fmt.Errorf("could not retarget PR #%d onto %s: %w", n, want, err)
@@ -115,8 +119,8 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	}); err != nil {
 		return err
 	}
-	text := fmt.Sprintf("BASE %s\nThe base of your PR changed: it now targets %s. Before the PR merges: `git fetch origin %s`, then `git merge origin/%s` into your branch (a merge, never a rebase), resolve every conflict, re-run your targeted checks, record proof at the merged head, push and run `rota worker done %s` again.\n",
-		s.PR(), want, want, want, f.Slot)
+	text := fmt.Sprintf("BASE %s\nThe base of your PR changed: it now targets %s. Before the PR merges: `git fetch %s %s`, then `git merge %s/%s` into your branch (a merge, never a rebase), resolve every conflict, re-run your targeted checks, record proof at the merged head, push and run `rota worker done %s` again.\n",
+		s.PR(), want, remote, want, remote, want, f.Slot)
 	if _, err := worker.PostMail(root, f.Slot, worker.MailBase, text, e.Worker.Now()); err != nil {
 		return err
 	}

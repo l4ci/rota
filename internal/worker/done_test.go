@@ -23,11 +23,13 @@ type doneRig struct {
 	root   string
 	deps   DoneDeps
 	status string // `git status --porcelain` output
-	remote string // origin/<branch> sha, "" when never pushed
-	rows   map[string][]proof.Row
-	closed map[string]bool
-	files  []string
-	ran    []string
+	remote string // <remoteName>/<branch> sha, "" when never pushed
+	// remoteName is the remote the pushed copy lives on; "" means origin.
+	remoteName string
+	rows       map[string][]proof.Row
+	closed     map[string]bool
+	files      []string
+	ran        []string
 }
 
 func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
@@ -41,16 +43,23 @@ func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
 	}
 	e := Env{Config: memConfig(t, cfg)}
 	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		name := r.remoteName
+		if name == "" {
+			name = "origin"
+		}
 		switch strings.Join(args, " ") {
 		case "status --porcelain":
 			return git.Result{Stdout: r.status}, nil
-		case "rev-parse --verify --quiet refs/remotes/origin/ben/7-x":
+		case "rev-parse --verify --quiet refs/remotes/" + name + "/ben/7-x":
 			if r.remote == "" {
 				return git.Result{ExitCode: 1}, nil
 			}
 			return git.Result{Stdout: r.remote + "\n"}, nil
 		case "rev-parse HEAD", "rev-parse --verify --quiet ben/7-x^{commit}":
 			return git.Result{Stdout: doneHead + "\n"}, nil
+		}
+		if strings.HasPrefix(strings.Join(args, " "), "rev-parse --verify --quiet refs/remotes/") { // a remote the branch was not pushed to
+			return git.Result{ExitCode: 1}, nil
 		}
 		if args[0] == "rev-parse" && args[1] == "--git-common-dir" { // the ledger row's lease lookup
 			return git.Result{ExitCode: 128}, nil
@@ -277,6 +286,31 @@ func TestDoneSettledBranch(t *testing.T) {
 		if !res.Unpushed {
 			t.Errorf("res %+v", res)
 		}
+	})
+	t.Run("a branch pushed only to the configured remote", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, `{"git":{"remote":"mirror"},"test":{"fast":["go test ./x"]}}`)
+		r.remoteName = "mirror"
+		r.pass("7", FastTierCheck)
+		if _, err := r.done(DoneRequest{}); err != nil {
+			t.Fatalf("done refused a branch pushed to the configured remote: %v", err)
+		}
+	})
+	t.Run("an unpushed branch names the configured remote", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, `{"git":{"remote":"mirror"},"test":{"fast":["go test ./x"]}}`)
+		r.remoteName = "mirror"
+		r.remote = ""
+		_, err := r.done(DoneRequest{})
+		wantExit(t, err, exitcode.ExitRefused)
+		var ee *exitcode.Error
+		errors.As(err, &ee)
+		if !strings.Contains(ee.Hint, "git push mirror ben/7-x") {
+			t.Errorf("hint %q", ee.Hint)
+		}
+	})
+	t.Run("an option-looking remote is refused before git runs", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, `{"git":{"remote":"--receive-pack=sh"},"test":{"fast":["go test ./x"]}}`)
+		_, err := r.done(DoneRequest{})
+		wantExit(t, err, exitcode.ExitRefused)
 	})
 	t.Run("a failed outcome skips the check", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, fastCfg)
