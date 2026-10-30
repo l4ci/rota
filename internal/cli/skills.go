@@ -27,6 +27,7 @@ func skillsCommands() *Command {
 		{Name: "status", Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false, false)},
 		{Name: "list", Summary: "name the skills embedded in this binary", Verb: skillsList},
 		{Name: "get", Summary: "print an embedded skill or one of its references", Verb: skillsGet},
+		{Name: "links", Summary: "print the relative links of markdown files", Verb: skillsLinks},
 	}}
 }
 
@@ -485,6 +486,35 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 			res = withWarnings(res, []string{warn})
 		}
 		return res, nil
+	}
+}
+
+// skillsLinks prints the relative link targets of each markdown file through
+// skills.Links, the one definition the install footer and
+// test/validate-skills.py share.
+func skillsLinks(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) == 0 {
+			return Result{}, Usage("missing markdown file")
+		}
+		var files []any
+		var lines []string
+		for _, f := range args {
+			b, err := os.ReadFile(f)
+			if err != nil {
+				return Result{}, Failed("%v", err)
+			}
+			links := skills.Links(b)
+			files = append(files, knObj("file", f, "links", strs(links)))
+			for _, l := range links {
+				if len(args) == 1 {
+					lines = append(lines, l)
+				} else {
+					lines = append(lines, f+"\t"+l)
+				}
+			}
+		}
+		return Result{Data: knObj("files", files), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
