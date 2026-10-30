@@ -1,11 +1,11 @@
 package extknowledge
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // hitsPath is the per-machine, per-clone log of consulted bullets. It lives in
@@ -43,25 +43,7 @@ func (c Clone) readHits() (rows []hitRow, torn int, err error) {
 	if p == "" {
 		return nil, 0, nil
 	}
-	raw, err := os.ReadFile(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, 0, nil
-		}
-		return nil, 0, err
-	}
-	for _, l := range strings.Split(string(raw), "\n") {
-		if strings.TrimSpace(l) == "" {
-			continue
-		}
-		var r hitRow
-		if json.Unmarshal([]byte(l), &r) != nil || r.Topic == "" || r.Title == "" {
-			torn++
-			continue
-		}
-		rows = append(rows, r)
-	}
-	return rows, torn, nil
+	return fsio.ReadJSONL(p, func(r *hitRow) bool { return r.Topic != "" && r.Title != "" })
 }
 
 // hitKey joins a hit to a bullet by the topic family (a split topic and its
@@ -149,25 +131,10 @@ func (c Clone) Hit(topic, title, project string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	line, err := json.Marshal(hitRow{Topic: t.Name, Title: title, Date: c.now().Format("2006-01-02"), Project: project})
-	if err != nil {
-		return 0, err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return 0, err
-	}
 	// One O_APPEND write per hit: concurrent rota processes interleave whole
 	// lines, never characters.
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
+	if err := fsio.AppendJSONL(p, hitRow{Topic: t.Name, Title: title, Date: c.now().Format("2006-01-02"), Project: project}); err != nil {
 		return 0, err
-	}
-	_, werr := f.Write(append(line, '\n'))
-	if cerr := f.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return 0, werr
 	}
 	m, _, err := c.tally(topics)
 	if err != nil {
