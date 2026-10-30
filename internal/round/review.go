@@ -121,7 +121,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	if out.Bounces, _, err = store.Count(issue); err != nil {
 		return out, err
 	}
-	if o.MaxBounces > 0 && out.Bounces >= o.MaxBounces {
+	if worker.AtCap(out.Bounces, o.MaxBounces) {
 		return e.reviewCap(ctx, root, o, batch, number, issue, out)
 	}
 	if o.FreshAt > 0 && out.Bounces+1 == o.FreshAt {

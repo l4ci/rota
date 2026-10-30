@@ -451,3 +451,18 @@ func (noTrustComments) AddComment(context.Context, tracker.IssueKey, string) (st
 	return "1", nil
 }
 func (noTrustComments) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
+
+func TestAtCap(t *testing.T) {
+	for _, c := range []struct {
+		n, limit int
+		want     bool
+	}{
+		{0, 0, false}, {99, 0, false}, // 0 means no cap
+		{0, 3, false}, {2, 3, false}, {3, 3, true}, {4, 3, true},
+		{0, 1, false}, {1, 1, true},
+	} {
+		if got := AtCap(c.n, c.limit); got != c.want {
+			t.Errorf("AtCap(%d, %d) = %v, want %v", c.n, c.limit, got, c.want)
+		}
+	}
+}

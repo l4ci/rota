@@ -92,10 +92,15 @@ func TestGatePassEndsTheItemClockAndBestOf(t *testing.T) {
 
 func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 	bouncing(t)
-	root := t.TempDir() // round.maxBounces defaults to 3
+	root := t.TempDir()
+	cfg, err := jsonx.Decode([]byte(`{"round":{"maxBounces":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := worker.Env{Config: func(string) any { return cfg }}
 	p := &parked{}
 	for i := 1; i <= 3; i++ {
-		o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
+		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
 		if err != nil {
 			t.Fatal(err)
 		}
