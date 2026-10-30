@@ -307,6 +307,11 @@ func TestDoneSettledBranch(t *testing.T) {
 			t.Errorf("hint %q", ee.Hint)
 		}
 	})
+	t.Run("an option-looking remote is refused before git runs", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, `{"git":{"remote":"--receive-pack=sh"},"test":{"fast":["go test ./x"]}}`)
+		_, err := r.done(DoneRequest{})
+		wantExit(t, err, exitcode.ExitRefused)
+	})
 	t.Run("a failed outcome skips the check", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, fastCfg)
 		r.status = " M x.go\n"

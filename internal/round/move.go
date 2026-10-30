@@ -13,7 +13,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
@@ -654,6 +653,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if err := e.roundCfgErr(); err != nil {
 		return res, err
 	}
+	if _, err := e.remote(root); err != nil {
+		return res, blocked(BlockFetch, "%v", err)
+	}
 	defer func() {
 		if err == nil && res.Changed {
 			if lerr := e.Worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
@@ -1137,7 +1139,8 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD, Remote: config.GitRemote(e.Worker.Config(root))})
+			transferRemote, _ := e.remote(root) // refused in Transfer before this runs
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Remote: transferRemote, Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {
@@ -1196,8 +1199,10 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 
 // queuedHead is the tip of a queued PR's branch: origin's, else the local one.
 func (e Env) queuedHead(ctx context.Context, root, branch string) string {
-	if h := e.headLine(ctx, root, "origin/"+branch); h != "" {
-		return h
+	if remote, err := e.remote(root); err == nil {
+		if h := e.headLine(ctx, root, remote+"/"+branch); h != "" {
+			return h
+		}
 	}
 	return e.headLine(ctx, root, branch)
 }
@@ -1225,7 +1230,11 @@ func (e Env) branchTip(ctx context.Context, root, branch string) string {
 	if _, _, code := e.gitOut(ctx, root, "check-ref-format", "--branch", branch); code != 0 {
 		return ""
 	}
-	e.gitOut(ctx, root, "fetch", "-q", "origin", "--", "refs/heads/"+branch+":refs/remotes/origin/"+branch)
+	remoteName, rerr := e.remote(root)
+	if rerr != nil {
+		return ""
+	}
+	e.gitOut(ctx, root, "fetch", "-q", remoteName, "--", "refs/heads/"+branch+":refs/remotes/"+remoteName+"/"+branch)
 	rev := func(ref string) string {
 		out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 		if code != 0 {
@@ -1233,7 +1242,7 @@ func (e Env) branchTip(ctx context.Context, root, branch string) string {
 		}
 		return strings.TrimSpace(out)
 	}
-	remote, local := rev("origin/"+branch), rev(branch)
+	remote, local := rev(remoteName+"/"+branch), rev(branch)
 	if remote == "" {
 		return local
 	}
@@ -1270,7 +1279,11 @@ func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, tit
 	if cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD"); cur == *branch {
 		return nil
 	}
-	start := "origin/" + *branch
+	remoteName, err := e.remote(root)
+	if err != nil {
+		return err
+	}
+	start := remoteName + "/" + *branch
 	if _, _, code := e.gitOut(ctx, wt, "rev-parse", "--verify", "-q", "refs/remotes/"+start); code != 0 {
 		start = *branch
 	}

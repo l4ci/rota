@@ -177,17 +177,21 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 // worktree is refused (BlockDirty) before any merge runs.
 func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool, target string) (string, error) {
 	base := strutil.FirstNonEmpty(target, e.Base)
-	res, err := e.Git(ctx, root, "fetch", "-q", "origin", base)
-	if err != nil || res.ExitCode != 0 {
-		return "", blocked(BlockFetch, "could not fetch origin/%s to cut the support branch from (%s): a support machine never cuts from its local %s", base, gitWhy(res.Stderr, err), base)
+	remote, rerr := e.remote(root)
+	if rerr != nil {
+		return "", blocked(BlockFetch, "%v", rerr)
 	}
-	from := "origin/" + base
+	res, err := e.Git(ctx, root, "fetch", "-q", remote, base)
+	if err != nil || res.ExitCode != 0 {
+		return "", blocked(BlockFetch, "could not fetch %s/%s to cut the support branch from (%s): a support machine never cuts from its local %s", remote, base, gitWhy(res.Stderr, err), base)
+	}
+	from := remote + "/" + base
 	if !resuming {
 		return from, nil
 	}
 	wt := slot.Worktree()
 	if cur, err := e.Git(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD"); err != nil || strings.TrimSpace(cur.Stdout) != branch {
-		return from, nil // not on the branch: the reset cuts it fresh from origin
+		return from, nil // not on the branch: the reset cuts it fresh from the remote
 	}
 	// Uncommitted work is the slot's to keep: no merge touches it, and the
 	// refusal says dirty, never conflict.

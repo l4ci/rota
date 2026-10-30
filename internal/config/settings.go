@@ -1,9 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // MaxInt is the upper bound of every unbounded integer setting.
@@ -55,15 +57,6 @@ func Bool(cfg any, key string) (bool, error) {
 // String returns a string key, or its schema default when unset. A value that
 // is not a string gives "". An unknown key is a coding error and panics, so a
 // typo cannot read as unset; TestReadKeysExistInSchema catches literal ones.
-// GitRemote is the git remote round workers fetch from and push to: git.remote,
-// origin when unset.
-func GitRemote(cfg any) string {
-	if r := strings.TrimSpace(String(cfg, GitRemoteKey)); r != "" {
-		return r
-	}
-	return "origin"
-}
-
 func String(cfg any, key string) string {
 	v, err := Value(cfg, key)
 	if err != nil {
@@ -71,6 +64,43 @@ func String(cfg any, key string) string {
 	}
 	s, _ := v.(string)
 	return s
+}
+
+// ValidGitRemote refuses a value that is not a safe git remote name: empty,
+// a leading "-" (git would read it as an option), whitespace, control
+// characters, or what git's ref-component rules forbid.
+func ValidGitRemote(name string) error {
+	switch {
+	case name == "":
+		return errors.New("a remote name cannot be empty")
+	case strings.HasPrefix(name, "-"):
+		return errors.New("a remote name cannot start with '-': git would read it as an option")
+	}
+	for _, r := range name {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune("~^:?*[\\", r) {
+			return fmt.Errorf("a remote name cannot contain %q", r)
+		}
+	}
+	if strings.Contains(name, "..") || strings.Contains(name, "@{") || name == "@" ||
+		strings.HasSuffix(name, ".") || strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "/") ||
+		strings.HasPrefix(name, "/") || strings.Contains(name, "//") || strings.Contains(name, "/.") {
+		return errors.New("a remote name must be a valid git ref component")
+	}
+	return nil
+}
+
+// GitRemote is the git remote round workers fetch from and push to: git.remote,
+// origin when unset. A set value that is not a valid remote name is an error:
+// no git runs on it.
+func GitRemote(cfg any) (string, error) {
+	raw := String(cfg, GitRemoteKey)
+	if strings.TrimSpace(raw) == "" {
+		return "origin", nil
+	}
+	if err := ValidGitRemote(raw); err != nil {
+		return "", fmt.Errorf("%w for %s: %v (rota config set %s origin)", ErrBadValue, GitRemoteKey, err, GitRemoteKey)
+	}
+	return raw, nil
 }
 
 // StringIfSet returns a string key as written, "" when it is absent or not a

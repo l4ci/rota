@@ -689,7 +689,7 @@ func SlotData(sl *Slot) *jsonx.Object {
 
 // Remote is the git remote the worker verbs fetch from and push to (git.remote,
 // origin when unset), read from root's config.
-func (e Env) Remote(root string) string {
+func (e Env) Remote(root string) (string, error) {
 	return config.GitRemote(e.WithDefaults().Config(root))
 }
 

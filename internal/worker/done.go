@@ -127,7 +127,11 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	// Done is the worker's last action: a late edit or commit after it moves
 	// the head a review or the gate has already bound to.
 	if req.Kind != OutcomeFailed {
-		if err := settledBranch(env, dir, env.Remote(req.Root), sl.Branch(), res); err != nil {
+		remote, err := env.Remote(req.Root)
+		if err != nil {
+			return fail(exitcode.ExitRefused, err.Error())
+		}
+		if err := settledBranch(env, dir, remote, sl.Branch(), res); err != nil {
 			return err
 		}
 	}

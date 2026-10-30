@@ -850,7 +850,7 @@ Skills that use the base branch (`/rota-ship`, `/rota-review`, `/rota-work`) cal
 - **Type:** string
 - **Default:** `"origin"`
 
-The git remote round workers fetch from and push to. `rota worker done` checks the branch is pushed to it, `rota worker gate` and `rota worker train` compare branches against it, `rota ship pr` and `rota round park` push to it, and the assignment brief tells the worker its name (the contract says `<remote>`). Set it when `origin` is not the remote that holds the PRs, for example when `origin` has a second push URL that mirrors every branch. Forge detection still reads `origin` unless `forge.provider` is set.
+The git remote round workers fetch from and push to. `rota worker done` checks the branch is pushed to it, `rota worker gate` and `rota worker train` compare branches against it, `rota ship pr` and `rota round park` push to it, and the assignment brief tells the worker its name (the contract says `<remote>`). Set it when `origin` is not the remote that holds the PRs, for example when `origin` has a second push URL that mirrors every branch. Round-side verbs (`round assign`, `transfer`, support cuts, stale-claim checks) read it too. Forge detection still reads `origin` unless `forge.provider` is set. The value must be a valid git remote name: `rota config set` refuses an empty one, one starting with `-` or one with whitespace or control characters (exit 4), and every verb that reads it refuses such a value instead of running git.
 
 ```json
 { "git": { "remote": "upstream" } }

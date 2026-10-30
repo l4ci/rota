@@ -293,6 +293,9 @@ func (t *trainRun) plan() (bool, error) {
 		return true, err
 	}
 	in.cfg.WarnLegacy(e.Stderr)
+	if err := in.cfg.RemoteErr; err != nil {
+		return true, fail(exitcode.ExitRefused, err.Error())
+	}
 	t.in = in
 	seen := map[string]bool{}
 	withPR := 0

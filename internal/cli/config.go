@@ -289,6 +289,10 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if pinned {
 				c.Warn("%s is a machine key: --project pinned it in the tracked .rota/config.json, where it shadows every developer's global config", args[0])
 			}
+		case args[0] == config.GitRemoteKey && errors.Is(err, config.ErrBadValue):
+			e := Refused("%s", err.Error())
+			e.Hint = "name a remote that `git remote` lists, for example origin"
+			return Result{}, e
 		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
 			return Result{}, Usage("%s", err.Error())
 		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject), errors.Is(err, fsio.ErrUnreadable):
