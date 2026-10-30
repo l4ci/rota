@@ -4,57 +4,31 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/testiso"
 )
 
-var tripwireHit string
-
 // TestMain puts tripwire herdr, tmux, ps, gh and glab first on PATH and
-// clears the host env, so a test that forgets to inject its Runner fails
+// (the host env is scrubbed by testiso), so a test that forgets to inject its Runner fails
 // instead of reaching a live herdr server or tmux session. This round runs
 // inside both: a stray `herdr tab close` kills live agents.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "host-tripwire")
+	tw, err := testiso.NewTripwire("host-tripwire", "herdr", "tmux", "gh", "glab")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	tripwireHit = filepath.Join(dir, "hit")
-	for _, bin := range []string{"herdr", "tmux", "gh", "glab"} {
-		script := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> '%s'\necho 'tripwire: real %s reached from a test' >&2\nexit 99\n", tripwireHit, bin)
-		if err := os.WriteFile(filepath.Join(dir, bin), []byte(script), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	// Root the temp dirs of child processes (the old bin/ helpers mktemp) under
-	// the tripwire dir, which is removed below (#110).
-	if tmp := filepath.Join(dir, "tmp"); os.Mkdir(tmp, 0o755) == nil {
-		os.Setenv("TMPDIR", tmp)
-	}
-	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID", "HERDR_SOCKET_PATH"} {
-		os.Unsetenv(k)
-	}
 	code := m.Run()
-	if b, err := os.ReadFile(tripwireHit); err == nil {
-		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a real host binary from PATH:\n%s", b)
+	if hit := tw.Check(); hit != "" {
+		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a real host binary from PATH:\n%s", hit)
 		code = 1
 	}
-	os.RemoveAll(dir)
+	tw.Close()
 	os.Exit(code)
-}
-
-func TestTripwireCatchesRealBinary(t *testing.T) {
-	r, err := ExecRunner(context.Background(), "herdr", []string{"tab", "close", "x"})
-	if err != nil || r.ExitCode != 99 {
-		t.Fatalf("ExecRunner did not hit the tripwire: %+v, %v", r, err)
-	}
-	os.Remove(tripwireHit) // hit on purpose
 }
 
 // fake is a scripted Runner: handler answers each call; every call is logged.
