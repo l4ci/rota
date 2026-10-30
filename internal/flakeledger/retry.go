@@ -1,15 +1,24 @@
 package flakeledger
 
 import (
+	_ "embed"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/testledger"
 )
 
+// infrastructureMarkers lists one regexp alternative per line. It is the single
+// owner of the rule: test/gate-go.py reads the same file for the gate's package
+// retry, so a marker added here reaches both retry loops.
+//
+//go:embed infrastructure-markers.txt
+var infrastructureMarkers string
+
 // Unknown output stays red. Even an assertion summary must not hide a
 // process/infrastructure failure in another package of the same command.
-var retryInfrastructure = regexp.MustCompile(`(?im)signal:|\bkilled\b|\[build failed\]|\[setup failed\]|^panic:|fatal error:|test timed out|context deadline exceeded|resource temporarily unavailable|cannot allocate memory|no space left on device|permission denied|command not found|executable file not found|fork/exec|connection refused|network is unreachable|i/o timeout`)
+var retryInfrastructure = regexp.MustCompile(`(?im)` + strings.ReplaceAll(strings.TrimSpace(infrastructureMarkers), "\n", "|"))
 
 // RetryEligible reports whether a red check may be rerun once: exit 1, a
 // named assertion failure, not excused by the test ledger (excused) and no
