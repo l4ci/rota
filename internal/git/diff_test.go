@@ -126,3 +126,28 @@ func TestRemoteBaseSpellings(t *testing.T) {
 		t.Fatalf("origin-spelled base: got %q", got)
 	}
 }
+
+// A span that starts with a dash is a revision to git, never an option
+// (`rota change --base` is user-supplied).
+func TestDiffSpanIsNeverAnOption(t *testing.T) {
+	var seen [][]string
+	run := func(_ context.Context, _ string, args ...string) (Result, error) {
+		seen = append(seen, args)
+		return Result{}, nil
+	}
+	span := "--output=/tmp/pwned"
+	ChangedPaths(context.Background(), run, ".", span)
+	DiffFiles(context.Background(), run, ".", span)
+	ChangedLines(context.Background(), run, ".", span)
+	ChangedLinesCounted(context.Background(), run, ".", span)
+	if len(seen) != 4 {
+		t.Fatalf("ran %d git calls", len(seen))
+	}
+	for _, args := range seen {
+		for i, a := range args {
+			if a == span && (i == 0 || args[i-1] != "--end-of-options") {
+				t.Errorf("git %v: span not guarded by --end-of-options", args)
+			}
+		}
+	}
+}

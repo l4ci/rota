@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -28,6 +29,9 @@ type GateConfig struct {
 	Full, Fast, E2E []string
 	// CIChecks is test.ciChecks: the CI checks that must all pass.
 	CIChecks []string
+	// Docs and Small are test.docs and test.small: what the gate and train run
+	// in place of test.full and test.e2e for a docs-tier or small-tier change.
+	Docs, Small []string
 	// Tracker is the forge adapter settings (issues.*).
 	Tracker tracker.Settings
 	// InProgressLabel is issues.labels.inProgress.
@@ -58,6 +62,8 @@ type GateConfig struct {
 	crossErr   error
 	lenses     config.Lenses
 	lensesErr  error
+	change     change.Policy
+	changeErr  error
 	tddErr     error
 	testsErr   error // a malformed test.fast or test.full
 	isolate    bool
@@ -88,6 +94,8 @@ func ParseGateConfig(cfg any) GateConfig {
 	c := GateConfig{
 		E2E:             commandList(cfg, "test.e2e"),
 		CIChecks:        commandList(cfg, "test.ciChecks"),
+		Docs:            commandList(cfg, "test.docs"),
+		Small:           commandList(cfg, "test.small"),
 		Tracker:         tracker.SettingsFromConfig(cfg),
 		InProgressLabel: labels.InProgress,
 		SharedPaths:     roundcfg.SharedPaths(cfg),
@@ -106,6 +114,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)
 	c.lenses, c.lensesErr = config.LensesOf(cfg)
+	c.change, c.changeErr = config.ChangePolicyOf(cfg)
 	c.isolate, c.isolateErr = config.Bool(cfg, "test.isolate")
 	c.slots, c.slotsErr = config.Int(cfg, "test.slots", 1, 64)
 	return c
@@ -176,6 +185,10 @@ func (c GateConfig) CrossReview() (roundcfg.CrossReview, error) { return c.cross
 // Lenses is review.lenses, or the error of a malformed one.
 func (c GateConfig) Lenses() (config.Lenses, error) { return c.lenses, c.lensesErr }
 
+// ChangePolicy is change.*, or the error of a malformed one. Callers classify
+// as full on the error rather than refuse.
+func (c GateConfig) ChangePolicy() (change.Policy, error) { return c.change, c.changeErr }
+
 // TDDEnabled is work.tdd, or the error of a non-boolean value.
 func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }
 
@@ -216,4 +229,28 @@ func commandList(cfg any, key string) []string {
 		}
 	}
 	return cmds
+}
+
+// forTier is the config a change of tier t verifies with: Full is test.docs or
+// test.small, with {files} expanded to files, and E2E is cleared. ran names the
+// list that runs and skipped the tiers it replaced. A full tier, or a tier
+// whose own list is empty, keeps c unchanged: ran is test.full, skipped nil.
+func (c GateConfig) forTier(t change.Tier, files []string) (cfg GateConfig, ran string, skipped []string) {
+	var cmds []string
+	switch t {
+	case change.TierDocs:
+		cmds, ran = c.Docs, "test.docs"
+	case change.TierSmall:
+		cmds, ran = c.Small, "test.small"
+	}
+	if len(cmds) == 0 {
+		return c, tierFull, nil
+	}
+	cfg = c
+	cfg.Full, cfg.E2E = expandTierFiles(cmds, files), nil
+	skipped = []string{tierFull}
+	if len(c.E2E) > 0 {
+		skipped = append(skipped, tierE2E)
+	}
+	return cfg, ran, skipped
 }

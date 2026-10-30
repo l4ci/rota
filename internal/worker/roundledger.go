@@ -181,7 +181,7 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
 func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult) {
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: m.Round(env, root)}
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped)), Round: m.Round(env, root)}
 	ledgerAppend(env, root, e)
 	switch {
 	case res.Verdict == GatePass:
@@ -191,6 +191,19 @@ func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult
 		e.Kind, e.Detail = ledger.KindMerge, ledger.Detail("by", "remote")
 		ledgerAppend(env, root, e)
 	}
+}
+
+// tierSkipped is the skipped test tiers as a ledger detail value, nil (left
+// out) when the gate skipped none.
+func tierSkipped(skipped []string) any {
+	if len(skipped) == 0 {
+		return nil
+	}
+	out := make([]any, len(skipped))
+	for i, s := range skipped {
+		out[i] = s
+	}
+	return out
 }
 
 // mergeRecorded reports a merge entry already on file for e's PR, so a PR
@@ -212,7 +225,7 @@ func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[
 		return
 	}
 	ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindTrain, Round: m.Round(env, root),
-		Detail: ledger.Detail("verdict", res.Verdict)})
+		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped))})
 	for _, culprit := range res.Culprits {
 		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
 	}

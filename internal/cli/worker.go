@@ -716,6 +716,12 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	}
 	d.Set("verified", strList(r.Verified))
 	d.Set("verifySkipped", r.VerifySkipped)
+	// Only a gate that reached the verify has a tier; skipped is always a list.
+	if r.Tier != "" {
+		d.Set("tier", r.Tier)
+		d.Set("tierReason", r.TierReason)
+		d.Set("skipped", strList(r.Skipped))
+	}
 	if len(r.Flaky) > 0 {
 		d.Set("flaky", flakyData(r.Flaky))
 	}
