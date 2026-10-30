@@ -88,8 +88,8 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 }
 
 // doctorDiskInput fills the disk fields of in: the threshold from config
-// (doctor.minFreeDiskPercent) and, when the volume is under it,
-// the leftovers worth naming. A non-numeric threshold falls back to the default.
+// (doctor.minFreeDiskPercent) and the leftovers scan doctor runs when the
+// volume is under it. A non-numeric threshold falls back to the default.
 func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk, getenv func(string) string) {
 	min := config.IntOr(cfg, "doctor.minFreeDiskPercent", 0, 100)
 	in.MinFreeDiskPercent = min
@@ -101,9 +101,7 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 	if cache := goCacheDir(getenv); cache != "" && !sameVolume(cache, dir) {
 		in.CacheDisk = disk(cache)
 	}
-	if in.Disk.Low(min) {
-		in.Leftovers = doctorLeftovers(ctx, run, root, now)
-	}
+	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, run, root, now) }
 }
 
 // goCacheDir is where the Go build cache lives: $GOCACHE, else go-build under

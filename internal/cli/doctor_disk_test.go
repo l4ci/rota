@@ -62,11 +62,6 @@ func TestDoctorDiskInput(t *testing.T) {
 	if !found {
 		t.Errorf("no disk warning in %+v", rep.Checks)
 	}
-	in = doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(50000, 100000), os.Getenv)
-	if len(in.Leftovers) != 0 {
-		t.Errorf("leftovers are only scanned when the disk is low: %v", in.Leftovers)
-	}
 }
 
 func TestDoctorSlotBlocksUsesTheStoredWidth(t *testing.T) {
