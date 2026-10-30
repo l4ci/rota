@@ -154,6 +154,32 @@ func TestStatsTouchedFallsBackToGitDate(t *testing.T) {
 	}
 }
 
+func TestEntriesSortsBySubsystemAndSkipsUnnamed(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, ".rota/map/z.md", "---\nsubsystem: aaa\n---\n")
+	write(t, root, ".rota/map/b.md", "---\nsubsystem: bbb\n---\n")
+	write(t, root, ".rota/map/n.md", "---\ntitle: x\n---\n")
+	write(t, root, ".rota/map/p.md", "no frontmatter\n")
+	var got []string
+	for _, e := range Entries(root) {
+		got = append(got, e.Name)
+	}
+	if !reflect.DeepEqual(got, []string{"aaa", "bbb"}) {
+		t.Errorf("Entries = %v", got)
+	}
+}
+
+// An unparseable touched value is dated by git, the rule stale.Find also uses.
+func TestStatsUnparseableTouchedFallsBackToGitDate(t *testing.T) {
+	root := gittest.NewRepo(t, "main")
+	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n")
+	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
+	got := Stats(root)
+	if len(got) != 1 || got[0].Touched != want || want == "" {
+		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
+	}
+}
+
 func TestSoftCap(t *testing.T) {
 	tests := []struct {
 		name string

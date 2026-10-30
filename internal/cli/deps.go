@@ -26,11 +26,11 @@ import (
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/update"
@@ -566,7 +566,7 @@ func envClock(getenv func(string) string) (now, today func() time.Time, holder f
 	}
 	today = now
 	if v := getenv("ROTA_TEST_TODAY"); v != "" {
-		if t, ok := stale.ParseDate(v); ok {
+		if t, ok := pystr.ParseDate(v); ok {
 			today = func() time.Time { return t }
 		} else {
 			err = Usage("ROTA_TEST_TODAY must be YYYY-MM-DD, got %q", v)
