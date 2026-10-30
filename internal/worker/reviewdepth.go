@@ -77,19 +77,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not diff %s to pick the review depth", s.Span), err}
 	}
-	// --no-renames lists both the old and the new path of a move, so a file
-	// moved out of a protected directory still counts as touching it. -z keeps
-	// git from C-quoting unusual names, which no glob would match.
-	res, err := s.Git(ctx, s.Dir, "diff", "--name-only", "-z", "--no-renames", s.Span)
-	if err == nil && res.ExitCode != 0 {
-		err = &git.ExitError{Args: "diff --name-only " + s.Span, ExitCode: res.ExitCode, Stderr: res.Stderr}
-	}
-	var files []string
-	for _, l := range strings.Split(res.Stdout, "\x00") {
-		if l != "" {
-			files = append(files, l)
-		}
-	}
+	files, err := git.DiffFiles(ctx, s.Git, s.Dir, s.Span)
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}

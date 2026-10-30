@@ -255,7 +255,7 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 			best = ReviewDecision{d, signal, why}
 		}
 	}
-	if doorOneWay.MatchString(in.PRBody) {
+	if DoorOneWay(in.PRBody) {
 		raise(DepthFull, SignalDoor, "PR body says Door: one-way")
 	}
 	if !p.NoScopeDrift {
