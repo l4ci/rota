@@ -20,6 +20,9 @@ class GateRetryTest(unittest.TestCase):
         shutil.copytree(source / "lib", self.repo / "test/lib")
         for helper in source.glob("gate-*.py"):
             shutil.copy(helper, self.repo / "test" / helper.name)
+        markers = Path("internal/flakeledger/infrastructure-markers.txt")
+        (self.repo / markers.parent).mkdir(parents=True)
+        shutil.copy(source.parent / markers, self.repo / markers)
         (self.repo / "test/sections/01_stub.sh").touch()
         (self.repo / "go.mod").write_text("module github.com/l4ci/rota\n")
         (self.repo / "test/runner.sh").write_text(
@@ -100,7 +103,7 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                         ROTA_TEST_LOCK_HELD="1", ROTA_GATE_LOCK=str(self.root / "gate.lock"),
                         ROTA_GATE_LOGS=str(self.root / "logs"))
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
-        subprocess.run(["git", "-C", str(self.repo), "add", "--", "test", "go.mod"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "add", "--", "test", "go.mod", "internal"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=test", "-c",
                         "user.email=test@example.com", "commit", "-qm", "seed"], check=True)
 
@@ -215,6 +218,26 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual(result.returncode, 0, result.stdout)
         path = Path(result.stdout.split("logs in ", 1)[1].splitlines()[0])
         self.assertFalse(path.exists(), result.stdout)
+
+    def test_go_helper_classifies_with_the_shared_marker_file(self):
+        # The Go side owns the infrastructure markers; gate-go.py must read the
+        # same file, so every line there makes a package ineligible for retry.
+        source = Path(__file__).resolve().parent
+        lines = (source.parent / "internal/flakeledger/infrastructure-markers.txt").read_text().splitlines()
+        self.assertGreater(len(lines), 10)
+        # A marker added to the file alone must reach the helper unchanged.
+        lines.append("zz-new-marker")
+        (self.repo / "internal/flakeledger/infrastructure-markers.txt").write_text("\n".join(lines) + "\n")
+        samples = {"^panic:": "panic: boom", "\\bkilled\\b": "worker killed", "signal:": "signal: killed"}
+        log = self.root / "go.json"
+        for marker in lines:
+            sample = samples.get(marker) or marker.replace("\\", "")
+            with self.subTest(marker=marker):
+                log.write_text(json.dumps(dict(Action="output", Package="p", Output=sample)) + "\n" +
+                               json.dumps(dict(Action="fail", Package="p")) + "\n")
+                result = subprocess.run(["python3", str(self.repo / "test/gate-go.py"), "failed", str(log)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1, (sample, result.stdout))
 
     def test_go_timeout_is_not_retried(self):
         self.env["GO_TIMEOUT"] = "1"
