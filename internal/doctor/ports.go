@@ -55,16 +55,6 @@ func ParseSS(out string) []Listener {
 	return ls
 }
 
-// ParseLsofCwd reads `lsof -a -p PID -d cwd -Fn` output: the directory, or "".
-func ParseLsofCwd(out string) string {
-	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "n") {
-			return line[1:]
-		}
-	}
-	return ""
-}
-
 // ParseLsof reads `lsof -nP -iTCP -sTCP:LISTEN -Fpn` output.
 func ParseLsof(out string) []Listener {
 	var ls []Listener

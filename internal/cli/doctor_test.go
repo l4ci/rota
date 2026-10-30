@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -528,5 +529,30 @@ func TestDoctorTestLine(t *testing.T) {
 	}
 	if c := line(); !strings.Contains(c["detail"].(string), "width 3; smoke shards 2 (ROTA_SMOKE_SHARDS)") {
 		t.Errorf("configured: %v", c)
+	}
+}
+
+// fakeProcs is a recorded process table: only working directories are read.
+type fakeProcs struct{ pidlive.Source }
+
+func (fakeProcs) Cwd(pid int) string { return map[int]string{91: "/p/.worktrees/w1"}[pid] }
+
+// Doctor reads a listener's working directory through the injected process
+// source, not /proc or lsof itself.
+func TestDoctorInputReadsCwdThroughProcs(t *testing.T) {
+	cwd, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.Getenv = func(string) string { return "" }
+	d.Procs = fakeProcs{}
+	in := doctorInput(context.Background(), d)
+	if got := in.CwdOf(91); got != "/p/.worktrees/w1" {
+		t.Errorf("CwdOf(91) = %q, want the fake table's directory", got)
 	}
 }

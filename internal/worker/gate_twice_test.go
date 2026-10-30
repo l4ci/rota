@@ -90,7 +90,7 @@ func TestGateRunMarkerOfDeadProcessIsReplaced(t *testing.T) {
 	if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte("2147483646\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	other, release, err := claimGateRun(common, "pr1")
+	other, release, err := claimGateRun(pidlive.Real{}, common, "pr1")
 	if err != nil || other != 0 {
 		t.Fatalf("claim: other=%d err=%v", other, err)
 	}
@@ -117,7 +117,7 @@ func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
 			if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			other, release, err := claimGateRun(common, "pr1")
+			other, release, err := claimGateRun(pidlive.Real{}, common, "pr1")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -201,9 +201,46 @@ func TestGateRunMarkerOfZombieHolderIsReplaced(t *testing.T) {
 	if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte(fmt.Sprintf("%d\n", pid)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	other, release, err := claimGateRun(common, "pr1")
+	other, release, err := claimGateRun(pidlive.Real{}, common, "pr1")
 	if err != nil || other != 0 {
 		t.Fatalf("zombie holder blocked the gate: other=%d err=%v", other, err)
 	}
 	release()
+}
+
+// fakeProcs is a recorded process table for markerLive: pid -> start ticks,
+// absent means gone.
+type fakeProcs map[int]uint64
+
+func (f fakeProcs) State(pid int) (string, bool) { _, ok := f[pid]; return "S", ok }
+func (f fakeProcs) Stat(pid int) (int, uint64, bool) {
+	s, ok := f[pid]
+	return 1, s, ok
+}
+func (fakeProcs) Comm(int) string              { return "" }
+func (fakeProcs) Cwd(int) string               { return "" }
+func (fakeProcs) Parents() (map[int]int, bool) { return nil, false }
+
+// markerLive reads the process table it is given: a marker is live only for
+// the same process, judged on a fake table with no real pid involved.
+func TestMarkerLiveThroughInjectedSource(t *testing.T) {
+	self := os.Getpid() // kill -0 must find a real pid; the table decides the rest
+	cases := []struct {
+		name  string
+		table fakeProcs
+		start uint64
+		want  bool
+	}{
+		{"same start", fakeProcs{self: 7}, 7, true},
+		{"reused pid", fakeProcs{self: 8}, 7, false},
+		{"no recorded start", fakeProcs{self: 8}, 0, true},
+	}
+	for _, c := range cases {
+		if got := markerLive(c.table, self, c.start); got != c.want {
+			t.Errorf("%s: markerLive = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if m := gateMarker(fakeProcs{self: 42}, self); m != fmt.Sprintf("%d 42\n", self) {
+		t.Errorf("gateMarker = %q", m)
+	}
 }

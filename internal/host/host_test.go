@@ -912,16 +912,6 @@ func TestHerdrNotify(t *testing.T) {
 	New("tmux", deps(g, nil, &clock{})).Notify(bg, "T", "B")
 }
 
-func TestPidTreeParsesPS(t *testing.T) {
-	f := &fake{handler: func(string, []string) Result {
-		return Result{Stdout: "  1     0\n 10     1\n 11    10\n 12    10\n 13    11\n 99     1\n"}
-	}}
-	got := pidTree(f.run, 10)
-	if !reflect.DeepEqual(got, []int{10, 11, 12, 13}) {
-		t.Errorf("pidTree = %v", got)
-	}
-}
-
 func TestTmuxEnsureOperator(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "i.md")
 	os.WriteFile(file, []byte("go"), 0o644)
