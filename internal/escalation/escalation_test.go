@@ -109,3 +109,27 @@ func TestNotifyReadsTheInjectedConfig(t *testing.T) {
 		t.Fatalf("sent=%v warns=%v", sent, warns)
 	}
 }
+
+func TestOpenKeepsOnlyStoredPending(t *testing.T) {
+	list := []Entry{
+		{ID: "e1", Status: StatusPending},
+		{ID: "e2", Status: StatusAnswered},
+		{ID: "e3", Status: StatusTimedOut},
+		{ID: "e4", Status: StatusPending, Deadline: "2000-01-01T00:00:00Z"},
+	}
+	var got []string
+	for _, e := range Open(list) {
+		got = append(got, e.ID)
+	}
+	if strings.Join(got, ",") != "e1,e4" {
+		t.Fatalf("Open = %v, want e1,e4 (answered and timed-out excluded; a pending past its deadline stays open)", got)
+	}
+}
+
+func TestTallyCountsReportStatuses(t *testing.T) {
+	reps := []Report{{Status: StatusPending}, {Status: StatusPending}, {Status: StatusAnswered}, {Status: StatusTimedOut}}
+	p, a, to := Tally(reps)
+	if p != 2 || a != 1 || to != 1 {
+		t.Fatalf("Tally = %d,%d,%d", p, a, to)
+	}
+}

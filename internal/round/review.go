@@ -289,7 +289,7 @@ func (e Env) reviewCap(ctx context.Context, root string, o ReviewOpts, batch wor
 	data := worker.BlockData{BlockedBy: blockedby.MaxBounces}
 	msg := fmt.Sprintf("%s was already sent back %d time(s) (round.maxBounces is %d)", issue, out.Bounces, o.MaxBounces)
 	for _, en := range escalation.Load(root) {
-		if en.Slot == o.Slot && en.Number == number && en.Status == escalation.StatusPending {
+		if en.Slot == o.Slot && en.Number == number && escalation.IsOpen(en) {
 			return out, (&exitcode.Error{Exit: exitcode.ExitRefused, Message: msg + "; the escalation is still open", Data: data}).WithHint(CapHint(issue))
 		}
 	}
