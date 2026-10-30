@@ -225,7 +225,7 @@ func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[
 		return
 	}
 	ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindTrain, Round: m.Round(env, root),
-		Detail: ledger.Detail("verdict", res.Verdict)})
+		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped))})
 	for _, culprit := range res.Culprits {
 		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
 	}
