@@ -17,7 +17,7 @@ type ownership struct {
 	base, wtDir string
 	checkouts   []checkout
 	agents      []host.Agent    // the host snapshot the report was built from
-	registered  map[string]bool // row names with a slot
+	holders     []worker.Holder // the worktree each registered slot holds
 	rowAgent    map[string]bool // row names the report matched an agent to
 	slotBranch  map[string]bool // branches registered rows name
 	slotTab     map[string]bool // tab handles registered rows name
@@ -28,7 +28,7 @@ type ownership struct {
 // caller's host-availability check keeps that from failing open.
 func newOwnership(rep *round.Report, base, wtDir string, checkouts []checkout) *ownership {
 	o := &ownership{base: base, wtDir: wtDir, checkouts: checkouts,
-		registered: map[string]bool{}, rowAgent: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}, agentTab: map[string]bool{}}
+		rowAgent: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}, agentTab: map[string]bool{}}
 	if rep == nil {
 		return o
 	}
@@ -43,7 +43,12 @@ func newOwnership(rep *round.Report, base, wtDir string, checkouts []checkout) *
 		if !r.Registered {
 			continue
 		}
-		o.registered[r.Name] = true
+		// A slot with no recorded checkout holds the pool's .worktrees/<name>.
+		wt := r.Worktree
+		if wt == "" {
+			wt = filepath.Join(wtDir, r.Name)
+		}
+		o.holders = append(o.holders, worker.Holder{Name: r.Name, Worktree: wt})
 		if r.Branch != "" {
 			o.slotBranch[r.Branch] = true
 		}
@@ -77,10 +82,16 @@ func (o *ownership) agentIn(dir string) bool {
 // tabLive: an agent runs in the tab, or a registered slot names it.
 func (o *ownership) tabLive(id string) bool { return o.agentTab[id] || o.slotTab[id] }
 
+// slotHolds: a registered slot holds the worktree at path, by the rule ship's
+// clearing shares (worker.HeldBy).
+func (o *ownership) slotHolds(path string) bool {
+	return worker.HeldBy(filepath.Dir(o.wtDir), o.holders, path) != ""
+}
+
 // Worktree: a checkout reap must never remove.
 func (o *ownership) Worktree(c *checkout) bool {
 	name := filepath.Base(c.path)
-	return o.registered[name] || c.isLocked || protectedBranch(c.branch, o.base) || o.agentIn(c.path) || o.rowAgent[name]
+	return o.slotHolds(c.path) || c.isLocked || protectedBranch(c.branch, o.base) || o.agentIn(c.path) || o.rowAgent[name]
 }
 
 // Branch: a branch reap must never delete for liveness reasons.
@@ -108,7 +119,7 @@ func (o *ownership) cwd(cwd string) bool {
 			return o.Worktree(c)
 		}
 	}
-	return o.registered[name] || o.agentIn(filepath.Join(o.wtDir, name))
+	return o.slotHolds(filepath.Join(o.wtDir, name)) || o.agentIn(filepath.Join(o.wtDir, name))
 }
 
 // Tab: a tab reap must not close, including one it cannot prove agentless.
