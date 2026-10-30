@@ -23,6 +23,8 @@ func TestIsSibling(t *testing.T) {
 		{".rota/plans/M01-B07.md", User},
 		{"src/main.go", User},
 		{"src/other.go.bak", User}, // main.go is tracked, other.go is not
+		{"src/main.go.orig", User}, // beside tracked main.go, but not a toolchain suffix
+		{"App.swift.local", User},
 		{"notes.txt", User},
 		{"project.pbxproj", User},
 	} {
