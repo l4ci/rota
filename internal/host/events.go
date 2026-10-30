@@ -1,15 +1,11 @@
 package host
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
 	"strings"
-	"sync"
 )
 
 // SupportedHerdr is the herdr minor `rota round wait` is written against.
@@ -70,23 +66,6 @@ func checkHerdrVersion(out string) error {
 	return err
 }
 
-// socket checks the installed herdr is a SupportedHerdr release and returns
-// its API socket path.
-func (h *herdr) socket(ctx context.Context) (string, error) {
-	r := h.herdr(ctx, "--version")
-	if r.ExitCode != 0 {
-		return "", fmt.Errorf("herdr --version failed: %s", strings.TrimSpace(r.Stderr))
-	}
-	if err := checkHerdrVersion(r.Stdout); err != nil {
-		return "", err
-	}
-	sock := h.d.Getenv("HERDR_SOCKET_PATH")
-	if sock == "" {
-		return "", errors.New("HERDR_SOCKET_PATH is not set: run from inside a herdr pane")
-	}
-	return sock, nil
-}
-
 // Watch implements Watcher over herdr's socket API: one `events.subscribe`
 // request carrying a `pane.agent_status_changed` subscription per watched
 // pane. The CLI's `herdr agent wait` takes one target, so waiting for the
@@ -109,135 +88,44 @@ func (h *herdr) Watch(ctx context.Context, targets []WatchTarget) (Watch, error)
 		subs = append(subs, map[string]string{"type": "pane.agent_status_changed", "pane_id": pane})
 	}
 	if len(subs) == 0 {
-		return &herdrWatch{ch: make(chan watchMsg), done: make(chan struct{})}, nil
+		return &herdrWatch{}, nil
 	}
-	conn, err := h.d.Dial(ctx, sock)
+	st, err := h.subscribeAt(ctx, sock, "rota-round-wait", subs, 16)
 	if err != nil {
-		return nil, fmt.Errorf("herdr socket: %w", err)
+		return nil, err
 	}
-	req, _ := json.Marshal(map[string]any{
-		"id": "rota-round-wait", "method": "events.subscribe",
-		"params": map[string]any{"subscriptions": subs},
-	})
-	if _, err := conn.Write(append(req, '\n')); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("herdr socket: %w", err)
-	}
-	w := &herdrWatch{conn: conn, panes: panes, ch: make(chan watchMsg, 16), done: make(chan struct{})}
-	go w.read()
-	// The reply to events.subscribe comes first; failing here beats waiting
-	// forever on a subscription that never started.
-	select {
-	case m := <-w.ch:
-		if m.err != nil {
-			w.Close()
-			return nil, m.err
-		}
-	case <-ctx.Done():
-		w.Close()
-		return nil, ctx.Err()
-	}
-	return w, nil
-}
-
-type watchMsg struct {
-	slot string
-	err  error
+	return &herdrWatch{st: st, panes: panes}, nil
 }
 
 type herdrWatch struct {
-	conn  net.Conn
+	st    *stream // nil when no watched slot has a pane
 	panes map[string]string
-	ch    chan watchMsg
-	done  chan struct{}
-	once  sync.Once
 }
 
-// frame is one line from the socket: the subscribe reply
-// (`{"id":..,"result":{"type":"subscription_started"}}`), an error reply, or
-// an event (`{"event":"pane.agent_status_changed","data":{..}}`).
-type frame struct {
-	Event string `json:"event"`
-	Data  struct {
-		PaneID string `json:"pane_id"`
-	} `json:"data"`
-	Result *struct {
-		Type string `json:"type"`
-	} `json:"result"`
-	Error *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// read forwards the first line as an ack or error, then one message per
-// status change of a watched pane. The socket carries only what was
-// subscribed to; the pane check is a second filter in case the server ever
-// widens a subscription.
-func (w *herdrWatch) read() {
-	sc := bufio.NewScanner(w.conn)
-	sc.Buffer(make([]byte, 0, 64<<10), 4<<20)
-	send := func(m watchMsg) bool {
-		select {
-		case w.ch <- m:
-			return true
-		case <-w.done:
-			return false
-		}
+// Next returns the slot of the next status change of a watched pane. The
+// socket carries only what was subscribed to; the pane check is a second
+// filter in case the server ever widens a subscription.
+func (w *herdrWatch) Next(ctx context.Context) (string, error) {
+	if w.st == nil {
+		<-ctx.Done()
+		return "", ctx.Err()
 	}
-	acked := false
-	for sc.Scan() {
-		var f frame
-		if json.Unmarshal(sc.Bytes(), &f) != nil {
-			continue
-		}
-		if f.Event == "events_lost" || (f.Error != nil && f.Error.Code == "events_lost") {
-			send(watchMsg{err: fmt.Errorf("%w: events_lost", ErrStreamLost)})
-			return
-		}
-		if f.Error != nil {
-			send(watchMsg{err: fmt.Errorf("herdr %s: %s", f.Error.Code, f.Error.Message)})
-			return
-		}
-		if !acked {
-			acked = true
-			if !send(watchMsg{}) {
-				return
-			}
-			if f.Event == "" {
-				continue
-			}
+	for {
+		f, err := w.st.next(ctx)
+		if err != nil {
+			return "", err
 		}
 		if f.Event != "pane.agent_status_changed" && f.Event != "pane_agent_status_changed" {
 			continue
 		}
 		if slot, ok := w.panes[f.Data.PaneID]; ok {
-			if !send(watchMsg{slot: slot}) {
-				return
-			}
+			return slot, nil
 		}
-	}
-	err := sc.Err()
-	if err == nil {
-		err = errors.New("herdr closed the event stream")
-	}
-	send(watchMsg{err: fmt.Errorf("%w: %v", ErrStreamLost, err)})
-}
-
-func (w *herdrWatch) Next(ctx context.Context) (string, error) {
-	select {
-	case m := <-w.ch:
-		return m.slot, m.err
-	case <-ctx.Done():
-		return "", ctx.Err()
 	}
 }
 
 func (w *herdrWatch) Close() {
-	w.once.Do(func() {
-		close(w.done)
-		if w.conn != nil {
-			w.conn.Close()
-		}
-	})
+	if w.st != nil {
+		w.st.Close()
+	}
 }

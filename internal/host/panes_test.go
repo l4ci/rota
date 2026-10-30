@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -198,5 +199,35 @@ func TestCurrentPaneAnyPrefersHerdr(t *testing.T) {
 		if pane, kind := CurrentPaneAny(env(tc.env)); pane != tc.pane || kind != tc.kind {
 			t.Errorf("%s: CurrentPaneAny = %q, %q; want %q, %q", tc.name, pane, kind, tc.pane, tc.kind)
 		}
+	}
+}
+
+func TestWatchOutputEventsLostFrameIsAStreamLoss(t *testing.T) {
+	for name, frame := range map[string]string{
+		"event": `{"event":"events_lost","data":{}}`,
+		"error": `{"error":{"code":"events_lost","message":"subscriber lagged"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, s, _ := pipeDeps(t, "herdr 0.9.3", nil)
+			s.serve(t, outAck, frame)
+			w, err := New("herdr", d).(OutputWatcher).WatchOutput(context.Background(), []string{"w1:p1"}, "x")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer w.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := w.Next(ctx); !errors.Is(err, ErrStreamLost) {
+				t.Errorf("Next = %v, want ErrStreamLost", err)
+			}
+		})
+	}
+}
+
+func TestHerdrPaneCallsRefuseOtherHerdrVersions(t *testing.T) {
+	d, _, _ := pipeDeps(t, "herdr 0.10.0", nil)
+	h := New("herdr", d).(PaneHost)
+	if err := h.SendPane(context.Background(), "w1:p1", "x"); err == nil || !strings.Contains(err.Error(), "unsupported herdr") {
+		t.Errorf("SendPane err = %v", err)
 	}
 }
