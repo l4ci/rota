@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Attachable host session guarantee: the port of bin/hv-worker-session.
@@ -69,11 +68,7 @@ type SessionOpts struct {
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
 func (e Env) operatorCommand(root string) (string, error) {
-	argv, err := harness.OrchestratorCommand(e.Config(root), true)
-	if err != nil {
-		return "", err
-	}
-	return shlex.Join(argv), nil
+	return harness.OrchestratorCommandLine(e.Config(root), true)
 }
 
 // SessionEnsure guarantees a session a human can attach to. Exits: 3 missing
