@@ -574,7 +574,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		g := shipGitRunner{c, dir}
 		plan, err := ship.PlanUndo(g, base, cur, dirty, ship.UndoOpts{
 			Cycle: *cycle, AllowPost: *allowPost,
-			IDs: func(hashes map[string]bool) []string { return ship.CycleIDs(root, hashes) },
+			IDs: func(hashes map[string]bool) []string { return backlog.CycleIDs(root, hashes) },
 		})
 		if err != nil {
 			return shipErr(err)
@@ -596,7 +596,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return err
 			}
-			return ship.Restore(b, root, ids, c.Stderr)
+			return ship.Restore(fileActive{b, root}, root, ids, c.Stderr)
 		}); err != nil {
 			return shipErr(err)
 		}
@@ -646,3 +646,12 @@ func shipPlan(short, subject, base string, postCount int, ids []string, apply bo
 	}
 	return b.String()
 }
+
+// fileActive gives a backend the Active lookup Restore decides through: the
+// file backlog's open bullets under root.
+type fileActive struct {
+	backlog.Backend
+	root string
+}
+
+func (f fileActive) Active(id string) bool { return backlog.IsActive(f.root, id) }
