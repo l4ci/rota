@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ import (
 func TestVerdictShowRecoversPRReport(t *testing.T) {
 	dir := verdictRepo(t)
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"issues":{"source":"github"},"forge":{"provider":"github"}}`)
-	head := strings.TrimSpace(gitT(t, dir, "rev-parse", "HEAD"))
+	head := strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "HEAD"))
 	report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: head, Summary: "remote review", Findings: []verdict.Finding{{Severity: "major", Title: "broken"}}}, nil)
 	fake := &forge{answer: func(_ string, args []string) (string, string, int) {
 		call := strings.Join(args, " ")
@@ -103,7 +104,7 @@ func TestVerdictLookupFilters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := verdictRepo(t)
 			write(t, filepath.Join(dir, ".rota", "config.json"), `{"issues":{"source":"`+tc.source+`"},"forge":{"provider":"github"}}`)
-			head := strings.TrimSpace(gitT(t, dir, "rev-parse", "HEAD"))
+			head := strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "HEAD"))
 			if tc.local {
 				b3Record(t, dir, "feat/x", verdict.ReviewSpec, verdict.Pass, head)
 			}
@@ -166,7 +167,7 @@ func TestVerdictRecoveryPreservesLocalBranch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := shipFixture(t, `{"forge":{"provider":"github"},"issues":{"source":"github"},"ship":{"review":"none"}}`)
 			shipBranchOf(t, dir, "feat/x", [3]string{"x.txt", "feature", ""})
-			head := gitT(t, dir, "rev-parse", "feat/x")
+			head := gittest.Run(t, dir, "rev-parse", "feat/x")
 			b3Record(t, dir, "feat/x", verdict.ReviewQuality, verdict.Fail, head)
 			report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Pass, Sha: head}, nil)
 			backend := a8Fixture()

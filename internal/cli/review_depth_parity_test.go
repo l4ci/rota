@@ -3,12 +3,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -41,27 +41,19 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	git := func(args ...string) {
 		t.Helper()
-		c := exec.Command("git", append([]string{"-C", wt, "-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
+		gittest.Run(t, wt, args...)
 	}
 	git("branch", "-m", "nia/6-x")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
 	git("add", "feature.txt")
 	git("commit", "-q", "-m", "feature")
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	if out, err := exec.Command("git", "init", "-q", "--bare", origin).CombinedOutput(); err != nil {
-		t.Fatalf("%v %s", err, out)
-	}
-	for _, args := range [][]string{{"-C", dir, "remote", "add", "origin", origin}, {"-C", dir, "push", "-q", "origin", "main"}, {"-C", wt, "push", "-q", "origin", "nia/6-x"}} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	if out, err := exec.Command("git", "-C", wt, "rev-parse", "HEAD").Output(); err == nil {
-		headSHA = strings.TrimSpace(string(out))
-	}
+	gittest.Run(t, dir, "init", "-q", "--bare", origin)
+	gittest.Quiet(t, origin)
+	gittest.Run(t, dir, "remote", "add", "origin", origin)
+	gittest.Run(t, dir, "push", "-q", "origin", "main")
+	gittest.Run(t, wt, "push", "-q", "origin", "nia/6-x")
+	headSHA = gittest.Run(t, wt, "rev-parse", "HEAD")
 	doc := registryDoc(t, dir)
 	slot := doc["slots"].([]any)[0].(map[string]any)
 	slot["task"], slot["branch"], slot["pr"] = "6", "nia/6-x", prURL
@@ -111,9 +103,7 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		git("add", "other.txt")
 		git("commit", "-q", "-m", "bounce fix")
 		git("push", "-q", "origin", "nia/6-x")
-		if o, err := exec.Command("git", "-C", wt, "rev-parse", "HEAD").Output(); err == nil {
-			headSHA = strings.TrimSpace(string(o))
-		}
+		headSHA = gittest.Run(t, wt, "rev-parse", "HEAD")
 		_, out, _ = rotaInWith(t, deps, dir, "review", "depth", "nia/6-x", "--json")
 		d := data(t, out)
 		note, _ := d["depthNote"].(string)

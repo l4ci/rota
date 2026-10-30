@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -72,9 +73,9 @@ type gateCase struct {
 // `rota release host` reads it as github.
 func gateRemote(t *testing.T, work string) {
 	t.Helper()
-	gitT(t, work, "init", "-q", "--bare", "github.com/fake/repo.git")
+	gittest.Run(t, work, "init", "-q", "--bare", "github.com/fake/repo.git")
 	write(t, filepath.Join(work, ".git", "info", "exclude"), "github.com/\n")
-	gitT(t, work, "remote", "add", "origin", "github.com/fake/repo.git")
+	gittest.Run(t, work, "remote", "add", "origin", "github.com/fake/repo.git")
 }
 
 // releaseForge answers `gh release view` with view (stdout, stderr, code) and
@@ -116,11 +117,11 @@ func gateCases() []gateCase {
 		work := newRepo(t, t.TempDir(), "proj", "main")
 		write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, "", level, nil))
 		gateRemote(t, work)
-		gitT(t, work, "tag", "-a", "v1.2.3", "-m", "v1.2.3")
+		gittest.Run(t, work, "tag", "-a", "v1.2.3", "-m", "v1.2.3")
 		return work
 	}
 	onRemote := func(t *testing.T, work string) bool {
-		return gitT(t, work, "ls-remote", "--tags", "origin", "refs/tags/v1.2.3") != ""
+		return gittest.Run(t, work, "ls-remote", "--tags", "origin", "refs/tags/v1.2.3") != ""
 	}
 	return []gateCase{
 		{gate.TagPush, "release push", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
@@ -129,7 +130,7 @@ func gateCases() []gateCase {
 		}},
 		{gate.ReleasePublish, "release publish", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			work := tagged(t, level)
-			gitT(t, work, "push", "-q", "origin", "main", "v1.2.3")
+			gittest.Run(t, work, "push", "-q", "origin", "main", "v1.2.3")
 			f := releaseForge(releaseNone, nil)
 			deps := useForge(t, f)
 			return work, []string{"release", "publish", "1.2.3", "--title", "v1.2.3 — x", "--body-file", "-"}, "notes",
@@ -149,7 +150,7 @@ func gateCases() []gateCase {
 			write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"issues": {"source": "file"}}`, level, map[string]any{"mergeApproval": "all"}))
 			shipBranchOf(t, work, "rota/x", [3]string{"x.txt", "feat: x", ""})
 			return work, []string{"ship", "merge", "rota/x", "--body-file", "-"}, "merge: x",
-				func() bool { return gitT(t, work, "branch", "--list", "rota/x") != "" }, testDeps()
+				func() bool { return gittest.Run(t, work, "branch", "--list", "rota/x") != "" }, testDeps()
 		}},
 		{gate.MergeApproval, "ship pr-merge", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			f := a8Fixture()
@@ -162,8 +163,8 @@ func gateCases() []gateCase {
 			rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 			wt := filepath.Join(dir, ".worktrees", "w1")
 			write(t, filepath.Join(wt, "feature.txt"), "f")
-			gitT(t, wt, "add", "feature.txt")
-			gitT(t, wt, "commit", "-q", "-m", "feature")
+			gittest.Run(t, wt, "add", "feature.txt")
+			gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 			return dir, []string{"worker", "gate", "w1", "--base", "main"}, "", func() bool {
 				_, err := os.Stat(filepath.Join(dir, "feature.txt"))
 				return os.IsNotExist(err)
@@ -303,7 +304,7 @@ func TestReleasePublishHosts(t *testing.T) {
 	// gitlab has no drafts
 	gl := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(gl, ".rota", "config.json"), "{}")
-	gitT(t, gl, "remote", "add", "origin", "https://gitlab.com/fake/repo.git")
+	gittest.Run(t, gl, "remote", "add", "origin", "https://gitlab.com/fake/repo.git")
 	if o := trRun(t, gl, "notes", append([]string{"release", "publish", "1.0.0", "--title", "T", "--body-file", "-", "--draft"}, gateYes...)...); o.code != 2 {
 		t.Fatalf("gitlab draft: %+v", o)
 	}
@@ -316,8 +317,8 @@ func TestReleasePublishHosts(t *testing.T) {
 		t.Fatalf("tag not on origin: %+v", o)
 	}
 	// github: gh release create with the notes file, the title and --draft
-	gitT(t, gh, "tag", "v1.0.0")
-	gitT(t, gh, "push", "-q", "origin", "v1.0.0")
+	gittest.Run(t, gh, "tag", "v1.0.0")
+	gittest.Run(t, gh, "push", "-q", "origin", "v1.0.0")
 	var notes string
 	f := releaseForge(releaseNone, func(args []string) {
 		for i, a := range args {
@@ -350,8 +351,8 @@ func TestReleasePublishFinishesTheDraft(t *testing.T) {
 			write(t, filepath.Join(work, ".goreleaser.yaml"), "version: 2\n")
 		}
 		gateRemote(t, work)
-		gitT(t, work, "tag", "v1.0.0")
-		gitT(t, work, "push", "-q", "origin", "v1.0.0")
+		gittest.Run(t, work, "tag", "v1.0.0")
+		gittest.Run(t, work, "push", "-q", "origin", "v1.0.0")
 		f := releaseForge(view, nil)
 		deps := useForge(t, f)
 		return trRunWith(t, deps, work, "notes\n", append([]string{"--json", "release", "publish", "1.0.0", "--title", "T", "--body-file", "-"}, gateYes...)...), f, work
@@ -402,14 +403,14 @@ func TestReleasePushScopes(t *testing.T) {
 	work := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(work, ".rota", "config.json"), "{}")
 	gateRemote(t, work)
-	gitT(t, work, "tag", "v1.2.3")
+	gittest.Run(t, work, "tag", "v1.2.3")
 	view := [3]any{`{"isDraft":true,"assets":` + releaseAllAssets + `}`, "", 0}
 	f := &forge{answer: func(string, []string) (string, string, int) { return view[0].(string), view[1].(string), view[2].(int) }}
 	deps := useForge(t, f)
 	push := func(extra ...string) trOut {
 		return trRunWith(t, deps, work, "", append(append([]string{"--json", "release", "push", "1.2.3"}, extra...), gateYes...)...)
 	}
-	branchOnOrigin := func() bool { return gitT(t, work, "ls-remote", "--heads", "origin", "main") != "" }
+	branchOnOrigin := func() bool { return gittest.Run(t, work, "ls-remote", "--heads", "origin", "main") != "" }
 	if o := push("--tag-only", "--branch-only"); o.code != 2 {
 		t.Fatalf("both flags: %+v", o)
 	}
@@ -419,7 +420,7 @@ func TestReleasePushScopes(t *testing.T) {
 	}
 	o := push("--tag-only")
 	d, _ := envelope(t, o.stdout)["data"].(map[string]any)
-	if o.code != 0 || d["scope"] != "tag" || gitT(t, work, "ls-remote", "--tags", "origin", "refs/tags/v1.2.3") == "" || branchOnOrigin() {
+	if o.code != 0 || d["scope"] != "tag" || gittest.Run(t, work, "ls-remote", "--tags", "origin", "refs/tags/v1.2.3") == "" || branchOnOrigin() {
 		t.Fatalf("tag-only: %+v", o)
 	}
 	// ... nor a tag whose release is still a draft, or missing
@@ -447,9 +448,9 @@ func TestReleasePushRefusesUnflaggedOnGoreleaser(t *testing.T) {
 	write(t, filepath.Join(work, ".rota", "config.json"), "{}")
 	write(t, filepath.Join(work, ".goreleaser.yaml"), "version: 2\n")
 	gateRemote(t, work)
-	gitT(t, work, "tag", "v1.2.3")
+	gittest.Run(t, work, "tag", "v1.2.3")
 	o := trRun(t, work, "", append([]string{"--json", "release", "push", "1.2.3"}, gateYes...)...)
-	if o.code != 4 || !strings.Contains(o.stdout, "--tag-only") || gitT(t, work, "ls-remote", "--tags", "origin") != "" {
+	if o.code != 4 || !strings.Contains(o.stdout, "--tag-only") || gittest.Run(t, work, "ls-remote", "--tags", "origin") != "" {
 		t.Fatalf("unflagged push: %+v", o)
 	}
 	if o := trRun(t, work, "", append([]string{"release", "push", "1.2.3", "--tag-only"}, gateYes...)...); o.code != 0 {
@@ -471,7 +472,7 @@ func TestReleasePushResolution(t *testing.T) {
 			t.Errorf("%v: %+v", c.args, o)
 		}
 	}
-	gitT(t, work, "tag", "v1.2.3")
+	gittest.Run(t, work, "tag", "v1.2.3")
 	if o := trRun(t, work, "", append([]string{"release", "push", "1.2.3"}, gateYes...)...); o.code != 3 || !strings.Contains(o.stderr, "origin") {
 		t.Errorf("no origin: %+v", o)
 	}
@@ -484,7 +485,7 @@ func TestReleasePushResolution(t *testing.T) {
 	if o.code != 0 || d["tag"] != "v1.2.3" || d["branch"] != "main" || d["remote"] != "origin" || d["scope"] != "both" || d["changed"] != true {
 		t.Fatalf("push: %+v", o)
 	}
-	if gitT(t, work, "ls-remote", "--heads", "origin", "main") == "" {
+	if gittest.Run(t, work, "ls-remote", "--heads", "origin", "main") == "" {
 		t.Error("the branch was not pushed with the tag")
 	}
 }
@@ -522,9 +523,9 @@ func TestWorkerGateAndTrainRefuseFailVerdict(t *testing.T) {
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
-	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gittest.Run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
 	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
 
 	if code, _, _ := rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "FAIL"); code != 0 {
@@ -563,9 +564,9 @@ func TestWorkerGateAppliesReviewDepth(t *testing.T) {
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
-	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gittest.Run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
 	gate := func(args ...string) (int, map[string]any) {
 		code, out, _ := rotaIn(t, dir, append([]string{"--json", "worker", "gate", "w1", "--base", "main"}, args...)...)
 		return code, data(t, out)

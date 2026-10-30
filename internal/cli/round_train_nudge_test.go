@@ -8,13 +8,13 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -58,17 +58,11 @@ func TestTrainNudgeAbsentWithOneReviewedPR(t *testing.T) {
 func nudgeRepo(t *testing.T, n int) string {
 	t.Helper()
 	root := gitRepo(t)
-	head, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	sha := strings.TrimSpace(string(head))
+	sha := gittest.Run(t, root, "rev-parse", "HEAD")
 	var slots []string
 	for i := 1; i <= n; i++ {
 		branch := fmt.Sprintf("w%d/%d-x", i, i)
-		if out, err := exec.Command("git", "-C", root, "branch", branch).CombinedOutput(); err != nil {
-			t.Fatalf("git branch: %v %s", err, out)
-		}
+		gittest.Run(t, root, "branch", branch)
 		rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Pass, sha, verdict.Body{}, time.Now())
 		if _, err := verdict.AddBranch(root, verdict.BranchKey("", branch), rec); err != nil {
 			t.Fatal(err)
@@ -123,19 +117,9 @@ func nudgeProject(t *testing.T, branches, reviewed []string) string {
 	dir := workerProject(t, `{}`)
 	var sha string
 	for _, b := range branches {
-		c := exec.Command("git", "branch", b)
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git branch %s: %v %s", b, err, out)
-		}
+		gittest.Run(t, dir, "branch", b)
 	}
-	c := exec.Command("git", "rev-parse", "HEAD")
-	c.Dir = dir
-	out, err := c.Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	sha = strings.TrimSpace(string(out))
+	sha = gittest.Run(t, dir, "rev-parse", "HEAD")
 	for _, b := range reviewed {
 		rec := verdict.NewRecord(verdict.ReviewQuality, "PASS", sha, verdict.Body{}, nudgeReviewedAt)
 		if _, err := verdict.AddBranch(dir, verdict.BranchKey("", b), rec); err != nil {
@@ -342,9 +326,7 @@ func TestWaitingPRsDropsMergedPRs(t *testing.T) {
 		"forge error keeps all": {openPRForge{err: errors.New("offline")}, []string{"#11", "#12"}},
 	} {
 		dir := nudgeProject(t, []string{"a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
-		if out, err := exec.Command("git", "-C", dir, "remote", "add", "origin", "https://github.com/o/r.git").CombinedOutput(); err != nil {
-			t.Fatalf("git remote add: %v %s", err, out)
-		}
+		gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
 		addRegistryRows(t, dir, map[string][]map[string]any{
 			"slots": {{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11"}},
 			"prs":   {{"branch": "b/2-y", "pr": "#12", "base": "main"}},
@@ -367,16 +349,13 @@ func TestWaitingPRsDropsMergedPRs(t *testing.T) {
 // is not reviewed, though its verdict is on record; a push (new head) clears it.
 func TestWaitingPRsLeavesOutABouncedPR(t *testing.T) {
 	dir := nudgeProject(t, []string{"a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
-	head, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
+	head := gittest.Run(t, dir, "rev-parse", "HEAD")
 	addRegistryRows(t, dir, map[string][]map[string]any{
 		"slots": {{"name": "a", "state": "done", "issue": "1", "branch": "a/1-x", "pr": "#11"}},
 		"prs":   {{"issue": "2", "branch": "b/2-y", "pr": "#12", "base": "main"}},
 	})
 	for _, issue := range []string{"1", "2"} {
-		if _, err := recordBounceVia(worker.Env{}, dir, issue, "", strings.TrimSpace(string(head))); err != nil {
+		if _, err := recordBounceVia(worker.Env{}, dir, issue, "", head); err != nil {
 			t.Fatal(err)
 		}
 	}

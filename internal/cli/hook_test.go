@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -540,9 +540,7 @@ func TestHookStopContextGuardAutoBlocksUpToMax(t *testing.T) {
 
 func TestHookStopContextGuardAutoPassesOnBranchHandoff(t *testing.T) {
 	dir := guardProject(t, "auto")
-	if out, err := exec.Command("git", "-C", dir, "checkout", "-q", "-b", "work/guard").CombinedOutput(); err != nil {
-		t.Fatalf("checkout: %v %s", err, out)
-	}
+	gittest.Run(t, dir, "checkout", "-q", "-b", "work/guard")
 	dumpAt(t, dir, 80)
 	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); !strings.Contains(out, "block") {
 		t.Fatalf("no note yet must block: %q", out)

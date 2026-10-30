@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -46,9 +47,9 @@ func reviewFeature(t *testing.T, repo string) {
 	write(t, filepath.Join(repo, "a.txt"), body.String())
 	write(t, filepath.Join(repo, "b.txt"), "one\ntwo\n")
 	write(t, filepath.Join(repo, "crlf.txt"), "x\r\ny\r\n")
-	gitT(t, repo, "add", "a.txt", "b.txt", "crlf.txt")
-	gitT(t, repo, "commit", "-q", "-m", "base files")
-	gitT(t, repo, "checkout", "-q", "-b", "feat/x")
+	gittest.Run(t, repo, "add", "a.txt", "b.txt", "crlf.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "base files")
+	gittest.Run(t, repo, "checkout", "-q", "-b", "feat/x")
 
 	lines := strings.Split(strings.TrimSuffix(body.String(), "\n"), "\n")
 	lines[1] = "Task 12 is in flight"
@@ -58,13 +59,13 @@ func reviewFeature(t *testing.T, repo string) {
 	write(t, filepath.Join(repo, "b.txt"), "one\nadded later\ntwo\n")
 	write(t, filepath.Join(repo, "crlf.txt"), "x\r\ny\r\nz placeholder\r\n")
 	write(t, filepath.Join(repo, "café.txt"), "task 1\n")
-	gitT(t, repo, "add", "a.txt", "b.txt", "crlf.txt", "café.txt")
-	gitT(t, repo, "commit", "-q", "-m", "Do work [B01] and [F02]", "-m", "Also [T05], [B03] and [B99].")
+	gittest.Run(t, repo, "add", "a.txt", "b.txt", "crlf.txt", "café.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "Do work [B01] and [F02]", "-m", "Also [T05], [B03] and [B99].")
 	write(t, filepath.Join(repo, "c.txt"), "extra\n")
-	gitT(t, repo, "add", "c.txt")
-	gitT(t, repo, "commit", "-q", "-m", "More [B01]")
-	gitT(t, repo, "branch", "empty", "main")
-	gitT(t, repo, "checkout", "-q", "feat/x")
+	gittest.Run(t, repo, "add", "c.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "More [B01]")
+	gittest.Run(t, repo, "branch", "empty", "main")
+	gittest.Run(t, repo, "checkout", "-q", "feat/x")
 }
 
 // reviewProject is a plain repo (with .rota/BACKLOG.md) and an umbrella whose
@@ -535,12 +536,12 @@ func TestReviewScopeIssueMode(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
 	write(t, filepath.Join(root, "a.txt"), "a\n")
-	gitT(t, root, "add", "a.txt")
-	gitT(t, root, "commit", "-q", "-m", "base")
-	gitT(t, root, "checkout", "-q", "-b", "kit/7-export")
+	gittest.Run(t, root, "add", "a.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "base")
+	gittest.Run(t, root, "checkout", "-q", "-b", "kit/7-export")
 	write(t, filepath.Join(root, "a.txt"), "b\n")
-	gitT(t, root, "add", "a.txt")
-	gitT(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
+	gittest.Run(t, root, "add", "a.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
 	deps := withTracker(t, issueFixture())
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
@@ -580,7 +581,7 @@ func TestReviewPackage(t *testing.T) {
 	if want := filepath.Join(plain, ".rota", "review", "feat-x.md"); path != want {
 		t.Errorf("path %q, want %q", path, want)
 	}
-	if want := strings.TrimSpace(gitT(t, plain, "rev-parse", "feat/x")); data["head"] != want {
+	if want := strings.TrimSpace(gittest.Run(t, plain, "rev-parse", "feat/x")); data["head"] != want {
 		t.Errorf("head %v, want the local branch tip %s", data["head"], want)
 	}
 	body, err := os.ReadFile(path)
@@ -599,7 +600,7 @@ func TestReviewPackage(t *testing.T) {
 		t.Errorf("text mode: %d %q", o.code, o.stdout)
 	}
 	// --since packages only the commits after the sha.
-	head := strings.TrimSpace(gitT(t, plain, "rev-parse", "HEAD~1"))
+	head := strings.TrimSpace(gittest.Run(t, plain, "rev-parse", "HEAD~1"))
 	o = trRun(t, plain, "", "review", "package", "feat/x", "--since", head, "--json")
 	if o.code != 0 {
 		t.Fatalf("since: exit %d %s", o.code, o.stderr)
@@ -664,10 +665,10 @@ func TestReviewDepth(t *testing.T) {
 // omits --labels still gets the risk:high override.
 func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
 	write(t, filepath.Join(root, "x.txt"), "x\n")
-	gitT(t, root, "add", "x.txt")
-	gitT(t, root, "commit", "-q", "-m", "small change")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	reads := 0
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -716,10 +717,10 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 // the signal and the files, and scopeDrift:false turns the rule off.
 func TestReviewDepthScopeDrift(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
 	write(t, filepath.Join(root, "x.txt"), "x\n")
-	gitT(t, root, "add", "x.txt")
-	gitT(t, root, "commit", "-q", "-m", "small change")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
 		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
@@ -747,10 +748,10 @@ func TestReviewDepthScopeDrift(t *testing.T) {
 // read, and reads the issue only when the policy can use it.
 func TestReviewDepthReadsTheDoorLineOfThePR(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
 	write(t, filepath.Join(root, "x.txt"), "x\n")
-	gitT(t, root, "add", "x.txt")
-	gitT(t, root, "commit", "-q", "-m", "small change")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	prs, prCode, issueReads := `[]`, 0, 0
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -825,12 +826,12 @@ func TestReviewScopeManualCommits(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
 	write(t, filepath.Join(root, "a.txt"), "a\n")
-	gitT(t, root, "add", "a.txt")
-	gitT(t, root, "commit", "-q", "-m", "base")
-	gitT(t, root, "checkout", "-q", "-b", "tidy-up")
+	gittest.Run(t, root, "add", "a.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "base")
+	gittest.Run(t, root, "checkout", "-q", "-b", "tidy-up")
 	write(t, filepath.Join(root, "a.txt"), "b\n")
-	gitT(t, root, "add", "a.txt")
-	gitT(t, root, "commit", "-q", "-m", "Tidy a by hand")
+	gittest.Run(t, root, "add", "a.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "Tidy a by hand")
 	deps := withTracker(t, issueFixture())
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
@@ -851,10 +852,10 @@ func TestReviewScopeManualCommits(t *testing.T) {
 // labels map, and prints cross and crossWhy; a Minor issue prints neither.
 func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
 	write(t, filepath.Join(root, "x.txt"), "x\n")
-	gitT(t, root, "add", "x.txt")
-	gitT(t, root, "commit", "-q", "-m", "small change")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	labels := ""
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -891,10 +892,10 @@ func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
 // or label that did it; a branch that triggers none lists an empty array.
 func TestReviewDepthListsLenses(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
 	write(t, filepath.Join(root, "x.txt"), "x\n")
-	gitT(t, root, "add", "x.txt")
-	gitT(t, root, "commit", "-q", "-m", "small change")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	labels := ""
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {

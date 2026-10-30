@@ -572,8 +572,6 @@ func suiteConfig(t *testing.T) {
 		f.after = func(t *testing.T, dir string, in *info) {
 			os.MkdirAll(filepath.Join(dir, "apps", "deep"), 0o755)
 			git(t, filepath.Join(dir, "apps", "deep"), "init", "-q", "-b", "main")
-			git(t, filepath.Join(dir, "apps", "deep"), "config", "user.name", "F")
-			git(t, filepath.Join(dir, "apps", "deep"), "config", "user.email", "f@e")
 			commitFile(t, filepath.Join(dir, "apps", "deep"), "c", "f.txt", "x\n")
 			write(t, dir, "apps/deep/src/x.txt", "x\n")
 			write(t, dir, ".rota/repos.json", `{"repos": [{"name": "deep", "path": "apps/deep"}, {"name": "web", "path": "web"}]}`+"\n")

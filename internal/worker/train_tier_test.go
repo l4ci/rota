@@ -2,8 +2,8 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -24,9 +24,9 @@ func tierTrainWorld(t *testing.T, cfg string, files map[string]string) *world {
 	}
 	slices.Sort(branches)
 	for _, b := range branches {
-		gitq(t, w.dir, "checkout", "-q", "-b", b, "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "-b", b, "main")
 		trainWrite(t, w, files[b], b)
-		gitq(t, w.dir, "checkout", "-q", "main")
+		gittest.Run(t, w.dir, "checkout", "-q", "main")
 		slots = append(slots, fmt.Sprintf(`{"name":"%s","branch":"%s"}`, b, b))
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
@@ -65,13 +65,7 @@ func TestTrainTier(t *testing.T) {
 // full, and so does a train that syncs another base in.
 func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 	dir := tierRepo(t, "x.go") // feat changes code
-	rev := func(ref string) string {
-		out, err := exec.Command("git", "-C", dir, "rev-parse", ref).Output()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return strings.TrimSpace(string(out))
-	}
+	rev := func(ref string) string { return gittest.Run(t, dir, "rev-parse", ref) }
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"docs":["true"]}}`))
 	run := func(o TrainOpts) *trainRun {
 		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o, in: gateInput{cfg: cfg},
@@ -97,26 +91,18 @@ func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 // three 90-line members under smallBelow 100 are a full train.
 func TestTrainTierSumsMemberLines(t *testing.T) {
 	dir := t.TempDir()
-	run := func(args ...string) string {
-		t.Helper()
-		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-	run("init", "-q", "-b", "main")
-	run("commit", "-q", "--allow-empty", "-m", "base")
-	base := run("rev-parse", "main")
+	gittest.Init(t, dir, "main")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "base")
+	base := gittest.Run(t, dir, "rev-parse", "main")
 	var heads []string
 	for _, n := range []string{"a", "b", "c"} {
-		run("checkout", "-q", "-b", n, base)
+		gittest.Run(t, dir, "checkout", "-q", "-b", n, base)
 		if err := os.WriteFile(filepath.Join(dir, n+".go"), []byte(strings.Repeat("x\n", 90)), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		run("add", n+".go")
-		run("commit", "-q", "-m", n)
-		heads = append(heads, run("rev-parse", n))
+		gittest.Run(t, dir, "add", n+".go")
+		gittest.Run(t, dir, "commit", "-q", "-m", n)
+		heads = append(heads, gittest.Run(t, dir, "rev-parse", n))
 	}
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"small":["true"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`))
 	pick := func(n int) *trainRun {

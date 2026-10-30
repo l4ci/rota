@@ -12,18 +12,12 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 )
 
-// gitT runs git in dir and fails the test on error.
-func gitT(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	return gittest.Run(t, dir, args...)
-}
-
 // newRepo makes a repo in dir/name with one commit on branch.
 func newRepo(t *testing.T, dir, name, branch string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
 	gittest.Init(t, p, branch)
-	gitT(t, p, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, p, "commit", "-q", "--allow-empty", "-m", "init")
 	return p
 }
 
@@ -89,17 +83,17 @@ func TestGitBase(t *testing.T) {
 	write(t, filepath.Join(stale, ".rota", "config.json"), `{"git":{"baseBranch":"gone"}}`)
 	fresh := filepath.Join(d, "fresh")
 	os.Mkdir(fresh, 0o755)
-	gitT(t, fresh, "init", "-q")
+	gittest.Run(t, fresh, "init", "-q")
 	remote := newRepo(t, d, "remote", "develop")
-	gitT(t, remote, "update-ref", "refs/remotes/origin/develop", "HEAD")
-	gitT(t, remote, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
-	gitT(t, remote, "branch", "-m", "develop", "work")
+	gittest.Run(t, remote, "update-ref", "refs/remotes/origin/develop", "HEAD")
+	gittest.Run(t, remote, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
+	gittest.Run(t, remote, "branch", "-m", "develop", "work")
 
 	u := umbrella(t)
-	gitT(t, filepath.Join(u, "svc"), "branch", "-m", "main", "trunk")
+	gittest.Run(t, filepath.Join(u, "svc"), "branch", "-m", "main", "trunk")
 	// A stray .rota/ in a registered sub-repo masks its config.
 	masked := filepath.Join(u, "web")
-	gitT(t, masked, "branch", "dev")
+	gittest.Run(t, masked, "branch", "dev")
 	write(t, filepath.Join(masked, ".rota", "config.json"), `{"git":{"baseBranch":"dev"}}`)
 
 	b := func(s string) map[string]any { return map[string]any{"base": s} }
@@ -123,7 +117,7 @@ func TestGitGuardClean(t *testing.T) {
 	write(t, filepath.Join(dirty, "f"), "x")
 	fresh := filepath.Join(d, "fresh")
 	os.Mkdir(fresh, 0o755)
-	gitT(t, fresh, "init", "-q")
+	gittest.Run(t, fresh, "init", "-q")
 	write(t, filepath.Join(fresh, "f"), "x")
 	plain := filepath.Join(d, "plain")
 	os.Mkdir(plain, 0o755)
@@ -157,13 +151,13 @@ func TestGitGuardClean(t *testing.T) {
 func TestGitGuardFeatureBranch(t *testing.T) {
 	d := t.TempDir()
 	feat := newRepo(t, d, "feat", "main")
-	gitT(t, feat, "switch", "-q", "-c", "ben/1-x")
+	gittest.Run(t, feat, "switch", "-q", "-c", "ben/1-x")
 	onMain := newRepo(t, d, "onmain", "main")
 	detached := newRepo(t, d, "detached", "main")
-	gitT(t, detached, "checkout", "-q", "--detach")
+	gittest.Run(t, detached, "checkout", "-q", "--detach")
 	fresh := filepath.Join(d, "fresh")
 	os.Mkdir(fresh, 0o755)
-	gitT(t, fresh, "init", "-q", "-b", "trunk")
+	gittest.Run(t, fresh, "init", "-q", "-b", "trunk")
 	u := umbrella(t)
 
 	runGitCases(t, []gitCase{
@@ -190,7 +184,7 @@ func TestGitGuardFeatureBranch(t *testing.T) {
 func TestGitBranch(t *testing.T) {
 	u := umbrella(t)
 	svc, web := filepath.Join(u, "svc"), filepath.Join(u, "web")
-	gitT(t, web, "branch", "taken")
+	gittest.Run(t, web, "branch", "taken")
 	list := func(xs ...string) []any {
 		out := []any{}
 		for _, x := range xs {
@@ -211,7 +205,7 @@ func TestGitBranch(t *testing.T) {
 			data: map[string]any{"branch": "feat/x", "repos": list("svc", "web"), "changed": true}},
 	})
 	// A failure after the first repo names the repos that got the branch.
-	gitT(t, web, "branch", "half") // refs/heads/half blocks half/x in web only
+	gittest.Run(t, web, "branch", "half") // refs/heads/half blocks half/x in web only
 	o := trRun(t, u, "", "git", "branch", "half/x", "--repos", "svc,web")
 	if o.code != 5 || !strings.Contains(o.stderr, "failed to create 'half/x' in web") ||
 		!strings.Contains(o.stderr, "already created in: svc") {
@@ -221,11 +215,11 @@ func TestGitBranch(t *testing.T) {
 	if o.code != 5 || !strings.Contains(o.stderr, "created nowhere") {
 		t.Errorf("failure on the first repo: %+v", o)
 	}
-	if gitT(t, svc, "branch", "--list", "taken") != "" {
+	if gittest.Run(t, svc, "branch", "--list", "taken") != "" {
 		t.Error("a collision must create nothing anywhere")
 	}
 	for _, r := range []string{svc, web} {
-		if gitT(t, r, "branch", "--list", "feat/x") == "" || gitT(t, r, "rev-parse", "--abbrev-ref", "HEAD") != "main" {
+		if gittest.Run(t, r, "branch", "--list", "feat/x") == "" || gittest.Run(t, r, "rev-parse", "--abbrev-ref", "HEAD") != "main" {
 			t.Errorf("%s: branch missing or HEAD moved", r)
 		}
 	}

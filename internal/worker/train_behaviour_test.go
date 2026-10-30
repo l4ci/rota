@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,8 +159,8 @@ func TestTrainBehaviourHeadMovedBeforeTheRunEndsTheTrain(t *testing.T) {
 	res, err := train(TrainOpts{ItemBody: func(issue string) (string, bool, error) {
 		if issue == "2" && !moved { // b2's gate is reading its item: push a commit to b2
 			moved = true
-			c := gitq(t, w.dir, "commit-tree", "b2^{tree}", "-p", "b2", "-m", "late")
-			gitq(t, w.dir, "update-ref", "refs/heads/b2", strings.TrimSpace(c))
+			c := gittest.Run(t, w.dir, "commit-tree", "b2^{tree}", "-p", "b2", "-m", "late")
+			gittest.Run(t, w.dir, "update-ref", "refs/heads/b2", strings.TrimSpace(c))
 		}
 		if issue == "2" { // its steps fail, but on a head they never ran on: base-moved, not verify-failed
 			return "## Try it\n\n- exit 1\n", true, nil

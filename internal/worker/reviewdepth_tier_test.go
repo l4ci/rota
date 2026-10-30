@@ -2,8 +2,8 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,16 +18,9 @@ import (
 func tierRepo(t *testing.T, files ...string) string {
 	t.Helper()
 	dir := t.TempDir()
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	run("init", "-q", "-b", "main")
-	run("commit", "-q", "--allow-empty", "-m", "base")
-	run("checkout", "-q", "-b", "feat")
+	gittest.Init(t, dir, "main")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "base")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
 	for _, f := range files {
 		p := filepath.Join(dir, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -40,9 +33,9 @@ func tierRepo(t *testing.T, files ...string) string {
 		if err := os.WriteFile(p, body, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		run("add", f)
+		gittest.Run(t, dir, "add", f)
 	}
-	run("commit", "-q", "-m", "change")
+	gittest.Run(t, dir, "commit", "-q", "-m", "change")
 	return dir
 }
 

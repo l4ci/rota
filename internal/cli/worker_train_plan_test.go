@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,8 +21,8 @@ func planProject(t *testing.T, cfg string, clash bool) string {
 			file = "clash.txt"
 		}
 		write(t, filepath.Join(wt, file), body)
-		gitT(t, wt, "add", file)
-		gitT(t, wt, "commit", "-q", "-m", s)
+		gittest.Run(t, wt, "add", file)
+		gittest.Run(t, wt, "commit", "-q", "-m", s)
 	}
 	return dir
 }

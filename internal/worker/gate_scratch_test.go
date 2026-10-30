@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,10 +101,10 @@ func TestGateLocalRedE2ELandsNothing(t *testing.T) {
 func TestGateLocalBaseMovedWhileVerifying(t *testing.T) {
 	w := newWorld(t, ghURL)
 	mover := t.TempDir()
-	gitq(t, mover, "clone", "-q", w.origin, ".")
+	gittest.Run(t, mover, "clone", "-q", w.origin, ".")
 	os.WriteFile(filepath.Join(mover, "other.txt"), []byte("other\n"), 0o644)
-	gitq(t, mover, "add", "other.txt")
-	gitq(t, mover, "commit", "-q", "-m", "lands while the gate verifies")
+	gittest.Run(t, mover, "add", "other.txt")
+	gittest.Run(t, mover, "commit", "-q", "-m", "lands while the gate verifies")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["git -C %s push -q origin HEAD:main"]}}`, mover))
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "nothing landed") {

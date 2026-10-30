@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"io"
 	"path/filepath"
 	"strings"
@@ -20,16 +21,16 @@ import (
 func fillTickFixture(t *testing.T, review string, reviewed, clocked bool) (*Ctx, string, func() roundtick.Result) {
 	t.Helper()
 	f := newScopeFx(t, "warn", "")
-	gitIn(t, f.root, "branch", "-M", "main")
-	gitIn(t, f.root, "checkout", "-b", "ben/1-fill")
+	gittest.Run(t, f.root, "branch", "-M", "main")
+	gittest.Run(t, f.root, "checkout", "-b", "ben/1-fill")
 	write(t, filepath.Join(f.root, "feature.txt"), "feature")
-	gitIn(t, f.root, "add", "feature.txt")
-	gitIn(t, f.root, "commit", "-m", "feature")
-	gitIn(t, f.root, "checkout", "main")
+	gittest.Run(t, f.root, "add", "feature.txt")
+	gittest.Run(t, f.root, "commit", "-m", "feature")
+	gittest.Run(t, f.root, "checkout", "main")
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	gitIn(t, f.root, "init", "--bare", origin)
-	gitIn(t, f.root, "remote", "add", "origin", origin)
-	gitIn(t, f.root, "push", "origin", "main", "ben/1-fill")
+	gittest.Run(t, f.root, "init", "--bare", origin)
+	gittest.Run(t, f.root, "remote", "add", "origin", origin)
+	gittest.Run(t, f.root, "push", "origin", "main", "ben/1-fill")
 	r, err := f.deps.Git(context.Background(), f.root, "rev-parse", "ben/1-fill")
 	if err != nil || r.ExitCode != 0 {
 		t.Fatalf("head: %+v %v", r, err)
@@ -129,8 +130,8 @@ func TestAutopilotTrainFillRejectsQueuedMissingReview(t *testing.T) {
 	if _, err := config.Set(root, config.RoundTrainMaxKey, "2"); err != nil {
 		t.Fatal(err)
 	}
-	gitIn(t, root, "branch", "dana/2-fill", "ben/1-fill")
-	gitIn(t, root, "push", "origin", "dana/2-fill")
+	gittest.Run(t, root, "branch", "dana/2-fill", "ben/1-fill")
+	gittest.Run(t, root, "push", "origin", "dana/2-fill")
 	r, err := c.deps().Git(context.Background(), root, "rev-parse", "dana/2-fill")
 	if err != nil || r.ExitCode != 0 {
 		t.Fatalf("head: %+v %v", r, err)

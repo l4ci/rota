@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -27,7 +28,7 @@ func ledgerEntry(test, expires string) string {
 func gateLedgerWorld(t *testing.T, full string) *world {
 	t.Helper()
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[` + jsonString(full) + `]}}`)
 	return w
 }

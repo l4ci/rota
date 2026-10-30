@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,7 +105,7 @@ func TestGateFlakeLedgerRecordsBothRuns(t *testing.T) {
 	first := "--- FAIL: TestUnderLoad (0s)\nFAIL\n"
 	e.Shell = func(_ context.Context, dir, cmd string) (string, int) {
 		calls++
-		tree = gitq(t, dir, "rev-parse", "HEAD^{tree}")
+		tree = gittest.Run(t, dir, "rev-parse", "HEAD^{tree}")
 		if calls == 1 {
 			return first, 1
 		}

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // finishDeps is testDeps with ROTA_SLOT unset (or slot), whatever the
@@ -33,8 +35,8 @@ func finishFixture(t *testing.T, files int, both bool) string {
 	b, _ := os.ReadFile(filepath.Join(work, ".rota", "BACKLOG.md"))
 	open := "## Features\n\n- **[F71] [Minor] First feature.** One.\n- **[F72] [Minor] Second feature.** Two.\n"
 	write(t, filepath.Join(work, ".rota", "BACKLOG.md"), strings.Replace(string(b), "## Features\n", open, 1))
-	gitT(t, work, "add", "-A")
-	gitT(t, work, "commit", "-q", "-m", "open items")
+	gittest.Run(t, work, "add", "-A")
+	gittest.Run(t, work, "commit", "-q", "-m", "open items")
 	var cs [][3]string
 	for i := 0; i < files; i++ {
 		body := ""
@@ -83,7 +85,7 @@ func TestShipFinishPRPath(t *testing.T) {
 	if data["branch"] != "rota/fin" || data["base"] != "main" || data["changed"] != true || data["autonomy"] != "off" {
 		t.Errorf("data %v", data)
 	}
-	if data["commit"] != gitT(t, work, "rev-parse", "--short", "rota/fin") {
+	if data["commit"] != gittest.Run(t, work, "rev-parse", "--short", "rota/fin") {
 		t.Errorf("commit %v", data["commit"])
 	}
 	if st := sub(data, "status"); st["removed"] != float64(1) {
@@ -130,11 +132,11 @@ func TestShipFinishAfterMerge(t *testing.T) {
 	if o := trRun(t, work, "merge: fin\n", "ship", "merge", "rota/fin", "--body-file", "-"); o.code != 0 {
 		t.Fatalf("merge: %+v", o)
 	}
-	if gitT(t, work, "branch", "--list", "rota/fin") != "" {
+	if gittest.Run(t, work, "branch", "--list", "rota/fin") != "" {
 		t.Fatal("branch still there")
 	}
 	data := finishRun(t, finishDeps(""), work, 0, "rota/fin")
-	if data["commit"] != gitT(t, work, "rev-parse", "--short", "HEAD") {
+	if data["commit"] != gittest.Run(t, work, "rev-parse", "--short", "HEAD") {
 		t.Errorf("commit %v", data["commit"])
 	}
 	if sg := sub(data, "signals"); sg["files"] != float64(5) || sg["items"] != float64(1) {
@@ -147,11 +149,11 @@ func TestShipFinishAfterMerge(t *testing.T) {
 		t.Errorf("learn %v", sub(data, "learn"))
 	}
 	// A commit that is not a merge is exit 3; the base branch needs a name.
-	gitT(t, work, "checkout", "-q", "HEAD^1")
+	gittest.Run(t, work, "checkout", "-q", "HEAD^1")
 	if o := trRunWith(t, finishDeps(""), work, "", "ship", "finish", "rota/gone", "--json"); o.code != 3 {
 		t.Errorf("not a merge commit: %+v", o)
 	}
-	gitT(t, work, "checkout", "-q", "main")
+	gittest.Run(t, work, "checkout", "-q", "main")
 	if o := trRunWith(t, finishDeps(""), work, "", "ship", "finish", "--json"); o.code != 2 {
 		t.Errorf("no branch name on base: %+v", o)
 	}

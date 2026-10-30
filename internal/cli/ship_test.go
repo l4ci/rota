@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -26,8 +27,13 @@ import (
 // fixture make identical commits.
 func shipDeterministic(t *testing.T) {
 	t.Helper()
+	// The goldens hold hashes made under gittest's default identity; the code
+	// under test commits from the process env, so pin that same identity.
+	for _, kv := range gittest.Identity {
+		k, v, _ := strings.Cut(kv, "=")
+		t.Setenv(k, v)
+	}
 	for k, v := range map[string]string{
-		"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
 		"GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z", "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
 	} {
 		t.Setenv(k, v)
@@ -73,8 +79,8 @@ func shipFixture(t *testing.T, cfg string) string {
 	base := t.TempDir()
 	work := filepath.Join(base, "work")
 	origin := filepath.Join(base, "origin.git")
-	gitT(t, base, "init", "-q", "--bare", origin)
-	gitT(t, base, "init", "-q", "-b", "main", work)
+	gittest.Run(t, base, "init", "-q", "--bare", origin)
+	gittest.Run(t, base, "init", "-q", "-b", "main", work)
 	if cfg == "" {
 		cfg = `{"forge": {"provider": "github"}, "issues": {"source": "file"}}`
 	}
@@ -92,10 +98,10 @@ func shipFixture(t *testing.T, cfg string) string {
 - ~~**[F70] [Minor] Ship demo feature.** Overlay. GL: #43 GH: #42~~ Done 2026-04-18 [`+"`bbb2222`"+`]
 `)
 	write(t, filepath.Join(work, "seed.txt"), "seed\n")
-	gitT(t, work, "add", "-A")
-	gitT(t, work, "commit", "-q", "-m", "seed")
-	gitT(t, work, "remote", "add", "origin", origin)
-	gitT(t, work, "push", "-q", "origin", "main")
+	gittest.Run(t, work, "add", "-A")
+	gittest.Run(t, work, "commit", "-q", "-m", "seed")
+	gittest.Run(t, work, "remote", "add", "origin", origin)
+	gittest.Run(t, work, "push", "-q", "origin", "main")
 	return work
 }
 
@@ -113,21 +119,21 @@ func shipCopy(t *testing.T, dir string) string {
 func shipCommit(t *testing.T, dir, file, subject, body string) {
 	t.Helper()
 	write(t, filepath.Join(dir, file), subject+"\n")
-	gitT(t, dir, "add", file)
+	gittest.Run(t, dir, "add", file)
 	msg := subject
 	if body != "" {
 		msg += "\n\n" + body
 	}
-	gitT(t, dir, "commit", "-q", "-m", msg)
+	gittest.Run(t, dir, "commit", "-q", "-m", msg)
 }
 
 func shipBranchOf(t *testing.T, dir, name string, commits ...[3]string) {
 	t.Helper()
-	gitT(t, dir, "checkout", "-q", "-b", name)
+	gittest.Run(t, dir, "checkout", "-q", "-b", name)
 	for _, c := range commits {
 		shipCommit(t, dir, c[0], c[1], c[2])
 	}
-	gitT(t, dir, "checkout", "-q", "main")
+	gittest.Run(t, dir, "checkout", "-q", "main")
 }
 
 // shipTree is every file under dir's .rota/ with its bytes.
@@ -178,9 +184,9 @@ func TestShipBody(t *testing.T) {
 		t.Errorf("evidence:\n%s", pb.stdout)
 	}
 	shipSame(t, "no items", work, "", 0, "ship", "body", "rota/plain")
-	gitT(t, work, "checkout", "-q", "rota/plain")
+	gittest.Run(t, work, "checkout", "-q", "rota/plain")
 	shipSame(t, "current branch", work, "", 0, "ship", "body")
-	gitT(t, work, "checkout", "-q", "main")
+	gittest.Run(t, work, "checkout", "-q", "main")
 	shipSame(t, "base branch has no commits", work, "", 1, "ship", "body", "main")
 	shipSame(t, "unknown branch", work, "", 3, "ship", "body", "rota/none")
 
@@ -231,32 +237,32 @@ func TestShipMerge(t *testing.T) {
 
 	// ok: a registered cycle worktree on the branch is removed first.
 	wt := filepath.Join(t.TempDir(), "wt")
-	gitT(t, work, "worktree", "add", "-q", wt, "rota/wt")
+	gittest.Run(t, work, "worktree", "add", "-q", wt, "rota/wt")
 	write(t, filepath.Join(work, ".git", "info", "exclude"), ".rota/status.json*\n")
 	if o := trRun(t, work, "", "status", "add", "rota/wt", "--items", "B70", "--worktree", wt); o.code != 0 {
 		t.Fatalf("register cycle worktree: %+v", o)
 	}
 	nenv := shipSame(t, "merge with worktree", work, "merge: wt branch\n\nbody\n", 0, "ship", "merge", "rota/wt", "--body-file", "-")
-	if d := nenv["data"].(map[string]any); d["base"] != "main" || d["changed"] != true || d["sha"] != gitT(t, work, "rev-parse", "--short", "HEAD") {
+	if d := nenv["data"].(map[string]any); d["base"] != "main" || d["changed"] != true || d["sha"] != gittest.Run(t, work, "rev-parse", "--short", "HEAD") {
 		t.Errorf("merge data %v", d)
 	}
-	golden.Check(t, "HEAD after the merge of rota/wt", gitT(t, work, "rev-parse", "HEAD"))
-	if gitT(t, work, "branch", "--list", "rota/wt") != "" || strings.Contains(gitT(t, work, "worktree", "list", "--porcelain"), "rota/wt") {
-		t.Errorf("branch or worktree left behind: %s", gitT(t, work, "worktree", "list", "--porcelain"))
+	golden.Check(t, "HEAD after the merge of rota/wt", gittest.Run(t, work, "rev-parse", "HEAD"))
+	if gittest.Run(t, work, "branch", "--list", "rota/wt") != "" || strings.Contains(gittest.Run(t, work, "worktree", "list", "--porcelain"), "rota/wt") {
+		t.Errorf("branch or worktree left behind: %s", gittest.Run(t, work, "worktree", "list", "--porcelain"))
 	}
-	if msg := gitT(t, work, "log", "-1", "--format=%B"); msg != "merge: wt branch\n\nbody" {
+	if msg := gittest.Run(t, work, "log", "-1", "--format=%B"); msg != "merge: wt branch\n\nbody" {
 		t.Errorf("merge message %q", msg)
 	}
 	shipSame(t, "plain merge", work, "merge: ok", 0, "ship", "merge", "rota/ok", "--body-file", "-")
 
 	// refusals
 	shipSame(t, "base branch", work, "merge: x", 4, "ship", "merge", "main", "--body-file", "-")
-	head := gitT(t, work, "rev-parse", "HEAD")
+	head := gittest.Run(t, work, "rev-parse", "HEAD")
 	shipSame(t, "conflict", work, "merge: x", 4, "ship", "merge", "rota/clash", "--body-file", "-")
-	if gitT(t, work, "rev-parse", "HEAD") != head || gitT(t, work, "status", "--porcelain") != "" {
+	if gittest.Run(t, work, "rev-parse", "HEAD") != head || gittest.Run(t, work, "status", "--porcelain") != "" {
 		t.Errorf("a conflicting merge must leave the tree as it was")
 	}
-	if gitT(t, work, "branch", "--list", "rota/clash") == "" {
+	if gittest.Run(t, work, "branch", "--list", "rota/clash") == "" {
 		t.Errorf("the conflicting branch must stay")
 	}
 	// usage and resolution
@@ -273,19 +279,19 @@ func TestShipMerge(t *testing.T) {
 	}
 	// git failure: checking out the base fails on an uncommitted change
 	shipBranchOf(t, work, "rota/dirty", [3]string{"seed.txt", "feat: touches seed", ""})
-	gitT(t, work, "checkout", "-q", "rota/dirty")
+	gittest.Run(t, work, "checkout", "-q", "rota/dirty")
 	write(t, filepath.Join(work, "seed.txt"), "uncommitted\n")
 	if o := trRun(t, work, "merge: x", "ship", "merge", "rota/dirty", "--body-file", "-"); o.code != ExitUnavailable {
 		t.Errorf("a checkout that git refuses should exit 5: %+v", o)
 	}
-	gitT(t, work, "checkout", "-q", "--", "seed.txt")
-	gitT(t, work, "checkout", "-q", "main")
+	gittest.Run(t, work, "checkout", "-q", "--", "seed.txt")
+	gittest.Run(t, work, "checkout", "-q", "main")
 
 	u := umbrella(t)
 	shipBranchOf(t, filepath.Join(u, "svc"), "feat/x", [3]string{"x.txt", "feat: x", ""})
 	shipSame(t, "umbrella root", u, "merge: x", 2, "ship", "merge", "feat/x", "--body-file", "-")
 	n := trRun(t, u, "merge: x", "ship", "merge", "feat/x", "--body-file", "-", "--repo", "svc", "--json")
-	if n.code != 0 || gitT(t, filepath.Join(u, "svc"), "branch", "--list", "feat/x") != "" {
+	if n.code != 0 || gittest.Run(t, filepath.Join(u, "svc"), "branch", "--list", "feat/x") != "" {
 		t.Errorf("--repo merge: %+v", n)
 	}
 }
@@ -308,7 +314,7 @@ func TestShipPRGitHubConfiguredBase(t *testing.T) {
 	shipDeterministic(t)
 	cfg := `{"forge":{"provider":"github"},"issues":{"source":"file"},"git":{"baseBranch":"develop"}}`
 	work := shipFixture(t, cfg)
-	gitT(t, work, "branch", "develop", "main")
+	gittest.Run(t, work, "branch", "develop", "main")
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 	f := shipPRForge("https://github.com/fake/repo/pull/1")
 	deps := useForge(t, f)
@@ -359,10 +365,10 @@ func TestShipPRFileMode(t *testing.T) {
 				}
 			}
 			origin := filepath.Join(filepath.Dir(work), "origin.git")
-			if gitT(t, work, "--git-dir="+origin, "rev-parse", "--verify", "-q", "refs/heads/feat/x") == "" {
+			if gittest.Run(t, work, "--git-dir="+origin, "rev-parse", "--verify", "-q", "refs/heads/feat/x") == "" {
 				t.Errorf("branch not pushed")
 			}
-			if gitT(t, work, "config", "branch.feat/x.remote") != "origin" {
+			if gittest.Run(t, work, "config", "branch.feat/x.remote") != "origin" {
 				t.Errorf("upstream not set")
 			}
 			if n.stdout == "" || trRunWith(t, deps, work, "b", "ship", "pr", "feat/x", "--title", "T", "--body-file", "-").stdout != tc.url+"\n" {
@@ -390,9 +396,9 @@ func TestShipPRUsageAndResolution(t *testing.T) {
 		t.Errorf("no forge call expected: %q", f.calls)
 	}
 	// the push fails: no origin
-	gitT(t, work, "remote", "remove", "origin")
+	gittest.Run(t, work, "remote", "remove", "origin")
 	shipErrHas(t, "push fails", trRunWith(t, deps, work, "b", pr...), ExitUnavailable, "git push")
-	gitT(t, work, "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git"))
+	gittest.Run(t, work, "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	if o := trRunWith(t, deps, work, "b", pr...); o.code != ExitUnavailable {
 		t.Errorf("unreachable origin: %+v", o)
 	}
@@ -431,11 +437,11 @@ func TestShipPRProviderDetection(t *testing.T) {
 		shipBranchOf(t, work, "feat/p", [3]string{"p.txt", "work", ""})
 		if tc.url != "" {
 			// fetch URL names the host, pushes still reach the bare repo
-			origin := gitT(t, work, "remote", "get-url", "origin")
-			gitT(t, work, "remote", "set-url", "origin", tc.url)
-			gitT(t, work, "remote", "set-url", "--push", "origin", origin)
+			origin := gittest.Run(t, work, "remote", "get-url", "origin")
+			gittest.Run(t, work, "remote", "set-url", "origin", tc.url)
+			gittest.Run(t, work, "remote", "set-url", "--push", "origin", origin)
 		} else {
-			gitT(t, work, "remote", "remove", "origin")
+			gittest.Run(t, work, "remote", "remove", "origin")
 		}
 		f := shipPRForge("https://x.test/p/7")
 		deps := useForge(t, f)
@@ -509,7 +515,7 @@ func TestShipPRIssueMode(t *testing.T) {
 				t.Errorf("forge called after a bad item")
 			}
 			origin := filepath.Join(filepath.Dir(work), "origin.git")
-			if gitT(t, work, "--git-dir="+origin, "branch", "--list", "feat/j") != "" {
+			if gittest.Run(t, work, "--git-dir="+origin, "branch", "--list", "feat/j") != "" {
 				t.Errorf("a bad --items must push nothing")
 			}
 		})
@@ -525,8 +531,8 @@ func TestShipPRIssueModeUmbrella(t *testing.T) {
 	deps := useForge(t, shipPRForge("https://x.test/pr/1"))
 	deps.NewTracker = withTracker(t, issueFixture()).NewTracker
 	origin := t.TempDir()
-	gitT(t, origin, "init", "-q", "--bare")
-	gitT(t, svc, "remote", "add", "origin", origin)
+	gittest.Run(t, origin, "init", "-q", "--bare")
+	gittest.Run(t, svc, "remote", "add", "origin", origin)
 	// The items resolve inside the --repo sub-repo, and one qualified with
 	// another sub-repo is unknown there.
 	o := trRunWith(t, deps, u, "b", "ship", "pr", "feat/u", "--title", "T", "--body-file", "-", "--items", "web:7", "--repo", "svc")
@@ -699,29 +705,29 @@ func shipCycle(t *testing.T) string {
 	shipDeterministic(t)
 	dir := t.TempDir()
 	root := filepath.Join(dir, "work")
-	gitT(t, dir, "init", "-q", "-b", "main", root)
+	gittest.Run(t, dir, "init", "-q", "-b", "main", root)
 	write(t, filepath.Join(root, ".rota", "BACKLOG.md"), "# TODO\n\n## Bugs\n- **[B01] [P1] Sample bug.** Body.\n\n## Features\n- **[F03] [Minor] Sample feature.** Body.\n\n## Tasks\n\n## Completed\n")
 	write(t, filepath.Join(root, ".rota", "counters.json"), "{\n  \"bugs\": 1,\n  \"features\": 3,\n  \"tasks\": 0,\n  \"milestones\": 0,\n  \"since_refactor\": {\"features\": 0, \"bugs\": 0, \"tasks\": 0}\n}\n")
 	write(t, filepath.Join(root, ".rota", "config.json"), "{}\n")
 	write(t, filepath.Join(root, "seed.txt"), "seed\n")
-	gitT(t, root, "add", "-A")
-	gitT(t, root, "commit", "-q", "-m", "seed")
-	gitT(t, root, "checkout", "-q", "-b", "rota/F03-test")
+	gittest.Run(t, root, "add", "-A")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed")
+	gittest.Run(t, root, "checkout", "-q", "-b", "rota/F03-test")
 	shipCommit(t, root, "prep.txt", "chore: prep for F03", "")
 	shipCommit(t, root, "impl.txt", "feat: implement F03", "")
-	short := gitT(t, root, "rev-parse", "--short", "HEAD")
-	shortPrep := gitT(t, root, "rev-parse", "--short", "HEAD~1")
-	gitT(t, root, "checkout", "-q", "main")
-	gitT(t, root, "merge", "--no-ff", "-q", "rota/F03-test", "-m", "merge: F03 — test cycle")
-	gitT(t, root, "branch", "-q", "-d", "rota/F03-test")
+	short := gittest.Run(t, root, "rev-parse", "--short", "HEAD")
+	shortPrep := gittest.Run(t, root, "rev-parse", "--short", "HEAD~1")
+	gittest.Run(t, root, "checkout", "-q", "main")
+	gittest.Run(t, root, "merge", "--no-ff", "-q", "rota/F03-test", "-m", "merge: F03 — test cycle")
+	gittest.Run(t, root, "branch", "-q", "-d", "rota/F03-test")
 	b, _ := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md"))
 	text := strings.Replace(string(b), "- **[F03] [Minor] Sample feature.** Body.\n", "", 1)
 	text = strings.Replace(text, "## Completed\n", "## Completed\n- ~~**[F03] [Minor] Sample feature.** Body.~~ Done 2026-01-15 [`"+short+"`]\n"+
 		"- ~~**[B01] [P1] Sample bug.** Body.~~ Done 2026-01-15 [`"+shortPrep+"`]\n", 1)
 	text = strings.Replace(text, "- **[B01] [P1] Sample bug.** Body.\n", "", 1)
 	write(t, filepath.Join(root, ".rota", "BACKLOG.md"), text)
-	gitT(t, root, "add", ".rota/BACKLOG.md")
-	gitT(t, root, "commit", "-q", "--amend", "--no-edit")
+	gittest.Run(t, root, "add", ".rota/BACKLOG.md")
+	gittest.Run(t, root, "commit", "-q", "--amend", "--no-edit")
 	return root
 }
 
@@ -746,13 +752,13 @@ func shipUndoBoth(t *testing.T, name string, src string, wantCode int, args ...s
 		t.Fatalf("%s: exit %d want %d\n%s%s", name, n.code, wantCode, n.stdout, n.stderr)
 	}
 	golden.Check(t, shipCallIn{Name: name, Args: oargs, Code: wantCode}, shipUndoWant{
-		Data: nenv["data"], Tree: shipTree(t, nu), Head: gitT(t, nu, "rev-parse", "HEAD"), Status: gitT(t, nu, "status", "--porcelain")})
+		Data: nenv["data"], Tree: shipTree(t, nu), Head: gittest.Run(t, nu, "rev-parse", "HEAD"), Status: gittest.Run(t, nu, "status", "--porcelain")})
 	return nenv
 }
 
 func TestShipUndoPreviewAndApply(t *testing.T) {
 	src := shipCycle(t)
-	pre := gitT(t, src, "rev-parse", "HEAD~1")
+	pre := gittest.Run(t, src, "rev-parse", "HEAD~1")
 	n := shipUndoBoth(t, "preview", src, 0)
 	d := n["data"].(map[string]any)
 	if d["applied"] != false || d["changed"] != false || d["base"] != "main" || d["subject"] != "merge: F03 — test cycle" ||
@@ -764,7 +770,7 @@ func TestShipUndoPreviewAndApply(t *testing.T) {
 	}
 	// the preview changes nothing
 	o := trRun(t, src, "", "ship", "undo")
-	short := gitT(t, src, "rev-parse", "--short", "HEAD")
+	short := gittest.Run(t, src, "rev-parse", "--short", "HEAD")
 	wantText := "Undo plan for last cycle: " + short + "\n\nSubject:  merge: F03 — test cycle\n" +
 		"Base:     main will reset --hard " + short + "^1 (currently " + short + ")\n" +
 		"Items:    F03 will be restored to BACKLOG.md (Features)\n          B01 will be restored to BACKLOG.md (Bugs)\n\n" +
@@ -773,22 +779,22 @@ func TestShipUndoPreviewAndApply(t *testing.T) {
 	if o.code != 0 || o.stdout != wantText {
 		t.Errorf("plan text:\n%q\nwant\n%q", o.stdout, wantText)
 	}
-	if gitT(t, src, "rev-parse", "HEAD") == pre {
+	if gittest.Run(t, src, "rev-parse", "HEAD") == pre {
 		t.Errorf("preview moved HEAD")
 	}
 
 	n = shipUndoBoth(t, "apply", src, 0, "--apply")
 	d = n["data"].(map[string]any)
-	if d["applied"] != true || d["changed"] != true || d["restoredTo"] != gitT(t, src, "rev-parse", "--short", "HEAD~1") ||
+	if d["applied"] != true || d["changed"] != true || d["restoredTo"] != gittest.Run(t, src, "rev-parse", "--short", "HEAD~1") ||
 		!reflect.DeepEqual(d["restored"], []any{"F03", "B01"}) {
 		t.Errorf("apply data %v", d)
 	}
 	nu := shipCopy(t, src)
 	o = trRun(t, nu, "", "ship", "undo", "--apply")
-	if o.code != 0 || o.stdout != "Undone cycle "+short+". Reset main to "+gitT(t, nu, "rev-parse", "--short", "HEAD")+". Restored: F03,B01.\n" {
+	if o.code != 0 || o.stdout != "Undone cycle "+short+". Reset main to "+gittest.Run(t, nu, "rev-parse", "--short", "HEAD")+". Restored: F03,B01.\n" {
 		t.Errorf("apply text %q", o.stdout)
 	}
-	if gitT(t, nu, "rev-parse", "HEAD") != pre {
+	if gittest.Run(t, nu, "rev-parse", "HEAD") != pre {
 		t.Errorf("not reset to the pre-merge commit")
 	}
 }
@@ -796,8 +802,8 @@ func TestShipUndoPreviewAndApply(t *testing.T) {
 func TestShipUndoNoItems(t *testing.T) {
 	src := shipCycle(t)
 	write(t, filepath.Join(src, ".rota", "BACKLOG.md"), "# TODO\n\n## Completed\n")
-	gitT(t, src, "add", "-A")
-	gitT(t, src, "commit", "-q", "--amend", "--no-edit")
+	gittest.Run(t, src, "add", "-A")
+	gittest.Run(t, src, "commit", "-q", "--amend", "--no-edit")
 	n := shipUndoBoth(t, "no items", src, 0, "--apply")
 	d := n["data"].(map[string]any)
 	if !reflect.DeepEqual(d["items"], []any{}) || !reflect.DeepEqual(d["restored"], []any{}) {
@@ -821,7 +827,7 @@ func TestShipUndoRefusals(t *testing.T) {
 	}
 
 	feat := shipCopy(t, src)
-	gitT(t, feat, "checkout", "-q", "-b", "feat/other")
+	gittest.Run(t, feat, "checkout", "-q", "-b", "feat/other")
 	check("not on base", feat, 4, "not on base branch")
 
 	dirty := shipCopy(t, src)
@@ -844,20 +850,20 @@ func TestShipUndoRefusals(t *testing.T) {
 	check("--cycle bad hash", src, 3, "", "--cycle", "nonsense")
 
 	plain := shipCopy(t, src)
-	gitT(t, plain, "reset", "-q", "--hard", "HEAD~1")
+	gittest.Run(t, plain, "reset", "-q", "--hard", "HEAD~1")
 	check("root commit", plain, 4, "not a merge")
 
 	sub := shipCopy(t, src)
-	gitT(t, sub, "commit", "-q", "--amend", "-m", "Merge branch rota/F03-test")
+	gittest.Run(t, sub, "commit", "-q", "--amend", "-m", "Merge branch rota/F03-test")
 	check("subject is not merge:", sub, 4, "merge subject")
 	check("--cycle subject is not merge:", sub, 4, "merge subject", "--cycle", "HEAD")
 
 	pr := shipCopy(t, src)
-	gitT(t, pr, "update-ref", "refs/remotes/origin/rota/F03-test", gitT(t, pr, "rev-parse", "HEAD^2"))
+	gittest.Run(t, pr, "update-ref", "refs/remotes/origin/rota/F03-test", gittest.Run(t, pr, "rev-parse", "HEAD^2"))
 	check("PR mode", pr, 4, "pr mode")
 
 	empty := t.TempDir()
-	gitT(t, empty, "init", "-q", "-b", "main")
+	gittest.Run(t, empty, "init", "-q", "-b", "main")
 	write(t, filepath.Join(empty, ".rota", "config.json"), "{}\n")
 	o := trRun(t, empty, "", "ship", "undo")
 	if o.code == 0 {
@@ -884,8 +890,8 @@ func TestShipUndoItemFromArchive(t *testing.T) {
 	}
 	write(t, filepath.Join(src, ".rota", "BACKLOG.md"), strings.Join(keep, "\n"))
 	write(t, filepath.Join(src, ".rota", "ARCHIVE.md"), "# Archive\n\n"+strings.Join(arch, "\n")+"\n")
-	gitT(t, src, "add", "-A")
-	gitT(t, src, "commit", "-q", "--amend", "--no-edit")
+	gittest.Run(t, src, "add", "-A")
+	gittest.Run(t, src, "commit", "-q", "--amend", "--no-edit")
 	n := shipUndoBoth(t, "archive", src, 0, "--apply")
 	if d := n["data"].(map[string]any); !reflect.DeepEqual(d["restored"], []any{"B01", "F03"}) && !reflect.DeepEqual(d["restored"], []any{"F03", "B01"}) {
 		t.Errorf("data %v", d)
@@ -897,30 +903,30 @@ func TestShipUndoRestoreFails(t *testing.T) {
 	shipDeterministic(t)
 	dir := t.TempDir()
 	root := filepath.Join(dir, "work")
-	gitT(t, dir, "init", "-q", "-b", "main", root)
+	gittest.Run(t, dir, "init", "-q", "-b", "main", root)
 	write(t, filepath.Join(root, "seed.txt"), "seed\n")
-	gitT(t, root, "add", "-A")
-	gitT(t, root, "commit", "-q", "-m", "seed")
-	gitT(t, root, "checkout", "-q", "-b", "rota/F03-x")
+	gittest.Run(t, root, "add", "-A")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed")
+	gittest.Run(t, root, "checkout", "-q", "-b", "rota/F03-x")
 	shipCommit(t, root, "impl.txt", "feat: impl", "")
-	short := gitT(t, root, "rev-parse", "--short", "HEAD")
+	short := gittest.Run(t, root, "rev-parse", "--short", "HEAD")
 	// BACKLOG.md exists only on the cycle side, so the reset removes it.
 	write(t, filepath.Join(root, ".rota", "BACKLOG.md"), "# TODO\n\n## Features\n\n## Completed\n- ~~**[F03] [Minor] Sample.** Body.~~ Done 2026-01-15 [`"+short+"`]\n")
-	gitT(t, root, "add", "-A")
-	gitT(t, root, "commit", "-q", "-m", "chore: backlog")
-	gitT(t, root, "checkout", "-q", "main")
-	gitT(t, root, "merge", "--no-ff", "-q", "rota/F03-x", "-m", "merge: F03")
-	gitT(t, root, "branch", "-q", "-d", "rota/F03-x")
+	gittest.Run(t, root, "add", "-A")
+	gittest.Run(t, root, "commit", "-q", "-m", "chore: backlog")
+	gittest.Run(t, root, "checkout", "-q", "main")
+	gittest.Run(t, root, "merge", "--no-ff", "-q", "rota/F03-x", "-m", "merge: F03")
+	gittest.Run(t, root, "branch", "-q", "-d", "rota/F03-x")
 	// the done line must carry a hash of the cycle: it does (short is on the branch)
 	nu := shipCopy(t, root)
 	n := trRun(t, nu, "", "ship", "undo", "--apply", "--json")
 	if n.code != 5 {
 		t.Fatalf("exit %d %s%s", n.code, n.stdout, n.stderr)
 	}
-	if !strings.Contains(n.stderr, "the reset already happened (HEAD is now "+gitT(t, nu, "rev-parse", "--short", "HEAD")+")") {
+	if !strings.Contains(n.stderr, "the reset already happened (HEAD is now "+gittest.Run(t, nu, "rev-parse", "--short", "HEAD")+")") {
 		t.Errorf("message %q", n.stderr)
 	}
-	if gitT(t, nu, "rev-parse", "HEAD") != gitT(t, root, "rev-parse", "HEAD^1") {
+	if gittest.Run(t, nu, "rev-parse", "HEAD") != gittest.Run(t, root, "rev-parse", "HEAD^1") {
 		t.Errorf("the run must stop at the reset")
 	}
 }
@@ -930,11 +936,11 @@ func TestShipUndoRepo(t *testing.T) {
 	svc := filepath.Join(u, "svc")
 	shipDeterministic(t)
 	write(t, filepath.Join(u, ".rota", "BACKLOG.md"), "# TODO\n\n## Features\n\n## Completed\n")
-	gitT(t, svc, "checkout", "-q", "-b", "rota/F03-t")
+	gittest.Run(t, svc, "checkout", "-q", "-b", "rota/F03-t")
 	shipCommit(t, svc, "impl.txt", "feat: impl F03", "")
-	short := gitT(t, svc, "rev-parse", "--short", "HEAD")
-	gitT(t, svc, "checkout", "-q", "main")
-	gitT(t, svc, "merge", "--no-ff", "-q", "rota/F03-t", "-m", "merge: F03")
+	short := gittest.Run(t, svc, "rev-parse", "--short", "HEAD")
+	gittest.Run(t, svc, "checkout", "-q", "main")
+	gittest.Run(t, svc, "merge", "--no-ff", "-q", "rota/F03-t", "-m", "merge: F03")
 	write(t, filepath.Join(u, ".rota", "BACKLOG.md"), "# TODO\n\n## Features\n\n## Completed\n- ~~**[F03] [Minor] Sample.** Body.~~ Done 2026-01-15 [`"+short+"`]\n")
 	n := trRun(t, u, "", "ship", "undo", "--repo", "svc", "--apply", "--json")
 	if n.code != 0 {
@@ -947,7 +953,7 @@ func TestShipUndoRepo(t *testing.T) {
 	if !strings.Contains(string(b), "## Features\n\n- **[F03] [Minor] Sample.** Body.") {
 		t.Errorf("F03 not restored in the umbrella backlog:\n%s", b)
 	}
-	if gitT(t, svc, "rev-list", "--count", "HEAD") != "1" {
+	if gittest.Run(t, svc, "rev-list", "--count", "HEAD") != "1" {
 		t.Errorf("svc not reset")
 	}
 }

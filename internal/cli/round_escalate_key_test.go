@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -291,8 +292,8 @@ func TestWorkerGateApprovalOnKeyIssueThread(t *testing.T) {
 	rotaInWith(t, testDeps(), dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 	doc := registryDoc(t, dir)
 	doc["slots"].([]any)[0].(map[string]any)["task"] = "PROJ-123"
 	b, _ := json.Marshal(doc)

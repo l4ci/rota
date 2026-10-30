@@ -3,11 +3,11 @@ package backlog
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
@@ -16,25 +16,9 @@ import (
 func proj(t *testing.T, files map[string]string) (*File, string) {
 	t.Helper()
 	root := t.TempDir()
-	run := func(args ...string) string {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-	run("init", "-q")
-	os.WriteFile(filepath.Join(root, "a.txt"), []byte("a"), 0o644)
-	run("add", "a.txt")
-	run("commit", "-q", "-m", "refactor(core)!: tidy")
-	refactor := run("rev-parse", "--short", "HEAD")
-	os.WriteFile(filepath.Join(root, "b.txt"), []byte("b"), 0o644)
-	run("add", "b.txt")
-	run("commit", "-q", "-m", "feat: thing")
+	gittest.Init(t, root, "main")
+	refactor := gittest.Commit(t, root, "refactor(core)!: tidy", "a.txt", "a")
+	gittest.Commit(t, root, "feat: thing", "b.txt", "b")
 	for rel, c := range files {
 		c = strings.ReplaceAll(c, "{refactor}", refactor)
 		p := filepath.Join(root, filepath.FromSlash(rel))

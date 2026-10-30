@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -127,8 +128,8 @@ func TestGateMilestonePartialSliceAndDefaultBranch(t *testing.T) {
 			w.setPRBody(c.body)
 			if c.base != "main" {
 				w.forge("base", c.base)
-				gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/"+c.base)
-				gitq(t, w.dir, "checkout", "-q", "-b", c.base)
+				gittest.Run(t, w.dir, "push", "-q", "origin", "main:refs/heads/"+c.base)
+				gittest.Run(t, w.dir, "checkout", "-q", "-b", c.base)
 			}
 			m := &milestoneIssues{fakeForge: &fakeForge{w: w, provider: "github"}, state: "open", labels: []string{"in-progress"}}
 			if c.partial {
@@ -153,8 +154,8 @@ func TestGateMilestoneMixedFailureReleasesClosedClaims(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.forge("base", "milestone/M01")
 			w.setPRBody("Closes #5\nCloses #6\nCloses #7")
-			gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
-			gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
+			gittest.Run(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+			gittest.Run(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
 			if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6","#7"]}]}`, ghURL)), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -198,8 +199,8 @@ func TestGateMilestoneClosesBundleAndOtherLinkedIssues(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("base", "milestone/M01")
 	w.setPRBody("Closes #5\nCloses #6\nCloses #8\nRefs #9")
-	gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
-	gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+	gittest.Run(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
 	if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6"]}]}`, ghURL)), 0o644); err != nil {
 		t.Fatal(err)
 	}

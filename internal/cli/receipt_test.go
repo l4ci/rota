@@ -7,12 +7,12 @@ import (
 	"flag"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
@@ -266,17 +266,11 @@ func TestReceiptChangedInputsUnderTheSameIDAreRefused(t *testing.T) {
 func gateHeadsRepo(t *testing.T, registry string) (dir string, push func()) {
 	t.Helper()
 	dir = workerProject(t, `{}`)
-	git := func(args ...string) {
-		t.Helper()
-		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	git("branch", "ben/1-x")
+	gittest.Run(t, dir, "branch", "ben/1-x")
 	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(registry), 0o644)
 	return dir, func() {
-		git("switch", "-q", "ben/1-x")
-		git("-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "push")
+		gittest.Run(t, dir, "switch", "-q", "ben/1-x")
+		gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "push")
 	}
 }
 

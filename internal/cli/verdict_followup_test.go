@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // fileDeferredRepo is a file-backend repo with an empty backlog.
@@ -220,7 +222,7 @@ func TestFileDeferredSkipsFollowUpPR(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte(bl), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitIn(t, dir, "checkout", "-q", "-b", "kit/5-review-follow-ups-from-pr")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "kit/5-review-follow-ups-from-pr")
 	code, d, errOut := fileDeferred(t, dir, "review-quality", `{"severity":"major","title":"big","blocking":false}`)
 	if code != 0 {
 		t.Fatalf("add: %d %s", code, errOut)

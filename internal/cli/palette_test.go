@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"flag"
+	"github.com/l4ci/rota/internal/gittest"
 	"io"
 	"os"
 	"path/filepath"
@@ -80,7 +81,7 @@ func TestPaletteContextLineShowsTildeRoundAndHost(t *testing.T) {
 	paletteRig(deps, "q")
 	useLaunchRig(deps, nil)
 	dir := trackerProject(t, "")
-	gitT(t, dir, "init", "-q")
+	gittest.Run(t, dir, "init", "-q")
 	t.Setenv("HOME", dir)
 	t.Setenv("TMUX", "")
 	t.Setenv("HERDR_ENV", "")
@@ -98,7 +99,7 @@ func TestPaletteHeaderBuildsNoForge(t *testing.T) {
 	useLaunchRig(deps, nil)
 	built := forgeBuilds(deps)
 	dir := trackerProject(t, "")
-	gitT(t, dir, "init", "-q")
+	gittest.Run(t, dir, "init", "-q")
 	t.Setenv("HOME", dir)
 	t.Setenv("TMUX", "")
 	t.Setenv("HERDR_ENV", "")

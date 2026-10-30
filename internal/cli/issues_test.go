@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -17,13 +18,8 @@ import (
 func issuesRepo(t *testing.T, origin string) string {
 	t.Helper()
 	root := trackerProject(t, `{}`)
-	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"remote", "add", "origin", origin}} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	gittest.Init(t, root, "main")
+	gittest.Run(t, root, "remote", "add", "origin", origin)
 	return root
 }
 
@@ -221,13 +217,8 @@ func TestIssuesScopeFollowsWorkingDirectory(t *testing.T) {
 	for name, origin := range map[string]string{"web": "https://github.com/o/web.git", "api": "https://gitlab.com/o/api.git"} {
 		dir := filepath.Join(root, name)
 		os.MkdirAll(filepath.Join(dir, "src"), 0o755)
-		for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"remote", "add", "origin", origin}} {
-			cmd := exec.Command("git", args...)
-			cmd.Dir = dir
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("git %v: %v\n%s", args, err, out)
-			}
-		}
+		gittest.Init(t, dir, "main")
+		gittest.Run(t, dir, "remote", "add", "origin", origin)
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}, {"name": "api", "path": "api"}]}`), 0o644)
 	for _, c := range []struct {
