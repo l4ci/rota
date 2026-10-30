@@ -90,7 +90,7 @@ func (d *Deps) fill() {
 		d.Alive = pidlive.Alive
 	}
 	if d.Tree == nil {
-		d.Tree = func(pid int) []int { return pidTree(d.Run, pid) }
+		d.Tree = func(pid int) []int { return pidlive.Tree(pidlive.Real{}, pid) }
 	}
 	if d.KillWait <= 0 {
 		d.KillWait = 10
@@ -314,31 +314,6 @@ func New(kind Kind, d Deps) Host {
 		return &herdr{d: d, noted: new(atomic.Bool)}
 	}
 	return &tmux{d: d}
-}
-
-// pidTree lists pid and its descendants, breadth first.
-func pidTree(run Runner, root int) []int {
-	r, err := run(context.Background(), "ps", []string{"-A", "-o", "pid=", "-o", "ppid="})
-	out := []int{root}
-	if err != nil {
-		return out
-	}
-	kids := map[int][]int{}
-	for _, line := range strings.Split(r.Stdout, "\n") {
-		f := strings.Fields(line)
-		if len(f) != 2 {
-			continue
-		}
-		p, e1 := strconv.Atoi(f[0])
-		pp, e2 := strconv.Atoi(f[1])
-		if e1 == nil && e2 == nil {
-			kids[pp] = append(kids[pp], p)
-		}
-	}
-	for i := 0; i < len(out); i++ {
-		out = append(out, kids[out[i]]...)
-	}
-	return out
 }
 
 // killLoop is the proof half of Kill, shared by both hosts: poll until gone()

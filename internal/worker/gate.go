@@ -427,7 +427,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	}
 	var res GateResult
 	if common, key, ok := e.gateRunKey(ctx, root, o.Slot); ok {
-		other, release, err := claimGateRun(common, key)
+		other, release, err := claimGateRun(e.procs(), common, key)
 		if err != nil {
 			return res, err
 		}

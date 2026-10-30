@@ -577,8 +577,8 @@ func TestRelaySummaryAndSplitLines(t *testing.T) {
 // ── real host adapters, fake binaries ───────────────────────────────────────
 
 // fakeBinRunner runs test/fakes/herdr and test/fakes/tmux by absolute path
-// with their state dirs, and ps for the pid checks. It refuses anything else,
-// so even a bug here cannot reach a real herdr or tmux.
+// with their state dirs. It refuses anything else, so even a bug here cannot
+// reach a real herdr or tmux.
 func fakeBinRunner(t *testing.T, herdrDir, tmuxDir string) host.Runner {
 	t.Helper()
 	fakes, err := filepath.Abs("../../test/fakes")
@@ -591,8 +591,6 @@ func fakeBinRunner(t *testing.T, herdrDir, tmuxDir string) host.Runner {
 		case "herdr", "tmux":
 			cmd = exec.CommandContext(ctx, filepath.Join(fakes, name), args...)
 			cmd.Env = append(os.Environ(), "FAKE_HERDR="+herdrDir, "FAKE_TMUX="+tmuxDir)
-		case "ps":
-			cmd = exec.CommandContext(ctx, "ps", args...)
 		default:
 			t.Fatalf("fakeBinRunner: refusing to run %q", name)
 		}

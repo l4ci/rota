@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"io"
@@ -733,6 +734,9 @@ type Env struct {
 	Lease func() roundlease.Env
 	// Getenv defaults to os.Getenv (ROTA_GATE_SHA_WAIT).
 	Getenv func(string) string
+	// Procs reads the process table the gate and landing markers are checked
+	// against; nil means this machine's.
+	Procs pidlive.Source
 	// Forge returns the forge a provider ("github" or "gitlab") runs in dir.
 	// Every forge call goes through internal/tracker, never an exec of gh or
 	// glab from here. Tests inject a fake Forge.
@@ -782,6 +786,14 @@ type Env struct {
 // defaults. cli's Deps fills Env.Config; worker tests swap in a disk reader.
 var defaultConfig = func(string) any { return nil }
 
+// procs is the process table: the injected one, else this machine's.
+func (e Env) procs() pidlive.Source {
+	if e.Procs != nil {
+		return e.Procs
+	}
+	return pidlive.Real{}
+}
+
 func (e Env) WithDefaults() Env {
 	if e.Ctx == nil {
 		e.Ctx = context.Background()
@@ -810,6 +822,7 @@ func (e Env) WithDefaults() Env {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
 	}
+	e.Procs = e.procs()
 	if e.Lease == nil {
 		e.Lease = roundlease.DefaultEnv
 	}

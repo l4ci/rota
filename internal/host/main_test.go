@@ -68,7 +68,7 @@ func (f *fake) run(_ context.Context, name string, args []string) (Result, error
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
-	if name != "herdr" && name != "tmux" && name != "ps" {
+	if name != "herdr" && name != "tmux" {
 		panic("unexpected command " + name)
 	}
 	return f.handler(name, args), nil
