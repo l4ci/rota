@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -61,19 +61,14 @@ type SessionOpts struct {
 	BootTimeout int    // default 60
 }
 
-// operatorCommand is orchestrator.command, else a resumed opus session. The
+// operatorCommand is orchestrator.command, else a resumed opus session, built
+// by harness.OrchestratorCommand so a bad command is refused as `rota
+// orchestrate` refuses it. The
 // operator runs in `auto`, not the workers' skip-permissions mode: it is the
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
-func (e Env) operatorCommand(root string) string {
-	cfg := e.Config(root)
-	if v, ok := config.Lookup(cfg, "orchestrator.command"); ok {
-		if s, _ := v.(string); s != "" {
-			return s
-		}
-	}
-	model := config.StringOrDefault(cfg, "orchestrator.model")
-	return "claude --continue --model " + model + " --permission-mode auto"
+func (e Env) operatorCommand(root string) (string, error) {
+	return harness.OrchestratorCommandLine(e.Config(root), true)
 }
 
 // SessionEnsure guarantees a session a human can attach to. Exits: 3 missing
@@ -113,12 +108,16 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 			return SessionState{}, fail(exitcode.ExitResolution, "instruction file not found: "+o.BodyFile)
 		}
 	}
+	command, err := e.operatorCommand(root)
+	if err != nil {
+		return SessionState{}, fail(exitcode.ExitUsage, err.Error())
+	}
 	abs, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		abs = root
 	}
 	err = op.EnsureOperator(ctx, host.OperatorOpts{Session: o.Session, Root: abs,
-		Command: e.operatorCommand(root), Instruction: o.BodyFile, BootTimeout: o.BootTimeout})
+		Command: command, Instruction: o.BodyFile, BootTimeout: o.BootTimeout})
 	if err != nil {
 		w := fail(exitcode.ExitUnavailable, err.Error())
 		switch {
