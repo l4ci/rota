@@ -79,21 +79,9 @@ func DecideGuardStop(st State, set Settings, ho Handoff, now time.Time) StopDeci
 	if st.HandoffFailed {
 		return d
 	}
-	var blockedAt time.Time
-	if st.BlockedAt != "" {
-		blockedAt, _ = stamp.Parse(st.BlockedAt)
-	}
-	if ho.Fresh(time.Duration(set.HandoffMaxAge)*time.Second, now) && !ho.ModTime.Before(blockedAt) {
+	if !holdForHandoff(&d, set, ho, now, handoffRule{countAll: true}) {
 		return d
 	}
-	if st.HandoffBlocks >= set.HandoffMaxBlks {
-		d.State.HandoffFailed = true
-		d.Persist = true
-		return d
-	}
-	d.State.HandoffBlocks++
-	d.State.BlockedAt = stamp.Format(now)
-	d.Persist, d.Block = true, true
 	d.Reason = fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. "+
 		"Finish the current task step, then run /rota-pause at the next task boundary before you stop.",
 		trimPct(pct), set.Threshold)
