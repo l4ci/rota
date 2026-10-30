@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 
 	targetRepos := []string{""}
 	if csv := strings.TrimSpace(frontmatter.Str(fm, "repo")); csv != "" {
-		targetRepos = artifact.SplitCSV(csv)
+		targetRepos = pystr.SplitCSV(csv)
 	}
 	allRepos := artifact.Repos(root)
 

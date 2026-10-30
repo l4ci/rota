@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -16,7 +17,7 @@ const (
 // the reviewer, rather than this mechanical check, judges their content.
 func requiredPRSection(body string) (verdict, heading string) {
 	found := map[string]bool{}
-	for _, line := range splitLines(body) {
+	for _, line := range pystr.Splitlines(body) {
 		found[strings.ToLower(strings.TrimSpace(line))] = true
 	}
 	for _, section := range []struct{ verdict, heading string }{
