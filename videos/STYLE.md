@@ -87,7 +87,7 @@ For the why and the how: diagrams, flows and one-idea title cards.
 
 Every episode opens with the logo sting and closes with the outro card. Both count toward the length target.
 
-**Intro sting (1.5 s).** On `paper`, the rota icon (`docs/images/rota-icon.svg`) draws in centred: its stroke traces over 0.6 s, then the wheel turns one quarter turn in 0.5 s on the standard curve. The wordmark (`docs/images/rota-logo.svg`) fades in beneath it over 0.3 s. Hold 0.4 s, then a hard cut to shot 01. Silent except for the voiceover's first word starting at 1.5 s. In 9:16 the lockup sits at the optical centre, 40% from the top.
+**Intro sting (1.5 s).** On `paper`, the rota icon (`docs/images/rota-icon.svg`) draws in centred: it fades and scales up from 88% over 0.6 s on the standard curve; it never rotates. The wordmark (`docs/images/rota-logo.svg`) fades in beneath it over 0.3 s. Hold 0.4 s, then a hard cut to shot 01. Silent except for the voiceover's first word starting at 1.5 s. In 9:16 the lockup sits at the optical centre, 40% from the top.
 
 **Outro card (4 s).**
 
@@ -96,7 +96,7 @@ Every episode opens with the logo sting and closes with the outro card. Both cou
 - Link, Martian Mono, `ink` on a `duty-wash` band: `github.com/l4ci/rota`
 - The rota icon at 64 px above line 1.
 
-Timing: the card fades in 280 ms; the voiceover reads line 2 only, `rota makes sure what they merge works.`, in about 3 s; the link is on screen, never spoken, and the card holds 0.8 s after the voice ends, 4 s in all. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
+Timing: the card fades in 280 ms; the voiceover reads line 2 only, `rota makes sure what they merge works.`, in about 3 s; after line 2 the voice adds `Find it on GitHub.`; the link itself is on screen, never read out, and the card holds 0.8 s after the voice ends, 4 s in all. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
 
 ## Voice
 

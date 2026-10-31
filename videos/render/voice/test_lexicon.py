@@ -18,6 +18,14 @@ class Lexicon(unittest.TestCase):
             self.assertIn('t', p, text)
             self.assertNotIn('ɾ', p, text)
 
+    def test_rota_has_no_stress_or_length_marks(self):
+        # Stress (ˈ ˌ) and length (ː) made the voice drag "roo-taah"; plain rota is short vowels.
+        for text in ('rota', 'Rota ships.', 'Meet rota, a workflow.'):
+            p = self.phonemes(text)
+            for mark in ('ˈ', 'ˌ', 'ː'):
+                self.assertNotIn(mark, synth.load_lexicon()['rota'], text)
+        self.assertEqual(self.phonemes('rota'), synth.load_lexicon()['rota'])
+
     def test_other_words_are_untouched(self):
         self.assertIn('ɾ', self.phonemes('water'))
 
