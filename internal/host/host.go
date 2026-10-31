@@ -237,6 +237,30 @@ type Capabilities struct {
 	Snapshotter     Snapshotter
 	WorkspaceCloser WorkspaceCloser
 	LinkedLayouter  LinkedLayouter
+	// RuntimeScopedHandles: a recorded handle dies with the host runtime while
+	// the agent may live on, so a handle missing from the live list proves
+	// nothing about the agent (Orca).
+	RuntimeScopedHandles bool
+	// TreeKillClose: closing the session must kill the agent's process tree
+	// and prove it gone, even after a positive exit poll (Orca).
+	TreeKillClose bool
+}
+
+// RuntimeScoped is implemented by hosts whose handles do not outlive the host
+// runtime; see Capabilities.RuntimeScopedHandles.
+type RuntimeScoped interface{ RuntimeScopedHandles() bool }
+
+// TreeKiller is implemented by hosts whose close needs a process-tree kill;
+// see Capabilities.TreeKillClose.
+type TreeKiller interface{ TreeKillClose() bool }
+
+// CapabilitiesForKind is the capabilities of the adapter for k, read without
+// building it. Solo and unknown kinds have none.
+func CapabilitiesForKind(k Kind) Capabilities {
+	if k == Orca {
+		return CapabilitiesOf(&orca{})
+	}
+	return Capabilities{}
 }
 
 // CanGroup reports whether the host can keep slots in linked workspaces
@@ -268,6 +292,12 @@ func CapabilitiesOf(h any) Capabilities {
 	c.OutputWatcher, _ = h.(OutputWatcher)
 	c.Operator, _ = h.(Operator)
 	c.Snapshotter, _ = h.(Snapshotter)
+	if r, ok := h.(RuntimeScoped); ok {
+		c.RuntimeScopedHandles = r.RuntimeScopedHandles()
+	}
+	if t, ok := h.(TreeKiller); ok {
+		c.TreeKillClose = t.TreeKillClose()
+	}
 	return c
 }
 
