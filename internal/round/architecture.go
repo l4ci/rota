@@ -193,7 +193,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	if *since == "" {
 		at := stamp.Format(e.now())
-		if err := worker.Update(root, func(d *worker.Doc) { d.SeedReview(at) }); err != nil {
+		if err := worker.Update(root, func(d *worker.Doc) { SeedReview(d, at) }); err != nil {
 			return -1, err.Error()
 		}
 		*since = at
@@ -222,7 +222,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	checked := stamp.Format(e.now())
 	// A failed cache write only costs the next call a refetch.
-	_ = worker.Update(root, func(d *worker.Doc) { d.CacheClosedCount(checked, *since, n) })
+	_ = worker.Update(root, func(d *worker.Doc) { CacheClosedCount(d, checked, *since, n) })
 	return n, ""
 }
 
@@ -232,7 +232,7 @@ const closedCacheTTL = 5 * time.Minute
 // cachedClosed is the saved closed-item count for the review recorded at since,
 // when it is younger than closedCacheTTL.
 func (e Env) cachedClosed(root, since string) (int, bool) {
-	c := worker.LoadRegistryTolerant(root).Review().Closed // a cache read: a corrupt registry is a miss
+	c := ReviewOf(worker.LoadRegistryTolerant(root)).Closed // a cache read: a corrupt registry is a miss
 	if c == nil || c.Since != since {
 		return 0, false
 	}
@@ -278,7 +278,7 @@ func reviewAreas(root string, set roundcfg.Settings) []string {
 func MintedReviews(root string) map[string]bool {
 	out := map[string]bool{}
 	// Read-only: the verbs that mint or assign read the registry strictly.
-	for _, id := range worker.LoadRegistryTolerant(root).Review().Items {
+	for _, id := range ReviewOf(worker.LoadRegistryTolerant(root)).Items {
 		out[worker.NormID(id)] = true
 	}
 	return out
@@ -315,7 +315,7 @@ func (e Env) mintedReview(ctx context.Context, root string, be Board, it *backlo
 
 // ReviewSince is the time the last review was minted, "" when none was.
 func ReviewSince(root string) string {
-	return worker.LoadRegistryTolerant(root).Review().At // display; Architecture reads the registry strictly right after
+	return ReviewOf(worker.LoadRegistryTolerant(root)).At // display; Architecture reads the registry strictly right after
 }
 
 // MintReview creates one review item per area, labels them refactor in issue
@@ -328,7 +328,7 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 	// re-creates them nor counts them.
 	fail := func(err error) ([]string, error) {
 		if len(ids) > 0 {
-			if uerr := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems(ids) }); uerr != nil {
+			if uerr := worker.Update(root, func(d *worker.Doc) { RecordReviewItems(d, ids) }); uerr != nil {
 				err = fmt.Errorf("%w (and recording %s: %v)", err, strings.Join(ids, ", "), uerr)
 			}
 		}
@@ -366,7 +366,7 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 	}
 	at := stamp.Format(e.now())
 	// Cumulative: a review item still open from an earlier review stays recognised.
-	err := worker.Update(root, func(d *worker.Doc) { d.StartReview(at, round, a.Trigger, ids) })
+	err := worker.Update(root, func(d *worker.Doc) { StartReview(d, at, round, a.Trigger, ids) })
 	return ids, err
 }
 

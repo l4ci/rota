@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
@@ -405,8 +406,8 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
 	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
-	worker.UpdateEscalations(f.root, func([]worker.Escalation) []worker.Escalation {
-		return []worker.Escalation{{ID: "e1", Kind: "issue", Number: 12, Slot: "ben", Status: "pending"}}
+	escalation.Update(f.root, func([]escalation.Entry) []escalation.Entry {
+		return []escalation.Entry{{ID: "e1", Kind: "issue", Number: 12, Slot: "ben", Status: "pending"}}
 	})
 	f.now = f.now.Add(5 * time.Hour)
 	rep, _ := f.env.Status(bg, f.root)
@@ -414,7 +415,7 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 		t.Errorf("a slot waiting on an escalation is never stalled: %+v", rep.Findings)
 	}
 	// Without the escalation it is stalled, and 0 turns the check off.
-	worker.UpdateEscalations(f.root, func([]worker.Escalation) []worker.Escalation { return nil })
+	escalation.Update(f.root, func([]escalation.Entry) []escalation.Entry { return nil })
 	if rep, _ := f.env.Status(bg, f.root); !hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Fatalf("control: stalled once the escalation is gone: %+v", rep.Findings)
 	}

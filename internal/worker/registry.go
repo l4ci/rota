@@ -167,6 +167,19 @@ func listOf(o *jsonx.Object, key string) []any {
 	return l
 }
 
+// Section is the raw value under key, the read half of the shared document
+// seam: the packages that own a round-level record (escalation, limits, the
+// architecture review) decode their own section with it.
+func (r Registry) Section(key string) (any, bool) { return r.doc.Get(key) }
+
+// Objects is the object entries under key, skipping any entry that is not an
+// object; a missing or malformed list reads as empty.
+func (r Registry) Objects(key string) []*jsonx.Object { return r.objects(key) }
+
+// SetSection stores v under key, the write half of the seam. It is meant to be
+// called inside Update, so every section shares the registry's one lock.
+func (d *Doc) SetSection(key string, v any) { d.doc.Set(key, v) }
+
 // objects is the one decode of a registry list: the object entries under key,
 // skipping any entry that is not an object.
 func (r Registry) objects(key string) []*jsonx.Object {

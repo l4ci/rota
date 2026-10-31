@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"github.com/l4ci/rota/internal/escalation"
 	"strings"
 	"testing"
 	"time"
@@ -27,8 +28,8 @@ func TestRoundNeedsYouHumanReservations(t *testing.T) {
 	if code != 0 || len(data(t, out)["needsYou"].([]any)) != 0 {
 		t.Errorf("worker questions and cap audits belong to the orchestrator: %d %s %s", code, out, stderr)
 	}
-	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
-		return []worker.Escalation{{ID: "human", Kind: "pr", Number: 7, Title: "Approve a scope cut?", Status: "pending", Options: []string{"Keep scope", "Cut scope"}, Recommend: 1}}
+	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+		return []escalation.Entry{{ID: "human", Kind: "pr", Number: 7, Title: "Approve a scope cut?", Status: "pending", Options: []string{"Keep scope", "Cut scope"}, Recommend: 1}}
 	}); err != nil {
 		t.Fatal(err)
 	}

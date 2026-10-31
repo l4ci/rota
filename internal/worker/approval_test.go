@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -71,10 +72,10 @@ func TestGateMergeApprovalResolvesBeforeAudit(t *testing.T) {
 			var steps []string
 			boom := errors.New("registry unavailable")
 			e := answeredOn("pr", 7, "approve")
-			answers := fakeAnswers{entries: map[string]Escalation{"e1": e}, steps: &steps}
+			answers := fakeAnswers{entries: map[string]ApprovalEntry{"e1": e}, steps: &steps}
 			switch outcome {
 			case "pending":
-				answers.entries["e1"] = Escalation{Kind: "pr", Number: 7, Status: EscalationPending}
+				answers.entries["e1"] = pendingOn("pr", 7, "pending")
 			case "unavailable":
 				answers.err = boom
 			}
@@ -259,26 +260,31 @@ func TestSlotApprovalThread(t *testing.T) {
 	}
 }
 
-func answeredOn(kind string, n int, body string) Escalation {
-	return Escalation{Kind: kind, Number: n, Status: EscalationAnswered, Answer: &EscalationAnswer{Body: body}}
+func answeredOn(kind string, n int, body string) ApprovalEntry {
+	return ApprovalEntry{Kind: kind, Ref: "#" + strconv.Itoa(n), Answered: true, Answer: &body,
+		Status: func(time.Time) string { return "answered" }}
+}
+
+func pendingOn(kind string, n int, status string) ApprovalEntry {
+	return ApprovalEntry{Kind: kind, Ref: "#" + strconv.Itoa(n), Status: func(time.Time) string { return status }}
 }
 
 type fakeAnswers struct {
-	entries map[string]Escalation
+	entries map[string]ApprovalEntry
 	err     error
 	steps   *[]string
 }
 
 type panicAnswers struct{ t *testing.T }
 
-func (p panicAnswers) Entry(string) (Escalation, bool, error) {
+func (p panicAnswers) Entry(string) (ApprovalEntry, bool, error) {
 	p.t.Error("unused approval resolved")
-	return Escalation{}, false, errors.New("unused adapter")
+	return ApprovalEntry{}, false, errors.New("unused adapter")
 }
 
 func (panicAnswers) Approves(string) bool { return false }
 
-func (f fakeAnswers) Entry(id string) (Escalation, bool, error) {
+func (f fakeAnswers) Entry(id string) (ApprovalEntry, bool, error) {
 	if f.steps != nil {
 		*f.steps = append(*f.steps, "resolve "+id)
 	}
@@ -290,10 +296,10 @@ func (fakeAnswers) Approves(answer string) bool { return answer == "approve" }
 
 func TestMergeApprovalConfirmation(t *testing.T) {
 	th := ApprovalThread{Kind: "pr", Number: 7}
-	answers := fakeAnswers{entries: map[string]Escalation{
+	answers := fakeAnswers{entries: map[string]ApprovalEntry{
 		"ok":       answeredOn("pr", 7, "approve"),
 		"declined": answeredOn("pr", 7, "hold"),
-		"pending":  {Kind: "pr", Number: 7, Status: EscalationPending, Deadline: "2026-10-03T11:00:00Z"},
+		"pending":  pendingOn("pr", 7, "timed-out"),
 		"other":    answeredOn("issue", 7, "approve"),
 	}}
 	for _, tc := range []struct {

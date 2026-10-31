@@ -23,13 +23,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// Statuses. StatusTimedOut is derived on read and never stored.
-const (
-	StatusPending  = worker.EscalationPending
-	StatusAnswered = worker.EscalationAnswered
-	StatusTimedOut = worker.EscalationTimedOut
-)
-
 // Error is a verb failure with its exit code; Data is the failure data for
 // exit 1 and 4.
 type Error struct {
@@ -39,13 +32,6 @@ type Error struct {
 }
 
 func (e *Error) Error() string { return e.Message }
-
-// Answer is the comment that answered an escalation.
-type Answer = worker.EscalationAnswer
-
-// Entry is one record of the `escalations` list; the worker package owns its
-// stored shape.
-type Entry = worker.Escalation
 
 // Forge is the part of tracker.Adapter the verbs use.
 type Forge interface {
@@ -95,7 +81,7 @@ func Time(t time.Time) string { return stamp.Format(t) }
 // Load reads the escalations list; a missing or malformed list reads as empty.
 // It tolerates a corrupt registry: it feeds display and the tick's passive
 // reads, and Send refuses a corrupt registry itself.
-func Load(root string) []Entry { return worker.LoadRegistryTolerant(root).Escalations() }
+func Load(root string) []Entry { return FromRegistry(worker.LoadRegistryTolerant(root)) }
 
 // NextID is e<N>, N one more than the highest in the list.
 func NextID(list []Entry) string {
@@ -298,7 +284,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		}
 	}
 	res.Entry = e
-	err = worker.UpdateEscalations(root, func(list []Entry) []Entry {
+	err = Update(root, func(list []Entry) []Entry {
 		return append(list, e)
 	})
 	if err != nil {
@@ -411,7 +397,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := worker.UpdateEscalations(root, func(stored []Entry) []Entry {
+		err := Update(root, func(stored []Entry) []Entry {
 			for j := range stored {
 				a, hit := found[stored[j].ID]
 				if !hit || !IsOpen(stored[j]) {

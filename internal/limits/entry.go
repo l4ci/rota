@@ -53,17 +53,13 @@ const (
 // session is its slot name.
 const Orchestrator = "orchestrator"
 
-// Entry is one record of the `limits` list; the worker package owns its
-// stored shape.
-type Entry = worker.Limit
-
 // Time renders t as RFC 3339 UTC.
 func Time(t time.Time) string { return stamp.Format(t) }
 
 // Load reads the limits list; a missing or malformed list reads as empty. It
 // tolerates a corrupt registry: it feeds display and the tick's passive reads,
 // and the verbs that write the list refuse a corrupt registry themselves.
-func Load(root string) []Entry { return worker.LoadRegistryTolerant(root).Limits() }
+func Load(root string) []Entry { return FromRegistry(worker.LoadRegistryTolerant(root)) }
 
 // Waiting are the entries still waiting, in list order.
 func Waiting(list []Entry) []Entry {
@@ -90,7 +86,7 @@ func NextID(list []Entry) string {
 // Append adds the entry under the registry lock, numbering it from the list
 // as it is at that moment, and returns it with its id.
 func Append(root string, e Entry) (Entry, error) {
-	err := worker.UpdateLimits(root, func(list []Entry) []Entry {
+	err := Update(root, func(list []Entry) []Entry {
 		e.ID = NextID(list)
 		return append(list, e)
 	})
@@ -99,7 +95,7 @@ func Append(root string, e Entry) (Entry, error) {
 
 // Save rewrites the entry with the same id under the registry lock.
 func Save(root string, e Entry) error {
-	return worker.UpdateLimits(root, func(list []Entry) []Entry {
+	return Update(root, func(list []Entry) []Entry {
 		for i := range list {
 			if list[i].ID == e.ID {
 				list[i] = e
