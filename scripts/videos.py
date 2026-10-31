@@ -33,7 +33,7 @@ import fmlite  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOT_RE = re.compile(r'^### (\d+) (motion|terminal)[ \t]*$')
-KEY_RE = re.compile(r'^(vo|say|scene|vertical|lower-third|crop|staged):[ \t]*(.*)$')
+KEY_RE = re.compile(r'^(vo|say|scene|anim|vertical|lower-third|crop|staged):[ \t]*(.*)$')
 FENCE_RE = re.compile(r'^```(\w*)[ \t]*$')
 ANSI_RE = re.compile(r'\x1b\[[0-9;?]*[ -/]*[@-~]')
 # `rota version` prints `rota 0.28.0 (7eaa16a, 2026-10-31T12:38:31Z)` with VCS or link-time
@@ -70,7 +70,7 @@ def parse_script(path):
         line = lines[i]
         m = SHOT_RE.match(line)
         if m:
-            cur = {'n': m.group(1), 'kind': m.group(2), 'vo': None, 'say': None, 'scene': None,
+            cur = {'n': m.group(1), 'kind': m.group(2), 'vo': None, 'say': None, 'scene': None, 'anim': None,
                    'vertical': None, 'lower_third': None, 'crop': None,
                    'staged': None, 'cmds': []}
             shots.append(cur)
@@ -122,8 +122,44 @@ def parse_script(path):
         s['caption'] = NAME_SPELLING_RE.sub('rota', s['vo'])
         s['speak'] = s['say'] or s['vo']
         s['crops'] = crop_rules(s['crop'], s['cmds'])
+        s['anim'] = parse_anim(s['anim'], s['kind'], s['n'], path)
     slug = os.path.splitext(os.path.basename(path))[0]
     return {'slug': slug, 'front': front, 'shots': shots}
+
+
+# Animated scenes a motion shot can pick with `anim:`; each is a component in
+# videos/render/src/scenes/ and takes the listed key=value parameters.
+ANIMS = {
+    'split': {'left', 'right', 'left-items', 'right-items', 'right-tone'},
+    'cards': {'items', 'mono', 'frame', 'last-tone'},
+    'flow': {'steps', 'mono', 'bounce'},
+    'lanes': {'lanes', 'end'},
+}
+ANIM_PARAM_RE = re.compile(r'^([a-z][a-z-]*)=(.*)$')
+
+
+def parse_anim(text, kind, n, path):
+    """`anim: <name> | key=value | key=value` -> {'name': ..., 'params': {...}} or None.
+    Values are plain text; lists inside a value are split by ';' by the scene."""
+    if text is None:
+        return None
+    if kind != 'motion':
+        raise VideoError('%s: shot %s is a terminal shot with an anim: line' % (path, n))
+    name, *rest = [p.strip() for p in text.split('|')]
+    if name not in ANIMS:
+        raise VideoError('%s: shot %s: unknown anim %r (one of %s)' % (path, n, name, ', '.join(sorted(ANIMS))))
+    params = {}
+    for part in rest:
+        m = ANIM_PARAM_RE.match(part)
+        if not m:
+            raise VideoError('%s: shot %s: anim parameter %r is not key=value' % (path, n, part))
+        key, val = m.group(1), m.group(2).strip().strip('`')
+        if key not in ANIMS[name]:
+            raise VideoError('%s: shot %s: anim %s has no parameter %r (one of %s)' % (path, n, name, key, ', '.join(sorted(ANIMS[name]))))
+        if key in params:
+            raise VideoError('%s: shot %s: anim parameter %r given twice' % (path, n, key))
+        params[key] = val
+    return {'name': name, 'params': params}
 
 
 def crop_rules(crop, cmds):

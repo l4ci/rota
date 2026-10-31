@@ -129,3 +129,34 @@ mkdir -p "$VD/vroot2"; cp -r "$VD/vroot/episodes" "$VD/vroot2/"
 fake_ver "$VD/v-newver" "rota 2.0.0 (abc1234, 2026-01-01T00:00:00Z)"
 [ "$(cap "$VD/v-newver")" != "$(cap "$VD/v-vcs")" ] || fail "a changed version number must still differ"
 pass "the rota version stamp is masked in every form, and a changed version still differs"
+
+# anim: lines (#2537): an optional animated scene per motion shot, parsed inside the grammar
+AN="$VD/anim"; mkdir -p "$AN"
+mkanim() { # <name> <anim line> [kind]: a one-shot episode; parse prints its anim
+  printf -- '---\nnumber: 9\n---\n\n### 01 %s\n\nvo: x\n\n%s\n\nvertical: y\n' "${3:-motion}" "$2" > "$AN/$1.md"
+}
+mkanim ok 'anim: cards | items=a~b; c | last-tone=danger'
+python3 "$VID" parse "$AN/ok.md" | python3 -c '
+import json, sys
+a = json.load(sys.stdin)["shots"][0]["anim"]
+assert a == {"name": "cards", "params": {"items": "a~b; c", "last-tone": "danger"}}, a' \
+  || fail "anim: should parse into a name and key=value params"
+mkanim none 'scene: plain'
+python3 "$VID" parse "$AN/none.md" | grep -q '"anim": null' || fail "a motion shot without anim: should keep anim null"
+pass "videos parse reads an optional anim: line and leaves other motion shots a title card"
+for bad in 'anim: wobble | x=1' 'anim: cards | nope=1' 'anim: cards | items' 'anim: cards | items=a | items=b'; do
+  mkanim bad "$bad"
+  rc=0; OUT="$(python3 "$VID" parse "$AN/bad.md" 2>&1)" || rc=$?
+  { [ "$rc" = 1 ] && grep -q 'videos.py: .*shot 01' <<<"$OUT" && ! grep -q Traceback <<<"$OUT"; } \
+    || fail "anim line '$bad' should be a grammar error (rc $rc): $OUT"
+done
+mkanim term 'anim: cards | items=a' terminal
+printf '\n```sh\nrota version\n```\n' >> "$AN/term.md"
+rc=0; OUT="$(python3 "$VID" parse "$AN/term.md" 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -q 'terminal shot with an anim' <<<"$OUT" || fail "anim: on a terminal shot should be refused (rc $rc): $OUT"
+pass "videos parse refuses unknown scenes, unknown or repeated parameters and anim: on a terminal shot"
+# the script hash covers the anim line, so changing a scene makes the episode stale
+H1="$(python3 "$VID" parse "$AN/ok.md" | grep source_hash)"
+sed -i 's/last-tone=danger/last-tone=ask/' "$AN/ok.md"
+[ "$H1" != "$(python3 "$VID" parse "$AN/ok.md" | grep source_hash)" ] || fail "an anim edit should change the source hash"
+pass "an anim: edit changes the script hash the drift check compares"

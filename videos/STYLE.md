@@ -78,6 +78,19 @@ For the why and the how: diagrams, flows and one-idea title cards.
 - **Diagrams.** Boxes are `rule`-bordered cards with 3 px radius, labels in Atkinson Hyperlegible Next, verbs and IDs in Martian Mono. Arrows are 2 px `muted` lines with a filled head; the active path turns `duty`. Use the state colours for state only.
 - **Layout.** Left-aligned, on an 8 px grid, one focal element per frame. 16:9 puts text left and visual right; 9:16 stacks text over visual.
 
+### Animated scenes
+
+A motion shot picks a scene with `anim: <scene> | key=value | ...` (grammar in [`README.md`](README.md#shots)). Scenes follow the rules above, build in step with the voiceover (the last item lands about 78% through it) and add detail to the voice rather than repeating it. Lists inside a value are split by `;`; `label~detail` adds a muted detail line.
+
+| Scene | Idea | Parameters |
+|---|---|---|
+| `split` | Two panels, before/after or doing/stuck; the left builds first | `left`, `right` (titles), `left-items`, `right-items`, `right-tone` (`ask` or `danger`, default `ask`) |
+| `cards` | Keyword cards that build up with the voice | `items`, `mono=true` (Martian Mono labels), `frame=<label>` (sets the cards in a labelled outline), `last-tone` (tone of the last card, for example `danger`) |
+| `flow` | Steps joined by arrows; the active step turns `duty` as the voice reaches it | `steps`, `mono=true`, `bounce=<step>` (a gate flow: the last step turns `merged` and a second token is sent back at that step in `danger`) |
+| `lanes` | Parallel worktrees each fill, turn `merged` and feed one target | `lanes` (names), `end` (target label, default `main`) |
+
+In 9:16 the scenes stack in a column. Add a scene to this table when you add its component.
+
 ## Captions and lower thirds
 
 - **Captions** are on in every episode, burned in: voiceover text, split at phrases, at most two lines, 42 characters per line, `ink` on a `paper`-coloured band at 85% opacity. They sit in the lower third of the 16:9 frame and above the bottom safe area in 9:16. A caption never covers the last three terminal lines. Verbs and IDs inside a caption render in Martian Mono.
@@ -87,7 +100,7 @@ For the why and the how: diagrams, flows and one-idea title cards.
 
 Every episode opens with the logo sting and closes with the outro card. Both count toward the length target.
 
-**Intro sting (1.5 s).** On `paper`, the rota icon (`docs/images/rota-icon.svg`) draws in centred: its stroke traces over 0.6 s, then the wheel turns one quarter turn in 0.5 s on the standard curve. The wordmark (`docs/images/rota-logo.svg`) fades in beneath it over 0.3 s. Hold 0.4 s, then a hard cut to shot 01. Silent except for the voiceover's first word starting at 1.5 s. In 9:16 the lockup sits at the optical centre, 40% from the top.
+**Intro sting (1.5 s).** On `paper`, the rota icon (`docs/images/rota-icon.svg`) draws in centred: it fades and scales up from 88% over 0.6 s on the standard curve; it never rotates. The wordmark (`docs/images/rota-logo.svg`) fades in beneath it over 0.3 s. Hold 0.4 s, then a hard cut to shot 01. Silent except for the voiceover's first word starting at 1.5 s. In 9:16 the lockup sits at the optical centre, 40% from the top.
 
 **Outro card (4 s).**
 
@@ -96,7 +109,7 @@ Every episode opens with the logo sting and closes with the outro card. Both cou
 - Link, Martian Mono, `ink` on a `duty-wash` band: `github.com/l4ci/rota`
 - The rota icon at 64 px above line 1.
 
-Timing: the card fades in 280 ms; the voiceover reads line 2 only, `rota makes sure what they merge works.`, in about 3 s; the link is on screen, never spoken, and the card holds 0.8 s after the voice ends, 4 s in all. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
+Timing: the card fades in 280 ms; the voiceover reads line 2 only, `rota makes sure what they merge works.`, in about 3 s; after line 2 the voice adds `Find it on GitHub.`; the link itself is on screen, never read out, and the card holds 0.8 s after the voice ends, 4 s in all. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
 
 ## Voice
 
