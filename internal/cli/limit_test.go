@@ -342,10 +342,10 @@ func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rig.Cancel()
-	if got, ok := rig.W.IdleSlot(context.Background(), "", "b"); !ok || got != "dana" {
+	if got, ok := rig.W.Move.IdleSlot(context.Background(), "", "b"); !ok || got != "dana" {
 		t.Fatalf("receiver = %q, %v; want dana", got, ok)
 	}
-	if got, ok := rig.W.IdleSlot(context.Background(), "", "c"); ok {
+	if got, ok := rig.W.Move.IdleSlot(context.Background(), "", "c"); ok {
 		t.Fatalf("no slot is idle on account c, got %q", got)
 	}
 }
