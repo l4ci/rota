@@ -76,16 +76,6 @@ func TestSigning(t *testing.T) {
 	if ok, why := CheckPrompt(key, signed); !ok {
 		t.Errorf("signed payload blocked: %s", why)
 	}
-	got, err := (codex{}).RelayKey(func() (string, error) { return cd, nil }, "w1")
-	if err != nil || string(got) != string(key) {
-		t.Errorf("relay key: %v %v", got, err)
-	}
-	os.Remove(filepath.Join(home, PromptKeyFile))
-	_, err = (codex{}).RelayKey(func() (string, error) { return cd, nil }, "w1")
-	var r *Refusal
-	if !errors.As(err, &r) || r.Class != Unavailable || r.Hint == "" {
-		t.Errorf("a missing key must be an unavailable refusal with a hint: %v", err)
-	}
 	if _, _, err := (codex{}).Prepare("codex", func() (string, error) { return "", errors.New("no exe") }, Setup{StateDir: home, Worktree: "/wt"}); err == nil {
 		t.Error("no rota binary must refuse")
 	}

@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,5 +131,47 @@ func TestTomlString(t *testing.T) {
 		if got := tomlString(in); got != want {
 			t.Errorf("tomlString(%q) = %s, want %s", in, got, want)
 		}
+	}
+}
+
+// The key lifecycle both signing kinds share: Prepare writes the key into the
+// slot's state dir, RelayKey loads it back, and a missing one is a refusal
+// that says how to renew it.
+func TestPromptKeyLifecycleSharedByKinds(t *testing.T) {
+	for _, tc := range []struct {
+		kind    string
+		slotDir func(cd, slot string) string
+	}{
+		{"codex", CodexSlotDir},
+		{"opencode", OpencodeSlotDir},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			cd := t.TempDir()
+			dir := tc.slotDir(cd, "w1")
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			path, key, err := writePromptKey(dir)
+			if err != nil || len(key) != 32 || path != filepath.Join(dir, PromptKeyFile) {
+				t.Fatalf("writePromptKey: %q %d %v", path, len(key), err)
+			}
+			cdf := func() (string, error) { return cd, nil }
+			got, err := relayPromptKey(cdf, tc.slotDir, "w1", tc.kind, "re-dispatch")
+			if err != nil || string(got) != string(key) {
+				t.Fatalf("relay key: %v %v", got, err)
+			}
+			_, err = relayPromptKey(cdf, tc.slotDir, "gone", tc.kind, "re-dispatch")
+			var r *Refusal
+			if !errors.As(err, &r) || r.Class != Unavailable || r.Hint != "re-dispatch" || !strings.Contains(r.Error(), "is a "+tc.kind+" worker") {
+				t.Errorf("a missing key must be an unavailable refusal with the hint: %v", err)
+			}
+			if _, err := relayPromptKey(func() (string, error) { return "", errors.New("no git") }, tc.slotDir, "w1", tc.kind, "h"); err == nil {
+				t.Error("an unresolvable git dir must error")
+			}
+			_, _, err = writePromptKey(filepath.Join(cd, "absent", "dir"))
+			if !errors.As(err, &r) || r.Class != Unavailable {
+				t.Errorf("an unwritable state dir must be an unavailable refusal: %v", err)
+			}
+		})
 	}
 }
