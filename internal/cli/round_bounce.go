@@ -56,43 +56,49 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		env := c.deps().workerEnv()
-		rec, err := recordBounce(env, root, issue, *slot, *head, set.MaxBounces)
+		store, err := checkedBounceStore(env, root, *slot)
 		if err != nil {
 			return Result{}, err
 		}
-		n, capped := rec.N, rec.Capped
-		if !capped {
-			// Idempotent per head, so a head the store deduped posts too: a
-			// failed post whose undo failed leaves the head counted, and the
-			// retry must still reach the support worker.
-			posted, pr, err := postSupportBounce(env, root, issue, *slot, *head)
-			var noPR *worker.NoSupportPRError
-			if errors.As(err, &noPR) {
-				if undoErr := rec.Undo(); undoErr != nil {
-					return Result{}, errors.Join(err, undoErr)
-				}
-				slotName := *slot
-				if slotName == "" {
-					for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-						if s.HeldID() == issue {
-							slotName = s.Name()
-							break
-						}
+		// Idempotent per head, so a head the store deduped posts too: a failed
+		// post whose undo failed leaves the head counted, and the retry must
+		// still reach the support worker.
+		var posted bool
+		var pr string
+		res, err := worker.Bounce(store, nil, issue, *slot, *head, set.MaxBounces, func(worker.BounceRecord) (err error) {
+			posted, pr, err = postSupportBounce(env, root, issue, *slot, *head)
+			return err
+		})
+		if err != nil {
+			return Result{}, err
+		}
+		n, capped := res.N, res.Capped
+		var noPR *worker.NoSupportPRError
+		if errors.As(res.NotifyErr, &noPR) {
+			if res.UndoErr != nil {
+				return Result{}, res.Err()
+			}
+			slotName := *slot
+			if slotName == "" {
+				for _, s := range worker.LoadRegistryTolerant(root).Slots() {
+					if s.HeldID() == issue {
+						slotName = s.Name()
+						break
 					}
 				}
-				d := jsonx.NewObject()
-				d.Set("issue", issue)
-				d.Set("branch", noPR.Branch)
-				d.Set("slot", slotName)
-				return blockedRefusal(d, blockedby.NoPRRecorded, fmt.Sprintf("%s is the support machine's PR but the slot records none, so the bounce has no PR to land on (nothing counted)", noPR.Branch),
-					noPRHint(issue, slotName, *head, *force))
 			}
-			if err != nil {
-				return Result{}, errors.Join(err, rec.Undo())
-			}
-			if posted {
-				postSupportPointer(c, root, issue, "bounce", pr)
-			}
+			d := jsonx.NewObject()
+			d.Set("issue", issue)
+			d.Set("branch", noPR.Branch)
+			d.Set("slot", slotName)
+			return blockedRefusal(d, blockedby.NoPRRecorded, fmt.Sprintf("%s is the support machine's PR but the slot records none, so the bounce has no PR to land on (nothing counted)", noPR.Branch),
+				noPRHint(issue, slotName, *head, *force))
+		}
+		if res.NotifyErr != nil {
+			return Result{}, res.Err()
+		}
+		if posted {
+			postSupportPointer(c, root, issue, "bounce", pr)
 		}
 		d := jsonx.NewObject()
 		d.Set("issue", issue)
@@ -169,24 +175,18 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		Hint: "file the deferred findings with `rota verdict add --file-deferred`, or pass --force to bounce anyway"}
 }
 
-// recordBounce counts one bounce unless the item is already at max (0 = no
-// cap); the bounce store enforces it, the issue store by re-reading after its
-// write. capped reports the refusal; n is then the unchanged count. A slot that
-// is not in the pool is refused before anything is written.
-func recordBounce(env worker.Env, root, issue, slot, head string, max int) (worker.BounceRecord, error) {
+// checkedBounceStore is the bounce store, after refusing a slot that is not in
+// the pool before anything is written.
+func checkedBounceStore(env worker.Env, root, slot string) (worker.BounceStore, error) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return worker.BounceRecord{}, err
+		return nil, err
 	}
 	if slot != "" && reg.Slot(slot) == nil {
-		return worker.BounceRecord{}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
+		return nil, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
 			Hint: "see `rota worker pool list` for the slot names"}
 	}
-	store, err := env.BounceStore(root)
-	if err != nil {
-		return worker.BounceRecord{}, err
-	}
-	return store.Record(nil, issue, slot, head, max)
+	return env.BounceStore(root)
 }
 
 // postSupportBounce posts a counted bounce on the PR when the support machine

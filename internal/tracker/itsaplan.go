@@ -54,29 +54,16 @@ const itsaplanFieldName = "rota"
 
 // newItsaplanTracker is NewIssueTracker for issues.source itsaplan.
 func newItsaplanTracker(ctx context.Context, c *CLI, s Settings) (*Itsaplan, error) {
-	if s.Connection == "" {
-		return nil, Unavailable("issues.source is itsaplan but issues.connection is not set (run: rota connect add <name> --kind itsaplan --site <url>, then rota config set issues.connection <name>)")
-	}
+	missing := ""
 	if s.ItsaplanProject == "" {
-		return nil, Unavailable("issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)")
+		missing = "issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)"
 	}
-	conn, secret, err := c.resolver()(ctx, s.Connection)
+	conn, secret, wire, err := c.restConn(ctx, s, itsaplanSpec, missing)
 	if err != nil {
-		return nil, Unavailable("%v", err)
-	}
-	if conn.Kind != connections.KindItsaplan {
-		return nil, Unavailable("connection %q is kind %s, not itsaplan", conn.Name, conn.Kind)
-	}
-	if secret == "" {
-		return nil, Unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
+		return nil, err
 	}
 	t := NewItsaplan(conn, secret, s.ItsaplanProject)
-	if sleep := c.Sleep; sleep != nil {
-		t.rest.Sleep = func(ctx context.Context, d time.Duration) error {
-			sleep(d)
-			return ctx.Err()
-		}
-	}
+	wire(t.rest)
 	return t, nil
 }
 
