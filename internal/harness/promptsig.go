@@ -57,8 +57,8 @@ func writePromptKey(stateDir string) (keyPath string, key []byte, err error) {
 }
 
 // relayPromptKey loads the key the session's task dispatch wrote for slot, or
-// refuses with kind (the harness name) and hint (what re-dispatching renews).
-func relayPromptKey(commonDir func() (string, error), slotDir func(commonDir, slot string) string, slot, kind, hint string) ([]byte, error) {
+// refuses with who ("a codex", "an opencode") and hint (what re-dispatching renews).
+func relayPromptKey(commonDir func() (string, error), slotDir func(commonDir, slot string) string, slot, who, hint string) ([]byte, error) {
 	cd, err := commonDir()
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func relayPromptKey(commonDir func() (string, error), slotDir func(commonDir, sl
 	keyFile := filepath.Join(slotDir(cd, slot), PromptKeyFile)
 	key, err := loadPromptKey(keyFile)
 	if err != nil {
-		r := refuse(Unavailable, "slot '%s' is a %s worker but its prompt key is unreadable (%s): %v", slot, kind, keyFile, err)
+		r := refuse(Unavailable, "slot '%s' is %s worker but its prompt key is unreadable (%s): %v", slot, who, keyFile, err)
 		r.Hint = hint
 		return nil, r
 	}

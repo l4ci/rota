@@ -403,7 +403,7 @@ func (o opencode) Prepare(launch string, _ func() (string, error), s Setup) (str
 
 // RelayKey loads the key the session's task dispatch wrote.
 func (opencode) RelayKey(commonDir func() (string, error), slot string) ([]byte, error) {
-	return relayPromptKey(commonDir, OpencodeSlotDir, slot, "opencode", "re-dispatch the task: a fresh session gets a fresh key and guard")
+	return relayPromptKey(commonDir, OpencodeSlotDir, slot, "an opencode", "re-dispatch the task: a fresh session gets a fresh key and guard")
 }
 
 // OpencodeSlotDir is the slot's own state directory,
