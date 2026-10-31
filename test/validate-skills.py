@@ -607,7 +607,10 @@ def main(prose=True):
     skill_files = sorted(Path(".").glob("skills/rota-*/SKILL.md"))
     check_layout("skills", issues)
 
-    for skill_path in skill_files:
+    # The plugin's own skills (rota-install) ship outside skills/ but get the same per-file checks.
+    plugin_files = sorted(Path(".").glob("plugin/skills/*/SKILL.md"))
+
+    for skill_path in [*skill_files, *plugin_files]:
         text = skill_path.read_text(encoding="utf-8")
         check_frontmatter(skill_path, text, issues)
         check_spec_frontmatter(skill_path, text, issues)
@@ -621,7 +624,7 @@ def main(prose=True):
     if prose:
         check_prose(issues)
 
-    n = len(skill_files)
+    n = len(skill_files) + len(plugin_files)
     if issues:
         for line in issues:
             print(line, file=sys.stderr)
