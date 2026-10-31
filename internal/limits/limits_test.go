@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -42,6 +43,7 @@ type rig struct {
 	sent      []string          // "<session>: <prompt>"
 	xfers     []string
 	xferErr   error
+	ledgered  []ledger.Entry
 	escal     []string
 	notified  []string
 	set       Settings
@@ -71,16 +73,8 @@ func (r *rig) build() *Watcher {
 			r.pickKinds = append(r.pickKinds, kind)
 			return r.pick, r.pick != "" && r.pick != exclude
 		},
-		IdleSlot: func(_ context.Context, _, a string) (string, bool) { s, ok := r.idle[a]; return s, ok },
-		Transfer: func(_ context.Context, issue, to string) error {
-			r.xfers = append(r.xfers, issue+"->"+to)
-			for i := range r.targets { // the sender is parked, so idle
-				if r.targets[i].Issue == issue {
-					r.targets[i].Issue = ""
-				}
-			}
-			return r.xferErr
-		},
+		Move:   r,
+		Ledger: func(e ledger.Entry) { r.ledgered = append(r.ledgered, e) },
 		Send: func(_ context.Context, t Target, p string) error {
 			r.mu.Lock()
 			r.sent = append(r.sent, t.Session+": "+p)
@@ -94,6 +88,21 @@ func (r *rig) build() *Watcher {
 		Notify: func(title, body string) { r.notified = append(r.notified, title) },
 	})
 	return r.w
+}
+
+func (r *rig) IdleSlot(_ context.Context, _, a string) (string, bool) {
+	s, ok := r.idle[a]
+	return s, ok
+}
+
+func (r *rig) Transfer(_ context.Context, issue, to string) error {
+	r.xfers = append(r.xfers, issue+"->"+to)
+	for i := range r.targets { // the sender is parked, so idle
+		if r.targets[i].Issue == issue {
+			r.targets[i].Issue = ""
+		}
+	}
+	return r.xferErr
 }
 
 func (r *rig) step(sweep bool, ms ...Match) { r.w.Step(context.Background(), ms, sweep) }
@@ -688,5 +697,24 @@ func TestLimitPhraseQuotedInReplyIsIgnored(t *testing.T) {
 	dialog := "● done\n\n" + limitMsg + "\n❯ \n"
 	if _, _, ok := findLimit("", dialog, ""); !ok {
 		t.Error("a limit dialog below the reply was dropped")
+	}
+}
+
+func TestGapHidesOrchestratorDataAndPane(t *testing.T) {
+	r := newRig(t)
+	gap := true
+	r.set.Mode = ModeSleep
+	r.build()
+	r.w.InGap = func() bool { return gap }
+	r.data = Data{Window: WindowFiveHour, ResetsAt: t0.Add(time.Hour), Limited: true, Known: true}
+	r.panes[Orchestrator] = limitMsg
+	r.step(true)
+	if es := r.entries(); len(es) != 0 {
+		t.Fatalf("a limit was recorded during the gap: %+v", es)
+	}
+	gap = false
+	r.step(true)
+	if es := r.entries(); len(es) != 1 {
+		t.Fatalf("want one entry once the child is back, got %+v", es)
 	}
 }
