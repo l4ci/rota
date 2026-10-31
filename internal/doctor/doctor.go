@@ -1027,6 +1027,9 @@ func (d *runner) skillsCheck() Check {
 	hint := "run: rota skills update"
 	var manifestBad, pluginBad bool
 	for _, r := range have {
+		if !r.Damaged() {
+			continue
+		}
 		if r.Plugin {
 			if !r.Current {
 				pluginBad = true

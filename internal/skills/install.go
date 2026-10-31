@@ -560,6 +560,29 @@ type RootStatus struct {
 	Changed []string
 }
 
+// Damaged says the root is installed but out of step with the binary: another
+// digest, files missing or files edited. A stub root's Current already
+// judges against the stub digest.
+func (r RootStatus) Damaged() bool {
+	return !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0
+}
+
+// NeedsUpdate says `rota skills update` has work: some installed root is
+// damaged or not a stub install, or nothing is installed yet.
+func (r Report) NeedsUpdate() bool {
+	installed := 0
+	for _, st := range r.Roots {
+		if !st.Installed {
+			continue
+		}
+		installed++
+		if st.Mode != ModeStub || st.Damaged() {
+			return true
+		}
+	}
+	return installed == 0
+}
+
 // Report is Status: the binary's version and digest, and each root.
 type Report struct {
 	Version string
