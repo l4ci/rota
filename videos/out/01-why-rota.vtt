@@ -1,0 +1,47 @@
+WEBVTT
+
+00:00:01.500 --> 00:00:03.500
+Coding agents write code fast.
+
+00:00:03.500 --> 00:00:05.800
+Merging it safely is the hard part.
+
+00:00:06.200 --> 00:00:07.400
+Branches pile up.
+
+00:00:07.400 --> 00:00:08.633
+Tests get skipped.
+
+00:00:08.633 --> 00:00:10.300
+Agents collide on files.
+
+00:00:10.300 --> 00:00:12.333
+Yesterday's lessons are gone.
+
+00:00:12.733 --> 00:00:15.800
+rota is a workflow for Claude Code and Codex.
+
+00:00:15.800 --> 00:00:17.833
+You write work down as issues.
+
+00:00:17.833 --> 00:00:21.167
+Agents build each one in small, verified commits.
+
+00:00:21.567 --> 00:00:24.933
+One small binary sets up a project in one command.
+
+00:00:24.933 --> 00:00:28.267
+Backlog, knowledge and decisions live in the repo.
+
+00:00:28.667 --> 00:00:31.200
+Every branch is reviewed against its spec.
+
+00:00:31.200 --> 00:00:34.000
+Only work that passes your tests lands on main.
+
+00:00:34.400 --> 00:00:38.400
+Lessons and decisions stay in the repo, so the next session starts ahead.
+
+00:00:38.800 --> 00:00:40.867
+rota makes sure what they merge works.
+
