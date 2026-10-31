@@ -137,7 +137,7 @@ func (r *REST) send(ctx context.Context, method, path string, body []byte) (int,
 		if ctx.Err() != nil {
 			return 0, nil, nil, internal("%s %s: %v", method, path, ctx.Err())
 		}
-		return 0, nil, nil, unavailable("%s %s: %v", method, path, err)
+		return 0, nil, nil, Unavailable("%s %s: %v", method, path, err)
 	}
 	defer resp.Body.Close()
 	limit := r.MaxBody
@@ -146,7 +146,7 @@ func (r *REST) send(ctx context.Context, method, path string, body []byte) (int,
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
-		return 0, nil, nil, unavailable("%s %s: reading the response: %v", method, path, err)
+		return 0, nil, nil, Unavailable("%s %s: reading the response: %v", method, path, err)
 	}
 	if int64(len(raw)) > limit {
 		return 0, nil, nil, failed("%s %s: the response is larger than %d bytes", method, path, limit)
@@ -213,9 +213,9 @@ func restError(method, path string, status int, raw []byte) *Error {
 	}
 	switch {
 	case status == http.StatusUnauthorized:
-		return unavailable("%s (check the connection's token: rota connect test)", msg)
+		return Unavailable("%s (check the connection's token: rota connect test)", msg)
 	case status == http.StatusForbidden:
-		return unavailable("%s (check the connection's token or its permission on this issue: rota connect test)", msg)
+		return Unavailable("%s (check the connection's token or its permission on this issue: rota connect test)", msg)
 	case status == http.StatusNotFound:
 		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
 	case status == http.StatusTooManyRequests:

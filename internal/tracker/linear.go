@@ -150,9 +150,9 @@ func gqlFailure(op string, errs []gqlError) *Error {
 	case code == "RATELIMITED" || typ == "ratelimited":
 		return rateLimited("%s", msg)
 	case code == "AUTHENTICATION_ERROR" || typ == "authentication error":
-		return unavailable("%s (check the connection's API key: rota connect test)", msg)
+		return Unavailable("%s (check the connection's API key: rota connect test)", msg)
 	case code == "FORBIDDEN" || typ == "forbidden":
-		return unavailable("%s (check the API key's access to this team: rota connect test)", msg)
+		return Unavailable("%s (check the API key's access to this team: rota connect test)", msg)
 	case strings.Contains(strings.ToLower(e.Message), "not found"):
 		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
 	}
@@ -295,7 +295,7 @@ func (l *Linear) teamInfo(ctx context.Context) (string, error) {
 			return l.teamID, nil
 		}
 	}
-	return "", unavailable("Linear team %s is not visible to this API key (check issues.linear.team, or the key's access: rota connect test)", l.team)
+	return "", Unavailable("Linear team %s is not visible to this API key (check issues.linear.team, or the key's access: rota connect test)", l.team)
 }
 
 // stateOf is the team's first state of the first type in want that it has,
@@ -409,7 +409,7 @@ func (l *Linear) labelIDs(ctx context.Context, names []string, create bool) ([]s
 		}
 		in := map[string]any{"name": n, "teamId": l.teamID}
 		if lb, ok := labelMetadata(n, l.labelEntries); ok {
-			in["description"], in["color"] = lb.Description, "#"+labelColor(lb.Color)
+			in["description"], in["color"] = lb.Description, "#"+labels.NormalizeColor(lb.Color)
 		}
 		if err := l.mutate(ctx, "LabelCreate", `($input: IssueLabelCreateInput!) { issueLabelCreate(input: $input) { success issueLabel { id name } } }`,
 			map[string]any{"input": in}, &d); err != nil {

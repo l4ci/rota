@@ -121,7 +121,7 @@ func (t *Itsaplan) CheckAuth(ctx context.Context) error {
 		return err
 	}
 	if m.field() == nil && !m.permits("custom_fields", "create") {
-		return unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q, or give the key's user the custom fields permission)", t.project, itsaplanFieldName, itsaplanFieldName)
+		return Unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q, or give the key's user the custom fields permission)", t.project, itsaplanFieldName, itsaplanFieldName)
 	}
 	return nil
 }
@@ -145,7 +145,7 @@ func (t *Itsaplan) viewer(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if !d.Authenticated || d.User.ID == "" {
-		return "", unavailable("It's a Plan at %s did not accept the API key (check the connection's token: rota connect add <name> --replace)", t.site)
+		return "", Unavailable("It's a Plan at %s did not accept the API key (check the connection's token: rota connect add <name> --replace)", t.site)
 	}
 	t.me = d.User.ID
 	return t.me, nil
@@ -235,7 +235,7 @@ func (t *Itsaplan) projectMeta(ctx context.Context) (*itsaplanMeta, error) {
 	var m itsaplanMeta
 	if err := t.rest.Do(ctx, http.MethodGet, t.projectPath(""), nil, &m); err != nil {
 		if IsKind(err, KindNotFound) {
-			return nil, unavailable("It's a Plan project %s is not visible to this API key (check issues.itsaplan.project, or the key's access: rota connect test)", t.project)
+			return nil, Unavailable("It's a Plan project %s is not visible to this API key (check issues.itsaplan.project, or the key's access: rota connect test)", t.project)
 		}
 		return nil, err
 	}
