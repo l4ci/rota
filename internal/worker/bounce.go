@@ -66,6 +66,49 @@ func (r BounceRecord) Undo() error {
 	return r.undo()
 }
 
+// BounceResult is what Bounce did. N is the count after it, rolled back when
+// the notify failed; Counted and Capped are the record's. NotifyErr is the
+// notify's failure and UndoErr the failure to take the record back after it.
+type BounceResult struct {
+	N               int
+	Counted, Capped bool
+	NotifyErr       error
+	UndoErr         error
+}
+
+// Err joins the notify failure with the rollback failure; nil when both are.
+func (r BounceResult) Err() error { return errors.Join(r.NotifyErr, r.UndoErr) }
+
+// Bounce is the one record-notify-undo sequence: it records a bounce at head,
+// runs notify unless the cap refused the record, and takes the record back when
+// notify fails. notify runs for a head the store deduped too, so a retry after
+// a failed undo still reaches whoever must learn of the bounce; it must be
+// idempotent per head. The caller keeps its cap policy: a Capped result ran no
+// notify and counted nothing.
+func Bounce(store BounceStore, m *RoundMemo, issue, slot, head string, limit int, notify func(BounceRecord) error) (BounceResult, error) {
+	rec, err := store.Record(m, issue, slot, head, limit)
+	if err != nil {
+		return BounceResult{}, err
+	}
+	res := BounceResult{N: rec.N, Counted: rec.Counted, Capped: rec.Capped}
+	if rec.Capped {
+		return res, nil
+	}
+	if res.NotifyErr = notify(rec); res.NotifyErr != nil {
+		// Only a bounce this call counted is taken back; a failed undo leaves
+		// the count standing, and the retry's notify still goes out.
+		if res.UndoErr = rec.Undo(); res.UndoErr == nil && rec.Counted {
+			// Read back, not decremented: another writer may have counted meanwhile.
+			if n, _, err := store.Count(issue); err == nil {
+				res.N = n
+			} else {
+				res.N--
+			}
+		}
+	}
+	return res, nil
+}
+
 // ErrNoPushTrust is BounceStore's refusal when the issue tracker cannot say who
 // has write access (a forge without PushTrust, GitLab today).
 var ErrNoPushTrust = errors.New("round.support keeps bounces on the issue, and this issue tracker cannot say who has write access to trust them")
