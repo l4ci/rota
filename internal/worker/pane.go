@@ -510,8 +510,8 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		}
 		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[s:e]), 120)
 	}
-	nativeLive, nativeKnown := NativeLiveness(native)
-	if nativeKnown && nativeLive.State == LivenessUnverifiable {
+	nativeLive := JudgeLiveness(LivenessEvidence{Native: native})
+	if nativeLive.State == LivenessUnverifiable {
 		return StateUnverifiable, nativeLive.Reason
 	}
 	if rules.loggedOut != nil {
@@ -540,7 +540,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if native == "blocked" && !waiting {
 		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
-	if nativeKnown && nativeLive.State == LivenessDead {
+	if nativeLive.State == LivenessDead {
 		return StateDead, "herdr: no agent in the slot's tab — the session exited"
 	}
 	// Static pane from here down.

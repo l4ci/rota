@@ -680,7 +680,7 @@ func withReadFailure(native string, err error) string {
 	if errors.Is(err, host.ErrPaneGone) {
 		return "gone"
 	}
-	if _, ok := NativeLiveness(native); ok || native == "working" || native == "blocked" {
+	if JudgeLiveness(LivenessEvidence{Native: native}).State != LivenessAlive || native == "working" || native == "blocked" {
 		return native
 	}
 	return host.UnverifiablePrefix + host.ReasonPaneUnreadable
