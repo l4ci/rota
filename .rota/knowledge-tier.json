@@ -1230,6 +1230,16 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Bounce cap: AtCap parks, not only Capped": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-31"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Train refusals: stale review aborts, body gaps skip": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-31"
     }
   }
 }
