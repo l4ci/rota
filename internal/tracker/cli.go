@@ -215,7 +215,7 @@ func (c *CLI) resolveIssues(ctx context.Context, want, configured string) (strin
 		p = ProviderFromURL(c.originURL(ctx))
 	}
 	if p != "github" && p != "gitlab" {
-		return "", unavailable("cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)")
+		return "", Unavailable("cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)")
 	}
 	return p, nil
 }
@@ -284,7 +284,7 @@ func CLIName(provider string) string {
 // KindUnavailable.
 func (c *CLI) CheckAuth(ctx context.Context) error {
 	if res, err := c.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
-		e := unavailable("%s not installed or not authenticated", CLIName(c.Provider))
+		e := Unavailable("%s not installed or not authenticated", CLIName(c.Provider))
 		e.CLIMissing = IsCLIMissing(err)
 		return e
 	}
@@ -359,7 +359,7 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		case ctx.Err() != nil:
 			return Result{}, internal("%s: %v", cli, ctx.Err())
 		case actx.Err() != nil:
-			return Result{}, unavailable("%s timed out after %s", cli, c.timeout())
+			return Result{}, Unavailable("%s timed out after %s", cli, c.timeout())
 		case errors.Is(err, exec.ErrNotFound):
 			return Result{}, cliMissing(cli)
 		}
@@ -389,7 +389,7 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 	}
 	if r.ExitCode != 0 {
 		if reAuth.Match(r.Stderr) {
-			return Result{}, unavailable("%s is not authenticated; run '%s auth login'", cli, cli)
+			return Result{}, Unavailable("%s is not authenticated; run '%s auth login'", cli, cli)
 		}
 		return r, nil
 	}

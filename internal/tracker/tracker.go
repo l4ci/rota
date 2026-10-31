@@ -23,6 +23,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -76,12 +77,13 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
-func unavailable(format string, a ...any) *Error {
+// Unavailable is a KindUnavailable error (exit code 3) with a formatted message.
+func Unavailable(format string, a ...any) *Error {
 	return &Error{Kind: KindUnavailable, Code: 3, Message: fmt.Sprintf(format, a...)}
 }
 
 func cliMissing(cli string) *Error {
-	e := unavailable("%s is not installed", cli)
+	e := Unavailable("%s is not installed", cli)
 	e.CLIMissing = true
 	return e
 }
@@ -603,7 +605,7 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 			return nil, err
 		}
 		if r.Provider == config.ForgeLocal {
-			return nil, unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
+			return nil, Unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
 		}
 		c.Provider = r.Provider
 		if r.How == HowAssumed {
@@ -612,7 +614,7 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		return adapterFor(c, s), nil
 	case config.SourceGitHub, config.SourceGitLab:
 	default:
-		return nil, unavailable("unknown issues.source %q", source)
+		return nil, Unavailable("unknown issues.source %q", source)
 	}
 	c := newCLI(s, dir, opts...)
 	p, err := c.resolveIssues(ctx, provider, s.Provider)
@@ -914,7 +916,7 @@ func (b *base) removeLabels(ctx context.Context, a Adapter, key IssueKey, labels
 // numberFromURL reads the issue number off the last line of a create call.
 func numberFromURL(out string) (int, error) {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	last := strings.TrimRightFunc(lines[len(lines)-1], isPySpace)
+	last := strings.TrimRightFunc(lines[len(lines)-1], pystr.IsSpace)
 	i := len(last)
 	for i > 0 && last[i-1] >= '0' && last[i-1] <= '9' {
 		i--

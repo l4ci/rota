@@ -75,10 +75,6 @@ func execOf(env Env) tracker.Exec {
 	return c.Exec
 }
 
-func unavailable(format string, a ...any) *tracker.Error {
-	return &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: fmt.Sprintf(format, a...)}
-}
-
 // adapter is the forge adapter for provider, whose CLI runs in dir.
 func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 	if e.Forge != nil {
@@ -176,7 +172,7 @@ func shortSHA(dir, commit string) (string, error) {
 	}
 	res, err := git.Repo{Dir: dir}.Run(context.Background(), "rev-parse", "--short", commit)
 	if errors.Is(err, git.ErrNoGit) {
-		return "", unavailable("git is not installed")
+		return "", tracker.Unavailable("git is not installed")
 	}
 	if err != nil || res.ExitCode != 0 {
 		return "", notFound

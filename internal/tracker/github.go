@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -237,7 +238,7 @@ func (g *GitHub) EnsureLabels(ctx context.Context, names []string, autoCreate bo
 		}
 		args := []string{"label", "create", n, "--force"}
 		if lb, ok := labelMetadata(n, g.labelEntries); ok {
-			args = append(args, "--description", lb.Description, "--color", labelColor(lb.Color))
+			args = append(args, "--description", lb.Description, "--color", labels.NormalizeColor(lb.Color))
 		}
 		if _, err := g.run(ctx, args, ""); err != nil {
 			return err
@@ -496,15 +497,6 @@ func (r restIssue) labelNames() []string {
 		out = append(out, l.Name)
 	}
 	return out
-}
-
-func contains(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
 }
 
 // verify errors when the issue read back lacks a requested change.
