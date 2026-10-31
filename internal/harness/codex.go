@@ -280,7 +280,7 @@ func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (stri
 
 // RelayKey loads the key the session's task dispatch wrote.
 func (codex) RelayKey(commonDir func() (string, error), slot string) ([]byte, error) {
-	return relayPromptKey(commonDir, CodexSlotDir, slot, "codex", "re-dispatch the task: a fresh session gets a fresh key and hook")
+	return relayPromptKey(commonDir, CodexSlotDir, slot, "a codex", "re-dispatch the task: a fresh session gets a fresh key and hook")
 }
 
 // CodexSlotsDir is where the slots' state directories live, beside the round

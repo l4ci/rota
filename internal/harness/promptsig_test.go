@@ -134,16 +134,21 @@ func TestTomlString(t *testing.T) {
 	}
 }
 
-// The key lifecycle both signing kinds share: Prepare writes the key into the
-// slot's state dir, RelayKey loads it back, and a missing one is a refusal
-// that says how to renew it.
+// The key lifecycle both signing kinds share, crossed through each adapter's
+// real methods: Prepare writes the key into the slot's state dir, RelayKey
+// loads it back from the kind's own slot dir, and a missing one is a refusal
+// carrying that kind's article and hint.
 func TestPromptKeyLifecycleSharedByKinds(t *testing.T) {
+	exe := func() (string, error) { return "/opt/rota", nil }
 	for _, tc := range []struct {
 		kind    string
+		who     string
+		hint    string
 		slotDir func(cd, slot string) string
+		h       Harness
 	}{
-		{"codex", CodexSlotDir},
-		{"opencode", OpencodeSlotDir},
+		{"codex", "is a codex worker", "key and hook", CodexSlotDir, codex{}},
+		{"opencode", "is an opencode worker", "key and guard", OpencodeSlotDir, opencode{}},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			cd := t.TempDir()
@@ -151,21 +156,27 @@ func TestPromptKeyLifecycleSharedByKinds(t *testing.T) {
 			if err := os.MkdirAll(dir, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			path, key, err := writePromptKey(dir)
-			if err != nil || len(key) != 32 || path != filepath.Join(dir, PromptKeyFile) {
-				t.Fatalf("writePromptKey: %q %d %v", path, len(key), err)
+			_, key, err := tc.h.Prepare("codex --dangerously-bypass-hook-trust", exe, Setup{StateDir: dir, Worktree: "/wt"})
+			if err != nil || len(key) != 32 {
+				t.Fatalf("Prepare: %d %v", len(key), err)
 			}
 			cdf := func() (string, error) { return cd, nil }
-			got, err := relayPromptKey(cdf, tc.slotDir, "w1", tc.kind, "re-dispatch")
+			got, err := tc.h.RelayKey(cdf, "w1")
 			if err != nil || string(got) != string(key) {
 				t.Fatalf("relay key: %v %v", got, err)
 			}
-			_, err = relayPromptKey(cdf, tc.slotDir, "gone", tc.kind, "re-dispatch")
-			var r *Refusal
-			if !errors.As(err, &r) || r.Class != Unavailable || r.Hint != "re-dispatch" || !strings.Contains(r.Error(), "is a "+tc.kind+" worker") {
-				t.Errorf("a missing key must be an unavailable refusal with the hint: %v", err)
+			if fi, err := os.Stat(filepath.Join(dir, PromptKeyFile)); err != nil || fi.Mode().Perm() != 0o600 {
+				t.Errorf("key file: %v %v", fi, err)
 			}
-			if _, err := relayPromptKey(func() (string, error) { return "", errors.New("no git") }, tc.slotDir, "w1", tc.kind, "h"); err == nil {
+			if signed := tc.h.Sign(key, sigBody); !strings.HasPrefix(signed, sigBody+"\n--- ROTA-SIG ") {
+				t.Errorf("sign: %q", signed)
+			}
+			_, err = tc.h.RelayKey(cdf, "gone")
+			var r *Refusal
+			if !errors.As(err, &r) || r.Class != Unavailable || !strings.Contains(r.Hint, tc.hint) || !strings.Contains(r.Error(), tc.who) {
+				t.Errorf("a missing key must be an unavailable refusal naming %q with hint %q: %v", tc.who, tc.hint, err)
+			}
+			if _, err := tc.h.RelayKey(func() (string, error) { return "", errors.New("no git") }, "w1"); err == nil {
 				t.Error("an unresolvable git dir must error")
 			}
 			_, _, err = writePromptKey(filepath.Join(cd, "absent", "dir"))
