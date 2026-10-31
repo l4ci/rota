@@ -6,7 +6,6 @@
 package postgate
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -127,23 +126,22 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	if err != nil {
 		return Outcome{}, err
 	}
-	rec, err := store.Record(r.Round, issue, r.TargetSlot, r.SHA, set.MaxBounces)
+	// A support machine's worker learns of the bounce on its PR (#1598). The
+	// post is idempotent per head, so it also goes out for a head already
+	// counted: a failed post whose undo failed too still lands on the retry.
+	res, err := worker.Bounce(store, r.Round, issue, r.TargetSlot, r.SHA, set.MaxBounces, func(rec worker.BounceRecord) error {
+		if worker.AtCap(rec.N, set.MaxBounces) {
+			return nil // this bounce reaches the cap: it is parked below, not sent back
+		}
+		_, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
+		return err
+	})
 	if err != nil {
 		return Outcome{}, err
 	}
-	n := rec.N
+	n := res.N
 	if !worker.AtCap(n, set.MaxBounces) {
-		// A support machine's worker learns of the bounce on its PR (#1598).
-		// The post is idempotent per head, so it also goes out for a head
-		// already counted: a failed post whose undo failed too still lands on
-		// the retry.
-		if _, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err); err != nil {
-			if rec.Counted {
-				n--
-			}
-			return Outcome{Bounces: n}, errors.Join(err, rec.Undo())
-		}
-		return Outcome{Bounces: n}, nil
+		return Outcome{Bounces: n}, res.Err()
 	}
 	why, _, _ := strings.Cut(r.Err, "\n")
 	what := r.PR
