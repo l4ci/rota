@@ -178,12 +178,10 @@ func (a Assigned) Ready() bool {
 }
 
 // briefPath is the standing worker contract the pointer names: round.brief,
-// else skills/references/worker-contract.md in the project (a source checkout), else
-// rota-orchestrate/references/worker-contract.md under the first installed
-// skills root (rota skills install): the project's before the user's, Claude's
-// before Codex's, so a Codex-only install finds it too. With round.brief unset
-// and none of those present, the copy in the skills cache under cache (the
-// tree this binary extracts, made when missing); "" skips it.
+// else the project's source-checkout copy, else the first installed skills
+// root's (the skills package owns both layouts). With round.brief unset and
+// none of those present, the copy in the skills cache under cache (the tree
+// this binary extracts, made when missing); "" skips it.
 func briefPath(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, bool) {
 	p, _, ok := resolveBrief(root, set, getenv, cache)
 	return p, ok
@@ -195,31 +193,24 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 // the stale value and the path used. A missing round.brief elsewhere stays a
 // miss.
 func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, string, bool) {
-	var cands []string
 	configured := ""
 	if set.Brief != "" {
 		configured = set.Brief
 		if !filepath.IsAbs(configured) {
 			configured = filepath.Join(root, configured)
 		}
-		cands = append(cands, configured)
+		if fi, err := os.Stat(configured); err == nil && !fi.IsDir() {
+			return configured, "", true
+		}
 	} else {
-		cands = append(cands, filepath.Join(root, "skills", "references", "worker-contract.md"))
-		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
-		for _, r := range skills.InstalledRoots(getenv, root) {
-			if _, err := os.Stat(filepath.Join(r, ".rota-manifest.json")); err == nil {
-				cands = append(cands, filepath.Join(r, installed))
-				break
+		for _, c := range []string{skills.CheckoutBrief(root), skills.InstalledBrief(getenv, root)} {
+			if c != "" {
+				return c, "", true
 			}
 		}
 	}
-	for _, c := range cands {
-		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-			return c, "", true
-		}
-	}
 	if set.Brief == "" || inCache(configured, cache) {
-		if c, ok := cachedBrief(cache); ok {
+		if c := skills.CachedBrief(version.Get().Version, cache); c != "" {
 			if set.Brief == "" {
 				return c, "", true
 			}
@@ -227,27 +218,6 @@ func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string
 		}
 	}
 	return "", "", false
-}
-
-// cachedBrief is the contract in the skills cache this binary extracts
-// (made when missing); "" cache skips it.
-func cachedBrief(cache string) (string, bool) {
-	if cache == "" {
-		return "", false
-	}
-	set, err := skills.Embedded()
-	if err != nil {
-		return "", false
-	}
-	tree, err := skills.Extract(set, version.Get().Version, cache)
-	if err != nil {
-		return "", false
-	}
-	c := filepath.Join(tree, "references", "worker-contract.md")
-	if fi, err := os.Stat(c); err != nil || fi.IsDir() {
-		return "", false
-	}
-	return c, true
 }
 
 // inCache reports whether p lies under the skills cache root.
@@ -262,7 +232,7 @@ func inCache(p, cache string) bool {
 // briefMissingMsg is the refusal text when no contract was found: it names a
 // configured round.brief and the skills cache root to point it into.
 func briefMissingMsg(set roundcfg.Settings, cache string) string {
-	msg := "the worker contract (skills/references/worker-contract.md) was not found"
+	msg := "the worker contract was not found"
 	if set.Brief != "" {
 		msg += fmt.Sprintf("; round.brief is %q", set.Brief)
 	}
