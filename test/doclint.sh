@@ -57,6 +57,15 @@ RC=0; OUT="$(python3 "$SSR/scripts/site-sync.py" "$TMP/site" 2>&1)" || RC=$?
 [ "$RC" != 0 ] && grep -qF "no-such-page" <<<"$OUT" || fail "site-sync accepted an llms.txt link to no docs page (rc $RC): $OUT"
 pass "site-sync publishes llms.txt raw (and not install.md) and fails on a link to no docs page"
 
+# ── site-sync reports a bad lane with skills-docs' message, not a traceback (#2422) ──
+SSL="$TMP/sitelane"; mkdir -p "$SSL" "$TMP/sitelane-out"
+cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSL/"
+sed -i 's/^lane: .*/lane: nowhere/' "$SSL/docs/skills/rota-work.md"
+RC=0; OUT="$(python3 "$SSL/scripts/site-sync.py" "$TMP/sitelane-out" 2>&1)" || RC=$?
+[ "$RC" != 0 ] && grep -qF "docs/skills/rota-work.md: lane 'nowhere' is not one of" <<<"$OUT" && ! grep -qF "Traceback" <<<"$OUT" \
+  || fail "site-sync did not exit with the lane message on a bad lane (rc $RC): $OUT"
+pass "site-sync exits with skills-docs' lane message on a bad lane"
+
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even
 # with "ask the user" or "never" nearby and in a shared reference file; a line that

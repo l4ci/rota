@@ -23,16 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fmlite  # noqa: E402
 
-LANES = [
-    ('capture', 'Capture'),
-    ('plan', 'Plan'),
-    ('execute', 'Execute'),
-    ('ship', 'Ship'),
-    ('persist', 'Persist'),
-    ('rounds', 'Rounds'),
-    ('maintenance', 'Maintenance'),
-]
-LANE_NAME = dict(LANES)
+from lanes import LANES, lane_error  # noqa: E402
 REQUIRED = ['skill', 'lane', 'order', 'situation', 'summary', 'not_when',
             'before', 'after', 'manual_only', 'flags', 'example']
 EDIT_NOTE = '<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->'
@@ -80,8 +71,8 @@ def load(root):
             continue
         if fm['skill'] != p:
             errs.append('%s: skill is %r, expected %r' % (rel, fm['skill'], p))
-        if fm['lane'] not in LANE_NAME:
-            errs.append('%s: lane %r is not one of %s' % (rel, fm['lane'], ', '.join(LANE_NAME)))
+        if lane_error(rel, fm['lane']):
+            errs.append(lane_error(rel, fm['lane']))
         if not isinstance(fm['order'], int) or isinstance(fm['order'], bool):
             errs.append('%s: order must be an integer' % rel)
         for k in ('situation', 'summary'):
