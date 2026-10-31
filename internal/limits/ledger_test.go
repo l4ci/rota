@@ -13,10 +13,7 @@ func TestLimitLedgerLimited(t *testing.T) {
 	r := slotRig(t)
 	r.build()
 	r.step(true)
-	es, err := ledger.Load(r.root)
-	if err != nil {
-		t.Fatal(err)
-	}
+	es := r.ledgered
 	if len(es) != 1 || es[0].Kind != ledger.KindLimited {
 		t.Fatalf("entries %+v", es)
 	}
@@ -31,7 +28,7 @@ func TestLimitLedgerSleepIsOnlyLimited(t *testing.T) {
 	r.set.Mode = ModeSleep
 	r.build()
 	r.step(true)
-	es, _ := ledger.Load(r.root)
+	es := r.ledgered
 	if len(es) != 1 || es[0].Kind != ledger.KindLimited {
 		t.Fatalf("entries %+v", es)
 	}
