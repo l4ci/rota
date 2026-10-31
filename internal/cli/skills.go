@@ -532,15 +532,5 @@ func skillsNeedUpdate(c *Ctx) bool {
 	if err != nil {
 		return true
 	}
-	installed := 0
-	for _, r := range rep.Roots {
-		if !r.Installed {
-			continue
-		}
-		installed++
-		if r.Mode != skills.ModeStub || !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0 {
-			return true
-		}
-	}
-	return installed == 0
+	return rep.NeedsUpdate()
 }
