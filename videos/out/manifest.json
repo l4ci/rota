@@ -2,11 +2,11 @@
  "episodes": {
   "01-why-rota": {
    "rota_version": "0.28.0",
-   "source_hash": "974cb10ce678ae61778ad7920a72842fbe7f4d110290b3e4d5e9b883aa10b1b0",
+   "source_hash": "f62191d7113af2a9940c7c31bba405a2128709d54b5183678a023438a0b724fa",
    "outputs": {
-    "01-why-rota.mp4": "82b64905e71e6494dc32c2f84d3ca773b4b5a288a6bc115f204df065f7debbcb",
-    "01-why-rota.vertical.mp4": "bd535be6c512cc99586306a47975166920c955f76602878e9eabb21854877288",
-    "01-why-rota.vtt": "6f96c92e2cfd57f51d6b73a53406e4878d7582afc386c1f08cab46cea4474ba4"
+    "01-why-rota.mp4": "38340aa80eb69bcd4f45b815dd765186e3551713c9b5b918a040b0b53520c4a5",
+    "01-why-rota.vertical.mp4": "0c618818319ae745bba3f3597b46431005e25e8cea35836061321f3efee10e99",
+    "01-why-rota.vtt": "b5fd1b03890a250ac5469706ffef79d192c25f0022f63e25ae68a88b49f6ef65"
    }
   }
  }

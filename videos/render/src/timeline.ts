@@ -10,7 +10,7 @@ const TYPE_CPS = 28;
 const BEAT_FRAMES = 12; // 0.4 s between typed command and output
 const LINE_FRAMES = 4; // 120 ms per output line
 const ALL_AT_ONCE_OVER = 12; // more output lines than this print at once
-export const OUTRO_VO = 'Find it at github dot com slash L four C I slash Ro-Ta.';
+export const OUTRO_VO = 'Find it on GitHub.';
 
 export type Capture = {shot: string; cmd: string; stdout: string; exit: number};
 export type Shot = {
@@ -19,6 +19,7 @@ export type Shot = {
   vo: string;
   caption: string;
   scene: string | null;
+  anim?: {name: string; params: Record<string, string>} | null;
   lower_third: string | null;
   cmds: string[];
   crops?: Record<string, {mode: 'first' | 'last'; n: number}>;

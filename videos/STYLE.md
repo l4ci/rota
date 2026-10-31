@@ -78,6 +78,19 @@ For the why and the how: diagrams, flows and one-idea title cards.
 - **Diagrams.** Boxes are `rule`-bordered cards with 3 px radius, labels in Atkinson Hyperlegible Next, verbs and IDs in Martian Mono. Arrows are 2 px `muted` lines with a filled head; the active path turns `duty`. Use the state colours for state only.
 - **Layout.** Left-aligned, on an 8 px grid, one focal element per frame. 16:9 puts text left and visual right; 9:16 stacks text over visual.
 
+### Animated scenes
+
+A motion shot picks a scene with `anim: <scene> | key=value | ...` (grammar in [`README.md`](README.md#shots)). Scenes follow the rules above, build in step with the voiceover (the last item lands about 78% through it) and add detail to the voice rather than repeating it. Lists inside a value are split by `;`; `label~detail` adds a muted detail line.
+
+| Scene | Idea | Parameters |
+|---|---|---|
+| `split` | Two panels, before/after or doing/stuck; the left builds first | `left`, `right` (titles), `left-items`, `right-items`, `right-tone` (`ask` or `danger`, default `ask`) |
+| `cards` | Keyword cards that build up with the voice | `items`, `mono=true` (Martian Mono labels), `frame=<label>` (sets the cards in a labelled outline), `last-tone` (tone of the last card, for example `danger`) |
+| `flow` | Steps joined by arrows; the active step turns `duty` as the voice reaches it | `steps`, `mono=true`, `bounce=<step>` (a gate flow: the last step turns `merged` and a second token is sent back at that step in `danger`) |
+| `lanes` | Parallel worktrees each fill, turn `merged` and feed one target | `lanes` (names), `end` (target label, default `main`) |
+
+In 9:16 the scenes stack in a column. Add a scene to this table when you add its component.
+
 ## Captions and lower thirds
 
 - **Captions** are on in every episode, burned in: voiceover text, split at phrases, at most two lines, 42 characters per line, `ink` on a `paper`-coloured band at 85% opacity. They sit in the lower third of the 16:9 frame and above the bottom safe area in 9:16. A caption never covers the last three terminal lines. Verbs and IDs inside a caption render in Martian Mono.
