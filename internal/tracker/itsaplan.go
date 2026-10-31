@@ -55,20 +55,20 @@ const itsaplanFieldName = "rota"
 // newItsaplanTracker is NewIssueTracker for issues.source itsaplan.
 func newItsaplanTracker(ctx context.Context, c *CLI, s Settings) (*Itsaplan, error) {
 	if s.Connection == "" {
-		return nil, unavailable("issues.source is itsaplan but issues.connection is not set (run: rota connect add <name> --kind itsaplan --site <url>, then rota config set issues.connection <name>)")
+		return nil, Unavailable("issues.source is itsaplan but issues.connection is not set (run: rota connect add <name> --kind itsaplan --site <url>, then rota config set issues.connection <name>)")
 	}
 	if s.ItsaplanProject == "" {
-		return nil, unavailable("issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)")
+		return nil, Unavailable("issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)")
 	}
 	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
-		return nil, unavailable("%v", err)
+		return nil, Unavailable("%v", err)
 	}
 	if conn.Kind != connections.KindItsaplan {
-		return nil, unavailable("connection %q is kind %s, not itsaplan", conn.Name, conn.Kind)
+		return nil, Unavailable("connection %q is kind %s, not itsaplan", conn.Name, conn.Kind)
 	}
 	if secret == "" {
-		return nil, unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
+		return nil, Unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
 	}
 	t := NewItsaplan(conn, secret, s.ItsaplanProject)
 	if sleep := c.Sleep; sleep != nil {
@@ -134,7 +134,7 @@ func (t *Itsaplan) CheckAuth(ctx context.Context) error {
 		return err
 	}
 	if m.field() == nil && !m.permits("custom_fields", "create") {
-		return unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q, or give the key's user the custom fields permission)", t.project, itsaplanFieldName, itsaplanFieldName)
+		return Unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q, or give the key's user the custom fields permission)", t.project, itsaplanFieldName, itsaplanFieldName)
 	}
 	return nil
 }
@@ -158,7 +158,7 @@ func (t *Itsaplan) viewer(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if !d.Authenticated || d.User.ID == "" {
-		return "", unavailable("It's a Plan at %s did not accept the API key (check the connection's token: rota connect add <name> --replace)", t.site)
+		return "", Unavailable("It's a Plan at %s did not accept the API key (check the connection's token: rota connect add <name> --replace)", t.site)
 	}
 	t.me = d.User.ID
 	return t.me, nil
@@ -248,7 +248,7 @@ func (t *Itsaplan) projectMeta(ctx context.Context) (*itsaplanMeta, error) {
 	var m itsaplanMeta
 	if err := t.rest.Do(ctx, http.MethodGet, t.projectPath(""), nil, &m); err != nil {
 		if IsKind(err, KindNotFound) {
-			return nil, unavailable("It's a Plan project %s is not visible to this API key (check issues.itsaplan.project, or the key's access: rota connect test)", t.project)
+			return nil, Unavailable("It's a Plan project %s is not visible to this API key (check issues.itsaplan.project, or the key's access: rota connect test)", t.project)
 		}
 		return nil, err
 	}

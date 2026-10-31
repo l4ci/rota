@@ -33,18 +33,16 @@ var (
 	_ LabelLister  = (*Itsaplan)(nil)
 )
 
-func labelColor(c string) string { return strings.ToLower(strings.TrimPrefix(c, "#")) }
-
 func orderedLabels(ls []Label) []Label {
 	for i := range ls {
-		ls[i].Color = labelColor(ls[i].Color)
+		ls[i].Color = labels.NormalizeColor(ls[i].Color)
 	}
 	sort.Slice(ls, func(i, j int) bool { return ls[i].Name < ls[j].Name })
 	return ls
 }
 
 func sameLabelMetadata(a, b Label) bool {
-	return a.Description == b.Description && labelColor(a.Color) == labelColor(b.Color)
+	return a.Description == b.Description && labels.NormalizeColor(a.Color) == labels.NormalizeColor(b.Color)
 }
 
 func (g *GitHub) ListLabels(ctx context.Context) ([]Label, error) {
@@ -65,11 +63,11 @@ func (g *GitHub) UpsertLabel(ctx context.Context, want Label) error {
 			if sameLabelMetadata(lb, want) {
 				return nil
 			}
-			_, err := g.run(ctx, []string{"label", "edit", lb.Name, "--description", want.Description, "--color", labelColor(want.Color)}, "")
+			_, err := g.run(ctx, []string{"label", "edit", lb.Name, "--description", want.Description, "--color", labels.NormalizeColor(want.Color)}, "")
 			return err
 		}
 	}
-	_, err = g.run(ctx, []string{"label", "create", want.Name, "--description", want.Description, "--color", labelColor(want.Color)}, "")
+	_, err = g.run(ctx, []string{"label", "create", want.Name, "--description", want.Description, "--color", labels.NormalizeColor(want.Color)}, "")
 	return err
 }
 
@@ -101,7 +99,7 @@ func (g *GitLab) UpsertLabel(ctx context.Context, want Label) error {
 	if method == "POST" {
 		args = append(args, "-f", "name="+want.Name)
 	}
-	args = append(args, "-f", "description="+want.Description, "-f", "color=#"+labelColor(want.Color))
+	args = append(args, "-f", "description="+want.Description, "-f", "color=#"+labels.NormalizeColor(want.Color))
 	_, err = g.run(ctx, args, "")
 	return err
 }
@@ -130,7 +128,7 @@ func (l *Linear) UpsertLabel(ctx context.Context, want Label) error {
 	if exists && sameLabelMetadata(Label{Description: lb.Description, Color: lb.Color}, want) {
 		return nil
 	}
-	in := map[string]any{"description": want.Description, "color": "#" + labelColor(want.Color)}
+	in := map[string]any{"description": want.Description, "color": "#" + labels.NormalizeColor(want.Color)}
 	if exists {
 		var d struct {
 			IssueLabelUpdate struct {
@@ -159,7 +157,7 @@ func (l *Linear) UpsertLabel(ctx context.Context, want Label) error {
 		}
 		lb = d.IssueLabelCreate.IssueLabel
 	}
-	lb.Description, lb.Color = want.Description, "#"+labelColor(want.Color)
+	lb.Description, lb.Color = want.Description, "#"+labels.NormalizeColor(want.Color)
 	l.mu.Lock()
 	l.labels[strings.ToLower(want.Name)] = lb
 	l.mu.Unlock()

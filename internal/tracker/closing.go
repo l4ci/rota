@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/pystr"
@@ -47,11 +46,6 @@ func closedNumbers(re *regexp.Regexp, body string) []int {
 func startsWithWord(s string) bool {
 	r, n := utf8.DecodeRuneInString(s)
 	return n > 0 && pystr.IsWord(r)
-}
-
-// isPySpace is Python's str.isspace for one rune.
-func isPySpace(r rune) bool {
-	return (r >= '\t' && r <= '\r') || (r >= 0x1c && r <= 0x1f) || r == 0x85 || unicode.In(r, unicode.Z)
 }
 
 // ClosesByKey is the closing convention of a key-based tracker (Jira, Linear):

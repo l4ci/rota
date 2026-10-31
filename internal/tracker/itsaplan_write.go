@@ -64,7 +64,7 @@ func (t *Itsaplan) fieldID(ctx context.Context) (int, error) {
 		return f.ID, nil
 	}
 	if !m.permits("custom_fields", "create") {
-		return 0, unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q)", t.project, itsaplanFieldName, itsaplanFieldName)
+		return 0, Unavailable("It's a Plan project %s has no custom field %q and this API key may not create one (ask a project admin to add a text field named %q)", t.project, itsaplanFieldName, itsaplanFieldName)
 	}
 	var nf itsaplanField
 	if err := t.rest.Do(ctx, http.MethodPost, t.projectPath("/custom-fields"), map[string]any{"name": itsaplanFieldName, "fieldType": "text"}, &nf); err != nil {

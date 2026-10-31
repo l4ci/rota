@@ -100,23 +100,23 @@ func (c *CLI) machineConn(ctx context.Context, name string) (connections.Connect
 // newJiraTracker is NewIssueTracker for issues.source jira.
 func newJiraTracker(ctx context.Context, c *CLI, s Settings) (*Jira, error) {
 	if s.Connection == "" {
-		return nil, unavailable("issues.source is jira but issues.connection is not set (run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>)")
+		return nil, Unavailable("issues.source is jira but issues.connection is not set (run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>)")
 	}
 	if s.JiraProject == "" {
-		return nil, unavailable("issues.source is jira but issues.jira.project is not set (run: rota config set issues.jira.project <KEY>)")
+		return nil, Unavailable("issues.source is jira but issues.jira.project is not set (run: rota config set issues.jira.project <KEY>)")
 	}
 	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
-		return nil, unavailable("%v", err)
+		return nil, Unavailable("%v", err)
 	}
 	if conn.Kind != connections.KindJira {
-		return nil, unavailable("connection %q is kind %s, not jira", conn.Name, conn.Kind)
+		return nil, Unavailable("connection %q is kind %s, not jira", conn.Name, conn.Kind)
 	}
 	if err := conn.Validate(); err != nil {
-		return nil, unavailable("%v (run: rota connect add %s --replace ...)", err, conn.Name)
+		return nil, Unavailable("%v (run: rota connect add %s --replace ...)", err, conn.Name)
 	}
 	if secret == "" {
-		return nil, unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
+		return nil, Unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
 	}
 	j := NewJira(conn, secret, s.JiraProject, s.NotPlannedLabel)
 	if sleep := c.Sleep; sleep != nil {

@@ -68,20 +68,20 @@ const linearPage = 50
 // newLinearTracker is NewIssueTracker for issues.source linear.
 func newLinearTracker(ctx context.Context, c *CLI, s Settings) (*Linear, error) {
 	if s.Connection == "" {
-		return nil, unavailable("issues.source is linear but issues.connection is not set (run: rota connect add <name> --kind linear, then rota config set issues.connection <name>)")
+		return nil, Unavailable("issues.source is linear but issues.connection is not set (run: rota connect add <name> --kind linear, then rota config set issues.connection <name>)")
 	}
 	if s.LinearTeam == "" {
-		return nil, unavailable("issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)")
+		return nil, Unavailable("issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)")
 	}
 	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
-		return nil, unavailable("%v", err)
+		return nil, Unavailable("%v", err)
 	}
 	if conn.Kind != connections.KindLinear {
-		return nil, unavailable("connection %q is kind %s, not linear", conn.Name, conn.Kind)
+		return nil, Unavailable("connection %q is kind %s, not linear", conn.Name, conn.Kind)
 	}
 	if secret == "" {
-		return nil, unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
+		return nil, Unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
 	}
 	l := NewLinear(conn, secret, s.LinearTeam)
 	l.labelEntries = s.Labels
@@ -164,9 +164,9 @@ func gqlFailure(op string, errs []gqlError) *Error {
 	case code == "RATELIMITED" || typ == "ratelimited":
 		return rateLimited("%s", msg)
 	case code == "AUTHENTICATION_ERROR" || typ == "authentication error":
-		return unavailable("%s (check the connection's API key: rota connect test)", msg)
+		return Unavailable("%s (check the connection's API key: rota connect test)", msg)
 	case code == "FORBIDDEN" || typ == "forbidden":
-		return unavailable("%s (check the API key's access to this team: rota connect test)", msg)
+		return Unavailable("%s (check the API key's access to this team: rota connect test)", msg)
 	case strings.Contains(strings.ToLower(e.Message), "not found"):
 		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
 	}
@@ -309,7 +309,7 @@ func (l *Linear) teamInfo(ctx context.Context) (string, error) {
 			return l.teamID, nil
 		}
 	}
-	return "", unavailable("Linear team %s is not visible to this API key (check issues.linear.team, or the key's access: rota connect test)", l.team)
+	return "", Unavailable("Linear team %s is not visible to this API key (check issues.linear.team, or the key's access: rota connect test)", l.team)
 }
 
 // stateOf is the team's first state of the first type in want that it has,
@@ -423,7 +423,7 @@ func (l *Linear) labelIDs(ctx context.Context, names []string, create bool) ([]s
 		}
 		in := map[string]any{"name": n, "teamId": l.teamID}
 		if lb, ok := labelMetadata(n, l.labelEntries); ok {
-			in["description"], in["color"] = lb.Description, "#"+labelColor(lb.Color)
+			in["description"], in["color"] = lb.Description, "#"+labels.NormalizeColor(lb.Color)
 		}
 		if err := l.mutate(ctx, "LabelCreate", `($input: IssueLabelCreateInput!) { issueLabelCreate(input: $input) { success issueLabel { id name } } }`,
 			map[string]any{"input": in}, &d); err != nil {
