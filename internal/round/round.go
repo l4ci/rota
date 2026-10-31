@@ -546,7 +546,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		} else if r.Registered && r.Tab != "" {
 			// A runtime restart can orphan Orca handles while their processes
 			// survive. Never offer the destructive dead-tab repair for absence.
-			if v := e.liveness(slotObj[r.Name], true, false); v.State == worker.LivenessUnverifiable {
+			if v := e.absence(slotObj[r.Name]); v.State == worker.LivenessUnverifiable {
 				r.HostState, r.Evidence = v.State, v.Reason
 				continue
 			}

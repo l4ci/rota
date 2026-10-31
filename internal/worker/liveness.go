@@ -21,6 +21,9 @@ type LivenessEvidence struct {
 	// recorded for an unverifiable one.
 	State, Reason string
 	Handle        string
+	// Native is the host's own status for the slot's pane, when it gave one:
+	// its `gone` is proof of exit, an unverifiable one carries its reason.
+	Native string
 	// Answered: the host listed its live agents. Listed: one is the slot's.
 	Answered, Listed bool
 }
@@ -30,8 +33,13 @@ type LivenessEvidence struct {
 type Liveness struct{ State, Reason string }
 
 // JudgeLiveness is the one rule for whether a slot's agent lives. Round status,
-// reclaim, the watch digest and poll all ask it, so none can disagree.
+// reclaim (Health), poll's pane classifier and the watch digest all ask it, so
+// none can disagree: status and reclaim pass the host snapshot, poll the host's
+// native pane status, the digest the recorded state.
 func JudgeLiveness(in LivenessEvidence) Liveness {
+	if v, ok := nativeLiveness(in.Native); ok {
+		return v
+	}
 	dead := IsDead(in.State)
 	switch {
 	case in.Answered && in.Listed:
@@ -50,10 +58,10 @@ func JudgeLiveness(in LivenessEvidence) Liveness {
 	return Liveness{State: LivenessAlive} // the host cannot be asked: read as alive
 }
 
-// NativeLiveness reads a host's native agent status as liveness evidence: the
+// nativeLiveness reads a host's native agent status as liveness evidence: the
 // host's own `gone` is proof of exit, an unverifiable status carries its
 // reason, and every other status says nothing (ok false).
-func NativeLiveness(native string) (v Liveness, ok bool) {
+func nativeLiveness(native string) (v Liveness, ok bool) {
 	if native == "gone" {
 		return Liveness{State: LivenessDead}, true
 	}

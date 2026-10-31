@@ -452,6 +452,15 @@ func (e Env) liveness(s *worker.Slot, answered, listed bool) worker.Liveness {
 	})
 }
 
+// absence is the verdict for a slot the snapshot does not list, judged on that
+// absence alone: a recorded state is no evidence about the list, so a host
+// whose handles are runtime-scoped never reads as dead from it.
+func (e Env) absence(s *worker.Slot) worker.Liveness {
+	return worker.JudgeLiveness(worker.LivenessEvidence{
+		Caps: e.caps(), Handle: s.Handle(), Answered: true,
+	})
+}
+
 // ReclaimOpts are the flags of `rota round reclaim`.
 type ReclaimOpts struct {
 	Slot      string

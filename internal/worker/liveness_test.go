@@ -65,3 +65,18 @@ func TestRealAdaptersDeclareLivenessCapabilities(t *testing.T) {
 		}
 	}
 }
+
+// Poll hands the host's native pane status to the same verdict function.
+func TestJudgeLivenessNative(t *testing.T) {
+	for _, c := range []struct{ native, state, reason string }{
+		{"gone", LivenessDead, ""},
+		{host.UnverifiablePrefix + "pane-unreadable", LivenessUnverifiable, "pane-unreadable"},
+		{"working", LivenessAlive, ""},
+		{"", LivenessAlive, ""},
+	} {
+		got := JudgeLiveness(LivenessEvidence{Native: c.native})
+		if got.State != c.state || got.Reason != c.reason {
+			t.Errorf("native %q: %+v, want %s/%s", c.native, got, c.state, c.reason)
+		}
+	}
+}
