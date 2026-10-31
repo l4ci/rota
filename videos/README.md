@@ -32,7 +32,7 @@ videos/
 
 ## Script format
 
-A script is data. The render pipeline reads the voiceover text and the exact commands straight from it, and #2536 adds a drift check that runs those commands against the binary, so a renamed flag fails CI rather than a published video. The check does not exist yet.
+A script is data. The render pipeline reads the voiceover text and the exact commands straight from it, and `python3 scripts/videos.py --check` runs those commands against the binary in CI, so a renamed flag fails the lint rather than a published video.
 
 ### Front matter
 
@@ -62,7 +62,7 @@ The body is an ordered shot list. Each shot starts with `### NN motion` or `### 
 | `vertical:` | all | yes | How the shot reframes for 9:16. |
 | `lower-third:` | all | no | `<mono text> \| <gloss>`. |
 | `crop:` | terminal | no | Which output lines to keep when the capture is longer than the 9:16 box (14 lines). |
-| `staged:` | terminal | no | Names the fixture the shot needs (a live round, a forge, an agent session). The shot is not run by the drift check (#2536); the fixture is built in #2536. |
+| `staged:` | terminal | no | Names the fixture the shot needs (a live round, a forge, an agent session). The shot is not run by the drift check; its output comes from `videos/staged/<fixture>.txt` when that file exists. |
 
 Voiceover text across an episode stays within its length: about 150 words per minute, less the 5.5 s of sting and outro.
 
@@ -70,9 +70,66 @@ Voiceover text across an episode stays within its length: about 150 words per mi
 
 Every terminal block that carries no `staged:` line runs with exit 0, line by line, in a scratch project: `git init` in a temp dir with `HOME` and `XDG_CONFIG_HOME` pointed at a temp dir. That is also how a script is checked when written. Output is captured separately from rendering; the `rota version` build stamp is normalised before comparing.
 
+## Rendering
+
+`videos/render.sh` builds an episode from its script in `videos/episodes/NN-slug.md` (format above). Everything shown or said is read from the script, so a change to rota or to a script means one re-render, not a re-recording.
+
+### Set up once
+
+Needs Node 20+, Python 3.10+, ffmpeg and (for a default `$ROTA_BIN`) Go. `videos/render.sh <episode> --setup` installs the rest:
+
+- `npm ci` in `videos/render/` (Remotion 4.0.539, pinned by `package-lock.json`; it fetches its own headless Chrome on the first render);
+- a Python venv at `videos/render/.venv` with `kokoro-onnx` (CPU, no torch);
+- the Kokoro int8 model and voices (about 120 MB) in `videos/render/models/`.
+
+All three are gitignored. Git LFS is needed to pull or commit the rendered `.mp4` files (`.gitattributes`).
+
+### Render one episode, or all
+
+```sh
+videos/render.sh 01-why-rota      # one episode
+videos/render.sh all              # every script in videos/episodes/
+```
+
+`ROTA_BIN=/path/to/rota` picks the binary the terminal shots run (default: built from this checkout). `RENDER_CONCURRENCY` sets Chrome tabs (default 2; machine memory is shared, keep it low).
+
+Per episode it writes to `videos/out/`: `NN-slug.mp4` (1920x1080), `NN-slug.vertical.mp4` (1080x1920), `NN-slug.vtt`, and an entry in `manifest.json` (rota version, hash of the script, hash of each output). It also rewrites `videos/snapshots/NN-slug.json`. Commit the `out/` files and the snapshot together.
+
+The stages, each cached:
+
+1. **Capture.** `scripts/videos.py` runs each terminal shot's `sh` lines, in order, in a throwaway git project with `HOME`, `XDG_CONFIG_HOME`, `TZ` and the git identity pinned and every `ROTA_*`/`GIT_*` variable dropped. The `rota version` commit and build time are masked as `(build)`; nothing else is.
+2. **Voice.** Kokoro speaks each shot's `say:` line, else its `vo:` line. Audio is cached in `videos/.cache/audio/` by text, voice and lexicon. `voice/lexicon.json` makes "rota" "Ro-Ta" with a hard T; check it with `videos/render/.venv/bin/python videos/render/voice/synth.py --phonemes rota`.
+3. **Compose.** Remotion renders the shared intro, shots, captions and outro. Shot length is the voiceover length (plus a tail) or the terminal animation, whichever is longer. Typing is a function of the frame number, so the same sources and rota version give the same bytes.
+
+`render.sh` fails when a file is over the per-episode size budget (the Size budget in [`STYLE.md`](STYLE.md); override with `VIDEO_BUDGET_KB_16x9` and `VIDEO_BUDGET_KB_9x16`).
+
+`crop:` (the "first/last N lines" forms) and `lower-third:` are applied; a `crop:` in other words crops nothing and the bottom-anchored terminal scrolls. Motion shots render the shot's caption text as a title card. A designed scene for a shot is a component in `videos/render/src/` that `Episode.tsx` picks by shot.
+
+### Is anything stale?
+
+```sh
+python3 scripts/videos.py --check
+```
+
+It re-captures every non-staged terminal shot against `$ROTA_BIN` and names each episode whose command failed, whose output differs from `videos/snapshots/`, or whose script hash differs from `videos/out/manifest.json`. An episode that has not been rendered yet is listed as "not rendered yet", not as stale, so CI stays green until the first render. It needs only Python and the binary, so `test/doclint.sh` runs it in CI. CI never renders: the maintainer re-renders locally, and `/rota-release` reminds them.
+
+### Add an episode
+
+1. Write `videos/episodes/NN-slug.md` (front matter, then `### NN motion|terminal` shots with `vo:`, an `sh` block for terminal shots, and `vertical:`). Add `say:` where the spoken form differs from the caption.
+2. `videos/render.sh NN-slug`, then watch both cuts.
+3. `python3 scripts/videos.py --check` must pass. Commit the script, snapshot, manifest, `.mp4` and `.vtt`.
+
+A shot that cannot run in a scratch project carries `staged:`; the drift check skips it.
+
+### Pipeline checks
+
+- `node --experimental-strip-types --test videos/render/src/*.test.ts` covers the terminal window, typing and caption timing.
+- `bash test/videos-drift.sh` covers the drift check (also part of `test/doclint.sh`).
+- `videos/render.sh 00-fixture` renders `render/fixtures/00-fixture.md`, a five-second episode used to try the pipeline.
+
 ## Status
 
-Scripts for episodes 1 to 8 are written. Episode 1 is final. No media has been rendered; rendering, the TTS engine and hosting are #2536 and the per-episode items after it.
+Scripts for episodes 1 to 8 are written. Episode 1 is final. The render pipeline (below) exists; no episode has been rendered yet.
 
 ## Staged fixtures
 
