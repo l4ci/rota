@@ -18,30 +18,30 @@ Agents collide on files.
 00:00:10.300 --> 00:00:12.333
 Yesterday's lessons are gone.
 
-00:00:12.733 --> 00:00:15.800
+00:00:12.733 --> 00:00:15.733
 rota is a workflow for Claude Code and Codex.
 
-00:00:15.800 --> 00:00:17.833
+00:00:15.733 --> 00:00:17.733
 You write work down as issues.
 
-00:00:17.833 --> 00:00:21.167
+00:00:17.733 --> 00:00:21.000
 Agents build each one in small, verified commits.
 
-00:00:21.567 --> 00:00:24.933
+00:00:21.400 --> 00:00:24.767
 One small binary sets up a project in one command.
 
-00:00:24.933 --> 00:00:28.267
+00:00:24.767 --> 00:00:28.100
 Backlog, knowledge and decisions live in the repo.
 
-00:00:28.667 --> 00:00:31.200
+00:00:28.500 --> 00:00:31.033
 Every branch is reviewed against its spec.
 
-00:00:31.200 --> 00:00:34.000
+00:00:31.033 --> 00:00:33.833
 Only work that passes your tests lands on main.
 
-00:00:34.400 --> 00:00:38.400
+00:00:34.233 --> 00:00:38.233
 Lessons and decisions stay in the repo, so the next session starts ahead.
 
-00:00:38.800 --> 00:00:40.867
+00:00:38.633 --> 00:00:40.500
 rota makes sure what they merge works.
 
