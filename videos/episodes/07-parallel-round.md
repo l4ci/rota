@@ -30,7 +30,7 @@ vertical: Orchestrator on top, three workers stacked below, PR chips returning u
 
 ### 03 terminal
 
-vo: Start by taking the lease and setting up the slots. Ro-Ta lists the issues that are ready and safe to run side by side. Issues that touch the same files are held back.
+vo: Start by taking the lease and setting up the slots. rota lists the issues that are ready and safe to run side by side. Issues that touch the same files are held back.
 
 ```sh
 rota round start --slots 3
@@ -72,7 +72,7 @@ vertical: Chat panel on top, question card below at 952 px wide.
 
 ### 06 terminal
 
-vo: Each pull request goes through the merge gate. When all are in, wind the round down. Ro-Ta re-checks main and releases the lease. Then the slots wait for the next round.
+vo: Each pull request goes through the merge gate. When all are in, wind the round down. rota re-checks main and releases the lease. Then the slots wait for the next round.
 
 ```sh
 rota worker gate ben --base main
@@ -89,7 +89,7 @@ vertical: Terminal box at 34 px; the closing summary stays on screen.
 
 ### 07 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 

@@ -32,7 +32,7 @@ videos/
 
 ## Script format
 
-A script is data. The render pipeline reads the voiceover text and the exact commands straight from it, and a drift check runs those commands against the binary, so a renamed flag fails CI rather than a published video.
+A script is data. The render pipeline reads the voiceover text and the exact commands straight from it, and #2536 adds a drift check that runs those commands against the binary, so a renamed flag fails CI rather than a published video. The check does not exist yet.
 
 ### Front matter
 
@@ -46,7 +46,7 @@ Inside the subset `scripts/fmlite.py` parses (CI has no PyYAML): bare or double-
 | `length` | target length in seconds |
 | `audience` | `evaluators` or `new users` |
 | `rota` | the rota version the commands were checked against, quoted |
-| `chain` | the chain id from `docs/skills/README.md` it follows |
+| `chain` | the chain id from `docs/skills/README.md` it follows, or a flow list `[id, id]` when it follows two |
 
 ### Shots
 
@@ -54,13 +54,15 @@ The body is an ordered shot list. Each shot starts with `### NN motion` or `### 
 
 | Line | Shots | Required | Meaning |
 |---|---|---|---|
-| `vo:` | all | yes | The exact voiceover text, one paragraph, written to be read aloud. Write the name as `Ro-Ta` so the voice says it with a hard T; captions render it as `rota`. |
+| `vo:` | all | yes | The exact voiceover text, one paragraph, written to be read aloud. Written as shown on screen: captions come from it, and the name is plain `rota`. The pipeline's lexicon (#2536) maps it to "Ro-Ta" with a hard T. |
+| `say:` | all | no | The spoken form when it differs from `vo:`, such as a URL or `.rota` ("dot rota"). Audio comes from `say:` when present, otherwise from `vo:`. |
+| `time:` | all | no | Estimated seconds for the shot (voiceover at 150 wpm, 0.35 s per sentence pause, 0.8 s hold). Episode 1 states it per shot with a total, to show it fits 60 s. |
 | `scene:` | motion | yes | What is on screen, naming guide elements (palette tokens, fonts, the outro card). |
 | fenced `sh` block | terminal | yes | The exact commands, one per line. Run in order in a scratch project (see below). |
 | `vertical:` | all | yes | How the shot reframes for 9:16. |
 | `lower-third:` | all | no | `<mono text> \| <gloss>`. |
 | `crop:` | terminal | no | Which output lines to keep when the capture is longer than the 9:16 box (14 lines). |
-| `staged:` | terminal | no | Names the fixture the shot needs (a live round, a forge, an agent session). The shot is not run by the drift check; the fixture is built in #2536. |
+| `staged:` | terminal | no | Names the fixture the shot needs (a live round, a forge, an agent session). The shot is not run by the drift check (#2536); the fixture is built in #2536. |
 
 Voiceover text across an episode stays within its length: about 150 words per minute, less the 5.5 s of sting and outro.
 

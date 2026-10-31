@@ -85,7 +85,7 @@ vertical: Rows stack top to bottom; the arrow points down from `B01`.
 
 ### 07 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 

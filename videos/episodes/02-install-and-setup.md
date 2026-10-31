@@ -14,7 +14,7 @@ Written for a new user with a git repo and an agent (Claude Code or Codex). It i
 
 ### 01 motion
 
-vo: Getting started takes three steps. Install Ro-Ta, set up your project, check that it works.
+vo: Getting started takes three steps. Install rota, set up your project, check that it works.
 
 scene: Title card on `paper`. Three numbered rows enter one after another in Atkinson Hyperlegible Next: "1 install", "2 set up the project", "3 check". The number is `muted`, the label `ink`.
 
@@ -22,7 +22,7 @@ vertical: The three rows stack over the vertical centre, 88 px, each on its own 
 
 ### 02 terminal
 
-vo: Install the binary with Homebrew, or with the install script. It needs no sudo and puts Ro-Ta in your local bin folder.
+vo: Install the binary with Homebrew, or with the install script. It needs no sudo and puts rota in your local bin folder.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
@@ -54,7 +54,9 @@ vertical: Terminal box at 34 px; the crop keeps all three commands on screen wit
 
 ### 04 terminal
 
-vo: In your project, run init. It creates the dot rota folder, with your backlog, knowledge and decisions, and adds a few instruction files.
+vo: In your project, run init. It creates the .rota folder, with your backlog, knowledge and decisions, and adds a few instruction files.
+
+say: In your project, run init. It creates the dot rota folder, with your backlog, knowledge and decisions, and adds a few instruction files.
 
 ```sh
 rota init
@@ -98,7 +100,7 @@ vertical: Terminal box at 34 px; the question and the suggestion stay on screen,
 
 ### 07 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 

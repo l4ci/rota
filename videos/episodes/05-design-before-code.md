@@ -5,7 +5,7 @@ title: Design before code
 length: 90
 audience: new users
 rota: "0.28.0"
-chain: big-feature
+chain: [big-feature, risky-idea]
 ---
 
 # Episode 5: Design before code
@@ -22,7 +22,7 @@ vertical: Same two lines stacked over the vertical centre, 88 px, each on its ow
 
 ### 02 motion
 
-vo: Ro-Ta has three ways to do that. Brainstorm settles the design. Plan breaks it into tasks. Spike answers a question by trying it, and ships no code, only a finding. Pick the one that fits the doubt you have.
+vo: rota has three ways to do that. Brainstorm settles the design. Plan breaks it into tasks. Spike answers a question by trying it, and ships no code, only a finding. Pick the one that fits the doubt you have.
 
 scene: Three cards in a row, each a `rule`-bordered card with the skill in Martian Mono over a one-line gloss in Atkinson Hyperlegible Next: `/rota-brainstorm` "settle the design", `/rota-plan` "break it into tasks", `/rota-spike` "try it, keep the finding". Each card turns `duty` in turn as the voiceover reaches it.
 
@@ -63,7 +63,7 @@ vertical: The card stacks tasks and chips in one column; the confirm line sits a
 
 ### 06 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 
