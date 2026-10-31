@@ -46,7 +46,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 	}
 	// An explicit escalation replaces the implicit hold on its thread or slot.
 	escalated := map[string]bool{}
-	for _, esc := range escalation.Open(reg.Escalations()) {
+	for _, esc := range escalation.Open(escalation.FromRegistry(reg)) {
 		reply := "reply"
 		if esc.Recommend > 0 && esc.Recommend <= len(esc.Options) && esc.Recommend <= 26 {
 			reply = string(rune('A' + esc.Recommend - 1))
@@ -127,9 +127,9 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 			return
 		}
 		approvalSeen[key] = true
-		for _, esc := range reg.Escalations() {
+		for _, esc := range escalation.FromRegistry(reg) {
 			same := (ok && esc.Kind == "pr" && esc.Number == n) || (!ok && esc.Kind == "issue" && worker.NormID(esc.IssueKey().String()) == worker.NormID(issue))
-			if same && strings.HasPrefix(esc.Title, "Merge approval: ") && esc.Status == worker.EscalationAnswered && esc.Answer != nil {
+			if same && strings.HasPrefix(esc.Title, "Merge approval: ") && esc.Status == escalation.StatusAnswered && esc.Answer != nil {
 				answered, err := stamp.Parse(esc.Answer.SeenAt)
 				if err == nil && !answered.Before(g.TS) {
 					return

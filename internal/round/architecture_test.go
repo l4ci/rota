@@ -33,7 +33,7 @@ func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, 
 // seedReview records a past review so closed issues after it count.
 func seedReview(t *testing.T, root string) {
 	t.Helper()
-	err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-09-30T00:00:00Z", 1, "test", nil) })
+	err := worker.Update(root, func(d *worker.Doc) { StartReview(d, "2026-09-30T00:00:00Z", 1, "test", nil) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestReviewItemsAreInEveryScope(t *testing.T) {
 		t.Fatalf("a title alone must not bypass the scope: %v %v", got, err)
 	}
 	writeRegistry(t, root)
-	if err := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems([]string{"2"}) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { RecordReviewItems(d, []string{"2"}) }); err != nil {
 		t.Fatal(err)
 	}
 	got, err = scopeSet(root, items, map[string]bool{}, roundcfg.ScopeSlate, []string{"1"})
@@ -180,7 +180,7 @@ func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
 	if got := ReviewSince(root); got != a.Since {
 		t.Fatalf("seed not saved: %q", got)
 	}
-	if !worker.LoadRegistryTolerant(root).Review().Seeded {
+	if !ReviewOf(worker.LoadRegistryTolerant(root)).Seeded {
 		t.Fatal("the seeded timestamp should be marked unratified")
 	}
 }
@@ -244,7 +244,7 @@ func TestMintReviewCommentFailureNamesRecovery(t *testing.T) {
 func TestMintedReviewsNormalisesRecordedSpelling(t *testing.T) {
 	root, _, _, _ := archFixture(t, 1, nil)
 	seedReview(t, root)
-	if err := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems([]string{"#101", " b7 "}) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { RecordReviewItems(d, []string{"#101", " b7 "}) }); err != nil {
 		t.Fatal(err)
 	}
 	got := MintedReviews(root)
@@ -276,7 +276,7 @@ func TestArchitectureQueueEmptyRateLimit(t *testing.T) {
 	// Right after a review: due is false whatever has closed since.
 	set.ArchitectureIdleMinItems = 1
 	withNow(&e, func() time.Time { return time.Date(2026, 10, 1, 6, 0, 0, 0, time.UTC) }) // 6h before the first close
-	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-10-01T00:00:00Z", 2, "test", nil) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { StartReview(d, "2026-10-01T00:00:00Z", 2, "test", nil) }); err != nil {
 		t.Fatal(err)
 	}
 	be.closedIssues = closed
@@ -315,7 +315,7 @@ func TestArchitectureZeroHoursNeverCools(t *testing.T) {
 	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-04T11:30:00Z")})
 	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 1, 0
 	// A review one hour before the fixture clock: only the hours floor could hold it back.
-	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-10-04T11:00:00Z", 1, "test", nil) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { StartReview(d, "2026-10-04T11:00:00Z", 1, "test", nil) }); err != nil {
 		t.Fatal(err)
 	}
 	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Cooling || !a.Due || a.Trigger != TriggerQueueEmpty {
@@ -334,7 +334,7 @@ func TestArchitectureUnparsableSinceNeverCools(t *testing.T) {
 	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-03T00:00:00Z")})
 	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 0, 24
 	// No review time to measure from: the hours floor does not apply, as in file mode where Since is empty.
-	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("not-a-time", 1, "test", nil) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { StartReview(d, "not-a-time", 1, "test", nil) }); err != nil {
 		t.Fatal(err)
 	}
 	a, _ := e.Architecture(ctx, root, be, set, notReady)
@@ -349,7 +349,7 @@ func TestArchitectureSeededFirstLookCools(t *testing.T) {
 	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-03T00:00:00Z")})
 	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 0, 24
 	a, _ := e.Architecture(ctx, root, be, set, notReady)
-	if !worker.LoadRegistryTolerant(root).Review().Seeded {
+	if !ReviewOf(worker.LoadRegistryTolerant(root)).Seeded {
 		t.Fatal("first look should seed")
 	}
 	if !a.Cooling || a.Due {
