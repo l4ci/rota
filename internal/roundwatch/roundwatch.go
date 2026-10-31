@@ -402,7 +402,7 @@ func roundState(ctx context.Context, run git.Runner, root string, round int) str
 			continue
 		}
 		p := s.Name() + " " + st
-		if st == "unverifiable" && s.Reason() != "" {
+		if v := worker.JudgeLiveness(worker.LivenessEvidence{State: st, Reason: s.Reason()}); v.State == worker.LivenessUnverifiable && s.Reason() != "" {
 			p += ":" + s.Reason()
 		}
 		is := s.Issue()

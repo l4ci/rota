@@ -52,7 +52,7 @@ const (
 	HealthIdle    = "idle"
 	// HealthUnverifiable: the slot's last poll could not reach the host or read
 	// the pane, and the host cannot be asked now. Not dead.
-	HealthUnverifiable = "unverifiable"
+	HealthUnverifiable = worker.LivenessUnverifiable
 )
 
 // HumanTarget is the `--to` value that hands an issue to the human.
@@ -413,23 +413,13 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 			h.Alive = matchAgent(agents, name, tab, wt) >= 0
 		}
 	}
-	// Orca handles are runtime-scoped: list absence cannot prove exit, even
-	// when the app answered. A positive dead poll is still exit evidence.
-	if e.HostName == host.Orca && tab != "" && !h.Alive && !worker.IsDead(s.State()) {
-		h.Known = false
-		h.Health, h.Reason = HealthUnverifiable, "stale-handle"
+	switch v := e.liveness(s, h.Known, h.Alive); v.State {
+	case worker.LivenessUnverifiable:
+		h.Known = h.Known && !e.caps().RuntimeScopedHandles // list absence proved nothing
+		h.Health, h.Reason = HealthUnverifiable, v.Reason
 		return h
-	}
-	if worker.IsDead(s.State()) || (h.Known && !h.Alive && tab != "") {
+	case worker.LivenessDead:
 		h.Health = HealthDead
-		return h
-	}
-	// A host that answers settles it above (alive, or provably gone). One that
-	// does not leaves the slot's last poll as the only word, and a poll that
-	// could not reach the host is no proof of death or of life.
-	if !h.Known && s.State() == "unverifiable" {
-		h.Health = HealthUnverifiable
-		h.Reason = unverifiableReason(s)
 		return h
 	}
 	waiting := false
@@ -449,13 +439,26 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	return h
 }
 
-// unverifiableReason is the reason the slot's last poll recorded,
-// "unrecorded" when it left none.
-func unverifiableReason(s *worker.Slot) string {
-	if r := s.Reason(); r != "" {
-		return r
-	}
-	return "unrecorded"
+// caps is the capabilities of the round's host.
+func (e Env) caps() host.Capabilities { return host.CapabilitiesForKind(e.HostName) }
+
+// liveness is the one liveness verdict for a slot: status, reclaim and the
+// watch digest all read it. answered: the host listed its agents; listed: one
+// of them is the slot's.
+func (e Env) liveness(s *worker.Slot, answered, listed bool) worker.Liveness {
+	return worker.JudgeLiveness(worker.LivenessEvidence{
+		Caps: e.caps(), State: s.State(), Reason: s.Reason(), Handle: s.Handle(),
+		Answered: answered, Listed: listed,
+	})
+}
+
+// absence is the verdict for a slot the snapshot does not list, judged on that
+// absence alone: a recorded state is no evidence about the list, so a host
+// whose handles are runtime-scoped never reads as dead from it.
+func (e Env) absence(s *worker.Slot) worker.Liveness {
+	return worker.JudgeLiveness(worker.LivenessEvidence{
+		Caps: e.caps(), Handle: s.Handle(), Answered: true,
+	})
 }
 
 // ReclaimOpts are the flags of `rota round reclaim`.
@@ -539,7 +542,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	}
 	// A live pane must be gone before its worktree moves under it. A dead
 	// slot's agent is gone, but its pane may linger as a bare shell.
-	if e.HostName == host.Orca {
+	if e.caps().TreeKillClose {
 		// Force bypasses the uncertainty refusal, not the process-tree proof.
 		// Even a positive exit poll may leave captured descendants alive.
 		if err := e.Worker.KillSlot(ctx, root, o.Slot); err != nil {

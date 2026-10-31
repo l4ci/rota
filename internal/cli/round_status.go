@@ -345,7 +345,7 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)
 		setIf(o, "hostState", r.HostState)
-		if r.HostState == "unverifiable" { // the reason (#820); other rows' evidence is the UI's
+		if r.HostState == worker.LivenessUnverifiable { // the reason (#820); other rows' evidence is the UI's
 			setIf(o, "evidence", r.Evidence)
 		}
 		setIf(o, "state", r.State)
@@ -419,7 +419,7 @@ func dash(s string) string {
 // hostStateText is the row's host state, with an unverifiable slot's reason
 // beside it.
 func hostStateText(r round.Row) string {
-	if r.HostState == "unverifiable" && r.Evidence != "" {
+	if r.HostState == worker.LivenessUnverifiable && r.Evidence != "" {
 		return r.HostState + ":" + r.Evidence
 	}
 	// A partial or failed report shows beside the state; a plain done adds nothing.
