@@ -821,7 +821,7 @@ func TestGateApprovalSeesTheAdoptedPR(t *testing.T) {
 	w.forge("listed", "1")
 	res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
 		Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1",
-		Answers: fakeAnswers{entries: map[string]Escalation{"e1": answeredOn("pr", 7, "approve")}},
+		Answers: fakeAnswers{entries: map[string]ApprovalEntry{"e1": answeredOn("pr", 7, "approve")}},
 		Clear:   func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, nil },
 	}})
 	if err != nil || res.Verdict != GatePass {

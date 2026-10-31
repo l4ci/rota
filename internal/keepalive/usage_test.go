@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // usageRig is a rig whose first child leaves a usage handoff.
@@ -187,7 +186,7 @@ func TestUsageRecorderMapsActionToStatus(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got []limits.Entry
-		if err := worker.UpdateLimits(root, func(l []limits.Entry) []limits.Entry { got = l; return l }); err != nil {
+		if err := limits.Update(root, func(l []limits.Entry) []limits.Entry { got = l; return l }); err != nil {
 			t.Fatal(err)
 		}
 		if len(got) != 1 {

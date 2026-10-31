@@ -1,6 +1,12 @@
-package worker
+package round
 
-import "github.com/l4ci/rota/internal/jsonx"
+import (
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
+)
+
+// reviewKey is the registry section the architecture review owns.
+const reviewKey = "architectureReview"
 
 // Review is the registry's `architectureReview`: when the last review was
 // minted, the review items still recognised, and the cached count of items
@@ -18,9 +24,9 @@ type ClosedCount struct {
 	Count          int
 }
 
-// Review reads the architecture review state.
-func (r Registry) Review() Review {
-	v, _ := r.doc.Get("architectureReview")
+// ReviewOf reads the architecture review state.
+func ReviewOf(r worker.Registry) Review {
+	v, _ := r.Section(reviewKey)
 	o, _ := v.(*jsonx.Object)
 	if o == nil {
 		return Review{}
@@ -43,51 +49,51 @@ func (r Registry) Review() Review {
 	return rv
 }
 
-// review is the review object, created when missing.
-func (d *Doc) review() *jsonx.Object {
-	v, _ := d.doc.Get("architectureReview")
+// reviewObject is the review object, created when missing.
+func reviewObject(d *worker.Doc) *jsonx.Object {
+	v, _ := d.Section(reviewKey)
 	o, _ := v.(*jsonx.Object)
 	if o == nil {
 		o = jsonx.NewObject()
-		d.doc.Set("architectureReview", o)
+		d.SetSection(reviewKey, o)
 	}
 	return o
 }
 
 // SeedReview starts the review clock at at, with no review minted yet.
-func (d *Doc) SeedReview(at string) {
-	o := d.review()
+func SeedReview(d *worker.Doc, at string) {
+	o := reviewObject(d)
 	o.Set("at", at)
 	o.Set("seeded", true)
 }
 
 // CacheClosedCount saves the closed-item count for the review recorded at since.
-func (d *Doc) CacheClosedCount(checked, since string, count int) {
+func CacheClosedCount(d *worker.Doc, checked, since string, count int) {
 	c := jsonx.NewObject()
 	c.Set("checked", checked)
 	c.Set("since", since)
 	c.Set("count", count)
-	d.review().Set("closed", c)
+	reviewObject(d).Set("closed", c)
 }
 
 // RecordReviewItems adds ids to the review's cumulative item list.
-func (d *Doc) RecordReviewItems(ids []string) { recordItems(d.review(), ids) }
+func RecordReviewItems(d *worker.Doc, ids []string) { recordItems(reviewObject(d), ids) }
 
 // StartReview replaces the review with a freshly minted one. Items of earlier
 // reviews stay recognised, and ids join them.
-func (d *Doc) StartReview(at string, round int, trigger string, ids []string) {
+func StartReview(d *worker.Doc, at string, round int, trigger string, ids []string) {
 	o := jsonx.NewObject()
 	o.Set("at", at)
 	o.Set("round", round)
 	o.Set("trigger", trigger)
-	if v, ok := d.doc.Get("architectureReview"); ok {
+	if v, ok := d.Section(reviewKey); ok {
 		if old, _ := v.(*jsonx.Object); old != nil {
 			l, _ := old.Get("items")
 			o.Set("items", l)
 		}
 	}
 	recordItems(o, ids)
-	d.doc.Set("architectureReview", o)
+	d.SetSection(reviewKey, o)
 }
 
 func recordItems(o *jsonx.Object, ids []string) {

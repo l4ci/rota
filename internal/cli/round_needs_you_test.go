@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/escalation"
 	"strings"
 	"testing"
 
@@ -18,8 +19,8 @@ func TestRoundNeedsYou(t *testing.T) {
 		env.Round.MaxBounces = 3
 		return env
 	}
-	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
-		return []worker.Escalation{
+	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+		return []escalation.Entry{
 			{ID: "open", Kind: "issue", Number: 58, Title: "Keep the current design?", Status: "pending", SentAt: "2026-10-03T10:00:00Z", Options: []string{"Keep it", "Replace it"}, Recommend: 1},
 			{ID: "answered", Kind: "issue", Number: 59, Title: "Already answered", Status: "answered"},
 		}
@@ -105,8 +106,8 @@ func (digestClosedPR) PRState(context.Context, int) (string, error) { return "cl
 
 func TestHookPromptNeedsYouCount(t *testing.T) {
 	root := orchProject(t, true)
-	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
-		return []worker.Escalation{{ID: "waiver", Kind: "pr", Number: 77, Title: "Waive the Spec finding?", Status: "pending", SentAt: "2026-10-03T10:00:00Z"}}
+	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+		return []escalation.Entry{{ID: "waiver", Kind: "pr", Number: 77, Title: "Waive the Spec finding?", Status: "pending", SentAt: "2026-10-03T10:00:00Z"}}
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -139,8 +140,8 @@ func TestHookPromptNeedsYouCount(t *testing.T) {
 	if out := promptOut(t, root); strings.Contains(out, "waits on you") {
 		t.Fatalf("snapshot older than the watch interval must be omitted: %s", out)
 	}
-	if err := worker.UpdateEscalations(root, func(list []worker.Escalation) []worker.Escalation {
-		list[0].Status = worker.EscalationAnswered
+	if err := escalation.Update(root, func(list []escalation.Entry) []escalation.Entry {
+		list[0].Status = escalation.StatusAnswered
 		return list
 	}); err != nil {
 		t.Fatal(err)
