@@ -87,7 +87,10 @@ func TestRestConnWiresSleep(t *testing.T) {
 	}
 	c.Sleep = nil
 	r = &REST{}
-	wire2 := func() func(*REST) { _, _, w, _ := c.restConn(context.Background(), Settings{Connection: "c"}, linearSpec, ""); return w }()
+	wire2 := func() func(*REST) {
+		_, _, w, _ := c.restConn(context.Background(), Settings{Connection: "c"}, linearSpec, "")
+		return w
+	}()
 	wire2(r)
 	if r.Sleep != nil {
 		t.Error("no CLI sleep must leave the REST default")
