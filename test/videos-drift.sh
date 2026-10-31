@@ -13,6 +13,9 @@ fi
 VID="$REPO/scripts/videos.py"
 VD="$TMP/videos-drift"; mkdir -p "$VD"
 
+# fake_ver <path> <stdout of 'rota version'>: a binary that prints one form of the stamp
+fake_ver() { printf '#!/bin/sh\necho "%s"\n' "$2" > "$1"; chmod +x "$1"; }
+
 # fake_rota <path> <help-flag> <exit-of-help> <stamp-commit>
 fake_rota() {
   cat > "$1" <<FAKE
@@ -85,7 +88,10 @@ if [ -n "${ROTA_BIN:-}" ]; then
   printf -- '---\nnumber: 0\nslug: real\n---\n\n### 01 terminal\n\nvo: x\n\n```sh\nrota version\n```\n\nvertical: x\n' > "$R2/episodes/00-real.md"
   python3 "$VID" capture "$R2/episodes/00-real.md" --bin "$ROTA_BIN" --write "$R2/snapshots/00-real.json"
   OUT="$(python3 "$VID" --check --root "$R2" --bin "$ROTA_BIN" 2>&1)" || fail "real-binary check failed: $OUT"
-  grep -q '(build)' "$R2/snapshots/00-real.json" || fail "the real build stamp was not masked"
+  # whatever form `rota version` prints (stamped, ldflags only, dev), no commit or build time survives
+  if grep -Eq '\([0-9a-f]{7,40}|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z' "$R2/snapshots/00-real.json"; then
+    fail "a commit or build time survived in the snapshot: $(grep -E 'rota' "$R2/snapshots/00-real.json" | head -2)"
+  fi
   pass "videos --check runs against \$ROTA_BIN"
 fi
 
@@ -106,3 +112,20 @@ pass "videos.py reads crop: first/last N lines per command"
 # every real episode parses
 for f in "$REPO"/videos/episodes/*.md; do python3 "$VID" parse "$f" >/dev/null || fail "$f does not parse"; done
 pass "every episode under videos/episodes/ parses"
+
+# every form `rota version` can print compares equal across builds of different commits
+fake_ver "$VD/v-vcs" "rota 1.2.3 (abc1234, 2026-01-01T00:00:00Z)"
+fake_ver "$VD/v-vcs2" "rota 1.2.3 (def5678, 2026-02-02T00:00:00Z)"
+fake_ver "$VD/v-ldflags" "rota 1.2.3"
+fake_ver "$VD/v-dev" "rota dev"
+mkdir -p "$VD/vroot/episodes"
+printf -- '---\nnumber: 0\n---\n\n### 01 terminal\n\nvo: x\n\n```sh\nrota version\n```\n\nvertical: x\n' > "$VD/vroot/episodes/00-v.md"
+cap() { python3 "$VID" capture "$VD/vroot/episodes/00-v.md" --bin "$1" | python3 -c "import json,sys;print(json.load(sys.stdin)['captures'][0]['stdout'].strip())"; }
+[ "$(cap "$VD/v-vcs")" = "$(cap "$VD/v-vcs2")" ] || fail "builds of different commits should compare equal"
+[ "$(cap "$VD/v-vcs")" = "$(cap "$VD/v-ldflags")" ] || fail "the stamped and unstamped forms should compare equal"
+[ "$(cap "$VD/v-dev")" = "rota dev" ] || fail "the dev form should pass through"
+[ "$(cap "$VD/v-vcs")" != "rota 9.9.9" ] || fail "sanity"
+mkdir -p "$VD/vroot2"; cp -r "$VD/vroot/episodes" "$VD/vroot2/"
+fake_ver "$VD/v-newver" "rota 2.0.0 (abc1234, 2026-01-01T00:00:00Z)"
+[ "$(cap "$VD/v-newver")" != "$(cap "$VD/v-vcs")" ] || fail "a changed version number must still differ"
+pass "the rota version stamp is masked in every form, and a changed version still differs"

@@ -36,10 +36,12 @@ SHOT_RE = re.compile(r'^### (\d+) (motion|terminal)[ \t]*$')
 KEY_RE = re.compile(r'^(vo|say|scene|vertical|lower-third|crop|staged):[ \t]*(.*)$')
 FENCE_RE = re.compile(r'^```(\w*)[ \t]*$')
 ANSI_RE = re.compile(r'\x1b\[[0-9;?]*[ -/]*[@-~]')
-# The one build stamp the captures normalise: `rota 0.28.0 (7eaa16a, 2026-10-31T12:38:31Z)`.
-# The version stays; the commit and build time change on every build and say nothing
-# about whether a command, flag or output changed.
-STAMP_RE = re.compile(r'\((?:[0-9a-f]{7,40}|unknown|dirty|none)(?:-dirty)?, [^)]*\)')
+# `rota version` prints `rota 0.28.0 (7eaa16a, 2026-10-31T12:38:31Z)` with VCS or link-time
+# info, `rota 0.28.0` with ldflags only and `rota dev` with neither (internal/version).
+# The commit and build time change on every build and say nothing about a command, flag
+# or output, so the parenthesised stamp on the `rota <version>` line is dropped and all
+# three forms compare equal. The version itself stays.
+STAMP_RE = re.compile(r'^(rota \S+) \([^)\n]*\)[ \t]*$', re.M)
 SCRATCH_PLACEHOLDER = '/tmp/scratch'
 HOME_PLACEHOLDER = '/home/user'
 CMD_TIMEOUT = 120
@@ -150,7 +152,7 @@ def source_hash(path):
 def normalise(text, scratch, home):
     text = ANSI_RE.sub('', text)
     text = text.replace(scratch, SCRATCH_PLACEHOLDER).replace(home, HOME_PLACEHOLDER)
-    text = STAMP_RE.sub('(build)', text)
+    text = STAMP_RE.sub(r'\1', text)
     return text.replace('\r\n', '\n')
 
 
