@@ -45,7 +45,7 @@ func Diff(entries []Entry, have []Label, used map[string]bool, metadata bool) []
 			continue
 		}
 		if want, ok := Find(entries, cur.Name); ok {
-			if metadata && (cur.Description != want.Description || normalizeColor(cur.Color) != normalizeColor(want.Color)) {
+			if metadata && (cur.Description != want.Description || NormalizeColor(cur.Color) != NormalizeColor(want.Color)) {
 				out = append(out, Change{Metadata, want, &cur})
 			}
 			continue
@@ -66,4 +66,5 @@ func Diff(entries []Entry, have []Label, used map[string]bool, metadata bool) []
 	return out
 }
 
-func normalizeColor(c string) string { return strings.ToLower(strings.TrimPrefix(c, "#")) }
+// NormalizeColor is a label color without its leading # and in lower case.
+func NormalizeColor(c string) string { return strings.ToLower(strings.TrimPrefix(c, "#")) }
