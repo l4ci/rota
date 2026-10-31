@@ -46,6 +46,40 @@ func newPromptKey(home string) (keyPath string, key []byte, err error) {
 	return keyPath, key, nil
 }
 
+// writePromptKey is newPromptKey with the refusal both key-holding adapters
+// give when the slot's state directory cannot take the key.
+func writePromptKey(stateDir string) (keyPath string, key []byte, err error) {
+	keyPath, key, err = newPromptKey(stateDir)
+	if err != nil {
+		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", stateDir, err)
+	}
+	return keyPath, key, nil
+}
+
+// relayPromptKey loads the key the session's task dispatch wrote for slot, or
+// refuses with kind (the harness name) and hint (what re-dispatching renews).
+func relayPromptKey(commonDir func() (string, error), slotDir func(commonDir, slot string) string, slot, kind, hint string) ([]byte, error) {
+	cd, err := commonDir()
+	if err != nil {
+		return nil, err
+	}
+	keyFile := filepath.Join(slotDir(cd, slot), PromptKeyFile)
+	key, err := loadPromptKey(keyFile)
+	if err != nil {
+		r := refuse(Unavailable, "slot '%s' is a %s worker but its prompt key is unreadable (%s): %v", slot, kind, keyFile, err)
+		r.Hint = hint
+		return nil, r
+	}
+	return key, nil
+}
+
+// promptSigner is the Sign half of the Harness facet for every kind that
+// signs: embed it.
+type promptSigner struct{}
+
+// Sign ends payload with its ROTA-SIG trailer.
+func (promptSigner) Sign(key []byte, payload string) string { return signPrompt(key, payload) }
+
 // loadPromptKey reads a key newPromptKey wrote.
 func loadPromptKey(path string) ([]byte, error) {
 	b, err := os.ReadFile(path)
