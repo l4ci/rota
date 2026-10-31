@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
@@ -68,21 +69,6 @@ func orchestratorData(commonDir, root string, maxAge time.Duration) func(now tim
 			return limits.Data{}
 		}
 		return d
-	}
-}
-
-// inGap is whether the supervisor has no orchestrator child right now (D4).
-func inGap(gap *atomic.Bool) bool { return gap != nil && gap.Load() }
-
-// gapped hides the orchestrator's session file while there is no child: a
-// limit read from the last session must not type a resume prompt at a
-// supervisor with nothing to receive it.
-func gapped(gap *atomic.Bool, f func(time.Time) limits.Data) func(time.Time) limits.Data {
-	return func(now time.Time) limits.Data {
-		if inGap(gap) {
-			return limits.Data{}
-		}
-		return f(now)
 	}
 }
 
@@ -155,43 +141,20 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	}
 
 	d := limits.Deps{
-		Root: root, Settings: set, Now: c.deps().Now, Worker: c.deps().workerEnv(), Tick: tick,
+		Root: root, Settings: set, Now: c.deps().Now, Tick: tick,
+		InGap:   func() bool { return gap != nil && gap.Load() },
+		Ledger:  func(e ledger.Entry) { worker.LedgerNote(c.deps().workerEnv(), root, e) },
+		Move:    limitMover{c: c, root: root, holderPID: holderPID},
 		Targets: targets,
 		Capture: func(ctx context.Context, t limits.Target) string {
-			if t.Orchestrator && inGap(gap) {
-				return ""
-			}
 			return ph.CapturePane(ctx, t.Pane, 60)
 		},
-		OrchestratorData: gapped(gap, orchestratorData(cd, root, maxAge)),
+		OrchestratorData: orchestratorData(cd, root, maxAge),
 		Meter: func(ctx context.Context, account string) limits.Reading {
 			return limits.MeterReading(ctx, src, account)
 		},
 		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
 			return limits.PickAccount(ctx, src, root, kind, exclude, c.deps().Now())
-		},
-		IdleSlot: func(ctx context.Context, kind, account string) (string, bool) {
-			rc, ok := c.deps().tolerantRoundSettings(root)
-			if !ok {
-				return "", false
-			}
-			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
-			return round.IdleSlotInRound(worker.LoadRegistryTolerant(root), rc, kind, account)
-		},
-		Transfer: func(ctx context.Context, issue, to string) error {
-			env, be, err := moveEnv(c, root)
-			if err != nil {
-				return err
-			}
-			env.HolderPID = holderPID
-			// A move that has begun is finished, not cut by --timeout or a
-			// signal: it leaves a claim and a branch half-moved otherwise (the
-			// same call would resume it, but nobody is there to make it).
-			_, err = env.Transfer(context.WithoutCancel(ctx), root, be, round.TransferOpts{
-				Issue: issue, To: to,
-				Note: "The slot's account hit its usage limit; rota limit watch moved the issue to an idle slot on another account.",
-			})
-			return err
 		},
 		Send: func(ctx context.Context, t limits.Target, prompt string) error {
 			return ph.SendPane(ctx, t.Pane, prompt)
@@ -230,6 +193,38 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		feed.Start()
 	}
 	return rig, nil
+}
+
+// limitMover satisfies limits.Mover over the round registry and transfer.
+type limitMover struct {
+	c         *Ctx
+	root      string
+	holderPID int
+}
+
+func (m limitMover) IdleSlot(_ context.Context, kind, account string) (string, bool) {
+	rc, ok := m.c.deps().tolerantRoundSettings(m.root)
+	if !ok {
+		return "", false
+	}
+	// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
+	return round.IdleSlotInRound(worker.LoadRegistryTolerant(m.root), rc, kind, account)
+}
+
+func (m limitMover) Transfer(ctx context.Context, issue, to string) error {
+	env, be, err := moveEnv(m.c, m.root)
+	if err != nil {
+		return err
+	}
+	env.HolderPID = m.holderPID
+	// A move that has begun is finished, not cut by --timeout or a
+	// signal: it leaves a claim and a branch half-moved otherwise (the
+	// same call would resume it, but nobody is there to make it).
+	_, err = env.Transfer(context.WithoutCancel(ctx), m.root, be, round.TransferOpts{
+		Issue: issue, To: to,
+		Note: "The slot's account hit its usage limit; rota limit watch moved the issue to an idle slot on another account.",
+	})
+	return err
 }
 
 // accountSource adapts the worker accounts and the harness config to

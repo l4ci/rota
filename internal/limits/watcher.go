@@ -62,13 +62,21 @@ type Match struct {
 	Session, Line, Text string
 }
 
+// Mover is the part of the round the watcher moves an issue through.
+type Mover interface {
+	// IdleSlot finds an idle slot of the harness kind on the account.
+	IdleSlot(ctx context.Context, kind, account string) (string, bool)
+	// Transfer is `rota round transfer <issue> --to <slot>`.
+	Transfer(ctx context.Context, issue, to string) error
+}
+
 // Deps is everything the loop touches outside its own memory.
 type Deps struct {
 	Root     string
 	Settings Settings
 	Now      func() time.Time
-	// Worker is the env the limited entry is ledgered through (clock, stderr, lease).
-	Worker worker.Env
+	// Ledger records the limited entry in the round ledger; nil records nothing.
+	Ledger func(ledger.Entry)
 	// Loc is the zone a bare reset time in limit text is read in.
 	Loc *time.Location
 	// Targets lists the sessions now: the orchestrator's pane and every
@@ -84,16 +92,20 @@ type Deps struct {
 	// with the most headroom that is not cooling.
 	// For a Codex slot (kind "codex") it picks among the codex entries of round.accounts.
 	PickAccount func(ctx context.Context, kind, exclude string) (string, bool)
-	// IdleSlot finds an idle slot of the harness kind on the account.
-	IdleSlot func(ctx context.Context, kind, account string) (string, bool)
-	// Transfer is `rota round transfer <issue> --to <slot>`.
-	Transfer func(ctx context.Context, issue, to string) error
+	// Move is where a limited slot's issue can go; nil means switching is
+	// not available and every limit sleeps.
+	Move Mover
 	// Send types the prompt into the target's pane and submits it.
 	Send func(ctx context.Context, t Target, prompt string) error
 	// Escalate posts on the issue thread; returns the escalation id.
 	Escalate func(issue tracker.IssueKey, title, body string) (id string, warnings []string, err error)
 	// Notify raises the host notification alone.
 	Notify func(title, body string)
+	// InGap reports the supervisor has no orchestrator child right now (D4);
+	// nil means never. In a gap the orchestrator's session file and pane are
+	// not read: a limit from the last session must not type a resume prompt
+	// at a supervisor with nothing to receive it.
+	InGap func() bool
 	// Poll: capture every target on every pass. Without it text arrives as
 	// Matches (herdr), and the first pass alone sweeps the panes.
 	Poll bool
@@ -122,6 +134,9 @@ func New(d Deps) *Watcher {
 	}
 	if d.After == nil {
 		d.After = time.After
+	}
+	if d.InGap == nil {
+		d.InGap = func() bool { return false }
 	}
 	if d.Tick <= 0 {
 		d.Tick = 5 * time.Second
@@ -211,7 +226,7 @@ func (w *Watcher) Step(ctx context.Context, matches []Match, sweep bool) {
 	if ctx.Err() != nil {
 		return
 	}
-	if w.OrchestratorData != nil {
+	if w.OrchestratorData != nil && !w.InGap() {
 		if d := w.OrchestratorData(now); d.Limited && d.ResetsAt.After(now) {
 			w.detect(ctx, now, orchestratorTarget(targets), obs{window: d.Window, source: SourceData, resetsAt: d.ResetsAt, hasReset: true})
 		}
@@ -223,6 +238,9 @@ func (w *Watcher) Step(ctx context.Context, matches []Match, sweep bool) {
 		for _, t := range targets {
 			if ctx.Err() != nil {
 				return
+			}
+			if t.Orchestrator && w.InGap() {
+				continue
 			}
 			if txt := w.Capture(ctx, t); txt != "" {
 				w.text(ctx, now, targets, Match{Session: t.Session, Text: txt})
@@ -340,7 +358,7 @@ func (w *Watcher) text(ctx context.Context, now time.Time, targets []Target, m M
 	}
 	o := obs{source: SourceText, window: WindowUnknown, text: line}
 	if t.Orchestrator {
-		if w.OrchestratorData != nil {
+		if w.OrchestratorData != nil && !w.InGap() {
 			if d := w.OrchestratorData(now); d.Known && !(d.Limited && d.ResetsAt.After(now)) {
 				w.dismissed[t.Session] = line // the data says no window is spent
 				return
@@ -427,12 +445,14 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 		w.warn("limits not recorded: %v", err)
 		return
 	}
-	worker.LedgerNote(w.Worker, w.Root, ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
-		Detail: ledger.Detail("resetsAt", e.ResetsAt, "window", e.Window)})
+	if w.Ledger != nil {
+		w.Ledger(ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
+			Detail: ledger.Detail("resetsAt", e.ResetsAt, "window", e.Window)})
+	}
 	if !attempt {
 		return
 	}
-	if err := w.Transfer(ctx, t.Issue, slot); err != nil {
+	if err := w.Move.Transfer(ctx, t.Issue, slot); err != nil {
 		e.Action, e.To = ActionSleep, ""
 		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" transfer of %s to %s failed: %v; sleeping instead.", t.Issue, slot, err))
 	} else {
@@ -472,14 +492,14 @@ func (w *Watcher) decide(ctx context.Context, t Target, e *Entry) (slot, acct st
 		return sleep("limits.mode is sleep.")
 	case t.Issue == "":
 		return sleep("The slot holds no issue.")
-	case w.PickAccount == nil || w.IdleSlot == nil || w.Transfer == nil:
+	case w.PickAccount == nil || w.Move == nil:
 		return sleep("Switching is not available here.")
 	}
 	acct, ok := w.PickAccount(ctx, t.Kind, t.Account)
 	if !ok {
 		return sleep("No usable account to switch to.")
 	}
-	slot, ok = w.IdleSlot(ctx, t.Kind, acct)
+	slot, ok = w.Move.IdleSlot(ctx, t.Kind, acct)
 	if !ok {
 		return sleep(fmt.Sprintf("No idle slot on account %s.", acct))
 	}
