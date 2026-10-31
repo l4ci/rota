@@ -6,6 +6,7 @@ import {LowerThird} from './LowerThird';
 import {Motion} from './Motion';
 import {Outro} from './Outro';
 import {Terminal} from './Terminal';
+import {SCENES} from './scenes';
 import {Capture, Clip, OUTRO_FRAMES, OUTRO_VO, Shot, buildTimeline} from './timeline';
 import {loadFonts} from './fonts';
 import {C} from './theme';
@@ -35,6 +36,8 @@ export const Episode: React.FC<EpisodeProps> = ({script, captures, clips, outroC
         <Sequence key={s.n} from={s.start} durationInFrames={s.frames}>
           {s.kind === 'terminal' ? (
             <Terminal rows={s.rows} boxWidth={boxW} boxHeight={boxH} boxStyle={{position: 'absolute', left: side, top}} />
+          ) : s.anim && SCENES[s.anim.name] ? (
+            React.createElement(SCENES[s.anim.name], {anim: s.anim, voFrames: s.voFrames})
           ) : (
             <Motion text={s.caption} />
           )}

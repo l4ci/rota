@@ -72,7 +72,7 @@ render_one() {
 import json, sys
 s = json.load(open(sys.argv[1]))
 shots = [{"n": x["n"], "vo": x["speak"]} for x in s["shots"]]
-shots.append({"n": "outro", "vo": "Find it at github dot com slash l four c i slash rota."})
+shots.append({"n": "outro", "vo": "Find it on GitHub."})
 json.dump({"shots": shots}, open(sys.argv[2], "w"))
 PY
   "$R/.venv/bin/python" "$R/voice/synth.py" --plan "$work/voice-plan.json" --out "$work/public/audio"

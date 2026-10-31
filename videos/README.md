@@ -59,6 +59,7 @@ The body is an ordered shot list. Each shot starts with `### NN motion` or `### 
 | `time:` | all | no | Estimated seconds for the shot (voiceover at 150 wpm, 0.35 s per sentence pause, 0.8 s hold). Episode 1 states it per shot with a total, to show it fits 60 s. |
 | `scene:` | motion | yes | What is on screen, naming guide elements (palette tokens, fonts, the outro card). |
 | fenced `sh` block | terminal | yes | The exact commands, one per line. Run in order in a scratch project (see below). |
+| `anim:` | motion | no | Picks an animated scene and its parameters: `anim: <scene> \| key=value \| key=value`. Scenes and parameters are in [`STYLE.md`](STYLE.md#animated-scenes). A motion shot without it renders the caption as a title card. `scene:` stays the prose brief; `anim:` is what the renderer reads. An unknown scene or parameter, a repeated parameter, or `anim:` on a terminal shot is a parse error. The line is part of the script, so editing it makes the episode stale. |
 | `vertical:` | all | yes | How the shot reframes for 9:16. |
 | `lower-third:` | all | no | `<mono text> \| <gloss>`. |
 | `crop:` | terminal | no | Which output lines to keep when the capture is longer than the 9:16 box (14 lines). |
@@ -103,7 +104,7 @@ The stages, each cached:
 
 `render.sh` fails when a file is over the per-episode size budget (the Size budget in [`STYLE.md`](STYLE.md); override with `VIDEO_BUDGET_KB_16x9` and `VIDEO_BUDGET_KB_9x16`).
 
-`crop:` (the "first/last N lines" forms) and `lower-third:` are applied; a `crop:` in other words crops nothing and the bottom-anchored terminal scrolls. Motion shots render the shot's caption text as a title card. A designed scene for a shot is a component in `videos/render/src/` that `Episode.tsx` picks by shot.
+`crop:` (the "first/last N lines" forms) and `lower-third:` are applied; a `crop:` in other words crops nothing and the bottom-anchored terminal scrolls. A motion shot with an `anim:` line renders that scene (`videos/render/src/scenes.tsx`); one without renders the shot's caption text as a title card. A new scene is a component in `scenes.tsx` plus its name and parameters in `ANIMS` in `scripts/videos.py`.
 
 ### Is anything stale?
 
@@ -129,7 +130,7 @@ A shot that cannot run in a scratch project carries `staged:`; the drift check s
 
 ## Status
 
-Scripts for episodes 1 to 8 are written. Episode 1 is final. The render pipeline (below) exists; no episode has been rendered yet.
+Scripts for episodes 1 to 8 are written. Episode 1 is final and rendered (`videos/out/01-why-rota.mp4`); episodes 2 to 8 are not rendered yet.
 
 ## Staged fixtures
 

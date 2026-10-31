@@ -20,6 +20,8 @@ time: 6.3 s (12 words at 150 wpm, 2 pauses, 0.8 s hold)
 
 scene: Title card on `paper`. Line 1 in Atkinson Hyperlegible Next 600, `ink`: "Coding agents write fast." Line 2 fades in 0.6 s later, `ask`: "Merging is the hard part." Left-aligned, no icon.
 
+anim: split | left=Agents write | left-items=feature; fix; refactor | right=Merging | right-items=review?; tests?; collisions? | right-tone=ask
+
 vertical: Same two lines stacked over the vertical centre, 88 px, each on its own line.
 
 ### 02 motion
@@ -30,6 +32,8 @@ time: 7.8 s (14 words at 150 wpm, 4 pauses, 0.8 s hold)
 
 scene: Four small cards enter in a row, one per problem, each a `rule`-bordered card with a one-line label in Atkinson Hyperlegible Next: "branches pile up", "tests skipped", "file collisions", "lessons lost". The last card turns `danger` at the border only.
 
+anim: cards | items=branches~stale; tests~skipped; files~collide; lessons~gone | last-tone=danger
+
 vertical: Cards stack in a column, 952 px wide, 16 px apart, entering top to bottom.
 
 ### 03 motion
@@ -39,6 +43,8 @@ vo: rota is a workflow for Claude Code and Codex. You write work down as issues.
 time: 11.1 s (23 words at 150 wpm, 3 pauses, 0.8 s hold)
 
 scene: A three-step flow, left to right: `capture`, `work`, `ship`, each a card with the skill name in Martian Mono (`/rota-capture`, `/rota-work`, `/rota-ship`) over a one-word gloss. The active card turns `duty` as the voiceover reaches it.
+
+anim: flow | steps=/rota-capture~issue; /rota-work~small verified commits; /rota-ship~pull request | mono=true
 
 vertical: The three cards stack top to bottom with a vertical `muted` arrow between them.
 
@@ -68,6 +74,8 @@ time: 7.9 s (16 words at 150 wpm, 2 pauses, 0.8 s hold)
 
 scene: A PR card moves right into a box labelled "gate". The gate box border turns `merged` and the card continues to a "main" box. A second card stops at the gate, border `danger`, and is sent back left.
 
+anim: flow | steps=PR~from an agent; review~against its spec; gate~your tests; main~only what passes | bounce=gate
+
 vertical: The gate sits mid-frame; passing card exits downward to "main", the failing card bounces back upward.
 
 ### 06 motion
@@ -78,6 +86,8 @@ time: 6.3 s (13 words at 150 wpm, 1 pauses, 0.8 s hold)
 
 scene: Three file cards fade in under one repo outline: `KNOWLEDGE.md`, `DECISIONS.md`, `handoff`. Filenames in Martian Mono.
 
+anim: cards | items=KNOWLEDGE.md~lessons; DECISIONS.md~boundaries; handoff~where we stopped | mono=true | frame=repo
+
 vertical: Cards stack in a column inside the repo outline.
 
 ### 07 motion
@@ -87,5 +97,7 @@ vo: rota makes sure what they merge works.
 time: 4.0 s (7 words at 150 wpm, 1 pauses, 0.8 s hold)
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
+
+anim: lanes | lanes=ben; dana; nia | end=main
 
 vertical: Outro card per STYLE.md, link set on two lines at 64 px.
