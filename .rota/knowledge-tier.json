@@ -1240,6 +1240,16 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
+    },
+    "Build & Tooling: Video pipeline::Kokoro flaps the T in rota: use the lexicon": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-31"
+    },
+    "Build & Tooling: Video pipeline::Install Git LFS before committing renders": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-31"
     }
   }
 }

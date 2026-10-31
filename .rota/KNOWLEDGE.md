@@ -100,6 +100,10 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 - **Reviewer subagents export with git archive, never worktree add** — A reviewer subagent that runs git worktree add or remove while a gate runs changes git worktree list, and the gate fails FAIL worktree guard (#659, round 12; #607, round 11). Reviewer and fixer briefs export the branch with git archive <ref> | tar -x -C <scratch> and never touch worktrees. <!-- 2026-10-09 -->
 - **Repo-wide renames: one sweep PR owns shared code, slices stack on it** — Run a repo-wide rename as one sweep PR that alone owns shared code. Other slices own disjoint files (front-door docs, release files) and stack on the sweep. Rename on top of the last merged stepping stone, never in parallel slices. Frozen records go through the same rename script; only content hashes may differ. <!-- 2026-10-04 -->
 
+## Build & Tooling: Video pipeline
+
+- **Install Git LFS before committing renders** — Git LFS is not installed on the round machines, so .gitattributes names the lfs filter but nothing there can push LFS objects. Run `git lfs install` on the rendering machine before the first rendered mp4 commit, or the video lands in git history as a plain blob. <!-- paths: ["videos/out/**",".gitattributes"] --> <!-- 2026-10-31 sha:7ce05683 -->
+- **Kokoro flaps the T in rota: use the lexicon** — kokoro-onnx 0.6.1 phonemises "rota" as ɹˈoʊɾə (a flapped T, heard as "roda"). Fix it with the lexicon in videos/render/voice: phonemise the text around the word with Kokoro.tokenizer.phonemize, splice in the fixed phonemes, and call create(..., is_phonemes=True). kokoro-onnx has no inline misaki pronunciation markup, and respelling "Ro-Ta" in vo: text leaks into captions. <!-- paths: ["videos/render/voice/**"] --> <!-- 2026-10-31 sha:7ce05683 -->
 ## Glossary
 
 - **binding decision** — A hard project boundary stored in DECISIONS.md, with Forbids and Permits. round assign --decision-topics includes these entries in a worker brief. This is one meaning of decision; it differs from settled answers, decision comments and decision items.
