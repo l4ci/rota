@@ -94,3 +94,15 @@ printf -- '---\nnumber: 0\n---\n\n### 01 motion\n\nvo: Open the .rota folder.\n\
 SAY="$(python3 "$VID" parse "$VD/say.md" | python3 -c "import json,sys;s=json.load(sys.stdin)['shots'][0];print(s['caption']+'|'+s['speak'])")"
 [ "$SAY" = 'Open the .rota folder.|Open the dot Ro-Ta folder.' ] || fail "say: should set the spoken text and leave the caption on vo: ($SAY)"
 pass "videos.py parse: captions come from vo:, audio from say: when present"
+
+# crop: prose becomes per-command first/last rules; unparsed prose crops nothing
+CR="$(python3 -c "
+import sys,json;sys.path.insert(0,'$REPO/scripts')
+import videos
+print(json.dumps([videos.crop_rules('rota init keeps its last 3 lines; rota design show F12 keeps its first 8 lines.',['rota init','rota design show F12']),videos.crop_rules('keep the FAIL line',['a'])],sort_keys=True))")"
+[ "$CR" = '[{"rota design show F12": {"mode": "first", "n": 8}, "rota init": {"mode": "last", "n": 3}}, {}]' ] || fail "crop rules parsed wrongly: $CR"
+pass "videos.py reads crop: first/last N lines per command"
+
+# every real episode parses
+for f in "$REPO"/videos/episodes/*.md; do python3 "$VID" parse "$f" >/dev/null || fail "$f does not parse"; done
+pass "every episode under videos/episodes/ parses"

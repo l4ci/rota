@@ -47,6 +47,9 @@ CMD_TIMEOUT = 120
 NAME_SPELLING_RE = re.compile(r'\bRo-Ta\b')
 
 
+CROP_RE = re.compile(r'(?:(?P<who>[^;]*?)\s+keeps? (?:its |their |the )?|keep the )(?P<mode>first|last) (?P<n>\d+) lines?')
+
+
 class VideoError(Exception):
     pass
 
@@ -116,8 +119,27 @@ def parse_script(path):
         # The voice's lexicon turns "rota" into "Ro-Ta" (hard T), so scripts never respell it.
         s['caption'] = NAME_SPELLING_RE.sub('rota', s['vo'])
         s['speak'] = s['say'] or s['vo']
+        s['crops'] = crop_rules(s['crop'], s['cmds'])
     slug = os.path.splitext(os.path.basename(path))[0]
     return {'slug': slug, 'front': front, 'shots': shots}
+
+
+def crop_rules(crop, cmds):
+    """Turn a shot's crop: prose into {cmd: {mode, n}} for the patterns scripts use:
+    "<command> keeps its last N lines" (per command; one clause may name several, split
+    by ';') and "keep the first N lines" (every command). Prose that does not match
+    (for example "keep the FAIL line") crops nothing: bottom-anchoring scrolls it."""
+    rules = {}
+    for clause in (crop or '').split(';'):
+        m = CROP_RE.search(clause)
+        if not m:
+            continue
+        rule = {'mode': m.group('mode'), 'n': int(m.group('n'))}
+        who = (m.group('who') or '').strip()
+        for c in cmds:
+            if not who or any(w.strip() and w.strip() in c for w in re.split(r'\band\b|,', who)):
+                rules.setdefault(c, rule)
+    return rules
 
 
 def source_hash(path):
@@ -139,7 +161,7 @@ def resolve_bin(arg):
     return os.path.abspath(b)
 
 
-def capture(script, rota_bin, staged_dir=None):
+def capture(script, rota_bin, staged_dir=None, warn=False):
     """Run the terminal shots of a parsed script in a throwaway project.
 
     One scratch git project per episode; HOME, XDG_CONFIG_HOME, TZ and the git
@@ -173,6 +195,9 @@ def capture(script, rota_bin, staged_dir=None):
                 continue
             if s['staged']:
                 fixture = _staged_fixture(staged_dir, s['staged'])
+                if warn and not fixture:
+                    print('videos.py: shot %s is staged (%s) and has no fixture in %s; it shows no output'
+                          % (s['n'], s['staged'], staged_dir or 'staged/'), file=sys.stderr)
                 for cmd in s['cmds']:
                     captures.append({'shot': s['n'], 'cmd': cmd, 'stdout': fixture,
                                      'exit': 0, 'staged': s['staged']})
@@ -241,7 +266,8 @@ def check(root, rota_bin):
             reasons.append('script edited since render')
         for r in reasons:
             stale.append('%s: %s' % (slug, r))
-    return stale, len(files)
+    unrendered = [f[:-3] for f in files if f[:-3] not in manifest]
+    return stale, len(files), unrendered
 
 
 def main(argv):
@@ -257,7 +283,7 @@ def main(argv):
             del args[k:k + 2]
     if args == ['--check']:
         try:
-            stale, n = check(opts['root'], resolve_bin(opts['bin']))
+            stale, n, unrendered = check(opts['root'], resolve_bin(opts['bin']))
         except VideoError as e:
             print('videos.py: %s' % e, file=sys.stderr)
             return 1
@@ -267,13 +293,15 @@ def main(argv):
                 print('  ' + s)
             return 1
         print('videos: %d episode(s) current' % n)
+        if unrendered:
+            print('not rendered yet (not stale): ' + ', '.join(unrendered))
         return 0
     if len(args) == 2 and args[0] in ('parse', 'capture'):
         try:
             script = parse_script(args[1])
             if args[0] == 'capture':
                 staged = os.path.join(opts['root'], 'staged')
-                out = capture(script, resolve_bin(opts['bin']), staged)
+                out = capture(script, resolve_bin(opts['bin']), staged, warn=True)
             else:
                 out = script
                 out['source_hash'] = source_hash(args[1])

@@ -22,9 +22,9 @@ R="$VIDEOS/render"
 CACHE="$VIDEOS/.cache"
 OUT="$VIDEOS/out"
 CONC="${RENDER_CONCURRENCY:-2}"
-# Per-episode size budget, from videos/STYLE.md (16:9: 12 MB, 9:16: 9 MB).
-BUDGET_16x9="${VIDEO_BUDGET_KB_16x9:-12288}"
+# Per-episode size budget, from videos/STYLE.md: 16:9 12 MB (episode 1: 8 MB), 9:16 9 MB, captions 20 KB.
 BUDGET_9x16="${VIDEO_BUDGET_KB_9x16:-9216}"
+BUDGET_VTT=20
 
 die() { echo "render.sh: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 not found: $2"; }
@@ -72,7 +72,7 @@ render_one() {
 import json, sys
 s = json.load(open(sys.argv[1]))
 shots = [{"n": x["n"], "vo": x["speak"]} for x in s["shots"]]
-shots.append({"n": "outro", "vo": "Find it at github dot com slash L four C I slash Ro-Ta."})
+shots.append({"n": "outro", "vo": "Find it at github dot com slash l four c i slash rota."})
 json.dump({"shots": shots}, open(sys.argv[2], "w"))
 PY
   "$R/.venv/bin/python" "$R/voice/synth.py" --plan "$work/voice-plan.json" --out "$work/public/audio"
@@ -124,8 +124,10 @@ PY
 }
 
 budget() {
-  local slug="$1" bad=0 kb
-  for pair in "$slug.mp4:$BUDGET_16x9" "$slug.vertical.mp4:$BUDGET_9x16"; do
+  local slug="$1" bad=0 kb b16=12288
+  case "$slug" in 01-*) b16=8192 ;; esac
+  b16="${VIDEO_BUDGET_KB_16x9:-$b16}"
+  for pair in "$slug.mp4:$b16" "$slug.vertical.mp4:$BUDGET_9x16" "$slug.vtt:$BUDGET_VTT"; do
     kb=$(( ($(stat -c %s "$OUT/${pair%%:*}") + 1023) / 1024 ))
     if [ "$kb" -gt "${pair##*:}" ]; then
       echo "render.sh: ${pair%%:*} is ${kb} KB, over the ${pair##*:} KB budget in videos/STYLE.md" >&2; bad=1
