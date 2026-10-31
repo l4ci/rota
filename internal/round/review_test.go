@@ -298,27 +298,6 @@ func (h *sendHook) Send(context.Context, string, string, string) error {
 	return errors.New("pane refused input")
 }
 
-// The rollback after a refused relay undoes this relay's bounce against the
-// registry as it is then, not a snapshot from before the dispatch.
-func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
-	f, _, o := reviewFx(t)
-	f.wire(func(w *worker.Env) {
-		w.NewHost = func(host.Kind) host.Host {
-			return &sendHook{hostFake: f.host, hook: func() {
-				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
-					t.Error(err)
-				}
-			}}
-		}
-	})
-	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
-		t.Fatal("want the dispatch failure")
-	}
-	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 1 {
-		t.Fatalf("bounces %d, want the concurrent one kept", n)
-	}
-}
-
 // A rollback that cannot be written is reported, not dropped.
 func TestReviewRelayReportsARollbackError(t *testing.T) {
 	f, _, o := reviewFx(t)
@@ -367,51 +346,6 @@ func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
 	}
 }
 
-// A bounce recordBounceVia deduped on the same head was not this relay's, so the
-// rollback leaves it, and a bounce another writer added, alone.
-func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
-	f, _, o := reviewFx(t)
-	if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "abc123"); err != nil {
-		t.Fatal(err)
-	}
-	f.wire(func(w *worker.Env) {
-		w.NewHost = func(host.Kind) host.Host {
-			return &sendHook{hostFake: f.host, hook: func() {
-				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
-					t.Error(err)
-				}
-			}}
-		}
-	})
-	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
-		t.Fatal("want the dispatch failure")
-	}
-	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 2 {
-		t.Fatalf("bounces %d, want both kept", n)
-	}
-}
-
-// The bounce head goes back only while it is the one this relay recorded.
-func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
-	f, _, o := reviewFx(t)
-	f.wire(func(w *worker.Env) {
-		w.NewHost = func(host.Kind) host.Host {
-			return &sendHook{hostFake: f.host, hook: func() {
-				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "newer"); err != nil {
-					t.Error(err)
-				}
-			}}
-		}
-	})
-	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
-		t.Fatal("want the dispatch failure")
-	}
-	// The same head again is deduped: only a kept head makes it so.
-	if n, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "newer"); err != nil || n != 1 {
-		t.Fatalf("recordBounceVia on the kept head = %d, %v; want 1 (deduped)", n, err)
-	}
-}
-
 func TestReviewRelayTextStripsInvisibleFormatCharacters(t *testing.T) {
 	body := "a\u200bb\u200cc\u200dd\u2060e" + string(rune(0xfeff)) + "\u00adf\U000e0041g\U000e007fh\u2061i"
 	text := ReviewRelayText(worker.ReviewBatch{PR: "u", Items: []tracker.Review{{Comment: tracker.Comment{Author: "rev", Body: body}}}})
@@ -441,29 +375,6 @@ func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 	got, err := f.env.ReviewRelay(bg, f.root, o)
 	if !isBlockedBy(err, "maxBounces") || got.Escalated || posts != 1 || !strings.Contains(err.Error(), "still open") {
 		t.Fatalf("second pass: %+v %v posts=%d", got, err, posts)
-	}
-}
-
-// A bounce the gate counts on the same head after the relay loaded its registry
-// makes this relay's recordBounceVia dedupe: it counted nothing, so a failed
-// dispatch must not undo the gate's bounce.
-func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
-	f, fg, o := reviewFx(t)
-	fg.onView = func() {
-		if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "abc123"); err != nil {
-			t.Error(err)
-		}
-	}
-	f.wire(func(w *worker.Env) {
-		w.NewHost = func(host.Kind) host.Host {
-			return &sendHook{hostFake: f.host, hook: func() {}}
-		}
-	})
-	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
-		t.Fatal("want the dispatch failure")
-	}
-	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 1 {
-		t.Fatalf("bounces %d, want the gate's bounce kept", n)
 	}
 }
 

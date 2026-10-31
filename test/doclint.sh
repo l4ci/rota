@@ -29,7 +29,7 @@ export ROTA_BIN
 echo "doclint: skills and references pass the validator; the prose lint catches drift (#173)"
 
 # ── skills and references pass the validator ────────────────────────────────
-OUT="$(cd "$REPO" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "validate-skills fails on the repo: $OUT"
+OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$REPO" 2>&1)" || fail "validate-skills fails on the repo: $OUT"
 pass "skills and references pass the doclint"
 
 # ── skill lists are generated from docs/skills ──────────────────────────────
@@ -64,11 +64,11 @@ pass "site-sync publishes llms.txt raw (and not install.md) and fails on a link 
 CL="$TMP/chain"; mkdir -p "$CL"
 cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$CL/"
 printf 'Ask the user, then invoke `rota-decide` and never skip it.\n' > "$CL/skills/references/chain.md"
-RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$CL" 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "skills/references/chain.md:1: chains into flagged skill rota-decide" <<<"$OUT" \
   || fail "chain lint missed a chaining line (rc $RC): $OUT"
 printf 'When a rule needs recording, tell the user to type `/rota-decide`.\n' > "$CL/skills/references/chain.md"
-RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$CL" 2>&1)" || RC=$?
 [ "$RC" = 0 ] || fail "chain lint rejected an explicit offer (rc $RC): $OUT"
 pass "the chain lint fails a line that runs a flagged skill, in shared references too, and passes an explicit offer"
 
@@ -79,7 +79,7 @@ FL="$TMP/fence"; mkdir -p "$FL"
 cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$FL/"
 printf 'Extracted detail for the fence fixture.\n' > "$FL/skills/rota-work/fence-only.md"
 printf '\n```\n[fenced](fence-only.md) [gone](gone.md)\n```\n' >> "$FL/skills/rota-work/$SK"
-RC=0; OUT="$(cd "$FL" && ROTA_DOCLINT_PROSE=off python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$FL" --no-prose 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "fence-only.md: not linked from" <<<"$OUT" && ! grep -qF "gone.md" <<<"$OUT" \
   || fail "a fenced link counted as a link in the validator (rc $RC): $OUT"
 pass "the validator ignores links inside a fence"
@@ -87,7 +87,7 @@ pass "the validator ignores links inside a fence"
 # A minimal skill tree has no authoring-conventions.md: the flagged-list check skips it
 # (section 94 lints such a fixture). It stays strict when the file exists (below).
 rm -f "$CL/skills/references/chain.md" "$CL/skills/references/authoring-conventions.md"
-RC=0; OUT="$(cd "$CL" && ROTA_DOCLINT_PROSE=off python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$CL" --no-prose 2>&1)" || RC=$?
 grep -qF "authoring-conventions.md: no 'The set is" <<<"$OUT" \
   && fail "flagged-list check failed a tree without authoring-conventions.md (rc $RC): $OUT"
 pass "the flagged-list check skips a tree without authoring-conventions.md"
@@ -104,13 +104,13 @@ pass "eval runner rejects failed calls and invalid routes without aborting the b
 # the file; a deleted target file is reported, not skipped.
 PL="$TMP/prose"; mkdir -p "$PL"
 cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
-OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
+OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$PL" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
 sed -i 's/rota status handoff/rota status hand-off/' "$PL/skills/rota-work/no-argument-mode.md"
-RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$PL" 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "skills/rota-work/no-argument-mode.md: must call rota status handoff" <<<"$OUT" \
   || fail "prose lint missed a dropped phrase (rc $RC): $OUT"
 rm -f "$PL/skills/references/manual-gates.md"
-RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$PL" 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "skills/references/manual-gates.md: prose rule target is missing" <<<"$OUT" \
   || fail "prose lint skipped a missing target file (rc $RC): $OUT"
 pass "the prose lint names a skill that lost a pinned phrase and a missing target file"

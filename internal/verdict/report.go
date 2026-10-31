@@ -18,7 +18,7 @@ func RenderReport(r Record, artifacts []string) string {
 	if r.Kind == QA {
 		section = "Checks run"
 	}
-	fmt.Fprintf(&out, "\n### %s\n\n%s\n", section, reportProse(reportOrNone(r.Summary)))
+	fmt.Fprintf(&out, "\n### %s\n\n%s\n", section, marker.ReportProse(reportOrNone(r.Summary)))
 	out.WriteString("\n### Findings by severity\n")
 	for _, severity := range severities {
 		fmt.Fprintf(&out, "\n### %s\n\n", strings.ToUpper(severity[:1])+severity[1:])
@@ -34,7 +34,7 @@ func RenderReport(r Record, artifacts []string) string {
 			} else if f.Severity == "info" {
 				disposition = "informational"
 			}
-			fmt.Fprintf(&out, "- **%s** (%s)%s\n", reportProse(f.Title), disposition, reportLocation(f.File, f.Line))
+			fmt.Fprintf(&out, "- **%s** (%s)%s\n", marker.ReportProse(f.Title), disposition, reportLocation(f.File, f.Line))
 			reportDetail(&out, f.Detail)
 			if f.Fix != "" {
 				reportDetail(&out, "Expected: "+f.Fix)
@@ -55,7 +55,7 @@ func RenderReport(r Record, artifacts []string) string {
 		out.WriteString("None.\n")
 	}
 	for _, d := range r.Declined {
-		fmt.Fprintf(&out, "- **%s**%s\n", reportProse(d.Title), reportLocation(d.File, d.Line))
+		fmt.Fprintf(&out, "- **%s**%s\n", marker.ReportProse(d.Title), reportLocation(d.File, d.Line))
 		reportDetail(&out, d.Detail)
 	}
 	out.WriteString("\n### Item verdicts\n\n")
@@ -63,7 +63,7 @@ func RenderReport(r Record, artifacts []string) string {
 		out.WriteString("None.\n")
 	}
 	for _, it := range r.Items {
-		fmt.Fprintf(&out, "- %s: **%s**\n", reportProse(it.ID), it.Verdict)
+		fmt.Fprintf(&out, "- %s: **%s**\n", marker.ReportProse(it.ID), it.Verdict)
 	}
 	if r.Kind == QA || len(artifacts) > 0 {
 		out.WriteString("\n### Artifacts\n\n")
@@ -71,7 +71,7 @@ func RenderReport(r Record, artifacts []string) string {
 			out.WriteString("None recorded.\n")
 		}
 		for _, path := range artifacts {
-			fmt.Fprintf(&out, "- `%s`\n", reportProse(path))
+			fmt.Fprintf(&out, "- `%s`\n", marker.ReportProse(path))
 		}
 	}
 	findings := r.Findings
@@ -105,21 +105,7 @@ func reportLocation(file string, line int) string {
 	if line > 0 {
 		file += fmt.Sprintf(":%d", line)
 	}
-	return " — `" + reportProse(file) + "`"
-}
-
-// Keep producer prose from introducing a sibling file section or a second
-// report identity. The embedded JSON below keeps the producer's text verbatim.
-func reportProse(text string) string {
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "# ") {
-			lines[i] = "\\" + line
-		} else if strings.HasPrefix(line, "<!-- rota:report ") {
-			lines[i] = "&lt;" + line[1:]
-		}
-	}
-	return strings.Join(lines, "\n")
+	return " — `" + marker.ReportProse(file) + "`"
 }
 
 func reportDetail(out *strings.Builder, detail string) {

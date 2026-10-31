@@ -184,3 +184,20 @@ func TestOpenClaims(t *testing.T) {
 		})
 	}
 }
+
+func TestReportProse(t *testing.T) {
+	cases := map[string]string{
+		"plain":                     "plain",
+		"## Heading":                "\\## Heading",
+		"# Title":                   "\\# Title",
+		"a\n## B\nc":                "a\n\\## B\nc",
+		"<!-- rota:report gate -->": "&lt;!-- rota:report gate -->",
+		"#nospace":                  "#nospace",
+		"<!-- rota:note -->":        "<!-- rota:note -->",
+	}
+	for in, want := range cases {
+		if got := ReportProse(in); got != want {
+			t.Errorf("ReportProse(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

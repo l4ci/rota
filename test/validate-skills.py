@@ -3,6 +3,10 @@ validate-skills.py — static schema validator for rota SKILL.md files,
 plus the Agent Skills spec frontmatter lint (E2, #69) and the prose-contract
 lint (PROSE_RULES, #173).
 Stdlib only. Exit 0 on all-pass, exit 1 on any failure, exit 2 on unexpected error.
+
+Usage: python3 test/validate-skills.py [--root <dir>] [--no-prose]
+  --root      tree to validate (default: the current directory)
+  --no-prose  skip the prose-contract lint, for fixture trees that lack its targets
 """
 
 import atexit
@@ -54,17 +58,13 @@ def check_frontmatter(path, text, issues):
 
 # Agent Skills spec frontmatter (E2, #69; https://agentskills.io/specification).
 # Codex and Claude Code read the same SKILL.md, and a strict spec validator
-# rejects any key outside SPEC_KEYS. The two sets below excuse a violation a
-# slice has not fixed yet (empty since E2 fixed them all). An entry with nothing
-# left to excuse fails the check, so the sets can only shrink.
+# rejects any key outside SPEC_KEYS.
 SPEC_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Claude Code's own frontmatter key, outside the spec. A skill that sets it true
 # is manual-only on Claude Code, and must carry agents/openai.yaml with
 # policy.allow_implicit_invocation: false so it is manual-only on Codex too (#677).
 CLAUDE_KEYS = {"disable-model-invocation"}
-PENDING_KEYS = set()
-PENDING_LONG = set()
 # A description says when to use the skill, not how it works: a long one
 # summarises the workflow and agents follow it instead of reading the skill
 # (#246, references/authoring-conventions.md). The spec's 1024 is a ceiling, not a target.
@@ -76,17 +76,6 @@ SECOND_PERSON = re.compile(r"\b(you|your|I)\b")
 # A reference longer than this opens with a "## Contents" section so a partial
 # read still shows what the file covers (same guide, #248).
 REF_TOC_LINES = 100
-
-
-def pending_spec():
-    # ROTA_SPEC_PENDING (whitespace-separated; a token ending .md is a path for
-    # PENDING_LONG, anything else a key for PENDING_KEYS) replaces both sets, so
-    # smoke sections can test the check on a fixture tree.
-    override = os.environ.get("ROTA_SPEC_PENDING")
-    if override is None:
-        return PENDING_KEYS, PENDING_LONG
-    toks = override.split()
-    return {t for t in toks if not t.endswith(".md")}, {t for t in toks if t.endswith(".md")}
 
 
 BLOCK_SCALARS = {">", "|", ">-", "|-", ">+", "|+"}
@@ -156,7 +145,6 @@ def plain_scalar_hazards(text):
 
 
 def check_spec_frontmatter(path, text, issues):
-    pending_keys, pending_long = pending_spec()
     path = Path(path)
     fm = spec_fields(text)
     if fm is None:
@@ -168,10 +156,7 @@ def check_spec_frontmatter(path, text, issues):
     if name and (len(name) > 64 or not NAME_RE.match(name)):
         issues.append(f"{rel}: name '{name}' must be 1-64 chars of lowercase letters, digits and single hyphens, not starting or ending with one")
     if len(desc) > 1024:
-        if rel not in pending_long:
-            issues.append(f"{rel}: description is {len(desc)} chars; the spec allows 1024")
-    elif rel in pending_long:
-        issues.append(f"{rel}: description is within 1024 chars; remove it from PENDING_LONG")
+        issues.append(f"{rel}: description is {len(desc)} chars; the spec allows 1024")
     elif len(desc) > DESC_CAP:
         issues.append(f"{rel}: description is {len(desc)} chars; the cap is {DESC_CAP}. "
                       f"State when to use the skill, not how it works")
@@ -184,9 +169,8 @@ def check_spec_frontmatter(path, text, issues):
     if len(fm.get("compatibility", "")) > 500:
         issues.append(f"{rel}: compatibility is over 500 chars")
     extra = sorted(set(fm) - SPEC_KEYS - CLAUDE_KEYS)
-    bad = [k for k in extra if k not in pending_keys]
-    if bad:
-        issues.append(f"{rel}: frontmatter key(s) {', '.join(bad)} are not in the Agent Skills spec "
+    if extra:
+        issues.append(f"{rel}: frontmatter key(s) {', '.join(extra)} are not in the Agent Skills spec "
                       f"(allowed: {', '.join(sorted(SPEC_KEYS))})")
 
 
@@ -283,19 +267,6 @@ def check_flag_consistency(skill_files, issues):
                 if chained:
                     issues.append(f"{real.relative_to(root.parent).as_posix()}:{n}: chains into flagged skill {hit.group(1)} "
                                   "(manual-only; tell the user to type it instead)")
-
-
-def check_pending_spec(skill_files, issues):
-    """A pending entry nothing uses any more must be deleted."""
-    pending_keys, pending_long = pending_spec()
-    used = set()
-    for p in skill_files:
-        used |= set(spec_fields(Path(p).read_text(encoding="utf-8")) or {}) & pending_keys
-    for k in sorted(pending_keys - used):
-        issues.append(f"PENDING_KEYS: no SKILL.md uses '{k}' any more; remove it")
-    present = {Path(p).as_posix() for p in skill_files}
-    for rel in sorted(pending_long - present):
-        issues.append(f"{rel}: listed in PENDING_LONG but missing; remove the entry")
 
 
 def supported_skill_file(rel):
@@ -480,7 +451,7 @@ def check_reference_toc(issues):
 #   count_ge(path, text, n, msg)      text appears at least n times
 #   only_in(glob, text, names, msg)   exactly these skill dirs contain text
 #   paired(glob, trigger, need, msg)  every file with trigger also has need
-# A rule on a missing file fails. ROTA_DOCLINT_PROSE=off skips the lint so section
+# A rule on a missing file fails. --no-prose skips the lint so section
 # 94 can run the spec lint on a fixture tree.
 def has(path, text, msg, re_=False, flags=0):
     return ("has", path, text, msg, re_, flags)
@@ -584,8 +555,6 @@ def prose_rules():
 
 
 def check_prose(issues):
-    if os.environ.get("ROTA_DOCLINT_PROSE") == "off":
-        return
     cache = {}
 
     def read(path):
@@ -632,7 +601,7 @@ def check_prose(issues):
                     issues.append(f"{p.as_posix()}: {msg}")
 
 
-def main():
+def main(prose=True):
     issues = []
 
     skill_files = sorted(Path(".").glob("skills/rota-*/SKILL.md"))
@@ -647,10 +616,10 @@ def main():
         check_skill_files(skill_path, text, issues)
         check_checklist(skill_path, text, issues)
 
-    check_pending_spec(skill_files, issues)
     check_flag_consistency(skill_files, issues)
     check_reference_toc(issues)
-    check_prose(issues)
+    if prose:
+        check_prose(issues)
 
     n = len(skill_files)
     if issues:
@@ -677,12 +646,28 @@ def print_fields(path):
     sys.exit(0)
 
 
+def parse_args(argv):
+    """Return (root, prose); --root changes into the tree, so every check keeps its relative paths."""
+    root, prose, i = None, True, 0
+    while i < len(argv):
+        if argv[i] == "--root" and i + 1 < len(argv):
+            root, i = argv[i + 1], i + 2
+        elif argv[i] == "--no-prose":
+            prose, i = False, i + 1
+        else:
+            raise SystemExit(f"validate-skills: unknown argument {argv[i]!r}\n{__doc__.split('Usage: ')[1].strip()}")
+    return root, prose
+
+
 try:
     if len(sys.argv) == 3 and sys.argv[1] == "--layout":
         layout_only(sys.argv[2])
     if len(sys.argv) == 3 and sys.argv[1] == "--fields":
         print_fields(sys.argv[2])
-    main()
+    root, prose = parse_args(sys.argv[1:])
+    if root is not None:
+        os.chdir(root)
+    main(prose)
 except Exception as exc:
     print(f"validate-skills: ERROR {exc}", file=sys.stderr)
     sys.exit(2)
