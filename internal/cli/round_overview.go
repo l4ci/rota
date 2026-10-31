@@ -130,7 +130,7 @@ func (s roundSnap) totals() []string {
 			parkedNames = append(parkedNames, r.Name)
 		case !s.CandsLoaded:
 			holding++ // the host has not been read: no state to count yet
-		case r.HostState == "dead" || r.HostState == "unverifiable" || r.NoLogin != "":
+		case r.HostState == worker.LivenessDead || r.HostState == worker.LivenessUnverifiable || r.NoLogin != "":
 			unavailable++
 		case awaitingReview(r):
 			review++
@@ -202,7 +202,7 @@ func slotEntry(r round.Row, urls map[string]string) entry {
 		e.status, e.tone = "ready for review", toneOK
 	case r.HostState == "working":
 		e.tone = toneOK
-	case r.HostState == "dead" || r.HostState == "unverifiable" || r.NoLogin != "":
+	case r.HostState == worker.LivenessDead || r.HostState == worker.LivenessUnverifiable || r.NoLogin != "":
 		e.tone = toneBad
 	default:
 		e.tone = toneWarn

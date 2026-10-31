@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -511,8 +510,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		}
 		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[s:e]), 120)
 	}
-	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
-		return StateUnverifiable, reason
+	nativeLive, nativeKnown := NativeLiveness(native)
+	if nativeKnown && nativeLive.State == LivenessUnverifiable {
+		return StateUnverifiable, nativeLive.Reason
 	}
 	if rules.loggedOut != nil {
 		if m := rules.loggedOut.FindString(dialog); m != "" {
@@ -540,7 +540,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if native == "blocked" && !waiting {
 		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
-	if native == "gone" {
+	if nativeKnown && nativeLive.State == LivenessDead {
 		return StateDead, "herdr: no agent in the slot's tab — the session exited"
 	}
 	// Static pane from here down.
