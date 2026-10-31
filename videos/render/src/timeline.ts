@@ -21,13 +21,14 @@ export type Shot = {
   scene: string | null;
   lower_third: string | null;
   cmds: string[];
+  crops?: Record<string, {mode: 'first' | 'last'; n: number}>;
 };
 export type Clip = {n: string; file: string; seconds: number};
 
 export type Row = {text: string; appear: number; typedFrom?: number; typedChars?: number};
 
 /** Rows of a terminal shot: each command typed at 28 cps, then its output after a beat. */
-export function layoutTerminal(cmds: string[], captures: Capture[]): {rows: Row[]; end: number} {
+export function layoutTerminal(cmds: string[], captures: Capture[], crops: Shot['crops'] = {}): {rows: Row[]; end: number} {
   const rows: Row[] = [];
   let t = 0;
   for (const cmd of cmds) {
@@ -35,7 +36,9 @@ export function layoutTerminal(cmds: string[], captures: Capture[]): {rows: Row[
     rows.push({text: '$ ' + cmd, appear: t, typedFrom: t, typedChars: cmd.length});
     t += typeFrames + BEAT_FRAMES;
     const cap = captures.find((c) => c.cmd === cmd);
-    const out = cap ? cap.stdout.replace(/\n+$/, '').split('\n').filter((_, i, a) => !(a.length === 1 && a[0] === '')) : [];
+    let out = cap ? cap.stdout.replace(/\n+$/, '').split('\n').filter((_, i, a) => !(a.length === 1 && a[0] === '')) : [];
+    const crop = crops?.[cmd];
+    if (crop) out = crop.mode === 'first' ? out.slice(0, crop.n) : out.slice(-crop.n);
     const allAtOnce = out.length > ALL_AT_ONCE_OVER;
     out.forEach((line, i) => rows.push({text: line, appear: allAtOnce ? t : t + i * LINE_FRAMES}));
     t += (allAtOnce ? 0 : out.length * LINE_FRAMES) + BEAT_FRAMES;
@@ -79,7 +82,7 @@ export function buildTimeline(shots: Shot[], captures: Capture[], clips: Clip[])
     const clip = clips.find((c) => c.n === s.n);
     if (!clip) throw new Error(`no voiceover clip for shot ${s.n}`);
     const voFrames = Math.ceil(clip.seconds * FPS);
-    const term = s.kind === 'terminal' ? layoutTerminal(s.cmds, captures.filter((c) => c.shot === s.n)) : {rows: [], end: 0};
+    const term = s.kind === 'terminal' ? layoutTerminal(s.cmds, captures.filter((c) => c.shot === s.n), s.crops) : {rows: [], end: 0};
     const frames = Math.max(voFrames + TAIL_FRAMES, term.end + HOLD_FRAMES);
     const p = {...s, start, frames, voFrames, audio: clip.file, rows: term.rows};
     start += frames;
@@ -132,4 +135,19 @@ export function captionAt(chunks: string[], voFrames: number, frame: number): st
     if (frame < (acc / total) * voFrames) return c;
   }
   return chunks[chunks.length - 1] ?? null;
+}
+
+/** Lower third opacity: in 280 ms, held 2.5 s, out 200 ms (STYLE.md). */
+export function lowerThirdOpacity(frame: number): number {
+  const inF = 8, hold = 75, outF = 6;
+  if (frame < 0 || frame >= inF + hold + outF) return 0;
+  if (frame < inF) return frame / inF;
+  if (frame < inF + hold) return 1;
+  return 1 - (frame - inF - hold) / outF;
+}
+
+/** `<mono text> | <gloss>` -> parts, backticks dropped. */
+export function parseLowerThird(s: string): {mono: string; gloss: string} {
+  const [a, ...b] = s.split('|');
+  return {mono: a.replace(/`/g, '').trim(), gloss: b.join('|').trim()};
 }

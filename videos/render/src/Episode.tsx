@@ -2,6 +2,7 @@ import React from 'react';
 import {AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {Captions} from './Captions';
 import {Intro} from './Intro';
+import {LowerThird} from './LowerThird';
 import {Motion} from './Motion';
 import {Outro} from './Outro';
 import {Terminal} from './Terminal';
@@ -37,6 +38,7 @@ export const Episode: React.FC<EpisodeProps> = ({script, captures, clips, outroC
           ) : (
             <Motion text={s.caption} />
           )}
+          {s.lower_third ? <LowerThird text={s.lower_third} style={{position: 'absolute', left: side, top: top + 72}} /> : null}
           <Audio src={staticFile('audio/' + s.audio)} />
           <Captions text={s.caption} voFrames={s.voFrames} style={{position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: bottom + (portrait ? 0 : 16)}} />
         </Sequence>

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {captionAt, captionChunks, layoutTerminal, linesAt, visibleWindow, wrapLines} from './timeline.ts';
+import {lowerThirdOpacity, parseLowerThird, captionAt, captionChunks, layoutTerminal, linesAt, visibleWindow, wrapLines} from './timeline.ts';
 
 const forty = Array.from({length: 40}, (_, i) => `line ${i + 1}`);
 
@@ -47,4 +47,19 @@ test('captions split at phrases, two lines of 42 characters at most, and cover t
   assert.equal(captionAt(chunks, 90, 0), chunks[0]);
   assert.equal(captionAt(chunks, 90, 89), chunks[chunks.length - 1]);
   assert.equal(captionAt(chunks, 90, 500), null);
+});
+
+test('crop keeps the first or last N lines of one command', () => {
+  const cap = [{shot: '1', cmd: 'x', stdout: forty.join('\n'), exit: 0}];
+  const last = layoutTerminal(['x'], cap, {x: {mode: 'last', n: 3}}).rows.map((r) => r.text);
+  assert.deepEqual(last, ['$ x', 'line 38', 'line 39', 'line 40']);
+  const first = layoutTerminal(['x'], cap, {x: {mode: 'first', n: 2}}).rows.map((r) => r.text);
+  assert.deepEqual(first, ['$ x', 'line 1', 'line 2']);
+});
+
+test('lower third parses and fades 280 ms in, holds 2.5 s, 200 ms out', () => {
+  assert.deepEqual(parseLowerThird('`rota init` | Seed .rota/ in this repo'), {mono: 'rota init', gloss: 'Seed .rota/ in this repo'});
+  assert.equal(lowerThirdOpacity(0), 0);
+  assert.equal(lowerThirdOpacity(40), 1);
+  assert.equal(lowerThirdOpacity(200), 0);
 });
