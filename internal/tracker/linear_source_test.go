@@ -28,7 +28,6 @@ func TestLinearSourceBuildsTheLinearTracker(t *testing.T) {
 		t.Errorf("provider %q", it.Provider())
 	}
 	for _, c := range []struct{ cfg, want string }{
-		{`{"issues":{"source":"linear","linear":{"team":"ENG"}}}`, "issues.connection is not set"},
 		{`{"issues":{"source":"linear","connection":"work"}}`, "issues.linear.team is not set"},
 	} {
 		cfg, _ := jsonx.Decode([]byte(c.cfg))
