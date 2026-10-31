@@ -14,6 +14,7 @@ import json, os, re, shutil, sys, posixpath
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fmlite  # noqa: E402
+from lanes import LANES, LANE_NAME, lane_error  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(REPO, "docs")
@@ -225,10 +226,6 @@ def convert(rel):
             "{%% raw %%}\n%s\n{%% endraw %%}\n") % (q(title), q(desc), permalink(rel), rel, extra, text)
 
 
-LANES = [("capture", "Capture"), ("plan", "Plan"), ("execute", "Execute"), ("ship", "Ship"),
-         ("persist", "Persist"), ("rounds", "Rounds"), ("maintenance", "Maintenance")]
-
-
 def with_source_url(ex):
     """Add source_url to a skill example or a chain step example that names a source."""
     if ex and ex.get("source"):
@@ -238,16 +235,18 @@ def with_source_url(ex):
 def skill_data():
     """Skill cards and chains for the site, from docs/skills/ plus each SKILL.md description."""
     lane_ix = {k: i for i, (k, _) in enumerate(LANES)}
-    lane_name = dict(LANES)
     skills = []
     for rel in MD:
         if not re.match(r"^skills/rota-[a-z-]+\.md$", rel):
             continue
         fm, _ = fmlite.load_front_matter(os.path.join(DOCS, rel))
+        err = lane_error("docs/" + rel, fm.get("lane"))
+        if err:
+            sys.exit(err)
         name = fm["skill"]
         sk, _ = fmlite.load_front_matter(os.path.join(REPO, "skills", name, "SKILL.md"))
         fm["when"] = sk.get("description", "")
-        fm["lane_name"] = lane_name[fm["lane"]]
+        fm["lane_name"] = LANE_NAME[fm["lane"]]
         fm["url"] = permalink(rel)
         with_source_url(fm.get("example"))
         skills.append(fm)

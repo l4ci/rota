@@ -122,3 +122,38 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 		}
 	})
 }
+
+// The plugin ships its own rota-install skill outside skills/, and it is the
+// first one a plugin user hits: the validator must hold it to the same rules.
+func TestValidatorLintsPluginSkills(t *testing.T) {
+	abs, _ := filepath.Abs("test/validate-skills.py")
+	root := t.TempDir()
+	copyTree(t, root, "skills", "plugin")
+	run := func() (string, error) {
+		out, err := exec.Command("python3", abs, "--root", root, "--no-prose").CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run(); err != nil {
+		t.Fatalf("clean tree rejected: %v\n%s", err, out)
+	}
+	skill := filepath.Join(root, "plugin/skills/rota-install/SKILL.md")
+	b, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(string) string{
+		"no front matter": func(s string) string { return s[strings.Index(s[3:], "---")+6:] },
+		"second person": func(s string) string {
+			return strings.Replace(s, "description: Use on", "description: Use when you want to install", 1)
+		},
+		"broken link": func(s string) string { return s + "\nSee [x](references/nope.md).\n" },
+	} {
+		if err := os.WriteFile(skill, []byte(mutate(string(b))), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, err := run()
+		if err == nil || !strings.Contains(out, "plugin/skills/rota-install/SKILL.md") {
+			t.Errorf("%s: validator did not flag the plugin skill: %v\n%s", name, err, out)
+		}
+	}
+}
