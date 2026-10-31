@@ -148,19 +148,6 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// The snapshot check above only spares the work. The registry store holds
 	// the cap under its lock; the issue store, across machines, re-reads after
 	// its comment and takes it back when another machine's landed first.
-	rec, err := store.Record(nil, issue, o.Slot, pr.HeadSHA, o.MaxBounces)
-	if err != nil {
-		return out, err
-	}
-	out.Bounces = rec.N
-	if rec.Capped {
-		return e.reviewCap(ctx, root, o, batch, number, issue, out)
-	}
-	// recount is the count after a rollback; the store was read above.
-	recount := func() int {
-		n, _, _ := store.Count(issue)
-		return n
-	}
 	// The cursor goes back only while it is still the one written here.
 	unseen := func() error {
 		_, err := worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) {
@@ -170,24 +157,30 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		})
 		return err
 	}
-	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
-		rerr := rec.Undo()
-		out.Bounces = recount()
-		return out, errors.Join(err, rollbackErr(rerr))
-	}
-	// The same text goes to the slot's inbox first: the pane copy can cross the
-	// worker's ROTA-DONE, and `worker done` refuses while mail is unread.
-	mail, err := worker.PostMail(root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
+	res, err := worker.Bounce(store, nil, issue, o.Slot, pr.HeadSHA, o.MaxBounces, func(worker.BounceRecord) error {
+		if _, err := worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
+			return err
+		}
+		// The same text goes to the slot's inbox first: the pane copy can cross the
+		// worker's ROTA-DONE, and `worker done` refuses while mail is unread.
+		mail, err := worker.PostMail(root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
+		if err != nil {
+			return errors.Join(err, rollbackErr(unseen()))
+		}
+		if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: path, Relay: true}); err != nil {
+			return errors.Join(err, rollbackErr(unseen()), rollbackErr(worker.RetractMail(root, o.Slot, mail.Seq)))
+		}
+		return nil
+	})
 	if err != nil {
-		rerr, serr := rec.Undo(), unseen()
-		out.Bounces = recount()
-		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
+		return out, err
 	}
-	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: path, Relay: true}); err != nil {
-		rerr, serr := rec.Undo(), unseen()
-		merr := worker.RetractMail(root, o.Slot, mail.Seq)
-		out.Bounces = recount()
-		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
+	out.Bounces = res.N
+	if res.Capped {
+		return e.reviewCap(ctx, root, o, batch, number, issue, out)
+	}
+	if res.NotifyErr != nil {
+		return out, errors.Join(res.NotifyErr, rollbackErr(res.UndoErr))
 	}
 	// The relay stays on the PR; with the support split active the issue thread
 	// gets the pointer the other machine's watch reads (#1827).
@@ -239,33 +232,39 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return skip("no free slot to transfer to")
 	}
 	prev := out.Bounces
-	rec, err := store.Record(nil, issue, o.Slot, head, o.MaxBounces)
+	var res Transferred
+	var terr error
+	bres, err := worker.Bounce(store, nil, issue, o.Slot, head, o.MaxBounces, func(rec worker.BounceRecord) error {
+		res, terr = e.Transfer(ctx, root, o.Board, TransferOpts{
+			Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings),
+			Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", rec.N, o.FreshAt, prLabel(out.PR)),
+			Tier:       s.Tier(),
+			TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),
+			CapReason:  ledger.CapFresh,
+		})
+		// A transfer that changed something keeps the bounce, whatever it returned.
+		if terr != nil && !res.Changed {
+			return terr
+		}
+		return nil
+	})
 	if err != nil {
 		return false, err
 	}
-	bounces := rec.N
-	if rec.Capped {
+	if bres.Capped {
 		// Another bounce reached the cap meanwhile: the relay that follows
 		// refuses it through the same check and escalates.
-		out.Bounces = bounces
+		out.Bounces = bres.N
 		return false, nil
 	}
-	out.Bounces = bounces
-	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
-		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings),
-		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
-		Tier:       s.Tier(),
-		TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),
-		CapReason:  ledger.CapFresh,
-	})
-	if terr != nil && !res.Changed {
-		var blk *BlockedError
-		rerr := rec.Undo()
+	out.Bounces = bres.N
+	if bres.NotifyErr != nil {
 		out.Bounces = prev
-		if errors.As(terr, &blk) {
+		var blk *BlockedError
+		if errors.As(bres.NotifyErr, &blk) {
 			return skip("transfer to %s refused: %s", to, blk.Error())
 		}
-		return false, errors.Join(terr, rollbackErr(rerr))
+		return false, errors.Join(bres.NotifyErr, rollbackErr(bres.UndoErr))
 	}
 	if _, serr := worker.UpdateSlot(root, to, func(t *worker.Slot) { t.SetReviewSeen(batch.Cursor) }); serr != nil {
 		terr = errors.Join(terr, serr)
