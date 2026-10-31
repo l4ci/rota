@@ -161,6 +161,8 @@ When `milestone/<MNN>` still exists on origin or issues still carry `on-mileston
 
 ## Step 13 — Close Upstream Issues
 
+**Video series.** When `scripts/videos.py` and `videos/` exist, run `python3 scripts/videos.py --check`. A stale episode does not block the release: list each one it names and remind the maintainer to re-render with `videos/render.sh <episode>` (CI never renders). Skip in `--dry-run`.
+
 When `rota issues imported --json --open-only` lists open upstream issues, read [`upstream-issues.md`](upstream-issues.md) and follow it. Skip in `--dry-run`.
 
 ## Step 14 — Docs Nudge

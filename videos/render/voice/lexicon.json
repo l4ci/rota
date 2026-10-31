@@ -1,0 +1,4 @@
+{
+  "_comment": "Word -> espeak/IPA phonemes. 'rota' is Ro-Ta: two clear syllables, long O, hard T. The default American voice flaps the T (ɾ), which is wrong.",
+  "rota": "ɹˈoʊtɑː"
+}
