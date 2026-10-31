@@ -31,6 +31,13 @@ type orcaTerminal struct {
 
 func (o *orca) Kind() Kind                 { return Orca }
 func (o *orca) Capabilities() Capabilities { return CapabilitiesOf(o) }
+
+// RuntimeScopedHandles: an Orca runtime restart orphans handles whose
+// processes survive, so list absence proves nothing.
+func (o *orca) RuntimeScopedHandles() bool { return true }
+
+// TreeKillClose: Orca owns terminals whose agent can outlive the handle.
+func (o *orca) TreeKillClose() bool { return true }
 func (o *orca) call(ctx context.Context, args ...string) (string, error) {
 	r, e := o.d.Run(ctx, "orca", args)
 	if e != nil {

@@ -300,7 +300,7 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		}
 		// Orca owns a terminal whose agent can outlive its runtime handle.
 		// Retain the worktree and registry until close proves the tree gone.
-		if e.hostKind(root) == host.Orca && s.Handle() != "" {
+		if host.CapabilitiesForKind(e.hostKind(root)).TreeKillClose && s.Handle() != "" {
 			if err := e.KillSlot(context.Background(), root, name); err != nil {
 				failed = append(failed, fmt.Sprintf("%s: %v", name, err))
 				continue

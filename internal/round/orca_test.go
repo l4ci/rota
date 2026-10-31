@@ -168,3 +168,31 @@ func TestOrcaForceReclaimUsesAdapterRetainedProcessProof(t *testing.T) {
 		})
 	}
 }
+
+// Absence from the list proves nothing on Orca, whatever the slot last
+// recorded: a recorded-dead slot must not get the dead-tab repair, which would
+// clear the handle that reap needs for the process-tree kill.
+func TestOrcaStatusNeverOffersDeadTabForListAbsence(t *testing.T) {
+	for _, state := range []string{"busy", "dead"} {
+		t.Run(state, func(t *testing.T) {
+			f := newMoveFx(t)
+			f.env.HostName = host.Kind("orca")
+			f.env.Snapshot = func(context.Context) ([]host.Agent, error) { return []host.Agent{}, nil }
+			rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "orca:old-runtime"); s.Set("state", state) })
+			rep, err := f.env.Status(bg, f.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, finding := range rep.Findings {
+				if finding.Kind == DeadTab && finding.Slot == "ben" {
+					t.Fatalf("recorded %s + absent offered dead-tab repair", state)
+				}
+			}
+			for _, row := range rep.Rows {
+				if row.Name == "ben" && (row.HostState != "unverifiable" || row.Evidence != "stale-handle") {
+					t.Fatalf("row = %+v", row)
+				}
+			}
+		})
+	}
+}

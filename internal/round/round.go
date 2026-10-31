@@ -546,8 +546,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		} else if r.Registered && r.Tab != "" {
 			// A runtime restart can orphan Orca handles while their processes
 			// survive. Never offer the destructive dead-tab repair for absence.
-			if e.HostName == host.Orca {
-				r.HostState, r.Evidence = "unverifiable", "stale-handle"
+			if v := e.absence(slotObj[r.Name]); v.State == worker.LivenessUnverifiable {
+				r.HostState, r.Evidence = v.State, v.Reason
 				continue
 			}
 			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})
@@ -842,8 +842,8 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
 			r.Evidence, _, _ = strings.Cut(ev, "\t") // an event's seq trails the evidence
 		}
-		if s.State() == "unverifiable" { // an agent the host lists below overrides the host state
-			r.HostState, r.Evidence = "unverifiable", s.Reason()
+		if worker.IsUnverifiable(s.State()) { // an agent the host lists below overrides the host state
+			r.HostState, r.Evidence = worker.LivenessUnverifiable, s.Reason()
 		}
 		if ev := s.Event(); ev != nil && ev.Kind != worker.EventHeartbeat {
 			r.Event = ev

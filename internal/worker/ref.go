@@ -129,3 +129,6 @@ func IssueFromBranch(name string) string {
 	}
 	return ""
 }
+
+// IsUnverifiable: the host could not say whether the session lives.
+func IsUnverifiable(state string) bool { return stateIs(state, LivenessUnverifiable) }
