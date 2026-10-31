@@ -35,7 +35,7 @@ const hookTrustFlag = "--dangerously-bypass-hook-trust"
 // codex is the Codex CLI. Its account is the default Codex home, or a named
 // home of a codex entry of round.accounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
 // pane, so a UserPromptSubmit hook blocks anything without the signature.
-type codex struct{}
+type codex struct{ promptSigner }
 
 func (codex) Kind() string       { return Codex }
 func (codex) CommandKey() string { return config.RoundCommandsCodexKey }
@@ -267,9 +267,9 @@ func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (stri
 	if err != nil {
 		return "", nil, refuse(Unavailable, "cannot find the rota binary for the prompt-check hook: %v", err)
 	}
-	keyPath, key, err := newPromptKey(s.StateDir)
+	keyPath, key, err := writePromptKey(s.StateDir)
 	if err != nil {
-		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", s.StateDir, err)
+		return "", nil, err
 	}
 	out, err := withPromptHook(launch, append(codexLaunchArgs(s.Worktree), CodexHookArgs(bin, keyPath)...))
 	if err != nil {
@@ -280,22 +280,8 @@ func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (stri
 
 // RelayKey loads the key the session's task dispatch wrote.
 func (codex) RelayKey(commonDir func() (string, error), slot string) ([]byte, error) {
-	cd, err := commonDir()
-	if err != nil {
-		return nil, err
-	}
-	keyFile := filepath.Join(CodexSlotDir(cd, slot), PromptKeyFile)
-	key, err := LoadPromptKey(keyFile)
-	if err != nil {
-		r := refuse(Unavailable, "slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", slot, keyFile, err)
-		r.Hint = "re-dispatch the task: a fresh session gets a fresh key and hook"
-		return nil, r
-	}
-	return key, nil
+	return relayPromptKey(commonDir, CodexSlotDir, slot, "a codex", "re-dispatch the task: a fresh session gets a fresh key and hook")
 }
-
-// Sign ends payload with its ROTA-SIG trailer.
-func (codex) Sign(key []byte, payload string) string { return signPrompt(key, payload) }
 
 // CodexSlotsDir is where the slots' state directories live, beside the round
 // lease, under the git common dir.

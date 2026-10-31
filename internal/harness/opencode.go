@@ -31,7 +31,7 @@ const DefaultOpencodeCommand = "opencode --model {model}"
 // after boot, like Claude Code. It has no usage meter: a provider is billed
 // per token, so a quota error is a limit without a reset clock. It is also the
 // orchestrator in `orchestrator.harness: opencode` (Name, Prompt, Command).
-type opencode struct{}
+type opencode struct{ promptSigner }
 
 func (opencode) Kind() string       { return OpenCode }
 func (opencode) CommandKey() string { return config.RoundCommandsOpencodeKey }
@@ -389,9 +389,9 @@ func (o opencode) Prepare(launch string, _ func() (string, error), s Setup) (str
 	if err := os.WriteFile(filepath.Join(s.StateDir, GuardFile), opencodeGuard, 0o600); err != nil {
 		return "", nil, refuse(Unavailable, "cannot write the prompt guard in %s: %v", s.StateDir, err)
 	}
-	_, key, err := newPromptKey(s.StateDir)
+	_, key, err := writePromptKey(s.StateDir)
 	if err != nil {
-		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", s.StateDir, err)
+		return "", nil, err
 	}
 	guard, err := filepath.Abs(filepath.Join(s.StateDir, GuardFile))
 	if err != nil {
@@ -403,22 +403,8 @@ func (o opencode) Prepare(launch string, _ func() (string, error), s Setup) (str
 
 // RelayKey loads the key the session's task dispatch wrote.
 func (opencode) RelayKey(commonDir func() (string, error), slot string) ([]byte, error) {
-	cd, err := commonDir()
-	if err != nil {
-		return nil, err
-	}
-	keyFile := filepath.Join(OpencodeSlotDir(cd, slot), PromptKeyFile)
-	key, err := LoadPromptKey(keyFile)
-	if err != nil {
-		r := refuse(Unavailable, "slot '%s' is an opencode worker but its prompt key is unreadable (%s): %v", slot, keyFile, err)
-		r.Hint = "re-dispatch the task: a fresh session gets a fresh key and guard"
-		return nil, r
-	}
-	return key, nil
+	return relayPromptKey(commonDir, OpencodeSlotDir, slot, "an opencode", "re-dispatch the task: a fresh session gets a fresh key and guard")
 }
-
-// Sign ends payload with its ROTA-SIG trailer.
-func (opencode) Sign(key []byte, payload string) string { return signPrompt(key, payload) }
 
 // OpencodeSlotDir is the slot's own state directory,
 // <git-common-dir>/rota/opencode/<slot>: the prompt key and the guard plugin.

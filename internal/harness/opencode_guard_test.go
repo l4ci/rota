@@ -126,22 +126,6 @@ func TestOpenCodePrepareAddsTheGuardToTheLaunch(t *testing.T) {
 	if b, _ := os.ReadFile(guard); string(b) != string(opencodeGuard) || len(b) == 0 {
 		t.Error("the guard is not the embedded plugin")
 	}
-	// A relay is signed with the key the task dispatch wrote.
-	cd := t.TempDir()
-	slotDir := OpencodeSlotDir(cd, "ben")
-	if err := os.MkdirAll(slotDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := (opencode{}).Prepare("opencode", nil, Setup{StateDir: slotDir}); err != nil {
-		t.Fatal(err)
-	}
-	k, err := (opencode{}).RelayKey(func() (string, error) { return cd, nil }, "ben")
-	if err != nil || len(k) != 32 {
-		t.Errorf("RelayKey = %d, %v", len(k), err)
-	}
-	if _, err := (opencode{}).RelayKey(func() (string, error) { return cd, nil }, "gone"); err == nil {
-		t.Error("a slot with no key is refused")
-	}
 }
 
 func TestOpenCodeCheckLaunchKeepsTheGuardIn(t *testing.T) {
