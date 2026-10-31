@@ -394,7 +394,7 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 func (f *moveFx) mintReview(t *testing.T, id string) {
 	t.Helper()
 	f.be.items[id].Title = ReviewTitle("cli")
-	if err := worker.Update(f.root, func(d *worker.Doc) { d.RecordReviewItems([]string{id}) }); err != nil {
+	if err := worker.Update(f.root, func(d *worker.Doc) { RecordReviewItems(d, []string{id}) }); err != nil {
 		t.Fatal(err)
 	}
 }

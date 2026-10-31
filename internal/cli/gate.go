@@ -156,17 +156,21 @@ func approvalNow(c *Ctx) time.Time {
 // worker.ApprovalReader the cli wires. The rule over it lives in worker.
 type approvalAnswers struct{ c *Ctx }
 
-func (r approvalAnswers) Entry(id string) (worker.Escalation, bool, error) {
+func (r approvalAnswers) Entry(id string) (worker.ApprovalEntry, bool, error) {
 	root, err := r.c.Root()
 	if err != nil {
-		return worker.Escalation{}, false, err
+		return worker.ApprovalEntry{}, false, err
 	}
 	for _, e := range escalation.Load(root) {
 		if e.ID == id {
-			return e, true, nil
+			ae := worker.ApprovalEntry{Kind: e.Kind, Ref: e.Ref(), Answered: e.Status == escalation.StatusAnswered, Status: e.Derived}
+			if e.Answer != nil {
+				ae.Answer = &e.Answer.Body
+			}
+			return ae, true, nil
 		}
 	}
-	return worker.Escalation{}, false, nil
+	return worker.ApprovalEntry{}, false, nil
 }
 
 func (approvalAnswers) Approves(answer string) bool { return escalation.Approves(answer) }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/limits"
 	"os"
@@ -95,8 +96,8 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// An open escalation shows in both verbs and on its slot's row.
-	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
-		return []worker.Escalation{{ID: "e1", Kind: "pr", Number: 3, Slot: "dana", Title: "Which option?",
+	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+		return []escalation.Entry{{ID: "e1", Kind: "pr", Number: 3, Slot: "dana", Title: "Which option?",
 			CommentID: "1", SentAt: "2026-10-03T10:00:00Z", Status: "pending"}}
 	}); err != nil {
 		t.Fatal(err)

@@ -79,11 +79,21 @@ func (a MergeApproval) Check(target string, files func() ([]string, error), thre
 	return ref, err
 }
 
+// ApprovalEntry is the part of an escalation the approval rule reads: the
+// escalation package owns the record, the gate needs only its thread, its
+// answer and its status as reported.
+type ApprovalEntry struct {
+	Kind, Ref string
+	Answered  bool                       // stored status is answered
+	Answer    *string                    // the answer's body, nil when unanswered
+	Status    func(now time.Time) string // the status as reported (pending, timed-out, answered)
+}
+
 // ApprovalReader is the thread-reading seam of --approval: the escalation
 // registry as the cli wires it, a test a fake.
 type ApprovalReader interface {
 	// Entry is the escalation with that id; ok is false when there is none.
-	Entry(id string) (entry Escalation, ok bool, err error)
+	Entry(id string) (entry ApprovalEntry, ok bool, err error)
 	// Approves reports whether an answer's body approves the merge.
 	Approves(answer string) bool
 }
@@ -99,16 +109,16 @@ func (a MergeApproval) Confirmation(id string, th ApprovalThread) (gatepolicy.Co
 	switch {
 	case !ok:
 		return gatepolicy.Confirm{}, approvalError(exitcode.ExitResolution, "no escalation %s", id), nil
-	case e.Kind != th.Kind || e.Ref() != th.Ref():
-		return gatepolicy.Confirm{}, approvalError(exitcode.ExitUsage, "escalation %s is on %s %s, not on this merge's approval thread (%s %s)", id, e.Kind, e.Ref(), th.Kind, th.Ref()), nil
-	case e.Status != EscalationAnswered:
-		status := e.Derived(a.Now())
+	case e.Kind != th.Kind || e.Ref != th.Ref():
+		return gatepolicy.Confirm{}, approvalError(exitcode.ExitUsage, "escalation %s is on %s %s, not on this merge's approval thread (%s %s)", id, e.Kind, e.Ref, th.Kind, th.Ref()), nil
+	case !e.Answered:
+		status := e.Status(a.Now())
 		return gatepolicy.Confirm{}, a.refuse(fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
 			"blockedBy", blockedby.ApprovalPending, "escalation", id, "status", status), nil
 	}
 	body := ""
 	if e.Answer != nil {
-		body = e.Answer.Body
+		body = *e.Answer
 	}
 	if !a.Answers.Approves(body) {
 		return gatepolicy.Confirm{}, a.refuse(fmt.Sprintf("escalation %s was answered without approving the merge", id),
