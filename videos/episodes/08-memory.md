@@ -22,7 +22,7 @@ vertical: Same two lines stacked over the vertical centre, 88 px, each on its ow
 
 ### 02 terminal
 
-vo: Ro-Ta keeps two files for this in the repo. One holds knowledge, the other holds decisions. A new project starts with both nearly empty. They are plain files, so they travel with the code and show up in review.
+vo: rota keeps two files for this in the repo. One holds knowledge, the other holds decisions. A new project starts with both nearly empty. They are plain files, so they travel with the code and show up in review.
 
 ```sh
 rota init
@@ -71,7 +71,7 @@ vertical: Pause panel on top, handoff card in the middle, resume panel below.
 
 ### 06 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 

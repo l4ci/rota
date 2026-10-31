@@ -22,7 +22,7 @@ vertical: PR card above, gate box in the middle, `main` box below.
 
 ### 02 terminal
 
-vo: Some steps always need a human yes. Ro-Ta lists them, with the verbs that enforce them. Merging into the base branch is one. The agent cannot skip it.
+vo: Some steps always need a human yes. rota lists them, with the verbs that enforce them. Merging into the base branch is one. The agent cannot skip it.
 
 ```sh
 rota init
@@ -54,7 +54,7 @@ vertical: Terminal box at 34 px; the two verdict lines and the sha stay on scree
 vo: Then the gate itself. It runs your test tiers on the merged tree. On a pass it merges. If anything fails, it refuses and says why.
 
 ```sh
-rota test run test.fast
+rota test run fast
 rota worker gate ben --base main
 ```
 
@@ -76,7 +76,7 @@ vertical: Gate mid-frame; findings leave upward, the card re-enters from the top
 
 ### 06 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 

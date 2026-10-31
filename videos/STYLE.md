@@ -96,7 +96,7 @@ Every episode opens with the logo sting and closes with the outro card. Both cou
 - Link, Martian Mono, `ink` on a `duty-wash` band: `github.com/l4ci/rota`
 - The rota icon at 64 px above line 1.
 
-Timing: the card fades in 280 ms, the voiceover reads `Find it at github dot com slash l four c i slash rota.` over the first 3 s, the link band holds to the end plus 0.8 s. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
+Timing: the card fades in 280 ms; the voiceover reads line 2 only, `rota makes sure what they merge works.`, in about 3 s; the link is on screen, never spoken, and the card holds 0.8 s after the voice ends, 4 s in all. The link is the only element above 44 px apart from line 1, and stays inside the safe area in both cuts: in 9:16 it is set on two lines (`github.com/` over `l4ci/rota`) at 64 px.
 
 ## Voice
 
@@ -104,9 +104,9 @@ Generated locally with open-weights TTS (the engine is chosen in #2536; Kokoro w
 
 - **Character.** A calm, clear, plain-spoken narrator. Neutral register, no sales tone, no excitement, no vocal fry. One voice for the whole series, fixed in the pipeline config so every episode matches.
 - **Pace.** About 150 words per minute, short sentences, a natural pause at each full stop (0.35 s) and each paragraph break (0.6 s).
-- **Pronunciation.** *rota* is **"Ro-Ta"**: two clear syllables, long O, a hard T. Never "roda": American voices flap the T between vowels, and the spike's voice did exactly that. The script spells the word the way the engine needs it (a phonetic override in the voiceover text, kept next to the plain spelling in the caption), and the pipeline checks the rendered audio for it on every episode. Say it the same way in every episode, including the outro.
-- **Read-outs.** Commands are not read letter by letter. The voiceover says what a command does; the terminal shows what it is. Where a name must be spoken, write it as spoken: "rota work", "slash rota dash ship" is avoided in favour of "ship".
-- **Text.** Voiceover text is the data. It lives in the script, one `vo:` paragraph per shot, written to be read aloud: no symbols, no abbreviations the narrator would have to guess, numbers in words under ten.
+- **Pronunciation.** *rota* is **"Ro-Ta"**: two clear syllables, long O, a hard T. Never "roda": American voices flap the T between vowels, and the spike's voice did exactly that. Scripts always write plain `rota`: `vo:` is the caption text. The pipeline's pronunciation lexicon (#2536) maps `rota` to "Ro-Ta" with a hard T before synthesis, and it checks the rendered audio for it on every episode. Say it the same way in every episode, including the outro.
+- **Read-outs.** Commands are not read letter by letter. The voiceover says what a command does; the terminal shows what it is. Where a name must be spoken, write it as spoken: "ship" rather than "slash rota dash ship".
+- **Text.** Voiceover text is the data. It lives in the script, one `vo:` paragraph per shot, written to be read aloud, and captions come from it. Where the spoken form differs from what should show (a URL, `.rota` read as "dot rota"), the shot adds a `say:` line; audio comes from `say:` when present, otherwise from `vo:`. Numbers under ten are in words.
 
 ## Size budget
 

@@ -38,7 +38,7 @@ vertical: Terminal box fills the frame width at 34 px; the branch line and the f
 
 ### 03 terminal
 
-vo: A bug fix needs proof. First the test must fail. That is the red run. After the fix it must pass. Ro-Ta runs the command itself, so nobody types the result.
+vo: A bug fix needs proof. First the test must fail. That is the red run. After the fix it must pass. rota runs the command itself, so nobody types the result.
 
 ```sh
 rota proof record B01 -- go test ./... -run TestSaveEmptyName
@@ -88,7 +88,7 @@ vertical: The three cards stack top to bottom with a vertical `muted` arrow betw
 
 ### 07 motion
 
-vo: Coding agents write fast. Ro-Ta makes sure what they merge works. Find it at github dot com slash l four c i slash Ro-Ta.
+vo: rota makes sure what they merge works.
 
 scene: The outro card from STYLE.md, unchanged: icon, two lines, link band `github.com/l4ci/rota`.
 
