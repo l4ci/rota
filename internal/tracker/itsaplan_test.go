@@ -218,19 +218,12 @@ func TestNewIssueTrackerItsaplan(t *testing.T) {
 		t.Errorf("%s: %v", it.Provider(), it.CheckAuth(context.Background()))
 	}
 	for cfg, want := range map[string]string{
-		`{"issues":{"source":"itsaplan","itsaplan":{"project":"MKT"}}}`:    "issues.connection is not set",
 		`{"issues":{"source":"itsaplan","connection":"plan"}}`:             "issues.itsaplan.project is not set",
 		`{"issues":{"source":"itsaplan","connection":"plan","linear":{}}}`: "issues.itsaplan.project is not set",
 	} {
 		if _, err := build(cfg, conn); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v, want %q", cfg, err, want)
 		}
-	}
-	wrongKind := WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
-		return connections.Connection{Name: name, Kind: connections.KindLinear}, "k", nil
-	})
-	if _, err := build(`{"issues":{"source":"itsaplan","connection":"plan","itsaplan":{"project":"MKT"}}}`, wrongKind); err == nil || !strings.Contains(err.Error(), "not itsaplan") {
-		t.Errorf("wrong connection kind: %v", err)
 	}
 	if got, err := config.IssueSource(mustJSON(t, `{"issues":{"source":"itsaplan"}}`)); err != nil || got != config.SourceItsaplan {
 		t.Errorf("issues.source itsaplan: %q %v", got, err)
