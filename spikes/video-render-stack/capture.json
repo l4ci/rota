@@ -1,0 +1,9 @@
+{
+ "commands": [
+  "rota --version",
+  "rota init",
+  "rota --help | head -15"
+ ],
+ "stdout": "### rota --version\nrota 0.28.0 (5d72ecb, 2026-10-31T03:25:00Z)\n### rota init\ncreated: .gitignore\ncreated: .rota\ncreated: .rota/BACKLOG.md\ncreated: .rota/DECISIONS.md\ncreated: .rota/KNOWLEDGE.md\ncreated: .rota/MAP.md\ncreated: .rota/MILESTONES.md\ncreated: .rota/bugs\ncreated: .rota/config.json\ncreated: .rota/counters.json\ncreated: .rota/features\ncreated: .rota/map\ncreated: .rota/milestones\ncreated: .rota/plans\ncreated: .rota/repos.json\ncreated: .rota/spikes\ncreated: .rota/status.json\ncreated: .rota/tasks\nconfig filled: learn.promoteThreshold, docs.path, git.baseBranch, umbrella.enabled, rota.version, test.fast, test.full, test.e2e\nstamped rota.version: 0.28.0\nblock skills: appended\nblock knowledge: appended\nblock milestones: updated\nblock decisions: appended\nblock map: appended\nblock qa: appended\nagent: .claude/agents/rota-explorer.md\nagent: .claude/agents/rota-implementer.md\nagent: .claude/agents/rota-reasoner.md\nproject not registered: temporary directory\ntest.full is empty: the merge gate will refuse to merge until it is set (rota config set test.full '[...]')\n### rota --help | head -15\nrota: rota command line\n\nUsage: rota <command> [flags]\n\nCommands:\n  agents       subagent definitions generated from the role config\n  backlog      backlog views and upkeep\n  block        regenerate a managed block in the instructions file\n  bugreport    record rota's own mistakes and file them upstream\n  change       size a branch's change: the tier the gate and review depth work to\n  config       read and write .rota/config.json\n  connect      manage machine-wide tracker connections (Jira, Linear, It's a Plan) and their secrets\n  debug        Iron Law fix-attempt counter\n  decisions    read and write .rota/DECISIONS.md\n  design       per-item design documents\n",
+ "ansi": false
+}
