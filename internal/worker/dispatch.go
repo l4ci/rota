@@ -168,330 +168,140 @@ func roundOf(root string) int {
 // a conversation; 5 host unavailable, old session will not close, or a dialog
 // refused input; 6 the brief was never submitted (safe to resend).
 func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (DispatchResult, error) {
-	e = e.WithDefaults()
-	res := DispatchResult{Slot: o.Slot, Task: o.Task, Round: o.Round, Relay: o.Relay}
+	if o.Relay {
+		return e.DispatchRelay(ctx, root, o)
+	}
+	return e.DispatchTask(ctx, root, o)
+}
+
+// dispatchTarget is what both pipelines resolve before they touch the slot:
+// the brief, the host, the registry and the slot's session coordinates.
+type dispatchTarget struct {
+	brief    []byte
+	cfg      any
+	hostCfg  HostConfig
+	h        host.Host
+	reg      Registry
+	slot     *Slot
+	worktree string
+	handle   string
+	session  string
+	timeout  int
+}
+
+// prepareDispatch is the shared front of a task dispatch and a relay: refuse
+// solo and external slots, read the brief, pick and check the host, and resolve
+// the slot. res is returned filled even on failure.
+func (e Env) prepareDispatch(root string, o DispatchOpts) (*dispatchTarget, error) {
 	if err := SoloRefusal(root, "rota round assign hands a slot its brief and rota round report records the result"); err != nil {
-		return res, err
+		return nil, err
 	}
 	pre, err := LoadRegistry(root)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 	if s := pre.Slot(o.Slot); s != nil && s.IsExternal() {
 		e := fail(exitcode.ExitRefused, "external slot has no host")
 		e.Data = BlockData{BlockedBy: blockedby.Host}
-		return res, e
+		return nil, e
 	}
 	brief, err := os.ReadFile(o.BodyFile)
 	if err != nil {
-		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
+		return nil, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
 	cfg := e.Config(root)
 	hostCfg := ParseHostConfig(cfg)
 	h := e.NewHost(ResolveHost(root, hostCfg, e.Getenv, e.LookPath))
 	if err := h.Require(); err != nil {
-		return res, fail(exitcode.ExitUnavailable, err.Error())
+		return nil, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	// herdr tabs are created in the caller's own workspace. Outside herdr there
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
 	if h.Kind() == host.Herdr && !h.InSession() {
-		return res, fail(exitcode.ExitUnavailable, "round.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
+		return nil, fail(exitcode.ExitUnavailable, "round.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 	if !reg.Exists {
-		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
+		return nil, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	s := reg.Slot(o.Slot)
 	if s == nil {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
+		return nil, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
-	// A relay is logged where the gate of its PR reads it: on the slot while it
-	// holds an issue or PR, else on the PR queued from it. With neither there is
-	// nothing the gate could read, so refuse before anything is sent.
-	relayQueued := o.Relay && s.HeldID() == "" && s.PR() == ""
-	if relayQueued && s.PaneHandle() != "" && reg.QueuedFrom(o.Slot) == nil {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' holds no issue or queued PR to log a relay against — assign it work, or gate the PR directly", o.Slot))
-	}
-	worktree := s.Worktree()
-	handle := s.PaneHandle()
 	session := reg.Session()
 	if session == "" {
 		session = "rota"
-	}
-	configDir := s.ConfigDir()
-	if !fsio.IsDir(worktree) {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
 	}
 	timeout := o.BootTimeout
 	if timeout <= 0 {
 		timeout = 60
 	}
+	return &dispatchTarget{brief: brief, cfg: cfg, hostCfg: hostCfg, h: h, reg: reg, slot: s,
+		worktree: s.Worktree(), handle: s.PaneHandle(), session: session, timeout: timeout}, nil
+}
 
-	var signKey []byte      // the key that signs the session's payloads; nil signs nothing
-	var accountEnv []string // the variable that selects the slot's account
-	recKind := ""           // the harness a task dispatch records
-	var hz harness.Harness
-	if !o.Relay {
-		kind := o.Kind
-		if kind == "" {
-			kind = s.Kind()
-		}
-		var err error
-		if hz, err = Harness(kind); err != nil {
-			return res, err
-		}
-		kind = hz.Kind()
-		res.Kind = kind
-		recKind = kind
-		key := hz.CommandKey()
-		launch, hit, err := e.launchLine(root, hz, o.Model)
-		if err != nil {
-			return res, err
-		}
-		if hit.Token != "" {
-			e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
-			e.Data = BlockData{BlockedBy: blockedby.ResumeFlag}
-			return res, e
-		}
-		// Under herdr the launch binary decides `agent start --kind`, so it
-		// must be the kind's own: refuse before anything is killed.
-		if h.Kind() == host.Herdr {
-			if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
-				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
-			}
-		}
-		// A launch the harness cannot run safely is refused before anything is
-		// touched.
-		if err := hz.CheckLaunch(launch); err != nil {
-			return res, asError(err)
-		}
-		// The slot's account, launch flags and login are checked before the old
-		// session is killed or anything is marked.
-		setup, err := e.Preflight(ctx, root, kind, o.Slot, o.Model)
-		if err != nil {
-			return res, err
-		}
-		res.Warnings = setup.Warnings
-		// A session started into an account at its limit stops on its first turn.
-		if why := e.accountLimited(ctx, root, hz, configDir); why != "" {
-			le := fail(exitcode.ExitRefused, why)
-			le.Data = BlockData{BlockedBy: blockedby.Limited}
-			return res, le
-		}
-		if !hz.WorkAccounts() {
-			configDir = "" // a codex slot's account is its home, not a claude config dir
-			account := setup.Account
-			if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHomeAccount(account) }); err != nil {
-				return res, err
-			}
-		}
-		if configDir != "" {
-			// A slot cached by an older rota may hold the path as written.
-			home, _ := e.Home()
-			configDir = ExpandConfigDirIn(configDir, home)
-		}
-		acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
-		// No account configured for the slot: it runs under the orchestrator's.
-		amb := hz.AmbientAccount(e.Getenv)
-		if acct.ConfigDir == "" {
-			acct.ConfigDir = amb.ConfigDir
-		}
-		if acct.Home == "" {
-			acct.Home = amb.Home
-		}
-		accountEnv = hz.AccountEnv(acct)
-		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
-			return res, asError(err)
-		}
-		group, err := GroupSlots(hostCfg, h.Capabilities())
-		if err != nil {
-			return res, fail(exitcode.ExitResolution, err.Error())
-		}
-		// Refuse a slot that still holds work, before its session is killed.
-		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
-			return res, resetRefusal(err, false)
-		}
-		// Fresh session every task dispatch. The kill must be provable: a
-		// window that survives it would run beside the new one.
-		sweepShells(ctx, h, worktree)
-		if err := h.Kill(ctx, o.Slot, handle); err != nil {
-			return res, fail(exitcode.ExitUnavailable, err.Error())
-		}
-		e.closeSlotWorkspace(ctx, h, root, o.Slot)
-		// The old handle names a pane that is gone. Drop it now, not at
-		// recordDispatch after the boot: a watch ticking in between would
-		// read the dead pane and report the slot dead (#707).
-		clearHandle(root, o.Slot)
-		// Re-check: the old session may have written between the check and its
-		// exit. The old session is dead from here on, so a failure must not
-		// leave its handle in the registry for a poll or relay to chase.
-		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), false); err != nil {
-			clearHandle(root, o.Slot)
-			// The old session was killed and its handle cleared on the way here.
-			return res, resetRefusal(err, true)
-		}
-		ports := ParsePortConfig(cfg)
-		portBase, width, err := EnsurePortBase(root, o.Slot, ports.Base, ports.Block)
-		if err != nil {
-			return res, fail(exitcode.ExitUnavailable, err.Error())
-		}
-		// A parked slot reused for a task: re-apply round.sharedDirs, the
-		// branch switch may have changed the lockfile or the link may be gone.
-		shared, err := e.slotDeps(ctx, root, o.Slot, worktree, ParseDepsConfig(cfg), portBase, width)
-		res.Shared = shared
-		if err != nil {
-			clearHandle(root, o.Slot)
-			return res, err
-		}
-		var linked bool
-		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group, Linked: &linked,
-			Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: timeout})
-		if err != nil {
-			clearHandle(root, o.Slot)
-			if handle != "" {
-				// The spawn failed with its session still open (an unanswered
-				// startup screen). Record the handle so the replay's kill
-				// reaps it instead of spawning a second one beside it.
-				UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHandle(handle) })
-			}
-			return res, fail(exitcode.ExitUnavailable, err.Error())
-		}
-		if group && linked {
-			// The slot's tab id leads with the workspace it lives in. Record it
-			// so the next kill closes this workspace and no other.
-			ws, _, _ := strings.Cut(handle, ":")
-			UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetWorkspaceID(ws) })
-		}
-	} else if handle == "" {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
-	} else {
-		// A relay is signed by the key of the session it goes into.
-		var err error
-		var ok bool
-		if hz, ok = harness.Lookup(s.Kind()); !ok {
-			hz = harness.Resolve("")
-		}
-		if signKey, err = hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot); err != nil {
-			return res, asError(err)
-		}
+// checkWorktree refuses a slot whose worktree is gone.
+func (t *dispatchTarget) checkWorktree(slot string) error {
+	if !fsio.IsDir(t.worktree) {
+		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, t.worktree))
 	}
-	res.Handle = handle
-	if o.Relay {
-		// The pane may have moved to another tab since the handle was recorded;
-		// the message goes by agent name, so report where it landed.
-		if tf := h.Capabilities().TabFollower; tf != nil {
-			if cur := tf.CurrentHandle(ctx, o.Slot, handle); cur != "" {
-				res.Handle = cur
-			}
-		}
-	}
+	return nil
+}
 
-	// The turn baseline is read before the brief goes out: a turn finished
-	// after it is numbered past it, however fast the worker answers. 0 (no
-	// numbered host, a failing read) records none.
+// baselineAndRecord reads the turn baseline, then records the dispatch. The
+// baseline is read before the brief goes out: a turn finished after it is
+// numbered past it, however fast the worker answers. 0 (no numbered host, a
+// failing read) records none.
+func (e Env) baselineAndRecord(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, recKind string) error {
 	turnSeq := 0
-	if tr := h.Capabilities().TurnReader; tr != nil {
-		if t, ok := tr.Turn(ctx, o.Slot, handle); ok {
-			turnSeq = t.StateSeq
+	if tr := t.h.Capabilities().TurnReader; tr != nil {
+		if tn, ok := tr.Turn(ctx, o.Slot, t.handle); ok {
+			turnSeq = tn.StateSeq
 		}
 	}
-	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, turnSeq, stamp.Format(e.Now())); err != nil {
-		return res, err
-	}
-	if !o.Relay {
-		// The round was folded into the orchestrator's tab: the new worker
-		// joins the grid instead of keeping its own tab.
-		if w := arrangeNew(ctx, h, root, hostCfg); w != "" {
-			res.Warnings = append(res.Warnings, w)
-		}
-		syncLabel(ctx, h, root, o.Slot)
-		labelWorkspace(ctx, h, root)
-	}
-	round := roundOf(root)
-	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)
+	return recordDispatch(root, o.Slot, t.handle, o.Task, recKind, o.Round, turnSeq, stamp.Format(e.Now()))
+}
 
-	// Every payload is signed so the worker can tell the orchestrator's voice
-	// from unsigned pane text. A relay also carries a note: it writes its own
-	// PR body and cannot otherwise tell a relay from the maintainer typing in
-	// its pane.
+// signBrief is the shared signing step. The payload leads with the
+// orchestrator signature, then preamble (a relay's note, "" for a task), then
+// the brief, and the harness signs the whole. An already-signed brief is not
+// signed twice. It returns the signed text and the round it was signed with.
+func signBrief(hz harness.Harness, key []byte, round int, preamble, brief string) string {
+	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)
 	var payload strings.Builder
 	payload.WriteString(signature + "\n")
-	// relaySeq numbers the relay in the slot's log. Its `[relay K]` line is how
-	// the classifier tells this relay's echo from an earlier one's (#1017).
-	relaySeq := len(s.Relays()) + 1
-	if relayQueued {
-		relaySeq = len(reg.QueuedFrom(o.Slot).Relays) + 1
+	payload.WriteString(preamble)
+	if first, rest, _ := strings.Cut(brief, "\n"); first == signature {
+		brief = rest
 	}
-	if o.Relay {
-		fmt.Fprintf(&payload, "[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
-			"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
-			"body, attribute it as 'orchestrator relay round %d', never as a maintainer\n"+
-			"sign-off in your session.]\n[relay %d]\n\n", round, relaySeq)
-	}
-	text := string(brief)
-	// An already-signed brief is not signed twice.
-	if first, rest, _ := strings.Cut(text, "\n"); first == signature {
-		text = rest
-	}
-	payload.WriteString(text)
-	out := payload.String()
-	out = hz.Sign(signKey, out)
-	path, cleanup, err := fsio.WriteTemp(e.Getenv("TMPDIR"), "rota-dispatch-*", []byte(out))
+	payload.WriteString(brief)
+	return hz.Sign(key, payload.String())
+}
+
+// sendSigned writes the signed payload to a temp file and hands it to the host.
+// resubmit, when the host can, submits a brief an earlier send left on the
+// prompt line instead of typing a second copy.
+func (e Env) sendSigned(ctx context.Context, t *dispatchTarget, slot, payload string, resubmit bool) error {
+	path, cleanup, err := fsio.WriteTemp(e.Getenv("TMPDIR"), "rota-dispatch-*", []byte(payload))
 	if err != nil {
-		return res, err
+		return err
 	}
 	defer cleanup()
+	if rs := t.h.Capabilities().Resubmitter; rs != nil && resubmit {
+		if handled, sendErr := rs.SubmitPending(ctx, slot, t.handle, path); handled {
+			return sendErr
+		}
+	}
+	return t.h.Send(ctx, slot, t.handle, path)
+}
 
-	// A relay reuses the session, so a brief an earlier send left unsent on the
-	// prompt line is still there: submit it rather than type a second copy. A
-	// task dispatch starts a fresh session and has nothing pending.
-	var sendErr error
-	handled := false
-	if o.Relay {
-		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
-			return res, err
-		}
-	}
-	if rs := h.Capabilities().Resubmitter; rs != nil && o.Relay && s.Unsent() {
-		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, path)
-	}
-	if !handled {
-		sendErr = h.Send(ctx, o.Slot, handle, path)
-	}
-	// Remember a stall so the next relay checks the prompt line first. Written
-	// only on a change: a clean send leaves the registry untouched.
-	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || s.Unsent() {
-		UpdateSlot(root, o.Slot, func(s *Slot) {
-			s.SetUnsent(unsent)
-			if unsent && !o.Relay {
-				s.MarkState("idle", "")
-			}
-		})
-	}
-	if o.Relay && (errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt)) {
-		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
-	}
-	// Log the relay once it was (or may have been) sent. A stall does not prove
-	// the text was lost, and the gate must not call a delivered relay unlogged;
-	// only a refused dialog or a human draft is certain nothing went out.
-	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) && !errors.Is(sendErr, host.ErrDraftOnPrompt) {
-		entry := newRelayEntry(round, e.Now(), string(brief))
-		if relayQueued {
-			logged := false
-			if err := Update(root, func(d *Doc) { logged = d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
-				return res, err
-			}
-			if !logged {
-				return res, fmt.Errorf("relay sent but no queued PR from slot %s to log it on", o.Slot)
-			}
-		} else if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
-			return res, err
-		}
-	}
+// sendFailure maps a failed send onto dispatch's exits. A queued send and a
+// clean one are not failures: it returns res, nil for both.
+func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (DispatchResult, error) {
 	switch {
 	case errors.Is(sendErr, host.ErrQueued):
 		res.Queued = true
@@ -505,16 +315,278 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			first = " (" + de.First + ")"
 		}
 		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Data: BlockData{BlockedBy: blockedby.Dialog},
-			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", o.Slot, first)}
+			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
-		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", o.Slot))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", slot))
 	case h.Kind() == host.Orca && !errors.Is(sendErr, host.ErrNotSubmitted):
 		// Orca can discover a branch rename after the prompt has been accepted.
 		// Preserve that evidence instead of suggesting the brief was never sent.
-		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", o.Slot, sendErr))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", slot, sendErr))
 	default:
-		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
+		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", slot))
 	}
+}
+
+// DispatchTask sends a task brief into a fresh session of the slot, guarding
+// and resetting the slot first. See Dispatch for the contract and exit codes.
+func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (DispatchResult, error) {
+	e = e.WithDefaults()
+	res := DispatchResult{Slot: o.Slot, Task: o.Task, Round: o.Round}
+	t, err := e.prepareDispatch(root, o)
+	if err != nil {
+		return res, err
+	}
+	if err := t.checkWorktree(o.Slot); err != nil {
+		return res, err
+	}
+	h, cfg, worktree := t.h, t.cfg, t.worktree
+	configDir := t.slot.ConfigDir()
+	kind := o.Kind
+	if kind == "" {
+		kind = t.slot.Kind()
+	}
+	hz, err := Harness(kind)
+	if err != nil {
+		return res, err
+	}
+	kind = hz.Kind()
+	res.Kind = kind
+	key := hz.CommandKey()
+	launch, hit, err := e.launchLine(root, hz, o.Model)
+	if err != nil {
+		return res, err
+	}
+	if hit.Token != "" {
+		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
+		e.Data = BlockData{BlockedBy: blockedby.ResumeFlag}
+		return res, e
+	}
+	// Under herdr the launch binary decides `agent start --kind`, so it
+	// must be the kind's own: refuse before anything is killed.
+	if h.Kind() == host.Herdr {
+		if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
+			return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
+		}
+	}
+	// A launch the harness cannot run safely is refused before anything is
+	// touched.
+	if err := hz.CheckLaunch(launch); err != nil {
+		return res, asError(err)
+	}
+	// The slot's account, launch flags and login are checked before the old
+	// session is killed or anything is marked.
+	setup, err := e.Preflight(ctx, root, kind, o.Slot, o.Model)
+	if err != nil {
+		return res, err
+	}
+	res.Warnings = setup.Warnings
+	// A session started into an account at its limit stops on its first turn.
+	if why := e.accountLimited(ctx, root, hz, configDir); why != "" {
+		le := fail(exitcode.ExitRefused, why)
+		le.Data = BlockData{BlockedBy: blockedby.Limited}
+		return res, le
+	}
+	if !hz.WorkAccounts() {
+		configDir = "" // a codex slot's account is its home, not a claude config dir
+		account := setup.Account
+		if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHomeAccount(account) }); err != nil {
+			return res, err
+		}
+	}
+	if configDir != "" {
+		// A slot cached by an older rota may hold the path as written.
+		home, _ := e.Home()
+		configDir = ExpandConfigDirIn(configDir, home)
+	}
+	acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
+	// No account configured for the slot: it runs under the orchestrator's.
+	amb := hz.AmbientAccount(e.Getenv)
+	if acct.ConfigDir == "" {
+		acct.ConfigDir = amb.ConfigDir
+	}
+	if acct.Home == "" {
+		acct.Home = amb.Home
+	}
+	accountEnv := hz.AccountEnv(acct)
+	launch, signKey, err := hz.Prepare(launch, e.Executable, setup)
+	if err != nil {
+		return res, asError(err)
+	}
+	group, err := GroupSlots(t.hostCfg, h.Capabilities())
+	if err != nil {
+		return res, fail(exitcode.ExitResolution, err.Error())
+	}
+	// Refuse a slot that still holds work, before its session is killed.
+	if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
+		return res, resetRefusal(err, false)
+	}
+	// Fresh session every task dispatch. The kill must be provable: a
+	// window that survives it would run beside the new one.
+	sweepShells(ctx, h, worktree)
+	if err := h.Kill(ctx, o.Slot, t.handle); err != nil {
+		return res, fail(exitcode.ExitUnavailable, err.Error())
+	}
+	e.closeSlotWorkspace(ctx, h, root, o.Slot)
+	// The old handle names a pane that is gone. Drop it now, not at
+	// recordDispatch after the boot: a watch ticking in between would
+	// read the dead pane and report the slot dead (#707).
+	clearHandle(root, o.Slot)
+	// Re-check: the old session may have written between the check and its
+	// exit. The old session is dead from here on, so a failure must not
+	// leave its handle in the registry for a poll or relay to chase.
+	if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), false); err != nil {
+		clearHandle(root, o.Slot)
+		// The old session was killed and its handle cleared on the way here.
+		return res, resetRefusal(err, true)
+	}
+	ports := ParsePortConfig(cfg)
+	portBase, width, err := EnsurePortBase(root, o.Slot, ports.Base, ports.Block)
+	if err != nil {
+		return res, fail(exitcode.ExitUnavailable, err.Error())
+	}
+	// A parked slot reused for a task: re-apply round.sharedDirs, the
+	// branch switch may have changed the lockfile or the link may be gone.
+	shared, err := e.slotDeps(ctx, root, o.Slot, worktree, ParseDepsConfig(cfg), portBase, width)
+	res.Shared = shared
+	if err != nil {
+		clearHandle(root, o.Slot)
+		return res, err
+	}
+	var linked bool
+	t.handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: t.session, Cwd: worktree, LinkWorkspace: group, Linked: &linked,
+		Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: t.timeout})
+	if err != nil {
+		clearHandle(root, o.Slot)
+		if t.handle != "" {
+			// The spawn failed with its session still open (an unanswered
+			// startup screen). Record the handle so the replay's kill
+			// reaps it instead of spawning a second one beside it.
+			handle := t.handle
+			UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHandle(handle) })
+		}
+		return res, fail(exitcode.ExitUnavailable, err.Error())
+	}
+	if group && linked {
+		// The slot's tab id leads with the workspace it lives in. Record it
+		// so the next kill closes this workspace and no other.
+		ws, _, _ := strings.Cut(t.handle, ":")
+		UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetWorkspaceID(ws) })
+	}
+	res.Handle = t.handle
+	if err := e.baselineAndRecord(ctx, root, o, t, kind); err != nil {
+		return res, err
+	}
+	// The round was folded into the orchestrator's tab: the new worker
+	// joins the grid instead of keeping its own tab.
+	if w := arrangeNew(ctx, h, root, t.hostCfg); w != "" {
+		res.Warnings = append(res.Warnings, w)
+	}
+	syncLabel(ctx, h, root, o.Slot)
+	labelWorkspace(ctx, h, root)
+
+	out := signBrief(hz, signKey, roundOf(root), "", string(t.brief))
+	// A task dispatch starts a fresh session and has nothing pending.
+	sendErr := e.sendSigned(ctx, t, o.Slot, out, false)
+	// Remember a stall so the next relay checks the prompt line first. Written
+	// only on a change: a clean send leaves the registry untouched.
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || t.slot.Unsent() {
+		UpdateSlot(root, o.Slot, func(s *Slot) {
+			s.SetUnsent(unsent)
+			if unsent {
+				s.MarkState("idle", "")
+			}
+		})
+	}
+	return sendFailure(h, o.Slot, res, sendErr)
+}
+
+// DispatchRelay sends a relay into the slot's RUNNING session and logs it
+// against the PR's gate. See Dispatch for the contract and exit codes.
+func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (DispatchResult, error) {
+	e = e.WithDefaults()
+	res := DispatchResult{Slot: o.Slot, Task: o.Task, Round: o.Round, Relay: true}
+	t, err := e.prepareDispatch(root, o)
+	if err != nil {
+		return res, err
+	}
+	reg, s, h := t.reg, t.slot, t.h
+	// A relay is logged where the gate of its PR reads it: on the slot while it
+	// holds an issue or PR, else on the PR queued from it. With neither there is
+	// nothing the gate could read, so refuse before anything is sent.
+	relayQueued := s.HeldID() == "" && s.PR() == ""
+	if relayQueued && t.handle != "" && reg.QueuedFrom(o.Slot) == nil {
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' holds no issue or queued PR to log a relay against — assign it work, or gate the PR directly", o.Slot))
+	}
+	if err := t.checkWorktree(o.Slot); err != nil {
+		return res, err
+	}
+	if t.handle == "" {
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
+	}
+	// A relay is signed by the key of the session it goes into.
+	hz, ok := harness.Lookup(s.Kind())
+	if !ok {
+		hz = harness.Resolve("")
+	}
+	signKey, err := hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot)
+	if err != nil {
+		return res, asError(err)
+	}
+	res.Handle = t.handle
+	// The pane may have moved to another tab since the handle was recorded;
+	// the message goes by agent name, so report where it landed.
+	if tf := h.Capabilities().TabFollower; tf != nil {
+		if cur := tf.CurrentHandle(ctx, o.Slot, t.handle); cur != "" {
+			res.Handle = cur
+		}
+	}
+	if err := e.baselineAndRecord(ctx, root, o, t, ""); err != nil {
+		return res, err
+	}
+	round := roundOf(root)
+	// relaySeq numbers the relay in the slot's log. Its `[relay K]` line is how
+	// the classifier tells this relay's echo from an earlier one's (#1017).
+	relaySeq := len(s.Relays()) + 1
+	if relayQueued {
+		relaySeq = len(reg.QueuedFrom(o.Slot).Relays) + 1
+	}
+	// A relay also carries a note: the worker writes its own PR body and cannot
+	// otherwise tell a relay from the maintainer typing in its pane.
+	note := fmt.Sprintf("[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
+		"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
+		"body, attribute it as 'orchestrator relay round %d', never as a maintainer\n"+
+		"sign-off in your session.]\n[relay %d]\n\n", round, relaySeq)
+	out := signBrief(hz, signKey, round, note, string(t.brief))
+	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
+		return res, err
+	}
+	// A relay reuses the session, so a brief an earlier send left unsent on the
+	// prompt line is still there: submit it rather than type a second copy.
+	sendErr := e.sendSigned(ctx, t, o.Slot, out, s.Unsent())
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || s.Unsent() {
+		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
+	}
+	if errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt) {
+		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
+	} else {
+		// Log the relay once it was (or may have been) sent. A stall does not
+		// prove the text was lost, and the gate must not call a delivered relay
+		// unlogged; only a refused dialog or a human draft is certain nothing
+		// went out.
+		entry := newRelayEntry(round, e.Now(), string(t.brief))
+		if relayQueued {
+			logged := false
+			if err := Update(root, func(d *Doc) { logged = d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
+				return res, err
+			}
+			if !logged {
+				return res, fmt.Errorf("relay sent but no queued PR from slot %s to log it on", o.Slot)
+			}
+		} else if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
+			return res, err
+		}
+	}
+	return sendFailure(h, o.Slot, res, sendErr)
 }
 
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding
