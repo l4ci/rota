@@ -129,7 +129,7 @@ A shot that cannot run in a scratch project carries `staged:`; the drift check s
 
 ## Status
 
-Scripts for episodes 1 to 8 are written. Episode 1 is final. The render pipeline (below) exists; no episode has been rendered yet.
+Scripts for episodes 1 to 8 are written. Episode 1 is final and rendered (`videos/out/01-why-rota.mp4`); episodes 2 to 8 are not rendered yet.
 
 ## Staged fixtures
 
