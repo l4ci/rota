@@ -50,19 +50,5 @@ func publicGateText(text string) string {
 		const suffix = "… (truncated; see local gate output)"
 		text = string(chars[:512-len([]rune(suffix))]) + suffix
 	}
-	return reportProse(text)
-}
-
-// Preserve arbitrary command output without introducing a sibling file
-// section or a second report marker in a file-backend detail.
-func reportProse(text string) string {
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "# ") {
-			lines[i] = "\\" + line
-		} else if strings.HasPrefix(line, "<!-- rota:report ") {
-			lines[i] = "&lt;" + line[1:]
-		}
-	}
-	return strings.Join(lines, "\n")
+	return marker.ReportProse(text)
 }
