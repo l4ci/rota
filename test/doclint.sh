@@ -295,4 +295,9 @@ printf 'hand edit\n' >> "$TMP/labels.edited"
 if diff -q "$TMP/labels.edited" "$GEN" >/dev/null; then fail "the labels page drift check cannot fail"; fi
 pass "docs/reference/labels.md matches the tracker-label registry"
 
+# ── the video series drift check needs only Python and a rota binary (#2536) ─
+. "$TESTDIR/videos-drift.sh"
+OUT="$(python3 "$REPO/scripts/videos.py" --check --bin "$ROTA_BIN" 2>&1)" || fail "videos/ has stale episodes: $OUT"
+pass "every video episode matches the current binary (scripts/videos.py --check)"
+
 echo "All doclint checks passed."

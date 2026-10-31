@@ -56,3 +56,12 @@ dist/
 
 # Bytecode cache of the smoke fakes
 __pycache__/
+
+# Video series render stack (#2536): installs, models and caches stay local;
+# only the pipeline fixture's output is throwaway.
+videos/render/node_modules/
+videos/render/.venv/
+videos/render/models/
+videos/.cache/
+videos/out/00-fixture*
+videos/snapshots/00-fixture.json
