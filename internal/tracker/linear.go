@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/labels"
@@ -67,30 +66,17 @@ const linearPage = 50
 
 // newLinearTracker is NewIssueTracker for issues.source linear.
 func newLinearTracker(ctx context.Context, c *CLI, s Settings) (*Linear, error) {
-	if s.Connection == "" {
-		return nil, Unavailable("issues.source is linear but issues.connection is not set (run: rota connect add <name> --kind linear, then rota config set issues.connection <name>)")
-	}
+	missing := ""
 	if s.LinearTeam == "" {
-		return nil, Unavailable("issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)")
+		missing = "issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)"
 	}
-	conn, secret, err := c.resolver()(ctx, s.Connection)
+	conn, secret, wire, err := c.restConn(ctx, s, linearSpec, missing)
 	if err != nil {
-		return nil, Unavailable("%v", err)
-	}
-	if conn.Kind != connections.KindLinear {
-		return nil, Unavailable("connection %q is kind %s, not linear", conn.Name, conn.Kind)
-	}
-	if secret == "" {
-		return nil, Unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
+		return nil, err
 	}
 	l := NewLinear(conn, secret, s.LinearTeam)
 	l.labelEntries = s.Labels
-	if sleep := c.Sleep; sleep != nil {
-		l.rest.Sleep = func(ctx context.Context, d time.Duration) error {
-			sleep(d)
-			return ctx.Err()
-		}
-	}
+	wire(l.rest)
 	return l, nil
 }
 

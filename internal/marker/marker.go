@@ -297,3 +297,17 @@ func OpenClaims(bodies []string) []string {
 	}
 	return held
 }
+
+// ReportProse keeps producer prose from introducing a sibling file section or
+// a second report marker in a rendered report.
+func ReportProse(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "# ") {
+			lines[i] = "\\" + line
+		} else if strings.HasPrefix(line, "<!-- rota:report ") {
+			lines[i] = "&lt;" + line[1:]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
