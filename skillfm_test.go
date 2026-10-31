@@ -64,9 +64,7 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 			t.Errorf("validator read %q, want %q", fm["description"], foldedWant)
 		}
 		// The whole-tree run must pass too: a crash or any issue fails the test.
-		full := exec.Command("python3", abs)
-		full.Dir = root
-		full.Env = append(os.Environ(), "ROTA_DOCLINT_PROSE=off")
+		full := exec.Command("python3", abs, "--root", root, "--no-prose")
 		if out, err := full.CombinedOutput(); err != nil {
 			t.Fatalf("validator rejects the folded fixture tree: %s", out)
 		}

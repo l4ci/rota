@@ -14,8 +14,9 @@ sp_fixture() {
   mkdir -p "$d/skills/rota-a" "$d/skills/references"
   printf -- '---\n%b---\n\nbody\n' "$2" > "$d/skills/rota-a/$SK"
 }
-# sp_run <dir> [pending] prints the validator output and returns its exit code.
-sp_run() { ( cd "$1" && ROTA_DOCLINT_PROSE=off ROTA_SPEC_PENDING="${2:-}" python3 "$VALIDATE" 2>&1 ); }
+# sp_run <dir> prints the validator output and returns its exit code. --root names the
+# fixture, so the caller's cwd does not matter (the shell stays where it is).
+sp_run() { python3 "$VALIDATE" --root "$1" --no-prose 2>&1; }
 
 # (a) a compliant skill passes, optional spec keys included
 sp_fixture "$SPEC_TMP/ok" 'name: rota-a\ndescription: Does a thing.\nlicense: MIT\ncompatibility: needs rota\nmetadata:\n  owner: l4ci\nallowed-tools: Bash\n'
@@ -62,17 +63,11 @@ RC=0; OUT="$(sp_run "$SPEC_TMP/toc")" || RC=$?
 OUT="$(sp_run "$SPEC_TMP/toc")" || fail "E2[b2]: a long reference with contents was flagged: $OUT"
 pass "E2[b2]: a reference over 100 lines fails without a ## Contents section and passes with one"
 
-# (c) the transitional sets excuse what is listed, and only that
-sp_fixture "$SPEC_TMP/pend" 'name: rota-a\ndescription: ok\nuser-invocable: true\n'
-OUT="$(sp_run "$SPEC_TMP/pend" "user-invocable")" || fail "E2[c]: a pending key was flagged: $OUT"
-sp_fixture "$SPEC_TMP/clean" 'name: rota-a\ndescription: ok\n'
-RC=0; OUT="$(sp_run "$SPEC_TMP/clean" "user-invocable")" || RC=$?
-[ "$RC" = 1 ] && grep -qF "uses 'user-invocable' any more" <<<"$OUT" || fail "E2[c]: an unused pending key passed (rc $RC): $OUT"
-sp_fixture "$SPEC_TMP/plong" "name: rota-a\ndescription: $LONG\n"
-OUT="$(sp_run "$SPEC_TMP/plong" "skills/rota-a/$SK")" || fail "E2[c]: a pending long description was flagged: $OUT"
-RC=0; OUT="$(sp_run "$SPEC_TMP/ok" "skills/rota-a/$SK")" || RC=$?
-[ "$RC" = 1 ] && grep -qF "remove it from PENDING_LONG" <<<"$OUT" || fail "E2[c]: an unused PENDING_LONG entry passed (rc $RC): $OUT"
-pass "E2[c]: pending entries excuse only what they name, and a stale entry fails"
+# (c) no cwd dependence: --root works from anywhere, and a missing root is an error
+OUT="$(cd / && python3 "$VALIDATE" --root "$SPEC_TMP/ok" --no-prose 2>&1)" || fail "E2[c]: --root from another cwd failed: $OUT"
+RC=0; OUT="$(python3 "$VALIDATE" --root "$SPEC_TMP/no-such-dir" --no-prose 2>&1)" || RC=$?
+[ "$RC" = 2 ] || fail "E2[c]: a missing --root did not exit 2 (rc $RC): $OUT"
+pass "E2[c]: --root validates a fixture from any cwd and a missing root exits 2"
 
 # (c2) chain lint: an imperative clause that runs a flagged skill fails; prose references and offers pass (#1900)
 sp_chain() { # sp_chain <dir> <line>: a flagged rota-b and a rota-a whose body is <line>
