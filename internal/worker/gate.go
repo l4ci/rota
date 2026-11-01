@@ -492,13 +492,12 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		return res, err
 	}
 	in.cfg.WarnLegacy(e.Stderr)
-	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
-	err = g.run()
-	return res, err
+	g := gate{e: e, ctx: ctx, root: root, o: o, in: in, resolved: t}
+	return g.run(gateIdentity{gate: g, res: &res, target: t, branch: t.Branch, pr: t.PR})
 }
 
 // rem is the configured git remote the gate fetches from and compares against.
-func (g *gate) rem() string { return g.in.cfg.RemoteName() }
+func (g gate) rem() string { return g.in.cfg.RemoteName() }
 
 // gateInput is what the gate and the train read before they start: the config,
 // the commands it names and the test ledger. Env.GateInput supplies it, so one
@@ -529,118 +528,119 @@ func (e Env) loadGateInput(root string) (gateInput, error) {
 	return in, err
 }
 
-// gateStep is one stage of the gate. done ends the gate: the verdict is
-// already in g.res, or err says why it could not run.
-type gateStep func(g *gate) (done bool, err error)
-
-// gateSteps run in order; see the numbered stages in the file comment.
-var gateSteps = []gateStep{
-	(*gate).stepForge,
-	(*gate).stepExternal,
-	(*gate).stepAdoptPR,
-	(*gate).stepFreeze,
-	(*gate).stepBestOf,
-	(*gate).stepRemote,
-	(*gate).stepWaitedMerged,
-	(*gate).stepSlotHead,
-	(*gate).stepRefs,
-	(*gate).stepAttempt,
-	(*gate).stepOutcome,
-	(*gate).stepFreshness,
-	(*gate).stepPRMatches,
-	(*gate).stepVerdictReports,
-	(*gate).stepProvenance,
-	(*gate).stepCloses,
-	(*gate).stepClaim,
-	(*gate).stepVerdict,
-	(*gate).stepReviewDepth,
-	(*gate).stepCheckOnly,
-	(*gate).stepOnBase,
-	(*gate).stepCIVerifier,
-	(*gate).stepPremerge,
-	(*gate).stepForgeMergeable,
-	(*gate).stepTier,
-	(*gate).stepVerifyFirst,
-	(*gate).stepMerge,
-	(*gate).stepVerify,
-}
-
-// reviewsOnlySteps is the table of a ReviewsOnly run: it resolves the target
-// and its head as the full table does, then stops at the review verdicts.
-var reviewsOnlySteps = []gateStep{
-	(*gate).stepForge,
-	(*gate).stepExternal,
-	(*gate).stepAdoptPR,
-	(*gate).stepFreeze,
-	(*gate).stepRemote,
-	(*gate).stepWaitedMerged,
-	(*gate).stepSlotHead,
-	(*gate).stepRefs,
-	(*gate).stepPRMatches,
-	(*gate).stepVerdictReports,
-	(*gate).stepReviewDepth,
-	(*gate).stepCheckOnly,
-}
-
-// gatePostSteps run after the steps above, however they ended, unless one
-// returned an error: the verdict is final and these record it.
-var gatePostSteps = []func(*gate) error{
-	(*gate).stepClearFreeze,
-	(*gate).stepRecordLedger,
-	(*gate).stepDequeue,
-	(*gate).stepReleaseExternal,
-}
-
-// run walks the step table, then the post steps. A step that is done ends the
-// table, not the post steps; an error ends both.
-func (g *gate) run() error {
-	steps := gateSteps
+// run makes the typed handoffs explicit. A stage cannot read a later phase's
+// outputs; the shared runner preserves the terminal answer across skipped stages.
+func (g gate) run(previous gateIdentity) (GateResult, error) {
+	var result GateResult
+	var err error
 	if g.o.ReviewsOnly {
-		steps = reviewsOnlySteps
+		result, err = g.runReviews(previous)
+	} else {
+		result, err = g.runGate(previous)
 	}
-	for _, step := range steps {
-		done, err := step(g)
-		if err != nil {
-			return err
-		}
-		if done {
-			break
-		}
+	if err != nil {
+		return result, err
 	}
-	for _, step := range gatePostSteps {
-		if err := step(g); err != nil {
-			return err
-		}
-	}
-	return nil
+	// Post steps need only the final public answer and target identity, including
+	// any adopted PR or followed branch. They run even after a terminal verdict.
+	target := previous.target
+	target.Branch, target.PR, target.Issue = result.Branch, result.PR, result.Issue
+	post := gateIdentity{gate: g, res: &result, target: target}
+	// A terminal verdict still needs bookkeeping. Start a fresh sequence so its
+	// terminal flag is deliberately clear; any bookkeeping error stops the rest.
+	s0 := landingStageResult[gateIdentity, GateResult]{Value: post, Result: result}
+	s1 := runLandingStage(s0, g.stepClearFreeze)
+	s2 := runLandingStage(s1, g.stepRecordLedger)
+	s3 := runLandingStage(s2, g.stepDequeue)
+	s4 := runLandingStage(s3, g.stepReleaseExternal)
+	return s4.Result, s4.Err
+}
+
+func (g gate) runGate(previous gateIdentity) (GateResult, error) {
+	s0 := landingStageResult[gateIdentity, GateResult]{Value: previous, Result: *previous.res}
+	s1 := runLandingStage(s0, g.stepForge)
+	s2 := runLandingStage(s1, g.stepExternal)
+	s3 := runLandingStage(s2, g.stepAdoptPR)
+	s4 := runLandingStage(s3, g.stepFreeze)
+	s5 := runLandingStage(s4, g.stepBestOf)
+	s6 := runLandingStage(s5, g.stepRemote)
+	s7 := runLandingStage(s6, g.stepWaitedMerged)
+	s8 := runLandingStage(s7, g.stepSlotHead)
+	s9 := runLandingStage(s8, g.stepRefs)
+	s10 := runLandingStage(s9, g.stepAttempt)
+	s11 := runLandingStage(s10, g.stepOutcome)
+	s12 := runLandingStage(s11, g.stepFreshness)
+	s13 := runLandingStage(s12, g.stepPRMatches)
+	s14 := runLandingStage(s13, g.stepVerdictReports)
+	s15 := runLandingStage(s14, g.stepProvenance)
+	s16 := runLandingStage(s15, g.stepCloses)
+	s17 := runLandingStage(s16, g.stepClaim)
+	s18 := runLandingStage(s17, g.stepVerdict)
+	s19 := runLandingStage(s18, g.stepReviewDepth)
+	s20 := runLandingStage(s19, g.stepCheckOnly)
+	s21 := runLandingStage(s20, g.stepOnBase)
+	s22 := runLandingStage(s21, g.stepCIVerifier)
+	s23 := runLandingStage(s22, g.stepPremerge)
+	s24 := runLandingStage(s23, g.stepForgeMergeable)
+	s25 := runLandingStage(s24, g.stepTier)
+	s26 := runLandingStage(s25, g.stepVerifyFirst)
+	s27 := runLandingStage(s26, g.stepMerge)
+	s28 := runLandingStage(s27, g.stepVerify)
+	return s28.Result, s28.Err
+}
+
+func (g gate) runReviews(previous gateIdentity) (GateResult, error) {
+	s0 := landingStageResult[gateIdentity, GateResult]{Value: previous, Result: *previous.res}
+	s1 := runLandingStage(s0, g.stepForge)
+	s2 := runLandingStage(s1, g.stepExternal)
+	s3 := runLandingStage(s2, g.stepAdoptPR)
+	s4 := runLandingStage(s3, g.stepFreeze)
+	s5 := runLandingStage(s4, g.stepRemote)
+	s6 := runLandingStage(s5, g.stepWaitedMerged)
+	s7 := runLandingStage(s6, g.stepSlotHead)
+	s8 := runLandingStage(s7, g.stepRefs)
+	s9 := runLandingStage(s8, g.stepPRMatches)
+	s10 := runLandingStage(s9, g.stepVerdictReports)
+	s11 := runLandingStage(s10, g.stepReviewDepth)
+	s12 := runLandingStage(s11, g.stepCheckOnly)
+	return s12.Result, s12.Err
 }
 
 // git runs git on the gate's context.
-func (g *gate) git(dir string, args ...string) (string, int) {
+func (g gate) git(dir string, args ...string) (string, int) {
 	return g.e.runGit(g.ctx, dir, args...)
 }
 
 // stepRecordLedger appends the verdict to the gate ledger.
-func (g *gate) stepRecordLedger() error {
+func (_ gate) stepRecordLedger(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if !g.o.CheckOnly {
 		gateLedger(g.e, g.o.Round, g.root, g.resolved, *g.res)
 	}
-	return nil
+	return g.finish(false, nil)
 }
 
 // stepDequeue drops the review record of a PR that merged: a pass, or a verdict
 // (merged-remotely, a red verify of the landed tree) that still left the PR on
 // the base. The target may have resolved to a slot, so the record is matched by
 // PR, not by how the argument resolved.
-func (g *gate) stepDequeue() error {
+func (_ gate) stepDequeue(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.o.CheckOnly || !(g.res.Verdict == GatePass || g.res.Changed) {
-		return nil
+		return g.finish(false, nil)
 	}
-	return RemoveQueuedPR(g.root, g.target.PR)
+	return g.finish(false, RemoveQueuedPR(g.root, g.target.PR))
 }
 
 // stepReleaseExternal unregisters a merged adopted slot and keeps its checkout.
-func (g *gate) stepReleaseExternal() error {
+func (_ gate) stepReleaseExternal(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	t := g.target
 	if t.External && t.Name != "" && g.res.Verdict == GatePass && !g.o.CheckOnly {
 		// The PR is merged: a release that cannot finish is a note, not a failed gate.
@@ -648,16 +648,19 @@ func (g *gate) stepReleaseExternal() error {
 			g.res.Notes = append(g.res.Notes, "RELEASE-KEPT "+t.Name+" — "+rerr.Error())
 		}
 	}
-	return nil
+	return g.finish(false, nil)
 }
 
 // stepForge picks the provider and opens its forge.
-func (g *gate) stepForge() (bool, error) {
+func (_ gate) stepForge(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if err := g.in.cfg.RemoteErr; err != nil {
-		return true, fail(exitcode.ExitRefused, err.Error())
+		return g.finish(true, fail(exitcode.ExitRefused, err.Error()))
 	}
 	if err := g.in.cfg.sourceErr; err != nil {
-		return true, fail(exitcode.ExitInternal, err.Error())
+		return g.finish(true, fail(exitcode.ExitInternal, err.Error()))
 	}
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
 	var refusal *forgeOpenRefusal
@@ -665,7 +668,7 @@ func (g *gate) stepForge() (bool, error) {
 	if refusal != nil && refusal.reason == forgeOpenProvider {
 		g.verdict(GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, refusal.err),
 			"set forge.provider to the forge that holds the PR, or to local to merge directly")
-		return true, nil
+		return g.finish(true, nil)
 	}
 	g.cliName = tracker.CLIName(g.provider)
 	g.label = g.in.cfg.InProgressLabel
@@ -673,35 +676,38 @@ func (g *gate) stepForge() (bool, error) {
 		// No forge: no PR to look for, read or merge. The gate merges directly.
 		g.local = true
 		if g.pr != "" {
-			return g.broke(fmt.Sprintf("slot %s records PR %s, but the forge is local (forge.provider is local, or auto with no origin remote); set forge.provider to the forge that holds the PR", g.o.Slot, g.pr))
+			return g.finish(g.broke(fmt.Sprintf("slot %s records PR %s, but the forge is local (forge.provider is local, or auto with no origin remote); set forge.provider to the forge that holds the PR", g.o.Slot, g.pr)))
 		}
-		return false, nil
+		return g.finish(false, nil)
 	}
 	if refusal != nil {
-		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, refusal.err))
+		return g.finish(g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, refusal.err)))
 	}
 	var err error
 	if g.issues, err = g.e.issueSide(g.forge, g.provider, g.root, g.in.cfg.Tracker); err != nil {
-		return g.broke(fmt.Sprintf("cannot reach the issue source: %v", err))
+		return g.finish(g.broke(fmt.Sprintf("cannot reach the issue source: %v", err)))
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepExternal reads the head branch of a PR no slot owns from the forge, so
 // the later steps judge it like a slot's: freshness, identity, provenance,
 // approval, verify and land. Its issue, for the closes check, is the one its
 // branch name leads with (HeldID); a branch with none has nothing to check.
-func (g *gate) stepExternal() (bool, error) {
+func (_ gate) stepExternal(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if !g.target.External || g.pr == "" { // an adopted slot may record no PR yet
-		return false, nil
+		return g.finish(false, nil)
 	}
 	if g.local {
-		return g.broke(fmt.Sprintf("cannot gate PR %s: the forge is local (forge.provider is local, or auto with no origin remote)", g.pr))
+		return g.finish(g.broke(fmt.Sprintf("cannot gate PR %s: the forge is local (forge.provider is local, or auto with no origin remote)", g.pr)))
 	}
 	g.prNum = prNumText(g.pr)
 	info, ok := g.prInfo()
 	if !ok {
-		return g.broke(fmt.Sprintf("could not read PR %s from %s", g.pr, g.provider))
+		return g.finish(g.broke(fmt.Sprintf("could not read PR %s from %s", g.pr, g.provider)))
 	}
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
 	// the head branch names the issue of a PR no slot or record owns
@@ -709,7 +715,7 @@ func (g *gate) stepExternal() (bool, error) {
 	g.target.Bundle = nil // a bundle belongs to a slot's lead, not to a branch-derived issue
 	g.res.Issue = g.target.Issue
 	g.target.relays = append(slices.Clone(g.target.relays), g.unrecordedSlotRelays(info.Head)...)
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // unrecordedSlotRelays is the relay log of the slot on the PR's head branch
@@ -717,7 +723,7 @@ func (g *gate) stepExternal() (bool, error) {
 // sibling or another agent's branch shares): the worker opened it
 // without `worker done` recording it, so the PR resolved as external and would
 // otherwise be judged against no relays (bug-16).
-func (g *gate) unrecordedSlotRelays(head string) []any {
+func (g *gateIdentity) unrecordedSlotRelays(head string) []any {
 	issue := g.target.Issue
 	if issue == "" {
 		return nil
@@ -735,23 +741,26 @@ func (g *gate) unrecordedSlotRelays(head string) []any {
 // open its PR without the slot recording it. A local merge would then land on
 // the local base only, leave the PR open and still report a pass, so look the
 // PR up by head before taking that path.
-func (g *gate) stepAdoptPR() (bool, error) {
+func (_ gate) stepAdoptPR(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.local || g.pr != "" || g.target.Queued || g.branch == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	adopted, msg := g.openPRForBranch()
 	if msg != "" {
-		return g.broke(msg)
+		return g.finish(g.broke(msg))
 	}
 	if adopted == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.pr, g.target.PR, g.res.PR = adopted, adopted, adopted
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("PR-ADOPTED %s — the slot recorded no PR; open PR %s is headed by %s", g.o.Slot, adopted, g.branch))
 	if !g.o.CheckOnly {
 		UpdateSlot(g.root, g.o.Slot, func(s *Slot) { s.SetPR(adopted) })
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepSlotHead follows a slot's PR to its head branch when the two disagree.
@@ -760,28 +769,31 @@ func (g *gate) stepAdoptPR() (bool, error) {
 // it leads with the issue the slot holds, so a PR of another issue's branch
 // stays a mismatch. A real gate records it on the slot, so the next one starts
 // from the right branch.
-func (g *gate) stepSlotHead() (bool, error) {
+func (_ gate) stepSlotHead(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	t := g.target
 	if t.External || t.Queued || !g.remote || g.pr == "" || g.branch == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	info, ok := g.prInfo()
 	if !ok {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.viewed = &info // stepPRMatches reads the same PR next: one forge call
 	if info.State != "OPEN" || info.Head == "" || info.Head == g.branch {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	if held := HeldID(t.Task, g.branch, t.Name); held == "" || HeldID("", info.Head, t.Name) != held {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("BRANCH-FOLLOWED %s — PR %s is headed by %s, not the recorded %s", t.Name, g.pr, info.Head, g.branch))
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
 	if !g.o.CheckOnly && t.Name != "" { // o.Slot is a PR ref when gated by number
 		UpdateSlot(g.root, t.Name, func(s *Slot) { s.SetBranch(info.Head) })
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepRemote decides whether the gate reads origin/* refs. A PR merges what was
@@ -790,9 +802,13 @@ func (g *gate) stepSlotHead() (bool, error) {
 // right ones. A recorded PR with no origin remote is refused: a local merge
 // would leave the PR open and bypass its review, CI and branch protection while
 // reporting MERGED.
-func (g *gate) stepRemote() (bool, error) {
+func (_ gate) stepRemote(previous gateIdentity) (gateReferences, GateResult, bool, error) {
+	g := gateReferences{gateIdentity: previous}
+	result := *g.res
+	g.res = &result
+
 	if g.pr == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.prNum = prNumText(g.pr)
 	// Only exit 2 ("No such remote") means origin is absent. A git that cannot
@@ -801,61 +817,67 @@ func (g *gate) stepRemote() (bool, error) {
 	res, err := g.e.Git(g.ctx, g.root, "remote", "get-url", g.rem())
 	switch {
 	case err != nil:
-		return g.broke(fmt.Sprintf("could not run git in %s to read the %s remote: %v", g.root, g.rem(), err))
+		return g.finish(g.broke(fmt.Sprintf("could not run git in %s to read the %s remote: %v", g.root, g.rem(), err)))
 	case res.ExitCode == 2:
-		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no '%s' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr, g.rem()))
+		return g.finish(g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no '%s' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr, g.rem())))
 	case res.ExitCode != 0:
-		return g.broke(fmt.Sprintf("git remote get-url %s failed in %s (exit %d): %s", g.rem(), g.root, res.ExitCode, strings.TrimSpace(res.Stderr)))
+		return g.finish(g.broke(fmt.Sprintf("git remote get-url %s failed in %s (exit %d): %s", g.rem(), g.root, res.ExitCode, strings.TrimSpace(res.Stderr))))
 	}
 	if g.prNum == "" {
-		return g.broke(fmt.Sprintf("cannot read a PR number from '%s'", g.pr))
+		return g.finish(g.broke(fmt.Sprintf("cannot read a PR number from '%s'", g.pr)))
 	}
 	g.remote = true
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepWaitedMerged re-reads the PR when the gate queued behind another gate or
 // a train: it may have merged in the meantime, and judging it again would fail
 // on a head that is already landed.
-func (g *gate) stepWaitedMerged() (bool, error) {
+func (_ gate) stepWaitedMerged(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if !g.o.waited || g.o.CheckOnly || !g.remote {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
 		g.res.AlreadyMerged = true
 		g.verdict(GateAlreadyMerged, fmt.Sprintf("GATE %s — PR %s merged while this gate waited for the land lock; nothing changed", g.o.Slot, g.pr), "")
-		return true, nil
+		return g.finish(true, nil)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepRefs resolves the refs the later steps judge: fetched origin refs for a
 // remote gate, the local branch otherwise.
-func (g *gate) stepRefs() (bool, error) {
+func (_ gate) stepRefs(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	root, o := g.root, g.o
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
-		return true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
+		return g.finish(true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base)))
 	}
 	if !g.remote {
 		g.headRef, g.baseRef = g.branch, o.Base
 		var code int
 		// The commit the gates below judge is the commit that lands.
 		if g.verified, code = g.git(root, "rev-parse", "--verify", "--quiet", g.branch); code != 0 || g.verified == "" {
-			return true, fail(exitcode.ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", g.branch))
+			return g.finish(true, fail(exitcode.ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", g.branch)))
 		}
-		return false, nil
+		return g.finish(false, nil)
 	}
 	if _, code := g.git(root, "fetch", g.rem(), "-q"); code != 0 {
-		return g.broke("git fetch " + g.rem() + " failed")
+		return g.finish(g.broke("git fetch " + g.rem() + " failed"))
 	}
 	g.headRef, g.baseRef = g.rem()+"/"+g.branch, g.rem()+"/"+o.Base
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.headRef+"^{commit}"); code != 0 {
-		return g.broke(fmt.Sprintf("%s does not exist — has the worker pushed %s?", g.headRef, g.branch))
+		return g.finish(g.broke(fmt.Sprintf("%s does not exist — has the worker pushed %s?", g.headRef, g.branch)))
 	}
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.baseRef+"^{commit}"); code != 0 {
-		return g.broke(g.baseRef + " does not exist")
+		return g.finish(g.broke(g.baseRef + " does not exist"))
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepAttempt refuses a PR carrying a commit stamped (AttemptTrailer) with an
@@ -868,10 +890,13 @@ func (g *gate) stepRefs() (bool, error) {
 // Anything it cannot tell passes: a slot with no attempt (assigned before the
 // fence), an unstamped commit, an inherited tip that is not an ancestor of the
 // head (a rebase rewrote it) or a log that fails.
-func (g *gate) stepAttempt() (bool, error) {
+func (_ gate) stepAttempt(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	t := g.target
 	if t.Queued || t.External || t.Attempt == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	// The base's own commits (a merge of main into the branch brings other
 	// workers' stamped commits) are nobody's attempt here: exclude them too.
@@ -880,13 +905,13 @@ func (g *gate) stepAttempt() (bool, error) {
 		if _, code := g.git(g.root, "merge-base", "--is-ancestor", t.AttemptBase, g.headRef); code != 0 {
 			// A rebase rewrote the inherited tip: the inherited trailers cannot be
 			// told from the stale ones, so judge nothing.
-			return false, nil
+			return g.finish(false, nil)
 		}
 		rng = append(rng, "^"+t.AttemptBase)
 	}
 	out, code := g.git(g.root, append([]string{"log", "--format=%h %(trailers:key=" + AttemptTrailer + ",valueonly,separator=%x20)"}, rng...)...)
 	if code != 0 {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	for _, line := range strings.Split(out, "\n") {
 		sha, stamps, _ := strings.Cut(strings.TrimSpace(line), " ")
@@ -895,11 +920,11 @@ func (g *gate) stepAttempt() (bool, error) {
 				g.res.SHA = sha
 				g.verdict(GateStaleAttempt, fmt.Sprintf("GATE %s refused — commit %s on %s was pushed by attempt %s, which the slot no longer holds; nothing landed", g.o.Slot, sha, g.branch, id),
 					"the assignment was reclaimed or transferred: the holder's own commits are not affected, so have it check that branch, or reassign the issue")
-				return true, nil
+				return g.finish(true, nil)
 			}
 		}
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepOutcome refuses a PR whose worker reported partial or failed through
@@ -907,25 +932,31 @@ func (g *gate) stepAttempt() (bool, error) {
 // gate. A relay or a transfer is a new brief and clears the outcome; so does the
 // worker's next `worker done`. It reads the slot, so a queued PR and an
 // external one have no outcome, and it runs under CheckOnly too.
-func (g *gate) stepOutcome() (bool, error) {
+func (_ gate) stepOutcome(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.target.Queued || g.target.External || g.target.Outcome == "" {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.verdict(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
 		fmt.Sprintf("read the summary (`rota round status`), then relay slot %s to finish the rest or `rota round transfer` it; a later `worker done --outcome done` lifts this", g.o.Slot))
-	return true, nil
+	return g.finish(true, nil)
 }
 
 // stepFreshness is stage 1. Three-way on the exit code: `&& FRESH || STALE`
 // would call a check that itself errors STALE.
-func (g *gate) stepFreshness() (bool, error) {
+func (_ gate) stepFreshness(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	o := g.o
 	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", g.baseRef, g.headRef); code {
 	case 0:
-		return false, nil
+		return g.finish(false, nil)
 	case 1:
 	default:
-		return g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code))
+		return g.finish(g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code)))
 	}
 	behind, c := g.git(g.root, "rev-list", "--count", g.headRef+".."+g.baseRef)
 	if c != 0 {
@@ -937,14 +968,14 @@ func (g *gate) stepFreshness() (bool, error) {
 		why, shared, brokeMsg = g.staleReason()
 	}
 	if brokeMsg != "" {
-		return g.broke(brokeMsg)
+		return g.finish(g.broke(brokeMsg))
 	}
 	if why != "" {
 		g.noteMergedRemotely()
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
-		return true, nil
+		return g.finish(true, nil)
 	}
 	if !o.LandVerified {
 		detail := "none touch its files and the merge is clean, merging as is"
@@ -953,19 +984,22 @@ func (g *gate) stepFreshness() (bool, error) {
 		}
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("STALE-MERGE %s — %s commit(s) landed on %s since %s branched; %s", o.Slot, behind, o.Base, g.branch, detail))
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepPRMatches checks the PR is the thing that was just verified: open, aimed
 // at the gate's base (a PR stacked on another worker's branch merges THERE, not
 // here), and headed by the pushed commit.
-func (g *gate) stepPRMatches() (bool, error) {
+func (_ gate) stepPRMatches(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if !g.remote {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	var code int
 	if g.verified, code = g.git(g.root, "rev-parse", g.headRef); code != 0 || g.verified == "" {
-		return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code))
+		return g.finish(g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code)))
 	}
 	info, ok := g.viewed, true
 	g.viewed = nil
@@ -976,7 +1010,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 		}
 	}
 	if !ok {
-		return g.broke(fmt.Sprintf("could not read PR %s from %s", g.prNum, g.provider))
+		return g.finish(g.broke(fmt.Sprintf("could not read PR %s from %s", g.prNum, g.provider)))
 	}
 	mismatch := func(msg string) (bool, error) {
 		g.verdict(GatePRMismatch, "error: "+msg, "")
@@ -986,11 +1020,11 @@ func (g *gate) stepPRMatches() (bool, error) {
 	switch {
 	case info.State != "OPEN":
 		g.res.AlreadyMerged = info.State == "MERGED"
-		return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
+		return g.finish(mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State)))
 	case info.Base != g.o.Base:
-		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
+		return g.finish(mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base)))
 	case info.Head != g.branch:
-		return mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.Head, g.o.Slot, g.branch))
+		return g.finish(mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.Head, g.o.Slot, g.branch)))
 	}
 	// The forge can lag a push: origin has the commit and the PR still names the
 	// old head. Read again a bounded number of times before calling it a mismatch.
@@ -998,7 +1032,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 		g.e.Sleep(gateHeadWait)
 		v, ok := g.prInfo()
 		if !ok {
-			return g.broke(fmt.Sprintf("could not re-read PR %s from %s", g.prNum, g.provider))
+			return g.finish(g.broke(fmt.Sprintf("could not re-read PR %s from %s", g.prNum, g.provider)))
 		}
 		info = &v
 		if info.State != "OPEN" || info.Head != g.branch {
@@ -1009,9 +1043,9 @@ func (g *gate) stepPRMatches() (bool, error) {
 		g.verdict(GatePRMismatch,
 			fmt.Sprintf("error: PR %s head is %s, the verified %s is %s — pushed since, or %s has not caught up with the push (read %d times)", g.prNum, info.HeadSHA, g.headRef, g.verified, g.provider, gateHeadTries),
 			fmt.Sprintf("once the PR shows the pushed head, run `rota worker gate %s` again without --request-id: the same id replays this refusal", g.o.Slot))
-		return true, nil
+		return g.finish(true, nil)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // gateHeadTries and gateHeadWait bound the wait for the forge's PR head to reach
@@ -1022,32 +1056,38 @@ const (
 )
 
 // stepProvenance runs the approvals check.
-func (g *gate) stepProvenance() (bool, error) {
+func (_ gate) stepProvenance(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	failMsg, brokeMsg := g.checkProvenance()
 	if brokeMsg != "" {
-		return g.broke(brokeMsg)
+		return g.finish(g.broke(brokeMsg))
 	}
 	if failMsg != "" {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 		g.verdict(GateProvenanceFail, failMsg, "")
-		return true, nil
+		return g.finish(true, nil)
 	}
-	return g.checkRequiredPRSections()
+	return g.finish(g.checkRequiredPRSections())
 }
 
 // stepBestOf refuses an attempt of a best-of:2 issue until a `rota round pick`
 // names its PR, before any fetch, freshness check or bounce. It runs under
 // CheckOnly too, so a train member is refused before anything merges. The
 // refusal clears itself once the orchestrator picks.
-func (g *gate) stepBestOf() (bool, error) {
+func (_ gate) stepBestOf(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	issue := g.target.Issue
 	reg, err := LoadRegistry(g.root)
 	if err != nil {
-		return false, err
+		return g.finish(false, err)
 	}
 	rec := reg.BestOf(issue)
 	if rec == nil || (g.pr != "" && rec.Picked(g.pr)) {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	what := "this branch"
 	if g.pr != "" {
@@ -1058,7 +1098,7 @@ func (g *gate) stepBestOf() (bool, error) {
 		msg = fmt.Sprintf("GATE %s refused — %s is best-of:2 and the pick chose %s; this attempt lost; nothing landed", g.o.Slot, tracker.RefOf(rec.Issue), rec.Pick)
 	}
 	g.verdict(GateBestOfUnpicked, msg, fmt.Sprintf("compare both attempts and run `rota round pick %s --pr <N> --reason-file <f>`", rec.Issue))
-	return true, nil
+	return g.finish(true, nil)
 }
 
 // refList is the keys' refs joined by ", ".
@@ -1096,18 +1136,21 @@ func assignedHarness(root, issue string) string {
 // A recorded FAIL was already refused by stepVerdict. An unreadable policy,
 // diff or issue is a refusal too: guessing a depth could pass a risk:high
 // branch as light.
-func (g *gate) stepReviewDepth() (bool, error) {
+func (_ gate) stepReviewDepth(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	policy, err := g.in.cfg.ReviewPolicy()
 	if err != nil {
-		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+		return g.finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
 	}
 	cross, err := g.in.cfg.CrossReview()
 	if err != nil {
-		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+		return g.finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
 	}
 	lenses, err := g.in.cfg.Lenses()
 	if err != nil {
-		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+		return g.finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
 	}
 	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind, Lenses: lenses}
 	src.Change, src.ChangeErr = g.in.cfg.ChangePolicy()
@@ -1130,7 +1173,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	res, err := ResolveReviewDepth(g.ctx, src)
 	if err != nil {
-		return g.broke(err.Error())
+		return g.finish(g.broke(err.Error()))
 	}
 	depth, why := res.Depth, res.Why
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
@@ -1141,14 +1184,14 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-LENS %s — %s (%s)", g.o.Slot, l.Name, l.Why))
 	}
 	if !g.o.CheckReviews {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	// stepPRMatches resolved the head when the slot has a remote; otherwise resolve it here
 	head := g.verified
 	if head == "" {
 		var code int
 		if head, code = g.git(g.root, "rev-parse", g.headRef); code != 0 || strings.TrimSpace(head) == "" {
-			return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code))
+			return g.finish(g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code)))
 		}
 	}
 	have := verdict.Recorded(g.root, g.branch, strings.TrimSpace(head))
@@ -1169,7 +1212,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		}
 	}
 	if len(missing) == 0 && crossMissing == "" && len(lensMissing) == 0 {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	var needs []string
@@ -1186,32 +1229,38 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		hint += fmt.Sprintf("; the review lenses need a reviewer per triggered lens recorded by /rota-review on %s, or a looser review.lenses", g.branch)
 	}
 	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
-	return true, nil
+	return g.finish(true, nil)
 }
 
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
 // ship paths apply. It runs under CheckOnly too, so a train member is refused
 // before anything merges.
-func (g *gate) stepVerdict() (bool, error) {
+func (_ gate) stepVerdict(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.o.NoVerdict {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	head, _ := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
 	// Loaded here, after the gate recovered the PR's reports into the store.
 	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: verdict.Load(g.root), Repo: g.o.VerdictRepo}
 	if err := check.BlockGate(g.branch, head); err != nil {
 		g.res.Verdict = GateVerdictBlocked
-		return true, err
+		return g.finish(true, err)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepCheckOnly ends a CheckOnly gate with verdict fresh.
-func (g *gate) stepCheckOnly() (bool, error) {
+func (_ gate) stepCheckOnly(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.o.CheckOnly {
 		if g.o.BehaviourDir != "" {
 			if done, err := g.behaviourRun(g.o.BehaviourDir); done || err != nil {
-				return true, err
+				return g.finish(true, err)
 			}
 		}
 		// the checked tip: origin/<branch> when a PR is recorded
@@ -1222,36 +1271,46 @@ func (g *gate) stepCheckOnly() (bool, error) {
 			g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
 		}
 		g.res.Verdict = GateFresh
-		return true, nil
+		return g.finish(true, nil)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepOnBase refuses a gate run with another branch than the base checked out.
-func (g *gate) stepOnBase() (bool, error) {
+func (_ gate) stepOnBase(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	cur, _ := g.git(g.root, "rev-parse", "--abbrev-ref", "HEAD")
 	if cur != g.o.Base {
-		return true, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", g.o.Base, cur))
+		return g.finish(true, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", g.o.Base, cur)))
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepCIVerifier builds the CI verifier of a test.fullWhere ci gate.
-func (g *gate) stepCIVerifier() (bool, error) {
+func (_ gate) stepCIVerifier(previous gateReferences) (gatePrepared, GateResult, bool, error) {
+	g := gatePrepared{gateReferences: previous}
+	result := *g.res
+	g.res = &result
+
 	if g.in.cfg.where != WhereCI || g.o.skipsVerify() {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	ci, msg := g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg)
 	if msg != "" {
-		return g.broke(msg)
+		return g.finish(g.broke(msg))
 	}
 	g.ci = ci
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepPremerge runs the pre-merge sequence the train shares (premerge.go):
 // ledger expiry, no-verify, CI-config and the merge-approval gate (B1).
-func (g *gate) stepPremerge() (bool, error) {
+func (_ gate) stepPremerge(g gatePrepared) (gatePrepared, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	run := premergeRun{
 		Subject:      gateSubject(g.o.Slot),
 		In:           g.in,
@@ -1280,23 +1339,26 @@ func (g *gate) stepPremerge() (bool, error) {
 		if ref != nil {
 			err = ref.Err
 		}
-		return true, err
+		return g.finish(true, err)
 	case err != nil:
-		return g.broke(err.Error())
+		return g.finish(g.broke(err.Error()))
 	case r != nil:
 		g.res.Expired = r.Expired
 		g.verdict(r.Verdict, r.Err, r.Hint)
-		return true, nil
+		return g.finish(true, nil)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepForgeMergeable asks the forge about mergeability before the scratch verify.
-func (g *gate) stepForgeMergeable() (bool, error) {
+func (_ gate) stepForgeMergeable(g gatePrepared) (gatePrepared, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.remote && !g.o.skipsVerify() {
-		return g.forgeRefuses(), nil
+		return g.finish(g.forgeRefuses(), nil)
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // stepTier puts the change in a tier (#2348) and picks what verifies the
@@ -1304,9 +1366,12 @@ func (g *gate) stepForgeMergeable() (bool, error) {
 // when that list is set. It runs after stepPremerge, so the NO-VERIFY refusal
 // still reads test.full, and it fails closed: anything ClassifyChange cannot
 // read is full. Under test.fullWhere ci the tier is recorded, not applied.
-func (g *gate) stepTier() (bool, error) {
+func (_ gate) stepTier(g gatePrepared) (gatePrepared, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if g.o.skipsVerify() {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	span := g.baseRef + "..." + g.verified
 	tier := g.classify(span)
@@ -1315,7 +1380,7 @@ func (g *gate) stepTier() (bool, error) {
 		if tier.Tier != change.TierFull {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("GATE-TIER %s — %s (%s); not applied: test.fullWhere is ci, so CI runs its own checks", g.o.Slot, tier.Tier, tier.Reason))
 		}
-		return false, nil
+		return g.finish(false, nil)
 	}
 	var files []string
 	if tier.Tier == change.TierSmall && anyHasFiles(g.in.cfg.Small) {
@@ -1323,20 +1388,20 @@ func (g *gate) stepTier() (bool, error) {
 		// Deleted files stay in: a removed file's package and its dependents must run.
 		if files, err = git.DiffFiles(g.ctx, g.e.Git, g.root, span); err != nil {
 			g.res.Tier, g.res.TierReason = string(change.TierFull), fmt.Sprintf("could not list the files of %s for test.small: %v", span, err)
-			return false, nil
+			return g.finish(false, nil)
 		}
 	}
 	cfg, ran, skipped := g.in.cfg.forTier(tier.Tier, files)
 	if len(skipped) == 0 {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.tierCfg, g.res.Skipped = &cfg, skipped
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("GATE-TIER %s — %s (%s); ran %s; skipped %s", g.o.Slot, tier.Tier, tier.Reason, ran, strings.Join(skipped, ", ")))
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // classify is the change tier of span, with the PR's Door line when there is a PR.
-func (g *gate) classify(span string) change.Result {
+func (g *gateReferences) classify(span string) change.Result {
 	policy, perr := g.in.cfg.ChangePolicy()
 	src := ChangeSources{Policy: policy, PolicyErr: perr, Git: g.e.Git, Dir: g.root, Span: span}
 	if g.pr != "" {
@@ -1347,9 +1412,13 @@ func (g *gate) classify(span string) change.Result {
 
 // stepVerifyFirst verifies the merge result in a scratch tree, before anything
 // lands (stage 2).
-func (g *gate) stepVerifyFirst() (bool, error) {
+func (_ gate) stepVerifyFirst(previous gatePrepared) (gateVerified, GateResult, bool, error) {
+	g := gateVerified{gatePrepared: previous}
+	result := *g.res
+	g.res = &result
+
 	if g.o.skipsVerify() {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	check, what := g.verifyLocal, "the gate"
 	if g.ci != nil {
@@ -1357,24 +1426,28 @@ func (g *gate) stepVerifyFirst() (bool, error) {
 		check, what = func(dir, sha string) (bool, error) { return g.verifyOnCI(ci, sha) }, "CI"
 	}
 	done, err := g.verifyFirst(what, check)
-	return done || err != nil, err
+	return g.finish(done || err != nil, err)
 }
 
 // stepMerge is stage 3: the merge itself, through the forge or locally.
-func (g *gate) stepMerge() (bool, error) {
+func (_ gate) stepMerge(previous gateVerified) (gateLanded, GateResult, bool, error) {
+	g := gateLanded{gateVerified: previous}
+	result := *g.res
+	g.res = &result
+
 	if g.remote {
 		if g.mergeRemote() {
-			return true, nil
+			return g.finish(true, nil)
 		}
 	} else if done := g.mergeLocal(g.root); done {
-		return true, nil
+		return g.finish(true, nil)
 	}
 	g.res.Changed = true
 	if !g.remote {
 		g.landed, _ = g.git(g.root, "rev-parse", "HEAD")
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", "HEAD")
-	return false, nil
+	return g.finish(false, nil)
 }
 
 // gateMergeableTries bounds the wait for a forge still computing mergeability.
@@ -1385,7 +1458,7 @@ const gateMergeableTries = 3
 // forge does not) costs seconds, not a verify run. done is true when the forge
 // reports a conflict: merge-failed, nothing landed. Unknown after a few tries
 // and any error proceed: the post-verify forge merge stays the authority.
-func (g *gate) forgeRefuses() (done bool) {
+func (g *gateReferences) forgeRefuses() (done bool) {
 	n, err := strconv.Atoi(g.prNum)
 	if err != nil {
 		return false
@@ -1420,7 +1493,7 @@ func (g *gate) forgeRefuses() (done bool) {
 // where verifying the landed base would leave it to fix forward. The base must
 // still be what the scratch tree was built on, and its tree is what must land
 // (stepVerify). done is true when it ends the gate with a verdict.
-func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error)) (bool, error) {
+func (g *gateVerified) verifyFirst(what string, check func(dir, sha string) (bool, error)) (bool, error) {
 	o := g.o
 	baseSHA, code := g.git(g.root, "rev-parse", g.baseRef)
 	if code != 0 {
@@ -1467,7 +1540,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 }
 
 // verifyOnCI pushes the scratch merge sha for CI to check (test.fullWhere ci).
-func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
+func (g *gateVerified) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 	o := g.o
 	vr, err := ci.verify(sha, o.Slot)
 	if err != nil {
@@ -1486,7 +1559,7 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 }
 
 // verifyLocal runs test.full, then test.e2e, on the scratch merge in dir.
-func (g *gate) verifyLocal(dir, _ string) (bool, error) {
+func (g *gatePrepared) verifyLocal(dir, _ string) (bool, error) {
 	cfg := g.in.cfg
 	if g.tierCfg != nil {
 		cfg = *g.tierCfg
@@ -1499,7 +1572,7 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 // a red result is then fixed forward, else nothing landed and the slot goes
 // back. An empty test.full leaves a NO-VERIFY note; test.e2e passing after it
 // clears VerifySkipped. done is true when it ends the gate with a verdict.
-func (g *gate) verifyTiers(cfg GateConfig, first, dir string, landed bool) (bool, error) {
+func (g *gatePrepared) verifyTiers(cfg GateConfig, first, dir string, landed bool) (bool, error) {
 	w := g.tierWalk(func(tier string, cmds []string) (VerifyResult, error) {
 		run := g.e.runGateVerify
 		if tier == tierE2E {
@@ -1527,7 +1600,7 @@ func (g *gate) verifyTiers(cfg GateConfig, first, dir string, landed bool) (bool
 
 // tierWalk builds the gate's walk: it records into the result and stops on a
 // run that gave no answer (only a CI run can). Only run and red differ.
-func (g *gate) tierWalk(run func(string, []string) (VerifyResult, error), red func(string, VerifyResult) (bool, error)) *tierWalk {
+func (g *gatePrepared) tierWalk(run func(string, []string) (VerifyResult, error), red func(string, VerifyResult) (bool, error)) *tierWalk {
 	res := g.res
 	return &tierWalk{
 		subject: g.o.Slot,
@@ -1546,7 +1619,7 @@ func (g *gate) tierWalk(run func(string, []string) (VerifyResult, error), red fu
 }
 
 // landedTree is the tree of the commit the merge produced.
-func (g *gate) landedTree() string {
+func (g *gateLanded) landedTree() string {
 	tree, _ := g.git(g.root, "rev-parse", g.landed+"^{tree}")
 	return tree
 }
@@ -1555,7 +1628,7 @@ func (g *gate) landedTree() string {
 // forge merged something else (the base moved in between). It reads the merge
 // commit itself, not the base's tip: a push to the base after the merge is not
 // a mismatch. false ends the gate with the verdict set.
-func (g *gate) confirmCITree() bool {
+func (g *gateLanded) confirmCITree() bool {
 	if tree := g.landedTree(); tree != g.verifiedTree {
 		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
@@ -1565,14 +1638,14 @@ func (g *gate) confirmCITree() bool {
 }
 
 // changedFiles lists the paths the merge changes, for the approval gate.
-func (g *gate) changedFiles() ([]string, error) {
+func (g *gateReferences) changedFiles() ([]string, error) {
 	return git.ChangedPaths(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
 }
 
 // mergeLocal merges the verified head into the base checked out in dir: the
 // gate checkout, or a scratch tree. done is true when it ends the gate with a
 // verdict.
-func (g *gate) mergeLocal(dir string) (done bool) {
+func (g *gateReferences) mergeLocal(dir string) (done bool) {
 	run := func(args ...string) (git.Result, error) { return g.e.Git(g.ctx, dir, args...) }
 	err := land.MergeLocal(run, g.verified, land.MergeSubject(g.branch, g.o.Base), land.RecoveryGit(g.ctx, g.e.Git, dir))
 	if err == nil {
@@ -1592,24 +1665,27 @@ func (g *gate) mergeLocal(dir string) (done bool) {
 // run again on the landed base, so the gate never claims a verify it did not
 // do. Under test.fullWhere ci a mismatch is base-moved, and test.e2e runs here
 // on the landed tree.
-func (g *gate) stepVerify() (bool, error) {
+func (_ gate) stepVerify(g gateLanded) (gateLanded, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	res, o := g.res, g.o
 	if o.skipsVerify() {
 		res.Verdict, res.VerifySkipped = GatePass, true
 		if !o.LandVerified {
 			res.Notes = append(res.Notes, noVerifyFlagNote(o.Slot))
 		}
-		return true, nil
+		return g.finish(true, nil)
 	}
 	if g.ciRun != nil {
 		if !g.confirmCITree() {
-			return true, nil
+			return g.finish(true, nil)
 		}
 		if done, err := g.verifyTiers(g.in.cfg, tierE2E, g.root, true); done || err != nil {
-			return true, err
+			return g.finish(true, err)
 		}
 		res.Verdict = GatePass
-		return true, nil
+		return g.finish(true, nil)
 	}
 	if tree := g.landedTree(); tree != g.verifiedTree {
 		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
@@ -1617,17 +1693,17 @@ func (g *gate) stepVerify() (bool, error) {
 		// The landed base holds other merges, so the cheap tier's premise (only
 		// this change's files changed) no longer holds: verify it in full.
 		if done, err := g.verifyTiers(g.in.cfg, tierFull, g.root, true); done || err != nil {
-			return true, err
+			return g.finish(true, err)
 		}
 	}
 	res.Verdict = GatePass
-	return true, nil
+	return g.finish(true, nil)
 }
 
 // redTier is the gate's answer to a failed tier. landed says the tree is
 // already on the base: a red result is then fixed forward, else nothing landed
 // and the slot goes back. It always ends the gate with a verdict.
-func (g *gate) redTier(landed bool) func(string, VerifyResult) (bool, error) {
+func (g *gatePrepared) redTier(landed bool) func(string, VerifyResult) (bool, error) {
 	return func(tier string, vr VerifyResult) (bool, error) {
 		res, o := g.res, g.o
 		e2e := tier == tierE2E
@@ -1684,7 +1760,7 @@ func pairwiseMergeConflict(runGit func(string, ...string) (string, int), root, a
 // catches that, so shared lists those files for the verdict note instead of
 // refusing. Files matching round.sharedPaths are ignored, as the readiness
 // overlap check ignores them. brokeMsg is set when a git check itself fails.
-func (g *gate) staleReason() (why string, shared []string, brokeMsg string) {
+func (g *gateReferences) staleReason() (why string, shared []string, brokeMsg string) {
 	root := g.root
 	if _, code := g.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
 		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), nil, ""
@@ -1749,63 +1825,93 @@ func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Setting
 	return e.Issues(dir, s)
 }
 
+// gate is immutable run configuration and dependencies. Per-stage outputs live
+// in the typed handoffs below, never on this receiver.
 type gate struct {
-	// tierCfg is the config the scratch merge verifies with: test.docs or
-	// test.small in place of test.full and test.e2e (stepTier); nil is in.cfg.
-	tierCfg *GateConfig
-	e       Env // defaulted once, by Env.Gate
-	ctx     context.Context
-	root    string
-	res     *GateResult
-	o       GateOpts
-	in      gateInput
-	target  GateTarget
-	// resolved is the target as GateTarget returned it. stepExternal rewrites
-	// target.Branch to the forge head; the ledger keeps the resolved one.
-	resolved    GateTarget
-	sectionBody *string // successful PR body read, reused by the section check
+	e        Env
+	ctx      context.Context
+	root     string
+	o        GateOpts
+	in       gateInput
+	resolved GateTarget // original target retained by the ledger
+}
 
-	// viewed is the PR stepSlotHead read, for stepPRMatches to reuse once.
-	viewed   *tracker.PRInfo
-	branch   string
-	pr       string
-	prNum    string
-	provider string
-	forge    Forge
-	issues   Issues // the issue source; nil for a file source
-	local    bool   // the forge is local: no PR, direct merge
-	cliName  string
-	label    string // issues.labels.inProgress: the claim label a merge releases
-	remote   bool
-	headRef  string
-	baseRef  string
-	verified string
-	// ci is the CI verifier of a test.fullWhere ci gate, built by stepCIConfig.
-	ci *ciVerifier
-	// ciRun is the CI run of the merge result when test.fullWhere is ci.
-	ciRun *VerifyResult
-	// verifiedTree is the tree of the scratch merge verifyFirst verified: what
-	// must land.
+// gateIdentity is the forge and target resolved before refs may be inspected.
+type gateIdentity struct {
+	gate
+	res               *GateResult
+	target            GateTarget
+	branch, pr, prNum string
+	provider          string
+	forge             Forge
+	issues            Issues
+	local             bool
+	cliName, label    string
+}
+
+// gateReferences carries the refs and PR head that policy checks judge.
+type gateReferences struct {
+	gateIdentity
+	sectionBody                *string
+	viewed                     *tracker.PRInfo
+	remote                     bool
+	headRef, baseRef, verified string
+}
+
+// gatePrepared carries the selected verifier and the tier's immutable config.
+type gatePrepared struct {
+	gateReferences
+	tierCfg *GateConfig
+	ci      *ciVerifier
+}
+
+// gateVerified carries proof of the scratch tree that is allowed to land.
+type gateVerified struct {
+	gatePrepared
 	verifiedTree string
-	// landed is the commit the merge produced: the forge's merge commit, or
-	// the local merge's HEAD.
+	ciRun        *VerifyResult
+}
+
+// gateLanded adds the commit actually produced by the merge.
+type gateLanded struct {
+	gateVerified
 	landed string
 }
 
+func (s gateIdentity) finish(done bool, err error) (gateIdentity, GateResult, bool, error) {
+	return s, *s.res, done, err
+}
+
+func (s gateReferences) finish(done bool, err error) (gateReferences, GateResult, bool, error) {
+	return s, *s.res, done, err
+}
+
+func (s gatePrepared) finish(done bool, err error) (gatePrepared, GateResult, bool, error) {
+	return s, *s.res, done, err
+}
+
+func (s gateVerified) finish(done bool, err error) (gateVerified, GateResult, bool, error) {
+	return s, *s.res, done, err
+}
+
+func (s gateLanded) finish(done bool, err error) (gateLanded, GateResult, bool, error) {
+	return s, *s.res, done, err
+}
+
 // verdict records a non-success verdict.
-func (g *gate) verdict(v, msg, hint string) {
+func (g *gateIdentity) verdict(v, msg, hint string) {
 	g.res.Verdict, g.res.Err, g.res.Hint = v, msg, hint
 }
 
-func (g *gate) broke(msg string) (bool, error) {
-	g.verdict(GateCheckBroke, fmt.Sprintf("CHECK-BROKE %s — %s", g.o.Slot, msg), "")
+func (g *gateIdentity) broke(msg string) (bool, error) {
+	g.verdict(GateCheckBroke, checkBrokeMessage(g.o.Slot, msg), "")
 	return true, nil
 }
 
 // noteMergedRemotely marks the result when the forge says the PR is merged: a
 // stale refusal of a PR landed elsewhere, by a squash or rebase too, whose head
 // is then not on the base.
-func (g *gate) noteMergedRemotely() {
+func (g *gateReferences) noteMergedRemotely() {
 	if !g.remote || g.o.CheckOnly { // a check-only gate writes no ledger entry
 		return
 	}
@@ -1815,7 +1921,7 @@ func (g *gate) noteMergedRemotely() {
 }
 
 // prInfo reads the PR; ok is false when the forge could not be read.
-func (g *gate) prInfo() (tracker.PRInfo, bool) {
+func (g *gateIdentity) prInfo() (tracker.PRInfo, bool) {
 	n, err := strconv.Atoi(g.prNum)
 	if err != nil {
 		return tracker.PRInfo{}, false
@@ -1828,7 +1934,7 @@ func (g *gate) prInfo() (tracker.PRInfo, bool) {
 // origin remote or a forge CLI there is no remote to hold one, and the local
 // merge stands. Any other failure to ask is a check-broke message: guessing
 // "none" would fail open into a local merge of a branch whose PR may be open.
-func (g *gate) openPRForBranch() (url, brokeMsg string) {
+func (g *gateIdentity) openPRForBranch() (url, brokeMsg string) {
 	if _, code := g.git(g.root, "remote", "get-url", g.rem()); code != 0 {
 		return "", ""
 	}
@@ -1848,12 +1954,12 @@ func (g *gate) openPRForBranch() (url, brokeMsg string) {
 }
 
 // prBody is the PR/MR description. An error means it could not be read.
-func (g *gate) prBody() (string, error) {
+func (g *gateIdentity) prBody() (string, error) {
 	info, err := g.prView()
 	return info.Body, err
 }
 
-func (g *gate) prView() (tracker.PRInfo, error) {
+func (g *gateIdentity) prView() (tracker.PRInfo, error) {
 	n, ok := PRRefNumber(g.pr)
 	if !ok {
 		return tracker.PRInfo{}, fmt.Errorf("no PR number in %q", g.pr)
@@ -1869,7 +1975,7 @@ func (g *gate) prView() (tracker.PRInfo, error) {
 // reason (not authenticated, rate limited, PR gone, unparseable reply) used
 // to be a skip too, in the Python gate as well, so the gate merged without
 // having looked at the approvals. That fails open; here it is check-broke.
-func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
+func (g *gateReferences) checkProvenance() (failMsg, brokeMsg string) {
 	if g.pr == "" {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("PROVENANCE-SKIP %s — no recorded PR (or no %s) to read approvals from", g.o.Slot, g.cliName))
 		return "", ""
@@ -1912,7 +2018,7 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 // other machine left as issue comments (#1827). Only writer-trusted authors
 // count. support says the PR is one, so the offer citation is enforced; any
 // other PR returns the local log alone, with no extra read.
-func (g *gate) supportApprovals() (relays []any, offered, support bool, err error) {
+func (g *gateIdentity) supportApprovals() (relays []any, offered, support bool, err error) {
 	relays = g.target.relays
 	cfg := g.in.cfg
 	key, ok := tracker.ParseKey(g.target.Issue)
@@ -1933,7 +2039,7 @@ func (g *gate) supportApprovals() (relays []any, offered, support bool, err erro
 
 // mergeRemote merges through the forge and confirms it landed. done is true
 // when it ends the gate with a verdict.
-func (g *gate) mergeRemote() (done bool) {
+func (g *gateLanded) mergeRemote() (done bool) {
 	// Pinned to the verified SHA so a push after the check is refused. The
 	// adapter turns auto-merge off where the forge would otherwise schedule a
 	// merge that reports success and merges nothing.
@@ -1956,7 +2062,7 @@ func (g *gate) mergeRemote() (done bool) {
 // reports success and merges nothing). A fast-forward or rebase merge has no
 // merge commit on either provider: state merged with an empty one falls back to
 // the pinned verified SHA, which must then be on the base.
-func (g *gate) awaitMerged() (sha string, done bool) {
+func (g *gateReferences) awaitMerged() (sha string, done bool) {
 	wait := 2 * time.Second
 	if v := g.e.Getenv("ROTA_GATE_SHA_WAIT"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
@@ -1995,7 +2101,7 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 // confirmLanded checks the merge commit is on origin/<base> and fast-forwards
 // the local base to it. Past this point the PR IS merged: local trouble is
 // reported distinctly so nobody retries an already-merged PR.
-func (g *gate) confirmLanded(sha string) (done bool) {
+func (g *gateReferences) confirmLanded(sha string) (done bool) {
 	o := g.o
 	if _, code := g.git(g.root, "fetch", g.rem(), "-q"); code != 0 {
 		g.broke("git fetch " + g.rem() + " failed after merging")
@@ -2027,7 +2133,7 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 
 // mergedRemotely ends the gate on a PR that is on origin but not on the local
 // base. The merged tree was never verified, and the result says so.
-func (g *gate) mergedRemotely(why string) {
+func (g *gateReferences) mergedRemotely(why string) {
 	g.res.VerifySkipped = true
 	g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s; do not re-merge, reconcile %s by hand", g.o.Slot, g.prNum, g.baseRef, why, g.o.Base),
 		fmt.Sprintf("the merged tree was NOT verified: fix the local %s, fast-forward it to %s, then run the full gate on %s", g.o.Base, g.baseRef, g.o.Base))
@@ -2036,7 +2142,7 @@ func (g *gate) mergedRemotely(why string) {
 // ffFailureCause names why `merge --ff-only` failed. Uncommitted changes to
 // files the merge touches are told apart from real divergence: local main can
 // be purely behind and still refuse to move.
-func (g *gate) ffFailureCause(mergeOut string) string {
+func (g *gateReferences) ffFailureCause(mergeOut string) string {
 	incoming, _ := g.git(g.root, "diff", "--name-only", "HEAD", g.baseRef)
 	in := map[string]bool{}
 	for _, p := range strings.Split(incoming, "\n") {
@@ -2070,7 +2176,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // A failed close is a warning because the PR has already landed. It returns
 // whether every close succeeded, allowing the caller to sweep claim labels;
 // milestone closes also release each successful issue's labels independently.
-func (g *gate) closeMerged(src tracker.ClosingSource) bool {
+func (g *gateReferences) closeMerged(src tracker.ClosingSource) bool {
 	if id, ok := strings.CutPrefix(g.o.Base, "milestone/"); ok && id != "" && g.issues != nil {
 		return g.closeOnMilestone(src, labels.OnMilestonePrefix+id)
 	}

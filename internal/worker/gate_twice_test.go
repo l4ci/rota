@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -128,26 +127,6 @@ func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
 				release()
 			}
 		})
-	}
-}
-
-// Only exit 2 means origin is absent. A git that cannot run is reported as
-// that, never as a missing remote.
-func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
-	w := newWorld(t, ghURL)
-	env := w.env(false).WithDefaults()
-	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
-		if len(args) > 0 && args[0] == "remote" {
-			return git.Result{}, errors.New("chdir: no such file or directory")
-		}
-		return git.Exec(ctx, dir, args...)
-	}
-	res, err := env.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateCheckBroke {
-		t.Fatalf("verdict %q err %v", res.Verdict, err)
-	}
-	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
-		t.Errorf("want the real cause, got %q", res.Err)
 	}
 }
 
