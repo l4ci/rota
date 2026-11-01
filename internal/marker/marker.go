@@ -37,8 +37,8 @@ func Has(body string) bool {
 
 // The marker kinds with a grammar beyond Line: durable notes, context
 // comments, claims and releases, handoffs and the issue-body fields block.
-// Each has a writer here and a parser here, so the two cannot drift, and every
-// parser accepts the legacy hv prefix.
+// Each has a writer here and a parser here, so the two cannot drift. Parsers
+// for older kinds accept the legacy hv prefix.
 const (
 	KindComment = "comment"
 	KindClaim   = "claim"
@@ -71,6 +71,28 @@ const (
 
 // Report is the identity of one rendered report on a PR or item.
 func Report(kind, sha string) string { return Line(KindReport, kind, "sha="+sha) }
+
+// ReportPrefix opens a report marker, including the space before its arguments.
+// File-backed report sections use it to find the next report boundary.
+const ReportPrefix = Prefix + KindReport + " "
+
+// IsReportKey checks the marker envelope used to key report upserts. It keeps
+// posting independent of verdict-specific kind and SHA validation.
+func IsReportKey(key string) bool {
+	return strings.HasPrefix(key, ReportPrefix) && strings.HasSuffix(key, " -->")
+}
+
+var reportRe = regexp.MustCompile(`^<!-- rota:report ([a-z-]+) sha=([0-9a-f]{4,64}) -->$`)
+
+// ParseReport reads one complete report marker line into its kind and SHA.
+// Reports use the rota prefix only, matching the original verdict reader.
+func ParseReport(line string) (kind, sha string, ok bool) {
+	m := reportRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1], m[2], true
+}
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
 const opener = `\A<!-- (?:rota|hv):`
