@@ -54,9 +54,6 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if res == nil {
 			return Result{}, err
 		}
-		for _, w := range res.Warnings {
-			c.Warn("%s", w)
-		}
 		d := doneData(res)
 		if err != nil {
 			return Result{Data: d}, err
@@ -80,6 +77,7 @@ func doneDeps(c *Ctx, root, poolRoot string) worker.DoneDeps {
 	return worker.DoneDeps{
 		Env:      c.deps().workerEnv().WithDefaults(),
 		Accounts: c.deps().WorkerAccounts(),
+		Warn:     func(message string) { c.Warn("%s", message) },
 		ExpandFiles: func(dir, base string, lines []string) ([]string, error) {
 			return expandFiles(c, dir, base, proof.ShellLines(lines)...)
 		},
