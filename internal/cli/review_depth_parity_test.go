@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -103,7 +104,7 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		prBody, issueBody = "Closes #6\n"+decisionSectionsFixture, ""
 		issueLabels = []map[string]string{{"name": "size:Major"}}
 		defer func() { issueLabels = nil }()
-		if err := ledger.Append(dir, ledger.Entry{TS: time.Now(), Kind: ledger.KindAssign, Issue: "6", Slot: "w1", Harness: "codex"}); err != nil {
+		if err := ledger.Append(dir, ledger.Entry{TS: time.Now(), Kind: ledger.KindAssign, Issue: "6", Slot: "w1", Harness: harness.Codex}); err != nil {
 			t.Fatal(err)
 		}
 		saved, _ := json.Marshal(registryDoc(t, dir))
@@ -122,7 +123,7 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 			if code != 0 {
 				t.Fatalf("preview: %d %s %s", code, out, errOut)
 			}
-			if got := data(t, out)["cross"]; got != "claude" {
+			if got := data(t, out)["cross"]; got != harness.Claude {
 				t.Errorf("preview from %s cross = %v; gate requires claude", root, got)
 			}
 		}
