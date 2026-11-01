@@ -61,7 +61,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 		return branchTarget{}, err
 	}
 	if !ok {
-		return branchTarget{}, Resolution("could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)")
+		return branchTarget{}, Resolution(noBaseMsg)
 	}
 	t.Base = base
 	found, err := r.Verify(ctx, t.Branch+"^{commit}")
