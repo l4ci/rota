@@ -22,10 +22,10 @@ func TestWorkerCommandModel(t *testing.T) {
 	}
 	for _, c := range cases {
 		cfg := cfgOf(t, c.cfg)
-		if got, err := (claude{}).Launch(cfg, c.chosen); err != nil || got != c.want {
+		if got, err := (claude{}).Launch(ConfigFor(cfg, Claude), c.chosen); err != nil || got != c.want {
 			t.Errorf("%s + %q: %q, %v want %q", c.cfg, c.chosen, got, err, c.want)
 		}
-		if got := (claude{}).ModelApplies(cfg); got != c.applies {
+		if got := (claude{}).ModelApplies(ConfigFor(cfg, Claude)); got != c.applies {
 			t.Errorf("%s: ModelApplies %v want %v", c.cfg, got, c.applies)
 		}
 	}
@@ -39,14 +39,14 @@ func TestInheritProfileLaunchesWithoutModel(t *testing.T) {
 		{`{"round":{"profile":"budget"}}`, "", "claude --model sonnet --dangerously-skip-permissions"},
 	}
 	for _, c := range cases {
-		if got, err := (claude{}).Launch(cfgOf(t, c.cfg), c.chosen); err != nil || got != c.want {
+		if got, err := (claude{}).Launch(ConfigFor(cfgOf(t, c.cfg), Claude), c.chosen); err != nil || got != c.want {
 			t.Errorf("%s + %q: %q, %v want %q", c.cfg, c.chosen, got, err, c.want)
 		}
 	}
-	if (claude{}).NeedsModel(cfgOf(t, `{"round":{"profile":"inherit"}}`)) {
+	if (claude{}).NeedsModel(ConfigFor(cfgOf(t, `{"round":{"profile":"inherit"}}`), Claude)) {
 		t.Error("inherit must not need a tier model")
 	}
-	if !(claude{}).NeedsModel(cfgOf(t, ``)) {
+	if !(claude{}).NeedsModel(ConfigFor(cfgOf(t, ``), Claude)) {
 		t.Error("claude needs a tier model without a profile")
 	}
 	files, err := (claude{}).AgentFiles(AgentRole{Name: "explorer", Description: "d", Instructions: "i"}, "")
@@ -95,11 +95,11 @@ func TestModelFallbacksFollowKeyDefaults(t *testing.T) {
 		}
 	}
 	cfg := cfgOf(t, `{}`)
-	got, err := (claude{}).Launch(cfg, "")
+	got, err := (claude{}).Launch(ConfigFor(cfg, Claude), "")
 	if err != nil || !strings.Contains(got, "--model worker-default ") {
 		t.Errorf("worker Launch = %q, %v", got, err)
 	}
-	argv, err := (claude{}).Command(cfg)
+	argv, err := (claude{}).Command(ConfigFor(cfg, Claude))
 	if err != nil || strings.Join(argv, " ") != "claude --model orch-default --permission-mode auto" {
 		t.Errorf("operator Command = %q, %v", argv, err)
 	}

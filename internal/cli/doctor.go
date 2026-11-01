@@ -198,11 +198,11 @@ func doctorExec(run proc.Runner) doctor.Exec {
 func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 	out := map[string]doctor.KindInput{}
 	for _, k := range harness.Kinds() {
-		h := harness.Resolve(k)
+		h := harness.ResolveDiagnoser(k)
 		if h.Doctor().Check == "" {
 			continue
 		}
-		accts := h.Accounts(cfg).In(home)
+		accts := harness.ResolveAccounts(k).Accounts(harness.ConfigFor(cfg, k)).In(home)
 		in := doctor.KindInput{AccountsKey: accts.Key}
 		for _, a := range accts.Entries {
 			if a.Name != "" {

@@ -16,10 +16,20 @@ import (
 // pick a harness adapter once and call it, and what an adapter refuses with is
 // mapped onto the verbs' exit codes here.
 
-// Harness is the adapter for kind ("" is the default), or a usage error when
+// LaunchHarness is the launch adapter for kind ("" is the default), or a usage error when
 // the kind is not a worker harness.
-func Harness(kind string) (harness.Harness, error) {
-	h, ok := harness.Lookup(kind)
+func LaunchHarness(kind string) (harness.Launcher, error) {
+	h, ok := harness.LookupLauncher(kind)
+	if !ok {
+		return nil, fail(exitcode.ExitUsage, "kind must be "+harness.KindList()+", got: "+kind)
+	}
+	return h, nil
+}
+
+// AccountHarness is the account adapter for kind, with the same validation
+// as LaunchHarness for callers that select accounts without launching.
+func AccountHarness(kind string) (harness.Accounts, error) {
+	h, ok := harness.LookupAccounts(kind)
 	if !ok {
 		return nil, fail(exitcode.ExitUsage, "kind must be "+harness.KindList()+", got: "+kind)
 	}
@@ -61,14 +71,14 @@ func (e Env) ModelApplies(root string) bool { return e.ModelAppliesTo(root, harn
 
 // ModelAppliesTo is ModelApplies for a harness kind.
 func (e Env) ModelAppliesTo(root, kind string) bool {
-	h, ok := harness.Lookup(kind)
-	return ok && h.ModelApplies(e.WithDefaults().Config(root))
+	h, ok := harness.LookupLauncher(kind)
+	return ok && h.ModelApplies(harness.ConfigFor(e.WithDefaults().Config(root), h.Kind()))
 }
 
 // NeedsModel reports whether a launch of kind needs a tier model.
 func (e Env) NeedsModel(root, kind string) bool {
-	h, ok := harness.Lookup(kind)
-	return !ok || h.NeedsModel(e.WithDefaults().Config(root))
+	h, ok := harness.LookupLauncher(kind)
+	return !ok || h.NeedsModel(harness.ConfigFor(e.WithDefaults().Config(root), h.Kind()))
 }
 
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
@@ -86,7 +96,7 @@ func CommonDir(ctx context.Context, run git.Runner, root string) (string, error)
 // nothing to check passes.
 func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (harness.Setup, error) {
 	e = e.WithDefaults()
-	h, err := Harness(kind)
+	h, err := LaunchHarness(kind)
 	if err != nil {
 		return harness.Setup{}, err
 	}
@@ -100,9 +110,10 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 	}
 	var accts []harness.HomeAccount
 	load := map[string]int{}
-	if !h.WorkAccounts() {
+	accounts := harness.ResolveAccounts(h.Kind())
+	if !accounts.WorkAccounts() {
 		home, _ := e.Home()
-		for _, a := range h.Accounts(e.Config(root)).In(home).Entries {
+		for _, a := range accounts.Accounts(harness.ConfigFor(e.Config(root), h.Kind())).In(home).Entries {
 			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {
@@ -125,8 +136,8 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 
 // launchLine is the launch command of h for a chosen model, with the problem
 // that makes it unusable, as the verbs report it.
-func (e Env) launchLine(root string, h harness.Harness, model string) (launch string, hit harness.ResumeHit, err error) {
-	launch, err = h.Launch(e.Config(root), model)
+func (e Env) launchLine(root string, h harness.Launcher, model string) (launch string, hit harness.ResumeHit, err error) {
+	launch, err = h.Launch(harness.ConfigFor(e.Config(root), h.Kind()), model)
 	if err == nil {
 		hit, err = h.Resume(launch)
 	}

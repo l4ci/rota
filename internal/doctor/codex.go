@@ -51,7 +51,7 @@ func (h Home) env(plan harness.Doctor) string {
 func (d *runner) harnessChecks() []Check {
 	var out []Check
 	for _, k := range harness.Kinds() {
-		if plan := harness.Resolve(k).Doctor(); plan.Check != "" {
+		if plan := harness.ResolveDiagnoser(k).Doctor(); plan.Check != "" {
 			out = append(out, d.harnessCheck(k, plan))
 		}
 	}

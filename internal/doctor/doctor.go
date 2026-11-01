@@ -967,7 +967,7 @@ func (d *runner) guardHook() Check {
 		return fail(name, "PreToolUse hook runs "+first+", which is not found", guardHookHint)
 	}
 	for _, k := range harness.Kinds() {
-		if plan := harness.Resolve(k).Doctor(); plan.Unguarded && d.in.Kinds[k].Tiers {
+		if plan := harness.ResolveDiagnoser(k).Doctor(); plan.Unguarded && d.in.Kinds[k].Tiers {
 			return Check{Name: name, Status: Warn, Detail: "PreToolUse guard covers Claude workers only; " + plan.Title + " workers are not guarded"}
 		}
 	}

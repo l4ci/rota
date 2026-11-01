@@ -103,7 +103,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	if err != nil {
 		return Plan{}, &Error{Code: "config", Msg: err.Error(), Hint: "fix it with: rota config set orchestrator.harness claude"}
 	}
-	agent, err := h.Command(cfg)
+	agent, err := h.Command(harness.ConfigFor(cfg, h.Name()))
 	if err != nil {
 		return Plan{}, &Error{Code: "config", Msg: err.Error()}
 	}

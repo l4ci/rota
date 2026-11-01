@@ -40,9 +40,9 @@ func (opencode) CommandKey() string { return config.RoundCommandsOpencodeKey }
 // {model}. The default without a model drops its `--model {model}` pair; a
 // custom command that still holds {model} then has nothing to put there, which
 // is a usage error. A custom command without the placeholder runs as written.
-func (o opencode) Launch(cfg any, model string) (string, error) {
+func (o opencode) Launch(cfg Config, model string) (string, error) {
 	cmd, custom := DefaultOpencodeCommand, false
-	if s := config.StringIfSet(cfg, o.CommandKey()); s != "" {
+	if s := cfg.Command; s != "" {
 		cmd, custom = s, true
 	}
 	if model == "" {
@@ -58,13 +58,13 @@ func (o opencode) Launch(cfg any, model string) (string, error) {
 }
 
 // NeedsModel: only a custom round.commands.opencode that holds {model} does.
-func (o opencode) NeedsModel(cfg any) bool {
+func (o opencode) NeedsModel(cfg Config) bool {
 	_, err := o.Launch(cfg, "")
 	return err != nil
 }
 
 // ModelApplies: the default command always takes the model.
-func (o opencode) ModelApplies(cfg any) bool { return placeholderApplies(cfg, o.CommandKey()) }
+func (o opencode) ModelApplies(cfg Config) bool { return placeholderApplies(cfg) }
 
 // opencodeResume are the flags that reopen an earlier session (`--prompt`,
 // `--model` and `--agent` do not).
@@ -136,21 +136,13 @@ func (opencode) AmbientAccount(getenv func(string) string) Account {
 	return Account{Home: getenv("OPENCODE_CONFIG_DIR")}
 }
 
-func (opencode) Accounts(cfg any) AccountList {
-	l := AccountList{Key: config.RoundAccountsKey}
-	for _, a := range config.AccountsOf(cfg, config.KindOpencode) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
-	}
-	return l
-}
+func (opencode) Accounts(cfg Config) AccountList { return cfg.AccountList }
 
 // UsageMeter: OpenCode has no usage reading; a provider is billed per token.
 func (opencode) UsageMeter() bool { return false }
 
 // CrossReviewer is false: OpenCode is not a reviewer yet (#1612).
 func (opencode) CrossReviewer() bool { return false }
-
-func (opencode) LimitPhrases() []string { return SharedLimitPhrases() }
 
 // PaneVocab is OpenCode's own wording. The limit texts are the account caps of
 // its provider layer (packages/ai/src/provider-error.ts) and its dead-key text;
@@ -181,17 +173,17 @@ func (opencode) Tiers() TierRule { return TierRule{} }
 
 // Configured is whether the project uses OpenCode as a worker: an opencode
 // tier map, a named account, a custom command or it as the default kind.
-func (o opencode) Configured(cfg any) bool {
-	if ProjectKind(cfg) == OpenCode {
+func (o opencode) Configured(cfg Config) bool {
+	if cfg.ProjectKind == OpenCode {
 		return true
 	}
-	if TierMapSet(cfg, OpenCode) {
+	if cfg.TierMap {
 		return true
 	}
 	if len(o.Accounts(cfg).Entries) > 0 {
 		return true
 	}
-	return strings.TrimSpace(config.StringIfSet(cfg, o.CommandKey())) != ""
+	return strings.TrimSpace(cfg.Command) != ""
 }
 
 // AgentFiles is .opencode/agents/rota-<role>.md. OpenCode agents have no
@@ -421,4 +413,4 @@ func (opencode) Name() string { return OpenCode }
 func (opencode) Prompt() string {
 	return "You are the orchestrator: load the rota-orchestrate skill and follow it."
 }
-func (opencode) Command(any) ([]string, error) { return []string{"opencode", "--prompt"}, nil }
+func (opencode) Command(Config) ([]string, error) { return []string{"opencode", "--prompt"}, nil }

@@ -593,7 +593,7 @@ func ISOFormat(t time.Time) string {
 // take a new session: its meter is cooling, the verdict the quota fallback
 // uses. "" when it can, when the harness has no config-dir accounts, when
 // configDir is no configured account or when no meter reader is set.
-func (e Env) accountLimited(ctx context.Context, root string, hz harness.Harness, configDir string) string {
+func (e Env) accountLimited(ctx context.Context, root string, hz harness.Accounts, configDir string) string {
 	if e.Accounts == nil || !hz.WorkAccounts() || configDir == "" {
 		return ""
 	}
