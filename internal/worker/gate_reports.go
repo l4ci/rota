@@ -10,17 +10,20 @@ import (
 
 // stepVerdictReports runs only after the PR and its pushed head were validated.
 // Both the blocking check and review-depth lookup then see the recovered cache.
-func (g *gate) stepVerdictReports() (bool, error) {
+func (_ gate) stepVerdictReports(g gateReferences) (gateReferences, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	if !g.remote || g.pr == "" || !backlog.CapabilitiesForSource(g.in.cfg.Tracker.Source).IssueIDs {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	source, ok := g.forge.(verdict.ReportSource)
 	if !ok {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	pr, ok := PRRefNumber(g.pr)
 	if !ok {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	head := strings.TrimSpace(g.verified)
 	if head == "" {
@@ -30,5 +33,5 @@ func (g *gate) stepVerdictReports() (bool, error) {
 	if err := verdict.RecoverPR(g.ctx, g.root, verdict.BranchKey("", g.branch), head, pr, source); err != nil {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("VERDICT-REPORT-UNKNOWN %s — %v; using local verdicts", g.branch, err))
 	}
-	return false, nil
+	return g.finish(false, nil)
 }
