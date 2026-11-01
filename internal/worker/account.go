@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -431,30 +430,17 @@ func (a *Accounts) token(configDir string) (string, string) {
 // config dir has no usable login (Login.Problem) is never picked: it would
 // dispatch into a login prompt. ok is false when no account is usable.
 func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (name string, ok bool) {
-	skip := map[string]bool{}
-	for _, n := range exclude {
-		skip[strings.TrimSpace(n)] = true
+	names := make([]string, len(exclude))
+	for i, n := range exclude {
+		names[i] = strings.TrimSpace(n)
 	}
-	var usable []Meter
-	for _, m := range a.Meters(ctx, root) {
-		if !skip[m.Name] && m.Verdict != VerdictCooling && a.login().Problem(a.expand(m.ConfigDir)) == "" {
-			usable = append(usable, m)
-		}
-	}
-	if len(usable) == 0 {
-		return "", false
-	}
-	sort.SliceStable(usable, func(i, j int) bool {
-		hi, hj := usable[i].Headroom, usable[j].Headroom
-		if (hi == nil) != (hj == nil) {
-			return hi != nil
-		}
-		if hi == nil {
-			return false
-		}
-		return *hi > *hj
+	m, ok, _ := SelectAccount(a.Meters(ctx, root), AccountSelection{
+		Exclude: names,
+		LoginProblem: func(m Meter) string {
+			return a.login().Problem(a.expand(m.ConfigDir))
+		},
 	})
-	return usable[0].Name, true
+	return m.Name, ok
 }
 
 // NoPickReason explains a failed Pick when a missing login is involved: it
@@ -542,34 +528,9 @@ func (a *Accounts) AccountOf(root, dir string) string {
 // headroom wins, ties by config order. others describes every account that
 // was not taken, for the log.
 func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir string, threshold int) (m Meter, ok bool, others []string) {
-	for _, c := range a.Meters(ctx, root) {
-		why := ""
-		switch {
-		case c.ConfigDir == "":
-			why = "no configDir"
-		case a.same(c.ConfigDir, currentDir):
-			why = "current account"
-		case c.Verdict != VerdictFree:
-			why = c.Verdict
-		case c.Headroom == nil:
-			why = "no reading"
-		case *c.Headroom <= float64(100-threshold):
-			why = fmt.Sprintf("%g%% headroom", *c.Headroom)
-		}
-		if why != "" {
-			others = append(others, c.Name+": "+why)
-			continue
-		}
-		if !ok || *c.Headroom > *m.Headroom {
-			if ok {
-				others = append(others, m.Name+": less headroom")
-			}
-			m, ok = c, true
-		} else {
-			others = append(others, c.Name+": less headroom")
-		}
-	}
-	return m, ok, others
+	return SelectAccount(a.Meters(ctx, root), AccountSelection{
+		Handoff: &AccountHandoff{CurrentDir: currentDir, Home: a.home(), Threshold: threshold},
+	})
 }
 
 // Assign writes the account's configDir onto the slot so dispatch launches
