@@ -403,7 +403,7 @@ func (f *moveFx) reportIssues(t *testing.T, slot string, refs ...string) {
 	t.Helper()
 	if err := editSlot(f.root, slot, func(s *worker.Slot) error {
 		s.MarkState("done", "")
-		s.SetIssues(refs)
+		s.SetReviewResult(worker.ParseReviewResult("issues:" + strings.Join(refs, ",")))
 		return nil
 	}); err != nil {
 		t.Fatal(err)
