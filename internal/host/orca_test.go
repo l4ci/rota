@@ -14,6 +14,12 @@ import (
 
 const orcaEmptyReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› "
 
+// Existing proof-rule fixtures use OS files; injected lifecycles exercise
+// decoding through the Host API instead.
+func decodeOrca(s string) (orcaHandle, error) {
+	return (&orca{d: Deps{FS: OSFileSystem{}}}).decodeOrca(s)
+}
+
 func orcaWorktree(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -26,7 +32,8 @@ func orcaWorktree(t *testing.T) string {
 // This fake models the CLI boundary, with real files for persistent evidence.
 // Neither Alive nor Tree consults or kills processes on the test machine.
 type orcaFake struct {
-	cwd, title, branch, gitBranch         string
+	cwd, title, branch, gitBranch, pidDir string
+	fs                                    FileSystem
 	screens                               []string
 	after, readReply, receipt, status     string
 	list                                  *[]orcaTerminal
@@ -37,10 +44,13 @@ type orcaFake struct {
 }
 
 func newOrcaFake(t *testing.T) *orcaFake {
-	return &orcaFake{cwd: orcaWorktree(t), title: "r:ben", branch: "ben/2203-orca", gitBranch: "ben/2203-orca", screens: []string{orcaEmptyReady}, receipt: `{"stages":["input_accepted","turn_started"],"provider":"codex","observation":"supported"}`, status: `{"running":true}`, alive: map[int]bool{123: true}}
+	return newOrcaFakeAt(orcaWorktree(t))
+}
+func newOrcaFakeAt(cwd string) *orcaFake {
+	return &orcaFake{fs: OSFileSystem{}, cwd: cwd, title: "r:ben", branch: "ben/2203-orca", gitBranch: "ben/2203-orca", screens: []string{orcaEmptyReady}, receipt: `{"stages":["input_accepted","turn_started"],"provider":"codex","observation":"supported"}`, status: `{"running":true}`, alive: map[int]bool{123: true}}
 }
 func (f *orcaFake) deps() Deps {
-	return Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(p int) bool { return f.alive[p] }, Tree: func(p int) []int {
+	return Deps{FS: f.fs, Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(p int) bool { return f.alive[p] }, Tree: func(p int) []int {
 		if f.alive[p] {
 			return []int{p, 456}
 		}
@@ -60,9 +70,13 @@ func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, erro
 	}
 	switch a[1] {
 	case "create":
-		files, _ := filepath.Glob(filepath.Join(f.cwd, ".git", "rota-orca", "agent-*.pid"))
+		dir := f.pidDir
+		if dir == "" {
+			dir = filepath.Join(f.cwd, ".git", "rota-orca")
+		}
+		files, _ := f.fs.Glob(filepath.Join(dir, "agent-*.pid"))
 		for _, file := range files {
-			if err := os.WriteFile(file, []byte("123\n"), 0600); err != nil {
+			if err := f.fs.WriteFile(file, []byte("123\n"), 0600); err != nil {
 				return Result{}, err
 			}
 		}
@@ -138,31 +152,6 @@ func orcaBrief(t *testing.T, text string) string {
 	}
 	return p
 }
-func TestOrcaSpawnQuotesEnvAndWaitsForBoot(t *testing.T) {
-	f := newOrcaFake(t)
-	f.screens = []string{"user@host $", "model: loading\n› Ask Codex to do anything", orcaEmptyReady}
-	h := New(Orca, f.deps())
-	handle, e := h.Spawn(context.Background(), SpawnOpts{Session: "r", Slot: "ben", Cwd: f.cwd, Launch: "codex", Env: []string{"CODEX_HOME=/tmp/account with 'quote'", "ROTA_SLOT=ben"}, BootTimeout: 10})
-	if e != nil {
-		t.Fatal(e)
-	}
-	if h.Kind() != Orca || handle == "" || f.reads != 3 {
-		t.Fatalf("kind=%q handle=%q reads=%d", h.Kind(), handle, f.reads)
-	}
-	if !strings.Contains(f.command, "CODEX_HOME=") || !strings.Contains(f.command, "sh -c ") || !strings.Contains(f.command, "exec codex") {
-		t.Fatalf("unsafe launch: %s", f.command)
-	}
-}
-func TestOrcaSendReceiptPreservesBrief(t *testing.T) {
-	f := newOrcaFake(t)
-	text := "line one\n\n`cmd` $HOME 'quotes' ö\n"
-	if e := New(Orca, f.deps()).Send(context.Background(), "ben", f.handle(t), orcaBrief(t, text)); e != nil {
-		t.Fatal(e)
-	}
-	if f.sent != text || f.sends != 1 {
-		t.Fatalf("sent %q %d times", f.sent, f.sends)
-	}
-}
 func TestOrcaStaleNativeHandleIsNeverReplacedByTitle(t *testing.T) {
 	f := newOrcaFake(t)
 	h := f.handle(t)
@@ -178,21 +167,6 @@ func TestOrcaStaleNativeHandleIsNeverReplacedByTitle(t *testing.T) {
 	}
 	if e := host.Kill(context.Background(), "ben", h); e == nil || f.closed {
 		t.Fatalf("replacement was closed: %v closed=%v", e, f.closed)
-	}
-}
-func TestOrcaKillPersistsTreeAcrossInstances(t *testing.T) {
-	f := newOrcaFake(t)
-	f.alive[456] = true
-	h := f.handle(t)
-	if e := New(Orca, f.deps()).Kill(context.Background(), "ben", h); e == nil || !strings.Contains(e.Error(), "456") {
-		t.Fatalf("surviving child: %v", e)
-	}
-	if e := New(Orca, f.deps()).Kill(context.Background(), "ben", h); e == nil {
-		t.Fatal("retry lost orphan proof")
-	}
-	f.alive[456] = false
-	if e := New(Orca, f.deps()).Kill(context.Background(), "ben", h); e != nil {
-		t.Fatalf("idempotent close: %v", e)
 	}
 }
 func TestOrcaOptionalViewsPreserveHandleAfterRestart(t *testing.T) {

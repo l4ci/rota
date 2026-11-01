@@ -84,6 +84,9 @@ type Deps struct {
 	Run    Runner
 	Getenv func(string) string
 	Sleep  func(time.Duration)
+	// FS owns brief files and Orca's persistent identity and process evidence.
+	// Nil selects OSFileSystem, including its locking and atomic writes.
+	FS FileSystem
 	// Alive reports whether a process exists and has not exited. A zombie
 	// has exited and only waits to be reaped, so it counts as gone.
 	Alive func(pid int) bool
@@ -103,6 +106,9 @@ type Deps struct {
 }
 
 func (d *Deps) fill() {
+	if d.FS == nil {
+		d.FS = OSFileSystem{}
+	}
 	if d.Stderr == nil {
 		d.Stderr = os.Stderr
 	}
@@ -411,7 +417,7 @@ func pidList(pids []int) string {
 	return b.String()
 }
 
-func readFile(p string) (string, error) {
-	b, err := os.ReadFile(p)
+func (d *Deps) readFile(p string) (string, error) {
+	b, err := d.FS.ReadFile(p)
 	return string(b), err
 }

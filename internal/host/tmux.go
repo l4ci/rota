@@ -136,7 +136,7 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 		return err
 	}
 	// A human typing in the pane would get the brief pasted into their draft.
-	text, _ := readFile(file)
+	text, _ := t.d.readFile(file)
 	text = strings.TrimRight(text, "\n")
 	if waitNoDraft(&t.d, read, text) != "" {
 		return ErrDraftOnPrompt
@@ -220,7 +220,7 @@ func (t *tmux) draftPane(ctx context.Context, window string) string {
 
 // Draft implements Drafter.
 func (t *tmux) Draft(ctx context.Context, slot, handle, file string) string {
-	text, _ := readFile(file)
+	text, _ := t.d.readFile(file)
 	return humanDraft(t.draftPane(ctx, handle), strings.TrimRight(text, "\n"))
 }
 
