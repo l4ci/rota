@@ -73,8 +73,8 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 		}
 	}
 	if issue := issues[r.Culprit]; issue != "" {
-		g := r.CulpritGate
-		g.Slot, g.Verdict, g.Err, g.Round = r.Culprit, r.Verdict, r.Err, round
+		g := trainCulprit(issues, r)
+		g.Slot, g.Round = r.Culprit, round
 		switch m := classify(r.Verdict); {
 		case m.Bounce:
 			if _, err := bounce(env, root, issue, g, park); err != nil {
