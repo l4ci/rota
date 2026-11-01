@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -75,27 +74,27 @@ func encodeOrca(h orcaHandle) string {
 	b, _ := json.Marshal(h)
 	return "orca:" + base64.RawURLEncoding.EncodeToString(b)
 }
-func decodeOrca(s string) (orcaHandle, error) {
+func (o *orca) decodeOrca(s string) (orcaHandle, error) {
 	var h orcaHandle
 	b, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(s, "orca:"))
 	if !strings.HasPrefix(s, "orca:") || e != nil || json.Unmarshal(b, &h) != nil || h.Cwd == "" || h.PIDFile == "" {
 		return h, fmt.Errorf("unverifiable Orca handle")
 	}
-	dir, err := orcaStateDir(h.Cwd)
+	dir, err := o.orcaStateDir(h.Cwd)
 	match, _ := filepath.Match("agent-*.pid", filepath.Base(h.PIDFile))
 	if err != nil || !filepath.IsAbs(h.PIDFile) || filepath.Clean(filepath.Dir(h.PIDFile)) != filepath.Clean(dir) || !match {
 		return h, fmt.Errorf("unverifiable Orca handle: PID proof must be an agent-*.pid file in the worktree's rota-orca directory")
 	}
 	return h, nil
 }
-func orcaStateDir(cwd string) (string, error) {
+func (o *orca) orcaStateDir(cwd string) (string, error) {
 	git := filepath.Join(cwd, ".git")
-	info, e := os.Stat(git)
+	info, e := o.d.FS.Stat(git)
 	if e != nil {
 		return "", e
 	}
 	if !info.IsDir() {
-		b, e := os.ReadFile(git)
+		b, e := o.d.FS.ReadFile(git)
 		if e != nil {
 			return "", e
 		}
@@ -110,22 +109,15 @@ func orcaStateDir(cwd string) (string, error) {
 	}
 	return filepath.Join(git, "rota-orca"), nil
 }
-func orcaPIDFile(cwd string) (string, error) {
-	dir, e := orcaStateDir(cwd)
+func (o *orca) orcaPIDFile(cwd string) (string, error) {
+	dir, e := o.orcaStateDir(cwd)
 	if e != nil {
 		return "", e
 	}
-	if e := os.MkdirAll(dir, 0700); e != nil {
+	if e := o.d.FS.MkdirAll(dir, 0700); e != nil {
 		return "", e
 	}
-	f, e := os.CreateTemp(dir, "agent-*.pid")
-	if e != nil {
-		return "", e
-	}
-	if e = f.Close(); e != nil {
-		return "", e
-	}
-	return f.Name(), nil
+	return o.d.FS.CreateTemp(dir, "agent-*.pid")
 }
 func (o *orca) create(ctx context.Context, cwd, title, launch string, env []string) (string, error) {
 	var pre []string
@@ -149,7 +141,7 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	if e != nil {
 		return "", e
 	}
-	pidfile, e := orcaPIDFile(cwd)
+	pidfile, e := o.orcaPIDFile(cwd)
 	if e != nil {
 		return "", e
 	}
@@ -157,8 +149,8 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	// the attempted creation proof, without adopting by title or using a blank target.
 	h := orcaHandle{Title: title, Cwd: cwd, PIDFile: pidfile, Branch: branch}
 	pending := encodeOrca(h)
-	if e := os.WriteFile(pidfile+".json", []byte(pending), 0600); e != nil {
-		os.Remove(pidfile)
+	if e := o.d.FS.WriteFile(pidfile+".json", []byte(pending), 0600); e != nil {
+		o.d.FS.Remove(pidfile)
 		return "", fmt.Errorf("persist Orca creation identity: %w", e)
 	}
 	// WARNING: Orca types --command into the login shell and its history. Only
@@ -177,7 +169,7 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	}
 	h.ID = v.ID
 	encoded := encodeOrca(h)
-	if e := os.WriteFile(pidfile+".json", []byte(encoded), 0600); e != nil {
+	if e := o.d.FS.WriteFile(pidfile+".json", []byte(encoded), 0600); e != nil {
 		return encoded, fmt.Errorf("persist Orca identity: %w", e)
 	}
 	return encoded, nil
@@ -195,11 +187,11 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 			}
 		}
 		if e == nil && orcaReady(p) {
-			meta, _ := decodeOrca(h)
+			meta, _ := o.decodeOrca(h)
 			if _, e := o.processes(meta, true); e != nil {
 				return h, fmt.Errorf("record Orca boot process evidence: %w", e)
 			}
-			if e := os.WriteFile(meta.PIDFile+".ready", []byte("ready"), 0600); e != nil {
+			if e := o.d.FS.WriteFile(meta.PIDFile+".ready", []byte("ready"), 0600); e != nil {
 				return h, e
 			}
 			return h, nil
@@ -245,7 +237,7 @@ func orcaReady(p string) bool {
 	return false
 }
 func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string, error) {
-	v, e := decodeOrca(h)
+	v, e := o.decodeOrca(h)
 	if e != nil {
 		return "", e
 	}
@@ -301,7 +293,7 @@ func (o *orca) Capture(ctx context.Context, s, h string, n int) string {
 func (o *orca) Status(context.Context, string, string) string { return "" }
 func (o *orca) Notify(context.Context, string, string)        {}
 func (o *orca) Send(ctx context.Context, slot, handle, file string) error {
-	text, err := readFile(file)
+	text, err := o.d.readFile(file)
 	if err != nil {
 		return err
 	}
@@ -320,7 +312,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	if err := orcaCheckSize(text); err != nil {
 		return err
 	}
-	h, err := decodeOrca(handle)
+	h, err := o.decodeOrca(handle)
 	if err != nil {
 		return err
 	}
@@ -407,7 +399,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if handle == "" {
 		return nil
 	}
-	h, e := decodeOrca(handle)
+	h, e := o.decodeOrca(handle)
 	if e != nil {
 		return e
 	}
@@ -454,7 +446,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if alive, ok := killLoop(&o.d, pids, gone); !ok {
 		return fmt.Errorf("orca close unproven; surviving processes:%s", pidList(alive))
 	}
-	os.Remove(h.PIDFile + ".json")
+	o.d.FS.Remove(h.PIDFile + ".json")
 	return nil
 }
 
@@ -462,7 +454,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 // updates so a polling process cannot discard descendants saved by cleanup.
 func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
 	var pids []int
-	err := fsio.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
+	err := o.d.FS.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
 		var err error
 		pids, err = o.processesLocked(h, snapshot)
 		return err
@@ -470,7 +462,7 @@ func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
 	return pids, err
 }
 func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
-	raw, e := os.ReadFile(h.PIDFile)
+	raw, e := o.d.FS.ReadFile(h.PIDFile)
 	if e != nil {
 		return nil, fmt.Errorf("missing Orca PID proof: %w", e)
 	}
@@ -480,7 +472,7 @@ func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
 	}
 	pids := []int{pid}
 	treeFile := h.PIDFile + ".tree"
-	if raw, e := os.ReadFile(treeFile); e == nil {
+	if raw, e := o.d.FS.ReadFile(treeFile); e == nil {
 		var stored []int
 		if json.Unmarshal(raw, &stored) != nil || len(stored) == 0 {
 			return nil, fmt.Errorf("unreadable Orca tree proof")
@@ -515,7 +507,7 @@ func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
 	}
 	if snapshot {
 		raw, _ := json.Marshal(unique)
-		if e := fsio.WriteFileAtomic(treeFile, raw); e != nil {
+		if e := o.d.FS.WriteFileAtomic(treeFile, raw); e != nil {
 			return nil, e
 		}
 	}
@@ -575,21 +567,21 @@ func (o *orca) resolve(ctx context.Context, h orcaHandle) (orcaHandle, error) {
 // recorded reuses only unambiguous rota-owned identity; unknown terminals
 // remain native ids and can never be closed via rota's PID-proof path.
 func (o *orca) recorded(t orcaTerminal) (string, orcaHandle, bool) {
-	dir, e := orcaStateDir(t.Cwd)
+	dir, e := o.orcaStateDir(t.Cwd)
 	if e != nil {
 		return t.ID, orcaHandle{}, false
 	}
-	files, e := filepath.Glob(filepath.Join(dir, "agent-*.pid.json"))
+	files, e := o.d.FS.Glob(filepath.Join(dir, "agent-*.pid.json"))
 	if e != nil {
 		return t.ID, orcaHandle{}, false
 	}
 	var candidates []string
 	for _, f := range files {
-		b, e := os.ReadFile(f)
+		b, e := o.d.FS.ReadFile(f)
 		if e != nil {
 			continue
 		}
-		h, e := decodeOrca(string(b))
+		h, e := o.decodeOrca(string(b))
 		if e == nil && h.ID == t.ID && filepath.Clean(h.Cwd) == filepath.Clean(t.Cwd) {
 			candidates = append(candidates, string(b))
 		}
@@ -597,7 +589,7 @@ func (o *orca) recorded(t orcaTerminal) (string, orcaHandle, bool) {
 	if len(candidates) != 1 {
 		return t.ID, orcaHandle{}, false
 	}
-	h, e := decodeOrca(candidates[0])
+	h, e := o.decodeOrca(candidates[0])
 	return candidates[0], h, e == nil
 }
 func (o *orca) Snapshot(ctx context.Context) ([]Agent, error) {
@@ -651,7 +643,7 @@ func (o *orca) OpenTab(ctx context.Context, t TabOpts) (string, error) {
 	return o.create(ctx, t.Cwd, t.Label, t.Command, nil)
 }
 func (o *orca) PaneOf(ctx context.Context, slot, handle string) string {
-	h, e := decodeOrca(handle)
+	h, e := o.decodeOrca(handle)
 	if e != nil {
 		return ""
 	}
@@ -665,7 +657,7 @@ func (o *orca) CapturePane(ctx context.Context, pane string, lines int) string {
 		return ""
 	}
 	if strings.HasPrefix(pane, "orca:") {
-		h, e := decodeOrca(pane)
+		h, e := o.decodeOrca(pane)
 		if e != nil {
 			return ""
 		}
@@ -685,7 +677,7 @@ func (o *orca) SendPane(ctx context.Context, pane, text string) error {
 		return e
 	}
 	if strings.HasPrefix(pane, "orca:") {
-		h, e := decodeOrca(pane)
+		h, e := o.decodeOrca(pane)
 		if e != nil {
 			return e
 		}
@@ -707,10 +699,10 @@ func (o *orca) inputReady(h orcaHandle, p string) bool {
 	if m := orcaCodexModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
 		return false
 	}
-	if _, e := os.Stat(h.PIDFile + ".ready"); e != nil {
+	if _, e := o.d.FS.Stat(h.PIDFile + ".ready"); e != nil {
 		return false
 	}
-	b, e := os.ReadFile(h.PIDFile)
+	b, e := o.d.FS.ReadFile(h.PIDFile)
 	if e != nil {
 		return false
 	}
