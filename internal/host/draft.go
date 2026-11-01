@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	"errors"
 	"regexp"
 	"strconv"
@@ -16,15 +15,6 @@ import (
 // ErrDraftOnPrompt: the slot's prompt line holds text rota did not type (a
 // human mid-draft); nothing was sent. Retry once the draft is sent or cleared.
 var ErrDraftOnPrompt = errors.New("a human draft is on the prompt line, so nothing was typed")
-
-// Drafter is implemented by a host that can tell whether a slot's prompt line
-// holds a human draft. Send already refuses on one; this is the same check on
-// its own.
-type Drafter interface {
-	// Draft returns the text on the slot's prompt line that is not the file's
-	// own brief, "" when the line is empty or holds only rota's brief.
-	Draft(ctx context.Context, slot, handle, file string) string
-}
 
 // Draft retries: a human may be about to press Enter, so Send waits a little
 // before it refuses. Three settles of two seconds is inside the time a brief
