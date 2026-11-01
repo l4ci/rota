@@ -146,7 +146,7 @@ func LedgerHeadroom(ctx context.Context, a *Accounts, root, kind, account string
 	if a == nil || account == "" {
 		return nil
 	}
-	if !harness.Resolve(kind).UsageMeter() {
+	if !harness.ResolveAccounts(kind).UsageMeter() {
 		return nil
 	}
 	return a.Headroom(ctx, root, account)

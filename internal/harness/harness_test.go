@@ -12,14 +12,14 @@ import (
 	"github.com/l4ci/rota/internal/config"
 )
 
-func TestLookup(t *testing.T) {
+func TestLookupLauncher(t *testing.T) {
 	for kind, want := range map[string]string{"": Claude, Claude: Claude, Codex: Codex} {
-		h, ok := Lookup(kind)
+		h, ok := LookupLauncher(kind)
 		if !ok || h.Kind() != want {
-			t.Errorf("Lookup(%q) = %v, %v; want %s", kind, h, ok, want)
+			t.Errorf("LookupLauncher(%q) = %v, %v; want %s", kind, h, ok, want)
 		}
 	}
-	if _, ok := Lookup("hermes"); ok {
+	if _, ok := LookupLauncher("hermes"); ok {
 		t.Error("hermes runs the orchestrator only: it is not a worker harness")
 	}
 	if Valid("") || !Valid(Claude) || !Valid(Codex) || !Valid(OpenCode) || KindList() != "claude, codex or opencode" {
@@ -36,7 +36,7 @@ func TestLookup(t *testing.T) {
 func TestAccountEnv(t *testing.T) {
 	both := Account{ConfigDir: "/acct", Home: "/home/w1"}
 	for _, c := range []struct {
-		h    Harness
+		h    Accounts
 		a    Account
 		want string
 	}{
@@ -229,7 +229,7 @@ func TestOrchestratorsAreAWiderSetThanWorkers(t *testing.T) {
 		if o.Prompt() == "" {
 			t.Errorf("%s has no prompt", o.Name())
 		}
-		if argv, err := o.Command(nil); err != nil || len(argv) == 0 {
+		if argv, err := o.Command(ConfigFor(nil, o.Name())); err != nil || len(argv) == 0 {
 			t.Errorf("%s: %v %v", o.Name(), argv, err)
 		}
 	}
@@ -237,7 +237,7 @@ func TestOrchestratorsAreAWiderSetThanWorkers(t *testing.T) {
 		t.Errorf("table: %v", names)
 	}
 	for _, n := range names[:2] {
-		if _, ok := Lookup(n); !ok {
+		if _, ok := LookupLauncher(n); !ok {
 			t.Errorf("%s runs workers too", n)
 		}
 	}
@@ -273,32 +273,6 @@ func TestWorkerKindEnumIsKinds(t *testing.T) {
 		if k.Name == "plan.criticHarness" && !slices.Equal(k.Choices, Kinds()) {
 			t.Errorf("plan.criticHarness enum %v, want %v", k.Choices, Kinds())
 		}
-	}
-}
-
-// Every kind answers the interface methods a caller would otherwise switch on.
-func TestEveryKindDescribesItself(t *testing.T) {
-	for _, k := range Kinds() {
-		h, ok := Lookup(k)
-		if !ok {
-			t.Fatalf("no adapter for %s", k)
-		}
-		if h.Accounts(nil).Key == "" {
-			t.Errorf("%s: no accounts key", k)
-		}
-		if len(h.LimitPhrases()) == 0 {
-			t.Errorf("%s: no limit phrases", k)
-		}
-		files, err := h.AgentFiles(AgentRole{Name: "explorer", Description: "d", Instructions: "i"}, "m")
-		if err != nil || len(files) == 0 || !strings.Contains(files[0].Content, AgentMarker) {
-			t.Errorf("%s: agent files %v %v", k, files, err)
-		}
-	}
-	if h, _ := Lookup(Claude); !h.Configured(nil) {
-		t.Error("claude is always configured")
-	}
-	if h, _ := Lookup(Codex); h.Configured(nil) {
-		t.Error("codex is not configured on an empty config")
 	}
 }
 

@@ -19,7 +19,7 @@ type AccountSource interface {
 // PickAccount is the account a limited session moves to: the metered pick for
 // a harness with a usage meter, else the first login not excluded or cooling.
 func PickAccount(ctx context.Context, src AccountSource, root, kind, exclude string, now time.Time) (string, bool) {
-	if h := harness.Resolve(kind); !h.UsageMeter() {
+	if h := harness.ResolveAccounts(kind); !h.UsageMeter() {
 		return LoggedPick(root, h.Kind(), src.Logins(h.Kind()), exclude, now)
 	}
 	return src.Pick(ctx, []string{exclude})

@@ -31,14 +31,14 @@ func (claude) CommandKey() string { return config.RoundCommandsClaudeKey }
 // A model chosen for the dispatch (a round's tier, C9) replaces round.tiers.claude.standard
 // in the default command and fills the {model} placeholder of a custom one; a
 // custom command without the placeholder runs as written (ModelApplies).
-func (claude) Launch(cfg any, chosen string) (string, error) {
-	model := config.StringOrDefault(cfg, TierKey(Claude, "standard"))
+func (claude) Launch(cfg Config, chosen string) (string, error) {
+	model := cfg.StandardModel
 	if chosen != "" {
 		model = chosen
 	} else if inheritsModel(cfg) {
 		model = ""
 	}
-	if s := config.StringIfSet(cfg, config.RoundCommandsClaudeKey); s != "" {
+	if s := cfg.Command; s != "" {
 		if model == "" {
 			// Stripping the flag leaves a gap; collapse it on this path only.
 			s = strings.Join(strings.Fields(modelFlag.ReplaceAllString(s, "")), " ")
@@ -56,20 +56,20 @@ func (claude) Launch(cfg any, chosen string) (string, error) {
 var modelFlag = regexp.MustCompile(`--model[ =]` + regexp.QuoteMeta(ModelPlaceholder))
 
 // inheritsModel is whether round.profile is inherit: no tier names a model.
-func inheritsModel(cfg any) bool {
-	return RoundProfile(cfg) == ProfileInherit
+func inheritsModel(cfg Config) bool {
+	return cfg.Profile == ProfileInherit
 }
 
 // NeedsModel: a claude launch takes its model from the tier map, except under
 // the inherit profile, which launches without --model.
-func (claude) NeedsModel(cfg any) bool { return !inheritsModel(cfg) }
+func (claude) NeedsModel(cfg Config) bool { return !inheritsModel(cfg) }
 
 // ModelApplies: the default command always takes the model, a custom
 // round.commands.claude only through the {model} placeholder.
-func (c claude) ModelApplies(cfg any) bool { return placeholderApplies(cfg, c.CommandKey()) }
+func (c claude) ModelApplies(cfg Config) bool { return placeholderApplies(cfg) }
 
-func placeholderApplies(cfg any, key string) bool {
-	if s := config.StringIfSet(cfg, key); s != "" {
+func placeholderApplies(cfg Config) bool {
+	if s := cfg.Command; s != "" {
 		return strings.Contains(s, ModelPlaceholder)
 	}
 	return true
@@ -136,20 +136,12 @@ func (claude) AmbientAccount(getenv func(string) string) Account {
 	return Account{ConfigDir: getenv("CLAUDE_CONFIG_DIR")}
 }
 
-func (claude) Accounts(cfg any) AccountList {
-	l := AccountList{Key: config.RoundAccountsKey}
-	for _, a := range config.AccountsOf(cfg, config.KindClaude) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
-	}
-	return l
-}
+func (claude) Accounts(cfg Config) AccountList { return cfg.AccountList }
 
 // UsageMeter: Anthropic's usage endpoint reads an account's headroom.
 func (claude) UsageMeter() bool { return true }
 
 func (claude) CrossReviewer() bool { return true }
-
-func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 
 // A turn in flight (a running command or monitor) shows `esc to interrupt` on
 // the status line while the pane itself may sit still between captures.
@@ -172,7 +164,7 @@ func (claude) Tiers() TierRule {
 }
 
 // Configured: Claude is every project's baseline worker.
-func (claude) Configured(any) bool { return true }
+func (claude) Configured(Config) bool { return true }
 
 // ClaudeIntegration is the name of Claude's herdr integration.
 const ClaudeIntegration = Claude
@@ -221,23 +213,27 @@ func (claude) Sign(_ []byte, payload string) string { return payload }
 // The orchestrator facet: a fresh session on orchestrator.model in `auto`
 // mode (the orchestrator merges and talks to the user, so it keeps a gate the
 // workers do not), or orchestrator.command when set.
-func (claude) Name() string                      { return Claude }
-func (claude) Prompt() string                    { return "/rota-orchestrate" }
-func (claude) Command(cfg any) ([]string, error) { return OrchestratorCommand(cfg, false) }
+func (claude) Name() string                         { return Claude }
+func (claude) Prompt() string                       { return "/rota-orchestrate" }
+func (claude) Command(cfg Config) ([]string, error) { return orchestratorCommand(cfg, false) }
 
 // OrchestratorCommand is the one builder of the claude orchestrator command
 // line, for `rota orchestrate` and the round's operator session alike. A set
 // orchestrator.command wins as written; both refuse one that is not a command
 // line. resume adds --continue to the default line.
 func OrchestratorCommand(cfg any, resume bool) ([]string, error) {
-	if s := config.StringIfSet(cfg, "orchestrator.command"); s != "" {
+	return orchestratorCommand(ConfigFor(cfg, Claude), resume)
+}
+
+func orchestratorCommand(cfg Config, resume bool) ([]string, error) {
+	if s := cfg.OrchestratorCommand; s != "" {
 		argv, err := shlex.Split(s)
 		if err != nil || len(argv) == 0 {
 			return nil, fmt.Errorf("orchestrator.command is not a command line: %q", s)
 		}
 		return argv, nil
 	}
-	model := config.StringOrDefault(cfg, "orchestrator.model")
+	model := cfg.OrchestratorModel
 	argv := []string{"claude"}
 	if resume {
 		argv = append(argv, "--continue")
@@ -248,12 +244,13 @@ func OrchestratorCommand(cfg any, resume bool) ([]string, error) {
 // OrchestratorCommandLine is OrchestratorCommand as one shell line. A custom
 // orchestrator.command is validated by the same split but returned as typed, so
 // `~`, `$VAR`, `&&` and env assignments keep their shell meaning.
-func OrchestratorCommandLine(cfg any, resume bool) (string, error) {
-	argv, err := OrchestratorCommand(cfg, resume)
+func OrchestratorCommandLine(raw any, resume bool) (string, error) {
+	cfg := ConfigFor(raw, Claude)
+	argv, err := orchestratorCommand(cfg, resume)
 	if err != nil {
 		return "", err
 	}
-	if s := config.StringIfSet(cfg, "orchestrator.command"); s != "" {
+	if s := cfg.OrchestratorCommand; s != "" {
 		return s, nil
 	}
 	return shlex.Join(argv), nil
@@ -272,6 +269,6 @@ func (hermes) WorkAccounts() bool { return false }
 func (hermes) Prompt() string {
 	return "You are the orchestrator: run the rota-orchestrate skill."
 }
-func (hermes) Command(any) ([]string, error) {
+func (hermes) Command(Config) ([]string, error) {
 	return []string{"hermes", "chat", "-s", "rota-orchestrate", "-q"}, nil
 }

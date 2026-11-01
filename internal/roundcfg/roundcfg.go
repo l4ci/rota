@@ -438,7 +438,7 @@ func loadTiers(cfg any, s *Settings) error {
 	s.Models = map[string]map[string]string{}
 	s.Tiered = map[string]bool{}
 	for _, kind := range harness.Kinds() {
-		rule := harness.Resolve(kind).Tiers()
+		rule := harness.ResolveLauncher(kind).Tiers()
 		s.Tiered[kind] = rule.Required || harness.TierMapSet(cfg, kind)
 		m := map[string]string{}
 		for _, tier := range Tiers {
@@ -600,7 +600,7 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 			return strings.TrimSpace(s), SourceExplicit
 		}
 	}
-	if harness.Resolve(kind).Tiers().Profile {
+	if harness.ResolveLauncher(kind).Tiers().Profile {
 		if p, _ := profileOf(cfg); p != "" {
 			if m := Profiles[p][indexOf(Tiers, tier)]; m != "" {
 				return m, SourceProfile

@@ -526,7 +526,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			// An internal tool wait can look blocked to the host. Only
 			// harnesses with that vocabulary need a pane read; ordinary
 			// snapshots and other harnesses keep their existing state.
-			if r.HostState == "blocked" && e.Capture != nil && len(harness.Resolve(r.Kind).PaneVocab().Waiting) > 0 {
+			if r.HostState == "blocked" && e.Capture != nil && len(harness.ResolvePane(r.Kind).PaneVocab().Waiting) > 0 {
 				pane := e.Capture(ctx, r.Name, agents[i].Handle(), 60)
 				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState); st == worker.StateBusy {
 					r.HostState, r.Evidence = "working", ev

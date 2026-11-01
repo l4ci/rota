@@ -19,7 +19,7 @@ func TestCodexCommand(t *testing.T) {
 		{`{"round":{"commands":{"claude":"claude -x"}}}`, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
 	}
 	for _, c := range cases {
-		got, err := (codex{}).Launch(cfgOf(t, c.cfg), c.model)
+		got, err := (codex{}).Launch(ConfigFor(cfgOf(t, c.cfg), Codex), c.model)
 		if c.exit != 0 {
 			if !usageRefusal(err) {
 				t.Errorf("%s + %q: err = %v, want a usage refusal", c.cfg, c.model, err)
@@ -37,7 +37,7 @@ func TestCodexCommand(t *testing.T) {
 
 func TestModelAppliesToCodex(t *testing.T) {
 	for cfg, want := range map[string]bool{``: true, `{"round":{"commands":{"codex":"codex -x"}}}`: false, `{"round":{"commands":{"codex":"codex -m {model}"}}}`: true, `{"round":{"commands":{"claude":"claude -x"}}}`: true} {
-		if got := (codex{}).ModelApplies(cfgOf(t, cfg)); got != want {
+		if got := (codex{}).ModelApplies(ConfigFor(cfgOf(t, cfg), Codex)); got != want {
 			t.Errorf("%s: %v want %v", cfg, got, want)
 		}
 	}
