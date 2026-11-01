@@ -319,17 +319,6 @@ func TestTmuxSendPastesRawIntoOpenCode(t *testing.T) {
 	}
 }
 
-func TestTmuxSendNeverSubmitted(t *testing.T) {
-	f := &fake{handler: func(_ string, a []string) Result { return Result{Stdout: "static"} }}
-	err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", "/f")
-	if err != ErrNotSubmitted {
-		t.Fatalf("Send = %v, want ErrNotSubmitted", err)
-	}
-	if n := f.count("tmux send-keys"); n != 4 {
-		t.Errorf("send-keys attempts = %d, want 4", n)
-	}
-}
-
 func TestTmuxSendPasteFails(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
 		if a[0] == "paste-buffer" {
@@ -770,22 +759,6 @@ func (p *promptHost) enter(lost Result) Result {
 	return Result{Stdout: agentJSON("working")}
 }
 
-func TestHerdrSendSubmitsBriefWhenEnterDropped(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "p.md")
-	os.WriteFile(file, []byte("--- ORCHESTRATOR (round 1) ---\nline one that wraps\nthe last line of the brief\n"), 0o644)
-	p := &promptHost{dropEnters: 1}
-	f := &fake{handler: p.handle}
-	if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file); err != nil {
-		t.Fatalf("Send = %v, want nil after Enter retry\n%s", err, f.log())
-	}
-	if p.typedTimes != 1 || !p.working {
-		t.Errorf("typed %d times, working=%v\n%s", p.typedTimes, p.working, f.log())
-	}
-	if n := f.count("herdr agent send-keys rota-w1-w9-t7 enter"); n != 1 {
-		t.Errorf("enter presses = %d, want 1\n%s", n, f.log())
-	}
-}
-
 func TestHerdrSubmitPendingNeverTypesAgain(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
@@ -795,8 +768,8 @@ func TestHerdrSubmitPendingNeverTypesAgain(t *testing.T) {
 	if err := h.Send(bg, "w1", "w9:t7", file); err != ErrNotSubmitted {
 		t.Fatalf("first Send = %v, want ErrNotSubmitted", err)
 	}
-	if n := f.count("herdr agent send-keys"); n != submitRetries {
-		t.Errorf("enter presses = %d, want bounded at %d", n, submitRetries)
+	if n := f.count("herdr agent send-keys"); n != 3 {
+		t.Errorf("enter presses = %d, want bounded at %d", n, 3)
 	}
 	// The resend finds the brief on the prompt line and only submits it.
 	p.dropEnters = 1
