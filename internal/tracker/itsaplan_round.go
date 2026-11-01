@@ -53,16 +53,16 @@ func (t *Itsaplan) AssignSelf(ctx context.Context, key IssueKey) error {
 // It's a Plan's own forge webhook, which is optional: an issue already in a
 // completed or canceled column, by that webhook or by hand, is left alone.
 func (t *Itsaplan) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) error {
-	m, err := t.projectMeta(ctx)
-	if err != nil {
-		return err
-	}
-	d, err := t.issue(ctx, key)
-	if err != nil {
-		return err
-	}
-	if c := m.column(d.ColumnID); c != nil && (c.StateType == "completed" || c.StateType == "canceled") {
-		return nil
-	}
-	return t.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
+	return closeAfterMerge(ctx, key, pr, t.Close, func() (bool, error) {
+		m, err := t.projectMeta(ctx)
+		if err != nil {
+			return false, err
+		}
+		d, err := t.issue(ctx, key)
+		if err != nil {
+			return false, err
+		}
+		c := m.column(d.ColumnID)
+		return c != nil && (c.StateType == "completed" || c.StateType == "canceled"), nil
+	})
 }
