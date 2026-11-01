@@ -37,8 +37,6 @@ type DoneRequest struct {
 type DoneDeps struct {
 	Env      Env
 	Accounts *Accounts
-	// TierForms are the rows `proof record -- rota test run fast` can store.
-	TierForms []string
 	// ExpandFiles turns test.fast lines into the shell lines that run and that
 	// proof records, {files} expanded against base in dir.
 	ExpandFiles func(dir, base string, lines []string) ([]string, error)
@@ -204,11 +202,11 @@ func doneProof(env Env, req DoneRequest, dp DoneDeps, sl *Slot, dir string, bund
 			if err != nil {
 				return noData{err}
 			}
-			missing := MissingFastProof(rows, head, dp.TierForms, want)
+			missing := proof.MissingFastProof(rows, head, want)
 			if len(missing) > 0 {
 				res.Head, res.Missing = head, missing
 				e := fail(exitcode.ExitRefused, fmt.Sprintf("%s has no PASS proof row at %s for test.fast: %s", bid, strutil.ShortSHA(head), strings.Join(missing, "; ")))
-				e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", bid, FastTierCheck, req.Slot)
+				e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", bid, proof.FastTierCheck, req.Slot)
 				return e
 			}
 		}
