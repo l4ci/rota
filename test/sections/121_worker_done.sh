@@ -4,7 +4,9 @@ TMP_WD="$(mktemp -d "$TMP/workerdone.XXXXXX")"
 WDP="$TMP_WD/proj"
 mkdir -p "$WDP/.rota"
 printf '# Backlog\n\n## Bugs\n\n- **[B07] [Major] Parser drops foo.** Small.\n' > "$WDP/.rota/BACKLOG.md"
-echo '{"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
+# This fixture has a local bare origin and no PR. Pin the code forge so done's
+# open-PR discovery does not assume GitHub for the unrecognized remote URL.
+echo '{"forge":{"provider":"local"},"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
 (
   cd "$WDP" && git init -q -b feat/x . && git config user.email t@t && git config user.name t \
     && echo seed > seed.txt && git add seed.txt .rota/BACKLOG.md .rota/config.json && git commit -q -m seed
@@ -33,7 +35,7 @@ RC=0; OUT=$(wdrun worker done ben) || RC=$?
 grep -q '"state": *"done"' "$WDP/.rota/workers.json" || fail "the slot should be recorded done"
 pass "a PASS row at HEAD marks the slot done"
 
-echo '{}' > "$WDP/.rota/config.json"
+echo '{"forge":{"provider":"local"}}' > "$WDP/.rota/config.json"
 ( cd "$WDP" && git commit -q -am "unset test.fast" && git push -q origin feat/x )
 echo '{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}' > "$WDP/.rota/workers.json"
 RC=0; OUT=$(wdrun worker done ben) || RC=$?
@@ -42,7 +44,7 @@ pass "an unset test.fast skips the proof half"
 
 # A relay written after the worker's last test run and before done (#964): the
 # slot's inbox holds it, done refuses until the worker has read it.
-echo '{"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
+echo '{"forge":{"provider":"local"},"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
 ( cd "$WDP" && git commit -q -am "set test.fast" && git push -q origin feat/x )
 python3 - "$WDP/.rota/workers.json" <<'PYEOF'
 import json, sys
