@@ -955,7 +955,9 @@ Each won round claim has a visible `claimed:<agent>@<machine>` label: `claimed:b
 or `claimed:ben@mac` for support slot `mac-ben` when `round.support` is `mac`. Comment claims
 decide ownership; labels follow them. `--apply` repairs missing or stale claim labels without
 editing the comment claims. Release removes that claim's label; completion and the merge gate
-remove all claim labels from closed issues. Reconcile also cleans closed issues that retain them.
+remove all claim labels and the configured in-progress label from closed issues. Reconcile and
+claim-label drift use the same cleanup rule. Open issues keep their workflow labels; cleanup
+leaves unrelated labels and claim history intact.
 
 After upgrading, run `rota round reconcile --apply` once to backfill the visible labels for
 in-flight comment claims. It also repairs stray claim labels on open issues with no remaining
