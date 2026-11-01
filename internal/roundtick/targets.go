@@ -10,20 +10,10 @@ import (
 
 // GateRun is the gate result and the bookkeeping that followed it. Refused
 // distinguishes an expected refusal from a run that died on an error.
-type GateRun struct {
-	Result  worker.GateResult
-	Err     error
-	Refused bool
-	BookErr error
-}
+type GateRun = postgate.GateRun
 
 // TrainRun is the train result and any failed bookkeeping steps.
-type TrainRun struct {
-	Result  worker.TrainResult
-	Err     error
-	Refused bool
-	Book    []postgate.Failure
-}
+type TrainRun = postgate.TrainRun
 
 // gateOutcome interprets a gate run for one target. An empty Verdict on a
 // failure reads as "gate-error".

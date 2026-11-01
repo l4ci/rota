@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -41,12 +43,12 @@ func (w *fakeWorld) Waiting() []ReadyPR                                  { w.wai
 func (w *fakeWorld) Reconcile(context.Context) (round.Outcome, error) {
 	return round.Outcome{}, nil
 }
-func (w *fakeWorld) RunGate(slot, base string) GateRun {
-	w.gated = append(w.gated, base+":"+slot)
-	return GateRun{Result: worker.GateResult{Verdict: worker.GatePass}}
-}
-func (w *fakeWorld) RunTrain(targets []string, base string) TrainRun {
-	return TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass}}
+func (w *fakeWorld) Root() string { return w.root }
+func (w *fakeWorld) Landing(_ context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
+	if req.Gate != nil {
+		w.gated = append(w.gated, req.Gate.Base+":"+req.Gate.Slot)
+	}
+	return postgate.Env{Worker: worker.Env{}}, req, nil
 }
 func (w *fakeWorld) ReviewReadiness(string, string) (string, bool) { return "", false }
 func (w *fakeWorld) ReviewLoop(string) ReviewOutcome               { return ReviewOutcome{} }
@@ -61,11 +63,12 @@ func (w *fakeWorld) Assign(context.Context, string) (round.Assigned, error) {
 func (w *fakeWorld) Review() Reviewer { return nil }
 func (w *fakeWorld) Audit(Action)     {}
 func (w *fakeWorld) Say(string)       {}
+func (w *fakeWorld) Warn(string)      {}
 func (w *fakeWorld) Now() time.Time   { return time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC) }
 
 func tickWorld(t *testing.T, w *fakeWorld) (Result, []string) {
 	t.Helper()
-	w.root = t.TempDir()
+	w.root = gittest.NewRepo(t, "main")
 	path := rotatree.Workers(w.root)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)

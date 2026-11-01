@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -307,14 +308,15 @@ func (w *tickWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
 	return w.renv.Reconcile(ctx, w.root, true)
 }
 
-func (w *tickWorld) RunGate(slot, base string) roundtick.GateRun {
-	run := runGate(w.c, w.root, gateRunOpts{Slot: slot, Base: base, NoWait: true})
-	return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
-}
+func (w *tickWorld) Root() string { return w.root }
 
-func (w *tickWorld) RunTrain(targets []string, base string) roundtick.TrainRun {
-	run := runTrain(w.c, w.root, trainRunOpts{Targets: targets, Base: base, NoWait: true})
-	return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
+func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
+	if req.Gate != nil {
+		o := req.Gate
+		return prepareGate(w.c, ctx, w.root, gateRunOpts{Slot: o.Slot, Base: o.Base, NoWait: o.NoWait})
+	}
+	o := req.Train
+	return prepareTrain(w.c, ctx, w.root, trainRunOpts{Targets: o.Targets, Base: o.Base, NoWait: o.NoWait})
 }
 
 func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
@@ -368,3 +370,6 @@ func (w *tickWorld) Audit(a roundtick.Action) {
 
 func (w *tickWorld) Say(line string) { fmt.Fprintln(w.c.Stderr, line) }
 func (w *tickWorld) Now() time.Time  { return w.c.deps().Now() }
+
+// Warn retains the CLI warning envelope for lifecycle report failures.
+func (w *tickWorld) Warn(message string) { w.c.Warn("%s", message) }
