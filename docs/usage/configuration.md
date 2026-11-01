@@ -885,6 +885,8 @@ Companion to `release.nudgeAfterCommits`. The nudge fires when either threshold 
 
 Overrides the base branch that `rota git base` resolves to. When empty, `rota` auto-detects by probing `main`, `master`, `trunk`, then `origin/HEAD` in that order. A set branch that does not exist is an error (`rota git base` exits 3), never replaced by one of those names. Set it when your project uses a base branch auto-detection won't find, such as `develop` (gitflow) or `release`.
 
+`rota setup` uses the same fallback order when suggesting a base branch.
+
 ```json
 { "git": { "baseBranch": "develop" } }
 ```

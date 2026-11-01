@@ -40,8 +40,8 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 	}
 	onPath := func(name string) bool { _, err := d.LookPath(name); return err == nil }
 
-	if base, ok := baseBranchSignal(run); ok {
-		sigs["git.baseBranch"] = base
+	if base, ok, err := d.Repo(dir).Base(c.Context(), ""); err == nil && ok {
+		sigs["git.baseBranch"] = setupSignal{base, "git base-branch fallback resolved " + base}
 	}
 	if sig, ok := issuesSourceSignal(c, dir, run, onPath, answered["issues.source"]); ok {
 		sigs["issues.source"] = sig
@@ -80,26 +80,6 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		sigs[config.RoundDispatchKey] = setupSignal{"tmux", "tmux is on PATH and $TMUX is set"}
 	}
 	return sigs
-}
-
-// baseBranchSignal is origin's default branch, else the first of main, master
-// and trunk that exists locally.
-func baseBranchSignal(run func(...string) (string, bool)) (setupSignal, bool) {
-	if ref, ok := run("symbolic-ref", "--short", "refs/remotes/origin/HEAD"); ok {
-		return setupSignal{strings.TrimPrefix(ref, "origin/"), "refs/remotes/origin/HEAD points at " + ref}, true
-	}
-	if out, ok := run("branch", "--list", "--format=%(refname:short)", "main", "master", "trunk"); ok {
-		have := map[string]bool{}
-		for _, b := range strings.Fields(out) {
-			have[b] = true
-		}
-		for _, b := range []string{"main", "master", "trunk"} {
-			if have[b] {
-				return setupSignal{b, "local branch " + b + " exists (git branch --list)"}, true
-			}
-		}
-	}
-	return setupSignal{}, false
 }
 
 // issuesSourceSignal is the forge named by origin's host, when its CLI is
