@@ -323,7 +323,7 @@ func TestShipPRGitHubConfiguredBase(t *testing.T) {
 	if n.code != 0 {
 		t.Fatalf("exit %d\n%s%s", n.code, n.stdout, n.stderr)
 	}
-	if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base develop" {
+	if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base develop --head feat/x" {
 		t.Errorf("gh call %q", f.calls)
 	}
 }
@@ -353,7 +353,7 @@ func TestShipPRFileMode(t *testing.T) {
 				t.Errorf("data %v", d)
 			}
 			if tc.prov == "github" {
-				if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base main" || f.stdins[0] != "Summary line" {
+				if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base main --head feat/x" || f.stdins[0] != "Summary line" {
 					t.Errorf("gh call %q stdin %q", f.calls, f.stdins)
 				}
 			} else if len(f.calls) != 1 || f.calls[0] != "glab mr create --title My title --description Summary line --source-branch feat/x --target-branch main --yes" {
