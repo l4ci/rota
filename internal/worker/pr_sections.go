@@ -145,16 +145,17 @@ func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (Ga
 	return gr, err
 }
 
-// Validate --order against the original membership, then remove only the
-// section culprits. Invalid or duplicate order tokens still fail as before.
-func filterSectionOrder(res TrainResult, o *TrainOpts) error {
-	if len(res.Culprits) == 0 || len(o.Order) == 0 {
+// Validate --order against the original membership, then remove the section
+// culprits and already-merged PRs. Invalid or duplicate tokens still fail.
+func filterSectionOrder(res TrainResult, o *TrainOpts, merged []TrainMember) error {
+	if (len(res.Culprits) == 0 && len(merged) == 0) || len(o.Order) == 0 {
 		return nil
 	}
 	all := append([]TrainMember{}, res.Members...)
 	for _, c := range res.Culprits {
 		all = append(all, TrainMember{Target: c.Target, Branch: c.Gate.Branch, PR: c.PR})
 	}
+	all = append(all, merged...)
 	perm, _, _, err := orderTrain(all, make([]trainFoot, len(all)), o.Order)
 	if err != nil {
 		return err

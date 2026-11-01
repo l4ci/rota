@@ -122,7 +122,7 @@ func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("state", "MERGED")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GatePRMismatch {
+	if err != nil || res.Verdict != GateAlreadyMerged {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	var merges []ledger.Entry
@@ -137,14 +137,14 @@ func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
 	}
 }
 
-// A conflicting squash merge is stale and its head is not on the base: the
-// forge's MERGED state still earns the merge entry.
-func TestStaleGateOfAPRMergedRemotelyRecordsTheMerge(t *testing.T) {
+// A squash merge's original head need not be on the base: the forge's MERGED
+// state earns the merge entry without a stale refusal.
+func TestGateOfAPRMergedRemotelyRecordsTheMerge(t *testing.T) {
 	w := newWorld(t, ghURL)
 	advanceMainOn(w, "work.txt")
 	w.forge("state", "MERGED")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateStale {
+	if err != nil || res.Verdict != GateAlreadyMerged || res.Hint != "" {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	for i := 0; i < 2; i++ { // gating it again adds no second entry
