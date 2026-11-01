@@ -411,6 +411,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	if done || err != nil {
 		return p.trainPlan, p.res, true, err
 	}
+	var merged []TrainMember
 	for _, tg := range targets {
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews})
 		if err != nil {
@@ -420,6 +421,11 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			return p.trainPlan, p.res, true, err
 		}
 		res.Notes = appendNew(res.Notes, gr.Notes...)
+		if gr.Verdict == GateAlreadyMerged {
+			merged = append(merged, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
+			res.Notes = append(res.Notes, gr.Err)
+			continue
+		}
 		if excludePRSections(res, tg, gr) {
 			continue
 		}
@@ -430,10 +436,17 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier})
 		p.remote = p.remote || gr.PR != ""
 	}
-	if err := filterSectionOrder(*res, &o); err != nil {
+	if err := filterSectionOrder(*res, &o, merged); err != nil {
 		return p.trainPlan, p.res, true, err
 	}
 	if len(res.Members) == 0 {
+		if len(res.Culprits) == 0 {
+			res.Verdict = GatePass
+			if o.Plan {
+				res.Verdict, res.Plan = GatePlan, &TrainPlan{}
+			}
+			return p.trainPlan, p.res, true, nil
+		}
 		c := res.Culprits[0]
 		res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = c.Gate.Verdict, c.Target, c.Gate, c.Gate.Err, c.Gate.Hint
 		return p.trainPlan, p.res, true, nil

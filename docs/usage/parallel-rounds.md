@@ -782,6 +782,12 @@ merges them onto the base in a scratch worktree in the order it picks, runs `tes
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
+PRs the forge already reports as merged into the requested base are reported as
+`ALREADY-MERGED` and skipped, even if their head branches were deleted. The train
+continues with open PRs; if every target is already merged, it succeeds without
+verification or another merge. A conflicting open PR still gets a hint naming
+its owning slot, or its branch when no slot owns it.
+
 After the tree verifies and before anything lands, the train also runs each member's `## Try it` steps in the scratch tree, member by member in merge order. A member whose steps fail is the `culprit`. `--no-verify` does not skip this.
 
 The train orders the members to cut conflicts: PRs that share no path with another candidate go first (lowest PR number first), then the PRs that share paths, smallest diff first. It prints one line per PR with the reason (`no shared paths`, or `shares 2 paths with #12, #15`) before it pushes anything. `--order 12,15,9` replaces that order and must name every PR exactly once. If a shared-path member conflicts with the ones before it, the train names the pair, exits 4 with `blockedBy: order` and pushes nothing; a conflict under `--order` is `merge-failed`. It never rebases a PR for you.

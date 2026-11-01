@@ -58,7 +58,7 @@ func TestGateSlotHeadStageOwnsNotes(t *testing.T) {
 	run := gate{e: Env{}.WithDefaults(), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "kit", CheckOnly: true}}
 	target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first", PR: ghURL}
 	forged := gateForgeResult{forge: stagePRForge{info: tracker.PRInfo{State: "OPEN", Head: "kit/5-second"}}}
-	out, result, done, err := run.stepSlotHead(answer, target, forged, true)
+	out, result, done, err := run.stepSlotHead(answer, target, forged, true, nil)
 	if err != nil || done || out.target.Branch != "kit/5-second" || len(result.Notes) != 2 {
 		t.Fatalf("follow result=%+v branch=%q done=%v err=%v", result, out.target.Branch, done, err)
 	}

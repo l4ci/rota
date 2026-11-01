@@ -161,7 +161,7 @@ func (w *world) gate(brokenMergeBase bool, o GateOpts) (GateResult, error) {
 // port may report: contract rule, old 3 is split by message, old 4, 5 and 6 are
 // verdicts.
 var oldExitVerdicts = map[int][]string{
-	0: {GateFresh, GatePass},
+	0: {GateFresh, GatePass, GateAlreadyMerged},
 	3: {GateStale, GatePRMismatch, GateMergeFailed},
 	4: {GateProvenanceFail, GateNotMerged, GateNotOnBase, GateVerifyFailed},
 	5: {GateCheckBroke},
@@ -307,8 +307,10 @@ func TestGate(t *testing.T) {
 			setup: func(w *world) { w.forge("base", "stack") }},
 		{name: "c: wrong head branch", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
 			setup: func(w *world) { w.forge("head", "other") }},
-		{name: "c: PR not open", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: PR already merged", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateAlreadyMerged,
 			setup: func(w *world) { w.forge("state", "MERGED") }},
+		{name: "c: PR closed without merging", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+			setup: func(w *world) { w.forge("state", "CLOSED") }},
 		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["test -f work.txt"]}}`) }},
 		{name: "d: no verify commands", pr: ghURL, verdict: GateNoVerify, noFiles: []string{"work.txt"},
@@ -1218,6 +1220,43 @@ func TestGateAnUnrecordedPR(t *testing.T) {
 			}
 			if res.Branch != "w1" {
 				t.Errorf("branch = %q, want the PR's head w1", res.Branch)
+			}
+		})
+	}
+}
+
+func TestGateStalePRHintNamesOwner(t *testing.T) {
+	for _, recorded := range []bool{true, false} {
+		t.Run(fmt.Sprintf("recorded=%v", recorded), func(t *testing.T) {
+			pr, owner := "", "branch w1"
+			if recorded {
+				pr, owner = ghURL, "slot w1"
+			}
+			w := newWorld(t, pr)
+			advanceMainOn(w, "work.txt")
+			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+			if err != nil || res.Verdict != GateStale {
+				t.Fatalf("stale PR: %+v, %v", res, err)
+			}
+			if !strings.Contains(res.Hint, owner) || strings.Contains(res.Hint, "slot 7") || !strings.Contains(res.Hint, "git merge main") {
+				t.Errorf("hint = %q, want bounce naming %s", res.Hint, owner)
+			}
+		})
+	}
+}
+
+func TestGateAlreadyMergedPRTarget(t *testing.T) {
+	for _, checkOnly := range []bool{false, true} {
+		t.Run(fmt.Sprintf("check-only=%v", checkOnly), func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.forge("state", "MERGED")
+			gittest.Run(t, w.dir, "push", "-q", "origin", ":w1")
+			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: checkOnly})
+			if err != nil || res.Verdict != GateAlreadyMerged || !res.AlreadyMerged || res.Changed {
+				t.Fatalf("already-merged PR: %+v, %v", res, err)
+			}
+			if res.Hint != "" || !strings.Contains(res.Err, "already merged into main") || strings.Contains(res.Err, "STALE") {
+				t.Errorf("already-merged message: %s; hint: %s", res.Err, res.Hint)
 			}
 		})
 	}
