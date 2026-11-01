@@ -52,8 +52,6 @@ func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
 		switch strings.Join(args, " ") {
 		case "status --porcelain":
 			return git.Result{Stdout: r.status}, nil
-		case "remote get-url " + name:
-			return git.Result{ExitCode: 1}, nil
 		case "rev-parse --verify --quiet refs/remotes/" + name + "/ben/7-x":
 			if r.remote == "" {
 				return git.Result{ExitCode: 1}, nil
@@ -395,16 +393,22 @@ func TestDoneArchitectureReviewNeedsNoPR(t *testing.T) {
 
 type donePRForge struct {
 	Forge
-	prs []tracker.PR
-	err error
+	info tracker.PRInfo
+	err  error
 }
 
-func (f donePRForge) OpenPRs(context.Context) ([]tracker.PR, error) {
-	return f.prs, f.err
+func (f donePRForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return f.info, f.err
 }
 
 func (r *doneRig) forge(f donePRForge) {
 	r.t.Helper()
+	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR(ghURL) }); err != nil {
+		r.t.Fatal(err)
+	}
+	if f.info.State == "" {
+		f.info.State = "OPEN"
+	}
 	r.deps.Env.Config = memConfig(r.t, `{"forge":{"provider":"github"},"test":{"fast":["go test ./x"]}}`)
 	run := r.deps.Env.Git
 	r.deps.Env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
@@ -419,7 +423,7 @@ func (r *doneRig) forge(f donePRForge) {
 func TestDoneWarnsMissingPRSections(t *testing.T) {
 	r := newDoneRig(t, oneSlot, fastCfg)
 	r.pass("7", proof.FastTierCheck)
-	r.forge(donePRForge{prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Summary\nReady."}}})
+	r.forge(donePRForge{info: tracker.PRInfo{Body: "## Summary\nReady."}})
 	var emitted []string
 	r.deps.Warn = func(message string) {
 		sl := LoadRegistryTolerant(r.root).Slot("ben")
@@ -445,27 +449,35 @@ func TestDoneWarnsMissingPRSections(t *testing.T) {
 func TestDonePRSectionWarnings(t *testing.T) {
 	complete := "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"
 	for _, tc := range []struct {
-		name string
-		prs  []tracker.PR
-		err  error
-		want []string
+		name, body, state string
+		noPR              bool
+		err               error
+		want              []string
 	}{
-		{name: "complete", prs: []tracker.PR{{Branch: "ben/7-x", Body: complete}}},
-		{name: "empty sections", prs: []tracker.PR{{Branch: "ben/7-x", Body: "## Approvals\n## Rulings\n## Assumptions\n"}}},
-		{name: "case and whitespace", prs: []tracker.PR{{Branch: "ben/7-x", Body: "##\tapprovals \r\n  ## RULINGS  \r\n## assumptions\r\n"}}},
-		{name: "no PR yet"},
-		{name: "another branch", prs: []tracker.PR{{Branch: "dana/8-y", Body: "Missing every section."}}},
+		{name: "complete", body: complete},
+		{name: "empty sections", body: "## Approvals\n## Rulings\n## Assumptions\n"},
+		{name: "case and whitespace", body: "##\tapprovals \r\n  ## RULINGS  \r\n## assumptions\r\n"},
+		{name: "no PR yet", noPR: true},
+		{name: "merged PR", state: "MERGED"},
+		{name: "closed PR", state: "CLOSED"},
 		{name: "forge unavailable", err: errors.New("forge offline")},
-		{name: "approvals missing", prs: []tracker.PR{{Branch: "ben/7-x", Body: "## Rulings\nNone\n## Assumptions\nNone\n"}}, want: []string{"## Approvals"}},
-		{name: "rulings missing", prs: []tracker.PR{{Branch: "ben/7-x", Body: "## Approvals\nNone\n## Assumptions\nNone\n"}}, want: []string{"## Rulings"}},
-		{name: "assumptions missing", prs: []tracker.PR{{Branch: "ben/7-x", Body: "## Approvals\nNone\n## Rulings\nNone\n"}}, want: []string{"## Assumptions"}},
-		{name: "mentions only", prs: []tracker.PR{{Branch: "ben/7-x", Body: "Includes ## Approvals, ## Rulings and ## Assumptions."}}, want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
-		{name: "wrong heading depth", prs: []tracker.PR{{Branch: "ben/7-x", Body: "### Approvals\n### Rulings\n### Assumptions\n"}}, want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
+		{name: "approvals missing", body: "## Rulings\nNone\n## Assumptions\nNone\n", want: []string{"## Approvals"}},
+		{name: "rulings missing", body: "## Approvals\nNone\n## Assumptions\nNone\n", want: []string{"## Rulings"}},
+		{name: "assumptions missing", body: "## Approvals\nNone\n## Rulings\nNone\n", want: []string{"## Assumptions"}},
+		{name: "mentions only", body: "Includes ## Approvals, ## Rulings and ## Assumptions.", want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
+		{name: "wrong heading depth", body: "### Approvals\n### Rulings\n### Assumptions\n", want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newDoneRig(t, oneSlot, fastCfg)
 			r.pass("7", proof.FastTierCheck)
-			r.forge(donePRForge{prs: tc.prs, err: tc.err})
+			if !tc.noPR {
+				r.forge(donePRForge{info: tracker.PRInfo{Body: tc.body, State: tc.state}, err: tc.err})
+			} else {
+				r.deps.Env.Forge = func(string, string, tracker.Settings) (Forge, error) {
+					t.Fatal("no PR must not look up a forge")
+					return nil, nil
+				}
+			}
 			res, err := r.done(DoneRequest{})
 			if err != nil || !res.Changed || r.state() != "done" {
 				t.Fatalf("res %+v err %v state %s", res, err, r.state())

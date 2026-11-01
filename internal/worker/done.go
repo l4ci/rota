@@ -166,27 +166,21 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	return markDone(env, req, dp, sl, id, res)
 }
 
-// donePRSections is advisory: only an open PR for this branch supplies a body.
-// A forge that cannot answer leaves the gate to check it later. Look up the
-// branch even when the poll has not yet recorded the newly opened PR.
+// donePRSections is advisory: only the slot's recorded open PR supplies a body.
+// No recorded PR makes no forge call; a forge that cannot answer leaves the
+// gate to check it later.
 func donePRSections(env Env, req DoneRequest, dp DoneDeps, sl *Slot, res *DoneResult) {
-	prs, ok := env.openPRs(env.Ctx, req.Root)
-	if !ok {
+	pr, known := env.prInfoKnown(env.Ctx, req.Root, sl)
+	if !known || !strings.EqualFold(pr.State, "OPEN") {
 		return
 	}
-	for _, pr := range prs {
-		if pr.Branch != sl.Branch() {
-			continue
+	found := prSectionHeadings(pr.Body)
+	_, approvals := approvalsSection(pr.Body)
+	found["## approvals"] = approvals
+	for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
+		if !found[strings.ToLower(heading)] {
+			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", sl.PR(), heading))
 		}
-		found := prSectionHeadings(pr.Body)
-		_, approvals := approvalsSection(pr.Body)
-		found["## approvals"] = approvals
-		for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
-			if !found[strings.ToLower(heading)] {
-				doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", pr.URL, heading))
-			}
-		}
-		return
 	}
 }
 
