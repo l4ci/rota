@@ -158,11 +158,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	}
 	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
 	judged := false
-	for _, kind := range append([]string{verdict.ReviewSpec, verdict.ReviewQuality, verdict.ReviewCross}, verdict.LensKinds...) {
-		r, ok := verdict.Latest(list, kind)
-		if !ok || !verdict.AtHead(r, head) {
-			continue
-		}
+	for _, r := range verdict.BounceReviewsAtHead(list, head) {
 		if r.Failing() {
 			return nil
 		}

@@ -19,6 +19,24 @@ B2 (#55) replaces "parse the last line" routing in `/rota-review`, `/rota-qa`, `
 - **effective review verdict** of a branch. The latest `review-quality` record's `combined`, unless a `review-spec` record is newer, in which case that record's `verdict` (a spec-only review, or a spec FAIL that skipped Stage 2). `verdict route --for ship-review` and B3's ship refusal read it.
 - **stale.** A record is stale when its `sha` differs from the branch's current tip. Routing reports it and does not change `next` because of it.
 
+### Review record queries
+
+`internal/verdict` owns the named record sets and their latest-record lookup.
+Callers choose a query rather than repeat a review-kind list:
+
+| Query | Kinds | Head policy |
+|---|---|---|
+| `CoreReviewsAtHead` (`Recorded` / `RecordedIn` coverage) | spec, quality | Latest per kind at head, after `ForHead` report precedence |
+| `BounceReviewsAtHead` | core, cross, lenses | Latest per kind in the supplied history, then require head match |
+| `ReadinessReviewsAtHead` | bounce set, second opinion | Latest per kind at head, after `ForHead` report precedence |
+| `LatestBranchRecords` (show and report delivery) | readiness set, QA, behaviour | Latest per kind, including stale records, in display order |
+
+The sets extend one another inside verdict. Adding a kind to a narrower set
+also includes it in the wider sets. Selection takes the latest record before
+checking its SHA; an older record at head cannot override a newer local record
+of that kind. `ForHead` keeps the existing local-over-recovered-report rules.
+Blocking predicates and verdict routing remain separate from record selection.
+
 ### rota verdict add
 rota verdict add [<branch>] --kind <review-spec|review-quality|review-cross|review-security|review-perf|review-ux|second-opinion|qa|behaviour> --verdict <verdict> [--harness <claude|codex|opencode> --model <model>] [--sha <sha>] [--body-file <path|->] [--transcript <path>] [--file-deferred --pr <ref>]
 repo: scoped

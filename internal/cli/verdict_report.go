@@ -198,17 +198,15 @@ func postLatestVerdictReports(c *Ctx, t verdictBranch, prRef string) ([]any, err
 	list := verdict.Load(t.root).Branches[t.key]
 	reports := []any{}
 	var errs []error
-	for _, kind := range verdict.BranchKinds {
-		if r, ok := verdict.Latest(list, kind); ok {
-			err := postVerdictReportTo(c, t, r, prRef)
-			row := jsonx.NewObject()
-			row.Set("kind", kind)
-			row.Set("sha", r.Sha)
-			setReportStatus(row, err)
-			reports = append(reports, row)
-			if err != nil {
-				errs = append(errs, err)
-			}
+	for _, r := range verdict.LatestBranchRecords(list) {
+		err := postVerdictReportTo(c, t, r, prRef)
+		row := jsonx.NewObject()
+		row.Set("kind", r.Kind)
+		row.Set("sha", r.Sha)
+		setReportStatus(row, err)
+		reports = append(reports, row)
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return reports, errors.Join(errs...)
