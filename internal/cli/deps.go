@@ -60,6 +60,11 @@ type Deps struct {
 	// in a temp dir with a fake git.
 	Getwd       func() (string, error)
 	UserHomeDir func() (string, error)
+	// TempDir and UserCacheDir resolve the OS temporary and user cache roots.
+	TempDir      func() string
+	UserCacheDir func() (string, error)
+	// PID is this CLI process, unlike HolderPID which may name an ancestor.
+	PID func() int
 	// TempDirs supplies OS temporary roots to the project registry; nil uses
 	// the platform locations and TMPDIR through Getenv.
 	TempDirs func() []string
@@ -160,6 +165,9 @@ func defaultDeps() *Deps {
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
+		TempDir:          os.TempDir,
+		UserCacheDir:     os.UserCacheDir,
+		PID:              os.Getpid,
 		LookPath:         exec.LookPath,
 		DiskUsage:        statDisk,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },

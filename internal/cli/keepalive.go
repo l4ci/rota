@@ -198,7 +198,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Spawn:    keepaliveSpawn(c, *configDir),
 			Signals:  sigs,
 			Lease:    le,
-			Holder:   le.Discover(os.Getpid(), c.deps().Getenv),
+			Holder:   le.Discover(c.deps().PID(), c.deps().Getenv),
 			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffPath) },
 			Escalate: escalateFunc(ctx, c, root),
 			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
@@ -226,7 +226,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}
 			}
-			env.Limits = limitsLoop(c, root, cfg, lset, os.Getpid(), gap)
+			env.Limits = limitsLoop(c, root, cfg, lset, c.deps().PID(), gap)
 		}
 		res, err := keepalive.Run(env, opts)
 		for _, w := range res.Warnings {

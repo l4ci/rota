@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -65,7 +64,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%v", err)
 		}
 		lenv := c.deps().LeaseEnv()
-		release, err := roundwatch.Arm(lenv, cd, os.Getpid(), secs(*heartbeat))
+		release, err := roundwatch.Arm(lenv, cd, c.deps().PID(), secs(*heartbeat))
 		if err != nil {
 			var ae *roundwatch.ArmedError
 			if errors.As(err, &ae) {

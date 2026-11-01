@@ -92,7 +92,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
 		in.RoundHost = worker.ResolveHost("", worker.HostConfig{}, d.Getenv, d.LookPath)
-		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DiskUsage, d.Getenv)
+		d.doctorDiskInput(ctx, &in, nil, "")
 		return in
 	}
 	cfg := d.Config(root)
@@ -150,7 +150,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if issueErr == nil && issue {
 		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
 	}
-	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DiskUsage, d.Getenv)
+	d.doctorDiskInput(ctx, &in, cfg, root)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}
