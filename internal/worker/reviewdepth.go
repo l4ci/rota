@@ -178,16 +178,9 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if out.Depth != config.DepthNone {
 		out.Lenses = s.Lenses.Match(files, in.Labels)
 	}
-	author := s.Author
-	if author == "" && len(labelSets) > 0 {
-		author = harness.FromLabels(labelSets[0])
-	}
-	if author == "" {
-		author = s.Cross.DefaultKind
-	}
-	if author == "" {
-		author = harness.Default
-	}
+	author, _ := harness.ResolveAuthor(harness.AuthorSources{
+		Slot: s.Author, Labels: labelSets[0], Project: s.Cross.DefaultKind,
+	})
 	for _, labels := range labelSets {
 		if c, why := resolveCross(s.Cross, labels, author); crossRank(c) > crossRank(out.Cross) {
 			out.Cross, out.CrossWhy = c, why
