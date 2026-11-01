@@ -66,8 +66,9 @@ func (b *Issues) ClaimComments(ctx context.Context, key tracker.IssueKey) ([]tra
 	return comments, true, err
 }
 
-// ClaimLabelSyncer repairs only the visible labels derived from tracker claims.
-// The comment claims remain the source of truth; file mode has no labels.
+// ClaimLabelSyncer repairs visible labels derived from tracker claims and
+// removes in-progress and claim labels on closed issues. Claims remain the
+// source of truth; file mode has no labels.
 type ClaimLabelSyncer interface {
 	ClaimLabelDrift(ref string) (add, remove []string, err error)
 	SyncClaimLabels(ref string) (changed bool, err error)
