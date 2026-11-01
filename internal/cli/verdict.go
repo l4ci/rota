@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
@@ -91,7 +92,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 		}
 	}
 	v.key = verdict.BranchKey(v.repo, v.branch)
-	out, err := reviewGit(c.Context(), c.deps(), t.Dir, "rev-parse", "--short", t.Branch)
+	out, err := verdictHead(c, t.Dir, t.Branch)
 	if err != nil {
 		return verdictBranch{}, err
 	}
@@ -99,80 +100,32 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	return v, nil
 }
 
-// bindVerdictHead is the sha a new verdict records. With --sha it is that
-// commit, which must be the head of the remote branch (the local branch when
-// nothing was pushed): a verdict bound to a commit no reviewer saw, or to a
-// stale worktree, would pass the merge gate on code nobody read. Without
-// --sha the local tip is recorded, and a local ref that differs from the
-// remote branch is refused rather than guessed at.
-func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
-	ctx := c.Context()
-	r := c.deps().Repo(t.dir)
-	remote := t.remote
-	if remote == "" {
-		remote = "origin"
-	}
-	remoteRef := remote + "/" + t.branch
-	pushed, err := r.Verify(ctx, "refs/remotes/"+remoteRef)
-	if err != nil {
-		return "", gitErr(err)
-	}
-	rev := func(args ...string) (string, error) {
-		out, err := reviewGit(ctx, c.deps(), t.dir, append([]string{"rev-parse"}, args...)...)
-		return strings.TrimSpace(out), err
-	}
-	if sha == "" {
-		if !pushed || t.remote != "" {
-			return t.head, nil
+// verdictHeadError translates domain refusals and git failures to CLI exits.
+func verdictHeadError(err error) error {
+	var he *verdict.HeadError
+	var ge *git.ExitError
+	switch {
+	case errors.As(err, &he):
+		code := exitcode.ExitRefused
+		if he.NotFound {
+			code = exitcode.ExitResolution
 		}
-		local, err := rev(t.ref)
-		if err != nil {
-			return "", err
+		return exitcode.Errf(code, "%s", he.Message).WithHint(he.Hint)
+	case errors.As(err, &ge):
+		msg := strings.TrimSpace(ge.Stderr)
+		if msg == "" {
+			msg = fmt.Sprintf("exit %d", ge.ExitCode)
 		}
-		tip, err := rev(remoteRef)
-		if err != nil {
-			return "", err
-		}
-		if local != tip {
-			return "", Refused("local %s (%s) differs from %s (%s)", t.branch, local[:7], remoteRef, tip[:7]).
-				WithHint("pass --sha <the sha the reviewers were briefed on> to bind the verdict to it")
-		}
-		return t.head, nil
+		command, _, _ := strings.Cut(ge.Args, " ")
+		return Unavailable("git %s failed: %s", command, msg)
+	default:
+		return gitErr(err)
 	}
-	if found, err := r.Verify(ctx, sha+"^{commit}"); err != nil {
-		return "", gitErr(err)
-	} else if !found {
-		return "", Resolution("--sha %s is not a commit here", sha)
-	}
-	full, err := rev(sha + "^{commit}")
-	if err != nil {
-		return "", err
-	}
-	target := t.ref
-	if pushed {
-		target = remoteRef
-	}
-	tip, err := rev(target)
-	if err != nil {
-		return "", err
-	}
-	if full != tip {
-		if pushed {
-			if behind, err := r.Ok(ctx, "merge-base", "--is-ancestor", tip, full); err != nil {
-				return "", gitErr(err)
-			} else if behind {
-				return "", Refused("--sha %s is ahead of %s (%s): the remote-tracking ref is behind", sha, target, tip[:7]).
-					WithHint("git fetch " + remote + ", then retry")
-			}
-		}
-		extra, _ := reviewGit(ctx, c.deps(), t.dir, "log", "--format=%h %s", full+".."+tip)
-		msg := fmt.Sprintf("--sha %s is not the head of %s (%s)", sha, target, tip[:7])
-		if extra = strings.TrimSpace(extra); extra != "" {
-			msg += ", which has commits after it:\n" + extra
-		}
-		return "", Refused("%s", msg).WithHint("review the current head, then pass its sha")
-	}
-	return rev("--short", full)
+}
+
+func verdictHead(c *Ctx, dir, ref string) (string, error) {
+	head, err := verdict.ResolveHead(shipGitRunner{c, dir}, ref)
+	return head, verdictHeadError(err)
 }
 
 // verdictBody reads and validates an optional --body-file.
@@ -275,9 +228,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if *fileDeferred && len(deferred) > 0 {
 			followUpPR = branchIsFollowUp(c, fileRoot, t.branch)
 		}
-		head, err := bindVerdictHead(c, t, strings.TrimSpace(*sha))
+		head, err := verdict.BindHead(shipGitRunner{c, t.dir}, verdict.HeadTarget{Branch: t.branch, Ref: t.ref, Remote: t.remote, Head: t.head}, strings.TrimSpace(*sha))
 		if err != nil {
-			return Result{}, err
+			return Result{}, verdictHeadError(err)
 		}
 		r := verdict.NewRecord(*kind, *v, head, b, c.deps().Now())
 		r.Branch, r.Repo = t.branch, t.repo
@@ -497,7 +450,7 @@ func debugVerdict(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", "HEAD")
+		out, err := verdictHead(c, root, "HEAD")
 		if err != nil {
 			return Result{}, err
 		}
@@ -611,7 +564,7 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 			return res, err
 		}
 		sha := ""
-		if out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", "HEAD"); err == nil {
+		if out, err := verdictHead(c, root, "HEAD"); err == nil {
 			sha = strings.TrimSpace(out)
 		}
 		r := verdict.NewRecord(verdict.DebugReset, verdict.Reset, sha, verdict.Body{Summary: strings.TrimSpace(*reason)}, c.deps().Now())
@@ -656,7 +609,7 @@ func workFixTarget(c *Ctx, args []string, task string) (root, bug, key string, e
 
 func workFixRecord(c *Ctx, root, v string, body verdict.Body) verdict.Record {
 	sha := ""
-	if out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", "HEAD"); err == nil {
+	if out, err := verdictHead(c, root, "HEAD"); err == nil {
 		sha = strings.TrimSpace(out)
 	}
 	kind := verdict.WorkFix
