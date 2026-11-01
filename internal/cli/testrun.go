@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -50,7 +51,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		if cmds, err = expandFiles(c, root, *base, shellLines(cmds)...); err != nil {
+		if cmds, err = expandFiles(c, root, *base, proof.ShellLines(cmds)...); err != nil {
 			return Result{}, err
 		}
 		env := workerEnvCtx(c, ctx)

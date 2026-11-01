@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
@@ -1383,7 +1384,7 @@ func (_ gate) stepTier(g gatePrepared) (gatePrepared, GateResult, bool, error) {
 		return g.finish(false, nil)
 	}
 	var files []string
-	if tier.Tier == change.TierSmall && anyHasFiles(g.in.cfg.Small) {
+	if tier.Tier == change.TierSmall && proof.HasFiles(g.in.cfg.Small) {
 		var err error
 		// Deleted files stay in: a removed file's package and its dependents must run.
 		if files, err = git.DiffFiles(g.ctx, g.e.Git, g.root, span); err != nil {

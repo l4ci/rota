@@ -68,8 +68,7 @@ func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
 		return git.Result{}, nil
 	}
 	r.deps = DoneDeps{
-		Env:       e,
-		TierForms: []string{FastTierCheck},
+		Env: e,
 		ExpandFiles: func(dir, base string, lines []string) ([]string, error) {
 			return lines, nil
 		},
@@ -139,7 +138,7 @@ func TestDoneProofAtHead(t *testing.T) {
 	})
 	t.Run("the whole-tier row counts", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, fastCfg)
-		r.pass("7", FastTierCheck)
+		r.pass("7", proof.FastTierCheck)
 		if _, err := r.done(DoneRequest{}); err != nil {
 			t.Fatal(err)
 		}
@@ -290,7 +289,7 @@ func TestDoneSettledBranch(t *testing.T) {
 	t.Run("a branch pushed only to the configured remote", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, `{"git":{"remote":"mirror"},"test":{"fast":["go test ./x"]}}`)
 		r.remoteName = "mirror"
-		r.pass("7", FastTierCheck)
+		r.pass("7", proof.FastTierCheck)
 		if _, err := r.done(DoneRequest{}); err != nil {
 			t.Fatalf("done refused a branch pushed to the configured remote: %v", err)
 		}

@@ -54,6 +54,7 @@ func TestGateTier(t *testing.T) {
 		{"risky path runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"riskyPaths":["README.md"]}}`, "", GateVerifyFailed, "full", nil, ""},
 		{"code runs test.full", code, `{"test":{"full":["false"],"docs":["true"],"small":["true"]}}`, "", GateVerifyFailed, "full", nil, ""},
 		{"small runs test.small with files", code, `{"test":{"full":["false"],"e2e":["false"],"small":["test {files} = x.go"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", GatePass, "small", []string{"test.full", "test.e2e"}, "ran test.small"},
+		{"small quotes file names", map[string]string{"it's here.go": "package x"}, `{"test":{"full":["false"],"small":["test {files} = \"it's here.go\""]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", GatePass, "small", []string{"test.full"}, "ran test.small"},
 		{"bad change config runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"smallBelow":-1}}`, "", GateVerifyFailed, "full", nil, ""},
 	}
 	for _, c := range cases {
