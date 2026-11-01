@@ -270,7 +270,7 @@ func (e Env) baselineAndRecord(ctx context.Context, root string, o DispatchOpts,
 // orchestrator signature, then preamble (a relay's note, "" for a task), then
 // the brief, and the harness signs the whole. An already-signed brief is not
 // signed twice. It returns the signed text and the round it was signed with.
-func signBrief(hz harness.Harness, key []byte, round int, preamble, brief string) string {
+func signBrief(hz harness.Prompt, key []byte, round int, preamble, brief string) string {
 	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)
 	var payload strings.Builder
 	payload.WriteString(signature + "\n")
@@ -345,11 +345,13 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	if kind == "" {
 		kind = t.slot.Kind()
 	}
-	hz, err := Harness(kind)
+	hz, err := LaunchHarness(kind)
 	if err != nil {
 		return res, err
 	}
 	kind = hz.Kind()
+	accounts := harness.ResolveAccounts(kind)
+	prompt := harness.ResolvePrompt(kind)
 	res.Kind = kind
 	key := hz.CommandKey()
 	launch, hit, err := e.launchLine(root, hz, o.Model)
@@ -381,12 +383,12 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	res.Warnings = setup.Warnings
 	// A session started into an account at its limit stops on its first turn.
-	if why := e.accountLimited(ctx, root, hz, configDir); why != "" {
+	if why := e.accountLimited(ctx, root, accounts, configDir); why != "" {
 		le := fail(exitcode.ExitRefused, why)
 		le.Data = BlockData{BlockedBy: blockedby.Limited}
 		return res, le
 	}
-	if !hz.WorkAccounts() {
+	if !accounts.WorkAccounts() {
 		configDir = "" // a codex slot's account is its home, not a claude config dir
 		account := setup.Account
 		if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHomeAccount(account) }); err != nil {
@@ -400,15 +402,15 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
 	// No account configured for the slot: it runs under the orchestrator's.
-	amb := hz.AmbientAccount(e.Getenv)
+	amb := accounts.AmbientAccount(e.Getenv)
 	if acct.ConfigDir == "" {
 		acct.ConfigDir = amb.ConfigDir
 	}
 	if acct.Home == "" {
 		acct.Home = amb.Home
 	}
-	accountEnv := hz.AccountEnv(acct)
-	launch, signKey, err := hz.Prepare(launch, e.Executable, setup)
+	accountEnv := accounts.AccountEnv(acct)
+	launch, signKey, err := prompt.Prepare(launch, e.Executable, setup)
 	if err != nil {
 		return res, asError(err)
 	}
@@ -484,7 +486,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	syncLabel(ctx, h, root, o.Slot)
 	labelWorkspace(ctx, h, root)
 
-	out := signBrief(hz, signKey, roundOf(root), "", string(t.brief))
+	out := signBrief(prompt, signKey, roundOf(root), "", string(t.brief))
 	// A task dispatch starts a fresh session and has nothing pending.
 	sendErr := e.sendSigned(ctx, t, o.Slot, out, false)
 	// Remember a stall so the next relay checks the prompt line first. Written
@@ -524,9 +526,9 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
 	}
 	// A relay is signed by the key of the session it goes into.
-	hz, ok := harness.Lookup(s.Kind())
+	hz, ok := harness.LookupPrompt(s.Kind())
 	if !ok {
-		hz = harness.Resolve("")
+		hz = harness.ResolvePrompt("")
 	}
 	signKey, err := hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot)
 	if err != nil {

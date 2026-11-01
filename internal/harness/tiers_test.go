@@ -21,7 +21,7 @@ func TestTierKey(t *testing.T) {
 func TestHarnessKeysExistInSchema(t *testing.T) {
 	for _, kind := range Kinds() {
 		t.Run(kind, func(t *testing.T) {
-			h, ok := Lookup(kind)
+			h, ok := LookupLauncher(kind)
 			if !ok {
 				t.Fatalf("no adapter for %s", kind)
 			}
@@ -52,9 +52,9 @@ func TestTierMapSet(t *testing.T) {
 	}
 	// Both readers of a kind's tier map go through the same seam.
 	for _, k := range []string{Codex, OpenCode} {
-		h, _ := Lookup(k)
+		h, _ := LookupAgentWriter(k)
 		cfg := cfgOf(t, `{"round":{"tiers":{"`+k+`":{"standard":"m"}}}}`)
-		if !h.Configured(cfg) {
+		if !h.Configured(ConfigFor(cfg, k)) {
 			t.Errorf("%s Configured must follow its tier map", k)
 		}
 	}

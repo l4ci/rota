@@ -72,7 +72,7 @@ func FromConfig(cfg any) (Spec, error) {
 		sp.Roles = append(sp.Roles, role)
 	}
 	for _, k := range harness.Kinds() {
-		if harness.Resolve(k).Configured(cfg) {
+		if harness.ResolveAgentWriter(k).Configured(harness.ConfigFor(cfg, k)) {
 			sp.Kinds = append(sp.Kinds, k)
 		}
 	}
@@ -97,7 +97,7 @@ var instructions = map[string]string{
 func Render(sp Spec) ([]File, error) {
 	var out []File
 	for _, k := range sp.Kinds {
-		h, ok := harness.Lookup(k)
+		h, ok := harness.LookupAgentWriter(k)
 		if !ok {
 			return nil, fmt.Errorf("%q is not a worker harness", k)
 		}

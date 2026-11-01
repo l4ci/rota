@@ -202,7 +202,7 @@ const CrossNone = "none"
 
 // crossReviewer reports whether kind can run a cross-harness review.
 func crossReviewer(kind string) bool {
-	return harness.Valid(kind) && harness.Resolve(kind).CrossReviewer()
+	return harness.Valid(kind) && harness.ResolveReviewer(kind).CrossReviewer()
 }
 
 // crossRank orders cross results for a bundle: a harness beats none beats "".

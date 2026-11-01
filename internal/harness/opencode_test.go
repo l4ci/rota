@@ -22,7 +22,7 @@ func TestOpenCodeLaunch(t *testing.T) {
 		{`{"round":{"commands":{"codex":"codex -x"}}}`, "", "opencode", false},
 	}
 	for _, c := range cases {
-		got, err := (opencode{}).Launch(cfgOf(t, c.cfg), c.model)
+		got, err := (opencode{}).Launch(ConfigFor(cfgOf(t, c.cfg), OpenCode), c.model)
 		if c.refused {
 			if !usageRefusal(err) {
 				t.Errorf("%s + %q: err = %v, want a usage refusal", c.cfg, c.model, err)
@@ -37,7 +37,7 @@ func TestOpenCodeLaunch(t *testing.T) {
 
 func TestOpenCodeModelApplies(t *testing.T) {
 	for cfg, want := range map[string]bool{``: true, `{"round":{"commands":{"opencode":"opencode -x"}}}`: false, `{"round":{"commands":{"opencode":"opencode -m {model}"}}}`: true} {
-		if got := (opencode{}).ModelApplies(cfgOf(t, cfg)); got != want {
+		if got := (opencode{}).ModelApplies(ConfigFor(cfgOf(t, cfg), OpenCode)); got != want {
 			t.Errorf("%s: %v want %v", cfg, got, want)
 		}
 	}
@@ -69,9 +69,9 @@ func TestOpenCodeKinds(t *testing.T) {
 	if !slices.Contains(Kinds(), OpenCode) || !Valid(OpenCode) {
 		t.Fatalf("kinds = %v", Kinds())
 	}
-	h, ok := Lookup(OpenCode)
+	h, ok := lookup(OpenCode)
 	if !ok || h.Kind() != OpenCode {
-		t.Fatalf("Lookup(%q) = %v, %v", OpenCode, h, ok)
+		t.Fatalf("lookup(%q) = %v, %v", OpenCode, h, ok)
 	}
 	if h, ok := ForBinary("opencode"); !ok || h.Kind() != OpenCode {
 		t.Errorf("ForBinary(opencode) = %v, %v", h, ok)
@@ -86,11 +86,11 @@ func TestOpenCodeKinds(t *testing.T) {
 		`{"round":{"commands":{"opencode":"opencode"}}}`:                     true,
 		`{"round":{"accounts":[{"kind":"opencode","name":"a","dir":"/x"}]}}`: true,
 	} {
-		if got := h.Configured(cfgOf(t, cfg)); got != want {
+		if got := h.Configured(ConfigFor(cfgOf(t, cfg), OpenCode)); got != want {
 			t.Errorf("Configured(%s) = %v, want %v", cfg, got, want)
 		}
 	}
-	l := h.Accounts(cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"c","dir":"/c"},{"kind":"opencode","name":"a","dir":"/x"}]}}`))
+	l := h.Accounts(ConfigFor(cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"c","dir":"/c"},{"kind":"opencode","name":"a","dir":"/x"}]}}`), OpenCode))
 	if l.Key != "round.accounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
 		t.Errorf("Accounts = %+v", l)
 	}

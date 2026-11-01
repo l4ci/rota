@@ -26,7 +26,7 @@ func SlotIdle(s *worker.Slot) bool {
 // SlotAccount is the harness kind ("codex", or "" for Claude) and the account
 // a slot last ran under.
 func SlotAccount(s *worker.Slot) (kind, account string) {
-	if h := harness.Resolve(s.Kind()); !h.UsageMeter() {
+	if h := harness.ResolveAccounts(s.Kind()); !h.UsageMeter() {
 		return h.Kind(), s.HomeAccount()
 	}
 	return "", s.Account()
@@ -37,7 +37,7 @@ func SlotAccount(s *worker.Slot) (kind, account string) {
 // has one, and for a slot with no config dir or on a harness without a usage
 // meter (codex), which this check does not cover.
 func (e Env) SlotLoginProblem(s *worker.Slot) string {
-	if s == nil || s.ConfigDir() == "" || !harness.Resolve(s.Kind()).UsageMeter() {
+	if s == nil || s.ConfigDir() == "" || !harness.ResolveAccounts(s.Kind()).UsageMeter() {
 		return ""
 	}
 	home, _ := e.Worker.Home()

@@ -39,7 +39,7 @@ func (c Cap) Closed(kind string) string { return c.why[kindOrDefault(kind)] }
 
 // kindOrDefault is the kind of an adapter, the default one for "" or a kind
 // that is not a worker harness.
-func kindOrDefault(kind string) string { return harness.Resolve(kind).Kind() }
+func kindOrDefault(kind string) string { return harness.ResolveLauncher(kind).Kind() }
 
 // pool is one account pool: the resets of its cooling accounts and whether
 // every configured account is cooling (an unconfigured pool is never closed).
@@ -70,8 +70,8 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 
 // loggedPool reads the accounts of a kind with no usage meter through the
 // limits the watcher logged.
-func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool) {
-	logins := h.Accounts(e.Worker.Config(root)).Entries
+func (e Env) loggedPool(root string, h harness.Accounts) (p pool, configured bool) {
+	logins := h.Accounts(harness.ConfigFor(e.Worker.Config(root), h.Kind())).Entries
 	cooling := limits.Cooling(root, h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
@@ -84,7 +84,7 @@ func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool
 }
 
 // poolOf is the pool of a kind, and whether it has configured accounts.
-func (e Env) poolOf(ctx context.Context, root string, h harness.Harness) (pool, bool) {
+func (e Env) poolOf(ctx context.Context, root string, h harness.Accounts) (pool, bool) {
 	if h.UsageMeter() {
 		return e.meterPool(ctx, root), false
 	}
@@ -92,14 +92,14 @@ func (e Env) poolOf(ctx context.Context, root string, h harness.Harness) (pool, 
 }
 
 // poolKey is the config key of the kind's accounts.
-func (e Env) poolKey(root string, h harness.Harness) string {
-	return h.Accounts(e.Worker.Config(root)).Key
+func (e Env) poolKey(root string, h harness.Accounts) string {
+	return h.Accounts(harness.ConfigFor(e.Worker.Config(root), h.Kind())).Key
 }
 
 // Headroom says why a worker of the harness kind has no account to run under,
 // reading only that kind's pool; empty when it has one.
 func (e Env) Headroom(ctx context.Context, root, kind string) string {
-	h := harness.Resolve(kind)
+	h := harness.ResolveAccounts(kind)
 	if p, _ := e.poolOf(ctx, root, h); p.closed {
 		return coolingWhy(e.poolKey(root, h), earliest(p.resets)) + " (" + strings.Join(p.names, ", ") + ")"
 	}
@@ -123,7 +123,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 	var resets []time.Time
 	var pools []string
 	for _, k := range harness.Kinds() {
-		h := harness.Resolve(k)
+		h := harness.ResolveAccounts(k)
 		p, configured := e.poolOf(ctx, root, h)
 		key := e.poolKey(root, h)
 		if p.closed {
