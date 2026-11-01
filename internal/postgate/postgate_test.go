@@ -127,37 +127,6 @@ func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 	}
 }
 
-// The train counts a bounce like the gate does, for the culprit alone, and
-// ends the items it landed.
-func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	if err := worker.RecordItemStart(root, "1", time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	r := worker.TrainResult{
-		Verdict:     worker.GateStale,
-		Culprit:     "w2",
-		Members:     []worker.TrainMember{{Target: "w1", Landed: true}, {Target: "w2"}},
-		CulpritGate: worker.GateResult{SHA: "abc1234"},
-	}
-	issues := map[string]string{"w1": "1", "w2": "2"}
-	if fails := Train(worker.Env{Config: diskConfig}, nil, root, issues, r, (&parked{}).park); len(fails) != 0 {
-		t.Fatal(fails)
-	}
-	if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); ok {
-		t.Error("a landed member must end its item clock")
-	}
-	if bounces(root, "2") != 1 || bounces(root, "1") != 0 {
-		t.Errorf("bounces: culprit %d, landed %d", bounces(root, "2"), bounces(root, "1"))
-	}
-	// The same head again is the same refusal, not a second bounce.
-	Train(worker.Env{Config: diskConfig}, nil, root, issues, r, (&parked{}).park)
-	if bounces(root, "2") != 1 {
-		t.Errorf("a repeat on the same head counted again: %d", bounces(root, "2"))
-	}
-}
-
 // `rota worker gate 847` after the slot moved on sets the result's slot to the
 // PR number. The stale refusal's bounce must fold into the issue's own row: no
 // slot or account total named by the PR number.

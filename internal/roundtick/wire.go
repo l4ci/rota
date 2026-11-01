@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
@@ -28,7 +29,7 @@ type ReadyPR struct {
 }
 
 // World is every outside seam a tick reads or acts through. The CLI
-// implements it over the real verbs; tests implement it with fakes.
+// implements its transport adapters; tests fake external boundaries.
 type World interface {
 	// TolerantRegistry never fails: a tick callback has no error return, and
 	// the tick reconciles strictly. Registry is the strict read.
@@ -39,8 +40,10 @@ type World interface {
 	// most once, after reconciliation.
 	Waiting() []ReadyPR
 	Reconcile(ctx context.Context) (round.Outcome, error)
-	RunGate(slot, base string) GateRun
-	RunTrain(targets []string, base string) TrainRun
+	// Landing prepares dependencies and options only. NewEnv owns invoking
+	// the domain lifecycle, so adapters cannot replace its ordering.
+	Landing(context.Context, postgate.Request) (postgate.Env, postgate.Request, error)
+	Root() string
 	// ReviewReadiness says why a done slot still waits for required reviews,
 	// and whether its state must go straight to the real gate.
 	ReviewReadiness(slot, base string) (why string, gateNow bool)
@@ -52,6 +55,7 @@ type World interface {
 	Review() Reviewer
 	Audit(Action)
 	Say(string)
+	Warn(string)
 	Now() time.Time
 }
 
@@ -121,13 +125,33 @@ func NewEnv(w World, cfg Config) Env {
 		return ok && p.Immediate
 	}
 	e.Head = k.head
-	e.RunGate = func(_ context.Context, target, base string) GateRun { return w.RunGate(target, base) }
+	e.RunGate = func(ctx context.Context, target, base string) GateRun {
+		env, req, err := w.Landing(ctx, postgate.Request{Gate: &worker.GateOpts{Slot: target, Base: base, NoWait: true}})
+		if err != nil {
+			return GateRun{Err: err}
+		}
+		run := env.Run(ctx, w.Root(), req).Gate
+		for _, warning := range run.Warnings {
+			w.Warn(warning)
+		}
+		return run
+	}
 	e.AwaitingReview = func(_ context.Context, sl Slot, base string) string {
 		why, now := w.ReviewReadiness(sl.Name, base)
 		k.bypass[sl.Name] = now
 		return why
 	}
-	e.RunTrain = func(_ context.Context, targets []string, base string) TrainRun { return w.RunTrain(targets, base) }
+	e.RunTrain = func(ctx context.Context, targets []string, base string) TrainRun {
+		env, req, err := w.Landing(ctx, postgate.Request{Train: &worker.TrainOpts{Targets: targets, Base: base, NoWait: true}})
+		if err != nil {
+			return TrainRun{Err: err}
+		}
+		run := env.Run(ctx, w.Root(), req).Train
+		for _, warning := range run.Warnings {
+			w.Warn(warning)
+		}
+		return run
+	}
 	e.Say = w.Say
 	e.OpenItems = func(context.Context) int { return w.OpenItems() }
 	e.Candidates = w.Candidates
