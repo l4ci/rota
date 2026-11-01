@@ -758,14 +758,7 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 // heldClaims is the open claims, earliest first: a tracker.ClaimStore's own
 // records, else the claim and release marker comments.
 func (b *Issues) heldClaims(n tracker.IssueKey) ([]string, error) {
-	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
-		return cs.Claims(b.ctx(), n)
-	}
-	comments, err := b.Tracker.Comments(b.ctx(), n)
-	if err != nil {
-		return nil, err
-	}
-	return openClaims(comments), nil
+	return HeldClaims(b.ctx(), b.Tracker, n)
 }
 
 func (b *Issues) putClaim(n tracker.IssueKey, claimID string) error {
