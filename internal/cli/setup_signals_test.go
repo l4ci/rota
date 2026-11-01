@@ -156,6 +156,34 @@ func TestSetupNoSignalKeepsSchemaDefault(t *testing.T) {
 	}
 }
 
+func TestSetupBaseBranchFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name, branch, want string
+	}{
+		{"main before origin", "main", "main"},
+		{"master before origin", "master", "master"},
+		{"trunk before origin", "trunk", "trunk"},
+		{"origin fallback", "work", "develop"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := newRepo(t, t.TempDir(), "repo", tc.branch)
+			gittest.Run(t, dir, "update-ref", "refs/remotes/origin/develop", "HEAD")
+			gittest.Run(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
+			code, out, _ := signalRun(t, dir, nil, "--list", "--json")
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, out)
+			}
+			got, evidence, has := sugg(t, out, "git.baseBranch")
+			if !has || got != tc.want {
+				t.Errorf("base suggestion = %q (present %v), want %q", got, has, tc.want)
+			}
+			if !strings.Contains(evidence, tc.want) {
+				t.Errorf("evidence = %q, want it to name %q", evidence, tc.want)
+			}
+		})
+	}
+}
+
 func TestSetupYesTakesSuggestions(t *testing.T) {
 	dir := signalRepo(t, "https://gitlab.com/acme/x.git")
 	code, out, _ := signalRun(t, dir, []string{"glab", "codex"}, "--yes")
