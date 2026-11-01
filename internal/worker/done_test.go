@@ -52,6 +52,8 @@ func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
 		switch strings.Join(args, " ") {
 		case "status --porcelain":
 			return git.Result{Stdout: r.status}, nil
+		case "remote get-url " + name:
+			return git.Result{ExitCode: 1}, nil
 		case "rev-parse --verify --quiet refs/remotes/" + name + "/ben/7-x":
 			if r.remote == "" {
 				return git.Result{ExitCode: 1}, nil
@@ -394,11 +396,16 @@ func TestDoneArchitectureReviewNeedsNoPR(t *testing.T) {
 type donePRForge struct {
 	Forge
 	info tracker.PRInfo
+	prs  []tracker.PR
 	err  error
 }
 
 func (f donePRForge) PRView(context.Context, int) (tracker.PRInfo, error) {
 	return f.info, f.err
+}
+
+func (f donePRForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	return f.prs, f.err
 }
 
 func (r *doneRig) forge(f donePRForge) {
@@ -492,6 +499,55 @@ func TestDonePRSectionWarnings(t *testing.T) {
 			}
 			if !slices.Equal(missing, tc.want) || len(res.Warnings) != len(tc.want) {
 				t.Fatalf("missing %q, want %q; warnings %q", missing, tc.want, res.Warnings)
+			}
+		})
+	}
+}
+
+func TestDoneWarnsForUnrecordedOpenPR(t *testing.T) {
+	r := newDoneRig(t, oneSlot, fastCfg)
+	r.pass("7", proof.FastTierCheck)
+	r.forge(donePRForge{prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Assumptions\nNone\n"}}})
+	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
+		t.Fatal(err)
+	}
+	var emitted []string
+	r.deps.Warn = func(message string) {
+		if sl := LoadRegistryTolerant(r.root).Slot("ben"); sl.State() != "busy" || sl.Event() != nil {
+			t.Error("warning emitted after done was recorded")
+		}
+		emitted = append(emitted, message)
+	}
+	res, err := r.done(DoneRequest{})
+	if err != nil || !res.Changed || r.state() != "done" {
+		t.Fatalf("res %+v err %v state %s", res, err, r.state())
+	}
+	if len(emitted) != 1 || !strings.Contains(emitted[0], "## Rulings") || !strings.Contains(emitted[0], ghURL) {
+		t.Fatalf("warnings %q, want a missing ## Rulings warning naming the discovered PR", emitted)
+	}
+}
+
+func TestDoneUnrecordedPRCleanCases(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		prs  []tracker.PR
+		err  error
+	}{
+		{name: "no open PR"},
+		{name: "another branch", prs: []tracker.PR{{Branch: "dana/8-y", URL: ghURL}}},
+		{name: "complete body", prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"}}},
+		{name: "forge unavailable", err: errors.New("forge offline")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newDoneRig(t, oneSlot, fastCfg)
+			r.pass("7", proof.FastTierCheck)
+			r.forge(donePRForge{prs: tc.prs, err: tc.err})
+			if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
+				t.Fatal(err)
+			}
+			res, err := r.done(DoneRequest{})
+			if err != nil || !res.Changed || r.state() != "done" || len(res.Warnings) != 0 {
+				t.Fatalf("res %+v err %v state %s", res, err, r.state())
 			}
 		})
 	}

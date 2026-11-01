@@ -166,22 +166,42 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	return markDone(env, req, dp, sl, id, res)
 }
 
-// donePRSections is advisory: only the slot's recorded open PR supplies a body.
-// No recorded PR makes no forge call; a forge that cannot answer leaves the
+// donePRSections is advisory: no open PR or an unreadable forge leaves the
 // gate to check it later.
 func donePRSections(env Env, req DoneRequest, dp DoneDeps, sl *Slot, res *DoneResult) {
-	pr, known := env.prInfoKnown(env.Ctx, req.Root, sl)
-	if !known || !strings.EqualFold(pr.State, "OPEN") {
+	body, pr, ok := donePRBody(env, req.Root, sl)
+	if !ok {
 		return
 	}
-	found := prSectionHeadings(pr.Body)
-	_, approvals := approvalsSection(pr.Body)
+	found := prSectionHeadings(body)
+	_, approvals := approvalsSection(body)
 	found["## approvals"] = approvals
 	for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
 		if !found[strings.ToLower(heading)] {
-			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", sl.PR(), heading))
+			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", pr, heading))
 		}
 	}
+}
+
+// donePRBody also handles the normal first done, before the poll records the
+// PR URL from ROTA-DONE or adopts it by branch. Discovery does not adopt it.
+func donePRBody(env Env, root string, sl *Slot) (body, pr string, ok bool) {
+	if sl.PR() != "" {
+		info, known := env.prInfoKnown(env.Ctx, root, sl)
+		return info.Body, sl.PR(), known && strings.EqualFold(info.State, "OPEN")
+	}
+	if sl.Branch() == "" {
+		return "", "", false
+	}
+	prs, known := env.openPRs(env.Ctx, root)
+	if known {
+		for _, p := range prs {
+			if p.Branch == sl.Branch() {
+				return p.Body, p.URL, true
+			}
+		}
+	}
+	return "", "", false
 }
 
 func doneWarning(dp DoneDeps, res *DoneResult, message string) {
