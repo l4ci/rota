@@ -20,7 +20,7 @@ func TestReviewScaffoldingNoBaseDoesNotAssumeMain(t *testing.T) {
 	gittest.Run(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
 	gittest.Run(t, repo, "checkout", "-q", "-b", "feat")
 	o := trRun(t, repo, "", "review", "scaffolding", "feat")
-	if o.code != 3 || !strings.Contains(o.stderr+o.stdout, "could not determine base branch") {
+	if o.code != 3 || !strings.Contains(o.stderr+o.stdout, noBaseMsg) {
 		t.Fatalf("code=%d out=%q err=%q; want exit 3 naming the unresolved base", o.code, o.stdout, o.stderr)
 	}
 }
