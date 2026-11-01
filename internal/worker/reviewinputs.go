@@ -113,7 +113,7 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 	if key, ok := tracker.ParseKey(target.Issue); ok && o.Issues != nil && (policy.NeedsIssue() || cross.Active() || lenses.UsesLabels()) {
 		issues, err := o.Issues()
 		if err != nil {
-			return nil, err
+			return nil, &ReviewDepthError{Stage: "issue-source", Msg: err.Error(), Err: err}
 		}
 		if _, none := issues.(tracker.NoIssues); !none {
 			src.Issue, src.Issues = key, issues

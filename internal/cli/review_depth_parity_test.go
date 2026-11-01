@@ -260,3 +260,36 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		}
 	})
 }
+
+// Constructing the issue source can fail before any issue is fetched. Preserve
+// the tracker exit class so scripts can distinguish unavailable dependencies.
+func TestReviewDepthIssueSourceFailureKeepsTrackerExit(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge":{"provider":"local"},"issues":{"source":"linear"},"ship":{"review":{"default":"full","labels":{"risk:high":"full"}}}}`)
+	code, out, errOut := rotaIn(t, root, "review", "depth", "nia/6-small", "--json")
+	if code != 5 || !strings.Contains(out+errOut, "issues.connection is not set") {
+		t.Fatalf("issue source failure: exit %d, want 5; stdout %s stderr %s", code, out, errOut)
+	}
+}
+
+func TestReviewDepthOtherInputFailuresKeepFailureExit(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat/small")
+	for _, tc := range []struct{ name, cfg, want string }{
+		{"config", `{"ship":{"review":{"default":"deep"}}}`, "run rota config check"},
+		{"forge", `{"forge":{"provider":"unknown"},"ship":{"review":"light"}}`, "could not reach the forge to read the PR body"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			write(t, filepath.Join(root, ".rota", "config.json"), tc.cfg)
+			code, out, errOut := rotaIn(t, root, "review", "depth", "feat/small", "--json")
+			if code != 1 || !strings.Contains(out+errOut, tc.want) {
+				t.Fatalf("%s failure: exit %d, want 1 and %q; stdout %s stderr %s", tc.name, code, tc.want, out, errOut)
+			}
+		})
+	}
+}
