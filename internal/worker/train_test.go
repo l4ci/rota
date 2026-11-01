@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"path/filepath"
@@ -135,6 +136,78 @@ func TestTrainRefusesBeforeMerging(t *testing.T) {
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateStale || res.Culprit != "b2" || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainAlreadyMergedPRTargets(t *testing.T) {
+	w := newWorld(t, "") // neither PR is recorded in the pool
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1")
+	gittest.Run(t, w.dir, "merge", "-q", "--no-ff", "FETCH_HEAD", "-m", "already landed")
+	trainWrite(t, w, "later.txt", "base moved again")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main", ":w1")
+	w.forge("state", "MERGED")
+	w.forge("head#8", "deleted-branch")
+	w.setPRBody("")
+	w.setConfig(`{"test":{"full":["false"]}}`) // no verification is needed
+	res, err := w.env(false).Train(bg, w.dir, TrainOpts{Targets: []string{"7", "8"}, Base: "main"})
+	if err != nil || res.Verdict != GatePass || res.Changed || len(res.Landed) != 0 || len(res.Verified) != 0 {
+		t.Fatalf("already-merged train: %+v, %v", res, err)
+	}
+	text := strings.Join(res.Notes, "\n") + res.Err + res.Hint
+	for _, pr := range []string{"7", "8"} {
+		if !strings.Contains(text, "ALREADY-MERGED "+pr) {
+			t.Errorf("missing already-merged report for %s: %s", pr, text)
+		}
+	}
+	if strings.Contains(text, "STALE") || strings.Contains(text, "tell slot") || strings.Contains(text, "bounce") {
+		t.Errorf("already-merged train suggests a bounce: %s", text)
+	}
+}
+
+type alreadyMergedForge struct {
+	Forge
+	Issues
+}
+
+func (f alreadyMergedForge) PRView(ctx context.Context, pr int) (tracker.PRInfo, error) {
+	info, err := f.Forge.PRView(ctx, pr)
+	if pr == 7 {
+		info.State = "MERGED"
+	}
+	return info, err
+}
+
+func TestTrainSkipsMergedPRAndLandsOpenPR(t *testing.T) {
+	w := slicePRTrain(t)
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1")
+	gittest.Run(t, w.dir, "merge", "-q", "--no-ff", "FETCH_HEAD", "-m", "already landed")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main", ":w1")
+	// The fake's merge endpoint uses the primary head; #7 is read-only here.
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	w.forge("head", "w2")
+	w.forge("sha", w.forgeWord("sha#8"))
+	e := w.env(false)
+	forge := e.Forge
+	e.Forge = func(p, d string, s tracker.Settings) (Forge, error) {
+		f, err := forge(p, d, s)
+		return alreadyMergedForge{Forge: f, Issues: f.(Issues)}, err
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"7", "8"}, Base: "main", Order: []string{"8", "7"}, FinalSlice: []string{"8"}})
+	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"8"}) || !res.Changed || !w.onMain("work2.txt") {
+		t.Fatalf("mixed merged/open train: %+v, %v", res, err)
+	}
+	if !strings.Contains(strings.Join(res.Notes, "\n"), "ALREADY-MERGED 7") {
+		t.Errorf("merged member not reported: %v", res.Notes)
+	}
+}
+
+func TestTrainPlanAlreadyMergedPRTarget(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.forge("state", "MERGED")
+	res, err := w.env(false).Train(bg, w.dir, TrainOpts{Targets: []string{"7"}, Base: "main", Plan: true})
+	if err != nil || res.Verdict != GatePlan || res.Plan == nil || len(res.Plan.Landable) != 0 || res.Changed {
+		t.Fatalf("already-merged preview: %+v, %v", res, err)
 	}
 }
 

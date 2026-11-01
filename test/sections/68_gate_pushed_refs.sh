@@ -90,8 +90,28 @@ set_forge base main; set_forge head other
 RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main --check-only)"
 [ "$RC" = 1 ] && [ "$(gt_verdict)" = pr-mismatch ] || fail "gate (c): wrong head branch must be pr-mismatch (rc=$RC): $(cat "$GT_DIR.out")"
 set_forge head w1; set_forge state MERGED
-RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main --check-only)"
-[ "$RC" = 1 ] && [ "$(gt_verdict)" = pr-mismatch ] || fail "gate (c): a non-open PR must be pr-mismatch (rc=$RC): $(cat "$GT_DIR.out")"
+for GT_MODE in check-only standalone; do
+  GT_FLAGS=()
+  if [ "$GT_MODE" = check-only ]; then GT_FLAGS+=(--check-only); fi
+  RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main "${GT_FLAGS[@]}")"
+  [ "$RC" = 0 ] && [ "$(gt_verdict)" = already-merged ] && [ "$(jget ok <"$GT_DIR.out")" = true ] \
+    || fail "gate (c): $GT_MODE merged PR must succeed as already-merged (rc=$RC): $(cat "$GT_DIR.out")"
+  [ "$(jget data.changed <"$GT_DIR.out")" = false ] || fail "gate (c): an already-merged PR changed nothing: $(cat "$GT_DIR.out")"
+  if grep -qE 'STALE|tell slot|bounce:' "$GT_DIR.out" "$GT_DIR.err"; then
+    fail "gate (c): an already-merged PR must not suggest a bounce: $(cat "$GT_DIR.out" "$GT_DIR.err")"
+  fi
+done
+RC="$(gt_gate "$ROTA_BIN" worker gate w1 --base main)"
+[ "$RC" = 0 ] && grep -q 'ALREADY-MERGED.*already merged into main' "$GT_DIR.out" \
+  || fail "gate (c): standalone merged PR must report already-merged in text (rc=$RC): $(cat "$GT_DIR.out" "$GT_DIR.err")"
+set_forge state CLOSED
+for GT_MODE in check-only standalone; do
+  GT_FLAGS=()
+  if [ "$GT_MODE" = check-only ]; then GT_FLAGS+=(--check-only); fi
+  RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main "${GT_FLAGS[@]}")"
+  [ "$RC" = 1 ] && [ "$(gt_verdict)" = pr-mismatch ] \
+    || fail "gate (c): $GT_MODE closed-unmerged PR must be pr-mismatch (rc=$RC): $(cat "$GT_DIR.out")"
+done
 pass "PR head SHA, head branch, base and state are checked against the verified branch"
 
 # (d) github merge: pinned to the verified SHA, confirmed on origin/main, then re-verified
