@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -466,26 +467,76 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 	t.Fatalf("no done row in the main checkout's ledger: %+v", es)
 }
 
-// TestWorkerDoneAcceptsDocumentedFastProof pins the contract's done gate end to
-// end: `rota proof record <ID> -- rota test run fast` (a stub rota on PATH
-// stands in for the nested run) leaves the test.fast receipt that
-// `rota worker done` reads back.
-func TestWorkerDoneAcceptsDocumentedFastProof(t *testing.T) {
+// Record through the CLI, then prove through worker.Done without supplying any
+// knowledge of command spelling. Also exercise the CLI's done wiring.
+func TestProofRecordFeedsWorkerDone(t *testing.T) {
 	stub := t.TempDir()
-	if err := os.WriteFile(filepath.Join(stub, "rota"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	write(t, filepath.Join(stub, "rota"), "#!/bin/sh\nexit 0\n")
+	if err := os.Chmod(filepath.Join(stub, "rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", stub+string(os.PathListSeparator)+os.Getenv("PATH"))
-	dir := doneProject(t, "go test ./...")
-	if code, out, errOut := rotaIn(t, dir, "proof", "record", "B07", "--", "rota", "test", "run", "fast"); code != 0 {
-		t.Fatalf("record: %d %s %s", code, out, errOut)
-	}
-	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
-	d := data(t, out)
-	if code != 0 || d["changed"] != true || d["missing"] != nil {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-	if slotState(t, dir) != "done" {
-		t.Error("slot not marked done")
+	for _, tc := range []struct {
+		name  string
+		args  []string
+		fail  bool
+		stale bool
+	}{
+		{name: "argv tier", args: []string{"rota", "test", "run", "fast"}},
+		{name: "shell tier", args: []string{"rota test run fast"}},
+		{name: "withdrawn tier", args: []string{"rota", "test", "run", "fast"}, fail: true},
+		{name: "stale tier", args: []string{"rota test run fast"}, stale: true},
+		{name: "individual command", args: []string{"true {files}"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := doneProject(t, "true {files}")
+			gittest.Run(t, dir, "branch", "proof-base")
+			write(t, filepath.Join(dir, "it's here.txt"), "changed")
+			gittest.Run(t, dir, "add", "it's here.txt")
+			gittest.Run(t, dir, "commit", "-q", "-m", "change")
+			gittest.Run(t, dir, "push", "-q", "origin", "feat/x")
+			args := append([]string{"proof", "record", "B07", "--base", "proof-base", "--json", "--"}, tc.args...)
+			code, out, stderr := rotaIn(t, dir, args...)
+			if code != 0 {
+				t.Fatalf("record: %d %s %s", code, out, stderr)
+			}
+			check := data(t, out)["check"].(string)
+			if tc.fail {
+				if code, out, stderr := rotaIn(t, dir, "proof", "add", "B07", "--check", check, "--result", "FAIL", "--evidence", "withdrawn"); code != 0 {
+					t.Fatalf("withdraw: %d %s %s", code, out, stderr)
+				}
+			}
+			if tc.stale {
+				gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "new head")
+				gittest.Run(t, dir, "push", "-q", "origin", "feat/x")
+			}
+			deps := testDeps()
+			deps.Getwd = func() (string, error) { return dir, nil }
+			c := &Ctx{Deps: deps}
+			// Only IO belongs to the caller: no list of accepted tier spellings.
+			res, err := worker.Done(worker.DoneRequest{Root: dir, PoolRoot: dir, Slot: "ben", Base: "proof-base"}, worker.DoneDeps{
+				Env:          deps.workerEnv(),
+				ChangedFiles: func(dir, base string) ([]string, error) { return changedFiles(c, dir, base) },
+				ExpandFiles: func(dir, base string, lines []string) ([]string, error) {
+					return expandFiles(c, dir, base, proof.ShellLines(lines)...)
+				},
+				ProofRows: func(id string) ([]proof.Row, error) {
+					rows, _, err := proof.Show(proof.Files(dir), id)
+					return rows, err
+				},
+			})
+			if tc.fail || tc.stale {
+				if err == nil || res == nil || len(res.Missing) != 1 || slotState(t, dir) != "busy" {
+					t.Fatalf("unproven row accepted: res=%+v err=%v", res, err)
+				}
+				return
+			}
+			if err != nil || res == nil || !res.Changed || len(res.Missing) != 0 || slotState(t, dir) != "done" {
+				t.Fatalf("recorded proof must satisfy done without caller spelling: res=%+v err=%v", res, err)
+			}
+			if code, out, stderr := rotaIn(t, dir, "worker", "done", "ben", "--base", "proof-base", "--json"); code != 0 || data(t, out)["changed"] != false {
+				t.Fatalf("CLI done: %d %s %s", code, out, stderr)
+			}
+		})
 	}
 }

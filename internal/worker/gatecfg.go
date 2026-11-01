@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -247,7 +248,7 @@ func (c GateConfig) forTier(t change.Tier, files []string) (cfg GateConfig, ran 
 		return c, tierFull, nil
 	}
 	cfg = c
-	cfg.Full, cfg.E2E = expandTierFiles(cmds, files), nil
+	cfg.Full, cfg.E2E = proof.Commands(files, proof.ShellLines(cmds)...), nil
 	skipped = []string{tierFull}
 	if len(c.E2E) > 0 {
 		skipped = append(skipped, tierE2E)

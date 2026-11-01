@@ -7,32 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 )
 
-// FastTierCheck is the check `rota proof record <ID> -- rota test run fast`
-// writes: the tier run as one command, which the worker contract recommends.
-const FastTierCheck = "rota test run fast"
-
-// MissingFastProof lists what the PASS rows at head leave unproven: nothing
-// when a row ran the whole tier (any of tierForms), else each test.fast
-// command without a PASS row of its own. The latest row for a check at head
-// decides (proof.Proves): a FAIL after a PASS, or a row at another sha, proves
-// nothing. The caller supplies tierForms because only it knows how
-// `proof record` stores a command (the cli's recordedCommand): `-- rota test
-// run fast` stores the quoted multi-arg form, `-- "rota test run fast"` the
-// plain one.
-func MissingFastProof(rows []proof.Row, head string, tierForms, want []string) (missing []string) {
-	for _, f := range tierForms {
-		if proof.Proves(rows, head, f) {
-			return nil
-		}
-	}
-	for _, w := range want {
-		if !proof.Proves(rows, head, w) {
-			missing = append(missing, w)
-		}
-	}
-	return missing
-}
-
 // OpenBundle is the slot's bundle, lead first, less every member whose item
 // is closed: a member leaves the bundle by closing, so done no longer asks for
 // its proof. The lead always stays. closed answers false for a member whose

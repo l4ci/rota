@@ -78,11 +78,10 @@ func doneDeps(c *Ctx, root, poolRoot string) worker.DoneDeps {
 	var be backlog.Backend
 	opened := false
 	return worker.DoneDeps{
-		Env:       c.deps().workerEnv().WithDefaults(),
-		Accounts:  c.deps().WorkerAccounts(),
-		TierForms: fastTierForms(),
+		Env:      c.deps().workerEnv().WithDefaults(),
+		Accounts: c.deps().WorkerAccounts(),
 		ExpandFiles: func(dir, base string, lines []string) ([]string, error) {
-			return expandFiles(c, dir, base, shellLines(lines)...)
+			return expandFiles(c, dir, base, proof.ShellLines(lines)...)
 		},
 		ChangedFiles: func(dir, base string) ([]string, error) { return changedFiles(c, dir, base) },
 		ProofRows:    func(id string) ([]proof.Row, error) { return proofRows(c, id) },
