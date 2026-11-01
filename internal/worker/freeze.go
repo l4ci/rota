@@ -174,20 +174,23 @@ func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Reco
 	return landfreeze.Save(p, r)
 }
 
-func (g *gate) stepFreeze() (bool, error) {
+func (_ gate) stepFreeze(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
+
 	r, err := landfreeze.Load(g.ctx, g.e.Git, g.root)
 	if err != nil {
 		g.verdict(GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
-		return true, nil
+		return g.finish(true, nil)
 	}
 	if r.Allows(g.target.Issue, g.pr) && (!r.Frozen() || r.Binds(g.o.Base)) {
-		return false, nil
+		return g.finish(false, nil)
 	}
 	g.verdict(GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
-	return true, nil
+	return g.finish(true, nil)
 }
 
-func (g *gate) freezeFailure(vr VerifyResult) error {
+func (g *gateIdentity) freezeFailure(vr VerifyResult) error {
 	pr := g.pr
 	if pr == "" {
 		pr = g.branch
@@ -218,11 +221,13 @@ func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, ch
 	return landfreeze.Save(p, r)
 }
 
-func (g *gate) stepClearFreeze() error {
+func (_ gate) stepClearFreeze(g gateIdentity) (gateIdentity, GateResult, bool, error) {
+	result := *g.res
+	g.res = &result
 	if g.o.CheckOnly || g.o.skipsVerify() || g.res.Verdict != GatePass || g.res.VerifySkipped {
-		return nil
+		return g.finish(false, nil)
 	}
-	return g.e.clearVerifiedFreeze(g.ctx, g.root, g.o.Base)
+	return g.finish(false, g.e.clearVerifiedFreeze(g.ctx, g.root, g.o.Base))
 }
 
 func (e Env) clearVerifiedFreeze(ctx context.Context, root, base string) error {

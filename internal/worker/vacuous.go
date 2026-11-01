@@ -193,7 +193,7 @@ func vacuousCommand(dir string, files []string, template string) (string, error)
 	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template), nil
 }
 
-func (g *gate) vacuousRun(before, after string) (bool, error) {
+func (g *gateReferences) vacuousRun(before, after string) (bool, error) {
 	r, err := g.e.checkVacuous(g.ctx, g.root, before, after, g.in.cfg.vacuous)
 	if err != nil {
 		return g.broke(err.Error())
@@ -214,34 +214,37 @@ func (g *gate) vacuousRun(before, after string) (bool, error) {
 
 // vacuousStage checks each train member independently of later members and
 // never reuses the full-tier cache. A failure names the owning member.
-func (t *trainRun) vacuousStage() (bool, error) {
+func (t *trainRun) vacuousStage(v trainVerified) (trainVerified, TrainResult, bool, error) {
+	p := v.plan
+
 	if t.o.NoVerify {
-		return false, nil
+		return v, v.res, false, nil
 	}
-	for i := 0; i < t.passing; i++ {
-		r, err := t.e.checkVacuous(t.ctx, t.root, t.tips[i], t.tips[i+1], t.in.cfg.vacuous)
+	for i := 0; i < v.passing; i++ {
+		r, err := t.e.checkVacuous(t.ctx, t.root, p.tips[i], p.tips[i+1], p.in.cfg.vacuous)
 		if err != nil {
-			return t.broke(err.Error())
+			done, err := trainBrokeResult(&v.res, err.Error())
+			return v, v.res, done, err
 		}
 		if r.note != "" {
-			t.res.Notes = append(t.res.Notes, t.res.Members[i].Target+": "+r.note)
+			v.res.Notes = append(v.res.Notes, v.res.Members[i].Target+": "+r.note)
 		}
 		if r.verdict == "" {
 			continue
 		}
-		for j := range t.res.Members {
-			t.res.Members[j].Culprit = false
+		for j := range v.res.Members {
+			v.res.Members[j].Culprit = false
 		}
-		t.res.Members[i].Culprit = true
-		t.res.Culprit = t.res.Members[i].Target
-		t.res.Verdict, t.res.Err = r.verdict, r.detail+"; nothing landed"
-		t.res.Hint = "fix the selected tests, then re-run the train"
+		v.res.Members[i].Culprit = true
+		v.res.Culprit = v.res.Members[i].Target
+		v.res.Verdict, v.res.Err = r.verdict, r.detail+"; nothing landed"
+		v.res.Hint = "fix the selected tests, then re-run the train"
 		if r.verdict == GateVacuousTests {
-			t.res.Hint = "add an assertion that fails with non-test changes reverted, then re-run the train; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
+			v.res.Hint = "add an assertion that fails with non-test changes reverted, then re-run the train; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
 		}
 		// Unlike tier bisection this check has not verified the earlier prefix on
 		// its own. Refuse the whole train, including under --land-green.
-		return true, nil
+		return v, v.res, true, nil
 	}
-	return false, nil
+	return v, v.res, false, nil
 }

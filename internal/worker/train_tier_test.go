@@ -67,12 +67,10 @@ func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 	dir := tierRepo(t, "x.go") // feat changes code
 	rev := func(ref string) string { return gittest.Run(t, dir, "rev-parse", ref) }
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"docs":["true"]}}`))
-	run := func(o TrainOpts) *trainRun {
-		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o, in: gateInput{cfg: cfg},
-			baseSHA: rev("main"), heads: []string{rev("feat")}}
-		tr.res.Members = []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}
-		tr.pickTier()
-		return tr
+	run := func(o TrainOpts) trainPlan {
+		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o}
+		p := trainPlan{in: gateInput{cfg: cfg}, baseSHA: rev("main"), heads: []string{rev("feat")}, res: TrainResult{Members: []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}}}
+		return tr.pickTier(p)
 	}
 	if tr := run(TrainOpts{}); tr.res.Tier != "full" || tr.tierCfg != nil {
 		t.Fatalf("a docs-checked member whose head holds code verified as %q", tr.res.Tier)
@@ -105,13 +103,13 @@ func TestTrainTierSumsMemberLines(t *testing.T) {
 		heads = append(heads, gittest.Run(t, dir, "rev-parse", n))
 	}
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"small":["true"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`))
-	pick := func(n int) *trainRun {
-		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}
+	pick := func(n int) trainPlan {
+		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir}
+		p := trainPlan{in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}
 		for i := 0; i < n; i++ {
-			tr.res.Members = append(tr.res.Members, TrainMember{Target: "m", Branch: "m", Tier: "small"})
+			p.res.Members = append(p.res.Members, TrainMember{Target: "m", Branch: "m", Tier: "small"})
 		}
-		tr.pickTier()
-		return tr
+		return tr.pickTier(p)
 	}
 	if tr := pick(1); tr.res.Tier != "small" {
 		t.Fatalf("one 90-line member: tier %q, want small", tr.res.Tier)
