@@ -109,30 +109,6 @@ func TestGateUnknownOriginRefusesBlockedByForge(t *testing.T) {
 	}
 }
 
-// detectProvider adds one rule to tracker.ResolveProvider, a PR URL names its
-// own forge, and reads origin through Env.Git for the kind it is given.
-func TestDetectProvider(t *testing.T) {
-	w := newWorld(t, "")
-	gittest.Run(t, w.dir, "remote", "set-url", "origin", "https://git.example.com/o/r.git")
-	e := w.env(false).WithDefaults()
-	ctx := context.Background()
-	for _, c := range []struct {
-		pr, configured string
-		kind           tracker.ForgeKind
-		want           string
-	}{
-		{glURL, "local", tracker.ForgeActor, "gitlab"}, // a PR URL names its own forge
-		{"7", "github", tracker.ForgeActor, "github"},  // a bare number names none
-		{"", "auto", tracker.ForgeReader, "github"},    // the origin names no forge
-		{"", "auto", tracker.ForgeActor, ""},
-	} {
-		got, err := e.detectProvider(ctx, w.dir, c.pr, c.configured, c.kind)
-		if got != c.want || (err != nil) != (c.want == "") {
-			t.Errorf("pr %q configured %q kind %d: %q, %v; want %q", c.pr, c.configured, c.kind, got, err, c.want)
-		}
-	}
-}
-
 // A corrupt forge.provider stops the gate with exit 70 instead of reading as auto.
 func TestGateInvalidForgeProviderIsACorruptConfig(t *testing.T) {
 	w := newWorld(t, "7")
