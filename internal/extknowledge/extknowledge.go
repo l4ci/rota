@@ -5,13 +5,14 @@
 package extknowledge
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Files of the knowledge repo.
@@ -41,7 +42,7 @@ var (
 // Env is everything the package reaches outside its own memory.
 type Env struct {
 	Git      git.Runner
-	Proc     proc.Runner // runs gh
+	NewForge func(context.Context, string) (tracker.Forge, error) // resolves the knowledge clone's forge
 	Now      func() time.Time
 	StateDir string // per-clone fetch stamps live here
 	TTL      time.Duration
