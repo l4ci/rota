@@ -21,9 +21,9 @@ import (
 // doneProject is a backlog project whose slot "ben" holds B07 on branch feat/x.
 func doneProject(t *testing.T, fast string) string {
 	dir := backlogProject(t)
-	cfg := `{}`
+	cfg := `{"forge":{"provider":"local"}}`
 	if fast != "" {
-		cfg = `{"test":{"fast":["` + fast + `"]}}`
+		cfg = `{"forge":{"provider":"local"},"test":{"fast":["` + fast + `"]}}`
 	}
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
@@ -115,6 +115,23 @@ func (f doneForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, f.err
 }
 
+func TestWorkerDoneUnrecordedPRWarnings(t *testing.T) {
+	dir := doneProject(t, "")
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"forge":{"provider":"github"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deps := testDeps()
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {
+			return doneForge{body: "## Approvals\nNone\n## Assumptions\nNone\n"}, nil
+		}}
+	}
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--json")
+	if code != 0 || slotState(t, dir) != "done" || !strings.Contains(out, "## Rulings") || !strings.Contains(stderr, "## Rulings") {
+		t.Fatalf("unrecorded PR must warn in stderr and JSON without refusing done: %d %s %s", code, out, stderr)
+	}
+}
+
 func TestWorkerDoneOptionalForge(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -123,7 +140,11 @@ func TestWorkerDoneOptionalForge(t *testing.T) {
 	}{{"undeterminable", true, 0}, {"unreachable", true, 0}, {"unmarked", false, 4}} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, _, deps := acceptanceDoneProject(t)
-			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"issues":{"source":"github"}}`), 0o644); err != nil {
+			cfg := `{"issues":{"source":"github"}}`
+			if tc.name == "undeterminable" {
+				cfg = `{"issues":{"source":"github"},"forge":{"provider":"local"}}`
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			if tc.mark {
@@ -137,8 +158,8 @@ func TestWorkerDoneOptionalForge(t *testing.T) {
 			base := deps.WorkerEnv
 			deps.WorkerEnv = func() worker.Env {
 				e := base()
-				// Use the real resolver against the fixture's local bare
-				// origin; the unknown forge fails before any forge CLI runs.
+				// The local forge and failed forge read must both keep
+				// the acceptance fallback without running a real CLI.
 				e.Forge = nil
 				if tc.name == "unreachable" {
 					e.Forge = func(string, string, tracker.Settings) (worker.Forge, error) {
@@ -287,7 +308,7 @@ func TestWorkerDoneFileAcceptance(t *testing.T) {
 	deps.WorkerEnv = func() worker.Env {
 		e := base()
 		e.Forge = func(string, string, tracker.Settings) (worker.Forge, error) {
-			t.Fatal("file-mode done must not look up a forge")
+			t.Fatal("a local forge must not invoke a forge adapter")
 			return nil, nil
 		}
 		return e
@@ -384,7 +405,7 @@ func pushWorktreeBranch(t *testing.T, main, wt, branch string) {
 // {files} is the slot branch's diff, from whichever directory the verb runs.
 func TestWorkerDoneFromWorktree(t *testing.T) {
 	main := backlogProject(t)
-	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte(`{"test":{"fast":["true {files}"]}}`), 0o644)
+	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte(`{"forge":{"provider":"local"},"test":{"fast":["true {files}"]}}`), 0o644)
 	// Proof detail files are untracked noise; ignore them so {files} is stable.
 	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/*\n!.rota/config.json\n!.rota/BACKLOG.md\n"), 0o644)
 	gittest.Run(t, main, "add", ".gitignore", ".rota/config.json", ".rota/BACKLOG.md")
@@ -430,7 +451,7 @@ func TestWorkerDoneFromWorktree(t *testing.T) {
 // work.accounts reads round.accounts from the main checkout: the ledger row
 // carries the headroom of the slot's account (#1190).
 func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
-	main := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	main := workerProject(t, `{"forge":{"provider":"local"},"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	wt := filepath.Join(main, ".worktrees", "ben")
 	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/\n"), 0o644)
 	gittest.Run(t, main, "add", ".gitignore")
@@ -438,7 +459,7 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 	gittest.Run(t, main, "worktree", "add", "-q", "-b", "ben/x", wt)
 	pushWorktreeBranch(t, main, wt, "ben/x")
 	os.MkdirAll(filepath.Join(wt, ".rota"), 0o755)
-	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644)
+	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(`{"forge":{"provider":"local"},"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644)
 	os.WriteFile(filepath.Join(main, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"ben","branch":"ben/x","task":"B07","state":"busy","kind":"claude","account":"work","worktree":"`+wt+`"}]}`), 0o644)
 
