@@ -359,15 +359,11 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	list := lookupVerdicts(c, t)
 	records := []any{}
 	var lines []string
-	for _, kind := range verdict.BranchKinds {
-		r, ok := verdict.Latest(list, kind)
-		if !ok {
-			continue
-		}
+	for _, r := range verdict.LatestBranchRecords(list) {
 		o := r.Object()
 		o.Set("stale", !verdict.AtHead(r, t.head))
 		records = append(records, o)
-		line := kind + " " + r.Verdict + " @ " + r.Sha
+		line := r.Kind + " " + r.Verdict + " @ " + r.Sha
 		if who := strings.TrimSpace(r.Harness + " " + r.Model); who != "" {
 			line += " (" + who + ")"
 		}

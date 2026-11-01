@@ -80,12 +80,7 @@ func TrainBlocked(records []verdict.Record) bool {
 // PR or a review of a previous head cannot make a fresh review expire early.
 func reviewReadySince(records []verdict.Record, head string) time.Time {
 	var since time.Time
-	list := verdict.ForHead(records, head)
-	for _, kind := range append([]string{verdict.ReviewSpec, verdict.ReviewQuality, verdict.ReviewCross, verdict.SecondOpinion}, verdict.LensKinds...) {
-		r, ok := verdict.Latest(list, kind)
-		if !ok || !verdict.AtHead(r, head) {
-			continue
-		}
+	for _, r := range verdict.ReadinessReviewsAtHead(records, head) {
 		if at, err := stamp.Parse(r.RecordedAt); err == nil && at.After(since) {
 			since = at
 		}

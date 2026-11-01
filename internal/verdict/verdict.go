@@ -67,7 +67,7 @@ const (
 
 // BranchKinds are the kinds recorded against a branch, in the order
 // `verdict show` lists them.
-var BranchKinds = []string{ReviewSpec, ReviewQuality, ReviewCross, ReviewSecurity, ReviewPerf, ReviewUX, SecondOpinion, QA, Behaviour}
+var BranchKinds = append(slices.Clone(readinessReviewKinds), QA, Behaviour)
 
 // LensKinds are the lens review kinds, one per lens name.
 var LensKinds = []string{ReviewSecurity, ReviewPerf, ReviewUX}
@@ -637,12 +637,9 @@ func Recorded(root, branch, head string) []string {
 
 // RecordedIn is Recorded over a branch's records already in hand.
 func RecordedIn(records []Record, head string) []string {
-	list := ForHead(records, head)
 	var kinds []string
-	for _, k := range []string{ReviewSpec, ReviewQuality} {
-		if r, ok := Latest(list, k); ok && AtHead(r, head) {
-			kinds = append(kinds, k)
-		}
+	for _, r := range CoreReviewsAtHead(records, head) {
+		kinds = append(kinds, r.Kind)
 	}
 	return kinds
 }
