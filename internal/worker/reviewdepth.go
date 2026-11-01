@@ -30,9 +30,7 @@ type ReviewSources struct {
 	// Members are the other issues of a bundled slot (Issue is the lead). Each is
 	// read like the lead and the highest depth any of them requires wins.
 	Members []tracker.IssueKey
-	Issues  interface {
-		Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
-	}
+	Issues  ReviewIssues
 	// PRBody reads the PR description for its Door line; nil when there is no PR.
 	PRBody func() (string, error)
 	// Cross is the cross-harness review requirement's settings (#1612); its
@@ -52,6 +50,9 @@ type ReviewSources struct {
 
 // ReviewDepth is a resolved depth with the inputs it was read from.
 type ReviewDepth struct {
+	// HasSpec and Members identify the review set gathered by BuildReviewInputs.
+	HasSpec bool
+	Members []tracker.IssueKey
 	config.ReviewDecision
 	Changed int
 	Labels  []string
