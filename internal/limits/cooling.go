@@ -1,6 +1,10 @@
 package limits
 
-import "time"
+import (
+	"time"
+
+	"github.com/l4ci/rota/internal/worker"
+)
 
 // Cooling are the accounts of the harness kind whose limit has not reset yet,
 // with the reset time. A limit resolved by moving the issue (StatusSwitched)
@@ -29,10 +33,14 @@ func Cooling(root, kind string, now time.Time) map[string]time.Time {
 // not excluded and not cooling, in configured order.
 func LoggedPick(root, kind string, logins []string, exclude string, now time.Time) (string, bool) {
 	cooling := Cooling(root, kind, now)
+	meters := make([]worker.Meter, 0, len(logins))
 	for _, l := range logins {
-		if _, spent := cooling[l]; !spent && l != exclude {
-			return l, true
+		verdict := worker.VerdictUnknown
+		if _, spent := cooling[l]; spent {
+			verdict = worker.VerdictCooling
 		}
+		meters = append(meters, worker.Meter{Name: l, Verdict: verdict})
 	}
-	return "", false
+	m, ok, _ := worker.SelectAccount(meters, worker.AccountSelection{Exclude: []string{exclude}})
+	return m.Name, ok
 }
