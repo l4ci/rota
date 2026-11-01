@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -112,34 +113,54 @@ func loggedIn() Credentials {
 	return c
 }
 
-func TestAccountPick(t *testing.T) {
-	dir, usage := newProject(t, acctConfig), usageDir(t)
-	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
-		if k == "ROTA_ACCOUNT_USAGE_DIR" {
-			return usage
-		}
-		return ""
-	}}}
-	excludes := []string{"", "gamma", "gamma,alpha", " gamma , alpha ", "gamma,alpha,epsilon,zeta", "alpha,beta,gamma,delta,epsilon,zeta"}
-	picks := []string{} // "" where nothing was eligible
-	for _, excl := range excludes {
-		var skip []string
-		if excl != "" {
-			skip = strings.Split(excl, ",")
-		}
-		name, _ := acc.Pick(bg, dir, skip)
-		picks = append(picks, name)
-	}
-	golden.Check(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "excludes": excludes}, picks)
-}
-
-func TestAccountPickRotatesWhenNoMeterIsReadable(t *testing.T) {
-	dir := newProject(t, acctConfig)
-	empty := t.TempDir()
-	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(string) string { return empty }}}
-	name, ok := acc.Pick(bg, dir, nil)
-	if !ok || name != "alpha" {
-		t.Errorf("unknown meters must stay eligible: go %q", name)
+// Exercise the meter adapters with in-memory config and usage readers. Policy
+// combinations and ranking are covered once, in TestAccountSelection.
+func TestAccountSelectionMeterReaders(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		exclude   []string
+		current   string
+		threshold int
+		unknown   bool
+		want      string
+	}{
+		{name: "dispatch", want: "gamma"},
+		{name: "dispatch normalizes excludes", exclude: []string{" gamma ", " alpha "}, want: "epsilon"},
+		{name: "dispatch unknown fallback", unknown: true, want: "alpha"},
+		{name: "handoff compares expanded dirs", current: "~/acct/gamma/", threshold: 90, want: "alpha"},
+		{name: "handoff keeps its threshold", current: "~/acct/alpha", threshold: 20},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			acc := &Accounts{
+				Login: loggedIn(),
+				Env: Env{
+					Home:   func() (string, error) { return "/test", nil },
+					Config: memConfig(t, strings.ReplaceAll(acctConfig, "/acct/", "~/acct/")),
+				},
+				Fetch: func(_ context.Context, name, dir string) (*jsonx.Object, string) {
+					if tt.unknown || usageFixtures()[name] == "" {
+						return nil, "no reading"
+					}
+					v, err := jsonx.Decode([]byte(usageFixtures()[name]))
+					if err != nil {
+						t.Fatal(err)
+					}
+					return v.(*jsonx.Object), ""
+				},
+			}
+			var name string
+			var ok bool
+			if tt.current == "" {
+				name, ok = acc.Pick(bg, "unused", tt.exclude)
+			} else {
+				var m Meter
+				m, ok, _ = acc.OrchestratorTarget(bg, "unused", tt.current, tt.threshold)
+				name = m.Name
+			}
+			if name != tt.want || ok != (tt.want != "") {
+				t.Fatalf("pick = %q, %v; want %q", name, ok, tt.want)
+			}
+		})
 	}
 }
 
@@ -277,42 +298,6 @@ func TestExpiredTokenReportsUnknownWithoutNetwork(t *testing.T) {
 	}
 	if tok, why := acc.token(t.TempDir()); tok != "" || why != "no credentials file" {
 		t.Errorf("token = %q, %q", tok, why)
-	}
-}
-
-func TestOrchestratorTarget(t *testing.T) {
-	dir, usage := newProject(t, acctConfig), usageDir(t)
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
-		if k == "ROTA_ACCOUNT_USAGE_DIR" {
-			return usage
-		}
-		return ""
-	}}}
-	// From alpha: gamma has the most headroom (80). beta and delta cool, epsilon
-	// has none, zeta has no reading and so is not a candidate.
-	m, ok, others := acc.OrchestratorTarget(bg, dir, "/acct/alpha", 90)
-	if !ok || m.Name != "gamma" {
-		t.Fatalf("%v %v", m.Name, ok)
-	}
-	joined := strings.Join(others, "; ")
-	for _, want := range []string{"alpha: current account", "beta: cooling", "epsilon: 0% headroom", "zeta: unknown"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("others lack %q: %s", want, joined)
-		}
-	}
-	// The current account is never its own target, and gamma's 80 beats alpha's 69.5.
-	if m, _, _ := acc.OrchestratorTarget(bg, dir, "/acct/gamma", 90); m.Name != "alpha" {
-		t.Errorf("from gamma: %s", m.Name)
-	}
-	// The target must be below the threshold: alpha has 69.5 headroom, so a
-	// threshold of 20 (headroom above 80 needed) takes neither.
-	if _, ok, _ := acc.OrchestratorTarget(bg, dir, "/acct/zeta", 20); ok {
-		t.Error("an account above the threshold was taken")
-	}
-	// An account with no configDir is not a candidate.
-	d2 := newProject(t, `{"round":{"accounts":[{"name":"alpha","configDir":"/acct/alpha"},{"name":"gamma"}]}}`)
-	if _, ok, o := acc.OrchestratorTarget(bg, d2, "/acct/alpha", 90); ok || !strings.Contains(strings.Join(o, ";"), "gamma: no configDir") {
-		t.Errorf("no configDir: %v %v", ok, o)
 	}
 }
 

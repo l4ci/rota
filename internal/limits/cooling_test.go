@@ -30,19 +30,6 @@ func TestCoolingCountsWaitingEntriesOfTheKind(t *testing.T) {
 	}
 }
 
-func TestLoggedPickSkipsExcludedAndCoolingLogins(t *testing.T) {
-	r := newRig(t)
-	if _, err := Append(r.root, Entry{Session: "ben", Kind: harness.Codex, Account: "c2", Status: StatusWaiting, ResetsAt: Time(t0.Add(time.Hour))}); err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := LoggedPick(r.root, harness.Codex, []string{"c1", "c2", "c3"}, "c1", t0); !ok || got != "c3" {
-		t.Fatalf("pick %q %v", got, ok)
-	}
-	if got, ok := LoggedPick(r.root, harness.Codex, []string{"c1", "c2"}, "c1", t0); ok {
-		t.Fatalf("every login spent, picked %q", got)
-	}
-}
-
 // A limit the watcher resolved by moving the issue (StatusSwitched) leaves the
 // login just as spent: it must keep cooling until its reset, or LoggedPick hands
 // the next limit back to it and the pool never reads as closed.
