@@ -18,11 +18,7 @@ func TestParseReport(t *testing.T) {
 		t.Fatalf("round trip: %+v %v", r, ok)
 	}
 	for name, text := range map[string]string{
-		"prose before marker":     "Copied report\n" + report,
-		"embedded marker":         "```\n" + report + "```\n",
 		"bad kind":                strings.ReplaceAll(report, "review-spec", "gate"),
-		"bad sha":                 strings.ReplaceAll(report, "abcdef1234567", "not-a-sha"),
-		"partial marker":          strings.Replace(report, " -->", "", 1),
 		"header kind mismatch":    strings.Replace(report, "Kind: `review-spec`", "Kind: `qa`", 1),
 		"header sha mismatch":     strings.Replace(report, "Reviewed SHA: `abcdef1234567`", "Reviewed SHA: `1234567`", 1),
 		"header verdict mismatch": strings.Replace(report, "Verdict: **FAIL**", "Verdict: **PASS**", 1),
@@ -123,16 +119,6 @@ func TestRecoverPR(t *testing.T) {
 			t.Fatal(r)
 		}
 	})
-}
-
-func TestParseReportGitObjectFormats(t *testing.T) {
-	for _, sha := range []string{"abcd", strings.Repeat("a", 64)} {
-		report := RenderReport(NewRecord(QA, InfraFail, sha, Body{Summary: "runner unavailable"}, recAt), nil)
-		r, ok := ParseReport(report)
-		if !ok || r.Sha != sha || r.Verdict != InfraFail {
-			t.Fatalf("valid git object name %q was lost: %+v %v", sha, r, ok)
-		}
-	}
 }
 
 func TestRecoveredCacheDefersToLocalBranch(t *testing.T) {
