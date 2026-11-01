@@ -663,7 +663,7 @@ the worker records again. With `test.fast` unset it warns and skips that check. 
 marked `done`.
 
 Before recording done, the verb also warns for each missing `## Approvals`,
-`## Rulings` or `## Assumptions` heading in the branch's open PR. Add the missing
+`## Rulings` or `## Assumptions` heading in the slot's recorded open PR. Add the missing
 sections before review; `None` or empty content is allowed. These warnings do not
 block done. With no open PR or an unavailable forge, this check is skipped.
 
