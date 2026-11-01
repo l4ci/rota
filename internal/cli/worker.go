@@ -777,19 +777,7 @@ type gateRunOpts struct {
 }
 
 // gateRun is one gate run and the bookkeeping that followed it.
-type gateRun struct {
-	Result worker.GateResult
-	Err    error
-	// Issue is the item the gate acted on, as the result names it.
-	Issue string
-	// Refused: the verdict is an exit-4 refusal; nothing landed and no
-	// bookkeeping ran.
-	Refused bool
-	// Book is what the post-gate bookkeeping did; BookErr why it failed. The
-	// verdict stands either way.
-	Book    postgate.Outcome
-	BookErr error
-}
+type gateRun = postgate.GateRun
 
 // lazyItemBody reads item bodies for the behaviour run (#899, #915). The
 // backlog opens on the first item read, once: a gate or train that never
@@ -808,25 +796,25 @@ func lazyItemBody(c *Ctx, root string) func(issue string) (string, bool, error) 
 	}
 }
 
-// runGate runs the merge gate for one slot and does the item bookkeeping after
-// a real run. `worker gate` and the round autopilot both go through it, so the
-// autopilot reads the result, not a verb's JSON.
-func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
+// prepareGate supplies the CLI approval and input adapters for a domain run.
+func prepareGate(c *Ctx, ctx context.Context, root string, o gateRunOpts) (postgate.Env, postgate.Request, error) {
 	policy, err := mergePolicy(c)
+	if err != nil {
+		return postgate.Env{}, postgate.Request{}, err
+	}
+	opts := worker.GateOpts{NoWait: o.NoWait, Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)}
+	return landingEnv(c, ctx, root), postgate.Request{Gate: &opts}, nil
+}
+
+func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
+	ctx, stop := workerContext()
+	defer stop()
+	env, req, err := prepareGate(c, ctx, root, o)
 	if err != nil {
 		return gateRun{Err: err}
 	}
-	ctx, stop := workerContext()
-	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{NoWait: o.NoWait, Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
-	if !o.CheckOnly {
-		postGateReport(c, root, r)
-	}
-	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
-	if run.Refused || err != nil || o.CheckOnly {
-		return run
-	}
-	run.Book, run.BookErr = postgate.Gate(workerEnvCtx(c, ctx), root, r.Issue, r, parkNeedsHuman(c, root))
+	run := env.Run(ctx, root, req).Gate
+	reportWarnings(c, run.Warnings)
 	return run
 }
 

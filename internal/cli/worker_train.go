@@ -131,50 +131,36 @@ type trainRunOpts struct {
 }
 
 // trainRun is one train run and the bookkeeping that followed it.
-type trainRun struct {
-	Result  worker.TrainResult
-	Err     error
-	Refused bool
-	// Book lists the bookkeeping steps that failed; the verdict stands.
-	Book []postgate.Failure
-}
+type trainRun = postgate.TrainRun
 
-// runTrain verifies and lands several PRs as one train and does the item
-// bookkeeping after it, as runGate does for one slot. `worker train` and the
-// round autopilot both go through it.
-func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
+// prepareTrain supplies the CLI approval and input adapters for a domain run.
+func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (postgate.Env, postgate.Request, error) {
 	policy, err := mergePolicy(c)
 	if err != nil {
-		return trainRun{Err: err}
+		return postgate.Env{}, postgate.Request{}, err
 	}
 	approve := func(files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
 		req.Thread = func() (worker.ApprovalThread, error) { return worker.SlotApprovalThread(root, o.Targets[0]) }
 		return clearMerge(c, policy, "train "+strings.Join(o.Targets, ", ")+" into "+o.Base, o.Confirm, req, files, nil)
 	}
+	syncBase, err := milestoneSyncBase(c, ctx, root, o.Base)
+	if err != nil {
+		return postgate.Env{}, postgate.Request{}, err
+	}
+	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)}
+	return landingEnv(c, ctx, root), postgate.Request{Train: &opts}, nil
+}
+
+func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	ctx, stop := workerContext()
 	defer stop()
-	issues := make(map[string]string, len(o.Targets)) // a landed PR drops its queued record, so read before
-	reg, _ := worker.LoadRegistry(root)               // the train refuses a corrupt registry itself
-	for _, t := range o.Targets {
-		if gt, err := reg.GateTargetAny(t); err == nil {
-			issues[t] = gt.Issue
-		}
-	}
-	round := &worker.RoundMemo{}
-	syncBase, err := milestoneSyncBase(c, ctx, root, o.Base)
+	env, req, err := prepareTrain(c, ctx, root, o)
 	if err != nil {
 		return trainRun{Err: err}
 	}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
-	if !o.Plan {
-		postTrainReports(c, root, issues, r)
-	}
-	run := trainRun{Result: r, Err: err, Refused: r.Refused(err)}
-	if run.Refused || err != nil || o.Plan {
-		return run
-	}
-	run.Book = postgate.Train(workerEnvCtx(c, ctx), round, root, issues, r, parkNeedsHuman(c, root))
+	run := env.Run(ctx, root, req).Train
+	reportWarnings(c, run.Warnings)
 	return run
 }
 
