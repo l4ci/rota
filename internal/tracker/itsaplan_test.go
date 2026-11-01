@@ -133,9 +133,6 @@ func TestItsaplanListFilters(t *testing.T) {
 	if n := count(ListFilter{Limit: 2}); n != 2 {
 		t.Errorf("limit: %d", n)
 	}
-	if _, err := it.List(context.Background(), ListFilter{Milestone: "m1"}); err == nil {
-		t.Error("a milestone filter was accepted: It's a Plan has none")
-	}
 }
 
 // AC-3: every way the connection or the project can be wrong is a

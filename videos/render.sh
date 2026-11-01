@@ -64,7 +64,7 @@ render_one() {
   rm -rf "$work"; mkdir -p "$work/public" "$OUT" "$VIDEOS/snapshots"
 
   echo "[$slug] capture"
-  python3 "$REPO/scripts/videos.py" parse "$script" > "$work/script.json"
+  python3 "$REPO/scripts/videos.py" parse "$script" --root "$VIDEOS" > "$work/script.json"
   python3 "$REPO/scripts/videos.py" capture "$script" --bin "$bin" --write "$VIDEOS/snapshots/$slug.json"
 
   echo "[$slug] voice"
@@ -104,19 +104,21 @@ PY
   done
 
   node "$R/vtt.mjs" "$work/props.json" > "$OUT/$slug.vtt"
-  stamp "$slug" "$script" "$bin"
+  stamp "$slug" "$work/script.json" "$bin"
   budget "$slug"
 }
 
-stamp() { # manifest entry: rota version + source hash + output hashes
+stamp() { # manifest entry: rota version + render-input hashes + output hashes
   python3 - "$OUT" "$1" "$2" "$3" <<'PY'
 import hashlib, json, os, subprocess, sys
-out, slug, script, rota = sys.argv[1:5]
+out, slug, parsed, rota = sys.argv[1:5]
+source = json.load(open(parsed))
 h = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
 ver = subprocess.run([rota, 'version'], capture_output=True, text=True).stdout.split()[1]
 mp = os.path.join(out, 'manifest.json')
 m = json.load(open(mp)) if os.path.exists(mp) else {'episodes': {}}
-m['episodes'][slug] = {'rota_version': ver, 'source_hash': h(script),
+m['episodes'][slug] = {'rota_version': ver, 'source_hash': source['source_hash'],
+                       'source_inputs': source['source_inputs'],
                        'outputs': {f: h(os.path.join(out, f)) for f in (slug + '.mp4', slug + '.vertical.mp4', slug + '.vtt')}}
 m['episodes'] = dict(sorted(m['episodes'].items()))
 json.dump(m, open(mp, 'w'), indent=1); open(mp, 'a').write('\n')
