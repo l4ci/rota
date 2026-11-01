@@ -115,7 +115,7 @@ See [configuration](configuration.md) for the full `work` block.
 
 The change tier also sets the depth: a docs-only diff gets `none`, even under `full`, and a small one is capped at `light`; a label, a `Door: one-way` line or a `paths` match still raises it. `rota change classify` shows the tier; the rules and the `change.*` keys are in [configuration](configuration.md#change).
 
-`rota review depth`, the verdict depth nudge and the merge gate use the same issue, bundle and author metadata. They use the current slot or queued PR record, including a promoted bundle lead, before falling back to the issue in the branch name. Preview finds the branch's open PR; the gate reads its selected PR. Before a PR exists, preview explains that it has no Door line to read.
+`rota review depth` and the merge gate agree on depth for the same branch because they use the same issue, bundle and author information. Verdict nudges use that information too. Before a PR exists, preview cannot read its Door line and says so; the depth can change once the PR has a Door line.
 
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
