@@ -68,7 +68,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	if in.Fixed != nil {
 		kind, kindSource = in.Fixed.kind, in.Fixed.kindSource
 	}
-	hz, err := worker.Harness(kind)
+	hz, err := worker.LaunchHarness(kind)
 	if err != nil {
 		return out, err
 	}
@@ -123,7 +123,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 type fallbackPick struct {
 	to    string
 	model string
-	hz    harness.Harness
+	hz    harness.Launcher
 }
 
 // fallbackFor picks the next harness in round.harnesses with headroom for an
@@ -140,7 +140,7 @@ func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, i
 	}
 	var tried []string
 	for _, k := range laterHarnesses(set.Harnesses, kind) {
-		hz, err := worker.Harness(k)
+		hz, err := worker.LaunchHarness(k)
 		if err != nil {
 			continue
 		}

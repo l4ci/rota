@@ -22,7 +22,7 @@ import (
 // flags, host, login) is refused here. dispatch runs the same preflight again.
 // A refusal carrying block data comes back as a BlockedError.
 func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string) (warnings []string, err error) {
-	hz, err := worker.Harness(kind)
+	hz, err := worker.LaunchHarness(kind)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (d *delivery) wrap(err error) error {
 // steps are the delivery's saga steps: account, write the brief, then the solo
 // hand-off or the dispatch. Call cleanup once they have run.
 func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error) {
-	hz, err := worker.Harness(d.Kind)
+	hz, err := worker.AccountHarness(d.Kind)
 	if err != nil {
 		return nil, err
 	}

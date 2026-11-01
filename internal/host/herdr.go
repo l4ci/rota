@@ -437,13 +437,13 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	if !confirm && hasRelayMarker(text) && jget(r.Stderr, "error.code") != "agent_blocked" {
 		agent := h.herdr(ctx, "agent", "get", name)
 		kind = jget(agent.Stdout, "result.agent.agent")
-		if hz, ok := harness.Lookup(kind); agent.ExitCode == 0 && ok && hz.PromptAcknowledgement().RequireEcho {
+		if hz, ok := harness.LookupPane(kind); agent.ExitCode == 0 && ok && hz.PromptAcknowledgement().RequireEcho {
 			status = jget(agent.Stdout, "result.agent.agent_status")
 			confirm = true
 		}
 	}
 	if confirm {
-		if hz, known := harness.Lookup(kind); known && kind != "" && !hz.PromptAcknowledgement().RequireEcho && (status == "working" || status == "blocked") {
+		if hz, known := harness.LookupPane(kind); known && kind != "" && !hz.PromptAcknowledgement().RequireEcho && (status == "working" || status == "blocked") {
 			return nil
 		}
 		pane := h.promptPane(ctx, name)

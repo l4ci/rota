@@ -78,8 +78,8 @@ func KindList() string {
 	return strings.Join(kinds[:len(kinds)-1], ", ") + " or " + kinds[len(kinds)-1]
 }
 
-// Lookup returns the worker adapter for kind; "" is Default.
-func Lookup(kind string) (Harness, bool) {
+// lookup returns the worker adapter for kind; "" is Default.
+func lookup(kind string) (adapter, bool) {
 	if kind == "" {
 		kind = Default
 	}
@@ -94,14 +94,14 @@ func Lookup(kind string) (Harness, bool) {
 	return nil, false
 }
 
-// Resolve is Lookup for a kind that must have an adapter: "" and a kind that is
+// resolve is lookup for a kind that must have an adapter: "" and a kind that is
 // not a worker harness (a corrupt slot or ledger record) resolve to the
 // Default one, the way those records always read.
-func Resolve(kind string) Harness {
-	if h, ok := Lookup(kind); ok {
+func resolve(kind string) adapter {
+	if h, ok := lookup(kind); ok {
 		return h
 	}
-	h, _ := Lookup(Default)
+	h, _ := lookup(Default)
 	return h
 }
 
@@ -111,12 +111,12 @@ func IsDefault(kind string) bool { return kind == "" || kind == Default }
 // DefaultOrchestrator is the orchestrator harness of a project that sets none.
 const DefaultOrchestrator = Claude
 
-// ForBinary is Lookup for the basename of a launch binary: the herdr host
+// ForBinary selects the pane capability for the basename of a launch binary: the herdr host
 // starts an agent by the kind its binary is.
-func ForBinary(base string) (Harness, bool) {
+func ForBinary(base string) (Pane, bool) {
 	for _, k := range kinds {
 		if k == base {
-			return Lookup(k)
+			return LookupPane(k)
 		}
 	}
 	return nil, false
@@ -228,12 +228,12 @@ type PromptAcknowledgement struct {
 // brief without teaching the host any harness names or UI vocabulary.
 func RequiresPromptEcho(kind, pane string) bool {
 	if kind != "" {
-		if h, ok := Lookup(kind); ok {
+		if h, ok := LookupPane(kind); ok {
 			return h.PromptAcknowledgement().RequireEcho
 		}
 	}
 	for _, k := range Kinds() {
-		p := Resolve(k).PromptAcknowledgement()
+		p := ResolvePane(k).PromptAcknowledgement()
 		if p.RequireEcho && p.EmptyPrompt != "" && strings.Contains(pane, p.EmptyPrompt) {
 			return true
 		}
@@ -341,34 +341,38 @@ type Setup struct {
 	Warnings []string
 }
 
-// Harness is one worker agent.
-type Harness interface {
+// Launcher is the adapter capability for launch commands, model policy and readiness checks.
+type Launcher interface {
 	Kind() string
 	// CommandKey is the config key that overrides the launch line.
 	CommandKey() string
 	// Launch is the launch line for a chosen model ("" keeps the default).
 	// A *Refusal of class Usage means the configuration cannot launch.
-	Launch(cfg any, model string) (string, error)
+	Launch(cfg Config, model string) (string, error)
 	// NeedsModel reports whether a launch needs a tier model.
-	NeedsModel(cfg any) bool
+	NeedsModel(cfg Config) bool
 	// ModelApplies reports whether a chosen model reaches the launch line.
-	ModelApplies(cfg any) bool
+	ModelApplies(cfg Config) bool
 	// Resume finds a token of launch that reopens the previous session, which
 	// a task dispatch must not do. An error means launch cannot be parsed.
 	Resume(launch string) (ResumeHit, error)
 	// SoloRefusal is why the harness cannot run as a subagent of a solo
 	// round, "" when it can.
 	SoloRefusal() string
+	// Tiers is how the kind's round.tiers map is read.
+	Tiers() TierRule
+	// CheckLaunch refuses a launch line the harness cannot run safely.
+	CheckLaunch(launch string) error
+	// Preflight checks, and prepares, a slot before its old session is killed.
+	Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, error)
+}
+
+// Accounts is the adapter capability for account selection and environment.
+type Accounts interface {
+	Kind() string
 	// WorkAccounts reports whether round.accounts (Anthropic's) rotates the
 	// slot's account; a harness with its own account model says no.
 	WorkAccounts() bool
-	// RawPaste reports whether a brief pasted into the kind's pane must keep
-	// its line feeds as they are: tmux pastes a CR for each, which the TUI
-	// drops and the brief arrives as one line.
-	RawPaste() bool
-	// PromptAcknowledgement is the evidence required before a host may
-	// report that a submitted brief was accepted.
-	PromptAcknowledgement() PromptAcknowledgement
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
 	// AmbientAccount is the account the orchestrator's own environment
@@ -378,34 +382,30 @@ type Harness interface {
 	AmbientAccount(getenv func(string) string) Account
 	// Accounts is the kind's configured accounts and the config key they come
 	// from (the entries of round.accounts).
-	Accounts(cfg any) AccountList
+	Accounts(cfg Config) AccountList
 	// UsageMeter reports whether the kind's accounts expose a usage reading.
 	// One that does not is balanced from the limits the watcher logged.
 	UsageMeter() bool
-	// CrossReviewer reports whether the kind can run the one-shot read-only
-	// cross-harness review of another kind's PR (#1612).
-	CrossReviewer() bool
-	// LimitPhrases are the usage-limit messages the kind's session prints
-	// about itself, as case-insensitive regex sources.
-	LimitPhrases() []string
+}
+
+// Pane is the adapter capability for terminal input and classification policy.
+type Pane interface {
+	Kind() string
+	// RawPaste reports whether a brief pasted into the kind's pane must keep
+	// its line feeds as they are: tmux pastes a CR for each, which the TUI
+	// drops and the brief arrives as one line.
+	RawPaste() bool
+	// PromptAcknowledgement is the evidence required before a host may
+	// report that a submitted brief was accepted.
+	PromptAcknowledgement() PromptAcknowledgement
 	// PaneVocab is what the kind's pane says that no other kind's does. The
 	// classifier applies it to that kind's slots only: a worker of another kind
 	// that echoes the text (reading this repo's source) must not read as limited.
 	PaneVocab() PaneVocab
-	// Tiers is how the kind's round.tiers map is read.
-	Tiers() TierRule
-	// Configured is whether the project uses the kind at all.
-	Configured(cfg any) bool
-	// AgentFiles are the files `rota agents write` emits for a role: none for
-	// a kind without a subagent format. model is "" when the kind has no tier
-	// map. An error is a role the kind cannot express.
-	AgentFiles(r AgentRole, model string) ([]AgentFile, error)
-	// Doctor is what `rota doctor` probes for the kind.
-	Doctor() Doctor
-	// CheckLaunch refuses a launch line the harness cannot run safely.
-	CheckLaunch(launch string) error
-	// Preflight checks, and prepares, a slot before its old session is killed.
-	Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, error)
+}
+
+// Prompt is the adapter capability for payload preparation and signing.
+type Prompt interface {
 	// Prepare is the last edit of the launch line (a hook) and the key that
 	// signs the session's payloads; a nil key means payloads go unsigned.
 	Prepare(launch string, exe func() (string, error), s Setup) (string, []byte, error)
@@ -415,6 +415,92 @@ type Harness interface {
 	Sign(key []byte, payload string) string
 }
 
+// AgentWriter is the adapter capability for generated subagent files and their configuration.
+type AgentWriter interface {
+	// Configured is whether the project uses the kind at all.
+	Configured(cfg Config) bool
+	// AgentFiles are the files `rota agents write` emits for a role: none for
+	// a kind without a subagent format. model is "" when the kind has no tier
+	// map. An error is a role the kind cannot express.
+	AgentFiles(r AgentRole, model string) ([]AgentFile, error)
+}
+
+// Reviewer is the adapter capability for cross-harness review availability.
+type Reviewer interface {
+	// CrossReviewer reports whether the kind can run the one-shot read-only
+	// cross-harness review of another kind's PR (#1612).
+	CrossReviewer() bool
+}
+
+// Diagnoser is the adapter capability for readiness diagnostics.
+type Diagnoser interface {
+	// Doctor is what `rota doctor` probes for the kind.
+	Doctor() Doctor
+}
+
+// adapter composes capabilities only inside the registry. Consumers receive
+// a concern interface through Lookup/Resolve helpers below.
+type adapter interface {
+	Launcher
+	Accounts
+	Pane
+	Prompt
+	AgentWriter
+	Reviewer
+	Diagnoser
+}
+
+// LookupLauncher selects the Launcher capability; an empty kind is Default.
+func LookupLauncher(kind string) (Launcher, bool) {
+	h, ok := lookup(kind)
+	return h, ok
+}
+
+// ResolveLauncher falls back to Default for an unknown recorded kind.
+func ResolveLauncher(kind string) Launcher { return resolve(kind) }
+
+// LookupAccounts selects the Accounts capability; an empty kind is Default.
+func LookupAccounts(kind string) (Accounts, bool) {
+	h, ok := lookup(kind)
+	return h, ok
+}
+
+// ResolveAccounts falls back to Default for an unknown recorded kind.
+func ResolveAccounts(kind string) Accounts { return resolve(kind) }
+
+// LookupPane selects the Pane capability; an empty kind is Default.
+func LookupPane(kind string) (Pane, bool) {
+	h, ok := lookup(kind)
+	return h, ok
+}
+
+// ResolvePane falls back to Default for an unknown recorded kind.
+func ResolvePane(kind string) Pane { return resolve(kind) }
+
+// LookupPrompt selects the Prompt capability; an empty kind is Default.
+func LookupPrompt(kind string) (Prompt, bool) {
+	h, ok := lookup(kind)
+	return h, ok
+}
+
+// ResolvePrompt falls back to Default for an unknown recorded kind.
+func ResolvePrompt(kind string) Prompt { return resolve(kind) }
+
+// LookupAgentWriter selects the AgentWriter capability; an empty kind is Default.
+func LookupAgentWriter(kind string) (AgentWriter, bool) {
+	h, ok := lookup(kind)
+	return h, ok
+}
+
+// ResolveAgentWriter falls back to Default for an unknown recorded kind.
+func ResolveAgentWriter(kind string) AgentWriter { return resolve(kind) }
+
+// ResolveReviewer falls back to Default for an unknown recorded kind.
+func ResolveReviewer(kind string) Reviewer { return resolve(kind) }
+
+// ResolveDiagnoser falls back to Default for an unknown recorded kind.
+func ResolveDiagnoser(kind string) Diagnoser { return resolve(kind) }
+
 // Orchestrator is one agent the orchestrator can run in.
 type Orchestrator interface {
 	Name() string
@@ -422,7 +508,7 @@ type Orchestrator interface {
 	// account the agent starts under.
 	WorkAccounts() bool
 	// Command is the argv that starts the agent, without its first prompt.
-	Command(cfg any) ([]string, error)
+	Command(cfg Config) ([]string, error)
 	// Prompt starts the orchestrate skill in the harness's own invocation
 	// syntax: Claude Code takes a slash command, Codex a `$skill` mention.
 	Prompt() string
@@ -439,25 +525,9 @@ var sharedLimitPhrases = []string{
 	`Approaching (?:your )?usage limit`,
 }
 
-// SharedLimitPhrases returns the default list a kind's LimitPhrases starts
-// from.
+// SharedLimitPhrases returns the common usage-limit messages. Kind-specific
+// wording lives in PaneVocab.Limits and is applied only to that kind's slots.
 func SharedLimitPhrases() []string { return append([]string(nil), sharedLimitPhrases...) }
-
-// AllLimitPhrases is the union of every kind's LimitPhrases, in kind order
-// without repeats: a pane is classified without knowing its kind.
-func AllLimitPhrases() []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, k := range kinds {
-		for _, p := range Resolve(k).LimitPhrases() {
-			if !seen[p] {
-				seen[p] = true
-				out = append(out, p)
-			}
-		}
-	}
-	return out
-}
 
 // AllPaneLimits is the union of every kind's PaneVocab.Limits, without repeats:
 // a prefilter for a pane watcher that cannot know a pane's kind.
@@ -465,7 +535,7 @@ func AllPaneLimits() []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, k := range kinds {
-		for _, p := range Resolve(k).PaneVocab().Limits {
+		for _, p := range ResolvePane(k).PaneVocab().Limits {
 			if !seen[p] {
 				seen[p] = true
 				out = append(out, p)

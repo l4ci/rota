@@ -45,9 +45,9 @@ func (codex) CommandKey() string { return config.RoundCommandsCodexKey }
 // Codex picks its own; a custom command that still holds {model} then has
 // nothing to put there, which is a usage error. A custom command without the
 // placeholder runs as written.
-func (c codex) Launch(cfg any, model string) (string, error) {
+func (c codex) Launch(cfg Config, model string) (string, error) {
 	cmd, custom := DefaultCodexCommand, false
-	if s := config.StringIfSet(cfg, c.CommandKey()); s != "" {
+	if s := cfg.Command; s != "" {
 		cmd, custom = s, true
 	}
 	if model == "" {
@@ -64,13 +64,13 @@ func (c codex) Launch(cfg any, model string) (string, error) {
 
 // NeedsModel: only a custom round.commands.codex that holds {model} does (Launch
 // refuses it with none).
-func (c codex) NeedsModel(cfg any) bool {
+func (c codex) NeedsModel(cfg Config) bool {
 	_, err := c.Launch(cfg, "")
 	return err != nil
 }
 
 // ModelApplies: the default command always takes the model.
-func (c codex) ModelApplies(cfg any) bool { return placeholderApplies(cfg, c.CommandKey()) }
+func (c codex) ModelApplies(cfg Config) bool { return placeholderApplies(cfg) }
 
 // Resume returns the first token after the codex binary that is one of its
 // `resume` or `fork` subcommands, which reopen a previous session in the
@@ -142,21 +142,13 @@ func (codex) AmbientAccount(getenv func(string) string) Account {
 	return Account{Home: getenv("CODEX_HOME")}
 }
 
-func (codex) Accounts(cfg any) AccountList {
-	l := AccountList{Key: config.RoundAccountsKey}
-	for _, a := range config.AccountsOf(cfg, config.KindCodex) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
-	}
-	return l
-}
+func (codex) Accounts(cfg Config) AccountList { return cfg.AccountList }
 
 // UsageMeter: Codex has no usage reading, so its accounts are balanced from
 // the limits the watcher logged.
 func (codex) UsageMeter() bool { return false }
 
 func (codex) CrossReviewer() bool { return true }
-
-func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
 func (codex) PaneVocab() PaneVocab {
 	return PaneVocab{
@@ -173,17 +165,17 @@ func (codex) Tiers() TierRule { return TierRule{} }
 
 // Configured is whether the project uses Codex at all: a Codex tier map, a
 // named Codex home, a custom Codex command or Codex as the first round.harnesses entry.
-func (c codex) Configured(cfg any) bool {
-	if ProjectKind(cfg) == Codex {
+func (c codex) Configured(cfg Config) bool {
+	if cfg.ProjectKind == Codex {
 		return true
 	}
-	if TierMapSet(cfg, Codex) {
+	if cfg.TierMap {
 		return true
 	}
 	if len(c.Accounts(cfg).Entries) > 0 {
 		return true
 	}
-	return strings.TrimSpace(config.StringIfSet(cfg, c.CommandKey())) != ""
+	return strings.TrimSpace(cfg.Command) != ""
 }
 
 // CodexEfforts are the model_reasoning_effort values every Codex model lists as
@@ -435,6 +427,6 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 }
 
 // The orchestrator facet: codex takes a `$skill` mention.
-func (codex) Name() string                  { return Codex }
-func (codex) Prompt() string                { return "$rota-orchestrate" }
-func (codex) Command(any) ([]string, error) { return []string{"codex"}, nil }
+func (codex) Name() string                     { return Codex }
+func (codex) Prompt() string                   { return "$rota-orchestrate" }
+func (codex) Command(Config) ([]string, error) { return []string{"codex"}, nil }

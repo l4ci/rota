@@ -364,7 +364,7 @@ func (w *Watcher) text(ctx context.Context, now time.Time, targets []Target, m M
 				return
 			}
 		}
-	} else if w.Meter != nil && t.Account != "" && harness.Resolve(t.Kind).UsageMeter() {
+	} else if w.Meter != nil && t.Account != "" && harness.ResolveAccounts(t.Kind).UsageMeter() {
 		// The meter reads metered accounts only: a Codex login has no usage
 		// numbers, so its limit message alone is the evidence.
 		r := w.Meter(ctx, t.Account)

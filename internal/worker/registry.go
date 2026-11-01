@@ -791,7 +791,8 @@ type Env struct {
 	// Config returns the merged project config every worker verb reads (dispatch,
 	// pool init, preflight, account meters, the operator command, the gate); nil
 	// loads .rota/config.json. It is the one disk read of config in this package:
-	// tests hand it an in-memory config.
+	// tests hand it an in-memory config. Harness adapters receive a typed
+	// harness.ConfigFor view at their call boundary.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the
 	// account's headroom when a pane reports done. Nil records none.

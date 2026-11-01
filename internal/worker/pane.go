@@ -70,7 +70,7 @@ const (
 // limitPhrases are the usage-limit messages a session prints about itself, as
 // case-insensitive regex sources (no flag prefix). FindLimit is the one reader
 // of them: `worker poll` and the usage-limit watcher (D3) both ask it.
-var limitPhrases = harness.AllLimitPhrases()
+var limitPhrases = harness.SharedLimitPhrases()
 
 // LimitRegex is the alternation of the limit phrases with the case-insensitive
 // flag written in the regex itself, for engines that take one pattern string
@@ -407,7 +407,7 @@ var (
 // paneRulesFor is the compiled vocabulary of a kind. The harness resolves an
 // unset kind to its default; a kind that is not a worker harness has no rules.
 func paneRulesFor(kind string) *paneRules {
-	h, known := harness.Lookup(kind)
+	h, known := harness.LookupPane(kind)
 	if known {
 		kind = h.Kind()
 	}

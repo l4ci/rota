@@ -145,7 +145,7 @@ func TestPromptKeyLifecycleSharedByKinds(t *testing.T) {
 		who     string
 		hint    string
 		slotDir func(cd, slot string) string
-		h       Harness
+		h       Prompt
 	}{
 		{"codex", "is a codex worker", "key and hook", CodexSlotDir, codex{}},
 		{"opencode", "is an opencode worker", "key and guard", OpencodeSlotDir, opencode{}},

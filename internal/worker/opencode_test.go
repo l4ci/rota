@@ -88,7 +88,7 @@ func TestDispatchOpenCodeGuardsTheSession(t *testing.T) {
 		t.Fatalf("prompt key: %v", err)
 	}
 	i := strings.LastIndex(f.sent, "\n--- ROTA-SIG ")
-	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") || i < 0 || f.sent != harness.Resolve(harness.OpenCode).Sign(key, f.sent[:i]) {
+	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") || i < 0 || f.sent != harness.ResolvePrompt(harness.OpenCode).Sign(key, f.sent[:i]) {
 		t.Errorf("the brief is signed with the slot's key: %q", f.sent)
 	}
 }
