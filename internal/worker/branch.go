@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/verdict"
 )
 
 // The one owner of the `<agent>/<issue>-<slug>` branch grammar a round cuts for
@@ -67,12 +66,6 @@ func BranchIssue(branch string) (tracker.IssueKey, bool) {
 		return "", false
 	}
 	return tracker.ParseKey(id)
-}
-
-// BranchHasSpec reports whether branch leads with an issue: its hasSpec.
-func BranchHasSpec(branch string) bool {
-	id, _ := branchIssue(branch)
-	return verdict.HasSpec(id)
 }
 
 // RoundBranch reports whether name has the `<agent>/<issue>-<slug>` shape a
