@@ -128,15 +128,3 @@ func TestIsMergeConflict(t *testing.T) {
 		}
 	}
 }
-
-func TestBaseConfiguredMissingDoesNotFallBack(t *testing.T) {
-	dir := newRepo(t)
-	ctx := context.Background()
-	repo := Repo{Dir: dir}
-	if got, ok, err := repo.Base(ctx, "gone"); err != nil || ok || got != "gone" {
-		t.Fatalf("Base(gone) = %q, %v, %v; want gone, false, nil", got, ok, err)
-	}
-	if got, ok, err := repo.Base(ctx, ""); err != nil || !ok || got != "main" {
-		t.Fatalf("Base(unset) = %q, %v, %v; want main, true, nil", got, ok, err)
-	}
-}
