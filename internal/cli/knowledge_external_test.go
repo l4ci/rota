@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,69 @@ import (
 
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/tracker"
 )
+
+func TestKnowledgeExternalPRUsesCloneForge(t *testing.T) {
+	for _, tc := range []struct{ provider, url string }{
+		{"github", "https://github.com/fake/repo/pull/1"},
+		{"gitlab", "https://gitlab.com/fake/repo/-/merge_requests/1"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			project, clone, remote := extFixture(t, `{"write":"pr","branch":"main"}`)
+			// The project's forge is unrelated to the shared knowledge repo.
+			if o := knNew(t, project, "", "config", "set", "forge.provider", "local"); o.rc != 0 {
+				t.Fatal(o)
+			}
+			fakes, err := filepath.Abs("../../test/fakes")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", fakes+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("FAKE_TRACKER_DB_DIR", "")
+			t.Setenv("FAKE_TRACKER_DB", filepath.Join(t.TempDir(), "tracker.json"))
+			d := testDeps()
+			d.Getwd = func() (string, error) { return project, nil }
+			d.Proc = func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{ExitCode: 1, Stderr: "PR creation bypassed the forge"}, nil
+			}
+			d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if dir != clone {
+					t.Fatalf("forge ran in %q, want knowledge clone %q", dir, clone)
+				}
+				if name == "git" {
+					// Keep git transfers local; only forge detection sees the hosted origin.
+					return []byte("https://" + tc.provider + ".com/fake/repo.git\n"), nil, 0, nil
+				}
+				r, err := proc.Run(ctx, proc.Cmd{Name: name, Dir: dir, Args: args, Stdin: stdin})
+				return []byte(r.Stdout), []byte(r.Stderr), r.ExitCode, err
+			}, nil)}
+			var stdout, stderr bytes.Buffer
+			rc := mainWith(d, []string{"knowledge", "add", "--external", "--topic", "Go", "--title", "Via Forge", "--body-file", "-"}, strings.NewReader("body"), &stdout, &stderr)
+			if rc != 0 || !strings.Contains(stdout.String(), tc.url) {
+				t.Fatalf("external write: rc=%d stdout=%s stderr=%s", rc, &stdout, &stderr)
+			}
+			forge, err := tracker.NewForge(context.Background(), tracker.Settings{}, tc.provider, clone)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pr, err := forge.PRView(context.Background(), 1)
+			if err != nil || pr.Base != "main" || pr.Title != `knowledge: add "Via Forge" to Go` || !strings.HasPrefix(pr.Head, "rota-knowledge/go-") || !strings.Contains(pr.Body, "external knowledge base policy") {
+				t.Fatalf("created PR: %+v, err=%v", pr, err)
+			}
+			if !strings.Contains(gittest.Run(t, remote, "show", pr.Head+":topics/go.md"), "**Via Forge**") {
+				t.Fatal("PR head does not contain the pushed learning")
+			}
+			if strings.Contains(gittest.Run(t, remote, "show", "main:topics/go.md"), "Via Forge") {
+				t.Fatal("PR write changed the remote base")
+			}
+			if gittest.Run(t, clone, "branch", "--show-current") != "main" || gittest.Run(t, clone, "status", "--porcelain") != "" {
+				t.Fatal("knowledge clone was not restored cleanly")
+			}
+		})
+	}
+}
 
 // extFixture is a project plus a cloned external knowledge repo (with a local
 // bare remote) whose path is set in the global config.

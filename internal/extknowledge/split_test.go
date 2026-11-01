@@ -249,8 +249,8 @@ func TestSplitPRModeOpensOnePR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wr.PR == "" || wr.Branch == "" || wr.Pushed || len(f.gh) != 1 {
-		t.Fatalf("wr = %+v gh = %v", wr, f.gh)
+	if wr.PR == "" || wr.Branch == "" || wr.Pushed || len(f.prs()) != 1 {
+		t.Fatalf("wr = %+v prs = %v", wr, f.prs())
 	}
 	if !strings.Contains(gittest.Run(t, f.remote, "show", "main:topics/godot.md"), "Lobby code") {
 		t.Fatal("main must keep the flat topic in pr mode")

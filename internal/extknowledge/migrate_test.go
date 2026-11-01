@@ -230,8 +230,8 @@ func TestMigrateSeenPRMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Write.PR == "" || rep.Write.Branch == "" || rep.Write.Pushed || len(f.gh) != 1 {
-		t.Fatalf("rep = %+v gh = %v", rep, f.gh)
+	if rep.Write.PR == "" || rep.Write.Branch == "" || rep.Write.Pushed || len(f.prs()) != 1 {
+		t.Fatalf("rep = %+v prs = %v", rep, f.prs())
 	}
 	if got := gittest.Run(t, f.a, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
 		t.Fatalf("clone left on %q", got)
@@ -261,7 +261,7 @@ func TestMigrateSeenPRModeFailureRestoresBranch(t *testing.T) {
 	if got := gittest.Run(t, f.a, "status", "--porcelain"); got != "" {
 		t.Fatalf("clone dirty: %q", got)
 	}
-	if len(f.gh) != 0 {
-		t.Fatalf("a PR was opened after the failed push: %v", f.gh)
+	if len(f.prs()) != 0 {
+		t.Fatalf("a PR was opened after the failed push: %v", f.prs())
 	}
 }

@@ -84,6 +84,9 @@ func (g *GitHub) PRCreate(ctx context.Context, s PRSpec) (string, error) {
 	if s.Base != "" {
 		args = append(args, "--base", s.Base)
 	}
+	if s.Head != "" {
+		args = append(args, "--head", s.Head)
+	}
 	return g.lastLine(ctx, args, s.Body, prFail("gh pr create"))
 }
 

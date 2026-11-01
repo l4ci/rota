@@ -79,7 +79,9 @@ A write needs a clean clone. It pulls (fast-forward only), writes the bullet to 
 | `write` | What happens |
 |---------|--------------|
 | `push` | `git push` to `branch`. A rejected push gets one `git pull --rebase` and a retry. |
-| `pr` | Pushes a `rota-knowledge/<topic>-<time>` branch and runs `gh pr create` against `branch`. No confirmation gate; the clone returns to its branch. |
+| `pr` | Pushes a `rota-knowledge/<topic>-<time>` branch and opens a PR (GitHub) or merge request (GitLab) against `branch` through the knowledge clone's forge. No confirmation gate; the clone returns to its branch. |
+
+PR creation detects the forge from the knowledge clone's `origin`, independently of the project's `forge.provider` and issue tracker. It uses the tracker's CLI timeout, retry and error handling. If PR creation fails, the write still exits 1 and reports the pushed branch so you can recover it.
 
 `branch` is optional. Without it, a push lands on the branch the clone tracks (its upstream, else its current branch), so a repo whose default branch is `master` works. A `push` policy refuses to write when the clone is on a different branch than `branch`. Titles may not contain `*`; titles, bodies and amend text must be one line and may not contain `-->`. Rota refuses (exit 4) rather than write through a symlink or over an untracked file. A base is shared input, so rota follows only index and sub-index paths that are slugs it could have written (`[a-z0-9-]`): a line such as `- [X](topics/*.md)` or `- [X](topics/../README.md)` is ignored, `query` warns and `rota doctor` reports it (`external knowledge index`), and git always sees topic paths literally, never as patterns. A write that fails (a commit hook, a missing identity) restores only the files it wrote; any other edit in the clone stays. A commit that fails for lack of `user.name` or `user.email` is exit 4 with a hint to set them in the clone. `add --topic "Unknown: Sub"` where `Unknown` is no topic is exit 3: add to `Unknown` first, then split it. `split` of a stray flat file that git does not track is exit 4 (commit or remove it first).
 
