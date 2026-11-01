@@ -5,12 +5,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 const doneHead = "abcdef1234567890"
@@ -50,6 +52,8 @@ func newDoneRig(t *testing.T, slotJSON, cfg string) *doneRig {
 		switch strings.Join(args, " ") {
 		case "status --porcelain":
 			return git.Result{Stdout: r.status}, nil
+		case "remote get-url " + name:
+			return git.Result{ExitCode: 1}, nil
 		case "rev-parse --verify --quiet refs/remotes/" + name + "/ben/7-x":
 			if r.remote == "" {
 				return git.Result{ExitCode: 1}, nil
@@ -387,4 +391,164 @@ func TestDoneArchitectureReviewNeedsNoPR(t *testing.T) {
 			t.Fatalf("res %+v err %v state %s", res, err, r.state())
 		}
 	})
+}
+
+type donePRForge struct {
+	Forge
+	info tracker.PRInfo
+	prs  []tracker.PR
+	err  error
+}
+
+func (f donePRForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return f.info, f.err
+}
+
+func (f donePRForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	return f.prs, f.err
+}
+
+func (r *doneRig) forge(f donePRForge) {
+	r.t.Helper()
+	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR(ghURL) }); err != nil {
+		r.t.Fatal(err)
+	}
+	if f.info.State == "" {
+		f.info.State = "OPEN"
+	}
+	r.deps.Env.Config = memConfig(r.t, `{"forge":{"provider":"github"},"test":{"fast":["go test ./x"]}}`)
+	run := r.deps.Env.Git
+	r.deps.Env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if strings.Join(args, " ") == "remote get-url origin" {
+			return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+		}
+		return run(ctx, dir, args...)
+	}
+	r.deps.Env.Forge = func(string, string, tracker.Settings) (Forge, error) { return f, nil }
+}
+
+func TestDoneWarnsMissingPRSections(t *testing.T) {
+	r := newDoneRig(t, oneSlot, fastCfg)
+	r.pass("7", proof.FastTierCheck)
+	r.forge(donePRForge{info: tracker.PRInfo{Body: "## Summary\nReady."}})
+	var emitted []string
+	r.deps.Warn = func(message string) {
+		sl := LoadRegistryTolerant(r.root).Slot("ben")
+		if sl.State() != "busy" || sl.Event() != nil {
+			t.Error("warning emitted after the done event was recorded")
+		}
+		emitted = append(emitted, message)
+	}
+	res, err := r.done(DoneRequest{})
+	if err != nil || !res.Changed || r.state() != "done" {
+		t.Fatalf("warnings must not refuse done: res %+v err %v state %s", res, err, r.state())
+	}
+	for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
+		if !strings.Contains(strings.Join(res.Warnings, "\n"), heading) {
+			t.Errorf("warnings %q do not name missing %s", res.Warnings, heading)
+		}
+		if !strings.Contains(strings.Join(emitted, "\n"), heading) {
+			t.Errorf("emitted warnings %q do not name missing %s", emitted, heading)
+		}
+	}
+}
+
+func TestDonePRSectionWarnings(t *testing.T) {
+	complete := "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"
+	for _, tc := range []struct {
+		name, body, state string
+		noPR              bool
+		err               error
+		want              []string
+	}{
+		{name: "complete", body: complete},
+		{name: "empty sections", body: "## Approvals\n## Rulings\n## Assumptions\n"},
+		{name: "case and whitespace", body: "##\tapprovals \r\n  ## RULINGS  \r\n## assumptions\r\n"},
+		{name: "no PR yet", noPR: true},
+		{name: "merged PR", state: "MERGED"},
+		{name: "closed PR", state: "CLOSED"},
+		{name: "forge unavailable", err: errors.New("forge offline")},
+		{name: "approvals missing", body: "## Rulings\nNone\n## Assumptions\nNone\n", want: []string{"## Approvals"}},
+		{name: "rulings missing", body: "## Approvals\nNone\n## Assumptions\nNone\n", want: []string{"## Rulings"}},
+		{name: "assumptions missing", body: "## Approvals\nNone\n## Rulings\nNone\n", want: []string{"## Assumptions"}},
+		{name: "mentions only", body: "Includes ## Approvals, ## Rulings and ## Assumptions.", want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
+		{name: "wrong heading depth", body: "### Approvals\n### Rulings\n### Assumptions\n", want: []string{"## Approvals", "## Rulings", "## Assumptions"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newDoneRig(t, oneSlot, fastCfg)
+			r.pass("7", proof.FastTierCheck)
+			if !tc.noPR {
+				r.forge(donePRForge{info: tracker.PRInfo{Body: tc.body, State: tc.state}, err: tc.err})
+			} else {
+				r.deps.Env.Forge = func(string, string, tracker.Settings) (Forge, error) {
+					t.Fatal("no PR must not look up a forge")
+					return nil, nil
+				}
+			}
+			res, err := r.done(DoneRequest{})
+			if err != nil || !res.Changed || r.state() != "done" {
+				t.Fatalf("res %+v err %v state %s", res, err, r.state())
+			}
+			var missing []string
+			for _, warning := range res.Warnings {
+				for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
+					if strings.Contains(warning, heading) {
+						missing = append(missing, heading)
+					}
+				}
+			}
+			if !slices.Equal(missing, tc.want) || len(res.Warnings) != len(tc.want) {
+				t.Fatalf("missing %q, want %q; warnings %q", missing, tc.want, res.Warnings)
+			}
+		})
+	}
+}
+
+func TestDoneWarnsForUnrecordedOpenPR(t *testing.T) {
+	r := newDoneRig(t, oneSlot, fastCfg)
+	r.pass("7", proof.FastTierCheck)
+	r.forge(donePRForge{prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Assumptions\nNone\n"}}})
+	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
+		t.Fatal(err)
+	}
+	var emitted []string
+	r.deps.Warn = func(message string) {
+		if sl := LoadRegistryTolerant(r.root).Slot("ben"); sl.State() != "busy" || sl.Event() != nil {
+			t.Error("warning emitted after done was recorded")
+		}
+		emitted = append(emitted, message)
+	}
+	res, err := r.done(DoneRequest{})
+	if err != nil || !res.Changed || r.state() != "done" {
+		t.Fatalf("res %+v err %v state %s", res, err, r.state())
+	}
+	if len(emitted) != 1 || !strings.Contains(emitted[0], "## Rulings") || !strings.Contains(emitted[0], ghURL) {
+		t.Fatalf("warnings %q, want a missing ## Rulings warning naming the discovered PR", emitted)
+	}
+}
+
+func TestDoneUnrecordedPRCleanCases(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		prs  []tracker.PR
+		err  error
+	}{
+		{name: "no open PR"},
+		{name: "another branch", prs: []tracker.PR{{Branch: "dana/8-y", URL: ghURL}}},
+		{name: "complete body", prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"}}},
+		{name: "forge unavailable", err: errors.New("forge offline")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newDoneRig(t, oneSlot, fastCfg)
+			r.pass("7", proof.FastTierCheck)
+			r.forge(donePRForge{prs: tc.prs, err: tc.err})
+			if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
+				t.Fatal(err)
+			}
+			res, err := r.done(DoneRequest{})
+			if err != nil || !res.Changed || r.state() != "done" || len(res.Warnings) != 0 {
+				t.Fatalf("res %+v err %v state %s", res, err, r.state())
+			}
+		})
+	}
 }

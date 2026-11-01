@@ -16,10 +16,7 @@ const (
 // requiredPRSection checks headings only. Empty sections and None both pass;
 // the reviewer, rather than this mechanical check, judges their content.
 func requiredPRSection(body string) (verdict, heading string) {
-	found := map[string]bool{}
-	for _, line := range pystr.Splitlines(body) {
-		found[strings.ToLower(strings.TrimSpace(line))] = true
-	}
+	found := prSectionHeadings(body)
 	for _, section := range []struct{ verdict, heading string }{
 		{GateAssumptionsMissing, "## Assumptions"},
 		{GateRulingsMissing, "## Rulings"},
@@ -29,6 +26,14 @@ func requiredPRSection(body string) (verdict, heading string) {
 		}
 	}
 	return "", ""
+}
+
+func prSectionHeadings(body string) map[string]bool {
+	found := map[string]bool{}
+	for _, line := range pystr.Splitlines(body) {
+		found[strings.ToLower(strings.TrimSpace(line))] = true
+	}
+	return found
 }
 
 // checkRequiredPRSections uses the same successful PR read as provenance.

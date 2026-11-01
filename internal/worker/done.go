@@ -37,6 +37,9 @@ type DoneRequest struct {
 type DoneDeps struct {
 	Env      Env
 	Accounts *Accounts
+	// Warn emits advisory messages before the done event is recorded. The same
+	// messages are retained in DoneResult.Warnings for callers without a sink.
+	Warn func(string)
 	// ExpandFiles turns test.fast lines into the shell lines that run and that
 	// proof records, {files} expanded against base in dir.
 	ExpandFiles func(dir, base string, lines []string) ([]string, error)
@@ -60,7 +63,7 @@ type DoneDeps struct {
 
 // DoneResult is what done reports, set field by field as the sequence gets
 // there, so a refusal still carries the facts gathered before it. Warnings are
-// for the caller to print.
+// also emitted through DoneDeps.Warn when supplied.
 type DoneResult struct {
 	Slot, Item string
 	// Changed is false when the slot was already done.
@@ -80,8 +83,8 @@ type DoneResult struct {
 
 // Done is the worker's last action: the attempt fence, unread mail, a settled
 // pushed branch, the test.fast (or targeted) proof at HEAD for every open
-// bundle issue, acceptance marks for a completed outcome, the RED check, then
-// the slot's done event, state and ledger row.
+// bundle issue, acceptance marks for a completed outcome, the RED check and
+// advisory PR-section warnings, then the slot's done event, state and ledger row.
 // A refusal returns the partial result beside the exit-4 error.
 func Done(req DoneRequest, dp DoneDeps) (*DoneResult, error) {
 	res := &DoneResult{}
@@ -159,7 +162,53 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 			return err
 		}
 	}
+	donePRSections(env, req, dp, sl, res)
 	return markDone(env, req, dp, sl, id, res)
+}
+
+// donePRSections is advisory: no open PR or an unreadable forge leaves the
+// gate to check it later.
+func donePRSections(env Env, req DoneRequest, dp DoneDeps, sl *Slot, res *DoneResult) {
+	body, pr, ok := donePRBody(env, req.Root, sl)
+	if !ok {
+		return
+	}
+	found := prSectionHeadings(body)
+	_, approvals := approvalsSection(body)
+	found["## approvals"] = approvals
+	for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
+		if !found[strings.ToLower(heading)] {
+			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", pr, heading))
+		}
+	}
+}
+
+// donePRBody also handles the normal first done, before the poll records the
+// PR URL from ROTA-DONE or adopts it by branch. Discovery does not adopt it.
+func donePRBody(env Env, root string, sl *Slot) (body, pr string, ok bool) {
+	if sl.PR() != "" {
+		info, known := env.prInfoKnown(env.Ctx, root, sl)
+		return info.Body, sl.PR(), known && strings.EqualFold(info.State, "OPEN")
+	}
+	if sl.Branch() == "" {
+		return "", "", false
+	}
+	prs, known := env.openPRs(env.Ctx, root)
+	if known {
+		for _, p := range prs {
+			if p.Branch == sl.Branch() {
+				return p.Body, p.URL, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func doneWarning(dp DoneDeps, res *DoneResult, message string) {
+	res.Warnings = append(res.Warnings, message)
+	if dp.Warn != nil {
+		dp.Warn(message)
+	}
 }
 
 // doneProof gates the done on the proof at HEAD: none for a failed outcome, the
@@ -184,7 +233,7 @@ func doneProof(env Env, req DoneRequest, dp DoneDeps, sl *Slot, dir string, bund
 		}
 		res.Head = head
 	case len(cmds) == 0:
-		res.Warnings = append(res.Warnings, fmt.Sprintf("test.fast is unset: the proof check is skipped for %s", req.Slot))
+		doneWarning(dp, res, fmt.Sprintf("test.fast is unset: the proof check is skipped for %s", req.Slot))
 		res.ProofSkipped = true
 	default:
 		head, err := branchHead(env, req.Root, sl.Branch())
@@ -251,7 +300,7 @@ func doneRed(env Env, req DoneRequest, dp DoneDeps, id, dir string, bundle func(
 		e.Hint = hint
 		return e
 	}
-	res.Warnings = append(res.Warnings, msg)
+	doneWarning(dp, res, msg)
 	return nil
 }
 
