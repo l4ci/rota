@@ -19,7 +19,7 @@ type milestoneCloser interface {
 // closeOnMilestone labels before closing: a label failure leaves the issue
 // open and claimed until manually recovered. Each successful close releases
 // its claim labels. A landed PR still passes with a warning for failed writes.
-func (g *gateReferences) closeOnMilestone(src tracker.ClosingSource, label string) bool {
+func (g *gateOperation) closeOnMilestone(src tracker.ClosingSource, label string) bool {
 	keys := g.bundleKeys()
 	for _, n := range g.forge.ClosedNumbers(src.Body) {
 		key := tracker.NumKey(n)

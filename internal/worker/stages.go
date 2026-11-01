@@ -21,6 +21,14 @@ func runLandingStage[I, O, R any](previous landingStageResult[I, R], stage func(
 	return landingStageResult[O, R]{Value: value, Result: result, Done: done, Err: err}
 }
 
+// runGateStage supplies the public answer independently from the named stage
+// outputs captured by the caller. The shared landing runner owns short-circuiting.
+func runGateStage[P, O any](previous landingStageResult[P, GateResult], stage func(GateResult) (O, GateResult, bool, error)) landingStageResult[O, GateResult] {
+	return runLandingStage(previous, func(P) (O, GateResult, bool, error) {
+		return stage(previous.Result)
+	})
+}
+
 func checkBrokeMessage(subject, msg string) string {
 	return fmt.Sprintf("CHECK-BROKE %s — %s", subject, msg)
 }

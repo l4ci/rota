@@ -10,20 +10,25 @@ import (
 
 // stepVerdictReports runs only after the PR and its pushed head were validated.
 // Both the blocking check and review-depth lookup then see the recovered cache.
-func (_ gate) stepVerdictReports(g gateReferences) (gateReferences, GateResult, bool, error) {
-	result := *g.res
-	g.res = &result
+func (runner gate) stepVerdictReports(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, target, forged)
+	g.remote = remote
+	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
+	g.verified = verified
+	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+		return struct{}{}, *g.res, done, err
+	}
 
 	if !g.remote || g.pr == "" || !backlog.CapabilitiesForSource(g.in.cfg.Tracker.Source).IssueIDs {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
 	source, ok := g.forge.(verdict.ReportSource)
 	if !ok {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
 	pr, ok := PRRefNumber(g.pr)
 	if !ok {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
 	head := strings.TrimSpace(g.verified)
 	if head == "" {
@@ -33,5 +38,5 @@ func (_ gate) stepVerdictReports(g gateReferences) (gateReferences, GateResult, 
 	if err := verdict.RecoverPR(g.ctx, g.root, verdict.BranchKey("", g.branch), head, pr, source); err != nil {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("VERDICT-REPORT-UNKNOWN %s — %v; using local verdicts", g.branch, err))
 	}
-	return g.finish(false, nil)
+	return finish(false, nil)
 }

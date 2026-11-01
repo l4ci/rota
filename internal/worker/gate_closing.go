@@ -268,20 +268,23 @@ func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKe
 // stepCloses runs checkCloses on the slot's PR. It runs under CheckOnly too,
 // so a train member is refused before anything merges. A slot with no PR, or
 // holding no numeric issue (file backend), has nothing to check.
-func (_ gate) stepCloses(g gateReferences) (gateReferences, GateResult, bool, error) {
-	result := *g.res
-	g.res = &result
+func (runner gate) stepCloses(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, target, forged)
+	g.headRef = headRef
+	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+		return struct{}{}, *g.res, done, err
+	}
 
 	keys := g.bundleKeys()
 	if g.pr == "" || g.issues == nil || len(keys) == 0 {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
 	info, err := g.prView()
 	if err != nil {
 		if tracker.IsCLIMissing(err) {
-			return g.finish(false, nil)
+			return finish(false, nil)
 		}
-		return g.finish(g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, refList(keys), err)))
+		return finish(g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, refList(keys), err)))
 	}
 	in := closesInput{Slot: g.o.Slot, PR: g.pr, Keys: keys, FinalSlice: g.o.FinalSlice, Issues: g.issues,
 		Source: tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}}
@@ -292,23 +295,26 @@ func (_ gate) stepCloses(g gateReferences) (gateReferences, GateResult, bool, er
 	if out.Verdict == GateNotClosing {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	}
-	return g.finish(g.apply(out))
+	return finish(g.apply(out))
 }
 
 // stepClaim runs checkClaim on the slot's recorded claim.
-func (_ gate) stepClaim(g gateReferences) (gateReferences, GateResult, bool, error) {
-	result := *g.res
-	g.res = &result
+func (runner gate) stepClaim(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, target, forged)
+	g.remote = remote
+	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+		return struct{}{}, *g.res, done, err
+	}
 
 	if !g.remote || g.issues == nil || g.target.ClaimID == "" {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
-	return g.finish(g.apply(checkClaim(g.ctx, claimInput{Slot: g.o.Slot, ClaimID: g.target.ClaimID, Keys: g.bundleKeys(), Issues: g.issues})))
+	return finish(g.apply(checkClaim(g.ctx, claimInput{Slot: g.o.Slot, ClaimID: g.target.ClaimID, Keys: g.bundleKeys(), Issues: g.issues})))
 }
 
 // apply records a step outcome on the gate result and reports whether the gate
 // stops.
-func (g *gateIdentity) apply(out stepOutcome) (bool, error) {
+func (g *gateOperation) apply(out stepOutcome) (bool, error) {
 	g.res.Notes = append(g.res.Notes, out.Notes...)
 	switch {
 	case out.Broke != "":
@@ -323,7 +329,7 @@ func (g *gateIdentity) apply(out stepOutcome) (bool, error) {
 // releaseClaimLabels releases the claim labels of every issue the merged PR
 // closes: the numbers its body closes, plus a key-based tracker's issue named
 // in the branch or title instead of a keyword.
-func (g *gateIdentity) releaseClaimLabels(src tracker.ClosingSource) {
+func (g *gateOperation) releaseClaimLabels(src tracker.ClosingSource) {
 	if g.label == "" || g.issues == nil {
 		return
 	}
@@ -341,7 +347,7 @@ func (g *gateIdentity) releaseClaimLabels(src tracker.ClosingSource) {
 
 // bundleKeys is the lead issue of the target followed by its bundle members,
 // as keys: nil when the target holds no issue, unparsable members skipped.
-func (g *gateIdentity) bundleKeys() []tracker.IssueKey {
+func (g *gateOperation) bundleKeys() []tracker.IssueKey {
 	lead, ok := tracker.ParseKey(g.target.Issue)
 	if !ok {
 		return nil
