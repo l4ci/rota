@@ -530,6 +530,10 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", root) },
 	})
 	if err != nil {
+		var de *worker.ReviewDepthError
+		if errors.As(err, &de) && de.Stage == "issue-source" {
+			return worker.ReviewDepth{}, "", trackerErr(de.Err)
+		}
 		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
 	res, err := inputs.Resolve(c.Context())
