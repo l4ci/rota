@@ -2,22 +2,20 @@ package verdict
 
 import (
 	"context"
-	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 )
-
-var reportMarker = regexp.MustCompile(`^<!-- rota:report ([a-z-]+) sha=([0-9a-f]{4,64}) -->$`)
 
 // ParseReport reads the report format emitted by RenderReport. Gate reports,
 // malformed markers and invalid bodies are not verdict records.
 func ParseReport(text string) (Record, bool) {
 	line, _, _ := strings.Cut(text, "\n")
-	m := reportMarker.FindStringSubmatch(line)
-	if m == nil || !slices.Contains(BranchKinds, m[1]) {
+	kind, sha, ok := marker.ParseReport(line)
+	if !ok || !slices.Contains(BranchKinds, kind) {
 		return Record{}, false
 	}
 	at := strings.LastIndex(text, "\n### Verdict body\n\n")
@@ -35,15 +33,15 @@ func ParseReport(text string) (Record, bool) {
 		return Record{}, false
 	}
 	body, err := ParseBody(raw)
-	accepted, _ := Takes(m[1], body.Verdict)
+	accepted, _ := Takes(kind, body.Verdict)
 	if err != nil || body.Verdict == "" || !accepted {
 		return Record{}, false
 	}
-	header := "\n### Verdict report\n\nKind: `" + m[1] + "`\n\nVerdict: **" + body.Verdict + "**\n\nReviewed SHA: `" + m[2] + "`\n"
+	header := "\n### Verdict report\n\nKind: `" + kind + "`\n\nVerdict: **" + body.Verdict + "**\n\nReviewed SHA: `" + sha + "`\n"
 	if !strings.HasPrefix(text, line+header) {
 		return Record{}, false
 	}
-	return Record{Kind: m[1], Verdict: body.Verdict, Sha: m[2], Summary: body.Summary, Findings: body.Findings, Items: body.Items, Declined: body.Declined}, true
+	return Record{Kind: kind, Verdict: body.Verdict, Sha: sha, Summary: body.Summary, Findings: body.Findings, Items: body.Items, Declined: body.Declined}, true
 }
 
 // ReportSource is the forge surface needed to recover a verdict. Authentication

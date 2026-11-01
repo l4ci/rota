@@ -17,7 +17,7 @@ import (
 // earlier report instead of adding another record.
 func PostReport(be Backend, ref, markdown string) error {
 	key, _, _ := strings.Cut(markdown, "\n")
-	if !strings.HasPrefix(key, marker.Prefix+marker.KindReport+" ") || !strings.HasSuffix(key, " -->") {
+	if !marker.IsReportKey(key) {
 		return errf(ErrInvalid, "report must start with a rota report marker")
 	}
 	p, ok := be.(interface {
@@ -61,7 +61,7 @@ func (f *File) postReport(ref, key, markdown string) error {
 		}
 		if start >= 0 {
 			end := len(body)
-			if at := strings.Index(body[start+len(key):], "\n"+marker.Prefix+marker.KindReport+" "); at >= 0 {
+			if at := strings.Index(body[start+len(key):], "\n"+marker.ReportPrefix); at >= 0 {
 				end = start + len(key) + at + 1
 			}
 			body = body[:start] + markdown + "\n" + body[end:]

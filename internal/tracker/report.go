@@ -47,7 +47,7 @@ func (g *GitLab) AuthenticatedUser(ctx context.Context) (string, error) { return
 // PostReport upserts the rendered report on the PR, keyed by its first marker line.
 func PostReport(ctx context.Context, forge Forge, pr int, markdown string) error {
 	key, _, _ := strings.Cut(markdown, "\n")
-	if !strings.HasPrefix(key, marker.Prefix+marker.KindReport+" ") || !strings.HasSuffix(key, " -->") {
+	if !marker.IsReportKey(key) {
 		return fmt.Errorf("report must start with a rota report marker")
 	}
 	notes, err := forge.MRNotes(ctx, pr)
