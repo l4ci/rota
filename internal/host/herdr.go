@@ -413,7 +413,7 @@ func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
 // herdr can type the brief and lose the Enter (#89). A brief left on the
 // prompt line is submitted with bounded Enter retries instead of failing.
 func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
-	text, err := readFile(file)
+	text, err := h.d.readFile(file)
 	if err != nil {
 		return ErrNotSubmitted
 	}
@@ -509,7 +509,7 @@ func relayQueued(output, text string) bool {
 // text and reports handled, so the resend never types a second copy on top.
 // Not handled means the prompt line holds no such brief and Send applies.
 func (h *herdr) SubmitPending(ctx context.Context, slot, handle, file string) (bool, error) {
-	text, err := readFile(file)
+	text, err := h.d.readFile(file)
 	if err != nil {
 		return false, nil
 	}
@@ -564,7 +564,7 @@ func (h *herdr) draftPane(ctx context.Context, name string) string {
 
 // Draft implements Drafter.
 func (h *herdr) Draft(ctx context.Context, slot, handle, file string) string {
-	text, _ := readFile(file)
+	text, _ := h.d.readFile(file)
 	return humanDraft(h.draftPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
 }
 
