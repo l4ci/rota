@@ -186,6 +186,7 @@ func TestReviewDepthBundleTakesHighest(t *testing.T) {
 // review:<h> and review:none labels, the author's harness and round.harnesses.
 func TestReviewDepthCross(t *testing.T) {
 	on := roundcfg.CrossReview{Labels: []string{"size:Major", "risk:high"}, Harnesses: []string{"claude", "codex"}}
+	codexDefault := roundcfg.CrossReview{Labels: on.Labels, Harnesses: []string{"codex", "claude"}, DefaultKind: "codex"}
 	for _, c := range []struct {
 		name   string
 		cfg    roundcfg.CrossReview
@@ -198,6 +199,9 @@ func TestReviewDepthCross(t *testing.T) {
 		{"risk:high, codex author", on, []string{"risk:high"}, "codex", "claude", "other than the author's codex"},
 		{"unknown author takes the default kind", on, []string{"size:Major"}, "", "codex", "author's claude"},
 		{"harness label names the author", on, []string{"size:Major", "harness:codex"}, "", "claude", "author's codex"},
+		{"project default names the author", codexDefault, []string{"size:Major"}, "", "claude", "author's codex"},
+		{"label overrides project default", codexDefault, []string{"size:Major", "harness:claude"}, "", "codex", "author's claude"},
+		{"slot overrides label and project", codexDefault, []string{"size:Major", "harness:codex"}, "claude", "codex", "author's claude"},
 		{"review label picks", on, []string{"size:Major", "review:claude"}, "claude", "claude", "label review:claude"},
 		{"review:none skips", on, []string{"size:Major", "review:none"}, "claude", "none", "label review:none"},
 		{"review:none beats review:codex", on, []string{"size:Major", "review:codex", "review:none"}, "claude", "none", "label review:none"},

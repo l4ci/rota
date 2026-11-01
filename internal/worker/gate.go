@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/ledger"
@@ -1250,20 +1251,6 @@ func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
 	return res.Cross != "" && res.Cross != CrossNone && depth != config.DepthNone
 }
 
-// assignedHarness is the harness of the latest assign ledger entry for issue,
-// the author of a PR whose slot moved on; "" when the ledger has none, so the
-// caller falls back to the issue's label and the configured default.
-func assignedHarness(root, issue string) string {
-	if issue == "" {
-		return ""
-	}
-	es, _ := ledger.Load(root)
-	if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: issue, RequireHarness: true}); e != nil {
-		return e.Harness
-	}
-	return ""
-}
-
 // stepReviewDepth applies ship.review: it resolves the depth for this branch
 // from the diff size against the base and the labels of the slot's issue, notes
 // it, and refuses a branch that lacks the recorded verdicts that depth needs.
@@ -1292,8 +1279,17 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	}
 	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind, Lenses: lenses}
 	src.Change, src.ChangeErr = g.in.cfg.ChangePolicy()
+	author := harness.AuthorSources{Slot: g.target.Kind}
 	if src.Author == "" {
-		src.Author = assignedHarness(g.root, g.target.Issue)
+		es, _ := ledger.Load(g.root)
+		if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: g.target.Issue, RequireHarness: true}); e != nil {
+			author.Assigned = e.Harness
+		}
+	}
+	// Only resolve known authors here. When none is recorded, review depth
+	// supplies the labels and project default before inferring the author.
+	if author.Slot != "" || author.Assigned != "" {
+		src.Author, _ = harness.ResolveAuthor(author)
 	}
 	hasSpec := verdict.HasSpec(g.target.Issue)
 	if key, ok := tracker.ParseKey(g.target.Issue); ok {

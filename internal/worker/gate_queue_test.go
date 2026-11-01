@@ -130,13 +130,13 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 // A queued PR's slot moved on, so the author kind comes from the issue's latest
 // assign ledger entry: a Codex-built PR needs a claude cross review, not codex.
 func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
-	run := func(t *testing.T, entries ...ledger.Entry) GateResult {
+	run := func(t *testing.T, labels string, entries ...ledger.Entry) GateResult {
 		t.Helper()
 		w := newWorld(t, "")
 		w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
 		w.setQueued()
 		w.setPRBody("Closes #5\n")
-		w.forge("issueLabels", "in-progress,size:Major")
+		w.forge("issueLabels", "in-progress,size:Major"+labels)
 		w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
 		for _, e := range entries {
 			e.TS = time.Now()
@@ -151,7 +151,7 @@ func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 		return res
 	}
 	t.Run("latest assign entry names the author", func(t *testing.T) {
-		res := run(t,
+		res := run(t, ",harness:claude",
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "ben", Harness: "claude"},
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "9", Slot: "kit", Harness: "claude"},
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "w2", Harness: "codex"})
@@ -160,9 +160,15 @@ func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 		}
 	})
 	t.Run("no entry falls back to the default order", func(t *testing.T) {
-		res := run(t)
+		res := run(t, "")
 		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
 			t.Fatalf("%s (%s), want review-missing naming codex", res.Verdict, res.Err)
+		}
+	})
+	t.Run("no entry falls back to the issue label", func(t *testing.T) {
+		res := run(t, ",harness:codex")
+		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+			t.Fatalf("%s (%s), want review-missing naming claude", res.Verdict, res.Err)
 		}
 	})
 }
