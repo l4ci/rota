@@ -10,10 +10,8 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -1265,47 +1263,20 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		return struct{}{}, *g.res, done, err
 	}
 
-	policy, err := g.in.cfg.ReviewPolicy()
-	if err != nil {
-		return finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
-	}
-	cross, err := g.in.cfg.CrossReview()
-	if err != nil {
-		return finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
-	}
-	lenses, err := g.in.cfg.Lenses()
-	if err != nil {
-		return finish(g.broke(fmt.Sprintf("%v; run rota config check", err)))
-	}
-	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind, Lenses: lenses}
-	src.Change, src.ChangeErr = g.in.cfg.ChangePolicy()
-	author := harness.AuthorSources{Slot: g.target.Kind}
-	if src.Author == "" {
-		es, _ := ledger.Load(g.root)
-		if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: g.target.Issue, RequireHarness: true}); e != nil {
-			author.Assigned = e.Harness
-		}
-	}
-	// Only resolve known authors here. When none is recorded, review depth
-	// supplies the labels and project default before inferring the author.
-	if author.Slot != "" || author.Assigned != "" {
-		src.Author, _ = harness.ResolveAuthor(author)
-	}
-	hasSpec := verdict.HasSpec(g.target.Issue)
-	if key, ok := tracker.ParseKey(g.target.Issue); ok {
-		if g.issues != nil {
-			src.Issue, src.Issues = key, g.issues
-			for _, id := range g.target.Bundle {
-				if m, ok := tracker.ParseKey(id); ok {
-					src.Members = append(src.Members, m)
-				}
-			}
-		}
-	}
+	var prBody func() (string, error)
 	if g.pr != "" {
-		src.PRBody = g.prBody
+		prBody = g.prBody
 	}
-	res, err := ResolveReviewDepth(g.ctx, src)
+	inputs, err := BuildReviewInputs(g.ctx, ReviewInputOptions{
+		Config: g.in.cfg, Root: g.root, Dir: g.root, Branch: g.branch,
+		Span: g.baseRef + "..." + g.headRef, Git: g.e.Git, Target: &g.target,
+		Issues:       func() (ReviewIssues, error) { return g.issues, nil },
+		TargetPRBody: prBody,
+	})
+	if err != nil {
+		return finish(g.broke(err.Error()))
+	}
+	res, err := inputs.Resolve(g.ctx)
 	if err != nil {
 		return finish(g.broke(err.Error()))
 	}
@@ -1329,7 +1300,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		}
 	}
 	have := verdict.Recorded(g.root, g.branch, strings.TrimSpace(head))
-	missing := verdict.MissingReviews(depth, hasSpec, have)
+	missing := verdict.MissingReviews(depth, res.HasSpec, have)
 	// A depth of none reviews nothing, so it asks for no cross review either.
 	crossMissing := ""
 	if NeedsCross(res, depth) {

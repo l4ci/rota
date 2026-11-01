@@ -12,11 +12,8 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -489,22 +486,20 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		data.Set("lenses", lenses)
 		// A bundled branch closes more than its lead: the reviewer checks every
 		// bundled issue's acceptance.
-		if root, err := backlogScope(c); err == nil {
-			if members := branchBundle(c, root, t.Branch); len(members) > 0 {
-				refs := make([]string, len(members))
-				for i, m := range members {
-					refs[i] = m.Ref()
-				}
-				data.Set("bundle", refs)
-				text += " bundle: " + strings.Join(refs, ", ")
+		if len(res.Members) > 0 {
+			refs := make([]string, len(res.Members))
+			for i, m := range res.Members {
+				refs[i] = m.Ref()
 			}
+			data.Set("bundle", refs)
+			text += " bundle: " + strings.Join(refs, ", ")
 		}
 		// The depth can rise after the review ran (a bounce fix outside the
 		// issue's files); the newest review set on record is the old depth.
 		if root, err := backlogScope(c); err == nil {
 			bare, _, _ := splitRemote(c, t.Dir, t.Branch)
 			if last := verdict.LastReviewSet(root, bare); len(last) > 0 {
-				if old := verdict.CoveredDepth(last, worker.BranchHasSpec(t.Branch)); verdict.DepthRose(old, depth) {
+				if old := verdict.CoveredDepth(last, res.HasSpec); verdict.DepthRose(old, depth) {
 					note := fmt.Sprintf("review depth %s -> %s (%s): record the missing review verdict before gating", old, depth, why)
 					data.Set("previousDepth", string(old))
 					data.Set("depthNote", note)
@@ -514,58 +509,6 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: text}, nil
 	}
-}
-
-// branchBundle is the member issues of the bundle behind branch: the bundle of
-// the slot holding the branch, else of the review record queued for it. The
-// registry lives in the main checkout, so a worktree falls back to that one.
-// Nil when the branch is no bundle's or the registry is unreadable.
-func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
-	_, ok := worker.BranchIssue(branch)
-	if !ok {
-		return nil
-	}
-	reg := branchRegistry(c, root)
-	var ids []string
-	sl, q := reg.BranchHolder(branch)
-	if sl != nil {
-		ids = sl.Bundle()
-	}
-	if len(ids) == 0 && q != nil {
-		ids = q.Bundle
-	}
-	var keys []tracker.IssueKey
-	for _, id := range ids {
-		if k, ok := tracker.ParseKey(id); ok {
-			keys = append(keys, k)
-		}
-	}
-	return keys
-}
-
-// branchRegistry is the worker registry of root, else of the main checkout
-// when root is a worktree without one.
-func branchRegistry(c *Ctx, root string) worker.Registry {
-	reg := worker.LoadRegistryTolerant(root)
-	if !reg.Exists {
-		common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
-		if err != nil {
-			return reg
-		}
-		if main, ok := rotastate.MainCheckout(common); ok && main != root {
-			reg = worker.LoadRegistryTolerant(main)
-		}
-	}
-	return reg
-}
-
-// branchAuthor is the harness of the slot holding branch, the PR's author for
-// the cross-harness review; "" when no slot holds it.
-func branchAuthor(c *Ctx, root, branch string) string {
-	if sl, _ := branchRegistry(c, root).BranchHolder(branch); sl != nil {
-		return sl.HarnessKind()
-	}
-	return ""
 }
 
 // branchReviewDepth resolves the depth ship.review picks for t, from its diff
@@ -578,58 +521,22 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		return worker.ReviewDepth{}, "", err
 	}
 	cfg := c.deps().Config(root)
-	policy, err := config.ReviewPolicyOf(cfg)
+	inputs, err := worker.BuildReviewInputs(c.Context(), worker.ReviewInputOptions{
+		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Branch,
+		Span: t.Base + "..." + t.Branch, Git: c.deps().Git, Labels: extra,
+		Issues: func() (worker.ReviewIssues, error) {
+			return c.deps().issuesOrNone(c.Context(), cfg, root)
+		},
+		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", root) },
+	})
 	if err != nil {
-		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
-	}
-	cross, err := roundcfg.ParseCrossReview(cfg)
-	if err != nil {
-		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
-	}
-	lenses, err := config.LensesOf(cfg)
-	if err != nil {
-		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
-	}
-	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra,
-		Cross: cross, Author: branchAuthor(c, root, t.Branch), Lenses: lenses}
-	src.Change, src.ChangeErr = config.ChangePolicyOf(cfg)
-	tiered := src.ChangeErr == nil && (len(src.Change.DocsPaths) > 0 || src.Change.SmallBelow > 0)
-	// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
-	// gate does, when the policy can use it (a label to match or a file set to
-	// drift from) or a cross-harness review may be required.
-	if n, ok := worker.BranchIssue(t.Branch); ok && (policy.NeedsIssue() || cross.Active() || lenses.UsesLabels()) {
-		it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
-		if err != nil {
-			return worker.ReviewDepth{}, "", trackerErr(err)
+		var de *worker.ReviewDepthError
+		if errors.As(err, &de) && de.Stage == "issue-source" {
+			return worker.ReviewDepth{}, "", trackerErr(de.Err)
 		}
-		if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
-			src.Issue, src.Issues = n, it
-			src.Members = branchBundle(c, root, t.Branch)
-		}
+		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
-	// The branch's open PR carries the Door line. Like the gate, an unreadable
-	// forge fails the verb: skipping would print a depth that ignores the line.
-	// A local forge or a missing forge CLI has no PR to read.
-	prFound, noForge := false, false
-	if policy.MayBeBelowFull() || tiered {
-		f, err := c.deps().forge(c.Context(), cfg, "", root)
-		switch {
-		case err == nil:
-			src.PRBody = func() (string, error) {
-				body, found, err := branchPRBody(c, f, t.Branch)
-				prFound = found
-				return body, err
-			}
-		case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
-			noForge = true
-		case !policy.MayBeBelowFull():
-			// only the tier reads the body: it classifies full on the error
-			src.PRBody = func() (string, error) { return "", err }
-		default:
-			return worker.ReviewDepth{}, "", Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
-		}
-	}
-	res, err := worker.ResolveReviewDepth(c.Context(), src)
+	res, err := inputs.Resolve(c.Context())
 	if err != nil {
 		var de *worker.ReviewDepthError
 		if errors.As(err, &de) && de.Stage == "diff" {
@@ -637,10 +544,10 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		}
 		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
-	return res, res.Why + worker.DoorNote(policy, res, prFound, noForge), nil
+	return res, inputs.PreviewWhy(res), nil
 }
 
-// branchPRBody is the body of branch's open PR; found is false when it has none.
+// branchPRBody is the body of branch's open PR for change classification.
 func branchPRBody(c *Ctx, f tracker.Forge, branch string) (body string, found bool, err error) {
 	prs, err := f.OpenPRs(c.Context())
 	if err != nil {
