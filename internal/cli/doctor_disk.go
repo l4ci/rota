@@ -31,10 +31,10 @@ func statDisk(dir string) *doctor.Disk {
 // doctorLeftovers names what rota left behind that would give disk back: temp
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // It only runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, run git.Runner, root string, now time.Time) []string {
+func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, now time.Time) []string {
 	var out []string
-	if n, size := leakedTempDirs(os.TempDir(), now.Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, os.TempDir(), doctor.HumanBytes(uint64(size))))
+	if n, size := leakedTempDirs(temp, now.Add(-leakAge)); n > 0 {
+		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
 		if n := prunableWorktrees(ctx, run, root); n > 0 {
@@ -90,27 +90,28 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent) and the leftovers scan doctor runs when the
 // volume is under it. A non-numeric threshold falls back to the default.
-func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk, getenv func(string) string) {
+func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string) {
 	min := config.IntOr(cfg, "doctor.minFreeDiskPercent", 0, 100)
 	in.MinFreeDiskPercent = min
 	dir := root
 	if dir == "" {
 		dir = in.Dir
 	}
-	in.Disk = disk(dir)
-	if cache := goCacheDir(getenv); cache != "" && !sameVolume(cache, dir) {
-		in.CacheDisk = disk(cache)
+	in.Disk = d.DiskUsage(dir)
+	if cache := goCacheDir(d.Getenv, d.UserCacheDir); cache != "" && !sameVolume(cache, dir) {
+		in.CacheDisk = d.DiskUsage(cache)
 	}
-	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, run, root, now) }
+	now := d.Now()
+	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), now) }
 }
 
 // goCacheDir is where the Go build cache lives: $GOCACHE, else go-build under
 // the user cache dir, as the go tool resolves it. "" when neither is known.
-func goCacheDir(getenv func(string) string) string {
+func goCacheDir(getenv func(string) string, userCacheDir func() (string, error)) string {
 	if c := getenv("GOCACHE"); c != "" && c != "off" {
 		return c
 	}
-	if d, err := os.UserCacheDir(); err == nil {
+	if d, err := userCacheDir(); err == nil {
 		return filepath.Join(d, "go-build")
 	}
 	return ""

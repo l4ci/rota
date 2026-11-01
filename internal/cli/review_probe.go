@@ -20,7 +20,7 @@ func reviewProbe(c *Ctx, args []string) (result Result, err error) {
 	if err != nil {
 		return Result{}, Unavailable("resolve probe directory: %v", err)
 	}
-	temp, err := reviewWorkspaceTempDir()
+	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
 	if err != nil {
 		return Result{}, Unavailable("resolve probe temporary directory: %v", err)
 	}

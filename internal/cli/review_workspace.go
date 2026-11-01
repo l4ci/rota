@@ -41,7 +41,7 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 	}
 	head = strings.TrimSpace(out)
 	// Canonical paths let cleanup reject symlinked parents rather than following them.
-	temp, err := reviewWorkspaceTempDir()
+	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
 	if err != nil {
 		return "", "", Unavailable("resolve temporary directory: %v", err)
 	}
@@ -91,7 +91,7 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	}
 	path := filepath.Clean(args[0])
 	root := filepath.Dir(path)
-	temp, err := reviewWorkspaceTempDir()
+	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
 	if err != nil {
 		return Result{}, Unavailable("resolve temporary directory: %v", err)
 	}
@@ -116,8 +116,8 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	return Result{Data: gitObj("changed", true, "path", path, "head", marker.Head), Text: fmt.Sprintf("removed %s", path)}, nil
 }
 
-func reviewWorkspaceTempDir() (string, error) {
-	temp, err := filepath.Abs(os.TempDir())
+func reviewWorkspaceTempDir(dir string) (string, error) {
+	temp, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}

@@ -16,18 +16,25 @@ import (
 
 func TestReviewWorkspacePinnedAndCleanup(t *testing.T) {
 	repo := newRepo(t, t.TempDir(), "repo", "main")
+	d := testDeps()
+	temp := t.TempDir()
+	d.TempDir = func() string { return temp }
 	write(t, filepath.Join(repo, "tracked.txt"), "pinned\n")
 	gittest.Run(t, repo, "add", "tracked.txt")
 	gittest.Run(t, repo, "commit", "-qm", "pinned")
 	sha := gittest.Run(t, repo, "rev-parse", "HEAD")
 	write(t, filepath.Join(repo, "tracked.txt"), "live dirty\n")
 	before := gittest.Run(t, repo, "status", "--porcelain")
-	o := trRun(t, repo, "", "review", "prepare", sha, "--json")
+	o := trRunWith(t, d, repo, "", "review", "prepare", sha, "--json")
 	if o.code != 0 {
 		t.Fatalf("prepare must return a workspace: rc=%d %s %s", o.code, o.stdout, o.stderr)
 	}
 	data := envelope(t, o.stdout)["data"].(map[string]any)
 	path := data["path"].(string)
+	canonicalTemp, err := filepath.EvalSymlinks(temp)
+	if err != nil || filepath.Dir(filepath.Dir(path)) != canonicalTemp {
+		t.Fatalf("workspace %s is outside injected temp %s: %v", path, temp, err)
+	}
 	t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
 	if data["head"] != sha {
 		t.Fatalf("head=%v want %s", data["head"], sha)
@@ -38,7 +45,7 @@ func TestReviewWorkspacePinnedAndCleanup(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(path, ".review")); err != nil {
 		t.Fatal(err)
 	}
-	o = trRun(t, repo, "", "review", "cleanup", path, "--json")
+	o = trRunWith(t, d, repo, "", "review", "cleanup", path, "--json")
 	if o.code != 0 {
 		t.Fatalf("cleanup: %s %s", o.stdout, o.stderr)
 	}
@@ -69,7 +76,6 @@ func TestReviewWorkspaceFailuresPreserveLiveRepo(t *testing.T) {
 	for _, mode := range []string{"missing", "archive", "extract", "setup", "cleanup", "extract-cleanup"} {
 		t.Run(mode, func(t *testing.T) {
 			temp := t.TempDir()
-			t.Setenv("TMPDIR", temp)
 			repo := newRepo(t, t.TempDir(), "repo", "main")
 			write(t, filepath.Join(repo, "tracked.txt"), "committed")
 			if mode == "setup" {
@@ -86,6 +92,7 @@ func TestReviewWorkspaceFailuresPreserveLiveRepo(t *testing.T) {
 			write(t, filepath.Join(repo, "untracked"), "keep")
 			before := reviewLiveSnapshot(t, repo)
 			deps := testDeps()
+			deps.TempDir = func() string { return temp }
 			ref := "HEAD"
 			if mode == "missing" {
 				ref = "does-not-exist"
@@ -152,21 +159,23 @@ func TestReviewWorkspaceFailuresPreserveLiveRepo(t *testing.T) {
 }
 
 func TestReviewWorkspaceCleanupScope(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir())
+	temp := t.TempDir()
+	d := testDeps()
+	d.TempDir = func() string { return temp }
 	repo := newRepo(t, t.TempDir(), "repo", "main")
 	write(t, filepath.Join(repo, "keep"), "live")
-	o := trRun(t, repo, "", "review", "cleanup", repo, "--json")
+	o := trRunWith(t, d, repo, "", "review", "cleanup", repo, "--json")
 	if o.code != 4 {
 		t.Fatalf("cleanup accepted live repository: %s", o.stdout)
 	}
-	o = trRun(t, repo, "", "review", "prepare", "HEAD", "--json")
+	o = trRunWith(t, d, repo, "", "review", "prepare", "HEAD", "--json")
 	if o.code != 0 {
 		t.Fatalf("prepare: %s", o.stdout)
 	}
 	path := envelope(t, o.stdout)["data"].(map[string]any)["path"].(string)
 	// An agent may replace the tree with a symlink. Cleanup removes the link,
 	// not its target, and also leaves a separately prepared workspace alone.
-	other := trRun(t, repo, "", "review", "prepare", "HEAD", "--json")
+	other := trRunWith(t, d, repo, "", "review", "prepare", "HEAD", "--json")
 	if other.code != 0 {
 		t.Fatalf("second prepare: %s", other.stdout)
 	}
@@ -177,7 +186,7 @@ func TestReviewWorkspaceCleanupScope(t *testing.T) {
 	if err := os.Symlink(repo, path); err != nil {
 		t.Fatal(err)
 	}
-	o = trRun(t, repo, "", "review", "cleanup", path, "--json")
+	o = trRunWith(t, d, repo, "", "review", "cleanup", path, "--json")
 	if o.code != 0 {
 		t.Fatalf("cleanup: %s", o.stdout)
 	}

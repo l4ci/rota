@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -339,7 +338,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 // ownWatching is this process's watcher record, stamped so its pid can be told
 // from a reused one.
 func ownWatching(c *Ctx, mode string) limits.Watching {
-	pid := os.Getpid()
+	pid := c.deps().PID()
 	host, start := c.deps().LeaseEnv().Identity(pid)
 	return limits.Watching{PID: pid, Host: host, Start: start, StartedAt: limits.Time(c.deps().Now()), Mode: mode}
 }
@@ -365,7 +364,7 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 	if !held {
 		return refuse(blockedby.NoRound, "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
 	}
-	if w, ok := limits.ActiveWatching(le, cd); ok && w.PID != os.Getpid() {
+	if w, ok := limits.ActiveWatching(le, cd); ok && w.PID != c.deps().PID() {
 		return refuse(blockedby.Watching, fmt.Sprintf("a usage-limit watcher (%s, pid %d) is already running", w.Mode, w.PID), "one watcher acts on the limits list")
 	}
 	return Result{}, nil
