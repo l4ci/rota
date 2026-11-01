@@ -566,12 +566,6 @@ func (s *Slot) SetFinding(id string) {
 	s.o.Set("finding", id)
 }
 
-// SetIssues records the reported issues; none clears them.
-func (s *Slot) SetIssues(refs []string) {
-	result := ParseReviewResult("issues:" + strings.Join(refs, ","))
-	s.SetReviewResult(result)
-}
-
 // SetHandle records the pane handle; "" clears it.
 func (s *Slot) SetHandle(h string) {
 	if h == "" {

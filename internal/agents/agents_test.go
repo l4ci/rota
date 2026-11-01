@@ -114,12 +114,12 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 			t.Fatalf("second write: %s %s", e.Path, e.Status)
 		}
 	}
-	if p := Problems(root, config.Load(projects.OSEnv(), rotatree.Config(root))); len(p) != 0 {
+	if p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
 		t.Fatalf("problems after write: %v", p)
 	}
 	// Config change makes the files drift; Compare writes nothing.
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"roles":{"explorer":{"effort":"low"}}}`), 0o644)
-	p := Problems(root, config.Load(projects.OSEnv(), rotatree.Config(root)))
+	p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil)
 	if len(p) != 1 || !strings.Contains(p[0], "rota-explorer.md: drift") {
 		t.Fatalf("problems: %v", p)
 	}
@@ -130,7 +130,7 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 	if _, err := Write(root, config.Load(projects.OSEnv(), rotatree.Config(root))); err != nil {
 		t.Fatal(err)
 	}
-	if p := Problems(root, config.Load(projects.OSEnv(), rotatree.Config(root))); len(p) != 0 {
+	if p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
 		t.Fatalf("problems after rewrite: %v", p)
 	}
 }
@@ -201,7 +201,7 @@ func TestProblemsOnlyListsKeptPaths(t *testing.T) {
 	cfg := `{"round":{"tiers":{"codex":{"light":"gpt-lo","standard":"gpt-mid","heavy":"gpt-hi"}}}}`
 	root := project(t, cfg)
 	c := config.Load(projects.OSEnv(), rotatree.Config(root))
-	all := Problems(root, c)
+	all := ProblemsOnly(root, c, nil)
 	if len(all) != 6 {
 		t.Fatalf("unrestricted problems: %v", all)
 	}
