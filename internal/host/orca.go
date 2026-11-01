@@ -372,14 +372,13 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	if started {
 		return o.verifyBranch(ctx, h)
 	}
-	for i := 0; i < 4; i++ {
-		o.d.settle(time.Second)
+	return confirmPickup(&o.d, Orca, func(time.Duration) (bool, error) {
 		after, e := o.ReadPane(ctx, "", handle, 0)
 		if e != nil {
-			return e
+			return false, e
 		}
 		if after == before || humanDraft(stripDim(after), "") != "" {
-			continue
+			return false, nil
 		}
 		above := after
 		if n := strings.LastIndexAny(after, promptMarkers); n >= 0 {
@@ -393,13 +392,13 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 			oldAbove = before[:n]
 		}
 		if above == oldAbove {
-			continue
+			return false, nil
 		}
 		if orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove) && !orcaBusy.MatchString(text) {
-			return o.verifyBranch(ctx, h)
+			return true, o.verifyBranch(ctx, h)
 		}
-	}
-	return ErrNotSubmitted
+		return false, nil
+	}, nil)
 }
 
 var orcaBusy = regexp.MustCompile(`(?im)^[ \t]*(?:[•●✶✻✽✢*][ \t]*)?[^\r\n]*\besc to interrupt\b[^\r\n]*$`)
