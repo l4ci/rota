@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -206,21 +205,7 @@ func checkClaim(ctx context.Context, in claimInput) stepOutcome {
 		return out
 	}
 	for _, key := range in.Keys {
-		var held []string
-		var err error
-		if cs, ok := in.Issues.(tracker.ClaimStore); ok {
-			held, err = cs.Claims(ctx, key)
-		} else {
-			var is tracker.Issue
-			is, err = in.Issues.Get(ctx, key, true)
-			if err == nil {
-				bodies := make([]string, len(is.Comments))
-				for i, c := range is.Comments {
-					bodies[i] = c.Body
-				}
-				held = marker.OpenClaims(bodies)
-			}
-		}
+		held, err := backlog.HeldClaims(ctx, in.Issues, key)
 		if err != nil {
 			out.Notes = append(out.Notes, fmt.Sprintf("CLAIMS-UNKNOWN %s — could not read claims on %s: %v; the claim check is skipped", in.Slot, key.Ref(), err))
 			continue
@@ -257,40 +242,27 @@ func releaseClaimLabels(ctx context.Context, in releaseInput) (notes []string) {
 		return nil
 	}
 	for _, key := range in.Keys {
-		is, err := in.Issues.Get(ctx, key, false)
-		if err != nil {
-			notes = append(notes, fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", in.Slot, key.Ref(), in.Label, err))
-			continue
-		}
-		if is.State != "closed" {
-			continue
-		}
-		if n := releaseClaimLabel(ctx, in, key, is.Labels); n != "" {
+		if n := releaseClaimLabel(ctx, in, key); n != "" {
 			notes = append(notes, n)
 		}
 	}
 	return notes
 }
 
-// releaseClaimLabel drops only workflow labels from an issue known to be
-// closed. It returns the note a failed removal leaves, "" otherwise.
-func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKey, labels []string) string {
+// releaseClaimLabel asks backlog to release a closed issue's workflow labels.
+// A failed write leaves a diagnostic; the merge has already landed.
+func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKey) string {
 	if in.Label == "" {
 		return ""
 	}
-	var drop []string
-	for _, label := range labels {
-		if label == in.Label || backlog.IsClaimLabel(label) {
-			drop = append(drop, label)
-		}
-	}
-	if len(drop) == 0 {
+	drop, err := backlog.CleanupClosedIssueLabels(ctx, in.Issues, key, in.Label)
+	if err == nil {
 		return ""
 	}
-	if err := in.Issues.RemoveLabels(ctx, key, drop); err != nil {
-		return fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", in.Slot, strings.Join(drop, ", "), key.Ref(), err)
+	if len(drop) == 0 {
+		return fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", in.Slot, key.Ref(), in.Label, err)
 	}
-	return ""
+	return fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", in.Slot, strings.Join(drop, ", "), key.Ref(), err)
 }
 
 // stepCloses runs checkCloses on the slot's PR. It runs under CheckOnly too,
