@@ -418,13 +418,9 @@ func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, 
 		return false, &NoSupportPRError{Branch: branch, PR: pr}
 	}
 	gc := e.GateConfig(root)
-	provider, err := e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider, tracker.ForgeActor)
-	if err != nil {
-		return false, err
-	}
-	forge, err := e.Forge(provider, root, gc.Tracker)
-	if err != nil {
-		return false, err
+	forge, _, refusal := e.openForge(e.Ctx, root, pr, gc, tracker.ForgeActor)
+	if refusal != nil {
+		return false, refusal.err
 	}
 	if rf, ok := forge.(ReviewForge); ok {
 		notes, err := rf.MRNotes(e.Ctx, n)
