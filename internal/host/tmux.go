@@ -153,15 +153,11 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 		return ErrNotSubmitted
 	}
 	t.tmux(ctx, "delete-buffer", "-b", buf)
-	for tries := 0; tries < 4; tries++ {
-		t.d.settle(time.Second)
+	return confirmPickup(&t.d, Tmux, func(time.Duration) (bool, error) {
+		return t.pane(ctx, handle) != before, nil
+	}, func() {
 		t.tmux(ctx, "send-keys", "-t", handle, "C-m")
-		t.d.settle(2 * time.Second)
-		if t.pane(ctx, handle) != before {
-			return nil
-		}
-	}
-	return ErrNotSubmitted
+	})
 }
 
 // rawPaste reports whether the pane's foreground process is a TUI that needs
