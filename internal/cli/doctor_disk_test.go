@@ -2,16 +2,15 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func fixedDisk(free, total uint64) func(string) *doctor.Disk {
@@ -20,47 +19,108 @@ func fixedDisk(free, total uint64) func(string) *doctor.Disk {
 	}
 }
 
-func TestLeakedTempDirs(t *testing.T) {
-	dir := t.TempDir()
-	old := time.Now().Add(-3 * time.Hour)
-	mk := func(name string, age time.Time) {
-		p := filepath.Join(dir, name)
-		os.MkdirAll(p, 0o755)
-		os.WriteFile(filepath.Join(p, "f"), make([]byte, 2048), 0o644)
-		os.Chtimes(p, age, age)
-	}
-	mk("rota-smoke.old", old)
-	mk("tmp.other", old) // another program's mktemp dir is not ours
-	mk("rota-gate-logs-old", old)
-	mk("rota-smoke.fresh", time.Now()) // a live run's dir is not leaked
-	mk("other", old)                   // not ours
-	n, size := leakedTempDirs(dir, time.Now().Add(-leakAge))
-	if n != 2 || size != 4096 {
-		t.Errorf("leakedTempDirs = %d, %d; want 2, 4096", n, size)
-	}
-}
-
-func TestDoctorDiskInput(t *testing.T) {
-	cfg := config.Load(projects.OSEnv(), filepath.Join(t.TempDir(), "absent.json"))
-	t.Setenv("TMPDIR", t.TempDir())
-	in := doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(1000, 100000), os.Getenv) // 1% free
-	if in.MinFreeDiskPercent != 10 || in.Disk == nil || in.Disk.Free != 1000 {
-		t.Fatalf("default threshold / disk not read: %+v", in)
-	}
-	rep := doctor.Run(context.Background(), doctor.Input{Disk: in.Disk, MinFreeDiskPercent: in.MinFreeDiskPercent,
-		Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
-			return doctor.Result{}, nil
-		},
-		Look: func(string) (string, bool) { return "", false }})
-	found := false
-	for _, c := range rep.Checks {
-		if c.Name == "disk" && c.Status == doctor.Warn && strings.Contains(c.Detail, "1%") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("no disk warning in %+v", rep.Checks)
+func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		name, gocache string
+		cacheError    bool
+	}{
+		{name: "user-cache"},
+		{name: "explicit-cache", gocache: "explicit"},
+		{name: "off-falls-back", gocache: "off"},
+		{name: "unknown-cache", cacheError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			temp, cache := t.TempDir(), t.TempDir()
+			now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+			for _, entry := range []struct {
+				name string
+				age  time.Duration
+			}{
+				{"rota-smoke.old", 3 * time.Hour}, {"rota-gate-logs-old", 3 * time.Hour},
+				{"rota-smoke.fresh", 0}, {"tmp.other", 3 * time.Hour}, {"other", 3 * time.Hour},
+			} {
+				p := filepath.Join(temp, entry.name)
+				if err := os.Mkdir(p, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(p, "f"), make([]byte, 2048), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				age := now.Add(-entry.age)
+				if err := os.Chtimes(p, age, age); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cachePath := filepath.Join(cache, "go-build")
+			if tc.gocache == "explicit" {
+				cachePath = filepath.Join(cache, "explicit")
+			}
+			if err := os.Mkdir(cachePath, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			d := testDeps()
+			// A nonexistent working directory has no device, so the existing volume
+			// comparison treats the fake cache as a separate volume.
+			cwd, home := filepath.Join(t.TempDir(), "absent"), t.TempDir()
+			d.Getwd = func() (string, error) { return cwd, nil }
+			d.UserHomeDir = func() (string, error) { return home, nil }
+			d.LookPath = func(string) (string, error) { return "", errors.New("no tools") }
+			d.Getenv = func(k string) string {
+				if k == "GOCACHE" {
+					if tc.gocache == "explicit" {
+						return cachePath
+					}
+					return tc.gocache
+				}
+				return ""
+			}
+			d.TempDir = func() string { return temp }
+			d.UserCacheDir = func() (string, error) {
+				if tc.cacheError {
+					return "", errors.New("no user cache")
+				}
+				return cache, nil
+			}
+			d.Now = func() time.Time { return now }
+			d.DiskUsage = fixedDisk(1000, 100000)
+			d.Git = func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
+			in := doctorInput(context.Background(), d)
+			if in.MinFreeDiskPercent != 10 || in.Disk == nil || in.Disk.Free != 1000 {
+				t.Fatalf("default threshold / disk not read: %+v", in)
+			}
+			if tc.cacheError {
+				if in.CacheDisk != nil {
+					t.Fatalf("unknown cache checked: %+v", in.CacheDisk)
+				}
+			} else if in.CacheDisk == nil || in.CacheDisk.Path != cachePath {
+				t.Fatalf("cache disk = %+v, want %s", in.CacheDisk, cachePath)
+			}
+			want := "2 leaked temp dirs under " + temp + " (4.0 KiB); safe to delete once no run is active"
+			got := in.ScanLeftovers()
+			if len(got) != 1 || got[0] != want {
+				t.Fatalf("leftovers = %q, want %q", got, want)
+			}
+			rep := doctor.Run(context.Background(), doctor.Input{
+				Disk: in.Disk, CacheDisk: in.CacheDisk, MinFreeDiskPercent: in.MinFreeDiskPercent,
+				ScanLeftovers: in.ScanLeftovers,
+				Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
+					return doctor.Result{}, nil
+				},
+				Look: func(string) (string, bool) { return "", false },
+			})
+			diskWarn, cacheWarn := false, false
+			for _, c := range rep.Checks {
+				if c.Name == "disk" && c.Status == doctor.Warn && strings.Contains(c.Detail, "1%") && strings.Contains(c.Hint, temp) {
+					diskWarn = true
+				}
+				if c.Name == "go-cache-disk" && c.Status == doctor.Warn && strings.Contains(c.Hint, "go clean -cache") {
+					cacheWarn = true
+				}
+			}
+			if !diskWarn || cacheWarn == tc.cacheError {
+				t.Fatalf("disk/cache warnings missing: %+v", rep.Checks)
+			}
+		})
 	}
 }
 
@@ -77,35 +137,23 @@ func TestDoctorSlotBlocksUsesTheStoredWidth(t *testing.T) {
 	}
 }
 
-func TestDoctorDiskInputWarnsOnTheGoCacheVolume(t *testing.T) {
-	cfg := config.Load(projects.OSEnv(), filepath.Join(t.TempDir(), "absent.json"))
-	t.Setenv("TMPDIR", t.TempDir())
+func TestDoctorDiskSkipsSharedCacheVolume(t *testing.T) {
 	cache := t.TempDir()
 	in := doctor.Input{Dir: t.TempDir()}
 	// Same device as Dir: the repo-volume check already covers it.
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(1000, 100000), func(string) string { return cache })
+	d := testDeps()
+	temp := t.TempDir()
+	d.TempDir = func() string { return temp }
+	d.UserCacheDir = func() (string, error) { return cache, nil }
+	d.Getenv = func(k string) string {
+		if k == "GOCACHE" {
+			return cache
+		}
+		return ""
+	}
+	d.DiskUsage = fixedDisk(1000, 100000)
+	d.doctorDiskInput(context.Background(), &in, nil, "")
 	if in.CacheDisk != nil {
 		t.Errorf("cache on the repo volume duplicated the disk check: %+v", in.CacheDisk)
-	}
-	rep := doctor.Run(context.Background(), doctor.Input{
-		CacheDisk: &doctor.Disk{Path: cache, Free: 1000, Total: 100000}, MinFreeDiskPercent: 10,
-		Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
-			return doctor.Result{}, nil
-		},
-		Look: func(string) (string, bool) { return "", false }})
-	for _, c := range rep.Checks {
-		if c.Name == "go-cache-disk" && c.Status == doctor.Warn && strings.Contains(c.Detail, "Go build cache") && strings.Contains(c.Hint, "go clean -cache") {
-			return
-		}
-	}
-	t.Errorf("no go-cache-disk warning in %+v", rep.Checks)
-}
-
-func TestGoCacheDir(t *testing.T) {
-	if got := goCacheDir(func(string) string { return "/x/gc" }); got != "/x/gc" {
-		t.Errorf("GOCACHE ignored: %q", got)
-	}
-	if got := goCacheDir(func(string) string { return "off" }); got == "off" {
-		t.Errorf("GOCACHE=off is not a path")
 	}
 }

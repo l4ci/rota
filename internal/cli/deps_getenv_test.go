@@ -10,14 +10,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
-// Deps.Getenv is the one env reader in cli: os.Getenv and os.LookupEnv appear
-// only in deps.go, where the default Deps binds os.Getenv.
-func TestNoRawEnvReadsOutsideDeps(t *testing.T) {
+// OS environment, process identity and directory reads belong at the Deps boundary.
+func TestNoRawMachineReadsOutsideDeps(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -36,8 +36,8 @@ func TestNoRawEnvReadsOutsideDeps(t *testing.T) {
 			if !ok {
 				return true
 			}
-			if id, ok := sel.X.(*ast.Ident); ok && id.Name == "os" && (sel.Sel.Name == "Getenv" || sel.Sel.Name == "LookupEnv") {
-				t.Errorf("%s: os.%s; read env through Deps.Getenv", fset.Position(sel.Pos()), sel.Sel.Name)
+			if id, ok := sel.X.(*ast.Ident); ok && id.Name == "os" && (sel.Sel.Name == "Getenv" || sel.Sel.Name == "LookupEnv" || sel.Sel.Name == "Getpid" || sel.Sel.Name == "TempDir" || sel.Sel.Name == "UserCacheDir") {
+				t.Errorf("%s: os.%s; read the machine through Deps", fset.Position(sel.Pos()), sel.Sel.Name)
 			}
 			return true
 		})
@@ -117,5 +117,29 @@ func TestLimitWatchGuardLookupErrorIsUnavailable(t *testing.T) {
 	var ce *Error
 	if !errors.As(err, &ce) || ce.Exit != ExitUnavailable {
 		t.Fatalf("lookup error: want ExitUnavailable, got %v", err)
+	}
+}
+
+// A watcher owns its current process marker even when the lease holder is an ancestor.
+func TestLimitWatchGuardUsesInjectedPID(t *testing.T) {
+	c, root, cd, _ := heldLeaseDeps(t)
+	le := c.deps().LeaseEnv()
+	le.Alive = func(pid int) bool { return pid == 4242 || pid == 7777 }
+	le.StartTime = func(pid int) (uint64, bool) { return 99, pid == 4242 || pid == 7777 }
+	c.deps().LeaseEnv = func() roundlease.Env { return le }
+	c.deps().PID = func() int { return 7777 }
+	rec := ownWatching(c, limits.ModeWatch)
+	if rec.PID != 7777 || rec.Start != 99 || rec.Host != le.Host {
+		t.Fatalf("watcher identity = %+v, want current pid 7777, start 99 on %s", rec, le.Host)
+	}
+	if err := limits.WriteWatching(cd, rec); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := limitWatchGuard(c, root, cd); err != nil {
+		t.Fatalf("own watcher refused: %v", err)
+	}
+	c.deps().PID = func() int { return 8888 }
+	if _, err := limitWatchGuard(c, root, cd); err == nil {
+		t.Fatal("another process's watcher allowed")
 	}
 }

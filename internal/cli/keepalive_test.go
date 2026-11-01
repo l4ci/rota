@@ -4,7 +4,6 @@ import (
 	"github.com/l4ci/rota/internal/limits"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -67,7 +66,15 @@ func TestKeepaliveRunUsageErrors(t *testing.T) {
 func TestKeepaliveRunRestartsOnFreshHandoff(t *testing.T) {
 	dir := kaProject(t, "")
 	child := kaChild(t, dir)
-	code, out, errOut := rotaIn(t, dir, append([]string{"keepalive", "run", "--backoff", "0", "--prompt", "go on", "--json", "--"}, child...)...)
+	deps := testDeps()
+	deps.PID = func() int { return 4242 }
+	deps.HolderPID = func() int { return 9000 } // the lease ancestor is not the supervisor
+	le := roundlease.Env{Host: "test", Now: deps.Now,
+		Alive:     func(pid int) bool { return pid == 4242 },
+		StartTime: func(pid int) (uint64, bool) { return 99, pid == 4242 },
+	}
+	deps.LeaseEnv = func() roundlease.Env { return le }
+	code, out, errOut := rotaInWith(t, deps, dir, append([]string{"keepalive", "run", "--backoff", "0", "--prompt", "go on", "--json", "--"}, child...)...)
 	if code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errOut)
 	}
@@ -83,11 +90,11 @@ func TestKeepaliveRunRestartsOnFreshHandoff(t *testing.T) {
 	if len(lines) != 2 || strings.HasSuffix(lines[0], "go on") || !strings.HasSuffix(lines[1], "go on") {
 		t.Errorf("the prompt goes last, on the restart only: %q", lines)
 	}
-	if h, _ := os.ReadFile(filepath.Join(child[4], "holder")); strings.TrimSpace(string(h)) != strconv.Itoa(os.Getpid()) {
+	if h, _ := os.ReadFile(filepath.Join(child[4], "holder")); strings.TrimSpace(string(h)) != "4242" {
 		t.Errorf("child must see ROTA_ROUND_HOLDER_PID: %q", h)
 	}
 	cd, _ := rotastatetest.CommonDir(dir)
-	if _, st, _ := roundlease.DefaultEnv().Read(cd); st != roundlease.None {
+	if _, st, _ := le.Read(cd); st != roundlease.None {
 		t.Errorf("lease must be released: %v", st)
 	}
 	code, out, _ = rotaIn(t, dir, "keepalive", "status", "--json")
