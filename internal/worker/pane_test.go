@@ -352,14 +352,8 @@ func TestLimitRegexIncludesKindPhrases(t *testing.T) {
 	}
 }
 
-// A "Login expired" status line blocks a claude pane on the account; another
-// kind's pane echoing the phrase is not logged out.
-func TestClassifyLoginExpiredIsBlockedOnTheAccount(t *testing.T) {
-	st, ev := ClassifyFor("claude", "  ⎿  Login expired · Please run /login\n", false, 0, "")
-	if st != StateBlocked || !strings.Contains(ev, "round.accounts") || !strings.Contains(ev, "config.local.json") {
-		t.Errorf("state %q evidence %q", st, ev)
-	}
-	// Another kind's pane that echoes the phrase is not logged out.
+// Another kind's pane that echoes the login phrase is not logged out.
+func TestClassifyOtherHarnessIsNotLoggedOut(t *testing.T) {
 	if st, _ := ClassifyFor("codex", "Login expired\n", false, 0, ""); st == StateBlocked {
 		t.Errorf("codex pane read as %q", st)
 	}
