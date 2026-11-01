@@ -201,3 +201,48 @@ func TestReportProse(t *testing.T) {
 		}
 	}
 }
+
+func TestReportRoundTrip(t *testing.T) {
+	for _, c := range []struct{ kind, sha string }{
+		{"review-spec", "abcdef1234567"},
+		{"qa", "abcd"},
+		{"gate", strings.Repeat("a", 64)},
+	} {
+		line := Report(c.kind, c.sha)
+		kind, sha, ok := ParseReport(line)
+		if !IsReportKey(line) || !ok || kind != c.kind || sha != c.sha {
+			t.Errorf("Report/ParseReport(%q, %q) = %q, %q, %v; key=%v", c.kind, c.sha, kind, sha, ok, IsReportKey(line))
+		}
+	}
+}
+
+func TestReportKeyAndParseBoundaries(t *testing.T) {
+	for _, c := range []struct {
+		line string
+		key  bool
+	}{
+		{"plain text", false},
+		{"Copied report\n<!-- rota:report qa sha=abcd -->", false},
+		{"```\n<!-- rota:report qa sha=abcd -->\n```", false},
+		{"<!-- hv:report qa sha=abcd -->", false},
+		{"<!-- rota:reporting qa sha=abcd -->", false},
+		{"<!-- rota:report qa sha=abcd", false},
+		{"<!-- rota:report qa sha=abcd --> trailing", false},
+		// Posting only requires an envelope, as it did before the extraction.
+		{"<!-- rota:report qa sha=not-a-sha -->", true},
+		{"<!-- rota:report qa sha=abc -->", true},
+		{"<!-- rota:report qa sha=" + strings.Repeat("a", 65) + " -->", true},
+		{"<!-- rota:report qa sha=ABCD -->", true},
+		{"<!-- rota:report qa -->", true},
+		{"<!-- rota:report QA sha=abcd -->", true},
+	} {
+		t.Run(c.line, func(t *testing.T) {
+			if got := IsReportKey(c.line); got != c.key {
+				t.Errorf("IsReportKey(%q) = %v, want %v", c.line, got, c.key)
+			}
+			if kind, sha, ok := ParseReport(c.line); ok || kind != "" || sha != "" {
+				t.Errorf("ParseReport(%q) = %q, %q, %v; want empty rejection", c.line, kind, sha, ok)
+			}
+		})
+	}
+}

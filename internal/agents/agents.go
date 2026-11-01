@@ -21,13 +21,6 @@ import (
 // was written by hand and is left alone.
 const Marker = harness.AgentMarker
 
-// CodexEfforts, ExplorerTools and ErrEffort are the harness package's: the
-// harness that owns a role's file format also owns what that format can say.
-var CodexEfforts = harness.CodexEfforts
-
-// ExplorerTools is the Claude tool allowlist of the explorer role.
-const ExplorerTools = harness.ExplorerTools
-
 // Role is one role with its resolved models: Models maps a harness kind to its
 // tier's model, "" when the kind has no tier map (the file then omits model
 // and the harness picks its own).
@@ -232,11 +225,9 @@ func symlinkIn(root, rel string) string {
 	return ""
 }
 
-// Problems lists the files that are missing or have drifted, as one line each
-// for `rota doctor`; a config or render error is one line too.
-func Problems(root string, cfg any) []string { return ProblemsOnly(root, cfg, nil) }
-
-// ProblemsOnly is Problems limited to the paths keep accepts (all when keep is nil).
+// ProblemsOnly lists the files that are missing or have drifted, as one line
+// each for `rota doctor`, limited to the paths keep accepts (all when keep is
+// nil); a config or render error is one line too.
 func ProblemsOnly(root string, cfg any, keep func(path string) bool) []string {
 	es, err := Compare(root, cfg)
 	if err != nil {
