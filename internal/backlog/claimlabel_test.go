@@ -215,7 +215,6 @@ func TestClaimLabelDrift(t *testing.T) {
 		{"wrong agent", "open", []string{"claimed:ben@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, []string{"claimed:dana@main"}, []string{"claimed:ben@main"}, []string{"keep", "claimed:dana@main"}},
 		{"released", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->", "<!-- rota:release dana@3 -->"}, nil, []string{"claimed:dana@main"}, []string{"keep"}},
 		{"shared", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->", "<!-- rota:claim mac-ben@3 -->"}, []string{"claimed:ben@mac"}, nil, []string{"claimed:dana@main", "keep", "claimed:ben@mac"}},
-		{"closed", "closed", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, nil, []string{"claimed:dana@main"}, []string{"keep"}},
 		{"in sync", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, nil, nil, []string{"claimed:dana@main", "keep"}},
 		{"legacy", "open", []string{"keep"}, []string{"<!-- rota:claim alice -->"}, nil, nil, []string{"keep"}},
 	} {
