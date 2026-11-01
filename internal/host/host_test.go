@@ -60,7 +60,7 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
-func TestInSession(t *testing.T) {
+func TestTmuxInSession(t *testing.T) {
 	f := &fake{}
 	c := &clock{}
 	cases := []struct {
@@ -70,10 +70,6 @@ func TestInSession(t *testing.T) {
 	}{
 		{"tmux", map[string]string{}, false},
 		{"tmux", map[string]string{"TMUX": "/tmp/tmux-1/default,1,0"}, true},
-		{"herdr", map[string]string{}, false},
-		{"herdr", map[string]string{"HERDR_ENV": "1"}, false},
-		{"herdr", map[string]string{"HERDR_WORKSPACE_ID": "w9"}, false},
-		{"herdr", map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}, true},
 	}
 	for _, tc := range cases {
 		if got := New(tc.dispatch, deps(f, tc.env, c)).InSession(); got != tc.want {
