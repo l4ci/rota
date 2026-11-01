@@ -115,6 +115,8 @@ See [configuration](configuration.md) for the full `work` block.
 
 The change tier also sets the depth: a docs-only diff gets `none`, even under `full`, and a small one is capped at `light`; a label, a `Door: one-way` line or a `paths` match still raises it. `rota change classify` shows the tier; the rules and the `change.*` keys are in [configuration](configuration.md#change).
 
+`rota review depth`, the verdict depth nudge and the merge gate use the same issue, bundle and author metadata. They use the current slot or queued PR record, including a promoted bundle lead, before falling back to the issue in the branch name. Preview finds the branch's open PR; the gate reads its selected PR. Before a PR exists, preview explains that it has no Door line to read.
+
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
 ## Review lenses
@@ -135,7 +137,7 @@ Globs allow `*` within a segment and a trailing `/**` for a directory. An unknow
 
 The two reviewers run on the harness you work in, so code Claude wrote is reviewed by Claude. For the work where a miss costs most, a third review comes from a different model. Once `round.harnesses` lists more than one harness (for example `["claude", "codex"]`), an issue labelled `size:Major` or `risk:high` (`review.crossLabels`) needs one read-only review from a harness other than its author's. `rota review depth --json` shows which one as `cross`, and why as `crossWhy`.
 
-- **Who reviews.** The first `claude` or `codex` entry of `round.harnesses` that is not the author's harness (the slot that built the PR, else the issue's `harness:<kind>` label). A `review:<harness>` label on the issue picks it instead, and `review:none` skips the cross review.
+- **Who reviews.** The first `claude` or `codex` entry of `round.harnesses` that is not the author's harness (the slot that built the PR, else its latest recorded assignment, then the issue's `harness:<kind>` label or the project default). A `review:<harness>` label on the issue picks it instead, and `review:none` skips the cross review.
 - **How it runs.** `/rota-review` runs the other harness once, headless, in a scratch extract of the reviewed commit (for Codex, `codex exec --sandbox read-only`). It takes no worker slot. It returns the same verdict block, recorded as `review-cross` with the reviewer's harness and model; `rota verdict show` prints both.
 - **What it blocks.** `rota worker gate` refuses the merge (`review-missing`) until a `review-cross` from that harness is recorded at the PR's head. A FAIL blocks and bounces like any review. A malformed block is retried once; a run that cannot happen (missing binary, quota, a second bad block) records nothing and says `cross-harness review unavailable`, and the PR waits until the review runs or someone adds `review:none`.
 - **Releases.** `/rota-release` runs one more over the range since the last tag, on contract and JSON changes, exit codes, migrations and config keys, and CHANGELOG claims. Its findings appear beside the notes for you to approve. They never stop the release.
