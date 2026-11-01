@@ -6,7 +6,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/labels"
 )
@@ -142,15 +141,15 @@ func (p Pick) String() string {
 
 // Where a worker's kind came from, as resolveKind reports it.
 const (
-	KindFromFlag  = "--kind"
-	KindFromLabel = "harness label"
+	KindFromFlag  = harness.AuthorFromFlag
+	KindFromLabel = harness.AuthorFromLabel
 	// KindFromHarnesses is the first entry of round.harnesses, the project default.
-	KindFromHarnesses = config.RoundHarnessesKey
-	KindFromSlot      = "slot"
+	KindFromHarnesses = harness.AuthorFromProject
+	KindFromSlot      = harness.AuthorFromSlot
 	// KindFromSlotResume is the slot's kind kept because it resumes its own
 	// issue, ahead of the project default.
-	KindFromSlotResume = "slot (resume)"
-	KindFromDefault    = "default"
+	KindFromSlotResume = harness.AuthorFromResume
+	KindFromDefault    = harness.AuthorFromDefault
 	// KindFromFallback is a kind another harness's cooling accounts handed
 	// over to (round.harnesses).
 	KindFromFallback = "quota fallback"
@@ -160,17 +159,11 @@ const (
 // label, else the first round.harnesses entry, else the slot's recorded kind, else claude.
 // A slot resuming its own issue keeps its kind ahead of the project default.
 func resolveKind(flag, label, project, slot string, resuming bool) (kind, source string) {
-	if resuming && flag == "" && label == "" && slot != "" {
-		return slot, KindFromSlotResume
+	s := harness.AuthorSources{Flag: flag, Labels: []string{harness.LabelPrefix + label}, Project: project, PriorSlot: slot}
+	if resuming {
+		s.ResumeSlot, s.PriorSlot = slot, ""
 	}
-	for _, c := range []struct{ k, src string }{
-		{flag, KindFromFlag}, {label, KindFromLabel}, {project, KindFromHarnesses}, {slot, KindFromSlot},
-	} {
-		if c.k != "" {
-			return c.k, c.src
-		}
-	}
-	return harness.Default, KindFromDefault
+	return harness.ResolveAuthor(s)
 }
 
 // resolveModel is the model: --model, else the item's label, else the tier
