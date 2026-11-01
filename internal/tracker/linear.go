@@ -614,15 +614,15 @@ func (l *Linear) Get(ctx context.Context, key IssueKey, withComments bool) (Issu
 	return is, nil
 }
 
-// errNoMilestones refuses a milestone on Linear: projects and cycles are not
+// errLinearNoMilestones refuses a milestone on Linear: projects and cycles are not
 // rota milestones (#586).
-func errNoMilestones() error {
-	return failed("issues.source linear has no milestones: Linear projects and cycles are not rota milestones")
+func errLinearNoMilestones() error {
+	return &noMilestonesError{failed("issues.source linear has no milestones: Linear projects and cycles are not rota milestones")}
 }
 
 func (l *Linear) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	if milestone != "" {
-		return "", errNoMilestones()
+		return "", errLinearNoMilestones()
 	}
 	teamID, err := l.teamInfo(ctx)
 	if err != nil {
@@ -674,7 +674,7 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 
 func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	if e.Milestone != "" {
-		return errNoMilestones()
+		return errLinearNoMilestones()
 	}
 	id, err := l.issueID(ctx, key)
 	if err != nil {
@@ -803,7 +803,7 @@ func (l *Linear) filter(f ListFilter) map[string]any {
 // order Linear pages in.
 func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
-		return nil, errNoMilestones()
+		return nil, errLinearNoMilestones()
 	}
 	var got []linearIssue
 	err := Pages(ctx, func(cursor string) (string, error) {
@@ -1133,7 +1133,7 @@ func (l *Linear) dropState(ctx context.Context, key IssueKey, name string) error
 // ---- milestones: none -----------------------------------------------------------
 
 func (l *Linear) Milestones(context.Context, string) ([]Milestone, error) {
-	return nil, errNoMilestones()
+	return nil, errLinearNoMilestones()
 }
 
 // FindMilestone finds none: Linear holds no rota milestones.
@@ -1142,13 +1142,15 @@ func (l *Linear) FindMilestone(context.Context, string) (string, bool, error) {
 }
 
 func (l *Linear) CreateMilestone(context.Context, string, string) (int, error) {
-	return 0, errNoMilestones()
+	return 0, errLinearNoMilestones()
 }
 
-func (l *Linear) EditMilestone(context.Context, int, MilestoneEdit) error { return errNoMilestones() }
+func (l *Linear) EditMilestone(context.Context, int, MilestoneEdit) error {
+	return errLinearNoMilestones()
+}
 
 func (l *Linear) IssuesInMilestone(context.Context, string, string) ([]Issue, error) {
-	return nil, errNoMilestones()
+	return nil, errLinearNoMilestones()
 }
 
 // ---- claims (plain comments) ------------------------------------------------------

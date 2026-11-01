@@ -63,17 +63,117 @@ grep -q "home=$HOME\b" "$R/snapshots/00-fixture.json" && fail "capture leaked th
 grep -q 'slot=none git=none' "$R/snapshots/00-fixture.json" || fail "capture did not drop ROTA_* and GIT_DIR from the environment"
 pass "capture pins HOME and drops ROTA_* and GIT_* variables"
 
-# script edited since render: the manifest holds a different source hash
+# Old manifests cannot prove pipeline freshness: require a new input record.
 mkdir -p "$R/out"
 printf '{"episodes":{"00-fixture":{"rota_version":"1.2.3","source_hash":"deadbeef"}}}\n' > "$R/out/manifest.json"
 chk "$VD/rota-a"
-{ [ "$rc" = 1 ] && grep -q '00-fixture: script edited since render' <<<"$OUT"; } \
-  || fail "an edited script should go stale against the manifest (rc $rc): $OUT"
-HASH="$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$R/episodes/00-fixture.md")"
-printf '{"episodes":{"00-fixture":{"rota_version":"1.2.3","source_hash":"%s"}}}\n' "$HASH" > "$R/out/manifest.json"
+{ [ "$rc" = 1 ] && grep -q '00-fixture: render inputs not recorded' <<<"$OUT"; } \
+  || fail "a legacy manifest should require a new input record (rc $rc): $OUT"
+pass "videos --check refuses to certify a manifest without render-input hashes"
+
+# Record a render, then change only the renderer: the script and capture stay put.
+mkdir -p "$R/render/src"
+printf 'export const title = "rota";\n' > "$R/render/src/Intro.tsx"
+stamp_fixture() {
+  python3 "$VID" parse "$R/episodes/00-fixture.md" --root "$R" > "$VD/parsed.json"
+  python3 - "$VD/parsed.json" "$R/out/manifest.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+json.dump({'episodes': {'00-fixture': {
+    'source_hash': s['source_hash'], 'source_inputs': s['source_inputs']
+}}}, open(sys.argv[2], 'w'))
+PY
+}
+stamp_fixture
 chk "$VD/rota-a"
-[ "$rc" = 0 ] || fail "a script matching the manifest hash should be current (rc $rc): $OUT"
-pass "videos --check compares each script's hash with out/manifest.json"
+[ "$rc" = 0 ] || fail "a freshly recorded render should be current (rc $rc): $OUT"
+printf 'export const title = "changed";\n' > "$R/render/src/Intro.tsx"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q 'render/src/Intro.tsx' <<<"$OUT"; } \
+  || fail "a renderer edit should go stale and name the input (rc $rc): $OUT"
+pass "videos --check detects a renderer edit without a script edit"
+stamp_fixture
+
+# The whole pipeline is shared: code, pronunciation, pins, assets and driver.
+for input in render/voice/synth.py render/voice/lexicon.json render/requirements.txt \
+  render/package.json render/package-lock.json render/remotion.config.ts \
+  render/tsconfig.json render/vtt.mjs render/public/fonts/font.woff2 render.sh; do
+  mkdir -p "$(dirname "$R/$input")"
+  printf 'original\n' > "$R/$input"
+  stamp_fixture
+  printf 'changed\n' > "$R/$input"
+  chk "$VD/rota-a"
+  { [ "$rc" = 1 ] && grep -Fq "videos/$input" <<<"$OUT"; } \
+    || fail "a $input edit should go stale and name the input (rc $rc): $OUT"
+done
+pass "videos --check covers voice code, lexicon, package pins, configs, captions, fonts and render.sh"
+
+stamp_fixture
+printf '\n# script edit\n' >> "$R/episodes/00-fixture.md"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q 'videos/episodes/00-fixture.md' <<<"$OUT"; } \
+  || fail "a script edit should go stale and name the script (rc $rc): $OUT"
+pass "videos --check includes the episode script in the render hash"
+
+stamp_fixture
+for input in render/src/sceneTiming.test.ts render/src/__tests__/timing.ts \
+  render/voice/test_lexicon.py render/voice/__pycache__/synth.pyc \
+  render/README.md README.md notes.txt; do
+  mkdir -p "$(dirname "$R/$input")"
+  printf '# comment outside render inputs\n' > "$R/$input"
+  chk "$VD/rota-a"
+  [ "$rc" = 0 ] || fail "$input cannot change the render (rc $rc): $OUT"
+  printf '# edited test or documentation\n' >> "$R/$input"
+  chk "$VD/rota-a"
+  [ "$rc" = 0 ] || fail "editing $input cannot change the render (rc $rc): $OUT"
+done
+pass "videos --check ignores tests, documentation, bytecode and comments outside render inputs"
+
+printf 'new scene\n' > "$R/render/src/New.tsx"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q 'render/src/New.tsx' <<<"$OUT"; } || fail "an added input should be stale: $OUT"
+stamp_fixture
+rm "$R/render/src/New.tsx" "$R/render/voice/lexicon.json"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q 'render/src/New.tsx' <<<"$OUT" && grep -q 'render/voice/lexicon.json' <<<"$OUT"; } \
+  || fail "deleted inputs should be stale and named: $OUT"
+pass "videos --check names added and deleted render inputs"
+stamp_fixture
+
+# Exercise the real manifest writer without running setup, Node or a render.
+for output in 00-fixture.mp4 00-fixture.vertical.mp4 00-fixture.vtt; do
+  printf 'fixture output\n' > "$R/out/$output"
+done
+sed '/^main "\$@"$/d' "$REPO/videos/render.sh" > "$VD/render-functions.sh"
+bash -c 'source "$1"; OUT="$2"; stamp 00-fixture "$3" "$4"' _ \
+  "$VD/render-functions.sh" "$R/out" "$VD/parsed.json" "$VD/rota-a" \
+  || fail "the render manifest writer failed"
+chk "$VD/rota-a"
+[ "$rc" = 0 ] || fail "the real manifest writer must record current inputs (rc $rc): $OUT"
+pass "render.sh writes the source fingerprint and input hashes consumed by videos --check"
+
+# A shared input invalidates every rendered episode, but an episode script is local.
+cp "$R/episodes/00-fixture.md" "$R/episodes/01-second.md"
+cp "$R/snapshots/00-fixture.json" "$R/snapshots/01-second.json"
+python3 "$VID" parse "$R/episodes/01-second.md" --root "$R" > "$VD/second.json"
+python3 - "$R/out/manifest.json" "$VD/second.json" <<'PY'
+import json, sys
+m, s = [json.load(open(p)) for p in sys.argv[1:]]
+m['episodes']['01-second'] = {k: s[k] for k in ('source_hash', 'source_inputs')}
+json.dump(m, open(sys.argv[1], 'w'))
+PY
+printf '\n# local edit\n' >> "$R/episodes/01-second.md"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q '01-second: input changed' <<<"$OUT" && ! grep -q '00-fixture:' <<<"$OUT"; } \
+  || fail "an episode edit should affect only that episode: $OUT"
+printf 'shared edit\n' >> "$R/render/src/Intro.tsx"
+chk "$VD/rota-a"
+{ [ "$rc" = 1 ] && grep -q '00-fixture: .*render/src/Intro.tsx' <<<"$OUT" \
+  && grep -q '01-second: .*render/src/Intro.tsx' <<<"$OUT"; } \
+  || fail "a shared renderer edit should affect both episodes: $OUT"
+rm "$R/episodes/01-second.md" "$R/snapshots/01-second.json"
+stamp_fixture
+pass "shared pipeline edits affect all rendered episodes and script edits stay local"
 
 # a script outside the grammar is reported, not a traceback
 printf -- '---\nnumber: 9\n---\n\n### 01 terminal\n\nvo: x\n' > "$R/episodes/09-bad.md"
