@@ -20,7 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/verdict"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // verdictCommands is the `rota verdict` group (B2, #55). `rota debug verdict`
@@ -342,7 +341,7 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	if err != nil {
 		return ""
 	}
-	hasSpec := worker.BranchHasSpec(t.branch)
+	hasSpec := res.HasSpec
 	missing := verdict.MissingReviews(res.Depth, hasSpec, verdict.Recorded(t.root, t.branch, head))
 	if len(missing) == 0 {
 		return ""
