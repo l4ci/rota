@@ -2,12 +2,14 @@ package worker
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // Verification needs only a pinned plan and its process boundary. There is no
@@ -23,7 +25,6 @@ func TestTrainVerifySuppliedPlan(t *testing.T) {
 	tr := trainRun{e: e, ctx: bg, root: dir, cache: loadTrainCache(dir)}
 	p := trainPlan{
 		in:      gateInput{cfg: ParseGateConfig(decodeCfg(t, `{"test":{"full":["full"],"e2e":["e2e"]}}`))},
-		res:     TrainResult{Members: []TrainMember{{Target: "kit", Branch: "feature"}}},
 		baseSHA: "base", heads: []string{"head"}, scratch: dir,
 		verify: func(where string) (VerifyResult, error) {
 			if where != dir {
@@ -32,13 +33,44 @@ func TestTrainVerifySuppliedPlan(t *testing.T) {
 			return VerifyResult{Verified: []string{"full"}}, nil
 		},
 	}
-	verified, result, done, err := tr.verifyStage(p)
+	verified, result, done, err := tr.verifyStage(p, TrainResult{Members: []TrainMember{{Target: "kit", Branch: "feature"}}})
 	if err != nil || done || verified.passing != 1 || !slices.Equal(result.Verified, []string{"full"}) || !slices.Equal(result.E2EVerified, []string{"e2e"}) {
 		t.Fatalf("verification of supplied plan: %+v prefix=%d done=%v err=%v", result, verified.passing, done, err)
 	}
-	// The handoff includes the plan that later checks and landing must consume.
-	if verified.plan.baseSHA != "base" || verified.plan.heads[0] != "head" {
-		t.Fatalf("lost pinned plan: %+v", verified.plan)
+}
+
+// A supplied prefix decides which members are checked. Refusing a later member
+// must not change the caller's earlier culprit flags or notes.
+func TestTrainVacuousSuppliedPrefix(t *testing.T) {
+	dir := gittest.NewRepo(t, "main")
+	gittest.Commit(t, dir, "base", "base.txt", "base")
+	base := gittest.Run(t, dir, "rev-parse", "HEAD")
+	gittest.Commit(t, dir, "first", "first.txt", "first")
+	first := gittest.Run(t, dir, "rev-parse", "HEAD")
+	if err := os.WriteFile(filepath.Join(dir, "work.test"), []byte("true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, dir, "add", "work.test")
+	gittest.Commit(t, dir, "second", "second.txt", "second")
+	second := gittest.Run(t, dir, "rev-parse", "HEAD")
+	tr := trainRun{e: Env{Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: TrainOpts{LandGreen: true}}
+	p := trainPlan{tips: []string{base, first, second}, in: gateInput{cfg: ParseGateConfig(decodeCfg(t,
+		`{"test":{"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`))}}
+	answer := TrainResult{Members: []TrainMember{{Target: "first", Culprit: true}, {Target: "second"}}}
+	for _, c := range []struct {
+		prefix  int
+		verdict string
+	}{{1, ""}, {2, GateVacuousTests}} {
+		_, result, done, err := tr.vacuousStage(p, answer, trainVerified{passing: c.prefix})
+		if err != nil || result.Verdict != c.verdict || done != (c.verdict != "") {
+			t.Fatalf("prefix=%d result=%+v done=%v err=%v", c.prefix, result, done, err)
+		}
+		if done && (result.Culprit != "second" || result.Members[0].Culprit || !result.Members[1].Culprit) {
+			t.Fatalf("wrong culprit: %+v", result)
+		}
+		if !answer.Members[0].Culprit || answer.Members[1].Culprit || len(answer.Notes) != 0 || answer.Verdict != "" {
+			t.Fatalf("changed supplied answer: %+v", answer)
+		}
 	}
 }
 
