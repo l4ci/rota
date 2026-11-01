@@ -3,6 +3,7 @@ package limits
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/worker"
@@ -34,7 +35,10 @@ func TestPickAccountMeteredHarnessAsksTheMeterPick(t *testing.T) {
 
 func TestPickAccountLoggedHarnessUsesLoginsAndCooling(t *testing.T) {
 	r := newRig(t)
-	src := &fakeSource{logins: []string{"c1", "c2"}, picked: "never", pickOK: true}
+	src := &fakeSource{logins: []string{"c1", "cooling", "c2"}, picked: "never", pickOK: true}
+	if _, err := Append(r.root, Entry{Session: "ben", Kind: harness.Codex, Account: "cooling", Status: StatusWaiting, ResetsAt: Time(t0.Add(time.Hour))}); err != nil {
+		t.Fatal(err)
+	}
 	got, ok := PickAccount(context.Background(), src, r.root, harness.Codex, "c1", t0)
 	if !ok || got != "c2" || src.exclude != nil {
 		t.Fatalf("pick %q %v exclude %v", got, ok, src.exclude)
