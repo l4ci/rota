@@ -104,7 +104,7 @@ How rota uses Linear:
 - **Claims.** A claim is a plain comment, `Claimed by <claim id>`. The earliest one wins by the time Linear recorded it (then by comment id), and a release deletes that claimer's comment.
 - **Status.** Close and reopen pick the team's workflow state by type, never by name: close moves the issue to a `completed` state, a not-planned close to a `canceled` one, and reopen to an `unstarted` state (else a `started` one).
 - **Labels.** Labels are workspace labels or the team's own, matched without case; a missing one is created on the team. Another team's label is never used.
-- **Milestones.** None: Linear projects and cycles are not rota milestones, and the milestone verbs fail on a Linear source.
+- **Milestones.** None: Linear projects and cycles are not rota milestones, and the milestone verbs fail on a Linear source. `rota migrate issues` reports each milestone it skips.
 - **Closing PRs.** A PR counts as closing a Linear issue when its head branch or title names the identifier. rota does not rely on Linear's GitHub or GitLab integration: `rota worker gate` moves the issue to a completed state after the merge and comments with the PR, unless the issue is labelled `partial-slice`. A PR merged any other way leaves the issue open (unless the integration closes it): run `rota issues close ENG-42 --commit <sha>`.
 - **Rate limits and errors.** Linear answers some failures with HTTP 200 and a GraphQL `errors` list; rota reads those like HTTP errors (a rate limit is exit 6, a bad key or an unknown team is exit 5). Reads are retried on a 5xx, writes never are.
 
@@ -191,6 +191,6 @@ Open items, their detail files, proof rows, design and plan artifacts, and plann
 
 The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and URL. Commit it. A rate limit (exit 6) stops the run with the map saved; wait and re-run. `--limit N` creates at most N items per run. Writes are paced at a fixed one second.
 
-On a tracker with no milestones (It's a Plan) a milestone is reported as skipped and its items migrate without a `Milestone` field. A forge is found from `origin`; It's a Plan is not one, so set `issues.source itsaplan`, `issues.connection` and `issues.itsaplan.project` before the run.
+On a tracker with no milestones (Linear or It's a Plan) a milestone is reported as skipped and its items migrate without a `Milestone` field. A forge is found from `origin`; It's a Plan is not one, so set `issues.source itsaplan`, `issues.connection` and `issues.itsaplan.project` before the run.
 
 `--apply` never changes `issues.source`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set issues.source github` (or `gitlab`). On It's a Plan it prints no such line, since `issues.source itsaplan` was set before the run. Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.

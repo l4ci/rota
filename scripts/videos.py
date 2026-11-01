@@ -7,7 +7,7 @@
 # Layout under the root (default: <repo>/videos):
 #   episodes/NN-slug.md      the scripts (#2535): front matter, then shots
 #   snapshots/NN-slug.json   committed capture of every terminal shot
-#   out/manifest.json        written by the render: rota version + source hash
+#   out/manifest.json        written by the render: rota version + render-input hashes
 #
 # Usage:
 #   videos.py parse FILE                     print the parsed script as JSON
@@ -22,6 +22,7 @@
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -185,6 +186,43 @@ def source_hash(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
+def render_source(root, script):
+    """Fingerprint checked-in render inputs, without loading the render stack.
+
+    Paths are logical repo-relative names even for a --root fixture. Missing
+    required inputs stay in the map as null, so deletion also causes drift.
+    Installed dependencies, models and caches are represented by their pinned
+    manifests and the model URLs in render.sh, never by local setup state.
+    """
+    root = Path(root).resolve()
+    paths = {'videos/' + os.path.relpath(script, root): Path(script)}
+    for name in ('render.sh', 'render/package.json', 'render/package-lock.json',
+                 'render/requirements.txt', 'render/remotion.config.ts',
+                 'render/tsconfig.json', 'render/vtt.mjs'):
+        paths['videos/' + name] = root / name
+    for directory in ('render/src', 'render/voice', 'render/public'):
+        for path in (root / directory).rglob('*'):
+            rel = path.relative_to(root)
+            if not path.is_file() or any(p in ('__pycache__', 'tests', '__tests__') for p in rel.parts):
+                continue
+            if (path.suffix == '.md' or path.name.startswith('test_')
+                    or '.test.' in path.name or '.spec.' in path.name
+                    or path.suffix == '.pyc'):
+                continue
+            paths['videos/' + rel.as_posix()] = path
+    for name in ('scripts/videos.py', 'scripts/fmlite.py',
+                 'docs/images/rota-icon.svg', 'docs/images/rota-logo.svg'):
+        paths[name] = Path(REPO) / name
+    for shot in parse_script(script)['shots']:
+        if shot['staged']:
+            name = 'staged/' + shot['staged'] + '.txt'
+            paths['videos/' + name] = root / name
+    inputs = {name: source_hash(path) if path.is_file() else None
+              for name, path in sorted(paths.items())}
+    digest = hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return {'source_hash': digest, 'source_inputs': inputs}
+
+
 def normalise(text, scratch, home):
     text = ANSI_RE.sub('', text)
     text = text.replace(scratch, SCRATCH_PLACEHOLDER).replace(home, HOME_PLACEHOLDER)
@@ -300,8 +338,18 @@ def check(root, rota_bin):
                     reasons.append('output changed: shot %s `%s`' % (c['shot'], c['cmd']))
         elif rendered:
             reasons.append('no snapshot for a rendered episode')
-        if rendered and manifest[slug].get('source_hash') != source_hash(path):
-            reasons.append('script edited since render')
+        if rendered:
+            recorded = manifest[slug]
+            current = render_source(root, path)
+            old_inputs = recorded.get('source_inputs')
+            if old_inputs is None:
+                reasons.append('render inputs not recorded; re-render to upgrade the manifest')
+            elif recorded.get('source_hash') != current['source_hash'] or old_inputs != current['source_inputs']:
+                changed = []
+                for name in sorted(old_inputs.keys() | current['source_inputs'].keys()):
+                    if name not in old_inputs or name not in current['source_inputs'] or old_inputs[name] != current['source_inputs'][name]:
+                        changed.append('input changed since render: %s' % name)
+                reasons.extend(changed or ['source hash differs from recorded render inputs'])
         for r in reasons:
             stale.append('%s: %s' % (slug, r))
     unrendered = [f[:-3] for f in files if f[:-3] not in manifest]
@@ -342,7 +390,7 @@ def main(argv):
                 out = capture(script, resolve_bin(opts['bin']), staged, warn=True)
             else:
                 out = script
-                out['source_hash'] = source_hash(args[1])
+                out.update(render_source(opts['root'], args[1]))
         except VideoError as e:
             print('videos.py: %s' % e, file=sys.stderr)
             return 1
