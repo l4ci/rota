@@ -873,6 +873,10 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", run.Issue, run.Book.Bounces)
 			}
 		}
+		if r.Verdict == worker.GateAlreadyMerged {
+			res.Text = r.Err
+			return res, nil
+		}
 		if r.OK() {
 			if r.Verdict == worker.GateFresh {
 				res.Text = fmt.Sprintf("fresh: %s %s", slot, r.Branch)
