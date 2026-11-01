@@ -660,9 +660,10 @@ func (g *gate) stepForge() (bool, error) {
 		return true, fail(exitcode.ExitInternal, err.Error())
 	}
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
-	var err error
-	if g.provider, err = g.e.detectProvider(g.ctx, g.root, g.pr, g.in.cfg.Tracker.Provider, tracker.ForgeActor); err != nil {
-		g.verdict(GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, err),
+	var refusal *forgeOpenRefusal
+	g.forge, g.provider, refusal = g.e.openForge(g.ctx, g.root, g.pr, g.in.cfg, tracker.ForgeActor)
+	if refusal != nil && refusal.reason == forgeOpenProvider {
+		g.verdict(GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, refusal.err),
 			"set forge.provider to the forge that holds the PR, or to local to merge directly")
 		return true, nil
 	}
@@ -676,9 +677,10 @@ func (g *gate) stepForge() (bool, error) {
 		}
 		return false, nil
 	}
-	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg.Tracker); err != nil {
-		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
+	if refusal != nil {
+		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, refusal.err))
 	}
+	var err error
 	if g.issues, err = g.e.issueSide(g.forge, g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the issue source: %v", err))
 	}
@@ -1728,17 +1730,6 @@ func indentTail(text string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return "    " + strings.Join(lines, "\n    ")
-}
-
-// detectProvider is the forge the PR URL names (a bare number carries none),
-// else tracker.ResolveProvider's answer for kind under forge.provider
-// (configured), reading origin through Env.Git.
-func (e Env) detectProvider(ctx context.Context, root, pr, configured string, kind tracker.ForgeKind) (string, error) {
-	if p, ok := tracker.ParsePRURL(pr); ok {
-		return p.Provider, nil
-	}
-	r, err := tracker.ResolveProvider(ctx, kind, "", configured, root, tracker.GitExec(e.Git))
-	return r.Provider, err
 }
 
 // issueSide is the issue source the gate reads beside forge, built from
