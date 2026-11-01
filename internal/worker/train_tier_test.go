@@ -67,9 +67,9 @@ func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 	dir := tierRepo(t, "x.go") // feat changes code
 	rev := func(ref string) string { return gittest.Run(t, dir, "rev-parse", ref) }
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"docs":["true"]}}`))
-	run := func(o TrainOpts) trainPlan {
+	run := func(o TrainOpts) trainPlanning {
 		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o}
-		p := trainPlan{in: gateInput{cfg: cfg}, baseSHA: rev("main"), heads: []string{rev("feat")}, res: TrainResult{Members: []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}}}
+		p := trainPlanning{trainPlan: trainPlan{in: gateInput{cfg: cfg}, baseSHA: rev("main"), heads: []string{rev("feat")}}, res: TrainResult{Members: []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}}}
 		return tr.pickTier(p)
 	}
 	if tr := run(TrainOpts{}); tr.res.Tier != "full" || tr.tierCfg != nil {
@@ -103,9 +103,9 @@ func TestTrainTierSumsMemberLines(t *testing.T) {
 		heads = append(heads, gittest.Run(t, dir, "rev-parse", n))
 	}
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"small":["true"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`))
-	pick := func(n int) trainPlan {
+	pick := func(n int) trainPlanning {
 		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir}
-		p := trainPlan{in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}
+		p := trainPlanning{trainPlan: trainPlan{in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}}
 		for i := 0; i < n; i++ {
 			p.res.Members = append(p.res.Members, TrainMember{Target: "m", Branch: "m", Tier: "small"})
 		}

@@ -33,7 +33,7 @@ func requiredPRSection(body string) (verdict, heading string) {
 
 // checkRequiredPRSections uses the same successful PR read as provenance.
 // A gate without a remote PR, or a missing forge CLI, has no body to check.
-func (g *gateReferences) checkRequiredPRSections() (bool, error) {
+func (g *gateOperation) checkRequiredPRSections() (bool, error) {
 	if g.sectionBody == nil {
 		return false, nil
 	}
@@ -100,19 +100,24 @@ func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry
 func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (GateResult, error) {
 	gr := GateResult{Slot: target, Base: t.o.Base, TargetSlot: gt.Name, Issue: gt.Issue}
 	g := gate{e: t.e, ctx: t.ctx, root: t.root, in: in, resolved: gt, o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true, NoVerdict: true}}
-	identity := gateIdentity{gate: g, res: &gr, target: gt, branch: gt.Branch, pr: gt.PR}
-	first := landingStageResult[gateIdentity, GateResult]{Value: identity, Result: gr}
-	forged := runLandingStage(first, g.stepForge)
-	adopted := runLandingStage(forged, g.stepAdoptPR)
-	remote := runLandingStage(adopted, g.stepRemote)
+	first := landingStageResult[struct{}, GateResult]{Result: gr}
+	forged := runGateStage(first, func(result GateResult) (gateForgeResult, GateResult, bool, error) {
+		return g.stepForge(result, gt)
+	})
+	adopted := runGateStage(forged, func(result GateResult) (GateTarget, GateResult, bool, error) {
+		return g.stepAdoptPR(result, gt, forged.Value)
+	})
+	remote := runGateStage(adopted, func(result GateResult) (bool, GateResult, bool, error) {
+		return g.stepRemote(result, adopted.Value.PR)
+	})
 	if remote.Done || remote.Err != nil {
 		return remote.Result, remote.Err
 	}
-	state := remote.Value
-	gr = remote.Result
+	state := g.operation(remote.Result, adopted.Value, forged.Value)
+	gr = *state.res
 	state.res = &gr
 	gr.Verdict = GateFresh
-	if !state.remote {
+	if !remote.Value {
 		return gr, nil
 	}
 	info, err := state.prView()

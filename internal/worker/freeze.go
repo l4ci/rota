@@ -174,23 +174,25 @@ func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Reco
 	return landfreeze.Save(p, r)
 }
 
-func (_ gate) stepFreeze(g gateIdentity) (gateIdentity, GateResult, bool, error) {
-	result := *g.res
-	g.res = &result
+func (runner gate) stepFreeze(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, GateTarget{Issue: issue, PR: pr}, gateForgeResult{})
+	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+		return struct{}{}, *g.res, done, err
+	}
 
 	r, err := landfreeze.Load(g.ctx, g.e.Git, g.root)
 	if err != nil {
 		g.verdict(GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
-		return g.finish(true, nil)
+		return finish(true, nil)
 	}
 	if r.Allows(g.target.Issue, g.pr) && (!r.Frozen() || r.Binds(g.o.Base)) {
-		return g.finish(false, nil)
+		return finish(false, nil)
 	}
 	g.verdict(GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
-	return g.finish(true, nil)
+	return finish(true, nil)
 }
 
-func (g *gateIdentity) freezeFailure(vr VerifyResult) error {
+func (g *gateOperation) freezeFailure(vr VerifyResult) error {
 	pr := g.pr
 	if pr == "" {
 		pr = g.branch
@@ -221,13 +223,15 @@ func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, ch
 	return landfreeze.Save(p, r)
 }
 
-func (_ gate) stepClearFreeze(g gateIdentity) (gateIdentity, GateResult, bool, error) {
-	result := *g.res
-	g.res = &result
-	if g.o.CheckOnly || g.o.skipsVerify() || g.res.Verdict != GatePass || g.res.VerifySkipped {
-		return g.finish(false, nil)
+func (runner gate) stepClearFreeze(result GateResult) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, GateTarget{}, gateForgeResult{})
+	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+		return struct{}{}, *g.res, done, err
 	}
-	return g.finish(false, g.e.clearVerifiedFreeze(g.ctx, g.root, g.o.Base))
+	if g.o.CheckOnly || g.o.skipsVerify() || g.res.Verdict != GatePass || g.res.VerifySkipped {
+		return finish(false, nil)
+	}
+	return finish(false, g.e.clearVerifiedFreeze(g.ctx, g.root, g.o.Base))
 }
 
 func (e Env) clearVerifiedFreeze(ctx context.Context, root, base string) error {
