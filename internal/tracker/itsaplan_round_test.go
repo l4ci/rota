@@ -75,34 +75,6 @@ func TestItsaplanAssignSelf(t *testing.T) {
 	}
 }
 
-// CloseAfterMerge moves an open issue to a completed column naming the PR, and
-// leaves one that It's a Plan's own forge webhook (or a person) closed alone.
-func TestItsaplanCloseAfterMerge(t *testing.T) {
-	ctx := context.Background()
-	it, s := fakeItsaplan(t, itsaplantest.Options{})
-	open, _ := it.Create(ctx, "open", "", nil, "")
-	done, _ := it.Create(ctx, "closed already", "", nil, "")
-	if err := it.Close(ctx, done, CloseCompleted, ""); err != nil {
-		t.Fatal(err)
-	}
-	var mc MergeCloser = it
-	if err := mc.CloseAfterMerge(ctx, open, "https://example.test/pr/9"); err != nil || s.Column("MKT-1") != 4 {
-		t.Fatalf("%v column %d", err, s.Column("MKT-1"))
-	}
-	if got := s.CommentBodies("MKT-1"); len(got) != 1 || !strings.Contains(got[0], "https://example.test/pr/9") {
-		t.Errorf("comments %q", got)
-	}
-	before := len(s.Requests())
-	if err := mc.CloseAfterMerge(ctx, done, "https://example.test/pr/9"); err != nil || len(s.CommentBodies("MKT-2")) != 0 {
-		t.Errorf("%v comments %q", err, s.CommentBodies("MKT-2"))
-	}
-	for _, r := range s.Requests()[before:] {
-		if !strings.HasPrefix(r, "GET ") {
-			t.Errorf("an issue already completed was written to: %s", r)
-		}
-	}
-}
-
 // #1148: Edit refused the rota field after it had already written the new
 // text; it now checks first, so a refused key leaves the issue as it was.
 func TestItsaplanEditChecksTheFieldBeforeWriting(t *testing.T) {

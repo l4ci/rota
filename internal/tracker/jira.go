@@ -665,14 +665,10 @@ var _ MergeCloser = (*Jira)(nil)
 // CloseAfterMerge closes the issue a merged PR names: Jira closes nothing on
 // a merge by itself.
 func (j *Jira) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) error {
-	d, err := j.issue(ctx, key)
-	if err != nil {
-		return err
-	}
-	if d.Fields.Status.StatusCategory.Key == "done" {
-		return nil
-	}
-	return j.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
+	return closeAfterMerge(ctx, key, pr, j.Close, func() (bool, error) {
+		d, err := j.issue(ctx, key)
+		return d.Fields.Status.StatusCategory.Key == "done", err
+	})
 }
 
 // Reopen moves the issue back to a to-do status (else an in-progress one) and
