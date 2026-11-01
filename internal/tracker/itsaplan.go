@@ -484,15 +484,9 @@ func errItsaplanSlice(what string) error {
 	return failed("issues.source itsaplan does not support %s yet (not implemented)", what)
 }
 
-// errNoMilestonesItsaplan is the one error every milestone call answers, so a
-// caller that can go on without milestones (rota migrate issues) can tell it.
-var errNoMilestonesItsaplan error = failed("issues.source itsaplan has no milestones")
-
-func errItsaplanNoMilestones() error { return errNoMilestonesItsaplan }
-
-// IsNoMilestones reports whether err is a tracker refusing a milestone call
-// because it has no milestones at all, as opposed to a failing call.
-func IsNoMilestones(err error) bool { return errors.Is(err, errNoMilestonesItsaplan) }
+func errItsaplanNoMilestones() error {
+	return &noMilestonesError{failed("issues.source itsaplan has no milestones")}
+}
 
 // ClosesIssue: a key-based tracker, so the key in the branch or the PR title.
 func (t *Itsaplan) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
