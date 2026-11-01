@@ -393,6 +393,48 @@ func TestPollNotifiesABlockedEventOnce(t *testing.T) {
 }
 
 // The wiring from the registry to the classifier: slotTarget hands a slot's
+// unset harness kind through ClassifyFor as the same vocabulary as Claude.
+func TestPollDefaultKindReadsClaudePaneVocabulary(t *testing.T) {
+	for _, tc := range []struct {
+		name, pane, want, evidence string
+	}{
+		{"busy", "✻ Working… (12s · esc to interrupt · ctrl+t to hide)\n", StateBusy, "pane shows:"},
+		{"login expired", "  ⎿  Login expired · Please run /login\n", StateBlocked, "config.local.json"},
+		{"not logged in", "Not logged in · Please run /login\n", StateBlocked, "round.accounts"},
+		{"background tasks", "● Done thinking\n\n  ⏵⏵ bypass permissions on · 1 shell, 2 monitors\n", StateBusy, "background shells or monitors"},
+		{"busy quotes limit", "● Bash(tests)\n  ⎿  You've hit your usage limit\n\n✻ Working… (12s · esc to interrupt)\n\n❯ \n  ⏵⏵ bypass permissions on\n", StateBusy, "pane shows:"},
+		{"relay quotes busy", "❯ --- ORCHESTRATOR (round 47) ---\n  ✻ Working… (12s · esc to interrupt)\n", StateIdle, "static pane"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, f := pollRegistry(t, "tmux")
+			if _, err := UpdateSlot(dir, "w2", func(s *Slot) { s.Raw().Set("kind", harness.Claude) }); err != nil {
+				t.Fatal(err)
+			}
+			if kind := LoadRegistryTolerant(dir).Slot("w1").HarnessKind(); kind != "" {
+				t.Fatalf("default slot kind = %q, want unset", kind)
+			}
+			f.panes["w1"] = []string{tc.pane, tc.pane}
+			f.panes["w2"] = []string{tc.pane, tc.pane}
+			res, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(res.Slots) != 2 {
+				t.Fatalf("poll rows = %+v, want both slots", res.Slots)
+			}
+			for _, row := range res.Slots {
+				if row.State != tc.want || !strings.Contains(row.Evidence, tc.evidence) {
+					t.Errorf("%s: %s %q, want %s with %q", row.Name, row.State, row.Evidence, tc.want, tc.evidence)
+				}
+			}
+			if res.Slots[0].Evidence != res.Slots[1].Evidence {
+				t.Errorf("default and explicit kinds differ: %+v", res.Slots)
+			}
+		})
+	}
+}
+
+// The wiring from the registry to the classifier: slotTarget hands a slot's
 // harness kind to ClassifyFor, so an opencode slot reads OpenCode's expired-key
 // pane as limited and a claude slot showing the same text stays idle.
 func TestPollReadsEachSlotsPaneByItsHarnessKind(t *testing.T) {

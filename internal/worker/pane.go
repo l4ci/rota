@@ -404,16 +404,20 @@ var (
 	paneRulesCache = map[string]*paneRules{}
 )
 
-// paneRulesFor is the compiled vocabulary of a kind; "" and a kind that is not
-// a worker harness have none, so they read as they always did.
+// paneRulesFor is the compiled vocabulary of a kind. The harness resolves an
+// unset kind to its default; a kind that is not a worker harness has no rules.
 func paneRulesFor(kind string) *paneRules {
+	h, known := harness.Lookup(kind)
+	if known {
+		kind = h.Kind()
+	}
 	paneRulesMu.Lock()
 	defer paneRulesMu.Unlock()
 	if r, ok := paneRulesCache[kind]; ok {
 		return r
 	}
 	r := &paneRules{}
-	if h, ok := harness.Lookup(kind); ok && kind != "" {
+	if known {
 		v := h.PaneVocab()
 		r.retry, r.busy = compileAll(`(?i)`, v.Retry), compileAll(`(?i)`, v.Busy)
 		r.waiting = compileAll(`(?i)`, v.Waiting)
@@ -452,8 +456,8 @@ func anyMatch(res []*regexp.Regexp, s string) bool {
 	return false
 }
 
-// Classify decides one slot's state from its pane text, reading it as a pane of
-// no particular kind (Claude Code's wording). native is herdr's agent_status
+// Classify decides one slot's state from its pane text using the default
+// harness's vocabulary. native is herdr's agent_status
 // (or `gone`), empty under tmux, which has none. moved says the pane changed
 // between the two captures.
 func Classify(text string, moved bool, lines int, native string) (state, evidence string) {
