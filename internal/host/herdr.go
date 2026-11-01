@@ -562,12 +562,6 @@ func (h *herdr) draftPane(ctx context.Context, name string) string {
 	return h.promptPane(ctx, name)
 }
 
-// Draft implements Drafter.
-func (h *herdr) Draft(ctx context.Context, slot, handle, file string) string {
-	text, _ := h.d.readFile(file)
-	return humanDraft(h.draftPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
-}
-
 func squeeze(s string) string {
 	return strings.Join(strings.Fields(s), "")
 }

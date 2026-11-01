@@ -1267,28 +1267,6 @@ func TestTmuxSendDraftClearsWithinTheWait(t *testing.T) {
 	}
 }
 
-// A brief rota itself left on the prompt line is not a human draft.
-func TestTmuxDraftIgnoresRotaBrief(t *testing.T) {
-	brief := "sig\nthe last line of the brief"
-	for name, pane := range map[string]string{
-		"tail":        "❯ sig the last line of the brief\n",
-		"placeholder": "❯ [Pasted text #1 +16 lines]\n",
-	} {
-		f := &fake{handler: func(string, []string) Result { return Result{Stdout: pane} }}
-		file := filepath.Join(t.TempDir(), "p.md")
-		os.WriteFile(file, []byte(brief), 0o644)
-		if d := New("tmux", deps(f, nil, &clock{})).(Drafter).Draft(bg, "w1", "rota:w1", file); d != "" {
-			t.Errorf("%s: Draft = %q, want none", name, d)
-		}
-	}
-	f := &fake{handler: func(string, []string) Result { return Result{Stdout: "❯ my own words\n"} }}
-	file := filepath.Join(t.TempDir(), "p.md")
-	os.WriteFile(file, []byte(brief), 0o644)
-	if d := New("tmux", deps(f, nil, &clock{})).(Drafter).Draft(bg, "w1", "rota:w1", file); d != "my own words" {
-		t.Errorf("Draft = %q", d)
-	}
-}
-
 func TestHerdrSendRefusesAHumanDraft(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
@@ -1331,23 +1309,6 @@ func TestHerdrSendPassesEmptyPromptAndRotaBrief(t *testing.T) {
 		}
 		if f.count("herdr agent prompt") != 1 {
 			t.Errorf("%s: brief not typed:\n%s", name, f.log())
-		}
-	}
-}
-
-func TestHerdrDraft(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "p.md")
-	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
-	for pane, want := range map[string]string{
-		"❯ \n":                                          "",
-		"❯ my own words\n":                              "my own words",
-		"❯ sig the last line of the brief\n":            "",
-		"❯ [Pasted text #1 +16 lines]\n":                "",
-		"❯ sig\nthe last line of the brief\n⏺ ok\n❯ \n": "",
-	} {
-		f := &fake{handler: func(string, []string) Result { return Result{Stdout: pane} }}
-		if d := New("herdr", deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", "w9:t7", file); d != want {
-			t.Errorf("pane %q: Draft = %q, want %q", pane, d, want)
 		}
 	}
 }
@@ -1408,24 +1369,6 @@ func ghostPaneFake(styled string, send func(a []string)) *fake {
 	}}
 }
 
-func TestGhostSuggestionIsNotADraft(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "p.md")
-	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
-	for _, tc := range []struct{ name, host, handle, pane, want string }{
-		{"tmux ghost", "tmux", "rota:w1", "⏺ done\n❯ " + ghost + "\n", ""},
-		{"herdr ghost", "herdr", "w9:t7", "⏺ done\n❯ " + ghost + "\n", ""},
-		{"tmux gray ghost", "tmux", "rota:w1", "❯ " + grayG + "\n", ""},
-		{"herdr gray ghost", "herdr", "w9:t7", "❯ " + grayG + "\n", ""},
-		{"tmux dim then typed", "tmux", "rota:w1", "❯ " + ghost + "my words\n", "my words"},
-		{"herdr dim then typed", "herdr", "w9:t7", "❯ " + ghost + "my words\n", "my words"},
-	} {
-		f := ghostPaneFake(tc.pane, nil)
-		if d := New(Kind(tc.host), deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", tc.handle, file); d != tc.want {
-			t.Errorf("%s: Draft = %q, want %q", tc.name, d, tc.want)
-		}
-	}
-}
-
 func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
@@ -1443,26 +1386,6 @@ func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
 		}
 		if bad.count(string(hostName)+" agent prompt")+bad.count("tmux paste-buffer")+bad.count("tmux send-keys") != 0 {
 			t.Errorf("%s: keys reached the pane:\n%s", hostName, bad.log())
-		}
-	}
-}
-
-// A styled read that fails falls back to plain text, still seeing a draft.
-func TestDraftFallsBackToPlainWhenStyledReadFails(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "p.md")
-	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
-	for _, hostName := range []Kind{Tmux, Herdr} {
-		f := &fake{handler: func(_ string, a []string) Result {
-			for _, x := range a {
-				if x == "-pJe" || x == "ansi" {
-					return Result{ExitCode: 1}
-				}
-			}
-			return Result{Stdout: "❯ my own words\n"}
-		}}
-		handle := map[Kind]string{Tmux: "rota:w1", Herdr: "w9:t7"}[hostName]
-		if d := New(hostName, deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", handle, file); d != "my own words" {
-			t.Errorf("%s: Draft = %q", hostName, d)
 		}
 	}
 }

@@ -218,12 +218,6 @@ func (t *tmux) draftPane(ctx context.Context, window string) string {
 	return t.pane(ctx, window)
 }
 
-// Draft implements Drafter.
-func (t *tmux) Draft(ctx context.Context, slot, handle, file string) string {
-	text, _ := t.d.readFile(file)
-	return humanDraft(t.draftPane(ctx, handle), strings.TrimRight(text, "\n"))
-}
-
 // Status: tmux has no native agent state, so the classifier decides from
 // pane text and movement alone.
 func (t *tmux) Status(ctx context.Context, slot, handle string) string { return "" }
