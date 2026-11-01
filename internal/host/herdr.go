@@ -402,9 +402,6 @@ func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
 	}
 }
 
-// submitRetries bounds the Enters pressed on a brief that sits unsent.
-const submitRetries = 3
-
 // Send submits the file and confirms pickup: it returns once the agent is
 // observed working (or blocked on a dialog), NOT when the task finishes,
 // since a plain --wait would hold until the whole task settled. ErrQueued
@@ -575,31 +572,35 @@ func squeeze(s string) string {
 	return strings.Join(strings.Fields(s), "")
 }
 
-// submitTyped presses Enter on a brief already on the prompt line, up to
-// submitRetries times, until the agent is working or blocked.
+// submitTyped confirms a brief already on the prompt line, pressing Enter
+// only while idle. Retry bounds and wait policy live in pickup.go.
 func (h *herdr) submitTyped(ctx context.Context, name string) error {
-	for i := 0; i < submitRetries; i++ {
-		// Enter only into an idle prompt: on a dialog it would answer the
-		// dialog, which nobody approved.
-		switch h.statusOf(ctx, name) {
+	return confirmPickup(&h.d, Herdr, func(timeout time.Duration) (bool, error) {
+		var status string
+		if timeout == 0 {
+			// Enter only into an idle prompt: on a dialog it would answer
+			// the dialog, which nobody approved.
+			status = h.statusOf(ctx, name)
+		} else {
+			w := h.herdr(ctx, "agent", "wait", name, "--until", "working", "--until", "blocked",
+				"--timeout", strconv.FormatInt(timeout.Milliseconds(), 10))
+			status = jget(w.Stdout, "result.agent.agent_status")
+		}
+		switch status {
 		case "working":
-			return nil
+			return true, nil
 		case "blocked":
-			return ErrDialogOpen
+			return false, ErrDialogOpen
 		case "idle":
 		default:
-			return ErrNotSubmitted
+			if timeout == 0 {
+				return false, ErrNotSubmitted
+			}
 		}
+		return false, nil
+	}, func() {
 		h.herdr(ctx, "agent", "send-keys", name, "enter")
-		w := h.herdr(ctx, "agent", "wait", name, "--until", "working", "--until", "blocked", "--timeout", "10000")
-		switch jget(w.Stdout, "result.agent.agent_status") {
-		case "working":
-			return nil
-		case "blocked":
-			return ErrDialogOpen
-		}
-	}
-	return ErrNotSubmitted
+	})
 }
 
 // Capture prints recent pane text with soft wraps joined (the herdr twin of
