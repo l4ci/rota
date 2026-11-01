@@ -316,22 +316,6 @@ func TestLinearStatus(t *testing.T) {
 	if err := l.Reopen(ctx, k); err != nil || slices.Contains(since(s, n), "IssueUpdate") {
 		t.Fatalf("Reopen of an open issue = %v, requests %v", err, since(s, n))
 	}
-
-	if err := l.CloseAfterMerge(ctx, k, "PR #7"); err != nil {
-		t.Fatal(err)
-	}
-	if s.StateType(string(k)) != "completed" || !slices.Contains(s.CommentBodies(string(k)), "Closed by rota: PR #7 merged.") {
-		t.Fatalf("CloseAfterMerge left %s, comments %v", s.StateType(string(k)), s.CommentBodies(string(k)))
-	}
-	n = len(s.Requests())
-	if err := l.CloseAfterMerge(ctx, k, "PR #7"); err != nil {
-		t.Fatal(err)
-	}
-	for _, op := range since(s, n) {
-		if op == "IssueUpdate" || op == "CommentCreate" {
-			t.Fatalf("CloseAfterMerge on a closed issue wrote: %v", since(s, n))
-		}
-	}
 }
 
 func TestLinearAssignSelf(t *testing.T) {

@@ -875,14 +875,10 @@ func (l *Linear) Close(ctx context.Context, key IssueKey, reason, comment string
 // CloseAfterMerge closes the issue a merged PR names: rota relies on no
 // Linear integration to do it.
 func (l *Linear) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) error {
-	d, err := l.issue(ctx, key)
-	if err != nil {
-		return err
-	}
-	if d.closed() {
-		return nil
-	}
-	return l.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
+	return closeAfterMerge(ctx, key, pr, l.Close, func() (bool, error) {
+		d, err := l.issue(ctx, key)
+		return d.closed(), err
+	})
 }
 
 // Reopen moves a closed issue to an unstarted state, else a started one.
