@@ -130,7 +130,7 @@ const (
 	// the gate cannot tell where the PR lives (tracker.ResolveProvider, an
 	// actor); the CLI exits 4 with it, blockedBy forge.
 	GateForge = "forge"
-	// GateAlreadyMerged: the PR merged while this gate waited for the land lock.
+	// GateAlreadyMerged: the PR merged before this gate checked its head.
 	// A success that changes nothing.
 	GateAlreadyMerged = "already-merged"
 )
@@ -178,9 +178,6 @@ type GateOpts struct {
 	// (the train does, through its landing steps), so the gate does not retake
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
 	HoldsLandLock bool
-	// waited is set by Gate when the land lock was busy: the PR may have merged
-	// meanwhile, so the gate reads it again (stepWaitedMerged).
-	waited bool
 	// The review-verdict gate (B3) runs after provenance, also under CheckOnly.
 	// It reads the verdict store itself (verdict.Check.BlockGate); a blocking
 	// record stops the gate with verdict verdict-blocked and is returned as is.
@@ -443,8 +440,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		}
 		defer release()
 	}
-	err := e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(waited bool) (err error) {
-		o.waited = waited
+	err := e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) (err error) {
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
@@ -579,11 +575,11 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 	remote := runGateStage(picked, func(result GateResult) (bool, GateResult, bool, error) {
 		return g.stepRemote(result, adopted.Value.PR)
 	})
-	waited := runGateStage(remote, func(result GateResult) (struct{}, GateResult, bool, error) {
-		return g.stepWaitedMerged(result, adopted.Value, forged.Value, remote.Value)
+	inspected := runGateStage(remote, func(result GateResult) (*tracker.PRInfo, GateResult, bool, error) {
+		return g.stepAlreadyMerged(result, adopted.Value, forged.Value, remote.Value)
 	})
-	followed := runGateStage(waited, func(result GateResult) (gateSlotHeadResult, GateResult, bool, error) {
-		return g.stepSlotHead(result, adopted.Value, forged.Value, remote.Value)
+	followed := runGateStage(inspected, func(result GateResult) (gateSlotHeadResult, GateResult, bool, error) {
+		return g.stepSlotHead(result, adopted.Value, forged.Value, remote.Value, inspected.Value)
 	})
 	refs := runGateStage(followed, func(result GateResult) (gateRefsResult, GateResult, bool, error) {
 		return g.stepRefs(result, followed.Value.target.Branch, remote.Value)
@@ -665,11 +661,11 @@ func (g gate) runReviews(target GateTarget, result GateResult) (GateResult, erro
 	remote := runGateStage(frozen, func(result GateResult) (bool, GateResult, bool, error) {
 		return g.stepRemote(result, adopted.Value.PR)
 	})
-	waited := runGateStage(remote, func(result GateResult) (struct{}, GateResult, bool, error) {
-		return g.stepWaitedMerged(result, adopted.Value, forged.Value, remote.Value)
+	inspected := runGateStage(remote, func(result GateResult) (*tracker.PRInfo, GateResult, bool, error) {
+		return g.stepAlreadyMerged(result, adopted.Value, forged.Value, remote.Value)
 	})
-	followed := runGateStage(waited, func(result GateResult) (gateSlotHeadResult, GateResult, bool, error) {
-		return g.stepSlotHead(result, adopted.Value, forged.Value, remote.Value)
+	followed := runGateStage(inspected, func(result GateResult) (gateSlotHeadResult, GateResult, bool, error) {
+		return g.stepSlotHead(result, adopted.Value, forged.Value, remote.Value, inspected.Value)
 	})
 	refs := runGateStage(followed, func(result GateResult) (gateRefsResult, GateResult, bool, error) {
 		return g.stepRefs(result, followed.Value.target.Branch, remote.Value)
@@ -864,9 +860,10 @@ func (runner gate) stepAdoptPR(result GateResult, target GateTarget, forged gate
 // it leads with the issue the slot holds, so a PR of another issue's branch
 // stays a mismatch. A real gate records it on the slot, so the next one starts
 // from the right branch.
-func (runner gate) stepSlotHead(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (gateSlotHeadResult, GateResult, bool, error) {
+func (runner gate) stepSlotHead(result GateResult, target GateTarget, forged gateForgeResult, remote bool, viewed *tracker.PRInfo) (gateSlotHeadResult, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
+	g.viewed = viewed
 	finish := func(done bool, err error) (gateSlotHeadResult, GateResult, bool, error) {
 		return gateSlotHeadResult{target: g.target, viewed: g.viewed}, *g.res, done, err
 	}
@@ -875,11 +872,14 @@ func (runner gate) stepSlotHead(result GateResult, target GateTarget, forged gat
 	if t.External || t.Queued || !g.remote || g.pr == "" || g.branch == "" {
 		return finish(false, nil)
 	}
-	info, ok := g.prInfo()
-	if !ok {
-		return finish(false, nil)
+	if g.viewed == nil {
+		info, ok := g.prInfo()
+		if !ok {
+			return finish(false, nil)
+		}
+		g.viewed = &info
 	}
-	g.viewed = &info // stepPRMatches reads the same PR next: one forge call
+	info := *g.viewed // stepPRMatches reads the same PR next: one forge call
 	if info.State != "OPEN" || info.Head == "" || info.Head == g.branch {
 		return finish(false, nil)
 	}
@@ -929,22 +929,29 @@ func (runner gate) stepRemote(result GateResult, pr string) (bool, GateResult, b
 	return finish(false, nil)
 }
 
-// stepWaitedMerged re-reads the PR when the gate queued behind another gate or
-// a train: it may have merged in the meantime, and judging it again would fail
-// on a head that is already landed.
-func (runner gate) stepWaitedMerged(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
+// stepAlreadyMerged reads the PR before judging its head, including check-only
+// train members. It may have merged before this run or while waiting for the
+// land lock; the branch may already be deleted.
+func (runner gate) stepAlreadyMerged(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (*tracker.PRInfo, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
-		return struct{}{}, *g.res, done, err
+	var viewed *tracker.PRInfo
+	finish := func(done bool, err error) (*tracker.PRInfo, GateResult, bool, error) {
+		return viewed, *g.res, done, err
 	}
 
-	if !g.o.waited || g.o.CheckOnly || !g.remote {
+	if !g.remote {
 		return finish(false, nil)
 	}
-	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+	info, ok := g.prInfo()
+	if !ok {
+		return finish(false, nil)
+	}
+	viewed = &info
+	if info.State == "MERGED" && info.Base == g.o.Base {
+		g.res.Branch = info.Head
 		g.res.AlreadyMerged = true
-		g.verdict(GateAlreadyMerged, fmt.Sprintf("GATE %s — PR %s merged while this gate waited for the land lock; nothing changed", g.o.Slot, g.pr), "")
+		g.verdict(GateAlreadyMerged, fmt.Sprintf("ALREADY-MERGED %s — PR %s already merged into %s; nothing to merge", g.o.Slot, g.pr, g.o.Base), "")
 		return finish(true, nil)
 	}
 	return finish(false, nil)
@@ -1087,8 +1094,12 @@ func (runner gate) stepFreshness(result GateResult, target GateTarget, forged ga
 	if why != "" {
 		g.noteMergedRemotely()
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
+		owner := "the worker on branch " + g.branch
+		if target.Name != "" {
+			owner = "slot " + target.Name
+		}
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
-			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
+			fmt.Sprintf("bounce: tell %s to `git merge %s`, resolve and re-verify, then re-gate", owner, o.Base))
 		return finish(true, nil)
 	}
 	if !o.LandVerified {

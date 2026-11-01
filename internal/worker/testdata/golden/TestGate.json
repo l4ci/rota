@@ -134,7 +134,21 @@
         "checkOnly": true,
         "files": null,
         "mode": "",
-        "name": "c: PR not open",
+        "name": "c: PR already merged",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "already-merged"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: PR closed without merging",
         "noFiles": null,
         "noVerify": false,
         "pr": "https://github.com/o/r/pull/7",
@@ -412,7 +426,13 @@
       "Local": "seed",
       "Forge": "github PRView 7\n"
     },
-    "c: PR not open": {
+    "c: PR already merged": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "github PRView 7\n"
+    },
+    "c: PR closed without merging": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
