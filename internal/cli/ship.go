@@ -209,7 +209,7 @@ func shipBase(c *Ctx, dir string) (string, error) {
 		return "", err
 	}
 	if !ok {
-		return "", Resolution("could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)")
+		return "", Resolution(noBaseMsg)
 	}
 	return base, nil
 }
@@ -557,7 +557,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !ok {
-			return shipBlocked("refused", "could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)")
+			return shipBlocked("refused", noBaseMsg)
 		}
 		cur := ""
 		if res, err := shipGit(c, dir, "symbolic-ref", "--short", "HEAD"); err != nil {
