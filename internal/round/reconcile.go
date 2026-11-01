@@ -199,23 +199,8 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		if !ok {
 			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
-		is, err := e.Forge.Get(ctx, n, false)
-		if err != nil {
-			return err
-		}
-		if is.State != "closed" {
-			return nil
-		}
-		var drop []string
-		for _, l := range is.Labels {
-			if l == e.Label || backlog.IsClaimLabel(l) {
-				drop = append(drop, l)
-			}
-		}
-		if len(drop) == 0 {
-			return nil
-		}
-		return e.Forge.RemoveLabels(ctx, n, drop)
+		_, err := backlog.CleanupClosedIssueLabels(ctx, e.Forge, n, e.Label)
+		return err
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
 }

@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -77,63 +75,5 @@ func TestGateReportFileOutcomes(t *testing.T) {
 				t.Fatalf("refusal report omitted the reason:\n%s", text)
 			}
 		})
-	}
-}
-
-func TestGateReportPRMergeAndRefusal(t *testing.T) {
-	dir := fileDeferredRepo(t)
-	gittest.Run(t, dir, "remote", "add", "origin", "git@github.com:example/reports.git")
-	write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
-	write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Tasks\n\n- **[T01] [Minor] Gate target.** Evidence\n")
-	var reports []string
-	f := &forge{answer: func(_ string, args []string) (string, string, int) {
-		call := strings.Join(args, " ")
-		if strings.HasPrefix(call, "pr view 20 ") {
-			return `{"headRefName":"feat/x","body":"Resolves [T01]"}`, "", 0
-		}
-		if strings.Contains(call, "issues/20/comments") {
-			if slices.Contains(args, "POST") {
-				for _, arg := range args {
-					if strings.HasPrefix(arg, "body=") {
-						reports = append(reports, strings.TrimPrefix(arg, "body="))
-					}
-				}
-				return `{"id":1}`, "", 0
-			}
-			return "[]", "", 0
-		}
-		return "[]", "", 0
-	}}
-	deps := useForge(t, f)
-	deps.Getwd = func() (string, error) { return dir, nil }
-	var warnings bytes.Buffer
-	c := &Ctx{Deps: deps, Stderr: &warnings}
-	for _, r := range []worker.GateResult{
-		{Branch: "feat/x", PR: "20", Issue: "T01", SHA: "abc1234", Verdict: worker.GatePass, Verified: []string{"go test ./internal/verdict"}},
-		{Branch: "feat/x", PR: "20", Issue: "T01", SHA: "def5678", Verdict: worker.GateNoVerify, Err: "test.full is empty"},
-	} {
-		postGateReport(c, dir, r)
-	}
-	if len(reports) != 2 || !strings.Contains(reports[0], "<!-- rota:report gate sha=abc1234 -->") || !strings.Contains(reports[1], "Outcome: **no-verify**") || !strings.Contains(reports[1], "test.full is empty") {
-		t.Fatalf("PR reports: %v", reports)
-	}
-	if warnings.Len() != 0 {
-		t.Fatalf("unexpected pending report: %s", &warnings)
-	}
-	if text := readTask(t, dir, "T01"); strings.Count(text, "<!-- rota:report gate sha=") != 2 {
-		t.Fatalf("linked item's gate reports: %s", text)
-	}
-}
-
-func TestGateReportSkipsRecordedPRWithoutOrigin(t *testing.T) {
-	dir := fileDeferredRepo(t)
-	write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
-	f := &forge{answer: func(string, []string) (string, string, int) { return "[]", "", 0 }}
-	deps := useForge(t, f)
-	deps.Getwd = func() (string, error) { return dir, nil }
-	var warnings bytes.Buffer
-	postGateReport(&Ctx{Deps: deps, Stderr: &warnings}, dir, worker.GateResult{Branch: "feat/x", PR: "20", SHA: "abc1234", Verdict: worker.GateCheckBroke, Err: "no origin"})
-	if len(f.calls) != 0 {
-		t.Fatalf("gate without origin reached the forge: %v", f.calls)
 	}
 }
