@@ -16,7 +16,9 @@ before running or joining a round. A worker reads `skills/references/worker-cont
 
 Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:
 
-- Architecture: Helper conventions & invariants: Go verbs & fakes
+- Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation
+- Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing
+- Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards
 - Architecture: Skill authoring
 - Build & Tooling: Helpers & migrations
 - Build & Tooling: Smoke testing: Sections & fixtures
@@ -26,7 +28,9 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 - Glossary
 - Process: Knowledge capture
 - Product: Market & competitors
-- Rounds: Orchestration: Reviews & verdicts
+- Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct
+- Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses
+- Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews
 - Rounds: Orchestration: Gate, trains & bookkeeping
 - Rounds: Orchestration: Workers & relays
 - Rounds: Orchestration: Slate & issues

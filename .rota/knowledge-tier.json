@@ -253,8 +253,8 @@
     },
     "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-27"
+      "hits": 4,
+      "lastSeen": "2026-10-31"
     },
     "Build & Tooling: Git & isolation::Repo-wide renames: one sweep PR owns shared code, slices stack on it": {
       "tier": "provisional",
@@ -316,21 +316,6 @@
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
-      "tier": "confirmed",
-      "hits": 8,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
-      "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-24"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::A per-invocation cache must reset per pass in long-running verbs": {
-      "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-24"
-    },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers read stdin only when an argument takes it": {
       "tier": "deprecated",
       "hits": 0,
@@ -385,21 +370,6 @@
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
-      "tier": "confirmed",
-      "hits": 6,
-      "lastSeen": "2026-10-24"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
-      "tier": "confirmed",
-      "hits": 9,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
-      "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-26"
     },
     "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
       "tier": "provisional",
@@ -606,11 +576,6 @@
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::The worker forge must not share the read cache": {
-      "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
-    },
     "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger re-fires on every idle check": {
       "tier": "provisional",
       "hits": 0,
@@ -636,22 +601,7 @@
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Reviews & verdicts::A tiny fix range is re-reviewed by the orchestrator itself": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Reviews & verdicts::Fast-forward the local ref after an orchestrator push before verdict add": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Re-reviews are one reviewer, majors only, fix range only": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-22"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::rota verdict add takes no extra top-level fields": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
@@ -676,20 +626,10 @@
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts::A string ship.review fixes the depth for every branch, labels included": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Learn and docs bookkeeping commits go straight to main": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::A commit after the review makes its PASS stale, bookkeeping included": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-18"
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::gh pr edit fails silently on this repo": {
       "tier": "provisional",
@@ -700,16 +640,6 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Refactor reviews need an old-vs-new input table": {
-      "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-22"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Mutation-check source-grep guard tests": {
-      "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Train PRs with disjoint paths; a new config key reds the frozen config record": {
       "tier": "provisional",
@@ -725,11 +655,6 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Renamed Go tests can silently stop running": {
-      "tier": "confirmed",
-      "hits": 6,
-      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Rebuild the installed rota after merging round-verb fixes": {
       "tier": "provisional",
@@ -761,16 +686,6 @@
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Have the reviewer write its verdict JSON to a file": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::CONCERNS on a round PR is the orchestrator's call, not a picker": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Workers & relays::Worker context is mostly fixed preamble": {
       "tier": "provisional",
       "hits": 0,
@@ -782,26 +697,6 @@
       "lastSeen": "2026-10-20"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::A new required config key goes into the F78 complete-config fixture": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-20"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
-      "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Verdict severities are blocker, major, minor and info": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-20"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::A gate failure on a PASS-reviewed PR needs round bounce --force": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-20"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::An orchestrator commit on a worker branch needs an independent reviewer": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
@@ -866,25 +761,10 @@
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::A bigger timeout is not a flake fix": {
-      "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
-    },
     "Build & Tooling: Smoke testing: Sections & fixtures::printf into head dies under pipefail": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Isolate the global config without a temp dir leak": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Record verdicts at review package data.head": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-27"
     },
     "Process: Knowledge capture::Tool gotchas become issues; knowledge only for current blockers": {
       "tier": "provisional",
@@ -910,16 +790,6 @@
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Contract data lines decide read-only verbs": {
-      "tier": "confirmed",
-      "hits": 8,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Packages before -run in review test commands": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::The worker forge must not share the read cache": {
       "tier": "provisional",
@@ -951,21 +821,6 @@
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts::A forge-reading gate step skips on error; the smoke fake cannot answer it": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Rebuild a missing reviewer verdict file from the report's JSON block": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Reviewers build, vet and read; named tests only": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-27"
-    },
     "Rounds: Orchestration: Gate, trains & bookkeeping::test.slots defaults to 1 and queues every proof and the gate": {
       "tier": "provisional",
       "hits": 1,
@@ -996,20 +851,10 @@
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Cross-harness Codex runs here need the unsandboxed rerun and a ChatGPT-account model": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
     "Rounds: Orchestration: Workers & relays::An assignment brief is not a relay": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Reviewer binary probes run in a scratch HOME": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::A key rename must grep test/sections for the old key": {
       "tier": "provisional",
@@ -1017,11 +862,6 @@
       "lastSeen": "2026-10-24"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Skill lints must accept a minimal skill tree": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-24"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::rota verdict add body rules": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
@@ -1053,8 +893,8 @@
     },
     "Architecture: Skill authoring::Skill files live at the top of the skill folder": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-27"
+      "hits": 4,
+      "lastSeen": "2026-10-31"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A new config key shifts every later frozen config-show/all row": {
       "tier": "provisional",
@@ -1065,11 +905,6 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Tests that read slot env must stub Getenv": {
-      "tier": "confirmed",
-      "hits": 11,
-      "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Herdr fakes must answer tab get with pane_count": {
       "tier": "provisional",
@@ -1106,46 +941,6 @@
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Knowledge path metadata goes before the date stamp": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Serialize proof records for one item until #2169 lands": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Completion tests need the real backlog backend": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Set Item.Type explicitly in round tests": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers that embed IssueTracker hide optional interfaces": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::A registry-derived guard cannot find what the registry lacks": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Verdict fallback tests need mixed kinds and same-sha updates": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Classify every new verb in the support fence": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
     "Product: Market & competitors::gstack entered the orchestration lane": {
       "tier": "provisional",
       "hits": 0,
@@ -1156,22 +951,7 @@
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::New terminal hosts need real-adapter round tests": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Capture host process evidence while the agent lives": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Never push to main while a gate runs": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::Check triggered review lenses before gating": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
@@ -1211,22 +991,12 @@
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::hvmigrate.splitLines is not a pystr copy": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-30"
-    },
     "Build & Tooling: Git & isolation::gittest owns test git identity and config isolation": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
     "Build & Tooling: Helpers & migrations::Stamp source builds as -dev": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-30"
-    },
-    "Rounds: Orchestration: Reviews & verdicts::A triggered lens needs its own review-security verdict": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
@@ -1250,6 +1020,286 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
+    },
+    "Rounds: Orchestration: Workers & relays::A bounce never reaches a pane that printed ROTA-DONE": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::The last slice of a partial-slice issue gates with --final-slice": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Rounds: Orchestration: Workers & relays::A proof row can be lost to a tracker error": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::A bare local remote does not keep forge reads offline": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::The fast tier skips source-scanning guards": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Build & Tooling: Helpers & migrations::proof record keeps only an output hash": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Architecture: Skill authoring::Skill lints must accept a minimal skill tree": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-31"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Capture host process evidence while the agent lives": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::New terminal hosts need real-adapter round tests": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Verdict fallback tests need mixed kinds and same-sha updates": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Wrappers that embed IssueTracker hide optional interfaces": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Set Item.Type explicitly in round tests": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Completion tests need the real backlog backend": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Tests that read slot env must stub Getenv": {
+      "tier": "confirmed",
+      "hits": 11,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Isolate the global config without a temp dir leak": {
+      "tier": "provisional",
+      "hits": 2,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::A bigger timeout is not a flake fix": {
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Embedding host fakes must redeclare Capabilities": {
+      "tier": "confirmed",
+      "hits": 8,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::GateResult.OK stays narrower than CLI success": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Typed stage handoffs copy slices and move cleanup ownership": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The worker forge must not share the read cache": {
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The tracker REST layer never resends a POST after a 5xx": {
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-26"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Gate steps read the forge only after stepRemote": {
+      "tier": "confirmed",
+      "hits": 9,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Gate target fields change mid-run": {
+      "tier": "confirmed",
+      "hits": 6,
+      "lastSeen": "2026-10-24"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::A per-invocation cache must reset per pass in long-running verbs": {
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-24"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::hvmigrate.splitLines is not a pystr copy": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Classify every new verb in the support fence": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A registry-derived guard cannot find what the registry lacks": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Serialize proof records for one item until #2169 lands": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Knowledge path metadata goes before the date stamp": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Contract data lines decide read-only verbs": {
+      "tier": "confirmed",
+      "hits": 8,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Palette entries name the verb that registers the View": {
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-24"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewer briefs ask for smoke and guard-test impact": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-01"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewer binary probes run in a scratch HOME": {
+      "tier": "provisional",
+      "hits": 2,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Cross-harness Codex runs here need the unsandboxed rerun and a ChatGPT-account model": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewers build, vet and read; named tests only": {
+      "tier": "provisional",
+      "hits": 2,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Rebuild a missing reviewer verdict file from the report's JSON block": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Packages before -run in review test commands": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Have the reviewer write its verdict JSON to a file": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Mutation-check source-grep guard tests": {
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Refactor reviews need an old-vs-new input table": {
+      "tier": "confirmed",
+      "hits": 5,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Renamed Go tests can silently stop running": {
+      "tier": "confirmed",
+      "hits": 6,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A triggered lens needs its own review-security verdict": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Check triggered review lenses before gating": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::rota verdict add body rules": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A forge-reading gate step skips on error; the smoke fake cannot answer it": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Record verdicts at review package data.head": {
+      "tier": "provisional",
+      "hits": 2,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Verdict severities are blocker, major, minor and info": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A commit after the review makes its PASS stale, bookkeeping included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A string ship.review fixes the depth for every branch, labels included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::rota verdict add takes no extra top-level fields": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::An orchestrator commit on a worker branch needs an independent reviewer": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::A gate failure on a PASS-reviewed PR needs round bounce --force": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::CONCERNS on a round PR is the orchestrator's call, not a picker": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::Re-reviews are one reviewer, majors only, fix range only": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::A tiny fix range is re-reviewed by the orchestrator itself": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
     }
   }
 }
