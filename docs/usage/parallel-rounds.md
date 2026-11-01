@@ -662,6 +662,11 @@ recorded with `rota proof record <ID> -- rota test run fast`. A later commit mak
 the worker records again. With `test.fast` unset it warns and skips that check. The worker brief then tells the worker to run `rota test run full` and have it green first, and `rota round start` warns once that the proof rows will be missing (reviewers treat that as minor at most). On success the slot is
 marked `done`.
 
+Before recording done, the verb also warns for each missing `## Approvals`,
+`## Rulings` or `## Assumptions` heading in the branch's open PR. Add the missing
+sections before review; `None` or empty content is allowed. These warnings do not
+block done. With no open PR or an unavailable forge, this check is skipped.
+
 On the issue backend, before reporting done, workers mark each verified `AC-n` on the lead and every open
 bundle member with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use an issue key
 such as `'#2150'`). The sha and check must name a recorded PASS row from
