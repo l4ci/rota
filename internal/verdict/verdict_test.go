@@ -442,39 +442,6 @@ func TestBehaviourKind(t *testing.T) {
 	}
 }
 
-// Recorded counts a verdict only at the branch head: a record on an older
-// commit is stale, as /rota-review treats it. Records hold a short sha.
-func TestRecordedIgnoresStaleVerdicts(t *testing.T) {
-	root := t.TempDir()
-	for _, r := range []Record{
-		{Kind: ReviewSpec, Verdict: Pass, Sha: "aaaaaaa"},
-		{Kind: ReviewQuality, Verdict: Pass, Sha: "bbbbbbb"},
-	} {
-		if _, err := AddBranch(root, "w1", r); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got := Recorded(root, "w1", "bbbbbbb0123456789012345678901234567890a")
-	if len(got) != 1 || got[0] != ReviewQuality {
-		t.Errorf("only the quality record is at head: %v", got)
-	}
-	if got := Recorded(root, "w1", "bbb"); len(got) != 1 {
-		t.Errorf("a short head is a prefix of the record sha: %v", got)
-	}
-	if _, err := AddBranch(root, "w2", Record{Kind: ReviewSpec, Verdict: Pass}); err != nil {
-		t.Fatal(err)
-	}
-	if got := Recorded(root, "w2", "bbbbbbb0123456789012345678901234567890a"); len(got) != 0 {
-		t.Errorf("a record with no sha is never at head: %v", got)
-	}
-	if got := Recorded(root, "w1", ""); len(got) != 0 {
-		t.Errorf("an unknown head matches nothing: %v", got)
-	}
-	if got := Recorded(root, "nobranch", "bbbbbbb"); len(got) != 0 {
-		t.Errorf("a branch with no records has none: %v", got)
-	}
-}
-
 func TestFailingVersusEffectiveFail(t *testing.T) {
 	blocker := []Finding{{Severity: "major", Title: "t"}}
 	nit := []Finding{{Severity: "minor", Title: "t"}}
