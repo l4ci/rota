@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -309,35 +308,8 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 	if err != nil {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
 	}
-	if reclaimedBranchClaim(comments, agent, held) {
+	if backlog.ReclaimedBranchClaim(comments, agent, held) {
 		return warnings, blocked(BlockClaimed, "%s was reclaimed from %s and is claimed by %s; branch %s cannot be adopted", issue, agent, strings.Join(held, ", "), branch)
 	}
 	return warnings, nil
-}
-
-// reclaimedBranchClaim requires a branch-agent claim, its release, then a
-// different still-open claim, in that order. A bare release or an existing
-// best-of peer is not evidence that the branch was reclaimed.
-func reclaimedBranchClaim(comments []tracker.Comment, agent string, held []string) bool {
-	claimed := map[string]bool{}
-	released := false
-	for _, comment := range comments {
-		verb, id, ok := marker.ParseClaim(comment.Body)
-		if !ok {
-			continue
-		}
-		holder, _, _ := strings.Cut(id, "@")
-		if holder == agent && agent != "" {
-			if verb == marker.KindClaim {
-				claimed[id] = true
-			}
-			if verb == marker.KindRelease && claimed[id] {
-				delete(claimed, id)
-				released = true
-			}
-		} else if verb == marker.KindClaim && released && slices.Contains(held, id) {
-			return true
-		}
-	}
-	return false
 }
