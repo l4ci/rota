@@ -3,10 +3,38 @@ package tracker
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
+
+func TestPRCreateUsesExplicitHead(t *testing.T) {
+	fakes, err := filepath.Abs("../../test/fakes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakes+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_TRACKER_DB_DIR", "")
+	t.Setenv("FAKE_TRACKER_DB", filepath.Join(t.TempDir(), "tracker.json"))
+	dir := gittest.NewRepo(t, "main")
+	ctx := context.Background()
+	forge, err := NewForge(ctx, Settings{}, "github", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url, err := forge.PRCreate(ctx, PRSpec{Title: "Learning", Body: "From the knowledge clone", Head: "rota-knowledge/go-20261101", Base: "develop"})
+	if err != nil || url != "https://github.com/fake/repo/pull/1" {
+		t.Fatalf("create: url=%q err=%v", url, err)
+	}
+	pr, err := forge.PRView(ctx, 1)
+	if err != nil || pr.Head != "rota-knowledge/go-20261101" || pr.Base != "develop" || pr.Title != "Learning" || pr.Body != "From the knowledge clone" {
+		t.Fatalf("created PR = %+v, err=%v", pr, err)
+	}
+}
 
 // scriptedCall is one expected forge call and what it answers.
 type scriptedCall struct {
@@ -50,7 +78,7 @@ func TestPRCreate(t *testing.T) {
 	spec := PRSpec{Title: "My title", Body: "Summary", Head: "feat/x", Base: "main"}
 	ghSpec := spec
 	ghSpec.Base = "develop"
-	gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-", "--base", "develop"},
+	gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-", "--base", "develop", "--head", "feat/x"},
 		stdin: "Summary", stdout: "warning\nhttps://github.com/o/r/pull/3\n"})
 	if !gh.PRNeedsBase() {
 		t.Error("github PRs need a base")
@@ -62,7 +90,7 @@ func TestPRCreate(t *testing.T) {
 	t.Run("github-empty-base", func(t *testing.T) {
 		emptyBaseSpec := spec
 		emptyBaseSpec.Base = ""
-		gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-"},
+		gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-", "--head", "feat/x"},
 			stdin: "Summary", stdout: "https://github.com/o/r/pull/4\n"})
 		if url, err := gh.PRCreate(context.Background(), emptyBaseSpec); err != nil || url != "https://github.com/o/r/pull/4" {
 			t.Errorf("github: %q %v", url, err)

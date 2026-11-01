@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 func TestMain(m *testing.M) {
@@ -28,7 +29,7 @@ type fixture struct {
 	a, b   string // two clones of the remote; a is under test
 	now    time.Time
 	calls  []string // git verbs run through the fixture runner
-	gh     [][]string
+	forge  tracker.Forge
 	hook   func(args []string) // runs before a git call
 }
 
@@ -63,7 +64,27 @@ func newFixtureIndex(t *testing.T, policy, branch, index string) *fixture {
 		gittest.Run(t, root, "clone", "-q", remote, d)
 		gittest.Quiet(t, d)
 	}
+	fakes, err := filepath.Abs("../../test/fakes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakes+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_TRACKER_DB_DIR", "")
+	t.Setenv("FAKE_TRACKER_DB", filepath.Join(root, "tracker.json"))
+	f.forge, err = tracker.NewForge(context.Background(), tracker.Settings{}, "github", f.a)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return f
+}
+
+func (f *fixture) prs() []tracker.PR {
+	f.t.Helper()
+	prs, err := f.forge.OpenPRs(context.Background())
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return prs
 }
 
 func (f *fixture) clone() Clone {
@@ -75,9 +96,11 @@ func (f *fixture) clone() Clone {
 			}
 			return git.Exec(ctx, dir, args...)
 		},
-		Proc: func(ctx context.Context, c proc.Cmd) (proc.Result, error) {
-			f.gh = append(f.gh, append([]string{c.Name}, c.Args...))
-			return proc.Result{Stdout: "https://example.test/org/kb/pull/7\n"}, nil
+		NewForge: func(_ context.Context, dir string) (tracker.Forge, error) {
+			if dir != f.a {
+				f.t.Fatalf("forge directory = %q, want %q", dir, f.a)
+			}
+			return f.forge, nil
 		},
 		Now:      func() time.Time { return f.now },
 		StateDir: filepath.Join(filepath.Dir(f.a), "state"),
@@ -326,40 +349,60 @@ func TestAddRetriesRejectedPushOnce(t *testing.T) {
 	}
 }
 
-func TestAddPRModePushesBranchAndOpensPR(t *testing.T) {
-	f := newFixture(t, `{"write":"pr","branch":"main"}`)
-	c := f.clone()
-	res, err := c.Add(context.Background(), AddIn{Topic: "Go", Title: "Via PR", Body: "b", Date: "2026-10-25", Source: "rota"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.PR != "https://example.test/org/kb/pull/7" || res.Branch == "" || res.Pushed {
-		t.Fatalf("res = %+v", res)
-	}
-	if len(f.gh) != 1 || f.gh[0][0] != "gh" || f.gh[0][1] != "pr" || f.gh[0][2] != "create" {
-		t.Fatalf("gh calls = %v", f.gh)
-	}
-	joined := strings.Join(f.gh[0], " ")
-	if !strings.Contains(joined, "--base main") || !strings.Contains(joined, "--head "+res.Branch) {
-		t.Fatalf("gh args = %v", f.gh[0])
-	}
-	if gittest.Run(t, f.remote, "branch", "--list", res.Branch) == "" {
-		t.Fatal("branch not pushed")
-	}
-	if strings.Contains(gittest.Run(t, f.remote, "show", "main:topics/go.md"), "Via PR") {
-		t.Fatal("main must not change in pr mode")
-	}
-	if gittest.Run(t, f.a, "rev-parse", "--abbrev-ref", "HEAD") != "main" || gittest.Run(t, f.a, "status", "--porcelain") != "" {
-		t.Fatal("clone must be back on main and clean")
-	}
-}
-
 func TestAddRefusesDirtyClone(t *testing.T) {
 	f := newFixture(t, "")
 	gittest.Write(t, f.a, "topics/go.md", seedGo+"- local\n")
 	_, err := f.clone().Add(context.Background(), AddIn{Topic: "Go", Title: "T", Body: "b", Date: "2026-10-25", Source: "rota"})
 	if !errorsIs(err, ErrDirty) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPRModeForgeFailuresKeepPushedBranch(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		kind       tracker.Kind
+		resolution bool
+	}{
+		{"create", tracker.KindFailed, false},
+		{"missing-cli", tracker.KindUnavailable, false},
+		{"resolution", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, `{"write":"pr","branch":"main"}`)
+			c := f.clone()
+			switch tc.name {
+			case "create":
+				t.Setenv("FAKE_TRACKER_FAIL", "pr create")
+			case "missing-cli":
+				c.NewForge = func(ctx context.Context, dir string) (tracker.Forge, error) {
+					return tracker.NewForge(ctx, tracker.Settings{}, "github", dir,
+						tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound }))
+				}
+			case "resolution":
+				// The default constructor cannot identify a forge from the local
+				// bare origin, and must wrap that error just like PRCreate errors.
+				c.NewForge = nil
+			}
+			res, err := c.Add(context.Background(), AddIn{Topic: "Go", Title: "Recoverable", Body: "body"})
+			if !errors.Is(err, ErrPush) || res.Branch == "" || !strings.Contains(err.Error(), "branch "+res.Branch+" is pushed") {
+				t.Fatalf("result=%+v error=%v", res, err)
+			}
+			if !tc.resolution {
+				var forgeErr *tracker.Error
+				if !errors.As(err, &forgeErr) || forgeErr.Kind != tc.kind {
+					t.Fatalf("lost forge error kind %v: %v", tc.kind, err)
+				}
+			} else if !errors.Is(err, tracker.ErrUnknownForge) {
+				t.Fatalf("lost forge resolution error: %v", err)
+			}
+			if !strings.Contains(gittest.Run(t, f.remote, "show", res.Branch+":topics/go.md"), "**Recoverable**") {
+				t.Fatal("pushed learning is missing after PR creation failed")
+			}
+			if gittest.Run(t, f.a, "branch", "--show-current") != "main" || gittest.Run(t, f.a, "status", "--porcelain") != "" || len(f.prs()) != 0 {
+				t.Fatal("failed PR creation did not leave a clean clone without a PR")
+			}
+		})
 	}
 }
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/toolver"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 const (
@@ -105,7 +107,12 @@ func externalClone(c *Ctx) (extknowledge.Clone, error) {
 	path = config.ExpandDir(path, home)
 	state, _ := projects.StateDir(d.projectsEnv())
 	return extknowledge.Clone{Dir: path, Env: extknowledge.Env{
-		Git: d.Git, Proc: d.Proc, Now: d.Now, StateDir: state, TTL: time.Duration(ttl) * time.Minute,
+		Git: d.Git, Now: d.Now, StateDir: state, TTL: time.Duration(ttl) * time.Minute,
+		NewForge: func(ctx context.Context, dir string) (tracker.Forge, error) {
+			// The shared knowledge clone has its own origin; the project's
+			// forge.provider and issue tracker do not describe it.
+			return d.forge(ctx, nil, "", dir)
+		},
 	}}, nil
 }
 

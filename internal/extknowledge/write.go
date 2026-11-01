@@ -10,8 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 var (
@@ -530,19 +529,22 @@ func (c Clone) pruneEmptyDirs(rels []string) {
 }
 
 func (c Clone) openPR(ctx context.Context, pol Policy, branch, title string) (string, error) {
-	run := c.Proc
-	if run == nil {
-		run = proc.Run
+	var forge tracker.Forge
+	var err error
+	if c.NewForge != nil {
+		forge, err = c.NewForge(ctx, c.Dir)
+	} else {
+		forge, err = tracker.NewForge(ctx, tracker.Settings{}, "", c.Dir)
 	}
-	r, err := run(ctx, proc.Cmd{Name: "gh", Dir: c.Dir, Args: []string{
-		"pr", "create", "--base", pol.Branch, "--head", branch, "--title", title,
-		"--body", "Opened by `rota knowledge` from the external knowledge base policy (write: pr).",
-	}})
+	var url string
+	if err == nil {
+		url, err = forge.PRCreate(ctx, tracker.PRSpec{
+			Base: pol.Branch, Head: branch, Title: title,
+			Body: "Opened by `rota knowledge` from the external knowledge base policy (write: pr).",
+		})
+	}
 	if err != nil {
-		return "", fmt.Errorf("%w: gh pr create: %v (branch %s is pushed)", ErrPush, err, branch)
+		return "", fmt.Errorf("%w: open PR: %w (branch %s is pushed)", ErrPush, err, branch)
 	}
-	if r.ExitCode != 0 {
-		return "", fmt.Errorf("%w: gh pr create: %s (branch %s is pushed)", ErrPush, strutil.OrDefault(strutil.FirstNonEmpty(strutil.FirstLine(r.Stderr), strutil.FirstLine(r.Stdout)), "no output"), branch)
-	}
-	return strings.TrimSpace(r.Stdout), nil
+	return url, nil
 }
