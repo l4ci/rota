@@ -324,16 +324,16 @@ func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (ver
 			return e.runGateVerify(ctx, cfg.Full, dir, in.ledger)
 		}, false, "", nil
 	}
-	provider, perr := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeActor)
-	if perr != nil {
-		return nil, true, "test.fullWhere is ci, but " + perr.Error(), nil
-	}
-	if provider == tracker.ProviderLocal {
-		return nil, true, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read", nil
-	}
-	forge, ferr := e.Forge(provider, root, cfg.Tracker)
-	if ferr != nil {
-		return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil
+	forge, provider, refusal := e.openForge(ctx, root, "", cfg, tracker.ForgeActor)
+	if refusal != nil {
+		switch refusal.reason {
+		case forgeOpenProvider:
+			return nil, true, "test.fullWhere is ci, but " + refusal.err.Error(), nil
+		case forgeOpenLocal:
+			return nil, true, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read", nil
+		default:
+			return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, refusal.err), nil
+		}
 	}
 	ci, msg := e.newCIVerifier(ctx, root, forge, cfg)
 	if msg != "" {

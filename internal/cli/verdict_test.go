@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/verdict"
@@ -229,7 +231,9 @@ func TestVerdictAddStripsRemotePrefix(t *testing.T) {
 	}
 }
 
-func TestVerdictAddRefusesLocalAheadOfOrigin(t *testing.T) {
+// A binding refusal must leave the store untouched; an explicit reviewed SHA
+// must reach the persisted record through the CLI adapter.
+func TestVerdictAddHeadBindingIntegration(t *testing.T) {
 	dir := pushedVerdictRepo(t)
 	reviewed := headSha(t, dir, "origin/feat/x")
 	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "unpushed")
@@ -246,46 +250,29 @@ func TestVerdictAddRefusesLocalAheadOfOrigin(t *testing.T) {
 	}
 }
 
-func TestVerdictAddShaMustBeOriginHead(t *testing.T) {
-	dir := pushedVerdictRepo(t)
-	old := headSha(t, dir, "feat/x")
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "worker push")
-	gittest.Run(t, dir, "push", "-q", "origin", "feat/x")
-	code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", old)
-	if code != 4 || !strings.Contains(errs, "worker push") {
-		t.Errorf("stale --sha: exit %d, stderr %q (want 4 naming the extra commit)", code, errs)
+func TestVerdictHeadErrorTranslation(t *testing.T) {
+	cases := []struct {
+		name          string
+		err           error
+		code          int
+		message, hint string
+	}{
+		{"refused", &verdict.HeadError{Message: "stale", Hint: "fetch"}, 4, "stale", "fetch"},
+		{"missing commit", &verdict.HeadError{Message: "unknown", NotFound: true}, 3, "unknown", ""},
+		{"git stderr", &git.ExitError{Args: "rev-parse feat/x", ExitCode: 128, Stderr: " unknown revision\n"}, 5, "git rev-parse failed: unknown revision", ""},
+		{"git exit only", &git.ExitError{Args: "rev-parse feat/x", ExitCode: 128}, 5, "git rev-parse failed: exit 128", ""},
+		{"git unavailable", git.ErrNoGit, 5, "git is not installed", ""},
 	}
-	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", "deadbeef"); code != 3 {
-		t.Errorf("unknown --sha: exit %d, want 3", code)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got *Error
+			if err := verdictHeadError(tc.err); !errors.As(err, &got) || got.Exit != tc.code || got.Message != tc.message || got.Hint != tc.hint {
+				t.Fatalf("got %#v; want exit %d, message %q, hint %q", err, tc.code, tc.message, tc.hint)
+			}
+		})
 	}
-	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", headSha(t, dir, "origin/feat/x")); code != 0 {
-		t.Errorf("--sha at origin head: exit %d, want 0", code)
-	}
-}
-
-// With a stale slot worktree, --sha still binds the verdict to the pushed head.
-func TestVerdictAddShaBindsStaleLocalRef(t *testing.T) {
-	dir := pushedVerdictRepo(t)
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "orchestrator push")
-	gittest.Run(t, dir, "push", "-q", "origin", "feat/x")
-	pushed := headSha(t, dir, "origin/feat/x")
-	gittest.Run(t, dir, "reset", "-q", "--hard", "HEAD~1") // slot worktree one behind origin
-	code, out, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", pushed, "--json")
-	if d := data(t, out); code != 0 || !strings.HasPrefix(pushed, d["sha"].(string)) {
-		t.Fatalf("--sha on stale ref: %d %v %s", code, d, errs)
-	}
-}
-
-// A tracking ref that lags the pushed head is a fetch problem, not a stale --sha.
-func TestVerdictAddShaAheadOfTrackingHintsFetch(t *testing.T) {
-	dir := pushedVerdictRepo(t)
-	behind := headSha(t, dir, "origin/feat/x")
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "worker push")
-	pushed := headSha(t, dir, "feat/x")
-	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/feat/x", behind) // origin/feat/x not fetched
-	code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", pushed)
-	if code != 4 || !strings.Contains(errs, "behind") || !strings.Contains(errs, "git fetch") || strings.Contains(errs, "review the current head") {
-		t.Errorf("--sha ahead of tracking ref: exit %d, stderr %q (want 4, behind, git fetch hint)", code, errs)
+	if err := verdictHeadError(nil); err != nil {
+		t.Fatalf("success became %v", err)
 	}
 }
 
@@ -304,61 +291,6 @@ func TestVerdictAddLocalBranchNamedLikeRemoteStaysWhole(t *testing.T) {
 	_, out, _ = rotaIn(t, dir, "verdict", "show", "feat/x", "--json")
 	if d := data(t, out); len(d["records"].([]any)) != 0 {
 		t.Errorf("origin/feat/x leaked into feat/x: %v", d)
-	}
-}
-
-// A remote other than origin is stripped and --sha is checked against that
-// remote's head, not origin's.
-func TestVerdictAddShaUsesNamedRemote(t *testing.T) {
-	dir := pushedVerdictRepo(t)
-	up := filepath.Join(t.TempDir(), "up.git")
-	gittest.Run(t, dir, "init", "-q", "--bare", up)
-	gittest.Run(t, dir, "remote", "add", "up", up)
-	old := headSha(t, dir, "feat/x")
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "up push")
-	gittest.Run(t, dir, "push", "-q", "up", "feat/x")
-	gittest.Run(t, dir, "fetch", "-q", "up")
-	pushed := headSha(t, dir, "up/feat/x")
-	args := []string{"verdict", "add", "up/feat/x", "--kind", "qa", "--verdict", "PASS", "--json"}
-	// origin still holds the old head, so only the named remote accepts the new sha.
-	code, out, errs := rotaIn(t, dir, append(args, "--sha", pushed)...)
-	if d := data(t, out); code != 0 || !strings.HasPrefix(pushed, d["sha"].(string)) {
-		t.Fatalf("--sha at up head: %d %v %s", code, d, errs)
-	}
-	if code, _, errs := rotaIn(t, dir, append(args, "--sha", old)...); code != 4 || !strings.Contains(errs, "up/feat/x") {
-		t.Errorf("--sha behind up head: exit %d, stderr %q (want 4 naming up/feat/x)", code, errs)
-	}
-	_, out, _ = rotaIn(t, dir, "verdict", "show", "feat/x", "--json")
-	if d := data(t, out); len(d["records"].([]any)) != 1 {
-		t.Errorf("up/feat/x not keyed as feat/x: %v", d)
-	}
-}
-
-// origin/<b> without --sha records the local tip and skips the local-vs-origin
-// check, which only guards a bare branch argument.
-func TestVerdictAddRemoteArgWithoutShaRecordsTip(t *testing.T) {
-	dir := pushedVerdictRepo(t)
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "unpushed")
-	tip := headSha(t, dir, "origin/feat/x")
-	code, out, errs := rotaIn(t, dir, "verdict", "add", "origin/feat/x", "--kind", "qa", "--verdict", "PASS", "--json")
-	if d := data(t, out); code != 0 || !strings.HasPrefix(tip, d["sha"].(string)) {
-		t.Errorf("origin/feat/x without --sha: %d %v %s (want origin head %s)", code, d, errs, tip[:7])
-	}
-}
-
-// With nothing pushed, --sha is checked against the local branch.
-func TestVerdictAddShaOnUnpushedBranch(t *testing.T) {
-	dir := verdictRepo(t)
-	old := headSha(t, dir, "feat/x")
-	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "second")
-	args := []string{"verdict", "add", "--kind", "qa", "--verdict", "PASS", "--json"}
-	if code, _, errs := rotaIn(t, dir, append(args, "--sha", old)...); code != 4 || !strings.Contains(errs, "feat/x") {
-		t.Errorf("stale --sha, unpushed: exit %d, stderr %q (want 4)", code, errs)
-	}
-	head := headSha(t, dir, "feat/x")
-	code, out, errs := rotaIn(t, dir, append(args, "--sha", head)...)
-	if d := data(t, out); code != 0 || !strings.HasPrefix(head, d["sha"].(string)) {
-		t.Errorf("--sha at local head: %d %v %s", code, d, errs)
 	}
 }
 

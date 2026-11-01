@@ -299,22 +299,11 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 // openPRs lists the forge's open PRs. Best effort: ok is false with no origin,
 // a local forge, no forge or a failing listing, where nothing is known.
 func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok bool) {
-	remote, err := e.Remote(root)
-	if err != nil {
+	f, _, refusal := e.openForge(ctx, root, "", e.GateConfig(root), tracker.ForgeReader)
+	if refusal != nil {
 		return nil, false
 	}
-	if _, code := e.runGit(ctx, root, "remote", "get-url", remote); code != 0 {
-		return nil, false
-	}
-	cfg := e.GateConfig(root)
-	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
-	if provider == tracker.ProviderLocal {
-		return nil, false
-	}
-	f, err := e.Forge(provider, root, cfg.Tracker)
-	if err != nil {
-		return nil, false
-	}
+	var err error
 	prs, err = f.OpenPRs(ctx)
 	return prs, err == nil
 }
@@ -379,22 +368,16 @@ func (e Env) prInfoKnown(ctx context.Context, root string, s *Slot) (info tracke
 	if !ok {
 		return info, true
 	}
-	remote, err := e.Remote(root)
-	if err != nil {
-		return info, true
+	f, _, refusal := e.openForge(ctx, root, "", e.GateConfig(root), tracker.ForgeReader)
+	if refusal != nil {
+		switch refusal.reason {
+		case forgeOpenRemote, forgeOpenLocal:
+			return info, ctx.Err() == nil
+		default:
+			return info, false
+		}
 	}
-	if _, code := e.git(root, "remote", "get-url", remote); code != 0 {
-		return info, true
-	}
-	cfg := e.GateConfig(root)
-	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
-	if provider == tracker.ProviderLocal {
-		return info, ctx.Err() == nil
-	}
-	f, err := e.Forge(provider, root, cfg.Tracker)
-	if err != nil {
-		return info, false
-	}
+	var err error
 	info, err = f.PRView(ctx, n)
 	if err != nil || ctx.Err() != nil {
 		return tracker.PRInfo{}, false
