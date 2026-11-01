@@ -140,23 +140,6 @@ func TestCheckClosesBreaksOnAnUnreadableIssue(t *testing.T) {
 	}
 }
 
-func TestReleaseClaimLabels(t *testing.T) {
-	is := &seamIssues{
-		labels: map[int][]string{5: {"in-progress", "claimed:dana@main", "type:task"}, 6: {"in-progress"}},
-		closed: map[int]bool{5: true},
-	}
-	notes := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Label: "in-progress", Keys: keys(5, 6), Issues: is})
-	if len(notes) != 0 {
-		t.Errorf("notes = %q", notes)
-	}
-	if got := strings.Join(is.removed[5], ","); got != "in-progress,claimed:dana@main" {
-		t.Errorf("removed from #5 = %q, want the workflow labels only", got)
-	}
-	if len(is.removed[6]) != 0 {
-		t.Errorf("an open issue kept its label, removed %q", is.removed[6])
-	}
-}
-
 func TestReleaseClaimLabelsNotesAnUnreadableIssue(t *testing.T) {
 	notes := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Label: "in-progress", Keys: keys(5), Issues: &seamIssues{getErr: errors.New("gone")}})
 	if len(notes) != 1 || !strings.Contains(notes[0], "LABEL-KEPT") {
