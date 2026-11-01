@@ -1,12 +1,15 @@
 package backlog
 
 import (
+	"context"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 const claimLabelPrefix = labels.ClaimPrefix
@@ -47,7 +50,7 @@ func ClaimLabel(cfg any, claimID string) (string, bool) {
 }
 
 // ClaimLabelDrift compares labels with open claims, never the worker registry.
-// Closed issues should carry no claim labels, even if old comment claims remain.
+// Closed issues drop in-progress and claim labels, even if comment claims remain.
 func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 	if _, err = b.tracker(); err != nil {
 		return
@@ -55,6 +58,11 @@ func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 	is, _, err := b.require(ref)
 	if err != nil {
 		return nil, nil, err
+	}
+	if is.State == "closed" {
+		remove = closedIssueLabels(is, config.Label(b.Cfg, "inProgress"))
+		slices.Sort(remove)
+		return nil, remove, nil
 	}
 	want := map[string]bool{}
 	if is.State == "open" {
@@ -107,4 +115,40 @@ func (b *Issues) SyncClaimLabels(ref string) (changed bool, err error) {
 		changed = true
 	}
 	return changed, nil
+}
+
+// ClaimLabelTracker is the tracker surface needed to clean up a closed issue.
+type ClaimLabelTracker interface {
+	ClaimReader
+	RemoveLabels(context.Context, tracker.IssueKey, []string) error
+}
+
+// CleanupClosedIssueLabels re-reads the issue and removes in-progress and every
+// claim label only when it is closed. Other workflow labels and claims survive.
+// On a write error, drop still names the labels attempted; on a read error it is
+// nil. Callers choose whether to warn (after landing) or leave a repair pending.
+func CleanupClosedIssueLabels(ctx context.Context, tr ClaimLabelTracker, key tracker.IssueKey, inProgress string) (drop []string, err error) {
+	is, err := tr.Get(ctx, key, false)
+	if err != nil {
+		return nil, err
+	}
+	drop = closedIssueLabels(is, inProgress)
+	if len(drop) == 0 {
+		return nil, nil
+	}
+	return drop, tr.RemoveLabels(ctx, key, drop)
+}
+
+// closedIssueLabels is the shared cleanup and drift rule. Keep input order for
+// removal diagnostics; drift sorts its result for a stable comparison.
+func closedIssueLabels(is tracker.Issue, inProgress string) (drop []string) {
+	if is.State != "closed" {
+		return nil
+	}
+	for _, label := range is.Labels {
+		if (inProgress != "" && label == inProgress) || IsClaimLabel(label) {
+			drop = append(drop, label)
+		}
+	}
+	return drop
 }
