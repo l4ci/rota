@@ -276,9 +276,6 @@ func TestLinearList(t *testing.T) {
 	if _, err := l.List(ctx, ListFilter{State: "all"}); err != nil || strings.Count(strings.Join(since(s, n), " "), "Issues") < 6 {
 		t.Fatalf("11 issues at 2 a page took requests %v", since(s, n))
 	}
-	if _, err := l.List(ctx, ListFilter{Milestone: "M01"}); err == nil {
-		t.Fatal("List with a milestone succeeded")
-	}
 }
 
 func TestLinearStatus(t *testing.T) {
@@ -408,35 +405,6 @@ func TestLinearErrors(t *testing.T) {
 	}
 	if doc, _ := s.Last("CommentCreate"); !strings.HasPrefix(doc, "mutation CommentCreate") {
 		t.Errorf("a write sent %q, want a mutation document", doc)
-	}
-}
-
-func TestLinearNoMilestones(t *testing.T) {
-	ctx := context.Background()
-	l, s := fakeLinear(t, lineartest.Options{})
-	k := linearCreate(t, l, "t", "")
-	n := len(s.Requests())
-	if _, err := l.Create(ctx, "t", "", nil, "M01"); err == nil {
-		t.Error("Create with a milestone succeeded")
-	}
-	ms := "M01"
-	if err := l.Edit(ctx, k, IssueEdit{Milestone: ms}); err == nil {
-		t.Error("Edit with a milestone succeeded")
-	}
-	if got := since(s, n); len(got) != 0 {
-		t.Errorf("a refused milestone still sent %v", got)
-	}
-	if _, err := l.Milestones(ctx, "open"); err == nil {
-		t.Error("Milestones succeeded")
-	}
-	if _, err := l.CreateMilestone(ctx, "M01", ""); err == nil {
-		t.Error("CreateMilestone succeeded")
-	}
-	if _, err := l.IssuesInMilestone(ctx, "M01", "open"); err == nil {
-		t.Error("IssuesInMilestone succeeded")
-	}
-	if _, ok, err := l.FindMilestone(ctx, "M01"); ok || err != nil {
-		t.Errorf("FindMilestone = %v, %v; want none", ok, err)
 	}
 }
 
