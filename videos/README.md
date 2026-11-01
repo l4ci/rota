@@ -94,7 +94,9 @@ videos/render.sh all              # every script in videos/episodes/
 
 `ROTA_BIN=/path/to/rota` picks the binary the terminal shots run (default: built from this checkout). `RENDER_CONCURRENCY` sets Chrome tabs (default 2; machine memory is shared, keep it low).
 
-Per episode it writes to `videos/out/`: `NN-slug.mp4` (1920x1080), `NN-slug.vertical.mp4` (1080x1920), `NN-slug.vtt`, and an entry in `manifest.json` (rota version, hash of the script, hash of each output). It also rewrites `videos/snapshots/NN-slug.json`. Commit the `out/` files and the snapshot together.
+Per episode it writes to `videos/out/`: `NN-slug.mp4` (1920x1080), `NN-slug.vertical.mp4` (1080x1920), `NN-slug.vtt`, and an entry in `manifest.json` (rota version, render-input hashes, hash of each output). It also rewrites `videos/snapshots/NN-slug.json`. Commit the `out/` files and the snapshot together.
+
+Each entry's `source_inputs` maps input paths to SHA-256 hashes; `source_hash` hashes that sorted map (compact JSON, UTF-8). Inputs include the episode script, renderer and voice sources (including the lexicon), fonts and brand assets, `render.sh`, caption generation, render configuration, package manifests and lockfile, the Python requirements, the parser and any staged fixtures the episode uses. Missing inputs have a `null` hash. Installed dependencies, downloaded models and caches are excluded; their pinned versions and model URLs are covered through the package files and `render.sh`. Tests, bytecode, Markdown documentation and unrelated files are excluded. Edits within a render source file, including comments, change its hash.
 
 The stages, each cached:
 
@@ -112,7 +114,7 @@ The stages, each cached:
 python3 scripts/videos.py --check
 ```
 
-It re-captures every non-staged terminal shot against `$ROTA_BIN` and names each episode whose command failed, whose output differs from `videos/snapshots/`, or whose script hash differs from `videos/out/manifest.json`. An episode that has not been rendered yet is listed as "not rendered yet", not as stale, so CI stays green until the first render. It needs only Python and the binary, so `test/doclint.sh` runs it in CI. CI never renders: the maintainer re-renders locally, and `/rota-release` reminds them.
+It re-captures every non-staged terminal shot against `$ROTA_BIN` and names each episode whose command failed, whose output differs from `videos/snapshots/`, or whose render-input hash differs from `videos/out/manifest.json`. For input drift it names every changed, added or deleted input. Shared pipeline changes mark all rendered episodes stale; script and staged-fixture changes affect only the episodes that use them. Old manifest entries without `source_inputs` require a re-render to record the pipeline. An episode that has not been rendered yet is listed as "not rendered yet", not as stale, so CI stays green until the first render. It needs only Python and the binary, so `test/doclint.sh` runs it in CI. CI never renders: the maintainer re-renders locally, and `/rota-release` reminds them.
 
 ### Add an episode
 

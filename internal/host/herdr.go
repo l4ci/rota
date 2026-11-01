@@ -51,7 +51,8 @@ func (h *herdr) Require() error {
 // Controlling a herdr server from outside one is what herdr's own guide
 // forbids: commands then land in whatever workspace a human has focused.
 func (h *herdr) InSession() bool {
-	return h.d.Getenv("HERDR_ENV") == "1" && h.d.Getenv("HERDR_WORKSPACE_ID") != ""
+	pane := detectHerdrPane(h.d)
+	return pane.managed && pane.workspace
 }
 
 func (h *herdr) Where() string {

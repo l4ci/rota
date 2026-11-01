@@ -2,11 +2,43 @@
  "episodes": {
   "01-why-rota": {
    "rota_version": "0.28.0",
-   "source_hash": "f62191d7113af2a9940c7c31bba405a2128709d54b5183678a023438a0b724fa",
+   "source_hash": "a73ee9797b54945859be6a81d733bfaaba435d4a3dff286f0ba433d17b580e3f",
    "outputs": {
     "01-why-rota.mp4": "38340aa80eb69bcd4f45b815dd765186e3551713c9b5b918a040b0b53520c4a5",
     "01-why-rota.vertical.mp4": "0c618818319ae745bba3f3597b46431005e25e8cea35836061321f3efee10e99",
     "01-why-rota.vtt": "b5fd1b03890a250ac5469706ffef79d192c25f0022f63e25ae68a88b49f6ef65"
+   },
+   "source_inputs": {
+    "docs/images/rota-icon.svg": "4c324eed1544d6208a3ab044dad7349ab0feb82bdad8087ee45ab134eb465673",
+    "docs/images/rota-logo.svg": "3fcc4e3341b7908aa50d09d5937de2c24c15d086253be314e1eb4e41089af232",
+    "scripts/fmlite.py": "161f54c6d2f6f85ce730765a0b6bd5a62ef31c4d51d0c423e8749bc27ab6b89a",
+    "scripts/videos.py": "200f1ba3772fbe26f8bb91f75e5862eed231a97fb715ce3607ad9bf77d13e1b3",
+    "videos/episodes/01-why-rota.md": "f62191d7113af2a9940c7c31bba405a2128709d54b5183678a023438a0b724fa",
+    "videos/render.sh": "f177e0243612971a0a67923f621dde241269f241a4468f650e908ddaa8527f44",
+    "videos/render/package-lock.json": "48420a14566e3687ad8a7fe16f29f5fe03ea92a96afaf8a212792d109f0b9d40",
+    "videos/render/package.json": "181209bf09d8ccf000f48ad2feb9150780ea908a74ecb0bd93e0873d2d5f8684",
+    "videos/render/public/fonts/atkinson-hyperlegible-next-normal-latin.woff2": "18b2a1a39a2fa298b0ba5390aca68462669826c90925656f1c1f6796e0e1bbaf",
+    "videos/render/public/fonts/martian-mono-normal-latin.woff2": "f9c1655c2c9d1ed5bb8b301a57d1169a1123ffef1a588dc50a7a487810f7d732",
+    "videos/render/remotion.config.ts": "ab9ff12a1d310d77bdb6478ac788f9d65c4c9e8cc99bf3ae45975d8d0f945d13",
+    "videos/render/requirements.txt": "8a55e8350c6060cad3b79e2988db7c582c20c66c74cca45cd1c49d7a19155079",
+    "videos/render/src/Captions.tsx": "b94ff59bc9ecf11e5671edbdb7bb48680409bf778a8ecf2922272fba9ec39208",
+    "videos/render/src/Episode.tsx": "1e903940969e07f553db08f1257220978d3165622d04aa0ec435c65b70e77b9c",
+    "videos/render/src/Intro.tsx": "6f4e992978969c8fd4667faa759017302fe9b78af4bed4b1baa8476a63a5c9f8",
+    "videos/render/src/LowerThird.tsx": "2cbd3b5c887bd9abe8b34931dffe4ba9d581e55059257a4b7005af45457ec85a",
+    "videos/render/src/Motion.tsx": "68994138724e4f93042db170f1ae88434fd3dba18f4e5e5452ad21dee12f5a0e",
+    "videos/render/src/Outro.tsx": "468b7bd5c9073891d0a8f8ba0099c1897ce74e9d1e83624cebe503e681bdb70a",
+    "videos/render/src/Root.tsx": "19839d1dd6e1d0911526a64a1fc6962e0309d5cdf851b66b75c01f57863fbec4",
+    "videos/render/src/Terminal.tsx": "59599d5fba5dec167ac5e77c27ec3b4e067f0b5ac0d5a6d2239a8b54fd13ac70",
+    "videos/render/src/fonts.ts": "51a87cdffa1905d60635462c0c58a8955b2c58f5825c782639ffb59fca5aa119",
+    "videos/render/src/index.ts": "a58f804bf74bab68b4549aa5c715eb4a89ec5835206d198fc79b462b4fc71ef9",
+    "videos/render/src/sceneTiming.ts": "dc3610cd4a331e951f5fec5d5dc8fab4db721d9c559cf9d66a61898241a92c23",
+    "videos/render/src/scenes.tsx": "e10124385c594655f92d2c77377958244ea6f1a9eece228e3745217fa7bf8d90",
+    "videos/render/src/theme.ts": "a46cfd0202c97462642df4e4395b9a77768cf650da1a3e41acd337a801f95b10",
+    "videos/render/src/timeline.ts": "8350c8f13779dbaafb647cffe77dddd8264623009bea67547ebcf5fd3b66be01",
+    "videos/render/tsconfig.json": "63a7490aab36b3bb9bfcaec58aa7942ecea1040335384bb143b430a69400a4f5",
+    "videos/render/voice/lexicon.json": "04da020f9455bf3642fe95614edfa1aec91c449afcac8e4be4dd47f896c46273",
+    "videos/render/voice/synth.py": "4431cdb74aae29915847f4546e5c475c557f8919d3f09e75cb3fa2debe23ddce",
+    "videos/render/vtt.mjs": "acb2fd57d6170731ee431b14cfd83d900090673b5b106859d5669d4a3a51775f"
    }
   }
  }
