@@ -1,46 +1,22 @@
 package host
 
-import (
-	"fmt"
-	"os"
-	"os/exec"
-)
+import "fmt"
 
-// Solo is the round host of a round with no terminal: workers are in-harness
-// subagents, so there is no pane to drive. It is a round-level value only:
-// New never returns it, and no Host is built for it.
-const Solo Kind = "solo"
-
-// Kind names a host backend. It is a string on the wire (the registry, the
-// round report); the constants below are its only spellings.
-type Kind string
-
-// The host kinds that have panes.
-const (
-	Herdr Kind = "herdr"
-	Tmux  Kind = "tmux"
-	Orca  Kind = "orca"
-)
-
-// KindOf is the kind a config or registry string names: "herdr", "tmux", "orca" and "solo",
-// anything else (including "subagent" and "") the zero Kind.
-func KindOf(s string) Kind {
-	switch k := Kind(s); k {
-	case Herdr, Tmux, Orca, Solo:
-		return k
-	}
-	return ""
+// herdrPaneFacts holds facts, not a host-selection policy. Resolve needs the marker
+// and binary; InSession needs the marker and workspace even without the binary.
+type herdrPaneFacts struct {
+	managed, workspace, installed bool
 }
 
-// String is the kind's wire spelling.
-func (k Kind) String() string { return string(k) }
-
-// Binary is the executable that runs the kind ("" for Solo).
-func (k Kind) Binary() string {
-	if k == Herdr || k == Tmux || k == Orca {
-		return string(k)
+// detectHerdrPane is the shared source of herdr pane facts. Callers supply
+// filled dependencies and retain their deliberately different policies.
+func detectHerdrPane(d Deps) herdrPaneFacts {
+	_, err := d.LookPath(Herdr.Binary())
+	return herdrPaneFacts{
+		managed:   d.Getenv("HERDR_ENV") == "1",
+		workspace: d.Getenv("HERDR_WORKSPACE_ID") != "",
+		installed: err == nil,
 	}
-	return ""
 }
 
 // Resolve is the rule for which host a round runs on (C8), the in-session one:
@@ -52,12 +28,6 @@ func (k Kind) Binary() string {
 // herdr inside a herdr pane with the binary on PATH, else tmux inside tmux,
 // else solo. getenv and lookPath default to the process's own.
 func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(string) (string, error)) Kind {
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-	if lookPath == nil {
-		lookPath = exec.LookPath
-	}
 	if registry != "" {
 		return registry
 	}
@@ -65,12 +35,13 @@ func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(
 	case Herdr, Tmux, Orca:
 		return dispatch
 	}
-	if getenv("HERDR_ENV") == "1" {
-		if _, err := lookPath(Herdr.Binary()); err == nil {
-			return Herdr
-		}
+	d := Deps{Getenv: getenv, LookPath: lookPath}
+	d.fill()
+	pane := detectHerdrPane(d)
+	if pane.managed && pane.installed {
+		return Herdr
 	}
-	if getenv("TMUX") != "" {
+	if d.Getenv("TMUX") != "" {
 		return Tmux
 	}
 	return Solo

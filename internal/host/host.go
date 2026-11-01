@@ -24,6 +24,43 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 )
 
+// Solo is the round host of a round with no terminal: workers are in-harness
+// subagents, so there is no pane to drive. It is a round-level value only:
+// New never returns it, and no Host is built for it.
+const Solo Kind = "solo"
+
+// Kind names a host backend. It is a string on the wire (the registry, the
+// round report); the constants below are its only spellings.
+type Kind string
+
+// The host kinds that have panes.
+const (
+	Herdr Kind = "herdr"
+	Tmux  Kind = "tmux"
+	Orca  Kind = "orca"
+)
+
+// KindOf is the kind a config or registry string names: "herdr", "tmux", "orca" and "solo",
+// anything else (including "subagent" and "") the zero Kind.
+func KindOf(s string) Kind {
+	switch k := Kind(s); k {
+	case Herdr, Tmux, Orca, Solo:
+		return k
+	}
+	return ""
+}
+
+// String is the kind's wire spelling.
+func (k Kind) String() string { return string(k) }
+
+// Binary is the executable that runs the kind ("" for Solo).
+func (k Kind) Binary() string {
+	if k == Herdr || k == Tmux || k == Orca {
+		return string(k)
+	}
+	return ""
+}
+
 // Result is what a finished command left behind.
 type Result = proc.Result
 
