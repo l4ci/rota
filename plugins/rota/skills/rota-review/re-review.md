@@ -1,0 +1,13 @@
+# Re-review (`/rota-review --since <sha>`)
+
+After a bounce the worker pushes a fix. Review the fix, not the whole branch. `<sha>` is the `sha` of the branch's last recorded review (`rota verdict show <branch> --json`, the newest record of kind `review-quality`); with no recorded review, run the full review. Do these in place of the full Step 7 brief:
+
+- Step 5 packages only `--since <sha>`. Steps 2-4 and 6 still run, on the fix range.
+- Both reviewers run, each on its own axis. `rota verdict show <branch> --json` holds the latest `review-spec` and `review-quality` records: put each record's blocking `findings` (`blocking: true`, or `blocker`/`major` when the key is absent, as in a record stored before the flag) into its reviewer's brief as `**Earlier findings:**`, numbered.
+- Each reviewer marks every earlier finding `ADDRESSED` or `NOT ADDRESSED`, with the diff line that settles it. A finding the fix does not touch is `NOT ADDRESSED`.
+- When `rota review depth <branch> --json` carries a `cross` harness, the cross-harness reviewer runs again too (`cross-harness-reviewer.md`): its extract is of the new head, its `diff.txt` is this `--since <sha>` package (the fix range only), and the latest `review-cross` record's blocking findings are its `**Earlier findings:**`. A fix push makes its record stale like the others.
+- Deferred findings (`blocking: false`) are not re-reviewed: they were filed as items, and the fix is not judged against them.
+- Only the fix gets the rubric. Anything noticed outside the fix goes to a `**Deferred:**` list in the report: never a finding, never moves the verdict.
+- The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
+- Relay the `**Deferred:**` list to the caller beside the verdict. File it with `/rota-capture` if the caller wants; never fold it into this branch.
+- When `rota review depth <branch> --json` lists `lenses`, every triggered lens runs again, and so does any lens whose latest `review-<lens>` record is FAIL even when the fix range no longer triggers it (a FAIL clears only through a newer record of its kind). Each runs on the fix range only (`lens-briefs.md`): the latest `review-<lens>` record's blocking findings are its `**Earlier findings:**`, and it reports majors only (`blocker` and `major`), no minor or info. A fix push makes its record stale like the others.
