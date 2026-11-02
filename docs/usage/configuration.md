@@ -626,12 +626,12 @@ legacy-labelled issues and keep them blocked so main cannot assign them as unpin
 
 ## round keys
 
-Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-rounds.md), [`rota round` verbs](../reference/cli-helpers.md#rota-round) and [`rota doctor`](../reference/preflight.md#rota-doctor)). All are silent defaults; none is written by `rota init`.
+Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-rounds.md), [`rota round` verbs](../reference/cli-helpers.md#rota-round) and [`rota doctor`](../reference/preflight.md#rota-doctor)). All are silent defaults except `round.roster`, which `rota init` writes when it creates a project's `config.json`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none of the active milestones has an item left to take. With no planned or active milestone at all, `"milestone"` and `"next"` offer every open item, as `"open"` does. `"open"`: every open item no slot holds. Assign refuses anything outside the scope. |
-| `round.roster` | `["ben","dana","nia","kit"]` | Agent names, one slot each (`.worktrees/<agent>`, parked on `park/<agent>`, working on `<agent>/<issue>-<slug>`). Lowercase letters, digits and `-`; no duplicates. |
+| `round.roster` | `["ben","dana","nia","kit"]` | Agent names, one slot each (`.worktrees/<agent>`, parked on `park/<agent>`, working on `<agent>/<issue>-<slug>`). Lowercase letters, digits and `-`; no duplicates. `rota init` seeds a new project with 8 random names from a pool of 40; the listed default is the fallback when the key is unset, and an existing `config.json` is never changed. |
 | `round.brief` | `""` | Path of the standing worker contract the assignment pointer names. Empty means `skills/references/worker-contract.md` in the project checkout, else the installed `rota-orchestrate/references/worker-contract.md`. A `round.brief` that is missing under rota's skills cache (an update removed that version's tree) falls back to the current cache copy with a warning; one missing anywhere else refuses. |
 | `round.sharedPaths` | `[]` | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches (a command registry, a contract doc). |
 | `round.scopeOverlap` | `warn` | What a clash on declared scopes does to the overlap readiness check. Scopes come from an issue's `## Touches` section, else its `Subsystem:` field. `warn` lists the clash and keeps the item ready; `block` fails the check like a shared file. `--accept-overlap` skips both. |
