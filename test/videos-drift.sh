@@ -230,6 +230,31 @@ fake_ver "$VD/v-newver" "rota 2.0.0 (abc1234, 2026-01-01T00:00:00Z)"
 [ "$(cap "$VD/v-newver")" != "$(cap "$VD/v-vcs")" ] || fail "a changed version number must still differ"
 pass "the rota version stamp is masked in every form, and a changed version still differs"
 
+# a version-only change is not drift (#2573); a change next to a version line still is
+fake_vrota() { # <path> <version> <usage-flag>: `rota version`, `rota init` stamp line and a help line
+  cat > "$1" <<FAKE
+#!/bin/sh
+case "\$1" in
+  version) echo "rota $2" ;;
+  init) echo "stamped rota.version: $2"; echo "usage: rota $3" ;;
+esac
+FAKE
+  chmod +x "$1"
+}
+fake_vrota "$VD/vr-old" 1.0.0 --a
+fake_vrota "$VD/vr-new" 1.0.1 --a
+fake_vrota "$VD/vr-newflag" 1.0.1 --b
+VR="$VD/vr"; mkdir -p "$VR/episodes" "$VR/snapshots"
+printf -- '---\nnumber: 0\nslug: vr\n---\n\n### 01 terminal\n\nvo: x\n\n```sh\nrota version\nrota init\n```\n\nvertical: x\n' > "$VR/episodes/00-vr.md"
+python3 "$VID" capture "$VR/episodes/00-vr.md" --bin "$VD/vr-old" --write "$VR/snapshots/00-vr.json" || fail "vr capture failed"
+vchk() { rc=0; OUT="$(python3 "$VID" --check --root "$VR" --bin "$1" 2>&1)" || rc=$?; }
+vchk "$VD/vr-new"
+{ [ "$rc" = 0 ] && grep -q '1 episode(s) current' <<<"$OUT"; } || fail "a version-only change should stay current (rc $rc): $OUT"
+vchk "$VD/vr-newflag"
+{ [ "$rc" = 1 ] && grep -q '00-vr: output changed: shot 01 `rota init`' <<<"$OUT" && ! grep -q 'rota version' <<<"$OUT"; } \
+  || fail "a version plus another change should go stale on that command only (rc $rc): $OUT"
+pass "videos --check ignores a version-only change and still flags one next to another change"
+
 # anim: lines (#2537): an optional animated scene per motion shot, parsed inside the grammar
 AN="$VD/anim"; mkdir -p "$AN"
 mkanim() { # <name> <anim line> [kind]: a one-shot episode; parse prints its anim
