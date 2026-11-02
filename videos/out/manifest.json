@@ -2,7 +2,7 @@
  "episodes": {
   "01-why-rota": {
    "rota_version": "0.28.0",
-   "source_hash": "a73ee9797b54945859be6a81d733bfaaba435d4a3dff286f0ba433d17b580e3f",
+   "source_hash": "25568a30acea8b63c9bd8848fcd4e61235252bfa016c9db12824970ee50c1dc2",
    "outputs": {
     "01-why-rota.mp4": "38340aa80eb69bcd4f45b815dd765186e3551713c9b5b918a040b0b53520c4a5",
     "01-why-rota.vertical.mp4": "0c618818319ae745bba3f3597b46431005e25e8cea35836061321f3efee10e99",
@@ -12,7 +12,7 @@
     "docs/images/rota-icon.svg": "4c324eed1544d6208a3ab044dad7349ab0feb82bdad8087ee45ab134eb465673",
     "docs/images/rota-logo.svg": "3fcc4e3341b7908aa50d09d5937de2c24c15d086253be314e1eb4e41089af232",
     "scripts/fmlite.py": "161f54c6d2f6f85ce730765a0b6bd5a62ef31c4d51d0c423e8749bc27ab6b89a",
-    "scripts/videos.py": "200f1ba3772fbe26f8bb91f75e5862eed231a97fb715ce3607ad9bf77d13e1b3",
+    "scripts/videos.py": "0ade692bc2646252177195885c4fdff52c916fbec6f0c4f32377ddb84018a02a",
     "videos/episodes/01-why-rota.md": "f62191d7113af2a9940c7c31bba405a2128709d54b5183678a023438a0b724fa",
     "videos/render.sh": "f177e0243612971a0a67923f621dde241269f241a4468f650e908ddaa8527f44",
     "videos/render/package-lock.json": "48420a14566e3687ad8a7fe16f29f5fe03ea92a96afaf8a212792d109f0b9d40",
