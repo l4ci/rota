@@ -196,8 +196,9 @@ gh api -X PATCH repos/<owner>/<repo>/pulls/<N> -F body=@body.md
 ## Roster
 
 Slots are provisioned once and reused: `.worktrees/<agent>`, parked on `park/<agent>`, working
-on `<agent>/<issue>-<slug>`. `round.roster` sets the names; the default is `ben`, `dana`, `nia`,
-`kit`. A longer round adds names with `rota config set round.roster '[...]'`.
+on `<agent>/<issue>-<slug>`. `round.roster` sets the names. `rota init` seeds a new project with
+8 random names from a pool of 40; the static default `ben`, `dana`, `nia`, `kit` applies only when
+the key is unset. A longer round adds names with `rota config set round.roster '[...]'`.
 
 Each slot's account (`CLAUDE_CONFIG_DIR`) comes from the `claude` entries of `round.accounts` (`{kind, name, dir}`). Those are paths on one
 machine, so they live in the developer's gitignored `.rota/config.local.json`, not in tracked files.

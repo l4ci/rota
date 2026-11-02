@@ -202,7 +202,7 @@ rota round candidates                         # re-read the board with readiness
 - **One orchestrator per repo.** A second `start` is refused (exit 4) and names the holder. A lease
   whose holder is gone is stale: `rota round reconcile` reports it and `rota round start` reclaims it.
   How the lease is stored and who counts as the holder: [lease internals](#internals).
-- **Slots** are the first `--slots` names of `round.roster` (default `ben`, `dana`, `nia`, `kit`),
+- **Slots** are the first `--slots` names of `round.roster` (`rota init` seeds 8 random names for a new project; when the key is unset the fallback is `ben`, `dana`, `nia`, `kit`),
   each `.worktrees/<agent>` on `park/<agent>`. Slots are provisioned once and reused; a healthy
   existing slot is left alone. The worktrees live in the project root under `.worktrees/`, which
   `rota init` adds to `.gitignore`.
