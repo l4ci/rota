@@ -69,7 +69,7 @@ Voiceover text across an episode stays within its length: about 150 words per mi
 
 ### Running a script
 
-Every terminal block that carries no `staged:` line runs with exit 0, line by line, in a scratch project: `git init` in a temp dir with `HOME` and `XDG_CONFIG_HOME` pointed at a temp dir. That is also how a script is checked when written. Output is captured separately from rendering; the `rota version` build stamp is normalised before comparing.
+Every terminal block that carries no `staged:` line runs with exit 0, line by line, in a scratch project: `git init` in a temp dir with `HOME` and `XDG_CONFIG_HOME` pointed at a temp dir. That is also how a script is checked when written. Output is captured separately from rendering; the `rota version` build stamp is normalised before comparing, and `--check` also ignores the version number itself (the `rota <version>` line and `rota init`'s `stamped rota.version: <version>` line), so a release alone does not make an episode stale.
 
 ## Rendering
 
@@ -100,7 +100,7 @@ Each entry's `source_inputs` maps input paths to SHA-256 hashes; `source_hash` h
 
 The stages, each cached:
 
-1. **Capture.** `scripts/videos.py` runs each terminal shot's `sh` lines, in order, in a throwaway git project with `HOME`, `XDG_CONFIG_HOME`, `TZ` and the git identity pinned and every `ROTA_*`/`GIT_*` variable dropped. The `rota version` commit and build time are masked as `(build)`; nothing else is.
+1. **Capture.** `scripts/videos.py` runs each terminal shot's `sh` lines, in order, in a throwaway git project with `HOME`, `XDG_CONFIG_HOME`, `TZ` and the git identity pinned and every `ROTA_*`/`GIT_*` variable dropped. The `rota version` commit and build time are masked as `(build)`; the snapshot keeps the version number. The drift check (`--check`) additionally masks the version number on the `rota <version>` and `stamped rota.version: <version>` lines of both sides, so a version bump alone is current; nothing else is masked.
 2. **Voice.** Kokoro speaks each shot's `say:` line, else its `vo:` line. Audio is cached in `videos/.cache/audio/` by text, voice and lexicon. `voice/lexicon.json` makes "rota" "Ro-Ta" with a hard T; check it with `videos/render/.venv/bin/python videos/render/voice/synth.py --phonemes rota`.
 3. **Compose.** Remotion renders the shared intro, shots, captions and outro. Shot length is the voiceover length (plus a tail) or the terminal animation, whichever is longer. Typing is a function of the frame number, so the same sources and rota version give the same bytes.
 

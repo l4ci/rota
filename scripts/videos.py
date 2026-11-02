@@ -41,8 +41,12 @@ ANSI_RE = re.compile(r'\x1b\[[0-9;?]*[ -/]*[@-~]')
 # info, `rota 0.28.0` with ldflags only and `rota dev` with neither (internal/version).
 # The commit and build time change on every build and say nothing about a command, flag
 # or output, so the parenthesised stamp on the `rota <version>` line is dropped and all
-# three forms compare equal. The version itself stays.
+# three forms compare equal. The captured text keeps the version, since the rendered shot
+# shows it; the drift check alone (drift_form) also masks the number, so a release that
+# changes nothing else does not turn --check red. Only the `rota <version>` line and
+# `rota init`'s `stamped rota.version: <version>` line are masked, nowhere else.
 STAMP_RE = re.compile(r'^(rota \S+) \([^)\n]*\)[ \t]*$', re.M)
+VERSION_LINE_RE = re.compile(r'^(rota |stamped rota\.version: )(?:v?\d\S*|dev)([ \t]*)$', re.M)
 SCRATCH_PLACEHOLDER = '/tmp/scratch'
 HOME_PLACEHOLDER = '/home/user'
 CMD_TIMEOUT = 120
@@ -230,6 +234,11 @@ def normalise(text, scratch, home):
     return text.replace('\r\n', '\n')
 
 
+def drift_form(text):
+    # a version bump alone is not drift: compare with the version number masked
+    return VERSION_LINE_RE.sub(r'\1<version>\2', text)
+
+
 def resolve_bin(arg):
     b = arg or os.environ.get('ROTA_BIN') or shutil.which('rota')
     if not b or not os.path.exists(b):
@@ -334,7 +343,7 @@ def check(root, rota_bin):
                 prev = old.get((c['shot'], c['cmd']))
                 if prev is None:
                     reasons.append('script changed: shot %s `%s` is not in the snapshot' % (c['shot'], c['cmd']))
-                elif prev['stdout'] != c['stdout'] or prev['exit'] != c['exit']:
+                elif drift_form(prev['stdout']) != drift_form(c['stdout']) or prev['exit'] != c['exit']:
                     reasons.append('output changed: shot %s `%s`' % (c['shot'], c['cmd']))
         elif rendered:
             reasons.append('no snapshot for a rendered episode')
