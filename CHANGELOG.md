@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.28.1 — 2026-11-02
+
+Already-merged PRs pass the gate, `worker done` finds PRs the slot never recorded, and the gate and harness internals move to typed stages.
+
+### Fixed
+
+- `rota worker gate` on a PR that is already merged now succeeds (exit 0) instead of reporting a PR mismatch, and `rota worker train` skips already-merged members instead of failing the train. A closed, unmerged PR is still refused (#2345).
+- `rota worker done` discovers an open PR on the slot's branch that was never recorded, and warns before done when the PR body is missing a required section (#2343).
+- Slots started without an explicit harness kind read Claude's pane vocabulary instead of empty rules, so they no longer show as idle while working (#2444).
+- External knowledge PRs open on the requested head branch; the GitHub adapter used to ignore it and open from the current branch (#2440).
+- A Linear tracker's "no milestones" refusal is recognised like Itsaplan's, so migration skips milestones there instead of failing (#2436).
+- The video drift check also tracks the render pipeline's inputs, not just the scripts (#2542).
+
+### New
+
+- **Video series.** A plan for an eight-episode series about rota, a render pipeline with a drift check (`scripts/videos.py --check`), and episode 1, "why rota exists" (#2535, #2536, #2537).
+- `test/validate-skills.py` takes `--root` and also lints the plugin's own `rota-install` skill (#2421, #2423).
+
+### Internal
+
+- Most of the 44 merged PRs continue the architecture pass. Gate and train now pass typed step results between stages, with lifecycle orchestration moved into postgate (#2450, #2511). The 27-method harness interface is split into concern interfaces, with author-harness precedence owned by the harness package (#2451, #2452).
+- One owner each for slot liveness, bounces, claim reads, account eligibility, forge opening, base-branch fallback and review-depth inputs (#2512, #2509, #2510, #2449, #2445, #2371, #2514). Process, directory and host file access go through injected seams (#2372, #2434).
+
+## Stats
+79 commits, 331 files changed, +15827 −4678 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.28.0...v0.28.1
+
 ## v0.28.0 — 2026-10-30
 
 A fast-track skill for solo work, gates sized to the change, and one owner for most of rota's internal rules.
