@@ -38,7 +38,7 @@ func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 	}
 }
 
-// The seed rota init writes (issues-only keys in schema order) filled out is
+// A seed like the one rota init writes (keys in schema order) filled out is
 // byte-identical to a full config written in schema order (G7).
 func TestFillCompletesTheSeedInSchemaOrder(t *testing.T) {
 	seed := `{"issues": {"labels": {"inProgress": "in-progress"}, "autoCreateLabel": true}}`

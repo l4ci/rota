@@ -8,7 +8,7 @@ RC=0; ( cd "$CF" && hvj config fill >/dev/null 2>&1 ) || RC=$?
 [ "$( cd "$CF" && hvj config check | jget data.status )" = "upToDate" ] \
   || fail "config check after fill on a fresh project should be upToDate"
 
-# The rota init seed (issues-only keys, schema order) filled out stays in schema order.
+# A seed like rota init's (issues keys, schema order) filled out stays in schema order.
 printf '{\n  "issues": {\n    "labels": {\n      "inProgress": "in-progress"\n    },\n    "autoCreateLabel": true\n  }\n}\n' > "$CF/.rota/config.json"
 OUT=$( cd "$CF" && hvj config fill ) || vfail
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill on the seed should report changed: $OUT"
