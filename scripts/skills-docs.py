@@ -190,29 +190,8 @@ def with_period(s):
     return s if s.endswith(('.', '!', '?')) else s + '.'
 
 
-def no_period(s):
-    s = s.strip()
-    return s[:-1] if s.endswith('.') else s
-
-
 def link(m, prefix):
     return '[`/%s`](%s%s.md)' % (m['skill'], prefix, m['skill'])
-
-
-def cell(s):
-    return s.replace('|', '\\|')
-
-
-def render_readme(meta, chains):
-    groups = {}
-    for m in ordered(meta):
-        groups.setdefault(m['situation'], []).append(m)
-    out = ['| When | Skill | What it does |', '|---|---|---|']
-    for sit, items in sorted(groups.items(), key=lambda kv: kv[1][0]['order']):
-        skills = ', '.join('`/%s`' % m['skill'] for m in items)
-        what = '; '.join(cell(no_period(m['summary'])) for m in items)
-        out.append('| %s | %s | %s |' % (cell(sit), skills, what))
-    return out
 
 
 def render_chains(meta, chains):
@@ -223,10 +202,10 @@ def render_chains(meta, chains):
         out.append(c['when'])
         out.append('')
         for n, st in enumerate(c['steps'], 1):
-            out.append('%d. %s: %s' % (n, link(meta[st['skill']], 'skills/'), st['why']))
+            out.append('%d. %s: %s' % (n, link(meta[st['skill']], ''), st['why']))
         if c.get('walkthrough'):
             out.append('')
-            out.append('Walkthrough: [%s](%s)' % (c['_wt_title'], c['walkthrough']))
+            out.append('Walkthrough: [%s](%s)' % (c['_wt_title'], '../' + c['walkthrough']))
         out.append('')
     return out[:-1]
 
@@ -248,13 +227,6 @@ def render_index(meta, chains):
     return out[:-1]
 
 
-def render_nav(meta, chains):
-    out = ['- [All skills](skills/README.md): when to use each skill, and how they chain']
-    for m in ordered(meta):
-        out.append('- %s: %s' % (link(m, 'skills/'), no_period(m['summary'])))
-    return out
-
-
 # -- block replacement -----------------------------------------------------------
 
 def replace_block(text, name, body, rel):
@@ -274,10 +246,8 @@ def replace_block(text, name, body, rel):
 
 
 TARGETS = [
-    ('README.md', 'readme', render_readme),
-    ('docs/how-it-works.md', 'chains', render_chains),
+    ('docs/skills/workflows.md', 'chains', render_chains),
     ('docs/skills/README.md', 'index', render_index),
-    ('docs/README.md', 'nav', render_nav),
 ]
 
 

@@ -292,8 +292,12 @@ def parse_nav():
         for ln in f.read().split("\n"):
             if ln.startswith("### "):
                 name = re.sub(r"^[^\w]+", "", ln[4:].strip())
-                cur = None if name.lower() == "contributing" else (name, [])
-                if cur:
+                if name.lower() == "contributing":
+                    cur = None
+                elif groups[-1][0] == name:
+                    cur = groups[-1]
+                else:
+                    cur = (name, [])
                     groups.append(cur)
                 continue
             m = item.match(ln)
@@ -303,6 +307,33 @@ def parse_nav():
                     continue
                 cur[1].append((m.group(1), url, rewrite_line(m.group(3), "README.md")))
     return [g for g in groups if g[1]]
+
+
+def reachable_pages(roots):
+    """A small sidebar may lead to catalogs; warn only about unreachable pages."""
+    pages = {permalink(rel): rel for rel in MD}
+    seen, pending = set(), list(roots)
+    while pending:
+        url = pending.pop()
+        if url in seen or url not in pages:
+            continue
+        seen.add(url)
+        rel = pages[url]
+        with open(os.path.join(DOCS, rel), encoding="utf-8") as f:
+            text = f.read()
+        fence = None
+        for line in text.splitlines():
+            fm = FENCE.match(line)
+            if fm:
+                fence = None if fence == fm.group(1)[0] else (fence or fm.group(1)[0])
+                continue
+            if fence:
+                continue
+            for match in INLINE.finditer(CODE.sub("", line)):
+                target = resolve(match.group(2), rel) or match.group(2)
+                target = target.removeprefix("https://volkerotto.net")
+                pending.append(re.split(r"[#?]", target, maxsplit=1)[0])
+    return seen
 
 
 def main():
@@ -346,10 +377,10 @@ def main():
             json.dump(val, f, indent=1, ensure_ascii=False, sort_keys=True)
             f.write("\n")
     publish_agent_files(site)
-    navurls = {u for _, items in groups for _, u, _ in items}
+    navurls = reachable_pages({u for _, items in groups for _, u, _ in items})
     for rel in MD:
         if permalink(rel) not in navurls:
-            warn("page in no nav group: " + permalink(rel))
+            warn("page unreachable from docs navigation: " + permalink(rel))
     print("%d pages, %d files copied, %d nav groups, %d skills, %d chains, %d warnings"
           % (len(MD), len(OTHER), len(groups), len(skills), len(chains), len(warnings)))
 

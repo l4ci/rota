@@ -2,7 +2,7 @@
 
 > For a coding agent (Claude Code, Codex, OpenCode) asked to install rota and set it up in the current project. Do what the user asked and nothing else. The outcomes below are in order; how you reach each one is up to you and the machine.
 
-rota is a dev workflow: skills for Claude Code and Codex plus a single-binary CLI, `rota`. Docs: https://volkerotto.net/rota/docs/ (index for agents: https://volkerotto.net/rota/llms.txt).
+rota coordinates parallel coding agents across tasks and accounts, with review and configured checks before merging. It provides skills for Claude Code and Codex plus a CLI the agents use. Docs: https://volkerotto.net/rota/docs/ (index for agents: https://volkerotto.net/rota/llms.txt).
 
 ## Rules for this install
 
@@ -35,7 +35,7 @@ Claude Code and Codex are the skill targets. OpenCode runs as a round worker, no
 
 This writes to the user's skill directories (`~/.claude/skills`, `~/.agents/skills`). It does not overwrite files the user edited. Claude Code users who installed the rota plugin already have the skills: skip this step, and do not install both.
 
-Done when `rota skills status` reports the skills as current. Claude Code or Codex may need a new session before the installed skills show up (`/rota-init`, the first loop); tell the user if so.
+Done when `rota skills status` reports the skills as current. Claude Code or Codex may need a new session before the installed skills show up (`/rota-init`, then `/rota-orchestrate`); tell the user if so.
 
 ## 3. `rota doctor` passes
 
@@ -52,18 +52,12 @@ Setup writes `.rota/` and a few files (`AGENTS.md`, `CLAUDE.md`, `.claude/agents
 - Interactive: run `rota setup --list` (or `--list --json`) to get the questions with each suggestion and its evidence. Put each question to the user, then apply their answer exactly with `rota setup --set key=value`. Bare `rota setup` needs a terminal and fails in an agent's shell. Never add `--yes` yourself: it answers every question with the default. Use this when the user is present and wants to choose now.
 - Defaults, tune later: run `rota init`, which takes the defaults without asking. Then offer `/rota-init` (`$rota-init` in Codex), which suggests values from the repo and writes only the ones the user confirms. Use this when the user wants it done fast.
 
-Done when `.rota/` exists. Do not commit. Tell the user which files setup wrote and that `/rota-work` starts from a clean tree, so they should commit `.rota/` and those files first.
+Done when `.rota/` exists. Do not commit. Tell the user which files setup wrote and that the round should start from a clean tree, so they should commit `.rota/` and those files first.
 
 ## 5. What to tell the user next
 
-Say that rota is installed and the project is set up, and give them the first loop. In Claude Code, one item at a time:
+Say that rota is installed and the project is set up. Point the user to `/rota-init` (`$rota-init` in Codex) if they still need to confirm project settings, then `/rota-orchestrate` (`$rota-orchestrate` in Codex) to start a parallel round.
 
-```
-/rota-capture <describe the work in plain words>
-/rota-work <the ID capture printed>
-/rota-ship
-```
+Link the first-round guide: https://volkerotto.net/rota/docs/getting-started/. Separate worker sessions and multiple accounts need herdr or tmux and the corresponding account configuration; do not claim those are ready merely because installation succeeded.
 
-In Codex the same skills are `$rota-capture`, `$rota-work` and `$rota-ship`. Then link the walkthrough: https://volkerotto.net/rota/docs/getting-started/
-
-Stop there. Do not start the loop for the user.
+Stop there. Do not start a round for the user.

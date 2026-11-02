@@ -40,13 +40,14 @@ SG="$TMP/skillsgen"; mkdir -p "$SG"
 cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/README.md" "$SG/"
 sed -i 's/^summary: Build the next item.*/summary: Build something else entirely./' "$SG/docs/skills/rota-work.md"
 RC=0; OUT="$(python3 "$SG/scripts/skills-docs.py" --check --root "$SG" 2>&1)" || RC=$?
-[ "$RC" = 1 ] && grep -qF "README.md" <<<"$OUT" \
+[ "$RC" = 1 ] && grep -qF "docs/skills/README.md" <<<"$OUT" \
   || fail "skills-docs --check missed an edited summary (rc $RC): $OUT"
 pass "skills-docs --check fails when a skill page changes without regenerating"
 
 # ── site-sync publishes llms.txt raw and rejects dead links (#2220) ──
 SS="$TMP/site"; mkdir -p "$SS"
-python3 "$REPO/scripts/site-sync.py" "$SS" >/dev/null 2>&1 || fail "site-sync fails on the repo (llms.txt links to no page?)"
+OUT="$(python3 "$REPO/scripts/site-sync.py" "$SS" 2>&1)" || fail "site-sync fails on the repo (llms.txt links to no page?): $OUT"
+if grep -qF "page unreachable" <<<"$OUT"; then fail "docs navigation leaves unreachable pages: $OUT"; fi
 cmp -s "$REPO/llms.txt" "$SS/rota/llms.txt" \
   || fail "site-sync did not publish llms.txt raw under rota/"
 [ ! -e "$SS/rota/install.md" ] || fail "site-sync published install.md to the site"
@@ -56,6 +57,15 @@ sed 's#/rota/docs/getting-started/#/rota/docs/no-such-page/#' "$REPO/llms.txt" >
 RC=0; OUT="$(python3 "$SSR/scripts/site-sync.py" "$TMP/site" 2>&1)" || RC=$?
 [ "$RC" != 0 ] && grep -qF "no-such-page" <<<"$OUT" || fail "site-sync accepted an llms.txt link to no docs page (rc $RC): $OUT"
 pass "site-sync publishes llms.txt raw (and not install.md) and fails on a link to no docs page"
+
+# A compact sidebar may reach pages through Reference; a genuinely orphaned
+# page still warns. Restore llms.txt after the dead-link fixture above.
+cp "$REPO/llms.txt" "$SSR/llms.txt"
+printf '# Orphan fixture\n\nNo page links here.\n' > "$SSR/docs/orphan-fixture.md"
+OUT="$(python3 "$SSR/scripts/site-sync.py" "$TMP/site" 2>&1)" || fail "site-sync orphan fixture failed: $OUT"
+grep -qF "page unreachable from docs navigation: /rota/docs/orphan-fixture/" <<<"$OUT" \
+  || fail "site-sync missed an unreachable page: $OUT"
+pass "site-sync accepts reference catalogs and still reports orphan pages"
 
 # ── site-sync reports a bad lane with skills-docs' message, not a traceback (#2422) ──
 SSL="$TMP/sitelane"; mkdir -p "$SSL" "$TMP/sitelane-out"
