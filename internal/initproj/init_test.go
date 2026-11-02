@@ -2,6 +2,7 @@ package initproj
 
 import (
 	"encoding/json"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 // fixture is a starting tree: path (relative to the root) to content.
@@ -109,7 +112,7 @@ func TestInitMatchesBootstrapGolden(t *testing.T) {
 	for _, name := range names() {
 		dir := t.TempDir()
 		writeFixture(t, dir, fixtures[name])
-		if _, err := Init(dir); err != nil {
+		if _, err := initWith(dir, seededPerm(1)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		got[name] = readTree(t, dir)
@@ -174,7 +177,8 @@ func TestSeedConfigKeepsSchemaOrder(t *testing.T) {
 	for i, k := range config.Keys {
 		schema[k.Name] = i
 	}
-	seed := []string{"issues.labels.inProgress", "issues.autoCreateLabel"}
+	seed := []string{"issues.labels.inProgress", "issues.autoCreateLabel", "round.roster"}
+	configSeed := configSeed(pickRoster(seededPerm(1)))
 	prevSchema, prevText := -1, -1
 	for _, name := range seed {
 		i, ok := schema[name]
@@ -336,5 +340,78 @@ func TestRuntimeFileListsMatchManagedIgnores(t *testing.T) {
 				t.Errorf("%s omits managed runtime file %s", path, line)
 			}
 		}
+	}
+}
+
+// seededPerm is a deterministic random source for pickRoster and initWith.
+func seededPerm(seed uint64) func(int) []int {
+	return rand.New(rand.NewPCG(seed, seed)).Perm
+}
+
+func TestRosterPool(t *testing.T) {
+	seen := map[string]bool{}
+	for _, n := range rosterPool {
+		if len(n) < 3 || len(n) > 4 {
+			t.Errorf("%q: want 3-4 letters", n)
+		}
+		if seen[n] {
+			t.Errorf("%q is listed twice", n)
+		}
+		seen[n] = true
+		for _, m := range rosterPool {
+			if n != m && strings.HasPrefix(m, n) {
+				t.Errorf("%q is a prefix of %q", n, m)
+			}
+		}
+	}
+	if len(rosterPool) < rosterSize {
+		t.Fatalf("pool of %d cannot fill a roster of %d", len(rosterPool), rosterSize)
+	}
+}
+
+// The seeded roster is 8 distinct pool names that the round settings accept.
+func TestInitSeedsRoundRoster(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := initWith(dir, seededPerm(7)); err != nil {
+		t.Fatal(err)
+	}
+	raw := readTree(t, dir)[".rota/config.json"]
+	cfg, err := jsonx.Decode([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := roundcfg.FromConfig(cfg)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, raw)
+	}
+	if len(s.Roster) != 8 {
+		t.Fatalf("roster = %v, want 8 names", s.Roster)
+	}
+	for _, n := range s.Roster {
+		if !slices.Contains(rosterPool, n) {
+			t.Errorf("%q is not in the pool", n)
+		}
+	}
+}
+
+// Different random sources give different rosters (the pool is not a fixed list).
+func TestPickRosterFollowsTheSource(t *testing.T) {
+	a, b := pickRoster(seededPerm(1)), pickRoster(seededPerm(2))
+	if slices.Equal(a, b) {
+		t.Errorf("seeds 1 and 2 both gave %v", a)
+	}
+}
+
+// An existing config.json is never touched, so a project without round.roster
+// keeps the default roster.
+func TestInitLeavesExistingConfigAlone(t *testing.T) {
+	dir := t.TempDir()
+	const body = `{"work":{"isolation":"worktree"}}` + "\n"
+	writeFixture(t, dir, fixture{".rota/config.json": body})
+	if _, err := initWith(dir, seededPerm(1)); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTree(t, dir)[".rota/config.json"]; got != body {
+		t.Errorf("config.json = %q", got)
 	}
 }
