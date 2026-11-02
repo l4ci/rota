@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -746,9 +747,20 @@ func TestSetupYesWritesNoTasteKey(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	tracked := readConfig(t, dir)
-	for _, k := range []string{`"work"`, `"autonomy"`, `"ship"`, `"round"`, `"models"`} {
-		if strings.Contains(tracked, k) {
-			t.Errorf("--yes pinned %s in config.json:\n%s", k, tracked)
+	var top map[string]any
+	if err := json.Unmarshal([]byte(tracked), &top); err != nil {
+		t.Fatal(err)
+	}
+	// rota init seeds round.roster (#2572); it is project scope, not taste.
+	if round, ok := top["round"].(map[string]any); ok {
+		delete(round, "roster")
+		if len(round) == 0 {
+			delete(top, "round")
+		}
+	}
+	for _, k := range []string{"work", "autonomy", "ship", "round", "models"} {
+		if _, ok := top[k]; ok {
+			t.Errorf("--yes pinned %q in config.json:\n%s", k, tracked)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".rota", "config.local.json")); err == nil {

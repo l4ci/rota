@@ -1,5 +1,7 @@
 package initproj
 
+import "encoding/json"
+
 // Seed texts, byte for byte the heredocs of bin/hv-bootstrap, except MAP.md
 // (G4 of the A9 rulings): it names `rota map query` and `rota map index`.
 
@@ -40,15 +42,43 @@ const statusSeed = `{"active":[]}` + "\n"
 
 const reposSeed = `{"repos":[]}` + "\n"
 
-// configSeed is the issues-only default, with the keys in schema order (G7):
-// the order config.Keys lists them in, which is the order `rota config show`
-// prints.
-const configSeed = `{
+// rosterPool is the one list `rota init` draws a new project's round.roster
+// from: short lowercase names, none a prefix of another.
+var rosterPool = []string{
+	"ada", "ari", "bea", "ben", "cal", "dana", "dex", "eli", "emi", "finn",
+	"gus", "hana", "ivo", "jade", "jon", "joy", "kai", "kit", "lea", "lou",
+	"mae", "mira", "nia", "nils", "noor", "ole", "pia", "quin", "ravi", "rio",
+	"sam", "sol", "tess", "uma", "vic", "wes", "yara", "yuki", "zara", "zeno",
+}
+
+// rosterSize is how many names a new project's roster holds.
+const rosterSize = 8
+
+// pickRoster draws rosterSize distinct names from rosterPool. perm has
+// rand.Perm's shape and is injected so tests stay deterministic.
+func pickRoster(perm func(int) []int) []string {
+	out := make([]string, 0, rosterSize)
+	for _, i := range perm(len(rosterPool))[:rosterSize] {
+		out = append(out, rosterPool[i])
+	}
+	return out
+}
+
+// configSeed is the config a new project starts with: the issues defaults and
+// the drawn round.roster, with the keys in schema order (G7): the order
+// config.Keys lists them in, which is the order `rota config show` prints.
+func configSeed(roster []string) string {
+	names, _ := json.Marshal(roster)
+	return `{
   "issues": {
     "labels": {
       "inProgress": "in-progress"
     },
     "autoCreateLabel": true
+  },
+  "round": {
+    "roster": ` + string(names) + `
   }
 }
 `
+}

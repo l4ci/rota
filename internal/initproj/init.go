@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"sort"
@@ -58,7 +59,7 @@ var seedFiles = []struct {
 	{"KNOWLEDGE.md", knowledgeSeed, true},
 	{"MILESTONES.md", milestonesSeed, true},
 	{rotatree.CountersFile, countersSeed, true},
-	{"config.json", configSeed, true},
+	{"config.json", "", true}, // text is drawn per project: see configSeed
 	{"status.json", statusSeed, true},
 	{"MAP.md", mapSeed, false},
 	{"repos.json", reposSeed, false},
@@ -67,6 +68,11 @@ var seedFiles = []struct {
 // Init seeds .rota/ under root. It never overwrites an existing file, and a
 // second run is a no-op, as hv-bootstrap was.
 func Init(root string) (Result, error) {
+	return initWith(root, rand.Perm)
+}
+
+// initWith is Init with the random source for round.roster injected.
+func initWith(root string, perm func(int) []int) (Result, error) {
 	var res Result
 	before := snapshot(root)
 	rota := rotatree.Dir(root)
@@ -86,7 +92,11 @@ func Init(root string) (Result, error) {
 	}
 
 	for _, f := range seedFiles {
-		if err := seedFile(filepath.Join(rota, f.name), f.text); err != nil {
+		text := f.text
+		if f.name == "config.json" {
+			text = configSeed(pickRoster(perm)) // used only when the file is absent
+		}
+		if err := seedFile(filepath.Join(rota, f.name), text); err != nil {
 			return res, err
 		}
 		if f.name == "MILESTONES.md" {
