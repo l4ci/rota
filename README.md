@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/images/rota-logo.svg" alt="rota" width="220"></p>
 
-# Parallel agents. Checked merges.
+# Run coding agents in parallel
 
 rota coordinates coding agents across tasks and accounts. Workers build in separate worktrees; the orchestrator reviews their changes and runs your configured checks on the combined code before merging.
 
