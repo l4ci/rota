@@ -1,8 +1,8 @@
 # FAQ
 
-## How is this different from a TODO file or issue tracker?
+## Why use rota if my coding agent already runs tasks?
 
-A TODO file or tracker is where most workflows start and stay. Three things tend to go wrong: commits stop being atomic and one PR touches six unrelated things, you re-discover the same gotcha three sessions in a row because nothing reads it back, and a session doesn't survive `/clear` because the live hypothesis is gone. `/rota-work` enforces atomic per-task commits, `/rota-learn` writes durable gotchas that future runs consult automatically, and `/rota-pause` with `/rota-work` carry intent across context resets. If those problems never bite you, stock Claude Code is fine.
+rota coordinates several agents across issues and accounts. It assigns isolated work, routes reviews and checks the combined code before merging. You stay in your harness and handle the product decisions. [How it works](how-it-works.md).
 
 ## How does rota compare to other tools?
 
@@ -24,7 +24,7 @@ The `.rota/` folder, the backlog formats and the `rota` binary are agent-agnosti
 
 ## Does rota work on Windows?
 
-Through WSL2. There is no native Windows build. Install rota, git, `gh` and your agent inside the WSL2 distro and keep the repo on the Linux filesystem. See [Windows](install.md#windows-wsl2).
+Through WSL2. There is no native Windows build. Install rota, git, `gh` and your agent inside the WSL2 distro and keep the repo on the Linux filesystem. See [Windows](reference/installation.md#windows-wsl2).
 
 ## Can a worker merge broken code?
 
@@ -74,4 +74,4 @@ For a cycle that merged directly into the base branch, yes: `/rota-ship --undo` 
 
 Run `rota update` (needs `gh`). It detects how you installed rota (Homebrew, the install script, or a dev build) and prints the command, for example `brew update && brew upgrade rota && rota skills update`, or the install script's `curl` line followed by `rota skills update`. It doesn't run the update itself.
 
-`rota skills update` refreshes the installed skills to match the new binary. Nothing else in your projects needs refreshing. Run `rota version --drift` in a project to see whether its stamped version trails the installed one. See [install](install.md#upgrading).
+`rota skills update` refreshes the installed skills to match the new binary. Nothing else in your projects needs refreshing. Run `rota version --drift` in a project to see whether its stamped version trails the installed one. See [install](reference/installation.md#upgrading).

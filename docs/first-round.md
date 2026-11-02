@@ -1,161 +1,77 @@
-# Your first round
+# Worker setup
 
-Finish [getting started](getting-started.md) first: install rota, install the skills and run `rota setup` in the project. This page walks you to a first parallel round in [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux): an orchestrator in one pane, workers in tabs (tmux: windows), each on its own issue. [Parallel rounds](usage/parallel-rounds.md) has the details behind each step.
+One-time setup for separate worker sessions. Follow [Your first parallel round](getting-started.md) for the full flow.
 
-## 1. 📋 Prerequisites
+## Open your agent in a terminal host
 
-- A git repo with an `origin`, and the base branch (usually `main`) pushed.
-- `gh` (GitHub) or `glab` (GitLab), logged in.
-- A few open issues with acceptance criteria. A round only offers issues that have them (or a design or plan note).
-- `claude` (Claude Code) on your `PATH`.
-- A terminal host: herdr 0.9.x, from [herdr.dev](https://herdr.dev), or [tmux](https://github.com/tmux/tmux). herdr reports each worker's state directly; under tmux rota reads the panes instead.
+Install [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux), then open it:
 
-## 2. ⚙ Slots and the merge check
-
-`rota setup` already wrote `.rota/`; commit `.rota/`, `.claude/agents/`, `AGENTS.md`, `CLAUDE.md` and `.gitignore`. The `.claude/agents/rota-*.md` files are subagent definitions that workers use to pick a cheaper or stronger model per job. Setup sets three worker slots. For a small first round, use two:
-
-```bash
-rota config set round.slots 2
+```sh
+herdr
 ```
 
-Then tell the gate how to check a merge. `test.full` is the command that runs your whole test suite. The gate runs it on a scratch merge of the PR before the PR lands:
+Or, with tmux:
 
-```bash
-rota config set test.full "go test ./..."   # your project's own test command
+```sh
+tmux new -s my-project
 ```
 
-> [!IMPORTANT]
-> While `test.full` is empty the gate refuses to merge, because nothing would check the result. `--no-verify` merges anyway, on purpose. Don't use it for a first round.
+In a pane, change to your project and start Claude Code or Codex. Invoke `/rota-init` there (`$rota-init` in Codex). rota detects the host when the round starts.
 
-## 3. Extra accounts (optional)
+With herdr, install the integration for each harness and account you use. For your default account:
 
-> [!NOTE]
-> Skip this if you have one Claude account.
-
-For each additional account, create a config dir and log in once. `rota skills install` copies the skills into every account you list in step 4, so re-running it there covers them (it skips a dir that does not exist).
-
-```bash
-mkdir ~/.claude-b
-CLAUDE_CONFIG_DIR=~/.claude-b claude          # log in, then exit
-```
-
-## 4. Tell rota about the accounts
-
-Account paths are machine-specific, so they go in `.rota/config.local.json` (gitignored), not the tracked config. Edit it by hand, list your main account too, and use absolute paths:
-
-```json
-{
-  "round": {
-    "accounts": [
-      { "kind": "claude", "name": "main", "dir": "/home/you/.claude" },
-      { "kind": "claude", "name": "b", "dir": "/home/you/.claude-b" }
-    ]
-  }
-}
-```
-
-Then check them, and install the skills into each one:
-
-```bash
-rota worker account list
-rota skills install
-```
-
-## 5. Start herdr or tmux
-
-```bash
-herdr                       # or: herdr --session <name>
-tmux new -s <name>          # with tmux instead
-```
-
-Open a pane and `cd` to the project root. Run everything from here on in that pane, so the round can detect its host.
-
-## 6. Install the herdr integration (herdr only)
-
-Skip this under tmux. herdr reports each worker's state (working, blocked, idle) only for agents it has an integration for. Install it once per account:
-
-```bash
+```sh
 herdr integration install claude
-CLAUDE_CONFIG_DIR=~/.claude-b herdr integration install claude   # each extra account
+# If using Codex:
+herdr integration install codex
 herdr integration status
 ```
 
-## 7. Orchestrator permissions
+Without a host, the skill falls back to Claude subagents sharing the orchestrator's account. Use herdr or tmux for the separate sessions described in this guide.
 
-The orchestrator runs many `rota`, git and forge commands. Allow them in `.claude/settings.local.json` so it doesn't stop at every prompt:
+## Connect your tracker
 
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(rota *)",
-      "Bash(git *)",
-      "Bash(gh *)",
-      "Bash(glab *)"
-    ]
-  }
-}
+For GitHub, log in with `gh auth login`; for GitLab, use `glab auth login`. The repository needs a pushed base branch and an `origin` remote.
+
+In `/rota-init`, choose the issue source you use. Start with two independent issues that say what a successful change must do. [Other issue sources](usage/issue-backend.md) are supported too.
+
+## Add your accounts
+
+One account is enough to begin. To use more, ask your agent to configure the named logins for this machine. Account paths belong in local or global configuration, not the shared project config.
+
+For example, two already-authenticated Claude config directories:
+
+```sh
+rota config set --local round.accounts '[{"kind":"claude","name":"main","dir":"/home/you/.claude"},{"kind":"claude","name":"second","dir":"/home/you/.claude-second"}]'
+rota skills install
 ```
 
-`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers launch with permissions skipped by default (`round.commands.claude`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#rounddispatch-subagent-tmux-herdr-or-orca).
+Replace the paths with your own. To create a second login, launch `claude` with `CLAUDE_CONFIG_DIR` set to a separate directory and sign in. With herdr, install its integration under that account too.
 
-## 8. Unattended hooks (skip for now)
+For Codex, use entries with `kind: "codex"` pointing to authenticated Codex homes. [Codex account setup](usage/codex-workers.md#several-codex-accounts) includes the commands. Claude accounts can be selected by measured headroom; Codex allocation and limit handling work differently.
 
-`rota hook install` adds handoff hooks so a long round survives the orchestrator's context filling up. It writes `.claude/settings.local.json` by default; `--scope project` and `--scope user` also exist, `--wrap-statusline` keeps a statusline you already have, and `rota` must be on `PATH`.
+## Decide how changes land
 
-For a first round, skip the hooks and keepalive both. Hooks without keepalive mean the orchestrator exits at the context threshold and nothing restarts it. Install them together later: [unattended rounds](usage/unattended-rounds.md).
+Confirm the project's check command during `/rota-init`. It can also be set later, for example:
 
-## 9. 🩺 Run doctor
-
-```bash
-rota doctor
+```sh
+rota config set test.full 'npm test'
 ```
 
-Fix every `fail`; each one prints the command or edit that fixes it. Run it inside the herdr or tmux pane so it sees the host. See [doctor and reap](usage/doctor-and-reap.md).
+Use your project's real command. The gate checks the PR combined with the current base before merging. [No tests yet?](troubleshooting.md#no-tests-yet)
 
-## 10. 🚀 Launch the orchestrator
+A passing gate merges automatically by default. To require your approval for every merge:
 
-In the pane, at the project root:
-
-```bash
-rota orchestrate
+```sh
+rota config set ship.mergeApproval all
 ```
 
-It runs `rota doctor`, then opens an orchestrator session that has already started `/rota-orchestrate`. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". Bare `rota` then Enter does the same; the palette, the harness choice and the account it starts under are described in [launching a round](usage/parallel-rounds.md#-launching-a-round).
+The approval happens on the PR thread. [Approval details](usage/parallel-rounds.md#merge-approval).
 
-The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
+Workers launch with unattended permissions by default; review [worker permissions](usage/parallel-rounds.md#worker-guard) and your harness launch configuration before starting. The orchestrator may request permission to run rota, git and tracker commands in your session.
 
-## 11. 👀 Watch
+## Check and start
 
-Each worker shows up as a herdr tab or a tmux window. To see all slots with their host, PR and drift:
+Review and commit the generated project files. In your agent, invoke `/rota-orchestrate` (`$rota-orchestrate` in Codex). It runs `rota doctor` first and helps resolve failures before assigning work.
 
-```bash
-rota round status
-```
-
-> [!TIP]
-> No need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
-
-## 12. Merges and escalations
-
-Workers open PRs and never merge. For each finished PR the orchestrator reads the diff, runs the gate (`rota worker gate`) on the merged tree and merges on a pass. The gate also refuses a PR whose body lacks `Closes #N` for its issue (an issue labelled `partial-slice` is exempt) and a PR with a recorded FAIL review verdict. By default (`ship.mergeApproval` is `none`) a passing gate merges. If you set `all` or `paths`, the gate asks you on the PR thread first and merges only after you reply `approve`, `approved`, `yes`, `lgtm` or `ship it`. See [merge approval](usage/parallel-rounds.md#merge-approval).
-
-When a worker or the orchestrator needs a human decision, it posts the question on the issue or PR thread, or asks in the pane. Answer there. A line starting with `m:` typed into a pane counts as a maintainer answer: [details](usage/parallel-rounds.md#maintainer-answers-typed-into-a-pane).
-
-## 13. 🏁 Wind down
-
-When the slate is done, tell the orchestrator to finish. It runs `rota round wind-down`, which re-verifies the base branch, parks every slot and releases the lease. Then clean up what is left:
-
-```bash
-rota reap            # preview
-rota reap --apply    # remove the leftovers that hold no work
-```
-
-See [doctor and reap](usage/doctor-and-reap.md).
-
-## ➡ Next
-
-- [A round cycle](walkthroughs/round-cycle.md): what you run between releases, from shaping the slate to the release.
-- [Parallel rounds](usage/parallel-rounds.md): every verb, scope, tiers, solo mode.
-- [Unattended rounds](usage/unattended-rounds.md): hooks, keepalive and usage limits.
-- [Codex workers](usage/codex-workers.md): run Codex in some slots.
+Stay available for the first round. Starting the skill in an existing session does not install a restart supervisor. For restarts across context limits and account switching, set up [unattended rounds](usage/unattended-rounds.md) later.

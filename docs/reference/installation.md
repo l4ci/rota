@@ -1,0 +1,183 @@
+# Installation reference
+
+Install the `rota` binary (Homebrew, the install script, or a release download), install the skills it carries, then run `rota setup` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
+
+## 🤖 Let your agent do it
+
+Paste this into Claude Code, Codex or OpenCode:
+
+```
+Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
+```
+
+The agent reads [install.md](https://github.com/l4ci/rota/blob/main/install.md) in the repo root (the prompt links the raw file) and works through the same steps as below: binary, skills, `rota doctor`, project setup. It shows each command and waits for your yes, never uses `sudo`, does not edit your shell profile without asking and stops on any checksum or signature failure. It does not answer the setup questions for you: it puts each `rota setup --list` question to you and applies your answer with `--set` (never `--yes`), or runs `rota init` with the defaults and offers `/rota-init` to tune them. Read the file first if you want to know what your agent will be told. [llms.txt](https://volkerotto.net/rota/llms.txt) indexes these docs for agents.
+
+## 📦 The binary
+
+### Homebrew
+
+```bash
+brew install l4ci/tap/rota
+```
+
+Needs [Homebrew](https://brew.sh) (macOS or Linux). See [verifying a release](#verifying-a-release) for what the formula checks.
+
+### Install script
+
+No Homebrew? This works on any linux or macOS machine.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
+```
+
+It installs to `~/.local/bin/rota`. It needs `curl` (or `wget` as a fallback) but no sudo, and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. With [`minisign`](https://jedisct1.github.io/minisign/) installed (`brew install minisign`, `apt install minisign`) it checks the signature and the sha256. Without minisign it checks the sha256 only, warns that the signature was not checked and how to install minisign, and finishes the install. `--strict` (or `ROTA_STRICT=1`) makes a missing minisign an error and installs nothing.
+
+| Option | Env var | Meaning |
+|---|---|---|
+| `--version X.Y.Z` | `ROTA_VERSION` | install this release instead of the latest |
+| `--prefix DIR` | `ROTA_PREFIX` | install to `DIR/bin` instead of `~/.local/bin` |
+| `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on. `ROTA_STRICT` accepts `1`, `true`, `yes` (on) and `0`, `false`, `no` or empty (off); any other value is an error |
+
+### Windows (WSL2)
+
+There is no native Windows build: rota's file locks use `flock`. Run it inside [WSL2](https://learn.microsoft.com/windows/wsl/install) instead, where it behaves as on Linux.
+
+1. In PowerShell, run `wsl --install` (Ubuntu by default) and open the distro.
+2. Inside WSL, install rota with the install script or Homebrew above, plus `git`, `gh` or `glab`, and Claude Code or Codex (OpenCode too if you run it as a round worker). rota calls them from the same environment, so Windows-side installs are not seen.
+3. Clone your repos into the Linux filesystem (`~/src/...`), not under `/mnt/c`. Git is much slower across the Windows mount.
+4. For rounds, run tmux inside WSL.
+
+### Release binaries by hand
+
+Download `rota_<os>_<arch>` from the [releases](https://github.com/l4ci/rota/releases) page (linux and macOS, amd64 and arm64), make it executable, and put it on your `PATH`. Download `rota_<os>_<arch>.minisig` too and verify it (below), then compare the sha256 with the line for that file in `checksums.txt`.
+
+### Verifying a release
+
+Every release asset has a detached [minisign](https://jedisct1.github.io/minisign/) signature, `<asset>.minisig`, made in the release workflow. With minisign installed, `install.sh` verifies the binary against the public key embedded in the script, then against `checksums.txt`, and installs nothing if either check fails. Without minisign it verifies `checksums.txt` only and warns (use `--strict` to refuse instead). The signature proves the file was signed with the release key (id `2153154F7AA18B5D`); the checksum alone only shows the download is intact, because `checksums.txt` comes from the same release. To check by hand:
+
+```bash
+minisign -V -P RWRdi6F6TxVTIW92f3/QsWBl5VHdXm1FABgexyAla0z3A5WT4JzG6/SP \
+  -m rota_linux_amd64 -x rota_linux_amd64.minisig
+```
+
+The Homebrew formula is checked against the tarball sha256 only. Maintainers: [release signing](../contributing/release-signing.md).
+
+Check the result with `rota version`. `rota doctor` checks the machine, including whether the installed skills match the binary.
+
+## 🧰 The skills
+
+```bash
+rota skills install
+```
+
+With no flags this writes the skills to the user roots for both agents: `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`) for Claude Code and `~/.agents/skills` for Codex.
+
+By default each `SKILL.md` is a stub: its frontmatter plus a short body that tells the agent to run `rota skills get <name>`. That command prints the skill text embedded in the installed binary, so upgrading the binary upgrades every skill body with no `rota skills update`. It also extracts the skill's files (siblings, `references/`, linked skills) once per binary version into your user cache (`rota/skills/<version>/` under `$XDG_CACHE_HOME`, `~/.cache` or `~/Library/Caches`; `ROTA_CACHE_DIR` replaces that base) and prints the first line `Base directory for this skill: <dir>` and a `Files this skill links to:` list of absolute paths, so every relative link in the text resolves to a file that matches the binary. `rota reap` removes the trees of other versions.
+
+`--full` writes the full text instead, with the references copied into each root, for a harness that cannot run a command when a skill loads. The root's manifest records `mode: stub` or `mode: full`. `rota skills update` keeps each root's recorded mode unless you pass `--stub` or `--full` (both is an error). A root installed before stubs became the default has no recorded mode and counts as full; it stays full until you reinstall or update it with `--stub`.
+
+| Flag | Meaning |
+|---|---|
+| `--agent claude\|codex\|all` | which agent's root to write (default: both) |
+| `--scope user\|project` | `user` (default), or `project` for `.claude/skills` and `.agents/skills` in the current repo |
+| `--overwrite` | replace files you edited or rota did not write |
+| `--stub`, `--full` | stub (default) or full text; see above |
+
+The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json` listing what it put there. A file you edited is kept and reported unless you pass `--overwrite`. A project-scope install can be committed so collaborators get the same skills. `rota-decide` and `rota-release` are manual-only: they carry `disable-model-invocation: true` for Claude Code and an `agents/openai.yaml` (`allow_implicit_invocation: false`) for Codex, so only you start them, by typing `/rota-decide` or `$rota-decide`.
+
+Common route: `npx skills add l4ci/rota` installs the skills with the [`skills` CLI](https://skills.sh), for Claude Code, Codex and other agents, and lists rota on [skills.sh](https://skills.sh/l4ci/rota). The CLI sends anonymous install telemetry. It writes no `.rota-manifest.json`, so `rota skills status` and `rota skills update` do not track those copies. You still need the `rota` binary on your `PATH`.
+
+`rota skills status` compares the installed skills with the binary. For Codex, see [skills in Codex](../usage/codex-skills.md) and, to run Codex as a round worker, [Codex workers](../usage/codex-workers.md).
+
+### User or project scope
+
+- **User scope** (the default) puts one copy in your home directory, and every project on the machine uses it. Pick it when you work alone or across many repos.
+- **Project scope** writes into the repo. Commit `.claude/skills` and `.agents/skills` and everyone who clones gets the same skills, pinned to the rota version that wrote them. Pick it for a team, or when a project must not move when you upgrade rota. Collaborators still need the `rota` binary on their `PATH`.
+
+If both exist, Claude Code uses the user copy of a skill over the project copy with the same name, so a stale user install hides a newer project one. Keep one scope per machine, or run `rota skills update` after every upgrade that `rota skills status` reports stale. `rota skills status` lists every root it finds.
+
+User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `round.accounts` `dir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
+
+## 🔌 Plugin marketplace
+
+The third install path is a plugin: Claude Code here, Codex in its own section below. In a Claude Code session:
+
+```
+/plugin marketplace add l4ci/rota
+/plugin install rota@rota
+```
+
+On Claude Code 2.1.275 or later, `/plugin install rota --marketplace l4ci/rota` does both in one step.
+
+The marketplace serves the latest release, not `main`: the plugin is fetched from the release tag, so its skills are the ones that release's binary carries. The first release that ships the plugin is the one after 0.14.0.
+
+Then run `/rota:rota-install`. It installs the `rota` binary at the plugin's version and runs `rota doctor`. It tries Homebrew first when `brew` is on your `PATH`, and uses the install script when there is no `brew` or the tap serves another version. It does not run `rota skills install`: the plugin already carries the skills. Run `rota init` in your project as usual.
+
+Plugin skills are namespaced: `/rota:rota-work`, `/rota:rota-ship` and so on. When the binary is missing or its version differs from the plugin's, a new session opens with one line pointing at `/rota:rota-install`. A `dev` build is left alone.
+
+`rota doctor` and `rota skills status` count the plugin's copy as a skill root. It matches when its files are the ones the binary carries, so a plugin install with the right binary reports healthy. On a mismatch, either run `/rota:rota-install` (binary to the plugin's version) or `claude plugin update rota@rota` (plugin to the binary's).
+
+Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second.
+
+### Codex
+
+Codex reads `.agents/plugins/marketplace.json`. It points at the `codex` branch, which the release workflow rebuilds on every tag: a copy of the skills with each skill's `references/` as real files, because Codex drops symlinks when it caches a plugin. The tree is built, not committed to `main`. In a terminal:
+
+```
+codex plugin marketplace add l4ci/rota
+codex plugin add rota@rota
+```
+
+Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`, with the repo's marketplace file and a tree built by `scripts/codex-plugin.sh`: 16 skills, 33 reference files each, no symlinks. 14 show up for implicit invocation; `rota-decide` and `rota-release` are manual-only (`$rota-decide`). The plugin carries no `rota-install` skill and no session hook; install the `rota` binary with Homebrew or the install script. Pick one way per machine: a plugin plus `rota skills install` lists every skill twice.
+
+Copilot CLI was not installed on the test machine and is untested.
+
+Does each route update itself?
+
+| Route | Updates itself? | Update with |
+|---|---|---|
+| Claude Code plugin | No | `claude plugin update rota@rota`, then `/rota:rota-install` |
+| Codex plugin | No | `codex plugin add rota@rota` again (re-fetches the `codex` branch) |
+| `rota skills install` (Claude Code, Codex), stub (default) | Skill text yes; the skill set and frontmatter, no | a new binary; `rota skills update` only when `rota skills status` or `rota doctor` names a skill that was added, removed or changed its frontmatter |
+| `rota skills install --full` | No | `rota skills update` |
+| `npx skills add l4ci/rota` | No | run the command again |
+| Homebrew or install script (binary) | No | `rota update` prints the command |
+
+## Upgrading
+
+```bash
+rota update
+```
+
+`rota update` (needs `gh`) works out how you installed, compares versions and prints the command to run. It does not run it. Typical output:
+
+- Homebrew: `brew update && brew upgrade rota && rota skills update`
+- install script: the `curl` line above, then `rota skills update`
+
+When every installed skill root is a current stub, the command leaves out `&& rota skills update`.
+
+A stub root needs `rota skills update` only when a release adds a skill, removes one or changes a skill's frontmatter (its `description`, which drives when the agent picks it, or `disable-model-invocation`). `rota skills status` and `rota doctor` compare a stub root on exactly that and name the skills that changed. A full root is stale after every release that touches skill text. `rota skills update` refreshes every skill root that has a manifest, in the mode each one recorded. A plugin install skips it: `claude plugin update rota@rota`, then `/rota:rota-install` for the binary. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
+
+## Uninstalling
+
+```bash
+rota skills uninstall    # removes what rota installed
+brew uninstall rota      # Homebrew; otherwise delete the rota binary
+```
+
+Your projects' `.rota/` folders are untouched.
+
+## Coming from hv-skills
+
+rota is the successor to hv-skills. Install rota as above, then run this in each project that has a `.hv/` folder:
+
+```bash
+rota migrate hv            # dry run: lists what would change
+rota migrate hv --apply    # makes the changes
+```
+
+It moves `.hv/` to `.rota/`, rewrites the `.gitignore` entries, the managed blocks in `AGENTS.md` and `CLAUDE.md`, and the config key that stamps the version. It also replaces the installed `/hv-*` skills with `/rota-*`; pass `--skip-skills` to leave your skills installs alone. Commit the result like any other change.
+
+## Next
+
+Open the project in your coding agent and invoke `/rota-init` (`$rota-init` in Codex). [Getting started](../getting-started.md) walks through setup and the first parallel round. For scripted setup, `rota init` writes the defaults without questions.

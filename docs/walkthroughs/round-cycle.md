@@ -70,7 +70,7 @@ Two issues that edit the same file or name the same `## Touches` entry clash. Re
 
 ## 2. Run the round
 
-Start the orchestrator from the host pane with `rota orchestrate` ([launching it](../first-round.md#10--launch-the-orchestrator)) and tell it the slate, for example "run a round on issues 42, 51, 58 and 63". It starts the round and assigns each issue to a worker in its own worktree. `rota round assign` refuses an item that is not ready, overlaps an in-flight slot or has no free slot, and prints why. Your decision here is whether to override an overlap (`--accept-overlap`) or wait.
+Start the orchestrator from the host pane with `rota orchestrate` ([launching it](../getting-started.md#start-the-round)) and tell it the slate, for example "run a round on issues 42, 51, 58 and 63". It starts the round and assigns each issue to a worker in its own worktree. `rota round assign` refuses an item that is not ready, overlaps an in-flight slot or has no free slot, and prints why. Your decision here is whether to override an overlap (`--accept-overlap`) or wait.
 
 You do not poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A worker that cannot decide prints `ROTA-BLOCKED` with one question; answer on the issue or PR thread, or type `m: <answer>` in the pane.
 

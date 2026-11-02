@@ -1,60 +1,60 @@
-# Getting started
+# Your first parallel round
 
-Install rota, set up a project and run your first capture, work, ship cycle in about five minutes.
+Start in the coding agent you already use. Set up the project with `/rota-init`, then run `/rota-orchestrate`.
 
-## 📦 Install
+## Bring a project and two tasks
 
-```bash
-brew install l4ci/tap/rota   # or: curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
+Use a git repository with a pushed base branch and two independent issues with clear acceptance criteria. For GitHub or GitLab PRs, have `gh` or `glab` installed and logged in.
+
+Open Claude Code or Codex in the project **inside herdr or tmux**. This lets rota launch separate worker sessions and use multiple accounts. [Worker setup](first-round.md) covers the one-time details.
+
+## Install rota
+
+In a terminal:
+
+```sh
+brew install l4ci/tap/rota
 rota skills install
 ```
 
-The second command writes the skills into the Claude Code and Codex skill directories. Options, scopes, upgrading and removal are on the [install page](install.md).
+No Homebrew? See [installation](install.md). Reopen your agent session if the new skills are not visible.
 
-## ⚙ Set up the project
+## Set up the project
 
-Run `rota setup` once at the project root. It scaffolds `.rota/` and asks the main config questions: where the backlog lives, isolation, merge strategy, review depth, test commands and a few more. Press Enter to keep the suggested value. Where the repo gives a signal (your `go.mod` or `package.json`, CI files, the `origin` host, the harnesses on your `PATH`), setup suggests that value and says where it read it.
+In your agent:
 
-- `rota setup --list` prints the questions with each suggestion and its evidence.
-- `rota setup --yes` takes the suggested values and asks nothing. `--set key=value` answers one question. Both suit scripts and CI.
-- `rota config set <key> <value>` changes a setting later. Don't hand-edit the JSON files.
+```text
+/rota-init
+```
 
-Every question and its choices are described in [config options](reference/config-options.md); [configuration](usage/configuration.md) explains the keys by concept. A second machine that builds issues beside main uses the `support` role: see [Support role](contributing/rounds.md#support-role).
+In Codex, type `$rota-init`.
 
-Commit `.rota/` and the files setup wrote (`AGENTS.md`, `CLAUDE.md`, `.claude/agents/`, `.gitignore`): `/rota-work` starts from a clean tree.
+The skill reads the project and proposes settings for you to confirm: where the issues live, which agents to use and how to check changes. It also initializes a project that has no `.rota/` yet.
 
-## 🔁 Your first cycle
+Tell it which command checks the project before a merge. If you have no tests yet, you can leave this unset, but the merge gate will wait for a configured check. There is currently no automatic reminder conversation; see [starting without tests](troubleshooting.md#no-tests-yet).
 
-One item, with you driving each step.
+Review and commit the setup files. Additional accounts and a human-approval policy are separate settings today; [worker setup](first-round.md) shows how to add them.
 
-1. **Capture it.** Describe the work in plain words:
+## Start the round
 
-   ```
-   /rota-capture the list command shows every row when I ask for zero
-   ```
+In the same agent:
 
-   Capture writes the item to the backlog (`.rota/BACKLOG.md` by default) and stops. It never starts work. See [capturing work](usage/capturing-work.md).
+```text
+/rota-orchestrate
+```
 
-2. **Build it.**
+In Codex, type `$rota-orchestrate`. Then give it the scope, for example:
 
-   ```
-   /rota-work B03
-   ```
+> Work on issues #12 and #13 in parallel, with two workers. Ask me about unresolved product decisions.
 
-   Use the ID capture printed. `/rota-work` checks the tree is clean, cuts a branch and builds the item in small commits, one per task. For a behavior change the proof gate wants a failing test run first, then a passing one. See [running work](usage/running-work.md).
+The orchestrator checks the environment before assigning work. It reports missing prerequisites with the next step to fix them. You do not need to open rota's CLI interface.
 
-3. **Ship it.**
+## Follow the work
 
-   ```
-   /rota-ship
-   ```
+Each worker gets its own worktree and works on one issue. The orchestrator coordinates reviews, runs the merge gate and reports progress. Answer product questions in the conversation or the linked issue.
 
-   Ship runs `/rota-review` first. On a pass it merges into the base branch (`work.mergeStrategy: direct`, the default) or pushes and prints the PR URL (`pr`). With the issue backend it always opens a PR that closes the issue. See [review and ship](usage/review-and-ship.md).
+A worker saying "done" is not the end: its PR still has to pass the required review and checks on the combined code. Failed checks keep it from merging and send it back for another attempt. By default, a passing gate merges automatically; [require your approval](usage/parallel-rounds.md#merge-approval) if you prefer.
 
-For an item too big to one-shot, run `/rota-plan` between capture and work. [Skills](skills/README.md) lists every `/rota-*` skill; [how skills chain](how-it-works.md#how-skills-chain) shows which follow which.
+When the selected work is finished, ask the orchestrator to wind down. It verifies the base branch and reports what merged, what remains open and what needs you.
 
-## ➡ Next
-
-- [Your first round](first-round.md): several issues in parallel, an orchestrator, workers and the merge gate.
-- [Examples](https://volkerotto.net/rota/examples/): the skill chains with sample transcripts, from one small bug to a whole project. The [walkthroughs](walkthroughs/README.md) show what a greenfield or brownfield project holds on disk.
-- [How it works](how-it-works.md): the roles and how the skills connect.
+[How changes are checked](agent-mistakes.md) · [Troubleshooting](troubleshooting.md)
