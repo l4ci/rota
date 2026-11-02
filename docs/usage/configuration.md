@@ -626,7 +626,7 @@ legacy-labelled issues and keep them blocked so main cannot assign them as unpin
 
 ## round keys
 
-Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-rounds.md), [`rota round` verbs](../reference/cli-helpers.md#rota-round) and [`rota doctor`](../reference/preflight.md#rota-doctor)). All are silent defaults; none is written by `rota init`.
+Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-rounds.md), [`rota round` verbs](../reference/cli-helpers.md#rota-round) and [`rota doctor`](../reference/preflight.md#rota-doctor)). All are silent defaults except `round.roster`, which `rota init` writes when it creates a project's `config.json`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|

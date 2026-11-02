@@ -367,6 +367,15 @@ func TestRosterPool(t *testing.T) {
 	if len(rosterPool) < rosterSize {
 		t.Fatalf("pool of %d cannot fill a roster of %d", len(rosterPool), rosterSize)
 	}
+	// Every pool name, not only the ones a seed happens to draw, is a valid
+	// roster name.
+	cfg, err := jsonx.Decode([]byte(configSeed(rosterPool)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := roundcfg.FromConfig(cfg); err != nil {
+		t.Fatalf("pool is not a valid roster: %v", err)
+	}
 }
 
 // The seeded roster is 8 distinct pool names that the round settings accept.
