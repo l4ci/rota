@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -746,11 +747,10 @@ func TestSetupYesWritesNoTasteKey(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	tracked := readConfig(t, dir)
-	cfg, err := jsonx.Decode([]byte(tracked))
-	if err != nil {
+	var top map[string]any
+	if err := json.Unmarshal([]byte(tracked), &top); err != nil {
 		t.Fatal(err)
 	}
-	top, _ := cfg.(map[string]any)
 	// rota init seeds round.roster (#2572); it is project scope, not taste.
 	if round, ok := top["round"].(map[string]any); ok {
 		delete(round, "roster")
