@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/migrate"
@@ -130,6 +131,9 @@ type Deps struct {
 
 	WorkerEnv      func() worker.Env
 	WorkerAccounts func() *worker.Accounts
+	AccountQuotas  func() *worker.Quotas
+	// QuotaExchange is a bounded duplex process boundary, separate from one-shot Proc.
+	QuotaExchange proc.Exchange
 
 	// Host is the one place a verb gets a pane host: it builds the host for a
 	// kind ("herdr", "tmux"). The env hooks above leave their host fields nil
@@ -161,6 +165,7 @@ func defaultDeps() *Deps {
 	d := &Deps{
 		Git:              git.Exec,
 		Proc:             proc.Run,
+		QuotaExchange:    proc.Duplex,
 		ReviewRemoveAll:  os.RemoveAll,
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
@@ -208,6 +213,10 @@ func defaultDeps() *Deps {
 	d.WorkerAccounts = func() *worker.Accounts {
 		env := worker.Env{Now: d.Now, Getenv: d.Getenv, Home: d.UserHomeDir, Config: d.Config}
 		return &worker.Accounts{Env: env, Login: d.credentials()}
+	}
+	d.AccountQuotas = func() *worker.Quotas {
+		home, _ := d.UserHomeDir()
+		return &worker.Quotas{Env: worker.Env{Now: d.Now, Getenv: d.Getenv, Home: d.UserHomeDir, Config: d.Config}, Options: harness.QuotaOptions{Exchange: d.QuotaExchange, Now: d.Now, UserHome: home}}
 	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.issueTracker(ctx, cfg, root)

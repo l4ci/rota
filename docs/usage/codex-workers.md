@@ -83,8 +83,9 @@ pane gets that account's `CODEX_HOME`, and login is checked in each home you con
 CODEX_HOME=/home/me/.codex-team codex login
 ```
 
-Codex has no usage meter, so the pick balances slots, not headroom. A per-slot home exists only if
-you configure it as an account.
+Codex has no scheduling usage meter, so the pick balances slot counts.
+[Current weekly capacity](#read-current-weekly-capacity) is available for reporting.
+A per-slot home exists only if you configure it as an account.
 
 ## Model tiers
 
@@ -141,8 +142,8 @@ The same one-shot run reviews code. With `round.harnesses` set, a `size:Major` o
 ## Limits
 
 - **herdr only.** Codex workers do not run under tmux or in solo mode, and there are no Codex subagents.
-- **No usage meter.** The headroom meter covers only the `claude` entries of `round.accounts`, and a Codex slot is skipped
-  by them. The `codex` entries spread slots but cannot measure headroom. `rota limit watch` reads only the
+- **No scheduling usage meter.** The headroom meter covers only the `claude` entries of `round.accounts`, and a Codex slot is skipped
+  by them. Codex weekly capacity reports do not affect scheduling. `rota limit watch` reads only the
   limit message in the pane (the wording, something like `You've hit your usage limit ... try again at 3:42 PM`, is recalled, not captured from a real Codex run), then parks the slot. It
   moves the issue to an idle slot on another Codex login that has no limit waiting, or sleeps until the
   reset when there is none. With every `codex` login in `round.accounts` waiting, the round stops filling Codex
@@ -160,3 +161,31 @@ configured account isn't logged in or (under herdr) lacks the integration, each 
 it. With no accounts it checks the default home and only notes a missing login or integration, since a project
 that never runs Codex workers has no reason to log in. See
 [doctor and reap](doctor-and-reap.md).
+
+## Read current weekly capacity
+
+Run `rota worker account list`, add `--json` for the `quota` snapshot, or use
+`--ui` to browse it. Codex rows show the account's reported weekly remaining and
+used percentages, reset time, observation time and any unavailable/stale reason.
+Shorter windows are listed separately. Missing values are unknown, never zero.
+
+Rota asks the authenticated installed CLI through
+[`account/rateLimits/read`](https://learn.chatgpt.com/docs/app-server), with a
+bounded one-shot app-server process and no model turn. The CLI owns login and
+refresh. Unsupported versions, authentication modes or missing source fields
+produce an explicit unavailable reading; no CLI version is pinned.
+
+Configured Codex homes are queried separately. A missing named home is unavailable;
+it cannot inherit another account. With no configured Codex homes, account listing shows the caller-current
+`ambient/current` home, including mixed projects and projects whose worker
+default is another harness. An unavailable CLI/source gives an explicit reason.
+Account reporting does not change the worker default. The reported remote identity,
+when available, is a hash reference rather than a raw account identifier.
+
+`rota round summary --round N` adds **Current account quota (observed now; not
+round usage)**, also available as JSON `accountQuotas`. These are fresh current
+readings of the uniquely resolvable accounts used by the round. A deleted account
+name stays unavailable. An ambient reading describes the caller's current login,
+not a verified historical worker identity. Codex worker/issue quota shares remain
+unknown. Account selection, quota caps and automatic cooldowns keep their existing
+policy; weekly percentages are reporting only.

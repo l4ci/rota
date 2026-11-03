@@ -5,6 +5,9 @@ refs:
   - internal/flakeledger
   - internal/cli/flakes.go
   - internal/cli/worker.go
+  - internal/cli/quota_reporting.go
+  - internal/cli/view_readonly.go
+  - internal/cli/deps.go
   - internal/cli/worker_send.go
   - internal/cli/worker_train.go
   - internal/cli/gate_report.go
@@ -274,12 +277,12 @@ note: after a handoff the caller is still outside the session, so `data` is `ins
 ### rota worker account list
 rota worker account list
 repo: none
-data: {"accounts": [{"kind": "claude", "name": string, "configDir": string, "verdict": string, "reason": string, "fiveHour"?: number, "sevenDay"?: number, "resetsAt"?: string, "headroom"?: number}]}
+data: {"accounts": [accountMeter | accountQuota]}
 exit: implied only
 old: hv-worker-account list --json
 note: `rota worker account list --ui` shows one row per account: a headroom bar, the verdict and the usage-window reset, with the five-hour and seven-day figures, reason and config dir in the preview. Terminal only.
-note: (#1824) `kind` is always `claude`: only claude entries have a usage meter, so the codex and opencode entries of `round.accounts` are not listed. The text output gains a kind column.
-shim: wraps the old array as `accounts`; null fields become absent. `verdict` is `free`, `cooling` or `unknown`. No accounts configured gives `{"accounts": []}`. Env `ROTA_ACCOUNT_USAGE_DIR` stays as is.
+note: `accountMeter` retains the Claude shape `{kind, name, configDir, verdict, reason, fiveHour?, sevenDay?, resetsAt?, headroom?}`. Codex rows are additive `accountQuota` objects `{kind, name, configDir, quota}`; the display-only `quota` schema and availability rules are in [Codex account reports](codex-workers.md#current-account-quota-reports-2632). Plain and UI output show weekly capacity, reset, status/reason, home and observation time; shorter windows remain distinct. Account keys include kind and name. OpenCode has no quota reporter and is not listed. With no named Codex entries, every project shows the explicitly caller-current ambient Codex account, including mixed projects where another harness is first. An unavailable CLI/source stays an explicit unavailable row. This does not change the worker default.
+shim: wraps the old meter array as `accounts`; meter null fields become absent. Meter `verdict` is `free`, `cooling` or `unknown`. Quota snapshots retain null missing values. A reporter without named entries contributes an ambient row even when the reading is unavailable; missing data never disappears from account reporting. Env `ROTA_ACCOUNT_USAGE_DIR` stays as is.
 
 ### rota worker account pick
 rota worker account pick [--exclude <name>[,<name>...]]

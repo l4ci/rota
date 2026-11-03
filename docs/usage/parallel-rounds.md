@@ -54,7 +54,7 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
    }
    ```
 
-   `rota worker account list` then shows each Claude account (`kind` is always `claude`: only those have a usage meter) with its usage verdict.
+   `rota worker account list` then shows each Claude account with its usage verdict, plus Codex current account quota reports when configured. Codex weekly capacity is display-only; it does not affect account selection. See [Codex weekly capacity](codex-workers.md#read-current-weekly-capacity).
 
 4. **Issues a worker can pick up.** A candidate needs acceptance criteria or a design or plan note,
    closed dependencies and no file overlap with work in flight (see [Picking issues](#picking-issues)).

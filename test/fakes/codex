@@ -8,8 +8,12 @@
 #                  "Not logged in" and exit 1. With CODEX_HOME unset it reads
 #                  $FAKE_DEFAULT_CODEX_HOME (the stand-in for the default
 #                  Codex home); with neither set it is "Not logged in".
+#   app-server --listen stdio://  opt-in ROTA_FAKE_CODEX_QUOTA_FILE fixture
 #   exec --json <prompt>  opt-in contract fixture; never invokes a model
 case "$1 $2" in
+  "app-server --listen")
+    [ "${3:-}" = stdio:// ] && [ -n "${ROTA_FAKE_CODEX_QUOTA_FILE:-}" ] || { echo "fake codex: quota fixture is not enabled" >&2; exit 98; }
+    exec python3 "$(dirname "$0")/codex_quota_server.py" ;;
   "exec --json")
     [ "${ROTA_FAKE_CODEX_SKILLS:-}" = 1 ] || { echo "fake codex: skill worker is not enabled" >&2; exit 98; }
     shift 2
