@@ -387,7 +387,8 @@ type Accounts interface {
 	// Accounts is the kind's configured accounts and the config key they come
 	// from (the entries of round.accounts).
 	Accounts(cfg Config) AccountList
-	// UsageMeter reports whether the kind's accounts expose a usage reading.
+	// UsageMeter reports whether accounts expose a scheduling usage meter.
+	// Display-only account capacity is the separate optional QuotaReporter facet.
 	// One that does not is balanced from the limits the watcher logged.
 	UsageMeter() bool
 }

@@ -19,7 +19,17 @@ chmod +x "$RS/fakebin/herdr"
 ) || fail "round fixture repo setup failed"
 mkdir -p "$RS/.rota"
 printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_status":"working","cwd":"%s/.worktrees/dana","name":"dana","tab_id":"w2:t1"},{"agent":"claude","agent_status":"idle","cwd":"%s/.worktrees/ghost","name":"ghost","tab_id":"w3:t1"},{"agent":"claude","agent_status":"working","cwd":"%s","name":"orchestrator","tab_id":"w4:t1"}]}}}\n' "$RS" "$RS" "$RS" > "$RS/snapshot.json"
-RSENV="env HERDR_ENV=1 PATH=$RS/fakebin:$PATH"
+# Quota reads use an explicitly enabled executable fake; all other tools retain
+# the runner's poison guard. The fake never opens a Codex home or credentials.
+cat > "$RS/fakebin/codex" <<SH
+#!/usr/bin/env bash
+exec "$TESTDIR/fakes/codex" "\$@"
+SH
+chmod +x "$RS/fakebin/codex"
+cat > "$RS/quota.json" <<'JSON'
+{"accountId":"fixture-account","rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":25,"windowDurationMins":10080,"resetsAt":4102444800},"secondary":{"usedPercent":10,"windowDurationMins":300,"resetsAt":4102444800}}}}
+JSON
+RSENV="env HERDR_ENV=1 PATH=$RS/fakebin:$PATH CODEX_HOME=$RS/codex-current ROTA_FAKE_CODEX_QUOTA_FILE=$RS/quota.json ROTA_FAKE_CODEX_QUOTA_LOG=$RS/quota-calls.jsonl"
 
 # Empty registry: rows come from the worktrees, matched to the snapshot by cwd.
 OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null ) || vfail
@@ -104,6 +114,31 @@ OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round summary 2>/dev/null ) || true
 [ "$(echo "$OUT" | jget data.round)" = "4" ] || fail "round summary should default to the highest round: $OUT"
 [ "$(echo "$OUT" | jget data.issues[0].quotaShare)" = "20.0" ] || [ "$(echo "$OUT" | jget data.issues[0].quotaShare)" = "20" ] \
   || fail "quotaShare should be the headroom delta: $OUT"
+python3 - "$OUT" "$RS/codex-current" <<'PYQUOTA' || fail "current quota must stay distinct from historical burn"
+import json, sys
+d = json.loads(sys.argv[1])["data"]
+q, = d["accountQuotas"]
+assert q["ambient"] and q["name"] == "ambient/current" and q["home"] == sys.argv[2], q
+assert q["weekly"]["remainingPercent"] == 75 and q["weekly"]["resetsAt"] == "2100-01-01T00:00:00Z", q
+assert [w["durationMins"] for w in q["windows"]] == [10080, 300], q
+assert next(r for r in d["issues"] if r["issue"] == "59")["quotaShare"] is None, d
+assert "fixture-account" not in json.dumps(q), q
+PYQUOTA
+# A failed fresh source stays explicit and cannot reuse the previous 75% value.
+printf '{}\n' > "$RS/quota.json"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round summary 2>/dev/null ) || vfail
+python3 - "$OUT" "$RS/quota-calls.jsonl" "$RS/codex-current" <<'PYQUOTA' || fail "offline quota source/guard regression"
+import json, sys
+d = json.loads(sys.argv[1])["data"]
+q, = d["accountQuotas"]
+assert q["status"] == "unavailable" and q["weekly"] is None and q["reason"], q
+assert next(r for r in d["issues"] if r["issue"] == "59")["quotaShare"] is None, d
+calls = [json.loads(line) for line in open(sys.argv[2])]
+assert len(calls) == 12, calls
+assert {c["method"] for c in calls} == {"initialize", "initialized", "account/read", "account/rateLimits/read"}, calls
+assert {c["home"] for c in calls} == {sys.argv[3]}, calls
+PYQUOTA
+pass "round quota reporting is offline, explicitly current, and preserves unknown historical burn"
 rc=0
 ( cd "$RS" && $RSENV "$ROTA_BIN" round summary --round 9 >/dev/null 2>&1 ) || rc=$?
 [ "$rc" = "3" ] || fail "an unknown --round should exit 3, got $rc"

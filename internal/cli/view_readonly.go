@@ -60,6 +60,11 @@ func accountsView(c *Ctx, res Result) (tui.Model, error) {
 	var rows []browseRow
 	for _, a := range dataObjs(res.Data, "accounts") {
 		name, verdict, reason := jsonx.Str(a, "name"), jsonx.Str(a, "verdict"), jsonx.Str(a, "reason")
+		kind := jsonx.Str(a, "kind")
+		if quota := nestedObject(a, "quota"); quota != nil {
+			rows = append(rows, browseRow{Label: fmt.Sprintf("%-14s %-8s %s", name, kind, quotaLabel(quota)), Preview: name + " (" + kind + ")\n" + accountQuotaText(quota), Key: kind + "/" + name})
+			continue
+		}
 		bar, pct := strings.Repeat(" ", barCells+2), "   -"
 		if h, ok := dataFloat(a, "headroom"); ok {
 			bar, pct = headroomBar(h), fmt.Sprintf("%3.0f%%", h)
@@ -81,7 +86,7 @@ func accountsView(c *Ctx, res Result) (tui.Model, error) {
 		if dir := jsonx.Str(a, "configDir"); dir != "" {
 			preview += "\nconfig: " + dir
 		}
-		rows = append(rows, browseRow{Label: label, Preview: preview, Key: name})
+		rows = append(rows, browseRow{Label: label, Preview: preview, Key: kind + "/" + name})
 	}
 	return newBrowser("worker accounts", "no accounts configured (slots inherit the ambient CLAUDE_CONFIG_DIR)", rows, true, nil), nil
 }

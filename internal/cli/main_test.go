@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/migrate"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/testiso"
 )
@@ -65,6 +67,9 @@ func TestMain(m *testing.M) {
 func testDeps() *Deps {
 	d := defaultDeps()
 	d.RecordMistakes = false
+	d.QuotaExchange = func(context.Context, proc.Cmd, func(io.Reader, io.Writer) error) error {
+		return errors.New("offline quota source")
+	}
 	d.OpenURL = func(string) error { return errors.New("no browser in tests") }
 	pinDay(d, goldenDay)
 	// doctor's disk check reads the real volume: pin a healthy one so a full
