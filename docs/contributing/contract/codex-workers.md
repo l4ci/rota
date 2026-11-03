@@ -91,8 +91,10 @@ and plan never establish unchanged account identity. No version is pinned. API-k
 or unsupported authentication may not expose subscription windows; availability
 on other plans depends on what the CLI reports.
 
-With no configured Codex entries, a Codex project's account list shows
-`ambient/current`, using the caller's effective home. Round summaries resolve
+With no configured Codex entries, the account list shows `ambient/current`,
+using the caller's effective home independently of the project's worker default.
+Mixed projects and explicit Codex workers use the same reporting path; an absent
+CLI or unavailable source produces an explicit unavailable row. Round summaries resolve
 only unique current `(kind, name)` configurations used by that round; a deleted
 or ambiguous name never becomes ambient. An unnamed historical account can
 show the caller-current ambient home only while no named homes are configured,

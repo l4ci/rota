@@ -176,8 +176,10 @@ refresh. Unsupported versions, authentication modes or missing source fields
 produce an explicit unavailable reading; no CLI version is pinned.
 
 Configured Codex homes are queried separately. A missing named home is unavailable;
-it cannot inherit another account. With no configured homes, a Codex project
-shows the caller-current `ambient/current` home. The reported remote identity,
+it cannot inherit another account. With no configured Codex homes, account listing shows the caller-current
+`ambient/current` home, including mixed projects and projects whose worker
+default is another harness. An unavailable CLI/source gives an explicit reason.
+Account reporting does not change the worker default. The reported remote identity,
 when available, is a hash reference rather than a raw account identifier.
 
 `rota round summary --round N` adds **Current account quota (observed now; not

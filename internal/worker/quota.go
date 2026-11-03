@@ -20,8 +20,8 @@ type Quotas struct {
 	Read    func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot
 }
 
-// List reports every configured account with a reporting facet. Only the active
-// worker kind can use caller-current ambient identity when it has no named homes.
+// List reports each available reporting facet independently of worker defaults.
+// A facet without named homes reports its explicitly caller-current ambient home.
 func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot {
 	e := q.Env.WithDefaults()
 	cfg := e.Config(root)
@@ -39,7 +39,7 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 		for _, entry := range entries {
 			refs = append(refs, QuotaAccount{kind, entry.Name})
 		}
-		if len(entries) == 0 && kind == harness.ProjectKind(cfg) {
+		if len(entries) == 0 {
 			refs = append(refs, QuotaAccount{kind, ""})
 		}
 	}

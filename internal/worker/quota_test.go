@@ -63,10 +63,6 @@ func TestQuotasAmbientIsExplicitCallerCurrent(t *testing.T) {
 			t.Fatalf("ambient=%#v", rows)
 		}
 	}
-	q.Env.Config = memConfig(t, `{}`)
-	if got := q.List(context.Background(), ""); len(got) != 0 {
-		t.Fatalf("inactive reporter acquired ambient identity: %#v", got)
-	}
 }
 
 func TestQuotasCancellationBoundsConcurrencyAndQueuedAccounts(t *testing.T) {
@@ -169,5 +165,27 @@ func TestQuotasAmbientDefaultHomeUsesInjectedUserHome(t *testing.T) {
 	got := q.List(context.Background(), "")
 	if len(got) != 1 || got[0].Home != "/isolated/.codex" {
 		t.Fatalf("default ambient=%#v", got)
+	}
+}
+
+func TestQuotasAmbientIndependentOfWorkerDefault(t *testing.T) {
+	for _, cfg := range []string{`{"round":{"harnesses":["claude","codex"]}}`, `{}`} {
+		t.Run(cfg, func(t *testing.T) {
+			configuration := memConfig(t, cfg)
+			before := harness.ProjectKind(configuration(""))
+			q := &Quotas{Env: Env{Config: configuration, Home: func() (string, error) { return "/caller", nil }, Getenv: func(string) string { return "/ambient" }}, Read: func(ctx context.Context, r harness.QuotaReporter, req harness.QuotaRequest, opts harness.QuotaOptions) harness.QuotaSnapshot {
+				if !req.Ambient || req.Name != "ambient/current" || req.Account.Home != "/ambient" {
+					t.Errorf("wrong ambient identity: %+v", req)
+				}
+				return harness.QuotaSnapshot{Home: req.Account.Home, Status: "unavailable", IdentityStatus: "unavailable", Reason: "offline fixture"}
+			}}
+			rows := q.List(context.Background(), "")
+			if len(rows) != 1 || !rows[0].Ambient || rows[0].Name != "ambient/current" || rows[0].Home != "/ambient" || rows[0].Reason != "offline fixture" {
+				t.Fatalf("ambient reporting must survive a different worker default: %+v", rows)
+			}
+			if after := harness.ProjectKind(configuration("")); after != before {
+				t.Fatalf("report changed worker default: before=%s after=%s", before, after)
+			}
+		})
 	}
 }
