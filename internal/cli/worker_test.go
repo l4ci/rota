@@ -158,11 +158,16 @@ func TestWorkerAccountVerbs(t *testing.T) {
 	code, out, _ := rotaIn(t, dir, "worker", "account", "list", "--json")
 	d := data(t, out)
 	rows := d["accounts"].([]any)
-	if code != 0 || len(rows) != 2 || rows[0].(map[string]any)["headroom"] != 10.0 || rows[1].(map[string]any)["verdict"] != "free" {
+	if code != 0 || len(rows) != 3 || rows[0].(map[string]any)["headroom"] != 10.0 || rows[1].(map[string]any)["verdict"] != "free" {
 		t.Fatalf("list: %d %v", code, d)
 	}
 	if rows[0].(map[string]any)["kind"] != harness.Claude || rows[1].(map[string]any)["kind"] != harness.Claude {
 		t.Errorf("list rows do not show the account kind: %v", rows)
+	}
+	quotaRow := rows[2].(map[string]any)
+	quota := quotaRow["quota"].(map[string]any)
+	if quotaRow["kind"] != harness.Codex || quotaRow["name"] != "cx" || quotaRow["headroom"] != nil || quota["status"] != "unavailable" || quota["weekly"] != nil || quota["reason"] == "" {
+		t.Errorf("configured Codex row must be explicit quota data, independent of meter policy: %v", quotaRow)
 	}
 	if _, has := rows[0].(map[string]any)["resetsAt"]; has {
 		t.Error("null fields must be absent")
