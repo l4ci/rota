@@ -2,6 +2,14 @@
 
 Run several coding agents in parallel, across your accounts, with reviews and checks before changes merge.
 
+To install rota and set up your project, paste this into your coding agent:
+
+```text
+Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
+```
+
+Alternative: [Homebrew](reference/installation.md#homebrew) · [curl](reference/installation.md#install-script) · [Claude Plugin](reference/installation.md#-plugin-marketplace) · [Codex Plugin](reference/installation.md#codex) · [More](reference/installation.md).
+
 ### Start
 
 - [Get started](getting-started.md): install, set up your project and start a round from your coding agent.
