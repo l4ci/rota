@@ -115,3 +115,30 @@ func TestAccountsViewQuotaKeysIncludeKind(t *testing.T) {
 		t.Fatalf("kind/name isolation: %+v", b.Rows)
 	}
 }
+
+func TestAccountQuotaAmbientInMixedProject(t *testing.T) {
+	dir := workerProject(t, `{"round":{"harnesses":["claude","codex"]}}`)
+	d := quotaReportingDeps(t)
+	d.Getenv = func(key string) string {
+		if key == "CODEX_HOME" {
+			return "/homes/work"
+		}
+		return ""
+	}
+	code, out, stderr := rotaInWith(t, d, dir, "worker", "account", "list", "--json")
+	if code != 0 {
+		t.Fatalf("%d %s %s", code, out, stderr)
+	}
+	rows := data(t, out)["accounts"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("missing ambient quota in mixed project: %s", out)
+	}
+	quota := rows[0].(map[string]any)["quota"].(map[string]any)
+	if quota["name"] != "ambient/current" || quota["ambient"] != true || quota["home"] != "/homes/work" || quota["weekly"].(map[string]any)["remainingPercent"] != float64(50) {
+		t.Fatalf("caller-current ambient identity missing: %s", out)
+	}
+	_, out, _ = rotaInWith(t, d, dir, "worker", "account", "list")
+	if !strings.Contains(out, "caller-current ambient account (historical identity unverified)") {
+		t.Fatal(out)
+	}
+}
