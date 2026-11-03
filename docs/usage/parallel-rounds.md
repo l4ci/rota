@@ -718,8 +718,8 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   The train takes the same flag.
 
 A train excludes PRs missing these headings or a required review verdict at their current head
-before building or verifying its merge. Each exclusion emits a `TRAIN-SKIP` note; the `culprits`
-list names its target, PR and `blockedBy` reason (`assumptions-missing`, `rulings-missing` or
+before building or verifying its merge. Each exclusion prints a `TRAIN-SKIP` note, including
+when every member is excluded. The JSON `culprits` list names its target, PR and `blockedBy` reason (`assumptions-missing`, `rulings-missing` or
 `review-missing`). The remaining PRs train normally. If every PR is excluded, the train exits 4
 with the first exclusion's reason, names every excluded PR, and verifies and lands nothing.
 Other member-check and verification failures keep their existing stop behavior. An explicit
