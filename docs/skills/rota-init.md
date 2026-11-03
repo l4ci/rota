@@ -10,7 +10,7 @@ not_when:
   - use: rota-docs
     when: you want the project's public docs scaffolded or updated
 before: []
-after: [rota-capture, rota-work]
+after: [rota-orchestrate, rota-capture, rota-work]
 manual_only: true
 flags: []
 example:

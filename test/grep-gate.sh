@@ -29,7 +29,7 @@ OLD_SCOPE=(
   ':(exclude).rota/'
   ':(exclude)test/grep-gate.sh'
   # The "Coming from hv-skills" migration section names the predecessor.
-  ':(exclude)docs/install.md'
+  ':(exclude)docs/reference/installation.md'
   ':(exclude)internal/migrate/'
   ':(exclude)internal/hvmigrate/'
   ':(exclude)internal/legacystate/'
@@ -99,7 +99,7 @@ HV_SCOPE=(
   ':(exclude)internal/hvmigrate/'
   ':(exclude)internal/legacystate/'
   # The "Coming from hv-skills" migration section names .hv/ and /hv-*.
-  ':(exclude)docs/install.md'
+  ':(exclude)docs/reference/installation.md'
 )
 HITS="$(git grep -nIP "$HV_NAME" -- . "${HV_SCOPE[@]}" || true)"
 if [ -n "$HITS" ]; then
