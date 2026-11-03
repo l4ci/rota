@@ -422,6 +422,20 @@ from `ROTA-DONE`) and marks it seen: the next `wait` skips that slot until its s
 done slot whose PR you are holding does not come back on every call. A dispatch or relay re-arms it,
 and a `ROTA-DONE` the worker printed before that relay no longer reads as done: only a new sentinel
 or a `worker done` event after the relay does.
+Poll and wait retain relay-echo observations from both captures, including an echo that
+scrolls out while the worker replies. A fresh `ROTA-DONE` can finish a text-only relay
+without a new commit. If the echo is already outside the first capture, they check a
+larger retained-output window for the matching relay and its later completion. When the
+host cannot supply that history, an unobserved relay stays pending until completion can
+be established; the normal unseen-relay stall timeout still applies.
+If a relay or session replaces a poll's capture before it is recorded, the poll returns
+`busy` with `slot changed during poll; poll again`, without the older completion or PR
+evidence. The next poll reads the current session.
+`rota round status` keeps the native observation in `hostState` and adds `state: "done"`
+for a driven slot whose accepted completion is still current (text mode appends
+`state done`). A pending relay, replacement session or a host reporting new work keeps
+the earlier completion from appearing. Status reads the recorded result without polling
+or changing worker state; adopted slots keep their existing derived states.
 With no slot named it watches every slot that has a session and whose recorded state is not `idle`;
 `rota worker dispatch` arms a slot.
 
@@ -720,6 +734,27 @@ Every escalation is decision ready: at least two `--options` and a `--recommend`
 or `send` exits 4 and posts nothing. The comment lists the options, marks the recommended one and
 states its cost if wrong. A reply of `ok`, `yes` or an option number resolves to that option in
 `escalate check`; anything longer is read as prose.
+
+Delivery is recorded separately from the answer status. A new send first saves its complete request
+as `ready`, then records `unknown` immediately before creating the tracker comment. A successful
+create is saved as `delivered`; `check`, `status` and `reconcile` expose the delivery state,
+attempts, last error and next retry time in additive JSON and text output. Existing answer statuses
+and counters keep their meaning. A visible `Delivery reference: rota-escalation/<32 lowercase hex characters>` line in the
+comment lets recovery find a create whose response or local save was lost, including on trackers
+that strip hidden markers. Repeating the same request resumes its saved delivery; identical
+undelivered input can also resume. A different request against an open question remains refused.
+
+If a merge approval fails before creating its comment, repeat the merge command with `--escalate`
+when its retry is due. This resumes the saved `ready` approval and preserves its original question
+and delivery reference. `check` and `watch` can inspect it but never create the comment.
+
+An `unknown` create is never posted again automatically: `check` and `watch` only look for its
+reference and adopt it if found. Transient delivery and lookup failures are retried only when due,
+starting at five seconds and doubling to a five-minute cap; calls before the saved due time make no
+retry request. If an unknown comment never becomes visible, it remains unresolved and inspectable:
+absence cannot prove the tracker did not accept it. After delivery, the host notification is best
+effort; a crash before its sent marker is saved can cause a duplicate notification, but never a
+duplicate escalation comment.
 
 An escalation has a deadline when you pass `--timeout <s>`; past it the entry counts as timed out.
 A slot waiting on an open escalation is never reported `stalled`. Under solo mode the comment is the
