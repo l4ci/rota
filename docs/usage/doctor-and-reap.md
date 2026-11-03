@@ -72,6 +72,10 @@ rota reap --kind branch,lease      # only these kinds
 The default is a preview (`warning: preview only; pass --apply`). `--apply` needs no `--confirm`,
 because everything it deletes is proven unowned and merged, and anything holding work is skipped.
 
+`--kind` runs discovery only for the requested kinds, so unrelated discovery errors and warnings
+do not affect the result. Without it, reap discovers all kinds in the order below. Every request
+still reads the registry, round status and worktree list to establish ownership before discovery.
+
 | Kind | A candidate is | Deletable when |
 |---|---|---|
 | `worktree` | a `.worktrees/<name>` checkout with no live owner, or one git marks prunable | it holds no work |
