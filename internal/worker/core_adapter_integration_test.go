@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -8,6 +9,54 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/testutil/coretest"
 )
+
+func TestCoreAdapterPendingCreateCannotEscapePoolCleanup(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "reconciled", true: "unknown"}[missing], func(t *testing.T) {
+			dir := newProject(t, "{\"round\":{\"dispatch\":\"herdr-core\"}}")
+			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
+				t.Fatal(err)
+			}
+			peer, h := coretest.New(t, harness.Codex)
+			peer.Mode("uncertain-run")
+			rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+			e := rig.env(h)
+			if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", Task: "T1", Kind: harness.Codex, BodyFile: writeBrief(t, "not sent")}); err == nil {
+				t.Fatal("unknown creation acknowledged")
+			}
+			s := LoadRegistryTolerant(dir).Slot("w1")
+			if s == nil || !strings.HasPrefix(s.Handle(), "core-pending:") {
+				t.Fatal("unknown creation lost pool cleanup authority")
+			}
+			wt := s.Worktree()
+			if missing {
+				peer.Mode("missing")
+			} else {
+				peer.Mode("")
+			}
+			reaped, err := e.Reap(dir, []string{"w1"}, false)
+			_, sends, kills := peer.Counts()
+			if sends != 0 {
+				t.Fatal("unready creation received input")
+			}
+			if missing {
+				if err == nil || len(reaped) != 0 || kills != 0 || LoadRegistryTolerant(dir).Slot("w1") == nil {
+					t.Fatalf("unknown cleanup discarded evidence: reaped=%v err=%v kills=%d", reaped, err, kills)
+				}
+				if _, err := os.Stat(wt); err != nil {
+					t.Fatal("unknown worker worktree removed")
+				}
+			} else {
+				if err != nil || len(reaped) != 1 || kills != 1 || LoadRegistryTolerant(dir).Slot("w1") != nil {
+					t.Fatalf("reconciled cleanup failed: reaped=%v err=%v kills=%d", reaped, err, kills)
+				}
+				if _, err := os.Stat(wt); !os.IsNotExist(err) {
+					t.Fatalf("reaped worktree retained: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestCoreAdapterDispatchAndBusyRelay(t *testing.T) {
 	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)

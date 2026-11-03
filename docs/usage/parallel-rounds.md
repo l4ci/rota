@@ -156,6 +156,9 @@ numeric tab names even when Core reports a slot-specific live title. In Agents,
 Priority/pinned rows use the space name as primary text, with terminal title or
 manual tab name as secondary detail; Grouped by space uses that detail for the
 row. Core names and reporting metadata do not override this presentation.
+In the observed Mac build, neither view exposed a reliable slot/address mapping
+automatically. Inspect the terminal content and Rota's reported address before
+closing a worker; do not identify it from a numeric tab name alone.
 Double-click a tab and use App's normal rename command for a stable short slot
 name; Core has no tab-rename API. Rota status and dispatch output include
 the exact terminal address; no app configuration or document edits are needed.
@@ -171,6 +174,9 @@ against arbitrary concurrent human edits. Ownership records and delivery receipt
 live under `$XDG_STATE_HOME/rota/herdr-core` (default
 `~/.local/state/rota/herdr-core`); retain them through recovery so cleanup can
 verify the original terminal incarnation and observed processes.
+An uncertain worker creation retains a pending ownership handle in the pool.
+Recovery must reconcile its original creation token before closing it; missing
+or ambiguous evidence retains the slot and worktree rather than claiming cleanup.
 
 Monitoring reconnects through a fresh authoritative Core snapshot. A raw Core turn
 counter, startup/restored idle status, error or exit cannot finish an assignment.

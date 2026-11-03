@@ -72,7 +72,11 @@ func (s *Server) terminal(addr string) map[string]any {
 	if addr == "t2" && s.mode == "incarnation" {
 		created = 456
 	}
-	return map[string]any{"address": addr, "created_ms": created, "pid": pid, "cwd": cwd, "state": "live", "screen": "exact", "labels": labels, "reported": true, "status": map[string]string{"app": s.app, "state": s.status}}
+	state := "live"
+	if addr == "t2" && s.mode == "finished" {
+		state = "finished"
+	}
+	return map[string]any{"address": addr, "created_ms": created, "pid": pid, "cwd": cwd, "state": state, "screen": "exact", "labels": labels, "reported": true, "status": map[string]string{"app": s.app, "state": s.status}}
 }
 func (s *Server) serve(c net.Conn) {
 	defer c.Close()
@@ -104,6 +108,10 @@ func (s *Server) serve(c net.Conn) {
 				s.labels[k] = v.(string)
 			}
 			v = s.terminal("t2")
+			if s.mode == "uncertain-run" {
+				s.mu.Unlock()
+				return
+			}
 		case "terminal.read":
 			if s.mode == "unreadable" {
 				rpcErr = map[string]any{"code": -32000, "message": "capture unavailable", "data": map[string]string{"kind": "unavailable"}}
@@ -133,6 +141,11 @@ func (s *Server) serve(c net.Conn) {
 			if s.mode == "missing" {
 				ts = []any{}
 			}
+			if s.mode == "unowned-same-cwd" {
+				foreign := s.terminal("t-unrelated")
+				foreign["labels"] = map[string]string{"herdr.space": "s1"}
+				ts = []any{foreign}
+			}
 			if s.mode == "snapshot-unreadable" {
 				rpcErr = map[string]any{"code": -32000, "message": "snapshot unavailable"}
 			} else {
@@ -140,6 +153,7 @@ func (s *Server) serve(c net.Conn) {
 			}
 		case "terminal.kill":
 			s.kills++
+			s.mode = "finished"
 			v = s.terminal("t2")
 		default:
 			rpcErr = map[string]any{"code": -32601, "message": "unexpected fixture RPC " + q.Method}
