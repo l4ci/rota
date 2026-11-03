@@ -1,6 +1,6 @@
 # Your first parallel round
 
-Start in the coding agent you already use. Set up the project with `/rota-init`, then run `/rota-orchestrate`.
+Install rota through your coding agent, confirm the project settings, then start a parallel round.
 
 ## Bring a project and two tasks
 
@@ -10,18 +10,19 @@ Open Claude Code or Codex in the project **inside herdr or tmux**. This lets rot
 
 ## Install rota
 
-In a terminal:
+Paste this into your coding agent, in the project:
 
-```sh
-brew install l4ci/tap/rota
-rota skills install
+```text
+Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
 ```
 
-No Homebrew? See [installation](install.md). Reopen your agent session if the new skills are not visible.
+Alternative: [Homebrew](reference/installation.md#homebrew) · [curl](reference/installation.md#install-script) · [Claude Plugin](reference/installation.md#-plugin-marketplace) · [Codex Plugin](reference/installation.md#codex) · [More](reference/installation.md).
+
+Reopen your agent session if the new skills are not visible.
 
 ## Set up the project
 
-In your agent:
+If installation already confirmed your project settings, skip to [starting the round](#start-the-round). To review or tune them, use:
 
 ```text
 /rota-init

@@ -1,4 +1,8 @@
-<p align="center"><img src="docs/images/rota-logo.svg" alt="rota" width="220"></p>
+<p align="center">
+  <img src="docs/images/rota-icon.svg" alt="rota icon" width="64">
+  <br><br>
+  <img src="docs/images/rota-logo.svg" alt="rota" width="220">
+</p>
 
 # Run coding agents in parallel
 
@@ -8,16 +12,15 @@ Use Claude Code or Codex to run the round. Mix Claude Code, Codex and OpenCode w
 
 ## Start in your coding agent
 
-Install once:
+Open your project in your coding agent and paste:
 
-```sh
-brew install l4ci/tap/rota
-rota skills install
+```text
+Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
 ```
 
-[Other installation methods](docs/install.md).
+Alternative: [Homebrew](docs/reference/installation.md#homebrew) · [curl](docs/reference/installation.md#install-script) · [Claude Plugin](docs/reference/installation.md#-plugin-marketplace) · [Codex Plugin](docs/reference/installation.md#codex) · [More](docs/reference/installation.md).
 
-Open your project in Claude Code or Codex, inside **herdr or tmux** for separate worker sessions. Then:
+For parallel rounds, run Claude Code or Codex inside **herdr or tmux** for separate worker sessions. Confirm the project settings and start the round:
 
 ```text
 /rota-init
