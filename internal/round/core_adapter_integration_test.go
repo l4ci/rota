@@ -21,7 +21,7 @@ import (
 )
 
 func TestCoreAdapterRoundSnapshotAbsenceAndIdentity(t *testing.T) {
-	for _, mode := range []string{"missing", "incarnation", "snapshot-unreadable"} {
+	for _, mode := range []string{"missing", "incarnation", "snapshot-unreadable", "unowned-same-cwd", "finished"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newMoveFx(t)
 			peer, h := coretest.New(t, harness.Codex)

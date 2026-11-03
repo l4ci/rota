@@ -310,7 +310,7 @@ func (h *coreHost) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerminal, o SpawnOpts, intentPath string) (result string, failure error) {
 	intent, t, e := h.spawnTerminal(ctx, c, parent, o, intentPath)
 	if e != nil {
-		return "", e
+		return h.pendingFor(intent), e
 	}
 	address := t.Address
 	defer func() {
@@ -331,11 +331,11 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 			v.PIDs = h.d.Tree(t.PID)
 		}
 		if v.PID <= 0 || v.Created == 0 || !coreMatch(v, t) || t.Parent != nil || t.DieWithParent {
-			return "", fmt.Errorf("Core spawn returned incomplete identity; inspect terminal %s", t.Address)
+			return h.pendingFor(intent), fmt.Errorf("Core spawn returned incomplete identity; inspect terminal %s", t.Address)
 		}
 		s = coreEncode(v)
 		if e = h.save(v); e != nil {
-			return s, fmt.Errorf("Core worker %s ownership could not persist: %w", t.Address, e)
+			return h.pendingFor(intent), fmt.Errorf("Core worker %s ownership could not persist: %w", t.Address, e)
 		}
 	}
 	intent.Handle = s
@@ -377,6 +377,9 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 	}
 }
 func (h *coreHost) terminal(ctx context.Context, s string) (coreHandle, *coreConn, coreTerminal, error) {
+	if strings.HasPrefix(s, corePendingPrefix) {
+		return coreHandle{}, nil, coreTerminal{}, fmt.Errorf("Core worker creation outcome pending; recover/reap its original owned terminal before dispatch")
+	}
 	v, e := h.owned(s)
 	if e != nil {
 		return v, nil, coreTerminal{}, e
@@ -655,6 +658,13 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 	if s == "" {
 		return nil
 	}
+	if strings.HasPrefix(s, corePendingPrefix) {
+		resolved, e := h.resolvePending(ctx, s)
+		if e != nil {
+			return e
+		}
+		s = resolved
+	}
 	v, e := h.owned(s)
 	if e != nil {
 		return e
@@ -691,6 +701,9 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 	}
 	if len(pids) == 0 {
 		return fmt.Errorf("refusing Core kill without process evidence")
+	}
+	if e = h.rememberPIDs(v, pids); e != nil {
+		return fmt.Errorf("Core pre-close process evidence could not persist: %w", e)
 	}
 	var out coreTerminal
 	if !missing {
@@ -743,18 +756,17 @@ func (h *coreHost) Snapshot(ctx context.Context) ([]Agent, error) {
 	out := []Agent{}
 	for _, t := range *r.Terminals {
 		v, ok := owned[t.Address]
-		handle := t.Address
-		if ok && coreMatch(v, t) {
-			handle = coreEncode(v)
+		if !ok || t.State != "live" {
+			continue
 		}
 		status := ""
 		if t.Status != nil {
 			status = t.Status.State
 		}
-		if ok && h.checkProgram(v, t) != nil {
+		if h.checkProgram(v, t) != nil {
 			status = UnverifiablePrefix + "worker program was lost or replaced by a shell; recover/reassign"
 		}
-		out = append(out, Agent{Tab: handle, Name: t.Labels["rota.slot"], Cwd: t.Cwd, Status: status})
+		out = append(out, Agent{Tab: coreEncode(v), Name: v.Slot, Cwd: v.Cwd, Status: status})
 	}
 	return out, nil
 }
@@ -765,6 +777,9 @@ func (h *coreHost) remember(v coreHandle, t coreTerminal) error {
 	if coreProgram(v, t) != nil {
 		return nil
 	}
+	return h.rememberPIDs(v, h.d.Tree(t.PID))
+}
+func (h *coreHost) rememberPIDs(v coreHandle, observed []int) error {
 	p, e := h.recordPath(v)
 	if e != nil {
 		return e
@@ -782,7 +797,7 @@ func (h *coreHost) remember(v coreHandle, t coreTerminal) error {
 			return e
 		}
 		pids := []int{}
-		for _, pid := range append(append(old, v.PIDs...), h.d.Tree(t.PID)...) {
+		for _, pid := range append(append(old, v.PIDs...), observed...) {
 			if pid > 0 && !seen[pid] {
 				seen[pid] = true
 				pids = append(pids, pid)

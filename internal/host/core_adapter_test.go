@@ -50,6 +50,8 @@ type coreFake struct {
 	missing            bool
 	loseRun            bool
 	runs               int
+	extras             []map[string]any
+	killed             []string
 	events             chan map[string]any
 }
 
@@ -116,10 +118,15 @@ func (f *coreFake) serve(c net.Conn) {
 			v = map[string]any{"turn": 1, "started": true}
 		case "terminal.kill":
 			f.kills++
+			f.killed = append(f.killed, q.Params["terminal"].(string))
 			f.state = "finished"
 			v = term("t2")
 		case "terminal.list", "events.subscribe":
-			v = map[string]any{"terminals": []any{term("t2")}, "seq": 1}
+			terminals := []any{term("t2")}
+			for _, extra := range f.extras {
+				terminals = append(terminals, extra)
+			}
+			v = map[string]any{"terminals": terminals, "seq": 1}
 		default:
 			v = term("t2")
 		}
@@ -556,5 +563,119 @@ func TestCoreAdapterWorkerCreationName(t *testing.T) {
 				t.Fatalf("name lacks unique ownership suffix: %q", name)
 			}
 		})
+	}
+}
+
+func TestCoreAdapterSnapshotOnlyOwnedLiveIncarnations(t *testing.T) {
+	h, f := coreFixture(t)
+	saved := coreSpawn(t, h)
+	f.extras = []map[string]any{{"address": "t-unrelated", "created_ms": 124, "cwd": "/work", "pid": 55, "state": "live", "screen": "exact", "labels": map[string]string{}, "status": map[string]string{"state": "idle"}}}
+	a, e := h.Capabilities().Snapshotter.Snapshot(context.Background())
+	if e != nil || len(a) != 1 || a[0].Handle() != saved {
+		t.Fatalf("snapshot exposed unrelated cwd fallback candidate: %v %v", a, e)
+	}
+	f.state = "finished"
+	a, e = h.Capabilities().Snapshotter.Snapshot(context.Background())
+	if e != nil || len(a) != 0 {
+		t.Fatalf("snapshot exposed finished history: %v %v", a, e)
+	}
+	f.state = "live"
+	f.pid = 99
+	a, e = h.Capabilities().Snapshotter.Snapshot(context.Background())
+	if e != nil || len(a) != 1 || a[0].Handle() != saved || !strings.HasPrefix(a[0].Status, UnverifiablePrefix) {
+		t.Fatalf("replacement lost owned recovery identity: %v %v", a, e)
+	}
+}
+func corePendingCreate(t *testing.T, h Host, f *coreFake) string {
+	t.Helper()
+	f.loseRun = true
+	s, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex"})
+	f.loseRun = false
+	if e == nil || s == "" {
+		t.Fatalf("uncertain create lost residual handle: handle=%q error=%v", s, e)
+	}
+	return s
+}
+func TestCoreAdapterPendingCreationCleanup(t *testing.T) {
+	h, f := coreFixture(t)
+	s := corePendingCreate(t, h, f)
+	if !strings.HasPrefix(h.Status(context.Background(), "dana", s), UnverifiablePrefix) {
+		t.Fatal("pending create was classified ready")
+	}
+	if _, e := h.Capabilities().PaneReader.ReadPane(context.Background(), "dana", s, 0); e == nil {
+		t.Fatal("pending handle read as normal agent")
+	}
+	if e := h.Send(context.Background(), "dana", s, coreBrief(t, "task")); e == nil || f.sends != 0 {
+		t.Fatal("brief sent into pending creation")
+	}
+	if e := h.Kill(context.Background(), "dana", s); e != nil {
+		t.Fatalf("owned pending terminal not reaped: %v", e)
+	}
+	if f.kills != 1 || len(f.killed) != 1 || f.killed[0] != "t2" {
+		t.Fatalf("wrong pending target killed: %v", f.killed)
+	}
+	f.state = "live"
+	if _, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex"}); e != nil || f.runs != 2 {
+		t.Fatalf("verified cleanup did not permit fresh worker: runs=%d error=%v", f.runs, e)
+	}
+}
+func TestCoreAdapterPendingCleanupRefusesUnknownOrUnproved(t *testing.T) {
+	for _, kind := range []string{"unknown", "ambiguous", "no-process-evidence"} {
+		t.Run(kind, func(t *testing.T) {
+			h, f := coreFixture(t)
+			s := corePendingCreate(t, h, f)
+			switch kind {
+			case "unknown":
+				f.labels = map[string]string{"rota.owner": "unrelated", "herdr.space": "s1"}
+			case "ambiguous":
+				labels := map[string]string{}
+				for k, v := range f.labels {
+					labels[k] = v
+				}
+				f.extras = []map[string]any{{"address": "t3", "created_ms": 124, "cwd": "/work", "pid": 43, "state": "live", "screen": "exact", "labels": labels}}
+			case "no-process-evidence":
+				h.(*coreHost).d.Tree = func(int) []int { return nil }
+			}
+			if e := h.Kill(context.Background(), "dana", s); e == nil {
+				t.Fatal("uncertain pending cleanup counted as proved")
+			}
+			if f.kills != 0 {
+				t.Fatalf("pending refusal killed a terminal: %v", f.killed)
+			}
+			if _, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex"}); e == nil && kind != "no-process-evidence" {
+				t.Fatal("unknown creation was recreated")
+			}
+			if f.runs != 1 {
+				t.Fatal("pending record was dropped and duplicate created")
+			}
+		})
+	}
+}
+
+func TestCoreAdapterPendingCleanupRetainsReplacementTree(t *testing.T) {
+	h, f := coreFixture(t)
+	s := corePendingCreate(t, h, f)
+	c := h.(*coreHost)
+	child := 77
+	c.d.Tree = func(pid int) []int { return []int{pid, child} }
+	c.d.KillWait = 1
+	survivor := 77
+	c.d.Alive = func(pid int) bool { return pid == survivor }
+	if e := h.Kill(context.Background(), "dana", s); e == nil {
+		t.Fatal("pending cleanup ignored surviving child")
+	}
+	f.state = "live"
+	f.pid = 99
+	child = 88
+	survivor = 88
+	if e := h.Kill(context.Background(), "dana", s); e == nil {
+		t.Fatal("replacement-shell cleanup ignored surviving child")
+	}
+	if e := h.Kill(context.Background(), "dana", s); e == nil {
+		t.Fatal("failed cleanup lost retained replacement child evidence")
+	}
+	survivor = 0
+	if e := h.Kill(context.Background(), "dana", s); e != nil {
+		t.Fatalf("retained tree gone but cleanup refused: %v", e)
 	}
 }
