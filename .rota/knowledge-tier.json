@@ -1058,13 +1058,13 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Capture host process evidence while the agent lives": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 1,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::New terminal hosts need real-adapter round tests": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 2,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Verdict fallback tests need mixed kinds and same-sha updates": {
       "tier": "provisional",
@@ -1082,14 +1082,14 @@
       "lastSeen": "2026-10-27"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Completion tests need the real backlog backend": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Tests that read slot env must stub Getenv": {
       "tier": "confirmed",
-      "hits": 11,
-      "lastSeen": "2026-10-27"
+      "hits": 19,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Isolate the global config without a temp dir leak": {
       "tier": "provisional",
@@ -1098,33 +1098,33 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::A bigger timeout is not a flake fix": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
+      "hits": 6,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Embedding host fakes must redeclare Capabilities": {
       "tier": "confirmed",
-      "hits": 8,
-      "lastSeen": "2026-10-27"
+      "hits": 12,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::GateResult.OK stays narrower than CLI success": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-11-01"
+      "hits": 2,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Typed stage handoffs copy slices and move cleanup ownership": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-11-01"
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The worker forge must not share the read cache": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
+      "hits": 6,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The tracker REST layer never resends a POST after a 5xx": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-26"
+      "hits": 5,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Gate steps read the forge only after stepRemote": {
       "tier": "confirmed",
@@ -1138,8 +1138,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::A per-invocation cache must reset per pass in long-running verbs": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-24"
+      "hits": 6,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::hvmigrate.splitLines is not a pystr copy": {
       "tier": "provisional",
@@ -1153,8 +1153,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A registry-derived guard cannot find what the registry lacks": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 1,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Serialize proof records for one item until #2169 lands": {
       "tier": "provisional",
@@ -1173,8 +1173,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-27"
+      "hits": 5,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Palette entries name the verb that registers the View": {
       "tier": "confirmed",
