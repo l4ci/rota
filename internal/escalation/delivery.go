@@ -222,6 +222,22 @@ func deliveryFailure(e Entry, err error) (SendResult, error) {
 	return SendResult{Entry: e}, &Error{Exit: code, Message: fmt.Sprintf("escalation %s delivery %s: %v; repeat the send command or inspect with rota round escalate check %s", e.ID, state, err, e.ID), Data: data}
 }
 
+// Resume explicitly retries an existing intent using its immutable saved payload.
+// It allocates no entry and shares Send's operation lock, backoff and unknown
+// reconciliation rules. Passive Check/watch never call it.
+func Resume(ctx context.Context, env Env, root, id string) (SendResult, error) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return SendResult{}, err
+	}
+	for _, e := range FromRegistry(reg) {
+		if e.ID == id {
+			return deliver(ctx, env.withDefaults(), root, e, true)
+		}
+	}
+	return SendResult{}, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no escalation %s", id)}
+}
+
 // deliver holds only the operation flock across network calls, never the registry lock.
 func deliver(ctx context.Context, env Env, root string, entry Entry, allowCreate bool) (SendResult, error) {
 	res := SendResult{Entry: entry}

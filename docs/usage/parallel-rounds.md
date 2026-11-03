@@ -664,6 +664,10 @@ comment lets recovery find a create whose response or local save was lost, inclu
 that strip hidden markers. Repeating the same request resumes its saved delivery; identical
 undelivered input can also resume. A different request against an open question remains refused.
 
+If a merge approval fails before creating its comment, repeat the merge command with `--escalate`
+when its retry is due. This resumes the saved `ready` approval and preserves its original question
+and delivery reference. `check` and `watch` can inspect it but never create the comment.
+
 An `unknown` create is never posted again automatically: `check` and `watch` only look for its
 reference and adopt it if found. Transient delivery and lookup failures are retried only when due,
 starting at five seconds and doubling to a five-minute cap; calls before the saved due time make no

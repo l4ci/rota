@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"github.com/l4ci/rota/internal/escalation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +186,62 @@ func TestUndeliveredAnswerCannotApprove(t *testing.T) {
 	code, d, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--approval", "e1")
 	if code != 4 || d["blockedBy"] != "approval pending" || len(forge.merged) != 0 {
 		t.Fatalf("undelivered answer approved: %d %v %s merged %v", code, d, msg, forge.merged)
+	}
+}
+
+func TestMergeEscalateRetriesReadyDelivery(t *testing.T) {
+	root, deps, forge, thread := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
+	useEscalation(deps, &escHost{}, "", &clock)
+	thread.failRead = errors.New("temporary comment listing failure")
+	code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	if code != 4 || posts(thread) != 0 || len(forge.merged) != 0 {
+		t.Fatalf("pre-create failure: exit=%d creates=%d merged=%v message=%s", code, posts(thread), forge.merged, msg)
+	}
+	saved := escalation.Load(root)
+	if len(saved) != 1 || saved[0].Delivery == nil || saved[0].Delivery.State != escalation.DeliveryReady || saved[0].Delivery.LastError == "" {
+		t.Fatalf("missing retryable intent: %+v", saved)
+	}
+	original := saved[0]
+	thread.failRead = nil
+	before := thread.reads()
+	code, _, _ = a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	if code != 4 || thread.reads() != before || posts(thread) != 0 {
+		t.Fatalf("explicit retry ignored backoff: exit=%d reads=%d before=%d creates=%d", code, thread.reads(), before, posts(thread))
+	}
+	clock = clock.Add(5 * time.Second)
+	if _, err := escalation.Check(context.Background(), deps.escalationEnv(), root, []string{original.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if posts(thread) != 0 {
+		t.Fatal("check created ready approval")
+	}
+	// The retry must use the saved ask even if today's covered policy differs.
+	forge.files = map[int][]string{10: {"README.md"}}
+	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, prAllCfg, "auto", map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"*.md"}}))
+	code, data, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	got := escalation.Load(root)
+	if code != 4 || posts(thread) != 1 || len(got) != 1 || got[0].Delivery.State != escalation.DeliveryDelivered {
+		t.Fatalf("due explicit retry never delivered saved approval: exit=%d creates=%d entries=%+v data=%v message=%s", code, posts(thread), got, data, msg)
+	}
+	if got[0].ID != original.ID || got[0].Delivery.OperationID != original.Delivery.OperationID || got[0].Delivery.Body != original.Delivery.Body || thread.comments[0]["body"] != original.Delivery.Body {
+		t.Fatal("retry replaced saved immutable operation")
+	}
+	code, _, _ = a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	if code != 4 || posts(thread) != 1 || len(forge.merged) != 0 {
+		t.Fatalf("repeat duplicated or approved: exit=%d creates=%d merged=%v", code, posts(thread), forge.merged)
+	}
+}
+
+func TestMergeEscalateUnknownDoesNotCreate(t *testing.T) {
+	root, deps, forge, thread := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	entry := escEntry("e1", "pr", 10, "pending", "")
+	entry["commentId"], entry["sentAt"] = "", ""
+	entry["delivery"] = map[string]any{"operationId": "0123456789abcdef0123456789abcdef", "body": "saved approval", "state": "unknown", "attempts": 1, "createdAt": "2026-10-03T09:00:00Z", "lastAttemptAt": "2026-10-03T09:00:00Z", "nextAttemptAt": "2026-10-03T09:00:05Z"}
+	seedEscalations(t, root, entry)
+	code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	saved := escalation.Load(root)
+	if code != 4 || posts(thread) != 0 || len(forge.merged) != 0 || len(saved) != 1 || saved[0].Delivery.State != escalation.DeliveryUnknown || saved[0].Delivery.LastError == "" {
+		t.Fatalf("unknown explicit retry: exit=%d creates=%d saved=%+v message=%s", code, posts(thread), saved, msg)
 	}
 }

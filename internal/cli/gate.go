@@ -193,6 +193,18 @@ func (f approvalForge) Pending(th worker.ApprovalThread) (any, bool, error) {
 		if env.Forge == nil {
 			env.Forge = escalationForge(f.c)
 		}
+		if e.Delivery.State == escalation.DeliveryReady {
+			// Pending is queried only for an explicit merge --escalate. Resume
+			// the saved operation rather than recomposing today's approval ask.
+			res, err := escalation.Resume(f.c.Context(), env, root, e.ID)
+			for _, warning := range res.Warnings {
+				f.c.Warn("%s", warning)
+			}
+			if err != nil {
+				return nil, false, err
+			}
+			return res.Entry.Object(), true, nil
+		}
 		res, err := escalation.Check(f.c.Context(), env, root, []string{e.ID})
 		for _, warning := range res.Warnings {
 			f.c.Warn("%s", warning)
