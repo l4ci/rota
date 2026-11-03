@@ -69,7 +69,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 
 // doctorInput gathers the environment through the invocation dependencies.
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Credentials: d.credentials(), Look: func(name string) (string, bool) {
+	in := doctor.Input{Getenv: d.Getenv, Exec: doctorExec(d.Proc), Credentials: d.credentials(), Look: func(name string) (string, bool) {
 		path, err := d.LookPath(name)
 		return path, err == nil
 	}}

@@ -74,6 +74,16 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		sigs["work.isolation"] = setupSignal{"worktree", ".worktrees/ exists"}
 	}
 	switch {
+	case d.Getenv("HC_TERMINAL_ID") != "" || d.Getenv("HC_TERMINAL_SOCKET") != "":
+		sigs[config.RoundDispatchKey] = setupSignal{"herdr-core", "HC_TERMINAL_ID/HC_TERMINAL_SOCKET identify the associated Herdr App Core"}
+		delete(sigs, config.RoundHarnessesKey)
+		for _, kind := range harness.CoreWorkerKinds() {
+			if onPath(kind) {
+				list, _ := jsonx.MarshalCompact(anySlice([]string{kind}))
+				sigs[config.RoundHarnessesKey] = setupSignal{string(list), kind + " is on PATH and supports native Core status reporting"}
+				break
+			}
+		}
 	case onPath("herdr"):
 		sigs[config.RoundDispatchKey] = setupSignal{"herdr", "herdr is on PATH"}
 	case onPath("tmux") && d.Getenv("TMUX") != "":

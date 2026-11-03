@@ -407,13 +407,16 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 		return h
 	}
 	name, wt, tab := s.Name(), s.Worktree(), s.Handle()
+	var native string
 	if e.Snapshot != nil {
 		if agents, err := e.Snapshot(ctx); err == nil {
 			h.Known = true
-			h.Alive = matchAgent(agents, name, tab, wt) >= 0
+			if i := matchAgent(agents, name, tab, wt); i >= 0 {
+				h.Alive, native = true, agents[i].Status
+			}
 		}
 	}
-	switch v := e.liveness(s, h.Known, h.Alive); v.State {
+	switch v := e.liveness(s, h.Known, h.Alive, native); v.State {
 	case worker.LivenessUnverifiable:
 		h.Known = h.Known && !e.caps().RuntimeScopedHandles // list absence proved nothing
 		h.Health, h.Reason = HealthUnverifiable, v.Reason
@@ -445,10 +448,10 @@ func (e Env) caps() host.Capabilities { return host.CapabilitiesForKind(e.HostNa
 // liveness is the one liveness verdict for a slot: status, reclaim and the
 // watch digest all read it. answered: the host listed its agents; listed: one
 // of them is the slot's.
-func (e Env) liveness(s *worker.Slot, answered, listed bool) worker.Liveness {
+func (e Env) liveness(s *worker.Slot, answered, listed bool, native string) worker.Liveness {
 	return worker.JudgeLiveness(worker.LivenessEvidence{
 		Caps: e.caps(), State: s.State(), Reason: s.Reason(), Handle: s.Handle(),
-		Answered: answered, Listed: listed,
+		Answered: answered, Listed: listed, Native: native,
 	})
 }
 

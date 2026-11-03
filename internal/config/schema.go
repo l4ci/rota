@@ -245,10 +245,11 @@ var Prompts = []Prompt{
 		"pr":     "open a pull request",
 	}},
 	{Key: "round.dispatch", Title: "Where do workers run?", Help: map[string]string{
-		"subagent": "in-process subagents (rounds detect herdr or tmux)",
-		"tmux":     "separate Claude Code sessions in tmux",
-		"herdr":    "separate Claude Code sessions in herdr",
-		"orca":     "worker terminals in a running Orca app (explicit only)",
+		"subagent":   "in-process subagents (rounds detect herdr or tmux)",
+		"tmux":       "separate Claude Code sessions in tmux",
+		"herdr":      "separate Claude Code sessions in herdr",
+		"herdr-core": "Codex workers in the current Herdr App Core runtime",
+		"orca":       "worker terminals in a running Orca app (explicit only)",
 	}},
 	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Help: map[string]string{
 		"off":       "skills only suggest the next step",

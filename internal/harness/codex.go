@@ -267,6 +267,12 @@ func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (stri
 	if err != nil {
 		return "", nil, refuse(Unavailable, "cannot add the prompt-check hook to %s: %v", c.CommandKey(), err)
 	}
+	if s.HerdrCore {
+		out, err = codexCoreShellLine(out)
+		if err != nil {
+			return "", nil, refuse(Unavailable, "cannot preserve Core shell identity: %v", err)
+		}
+	}
 	return out, key, nil
 }
 
@@ -336,7 +342,7 @@ func homeEnv(dir string) string {
 // killed, shared by `worker dispatch` and `round assign`: codex installed
 // (Unavailable), every flag of the launch line listed by `codex --help`
 // (Refused, blockedBy BlockCodexFlags), a supported host, the account's home (the
-// default Codex home, or a configured account's), herdr integration when on herdr,
+// default Codex home, or a configured account's), legacy integration only on herdr,
 // and login (Unavailable, hint `[CODEX_HOME=<home> ]codex login`),
 // and the slot's state directory. It never writes into a Codex home beyond
 // herdr's own integration install, and never touches auth.json.
@@ -346,11 +352,11 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	if !ok {
 		return set, refuse(Unavailable, "codex is not installed or not runnable")
 	}
-	if !o.Herdr && !o.Orca {
-		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr or orca")
+	if !o.Herdr && !o.HerdrCore && !o.Orca {
+		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr, herdr-core or orca")
 	}
 	herdr := ""
-	if o.Herdr {
+	if o.Herdr && !o.HerdrCore {
 		var ok bool
 		herdr, ok = p.Look("herdr")
 		if !ok {
@@ -364,6 +370,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	}
 	set.StateDir = CodexSlotDir(cd, o.Slot)
 	set.Worktree = o.Worktree
+	set.HerdrCore = o.HerdrCore
 	if o.Worktree == "" {
 		return set, refuse(Resolution, "slot '%s' has no worktree to trust", o.Slot)
 	}
@@ -430,3 +437,6 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 func (codex) Name() string                     { return Codex }
 func (codex) Prompt() string                   { return "$rota-orchestrate" }
 func (codex) Command(Config) ([]string, error) { return []string{"codex"}, nil }
+
+// CoreStatusApp is Codex's native OSC 7501 reporting identity.
+func (codex) CoreStatusApp() string { return Codex }

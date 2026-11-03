@@ -494,6 +494,7 @@ func (s *Slot) setState(next, now string) {
 func (s *Slot) Release() {
 	s.o.Set("handle", nil)
 	s.o.Set("state", "idle")
+	s.o.Delete("coreDelivery")
 }
 
 // PRMerged says the forge showed the slot's recorded PR merged when the watch

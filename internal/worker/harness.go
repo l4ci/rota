@@ -127,7 +127,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 		return harness.Setup{}, err
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
-		Slot: slot, Launch: launch, Herdr: e.hostKind(root) == host.Herdr, Orca: e.hostKind(root) == host.Orca, Worktree: wt,
+		Slot: slot, Launch: launch, Herdr: e.hostKind(root) == host.Herdr, HerdrCore: e.hostKind(root) == host.HerdrCore, Orca: e.hostKind(root) == host.Orca, Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
 		Accounts:  accts, Account: current, Load: load,
 	})
