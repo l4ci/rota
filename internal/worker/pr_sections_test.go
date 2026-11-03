@@ -23,6 +23,25 @@ func TestGateRequiresPRSections(t *testing.T) {
 	}
 }
 
+func TestGateReportsAllMissingPRSections(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.forge("body", "An ordinary description")
+	res, err := w.gate(false, GateOpts{CheckOnly: true})
+	named := 0
+	for _, heading := range []string{"## Assumptions", "## Rulings"} {
+		if strings.Contains(res.Err, heading) {
+			named++
+		}
+		if !strings.Contains(res.Err, heading) || !strings.Contains(res.Hint, heading) {
+			t.Errorf("refusal and remedy must name %s: %+v", heading, res)
+		}
+	}
+	t.Logf("AC-3 gate: missing headings named=%d", named)
+	if err != nil || res.Verdict != GateAssumptionsMissing || !res.Refused(err) || res.Changed {
+		t.Fatalf("all missing sections must refuse without landing: %+v %v", res, err)
+	}
+}
+
 const completePRSections = "\n## Assumptions\nNone\n\n## Rulings\nNone\n"
 
 func TestGatePRSectionPresence(t *testing.T) {
@@ -119,6 +138,17 @@ func TestTrainPRSectionsAllMissing(t *testing.T) {
 			t.Errorf("culprit %d: %+v", i, c)
 		}
 	}
+	c := res.Culprits[2]
+	named := 0
+	for _, heading := range []string{"## Assumptions", "## Rulings"} {
+		if strings.Contains(c.Gate.Err, heading) {
+			named++
+		}
+		if !strings.Contains(c.Gate.Err, heading) || !strings.Contains(c.Gate.Hint, heading) {
+			t.Errorf("pre-filter refusal and remedy must name %s: %+v", heading, c)
+		}
+	}
+	t.Logf("AC-3 train: missing headings named=%d", named)
 }
 
 func TestTrainPRSectionsExplicitOrder(t *testing.T) {

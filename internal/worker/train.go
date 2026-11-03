@@ -26,7 +26,8 @@ import (
 // time pay it N times. A train pays it once. In order:
 //
 //  1. CHECK each target the way `gate --check-only` does (freshness, PR
-//     identity, provenance, review verdict). Any refusal stops the train, naming that target.
+//     identity, provenance, review verdict). Missing PR sections or review verdicts
+//     exclude that target; other refusals stop the train, naming that target.
 //  2. APPROVE once for the whole train (B1 merge approval over the union of the
 //     files the members change), before the expensive step.
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
@@ -137,7 +138,7 @@ type TrainResult struct {
 	Skipped []string
 	Members []TrainMember
 	Culprit string
-	// Culprits lists members excluded by the static PR-section pre-filter.
+	// Culprits lists members excluded for missing PR sections or review verdicts.
 	Culprits []TrainCulprit
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
 	// that follows (its head SHA, PR and branch). Zero when none did.
@@ -426,7 +427,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			res.Notes = append(res.Notes, gr.Err)
 			continue
 		}
-		if excludePRSections(res, tg, gr) {
+		if excludeTrainMember(res, tg, gr) {
 			continue
 		}
 		if !gr.OK() {
