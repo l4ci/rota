@@ -70,12 +70,25 @@ func notFound(err error, c Class) bool {
 
 // Translate maps err onto the exit table under o. It returns the failure data
 // a refusal carries (blockedBy and friends, nil otherwise) and the error to
-// return: an *exitcode.Error for a classified or defaulted error, err itself
-// when it already is one or is unclassified under a zero Default. nil in, nil
-// out.
+// return. It never mutates supplied errors. Existing exit classifications pass
+// through by identity, except read-only exit-4 demotion, which owns a copy of
+// the classification. For classified results, errors.As exposes the effective
+// *exitcode.Error; the original chain remains inspectable. Unclassified errors
+// under a zero Default pass through unchanged. nil in, nil out.
 func Translate(err error, o Options) (data any, out error) {
-	data, out = translate(err, o)
+	if err == nil {
+		return nil, nil
+	}
 	var e *exitcode.Error
+	if errors.As(err, &e) {
+		if o.ReadOnly && e.Exit == exitcode.ExitRefused {
+			owned := *e
+			owned.Exit = exitcode.ExitFailed
+			return nil, &demotedError{original: err, classification: owned}
+		}
+		return nil, err
+	}
+	data, out = translate(err, o)
 	if out != err && errors.As(out, &e) && e.Cause == nil {
 		e.Cause = err
 	}
@@ -85,14 +98,25 @@ func Translate(err error, o Options) (data any, out error) {
 	return data, out
 }
 
+// demotedError owns the effective classification while preserving the supplied
+// error's text and complete chain, including any wrappers outside its exit code.
+type demotedError struct {
+	original       error
+	classification exitcode.Error
+}
+
+func (e *demotedError) Error() string { return e.original.Error() }
+func (e *demotedError) Unwrap() error { return e.original }
+
+func (e *demotedError) As(target any) bool {
+	if coded, ok := target.(**exitcode.Error); ok {
+		*coded = &e.classification
+		return true
+	}
+	return false
+}
+
 func translate(err error, o Options) (any, error) {
-	if err == nil {
-		return nil, nil
-	}
-	var e *exitcode.Error
-	if errors.As(err, &e) {
-		return nil, err
-	}
 	var te *tracker.Error
 	var ex interface{ Exit() int }
 	var ref *backlog.RefusedError
