@@ -129,7 +129,7 @@ func (h *coreHost) clearSpawnIntent(v coreHandle) error {
 	}
 	sum := sha256.Sum256([]byte(v.Endpoint + "\x00" + v.Core + "\x00" + v.Slot + "\x00" + filepath.Clean(v.Cwd)))
 	path = filepath.Join(d, "spawn-"+hex.EncodeToString(sum[:])+".json")
-	return h.d.FS.Locked(path+".lock", 30*time.Second, func() error {
+	return h.d.FS.Locked(path, 30*time.Second, func() error {
 		b, e := h.d.FS.ReadFile(path)
 		if errors.Is(e, os.ErrNotExist) {
 			return nil

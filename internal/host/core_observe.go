@@ -120,9 +120,9 @@ type coreCell struct {
 // It accepts the positioning/erase/style subset emitted by Core's screen
 // formatter, and refuses unsupported controls rather than guessing a draft.
 func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
-	refuse := func(why string) error { return fmt.Errorf("%w: %s", ErrDraftOnPrompt, why) }
+	fail := func(why string) error { return fmt.Errorf("%w: %s", ErrDraftOnPrompt, why) }
 	if cols < 1 || cols > 500 || rows < 1 || rows > 300 || len(paint) == 0 || paint[0] != 0x18 {
-		return refuse("unsupported observer paint/grid")
+		return fail("unsupported observer paint/grid")
 	}
 	grid := make([][]coreCell, rows)
 	for i := range grid {
@@ -163,7 +163,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		b := paint[i]
 		if b == 0x1b {
 			if i+1 >= len(paint) {
-				return refuse("unfinished escape")
+				return fail("unfinished escape")
 			}
 			if paint[i+1] == ']' {
 				end := i + 2
@@ -171,7 +171,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 					end++
 				}
 				if end == len(paint) {
-					return refuse("unfinished OSC")
+					return fail("unfinished OSC")
 				}
 				if paint[end] == 7 {
 					i = end + 1
@@ -182,7 +182,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			}
 			if paint[i+1] == 'H' {
 				if x < 0 || x >= cols {
-					return refuse("tabstop outside observer grid")
+					return fail("tabstop outside observer grid")
 				}
 				tabs[x] = true
 				i += 2
@@ -199,14 +199,14 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				continue
 			}
 			if paint[i+1] != '[' {
-				return refuse("unsupported escape")
+				return fail("unsupported escape")
 			}
 			end := i + 2
 			for end < len(paint) && (paint[end] < 0x40 || paint[end] > 0x7e) {
 				end++
 			}
 			if end == len(paint) {
-				return refuse("unfinished CSI")
+				return fail("unfinished CSI")
 			}
 			arg := string(paint[i+2 : end])
 			final := paint[end]
@@ -217,7 +217,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				var e error
 				dim, e = coreObserverDim(arg, dim)
 				if e != nil {
-					return refuse(e.Error())
+					return fail(e.Error())
 				}
 				bg = coreObserverBackground(arg, bg)
 				continue
@@ -230,7 +230,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			}
 			if final == 'q' && strings.HasSuffix(arg, " ") {
 				if _, e := strconv.Atoi(strings.TrimSpace(arg)); e != nil {
-					return refuse("invalid cursor shape")
+					return fail("invalid cursor shape")
 				}
 				continue
 			}
@@ -247,7 +247,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				}
 				v, e := strconv.Atoi(a)
 				if e != nil || v < 0 || v > 10000 {
-					return refuse("invalid CSI parameter")
+					return fail("invalid CSI parameter")
 				}
 				nums = append(nums, v)
 			}
@@ -264,12 +264,12 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				}
 			case 'g':
 				if len(nums) != 1 {
-					return refuse("unsupported tab clear")
+					return fail("unsupported tab clear")
 				}
 				switch nums[0] {
 				case 0:
 					if x >= cols {
-						return refuse("tabstop outside observer grid")
+						return fail("tabstop outside observer grid")
 					}
 					tabs[x] = false
 				case 3:
@@ -277,7 +277,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 						tabs[column] = false
 					}
 				default:
-					return refuse("unsupported tab clear")
+					return fail("unsupported tab clear")
 				}
 			case 'I':
 				moveTabs(1, n)
@@ -319,7 +319,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 					}
 					erase(y, 0, x+1)
 				default:
-					return refuse("unsupported erase")
+					return fail("unsupported erase")
 				}
 			case 'K':
 				switch nums[0] {
@@ -330,7 +330,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				case 2:
 					erase(y, 0, cols)
 				default:
-					return refuse("unsupported line erase")
+					return fail("unsupported line erase")
 				}
 			case 's':
 				sx, sy = x, y
@@ -338,13 +338,13 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				x, y = sx, sy
 			case 'r':
 				if !(arg == "" || arg == fmt.Sprintf("1;%d", rows)) {
-					return refuse("unsupported scroll region")
+					return fail("unsupported scroll region")
 				}
 			default:
-				return refuse("unsupported CSI")
+				return fail("unsupported CSI")
 			}
 			if x < 0 || x > cols || y < 0 || y >= rows {
-				return refuse("cursor outside observer grid")
+				return fail("cursor outside observer grid")
 			}
 			continue
 		}
@@ -359,7 +359,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		case '\n':
 			y++
 			if y >= rows {
-				return refuse("observer paint scrolls")
+				return fail("observer paint scrolls")
 			}
 			i++
 			continue
@@ -373,11 +373,11 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			continue
 		}
 		if b < 0x20 || b == 0x7f {
-			return refuse("unsupported control")
+			return fail("unsupported control")
 		}
 		r, size := utf8.DecodeRune(paint[i:])
 		if r == utf8.RuneError && size == 1 {
-			return refuse("invalid observer UTF-8")
+			return fail("invalid observer UTF-8")
 		}
 		i += size
 		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
@@ -391,7 +391,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			x = 0
 			y++
 			if y >= rows {
-				return refuse("observer paint wraps outside grid")
+				return fail("observer paint wraps outside grid")
 			}
 		}
 		grid[y][x] = coreCell{r: r, dim: dim, bg: bg}
@@ -401,10 +401,10 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		x += width
 	}
 	if !cleared {
-		return refuse("observer paint lacks authoritative clear")
+		return fail("observer paint lacks authoritative clear")
 	}
 	if x < 0 || x >= cols || y < 0 || y >= rows {
-		return refuse("observer cursor outside composer grid")
+		return fail("observer cursor outside composer grid")
 	}
 	ink := func(c coreCell) bool { return c.r != 0 && c.r != ' ' }
 	firstInk := func(row []coreCell) int {
@@ -430,7 +430,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			return true
 		}
 		if !inSurface(y) {
-			return refuse("observer composer surface is incomplete")
+			return fail("observer composer surface is incomplete")
 		}
 		top := y
 		for top > 0 && inSurface(top-1) {
@@ -453,7 +453,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		for r, row := range grid {
 			if c := firstInk(row); c >= 0 && row[c].r == '›' {
 				if markerRow >= 0 {
-					return refuse("observer has ambiguous uncolored prompts")
+					return fail("observer has ambiguous uncolored prompts")
 				}
 				markerRow, markerCol = r, c
 			}
@@ -461,7 +461,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 	}
 	if markerRow < 0 || grid[markerRow][markerCol].r != '›' ||
 		y != markerRow || x != markerCol+2 {
-		return refuse("observer cursor does not identify an empty composer")
+		return fail("observer cursor does not identify an empty composer")
 	}
 	for r := markerRow; r <= regionEnd; r++ {
 		for c, cell := range grid[r] {
@@ -489,7 +489,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 	}
 	pi := coreComposerStart(plain)
 	if pi < 0 {
-		return refuse("plain capture has no composer")
+		return fail("plain capture has no composer")
 	}
 	plainRows := strings.Split(plain[pi:], "\n")
 	compareEnd := regionEnd
@@ -502,14 +502,14 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			line = strings.TrimSpace(plainRows[i])
 		}
 		if line != rowText(grid[r], false) {
-			return refuse("plain and styled composer disagree")
+			return fail("plain and styled composer disagree")
 		}
 	}
 	observed := rowText(grid[markerRow][markerCol:], false)
 	ghost := strings.TrimSpace(strings.TrimPrefix(observed, "›"))
 	known := ghost == "" || strings.HasPrefix(ghost, "Try \"") || ghost == "Ask Codex to do anything" || ghost == "Ask a follow-up question"
 	if !known {
-		return refuse("unknown dim composer content")
+		return fail("unknown dim composer content")
 	}
 	return nil
 }

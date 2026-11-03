@@ -318,7 +318,7 @@ func (h *coreHost) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		return "", e
 	}
 	var handle string
-	e = h.d.FS.Locked(path+".lock", 30*time.Second, func() error { var err error; handle, err = h.spawnLocked(ctx, c, parent, o, path); return err })
+	e = h.d.FS.Locked(path, 30*time.Second, func() error { var err error; handle, err = h.spawnLocked(ctx, c, parent, o, path); return err })
 	return handle, e
 }
 func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerminal, o SpawnOpts, intentPath string) (result string, failure error) {
@@ -518,7 +518,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 	}
 	sum := sha256.Sum256([]byte(text))
 	receipt := p + "." + hex.EncodeToString(sum[:]) + ".delivery"
-	return h.d.FS.Locked(receipt+".lock", 30*time.Second, func() error {
+	return h.d.FS.Locked(receipt, 30*time.Second, func() error {
 		var prior coreDelivery
 		b, readErr := h.d.FS.ReadFile(receipt)
 		if readErr == nil {
@@ -800,7 +800,7 @@ func (h *coreHost) rememberPIDs(v coreHandle, observed []int) error {
 		return e
 	}
 	p += ".pids"
-	return h.d.FS.Locked(p+".lock", 30*time.Second, func() error {
+	return h.d.FS.Locked(p, 30*time.Second, func() error {
 		seen := map[int]bool{}
 		var old []int
 		b, e := h.d.FS.ReadFile(p)
