@@ -79,6 +79,54 @@ func TestTrainLandsAll(t *testing.T) {
 	}
 }
 
+func TestTrainSkipsMissingReview(t *testing.T) {
+	for _, stale := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stale=%t", stale), func(t *testing.T) {
+			w, e := sectionTrainWorld(t, []string{completePRSections, completePRSections})
+			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["test -f work.txt && test ! -f work2.txt"]}}`)
+			w.record("w1", gittest.Run(t, w.worker, "rev-parse", "w1"), verdict.ReviewQuality)
+			if stale {
+				w.record("w2", gittest.Run(t, w.worker, "rev-parse", "main"), verdict.ReviewQuality)
+			}
+			res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w2", "w1"}, Order: []string{"8", "7"}, CheckReviews: true})
+			t.Logf("AC-1: excluded=%d landed=%d verified=%d", len(res.Culprits), len(res.Landed), len(res.Verified))
+			if err != nil || res.Verdict != GatePass || !res.Changed || !slices.Equal(res.Landed, []string{"w1"}) || len(res.Members) != 1 || len(res.Culprits) != 1 || len(res.Verified) != 1 || w.onMain("work2.txt") || !w.onMain("work.txt") {
+				t.Fatalf("a missing or stale review must exclude only its PR: %+v %v", res, err)
+			}
+			c := res.Culprits[0]
+			if c.Target != "w2" || c.PR != "https://github.com/o/r/pull/8" || c.BlockedBy != GateReviewMissing || !strings.Contains(c.Gate.Err, "review-quality verdict") || !strings.Contains(strings.Join(res.Notes, "\n"), "TRAIN-SKIP w2") {
+				t.Fatalf("excluded member must carry its missing-review reason: %+v", res)
+			}
+		})
+	}
+}
+
+func TestTrainAllMembersExcluded(t *testing.T) {
+	for _, sectionMissing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("sectionMissing=%t", sectionMissing), func(t *testing.T) {
+			body := completePRSections
+			want := GateReviewMissing
+			if sectionMissing {
+				body, want = "", GateAssumptionsMissing
+			}
+			w, e := sectionTrainWorld(t, []string{body, completePRSections})
+			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["false"]}}`)
+			w.record("w2", gittest.Run(t, w.worker, "rev-parse", "main"), verdict.ReviewQuality)
+			res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2"}, CheckReviews: true})
+			t.Logf("AC-2: excluded=%d landed=%d verified=%d refused=%t", len(res.Culprits), len(res.Landed), len(res.Verified), res.Refused(err))
+			if err != nil || !res.Refused(err) || res.Verdict != want || res.Changed || len(res.Members) != 0 || len(res.Landed) != 0 || len(res.Verified) != 0 || len(res.Culprits) != 2 {
+				t.Fatalf("all exclusions must refuse, naming every member without verifying or landing: %+v %v", res, err)
+			}
+			for i, reason := range []string{want, GateReviewMissing} {
+				c := res.Culprits[i]
+				if c.Target != fmt.Sprintf("w%d", i+1) || c.BlockedBy != reason || !strings.Contains(strings.Join(res.Notes, "\n"), "TRAIN-SKIP "+c.Target) {
+					t.Errorf("excluded member %d: %+v", i, c)
+				}
+			}
+		})
+	}
+}
+
 func TestTrainBisectsToTheCulprit(t *testing.T) {
 	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2", "b3", "b4")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}})
