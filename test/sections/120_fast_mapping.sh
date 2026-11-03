@@ -44,6 +44,16 @@ done
 OUT=$(fast_plan internal/section/section.go)
 grep -qx "plan: go ./internal/acceptance" <<<"$OUT" || fail "an internal/section change should run its dependents: $OUT"
 
+# Shared test helpers must select the real repository callers from the report.
+OUT=$(fast_plan internal/gittest/gittest.go)
+for dep in ./internal/worker ./internal/cli ./cmd/rota; do
+  grep -qx "plan: go $dep" <<<"$OUT" || fail "a gittest change should select test consumer $dep: $OUT"
+done
+OUT=$(fast_plan internal/testiso/tripwire.go)
+for dep in ./internal/host ./internal/worker ./internal/cli ./cmd/rota; do
+  grep -qx "plan: go $dep" <<<"$OUT" || fail "a testiso change should select test consumer $dep: $OUT"
+done
+
 OUT=$(fast_plan internal/config/keys.go)
 grep -qx "plan: frozen-config" <<<"$OUT" || fail "a config change should run TestFrozenConfig: $OUT"
 OUT=$(fast_plan internal/knowledge/instructions.go)
@@ -60,6 +70,54 @@ if grep -q "section" <<<"$OUT"; then fail "other worker files must not run secti
 pass "fast.sh adds dependents of shared packages, the frozen config test and doctor/host smoke sections"
 
 pass "fast.sh selects package, testdata, embed and infra checks; unmapped files select none"
+
+# #2628: use a real graph to cover internal/external tests and their transitive
+# imports. A production importer of a test-only consumer must stay unselected.
+FAST_GRAPH=$(mktemp -d)
+mkdir -p "$FAST_GRAPH/test"
+cp "$TESTDIR/fast.sh" "$FAST_GRAPH/test/fast.sh"
+printf 'module example.com/fast\n\ngo 1.22\n' > "$FAST_GRAPH/go.mod"
+for pkg in leaf bridge directinternal directexternal transinternal transexternal production unrelated testclient; do
+  mkdir -p "$FAST_GRAPH/$pkg"
+  printf 'package %s\n' "$pkg" > "$FAST_GRAPH/$pkg/$pkg.go"
+done
+cat > "$FAST_GRAPH/bridge/bridge.go" <<'EOF'
+package bridge
+import _ "example.com/fast/leaf"
+EOF
+cat > "$FAST_GRAPH/production/production.go" <<'EOF'
+package production
+import _ "example.com/fast/bridge"
+EOF
+cat > "$FAST_GRAPH/testclient/testclient.go" <<'EOF'
+package testclient
+import _ "example.com/fast/directinternal"
+EOF
+for pkg in directinternal directexternal transinternal transexternal; do
+  case "$pkg" in *external) test_pkg="${pkg}_test" ;; *) test_pkg="$pkg" ;; esac
+  case "$pkg" in direct*) helper=leaf ;; *) helper=bridge ;; esac
+  printf 'package %s\nimport _ "example.com/fast/%s"\n' "$test_pkg" "$helper" > "$FAST_GRAPH/$pkg/${pkg}_test.go"
+done
+printf 'package leaf\n' > "$FAST_GRAPH/leaf/leaf_test.go"
+
+OUT=$(GOWORK=off FAST_DRY_RUN=1 bash "$FAST_GRAPH/test/fast.sh" leaf/leaf.go)
+[ "${OUT%%$'\n'*}" = "plan: go ./leaf" ] || fail "a source change should select its package first: $OUT"
+EXPECTED=$(cat <<'EOF'
+plan: go ./bridge
+plan: go ./directexternal
+plan: go ./directinternal
+plan: go ./leaf
+plan: go ./production
+plan: go ./transexternal
+plan: go ./transinternal
+EOF
+)
+[ "$(sort <<<"$OUT")" = "$EXPECTED" ] || fail "a helper change should select exactly its production and test consumers: $OUT"
+
+OUT=$(GOWORK=off FAST_DRY_RUN=1 bash "$FAST_GRAPH/test/fast.sh" leaf/leaf_test.go)
+[ "$OUT" = "plan: go ./leaf" ] || fail "a test-file-only change must not select consumers: $OUT"
+rm -rf "$FAST_GRAPH"
+pass "fast.sh selects exact runnable owners of direct/transitive test imports without propagating test-only edges"
 
 # #672: the gofmt check CI runs fails the gate and the fast tier on an unformatted file.
 GF=$(mktemp -d)/bad.go
