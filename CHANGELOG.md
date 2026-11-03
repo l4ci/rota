@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.29.0 — 2026-11-03
+
+Herdr App workers, Codex weekly capacity, and more reliable parallel rounds.
+
+## New
+
+- Run independent workers in Herdr App through `round.dispatch: herdr-core`. Workers open in persistent app tabs, retain their app space, and survive viewer closure. Rota detects Core automatically inside an app terminal; explicit configuration is also supported. Validated with Herdr App 0.1.12 and Core 0.1.17.
+- Read current Codex weekly capacity and reset time with `rota worker account list` (plain text, JSON, or UI). Round summaries add current readings for resolvable accounts. JSON gains `quota` on Codex account rows and `accountQuotas` in round summaries. These readings do not change scheduling or measure per-worker usage.
+
+## Changed
+
+- New projects receive eight randomly selected worker names. Existing rosters stay unchanged.
+- Round status exposes accepted worker completion separately from the native `hostState`. Escalation reports expose delivery state, attempts, errors, and retry timing so interrupted delivery can be recovered without automatically reposting an uncertain comment.
+
+## Fixed
+
+- Core worker dispatch protects retained drafts, preserves terminal ownership and identity, and refuses uncertain startup, delivery, and cleanup states. Core names include the worker slot; app tabs may still need manual renaming.
+- Relay polling retains completion evidence across captures and discards observations superseded by a new session or relay. Merge trains skip members missing required reviews and explain every exclusion. Failed legacy Herdr startup includes pane diagnostics.
+- Config check and fill agree on required values supplied by local configuration. Filtered cleanup runs only the requested discovery sources. Read-only error translation preserves the supplied error. Fast test selection includes direct and transitive test imports.
+
+## Known limitation
+
+Some Codex completion events record the wrong account name, so affected round summaries report account quota as unavailable. Direct account listing works; historical per-worker quota shares remain unknown. Tracked in [#2638](https://github.com/l4ci/rota/issues/2638).
+
+## Stats
+
+76 commits, 158 files changed, +10,819 −1,416 lines.
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.28.1...v0.29.0
+
 ## v0.28.1 — 2026-11-02
 
 Already-merged PRs pass the gate, `worker done` finds PRs the slot never recorded, and the gate and harness internals move to typed stages.
