@@ -187,7 +187,8 @@ type Row struct {
 	PRState   string
 	HostState string
 	// State is the derived state of an external slot (done, busy, idle,
-	// unknown); "" for a slot a host drives, whose state is HostState.
+	// unknown), or a driven slot's still-current accepted completion (done).
+	// HostState remains the native host observation.
 	State      string
 	Tab        string
 	Registered bool
@@ -505,7 +506,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 
 	agents, hostOK := e.readHost(ctx, rep)
 	claimed := map[int]bool{}
-	alive := map[string]bool{} // slots the host shows an agent or window for
+	alive := map[string]bool{}       // slots the host shows an agent or window for
+	sameSession := map[string]bool{} // a completion belongs to this exact host session
 	for _, r := range rows {
 		if !hostOK {
 			break
@@ -522,6 +524,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if i := matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
 			claimed[i] = true
 			alive[r.Name] = true
+			if s := slotObj[r.Name]; s != nil {
+				sameSession[r.Name] = s.PaneHandle() != "" && s.PaneHandle() == agents[i].Handle()
+			}
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
 			// An internal tool wait can look blocked to the host. Only
 			// harnesses with that vocabulary need a pane read; ordinary
@@ -759,10 +764,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 
 	e.leaseFinding(ctx, root, rep)
 
+	// Host and forge reads can outlast a relay or a session replacement. Re-read
+	// without writing: a missing/unreadable registry cannot vouch for completion.
+	current := worker.LoadRegistryTolerant(root)
 	for _, r := range rows {
 		if r.HostState == ExternalHost {
 			// Merged stays listed until the gate or reconcile --apply releases it.
 			r.State = e.ExternalState(ctx, root, forgeOK && !rep.views[r.Name].prErr, rep.views[r.Name].base, r)
+		} else if sameSession[r.Name] {
+			r.State = drivenCompletion(r, slotObj[r.Name], current.Slot(r.Name))
 		}
 		rep.Rows = append(rep.Rows, *r)
 	}
@@ -783,6 +793,40 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	rep.Limits = limits.Waiting(limits.Load(root))
 	return rep, nil
+}
+
+// drivenCompletion exposes accepted completion separately from native idle.
+// Native work outranks it, and a dispatch during this status read invalidates
+// the session/turn snapshot even when a replacement reuses the same handle.
+func drivenCompletion(r *Row, before, current *worker.Slot) string {
+	if before == nil || current == nil || r.Branch != current.Branch() {
+		return ""
+	}
+	switch r.HostState {
+	case "", "idle", "done": // tmux has no native agent state
+	default:
+		return ""
+	}
+	for _, s := range []*worker.Slot{before, current} {
+		if !worker.IsDone(s.State()) || s.RelayPending() != 0 || s.AwaitingDone() || s.Unsent() || s.IsExternal() {
+			return ""
+		}
+		if ev := s.Event(); ev != nil {
+			at, err := stamp.Parse(s.ActiveAt())
+			if err != nil || worker.Decide(ev, worker.PollRow{Name: r.Name, State: worker.StateDone}, at).State != worker.StateDone {
+				return ""
+			}
+		}
+	}
+	if before.Task() != current.Task() || before.Branch() != current.Branch() || before.PaneHandle() != current.PaneHandle() ||
+		before.Worktree() != current.Worktree() || before.Attempt() != current.Attempt() || before.TurnSeq() != current.TurnSeq() || before.ActiveAt() != current.ActiveAt() {
+		return ""
+	}
+	oldEvent, newEvent := before.Event(), current.Event()
+	if (oldEvent == nil) != (newEvent == nil) || (oldEvent != nil && oldEvent.Seq != newEvent.Seq) {
+		return ""
+	}
+	return "done"
 }
 
 // issueBounces reads each row's bounce count from the issue when round.support

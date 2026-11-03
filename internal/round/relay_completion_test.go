@@ -16,6 +16,85 @@ type relayRoundHost struct {
 	panes []string
 }
 
+func TestStatusDrivenCompletionRejectsNewerWork(t *testing.T) {
+	for name, tc := range map[string]struct {
+		native string
+		absent bool
+		before func(*worker.Slot)
+		during func(*worker.Slot)
+		want   string
+	}{
+		"native idle": {native: "idle", want: "done"},
+		"native done": {native: "done", want: "done"},
+		"tmux alive":  {want: "done"},
+		"working":     {native: "working"},
+		"blocked":     {native: "blocked"},
+		"unknown":     {native: "unknown"},
+		"absent":      {absent: true},
+		"pending relay": {native: "idle", before: func(s *worker.Slot) {
+			s.SetRelayPending(1, "2026-11-03T10:00:00Z")
+		}},
+		"transfer awaits done": {native: "idle", before: func(s *worker.Slot) { s.SetAwaitingDone(true) }},
+		"unsent brief":         {native: "idle", before: func(s *worker.Slot) { s.SetUnsent(true) }},
+		"new question": {native: "idle", before: func(s *worker.Slot) {
+			s.SetEvent(worker.EventQuestion, "Which next?", s.ActiveAt())
+		}},
+		"answered old question": {native: "idle", want: "done", before: func(s *worker.Slot) {
+			at := s.ActiveAt()
+			s.SetEvent(worker.EventQuestion, "Already answered", "2000-01-01T00:00:00Z")
+			s.Touch(at)
+		}},
+		"relay during snapshot": {native: "idle", during: func(s *worker.Slot) {
+			s.Dispatch(s.Handle(), "", "", "2026-11-03T10:00:00Z")
+			s.SetRelayPending(1, "2026-11-03T10:00:00Z")
+		}},
+		"new session during snapshot": {native: "idle", during: func(s *worker.Slot) {
+			s.Dispatch("new:session", "13", "", "2026-11-03T10:00:00Z")
+		}},
+		"completed replacement reuses handle": {native: "idle", during: func(s *worker.Slot) {
+			s.Dispatch(s.Handle(), "13", "", "2026-11-03T10:00:00Z")
+			if err := s.MarkState("done", "2026-11-03T10:00:00Z"); err != nil {
+				panic(err)
+			}
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newMoveFx(t)
+			f.finish(t, "ben", pr7)
+			if tc.before != nil {
+				if _, err := worker.UpdateSlot(f.root, "ben", tc.before); err != nil {
+					t.Fatal(err)
+				}
+			}
+			handle := f.slot("ben").Handle()
+			f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
+				if tc.during != nil {
+					if _, err := worker.UpdateSlot(f.root, "ben", tc.during); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if tc.absent {
+					return nil, nil
+				}
+				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: tc.native}}, nil
+			}
+			rep, err := f.env.Status(bg, f.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, row := range rep.Rows {
+				if row.Name == "ben" {
+					if row.State != tc.want || row.HostState != tc.native {
+						t.Fatalf("state=%q hostState=%q, want %q/%q", row.State, row.HostState, tc.want, tc.native)
+					}
+					return
+				}
+			}
+			t.Fatal("status omitted ben")
+		})
+	}
+}
+
 func (h *relayRoundHost) Capture(context.Context, string, string, int) string {
 	if len(h.panes) == 0 {
 		return h.capture
@@ -78,8 +157,8 @@ func TestRelayCompletionWithoutCommitAllowsNextAssignment(t *testing.T) {
 			for _, row := range status.Rows {
 				if row.Name == "ben" {
 					found = true
-					if row.HostState != "idle" || f.slot("ben").State() != "done" {
-						t.Fatalf("native idle status must preserve recorded completion: %+v", row)
+					if row.HostState != "idle" || row.State != "done" || f.slot("ben").State() != "done" {
+						t.Fatalf("native idle status must expose recorded completion separately: %+v", row)
 					}
 				}
 			}
