@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +18,19 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+// receiptInvocationKey is private to the CLI: durable operations can retain the
+// receipt identity before the wrapper writes its result, without adding flags.
+type receiptInvocationKey struct{}
+
+type receiptInvocation struct {
+	ID, Fingerprint string
+}
+
+func invocationReceipt(ctx context.Context) receiptInvocation {
+	id, _ := ctx.Value(receiptInvocationKey{}).(receiptInvocation)
+	return id
+}
 
 // receipted gives a state-writing verb --request-id and a receipt per call
 // (#822); receiptedVerbs below is the one list of which verbs get it, and the
@@ -56,7 +70,12 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			var runErr error
 			var ae *Error
 			out, err := receipt.New(root).Do(call, func(prior receipt.Entry) (receipt.Entry, bool) {
-				res, runErr = run(c, args)
+				res, runErr = func() (Result, error) {
+					previous := c.ctx
+					c.ctx = context.WithValue(c.Context(), receiptInvocationKey{}, receiptInvocation{ID: id, Fingerprint: fp})
+					defer func() { c.ctx = previous }()
+					return run(c, args)
+				}()
 				e := receipt.Entry{Status: receipt.Done}
 				if runErr != nil {
 					ae = asError(runErr)

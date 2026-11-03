@@ -173,13 +173,14 @@ func fromTracker(err error) *Error {
 
 // SendOpts are the flags of `rota round escalate send`.
 type SendOpts struct {
-	Number  int
-	Key     tracker.IssueKey // an issue thread's key; empty means issue Number
-	PR      bool
-	Slot    string
-	Title   string
-	Body    string
-	Timeout time.Duration
+	RequestID, Fingerprint string
+	Number                 int
+	Key                    tracker.IssueKey // an issue thread's key; empty means issue Number
+	PR                     bool
+	Slot                   string
+	Title                  string
+	Body                   string
+	Timeout                time.Duration
 	Choice
 }
 
@@ -208,94 +209,15 @@ type SendResult struct {
 	Warnings []string
 }
 
-// Send posts the escalation comment, raises the notification and records the
-// entry. The comment goes first, so a failed write leaves a comment and no
-// record: that is exit 1 with the comment's url in the failure data.
+// Send durably reserves an escalation before any remote mutation. Replays use
+// the same operation; ambiguous remote outcomes are reconciled, never resent.
 func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, error) {
 	env = env.withDefaults()
-	var res SendResult
-	if o.Slot != "" {
-		reg, err := worker.LoadRegistry(root)
-		if err != nil {
-			return res, err
-		}
-		if reg.Slot(o.Slot) == nil {
-			return res, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--slot %s is not a registered slot", o.Slot)}
-		}
-	}
-	kind := kindOf(o.PR)
-	// The pending check and NextID below read the registry outside its lock.
-	// That is safe only while one orchestrator sends escalations at a time
-	// (ratified by the orchestrator, round 4).
-	list := Load(root)
-	if p, ok := PendingOn(list, kind, o.Ref()); ok {
-		return res, &Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("escalation %s is still pending on %s %s", p.ID, kind, o.Ref()),
-			Data: pendingData(p.ID)}
-	}
-	if env.Forge == nil {
-		return res, &Error{Exit: exitcode.ExitUnavailable, Message: "no forge configured"}
-	}
-	f, err := env.Forge(ctx, root)
+	e, err := reserve(env, root, o)
 	if err != nil {
-		return res, fromTracker(err)
+		return SendResult{}, err
 	}
-	id := NextID(list)
-	text := Compose(id, o.Title, o.Body, o.Choice)
-	var cid string
-	if o.PR {
-		cid, err = f.AddMRNote(ctx, o.Number, text)
-	} else {
-		cid, err = f.AddComment(ctx, o.issueKey(), text)
-	}
-	if err != nil {
-		te := fromTracker(err)
-		if te.Exit == exitcode.ExitResolution {
-			te.Message = fmt.Sprintf("no such %s %s: %s", kind, o.Ref(), te.Message)
-		}
-		return res, te
-	}
-	var u string
-	if o.PR {
-		u, err = f.PRCommentURL(ctx, o.Number, cid)
-	} else {
-		u, err = f.CommentURL(ctx, o.issueKey(), cid)
-	}
-	if err != nil {
-		res.Warnings = append(res.Warnings, "comment posted but its url could not be read: "+err.Error())
-	} else {
-		res.URL = u
-	}
-
-	res.Notified, res.Warnings = notify(ctx, env, root, id, o, res.Warnings)
-
-	now := env.Now()
-	e := Entry{ID: id, Kind: kind, Number: o.Number, Slot: o.Slot, Title: o.Title, CommentID: cid,
-		SentAt: Time(now), Notified: res.Notified, Status: StatusPending,
-		Options: o.Options, Recommend: o.Recommend, Cost: o.Cost}
-	if o.Timeout > 0 {
-		e.Deadline = Time(now.Add(o.Timeout))
-	}
-	if !o.PR {
-		e.Number = 0
-		if n, ok := o.issueKey().Number(); ok {
-			e.Number = n
-		} else {
-			e.Key = o.issueKey().String()
-		}
-	}
-	res.Entry = e
-	err = Update(root, func(list []Entry) []Entry {
-		return append(list, e)
-	})
-	if err != nil {
-		d := jsonx.NewObject()
-		d.Set("id", id)
-		d.Set("commentId", cid)
-		d.Set("url", res.URL)
-		d.Set("changed", false)
-		return res, &Error{Exit: exitcode.ExitFailed, Message: fmt.Sprintf("comment %s posted (%s) but the record was not written: %v", cid, res.URL, err), Data: d}
-	}
-	return res, nil
+	return deliver(ctx, env, root, e, true)
 }
 
 func pendingData(id string) *jsonx.Object {
@@ -367,6 +289,27 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	for i, e := range targets {
 		if !IsOpen(e) {
 			continue
+		}
+		if e.Delivery != nil && (e.Delivery.State != DeliveryDelivered || !e.Notified) {
+			before := e.Object()
+			recovered, recoverErr := deliver(ctx, env, root, e, false)
+			e = recovered.Entry
+			if e.ID == "" {
+				e = targets[i]
+			}
+			targets[i] = e
+			b, _ := jsonx.MarshalCompact(before)
+			a, _ := jsonx.MarshalCompact(e.Object())
+			if string(a) != string(b) {
+				res.Changed = true
+			}
+			res.Warnings = append(res.Warnings, recovered.Warnings...)
+			if recoverErr != nil {
+				res.Warnings = append(res.Warnings, recoverErr.Error())
+			}
+			if e.Delivery.State != DeliveryDelivered {
+				continue
+			}
 		}
 		if forge == nil {
 			if env.Forge == nil {
