@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -131,6 +132,40 @@ func TestCheckPassesWithNoGlobalAndEmptyLocal(t *testing.T) {
 	writeFile(t, filepath.Join(root, ".rota", "config.local.json"), "{}\n")
 	if code, out := textRun(t, "-C", root, "config", "check"); code != 0 || strings.Contains(out, "warn:") {
 		t.Errorf("check: %d %q", code, out)
+	}
+}
+
+func TestConfigCheckThenFillLocalRequiredValue(t *testing.T) {
+	isolateGlobal(t)
+	root := filledProject(t, "{}")
+	doc, err := jsonx.Decode([]byte(readConfig(t, root)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.(*jsonx.Object).Delete("docs")
+	body, err := jsonx.MarshalCompact(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, ".rota", "config.json"), string(body))
+	const local = `{"docs":{"path":"private-docs"}}`
+	localPath := filepath.Join(root, ".rota", "config.local.json")
+	writeFile(t, localPath, local)
+	code, envelope, _ := rotaRun(t, "--json", "-C", root, "config", "check")
+	missing, _ := get(dataOf(envelope), "missing").([]any)
+	if code != 0 || get(dataOf(envelope), "status") != config.UpToDate || len(missing) != 0 {
+		t.Fatalf("check: %d %v", code, envelope)
+	}
+	code, envelope, _ = rotaRun(t, "--json", "-C", root, "config", "fill")
+	filled, ok := get(dataOf(envelope), "filled").([]any)
+	if code != 0 || !ok || len(filled) != 0 || get(dataOf(envelope), "changed") != false {
+		t.Fatalf("fill: %d %v, want filled [] and changed false", code, envelope)
+	}
+	if got := readConfig(t, root); got != string(body) {
+		t.Errorf("project config rewritten: %s", got)
+	}
+	if got, err := os.ReadFile(localPath); err != nil || string(got) != local {
+		t.Errorf("local config changed: %s, %v", got, err)
 	}
 }
 
