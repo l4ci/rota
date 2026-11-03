@@ -14,8 +14,9 @@
 # A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
 # (the piped grep -q lint), which scans all of them.
 # A non-test .go file (or embed asset) in a package also runs every package that
-# imports it, transitively (go list .Deps), so a change to internal/fsio runs the
-# dependents and the internal/cli goldens (#1303). A path-to-check table follows
+# imports it in production or tests, transitively (go list -test .Deps), so an
+# internal/fsio change runs dependents and the internal/cli goldens (#1303).
+# A path-to-check table follows
 # the loop: internal/config runs TestFrozenConfig, internal/doctor smoke 83,
 # internal/host and internal/worker/dispatch.go smoke 51.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
@@ -110,16 +111,27 @@ for f in "$@"; do
   esac
 done
 
-# Dependents of a changed source package: every package whose transitive imports
-# include it. rel() strips the module path so names match add_pkg's "./dir".
+# Dependents of a changed source package: every package whose production or test
+# transitive imports include it. Test variants map to their runnable owner;
+# production Match records remain, while synthetic test mains are excluded.
+# rel() strips the literal module path so names match add_pkg's "./dir".
 if [ "${#src_pkgs[@]}" -gt 0 ]; then
   mod="$(go list -m)"
   while IFS= read -r dep; do
     add_pkg "$dep"
-  done < <(go list -f '{{.ImportPath}} {{join .Deps " "}}' ./... | awk -v mod="$mod" -v list="${src_pkgs[*]}" '
-    function rel(p) { if (p == mod) return "."; sub("^" mod "/", "./", p); return p }
+  done < <(go list -test -f '{{if or .ForTest .Match}}{{if .ForTest}}{{.ForTest}}{{else}}{{.ImportPath}}{{end}} {{join .Deps " "}}{{end}}' ./... | awk -v mod="$mod" -v list="${src_pkgs[*]}" '
+    function rel(p) {
+      if (p == mod) return "."
+      if (index(p, mod "/") == 1) return "./" substr(p, length(mod)+2)
+      return ""
+    }
     BEGIN { n = split(list, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
-    { for (i = 2; i <= NF; i++) if (rel($i) in want) { print rel($1); break } }' | sort -u)
+    {
+      gsub(/ \[[^]]+\]/, "", $0)
+      owner = rel($1)
+      if (owner == "") next
+      for (i = 2; i <= NF; i++) if (rel($i) in want) { print owner; break }
+    }' | sort -u)
 fi
 
 # Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
