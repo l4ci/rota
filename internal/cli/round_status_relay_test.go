@@ -101,6 +101,9 @@ func TestRoundStatusRelayCompletionAndNextAssignment(t *testing.T) {
 			t.Fatal("status omitted dana")
 		}
 		text := run("round", "status")
+		if !strings.HasPrefix(text, "dana\t") && !strings.Contains(text, "\ndana\t") {
+			t.Fatal("text status omitted dana")
+		}
 		for _, line := range strings.Split(text, "\n") {
 			if strings.HasPrefix(line, "dana\t") && strings.Contains(line, "\tstate done") != wantDone {
 				t.Fatalf("text completion mismatch: %q, want done=%v", line, wantDone)
