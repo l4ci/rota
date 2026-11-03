@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -88,7 +89,6 @@ func TestCodexQuotaProtocol(t *testing.T) {
 		{"RPC failure", `{"id":1,"error":{"code":-1,"message":"secret-token"}}`, "authentication or source unavailable"},
 		{"EOF", `{"id":1,"result":{}}`, "closed"},
 		{"malformed", `secret-token`, "malformed"},
-		{"changed", "{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"method\":\"account/updated\"}\n", "account changed"},
 		{"oversized", strings.Repeat("x", 300*1024), "oversized"},
 		{"message bound", strings.Repeat("{\"method\":\"noise\"}\n", 65), "message limit"},
 		{"no auth", "{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":null}}\n", "authentication unavailable"},
@@ -197,5 +197,40 @@ func TestCodexQuotaInitialAccountAnnouncement(t *testing.T) {
 	snapshot := (codex{}).ReadQuota(context.Background(), QuotaRequest{Ambient: true}, opts)
 	if snapshot.Status != "available" || snapshot.Weekly == nil {
 		t.Fatalf("initial account announcement precedes the account baseline and must allow quota read: status=%s reason=%s", snapshot.Status, snapshot.Reason)
+	}
+}
+
+func TestCodexQuotaReobservesAfterAccountUpdate(t *testing.T) {
+	opts := quotaFixture(`{}`)
+	var requests strings.Builder
+	opts.Exchange = func(ctx context.Context, cmd proc.Cmd, talk func(io.Reader, io.Writer) error) error {
+		return talk(strings.NewReader("{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"method\":\"account/updated\",\"params\":{\"authMode\":\"chatgpt\",\"planType\":\"business\"}}\n{\"id\":3,\"result\":{\"accountId\":\"old-identity\",\"rateLimits\":{\"primary\":{\"usedPercent\":20,\"windowDurationMins\":10080,\"resetsAt\":1794326854}}}}\n{\"id\":4,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"id\":5,\"result\":{\"accountId\":\"new-identity\",\"rateLimits\":{\"primary\":{\"usedPercent\":70,\"windowDurationMins\":10080,\"resetsAt\":1794326854}}}}\n"), &requests)
+	}
+	s := (codex{}).ReadQuota(context.Background(), QuotaRequest{Ambient: true}, opts)
+	if s.Status != "available" || s.Weekly == nil || s.Weekly.UsedPercent == nil || *s.Weekly.UsedPercent != 70 || *s.Weekly.RemainingPercent != 30 {
+		t.Fatalf("must discard invalidated quota and return fresh reading: status=%s reason=%s weekly=%+v", s.Status, s.Reason, s.Weekly)
+	}
+	if strings.Count(requests.String(), `"method":"account/read"`) != 2 || strings.Count(requests.String(), `"method":"account/rateLimits/read"`) != 2 || !strings.Contains(s.SourceDetail, "refreshed after account update") {
+		t.Fatalf("recovery must read again and be explicit: requests=%s detail=%s", requests.String(), s.SourceDetail)
+	}
+}
+
+func TestCodexQuotaRepeatedAccountUpdatesFailClosed(t *testing.T) {
+	for _, duringBaseline := range []bool{false, true} {
+		t.Run(fmt.Sprint(duringBaseline), func(t *testing.T) {
+			opts := quotaFixture(`{}`)
+			prefix := "{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"method\":\"account/updated\"}\n{\"id\":3,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":20,\"windowDurationMins\":10080,\"resetsAt\":1794326854}}}}\n"
+			suffix := "{\"method\":\"account/updated\"}\n"
+			if !duringBaseline {
+				suffix = "{\"id\":4,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n" + suffix
+			}
+			opts.Exchange = func(ctx context.Context, cmd proc.Cmd, talk func(io.Reader, io.Writer) error) error {
+				return talk(strings.NewReader(prefix+suffix), io.Discard)
+			}
+			s := (codex{}).ReadQuota(context.Background(), QuotaRequest{Ambient: true}, opts)
+			if s.Status != "unavailable" || s.Weekly != nil || !strings.Contains(s.Reason, "account changed") {
+				t.Fatalf("repeated account updates must not return an old quota: %+v", s)
+			}
+		})
 	}
 }

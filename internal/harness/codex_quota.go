@@ -53,6 +53,7 @@ func (codex) ReadQuota(ctx context.Context, req QuotaRequest, opts QuotaOptions)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var payload json.RawMessage
+	refreshed := false
 	err := exchange(ctx, proc.Cmd{Name: Codex, Args: []string{"app-server", "--listen", "stdio://"}, Dir: opts.UserHome, Env: []string{"CODEX_HOME=" + s.Home}, Timeout: proc.NoTimeout, Group: true, MaxOutput: 1024 * 1024}, func(r io.Reader, w io.Writer) error {
 		rpc := quotaRPC{scan: bufio.NewScanner(r), out: json.NewEncoder(w)}
 		rpc.scan.Buffer(make([]byte, 4096), 256*1024)
@@ -62,25 +63,41 @@ func (codex) ReadQuota(ctx context.Context, req QuotaRequest, opts QuotaOptions)
 		if err := rpc.out.Encode(map[string]any{"method": "initialized"}); err != nil {
 			return err
 		}
-		account, err := rpc.call(2, "account/read", map[string]any{"refreshToken": false})
-		if err != nil {
+		readAccount := func(id int) error {
+			account, err := rpc.call(id, "account/read", map[string]any{"refreshToken": false})
+			if err != nil {
+				return err
+			}
+			var a struct {
+				Account *struct {
+					Type string `json:"type"`
+				} `json:"account"`
+			}
+			if json.Unmarshal(account, &a) != nil {
+				return quotaFailure("malformed account response")
+			}
+			if a.Account == nil || a.Account.Type == "apiKey" {
+				return quotaFailure("subscription authentication unavailable")
+			}
+			return nil
+		}
+		if err := readAccount(2); err != nil {
 			return err
 		}
-		var a struct {
-			Account *struct {
-				Type string `json:"type"`
-			} `json:"account"`
-		}
-		if json.Unmarshal(account, &a) != nil {
-			return quotaFailure("malformed account response")
-		}
-		if a.Account == nil || a.Account.Type == "apiKey" {
-			return quotaFailure("subscription authentication unavailable")
-		}
-		// Initialization may announce account state before account/read returns.
-		// Only updates after this baseline invalidate the quota observation.
 		rpc.accountObserved = true
+		var err error
 		payload, err = rpc.call(3, "account/rateLimits/read", nil)
+		if errors.Is(err, quotaAccountChanged) {
+			// Startup routing discovery can announce the initial account late.
+			// Discard that quota response and re-observe in this process once;
+			// matching auth mode/plan cannot prove the remote identity is equal.
+			rpc.recovering = true
+			if err := readAccount(4); err != nil {
+				return err
+			}
+			payload, err = rpc.call(5, "account/rateLimits/read", nil)
+			refreshed = err == nil
+		}
 		return err
 	})
 	s.ObservedAt = now().UTC()
@@ -99,10 +116,16 @@ func (codex) ReadQuota(ctx context.Context, req QuotaRequest, opts QuotaOptions)
 			return fail("app-server unavailable or exchange failed")
 		}
 	}
-	return parseCodexQuota(s, payload)
+	snapshot := parseCodexQuota(s, payload)
+	if refreshed {
+		snapshot.SourceDetail += "; refreshed after account update"
+	}
+	return snapshot
 }
 
 type quotaFailure string
+
+const quotaAccountChanged quotaFailure = "account changed during quota read"
 
 func (e quotaFailure) Error() string { return string(e) }
 
@@ -111,9 +134,11 @@ type quotaRPC struct {
 	out             *json.Encoder
 	messages        int
 	accountObserved bool
+	recovering      bool
 }
 
 func (r *quotaRPC) call(id int, method string, params any) (json.RawMessage, error) {
+	invalidated := false
 	if err := r.out.Encode(map[string]any{"id": id, "method": method, "params": params}); err != nil {
 		return nil, err
 	}
@@ -134,10 +159,17 @@ func (r *quotaRPC) call(id int, method string, params any) (json.RawMessage, err
 			return nil, quotaFailure("malformed app-server response")
 		}
 		if m.Method == "account/updated" && r.accountObserved {
-			return nil, quotaFailure("account changed during quota read")
+			if r.recovering || invalidated {
+				return nil, quotaFailure("account changed repeatedly during quota read")
+			}
+			invalidated = true
+			continue
 		}
 		if m.ID == nil || *m.ID != id {
 			continue
+		}
+		if invalidated {
+			return nil, quotaAccountChanged
 		}
 		if m.Error != nil {
 			if m.Error.Code == -32601 {
@@ -149,6 +181,9 @@ func (r *quotaRPC) call(id int, method string, params any) (json.RawMessage, err
 			return nil, quotaFailure("missing app-server result")
 		}
 		return m.Result, nil
+	}
+	if invalidated {
+		return nil, quotaFailure("account changed and source closed before quota response")
 	}
 	if r.scan.Err() != nil {
 		return nil, quotaFailure("malformed or oversized app-server response")
