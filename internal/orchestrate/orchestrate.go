@@ -125,6 +125,13 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 		return p, &Error{Code: "unavailable", Msg: err.Error()}
 	}
 	p.Host = l.Kind
+	if l.Kind == host.HerdrCore {
+		agent, err = harness.CoreShellCommand(h.Name(), agent)
+		if err != nil {
+			return p, &Error{Code: "config", Msg: err.Error()}
+		}
+		p.Supervisor = append(append([]string(nil), sup...), append([]string{"--"}, agent...)...)
+	}
 	switch {
 	case l.Kind == host.Solo || l.Kind == host.HerdrCore:
 		p.Mode = ModeInPlace

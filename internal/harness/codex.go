@@ -267,6 +267,12 @@ func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (stri
 	if err != nil {
 		return "", nil, refuse(Unavailable, "cannot add the prompt-check hook to %s: %v", c.CommandKey(), err)
 	}
+	if s.HerdrCore {
+		out, err = codexCoreShellLine(out)
+		if err != nil {
+			return "", nil, refuse(Unavailable, "cannot preserve Core shell identity: %v", err)
+		}
+	}
 	return out, key, nil
 }
 
@@ -364,6 +370,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	}
 	set.StateDir = CodexSlotDir(cd, o.Slot)
 	set.Worktree = o.Worktree
+	set.HerdrCore = o.HerdrCore
 	if o.Worktree == "" {
 		return set, refuse(Resolution, "slot '%s' has no worktree to trust", o.Slot)
 	}

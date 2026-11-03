@@ -190,6 +190,62 @@ func coreSpawn(t *testing.T, h Host) string {
 	}
 	return s
 }
+
+func TestCoreAdapterSpawnCarriesScopedRotaContext(t *testing.T) {
+	host, f := coreFixture(t)
+	h := host.(*coreHost)
+	original := h.d.Getenv
+	values := map[string]string{"ROTA_CONFIG_DIR": "/fixture/config", "ROTA_CORE_STATE_DIR": original("ROTA_CORE_STATE_DIR"), "ROTA_ROUND_HOLDER_PID": "1234", "ROTA_SLOT": "parent", "ROTA_ATTEMPT": "parent-attempt", "API_TOKEN": "do-not-copy", "ROTA_UNKNOWN": "do-not-copy"}
+	h.d.Getenv = func(k string) string {
+		if value, ok := values[k]; ok {
+			return value
+		}
+		return original(k)
+	}
+	if _, err := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex", Env: []string{"ROTA_SLOT=dana", "ROTA_PORT_BASE=40000"}}); err != nil {
+		t.Fatal(err)
+	}
+	env := f.run["env"].(map[string]any)
+	for _, key := range []string{"ROTA_CONFIG_DIR", "ROTA_CORE_STATE_DIR", "ROTA_ROUND_HOLDER_PID"} {
+		if env[key] != values[key] {
+			t.Errorf("Core child context %s=%v want %q", key, env[key], values[key])
+		}
+	}
+	if env["ROTA_SLOT"] != "dana" || env["ROTA_PORT_BASE"] != "40000" {
+		t.Fatal("child slot allocation changed")
+	}
+	for _, key := range []string{"HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "ROTA_ATTEMPT", "API_TOKEN", "ROTA_UNKNOWN"} {
+		if _, ok := env[key]; ok {
+			t.Errorf("parent identity or unrelated environment copied: %s", key)
+		}
+	}
+}
+
+func TestCoreAdapterPendingSpawnRetainsOriginalRotaContext(t *testing.T) {
+	host, f := coreFixture(t)
+	h := host.(*coreHost)
+	original := h.d.Getenv
+	configDir := "/fixture/first"
+	h.d.Getenv = func(k string) string {
+		if k == "ROTA_CONFIG_DIR" {
+			return configDir
+		}
+		return original(k)
+	}
+	f.loseRun = true
+	opts := SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex"}
+	if _, err := h.Spawn(context.Background(), opts); err == nil {
+		t.Fatal("lost create response acknowledged")
+	}
+	configDir = "/fixture/second"
+	f.loseRun = false
+	if _, err := h.Spawn(context.Background(), opts); err == nil || !strings.Contains(err.Error(), "different launch settings") {
+		t.Fatalf("pending create reused a different Rota context: %v", err)
+	}
+	if f.runs != 1 {
+		t.Fatal("pending creation duplicated")
+	}
+}
 func TestCoreAdapterIndependentOwnedWorker(t *testing.T) {
 	h, f := coreFixture(t)
 	if h.Kind() != HerdrCore {

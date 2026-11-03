@@ -135,6 +135,21 @@ a regular Codex session and retry; Rota leaves that dialog untouched. Codex keep
 Claude/OpenCode worker preflight refuses Core with guidance to use Codex or an
 existing host. No template or legacy integration installation is required.
 
+Core launches preserve terminal identity inside Codex shell tools with per-run
+native `shell_environment_policy.set` values. They read the actual terminal's
+`HC_TERMINAL_ID`/`HC_TERMINAL_SOCKET` and fixed Rota slot, attempt, supervisor,
+config/state and port-allocation fields when Codex starts. Workers receive their
+own new terminal identity. Rota leaves account credentials, environment inheritance,
+filters and sandbox/approval policy in place; it writes no Codex home config.
+An explicit Codex include allowlist can still remove these values. If a shell
+tool loses Core identity, allow the required exact keys in that policy:
+`HC_TERMINAL_ID`, `HC_TERMINAL_SOCKET`, `ROTA_SLOT`, `ROTA_ATTEMPT`,
+`ROTA_ROUND_HOLDER_PID`, `ROTA_CONFIG_DIR`, `ROTA_CORE_STATE_DIR`,
+`ROTA_PORT_BASE`, `ROTA_PORT_BLOCK`, `ROTA_DB_SUFFIX`.
+See [Codex shell environment policy](https://learn.chatgpt.com/docs/config-file/config-advanced#shell-environment-policy).
+Sandbox initialization or approval errors remain Codex setup errors; Rota does
+not automatically change that policy.
+
 ```sh
 rota config set round.dispatch herdr-core
 rota config set round.harnesses '["codex"]'
@@ -152,13 +167,12 @@ Rota invalidates readiness after program loss/replacement and requires intention
 recovery/reassignment. Keepalive remains responsible for orchestrator handoffs.
 Legacy split/tab layout commands do not arrange Core panes. Core creation names
 include the slot and a unique suffix for CLI lookup. App 0.1.12 may still show
-numeric tab names even when Core reports a slot-specific live title. In Agents,
-Priority/pinned rows use the space name as primary text, with terminal title or
-manual tab name as secondary detail; Grouped by space uses that detail for the
-row. Core names and reporting metadata do not override this presentation.
-In the observed Mac build, neither view exposed a reliable slot/address mapping
-automatically. Inspect the terminal content and Rota's reported address before
-closing a worker; do not identify it from a numeric tab name alone.
+numeric tab names even when Core reports a slot-specific live title. The observed
+Mac Agents sidebar showed distinct native titles, including a `| w1` suffix;
+some other views previously showed the shared space name. Titles may be truncated,
+and Core creation names/reporting labels do not rename App tabs. Inspect terminal
+content and Rota's reported address before closing a worker; a numeric tab name
+alone does not identify its slot.
 Double-click a tab and use App's normal rename command for a stable short slot
 name; Core has no tab-rename API. Rota status and dispatch output include
 the exact terminal address; no app configuration or document edits are needed.
