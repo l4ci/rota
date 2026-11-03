@@ -80,9 +80,14 @@ relative named homes fail closed. No persistent cache is used. Collection has a
 12-second total deadline, at most two concurrent children, and each exchange is
 bounded to 10 seconds, 1 MiB stdout, 256 KiB per message and 64 messages. Every
 child is stopped and reaped after reading. Unsupported binaries/RPCs, unavailable
-authentication, EOF, malformed/oversized responses, account-change notifications
-after the account-read baseline and timeouts produce unavailable snapshots. An
-initial account-state announcement before that baseline is accepted. No version is pinned. API-key-only
+authentication, EOF, malformed/oversized responses, repeated account updates
+and timeouts produce unavailable snapshots. An initial account-state announcement
+before the account-read baseline is accepted. If an update interrupts the first
+quota request, Rota discards that matching response and re-reads account and quota
+once in the same process, using new RPC IDs and the original deadline/message
+budget. The source detail identifies this refresh. Any further update during
+recovery fails closed, including during the new account read. Matching auth mode
+and plan never establish unchanged account identity. No version is pinned. API-key-only
 or unsupported authentication may not expose subscription windows; availability
 on other plans depends on what the CLI reports.
 
