@@ -53,6 +53,19 @@ func walk(cfg any, dotted string) (any, bool) {
 	return cur, true
 }
 
+// requiredKeyPresent checks the supplying layers independently: a non-null
+// value in any layer satisfies the required-key rule, even when another layer
+// holds null or a non-object parent. This is presence, not runtime merging.
+// global must be the filtered global layer, which excludes project-owned keys.
+func requiredKeyPresent(key string, project, global, local any) bool {
+	for _, layer := range []any{project, global, local} {
+		if _, ok := walk(layer, key); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // Value returns the value of a dotted key in cfg, or the key's default when
 // the key is missing or JSON null at any segment (config.Lookup, by contrast,
 // reports a null as present). It is an error for a key that is not in Keys.

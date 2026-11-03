@@ -89,13 +89,6 @@ func globalLayer(env projects.Env) any {
 	return obj
 }
 
-// globalSupplies is whether the global layer holds key, so a project that does
-// not set it inherits it and needs no default written.
-func globalSupplies(global any, key string) bool {
-	_, ok := walk(global, key)
-	return ok
-}
-
 // loadLayers keeps the layers alongside the runtime config so display
 // provenance uses the same reads and merge semantics as Load.
 func loadLayers(env projects.Env, configPath string) (merged any, l layers) {

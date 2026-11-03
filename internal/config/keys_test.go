@@ -61,15 +61,6 @@ func TestSetRoutesMachineKeysToLocal(t *testing.T) {
 	}
 }
 
-// A required key set only in the local or global layer is not missing.
-func TestCheckReadsMergedConfig(t *testing.T) {
-	root, env := layerRig(t, `{"docs":{"path":"doc"}}`, `{}`, `{"learn":{"promoteThreshold":2}}`)
-	_, missing := Check(env, root)
-	if contains(missing, "docs.path") || contains(missing, "learn.promoteThreshold") {
-		t.Errorf("missing %v", missing)
-	}
-}
-
 func TestWarningsAndUnknown(t *testing.T) {
 	// debug.competingHypotheses is a removed key, not an unknown one; an
 	// unknown key in the global config warns, as the tracked file's fail.

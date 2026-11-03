@@ -1,25 +1,136 @@
 package config
 
 import (
+	"errors"
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// A required key only config.local.json or the global sets is not missing
-// (#1765): check reads the layers `config show` does.
-func TestCheckCountsLocalAndGlobalLayers(t *testing.T) {
-	root, env := layerRig(t,
-		`{"docs":{"path":"doc"}}`,
-		`{"test":{"fast":[]}}`,
-		`{"learn":{"promoteThreshold":2}}`)
-	_, missing := Check(env, root)
-	for _, key := range []string{"learn.promoteThreshold", "docs.path"} {
-		if contains(missing, key) {
-			t.Errorf("%s reported missing though a layer sets it: %v", key, missing)
-		}
+// Presence is checked in each supplying layer, independently of runtime merging.
+// A complete, migration-free configuration must survive Fill byte-for-byte.
+func TestCheckThenFillRequiredLayers(t *testing.T) {
+	for _, tc := range []struct {
+		name, key, project, global, local string
+		missing                           bool
+	}{
+		{"project-only", "docs.path", `{"docs":{"path":"manual"}}`, "", "", false},
+		{"local-only", "docs.path", "", "", `{"docs":{"path":"private-docs"}}`, false},
+		{"global-only", "docs.path", "", `{"docs":{"path":"shared-docs"}}`, "", false},
+		{"missing", "docs.path", "", "", `{"learn":{"promoteThreshold":2}}`, true},
+		{"project null with global supplier", "docs.path", `{"docs":{"path":null}}`, `{"docs":{"path":"shared-docs"}}`, "", false},
+		{"project scalar with local supplier", "docs.path", `{"docs":false}`, "", `{"docs":{"path":"private-docs"}}`, false},
+		{"local null with project supplier", "docs.path", `{"docs":{"path":"manual"}}`, "", `{"docs":{"path":null}}`, false},
+		{"local scalar with global supplier", "docs.path", "", `{"docs":{"path":"shared-docs"}}`, `{"docs":false}`, false},
+		{"null everywhere", "docs.path", `{"docs":{"path":null}}`, `{"docs":{"path":null}}`, `{"docs":{"path":null}}`, true},
+		{"scalar parents everywhere", "docs.path", `{"docs":false}`, `{"docs":false}`, `{"docs":false}`, true},
+		{"local empty string", "docs.path", "", "", `{"docs":{"path":""}}`, false},
+		{"local false", "umbrella.enabled", "", "", `{"umbrella":{"enabled":false}}`, false},
+		{"local zero", "learn.promoteThreshold", "", "", `{"learn":{"promoteThreshold":0}}`, false},
+		{"local empty list", "test.full", "", "", `{"test":{"full":[]}}`, false},
+		{"global project-owned key excluded", "umbrella.enabled", "", `{"umbrella":{"enabled":true}}`, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := fullConfig()
+			deletePath(cfg, splitDots(tc.key))
+			if tc.project != "" {
+				overlay, err := jsonx.Decode([]byte(tc.project))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, key := range overlay.(*jsonx.Object).Keys() {
+					value, _ := overlay.(*jsonx.Object).Get(key)
+					cfg.Set(key, value)
+				}
+			}
+			body, err := jsonx.MarshalCompact(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root, env := layerRig(t, tc.global, string(body), tc.local)
+			wantStatus, wantKeys := UpToDate, []string{}
+			if tc.missing {
+				wantStatus, wantKeys = Stale, []string{tc.key}
+			}
+			if status, missing := Check(env, root); status != wantStatus || !reflect.DeepEqual(missing, wantKeys) {
+				t.Fatalf("Check = %s %v, want %s %v", status, missing, wantStatus, wantKeys)
+			}
+			filled, err := Fill(env, root)
+			if err != nil || !reflect.DeepEqual(filled, wantKeys) {
+				t.Fatalf("Fill = %v, %v, want %v", filled, err, wantKeys)
+			}
+			if !tc.missing {
+				if got := read(t, root); got != string(body) {
+					t.Errorf("complete project rewritten:\n%s", got)
+				}
+			} else {
+				doc, err := jsonx.Decode([]byte(read(t, root)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				value, present := Lookup(doc, tc.key)
+				want := any("docs")
+				if tc.key == "umbrella.enabled" {
+					want = false
+				}
+				if !present || value != want {
+					t.Errorf("filled %s = %v (present %v), want %v", tc.key, value, present, want)
+				}
+			}
+			if status, missing := Check(env, root); status != UpToDate || len(missing) != 0 {
+				t.Errorf("Check after Fill = %s %v", status, missing)
+			}
+			if tc.local != "" && readLocal(t, root) != tc.local {
+				t.Errorf("local configuration changed: %s", readLocal(t, root))
+			}
+			if tc.global != "" {
+				got, err := os.ReadFile(GlobalPath(env.Getenv("ROTA_CONFIG_DIR")))
+				if err != nil || string(got) != tc.global {
+					t.Errorf("global configuration changed: %s, %v", got, err)
+				}
+			}
+		})
 	}
-	if !contains(missing, "test.full") {
-		t.Errorf("test.full set nowhere must stay missing: %v", missing)
+}
+
+func TestCheckThenFillCorruptSupplyingLayer(t *testing.T) {
+	for _, layer := range []string{"global", "local"} {
+		t.Run(layer, func(t *testing.T) {
+			cfg := fullConfig()
+			cfg.Delete("docs")
+			body, err := jsonx.MarshalCompact(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			global, local := "{broken", ""
+			if layer == "local" {
+				global, local = "", "{broken"
+			}
+			root, env := layerRig(t, global, string(body), local)
+			if status, missing := Check(env, root); status != Stale || !reflect.DeepEqual(missing, []string{"docs.path"}) {
+				t.Fatalf("Check = %s %v, want stale with docs.path missing", status, missing)
+			}
+			filled, err := Fill(env, root)
+			if layer == "local" {
+				if !errors.Is(err, ErrCorrupt) {
+					t.Errorf("Fill error = %v, want ErrCorrupt", err)
+				}
+			} else if err != nil {
+				t.Errorf("Fill error = %v, want no error for a corrupt global", err)
+			}
+			if len(filled) != 0 || read(t, root) != string(body) {
+				t.Errorf("Fill pinned defaults despite a corrupt %s: %v, %s", layer, filled, read(t, root))
+			}
+			path := GlobalPath(env.Getenv("ROTA_CONFIG_DIR"))
+			if layer == "local" {
+				path = localPath(root)
+			}
+			if got, err := os.ReadFile(path); err != nil || string(got) != "{broken" {
+				t.Errorf("corrupt %s changed: %s, %v", layer, got, err)
+			}
+		})
 	}
 }
 
