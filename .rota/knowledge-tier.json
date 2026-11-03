@@ -887,9 +887,9 @@
       "lastSeen": "2026-10-26"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Clear CODEX_HOME for smoke runs from a Codex worker": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-26"
+      "tier": "confirmed",
+      "hits": 6,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Skill authoring::Skill files live at the top of the skill folder": {
       "tier": "confirmed",
@@ -987,9 +987,9 @@
       "lastSeen": "2026-10-30"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::runner.sh ignores a section argument": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-30"
+      "tier": "confirmed",
+      "hits": 6,
+      "lastSeen": "2026-11-03"
     },
     "Build & Tooling: Git & isolation::gittest owns test git identity and config isolation": {
       "tier": "provisional",
@@ -1088,13 +1088,13 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Tests that read slot env must stub Getenv": {
       "tier": "confirmed",
-      "hits": 19,
+      "hits": 25,
       "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Isolate the global config without a temp dir leak": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-27"
+      "tier": "confirmed",
+      "hits": 8,
+      "lastSeen": "2026-11-03"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::A bigger timeout is not a flake fix": {
       "tier": "confirmed",
@@ -1300,6 +1300,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::CLI package stubs do not isolate smoke binaries": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-03"
     }
   }
 }
