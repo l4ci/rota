@@ -21,7 +21,11 @@ import (
 func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
 		cfg := c.deps().Config(root)
-		return c.deps().forgeAndIssues(ctx, cfg, root)
+		// Delivery reconciliation must see comments accepted since an earlier read,
+		// including within a single watch pass. Do not inherit the invocation cache.
+		deps := *c.deps()
+		deps.ReadCache = nil
+		return deps.forgeAndIssues(ctx, cfg, root)
 	}
 }
 
@@ -102,7 +106,9 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		if env.Forge == nil {
 			env.Forge = escalationForge(c)
 		}
+		identity := invocationReceipt(c.Context())
 		res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
+			RequestID: identity.ID, Fingerprint: identity.Fingerprint,
 			Number: n, Key: key, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
 			Timeout: time.Duration(*timeout * float64(time.Second)),
 			Choice:  escalation.Choice{Options: trimmed(options), Recommend: *recommend, Cost: strings.TrimSpace(*cost)}.RecommendedFirst(),
@@ -196,8 +202,26 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 				resolved = fmt.Sprintf("\t%s -> %s", strings.TrimSpace(e.Answer.Body), e.Options[n-1])
 			}
 		}
+		deliveryText := ""
+		if e.Delivery != nil {
+			d := jsonx.NewObject()
+			d.Set("operationId", e.Delivery.OperationID)
+			d.Set("state", e.Delivery.State)
+			d.Set("attempts", e.Delivery.Attempts)
+			d.Set("lastAttemptAt", e.Delivery.LastAttemptAt)
+			d.Set("lastError", e.Delivery.LastError)
+			d.Set("nextAttemptAt", e.Delivery.NextAttemptAt)
+			o.Set("delivery", d)
+			deliveryText = fmt.Sprintf("\tdelivery=%s attempts=%d", e.Delivery.State, e.Delivery.Attempts)
+			if e.Delivery.NextAttemptAt != "" {
+				deliveryText += " retry=" + e.Delivery.NextAttemptAt
+			}
+			if e.Delivery.LastError != "" {
+				deliveryText += " error=" + strings.Join(strings.Fields(e.Delivery.LastError), " ")
+			}
+		}
 		rows = append(rows, o)
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title, resolved))
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s%s%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title, resolved, deliveryText))
 	}
 	return rows, lines
 }
