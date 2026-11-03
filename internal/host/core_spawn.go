@@ -101,7 +101,7 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 			env[k] = v
 		}
 	}
-	e = c.call("terminal.run", map[string]any{"line": o.Launch, "cwd": o.Cwd, "env": env, "caller": parent.Address, "no_parent": true, "outlive_parent": true, "keep": false, "rm": false, "no_notify": true, "labels": map[string]string{"herdr.space": parent.Labels["herdr.space"], "rota.owner": intent.Token, "rota.slot": o.Slot}}, &terminal)
+	e = c.call("terminal.run", map[string]any{"line": o.Launch, "name": coreWorkerName(o.Slot, intent.Token), "cwd": o.Cwd, "env": env, "caller": parent.Address, "no_parent": true, "outlive_parent": true, "keep": false, "rm": false, "no_notify": true, "labels": map[string]string{"herdr.space": parent.Labels["herdr.space"], "rota.owner": intent.Token, "rota.slot": o.Slot}}, &terminal)
 	if e != nil {
 		return intent, terminal, fmt.Errorf("Core slot %s create outcome uncertain (ownership %s); retry reconciles without recreation: %w", o.Slot, intent.Token, e)
 	}
@@ -136,4 +136,23 @@ func (h *coreHost) clearSpawnIntent(v coreHandle) error {
 		}
 		return h.d.FS.Remove(path)
 	})
+}
+
+// Core names are immutable CLI conveniences, never ownership or App tab names.
+// Leave enough room for an 80-bit suffix from the random ownership token.
+func coreWorkerName(slot, token string) string {
+	slot = strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("-_.", r) {
+			return r
+		}
+		return '-'
+	}, strings.ToLower(slot))
+	slot = strings.Trim(slot, "-_.")
+	if slot == "" {
+		slot = "worker"
+	}
+	if len(slot) > 6 {
+		slot = slot[:6]
+	}
+	return "rota-" + slot + "-" + token[:20]
 }

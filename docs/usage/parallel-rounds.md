@@ -150,7 +150,12 @@ Closing a worker's pane/tab explicitly ends its terminal. The app may enable Cor
 `keep`, which replaces a lost program with a shell; this is not agent recovery.
 Rota invalidates readiness after program loss/replacement and requires intentional
 recovery/reassignment. Keepalive remains responsible for orchestrator handoffs.
-Legacy split/tab layout commands do not arrange Core panes.
+Legacy split/tab layout commands do not arrange Core panes. Core creation names
+include the slot and a unique suffix for CLI lookup. App 0.1.12 may still show
+numeric tab names or a generic space label even when Core reports a slot-specific
+live title; Core has no tab-rename API. Double-click a tab and use App's normal
+rename command for a stable visible name. Rota status and dispatch output include
+the exact terminal address; no app configuration or document edits are needed.
 
 Delivery reports distinguish submitted, queued and picked-up input. A successful
 Core send alone proves submission. Exact message evidence is needed for queue or
