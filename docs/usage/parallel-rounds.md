@@ -335,6 +335,10 @@ The autopilot skips that refusal and continues to the next candidate.
   land a round in small batches below the slot count.
 - **Failure.** A failure before dispatch undoes the claim and state; one at or after dispatch keeps
   them, and repeating the call resumes.
+  On herdr, a failed agent start includes the last non-empty lines of the visible pane before
+  closing the failed tab. If the shell reports the selected binary missing, the error names it
+  and points to the pane's shell PATH; check that shell's default node or environment. An empty
+  or unreadable pane leaves the original startup error intact.
 - **Smoke section.** When the issue's text asks for a smoke section (it says "smoke section" or names
   `test/sections`) and the project has a `test/sections` directory, assign reserves the next free
   section number for that worker and names it in the brief ("Your smoke section ... is number N").
