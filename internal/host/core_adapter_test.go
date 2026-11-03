@@ -531,3 +531,30 @@ func TestCoreAdapterObserverBackgroundIsNotDim(t *testing.T) {
 		t.Fatalf("normal-style draft with Codex background was treated as ghost text: %v", e)
 	}
 }
+
+func TestCoreAdapterWorkerCreationName(t *testing.T) {
+	for _, tc := range []struct{ slot, prefix string }{{"Dana", "rota-dana-"}, {"Long worker@slot!", "rota-long-w-"}, {"..///", "rota-worker-"}} {
+		t.Run(tc.slot, func(t *testing.T) {
+			h, f := coreFixture(t)
+			if _, e := h.Spawn(context.Background(), SpawnOpts{Slot: tc.slot, Cwd: "/work", Launch: "codex"}); e != nil {
+				t.Fatal(e)
+			}
+			name, ok := f.run["name"].(string)
+			if !ok || name == "" {
+				t.Fatal("Core worker has no creation name")
+			}
+			if len(name) > 32 || !strings.HasPrefix(name, tc.prefix) {
+				t.Fatalf("invalid worker name %q", name)
+			}
+			for _, r := range name {
+				if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || strings.ContainsRune("-_.", r)) {
+					t.Fatalf("invalid Core name character %q", r)
+				}
+			}
+			token := f.run["labels"].(map[string]any)["rota.owner"].(string)
+			if !strings.HasSuffix(name, "-"+token[:20]) {
+				t.Fatalf("name lacks unique ownership suffix: %q", name)
+			}
+		})
+	}
+}
