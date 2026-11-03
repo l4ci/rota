@@ -358,6 +358,11 @@ without a new commit. If the echo is already outside the first capture, they che
 larger retained-output window for the matching relay and its later completion. When the
 host cannot supply that history, an unobserved relay stays pending until completion can
 be established; the normal unseen-relay stall timeout still applies.
+`rota round status` keeps the native observation in `hostState` and adds `state: "done"`
+for a driven slot whose accepted completion is still current (text mode appends
+`state done`). A pending relay, replacement session or a host reporting new work keeps
+the earlier completion from appearing. Status reads the recorded result without polling
+or changing worker state; adopted slots keep their existing derived states.
 With no slot named it watches every slot that has a session and whose recorded state is not `idle`;
 `rota worker dispatch` arms a slot.
 
