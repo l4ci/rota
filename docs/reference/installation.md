@@ -1,12 +1,12 @@
 # Installation reference
 
-Install the `rota` binary (Homebrew, the install script, or a release download), install the skills it carries, then run `rota setup` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
+Start with the prompt below to install rota and set up your project through your coding agent. Manual installation methods follow.
 
 ## 🤖 Let your agent do it
 
-Paste this into Claude Code, Codex or OpenCode:
+Open your project in Claude Code, Codex or OpenCode and paste:
 
-```
+```text
 Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
 ```
 
