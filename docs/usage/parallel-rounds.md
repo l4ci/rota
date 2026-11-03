@@ -698,7 +698,8 @@ A worker's PR body carries four sections besides the closing keyword: `## Approv
 decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each
 question the issue left open that it answered from the code, `None` if there were none) and the
 `Door:` line. The gate checks approval provenance and requires the Assumptions and Rulings
-headings. It checks their presence only: `None` and empty sections pass. The orchestrator reads
+headings. It names every missing heading in one refusal and remedy. It checks their presence
+only: `None` and empty sections pass. The orchestrator reads
 the content before review.
 
 The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
@@ -716,11 +717,13 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
   The train takes the same flag.
 
-A train excludes PRs missing these headings before building or verifying its merge. Its
-`culprits` list names each excluded target and PR with its own `blockedBy` reason; the remaining
-PRs train normally. If every PR is excluded, nothing is verified or landed, and the train
-refuses with the first missing-section reason. Other member-check and verification failures
-keep their existing stop behavior. An explicit `--order` retains the order of the remaining PRs.
+A train excludes PRs missing these headings or a required review verdict at their current head
+before building or verifying its merge. Each exclusion emits a `TRAIN-SKIP` note; the `culprits`
+list names its target, PR and `blockedBy` reason (`assumptions-missing`, `rulings-missing` or
+`review-missing`). The remaining PRs train normally. If every PR is excluded, the train exits 4
+with the first exclusion's reason, names every excluded PR, and verifies and lands nothing.
+Other member-check and verification failures keep their existing stop behavior. An explicit
+`--order` retains the order of the remaining PRs.
 
 A local gate verifies before it merges. For a PR it first asks the forge whether the PR merges
 cleanly; a conflict the forge reports (git can miss one, for example after a file move) is
