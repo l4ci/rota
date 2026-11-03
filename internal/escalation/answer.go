@@ -14,7 +14,7 @@ import (
 // To change what counts as an answer, change this function; everything else
 // goes through it.
 func IsAnswer(body string) bool {
-	return !marker.Has(body)
+	return !marker.Has(body) && !hasDeliveryReference(body)
 }
 
 // FindAnswer applies the rule to a thread's comments, oldest first: the answer

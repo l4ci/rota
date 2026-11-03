@@ -163,7 +163,7 @@ func (r approvalAnswers) Entry(id string) (worker.ApprovalEntry, bool, error) {
 	}
 	for _, e := range escalation.Load(root) {
 		if e.ID == id {
-			ae := worker.ApprovalEntry{Kind: e.Kind, Ref: e.Ref(), Answered: e.Status == escalation.StatusAnswered, Status: e.Derived}
+			ae := worker.ApprovalEntry{Kind: e.Kind, Ref: e.Ref(), Answered: e.Status == escalation.StatusAnswered && (e.Delivery == nil || e.Delivery.State == escalation.DeliveryDelivered), Status: e.Derived}
 			if e.Answer != nil {
 				ae.Answer = &e.Answer.Body
 			}
@@ -187,6 +187,22 @@ func (f approvalForge) Pending(th worker.ApprovalThread) (any, bool, error) {
 	e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Ref())
 	if !ok {
 		return nil, false, nil
+	}
+	if e.Delivery != nil && e.Delivery.State != escalation.DeliveryDelivered {
+		env := f.c.deps().escalationEnv()
+		if env.Forge == nil {
+			env.Forge = escalationForge(f.c)
+		}
+		res, err := escalation.Check(f.c.Context(), env, root, []string{e.ID})
+		for _, warning := range res.Warnings {
+			f.c.Warn("%s", warning)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if len(res.Reports) > 0 {
+			e = res.Reports[0].Entry
+		}
 	}
 	return e.Object(), true, nil
 }
