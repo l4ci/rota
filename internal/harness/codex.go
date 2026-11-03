@@ -430,3 +430,6 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 func (codex) Name() string                     { return Codex }
 func (codex) Prompt() string                   { return "$rota-orchestrate" }
 func (codex) Command(Config) ([]string, error) { return []string{"codex"}, nil }
+
+// CoreStatusApp is Codex's native OSC 7501 reporting identity.
+func (codex) CoreStatusApp() string { return Codex }
