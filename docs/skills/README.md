@@ -4,7 +4,7 @@ chains:
     featured: true
     title: Fix a small bug or add a small feature
     when: One clear item, small enough to build in one sitting.
-    walkthrough: getting-started.md
+    walkthrough: usage/running-work.md
     steps:
       - skill: rota-capture
         why: Write the item down. Capture records it and stops.
@@ -419,7 +419,7 @@ chains:
 ---
 # Skills
 
-One page per `/rota-*` skill: when to use it, when another skill fits better, what usually comes before and after, and a short example. This index, the README skills table and the chains in [how it works](../how-it-works.md) are generated from these pages by `scripts/skills-docs.py`, so edit the pages, not those lists.
+Look up a skill when you need it. For a first round, start with [Getting started](../getting-started.md). [Workflows](workflows.md) shows how skills fit together.
 
 <!-- generated:skills:index begin -->
 <!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
