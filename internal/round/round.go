@@ -523,6 +523,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			claimed[i] = true
 			alive[r.Name] = true
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
+			if v := worker.JudgeLiveness(worker.LivenessEvidence{Native: r.HostState}); v.State == worker.LivenessUnverifiable {
+				r.HostState, r.Evidence = v.State, v.Reason
+			}
 			// An internal tool wait can look blocked to the host. Only
 			// harnesses with that vocabulary need a pane read; ordinary
 			// snapshots and other harnesses keep their existing state.

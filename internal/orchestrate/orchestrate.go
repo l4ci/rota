@@ -126,7 +126,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	}
 	p.Host = l.Kind
 	switch {
-	case l.Kind == host.Solo:
+	case l.Kind == host.Solo || l.Kind == host.HerdrCore:
 		p.Mode = ModeInPlace
 	case !l.NewSession:
 		p.Mode = ModeTab
@@ -198,6 +198,13 @@ type Launched struct {
 // Launch carries the plan out. ModeSession and ModeInPlace replace this
 // process and return only on failure.
 func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
+	// Core retains the visible project terminal and the existing keepalive
+	// lifetime. Validate its exact inherited endpoint before replacing ourselves.
+	if p.Host == host.HerdrCore {
+		if err := e.Host(p.Host).Require(); err != nil {
+			return Launched{}, &Error{Code: "unavailable", Msg: fmt.Sprintf("herdr-core endpoint %q terminal %q: %v", e.Getenv("HC_TERMINAL_SOCKET"), e.Getenv("HC_TERMINAL_ID"), err), Hint: "run rota orchestrate from the associated Herdr App project terminal"}
+		}
+	}
 	line := shlex.Join(p.Supervisor)
 	switch p.Mode {
 	case ModeTab:

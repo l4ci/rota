@@ -306,6 +306,8 @@ type PreflightOpts struct {
 	Launch string
 	// Herdr is whether the round's host is herdr.
 	Herdr bool
+	// HerdrCore uses native reporting over the app-associated Core endpoint.
+	HerdrCore bool
 	// Orca permits terminal-based Codex launch without herdr integration.
 	Orca bool
 	// Worktree is the slot's worktree, which a seeded home must trust.
@@ -548,4 +550,12 @@ func AllPaneLimits() []string {
 // Orchestrators is the launch table, in the order the error message lists it.
 func Orchestrators() []Orchestrator {
 	return []Orchestrator{claude{}, codex{}, hermes{}, opencode{}}
+}
+
+// Core support requires native reporting and harness-specific composer guards.
+// Other harnesses remain unsupported until verified; legacy integration is not a substitute.
+func coreUnsupported(kind string) error {
+	r := refuse(Unavailable, "%s workers on herdr-core have no verified native status/composer support; use Codex on herdr-core or select a supported legacy host", kind)
+	r.Hint = "configure Codex workers for herdr-core, or change round.dispatch to a supported host"
+	return r
 }
