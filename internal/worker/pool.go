@@ -158,7 +158,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		handle := session + ":" + name
 		// A round slot has no session until its first dispatch, whatever the
 		// host: a nominal handle would read as a dead tab to reconcile.
-		if dispatch == host.Herdr || dispatch == host.Orca || len(o.Names) > 0 {
+		if dispatch == host.Herdr || dispatch == host.HerdrCore || dispatch == host.Orca || len(o.Names) > 0 {
 			handle = ""
 		}
 		if err := registerSlot(root, name, branch, abs, base, session, handle); err != nil {

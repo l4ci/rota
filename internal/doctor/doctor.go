@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -102,6 +103,10 @@ type StaleClaim struct {
 
 // Input is everything Run needs from the outside.
 type Input struct {
+	// Getenv and Dial identify the app-associated Core without executable probes.
+	Getenv func(string) string
+	Dial   func(context.Context, string) (net.Conn, error)
+
 	// Labels is the bounded remote label scan; nil outside an issue backend.
 	Labels *LabelState
 	// StaleClaims are remote claims past their activity threshold; empty adds no rows.
@@ -451,6 +456,27 @@ func (d *runner) roundHost() host.Kind { return d.in.RoundHost }
 
 func (d *runner) host() Check {
 	switch d.roundHost() {
+	case host.HerdrCore:
+		get := d.in.Getenv
+		if get == nil {
+			get = func(string) string { return "" }
+		}
+		if get("HC_TERMINAL_ID") == "" || get("HC_TERMINAL_SOCKET") == "" {
+			return fail("host", "Herdr Core terminal identity/endpoint is missing", "open the associated Herdr App project terminal and check HC_TERMINAL_ID and HC_TERMINAL_SOCKET")
+		}
+		h := host.New(host.HerdrCore, host.Deps{Getenv: get, Dial: d.in.Dial})
+		if err := h.Require(); err != nil {
+			return fail("host", err.Error(), "open the associated Herdr App project terminal and check HC_TERMINAL_ID and HC_TERMINAL_SOCKET")
+		}
+		detail := "Herdr Core associated endpoint verified"
+		if identity := h.Capabilities().CoreIdentity; identity != nil {
+			id, version := identity.CoreIdentity()
+			detail += "; id=" + id
+			if version != "" {
+				detail += "; version=" + version
+			}
+		}
+		return pass("host", detail)
 	case host.Herdr:
 		want := host.SupportedHerdr + ".x"
 		bin, ok := d.in.Look(host.Herdr.Binary())

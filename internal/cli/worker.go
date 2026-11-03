@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/ship"
@@ -476,6 +477,9 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			c.Warn("%s", w)
 		}
 		if err != nil {
+			if res.Delivery != "" {
+				return Result{Data: knObj("slot", res.Slot, "handle", res.Handle, "address", host.HandleAddress(res.Handle), "delivery", res.Delivery)}, err
+			}
 			var we *exitcode.Error
 			if errors.As(err, &we) {
 				if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && we.Exit == ExitRefused {
@@ -501,6 +505,9 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
 		d.Set("handle", res.Handle)
+		if address := host.HandleAddress(res.Handle); address != res.Handle {
+			d.Set("address", address)
+		}
 		if res.Task != "" {
 			d.Set("task", res.Task)
 		}
@@ -508,16 +515,20 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			d.Set("round", *res.Round)
 		}
 		d.Set("relay", res.Relay)
+		setIf(d, "delivery", res.Delivery)
 		if res.Queued {
 			d.Set("queued", true)
 		}
 		setIf(d, "kind", res.Kind)
 		d.Set("changed", true)
 		verb := "dispatched"
+		if res.Delivery == "submitted" {
+			verb = "submitted"
+		}
 		if res.Queued {
 			verb = "queued"
 		}
-		return Result{Data: d, Text: fmt.Sprintf("%s: %s (%s)", verb, res.Slot, res.Handle)}, nil
+		return Result{Data: d, Text: fmt.Sprintf("%s: %s (%s)", verb, res.Slot, host.HandleAddress(res.Handle))}, nil
 	}
 }
 

@@ -203,6 +203,9 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 				issue += " (best-of: " + r.BestOf + ")"
 			}
 			cols := []string{r.Name, issue, dash(r.Branch), dash(r.PR), dash(hostStateText(r)), dash(strings.Join(r.Drift, ","))}
+			if address := host.HandleAddress(r.Tab); address != r.Tab {
+				cols = append(cols, "terminal "+address)
+			}
 			if r.Kind != "" {
 				col := strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
 				if r.KindSource != "" {
@@ -345,6 +348,9 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)
 		setIf(o, "hostState", r.HostState)
+		if address := host.HandleAddress(r.Tab); address != r.Tab {
+			setIf(o, "address", address)
+		}
 		if r.HostState == worker.LivenessUnverifiable { // the reason (#820); other rows' evidence is the UI's
 			setIf(o, "evidence", r.Evidence)
 		}

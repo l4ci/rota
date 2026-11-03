@@ -32,11 +32,14 @@ func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(
 		return registry
 	}
 	switch dispatch {
-	case Herdr, Tmux, Orca:
+	case Herdr, HerdrCore, Tmux, Orca:
 		return dispatch
 	}
 	d := Deps{Getenv: getenv, LookPath: lookPath}
 	d.fill()
+	if coreContext(d) {
+		return HerdrCore
+	}
 	pane := detectHerdrPane(d)
 	if pane.managed && pane.installed {
 		return Herdr
@@ -76,6 +79,16 @@ type Launch struct {
 // getenv and lookPath default to the process's own.
 func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(string) (string, error)) (Launch, error) {
 	d := Deps{Getenv: getenv, LookPath: lookPath}
+	d.fill()
+	if coreContext(d) || dispatch == HerdrCore {
+		if d.Getenv("HC_TERMINAL_ID") == "" || d.Getenv("HC_TERMINAL_SOCKET") == "" {
+			return Launch{}, fmt.Errorf("herdr-core needs HC_TERMINAL_ID and HC_TERMINAL_SOCKET from an app project terminal; refusing disconnected runtime")
+		}
+		if dispatch != "" && dispatch != HerdrCore && dispatch != "subagent" {
+			return Launch{}, fmt.Errorf("round.dispatch=%s conflicts with this herdr-core terminal; use herdr-core or automatic detection", dispatch)
+		}
+		return Launch{Kind: HerdrCore}, nil
+	}
 	herdr, tmux := New(Herdr, d), New(Tmux, d)
 	switch {
 	case herdr.InSession() && herdr.Require() == nil:
@@ -98,4 +111,10 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 		return Launch{Kind: Tmux, NewSession: true}, nil
 	}
 	return Launch{Kind: Solo}, nil
+}
+
+// Partial Core markers still select Core so an unavailable endpoint cannot
+// silently launch a disconnected legacy runtime.
+func coreContext(d Deps) bool {
+	return d.Getenv("HC_TERMINAL_ID") != "" || d.Getenv("HC_TERMINAL_SOCKET") != ""
 }

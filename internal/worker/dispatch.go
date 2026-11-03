@@ -37,12 +37,13 @@ type DispatchOpts struct {
 
 // DispatchResult is what a successful dispatch did.
 type DispatchResult struct {
-	Slot   string
-	Handle string
-	Task   string
-	Round  *int
-	Relay  bool
-	Queued bool
+	Slot     string
+	Handle   string
+	Task     string
+	Round    *int
+	Relay    bool
+	Queued   bool
+	Delivery string // Core: submitted, queued, picked-up or unknown
 	// Kind is the harness the session runs; "" for a relay, which ignores it.
 	Kind     string
 	Warnings []string
@@ -302,6 +303,13 @@ func (e Env) sendSigned(ctx context.Context, t *dispatchTarget, slot, payload st
 // sendFailure maps a failed send onto dispatch's exits. A queued send and a
 // clean one are not failures: it returns res, nil for both.
 func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (DispatchResult, error) {
+	if h.Kind() == host.HerdrCore {
+		res.Delivery = coreOutcome(sendErr)
+		if errors.Is(sendErr, host.ErrSubmitted) {
+			res.Warnings = append(res.Warnings, "Core submitted the message; pickup remains unconfirmed. Monitor or retry the same message to reconcile; do not paste another copy.")
+			return res, nil
+		}
+	}
 	switch {
 	case errors.Is(sendErr, host.ErrQueued):
 		res.Queued = true
@@ -318,7 +326,7 @@ func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (D
 			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", slot))
-	case h.Kind() == host.Orca && !errors.Is(sendErr, host.ErrNotSubmitted):
+	case (h.Kind() == host.Orca || h.Kind() == host.HerdrCore) && !errors.Is(sendErr, host.ErrNotSubmitted):
 		// Orca can discover a branch rename after the prompt has been accepted.
 		// Preserve that evidence instead of suggesting the brief was never sent.
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", slot, sendErr))
@@ -338,6 +346,9 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	if err := t.checkWorktree(o.Slot); err != nil {
 		return res, err
+	}
+	if handled, result, err := e.coreRetry(ctx, root, o, t, res); handled {
+		return result, err
 	}
 	h, cfg, worktree := t.h, t.cfg, t.worktree
 	configDir := t.slot.ConfigDir()
@@ -488,7 +499,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 
 	out := signBrief(prompt, signKey, roundOf(root), "", string(t.brief))
 	// A task dispatch starts a fresh session and has nothing pending.
-	sendErr := e.sendSigned(ctx, t, o.Slot, out, false)
+	sendErr := e.sendTracked(ctx, root, o, t, out, false)
 	// Remember a stall so the next relay checks the prompt line first. Written
 	// only on a change: a clean send leaves the registry untouched.
 	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || t.slot.Unsent() {
@@ -525,6 +536,9 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	if t.handle == "" {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
 	}
+	if handled, result, err := e.coreRetry(ctx, root, o, t, res); handled {
+		return result, err
+	}
 	// A relay is signed by the key of the session it goes into.
 	hz, ok := harness.LookupPrompt(s.Kind())
 	if !ok {
@@ -558,17 +572,23 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
 		"body, attribute it as 'orchestrator relay round %d', never as a maintainer\n"+
 		"sign-off in your session.]\n[relay %d]\n\n", round, relaySeq)
+	if h.Kind() == host.HerdrCore {
+		// Codex's queue preview retains only the first few payload lines.
+		// Keep the exact relay identity visible without changing legacy payloads.
+		marker := fmt.Sprintf("[relay %d]\n", relaySeq)
+		note = marker + strings.Replace(note, marker, "", 1)
+	}
 	out := signBrief(hz, signKey, round, note, string(t.brief))
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
 		return res, err
 	}
 	// A relay reuses the session, so a brief an earlier send left unsent on the
 	// prompt line is still there: submit it rather than type a second copy.
-	sendErr := e.sendSigned(ctx, t, o.Slot, out, s.Unsent())
+	sendErr := e.sendTracked(ctx, root, o, t, out, s.Unsent())
 	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || s.Unsent() {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
 	}
-	if errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt) {
+	if errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt) || (h.Kind() == host.HerdrCore && errors.Is(sendErr, host.ErrNotSubmitted)) {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
 	} else {
 		// Log the relay once it was (or may have been) sent. A stall does not
