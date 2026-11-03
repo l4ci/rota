@@ -200,7 +200,12 @@ func (claude) Doctor() Doctor { return Doctor{} }
 
 func (claude) CheckLaunch(string) error { return nil }
 
-func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) { return Setup{}, nil }
+func (claude) Preflight(_ context.Context, _ Probe, o PreflightOpts) (Setup, error) {
+	if o.HerdrCore {
+		return Setup{}, coreUnsupported(Claude)
+	}
+	return Setup{}, nil
+}
 
 func (claude) Prepare(launch string, _ func() (string, error), _ Setup) (string, []byte, error) {
 	return launch, nil, nil

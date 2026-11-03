@@ -1,5 +1,5 @@
 // Package host drives the terminal host that runs /rota-work worker sessions:
-// tmux windows, herdr tabs or Orca terminals. It ports the bin/hv-host-*.sh
+// tmux windows, legacy herdr tabs, Core terminals or Orca terminals. It ports the bin/hv-host-*.sh
 // helpers and adds the opt-in Orca adapter.
 //
 // SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents.
@@ -35,16 +35,17 @@ type Kind string
 
 // The host kinds that have panes.
 const (
-	Herdr Kind = "herdr"
-	Tmux  Kind = "tmux"
-	Orca  Kind = "orca"
+	Herdr     Kind = "herdr"
+	HerdrCore Kind = "herdr-core"
+	Tmux      Kind = "tmux"
+	Orca      Kind = "orca"
 )
 
-// KindOf is the kind a config or registry string names: "herdr", "tmux", "orca" and "solo",
+// KindOf is the kind a config or registry string names: "herdr", "herdr-core", "tmux", "orca" and "solo",
 // anything else (including "subagent" and "") the zero Kind.
 func KindOf(s string) Kind {
 	switch k := Kind(s); k {
-	case Herdr, Tmux, Orca, Solo:
+	case Herdr, HerdrCore, Tmux, Orca, Solo:
 		return k
 	}
 	return ""
@@ -84,7 +85,7 @@ type Deps struct {
 	Run    Runner
 	Getenv func(string) string
 	Sleep  func(time.Duration)
-	// FS owns brief files and Orca's persistent identity and process evidence.
+	// FS owns brief files and persistent Core/Orca identity and process evidence.
 	// Nil selects OSFileSystem, including its locking and atomic writes.
 	FS FileSystem
 	// Alive reports whether a process exists and has not exited. A zombie
@@ -98,7 +99,7 @@ type Deps struct {
 	KillWait int
 	// LookPath reports whether a binary is installed.
 	LookPath func(string) (string, error)
-	// Dial opens the herdr API socket (a unix socket path).
+	// Dial opens an inherited Herdr or Core API Unix socket.
 	Dial func(ctx context.Context, path string) (net.Conn, error)
 	// Stderr receives the one-line reports a host makes about itself (a
 	// notification that never reached a human). Nil means os.Stderr.
@@ -158,6 +159,9 @@ var (
 	// ErrQueued acknowledges a relay delivered to a busy session's queue.
 	// It is a successful delivery; callers must not resend it.
 	ErrQueued = errors.New("relay queued")
+	// ErrSubmitted means Core accepted input, with no proven pickup yet.
+	ErrSubmitted       = errors.New("Core accepted input; pickup is not yet confirmed")
+	ErrDeliveryUnknown = errors.New("Core delivery outcome unknown; inspect original terminal before recovery")
 	// ErrNotSubmitted: nothing showed the brief was picked up. Safe to resend.
 	ErrNotSubmitted = errors.New("brief was never submitted")
 	// ErrDialogOpen: a dialog in the session refused input; nothing was sent.
@@ -240,6 +244,9 @@ type TurnReader interface {
 	Turn(ctx context.Context, slot, handle string) (t Turn, ok bool)
 }
 
+// CoreIdentity reports the identity and diagnostic build verified by Require.
+type CoreIdentity interface{ CoreIdentity() (id, version string) }
+
 // Finished reports whether t is a turn the agent finished after the state
 // change numbered base: herdr says the agent is ready for input (idle or
 // done) and that this idle transition was completed work numbered past base.
@@ -262,6 +269,7 @@ type WorkspaceCloser interface {
 // field means the host lacks that side (tmux has no Labeler, herdr no
 // Operator). It is the one place the optional interfaces are discovered.
 type Capabilities struct {
+	CoreIdentity    CoreIdentity
 	Resubmitter     Resubmitter
 	Explainer       Explainer
 	PaneReader      PaneReader
@@ -300,6 +308,9 @@ type TreeKiller interface{ TreeKillClose() bool }
 // CapabilitiesForKind is the capabilities of the adapter for k, read without
 // building it. Solo and unknown kinds have none.
 func CapabilitiesForKind(k Kind) Capabilities {
+	if k == HerdrCore {
+		return CapabilitiesOf(&coreHost{})
+	}
 	if k == Orca {
 		return CapabilitiesOf(&orca{})
 	}
@@ -317,6 +328,7 @@ func (c Capabilities) CanGroup() bool {
 // from Capabilities; a test fake does the same to declare what it supports.
 func CapabilitiesOf(h any) Capabilities {
 	var c Capabilities
+	c.CoreIdentity, _ = h.(CoreIdentity)
 	c.Resubmitter, _ = h.(Resubmitter)
 	c.Explainer, _ = h.(Explainer)
 	c.PaneReader, _ = h.(PaneReader)
@@ -346,7 +358,7 @@ func CapabilitiesOf(h any) Capabilities {
 
 // Host is one terminal backend.
 type Host interface {
-	// Kind is the backend this host drives (Herdr, Tmux or Orca).
+	// Kind is the backend this host drives (Herdr, HerdrCore, Tmux or Orca).
 	Kind() Kind
 	// Capabilities names the optional sides this host supports; a field is
 	// nil for a side it lacks. Callers ask here instead of type-asserting.
@@ -376,10 +388,13 @@ type Host interface {
 	Notify(ctx context.Context, title, body string)
 }
 
-// New returns the adapter for Herdr or Orca; every other kind, including Solo,
-// selects tmux (the worker helpers predate round.dispatch=herdr).
+// New returns the selected terminal adapter. Unknown kinds and Solo retain
+// the historical tmux fallback.
 func New(kind Kind, d Deps) Host {
 	d.fill()
+	if kind == HerdrCore {
+		return &coreHost{d: d}
+	}
 	if kind == Orca {
 		return &orca{d: d}
 	}

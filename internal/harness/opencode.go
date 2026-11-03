@@ -303,6 +303,9 @@ func (o opencode) CheckLaunch(launch string) error {
 // the model list is a network call and the integration only sharpens state.
 // Both hosts work; it never writes into an OpenCode config dir.
 func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Setup, error) {
+	if po.HerdrCore {
+		return Setup{}, coreUnsupported(OpenCode)
+	}
 	var set Setup
 	bin, ok := p.Look("opencode")
 	if !ok {
