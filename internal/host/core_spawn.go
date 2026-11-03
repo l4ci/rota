@@ -38,12 +38,22 @@ func (h *coreHost) writeSpawnIntent(path string, v coreSpawnIntent) error {
 func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTerminal, o SpawnOpts, path string) (coreSpawnIntent, coreTerminal, error) {
 	var intent coreSpawnIntent
 	var terminal coreTerminal
+	// Core uses its server environment. Carry only the caller's scoped Rota
+	// context; Core supplies the new terminal identity and SlotEnv supplies the
+	// worker's own allocation. Bind this context to uncertain-create retries.
+	var launchEnv []string
+	for _, key := range []string{"ROTA_CONFIG_DIR", "ROTA_CORE_STATE_DIR", "ROTA_ROUND_HOLDER_PID"} {
+		if value := h.d.Getenv(key); value != "" {
+			launchEnv = append(launchEnv, key+"="+value)
+		}
+	}
+	launchEnv = append(launchEnv, o.Env...)
 	b, e := h.d.FS.ReadFile(path)
 	if e == nil {
 		if json.Unmarshal(b, &intent) != nil {
 			return intent, terminal, fmt.Errorf("Core spawn intent corrupt; inspect slot %s", o.Slot)
 		}
-		env, _ := json.Marshal(o.Env)
+		env, _ := json.Marshal(launchEnv)
 		savedEnv, _ := json.Marshal(intent.Env)
 		if intent.Endpoint != h.d.Getenv("HC_TERMINAL_SOCKET") || intent.Core != c.core || intent.Slot != o.Slot || intent.Cwd != o.Cwd || intent.Launch != o.Launch || string(env) != string(savedEnv) {
 			return intent, terminal, fmt.Errorf("Core slot %s has an unresolved worker create with different launch settings; recover original worker first", o.Slot)
@@ -86,7 +96,7 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 	if _, e = rand.Read(tokenBytes); e != nil {
 		return intent, terminal, e
 	}
-	intent = coreSpawnIntent{Token: hex.EncodeToString(tokenBytes), Endpoint: h.d.Getenv("HC_TERMINAL_SOCKET"), Core: c.core, Slot: o.Slot, Cwd: o.Cwd, Launch: o.Launch, Env: o.Env}
+	intent = coreSpawnIntent{Token: hex.EncodeToString(tokenBytes), Endpoint: h.d.Getenv("HC_TERMINAL_SOCKET"), Core: c.core, Slot: o.Slot, Cwd: o.Cwd, Launch: o.Launch, Env: launchEnv}
 	if e = h.writeSpawnIntent(path, intent); e != nil {
 		return intent, terminal, fmt.Errorf("Core spawn not attempted: intent could not persist: %w", e)
 	}
@@ -96,7 +106,7 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 			env[k] = value
 		}
 	}
-	for _, s := range o.Env {
+	for _, s := range launchEnv {
 		if k, v, ok := strings.Cut(s, "="); ok {
 			env[k] = v
 		}

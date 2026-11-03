@@ -331,7 +331,9 @@ type HomeAccount struct{ Name, Home string }
 // means the slot's account is that home and the claude config dir is not its
 // business; a codex slot on the default home leaves it empty.
 type Setup struct {
-	Home string
+	// HerdrCore enables per-launch native shell-tool identity configuration.
+	HerdrCore bool
+	Home      string
 	// Account names the configured Codex account the slot got ("" on the
 	// default home); the dispatch records it so the next pick keeps it.
 	Account string
