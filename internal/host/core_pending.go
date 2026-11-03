@@ -65,7 +65,7 @@ func (h *coreHost) resolvePending(ctx context.Context, s string) (string, error)
 		return "", e
 	}
 	resolved := ""
-	e = h.d.FS.Locked(path+".lock", 30*time.Second, func() error {
+	e = h.d.FS.Locked(path, 30*time.Second, func() error {
 		_, intent, _, e := h.readPending(s)
 		if e != nil {
 			return e
