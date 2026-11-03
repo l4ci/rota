@@ -101,7 +101,8 @@ Where it opens depends on where you ran it:
 
 | You are | The orchestrator opens |
 |---|---|
-| In a herdr pane | a new focused tab in that workspace |
+| In a Herdr App/Core project terminal | the existing terminal runs the orchestrator supervisor |
+| In a legacy herdr pane | a new focused tab in that workspace |
 | In tmux | a new window in that session |
 | In neither, herdr installed | a herdr session `rota-<dir>` with the orchestrator in its first workspace (your terminal attaches to it) |
 | In neither, only tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
@@ -112,6 +113,63 @@ started with `herdr --session rota-<dir> server`; your default herdr session is 
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.
+
+### Herdr App and Core
+
+Open a project terminal in Herdr App, including a terminal on a connected machine.
+Rota uses that terminal's `HC_TERMINAL_SOCKET` and `HC_TERMINAL_ID` to verify the
+associated Core. It never starts another Core or a legacy Herdr server. In a
+Mac-viewer/remote-Linux setup, install and configure Rota and Codex on the remote
+machine; the Mac keeps its app preferences and connection settings.
+
+With automatic host detection, Core markers take precedence over inherited legacy
+Herdr/tmux markers. Missing or stale Core markers fail with recovery guidance.
+An active round retains its recorded host; changing a setting does not migrate it.
+`rota orchestrate` runs the existing keepalive supervisor in the visible project
+terminal. An explicit conflicting launch host is refused.
+
+Core workers currently support **Codex with native OSC 7501 status reporting**.
+Rota probes the launch flags and account login, then requires the spawned process
+to report readiness. If folder trust appears first, trust the primary project in
+a regular Codex session and retry; Rota leaves that dialog untouched. Codex keeps the default account unless configured otherwise.
+Claude/OpenCode worker preflight refuses Core with guidance to use Codex or an
+existing host. No template or legacy integration installation is required.
+
+```sh
+rota config set round.dispatch herdr-core
+rota config set round.harnesses '["codex"]'
+rota config set orchestrator.harness codex
+rota doctor
+rota orchestrate
+```
+
+Workers are independent Core terminals carrying the launching terminal's existing
+app space, without its tab label. The app adopts them into separate persistent
+tabs. They survive orchestrator replacement, viewer closure and connection loss.
+Closing a worker's pane/tab explicitly ends its terminal. The app may enable Core
+`keep`, which replaces a lost program with a shell; this is not agent recovery.
+Rota invalidates readiness after program loss/replacement and requires intentional
+recovery/reassignment. Keepalive remains responsible for orchestrator handoffs.
+Legacy split/tab layout commands do not arrange Core panes.
+
+Delivery reports distinguish submitted, queued and picked-up input. A successful
+Core send alone proves submission. Exact message evidence is needed for queue or
+pickup acknowledgment. Startup dialogs, missing status and human drafts refuse
+input; Rota never forces a send or answers an unknown dialog. Retry the same
+message to reconcile its saved signed payload. An uncertain send is retained as
+unknown and never pasted again automatically; inspect the original worker before
+recovery. These client receipts do not promise formal exactly-once delivery
+against arbitrary concurrent human edits. Ownership records and delivery receipts
+live under `$XDG_STATE_HOME/rota/herdr-core` (default
+`~/.local/state/rota/herdr-core`); retain them through recovery so cleanup can
+verify the original terminal incarnation and observed processes.
+
+Monitoring reconnects through a fresh authoritative Core snapshot. A raw Core turn
+counter, startup/restored idle status, error or exit cannot finish an assignment.
+Worker completion, issue acceptance, review and landing gates retain their usual
+requirements. Wind-down targets only saved owned terminal identities and verifies
+captured processes have exited; an unreachable Core or reused address cannot prove
+cleanup. It leaves other terminals and the shared Core running.
 
 On herdr, each worker's sidebar line reads `<slot> · <task> · <state>` (for example `ben · #494 · working`),
 and your workspace carries a `round` token with the round number and slot counts. Both are display-only
