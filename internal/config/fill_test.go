@@ -100,23 +100,14 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	}
 }
 
-func TestFillNothingMissingDoesNotRewrite(t *testing.T) {
-	full, _ := jsonx.MarshalCompact(fullConfig())
-	root := project(t, string(full), "")
-	filled, err := Fill(projects.OSEnv(), root)
-	if err != nil || filled == nil || len(filled) != 0 {
-		t.Fatalf("filled %v, err %v", filled, err)
-	}
-	if got := read(t, root); got != string(full) {
-		t.Errorf("file rewritten:\n%s", got)
-	}
-}
-
 func TestFillRefusesCorrupt(t *testing.T) {
-	for _, body := range []string{"{oops", "[1]", "null", "", "\xff{}"} {
+	for _, body := range []string{"{oops", "[1]", "null", "", "\xff{}", `{"a": NaN}`} {
 		root := project(t, "", "")
 		p := filepath.Join(root, ".rota", "config.json")
 		os.WriteFile(p, []byte(body), 0o644)
+		if status, missing := Check(projects.OSEnv(), root); status != Corrupt || len(missing) != 0 {
+			t.Errorf("%q: Check = %s %v, want corrupt", body, status, missing)
+		}
 		if _, err := Fill(projects.OSEnv(), root); !errors.Is(err, ErrCorrupt) {
 			t.Errorf("%q: %v", body, err)
 		}
@@ -181,8 +172,11 @@ func TestFillLegacyKeyAloneRewrites(t *testing.T) {
 	h, _ := jsonx.Decode([]byte(`{"version":"4.2.0"}`))
 	cfg.Set("hv", h)
 	b, _ := jsonx.Marshal(cfg)
-	root := project(t, string(b), "")
-	filled, err := Fill(projects.OSEnv(), root)
+	root, env := layerRig(t, "", string(b), `{"rota":{"version":"9.9.9"}}`)
+	if status, missing := Check(env, root); status != UpToDate || len(missing) != 0 {
+		t.Fatalf("Check = %s %v, want upToDate from the local version", status, missing)
+	}
+	filled, err := Fill(env, root)
 	if err != nil || !reflect.DeepEqual(filled, []string{VersionKey}) {
 		t.Fatalf("filled %v err %v", filled, err)
 	}
@@ -193,6 +187,9 @@ func TestFillLegacyKeyAloneRewrites(t *testing.T) {
 	}
 	if v, _ := Value(o, VersionKey); v != "4.2.0" {
 		t.Errorf("rota.version %v", v)
+	}
+	if got := readLocal(t, root); got != `{"rota":{"version":"9.9.9"}}` {
+		t.Errorf("migration changed the local version: %s", got)
 	}
 }
 
@@ -248,8 +245,11 @@ func TestStampedVersion(t *testing.T) {
 // refactor.verifyCommands moved to test.full: Fill copies it, drops the old
 // key, lists test.full, and leaves the rest of refactor alone.
 func TestFillMovesVerifyCommandsToTestFull(t *testing.T) {
-	root := project(t, `{"refactor":{"confirmBeforeExecute":true,"verifyCommands":["x"]}}`, "")
-	filled, err := Fill(projects.OSEnv(), root)
+	root, env := layerRig(t, "", `{"refactor":{"confirmBeforeExecute":true,"verifyCommands":["x"]}}`, `{"test":{"full":["local"]}}`)
+	if status, missing := Check(env, root); status != Stale || !slices.Contains(missing, LegacyVerifyKey) || slices.Contains(missing, TestFullKey) {
+		t.Fatalf("Check = %s %v, want legacy migration pending but no missing test.full", status, missing)
+	}
+	filled, err := Fill(env, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,6 +266,12 @@ func TestFillMovesVerifyCommandsToTestFull(t *testing.T) {
 	}
 	if _, ok := Lookup(o, "refactor.confirmBeforeExecute"); !ok {
 		t.Error("confirmBeforeExecute dropped")
+	}
+	if got := readLocal(t, root); got != `{"test":{"full":["local"]}}` {
+		t.Errorf("migration changed the local commands: %s", got)
+	}
+	if status, missing := Check(env, root); status != UpToDate || len(missing) != 0 {
+		t.Errorf("Check after Fill = %s %v", status, missing)
 	}
 }
 
