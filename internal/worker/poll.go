@@ -276,6 +276,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	openPRs := e.openPRsByHead(ctx, root, reg, byName)
 	var rowErr error
 	var dones []ledger.Entry
+	accepted := map[string]bool{}
 	if err := UpdateSlots(root, func(s *Slot) {
 		r, ok := byName[s.Name()]
 		if !ok {
@@ -294,6 +295,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		if skipped { // a newer event arrived; the next poll reads against it
 			return
 		}
+		accepted[s.Name()] = true
 		if ev := s.Event(); ev != nil && ev.Seq == notified[s.Name()] {
 			s.MarkEventNotified()
 		}
@@ -310,6 +312,15 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		}
 	}); err != nil {
 		return PollResult{}, err
+	}
+	// A rejected observation is stale for callers too, not only for registry
+	// writes. Keep its completion and PR evidence out of text/JSON and labels.
+	// An absent slot was replaced or removed before UpdateSlots visited it.
+	for i, r := range rows {
+		if !accepted[r.Name] {
+			rows[i] = PollRow{r.Name, StateBusy, "slot changed during poll; poll again"}
+			delete(notes, r.Name)
+		}
 	}
 	memo := &RoundMemo{}
 	for _, d := range dones {

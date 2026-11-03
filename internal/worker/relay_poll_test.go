@@ -165,16 +165,28 @@ func TestPollRelayCompletionOnFinishedTurn(t *testing.T) {
 }
 
 func TestPollRelayReplacedDuringCaptureKeepsNewRelayPending(t *testing.T) {
-	for _, replaceSession := range []bool{false, true} {
-		t.Run(map[bool]string{false: "new relay", true: "new session"}[replaceSession], func(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		replaceSession, scrolled bool
+	}{
+		{"new relay/visible echo", false, false},
+		{"new relay/scrolled echo", false, true},
+		{"new session/visible echo", true, false},
+		{"new session/scrolled echo", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			dir, h := pollRegistry(t, "tmux")
 			relayRaceSlot(t, dir, 1)
-			h.panes["w1"] = []string{relayEcho(1), relayEcho(1) + "ROTA-DONE w1\n"}
+			second := relayEcho(1)
+			if tc.scrolled {
+				second = strings.Repeat("● work\n", 80)
+			}
+			h.panes["w1"] = []string{relayEcho(1), second + "ROTA-DONE w1 https://github.com/o/r/pull/994\n"}
 			e := envWith(h)
 			e.Sleep = func(time.Duration) {
 				if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
 					k := 2
-					if replaceSession {
+					if tc.replaceSession {
 						s.Dispatch("new:session", "", "", "2026-11-03T10:00:00Z")
 						k = 1 // numbering restarts with a new session
 					}
@@ -183,8 +195,12 @@ func TestPollRelayReplacedDuringCaptureKeepsNewRelayPending(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err := e.Poll(bg, dir, PollOpts{Slot: "w1"}); err != nil {
+			res, err := e.Poll(bg, dir, PollOpts{Slot: "w1"})
+			if err != nil {
 				t.Fatal(err)
+			}
+			if len(res.Slots) != 1 || res.Slots[0].State != StateBusy || IsPRURL(res.Slots[0].Evidence) {
+				t.Fatalf("stale capture was published as current completion: %+v", res)
 			}
 			s := LoadRegistryTolerant(dir).Slot("w1")
 			if s.State() != "busy" || s.RelayPending() == 0 || s.RelayMarkerSeen() {
