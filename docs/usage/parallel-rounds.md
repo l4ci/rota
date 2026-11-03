@@ -152,9 +152,12 @@ Rota invalidates readiness after program loss/replacement and requires intention
 recovery/reassignment. Keepalive remains responsible for orchestrator handoffs.
 Legacy split/tab layout commands do not arrange Core panes. Core creation names
 include the slot and a unique suffix for CLI lookup. App 0.1.12 may still show
-numeric tab names or a generic space label even when Core reports a slot-specific
-live title; Core has no tab-rename API. Double-click a tab and use App's normal
-rename command for a stable visible name. Rota status and dispatch output include
+numeric tab names even when Core reports a slot-specific live title. In Agents,
+Priority/pinned rows use the space name as primary text, with terminal title or
+manual tab name as secondary detail; Grouped by space uses that detail for the
+row. Core names and reporting metadata do not override this presentation.
+Double-click a tab and use App's normal rename command for a stable short slot
+name; Core has no tab-rename API. Rota status and dispatch output include
 the exact terminal address; no app configuration or document edits are needed.
 
 Delivery reports distinguish submitted, queued and picked-up input. A successful

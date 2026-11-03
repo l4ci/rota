@@ -254,7 +254,7 @@ func coreProgram(v coreHandle, t coreTerminal) error {
 	return nil
 }
 func coreReady(t coreTerminal) error {
-	if !t.Reported || t.Status == nil || t.Status.App != "codex" {
+	if !t.Reported || t.Status == nil || !harness.CoreStatusSupported(t.Status.App) {
 		return fmt.Errorf("Core worker needs supported Codex native OSC 7501 reporting; inspect startup/authentication")
 	}
 	switch t.Status.State {
