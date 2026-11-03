@@ -199,14 +199,36 @@ w("gamma", 5.0, None, 100.0, "2090-01-01T00:00:00+00:00",
 w("delta", 100.0, "2020-01-01T00:00:00+00:00", 10.0, None, {"is_enabled": False})
 PYEOF
 
-acct() { ( cd "$TMP_WD" && ROTA_ACCOUNT_USAGE_DIR="$AFX" "$ROTA_BIN" --json worker account "$@" ); }
+# Account reporting also shows caller-current Codex capacity when Claude is
+# the worker default. Keep this exchange offline without disabling poison tools.
+mkdir -p "$AFX/bin"
+cat > "$AFX/bin/codex" <<SH
+#!/usr/bin/env bash
+exec "$TESTDIR/fakes/codex" "\$@"
+SH
+chmod +x "$AFX/bin/codex"
+cat > "$AFX/codex-quota.json" <<'JSON'
+{"rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":10080,"resetsAt":4102444800}}}
+JSON
+acct() { ( cd "$TMP_WD" && PATH="$AFX/bin:$PATH" CODEX_HOME="$AFX/codex-current" ROTA_FAKE_CODEX_QUOTA_FILE="$AFX/codex-quota.json" ROTA_ACCOUNT_USAGE_DIR="$AFX" "$ROTA_BIN" --json worker account "$@" ); }
 
 VERDICTS=$( acct list | python3 -c '
 import json, sys
-print(",".join(r["name"] + "=" + r["verdict"] for r in json.load(sys.stdin)["data"]["accounts"]))' )
+print(",".join(r["name"] + "=" + r["verdict"] for r in json.load(sys.stdin)["data"]["accounts"] if r["kind"] == "claude"))' )
 [ "$VERDICTS" = "alpha=free,beta=cooling,gamma=free,delta=free" ] \
   || fail "worker account verdicts wrong: $VERDICTS"
 pass "worker account list: extra_usage rescues a spent weekly; a past reset does not park an account"
+OUT=$( acct list ) || vfail
+python3 - "$OUT" "$AFX/codex-current" <<'PYQUOTA' || fail "ambient Codex quota must remain visible with the default worker harness"
+import json, sys
+rows = json.loads(sys.argv[1])["data"]["accounts"]
+row, = [r for r in rows if "quota" in r]
+q = row["quota"]
+assert row["kind"] == "codex" and q["name"] == "ambient/current" and q["ambient"], row
+assert q["home"] == sys.argv[2] and q["weekly"]["remainingPercent"] == 75, q
+assert "headroom" not in row and "verdict" not in row, row
+PYQUOTA
+pass "account reporting includes explicit ambient Codex quota without changing Claude meter verdicts"
 
 # gamma's weekly is discounted, so its headroom must come from the 5-hour
 # window (95), not from the spent weekly (0) — otherwise a working account
