@@ -7,9 +7,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -17,6 +19,72 @@ type statusRelayHost struct {
 	*cliHost
 	pane, sent, native string
 	captures           []string
+}
+
+func TestWorkerPollRejectsSupersededCompletionInTextAndJSON(t *testing.T) {
+	for _, replaceSession := range []bool{false, true} {
+		for _, jsonOutput := range []bool{false, true} {
+			name := map[bool]string{false: "new relay", true: "new session"}[replaceSession] + "/" + map[bool]string{false: "text", true: "json"}[jsonOutput]
+			t.Run(name, func(t *testing.T) {
+				root := workerProject(t, `{}`)
+				deps := testDeps()
+				echo := "❯ --- ORCHESTRATOR (round 48) ---\n  [relay 1]\n\n● working\n"
+				h := &statusRelayHost{cliHost: &cliHost{inSession: true}, native: "idle", captures: []string{
+					echo, strings.Repeat("● work\n", 80) + "ROTA-DONE w1 https://github.com/o/r/pull/7\n",
+				}}
+				useHost(deps, h)
+				if code, out, errOut := rotaInWith(t, deps, root, "worker", "pool", "init", "--slots", "1", "--base", "main"); code != 0 {
+					t.Fatalf("pool: exit %d: %s %s", code, out, errOut)
+				}
+				at := stamp.Format(deps.Now())
+				if _, err := worker.UpdateSlot(root, "w1", func(s *worker.Slot) {
+					s.Dispatch("old:session", "2346", "", at)
+					s.SetRelayPending(1, at)
+				}); err != nil {
+					t.Fatal(err)
+				}
+				baseEnv := deps.WorkerEnv
+				deps.WorkerEnv = func() worker.Env {
+					e := baseEnv()
+					e.Sleep = func(time.Duration) {
+						if _, err := worker.UpdateSlot(root, "w1", func(s *worker.Slot) {
+							pending := 2
+							if replaceSession {
+								s.Dispatch("new:session", "2346", "", at)
+								pending = 1
+							}
+							s.SetRelayPending(pending, at)
+						}); err != nil {
+							t.Fatal(err)
+						}
+					}
+					return e
+				}
+				args := []string{"worker", "poll", "w1", "--settle", "0"}
+				if jsonOutput {
+					args = append([]string{"--json"}, args...)
+				}
+				code, out, errOut := rotaInWith(t, deps, root, args...)
+				if code != 0 {
+					t.Fatalf("poll: exit %d: %s %s", code, out, errOut)
+				}
+				if jsonOutput {
+					rows := data(t, out)["slots"].([]any)
+					if len(rows) != 1 || rows[0].(map[string]any)["name"] != "w1" || rows[0].(map[string]any)["state"] != "busy" {
+						t.Fatalf("superseded completion in JSON: %s", out)
+					}
+				} else if !strings.HasPrefix(out, "w1\tbusy\t") {
+					t.Fatalf("superseded completion in text: %q", out)
+				}
+				if strings.Contains(out, "https://github.com/o/r/pull/7") {
+					t.Fatalf("superseded PR evidence was returned: %s", out)
+				}
+				if s := worker.LoadRegistryTolerant(root).Slot("w1"); s.State() != "busy" || s.RelayPending() == 0 || s.RelayMarkerSeen() || s.PR() != "" {
+					t.Fatalf("superseded completion changed current slot: %v", s.Raw())
+				}
+			})
+		}
+	}
 }
 
 func (h *statusRelayHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
