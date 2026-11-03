@@ -555,9 +555,10 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 		}
 		var result struct{ Turn uint64 }
 		params := map[string]any{"terminal": v.Address, "text": text, "force": false, "wait": false}
-		if t.Status.State == "working" {
+		switch t.Status.State {
+		case "working":
 			params["if"] = "working"
-		} else if t.Status.State == "idle" {
+		case "idle":
 			params["if"] = "idle"
 		}
 		if e = c.call("terminal.send", params, &result); e != nil {
