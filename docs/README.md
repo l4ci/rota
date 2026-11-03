@@ -6,7 +6,7 @@ Run several coding agents in parallel, across your accounts, with reviews and ch
 
 - [Get started](getting-started.md): install, set up your project and start a round from your coding agent.
 - [Worker setup](first-round.md): harnesses, accounts and the checks for your first round.
-- [How it works](how-it-works.md): who does the work, who merges and where you come in.
+- [Behind the scenes](how-it-works.md): the orchestrator, CLI commands and worker sessions.
 
 ### Understand the checks
 
