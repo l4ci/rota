@@ -88,7 +88,7 @@ func TestCodexQuotaProtocol(t *testing.T) {
 		{"RPC failure", `{"id":1,"error":{"code":-1,"message":"secret-token"}}`, "authentication or source unavailable"},
 		{"EOF", `{"id":1,"result":{}}`, "closed"},
 		{"malformed", `secret-token`, "malformed"},
-		{"changed", `{"method":"account/updated","params":{"secret":"token"}}`, "account changed"},
+		{"changed", "{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"method\":\"account/updated\"}\n", "account changed"},
 		{"oversized", strings.Repeat("x", 300*1024), "oversized"},
 		{"message bound", strings.Repeat("{\"method\":\"noise\"}\n", 65), "message limit"},
 		{"no auth", "{\"id\":1,\"result\":{}}\n{\"id\":2,\"result\":{\"account\":null}}\n", "authentication unavailable"},
@@ -187,4 +187,15 @@ func TestCodexQuotaLive(t *testing.T) {
 		reset = s.Weekly.ResetsAt.Format(time.RFC3339)
 	}
 	t.Logf("observed=%s source=%s detail=%s weekly-used=%g%% remaining=%g%% reset=%s status=%s identity=%s shorter-windows=%d", s.ObservedAt.Format(time.RFC3339), s.Source, s.SourceDetail, *s.Weekly.UsedPercent, *s.Weekly.RemainingPercent, reset, s.Status, s.IdentityStatus, len(s.Windows)-1)
+}
+
+func TestCodexQuotaInitialAccountAnnouncement(t *testing.T) {
+	opts := quotaFixture(`{}`)
+	opts.Exchange = func(ctx context.Context, cmd proc.Cmd, talk func(io.Reader, io.Writer) error) error {
+		return talk(strings.NewReader("{\"id\":1,\"result\":{}}\n{\"method\":\"account/updated\",\"params\":{\"authMode\":\"chatgpt\"}}\n{\"id\":2,\"result\":{\"account\":{\"type\":\"chatgpt\"}}}\n{\"id\":3,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":50,\"windowDurationMins\":10080,\"resetsAt\":1794326854}}}}\n"), io.Discard)
+	}
+	snapshot := (codex{}).ReadQuota(context.Background(), QuotaRequest{Ambient: true}, opts)
+	if snapshot.Status != "available" || snapshot.Weekly == nil {
+		t.Fatalf("initial account announcement precedes the account baseline and must allow quota read: status=%s reason=%s", snapshot.Status, snapshot.Reason)
+	}
 }

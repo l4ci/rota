@@ -77,6 +77,9 @@ func (codex) ReadQuota(ctx context.Context, req QuotaRequest, opts QuotaOptions)
 		if a.Account == nil || a.Account.Type == "apiKey" {
 			return quotaFailure("subscription authentication unavailable")
 		}
+		// Initialization may announce account state before account/read returns.
+		// Only updates after this baseline invalidate the quota observation.
+		rpc.accountObserved = true
 		payload, err = rpc.call(3, "account/rateLimits/read", nil)
 		return err
 	})
@@ -104,9 +107,10 @@ type quotaFailure string
 func (e quotaFailure) Error() string { return string(e) }
 
 type quotaRPC struct {
-	scan     *bufio.Scanner
-	out      *json.Encoder
-	messages int
+	scan            *bufio.Scanner
+	out             *json.Encoder
+	messages        int
+	accountObserved bool
 }
 
 func (r *quotaRPC) call(id int, method string, params any) (json.RawMessage, error) {
@@ -129,7 +133,7 @@ func (r *quotaRPC) call(id int, method string, params any) (json.RawMessage, err
 		if json.Unmarshal(r.scan.Bytes(), &m) != nil {
 			return nil, quotaFailure("malformed app-server response")
 		}
-		if m.Method == "account/updated" {
+		if m.Method == "account/updated" && r.accountObserved {
 			return nil, quotaFailure("account changed during quota read")
 		}
 		if m.ID == nil || *m.ID != id {

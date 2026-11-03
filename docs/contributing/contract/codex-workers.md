@@ -81,7 +81,8 @@ relative named homes fail closed. No persistent cache is used. Collection has a
 bounded to 10 seconds, 1 MiB stdout, 256 KiB per message and 64 messages. Every
 child is stopped and reaped after reading. Unsupported binaries/RPCs, unavailable
 authentication, EOF, malformed/oversized responses, account-change notifications
-and timeouts produce unavailable snapshots. No version is pinned. API-key-only
+after the account-read baseline and timeouts produce unavailable snapshots. An
+initial account-state announcement before that baseline is accepted. No version is pinned. API-key-only
 or unsupported authentication may not expose subscription windows; availability
 on other plans depends on what the CLI reports.
 
