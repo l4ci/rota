@@ -15,6 +15,7 @@ refs:
   - internal/ledger
   - internal/hook
   - internal/doctor
+  - internal/reap
   - internal/roundtick
   - internal/roundwatch
   - internal/tracker

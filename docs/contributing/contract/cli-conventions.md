@@ -2,6 +2,7 @@
 refs:
   - internal/cli
   - internal/exitcode
+  - internal/exitmap
   - internal/fsio
 ---
 
