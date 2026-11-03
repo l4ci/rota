@@ -74,25 +74,17 @@ func (s *stubForge) CommentURL(context.Context, tracker.IssueKey, string) (strin
 	return "", errors.New("no url")
 }
 
-// A record that cannot be written after the comment went out is exit 1 with
-// the comment's id and url in the failure data, never a silent success.
-func TestSendRecordWriteFailureKeepsTheURL(t *testing.T) {
+// An unwritable initial registry must never cause a remote mutation.
+func TestSendInitialRecordWriteFailureDoesNotPost(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".rota", "workers.json"), 0o755); err != nil { // a directory where the file belongs
+	if err := os.MkdirAll(filepath.Join(root, ".rota", "workers.json"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	f := &stubForge{}
-	env := Env{Forge: func(context.Context, string) (Forge, error) { return f, nil }, Getenv: func(string) string { return "" }}
-	res, err := Send(context.Background(), env, root, SendOpts{Number: 3, Title: "t", Body: "b"})
+	_, err := Send(context.Background(), deliveryEnv(f), root, SendOpts{Number: 3, Title: "t", Body: "b"})
 	var ee *Error
-	if !errors.As(err, &ee) || ee.Exit != 1 {
-		t.Fatalf("err %v", err)
-	}
-	if len(f.posted) != 1 || ee.Data == nil || !strings.Contains(ee.Message, "77") {
-		t.Errorf("posted %d, data %v, message %q", len(f.posted), ee.Data, ee.Message)
-	}
-	if len(res.Warnings) == 0 {
-		t.Error("the url read failure should be a warning")
+	if !errors.As(err, &ee) || ee.Exit != 1 || len(f.posted) != 0 {
+		t.Fatalf("err=%v creates=%d", err, len(f.posted))
 	}
 }
 
