@@ -38,7 +38,6 @@ func dataJSON(t *testing.T, data any) string {
 func TestTranslateTable(t *testing.T) {
 	trk := func(k tracker.Kind) error { return &tracker.Error{Kind: k, Message: "t"} }
 	refused := &backlog.RefusedError{BlockedBy: "dirty", Msg: "no", Hint: "fix it"}
-	active := &backlog.ActiveError{ID: "B1", Branch: "feat/x"}
 	backlogOpts := Options{Classes: Backlog}
 	roundOpts := Options{Classes: BacklogNotFound | Lock, Default: exitcode.ExitUnavailable}
 	trackerOpts := Options{Classes: Tracker, Default: exitcode.ExitInternal}
@@ -58,17 +57,11 @@ func TestTranslateTable(t *testing.T) {
 		{"backlog tracker rate limited", trk(tracker.KindRateLimited), backlogOpts, 6, ""},
 		{"backlog tracker unavailable", trk(tracker.KindUnavailable), backlogOpts, 5, ""},
 		{"backlog exiter", exiter{9}, backlogOpts, 9, ""},
-		{"backlog refused", refused, backlogOpts, 4, `{"blockedBy": "dirty", "changed": false}`},
-		{"backlog active", active, backlogOpts, 4, `{"blockedBy": "active", "id": "B1", "activeBranch": "feat/x", "changed": false}`},
-		{"backlog wrong backend", backlog.ErrWrongBackend, backlogOpts, 4, `{"blockedBy": "backend", "changed": false}`},
-		{"backlog exitcode error passes", exitcode.Errf(3, "x"), backlogOpts, 3, ""},
 		{"backlog unclassified passes", errors.New("boom"), backlogOpts, 0, ""},
 		{"backlog lock timeout passes", fsio.ErrLockTimeout, backlogOpts, 0, ""},
 
-		{"read-only refusal is 1", refused, readOpts, 1, `{"blockedBy": "dirty", "changed": false}`},
-		{"read-only wrong backend is 1", backlog.ErrWrongBackend, readOpts, 1, `{"blockedBy": "backend", "changed": false}`},
-		{"read-only demotes a plain exit 4", exitcode.Errf(4, "x"), readOpts, 1, ""},
 		{"read-only keeps not found", backlog.ErrNotFound, readOpts, 3, ""},
+		{"read-only default refusal is 1", errors.New("boom"), Options{Default: 4, ReadOnly: true}, 1, ""},
 
 		{"round not found", backlog.ErrNotFound, roundOpts, 3, ""},
 		{"round lock timeout", fmt.Errorf("w: %w", fsio.ErrLockTimeout), roundOpts, 6, ""},
@@ -114,11 +107,209 @@ func TestTranslateNil(t *testing.T) {
 	}
 }
 
-func TestRefusalCarriesHint(t *testing.T) {
-	_, err := Translate(&backlog.RefusedError{BlockedBy: "x", Msg: "no", Hint: "fix it"}, Options{Classes: Refusal})
-	var e *exitcode.Error
-	if !errors.As(err, &e) || e.Hint != "fix it" || e.Message != "no" {
-		t.Fatalf("got %+v", e)
+type contextError struct{ cause error }
+
+func (e *contextError) Error() string { return "context: " + e.cause.Error() }
+func (e *contextError) Unwrap() error { return e.cause }
+
+func TestTranslateExistingClassificationIsIndependent(t *testing.T) {
+	for _, shape := range []string{"direct", "fmt wrapped", "typed wrapper", "nil cause"} {
+		for _, readFirst := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/readFirst=%t", shape, readFirst), func(t *testing.T) {
+				sentinel := errors.New("original cause")
+				detail := &stageErr{stage: "claim"}
+				payload := &struct{ reason string }{reason: "dirty"}
+				inner := &exitcode.Error{
+					Exit: exitcode.ExitRefused, Message: "no", Hint: "fix it", Data: payload,
+					Cause: errors.Join(detail, sentinel),
+				}
+				var original error = inner
+				var wrapper *contextError
+				switch shape {
+				case "fmt wrapped":
+					original = fmt.Errorf("context: %w", inner)
+				case "typed wrapper":
+					wrapper = &contextError{cause: fmt.Errorf("wrapped: %w", inner)}
+					original = wrapper
+				case "nil cause":
+					inner.Cause = nil
+				}
+				before, message := *inner, original.Error()
+				for step, readOnly := range []bool{readFirst, !readFirst, readFirst, !readFirst} {
+					data, out := Translate(original, Options{Classes: Backlog, ReadOnly: readOnly})
+					if *inner != before {
+						t.Fatalf("step %d: input changed: got %+v, want %+v", step, *inner, before)
+					}
+					if data != nil {
+						t.Fatalf("existing classification returned separate data: %v", data)
+					}
+					want := before
+					if readOnly {
+						want.Exit = exitcode.ExitFailed
+					} else if out != original {
+						t.Fatal("ordinary translation lost input identity")
+					}
+					var coded *exitcode.Error
+					if !errors.As(out, &coded) || *coded != want {
+						t.Fatalf("classification = %+v, want %+v", coded, want)
+					}
+					if readOnly && coded == inner {
+						t.Fatal("read-only translation borrowed the input classification")
+					}
+					if out.Error() != message {
+						t.Fatalf("message = %q, want %q", out.Error(), message)
+					}
+					if got, ok := exitcode.DataOf[*struct{ reason string }](out); !ok || got != payload {
+						t.Fatalf("DataOf = %v, %t; want original payload", got, ok)
+					}
+					if !errors.Is(out, original) || !errors.Is(out, inner) {
+						t.Fatal("original error chain is unreachable")
+					}
+					var gotDetail *stageErr
+					if inner.Cause != nil {
+						if !errors.Is(out, sentinel) || !errors.As(out, &gotDetail) || gotDetail != detail {
+							t.Fatal("original typed detail or sentinel is unreachable")
+						}
+					} else if errors.Is(out, sentinel) || errors.As(out, &gotDetail) {
+						t.Fatal("nil-cause input gained a cause")
+					}
+					var gotWrapper *contextError
+					if got := errors.As(out, &gotWrapper); got != (wrapper != nil) || gotWrapper != wrapper {
+						t.Fatalf("typed wrapper = %v, want %v", gotWrapper, wrapper)
+					}
+					var absent *tracker.Error
+					if errors.Is(out, fsio.ErrLockTimeout) || errors.As(out, &absent) {
+						t.Fatal("matched a sentinel or type outside the original chain")
+					}
+					if readOnly {
+						for _, againReadOnly := range []bool{false, true} {
+							againData, again := Translate(out, Options{ReadOnly: againReadOnly})
+							if againData != nil || again != out || exitOf(t, again) != exitcode.ExitFailed {
+								t.Fatal("retranslating a demoted result must preserve its identity and exit 1")
+							}
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestTranslateExistingNonRefusalPasses(t *testing.T) {
+	for _, code := range []int{1, 2, 3, 5, 6, 70, 71} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			inner := exitcode.Errf(code, "existing")
+			for _, original := range []error{inner, fmt.Errorf("context: %w", inner)} {
+				for _, readOnly := range []bool{false, true} {
+					data, out := Translate(original, Options{Default: 4, ReadOnly: readOnly})
+					if data != nil || out != original || inner.Exit != code || inner.Cause != nil {
+						t.Fatalf("non-refusal classification must pass through unchanged: %v, %v", data, out)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestTranslateFirstClassificationWins(t *testing.T) {
+	for _, shape := range []string{"joined", "nested"} {
+		for _, firstCode := range []int{exitcode.ExitRefused, exitcode.ExitRetry} {
+			t.Run(fmt.Sprintf("%s/first=%d", shape, firstCode), func(t *testing.T) {
+				detail := &stageErr{stage: "other branch"}
+				second := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "second", Cause: detail}
+				branch := &contextError{cause: second}
+				first := exitcode.Errf(firstCode, "first")
+				var original error
+				if shape == "joined" {
+					original = errors.Join(first, branch)
+				} else {
+					first.Cause = branch
+					original = first
+				}
+				beforeFirst, beforeSecond := *first, *second
+				for _, readOnly := range []bool{true, false, true} {
+					data, out := Translate(original, Options{ReadOnly: readOnly})
+					want := beforeFirst
+					if readOnly && firstCode == exitcode.ExitRefused {
+						want.Exit = exitcode.ExitFailed
+					} else if out != original {
+						t.Fatal("passthrough lost original identity")
+					}
+					var coded *exitcode.Error
+					if !errors.As(out, &coded) || *coded != want || data != nil || out.Error() != original.Error() {
+						t.Fatalf("first classification = %+v, want %+v; data = %v", coded, want, data)
+					}
+					if *first != beforeFirst || *second != beforeSecond {
+						t.Fatal("translation changed an input classification")
+					}
+					var gotBranch *contextError
+					var gotDetail *stageErr
+					if !errors.Is(out, first) || !errors.Is(out, second) ||
+						!errors.As(out, &gotBranch) || gotBranch != branch ||
+						!errors.As(out, &gotDetail) || gotDetail != detail {
+						t.Fatal("translation lost part of the original chain or tree")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestTranslateRefusalDetails(t *testing.T) {
+	sentinel := errors.New("refusal cause")
+	cases := []struct {
+		name, message, hint, data string
+		err                       error
+		class                     Class
+		contextInMessage          bool
+	}{
+		{"refused", "no", "fix it", `{"blockedBy": "dirty", "changed": false}`,
+			&backlog.RefusedError{BlockedBy: "dirty", Msg: "no", Hint: "fix it", Err: sentinel}, Refusal, false},
+		{"active", "[B1] is active on branch feat/x; end that stream first", "end the stream first: rota status rm feat/x",
+			`{"blockedBy": "active", "id": "B1", "activeBranch": "feat/x", "changed": false}`,
+			&backlog.ActiveError{ID: "B1", Branch: "feat/x"}, Refusal, false},
+		{"wrong backend", backlog.ErrWrongBackend.Error(), "", `{"blockedBy": "backend", "changed": false}`,
+			backlog.ErrWrongBackend, Refusal, true},
+		{"unknown forge", "cannot determine the forge from origin https://x.example/r (set forge.provider)",
+			"set forge.provider to github, gitlab or local", `{"blockedBy": "forge", "changed": false}`,
+			&tracker.UnknownForgeError{Origin: "https://x.example/r"}, Tracker, true},
+	}
+	for _, c := range cases {
+		for _, wrapped := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/wrapped=%t", c.name, wrapped), func(t *testing.T) {
+				original, message := c.err, c.message
+				if wrapped {
+					original = fmt.Errorf("context: %w", original)
+					if c.contextInMessage {
+						message = "context: " + message
+					}
+				}
+				for _, readOnly := range []bool{false, true, false} {
+					data, out := Translate(original, Options{Classes: c.class, ReadOnly: readOnly})
+					wantExit := exitcode.ExitRefused
+					if readOnly {
+						wantExit = exitcode.ExitFailed
+					}
+					var coded *exitcode.Error
+					if !errors.As(out, &coded) || coded.Exit != wantExit || coded.Message != message ||
+						coded.Hint != c.hint || coded.Data != nil || coded.Cause != original {
+						t.Fatalf("readOnly=%t: classification = %+v", readOnly, coded)
+					}
+					if got := dataJSON(t, data); got != c.data {
+						t.Fatalf("data = %s, want %s", got, c.data)
+					}
+					if !errors.Is(out, original) || !errors.Is(out, c.err) {
+						t.Fatal("original refusal is unreachable")
+					}
+					if c.name == "refused" && !errors.Is(out, sentinel) {
+						t.Fatal("refusal sentinel is unreachable")
+					}
+					if c.name == "unknown forge" && !errors.Is(out, tracker.ErrUnknownForge) {
+						t.Fatal("unknown-forge sentinel is unreachable")
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -156,14 +347,8 @@ func TestTranslateKeepsTheCause(t *testing.T) {
 	if !errors.Is(out, fsio.ErrLockTimeout) || exitOf(t, out) != exitcode.ExitRetry {
 		t.Errorf("errors.Is through a translated lock timeout: %v", out)
 	}
-	// An error that already carries an exit code passes through untouched.
-	own := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "no"}
-	_, out = Translate(own, Options{Default: exitcode.ExitFailed})
-	if out != error(own) || own.Cause != nil {
-		t.Errorf("an exit-coded error must not gain a cause: %v", own.Cause)
-	}
 	// Nothing is found that the original did not hold.
-	if errors.Is(out, fsio.ErrLockTimeout) {
+	if errors.Is(out, backlog.ErrInvalid) {
 		t.Error("errors.Is matched a sentinel the error never wrapped")
 	}
 }
