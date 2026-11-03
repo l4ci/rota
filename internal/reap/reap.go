@@ -152,11 +152,21 @@ type state struct {
 	warnings   []string
 }
 
-// A finder returns the candidates of one source. Adding a source is adding a
-// function here.
-type finder func(ctx context.Context, s *state) ([]Candidate, error)
+// A finder names the kind it discovers so Find can select sources before
+// invoking them.
+type finder struct {
+	kind string
+	find func(ctx context.Context, s *state) ([]Candidate, error)
+}
 
-var finders = []finder{findWorktrees, findBranches, findTabs, findProcesses, findLeases, findSkillCache}
+var finders = []finder{
+	{KindWorktree, findWorktrees},
+	{KindBranch, findBranches},
+	{KindTab, findTabs},
+	{KindProcess, findProcesses},
+	{KindLease, findLeases},
+	{KindSkillCache, findSkillCache},
+}
 
 // findLeases lists the round lease when its holder is gone. A live, foreign
 // or absent lease is never a candidate, and a lease is never Held: stale means
@@ -240,15 +250,14 @@ func Find(ctx context.Context, in Input, kinds []string) (Result, error) {
 	}
 	var res Result
 	for _, f := range finders {
-		cs, err := f(ctx, s)
+		if len(want) != 0 && !want[f.kind] {
+			continue
+		}
+		cs, err := f.find(ctx, s)
 		if err != nil {
 			return Result{}, err
 		}
-		for _, c := range cs {
-			if len(want) == 0 || want[c.Kind] {
-				res.Candidates = append(res.Candidates, c)
-			}
-		}
+		res.Candidates = append(res.Candidates, cs...)
 	}
 	res.Warnings = s.warnings
 	return res, nil
