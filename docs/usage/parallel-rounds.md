@@ -199,6 +199,9 @@ requirements. Wind-down targets only saved owned terminal identities and verifie
 captured processes have exited; an unreachable Core or reused address cannot prove
 cleanup. It leaves other terminals and the shared Core running.
 
+The [App/Core validation record](../contributing/herdr-core-validation.md)
+lists the tested builds, real round evidence and UI/test limitations.
+
 On herdr, each worker's sidebar line reads `<slot> · <task> · <state>` (for example `ben · #494 · working`),
 and your workspace carries a `round` token with the round number and slot counts. Both are display-only
 labels under the source `rota`, updated when rota records a state change and cleared when a slot is parked
