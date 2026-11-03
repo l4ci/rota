@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,5 +134,64 @@ func TestCoreAdapterDispatchUnknownRetryRetainsSignedPayload(t *testing.T) {
 	}
 	if !strings.Contains(peer.Sent()[0], "--- ROTA-SIG ") {
 		t.Fatal("original uncertain payload was unsigned")
+	}
+}
+
+// Drive native-idle retained captures through worker relay bookkeeping and the
+// real host adapter, then prove the same relay can be sent once after clearing.
+func TestCoreAdapterRelayRetainedComposer(t *testing.T) {
+	var fixture struct {
+		Cols, Rows int
+		Cases      []struct{ Name, State, Plain, Paint string }
+	}
+	b, err := os.ReadFile("../host/testdata/core-retained-drafts.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(b, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	for _, capture := range fixture.Cases {
+		if capture.Name != "leading-newline-draft" && capture.Name != "trailing-glyph-draft" {
+			continue
+		}
+		t.Run(capture.Name, func(t *testing.T) {
+			dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
+				t.Fatal(err)
+			}
+			peer, h := coretest.New(t, harness.Codex)
+			rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+			e := rig.env(h)
+			initial, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", Task: "T1", Kind: harness.Codex, BodyFile: writeBrief(t, "initial task")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			peer.Capture(capture.Plain, capture.Paint, fixture.Cols, fixture.Rows)
+			relay := DispatchOpts{Slot: "w1", Relay: true, BodyFile: writeBrief(t, "one relay after the human draft is cleared")}
+			if _, err = e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "draft") {
+				t.Fatalf("retained input did not refuse relay: %v", err)
+			}
+			runs, sends, _ := peer.Counts()
+			if runs != 1 || sends != 1 {
+				t.Fatalf("retained input was mutated: runs=%d sends=%d", runs, sends)
+			}
+			slot := LoadRegistryTolerant(dir).Slot("w1")
+			if slot.Handle() != initial.Handle || len(slot.Relays()) != 0 {
+				t.Fatal("refused relay changed session or logged delivery")
+			}
+			for _, empty := range fixture.Cases {
+				if empty.Name == "leading-newline-cleared" {
+					peer.Capture(empty.Plain, empty.Paint, fixture.Cols, fixture.Rows)
+				}
+			}
+			if _, err = e.Dispatch(bg, dir, relay); err != nil {
+				t.Fatal(err)
+			}
+			runs, sends, _ = peer.Counts()
+			if runs != 1 || sends != 2 || len(LoadRegistryTolerant(dir).Slot("w1").Relays()) != 1 {
+				t.Fatalf("cleared relay retry duplicated or lost delivery: runs=%d sends=%d", runs, sends)
+			}
+		})
 	}
 }

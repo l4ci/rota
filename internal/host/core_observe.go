@@ -14,18 +14,14 @@ import (
 	"unicode/utf8"
 )
 
-// composer uses plain text only when it already proves empty input. Core's
-// text reader discards styling, so ghost text requires a separate read-only
-// observer. No bytes are ever written to a terminal stream channel.
+// Every accepted composer requires an authoritative styled first paint.
+// Plain text cannot distinguish continuation rows or ghost text safely.
+// No bytes are ever written to a terminal stream channel.
 func (h *coreHost) composer(ctx context.Context, v coreHandle, t coreTerminal, plain string) error {
-	if e := coreComposer(plain); e == nil {
-		return nil
-	} else {
-		if _, ok := ReadDialog(plain); ok {
-			return e
-		}
+	if _, ok := ReadDialog(plain); ok {
+		return coreComposer(plain)
 	}
-	if !strings.Contains(plain, "›") {
+	if coreComposerStart(plain) < 0 {
 		return coreComposer(plain)
 	}
 	c, e := h.connectMode(ctx, v.Endpoint, v.Core, true)
@@ -117,6 +113,7 @@ func coreReadFrame(r io.Reader) (uint32, byte, []byte, error) {
 type coreCell struct {
 	r   rune
 	dim bool
+	bg  string
 }
 
 // This bounded first-paint decoder is intentionally not a live VT emulator.
@@ -133,6 +130,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 	}
 	x, y, sx, sy := 0, 0, 0, 0
 	dim := false
+	bg := ""
 	tabs := make([]bool, cols)
 	for column := 8; column < cols; column += 8 {
 		tabs[column] = true
@@ -158,7 +156,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 	cleared := false
 	erase := func(row, from, to int) {
 		for c := max(0, from); c < min(cols, to); c++ {
-			grid[row][c] = coreCell{}
+			grid[row][c] = coreCell{bg: bg}
 		}
 	}
 	for i := 0; i < len(paint); {
@@ -221,6 +219,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				if e != nil {
 					return refuse(e.Error())
 				}
+				bg = coreObserverBackground(arg, bg)
 				continue
 			}
 			if (final == 'h' || final == 'l') && strings.HasPrefix(arg, "?") {
@@ -237,6 +236,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			}
 			if final == 'p' && arg == "!" {
 				x, y, dim = 0, 0, false
+				bg = ""
 				continue
 			}
 			nums := []int{}
@@ -394,25 +394,84 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 				return refuse("observer paint wraps outside grid")
 			}
 		}
-		grid[y][x] = coreCell{r: r, dim: dim}
+		grid[y][x] = coreCell{r: r, dim: dim, bg: bg}
 		for n := 1; n < width; n++ {
-			grid[y][x+n] = coreCell{r: ' ', dim: dim}
+			grid[y][x+n] = coreCell{r: ' ', dim: dim, bg: bg}
 		}
 		x += width
 	}
 	if !cleared {
 		return refuse("observer paint lacks authoritative clear")
 	}
-	markerRow, markerCol := -1, -1
-	for r, row := range grid {
+	if x < 0 || x >= cols || y < 0 || y >= rows {
+		return refuse("observer cursor outside composer grid")
+	}
+	ink := func(c coreCell) bool { return c.r != 0 && c.r != ' ' }
+	firstInk := func(row []coreCell) int {
 		for c, cell := range row {
-			if cell.r == '›' {
+			if ink(cell) {
+				return c
+			}
+		}
+		return -1
+	}
+	markerRow, markerCol, regionEnd := -1, -1, rows-1
+	composerBG := grid[y][x].bg
+	if composerBG != "" {
+		// Codex paints a rectangular composer surface, including its blank
+		// padding rows. Bound that whole surface before looking for its prompt;
+		// a rune typed inside the content cannot redefine the boundary.
+		inSurface := func(r int) bool {
+			for _, cell := range grid[r] {
+				if cell.bg != composerBG {
+					return false
+				}
+			}
+			return true
+		}
+		if !inSurface(y) {
+			return refuse("observer composer surface is incomplete")
+		}
+		top := y
+		for top > 0 && inSurface(top-1) {
+			top--
+		}
+		regionEnd = y
+		for regionEnd+1 < rows && inSurface(regionEnd+1) {
+			regionEnd++
+		}
+		for r := top; r <= regionEnd; r++ {
+			if c := firstInk(grid[r]); c >= 0 {
+				markerRow, markerCol = r, c
+				break
+			}
+		}
+	} else {
+		// A minimal uncolored paint is usable only with one structural prompt
+		// and no content below it. Without a surface boundary, a footer or a
+		// second prompt-looking row is ambiguous rather than empty input.
+		for r, row := range grid {
+			if c := firstInk(row); c >= 0 && row[c].r == '›' {
+				if markerRow >= 0 {
+					return refuse("observer has ambiguous uncolored prompts")
+				}
 				markerRow, markerCol = r, c
 			}
 		}
 	}
-	if markerRow < 0 || y != markerRow || x < markerCol+1 {
-		return refuse("observer cursor does not identify the composer")
+	if markerRow < 0 || grid[markerRow][markerCol].r != '›' ||
+		y != markerRow || x != markerCol+2 {
+		return refuse("observer cursor does not identify an empty composer")
+	}
+	for r := markerRow; r <= regionEnd; r++ {
+		for c, cell := range grid[r] {
+			if r == markerRow && c == markerCol {
+				continue
+			}
+			if ink(cell) && (r != markerRow || !cell.dim) {
+				return ErrDraftOnPrompt
+			}
+		}
 	}
 	rowText := func(row []coreCell, hideDim bool) string {
 		var b strings.Builder
@@ -428,18 +487,25 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		}
 		return strings.TrimSpace(b.String())
 	}
-	pi := strings.LastIndex(plain, "›")
+	pi := coreComposerStart(plain)
 	if pi < 0 {
 		return refuse("plain capture has no composer")
 	}
-	pl, _, _ := strings.Cut(plain[pi:], "\n")
+	plainRows := strings.Split(plain[pi:], "\n")
+	compareEnd := regionEnd
+	if composerBG == "" {
+		compareEnd = markerRow
+	}
+	for r := markerRow; r <= compareEnd; r++ {
+		line := ""
+		if i := r - markerRow; i < len(plainRows) {
+			line = strings.TrimSpace(plainRows[i])
+		}
+		if line != rowText(grid[r], false) {
+			return refuse("plain and styled composer disagree")
+		}
+	}
 	observed := rowText(grid[markerRow][markerCol:], false)
-	if strings.TrimSpace(pl) != observed {
-		return refuse("plain and styled composer disagree")
-	}
-	if rowText(grid[markerRow][markerCol+1:], true) != "" {
-		return ErrDraftOnPrompt
-	}
 	ghost := strings.TrimSpace(strings.TrimPrefix(observed, "›"))
 	known := ghost == "" || strings.HasPrefix(ghost, "Try \"") || ghost == "Ask Codex to do anything" || ghost == "Ask a follow-up question"
 	if !known {
@@ -500,4 +566,29 @@ func coreObserverDim(params string, dim bool) (bool, error) {
 		return dim, nil
 	}
 	return sgrDim(strings.Join(foreground, ";"), dim), nil
+}
+
+// Called only after coreObserverDim has validated the SGR groups. Keep the
+// background identity so composer padding cannot be confused with its footer.
+func coreObserverBackground(params, bg string) string {
+	p := strings.Split(params, ";")
+	for i := 0; i < len(p); i++ {
+		n, _ := strconv.Atoi(p[i])
+		switch n {
+		case 0, 49:
+			bg = ""
+		case 40, 41, 42, 43, 44, 45, 46, 47, 100, 101, 102, 103, 104, 105, 106, 107:
+			bg = p[i]
+		case 38, 48, 58:
+			count := 2
+			if p[i+1] == "2" {
+				count = 4
+			}
+			if n == 48 {
+				bg = strings.Join(p[i:i+count+1], ";")
+			}
+			i += count
+		}
+	}
+	return bg
 }

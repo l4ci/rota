@@ -270,17 +270,31 @@ func coreComposer(text string) error {
 	if d, ok := ReadDialog(text); ok {
 		return &DialogError{First: d.First}
 	}
-	i := strings.LastIndex(text, "›")
+	i := coreComposerStart(text)
 	if i < 0 {
 		return fmt.Errorf("%w: no recognized Codex composer", ErrNotSubmitted)
 	}
-	// Plain Core captures have no styling. Even familiar placeholder text can
-	// be a human's draft, so only a genuinely empty rendered line is accepted.
-	line, _, _ := strings.Cut(text[i+len("›"):], "\n")
-	if strings.TrimSpace(line) != "" {
+	// A blank marker row does not establish empty input: retained text may
+	// continue on following rows. Plain text is only a conservative hint;
+	// the styled observer supplies the authoritative composer boundaries.
+	if strings.TrimSpace(text[i+len("›"):]) != "" {
 		return ErrDraftOnPrompt
 	}
 	return nil
+}
+
+// Native Codex renders its prompt at the left margin and indents draft
+// continuations. A prompt-like rune inside that content is not a boundary.
+// This hint never authorizes input without the styled observer.
+func coreComposerStart(text string) int {
+	start, offset := -1, 0
+	for _, line := range strings.SplitAfter(text, "\n") {
+		if strings.HasPrefix(line, "› ") || line == "›\n" || line == "›" {
+			start = offset
+		}
+		offset += len(line)
+	}
+	return start
 }
 func (h *coreHost) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	if !filepath.IsAbs(o.Cwd) {
