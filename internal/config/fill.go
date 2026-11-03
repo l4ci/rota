@@ -104,6 +104,7 @@ func FillDetect(env projects.Env, root string, detect func() string) ([]string, 
 		cfg, copied, moved := migrateLegacyVerify(cfg)
 		cfg, sm = MigrateSource(cfg, detect)
 		global := globalLayer(env)
+		local := fsio.LoadJSON(localPath(root), nil)
 		// A corrupt global may hold keys we cannot see: writing defaults now
 		// would pin them over the repaired global, so fill none of them.
 		globalBroken := GlobalError(env) != nil
@@ -112,7 +113,7 @@ func FillDetect(env projects.Env, root string, detect func() string) ([]string, 
 				filled = append(filled, k.Name)
 				continue
 			}
-			if _, ok := walk(cfg, k.Name); !k.Required || ok || globalBroken || globalSupplies(global, k.Name) {
+			if !k.Required || globalBroken || requiredKeyPresent(k.Name, cfg, global, local) {
 				continue
 			}
 			cfg = fillKey(cfg, "", strings.Split(k.Name, "."), Default(k))

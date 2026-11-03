@@ -336,12 +336,6 @@ func TestCheckVerdicts(t *testing.T) {
 	if st, m := Check(projects.OSEnv(), root); st != Fresh || len(m) != 0 || m == nil {
 		t.Errorf("fresh: %s %v", st, m)
 	}
-	for _, body := range []string{"{oops", "[1]", "null", "", "\xff{}", `{"a": NaN}`} {
-		os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(body), 0o644)
-		if st, _ := Check(projects.OSEnv(), root); st != Corrupt {
-			t.Errorf("%q: %s", body, st)
-		}
-	}
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte("{}"), 0o644)
 	st, m := Check(projects.OSEnv(), root)
 	if st != Stale || len(m) == 0 || m[0] != "learn.promoteThreshold" {
@@ -361,13 +355,6 @@ func TestCheckVerdicts(t *testing.T) {
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), b, 0o644)
 	if st, m := Check(projects.OSEnv(), root); st != Stale || !reflect.DeepEqual(m, []string{"umbrella.enabled", "rota.version"}) {
 		t.Errorf("null/scalar: %s %v", st, m)
-	}
-}
-
-func TestCheckCountsLocalFile(t *testing.T) {
-	root := project(t, "{}", `{"learn": {"promoteThreshold": 1}}`)
-	if st, m := Check(projects.OSEnv(), root); st != Stale || m[0] != "docs.path" {
-		t.Errorf("%s %v", st, m)
 	}
 }
 

@@ -51,6 +51,8 @@ Each key has a scope, which `rota config show` prints beside the source (`(sourc
 
 `rota setup` writes a project answer to `.rota/config.json`, a machine answer to `config.local.json`, and a taste answer to `.rota/config.json` only when you typed or `--set` it and it differs from what the project would inherit. A suggestion you accept, such as `worktree` because `.worktrees/` exists, is not written, so `rota setup --yes` pins no taste key. `rota config check` warns, without failing, about a machine key in `.rota/config.json` and about a taste key pinned there at its default, and fails on a key the schema does not know.
 
+`rota config check` and `rota config fill` count a required key as supplied when the project, local or global layer holds a non-null value for it. The global layer excludes project-owned keys. For example, `docs.path` set only in `config.local.json` satisfies the check, and fill leaves it there without adding a tracked default. When every required key is supplied and no migration or removal is pending, fill reports `changed: false` and leaves the project file unchanged.
+
 ### Moving keys to their layer
 
 A config written before scopes can hold machine keys in the tracked file, where they shadow the global config (an empty `round.accounts` hides the global accounts). `rota migrate config` lists what it would change, with each key's effective value before and after, and writes nothing:
