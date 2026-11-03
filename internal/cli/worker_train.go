@@ -225,15 +225,16 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
+		// Exclusion notes must remain visible when no member survives the checks.
+		for _, n := range r.Notes {
+			fmt.Fprintln(c.Stderr, n)
+		}
 		if run.Refused {
 			res, rerr := verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, trainData(r))
 			return res, rerr
 		}
 		if err != nil {
 			return Result{}, err
-		}
-		for _, n := range r.Notes {
-			fmt.Fprintln(c.Stderr, n)
 		}
 		for _, h := range r.CacheHits {
 			fmt.Fprintln(c.Stderr, "CACHE-HIT "+h+" — verdict reused, not re-run")
