@@ -15,17 +15,21 @@ const (
 
 // requiredPRSection checks headings only. Empty sections and None both pass;
 // the reviewer, rather than this mechanical check, judges their content.
-func requiredPRSection(body string) (verdict, heading string) {
+func requiredPRSection(body string) (verdict, headings string) {
 	found := prSectionHeadings(body)
+	var missing []string
 	for _, section := range []struct{ verdict, heading string }{
 		{GateAssumptionsMissing, "## Assumptions"},
 		{GateRulingsMissing, "## Rulings"},
 	} {
 		if !found[strings.ToLower(section.heading)] {
-			return section.verdict, section.heading
+			if verdict == "" {
+				verdict = section.verdict
+			}
+			missing = append(missing, section.heading)
 		}
 	}
-	return "", ""
+	return verdict, strings.Join(missing, " and ")
 }
 
 func prSectionHeadings(body string) map[string]bool {
@@ -58,8 +62,8 @@ func missingPRSection(verdict string) bool {
 	return verdict == GateAssumptionsMissing || verdict == GateRulingsMissing
 }
 
-// TrainCulprit is a member excluded by the static PR-section check before the
-// train builds or verifies its merge. The remaining members train normally.
+// TrainCulprit is a member excluded for missing PR sections or review verdicts
+// before the train builds or verifies its merge. Remaining members train normally.
 type TrainCulprit struct {
 	Target    string
 	PR        string
@@ -67,8 +71,8 @@ type TrainCulprit struct {
 	Gate      GateResult
 }
 
-func excludePRSections(res *TrainResult, target string, gr GateResult) bool {
-	if !missingPRSection(gr.Verdict) {
+func excludeTrainMember(res *TrainResult, target string, gr GateResult) bool {
+	if !missingPRSection(gr.Verdict) && gr.Verdict != GateReviewMissing {
 		return false
 	}
 	res.Culprits = append(res.Culprits, TrainCulprit{Target: target, PR: gr.PR, BlockedBy: gr.Verdict, Gate: gr})
@@ -90,7 +94,7 @@ func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry
 		if err != nil {
 			return nil, true, err
 		}
-		if excludePRSections(res, target, gr) {
+		if excludeTrainMember(res, target, gr) {
 			continue
 		}
 		if !gr.OK() {
@@ -145,7 +149,7 @@ func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (Ga
 	return gr, err
 }
 
-// Validate --order against the original membership, then remove the section
+// Validate --order against the original membership, then remove the excluded
 // culprits and already-merged PRs. Invalid or duplicate tokens still fail.
 func filterSectionOrder(res TrainResult, o *TrainOpts, merged []TrainMember) error {
 	if (len(res.Culprits) == 0 && len(merged) == 0) || len(o.Order) == 0 {

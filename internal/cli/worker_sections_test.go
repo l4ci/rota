@@ -24,7 +24,7 @@ func (f sectionPRForge) PRView(context.Context, int) (tracker.PRInfo, error) {
 }
 
 func TestWorkerSectionsRefusalData(t *testing.T) {
-	dir := workerProject(t, `{"forge":{"provider":"github"},"ship":{"review":"none"},"test":{"full":["false"]}}`)
+	dir := workerProject(t, `{"forge":{"provider":"github"},"ship":{"review":"light"},"test":{"full":["false"]}}`)
 	origin := filepath.Join(t.TempDir(), "origin.git")
 	gittest.Run(t, dir, "init", "-q", "--bare", "-b", "main", origin)
 	gittest.Run(t, dir, "remote", "add", "origin", origin)
@@ -41,6 +41,7 @@ func TestWorkerSectionsRefusalData(t *testing.T) {
 	for _, tc := range []struct{ body, reason string }{
 		{"## Rulings\nNone\n", blockedby.AssumptionsMissing},
 		{"## Assumptions\nNone\n", blockedby.RulingsMissing},
+		{decisionSectionsFixture, blockedby.ReviewMissing},
 	} {
 		deps.WorkerEnv = func() worker.Env {
 			return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {
@@ -58,6 +59,9 @@ func TestWorkerSectionsRefusalData(t *testing.T) {
 			}
 			if args[1] == "train" {
 				cs, ok := d["culprits"].([]any)
+				if tc.reason == blockedby.ReviewMissing {
+					t.Logf("AC-2 CLI: exit=%d excluded=%d", code, len(cs))
+				}
 				if !ok || len(cs) != 1 {
 					t.Fatalf("missing culprit list: %s", out)
 				}
