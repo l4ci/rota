@@ -38,10 +38,33 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 		if doneAfterRelay(t.kind, text, lines, t.relayPending) {
 			return st, ev
 		}
-	} else if t.relaySeen {
+	} else if t.relaySeen || t.relayObserved {
 		return st, ev
 	}
 	return StateBusy, relayEchoEvidence
+}
+
+// relayHistoryLines bounds a recovery read when the first poll already missed
+// the relay echo. Hosts may retain less (or only the screen); absence of proof
+// leaves the relay pending rather than accepting an indistinguishable old done.
+const relayHistoryLines = 10000
+
+func (e Env) gateRelayCapture(ctx context.Context, h host.Host, t *pollTarget, st, ev, text string, lines int) (string, string) {
+	st, ev = gateRelayEcho(*t, st, ev, text, lines)
+	if st != StateBusy || ev != relayEchoEvidence || t.relaySeen || t.relayObserved || lines >= relayHistoryLines {
+		return st, ev
+	}
+	history, err := readPane(ctx, h, *t, relayHistoryLines)
+	if err != nil || !doneAfterRelay(t.kind, history, 0, t.relayPending) {
+		return st, ev
+	}
+	// Use the recovered capture's own sentinel and masking rules. Seeing only
+	// the marker, an idle host or a delivery acknowledgment is not completion.
+	if hs, he := ClassifyFor(t.kind, history, false, 0, ""); hs == StateDone {
+		t.relayObserved = true
+		return hs, he
+	}
+	return st, ev
 }
 
 // doneEventAfterRelay: the slot's standing event is a `worker done` sent after
@@ -76,14 +99,15 @@ func (e Env) noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 		if t.relayPending == 0 {
 			continue
 		}
-		k := t.relayPending
 		switch {
-		case t.relayMarker && !t.relaySeen:
+		case t.relayObserved && !t.relaySeen:
+			observed := false
 			if _, err := UpdateSlot(root, t.name, func(s *Slot) {
-				if s.RelayPending() == k {
+				if t.sameRelay(s) {
 					s.SetRelayMarkerSeen()
+					observed = true
 				}
-			}); err == nil {
+			}); err == nil && observed {
 				targets[i].relaySeen = true
 			}
 		case !t.relaySeen:
@@ -97,11 +121,13 @@ func (e Env) noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 				stall = relayFallbackWindow
 			}
 			if !t.relaySentAt.IsZero() && now.Sub(t.relaySentAt) >= stall {
+				cleared := false
 				if _, err := UpdateSlot(root, t.name, func(s *Slot) {
-					if s.RelayPending() == k {
+					if t.sameRelay(s) {
 						s.ClearRelayPending()
+						cleared = true
 					}
-				}); err == nil {
+				}); err == nil && cleared {
 					targets[i].relayPending = 0
 				}
 			}
@@ -403,6 +429,11 @@ func alwaysNews(state string) bool {
 // a pane's state does (Poll, Wait). A row different from `seen` drops it: the
 // slot moved on, so its next arrival is news again.
 func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry) (skipped bool, err error) {
+	// A relay sent while the captures were in flight reopens the same session.
+	// Neither this row nor its echo observation can answer that newer relay.
+	if !t.sameRelay(s) {
+		return true, nil
+	}
 	// The row was read against t's event. One that arrived, went or was replaced
 	// since (a `worker send` between the snapshot and this write) makes the row
 	// stale: recording it would stamp activeAt past the new event and kill it.
@@ -488,14 +519,15 @@ type pollTarget struct {
 	// relayPending is the number of the relay sent to the slot whose echo no
 	// done line has followed yet (0 for none). relays is the length of the
 	// slot's relay log.
-	relayPending int
-	relaySeen    bool      // its `[relay K]` line has been seen in a capture
-	relaySentAt  time.Time // when it went out
-	relayEvSeq   int       // the slot's event id when it went out; -1 when unrecorded
-	relayMarker  bool      // set by classify: the last capture shows the line
-	relays       int
-	turnSeq      int
-	unsent       bool // a task whose brief the host never acknowledged
+	relayPending  int
+	relaySeen     bool      // its `[relay K]` line has been seen in a capture
+	relaySentAt   time.Time // when it went out
+	relayEvSeq    int       // the slot's event id when it went out; -1 when unrecorded
+	relayMarker   bool      // set by classify: the last capture shows the line
+	relayObserved bool      // this classify pass saw the line in any capture
+	relays        int
+	turnSeq       int
+	unsent        bool // a task whose brief the host never acknowledged
 	// ev is the slot's standing worker event with the stamps Decide weighs it
 	// against. evSeq is set by classify to the event's seq when the event, not
 	// the pane, decided the row.
@@ -508,6 +540,14 @@ func slotTarget(s *Slot) pollTarget {
 	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(), unsent: s.Unsent(),
 		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relayEvSeq: s.RelayEventSeq(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
+}
+
+// sameRelay binds observations to the relay and session they were read for.
+// Relay numbers restart in a new session; timestamps and event baselines also
+// distinguish a replacement that reused the same number.
+func (t pollTarget) sameRelay(s *Slot) bool {
+	return t.handle == s.PaneHandle() && t.relayPending == s.RelayPending() &&
+		(t.relayPending == 0 || (t.relaySentAt.Equal(s.RelaySentAt()) && t.relayEvSeq == s.RelayEventSeq()))
 }
 
 // rowKey is the `seen` key of a row. A row an event decided carries the
@@ -536,14 +576,23 @@ func (t pollTarget) eventAfterDispatch() bool {
 	return spec.Poll != "" && err == nil && !ts.Before(t.lastChange)
 }
 
-// refreshEvents re-reads each target's event and last-change stamp (and its
-// recorded state) from reg, for a loop that classifies the same targets again.
+// refreshEvents re-reads events and relay baselines for a loop that classifies
+// the same sessions again. A relay can arrive between any two wait passes.
 func refreshEvents(reg Registry, targets []pollTarget) {
 	for i := range targets {
 		if s := reg.Slot(targets[i].name); s != nil {
 			targets[i].ev, targets[i].lastChange, targets[i].prev = s.Event(), parseStamp(s.ActiveAt()), s.State()
 			targets[i].unsent = s.Unsent()
+			if targets[i].handle == s.PaneHandle() {
+				targets[i].relayPending = s.RelayPending()
+				targets[i].relaySeen = s.RelayMarkerSeen()
+				targets[i].relaySentAt = s.RelaySentAt()
+				targets[i].relayEvSeq = s.RelayEventSeq()
+				targets[i].relays = len(s.Relays())
+				targets[i].turnSeq = s.TurnSeq()
+			}
 		}
+		targets[i].relayMarker, targets[i].relayObserved = false, false
 		targets[i].evSeq = 0
 	}
 }
@@ -579,7 +628,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 	first := map[string]string{}
 	finished := map[string]string{} // slot -> native status of a finished turn
 	readErr := map[string]error{}   // slot -> why a pane read failed
-	for _, t := range targets {
+	for i, t := range targets {
 		// The turn is read before the capture: a capture taken after the
 		// host counted the turn finished holds all of its output.
 		if tr != nil && t.turnSeq > 0 {
@@ -588,6 +637,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			}
 		}
 		first[t.name], readErr[t.name] = readPane(ctx, h, t, lines)
+		targets[i].relayObserved = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
 	}
 	if len(finished) < len(targets) {
 		e.Sleep(settle)
@@ -610,7 +660,8 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
 			t.relayMarker = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
 			targets[i].relayMarker = t.relayMarker
-			st, ev = gateRelayEcho(t, st, ev, first[t.name], lines)
+			st, ev = e.gateRelayCapture(ctx, h, &t, st, ev, first[t.name], lines)
+			targets[i].relayObserved = t.relayObserved
 			push(PollRow{t.name, st, ev})
 			continue
 		}
@@ -624,7 +675,9 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
 		t.relayMarker = t.relayPending > 0 && relayMarkerVisible(second, lines, t.relayPending)
 		targets[i].relayMarker = t.relayMarker
-		st, ev = gateRelayEcho(t, st, ev, second, lines)
+		t.relayObserved = t.relayObserved || t.relayMarker
+		st, ev = e.gateRelayCapture(ctx, h, &t, st, ev, second, lines)
+		targets[i].relayObserved = t.relayObserved
 		if st == StateUnknown {
 			// herdr says why it could not classify the agent; a failing or
 			// absent explain leaves the generic evidence as it was.
