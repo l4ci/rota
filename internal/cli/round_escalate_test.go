@@ -260,8 +260,15 @@ func TestEscalateSendUsageAndResolution(t *testing.T) {
 	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md"); code != 3 {
 		t.Errorf("forge has no such issue: %d, want 3", code)
 	}
-	if doc := registryDoc(t, dir); doc["escalations"] != nil {
-		t.Errorf("a failed send records nothing: %v", doc)
+	doc := registryDoc(t, dir)
+	list, _ := doc["escalations"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("a failed send must retain delivery intent: %v", doc)
+	}
+	entry := list[0].(map[string]any)
+	delivery, _ := entry["delivery"].(map[string]any)
+	if entry["commentId"] != "" || delivery["state"] != "ready" {
+		t.Errorf("pre-create failure must remain ready: %v", entry)
 	}
 }
 

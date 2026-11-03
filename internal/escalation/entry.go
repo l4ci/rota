@@ -25,6 +25,7 @@ type Answer struct {
 
 // Entry is one record of the `escalations` list; this package owns its stored shape.
 type Entry struct {
+	Delivery  *Delivery
 	ID        string
 	Kind      string // issue | pr
 	Number    int    // the PR, or a numbered issue; 0 for a key issue
@@ -49,6 +50,11 @@ func entryFrom(o *jsonx.Object) Entry {
 		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: n, Key: jsonx.Str(o, "key"),
 		Slot: jsonx.Str(o, "slot"), Title: jsonx.Str(o, "title"), CommentID: jsonx.Str(o, "commentId"),
 		SentAt: jsonx.Str(o, "sentAt"), Deadline: jsonx.Str(o, "deadline"), Status: jsonx.Str(o, "status"),
+	}
+	if v, ok := o.Get("delivery"); ok {
+		if d, ok := v.(*jsonx.Object); ok {
+			e.Delivery = deliveryFrom(d)
+		}
 	}
 	if v, _ := o.Get("notified"); v == true {
 		e.Notified = true
@@ -95,6 +101,9 @@ func (a Answer) Object() *jsonx.Object {
 func (e Entry) Object() *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("id", e.ID)
+	if e.Delivery != nil {
+		o.Set("delivery", e.Delivery.Object())
+	}
 	o.Set("kind", e.Kind)
 	if e.Key != "" {
 		o.Set("key", e.Key)
