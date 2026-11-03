@@ -104,22 +104,23 @@ Affects `/rota-work` and `/rota-ship` (solo). Sets how [`/rota-ship`](review-and
 
 With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. A local forge (no `origin` remote, or `forge.provider: local`) lands `direct` whatever this key says. The routing lives in one place, `ship.Strategy` in `internal/ship`, and `rota ship strategy` prints its answer. See [issue backend](issue-backend.md).
 
-## round.dispatch: subagent, tmux, herdr or orca
+## round.dispatch: subagent, tmux, herdr, herdr-core or orca
 
 Affects rounds only. `/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows, herdr tabs or Orca terminals (each its own agent session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
 
 | Mode | Effect on a round |
 |------|-------------------|
-| `"subagent"` (default) | `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
+| `"subagent"` (default) | `rota round start` detects the host: Herdr Core inside an app terminal, legacy herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
 | `"tmux"` | One tmux window per worker. Needs a `tmux` binary and a working `claude` on `PATH`. |
 | `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state, notifies when one needs you, and rota titles each tab `<slot> · <task> · <state>`. The orchestrator must run inside a herdr pane. |
+| `"herdr-core"` | Independent Codex terminals in the launching Herdr App space, using its inherited Core socket. No legacy `herdr` CLI/server is needed. See [Herdr App](parallel-rounds.md#herdr-app-and-core). |
 | `"orca"` | One terminal per worker in its existing worktree. Explicit opt-in; needs `orca` on PATH and the Orca app running. Claude and Codex use their configured launch commands. |
 
 ```bash
 rota config set round.dispatch tmux
 ```
 
-**A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux`, `herdr` or `orca` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
+**A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: Core inside a Herdr App terminal, legacy herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux`, `herdr`, `herdr-core` or `orca` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
 **Orca must be running.** Set `round.dispatch` to `orca`, disable
 `autoRenameBranchFromWork` in Orca, and run `rota doctor` before assigning a
