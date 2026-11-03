@@ -86,6 +86,7 @@ func (f *fakeGit) clean(name string) {
 }
 
 type fakeHost struct {
+	calls     []string
 	tabs      []host.Tab
 	procs     []Process
 	tabsErr   error
@@ -97,13 +98,17 @@ type fakeHost struct {
 }
 
 func (h *fakeHost) Tabs(context.Context) ([]host.Tab, error) {
+	h.calls = append(h.calls, "tabs")
 	t := h.tabs
 	if h.afterTabs != nil {
 		defer h.afterTabs()
 	}
 	return t, h.tabsErr
 }
-func (h *fakeHost) Processes(context.Context) ([]Process, error) { return h.procs, h.procsErr }
+func (h *fakeHost) Processes(context.Context) ([]Process, error) {
+	h.calls = append(h.calls, "processes")
+	return h.procs, h.procsErr
+}
 func (h *fakeHost) CloseTab(_ context.Context, id string) error {
 	if err := h.closeErr[id]; err != nil {
 		return err
@@ -364,37 +369,113 @@ func TestApplyReprovesABranchBeforeDeleting(t *testing.T) {
 	}
 }
 
-func TestKindFilter(t *testing.T) {
-	g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
-	g.clean("done")
-	all := find(t, input(g, nil, []host.Agent{}, nil))
-	if len(all.Candidates) != 2 {
-		t.Fatalf("all = %v", ids(all.Candidates))
-	}
-	for _, c := range all.Candidates {
-		known := false
-		for _, k := range Kinds {
-			known = known || c.Kind == k
-		}
-		if !known {
-			t.Errorf("unknown kind %q", c.Kind)
-		}
-	}
-	only := find(t, input(g, nil, []host.Agent{}, nil), KindBranch)
-	if got := ids(only.Candidates); !reflect.DeepEqual(got, []string{"branch:kit/9-old"}) {
-		t.Errorf("filtered = %v", got)
+func TestFindSelectsDiscoveryByKind(t *testing.T) {
+	all := []string{"worktree:done", "branch:kit/9-old", "tab:w1:t1", "process:10", "lease:round", "skillcache:old"}
+	for _, tt := range []struct {
+		name      string
+		kinds     []string
+		want      []string
+		worktrees bool
+		branches  bool
+		hostCalls []string
+		leases    int
+	}{
+		{"omitted", nil, all, true, true, []string{"tabs", "processes"}, 1},
+		{"empty", []string{}, all, true, true, []string{"tabs", "processes"}, 1},
+		{"worktree", []string{KindWorktree}, []string{"worktree:done"}, true, false, nil, 0},
+		{"branch", []string{KindBranch}, []string{"branch:kit/9-old"}, false, true, nil, 0},
+		{"tab", []string{KindTab}, []string{"tab:w1:t1"}, false, false, []string{"tabs"}, 0},
+		{"process", []string{KindProcess}, []string{"process:10"}, false, false, []string{"processes"}, 0},
+		{"lease", []string{KindLease}, []string{"lease:round"}, false, false, nil, 1},
+		{"skillcache", []string{KindSkillCache}, []string{"skillcache:old"}, false, false, nil, 0},
+		{"combined reversed with duplicate", []string{KindLease, KindProcess, KindBranch, KindLease}, []string{"branch:kit/9-old", "process:10", "lease:round"}, false, true, []string{"processes"}, 1},
+		{"unknown", []string{"unknown"}, []string{}, false, false, nil, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
+			g.clean("done")
+			h := &fakeHost{
+				tabs:  []host.Tab{tab("w1:t1", "/r/.worktrees/gone", true)},
+				procs: []Process{{PID: 10, Tab: "w1:t1", Cwd: "/r/.worktrees/gone"}},
+			}
+			l := &fakeLease{l: deadHolder, st: roundlease.Stale}
+			in := input(g, nil, []host.Agent{}, h)
+			in.Lease = l
+			in.SkillCache = t.TempDir()
+			if err := os.Mkdir(filepath.Join(in.SkillCache, "old"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			res := find(t, in, tt.kinds...)
+			if got := ids(res.Candidates); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("candidates = %v, want %v", got, tt.want)
+			}
+			if g.calls[0] != "/r|worktree list --porcelain" {
+				t.Errorf("shared worktree preflight missing: %v", g.calls)
+			}
+			if g.ran("status --porcelain") != tt.worktrees || g.ran("for-each-ref") != tt.branches {
+				t.Errorf("unexpected git discovery calls: %v", g.calls)
+			}
+			if !reflect.DeepEqual(h.calls, tt.hostCalls) || l.reads != tt.leases {
+				t.Errorf("host calls = %v, want %v; lease reads = %d, want %d", h.calls, tt.hostCalls, l.reads, tt.leases)
+			}
+			if len(res.Warnings) != 0 {
+				t.Errorf("warnings = %v", res.Warnings)
+			}
+		})
 	}
 }
 
 func TestGitFailureIsAnError(t *testing.T) {
-	g := &fakeGit{resp: map[string]gitResp{"worktree list --porcelain": {code: 128, err: "not a repo"}}}
-	if _, err := Find(bg, input(g, nil, nil, nil), nil); err == nil {
-		t.Error("git failing must be an error")
+	for _, kinds := range [][]string{nil, {KindLease}, {KindSkillCache}} {
+		g := &fakeGit{resp: map[string]gitResp{"worktree list --porcelain": {code: 128, err: "not a repo"}}}
+		if _, err := Find(bg, input(g, nil, nil, nil), kinds); err == nil {
+			t.Errorf("kinds %v: shared git preflight failing must be an error", kinds)
+		}
+	}
+}
+
+func TestFindExcludesUnselectedDiscoveryWarnings(t *testing.T) {
+	for _, hostUnavailable := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hostUnavailable=%t", hostUnavailable), func(t *testing.T) {
+			g := repo(nil, []string{"kit/9-old"}, "kit/9-old")
+			h := &fakeHost{tabsErr: errors.New("tabs broken"), procsErr: errors.New("processes broken")}
+			l := &fakeLease{readErr: errors.New("lease broken")}
+			in := input(g, nil, []host.Agent{}, h)
+			in.Lease = l
+			// ReadDir on a file fails even when the tests run as root.
+			in.SkillCache = filepath.Join(t.TempDir(), "not-a-directory")
+			if err := os.WriteFile(in.SkillCache, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if hostUnavailable {
+				in.Report.Unavailable = []string{round.SourceHost}
+			}
+			res := find(t, in, KindBranch)
+			if got := ids(res.Candidates); !reflect.DeepEqual(got, []string{"branch:kit/9-old"}) {
+				t.Errorf("branch candidates = %v", got)
+			}
+			if len(h.calls) != 0 || l.reads != 0 || len(res.Warnings) != 0 {
+				t.Errorf("excluded discovery: host calls = %v, lease reads = %d, warnings = %v", h.calls, l.reads, res.Warnings)
+			}
+			// The same failing dependencies must still warn when selected.
+			selected := find(t, in, KindTab, KindProcess, KindLease, KindSkillCache)
+			if len(selected.Candidates) != 0 || len(selected.Warnings) != 4 || l.reads != 1 {
+				t.Errorf("selected failing discovery = %+v, lease reads = %d", selected, l.reads)
+			}
+			wantHostCalls := []string{"tabs", "processes"}
+			if hostUnavailable {
+				wantHostCalls = nil
+			}
+			if !reflect.DeepEqual(h.calls, wantHostCalls) {
+				t.Errorf("selected host calls = %v, want %v", h.calls, wantHostCalls)
+			}
+		})
 	}
 }
 
 // fakeLease scripts the round lease.
 type fakeLease struct {
+	reads    int
 	l        round.Lease
 	st       roundlease.State
 	readErr  error
@@ -404,6 +485,7 @@ type fakeLease struct {
 }
 
 func (f *fakeLease) ReadLease(context.Context, string) (round.Lease, round.LeaseState, error) {
+	f.reads++
 	return f.l, f.st, f.readErr
 }
 
@@ -486,16 +568,26 @@ func TestApplyLeaseThatTurnedLiveIsLeftAlone(t *testing.T) {
 	}
 }
 
-func TestLeaseKindFilter(t *testing.T) {
+func TestFindLeaseSkipsUnrelatedDiscoveryFailure(t *testing.T) {
 	g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
 	g.clean("done")
-	in := input(g, nil, []host.Agent{}, nil)
-	in.Lease = &fakeLease{l: deadHolder, st: roundlease.Stale}
-	if got := ids(find(t, in, KindLease).Candidates); !reflect.DeepEqual(got, []string{"lease:round"}) {
-		t.Errorf("lease only = %v", got)
+	g.resp["for-each-ref --format=%(refname:short) refs/heads/"] = gitResp{code: 128, err: "unrelated branch failure"}
+	h := &fakeHost{tabsErr: errors.New("unrelated tabs failure"), procsErr: errors.New("unrelated processes failure")}
+	l := &fakeLease{l: deadHolder, st: roundlease.Stale}
+	in := input(g, nil, []host.Agent{}, h)
+	in.Lease = l
+	res, err := Find(bg, in, []string{KindLease})
+	if err != nil {
+		t.Errorf("lease discovery inherited an unrelated error: %v", err)
 	}
-	if got := ids(find(t, in, KindBranch).Candidates); !reflect.DeepEqual(got, []string{"branch:kit/9-old"}) {
-		t.Errorf("branch only = %v", got)
+	if got := ids(res.Candidates); !reflect.DeepEqual(got, []string{"lease:round"}) {
+		t.Errorf("lease candidates = %v", got)
+	}
+	if want := []string{"/r|worktree list --porcelain"}; !reflect.DeepEqual(g.calls, want) {
+		t.Errorf("git calls = %v, want only shared preflight %v", g.calls, want)
+	}
+	if len(h.calls) != 0 || l.reads != 1 || len(res.Warnings) != 0 {
+		t.Errorf("host calls = %v, lease reads = %d, warnings = %v", h.calls, l.reads, res.Warnings)
 	}
 }
 

@@ -556,7 +556,7 @@ func Check(env projects.Env, root string) (status string, missing []string) {
 	global := globalLayer(env)
 	local := fsio.LoadJSON(localPath(root), nil)
 	for _, k := range Keys {
-		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) && !globalSupplies(local, k.Name) {
+		if k.Required && !requiredKeyPresent(k.Name, doc, global, local) {
 			missing = append(missing, k.Name)
 		}
 	}
