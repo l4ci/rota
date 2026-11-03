@@ -180,8 +180,11 @@ the exact terminal address; no app configuration or document edits are needed.
 Delivery reports distinguish submitted, queued and picked-up input. A successful
 Core send alone proves submission. Exact message evidence is needed for queue or
 pickup acknowledgment. Startup dialogs, missing status and human drafts refuse
-input; Rota never forces a send or answers an unknown dialog. Retry the same
-message to reconcile its saved signed payload. An uncertain send is retained as
+input; Rota never forces a send or answers an unknown dialog. Each accepted
+composer needs a complete read-only styled paint: the guard checks continuation
+rows as well as the prompt row, and literal prompt glyphs in drafts remain input.
+Unknown layouts refuse dispatch; clear the draft or resolve the unsupported
+rendering before retrying. Retry the same message to reconcile its saved signed payload. An uncertain send is retained as
 unknown and never pasted again automatically; inspect the original worker before
 recovery. These client receipts do not promise formal exactly-once delivery
 against arbitrary concurrent human edits. Ownership records and delivery receipts

@@ -3,8 +3,10 @@ package coretest
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -21,11 +23,14 @@ type Server struct {
 	pid, runs, kills               int
 	sends                          []string
 	run                            map[string]any
+	paint                          string
+	cols, rows                     int
 }
 
 func New(t testing.TB, app string) (*Server, host.Host) {
 	t.Helper()
-	s := &Server{app: app, screen: "› \n", status: "idle", pid: 123, labels: map[string]string{}}
+	s := &Server{app: app, screen: "› \n", status: "idle", pid: 123, labels: map[string]string{}, cols: 100, rows: 30,
+		paint: "\x18\x1b[H\x1b[2J› \x1b[?9001l"}
 	state := t.TempDir()
 	h := host.New(host.HerdrCore, host.Deps{
 		Getenv: func(k string) string {
@@ -56,6 +61,11 @@ func (s *Server) Sent() []string {
 }
 func (s *Server) Run() map[string]any { s.mu.Lock(); defer s.mu.Unlock(); return s.run }
 func (s *Server) Busy()               { s.mu.Lock(); defer s.mu.Unlock(); s.status = "working"; s.screen = "› \n" }
+func (s *Server) Capture(plain, paint string, cols, rows int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.screen, s.paint, s.cols, s.rows, s.status = plain, paint, cols, rows, "idle"
+}
 func (s *Server) terminal(addr string) map[string]any {
 	pid := s.pid
 	created := 123
@@ -76,7 +86,7 @@ func (s *Server) terminal(addr string) map[string]any {
 	if addr == "t2" && s.mode == "finished" {
 		state = "finished"
 	}
-	return map[string]any{"address": addr, "created_ms": created, "pid": pid, "cwd": cwd, "state": state, "screen": "exact", "labels": labels, "reported": true, "status": map[string]string{"app": s.app, "state": s.status}}
+	return map[string]any{"address": addr, "created_ms": created, "pid": pid, "cwd": cwd, "state": state, "screen": "exact", "cols": s.cols, "rows": s.rows, "labels": labels, "reported": true, "status": map[string]string{"app": s.app, "state": s.status}}
 }
 func (s *Server) serve(c net.Conn) {
 	defer c.Close()
@@ -96,7 +106,7 @@ func (s *Server) serve(c net.Conn) {
 		var rpcErr any
 		switch q.Method {
 		case "hello":
-			v = map[string]any{"generation": 1, "version": "test-core", "core": map[string]string{"id": "test-core-id"}, "methods": []string{"terminal.run", "terminal.get", "terminal.read", "terminal.send", "terminal.kill", "terminal.list", "events.subscribe"}}
+			v = map[string]any{"generation": 1, "framed": q.Params["framed"], "version": "test-core", "core": map[string]string{"id": "test-core-id"}, "methods": []string{"terminal.run", "terminal.get", "terminal.read", "terminal.attach", "terminal.send", "terminal.kill", "terminal.list", "events.subscribe"}}
 		case "terminal.get":
 			v = s.terminal(q.Params["terminal"].(string))
 		case "terminal.run":
@@ -165,6 +175,48 @@ func (s *Server) serve(c net.Conn) {
 			result["error"] = rpcErr
 		}
 		if enc.Encode(result) != nil {
+			return
+		}
+		if q.Method == "hello" && q.Params["framed"] == true {
+			s.observe(c)
+			return
+		}
+	}
+}
+
+func (s *Server) observe(c net.Conn) {
+	var header [9]byte
+	if _, err := io.ReadFull(c, header[:]); err != nil || binary.LittleEndian.Uint32(header[:]) != 0 || header[4] != 0 {
+		return
+	}
+	n := binary.LittleEndian.Uint32(header[5:])
+	if n > 256*1024 {
+		return
+	}
+	b := make([]byte, n)
+	if _, err := io.ReadFull(c, b); err != nil {
+		return
+	}
+	var q struct {
+		ID     int
+		Method string
+		Params map[string]any
+	}
+	if json.Unmarshal(b, &q) != nil || q.Method != "terminal.attach" || q.Params["observe"] != true {
+		return
+	}
+	s.mu.Lock()
+	paint := s.paint
+	reply, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": q.ID, "result": map[string]any{"channel": 1, "terminal": s.terminal("t2"), "resize_notifications": false}})
+	s.mu.Unlock()
+	for channel, payload := range [][]byte{reply, []byte(paint)} {
+		binary.LittleEndian.PutUint32(header[:], uint32(channel))
+		header[4] = 0
+		binary.LittleEndian.PutUint32(header[5:], uint32(len(payload)))
+		if _, err := c.Write(header[:]); err != nil {
+			return
+		}
+		if _, err := c.Write(payload); err != nil {
 			return
 		}
 	}

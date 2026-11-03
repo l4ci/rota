@@ -19,7 +19,7 @@ import (
 // The fake speaks actual named Core RPC, with no executable dependency.
 func coreFixture(t *testing.T) (Host, *coreFake) {
 	t.Helper()
-	f := &coreFake{screen: "› \n", status: "idle", pid: 42, core: "fixture-core", state: "live", events: make(chan map[string]any, 8), labels: map[string]string{"herdr.space": "s1", "herdr.tab": "parent-tab"}}
+	f := &coreFake{screen: "› \n", styled: "\x18\x1b[H\x1b[2J› \x1b[1;3H\x1b[?9001l", cols: 100, rows: 30, status: "idle", pid: 42, core: "fixture-core", state: "live", events: make(chan map[string]any, 8), labels: map[string]string{"herdr.space": "s1", "herdr.tab": "parent-tab"}}
 	t.Cleanup(func() { close(f.events) })
 	dir := t.TempDir()
 	d := Deps{Run: func(context.Context, string, []string) (Result, error) {
@@ -44,6 +44,7 @@ type coreFake struct {
 	lose               bool
 	core, state, after string
 	styled             string
+	cols, rows         int
 	observes           int
 	blocked            bool
 	kills              int
@@ -75,7 +76,7 @@ func (f *coreFake) serve(c net.Conn) {
 			if addr == "t1" {
 				state = "live"
 			}
-			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": 100, "rows": 30, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": "codex", "state": f.status}}
+			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": "codex", "state": f.status}}
 		}
 		switch q.Method {
 		case "hello":

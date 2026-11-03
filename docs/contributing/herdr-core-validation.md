@@ -15,7 +15,9 @@ tree `95de6e44381e9f41347a8bc58c6ce6a5178b86e7`. A clean `git archive` was built
 with `go build -trimpath -buildvcs=false ./cmd/rota`; the external build manifest
 records the commit/tree because the archive contains no Git metadata. Binary
 SHA256: `888e3133ed86a35cd8fd00556a876b570acc63ab79481f94ccf0d7cbc4761672`.
-Later documentation changes do not change that Go implementation.
+The complete-round evidence remains tied to that binary. A later production
+draft-guard correction has separate captured-input and adapter proof below;
+the full round was not repeated on that correction.
 
 Core identity stayed `00e08aace2e38f54ce844113e387974d`, with server PID 1117300.
 These are validation identities, not values users should configure or hardcode.
@@ -42,6 +44,39 @@ and [PR 2](https://github.com/l4ci/rota-herdr-core-validation-r48-20261103/pull/
 The parent orchestrator inspected/published the fixture and owned its reviews,
 gates, process control and merges. Workers implemented, recorded assertion
 RED/PASS proof and opened PRs through the ordinary workflow.
+
+## Retained-draft correction after the full round
+
+Independent review found two stationary drafts that the original guard accepted:
+an empty first composer row followed by retained multiline text, and the draft
+`REVIEW DRAFT CHECK ›` ending in a literal prompt glyph. A bounded probe captured
+both from owned t9 without submitting either. Its native idle state, creation
+identity, process and turn stayed unchanged; only the exact test drafts were
+cleared. These observations showed that the earlier draft test was incomplete.
+
+The corrected guard always obtains a read-only styled first paint. It identifies
+the structural prompt within the cursor's composer surface and inspects all its
+rows, including continuation and padding. User-typed prompt glyphs cannot reset
+that boundary. Unknown or incomplete layouts refuse input. Genuine empty and
+recognized dim-placeholder composers remain usable for startup and busy relays.
+
+Sanitized actual plain/paint captures are committed in
+`internal/host/testdata/core-retained-drafts.json`. Assertion RED ran before the
+production correction. The focused regression commands are:
+
+```sh
+go test ./internal/host -run '^TestCoreRetained' -count=1
+go test ./internal/worker -run '^TestCoreAdapter(RelayRetainedComposer|DispatchAndBusyRelay)$' -count=1
+```
+
+The adapter tests require zero `terminal.send` calls for both captured drafts,
+and for a multiline draft with the cursor moved back to its first row. Worker
+integration additionally verifies no relay delivery record is created while
+blocked, then exactly one send after clearing the draft. Actual empty/cleared
+captures, dim placeholders and busy-relay readiness remain positive cases.
+Final-source Core/legacy checks and the fast tier cover the corrected guard;
+these tests do not claim another real full round or alter the pinned live binary.
+Original probe artifacts are retained under `/tmp/rota-2584-review26/`.
 
 ## Human App observations
 
