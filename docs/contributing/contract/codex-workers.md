@@ -1,6 +1,8 @@
 ---
 refs:
   - internal/harness/codex.go
+  - internal/proc/duplex.go
+  - internal/worker/quota.go
   - internal/harness
   - internal/worker/pane.go
   - internal/round/round.go
@@ -32,6 +34,74 @@ E1 (#68) runs OpenAI's Codex CLI as a round or pool worker beside Claude Code. I
 - **Classification.** `worker poll`, `round wait` and `round watch` apply sentinels (`ROTA-DONE`, `ROTA-BLOCKED`) over the host's native state, including Core's Codex status reports. Codex's `PaneVocab.Waiting` matches the active `Waiting for background terminal` line with elapsed time, including a truncated interrupt hint: busy even when herdr reports blocked (#2178). Explicit sentinels, limits, terminal failures and pane approval prompts take precedence over that wait. `round status` captures a blocked pane only when its harness defines `Waiting`; the same classifier can refine it to `working`. Other harnesses and failed or empty captures retain their snapshot state. Captured Codex panes cover the wait, blocked sentinel and approval prompt in `internal/worker/testdata/panes/`. `round status` also reports a still-current accepted completion as `state: "done"`, separately from `hostState`. A newer relay, assignment or session invalidates that completion; active native host state takes precedence. Status rechecks the registry without modifying the worker slot.
 - **`rota doctor` `codex` check.** Placed after `hook`. `skip` when codex is not on PATH and no codex account is in `round.accounts` (the skip message reads "no codex account in round.accounts"). Otherwise `fail` when codex is missing (accounts are configured), `codex --version` cannot run (hint: install codex-cli), or a configured account's home is not logged in (hint `CODEX_HOME=<home> codex login`) or, under herdr, lacks the integration (hint `CODEX_HOME=<home> herdr integration install codex`). `detail` names the version (when printed) and the homes checked, and on a pass with `round.tiers.codex` unset notes that the tiers are optional and names the effective models (the shipped `round.tiers.codex.*` defaults, or Codex's own default model once all three are emptied, #68, #1602). `codex --version` runs with `CODEX_HOME` set to a slot home when one exists, so the check never needs `~/.codex`. With no accounts it checks the default home and only notes a missing login or integration on a `pass`, since a project that never runs codex workers has no reason to log in.
 - **Not in E1.** Codex subagents and solo mode (E3, #70, then C8), a Codex usage meter, codex under tmux, a second-opinion runner (#158 retired it).
+
+### Current account quota reports (#2632)
+
+`worker account list` (plain, JSON and `--ui`) and `round summary` (plain and JSON)
+read the installed authenticated Codex CLI through a one-shot
+`codex app-server --listen stdio://` child. The supported source is the documented
+[`account/rateLimits/read` RPC](https://learn.chatgpt.com/docs/app-server).
+Rota waits for `initialize`, sends `initialized`, then reads `account/read` with
+`refreshToken: false` and `account/rateLimits/read`. It sends no login, thread or
+model-turn request. Authentication stays with the CLI, which may internally
+refresh its managed login. Rota reads no Codex credential files, discards stderr,
+and reports fixed failure reasons rather than raw backend errors.
+
+This is the optional `harness.QuotaReporter` facet. `UsageMeter()` remains false:
+slot-count selection, cooldowns, quota caps and historical `quotaShare` retain
+their existing behavior. A shared account's percentage cannot establish worker
+or issue burn, and percentages do not establish scheduling eligibility or an
+absolute token allowance. Other harnesses keep their existing reporting.
+
+The JSON `quota` snapshot carries `kind`, configured `name`, selected `home`,
+`ambient`, `source` (`codex-app-server`, or `not-read` for an unresolved account),
+`sourceDetail`, receipt-time `observedAt`,
+`accountRef` (a truncated SHA-256 reference, never a raw backend ID),
+`identityStatus` (`reported` or `unavailable`), `status`, `reason`, `weekly` and
+`windows`. A window has nullable `durationMins`, `usedPercent`,
+`remainingPercent`, `resetsAt` (UTC RFC 3339), plus `status` and `reason`.
+`weekly` is null when no unambiguous weekly reading exists. Statuses are
+`available`, `partial` (usage without reset), `stale` (reset elapsed), or
+`unavailable`; missing values remain null. Missing remote identity is explicit
+while the selected local login home remains identified.
+
+Weekly means duration **10080 minutes**, whether primary or secondary. Other
+windows retain their actual duration. The `codex` entry of
+`rateLimitsByLimitId` takes precedence; a present map without that entry never
+falls back to an arbitrary bucket. When the map is absent, `rateLimits` is
+accepted only with a `codex` or absent legacy ID, and the source detail names
+that fallback. Conflicting weekly candidates are unavailable. Missing/invalid
+percentages or timestamps are explicit, zero usage is real zero, and a reported
+percentage above 100 is retained with remaining capacity clamped to zero. An
+elapsed reset is stale; it never resets usage locally.
+
+Each read uses a separate child with an exact expanded `CODEX_HOME`. Missing or
+relative named homes fail closed. No persistent cache is used. Collection has a
+12-second total deadline, at most two concurrent children, and each exchange is
+bounded to 10 seconds, 1 MiB stdout, 256 KiB per message and 64 messages. Every
+child is stopped and reaped after reading. Unsupported binaries/RPCs, unavailable
+authentication, EOF, malformed/oversized responses, account-change notifications
+and timeouts produce unavailable snapshots. No version is pinned. API-key-only
+or unsupported authentication may not expose subscription windows; availability
+on other plans depends on what the CLI reports.
+
+With no configured Codex entries, a Codex project's account list shows
+`ambient/current`, using the caller's effective home. Round summaries resolve
+only unique current `(kind, name)` configurations used by that round; a deleted
+or ambiguous name never becomes ambient. An unnamed historical account can
+show the caller-current ambient home only while no named homes are configured,
+and explicitly cannot verify the historical worker identity. The separate
+**Current account quota (observed now; not round usage)** section and
+`accountQuotas` array do not modify historical totals.
+
+Bounded source verification: on 2026-11-03 at 21:27:03 UTC, `codex-cli 0.166.0`
+returned an authenticated ChatGPT account's `codex` bucket with **primary**
+`usedPercent: 50`, `windowDurationMins: 10080`, `resetsAt: 1794326854`: 50%
+remaining, reset `2026-11-10T16:07:34Z`. Secondary was absent. The research probe
+had a 25-second total deadline and started no model turn; no credentials, email,
+workspace name or raw account ID were printed or retained. This verifies that
+account and source shape, rather than all plans or named homes. Implementation
+verification is recorded separately in the PR.
 
 ### The harness seam (#584, slice A)
 
