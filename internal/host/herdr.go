@@ -330,10 +330,14 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		return tab, nil
 	}
 	if jget(r.Stderr, "error.code") != "agent_not_ready" {
-		// No agent ever ran in the tab: close it, or it lingers as a shell no
-		// slot tracks and no drift check sees (#204).
+		// Read the pane before closing it: a failed launch can leave only a
+		// shell error, which agent start's timeout does not include (#2533).
+		text := paneText(h.herdr(ctx, "pane", "read", pane, "--source", "visible", "--format", "text"))
+		detail := startupPaneDetail(text, kind)
+		// Close the failed tab, or it lingers as a shell no slot tracks and
+		// no drift check sees (#204), even when the diagnostic read failed.
 		h.herdr(ctx, "tab", "close", tab)
-		return "", fmt.Errorf("herdr agent start failed for slot '%s' (%s; tab closed): %s", o.Slot, tab, strings.TrimSpace(r.Stderr))
+		return "", fmt.Errorf("herdr agent start failed for slot '%s' (%s; tab closed): %s%s", o.Slot, tab, strings.TrimSpace(r.Stderr), detail)
 	}
 	// Blocked at startup: answer up to two dialogs (trust, then bypass).
 	for i := 0; ; {
@@ -358,6 +362,34 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 			return tab, fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
 		}
 	}
+}
+
+// startupPaneDetail keeps the last ten non-empty visible lines, clipping long
+// lines so a failed launch does not flood the error. Inspect the full text for
+// a missing binary: subsequent shell output may have pushed it out of the tail.
+func startupPaneDetail(text, kind string) string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	if len(lines) > 10 {
+		lines = lines[len(lines)-10:]
+	}
+	for i, line := range lines {
+		lines[i] = strutil.Clip(line, 500)
+	}
+	detail := "\npane output:\n" + strings.Join(lines, "\n")
+	binary := regexp.QuoteMeta(kind)
+	missing := regexp.MustCompile(`(?m)(?:^|[ \t:])(?:command not found:[ \t]*` + binary + `|` + binary + `:[ \t]*not found)(?:\s|$)`)
+	if missing.MatchString(text) {
+		detail += fmt.Sprintf("\nmissing binary %s: the pane's shell PATH lacks it (check its default node/environment)", kind)
+	}
+	return detail
 }
 
 // openedWorkspace is the linked workspace a `worktree open` made for a slot.
@@ -618,8 +650,8 @@ func (h *herdr) ReadPane(ctx context.Context, slot, handle string, lines int) (s
 	return paneText(r), nil
 }
 
-// paneText is the pane text of an `agent read` reply. herdr 0.9.x prints it as
-// plain text on stdout, not in the JSON envelope its other commands use; a
+// paneText is the pane text of an `agent read` or `pane read` reply. herdr
+// prints it as plain text on stdout, not in the JSON envelope its other commands use; a
 // failure is a JSON error on stderr and a non-zero exit, read here as no text.
 func paneText(r Result) string {
 	if r.ExitCode != 0 {
