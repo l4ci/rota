@@ -453,7 +453,7 @@ func TestCoreAdapterStyledObserverAcceptsOnlyDimPlaceholder(t *testing.T) {
 	if f.observes == 0 {
 		t.Fatal("no observer attached")
 	}
-	f.styled = "\x18\x1b[H\x1b[2J› Ask Codex to do anything\x1b[1;3H"
+	f.styled = "\x18\x1b[H\x1b[2J› Ask Codex to do anything\x1b[1;3H\x1b[?9001l"
 	if e = h.Send(context.Background(), "dana", s, coreBrief(t, "task")); !errors.Is(e, ErrDraftOnPrompt) {
 		t.Fatalf("normal-style placeholder was not protected: %v", e)
 	}
