@@ -40,7 +40,9 @@ Yes, once a supervised round works. Install the handoff hooks (`rota hook instal
 
 ## Do I need herdr or tmux?
 
-No. Workers in a [parallel round](usage/parallel-rounds.md) get a tab each in herdr or tmux when the orchestrator runs inside one. Without either, `rota round start` picks solo mode and the orchestrator runs each worker as a subagent in its own worktree. Solo mode has no host to notify you, so questions go on the issue or PR thread. Solo workers share the orchestrator's account and usage limit, and run Claude only, so keep solo rounds to two or three workers.
+herdr and tmux host the terminal sessions where workers run. rota uses them to launch harnesses, send instructions and read worker output or status. [Behind the scenes](how-it-works.md#why-herdr-or-tmux-is-involved) explains how this fits together.
+
+A host is optional for Claude subagents. Workers in a [parallel round](usage/parallel-rounds.md) get a tab each in herdr or tmux when the orchestrator runs inside one. Without either, `rota round start` picks solo mode and the orchestrator runs each worker as a subagent in its own worktree. Solo mode has no host to notify you, so questions go on the issue or PR thread. Solo workers share the orchestrator's account and usage limit, and run Claude only, so keep solo rounds to two or three workers.
 
 ## Is `.rota/` tracked by default?
 
