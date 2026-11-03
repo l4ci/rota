@@ -679,6 +679,117 @@ func TestHerdrSpawnOtherStartFailure(t *testing.T) {
 	if f.count("herdr agent read") != 0 {
 		t.Error("only agent_not_ready may enter the dialog loop")
 	}
+	if f.count("herdr pane read w9:p17 --source visible --format text") != 1 {
+		t.Errorf("failed start must read its visible pane once:\n%s", f.log())
+	}
+}
+
+func TestHerdrSpawnMissingBinary(t *testing.T) {
+	closed := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[0] + " " + a[1] {
+		case "tab create":
+			return Result{Stdout: tabCreated}
+		case "agent start":
+			return Result{ExitCode: 1, Stderr: "timed out waiting for agent startup"}
+		case "pane read":
+			if closed {
+				t.Error("pane was closed before its error could be read")
+			}
+			return Result{Stdout: "worker launch\n\nzsh: command not found: codex\n\n$ \n"}
+		case "tab close":
+			closed = true
+			return Result{}
+		default:
+			t.Fatalf("unexpected command: %v", a)
+			return Result{}
+		}
+	}}
+	got, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Launch: "codex", BootTimeout: 5})
+	if err == nil || got != "" {
+		t.Fatalf("Spawn = %q, %v, want no handle and a start error", got, err)
+	}
+	for _, want := range []string{"timed out waiting for agent startup", "zsh: command not found: codex", "missing binary codex", "pane's shell PATH"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not include %q", err, want)
+		}
+	}
+	if !closed {
+		t.Error("failed start left its tab open")
+	}
+}
+
+func TestHerdrSpawnFailurePane(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		pane       Result
+		want       string
+		missing    bool
+	}{
+		{"sh missing claude", "claude", Result{Stdout: "sh: 1: claude: not found\n"}, "sh: 1: claude: not found", true},
+		{"empty", "codex", Result{}, "", false},
+		{"blank", "codex", Result{Stdout: "\n \t\n"}, "", false},
+		{"unreadable", "codex", Result{ExitCode: 1, Stdout: "partial read", Stderr: "read failed"}, "", false},
+		{"other startup error", "codex", Result{Stdout: "fatal: login required\n"}, "fatal: login required", false},
+		{"different binary", "codex", Result{Stdout: "zsh: command not found: node\n"}, "zsh: command not found: node", false},
+		{"binary suffix", "codex", Result{Stdout: "zsh: command not found: codex-helper\n"}, "zsh: command not found: codex-helper", false},
+		{"binary prefix", "codex", Result{Stdout: "sh: my-codex: not found\n"}, "sh: my-codex: not found", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			closed := false
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch a[0] + " " + a[1] {
+				case "tab create":
+					return Result{Stdout: tabCreated}
+				case "agent start":
+					return Result{ExitCode: 1, Stderr: "original startup failure"}
+				case "pane read":
+					if closed {
+						t.Error("pane was closed before the diagnostic read")
+					}
+					return tc.pane
+				case "tab close":
+					closed = true
+					return Result{}
+				default:
+					t.Fatalf("unexpected command: %v", a)
+					return Result{}
+				}
+			}}
+			got, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Launch: tc.kind, BootTimeout: 5})
+			if got != "" || err == nil || !strings.Contains(err.Error(), "original startup failure") {
+				t.Fatalf("Spawn = %q, %v, want original error and no handle", got, err)
+			}
+			if tc.want != "" {
+				if !strings.Contains(err.Error(), tc.want) {
+					t.Errorf("error %q does not include %q", err, tc.want)
+				}
+			} else if want := "herdr agent start failed for slot 'w1' (w9:t7; tab closed): original startup failure"; err.Error() != want {
+				t.Errorf("error = %q, want %q", err, want)
+			}
+			if strings.Contains(err.Error(), "missing binary "+tc.kind) != tc.missing {
+				t.Errorf("error = %q, want missing binary hint: %v", err, tc.missing)
+			}
+			if !closed || f.count("herdr tab close w9:t7") != 1 {
+				t.Errorf("failed start must close its tab once:\n%s", f.log())
+			}
+		})
+	}
+}
+
+func TestStartupPaneDetailTail(t *testing.T) {
+	text := "old output\n\n1\n\n2\n3\n4\n5\n6\n7\n8\n9\n10\n \t\n"
+	if got, want := startupPaneDetail(text, "codex"), "\npane output:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10"; got != want {
+		t.Errorf("detail = %q, want %q", got, want)
+	}
+	// Long lines stay bounded without splitting UTF-8 characters.
+	if got, want := startupPaneDetail(strings.Repeat("界", 600), "codex"), "\npane output:\n"+strings.Repeat("界", 500); got != want {
+		t.Errorf("long line detail has %d bytes, want %d", len(got), len(want))
+	}
+	text = "zsh: command not found: codex\n" + strings.Repeat("$\n", 10)
+	if got := startupPaneDetail(text, "codex"); !strings.Contains(got, "missing binary codex") {
+		t.Errorf("missing binary outside the displayed tail lost its hint: %q", got)
+	}
 }
 
 func TestHerdrSend(t *testing.T) {
