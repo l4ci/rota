@@ -320,7 +320,20 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 		}
 		lines = append(lines, fmt.Sprintf("%-12s %-8s %-9s 5h=%-5s 7d=%-5s %s", m.Name, config.KindClaude, m.Verdict, pct(m.FiveHour), pct(m.SevenDay), note))
 	}
-	if len(rows) == 0 {
+	for _, snapshot := range c.deps().AccountQuotas().List(ctx, root) {
+		quota, err := quotaObject(snapshot)
+		if err != nil {
+			return Result{}, err
+		}
+		o := jsonx.NewObject()
+		o.Set("kind", snapshot.Kind)
+		o.Set("name", snapshot.Name)
+		o.Set("configDir", snapshot.Home)
+		o.Set("quota", quota)
+		list = append(list, o)
+		lines = append(lines, fmt.Sprintf("%-12s %-8s %s", snapshot.Name, snapshot.Kind, accountQuotaText(quota)))
+	}
+	if len(list) == 0 {
 		lines = []string{"no accounts configured (slots inherit the ambient CLAUDE_CONFIG_DIR)"}
 	}
 	d := jsonx.NewObject()

@@ -144,8 +144,8 @@ func (codex) AmbientAccount(getenv func(string) string) Account {
 
 func (codex) Accounts(cfg Config) AccountList { return cfg.AccountList }
 
-// UsageMeter: Codex has no usage reading, so its accounts are balanced from
-// the limits the watcher logged.
+// UsageMeter stays false: account quota reports do not provide the scheduling
+// meter or attributed burn. Accounts are balanced from limits the watcher logged.
 func (codex) UsageMeter() bool { return false }
 
 func (codex) CrossReviewer() bool { return true }
