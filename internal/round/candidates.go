@@ -45,6 +45,10 @@ type Candidate struct {
 	CrossMilestone []string
 	// Warnings are upgrade actions the candidate-listing verbs must surface.
 	Warnings []string
+	// AutoHold is why the autopilot skips the item although it may be ready
+	// (an epic, or a Major item with no design or plan note); a person can
+	// still assign it by hand. "" when the autopilot may assign it.
+	AutoHold string
 	// ScopeSource is where the item's scope came from: touches, subsystem,
 	// inferred or none. A none candidate wants a scout before it is assigned.
 	ScopeSource string
@@ -184,6 +188,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		_, src := ItemScopeSource(be, it.ID)
 		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		c.AutoHold = autoHold(be, it)
 		if st := stale[it.ID]; st.Holder != "" {
 			c.BlockedBy = StaleClaimKind
 			c.StaleHolder = st.Holder
