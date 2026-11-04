@@ -54,6 +54,8 @@ type coreFake struct {
 	extras             []map[string]any
 	killed             []string
 	events             chan map[string]any
+	app                string
+	sendIf             []any
 }
 
 func (f *coreFake) serve(c net.Conn) {
@@ -76,7 +78,7 @@ func (f *coreFake) serve(c net.Conn) {
 			if addr == "t1" {
 				state = "live"
 			}
-			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": "codex", "state": f.status}, "turn": f.turn}
+			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": f.appName(), "state": f.status}, "turn": f.turn}
 		}
 		switch q.Method {
 		case "hello":
@@ -109,6 +111,7 @@ func (f *coreFake) serve(c net.Conn) {
 				continue
 			}
 			f.sends++
+			f.sendIf = append(f.sendIf, q.Params["if"])
 			if f.lose {
 				f.mu.Unlock()
 				return
@@ -795,4 +798,11 @@ func TestCorePickedUpNeedsASentMessage(t *testing.T) {
 	if corePickedUp(coreDelivery{Sent: true, Turn: 5, Was: "idle"}, coreTerminal{Status: &coreStatus{State: "working"}, Turn: 5}) {
 		t.Error("an unreported status counts as picked up")
 	}
+}
+
+func (f *coreFake) appName() string {
+	if f.app == "" {
+		return "codex"
+	}
+	return f.app
 }

@@ -128,12 +128,15 @@ An active round retains its recorded host; changing a setting does not migrate i
 `rota orchestrate` runs the existing keepalive supervisor in the visible project
 terminal. An explicit conflicting launch host is refused.
 
-Core workers currently support **Codex with native OSC 7501 status reporting**.
+Core workers currently support **Codex and Claude with native OSC 7501 status reporting**.
 Rota probes the launch flags and account login, then requires the spawned process
 to report readiness. If folder trust appears first, trust the primary project in
 a regular Codex session and retry; Rota leaves that dialog untouched. Codex keeps the default account unless configured otherwise.
-Claude/OpenCode worker preflight refuses Core with guidance to use Codex or an
-existing host. No template or legacy integration installation is required.
+Claude needs no extra setup: Claude Code reports its status to Core itself, and
+rota skips the empty-composer check for it (a half-typed human draft is not guarded
+against; Core's `blocked` status and rota's dialog check still refuse a send into a
+permission prompt or question). OpenCode preflight refuses Core with guidance to
+use Codex, Claude or an existing host. No template or legacy integration installation is required.
 
 Core launches preserve terminal identity inside Codex shell tools with per-run
 native `shell_environment_policy.set` values. They read the actual terminal's
