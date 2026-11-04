@@ -328,7 +328,6 @@ func TestCoreAdapterDeliveryReconciliation(t *testing.T) {
 	text := "--- ORCHESTRATOR ---\n[relay 7]\ninspect this\n--- ROTA-SIG " + strings.Repeat("a", 64) + " ---"
 	p := coreBrief(t, text)
 	f.status = "working"
-	startTurn := f.turn
 	f.after = "• Queued follow-up inputs\n  ↳ --- ORCHESTRATOR ---\n    [relay 7]\n    inspect this…\n› \n"
 	if e := h.Send(context.Background(), "dana", s, p); !errors.Is(e, ErrQueued) {
 		t.Fatalf("queue=%v", e)
@@ -850,6 +849,7 @@ func TestCoreAdapterUnsignedRelayAbsorbedIntoRunningTurn(t *testing.T) {
 	text := "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead the relay.\n</rota-relay>"
 	p := coreBrief(t, text)
 	f.status = "working"
+	startTurn := f.turn
 	if err := h.Send(context.Background(), "dana", s, p); !errors.Is(err, ErrSubmitted) {
 		t.Fatalf("initial send = %v, want submitted", err)
 	}
