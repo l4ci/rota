@@ -15,20 +15,17 @@ import (
 
 var acIDRe = regexp.MustCompile(`^AC-\d+$`)
 
-// passItemRef is the item a plan key names: M01-B07 is B07, #7 and B7 stand
-// for themselves. A slice key names no item.
+// passItemRef is the item a plan key names: M01-B07 is B07, #7, B7 and
+// PROJ-123 stand for themselves. A slice key names no item.
 func passItemRef(verb, key string) (string, error) {
+	r, ok := plan.Resolve(key)
 	switch {
-	case plan.ValidKey(key):
-		unit := key[strings.LastIndex(key, "-")+1:]
-		if strings.HasPrefix(strings.ToUpper(unit), "S") {
-			return "", Usage("%s works on an item's criteria; %s is a slice plan", verb, key)
-		}
-		return unit, nil
-	case plan.ItemOnlyKey(key):
-		return key, nil
+	case !ok:
+		return "", Usage("key must look like #7, B7, PROJ-123 or M01-B07, got %q", key)
+	case r.Slice:
+		return "", Usage("%s works on an item's criteria; %s is a slice plan", verb, key)
 	}
-	return "", Usage("key must look like #7, B7 or M01-B07, got %q", key)
+	return r.Item.ID, nil
 }
 
 // planPass marks one acceptance criterion met. The mark lives in the item's
