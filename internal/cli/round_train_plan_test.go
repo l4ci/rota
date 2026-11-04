@@ -55,10 +55,10 @@ func TestTrainNudgeWithoutConflictsIsUnchanged(t *testing.T) {
 }
 
 func TestPlanNudgesFailsOpenAndSkipsLoneBases(t *testing.T) {
-	c := &Ctx{Deps: &Deps{}}
+	c := &Ctx{Deps: &Deps{Git: fakeHeads(map[string]string{})}}
 	ns := trainNudges([]waitingPR{{PR: "#9", Base: "main", Reviewed: true}, {PR: "#10", Base: "main", Reviewed: true}})
 	before := ns[0].Text()
-	if got := planNudges(c, "/x", ns); got[0].Text() != before {
+	if got := planNudges(c, t.TempDir(), ns); got[0].Text() != before {
 		t.Error("nil hook changed the nudge")
 	}
 	calls := 0
@@ -66,11 +66,11 @@ func TestPlanNudgesFailsOpenAndSkipsLoneBases(t *testing.T) {
 		calls++
 		return nil, errors.New("base not checked out")
 	}
-	if got := planNudges(c, "/x", ns); got[0].Text() != before || calls != 1 {
+	if got := planNudges(c, t.TempDir(), ns); got[0].Text() != before || calls != 1 {
 		t.Errorf("error did not fail open: %q calls=%d", got[0].Text(), calls)
 	}
 	one := trainNudges([]waitingPR{{PR: "#9", Base: "main", Reviewed: true}})
-	planNudges(c, "/x", one)
+	planNudges(c, t.TempDir(), one)
 	if calls != 1 {
 		t.Errorf("planned a lone PR: calls=%d", calls)
 	}

@@ -171,10 +171,10 @@ func TestWaitingPRsReadsDoneSlotsAndQueue(t *testing.T) {
 	})
 	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
 	want := []waitingPR{
-		{PR: "https://example.test/o/r/pull/11", Base: "main", Reviewed: true, ReadySince: nudgeReviewedAt},
-		{PR: "#13", Base: "main", Reviewed: false},
-		{PR: "#12", Base: "cycle", Reviewed: true, ReadySince: nudgeReviewedAt},
-		{PR: "#19", Base: "main", Reviewed: false},
+		{PR: "https://example.test/o/r/pull/11", Branch: "a/1-x", Base: "main", Reviewed: true, ReadySince: nudgeReviewedAt},
+		{PR: "#13", Branch: "c/3-z", Base: "main", Reviewed: false},
+		{PR: "#12", Branch: "b/2-y", Base: "cycle", Reviewed: true, ReadySince: nudgeReviewedAt},
+		{PR: "#19", Branch: "gone/9-q", Base: "main", Reviewed: false},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("waiting = %+v, want %+v", got, want)
@@ -198,8 +198,8 @@ func TestWaitingPRsFillsEmptyBaseFromConfiguredBase(t *testing.T) {
 	})
 	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
 	want := []waitingPR{
-		{PR: "#11", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
-		{PR: "#12", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
+		{PR: "#11", Branch: "a/1-x", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
+		{PR: "#12", Branch: "b/2-y", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
 	}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("waiting = %+v, want %+v", got, want)
