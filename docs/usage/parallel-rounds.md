@@ -504,6 +504,14 @@ blocking finding, when the gate sent it back at its current head (a push clears 
 it is already merged or closed. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
 
+When the preview finds two of the waiting PRs conflicting, the nudge says so before any train starts:
+one `nudge train-conflict` line per pair names the PRs and paths and suggests landing the first, then
+merging the base into the other's branch or routing the conflict to its worker. The `train` line then
+names the largest conflict-free set (the `worker train --plan` landable set) as its command and lists
+the order-blocked PRs with what they conflict with; `trainNudge` in JSON gains `conflicts` and
+`orderBlocked` rows. The preview needs the base checked out in the orchestrator's repo; without it the
+nudge reads as before.
+
 Set `round.trainMax` and `round.trainFillMinutes` to wait for a fuller train or an age deadline.
 The tick and nudge wait until either threshold fires on one base. For example, `3` and `60` wait
 for three reviewed PRs or sixty minutes since the oldest PR's latest current-head review. A lone
