@@ -131,9 +131,14 @@ terminal. An explicit conflicting launch host is refused.
 Core workers currently support **Codex and Claude with native OSC 7501 status reporting**.
 Rota probes the launch flags and account login, then requires the spawned process
 to report readiness. If folder trust appears first, trust the primary project in
-a regular Codex session and retry; Rota leaves that dialog untouched. Codex keeps the default account unless configured otherwise.
+a regular Codex session and retry; Rota leaves that dialog untouched. Codex's "Folder access"
+dialog applies to the repository root, so it comes up once per project, and its default answer,
+"Trust and continue", is the one you want. Codex keeps the default account unless configured otherwise.
 Claude workers need Claude Code's folder trust once for each new slot worktree
-folder: open `claude` once in that folder and accept the prompt. Until then the
+folder: open `claude` once in that folder and accept the prompt. Claude's dialog defaults to
+"No, exit", so pressing Enter straight away quits the worker: select "Yes, I trust this folder"
+first (Down, then Enter, or `hc keys <terminal> down` then `hc keys <terminal> enter` from another
+terminal). Until then the
 worker sits on the trust dialog and assign fails after the boot timeout with an
 error naming the dialog; accept it, then retry the assign with the same request id. Beyond that, Claude needs no
 extra setup: Claude Code reports its status to Core itself, and
