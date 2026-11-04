@@ -56,6 +56,7 @@ type coreFake struct {
 	events             chan map[string]any
 	app                string
 	sendIf             []any
+	unreported         bool
 }
 
 func (f *coreFake) serve(c net.Conn) {
@@ -78,7 +79,11 @@ func (f *coreFake) serve(c net.Conn) {
 			if addr == "t1" {
 				state = "live"
 			}
-			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": f.appName(), "state": f.status}, "turn": f.turn}
+			m := map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": !f.unreported, "status": map[string]string{"app": f.appName(), "state": f.status}, "turn": f.turn}
+			if f.unreported {
+				delete(m, "status")
+			}
+			return m
 		}
 		switch q.Method {
 		case "hello":
