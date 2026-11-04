@@ -94,6 +94,25 @@ func TestChangedPathsExactNames(t *testing.T) {
 	}
 }
 
+func TestDisplayPath(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"a/b.go", "a/b.go"},
+		{"café.txt", "café.txt"},
+		{"sp ace/x.txt", "sp ace/x.txt"},
+		{"tab\there", `"tab\there"`},
+		{"new\nline", `"new\nline"`},
+		{"back`tick", "\"back`tick\""},
+		{" lead.txt", `" lead.txt"`},
+		{"trail.txt ", `"trail.txt "`},
+		{"bad\xffbyte", `"bad\xffbyte"`},
+		{"", `""`},
+	} {
+		if got := DisplayPath(c.in); got != c.want {
+			t.Errorf("DisplayPath(%q) = %s, want %s", c.in, got, c.want)
+		}
+	}
+}
+
 func TestCountLinesSkipsBinary(t *testing.T) {
 	if got := CountLines("3\t1\ta.go\n-\t-\timg.png\n\n"); got != 4 {
 		t.Fatalf("got %d, want 4", got)

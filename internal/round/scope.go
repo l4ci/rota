@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itembody"
 )
 
@@ -146,7 +147,7 @@ func RecordInferred(be backlog.Backend, id string, entries []string) ([]string, 
 func overlapDetail(with, slot string, paths, scopes []string, inferred bool) string {
 	parts := make([]string, 0, 2)
 	if len(paths) > 0 {
-		parts = append(parts, strings.Join(paths, ", "))
+		parts = append(parts, strings.Join(git.DisplayPaths(paths), ", "))
 	}
 	if len(scopes) > 0 {
 		label := "scopes "
