@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/testiso"
 )
 
 // Nothing outside this package names a worker kind (#584): a kind's behaviour
@@ -71,6 +73,9 @@ func kindNames(t *testing.T, root string) []string {
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
+			if testiso.NestedCheckout(root, path, d) {
+				return filepath.SkipDir
+			}
 			switch rel {
 			case ".git", ".worktrees", "internal/harness", "node_modules":
 				return filepath.SkipDir
