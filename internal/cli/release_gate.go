@@ -59,6 +59,8 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		case *branchOnly:
 			mode = release.PushBranchOnly
 		}
+		// PlanPush enforces this too; checking here keeps the refusal ahead of
+		// the confirm-flag validation below.
 		if err := release.CheckPushMode(dir, mode); err != nil {
 			return Result{Data: err.(*Error).Data}, err
 		}

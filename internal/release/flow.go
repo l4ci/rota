@@ -151,8 +151,13 @@ func CheckPushMode(dir string, mode PushMode) error {
 }
 
 // PlanPush resolves the tag, branch and origin and, for a branch-only push,
-// proves the tag is on origin with a published release.
+// proves the tag is on origin with a published release. It applies
+// CheckPushMode first, before any call out, so a plan never carries both
+// refs where goreleaser builds releases.
 func PlanPush(ctx context.Context, p PushPorts, r PushRequest) (PushPlan, error) {
+	if err := CheckPushMode(r.Dir, r.Mode); err != nil {
+		return PushPlan{}, err
+	}
 	tag, bare := r.Tag, strings.TrimPrefix(r.Tag, "v")
 	sha, ok, err := p.Git.Query("rev-parse", "-q", "--verify", "refs/tags/"+tag+"^{commit}")
 	if err != nil {
