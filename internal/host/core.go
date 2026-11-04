@@ -62,9 +62,18 @@ type coreConn struct {
 	id            int
 	core, version string
 	methods       map[string]bool
+	ctxDeadline   time.Time // zero when the connect ctx has none
 }
 
+// coreRPCTimeout bounds one request/response round trip, not the connection.
+const coreRPCTimeout = 30 * time.Second
+
 func (c *coreConn) call(method string, p any, v any) error {
+	deadline := time.Now().Add(coreRPCTimeout)
+	if !c.ctxDeadline.IsZero() && c.ctxDeadline.Before(deadline) {
+		deadline = c.ctxDeadline
+	}
+	c.SetDeadline(deadline)
 	c.id++
 	if e := c.enc.Encode(map[string]any{"jsonrpc": "2.0", "id": c.id, "method": method, "params": p}); e != nil {
 		return e
@@ -99,12 +108,8 @@ func (h *coreHost) connectMode(ctx context.Context, endpoint, core string, frame
 	if e != nil {
 		return nil, e
 	}
-	deadline := time.Now().Add(30 * time.Second)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
-	n.SetDeadline(deadline)
-	c := &coreConn{Conn: n, enc: json.NewEncoder(n), dec: json.NewDecoder(n), methods: map[string]bool{}}
+	d, _ := ctx.Deadline()
+	c := newCoreConn(n, d)
 	var hello struct {
 		Generation int
 		Version    string
@@ -256,7 +261,7 @@ func coreProgram(v coreHandle, t coreTerminal) error {
 }
 func coreReady(t coreTerminal) error {
 	if !t.Reported || t.Status == nil || !harness.CoreStatusSupported(t.Status.App) {
-		return fmt.Errorf("Core worker needs supported native OSC 7501 reporting; inspect startup/authentication")
+		return fmt.Errorf("Core worker has not reported supported native OSC 7501 status; inspect the worker terminal for a startup or authentication prompt")
 	}
 	switch t.Status.State {
 	case "idle", "done", "working":
@@ -396,7 +401,7 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 			if e == nil {
 				e = fmt.Errorf("native state is still working")
 			}
-			return s, fmt.Errorf("Core worker %s did not establish reporting/readiness: %w", v.Address, e)
+			return s, fmt.Errorf("Core worker %s did not establish reporting/readiness: %w%s", v.Address, e, h.bootScreen(c, t))
 		}
 		h.d.Sleep(time.Second)
 		if e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t); e != nil {
@@ -918,4 +923,36 @@ func (h *coreHost) startupExit(c *coreConn, t coreTerminal, cause error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", diagnostic, cause)
+}
+
+// bootScreen explains a boot timeout from the worker's screen when it never
+// reported status: a recognised dialog is named with its recovery, otherwise a
+// short screen tail is attached. Best effort; empty when the read fails.
+func (h *coreHost) bootScreen(c *coreConn, t coreTerminal) string {
+	if t.Reported && t.Status != nil {
+		return ""
+	}
+	var read struct{ Text string }
+	if e := c.call("terminal.read", map[string]any{"terminal": t.Address, "lines": 20}, &read); e != nil {
+		return ""
+	}
+	if d, ok := ReadDialog(read.Text); ok {
+		return fmt.Sprintf("; worker is waiting on a dialog (%q): answer it in the worker terminal (for Claude folder trust, open `claude` once in the slot folder and accept), then retry the assign with the same request id", d.First)
+	}
+	lines := strings.Split(strings.TrimSpace(read.Text), "\n")
+	if len(lines) > 8 {
+		lines = lines[len(lines)-8:]
+	}
+	tail := strings.Join(lines, "\n")
+	if len(tail) > 2048 {
+		tail = tail[len(tail)-2048:]
+	}
+	if tail == "" {
+		return ""
+	}
+	return "; terminal output:\n" + tail
+}
+
+func newCoreConn(n net.Conn, ctxDeadline time.Time) *coreConn {
+	return &coreConn{Conn: n, enc: json.NewEncoder(n), dec: json.NewDecoder(n), methods: map[string]bool{}, ctxDeadline: ctxDeadline}
 }
