@@ -401,7 +401,7 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 			if e == nil {
 				e = fmt.Errorf("native state is still working")
 			}
-			return s, fmt.Errorf("Core worker %s did not establish reporting/readiness: %w%s", v.Address, e, h.bootScreen(c, t))
+			return s, fmt.Errorf("Core worker %s did not establish reporting/readiness: %w%s", v.Address, e, h.bootScreen(c, t, o.Launch))
 		}
 		h.d.Sleep(time.Second)
 		if e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t); e != nil {
@@ -532,7 +532,7 @@ func corePickedUp(d coreDelivery, t coreTerminal) bool {
 // turn shows the message was taken up.
 func deliveryEvidence(screen, text string, t coreTerminal, d coreDelivery) string {
 	state := coreDeliveryEvidence(screen, text, t, d.Before)
-	if state != "picked-up" && corePickedUp(d, t) {
+	if state != "picked-up" && state != "queued" && corePickedUp(d, t) {
 		return "picked-up"
 	}
 	return state
@@ -708,6 +708,27 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 	}
 	if oldQueue >= 0 {
 		old = old[:oldQueue]
+	}
+	// An element opening identifies an unsigned relay as well as a signed
+	// one. Match the sent opening (including its round and sequence), never a
+	// task brief or a legacy bare marker, and require a fresh echo.
+	opening := ""
+	for _, line := range strings.Split(text, "\n") {
+		if harness.IsRelayOpen(line) && harness.RelaySequence(line) != "" {
+			opening = strings.TrimSpace(line)
+			break
+		}
+	}
+	seenOpening := func(s string) bool {
+		for _, line := range strings.Split(s, "\n") {
+			if harness.IsRelayOpen(line) && strings.HasSuffix(strings.TrimSpace(line), opening) {
+				return true
+			}
+		}
+		return false
+	}
+	if opening != "" && seenOpening(output) && !seenOpening(old) {
+		return "picked-up"
 	}
 	signature := ""
 	for _, line := range strings.Split(text, "\n") {
@@ -888,7 +909,7 @@ func (h *coreHost) startupExit(c *coreConn, t coreTerminal, cause error) error {
 // bootScreen explains a boot timeout from the worker's screen when it never
 // reported status: a recognised dialog is named with its recovery, otherwise a
 // short screen tail is attached. Best effort; empty when the read fails.
-func (h *coreHost) bootScreen(c *coreConn, t coreTerminal) string {
+func (h *coreHost) bootScreen(c *coreConn, t coreTerminal, launch string) string {
 	if t.Reported && t.Status != nil {
 		return ""
 	}
@@ -897,7 +918,12 @@ func (h *coreHost) bootScreen(c *coreConn, t coreTerminal) string {
 		return ""
 	}
 	if d, ok := ReadDialog(read.Text); ok {
-		return fmt.Sprintf("; worker is waiting on a dialog (%q): answer it in the worker terminal (for Claude folder trust, open `claude` once in the slot folder and accept), then retry the assign with the same request id", d.First)
+		kind, _, _, _ := LaunchArgs(launch)
+		recovery := ""
+		if hint := harness.StartupDialogRecovery(kind); hint != "" {
+			recovery = " (" + hint + ")"
+		}
+		return fmt.Sprintf("; worker is waiting on a dialog (%q): answer it in the worker terminal%s, then retry the assign with the same request id", d.First, recovery)
 	}
 	lines := strings.Split(strings.TrimSpace(read.Text), "\n")
 	if len(lines) > 8 {
