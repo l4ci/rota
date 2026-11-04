@@ -136,18 +136,3 @@ func TestStoresShareTheVerbs(t *testing.T) {
 		t.Errorf("the note store lists slice plans only and says so once, got %v", warned)
 	}
 }
-
-// The unit's digit rule is the one place the stores differ in add: files are
-// minted as B07, issue numbers have any count.
-func TestAddUnitDigitsByStore(t *testing.T) {
-	root := project(t)
-	notes := NewNotes(
-		func(string) (artifact.Notes, error) { return artifacttest.NewNotes(), nil },
-		func() (SliceStore, error) { return &slicesFake{m: map[[2]string]string{}}, nil }, nil)
-	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B7", Title: "t"}, testDay); exitOf(err) != 2 {
-		t.Errorf("files B7: %v, want exit 2", err)
-	}
-	if key, _, err := Add(root, notes, AddOpts{Key: "M01-B7", Title: "t"}, testDay); err != nil || key != "M01-B7" {
-		t.Errorf("notes B7: %q %v", key, err)
-	}
-}

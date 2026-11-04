@@ -2,9 +2,7 @@ package plan
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
@@ -23,14 +21,6 @@ type SliceStore interface {
 	SlicePlans(mid string) ([]backlog.SlicePlan, error)
 }
 
-var (
-	sliceKeyRe = regexp.MustCompile(`^(` + backlog.MilestonePattern + `)-(` + backlog.SlicePattern + `)$`)
-	itemKeyRe  = regexp.MustCompile(`^` + backlog.MilestonePattern + `-(` + backlog.IDPattern(1) + `)$`)
-	// issueDesignRe is --design in issue mode: an issue number ("3") or the
-	// lettered form with any digit count ("F3").
-	issueDesignRe = regexp.MustCompile(`^[` + backlog.ItemLetters + `]?\p{Nd}+$`)
-)
-
 // notes keeps item plans as the `plan` note of the item's issue (the
 // milestone part of the key is ignored) and slice plans on the milestone's
 // tracking issue.
@@ -47,53 +37,46 @@ func NewNotes(item func(string) (artifact.Notes, error), slices func() (SliceSto
 	return notes{item, slices, warn}
 }
 
-func (notes) Digits() int { return 1 }
+// Resolve: on the issue backend an item plan goes without its milestone.
+func (notes) Resolve(key string) (Ref, error) {
+	if r, ok := Resolve(key); ok {
+		return r, nil
+	}
+	return Ref{}, exitcode.Errf(exitcode.ExitUsage, "key must look like #7, B7, PROJ-123, M01-B07 or M01-S02, got %q", key)
+}
 
-func (notes) ItemOnly() bool { return true }
+// CheckNew: issue numbers have any digit count, so there is nothing more.
+func (notes) CheckNew(Ref) error { return nil }
 
 // DesignRef: an item plan points at the item's own design note, a slice plan
 // at the note of the item it names.
 func (notes) DesignRef(slice bool, design string) (string, error) {
-	if !issueDesignRe.MatchString(design) {
-		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like 3 or F3, got %q", design)
+	ref, err := backlog.ParseIssueRef(design)
+	if err != nil {
+		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like 3, F3 or PROJ-123, got %q", design)
 	}
 	if slice {
-		return "note:" + design + ":design", nil
+		return "note:" + ref.ID + ":design", nil
 	}
 	return "note:design", nil
-}
-
-// sliceOf splits a slice plan key (M01-S03) into milestone and unit.
-func sliceOf(key string) (milestone, unit string, isSlice bool) {
-	if m := sliceKeyRe.FindStringSubmatch(key); m != nil {
-		return m[1], m[2], true
-	}
-	return "", "", false
-}
-
-// itemOf is the item of an item plan key (M01-B07 gives "B07").
-func itemOf(key string) string {
-	if ItemOnlyKey(key) {
-		return strings.ToUpper(strings.TrimPrefix(key, "#"))
-	}
-	if m := itemKeyRe.FindStringSubmatch(key); m != nil {
-		return m[1]
-	}
-	return ""
 }
 
 // docs opens a key's note: a slice plan is a slice of its milestone's
 // tracking issue, an item plan the `plan` note of the item's issue.
 func (s notes) docs() artifact.NoteDocs {
 	return artifact.NoteDocs{Kind: "plan", Open: func(key string) (artifact.NoteSlot, string, error) {
-		if m, u, isSlice := sliceOf(key); isSlice {
+		r, ok := Resolve(key)
+		if !ok {
+			return nil, "", exitcode.Errf(exitcode.ExitUsage, "key must look like #7, B7, PROJ-123, M01-B07 or M01-S02, got %q", key)
+		}
+		if r.Slice {
 			sl, err := s.slices()
 			if err != nil {
 				return nil, "", err
 			}
-			return sliceNote{sl, m, u}, key, nil
+			return sliceNote{sl, r.Milestone, r.Unit}, key, nil
 		}
-		item := itemOf(key)
+		item := r.Item.ID
 		n, err := s.item(item)
 		if err != nil {
 			return nil, "", err
@@ -112,8 +95,9 @@ func (n sliceNote) Get() (string, bool, error)    { return n.sl.SliceGet(n.mid, 
 func (n sliceNote) Put(text string) (bool, error) { return n.sl.SlicePut(n.mid, n.unit, text) }
 func (n sliceNote) Rm() (bool, error)             { return n.sl.SliceRm(n.mid, n.unit) }
 
-func (s notes) Create(milestone, unit string, render func(unit string) string) (string, error) {
-	if unit != "" && !strings.HasPrefix(unit, "S") {
+func (s notes) Create(r Ref, render func(unit string) string) (string, error) {
+	milestone, unit := r.Milestone, r.UnitID()
+	if !r.Slice {
 		n, err := s.item(unit)
 		if err != nil {
 			return "", err

@@ -6,8 +6,6 @@ package design
 
 import (
 	"errors"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -17,43 +15,27 @@ import (
 // Store is where designs live. Errors are exitcode.Errors: Create is exit 4
 // when the design exists, Read, Replace and Remove are exit 3 when it does not.
 type Store interface {
-	// Digits is the fewest digits an ID may carry: file designs are minted
-	// as B07 (2), issue numbers have any count (1).
-	Digits() int
+	// CheckID is the ID rule of the store, applied before it is touched: file
+	// designs are minted as B07 and addressed by that spelling, the issue
+	// backend takes any item reference the backlog reads.
+	CheckID(id string) error
 	Create(id, text string) error
 	Read(id string) (string, error)
 	Replace(id, text string) (changed bool, err error)
 	Remove(id string) error
 }
 
-// issueNumber is the bare and #-prefixed forms the issue backend resolves.
-var issueNumber = regexp.MustCompile(`\A#?[0-9]+\z`)
-
-// CheckID is the ID rule every verb applies before it touches the store.
-func CheckID(s Store, id string) error {
-	if backlog.ValidID(id, s.Digits()) {
-		return nil
-	}
-	if s.Digits() <= 1 {
-		if issueNumber.MatchString(id) {
-			return nil
-		}
-		return exitcode.Errf(exitcode.ExitUsage, "ID must be an issue number: N, #N or [%s]N (e.g. 233, #233, B7); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
-	}
-	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, s.Digits(), id)
-}
-
 // Add creates the design stub, dated by today; an existing design is exit 4.
 func Add(s Store, id, title string, today func() time.Time) error {
-	if err := CheckID(s, id); err != nil {
+	if err := s.CheckID(id); err != nil {
 		return err
 	}
-	return s.Create(id, stubText(strings.TrimPrefix(id, "#"), title, today().Format("2006-01-02")))
+	return s.Create(id, stubText(normID(id), title, today().Format("2006-01-02")))
 }
 
 // Show is the stored design.
 func Show(s Store, id string) (string, error) {
-	if err := CheckID(s, id); err != nil {
+	if err := s.CheckID(id); err != nil {
 		return "", err
 	}
 	return s.Read(id)
@@ -62,7 +44,7 @@ func Show(s Store, id string) (string, error) {
 // Put replaces an existing design's text; changed is false when the text is
 // already identical.
 func Put(s Store, id, text string) (bool, error) {
-	if err := CheckID(s, id); err != nil {
+	if err := s.CheckID(id); err != nil {
 		return false, err
 	}
 	changed, err := s.Replace(id, text)
@@ -75,10 +57,20 @@ func Put(s Store, id, text string) (bool, error) {
 
 // Rm deletes a design; a missing one is exit 3, never a no-op.
 func Rm(s Store, id string) error {
-	if err := CheckID(s, id); err != nil {
+	if err := s.CheckID(id); err != nil {
 		return err
 	}
 	return s.Remove(id)
+}
+
+// normID is the item reference in its one spelling: no "#", upper case. The
+// stub carries it too, since a "#" would turn the front-matter id into a YAML
+// comment.
+func normID(id string) string {
+	if r, err := backlog.ParseIssueRef(id); err == nil {
+		return r.ID
+	}
+	return id
 }
 
 // stubText is the starter text of a design.

@@ -2,6 +2,7 @@ package design
 
 import (
 	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 )
 
@@ -14,12 +15,20 @@ type notes struct {
 // use, so an ID the module rejects never reaches the tracker.
 func NewNotes(open func() (artifact.Notes, error)) Store { return notes{open} }
 
-func (notes) Digits() int { return 1 }
+// CheckID: the item references the issue backend resolves, a number, a lettered
+// number or a tracker key.
+func (notes) CheckID(id string) error {
+	if _, err := backlog.ParseIssueRef(id); err != nil {
+		return exitcode.Errf(exitcode.ExitUsage, "ID must be an issue number or tracker key: N, #N, [%s]N or PROJ-123 (e.g. 233, #233, B7); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
+	}
+	return nil
+}
 
 // docs resolves the item's notes on first use and keeps the design in its
 // `design` note.
 func (s notes) docs() artifact.NoteDocs {
 	return artifact.NoteDocs{Kind: "design", Open: func(id string) (artifact.NoteSlot, string, error) {
+		id = normID(id)
 		n, err := s.open()
 		if err != nil {
 			return nil, "", err
@@ -29,6 +38,7 @@ func (s notes) docs() artifact.NoteDocs {
 }
 
 func (s notes) Create(id, text string) error {
+	id = normID(id)
 	n, err := s.open()
 	if err != nil {
 		return err
