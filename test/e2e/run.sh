@@ -9,7 +9,8 @@
 # (E2E_TMP) and the test/e2e/lib.sh helpers. rota is built once from this
 # checkout unless ROTA_BIN names a binary (absolute path). Real tmux, herdr, gh
 # and glab are replaced by poison stand-ins that fail loudly, so a scenario can
-# never reach a live host or forge.
+# never reach a live host or forge. Each scenario runs under isolate_env
+# (test/lib/isolate.sh), so no parent config, HOME, XDG root or ssh agent reaches it.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO="$(cd "$HERE/../.." && pwd -P)"
@@ -27,7 +28,14 @@ for cli in tmux herdr gh glab; do
   printf '#!/bin/sh\necho "e2e: unexpected real %s call: $*" >&2\nexit 99\n' "$cli" >"$E2E_POISON/$cli"
   chmod +x "$E2E_POISON/$cli"
 done
-export E2E_POISON E2E_FAKES="$REPO/test/fakes" E2E_LIB="$HERE/lib.sh"
+export E2E_POISON E2E_FAKES="$REPO/test/fakes" E2E_LIB="$HERE/lib.sh" E2E_ISOLATE="$REPO/test/lib/isolate.sh"
+
+# Hostile parent (#2629): a global rota config and an ssh-agent identity that a
+# scenario must never see. Every scenario's isolate_env drops them; 06_isolation
+# asserts that. Built after the go build, which needs the real Go environment.
+E2E_HOSTILE="$RUN_TMP/hostile"; mkdir -p "$E2E_HOSTILE"
+printf '{"round":{"stallMinutes":999}}\n' >"$E2E_HOSTILE/config.json"
+export ROTA_CONFIG_DIR="$E2E_HOSTILE" SSH_AUTH_SOCK="$E2E_HOSTILE/agent.sock" SSH_AGENT_PID=1 E2E_HOSTILE
 
 failed=()
 ran=0
@@ -40,7 +48,9 @@ for f in "$HERE"/scenarios/*.sh; do
   ran=$((ran + 1))
   echo "scenario $name"
   E2E_TMP="$(mktemp -d "$RUN_TMP/sc.XXXXXX")"; export E2E_TMP
-  if ! bash -c 'set -euo pipefail; source "$E2E_LIB"; source "$1"' _ "$f"; then
+  # isolate_env pins HOME/XDG under $E2E_TMP/iso (removed with it) and drops the host
+  # and ssh identity; the fake/poison PATH and the Go caches survive it.
+  if ! bash -c 'set -euo pipefail; source "$E2E_ISOLATE"; isolate_env "$E2E_TMP/iso"; source "$E2E_LIB"; source "$1"' _ "$f"; then
     failed+=("$name")
   fi
   rm -rf "${E2E_TMP:?}"
