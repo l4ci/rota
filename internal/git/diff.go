@@ -46,10 +46,12 @@ func RemoteBase(ctx context.Context, run Runner, dir, base string) string {
 	return base
 }
 
-// ChangedPaths lists the paths `git diff --name-only <span>` reports, one per
-// line, trimmed, blanks dropped. A non-zero exit is an error.
+// ChangedPaths lists the paths `git diff --name-only <span>` reports (the new
+// name of a rename). -z keeps git from C-quoting unusual names and from
+// newline-separating them, so each path comes back byte-exact: spaces, tabs,
+// newlines, quotes and non-ASCII included. A non-zero exit is an error.
 func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, error) {
-	res, err := run(ctx, dir, "diff", "--name-only", "--end-of-options", span)
+	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--end-of-options", span)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +59,9 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 		return nil, &ExitError{"diff --name-only " + span, res.ExitCode, res.Stderr}
 	}
 	var paths []string
-	for _, l := range strings.Split(res.Stdout, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			paths = append(paths, l)
+	for _, p := range strings.Split(res.Stdout, "\x00") {
+		if p != "" {
+			paths = append(paths, p)
 		}
 	}
 	return paths, nil
