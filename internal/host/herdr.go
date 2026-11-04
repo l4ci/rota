@@ -723,8 +723,8 @@ func (h *herdr) Turn(ctx context.Context, slot, handle string) (Turn, bool) {
 
 // Kill asks the session to exit, closes its tab, and proves it is gone. It
 // records the pane's process PIDs first (claude plus its MCP children) and
-// fails unless `tab get` fails and every recorded PID has exited. Closed tab
-// ids are never reused, so a failing `tab get` is unambiguous. `/exit` is a
+// fails unless `tab get` reports not-found and every recorded PID has exited. Closed tab
+// ids are never reused, so a not-found `tab get` is unambiguous; any other failure proves nothing. `/exit` is a
 // client-side command, so there is no wait: it produces no turn to observe;
 // it lets Claude Code flush its session first.
 func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
@@ -733,9 +733,20 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	}
 	name := AgentName(slot, handle)
 	var pids []int
-	pane := jget(h.herdr(ctx, "agent", "get", name).Stdout, "result.agent.pane_id")
+	// evidenceUnknown: a failed query before the close means no process
+	// evidence was collected, so no later absence can prove cleanup.
+	evidenceUnknown := false
+	ag := h.herdr(ctx, "agent", "get", name)
+	if ag.ExitCode != 0 {
+		evidenceUnknown = failedStatus(ag) == UnverifiablePrefix+ReasonHostUnreachable
+	}
+	pane := jget(ag.Stdout, "result.agent.pane_id")
 	if pane != "" {
-		pids = processPIDs(h.herdr(ctx, "pane", "process-info", "--pane", pane).Stdout)
+		pi := h.herdr(ctx, "pane", "process-info", "--pane", pane)
+		if pi.ExitCode != 0 && notFound(pi) == presentUnknown {
+			evidenceUnknown = true
+		}
+		pids = processPIDs(pi.Stdout)
 	}
 	h.herdr(ctx, "agent", "prompt", name, "/exit")
 	// A handle naming a pane is one that shares its tab with panes rota does
@@ -765,9 +776,17 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	if paneOnly {
 		kind, target = "pane", pane
 	}
-	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, kind, "get", target).ExitCode != 0 })
+	alive, unknown, ok := killLoop(&h.d, pids, func() presence { return h.probe(ctx, kind, target) })
+	if evidenceUnknown {
+		return fmt.Errorf("slot '%s' previous session could not be verified (tab %s): herdr query failed before the close, so no process evidence was collected; not spawning a second one",
+			slot, handle)
+	}
 	if ok {
 		return nil
+	}
+	if unknown {
+		return fmt.Errorf("slot '%s' previous session could not be verified (tab %s%s): herdr query failed after the close; not spawning a second one",
+			slot, handle, pidSuffix(alive))
 	}
 	return fmt.Errorf("slot '%s' previous session is still running (tab %s%s); not spawning a second one",
 		slot, handle, pidSuffix(alive))

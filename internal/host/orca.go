@@ -443,7 +443,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 		}
 		return true
 	}
-	if alive, ok := killLoop(&o.d, pids, gone); !ok {
+	if alive, _, ok := killLoop(&o.d, pids, func() presence { return seenBool(gone()) }); !ok {
 		return fmt.Errorf("orca close unproven; surviving processes:%s", pidList(alive))
 	}
 	o.d.FS.Remove(h.PIDFile + ".json")
