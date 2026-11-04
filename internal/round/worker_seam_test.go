@@ -130,3 +130,43 @@ func TestRefuseWhileGateRunsNamesThePR(t *testing.T) {
 		}
 	}
 }
+
+// #2639: a held lock refuses only the slots its holder gates, by slot name or
+// by a PR a slot or its review-list record carries; an unreadable holder and a
+// call naming no slot still refuse everything.
+func TestRefuseWhileGateRunsOnlyForGatedSlots(t *testing.T) {
+	root := t.TempDir()
+	err := worker.Update(root, func(d *worker.Doc) {
+		ben := worker.NewSlot("ben", "ben/1-x", "/w/ben", "main", "h")
+		ben.SetPR("https://github.com/l4ci/rota/pull/304")
+		d.AppendSlot(ben)
+		d.AppendSlot(worker.NewSlot("dana", "dana/2-y", "/w/dana", "main", "h"))
+		d.AppendSlot(worker.NewSlot("kit", "park/kit", "/w/kit", "main", "h"))
+		d.QueuePR(worker.QueuedPR{Issue: "3", Branch: "nia/3-z", PR: "#306", From: "nia"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		holder string
+		slots  []string
+		refuse bool
+	}{
+		{"304, 306, 307", []string{"kit"}, false},
+		{"304, 306, 307", []string{"ben"}, true},
+		{"#306", []string{"nia"}, true},
+		{"dana", []string{"dana"}, true},
+		{"dana", []string{"kit"}, false},
+		{"", []string{"kit"}, true},
+		{"freeze recovery", []string{"kit"}, true},
+		{"ben", nil, true},
+	}
+	for _, tc := range cases {
+		err := Env{Worker: &fakeWorker{locked: true, holder: tc.holder}}.refuseWhileGateRuns(bg, root, "assign", tc.slots...)
+		var be *BlockedError
+		got := errors.As(err, &be) && be.By == worker.GateRunning
+		if got != tc.refuse || (!tc.refuse && err != nil) {
+			t.Errorf("holder %q slots %v: err = %v, want refuse=%v", tc.holder, tc.slots, err, tc.refuse)
+		}
+	}
+}

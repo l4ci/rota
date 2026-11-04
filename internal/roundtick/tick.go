@@ -639,8 +639,9 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
 				r.Capped = blk.Msg
 			}
-			// A gate or train holds the land lock: every later assign is refused
-			// the same way, so defer them to the next tick.
+			// A gate or train holds the land lock for the slot assign picked (or
+			// for slots it cannot name): later candidates pick the same slot, so
+			// defer them to the next tick.
 			if errors.As(err, &blk) && blk.By == worker.GateRunning {
 				r.Deferred = "gate running, deferred: " + blk.Msg
 				return nil
