@@ -602,7 +602,7 @@ func (s *Slot) RelayPending() int {
 }
 
 // SetRelayPending records relay k as sent at the stamp; ClearRelayPending ends
-// the mark. A pane that has shown the relay's `[relay k]` line has it recorded
+// the mark. A pane that has shown the relay's opening line has it recorded
 // by SetRelayMarkerSeen: a capture without the line is then a scrolled-out one.
 func (s *Slot) SetRelayPending(k int, at string) {
 	s.o.Set("relayPending", k)
@@ -635,7 +635,7 @@ func (s *Slot) RelaySentAt() time.Time {
 	return parseStamp(str)
 }
 
-// RelayMarkerSeen: a capture has shown the pending relay's `[relay k]` line.
+// RelayMarkerSeen: a capture has shown the pending relay's opening line.
 func (s *Slot) RelayMarkerSeen() bool { v, _ := s.o.Get("relayMarkerSeen"); b, _ := v.(bool); return b }
 
 // SetRelayMarkerSeen records that the pending relay's line has been seen.

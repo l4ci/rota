@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -55,9 +56,11 @@ func TestPollRelayEchoAlreadyOutsideFirstCapture(t *testing.T) {
 		want    string
 	}{
 		"retained history": {relayEcho(1) + strings.Repeat("● work\n", 80) + done, nil, StateDone},
+		"legacy echo":      {legacyRelayEcho(1) + strings.Repeat("● work\n", 80) + done, nil, StateDone},
 		"old done":         {done + relayEcho(1), nil, StateBusy},
 		"wrong relay":      {relayEcho(2) + done, nil, StateBusy},
 		"quoted done":      {"❯ --- ORCHESTRATOR (round 27) ---\n  [relay 1]\n  " + done, nil, StateBusy},
+		"quoted in tags":   {"❯ " + harness.RelayOpen(27, 1) + "\n  " + done + "  " + harness.RelayClose + "\n", nil, StateBusy},
 		"no history":       {done, nil, StateBusy},
 		"failed history":   {relayEcho(1) + done, errors.New("history unavailable"), StateBusy},
 	} {

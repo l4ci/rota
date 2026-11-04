@@ -118,7 +118,7 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 	if res.Dispatched || res.Host != host.Solo || !res.Changed {
 		t.Fatalf("%+v", res)
 	}
-	if !strings.HasPrefix(res.Brief, "--- ORCHESTRATOR (round 1) ---\nYou are ben. Read ") ||
+	if !strings.HasPrefix(res.Brief, "<rota-relay round=\"1\" from=\"orchestrator\">\nYou are ben. Read ") ||
 		!strings.Contains(res.Brief, "ben/12-add-the-round-assign-verb") {
 		t.Errorf("brief:\n%s", res.Brief)
 	}
