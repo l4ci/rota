@@ -869,7 +869,11 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if !*check && !*noAssignCheck {
 			warnAssignFirst(c, root)
 		}
+		st := c.trackStatus("gate " + slot)
+		ok := false
+		defer func() { st.Finish(ok) }()
 		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, FinalSlice: *final, Confirm: conf, Approval: req})
+		ok = run.Err == nil && !run.Refused && run.Result.OK()
 		r, err := run.Result, run.Err
 		if run.Refused {
 			return verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, gateData(r))
