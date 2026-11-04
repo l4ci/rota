@@ -261,7 +261,8 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 // indent: a harness banner at column 0. A reply marker inside a tag-opened span
 // is the orchestrator's own text (a "•" bullet), not the worker's reply. With
 // sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
-// closes the span, inclusive: what the harness prints after it, a limit banner
+// closes a legacy span, inclusive (a tag-opened span ends only at its closing
+// line, so a trailer shape quoted in the body cannot end it): what the harness prints after it, a limit banner
 // carrying no reply marker, is the session's own. The trailer straight below a
 // closing line is masked with the span either way.
 func relayMask(lines []string, gutter, sigEnds bool) []bool {
@@ -290,7 +291,7 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 		switch {
 		case inRelay && tagRelay && harness.IsRelayClose(l):
 			inRelay, gutterRelay, echoRelay, tagRelay, closed = false, false, false, false, true
-		case sigEnds && inRelay && reSigLine.MatchString(l):
+		case sigEnds && inRelay && !tagRelay && reSigLine.MatchString(l):
 			inRelay, gutterRelay, echoRelay, tagRelay = false, false, false, false
 		}
 	}

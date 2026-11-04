@@ -47,18 +47,28 @@ var (
 	// text early in the pane classifier, and the rest would pass for the
 	// worker's own output. Not only whole lines are escaped: a pane splits
 	// lines on more than "\n", and a tag behind any prefix is still a tag.
+	// A signature-trailer line quoted in the body would end a legacy span (and
+	// pass for the payload's own trailer), so that shape is escaped too.
+	// Every other line separator becomes "\n": a pane's echo indents or
+	// gutters each "\n"-separated line, and a separator it renders as a bare
+	// line break would start a line that carries neither.
 	bodyEscaper = strings.NewReplacer(
 		"<"+RelayTag, "&lt;"+RelayTag,
 		"</"+RelayTag, "&lt;/"+RelayTag,
 		"--- ORCHESTRATOR (round", "&#45;-- ORCHESTRATOR (round",
+		"--- ROTA-SIG", "&#45;-- ROTA-SIG",
+		"\r\n", "\n", "\r", "\n", "\v", "\n", "\f", "\n", "\x1c", "\n", "\x1d", "\n", "\x1e", "\n",
+		"\u0085", "\n", "\u2028", "\n", "\u2029", "\n",
 	)
 	bodyLegacyMarker = regexp.MustCompile(`\[relay (\d+)\]`)
 )
 
 // EscapeRelayBody is text with every opening or closing tag of the element, the
-// legacy `--- ORCHESTRATOR (round N) ---` header and the legacy `[relay K]`
-// marker made unrecognisable to IsRelayOpen, IsRelayClose and RelaySequence
-// (`&lt;/rota-relay>`, `&#45;-- ORCHESTRATOR`, `&#91;relay K]`), so quoted text
+// legacy `--- ORCHESTRATOR (round N) ---` header, the legacy `[relay K]` marker
+// and the `--- ROTA-SIG` trailer shape made unrecognisable to IsRelayOpen,
+// IsRelayClose and RelaySequence and to a signature-line match
+// (`&lt;/rota-relay>`, `&#45;-- ORCHESTRATOR`, `&#91;relay K]`,
+// `&#45;-- ROTA-SIG`), and every line separator made "\n", so quoted text
 // cannot end, restart or impersonate the element. Escaped text is unchanged by
 // a second pass. Escape before signing: the signature covers the escaped text.
 func EscapeRelayBody(text string) string {
