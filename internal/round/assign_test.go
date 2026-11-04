@@ -1710,3 +1710,32 @@ func TestPointerBriefNamesTheConfiguredRemote(t *testing.T) {
 		t.Errorf("brief still names origin:\n%s", got)
 	}
 }
+
+// #2639: a gate holding the land lock for a PR no slot carries leaves a slot
+// assignable; one held for this slot still refuses it.
+func TestAssignWhileGateHoldsAnotherSlot(t *testing.T) {
+	f := newAssignFixture(t)
+	cd, err := rotastatetest.CommonDir(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder := rotastate.File(cd, "land") + worker.LandHolderSuffix
+	if err := os.MkdirAll(filepath.Dir(holder), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	holdLandLock(t, f.root, func() {
+		if err := os.WriteFile(holder, []byte("ben"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := f.assign("12", "ben", nil)
+		if by := blockedBy(t, err); by != worker.GateRunning {
+			t.Errorf("lock held for ben: %v", err)
+		}
+		if err := os.WriteFile(holder, []byte("#999"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.assign("12", "ben", nil); err != nil {
+			t.Errorf("lock held for #999: assign to ben = %v, want it to run", err)
+		}
+	})
+}
