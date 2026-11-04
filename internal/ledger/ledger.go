@@ -35,8 +35,10 @@ const (
 	KindPark     = "park"
 	KindGate     = "gate"
 	// KindTrain records one completed train invocation, rather than a member.
-	KindTrain   = "train"
-	KindMerge   = "merge"
+	KindTrain = "train"
+	KindMerge = "merge"
+	// KindCreate records `rota item create` per filed item: issue is the new id, detail.title the normalized title.
+	KindCreate  = "create"
 	KindLimited = "limited"
 	// KindReviewReply records a worker's answer to a reviewer (`rota worker reply`).
 	KindReviewReply = "review-reply"
