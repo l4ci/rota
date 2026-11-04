@@ -876,6 +876,7 @@ func TestCoreUnsignedRelayScreenEvidence(t *testing.T) {
 		{"earlier round", "❯ <rota-relay n=\"9\" round=\"49\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
 		{"task brief", "❯ <rota-relay round=\"50\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
 		{"old echo", "❯ " + opening + "\n  </rota-relay>\n❯ \n", "❯ " + opening + "\n  </rota-relay>\n❯ \n", ""},
+		{"tag already in pre-send queue", "❯ " + opening + "\n  </rota-relay>\n❯ \n", "• Queued follow-up inputs\n  ↳ " + opening + "\n❯ \n", ""},
 		{"queued", "• Queued follow-up inputs\n  ↳ " + opening + "\n❯ \n", "❯ \n", "queued"},
 		{"next tool call", "• Messages to be submitted after next tool call\n    " + opening + "\n❯ \n", "❯ \n", "queued"},
 		{"end of turn", "• Messages to be submitted at end of turn\n    " + opening + "\n❯ \n", "❯ \n", "queued"},
