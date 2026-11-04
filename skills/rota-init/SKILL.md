@@ -31,7 +31,7 @@ Add only judgement the verb cannot make:
 
 - `round.harnesses`: the verb takes the first harness CLI on `PATH`. When the evidence lists several, recommend the one running this session.
 - `test.fast`: the verb proposes the manifest's whole-suite command. When a narrower command that takes changed files exists (a `package.json` `lint` or `test` script, a Makefile `check` target, `pytest` or `ruff` config), propose it with its evidence; `{files}` expands to the changed files, single-quoted, after `--`.
-- `test.full`: when the verb proposes the manifest command and a CI file runs more, say so.
+- `test.full`: when the verb proposes the manifest command and a CI file runs more, say so. A manifest or an inferred command is a candidate, not evidence that real tests exist or ran. Describe a build or lint command as build or lint coverage, never as automated behavior tests.
 - `issues.source`: a `.jira` or `.linear` config is a hint, not a proof: say so.
 - `forge.provider` is not a setup question; read `git remote get-url origin` (github.com → `github`, a GitLab host → `gitlab`, no remote → `local`) when you want to propose it.
 
@@ -44,11 +44,13 @@ Never run a test command to prove it works: the evidence is where the verb read 
 ## Step 2 — Compare with current config
 
 - **No `.rota/`:** every proposal stands. Nothing is written yet.
-- **Initialized:** `rota config show <key>` for each proposal. Drop a key whose current value already equals the suggestion and keep only the ones that differ, showing current and suggested value side by side. With nothing left, print `config already matches the project` and stop.
+- **Initialized:** `rota config show <key>` for each proposal. Drop a key whose current value already equals the suggestion and keep only the ones that differ, showing current and suggested value side by side. Retain the test-setup question even without a suggestion when `test.fullWhere` is local and both `test.full` and `test.e2e` are empty. Established local checks or CI verification (`test.fullWhere ci` with required `test.ciChecks`) need no deferral question. With nothing left, print `config already matches the project` and stop.
 
 ## Step 3 — Ask one at a time
 
 One question per call or message, the recommended value first, labelled with its evidence. For example: `test.fast: go test ./... (go.mod; Makefile target "test")`. Offer the schema default or "leave unset" as an alternative, and a free-text answer.
+
+For test setup, offer **leave for later** when the project has no tests, including when a manifest still suggests a command. With no test signal, ask about deferral rather than inventing a command. If the maintainer chooses it, leave the unresolved test keys unset, finish the remaining initialization and say: **"Verification setup deferred. We will revisit it at the next /rota-orchestrate start and settle it before the first merge."** Do not scaffold a test framework during init, install an always-successful placeholder or treat this answer as permission for `--no-verify`. Existing local or CI verification can stay as configured; deferral is for unresolved setup, not a reason to clear working checks.
 
 - **Claude Code:** `AskUserQuestion`, one question per call. The recommendation first, its label ending `(Recommended)`.
 - **Any other harness (Codex, OpenCode, ...):** one plain message per question, lettered `A)` to `E)`. `A)` is the recommendation. The last letter is "Write your own answer". Ask the next question only after the reply.
@@ -67,6 +69,8 @@ Run `rota config check` after the writes. Fix what it flags, re-run, and continu
 ## Step 5 — Report
 
 One line per key: `<key>: <value> (<evidence>)` for a confirmed write, `<key>: unchanged` for a declined one, `<key>: schema default (no signal)` for one not inferred.
+
+When test setup was deferred, repeat the next-round / before-first-merge commitment above. Explain that a new project can establish its test foundation alongside its first implementation; missing tests now do not prevent finishing init or starting that work.
 
 ## Thought → Reality
 
