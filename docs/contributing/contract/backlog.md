@@ -289,12 +289,13 @@ note: dry run by default: no tracker writes, including when labels are missing. 
 note: with --apply, GitHub, GitLab and Linear create missing fixed labels and finite families and correct descriptions and colors of known labels. Open prefixes update existing definitions only. Tracker defaults that overlap rota labels, unused claim definitions and unknown labels (including retired names) are report-only: never changed, renamed or deleted. Jira and It's a Plan support names only and stay report-only even with --apply; writable is false and metadata differences are omitted. changed is true after any successful upsert; an apply failure returns the measured changes and whether earlier writes succeeded.
 
 ### rota issues label
-rota issues label <issue|key> (--add <name> | --remove <name>)
+rota issues label <issue|key> (--add <name>... | --remove <name>...)
 repo: scoped
-data: {"issue": number|string, "label": string, "action": "add"|"remove", "changed": bool}
+data: {"issue": number|string, "label": string, "action": "add"|"remove", "changed": bool}  (several labels: {"issue", "labels": [{"label", "action", "changed"}], "changed"})
 exit: 3 when the issue does not exist upstream (the forge CLI says not found) or no provider resolves (a local forge); 4 `blockedBy: forge` when the origin names no forge (forge rule, actor); tracker (works under both backends, so there is no `backend` exit)
 old: hv-issues-label <apply|remove> --issue <issue> --label <name> [--repo <name>]
 note: `issue` is a number for a numbered issue (GitHub, GitLab) and the key text, a string, for a key-based tracker's issue (`PROJ-123`). Same for `issues close`.
+note: (#2571) `--add` and `--remove` are repeatable, one of them per call as before. Every label given applies, in the order given; one label keeps the single-label data shape, several report `labels` and `changed` true when any changed. A label named twice is exit 2 and changes nothing. A failure after some labels applied names them in the error (`already applied: ...`).
 shim: `--add` maps to `apply`, `--remove` to `remove`; stdout is empty, so `changed` is true on rc 0 (old cannot report a no-op); the Go port reports the real value. Config `issues.autoCreateLabel` (default true) still governs label creation. Old exits 5 for a missing issue or provider; both are 3 now.
 note: the subcommand `apply|remove` becomes the flags `--add` and `--remove` (exactly one), and the issue number becomes the positional.
 
