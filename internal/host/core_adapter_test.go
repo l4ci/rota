@@ -37,7 +37,7 @@ func coreFixture(t *testing.T) (Host, *coreFake) {
 type coreFake struct {
 	mu                 sync.Mutex
 	screen, status     string
-	pid                int
+	pid, turn          int
 	labels             map[string]string
 	sends              int
 	run                map[string]any
@@ -76,7 +76,7 @@ func (f *coreFake) serve(c net.Conn) {
 			if addr == "t1" {
 				state = "live"
 			}
-			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": "codex", "state": f.status}}
+			return map[string]any{"address": addr, "created_ms": 123, "cwd": "/work", "argv": []string{"codex"}, "state": state, "cols": f.cols, "rows": f.rows, "screen": "exact", "pid": f.pid, "labels": f.labels, "reported": true, "status": map[string]string{"app": "codex", "state": f.status}, "turn": f.turn}
 		}
 		switch q.Method {
 		case "hello":
@@ -734,5 +734,65 @@ func TestCoreAdapterPendingCleanupRetainsReplacementTree(t *testing.T) {
 	survivor = 0
 	if e := h.Kill(context.Background(), "dana", s); e != nil {
 		t.Fatalf("retained tree gone but cleanup refused: %v", e)
+	}
+}
+
+// #2640: Core's turn confirms pickup the screen never showed. From idle the
+// next turn (or working) follows the message; from working the running turn
+// ends first, and only working again or a second turn is the message's own.
+func TestCoreAdapterTurnConfirmsPickup(t *testing.T) {
+	for _, tc := range []struct {
+		name, was string
+		steps     []struct {
+			turn  int
+			state string
+			want  error
+		}
+	}{
+		{"idle", "idle", []struct {
+			turn  int
+			state string
+			want  error
+		}{{0, "idle", ErrSubmitted}, {1, "done", nil}}},
+		{"working", "working", []struct {
+			turn  int
+			state string
+			want  error
+		}{{1, "done", ErrSubmitted}, {1, "working", nil}}},
+		{"working two turns", "working", []struct {
+			turn  int
+			state string
+			want  error
+		}{{2, "idle", nil}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, f := coreFixture(t)
+			s := coreSpawn(t, h)
+			p := coreBrief(t, "task")
+			f.status = tc.was
+			if e := h.Send(context.Background(), "dana", s, p); !errors.Is(e, ErrSubmitted) {
+				t.Fatalf("first send = %v, want submitted", e)
+			}
+			for _, st := range tc.steps {
+				f.turn, f.status = st.turn, st.state
+				fresh := New(HerdrCore, h.(*coreHost).d)
+				if e := fresh.Send(context.Background(), "dana", s, p); !errors.Is(e, st.want) && !(st.want == nil && e == nil) {
+					t.Fatalf("turn %d %s: %v, want %v", st.turn, st.state, e, st.want)
+				}
+			}
+			if f.sends != 1 {
+				t.Fatalf("reconciliation resent: %d sends", f.sends)
+			}
+		})
+	}
+}
+
+func TestCorePickedUpNeedsASentMessage(t *testing.T) {
+	working := coreTerminal{Reported: true, Status: &coreStatus{State: "working"}, Turn: 5}
+	if corePickedUp(coreDelivery{Turn: 0, Was: "idle"}, working) {
+		t.Error("a receipt Core never accepted counts as picked up")
+	}
+	if corePickedUp(coreDelivery{Sent: true, Turn: 5, Was: "idle"}, coreTerminal{Status: &coreStatus{State: "working"}, Turn: 5}) {
+		t.Error("an unreported status counts as picked up")
 	}
 }
