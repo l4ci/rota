@@ -83,7 +83,15 @@ isolate_env "$ISO_DIR"
 WORKTREES_BEFORE="$GATE_TMP.worktrees"
 worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 PIDS=()
-cleanup() { gate_lock_release "$LOCK"; rm -rf "$GATE_TMP" "$ISO_DIR" "$WORKTREES_BEFORE"; }
+# OSC 7501 status (#2642): working/progress while the checks run, then done or
+# error, so the tab shows the gate's state. Only when stdout and stderr are both
+# terminals; terminals that don't know the sequence ignore it.
+GATE_OK=0 STATUS_DONE=0
+osc7501() { [ -t 1 ] && [ -t 2 ] && printf '\033]7501;state=%s:app=rota%s\033\\' "$1" "${2:+:progress=$2}" >&2; return 0; }
+cleanup() {
+  if [ "$STATUS_DONE" = 0 ]; then STATUS_DONE=1; if [ "$GATE_OK" = 1 ]; then osc7501 done; else osc7501 error; fi; fi
+  gate_lock_release "$LOCK"; rm -rf "$GATE_TMP" "$ISO_DIR" "$WORKTREES_BEFORE"
+}
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).
 stop_checks() { for p in "${PIDS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done; }
@@ -176,6 +184,7 @@ N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
 for i in $(seq 1 "$N"); do
   launch "smoke-shard$i" env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$i.list")" bash test/runner.sh
 done
+osc7501 working 0
 echo "gate: ${#NAMES[@]} checks running ($N smoke shards); logs in $LOGS"
 
 # Reap every initial check before retrying anything: a retry runs alone.
@@ -183,6 +192,7 @@ RCS=()
 for idx in "${!PIDS[@]}"; do
   rc=0; wait "${PIDS[$idx]}" || rc=$?
   RCS+=("$rc")
+  osc7501 working $(( (idx + 1) * 90 / ${#PIDS[@]} ))  # the retries below get the last tenth
 done
 fail=0
 for idx in "${!PIDS[@]}"; do
@@ -268,6 +278,7 @@ if [ -n "$(ls -A "$GATE_TMP" 2>/dev/null)" ]; then
 fi
 worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || { echo "FAIL worktree guard"; fail=1; }
 if [ "$fail" = 0 ]; then
+  GATE_OK=1
   [ -n "${ROTA_GATE_LOGS:-}" ] || rm -rf "$LOGS"
   echo "All smoke tests passed."
   exit 0
