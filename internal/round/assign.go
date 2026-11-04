@@ -586,21 +586,67 @@ func blocked(by, format string, a ...any) *BlockedError {
 }
 
 // refuseWhileGateRuns refuses (blockedBy gate-running) a verb that switches a
-// slot worktree's branch while a gate or train holds the land lock: the gate's
-// checkout guard would see the change and turn the merge red.
-func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
+// slot worktree's branch while a gate or train holds the land lock for that
+// slot. The gate verifies in its own scratch tree, so only the slots it gates
+// (named by slot or by PR in the lock's holder) are at risk: their branch and
+// post-landing bookkeeping belong to it. With no slots given, or a holder that
+// names no slot or PR (an older rota, freeze recovery), every slot counts as
+// touched.
+func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots ...string) error {
 	held, err := e.Worker.LandLockHeld(ctx, root)
 	if err != nil {
 		return err
 	}
-	if held {
-		forHolder := ""
-		if h := e.Worker.LandLockHolder(ctx, root); h != "" {
-			forHolder = " for " + holderPRs(root, h)
-		}
-		return blocked(worker.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
+	if !held {
+		return nil
 	}
-	return nil
+	h := e.Worker.LandLockHolder(ctx, root)
+	if len(slots) > 0 {
+		gated, all := gatedSlots(root, h)
+		if !all && !slices.ContainsFunc(slots, func(s string) bool { return gated[s] }) {
+			return nil
+		}
+	}
+	forHolder := ""
+	if h != "" {
+		forHolder = " for " + holderPRs(root, h)
+	}
+	return blocked(worker.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
+}
+
+// gatedSlots resolves a land-lock holder (a slot, a PR or a train's
+// comma-separated targets) to the slots whose branch it gates: a named slot,
+// and every slot or queued PR's origin slot whose PR number a target names.
+// all is true when the holder is empty or a target is neither, so the caller
+// cannot tell which slots are safe.
+func gatedSlots(root, holder string) (gated map[string]bool, all bool) {
+	if strings.TrimSpace(holder) == "" {
+		return nil, true
+	}
+	reg := worker.LoadRegistryTolerant(root)
+	gated = map[string]bool{}
+	for _, t := range strings.Split(holder, ",") {
+		t = strings.TrimSpace(t)
+		if s := reg.Slot(t); s != nil {
+			gated[t] = true
+			continue
+		}
+		n, ok := worker.PRRefNumber(t)
+		if !ok {
+			return nil, true
+		}
+		for _, s := range reg.Slots() {
+			if m, ok := worker.PRRefNumber(s.PR()); ok && m == n {
+				gated[s.Name()] = true
+			}
+		}
+		for _, q := range reg.PRs() {
+			if m, ok := worker.PRRefNumber(q.PR); ok && m == n && q.From != "" {
+				gated[q.From] = true
+			}
+		}
+	}
+	return gated, false
 }
 
 // holderPRs rewrites each comma-separated holder that names a slot with a
@@ -800,9 +846,6 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	if err := e.requireLease(ctx, root, o); err != nil {
 		return run, false, err
 	}
-	if err := e.refuseWhileGateRuns(ctx, root, "assign"); err != nil {
-		return run, false, err
-	}
 	if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *it); why != "" {
 		return run, false, blocked(BlockSite, "%s", why)
 	}
@@ -850,6 +893,17 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 	agent := slot.Name()
 	res.Agent = agent
+	// Only a gate or train on this slot's branch blocks it; other slots stay
+	// assignable while it verifies in its scratch tree (#2639). A file-backend
+	// claim writes tracked .rota/ files on the base checkout the gate lands
+	// on, so without a forge every slot still counts as touched.
+	var touched []string
+	if be.Capabilities().Forge {
+		touched = []string{agent}
+	}
+	if err := e.refuseWhileGateRuns(ctx, root, "assign", touched...); err != nil {
+		return run, false, err
+	}
 	if h := worker.HeldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != worker.NormID(id) {
 			e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
