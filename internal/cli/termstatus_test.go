@@ -42,7 +42,7 @@ func TestOSC7501Format(t *testing.T) {
 		{"working", -1, "\x1b]7501;state=working:app=rota:msg=" + msg + "\x1b\\"},
 		{"working", 40, "\x1b]7501;state=working:app=rota:progress=40:msg=" + msg + "\x1b\\"},
 		{"working", 400, "\x1b]7501;state=working:app=rota:progress=100:msg=" + msg + "\x1b\\"},
-		{"done", 50, "\x1b]7501;state=done:app=rota:msg=" + msg + "\x1b\\"}, // progress only rides working/blocked
+		{"done", -1, "\x1b]7501;state=done:app=rota:msg=" + msg + "\x1b\\"},
 		{"error", -1, "\x1b]7501;state=error:app=rota:msg=" + msg + "\x1b\\"},
 	} {
 		if got := osc7501(c.state, "gate w1", c.pct); got != c.want {

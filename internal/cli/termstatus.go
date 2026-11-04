@@ -18,7 +18,7 @@ const termStatusApp = "rota"
 // indeterminate working record). msg is base64 text, so it must stay one line.
 func osc7501(state, msg string, progress int) string {
 	s := "\x1b]7501;state=" + state + ":app=" + termStatusApp
-	if progress >= 0 && (state == "working" || state == "blocked") {
+	if progress >= 0 {
 		s += ":progress=" + strconv.Itoa(min(progress, 100))
 	}
 	if msg != "" {
