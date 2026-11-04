@@ -340,7 +340,7 @@ func bundleBrief(be backlog.Backend, ids []string) []bundleIssue {
 // mimicsSentinel reports a line that imitates the brief's signature, a
 // sentinel or the issue-text fence; such lines never ride in a signed brief.
 func mimicsSentinel(l string) bool {
-	for _, m := range []string{"ROTA-", "ORCHESTRATOR", "rota:", "issue-text", "<<<", ">>>"} {
+	for _, m := range []string{"ROTA-", "ORCHESTRATOR", "<" + harness.RelayTag, harness.RelayClose, "rota:", "issue-text", "<<<", ">>>"} {
 		if strings.Contains(l, m) {
 			return true
 		}

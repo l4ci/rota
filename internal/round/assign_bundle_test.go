@@ -62,7 +62,8 @@ func TestAssignBundleBindsLeadAndMembers(t *testing.T) {
 	if !strings.Contains(f.host.sent, "- [ ] works") {
 		t.Errorf("brief lacks the lead's acceptance:\n%s", f.host.sent)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(f.host.sent), "(your PR's URL) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.") {
+	// The brief's own last line is the one above the element's closing tag.
+	if !strings.HasSuffix(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(f.host.sent), "</rota-relay>")), "(your PR's URL) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.") {
 		t.Errorf("the ROTA-DONE line must stay last:\n%s", f.host.sent)
 	}
 }

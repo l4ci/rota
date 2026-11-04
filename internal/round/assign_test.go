@@ -168,7 +168,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	if strings.TrimSpace(out) != res.Branch {
 		t.Errorf("worktree must sit on the issue branch, not %q", out)
 	}
-	for _, want := range []string{"--- ORCHESTRATOR (round 1) ---", "You are ben", "contract", "issue 12", "Dispute the ticket", "ben/12-", "Sibling issues running now: 13", "Settled answers (verbatim):\n\nm: use the lease"} {
+	for _, want := range []string{"<rota-relay round=\"1\" from=\"orchestrator\">", "\n</rota-relay>", "You are ben", "contract", "issue 12", "Dispute the ticket", "ben/12-", "Sibling issues running now: 13", "Settled answers (verbatim):\n\nm: use the lease"} {
 		if !strings.Contains(f.host.sent, want) {
 			t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
 		}

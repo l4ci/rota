@@ -27,7 +27,10 @@ import (
 const PromptKeyFile = "rota-prompt.key"
 
 var (
-	promptHeaderRe = regexp.MustCompile(`^--- ORCHESTRATOR \(round \d+\) ---$`)
+	// promptHeaderRe is the first line of a signed payload: the rota-relay
+	// opening line, or the `--- ORCHESTRATOR (round N) ---` header a payload
+	// signed before the element existed carries.
+	promptHeaderRe = regexp.MustCompile(`^(?:--- ORCHESTRATOR \(round \d+\) ---|<` + RelayTag + `(?: n="\d+")? round="\d+" from="orchestrator">)$`)
 	promptSigRe    = regexp.MustCompile(`^--- ROTA-SIG ([0-9a-f]{64}) ---$`)
 	envAssignRe    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 )

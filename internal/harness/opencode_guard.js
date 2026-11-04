@@ -13,7 +13,9 @@ import { readFileSync } from "node:fs";
 const KEY_FILE = new URL("./rota-prompt.key", import.meta.url);
 // The white space Go's unicode.IsSpace drops, so both sides canonicalise alike.
 const SPACE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/g;
-const HEADER = /^--- ORCHESTRATOR \(round \d+\) ---/;
+// A payload opens with the rota-relay element, or with the header an earlier
+// rota signed it with.
+const HEADER = /^(?:--- ORCHESTRATOR \(round \d+\) ---|<rota-relay(?: n="\d+")? round="\d+" from="orchestrator">)/;
 const SIG = /--- ROTA-SIG ([0-9a-f]{64}) ---\s*$/;
 
 function loadKey() {
@@ -26,7 +28,7 @@ function loadKey() {
 }
 
 // signed accepts a maintainer's `m:` answer or a payload that opens with the
-// orchestrator header and ends with a ROTA-SIG over everything before it. The
+// orchestrator element and ends with a ROTA-SIG over everything before it. The
 // check does not depend on line breaks: some panes flatten a paste.
 function signed(key, prompt) {
   if (prompt.trim().startsWith("m:")) return true;

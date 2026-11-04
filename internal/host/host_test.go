@@ -1987,6 +1987,81 @@ func TestRelayQueuedTail(t *testing.T) {
 	}
 }
 
+// elementBrief is relayBrief in the rota-relay element (#2658): the sequence
+// rides on the opening line, and the closing line precedes the trailer.
+const elementBrief = "<rota-relay n=\"2\" round=\"35\" from=\"orchestrator\">\n" +
+	"[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n" +
+	"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n" +
+	"body, attribute it as 'orchestrator relay round 35', never as a maintainer\n" +
+	"sign-off in your session.]\n\nREVIEW pr\n</rota-relay>\n--- ROTA-SIG abc ---\n"
+
+// The queue preview of a busy Codex shows only a brief's first lines. The
+// opening tag is the first, so the relay is still recognised when the preview
+// stops after it, and the earlier relay's tag is not this one's.
+func TestHerdrCodexSendAcknowledgesQueuedRelayElement(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte(elementBrief), 0o600)
+	lines := strings.Split(elementBrief, "\n")
+	preview := func(n int) string { return "  ↳ " + strings.Join(lines[:n], "\n    ") + "\n" }
+	earlier := strings.Replace(preview(2), `n="2"`, `n="1"`, 1)
+	const idle = "Ask Codex to do anything"
+	cases := map[string]struct {
+		queued, composer string
+		want             error
+	}{
+		"queued":                {"• Queued follow-up messages\n" + preview(6), idle, ErrQueued},
+		"truncated to 2 lines":  {"• Queued follow-up messages\n" + preview(2), idle, ErrQueued},
+		"truncated to the tag":  {"• Queued follow-up messages\n" + preview(1), idle, ErrQueued},
+		"behind a core wrapper": {"• Queued follow-up messages\n  ↳ <hc from=\"t1\">" + lines[0] + "\n", idle, ErrQueued},
+		"absent":                {"", idle, ErrNotSubmitted},
+		"earlier":               {earlier, idle, ErrNotSubmitted},
+		"quoted":                {"The previous response mentioned " + lines[0] + " in prose.\n", idle, ErrNotSubmitted},
+		"on composer":           {"", strings.ReplaceAll(strings.TrimRight(elementBrief, "\n"), "\n", "\n  "), ErrNotSubmitted},
+	}
+	for _, status := range []string{"working", "blocked"} {
+		for name, c := range cases {
+			t.Run(status+"/"+name, func(t *testing.T) {
+				f := &fake{handler: func(_ string, a []string) Result {
+					switch a[1] {
+					case "read":
+						return Result{Stdout: "OpenAI Codex\n• Working (3s)\n" + c.queued + "› " + c.composer + "\n"}
+					case "prompt":
+						return Result{Stdout: strings.Replace(agentJSON(status), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+					}
+					return Result{}
+				}}
+				if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != c.want {
+					t.Fatalf("Send = %v, want %v", err, c.want)
+				}
+			})
+		}
+	}
+}
+
+// Every brief now ends in the same closing line. An earlier brief's echo holds
+// it, so the tail that proves pickup (or a brief left on the prompt line) is
+// the last body line together with it.
+func TestBriefTailOfAnElement(t *testing.T) {
+	first := "<rota-relay round=\"1\" from=\"orchestrator\">\nbuild A\n</rota-relay>\n"
+	second := "<rota-relay round=\"1\" from=\"orchestrator\">\nbuild B\n</rota-relay>\n"
+	if got, want := briefTail(second), "buildB</rota-relay>"; got != want {
+		t.Fatalf("briefTail = %q, want %q", got, want)
+	}
+	if briefInPrompt("❯ "+first, second) {
+		t.Error("an earlier brief's echo acknowledged this one")
+	}
+	if !briefInPrompt("❯ "+strings.ReplaceAll(strings.TrimRight(second, "\n"), "\n", "\n  "), second) {
+		t.Error("a brief typed whole on the prompt line was not recognised")
+	}
+	// Typed up to the last body line, before its closing line: not whole yet.
+	if briefInPrompt("❯ <rota-relay round=\"1\" from=\"orchestrator\">\n  build B", second) {
+		t.Error("a half-typed brief counted as typed")
+	}
+	if relayQueued("• Queued\n  ↳ <rota-relay n=\"1\" round=\"1\" from=\"orchestrator\">\n", "<rota-relay n=\"2\" round=\"1\" from=\"orchestrator\">\nx\n</rota-relay>\n") {
+		t.Error("relay 1's preview acknowledged relay 2")
+	}
+}
+
 func TestHerdrCodexSendAcknowledgesFastCompletion(t *testing.T) {
 	text := "--- ORCHESTRATOR (round 35) ---\nbuild issue 1800\n--- ROTA-SIG abc ---\n"
 	file := filepath.Join(t.TempDir(), "brief.md")

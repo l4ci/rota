@@ -149,12 +149,27 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 	return out
 }
 
-// reRelayHead opens an orchestrator relay or brief echoed into the pane, bare
-// or after Claude Code's "❯" prompt glyph.
+// reRelayHead opens an orchestrator relay or brief echoed into the pane in the
+// format that preceded the rota-relay element, bare or after Claude Code's "❯"
+// prompt glyph. isRelayHead reads both formats.
 var reRelayHead = regexp.MustCompile(`^\s*(?:❯\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reRelayHeadG is reRelayHead under the gutter.
 var reRelayHeadG = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+
+// isRelayHead reports the line that opens echoed orchestrator text: a
+// `<rota-relay …>` opening line, or the legacy `--- ORCHESTRATOR (round N) ---`
+// header (under the gutter when the kind has one). tag tells the two apart:
+// text opened by a tag ends at its closing line.
+func isRelayHead(l string, gutter bool) (head, tag bool) {
+	if harness.IsRelayOpen(l) {
+		return true, true
+	}
+	if gutter {
+		return reRelayHeadG.MatchString(l), false
+	}
+	return reRelayHead.MatchString(l), false
+}
 
 // reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
 // is evidence that is only the brief's own placeholder (`<pr-url>`).
@@ -188,10 +203,12 @@ var reSigLine = regexp.MustCompile(`^\s*(?:┃\s*)?--- ROTA-SIG [0-9a-f]+ ---\s*
 const staleDoneEvidence = "static pane, ROTA-DONE predates the last relay"
 
 // lastSentinel returns the state of the last ROTA-BLOCKED/ROTA-DONE line the
-// worker itself printed. Text from a `--- ORCHESTRATOR (round N) ---` header up
-// to the worker's next reply marker is a relay: sentinel text quoted there is
-// the orchestrator's, so only a marker-prefixed line counts inside it. A relay
-// echoed under OpenCode's "┃" gutter ends where the gutter does.
+// worker itself printed. Text from a `<rota-relay …>` opening line through its
+// closing line (see relayMask), or from a legacy `--- ORCHESTRATOR (round N) ---`
+// header up to the worker's next reply marker, is a relay: sentinel text quoted
+// there is the orchestrator's, so only a marker-prefixed line counts inside a
+// legacy one. A relay echoed under OpenCode's "┃" gutter ends where the gutter
+// does.
 //
 // A ROTA-DONE followed by a relay header is superseded: the relay (a bounce, a
 // review) reopened the work, so the old line is no longer the worker's state
@@ -200,13 +217,13 @@ const staleDoneEvidence = "static pane, ROTA-DONE predates the last relay"
 // after it counts, the same question re-asked included (#1096). stale reports that such a line was dropped and no later sentinel
 // replaced it.
 func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stale bool) {
-	relayHead, blockedRe, doneRe := reRelayHead, reBlocked, reDone
+	blockedRe, doneRe := reBlocked, reDone
 	if gutter {
-		relayHead, blockedRe, doneRe = reRelayHeadG, reBlockedG, reDoneG
+		blockedRe, doneRe = reBlockedG, reDoneG
 	}
 	inRelay := relayMask(lines, gutter, false)
 	for i, l := range lines {
-		if relayHead.MatchString(l) {
+		if head, _ := isRelayHead(l, gutter); head {
 			if ok && state == StateDone {
 				state, evidence, ok, stale = "", "", false, true
 			} else if ok && state == StateBlocked {
@@ -234,37 +251,44 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 }
 
 // relayMask marks the lines of echoed orchestrator text: each
-// `--- ORCHESTRATOR (round N) ---` header and what follows up to the worker's
-// next reply marker. A relay echoed under OpenCode's "┃" gutter ends where the
-// gutter does, since OpenCode marks the worker's reply with nothing. A brief
-// Claude Code echoes behind "❯" ends at the first non-blank line without the
-// two-space echo indent: a harness banner at column 0. With
+// `<rota-relay …>` opening line and what follows through its closing line, the
+// exact end of the orchestrator's text. Text echoed in the format that
+// preceded the element opens with a `--- ORCHESTRATOR (round N) ---` header and
+// has no end marker, so the span runs to the worker's next reply marker. A
+// relay echoed under OpenCode's "┃" gutter ends where the gutter does, since
+// OpenCode marks the worker's reply with nothing. A brief Claude Code echoes
+// behind "❯" ends at the first non-blank line without the two-space echo
+// indent: a harness banner at column 0. A reply marker inside a tag-opened span
+// is the orchestrator's own text (a "•" bullet), not the worker's reply. With
 // sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
 // closes the span, inclusive: what the harness prints after it, a limit banner
-// carrying no reply marker, is the session's own.
+// carrying no reply marker, is the session's own. The trailer straight below a
+// closing line is masked with the span either way.
 func relayMask(lines []string, gutter, sigEnds bool) []bool {
-	relayHead := reRelayHead
-	if gutter {
-		relayHead = reRelayHeadG
-	}
 	mask := make([]bool, len(lines))
-	inRelay, gutterRelay, echoRelay := false, false, false
+	inRelay, gutterRelay, echoRelay, tagRelay, closed := false, false, false, false, false
 	for i, l := range lines {
-		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !relayHead.MatchString(l) {
-			inRelay, echoRelay = false, false
+		head, tag := isRelayHead(l, gutter)
+		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !head {
+			inRelay, echoRelay, tagRelay = false, false, false
 		}
 		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
-			inRelay, gutterRelay = false, false
+			inRelay, gutterRelay, tagRelay = false, false, false
 		}
+		afterClose := closed
+		closed = false
 		switch {
-		case relayHead.MatchString(l):
-			inRelay, gutterRelay, echoRelay = true, gutter && reGutter.MatchString(l), reEchoHead.MatchString(l)
-		case reReplyMarker.MatchString(l):
+		case head:
+			inRelay, gutterRelay, echoRelay, tagRelay = true, gutter && reGutter.MatchString(l), reEchoHead.MatchString(l), tag
+		case reReplyMarker.MatchString(l) && !tagRelay:
 			inRelay, gutterRelay, echoRelay = false, false, false
 		}
-		mask[i] = inRelay
-		if sigEnds && inRelay && reSigLine.MatchString(l) {
-			inRelay, gutterRelay, echoRelay = false, false, false
+		mask[i] = inRelay || (afterClose && reSigLine.MatchString(l))
+		switch {
+		case inRelay && tagRelay && harness.IsRelayClose(l):
+			inRelay, gutterRelay, echoRelay, tagRelay, closed = false, false, false, false, true
+		case sigEnds && inRelay && reSigLine.MatchString(l):
+			inRelay, gutterRelay, echoRelay, tagRelay = false, false, false, false
 		}
 	}
 	return mask
@@ -577,7 +601,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	return StateIdle, "static pane, no sentinel"
 }
 
-// relayMarkerVisible: the pane capture holds pending relay k's `[relay k]` line.
+// relayMarkerVisible: the pane capture holds pending relay k's opening line (or the legacy `[relay k]` line).
 func relayMarkerVisible(text string, lines, k int) bool {
 	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines {
@@ -592,7 +616,7 @@ func relayMarkerVisible(text string, lines, k int) bool {
 }
 
 // doneAfterRelay reports a done line printed after relay k's echo. The relay is
-// identified by its `[relay k]` line, not by the shape of the pane, so a second
+// identified by its marker line, not by the shape of the pane, so a second
 // relay not yet rendered is never mistaken for the first.
 func doneAfterRelay(kind, text string, lines, k int) bool {
 	all := pystr.Splitlines(text)
@@ -600,10 +624,6 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 		all = all[len(all)-lines:]
 	}
 	gutter := paneRulesFor(kind).gutter
-	head := reRelayHead
-	if gutter {
-		head = reRelayHeadG
-	}
 	mark := -1
 	for i, l := range all {
 		if harness.RelaySequence(l) == strconv.Itoa(k) {
@@ -614,7 +634,10 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 		return false
 	}
 	start := mark
-	for start > 0 && !head.MatchString(all[start]) {
+	for start > 0 {
+		if head, _ := isRelayHead(all[start], gutter); head {
+			break
+		}
 		start--
 	}
 	st, _, ok, _ := lastSentinel(all[start:], gutter)
