@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/testiso"
 )
 
 // Guard key names in every expression, including local aliases, maps and
@@ -32,6 +34,9 @@ func roundKeyLiterals(t *testing.T, root string) []string {
 			return err
 		}
 		if d.IsDir() {
+			if testiso.NestedCheckout(root, path, d) {
+				return fs.SkipDir
+			}
 			switch d.Name() {
 			case ".git", ".worktrees", "node_modules", "vendor", "testdata":
 				return fs.SkipDir

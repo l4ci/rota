@@ -8,13 +8,13 @@ import (
 )
 
 func TestScrubHostEnvDropsByPrefix(t *testing.T) {
-	for _, k := range []string{"HERDR_FUTURE_VAR", "HERDR_ENV", "TMUX", "TMUX_PANE", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE"} {
+	for _, k := range []string{"HERDR_FUTURE_VAR", "HERDR_ENV", "TMUX", "TMUX_PANE", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE", "ORCA_TERMINAL_HANDLE"} {
 		t.Setenv(k, "x")
 	}
 	t.Setenv("ROTA_KEEP_ME", "x")
 	scrubHostEnv()
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") {
+		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") || strings.HasPrefix(kv, "ORCA_") {
 			t.Errorf("host variable survived the scrub: %s", kv)
 		}
 	}
@@ -26,7 +26,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 // A HERDR_ variable must not outlive package init, whatever the host sets.
 func TestNoHostVarAfterInit(t *testing.T) {
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") {
+		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") || strings.HasPrefix(kv, "ORCA_") {
 			t.Errorf("host variable survived package init: %s", kv)
 		}
 	}

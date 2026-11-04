@@ -8,9 +8,9 @@ import (
 )
 
 // hostEnvPrefixes are the host-session variables a test must never inherit:
-// herdr, herdr-core (HC_*) and tmux pane/socket state. Same rule as isolate_env in
+// herdr, herdr-core (HC_*), Orca (ORCA_*) and tmux pane/socket state. Same rule as isolate_env in
 // test/lib/isolate.sh, by prefix so a new HERDR_* variable is covered unseen.
-var hostEnvPrefixes = []string{"HERDR_", "TMUX", "HC_"}
+var hostEnvPrefixes = []string{"HERDR_", "TMUX", "HC_", "ORCA_"}
 
 // scrubHostEnv unsets every variable that starts with a host prefix.
 func scrubHostEnv() {
