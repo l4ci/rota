@@ -22,16 +22,31 @@ const (
 // normalized title. The ledger is gitignored per-project state and works the
 // same on the file and issue backends, so the check needs no tracker query.
 
+// createTargeter is implemented by the umbrella backend: the sub-repo a create
+// files to. Single-repo backends have one target, "".
+type createTargeter interface {
+	CreateTarget(in backlog.CreateInput) string
+}
+
+func createTarget(be backlog.Backend, in backlog.CreateInput) string {
+	if t, ok := be.(createTargeter); ok {
+		return t.CreateTarget(in)
+	}
+	return ""
+}
+
+func createKey(target, title string) string { return target + "\x00" + normCreateTitle(title) }
+
 func normCreateTitle(t string) string { return strings.ToLower(strings.Join(strings.Fields(t), " ")) }
 
-// recentCreates maps normalized title to the id filed within the window.
+// recentCreates maps createKey (target, normalized title) to the id filed within the window.
 func recentCreates(c *Ctx, root string) map[string]string {
 	out := map[string]string{}
 	entries, _ := ledger.Load(root)
 	cutoff := c.deps().Now().Add(-createWindow)
 	for _, e := range entries {
 		if e.Kind == ledger.KindCreate && e.TS.After(cutoff) {
-			out[e.DetailStr("title")] = e.Issue
+			out[createKey(e.DetailStr("target"), e.DetailStr("title"))] = e.Issue
 		}
 	}
 	return out
@@ -39,17 +54,17 @@ func recentCreates(c *Ctx, root string) map[string]string {
 
 // checkCreateGuard refuses (exit 4) before anything is filed: a batch over the
 // cap, or any title filed within the window. All-or-nothing for a batch.
-func checkCreateGuard(c *Ctx, root string, titles []string) error {
-	if len(titles) > createBatchCap {
-		e := Refused("batch holds %d records, over the cap of %d; split it or pass --force", len(titles), createBatchCap)
+func checkCreateGuard(c *Ctx, root string, be backlog.Backend, ins []backlog.CreateInput) error {
+	if len(ins) > createBatchCap {
+		e := Refused("batch holds %d records, over the cap of %d; split it or pass --force", len(ins), createBatchCap)
 		e.Data = jsonObj("blockedBy", blockedby.BatchCap, "cap", createBatchCap, "changed", false)
 		return e
 	}
 	recent := recentCreates(c, root)
 	var dups []string
-	for _, t := range titles {
-		if id, ok := recent[normCreateTitle(t)]; ok {
-			dups = append(dups, fmt.Sprintf("%s (%q)", id, t))
+	for _, in := range ins {
+		if id, ok := recent[createKey(createTarget(be, in), in.Title)]; ok {
+			dups = append(dups, fmt.Sprintf("%s (%q)", id, in.Title))
 		}
 	}
 	if len(dups) == 0 {
@@ -73,7 +88,7 @@ func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, 
 	res, err := r.Backend.Create(in)
 	if err == nil {
 		_ = ledger.Append(r.root, ledger.Entry{TS: r.c.deps().Now(), Kind: ledger.KindCreate, Issue: res.ID,
-			Detail: ledger.Detail("title", normCreateTitle(in.Title))})
+			Detail: ledger.Detail("title", normCreateTitle(in.Title), "target", createTarget(r.Backend, in))})
 	}
 	return res, err
 }

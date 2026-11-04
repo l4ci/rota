@@ -314,7 +314,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			if !*force {
-				if err := checkCreateGuard(c, root, []string{in.Title}); err != nil {
+				if err := checkCreateGuard(c, root, be, []backlog.CreateInput{in}); err != nil {
 					return Result{}, err
 				}
 			}
@@ -410,16 +410,12 @@ func itemCreateBatch(c *Ctx, root, path string, force bool) (Result, error) {
 		}
 		ins[i] = in
 	}
-	if !force {
-		titles := make([]string, len(ins))
-		for i, in := range ins {
-			titles[i] = in.Title
-		}
-		if err := checkCreateGuard(c, root, titles); err != nil {
-			return Result{}, err
-		}
-	}
 	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+		if !force {
+			if err := checkCreateGuard(c, root, be, ins); err != nil {
+				return Result{}, err
+			}
+		}
 		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root}, ins)
 		if data, ok := res.Data.(*jsonx.Object); ok {
 			warnings, _ := data.Get("warnings")
