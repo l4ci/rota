@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/overlap"
 )
 
 func branchWithChanges(t *testing.T) string {
@@ -43,6 +44,53 @@ func TestChangedPathsAndLines(t *testing.T) {
 	}
 	if _, err := repo.ChangedLines(ctx, "nope...feat"); err == nil {
 		t.Fatal("bad span: want error")
+	}
+}
+
+// ChangedPaths returns byte-exact repository paths: no display quoting, no
+// trimming, whatever core.quotePath says. The names feed path matching.
+func TestChangedPathsExactNames(t *testing.T) {
+	dir := newRepo(t)
+	ctx := context.Background()
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
+	names := []string{
+		" lead.txt",
+		"trail.txt ",
+		"tab\there.txt",
+		"new\nline.txt",
+		`q"uote.txt`,
+		`back\slash.txt`,
+		"café.txt",
+		"sp ace/über 日.txt",
+	}
+	for _, n := range names {
+		writeFile(t, dir, n, "x\n")
+	}
+	gittest.Run(t, dir, "add", "-A")
+	gittest.Run(t, dir, "commit", "-q", "-m", "odd names")
+	for _, quote := range []string{"true", "false"} {
+		gittest.Run(t, dir, "config", "core.quotePath", quote)
+		got, err := ChangedPaths(ctx, Exec, dir, "main...feat")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := append([]string(nil), names...)
+		sort.Strings(got)
+		sort.Strings(want)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("core.quotePath=%s: paths = %q, want %q", quote, got, want)
+		}
+		// a consumer matching the returned names against declared entries
+		// finds them: exact, directory and glob
+		for _, entry := range []string{" lead.txt", "trail.txt ", "sp ace/", "café.*"} {
+			hit := false
+			for _, p := range got {
+				hit = hit || overlap.MatchPath(entry, p)
+			}
+			if !hit {
+				t.Errorf("core.quotePath=%s: entry %q matches none of %q", quote, entry, got)
+			}
+		}
 	}
 }
 
