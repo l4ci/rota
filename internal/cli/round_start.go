@@ -49,6 +49,7 @@ func candidateList(cs []round.Candidate) []any {
 		setIf(o, "pickError", c.PickErr)
 		setIf(o, "decision", c.Decision)
 		setIf(o, "blockedBy", c.BlockedBy)
+		setIf(o, "autoHold", c.AutoHold)
 		if c.StaleHolder != "" {
 			o.Set("staleHolder", c.StaleHolder)
 			o.Set("lastActivity", c.LastActivity.Format(time.RFC3339))
@@ -95,6 +96,9 @@ func candidateLines(cs []round.Candidate) []string {
 		if c.Ready() {
 			for _, o := range c.Overlaps {
 				state += "; " + o.String()
+			}
+			if c.AutoHold != "" {
+				state += "; autopilot holds it: " + c.AutoHold
 			}
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))
