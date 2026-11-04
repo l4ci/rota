@@ -94,6 +94,9 @@ type Deps struct {
 	// Tree returns pid and all its descendants. Taken BEFORE a close:
 	// afterwards orphaned children are reparented and unfindable.
 	Tree func(pid int) []int
+	// Start returns pid's process start time, comparable only with another read
+	// from the same Start. A recorded pid whose start differs is a reused number.
+	Start func(pid int) (uint64, bool)
 	// KillWait is how many one-second polls Kill waits for a close to take
 	// (ROTA_HOST_KILL_WAIT in the shell helper). Zero means 10.
 	KillWait int
@@ -135,6 +138,9 @@ func (d *Deps) fill() {
 	}
 	if d.Tree == nil {
 		d.Tree = func(pid int) []int { return pidlive.Tree(pidlive.Real{}, pid) }
+	}
+	if d.Start == nil {
+		d.Start = pidlive.StartTicks
 	}
 	if d.KillWait <= 0 {
 		d.KillWait = 10
