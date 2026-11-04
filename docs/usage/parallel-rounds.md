@@ -132,7 +132,10 @@ Core workers currently support **Codex and Claude with native OSC 7501 status re
 Rota probes the launch flags and account login, then requires the spawned process
 to report readiness. If folder trust appears first, trust the primary project in
 a regular Codex session and retry; Rota leaves that dialog untouched. Codex keeps the default account unless configured otherwise.
-Claude needs no extra setup: Claude Code reports its status to Core itself, and
+Claude workers need Claude Code's folder trust once for each new slot worktree
+folder: open `claude` once in that folder and accept the prompt. Until then the
+worker sits on the trust dialog and assign fails. Beyond that, Claude needs no
+extra setup: Claude Code reports its status to Core itself, and
 rota skips the empty-composer check for it (a half-typed human draft is not guarded
 against; Core's `blocked` status and rota's dialog check still refuse a send into a
 permission prompt or question). OpenCode preflight refuses Core with guidance to
