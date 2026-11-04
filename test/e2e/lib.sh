@@ -56,9 +56,8 @@ e2e_fixture() {
 # rota_j <args>: `rota --json <args>` in the fixture, tmux host faked, real
 # tmux/herdr/gh/glab unreachable. Prints the envelope; returns rota's exit code.
 rota_j() {
-  local v unset_host=()
-  for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset_host+=(-u "$v"); done # same prefix rule as isolate_env
-  ( cd "$E2E_ROOT" && env "${unset_host[@]}" \
+  # Host and home isolation is the runner's isolate_env (test/lib/isolate.sh); no second scrub here.
+  ( cd "$E2E_ROOT" && env \
       PATH="$E2E_FK/bin:$E2E_POISON:$PATH" FAKE_TMUX="$E2E_FK/tmux" FAKE_TMUX_SNAPSHOT="$E2E_FK/snapshot" \
       "$ROTA_BIN" --json "$@" 2>/dev/null )
 }
