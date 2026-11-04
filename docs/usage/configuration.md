@@ -115,7 +115,7 @@ Affects rounds only. `/rota-work` always runs in-process `Agent` workers that wr
 | `"subagent"` (default) | `rota round start` detects the host: Herdr Core inside an app terminal, legacy herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
 | `"tmux"` | One tmux window per worker. Needs a `tmux` binary and a working `claude` on `PATH`. |
 | `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state, notifies when one needs you, and rota titles each tab `<slot> · <task> · <state>`. The orchestrator must run inside a herdr pane. |
-| `"herdr-core"` | Independent Codex terminals in the launching Herdr App space, using its inherited Core socket. No legacy `herdr` CLI/server is needed. See [Herdr App](parallel-rounds.md#herdr-app-and-core). |
+| `"herdr-core"` | Independent Codex or Claude terminals in the launching Herdr App space, using its inherited Core socket. No legacy `herdr` CLI/server is needed. See [Herdr App](parallel-rounds.md#herdr-app-and-core). |
 | `"orca"` | One terminal per worker in its existing worktree. Explicit opt-in; needs `orca` on PATH and the Orca app running. Claude and Codex use their configured launch commands. |
 
 ```bash

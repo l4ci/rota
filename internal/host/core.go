@@ -256,7 +256,7 @@ func coreProgram(v coreHandle, t coreTerminal) error {
 }
 func coreReady(t coreTerminal) error {
 	if !t.Reported || t.Status == nil || !harness.CoreStatusSupported(t.Status.App) {
-		return fmt.Errorf("Core worker needs supported Codex native OSC 7501 reporting; inspect startup/authentication")
+		return fmt.Errorf("Core worker needs supported native OSC 7501 reporting; inspect startup/authentication")
 	}
 	switch t.Status.State {
 	case "idle", "done", "working":
@@ -266,6 +266,19 @@ func coreReady(t coreTerminal) error {
 	default:
 		return fmt.Errorf("Core worker native state %q is not ready", t.Status.State)
 	}
+}
+
+// guard is the pre-send input check. A harness that opts out of the composer
+// check (Claude) still refuses an open dialog; everyone else needs an empty,
+// recognized composer.
+func (h *coreHost) guard(ctx context.Context, v coreHandle, t coreTerminal, plain string) error {
+	if t.Status != nil && !harness.CoreComposerChecked(t.Status.App) {
+		if d, ok := ReadDialog(plain); ok {
+			return &DialogError{First: d.First}
+		}
+		return nil
+	}
+	return h.composer(ctx, v, t, plain)
 }
 func coreComposer(text string) error {
 	if d, ok := ReadDialog(text); ok {
@@ -372,7 +385,7 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 			if e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 0}, &r); e != nil {
 				return s, e
 			}
-			if e = h.composer(ctx, v, t, r.Text); e == nil {
+			if e = h.guard(ctx, v, t, r.Text); e == nil {
 				if e = h.remember(v, t); e != nil {
 					return s, e
 				}
@@ -591,7 +604,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 		if e = coreReady(t); e != nil {
 			return e
 		}
-		if e = h.composer(ctx, v, t, screen.Text); e != nil {
+		if e = h.guard(ctx, v, t, screen.Text); e != nil {
 			return e
 		}
 		prior.Before = screen.Text
@@ -608,6 +621,8 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 			params["if"] = "working"
 		case "idle":
 			params["if"] = "idle"
+		case "done":
+			params["if"] = "done"
 		}
 		if e = c.call("terminal.send", params, &result); e != nil {
 			var rpc *coreRPCError

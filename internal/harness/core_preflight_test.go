@@ -63,7 +63,7 @@ func TestCoreCodexPreflight(t *testing.T) {
 }
 
 func TestCoreUnsupportedHarnessPreflight(t *testing.T) {
-	for _, kind := range []string{Claude, OpenCode} {
+	for _, kind := range []string{OpenCode} {
 		t.Run(kind, func(t *testing.T) {
 			_, err := ResolveLauncher(kind).Preflight(context.Background(), Probe{Look: func(string) (string, bool) {
 				t.Fatal("unsupported Core harness must refuse before probing")
