@@ -1,0 +1,96 @@
+package host
+
+import (
+	"context"
+	"errors"
+	"net"
+	"strings"
+	"testing"
+	"time"
+)
+
+// deadlineConn records SetDeadline calls on a real pipe-backed conn.
+type deadlineConn struct {
+	net.Conn
+	deadlines []time.Time
+}
+
+func (c *deadlineConn) SetDeadline(t time.Time) error {
+	c.deadlines = append(c.deadlines, t)
+	return c.Conn.SetDeadline(t)
+}
+
+func TestCoreCallRefreshesDeadlinePerRPC(t *testing.T) {
+	f := &coreFake{screen: "› \n", status: "idle", pid: 42, core: "c", state: "live", cols: 100, rows: 30}
+	a, b := net.Pipe()
+	go f.serve(b)
+	dc := &deadlineConn{Conn: a}
+	defer dc.Close()
+	c := newCoreConn(dc, time.Now().Add(5*time.Minute))
+	var v map[string]any
+	for i := 0; i < 3; i++ {
+		if e := c.call("terminal.get", map[string]any{"terminal": "t2"}, &v); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if len(dc.deadlines) != 3 {
+		t.Fatalf("deadline set %d times, want once per call", len(dc.deadlines))
+	}
+	for _, d := range dc.deadlines {
+		if rem := time.Until(d); rem > coreRPCTimeout || rem < coreRPCTimeout-5*time.Second {
+			t.Errorf("deadline %v away, want about %v", rem, coreRPCTimeout)
+		}
+	}
+	// A nearer ctx deadline still caps the per-call one.
+	near := time.Now().Add(2 * time.Second)
+	c = newCoreConn(dc, near)
+	dc.deadlines = nil
+	if e := c.call("terminal.get", map[string]any{"terminal": "t2"}, &v); e != nil {
+		t.Fatal(e)
+	}
+	if !dc.deadlines[0].Equal(near) {
+		t.Errorf("deadline %v, want ctx deadline %v", dc.deadlines[0], near)
+	}
+}
+
+const claudeTrustScreen = " Do you trust the files in this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit\n"
+
+func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
+	h, f := coreFixture(t)
+	f.app = "claude-code"
+	f.unreported = true
+	f.screen = claudeTrustScreen
+	_, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "claude", BootTimeout: 2})
+	if e == nil {
+		t.Fatal("spawn succeeded on an unanswered trust dialog")
+	}
+	for _, want := range []string{"Do you trust the files in this folder?", "open `claude` once in the slot folder", "same request id"} {
+		if !strings.Contains(e.Error(), want) {
+			t.Errorf("error %q lacks %q", e, want)
+		}
+	}
+	if strings.Contains(e.Error(), "timeout") {
+		t.Errorf("error reads as a socket timeout: %v", e)
+	}
+}
+
+func TestCoreSpawnBootTimeoutUnknownScreenShowsTail(t *testing.T) {
+	h, f := coreFixture(t)
+	f.unreported = true
+	f.screen = "Loading something odd\n"
+	_, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "codex", BootTimeout: 1})
+	if e == nil || !strings.Contains(e.Error(), "Loading something odd") {
+		t.Fatalf("want screen tail in error, got %v", e)
+	}
+}
+
+func TestCoreCallSurfacesSocketError(t *testing.T) {
+	a, b := net.Pipe()
+	b.Close()
+	c := newCoreConn(a, time.Time{})
+	var v map[string]any
+	e := c.call("terminal.get", map[string]any{}, &v)
+	if e == nil || errors.Is(e, ErrDialogOpen) || strings.Contains(e.Error(), "dialog") {
+		t.Fatalf("want a raw socket error, got %v", e)
+	}
+}
