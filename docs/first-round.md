@@ -55,7 +55,7 @@ For Codex, use entries with `kind: "codex"` pointing to authenticated Codex home
 Confirm the project's check command during `/rota-init`, or choose **leave for later** if there are no tests yet. Deferred setup returns at the next `/rota-orchestrate` start and must be settled before the first merge. A command can be set later, for example:
 
 ```sh
-rota config set test.full 'npm test'
+rota config set test.full '["npm test"]'
 ```
 
 Use your project's real command. The gate checks the PR combined with the current base before merging. [No tests yet?](troubleshooting.md#no-tests-yet)
@@ -79,7 +79,7 @@ When you invoke `/rota-orchestrate`, the agent revisits verification before assi
 Before the first merge, the orchestrator confirms that the command runs those tests and configures it in its checkout:
 
 ```sh
-rota config set test.full 'go test ./...'
+rota config set test.full '["go test ./..."]'
 rota config check
 ```
 
