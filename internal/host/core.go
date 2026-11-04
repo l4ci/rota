@@ -39,6 +39,7 @@ type coreTerminal struct {
 	DieWithParent              bool `json:"die_with_parent"`
 	Reported                   bool
 	Status                     *coreStatus
+	Turn                       uint64
 }
 type coreHandle struct {
 	Endpoint, Core, Address, Token, Slot, Cwd string
@@ -485,6 +486,38 @@ func (h *coreHost) LabelWorkspace(context.Context, string) {}
 type coreDelivery struct {
 	State  string
 	Before string
+	// Sent marks a send Core accepted; Turn and Was are the terminal's turn
+	// and native status read just before it, the baseline pickup evidence
+	// is measured against.
+	Sent bool
+	Turn uint64
+	Was  string
+}
+
+// corePickedUp reports whether Core's own turn and status show a sent message
+// was taken up (#2640). Core's turn advances each time status leaves working.
+// From idle, any working state or a later turn follows the message. From
+// working, the running turn ends first (Turn+1) and a queued message then
+// starts working on it or ends its own turn (Turn+2). This is pickup evidence
+// only: it never stands for successful completion.
+func corePickedUp(d coreDelivery, t coreTerminal) bool {
+	if !d.Sent || !t.Reported || t.Status == nil {
+		return false
+	}
+	if d.Was == "working" {
+		return t.Turn >= d.Turn+2 || (t.Turn == d.Turn+1 && t.Status.State == "working")
+	}
+	return t.Turn > d.Turn || t.Status.State == "working"
+}
+
+// deliveryEvidence is the screen evidence, upgraded to picked-up when Core's
+// turn shows the message was taken up.
+func deliveryEvidence(screen, text string, t coreTerminal, d coreDelivery) string {
+	state := coreDeliveryEvidence(screen, text, t, d.Before)
+	if state != "picked-up" && corePickedUp(d, t) {
+		return "picked-up"
+	}
+	return state
 }
 
 func deliveryError(state string) error {
@@ -549,7 +582,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 			return deliveryError(state)
 		}
 		if prior.State != "" {
-			state := coreDeliveryEvidence(screen.Text, text, t, prior.Before)
+			state := deliveryEvidence(screen.Text, text, t, prior)
 			if state != "" {
 				return save(state)
 			}
@@ -563,6 +596,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 		}
 		prior.Before = screen.Text
 		prior.State = "unknown"
+		prior.Turn, prior.Was = t.Turn, t.Status.State
 		b, _ = json.Marshal(prior)
 		if e = h.d.FS.WriteFileAtomic(receipt, b); e != nil {
 			return fmt.Errorf("%w: cannot persist receipt: %v", ErrNotSubmitted, e)
@@ -588,6 +622,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 			}
 			return fmt.Errorf("%w: %v", ErrDeliveryUnknown, e)
 		}
+		prior.Sent = true
 		if e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t); e != nil {
 			return save("submitted")
 		}
@@ -597,7 +632,7 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 		if e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); e != nil {
 			return save("submitted")
 		}
-		if state := coreDeliveryEvidence(screen.Text, text, t, prior.Before); state != "" {
+		if state := deliveryEvidence(screen.Text, text, t, prior); state != "" {
 			return save(state)
 		}
 		return save("submitted")

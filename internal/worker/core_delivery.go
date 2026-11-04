@@ -50,7 +50,19 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		return false, res, nil
 	}
 	if jsonx.Str(p, "request") != coreRequest(t, o) {
-		switch jsonx.Str(p, "state") {
+		state := jsonx.Str(p, "state")
+		// A message Core holds a receipt for (unknown, submitted) is
+		// reconciled before a new one is refused (#2640): with a receipt the
+		// host only re-reads its evidence and never pastes it again. prepared
+		// may have no receipt, so it is never re-sent from here.
+		if state == "unknown" || state == "submitted" {
+			err := e.sendSigned(ctx, t, o.Slot, jsonx.Str(p, "payload"), false)
+			if saveErr := setCoreOutcome(root, o.Slot, err); saveErr != nil {
+				return true, res, saveErr
+			}
+			state = coreOutcome(err)
+		}
+		switch state {
 		case "prepared", "unknown", "submitted":
 			res.Handle, res.Delivery = t.handle, jsonx.Str(p, "state")
 			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and reconcile that message before sending another")
