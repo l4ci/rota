@@ -755,24 +755,11 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 	if !missing && !coreMatch(v, t) {
 		return fmt.Errorf("refusing Core kill: terminal ownership changed")
 	}
-	pids := append([]int(nil), v.PIDs...)
-	p, _ := h.recordPath(v)
-	if b, err := h.d.FS.ReadFile(p + ".pids"); err == nil {
-		var retained []int
-		if json.Unmarshal(b, &retained) != nil {
-			return fmt.Errorf("Core process evidence corrupt")
-		}
-		pids = append(pids, retained...)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
+	ev, e := h.killEvidence(v, t)
+	if e != nil {
+		return e
 	}
-	if t.State == "live" && t.PID > 0 {
-		pids = append(pids, h.d.Tree(t.PID)...)
-	}
-	if len(pids) == 0 {
-		return fmt.Errorf("refusing Core kill without process evidence")
-	}
-	if e = h.rememberPIDs(v, pids); e != nil {
+	if e = h.rememberPIDs(v, ev.observed); e != nil {
 		return fmt.Errorf("Core pre-close process evidence could not persist: %w", e)
 	}
 	var out coreTerminal
@@ -781,7 +768,8 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 			return e
 		}
 	}
-	alive, ok := killLoop(&h.d, pids, func() bool {
+	probe := ev.aliveDeps(h)
+	alive, ok := killLoop(&probe, ev.pids(), func() bool {
 		if missing {
 			return true
 		}
@@ -848,34 +836,6 @@ func (h *coreHost) remember(v coreHandle, t coreTerminal) error {
 		return nil
 	}
 	return h.rememberPIDs(v, h.d.Tree(t.PID))
-}
-func (h *coreHost) rememberPIDs(v coreHandle, observed []int) error {
-	p, e := h.recordPath(v)
-	if e != nil {
-		return e
-	}
-	p += ".pids"
-	return h.d.FS.Locked(p, 30*time.Second, func() error {
-		seen := map[int]bool{}
-		var old []int
-		b, e := h.d.FS.ReadFile(p)
-		if e == nil {
-			if json.Unmarshal(b, &old) != nil {
-				return fmt.Errorf("Core process evidence corrupt")
-			}
-		} else if !errors.Is(e, os.ErrNotExist) {
-			return e
-		}
-		pids := []int{}
-		for _, pid := range append(append(old, v.PIDs...), observed...) {
-			if pid > 0 && !seen[pid] {
-				seen[pid] = true
-				pids = append(pids, pid)
-			}
-		}
-		b, _ = json.Marshal(pids)
-		return h.d.FS.WriteFileAtomic(p, b)
-	})
 }
 func (h *coreHost) invalidate(v coreHandle) error {
 	p, e := h.recordPath(v)
