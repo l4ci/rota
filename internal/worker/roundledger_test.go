@@ -293,3 +293,42 @@ func TestGateAndTrainLedgerRowsTakeTheEnvClock(t *testing.T) {
 		}
 	}
 }
+
+// #2638: a codex slot that still carries a legacy Claude account records its
+// home account (or the default home's "") on every completion path, never the
+// stale Claude name; a Claude slot keeps its own.
+func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
+	cases := []struct{ slot, want string }{
+		{`{"name":"ben","task":"12","kind":"codex","account":"personal","codexAccount":"codex","state":"busy"}`, "codex"},
+		{`{"name":"ben","task":"12","kind":"codex","account":"personal","state":"busy"}`, ""},
+		{`{"name":"ben","task":"12","kind":"claude","account":"work","codexAccount":"codex","state":"busy"}`, "work"},
+	}
+	for _, tc := range cases {
+		dir := ledgerProject(t, tc.slot)
+		env := Env{Now: func() time.Time { return ledgerNow }}
+		// The missing-field fallback.
+		LedgerNote(env, dir, ledger.Entry{Kind: ledger.KindDone, Issue: "12"})
+		// Pane-observed completion.
+		row := PollRow{Name: "ben", State: StateDone, Evidence: "https://github.com/o/r/pull/9"}
+		if err := UpdateSlots(dir, func(s *Slot) {
+			prev := s.State()
+			if _, err := recordRow(s, row, pollTarget{name: s.Name()}, time.Now(), LoadRegistryTolerant(dir)); err != nil {
+				t.Fatal(err)
+			}
+			if d, ok := paneDone(prev, s, row); ok {
+				LedgerNote(env, dir, d)
+			}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		es, err := ledger.Load(dir)
+		if err != nil || len(es) != 2 {
+			t.Fatalf("%s: %v %+v", tc.slot, err, es)
+		}
+		for _, e := range es {
+			if e.Account != tc.want {
+				t.Errorf("%s: %s entry account %q, want %q", tc.slot, e.Kind, e.Account, tc.want)
+			}
+		}
+	}
+}

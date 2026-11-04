@@ -190,6 +190,20 @@ func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 // key stays codexAccount so existing registries read.
 func (s *Slot) HomeAccount() string { return jsonx.Str(s.o, "codexAccount") }
 
+// AccountFor is the account the slot runs a kind ("" for the slot's own
+// kind) under: the home account for a harness without a usage meter (codex,
+// "" for its default home), the Claude account otherwise. The legacy Claude
+// account must never stand in for a codex one (#2638).
+func (s *Slot) AccountFor(kind string) string {
+	if kind == "" {
+		kind = s.Kind()
+	}
+	if !harness.ResolveAccounts(kind).UsageMeter() {
+		return s.HomeAccount()
+	}
+	return s.Account()
+}
+
 // SetHomeAccount records the account; "" removes it.
 func (s *Slot) SetHomeAccount(name string) {
 	if name == "" {
