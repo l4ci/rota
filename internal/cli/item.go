@@ -312,12 +312,12 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		if !*force {
-			if err := checkCreateGuard(c, root, []string{in.Title}); err != nil {
-				return Result{}, err
-			}
-		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			if !*force {
+				if err := checkCreateGuard(c, root, []string{in.Title}); err != nil {
+					return Result{}, err
+				}
+			}
 			res, err := recordingBackend{Backend: be, c: c, root: root}.Create(in)
 			if err != nil {
 				return Result{}, err

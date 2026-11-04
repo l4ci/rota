@@ -101,7 +101,7 @@ func TestUmbrellaRepoFlagNarrows(t *testing.T) {
 func TestUmbrellaCreateTarget(t *testing.T) {
 	root, deps, fakes, built := umbrellaProject(t)
 	create := func(root string, extra ...string) (int, string, string) {
-		args := append([]string{"--json", "-C", root, "item", "create", "--kind", "tasks", "--title", "New"}, extra...)
+		args := append([]string{"--json", "-C", root, "item", "create", "--kind", "tasks", "--title", "New", "--force"}, extra...)
 		code, env, stderr := rotaRunWith(t, deps, args...)
 		id := ""
 		if code == 0 {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/ledger"
 )
 
@@ -17,11 +18,9 @@ const (
 	createBatchCap = 25
 )
 
-// kindCreate is the ledger row `item create` appends per filed item: issue is
-// the new id, detail.title the normalized title. The ledger is gitignored
-// per-project state and works the same on the file and issue backends, so the
-// check needs no tracker query. Round is 0, as for any solo-mode row.
-const kindCreate = "create"
+// The guard reads ledger.KindCreate rows: issue is the new id, detail.title the
+// normalized title. The ledger is gitignored per-project state and works the
+// same on the file and issue backends, so the check needs no tracker query.
 
 func normCreateTitle(t string) string { return strings.ToLower(strings.Join(strings.Fields(t), " ")) }
 
@@ -31,7 +30,7 @@ func recentCreates(c *Ctx, root string) map[string]string {
 	entries, _ := ledger.Load(root)
 	cutoff := c.deps().Now().Add(-createWindow)
 	for _, e := range entries {
-		if e.Kind == kindCreate && e.TS.After(cutoff) {
+		if e.Kind == ledger.KindCreate && e.TS.After(cutoff) {
 			out[e.DetailStr("title")] = e.Issue
 		}
 	}
@@ -43,7 +42,7 @@ func recentCreates(c *Ctx, root string) map[string]string {
 func checkCreateGuard(c *Ctx, root string, titles []string) error {
 	if len(titles) > createBatchCap {
 		e := Refused("batch holds %d records, over the cap of %d; split it or pass --force", len(titles), createBatchCap)
-		e.Data = jsonObj("blockedBy", "batch-cap", "cap", createBatchCap, "changed", false)
+		e.Data = jsonObj("blockedBy", blockedby.BatchCap, "cap", createBatchCap, "changed", false)
 		return e
 	}
 	recent := recentCreates(c, root)
@@ -58,7 +57,7 @@ func checkCreateGuard(c *Ctx, root string, titles []string) error {
 	}
 	e := Refused("already filed in the last %d minutes, nothing created: %s", int(createWindow.Minutes()), strings.Join(dups, ", "))
 	e.Hint = "if the repeat is intended, pass --force"
-	e.Data = jsonObj("blockedBy", "duplicate-create", "duplicates", dups, "changed", false)
+	e.Data = jsonObj("blockedBy", blockedby.DuplicateCreate, "duplicates", dups, "changed", false)
 	return e
 }
 
@@ -73,7 +72,7 @@ type recordingBackend struct {
 func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
 	res, err := r.Backend.Create(in)
 	if err == nil {
-		_ = ledger.Append(r.root, ledger.Entry{TS: r.c.deps().Now(), Kind: kindCreate, Issue: res.ID,
+		_ = ledger.Append(r.root, ledger.Entry{TS: r.c.deps().Now(), Kind: ledger.KindCreate, Issue: res.ID,
 			Detail: ledger.Detail("title", normCreateTitle(in.Title))})
 	}
 	return res, err
