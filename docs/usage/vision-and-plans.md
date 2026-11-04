@@ -117,7 +117,7 @@ If that harness is not installed or the run fails, `/rota-plan` runs the same-ha
 
 When two levels fit, the lower one wins. A round worker never stops on the level: the issue's acceptance criteria are its spec.
 
-On the [issue backend](issue-backend.md) an item plan is a note on the item's issue (key `#42`), and a slice plan lives on the milestone's tracking issue.
+On the [issue backend](issue-backend.md) an item plan is a note on the item's issue, and a slice plan lives on the milestone's tracking issue. An item key is the issue number (`#42` or `42`) or, on a tracker with keys such as Jira or Linear, the key itself (`PROJ-123`); `rota plan check`, `rota plan pass` and design notes read it the same way.
 
 Each plan contains: goal in one sentence, approach in 3 to 6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined. In a plan with two or more tasks, the first is the tracer: the thinnest end-to-end path through every layer the change touches. It runs alone as the first wave. If its verify fails or its RED run does not turn green, `/rota-work` dispatches no other task and reports the failure; a round worker stops with `ROTA-BLOCKED`.
 
