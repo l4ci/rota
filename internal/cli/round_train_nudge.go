@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
@@ -23,6 +24,7 @@ import (
 // the one rule the tick and the nudge share.
 type waitingPR struct {
 	PR, Base   string
+	Branch     string
 	Reviewed   bool
 	ReadySince time.Time
 	Immediate  bool
@@ -37,6 +39,8 @@ type trainNudge struct {
 	Reason     string
 	Wait       string
 	ReadyCount int
+	// Branches maps a PR number to its branch, for the preview cache key.
+	Branches map[string]string
 	// Conflicts and Blocked come from the `worker train --plan` preview: the
 	// reviewed pairs that conflict and the PRs left out of Landable because of
 	// them. Empty when the preview was skipped or found none.
@@ -144,8 +148,40 @@ func planTrainNudge(c *Ctx, root, base string, prs []string) (*worker.TrainPlan,
 	return run.Result.Plan, nil
 }
 
+// trainPlanMemo remembers a preview per base and head SHAs for the life of the
+// process, so a watch re-evaluating an unchanged queue never re-plans. A failed
+// preview is remembered too: retrying it on every tick would repeat the fetch.
+var trainPlanMemo = struct {
+	sync.Mutex
+	m map[string]trainPlanMemoEntry
+}{m: map[string]trainPlanMemoEntry{}}
+
+type trainPlanMemoEntry struct {
+	plan *worker.TrainPlan
+	err  error
+}
+
+// trainPlanKey names the queue by root, base, the base tip and each PR's local
+// branch head. Local refs only, so it costs a few rev-parse calls.
+func trainPlanKey(c *Ctx, root string, n trainNudge) string {
+	rev := func(ref string) string {
+		r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", ref)
+		if err != nil || r.ExitCode != 0 {
+			return "?"
+		}
+		return strings.TrimSpace(r.Stdout)
+	}
+	parts := []string{root, n.Base, rev(n.Base), rev("origin/" + n.Base)}
+	for _, pr := range n.PRs {
+		parts = append(parts, pr+"="+rev(n.Branches[pr]))
+	}
+	return strings.Join(parts, "|")
+}
+
 // planNudges applies the train preview to each nudge naming two or more PRs.
-// Advice only: no hook, or a preview that fails (base not checked out, forge
+// The preview is read-only (a check-only gate per member: forge lookup and
+// `git fetch`, then git merge-tree; no worktree, lock or .rota write). Advice
+// only: no hook, or a preview that fails (base not checked out, forge
 // unreachable), keeps the unplanned nudge.
 func planNudges(c *Ctx, root string, ns []trainNudge) []trainNudge {
 	plan := c.deps().TrainPlan
@@ -156,8 +192,21 @@ func planNudges(c *Ctx, root string, ns []trainNudge) []trainNudge {
 		if n.Base == "" || len(n.PRs) < 2 {
 			continue
 		}
-		if p, err := plan(c, root, n.Base, n.PRs); err == nil {
-			ns[i] = n.withPlan(p)
+		key := trainPlanKey(c, root, n)
+		trainPlanMemo.Lock()
+		e, hit := trainPlanMemo.m[key]
+		trainPlanMemo.Unlock()
+		if !hit {
+			e.plan, e.err = plan(c, root, n.Base, n.PRs)
+			// The preview fetched, so heads may have moved: remember it under
+			// the state it left behind as well, which the next tick will read.
+			post := trainPlanKey(c, root, n)
+			trainPlanMemo.Lock()
+			trainPlanMemo.m[key], trainPlanMemo.m[post] = e, e
+			trainPlanMemo.Unlock()
+		}
+		if e.err == nil {
+			ns[i] = n.withPlan(e.plan)
 		}
 	}
 	return ns
@@ -236,6 +285,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 	oldest := map[string]time.Time{}
 	immediate := map[string][]string{}
 	ages := map[string]time.Time{}
+	branches := map[string]string{}
 	seen := map[int]bool{}
 	var bases []string
 	for _, w := range waiting {
@@ -252,6 +302,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 		}
 		by[w.Base] = append(by[w.Base], fmt.Sprint(n))
 		ages[fmt.Sprint(n)] = w.ReadySince
+		branches[fmt.Sprint(n)] = w.Branch
 		if w.Immediate {
 			immediate[w.Base] = append(immediate[w.Base], fmt.Sprint(n))
 		}
@@ -279,7 +330,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 			if fill.Max > 0 && len(prs) > fill.Max {
 				prs = roundcfg.OldestReady(prs, fill.Max, func(pr string) time.Time { return ages[pr] })
 			}
-			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count})
+			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count, Branches: branches})
 		}
 	}
 	return out
@@ -337,13 +388,13 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 				}
 			}
 			rd := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
-			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
+			out = append(out, waitingPR{PR: s.PR(), Branch: s.Branch(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
 			rd := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
-			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
+			out = append(out, waitingPR{PR: q.PR, Branch: q.Branch, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
