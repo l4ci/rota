@@ -339,3 +339,33 @@ func TestWorkerGateApprovalOnKeyIssueThread(t *testing.T) {
 		t.Fatalf("audit %v", a)
 	}
 }
+
+// #2571: every repeated --add (or --remove) applies; a label named twice is a
+// usage error that changes nothing.
+func TestIssuesLabelAppliesEveryRepeatedFlag(t *testing.T) {
+	dir := escProject(t, ghCfg)
+	deps := useThread(t, &fakeThread{})
+	fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: "PROJ-1", Title: "Widen", State: "open", Labels: []string{"stale"}}}}
+	deps.IssuesForge = func(context.Context, string, string) (issues.Forge, error) { return authedFake{fake}, nil }
+
+	code, out, errOut := rotaInWith(t, deps, dir, "--json", "issues", "label", "PROJ-1", "--add", "type:bug", "--add", "p1", "--add", "size:Minor")
+	if code != 0 {
+		t.Fatalf("label: %d %s %s", code, out, errOut)
+	}
+	got := fake.Issues[0].Labels
+	for _, want := range []string{"type:bug", "p1", "size:Minor"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("labels %v lack %s", got, want)
+		}
+	}
+	d := data(t, out)
+	if l, _ := d["labels"].([]any); len(l) != 3 || d["changed"] != true || d["label"] != nil {
+		t.Errorf("data %v, want three labels entries", d)
+	}
+	if code, _, errOut := rotaInWith(t, deps, dir, "issues", "label", "PROJ-1", "--remove", "stale", "--remove", "p1"); code != 0 || slices.Contains(fake.Issues[0].Labels, "stale") || slices.Contains(fake.Issues[0].Labels, "p1") {
+		t.Errorf("repeated --remove: exit %d %s, labels %v", code, errOut, fake.Issues[0].Labels)
+	}
+	if code, _, _ := rotaInWith(t, deps, dir, "issues", "label", "PROJ-1", "--add", "x", "--add", "x"); code != 2 || slices.Contains(fake.Issues[0].Labels, "x") {
+		t.Errorf("a label named twice: exit %d, labels %v", code, fake.Issues[0].Labels)
+	}
+}
