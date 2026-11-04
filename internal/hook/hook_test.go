@@ -296,6 +296,27 @@ func TestInstallGuardEntry(t *testing.T) {
 	}
 }
 
+func TestInstallSharedGroupKeepsForeignMatcher(t *testing.T) {
+	in := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rota hook guard # rota-hook"},{"type":"command","command":"mine.sh","timeout":7}]}]}}`
+	o := parse(t, in)
+	files := map[Scope]*jsonx.Object{ScopeProject: o}
+	if out, err := Install(InstallIn{Scope: ScopeProject, Files: files}); err != nil || !out.Changed {
+		t.Fatalf("%+v %v", out, err)
+	}
+	got := dump(t, o)
+	if strings.Count(got, GuardCommand) != 1 || !strings.Contains(got, `"matcher": "Bash|Edit|Write"`) || !strings.Contains(got, `"matcher": "Bash"`) {
+		t.Fatalf("install:\n%s", got)
+	}
+	if out, _ := Install(InstallIn{Scope: ScopeProject, Files: files}); out.Changed || dump(t, o) != got {
+		t.Errorf("second install not idempotent:\n%s", dump(t, o))
+	}
+	Uninstall(o)
+	left := dump(t, o)
+	if strings.Contains(left, Marker) || strings.Contains(left, "Edit|Write") || !strings.Contains(left, `"matcher": "Bash"`) || !strings.Contains(left, `"timeout": 7`) || !strings.Contains(left, "mine.sh") {
+		t.Errorf("uninstall:\n%s", left)
+	}
+}
+
 func TestWrapUserStatuslineFromProjectLocalShadows(t *testing.T) {
 	user := parse(t, original)
 	local := jsonx.NewObject()
