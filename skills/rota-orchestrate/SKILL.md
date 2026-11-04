@@ -37,6 +37,18 @@ One orchestrator per repo. If `start` exits 4 on the lease, someone else holds i
 
 When `rota round start` reports an empty backlog with the `/rota-vision` hint, stop: tell the maintainer the repo holds a concept but no milestones and point to `/rota-vision` (maintainer-invoked); never start a round on items captured from a concept without asking.
 
+### Deferred verification setup
+
+Before assigning workers, read `data.noVerify` from `rota round start`. When true, local `test.full` and `test.e2e` are both empty: revisit the test setup left open at init, even if no deferral note survived. Ask the maintainer one concise question about the verification plan, recommending a test foundation alongside the first implementation for a new project. Explain when it returns: **work can start now; the agreed verification must be configured and its required checks must pass before the first merge.** Keep this conversation in the current coding harness.
+
+- **First tests with the implementation (recommended for a new project):** agree the runner, an initial behavior to test and the command that will run it. Include this foundation in the first implementation's acceptance and worker brief; sequence dependent work and merges behind it. Record the agreement and pending configuration on that issue and in any orchestrator handoff. Missing tests at initialization alone do not block assigning this work.
+- **Existing build or lint as an interim check:** obtain explicit agreement to the limited coverage, name the actual command and record what it checks and what remains untested. Worker and merge reports must say, for example, `build and lint passed; automated behavior tests not run`. Never infer behavior coverage from a successful command, a manifest or a script named `test`.
+- **Established verification:** keep the project's local checks or configured CI workflow. Do not replace them merely because init suggested another command.
+
+Before calling the first gate or train, resolve the pending configuration in the orchestrator checkout through `rota config set`, then `rota config check`: local verification uses the agreed `test.full` and/or `test.e2e`; CI verification uses `test.fullWhere ci` with the required `test.ciChecks` and a working merge-result CI workflow. Check that the command actually runs the agreed checks, not an empty suite or an always-successful placeholder. The gate or train must run those required checks on the merge result using the existing local/CI rules. A PR that introduces tests does not by itself settle the orchestrator's verification config. Keep a failed or still-unconfigured first merge pending and explain the missing check before attempting to land it.
+
+Deferral never supplies `--no-verify` or authorizes an unverified merge; existing explicit override and approval rules still apply. Once the agreed checks are configured, later starts follow the normal workflow without repeating this question. Reopen it only for a new reason, such as removed checks, an empty suite or a reported coverage gap. `data.noVerify: false` with established local or CI verification needs no deferred-setup conversation; it is not proof of behavior-test coverage.
+
 ## 2. Choose the slate
 
 `rota round candidates` says what is ready, not what is wise. You decide:

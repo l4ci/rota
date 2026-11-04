@@ -10,11 +10,13 @@ The orchestrator runs `rota doctor` before starting. Each failing check names th
 
 ## No tests yet
 
-You can leave test commands unset during `/rota-init`. Today, initialization and round startup warn about missing verification; there is no automatic follow-up conversation. The merge gate refuses to merge when local verification has neither `test.full` nor `test.e2e`, unless explicitly overridden. Configured CI verification is another option.
+Choose **leave for later** during `/rota-init` and finish initialization with test setup deferred. At the next `/rota-orchestrate` start, the agent revisits verification before assigning workers. The agreement must be configured and its required checks must pass before the first merge. The merge gate still refuses to merge when local verification has neither `test.full` nor `test.e2e`, unless explicitly overridden. Deferral does not authorize that override. Configured CI verification is another option.
 
-Before your first merge, ask the agent to establish an appropriate check. In a new project, this can mean adding the first tests with the implementation. A build or lint command can check something useful, but it is not evidence that behavior was tested.
+In a new project, the agent recommends adding the first tests with the implementation; having no tests at init does not prevent starting that work. An existing build or lint command can be an explicitly agreed interim check, with reports identifying its limited coverage rather than claiming behavior tests ran.
 
 Set the agreed command through the agent or with `rota config set test.full '<your command>'`. A command inferred from a manifest is only a suggestion: check that it actually runs useful tests.
+
+Once verification is configured, later rounds use it without repeating the deferred-setup question unless something changes. See [a new project's first merge](first-round.md#starting-without-tests).
 
 ## A check fails
 
