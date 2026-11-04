@@ -558,7 +558,7 @@ func Orchestrators() []Orchestrator {
 // Core support requires native reporting and harness-specific composer guards.
 // Other harnesses remain unsupported until verified; legacy integration is not a substitute.
 func coreUnsupported(kind string) error {
-	r := refuse(Unavailable, "%s workers on herdr-core have no verified native status/composer support; use Codex on herdr-core or select a supported legacy host", kind)
-	r.Hint = "configure Codex workers for herdr-core, or change round.dispatch to a supported host"
+	r := refuse(Unavailable, "%s workers on herdr-core have no verified native status/composer support; use Codex or Claude on herdr-core or select a supported legacy host", kind)
+	r.Hint = "configure Codex or Claude workers for herdr-core, or change round.dispatch to a supported host"
 	return r
 }

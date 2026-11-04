@@ -7,6 +7,30 @@ type coreReporter interface {
 	CoreStatusApp() string
 }
 
+// coreComposerOptOut is optional: a harness whose composer rota does not
+// verify before a Core send declares so. Without it the host verifies an
+// empty, recognized composer first (the safe default, and Codex's behavior).
+// A native blocked status and a visible dialog still refuse the send.
+type coreComposerOptOut interface {
+	CoreSkipsComposerCheck() bool
+}
+
+// CoreComposerChecked reports whether the Core host must verify an empty
+// composer before sending to the worker identified by its OSC 7501 app. An
+// unknown app is checked.
+func CoreComposerChecked(app string) bool {
+	for _, kind := range CoreWorkerKinds() {
+		h, _ := lookup(kind)
+		if h.(coreReporter).CoreStatusApp() != app {
+			continue
+		}
+		if o, ok := h.(coreComposerOptOut); ok && o.CoreSkipsComposerCheck() {
+			return false
+		}
+	}
+	return true
+}
+
 // CoreWorkerKinds lists registered workers with verified Core reporting.
 // It is independent of the legacy Herdr integration and contains no versions.
 func CoreWorkerKinds() []string {

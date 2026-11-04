@@ -200,12 +200,17 @@ func (claude) Doctor() Doctor { return Doctor{} }
 
 func (claude) CheckLaunch(string) error { return nil }
 
-func (claude) Preflight(_ context.Context, _ Probe, o PreflightOpts) (Setup, error) {
-	if o.HerdrCore {
-		return Setup{}, coreUnsupported(Claude)
-	}
+func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) {
 	return Setup{}, nil
 }
+
+// CoreStatusApp is Claude Code's native OSC 7501 reporting identity.
+func (claude) CoreStatusApp() string { return "claude-code" }
+
+// CoreSkipsComposerCheck: rota does not guard a half-typed human draft in a
+// Claude input box on Core. Core's blocked status and the dialog check still
+// refuse a send into a permission prompt or question.
+func (claude) CoreSkipsComposerCheck() bool { return true }
 
 func (claude) Prepare(launch string, _ func() (string, error), _ Setup) (string, []byte, error) {
 	return launch, nil, nil
