@@ -304,16 +304,16 @@ func TestReportRecordsTheCodexAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
-		s.Dispatch(s.Handle(), s.Task(), "codex", "2026-11-04T10:00:00Z")
+		s.Dispatch(s.Handle(), s.Task(), harness.Codex, "2026-11-04T10:00:00Z")
 		s.SetAccount("personal", "")
-		s.SetHomeAccount("codex")
+		s.SetHomeAccount("cx-home")
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: "https://github.com/o/r/pull/9"}); err != nil {
 		t.Fatal(err)
 	}
-	if e := lastOf(ledgerKinds(t, f.root), ledger.KindDone); e == nil || e.Account != "codex" || e.Harness != "codex" {
-		t.Fatalf("done entry = %+v, want account codex", e)
+	if e := lastOf(ledgerKinds(t, f.root), ledger.KindDone); e == nil || e.Account != "cx-home" || e.Harness != harness.Codex {
+		t.Fatalf("done entry = %+v, want the codex home account cx-home", e)
 	}
 }
