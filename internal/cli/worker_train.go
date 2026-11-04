@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/postgate"
@@ -104,7 +105,7 @@ func planText(p *worker.TrainPlan) string {
 	} else {
 		b.WriteString("plan: conflicts")
 		for _, c := range p.Conflicts {
-			fmt.Fprintf(&b, "\n  %s x %s (%s)", c.A, c.B, strings.Join(c.Paths, ", "))
+			fmt.Fprintf(&b, "\n  %s x %s (%s)", c.A, c.B, strings.Join(git.DisplayPaths(c.Paths), ", "))
 		}
 	}
 	fmt.Fprintf(&b, "\nlandable, in merge order: %s", strings.Join(p.Landable, ", "))

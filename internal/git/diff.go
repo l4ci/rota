@@ -5,7 +5,36 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+// DisplayPath renders a repository path for human or agent text. ChangedPaths
+// returns exact bytes, so a name can hold a newline, a tab or a backtick that
+// would break a line format or a markdown span. A name of printable runes with
+// no backtick and no leading or trailing space comes back unchanged; anything
+// else is Go-quoted onto one line. Use it only for display; match on the
+// exact path.
+func DisplayPath(p string) string {
+	if p == "" || p != strings.TrimSpace(p) || strings.Contains(p, "`") || !utf8.ValidString(p) {
+		return strconv.Quote(p)
+	}
+	for _, r := range p {
+		if !unicode.IsPrint(r) {
+			return strconv.Quote(p)
+		}
+	}
+	return p
+}
+
+// DisplayPaths is DisplayPath over a list.
+func DisplayPaths(ps []string) []string {
+	out := make([]string, len(ps))
+	for i, p := range ps {
+		out[i] = DisplayPath(p)
+	}
+	return out
+}
 
 // The helpers below take a Runner, not a Repo, so a layer that fakes git (the
 // gate, the round env) keeps its seam. Repo's methods run them on its runner.
@@ -46,10 +75,12 @@ func RemoteBase(ctx context.Context, run Runner, dir, base string) string {
 	return base
 }
 
-// ChangedPaths lists the paths `git diff --name-only <span>` reports, one per
-// line, trimmed, blanks dropped. A non-zero exit is an error.
+// ChangedPaths lists the paths `git diff --name-only <span>` reports (the new
+// name of a rename). -z keeps git from C-quoting unusual names and from
+// newline-separating them, so each path comes back byte-exact: spaces, tabs,
+// newlines, quotes and non-ASCII included. A non-zero exit is an error.
 func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, error) {
-	res, err := run(ctx, dir, "diff", "--name-only", "--end-of-options", span)
+	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--end-of-options", span)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +88,9 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 		return nil, &ExitError{"diff --name-only " + span, res.ExitCode, res.Stderr}
 	}
 	var paths []string
-	for _, l := range strings.Split(res.Stdout, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			paths = append(paths, l)
+	for _, p := range strings.Split(res.Stdout, "\x00") {
+		if p != "" {
+			paths = append(paths, p)
 		}
 	}
 	return paths, nil
