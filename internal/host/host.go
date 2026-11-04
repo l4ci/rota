@@ -410,9 +410,31 @@ func New(kind Kind, d Deps) Host {
 	return &tmux{d: d}
 }
 
-// killLoop is the proof half of Kill, shared by both hosts: poll until gone()
-// is true and every recorded pid has exited, or give up after KillWait polls.
-func killLoop(d *Deps, pids []int, gone func() bool) (alive []int, ok bool) {
+// presence is what a host query says about a target. Only presentGone proves
+// cleanup; presentUnknown (transport, execution or unreadable-response
+// failure) never does.
+type presence int
+
+const (
+	presentYes presence = iota
+	presentGone
+	presentUnknown
+)
+
+// seenBool maps a boolean "is it gone" check, for adapters whose query cannot
+// fail ambiguously, onto presence.
+func seenBool(gone bool) presence {
+	if gone {
+		return presentGone
+	}
+	return presentYes
+}
+
+// killLoop is the proof half of Kill, shared by the hosts: poll until gone()
+// reports presentGone and every recorded pid has exited, or give up after
+// KillWait polls. unknown says the last query could not tell, so the caller
+// can report an unverified close rather than a surviving one.
+func killLoop(d *Deps, pids []int, gone func() presence) (alive []int, unknown, ok bool) {
 	for i := 0; ; i++ {
 		alive = alive[:0]
 		for _, p := range pids {
@@ -420,11 +442,12 @@ func killLoop(d *Deps, pids []int, gone func() bool) (alive []int, ok bool) {
 				alive = append(alive, p)
 			}
 		}
-		if gone() && len(alive) == 0 {
-			return nil, true
+		g := gone()
+		if g == presentGone && len(alive) == 0 {
+			return nil, false, true
 		}
 		if i+1 >= d.KillWait {
-			return alive, false
+			return alive, g == presentUnknown, false
 		}
 		d.Sleep(time.Second)
 	}

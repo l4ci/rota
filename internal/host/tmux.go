@@ -222,39 +222,60 @@ func (t *tmux) draftPane(ctx context.Context, window string) string {
 // pane text and movement alone.
 func (t *tmux) Status(ctx context.Context, slot, handle string) string { return "" }
 
-// windowPID is the pane PID of the window with that exact name, 0 when there
-// is none. Exact match: a bare -t target would also take a prefix, so `w1`
-// could be answered by `w10`.
-func (t *tmux) windowPID(ctx context.Context, handle string) int {
+// windowPID is the pane PID of the window with that exact name. Exact match:
+// a bare -t target would also take a prefix, so `w1` could be answered by
+// `w10`. Only a successful listing without the window, or tmux saying the
+// session or server does not exist, is presentGone; any other failure is
+// presentUnknown.
+func (t *tmux) windowPID(ctx context.Context, handle string) (int, presence) {
 	session, name, _ := strings.Cut(handle, ":")
 	r := t.tmux(ctx, "list-windows", "-t", session, "-F", "#{window_name} #{pane_pid}")
+	if r.ExitCode != 0 {
+		if strings.Contains(r.Stderr, "can't find session") || strings.Contains(r.Stderr, "no server running") {
+			return 0, presentGone
+		}
+		return 0, presentUnknown
+	}
 	for _, line := range strings.Split(r.Stdout, "\n") {
 		f := strings.Fields(line)
 		if len(f) >= 2 && f[0] == name {
 			pid, _ := strconv.Atoi(f[1])
-			return pid
+			return pid, presentYes
 		}
 	}
-	return 0
+	return 0, presentGone
 }
 
 // Kill destroys the slot's window and proves it is gone: it records the pane
 // PID and its descendants first (claude plus its MCP children) and fails
 // unless the window no longer exists and every recorded PID has exited. A
 // swallowed failure here would leave the old session running beside the next
-// one in the same worktree.
+// one in the same worktree. A query that cannot answer, before or after the
+// close, proves nothing.
 func (t *tmux) Kill(ctx context.Context, slot, handle string) error {
 	if handle == "" {
 		return nil
 	}
 	var pids []int
-	if pid := t.windowPID(ctx, handle); pid != 0 {
+	pid, before := t.windowPID(ctx, handle)
+	if pid != 0 {
 		pids = t.d.Tree(pid)
 	}
 	t.tmux(ctx, "kill-window", "-t", handle)
-	alive, ok := killLoop(&t.d, pids, func() bool { return t.windowPID(ctx, handle) == 0 })
+	alive, unknown, ok := killLoop(&t.d, pids, func() presence {
+		_, p := t.windowPID(ctx, handle)
+		return p
+	})
+	if before == presentUnknown {
+		return fmt.Errorf("slot '%s' previous session could not be verified (window %s): tmux query failed before the close, so no process evidence was collected; not spawning a second one",
+			slot, handle)
+	}
 	if ok {
 		return nil
+	}
+	if unknown {
+		return fmt.Errorf("slot '%s' previous session could not be verified (window %s%s): tmux query failed after the close; not spawning a second one",
+			slot, handle, pidSuffix(alive))
 	}
 	return fmt.Errorf("slot '%s' previous session is still running (window %s%s); not spawning a second one",
 		slot, handle, pidSuffix(alive))
