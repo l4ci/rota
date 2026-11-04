@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
@@ -16,7 +15,7 @@ func TestCoreSetupSuggestsAssociatedRuntimeAndSupportedHarness(t *testing.T) {
 	if got := str(listQuestion(t, out, config.RoundDispatchKey), "suggestion"); got != "herdr-core" {
 		t.Fatalf("Core setup suggests disconnected host %q", got)
 	}
-	if got := str(listQuestion(t, out, config.RoundHarnessesKey), "suggestion"); !strings.Contains(got, "codex") {
+	if got := str(listQuestion(t, out, config.RoundHarnessesKey), "suggestion"); got != `["claude"]` {
 		t.Fatalf("Core setup suggests unsupported worker: %q", got)
 	}
 }
