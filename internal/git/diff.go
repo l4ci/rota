@@ -5,7 +5,36 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+// DisplayPath renders a repository path for human or agent text. ChangedPaths
+// returns exact bytes, so a name can hold a newline, a tab or a backtick that
+// would break a line format or a markdown span. A name of printable runes with
+// no backtick and no leading or trailing space comes back unchanged; anything
+// else is Go-quoted onto one line. Use it only for display; match on the
+// exact path.
+func DisplayPath(p string) string {
+	if p == "" || p != strings.TrimSpace(p) || strings.Contains(p, "`") || !utf8.ValidString(p) {
+		return strconv.Quote(p)
+	}
+	for _, r := range p {
+		if !unicode.IsPrint(r) {
+			return strconv.Quote(p)
+		}
+	}
+	return p
+}
+
+// DisplayPaths is DisplayPath over a list.
+func DisplayPaths(ps []string) []string {
+	out := make([]string, len(ps))
+	for i, p := range ps {
+		out[i] = DisplayPath(p)
+	}
+	return out
+}
 
 // The helpers below take a Runner, not a Repo, so a layer that fakes git (the
 // gate, the round env) keeps its seam. Repo's methods run them on its runner.

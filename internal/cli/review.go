@@ -260,7 +260,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 		if res.ExitCode != 0 {
 			diff = ""
 		}
-		p(fmt.Sprintf("### `%s`", path))
+		p(fmt.Sprintf("### `%s`", git.DisplayPath(path)))
 		p("")
 		p("```diff")
 		p(strings.TrimRight(pystr.UniversalNewlines(diff), "\n"))
