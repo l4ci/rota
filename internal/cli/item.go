@@ -243,6 +243,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 	dependsOn := fs.String("depends-on", "", "items that must close first, comma or space separated (#N, or an ID like B07); written as a ## Depends on section")
 	rawFile := fs.String("raw-file", "", "a preformatted bullet to append verbatim, path or - for stdin")
 	batchFile := fs.String("batch-file", "", "a JSON array of records (kind, title, tag, desc, body, dependsOn, related, milestone, repos, subsystem, captured), filed in order; path or - for stdin")
+	force := fs.Bool("force", false, "file even when the title was filed in the last 10 minutes, or a batch holds more than 25 records")
 	named := map[string]*string{}
 	for _, n := range []string{"related", "milestone", "repos", "subsystem", "captured"} {
 		named[n] = fs.String(n, "", n+" field")
@@ -258,11 +259,11 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 		given := givenFlags(fs)
 		if given["batch-file"] {
 			for n := range given {
-				if n != "batch-file" && !globalNames[n] {
+				if n != "batch-file" && n != "force" && !globalNames[n] {
 					return Result{}, Usage("--batch-file takes no other flag; each record carries its own kind and fields")
 				}
 			}
-			return itemCreateBatch(c, root, *batchFile)
+			return itemCreateBatch(c, root, *batchFile, *force)
 		}
 		if !backlog.ValidKind(*kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks")
@@ -312,7 +313,12 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-			res, err := be.Create(in)
+			if !*force {
+				if err := checkCreateGuard(c, root, be, []backlog.CreateInput{in}); err != nil {
+					return Result{}, err
+				}
+			}
+			res, err := recordingBackend{Backend: be, c: c, root: root}.Create(in)
 			if err != nil {
 				return Result{}, err
 			}
@@ -368,7 +374,7 @@ type batchRecord struct {
 // itemCreateBatch validates every record before it files any, then files them
 // in order and reports one id per record. A record that fails to file stops the
 // batch; the ids already filed ride in the error so none is lost.
-func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
+func itemCreateBatch(c *Ctx, root, path string, force bool) (Result, error) {
 	raw, err := readBodyInput(c, "batch-file", path, ExitResolution)
 	if err != nil {
 		return Result{}, err
@@ -405,7 +411,12 @@ func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
 		ins[i] = in
 	}
 	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-		res, err := fileBatch(be, ins)
+		if !force {
+			if err := checkCreateGuard(c, root, be, ins); err != nil {
+				return Result{}, err
+			}
+		}
+		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root}, ins)
 		if data, ok := res.Data.(*jsonx.Object); ok {
 			warnings, _ := data.Get("warnings")
 			if warnings, ok := warnings.([]string); ok {

@@ -100,8 +100,8 @@ func TestUmbrellaRepoFlagNarrows(t *testing.T) {
 
 func TestUmbrellaCreateTarget(t *testing.T) {
 	root, deps, fakes, built := umbrellaProject(t)
-	create := func(root string, extra ...string) (int, string, string) {
-		args := append([]string{"--json", "-C", root, "item", "create", "--kind", "tasks", "--title", "New"}, extra...)
+	create := func(root, title string, extra ...string) (int, string, string) {
+		args := append([]string{"--json", "-C", root, "item", "create", "--kind", "tasks", "--title", title}, extra...)
 		code, env, stderr := rotaRunWith(t, deps, args...)
 		id := ""
 		if code == 0 {
@@ -128,7 +128,7 @@ func TestUmbrellaCreateTarget(t *testing.T) {
 		{"unregistered flag", "", []string{"--repo", "nope"}, ExitResolution, ""},
 	} {
 		dir := filepath.Join(root, c.cwd)
-		code, id, stderr := create(dir, c.extra...)
+		code, id, stderr := create(dir, "New "+c.name, c.extra...)
 		if code != c.want || id != c.id {
 			t.Errorf("%s: exit %d id %q (%s), want %d %q", c.name, code, id, strings.TrimSpace(stderr), c.want, c.id)
 		}
@@ -137,6 +137,38 @@ func TestUmbrellaCreateTarget(t *testing.T) {
 		t.Errorf("stores: web %d, api %d", len(fakes["web"].Issues), len(fakes["api"].Issues))
 	}
 	_ = built
+}
+
+// The repeat guard keys on (target, title): the same title to two sub-repos is
+// two items, the same title to one sub-repo again is a re-run (#2644).
+func TestUmbrellaCreateGuardIsPerTarget(t *testing.T) {
+	root, deps, fakes, _ := umbrellaProject(t)
+	create := func(repo string) (int, string) {
+		code, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "create", "--kind", "tasks",
+			"--title", "Shared title here", "--repo", repo)
+		return code, stderr
+	}
+	before := len(fakes["web"].Issues) + len(fakes["api"].Issues)
+	if code, e := create("web"); code != 0 {
+		t.Fatalf("web: exit %d: %s", code, e)
+	}
+	if code, e := create("api"); code != 0 {
+		t.Fatalf("same title, other target: exit %d: %s", code, e)
+	}
+	if code, _ := create("api"); code != ExitRefused {
+		t.Errorf("same title, same target: exit %d, want %d", code, ExitRefused)
+	}
+	if n := len(fakes["web"].Issues) + len(fakes["api"].Issues); n != before+2 {
+		t.Errorf("filed %d, want 2", n-before)
+	}
+	// A batch is checked per record's own target too.
+	b := guardBatch(t, `[{"kind":"tasks","title":"Fresh other title","repos":"web"},{"kind":"tasks","title":"Shared title here","repos":"web"}]`)
+	if code, _, e := rotaRunWith(t, deps, "--json", "-C", root, "item", "create", "--batch-file", b); code != ExitRefused {
+		t.Errorf("batch repeat to web: exit %d, want %d: %s", code, ExitRefused, e)
+	}
+	if n := len(fakes["web"].Issues) + len(fakes["api"].Issues); n != before+2 {
+		t.Errorf("refused batch filed something: %d", n-before)
+	}
 }
 
 func TestUmbrellaFileModeKeepsOneBacklog(t *testing.T) {

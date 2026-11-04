@@ -348,11 +348,10 @@ func CwdSubRepo(cwd string, list []repos.Repo) string {
 	return ""
 }
 
-// Create captures one item in one sub-repo: the Repos field, else Scope, else
-// the sub-repo the caller works in. The ID is "<repo>:<number>".
-func (u *Umbrella) Create(in CreateInput) (CreateResult, error) {
+// createTarget resolves the one sub-repo a create files to, and the fields left
+// once the Repos field is taken out.
+func (u *Umbrella) createTarget(in CreateInput) (name string, rest []Field, err error) {
 	var names []string
-	var rest []Field
 	for _, f := range in.Fields {
 		if f.Name != "Repos" {
 			rest = append(rest, f)
@@ -366,15 +365,14 @@ func (u *Umbrella) Create(in CreateInput) (CreateResult, error) {
 		}
 	}
 	if len(names) > 1 {
-		return CreateResult{}, errf(ErrNotFound, "an item lives in exactly one sub-repo in issue mode — capture one item "+
+		return "", nil, errf(ErrNotFound, "an item lives in exactly one sub-repo in issue mode — capture one item "+
 			"per repo and link them with Related:")
 	}
-	name := ""
 	switch {
 	case len(names) == 1:
 		name = names[0]
 		if u.Scope != "" && u.Scope != name {
-			return CreateResult{}, errf(ErrInvalid, "--repo %s and the Repos field %s name different sub-repos", u.Scope, name)
+			return "", nil, errf(ErrInvalid, "--repo %s and the Repos field %s name different sub-repos", u.Scope, name)
 		}
 	case u.Scope != "":
 		name = u.Scope
@@ -382,11 +380,31 @@ func (u *Umbrella) Create(in CreateInput) (CreateResult, error) {
 		name = u.CwdRepo
 	}
 	if name == "" {
-		return CreateResult{}, errf(ErrNotFound, "umbrella issue mode needs a target sub-repo — pass --repo <name> or --repos <name> "+
+		return "", nil, errf(ErrNotFound, "umbrella issue mode needs a target sub-repo — pass --repo <name> or --repos <name> "+
 			"(registered: %s) or run from inside one", u.names())
 	}
 	if _, ok := u.registered(name); !ok {
-		return CreateResult{}, errf(ErrNotFound, "unknown sub-repo '%s' (registered: %s)", name, u.names())
+		return "", nil, errf(ErrNotFound, "unknown sub-repo '%s' (registered: %s)", name, u.names())
+	}
+	return name, rest, nil
+}
+
+// CreateTarget names the sub-repo in would be filed to, "" when it does not
+// resolve (the create itself then fails with the reason).
+func (u *Umbrella) CreateTarget(in CreateInput) string {
+	name, _, err := u.createTarget(in)
+	if err != nil {
+		return ""
+	}
+	return name
+}
+
+// Create captures one item in one sub-repo: the Repos field, else Scope, else
+// the sub-repo the caller works in. The ID is "<repo>:<number>".
+func (u *Umbrella) Create(in CreateInput) (CreateResult, error) {
+	name, rest, err := u.createTarget(in)
+	if err != nil {
+		return CreateResult{}, err
 	}
 	s, err := u.sub(name)
 	if err != nil {

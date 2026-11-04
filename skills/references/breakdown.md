@@ -58,6 +58,6 @@ N. MODIFIED <capability>, serves M08 AC-n, depends on <numbers or none>, deliver
 
 ## Filing and checking
 
-File through `rota item create --batch-file`. Records go in dependency order, `dependsOn` points at the ids just printed, and `milestone` is set.
+File through `rota item create --batch-file`. Records go in dependency order, `dependsOn` points at the ids just printed, and `milestone` is set. A re-run is refused (exit 4) when a title was filed in the last 10 minutes or the batch holds over 25 records; never retry a batch with a fallback, check what was filed first, and pass `--force` only for an intended repeat.
 
 Then run `rota milestone check <MNN>` and fix every gap it names: features with no valid `## Change`, a `## Change` on an unlisted capability, unknown `Serves:` ids, REMOVED items missing a field, and `## Touches` entries that are not a listed capability. Leave a criterion uncovered only when the milestone's `## Not yet specified` explains it. `--strict` fails on uncovered criteria, so run it once the milestone is meant to be fully specified.

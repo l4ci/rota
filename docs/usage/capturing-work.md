@@ -41,7 +41,7 @@ Telling `/rota-capture` *"the sidebar flickers on hover, also we should add keyb
 
 Items captured in the same batch can reference each other via `Related:` links.
 
-Underneath, `rota item create` refuses an empty title or a placeholder (`x`, `tbd`, `todo`, `title`, `untitled`, any case) with exit 2. To file many items in one call, pass `--batch-file <json|->` with a JSON array of records; it cannot be combined with the other item flags. rota checks every title, kind and field first, then files the records in order and returns one id per record under `items`. A batch title needs at least three words. If a record fails part way, the error names it and lists the ids already filed.
+Underneath, `rota item create` refuses an empty title or a placeholder (`x`, `tbd`, `todo`, `title`, `untitled`, any case) with exit 2. To file many items in one call, pass `--batch-file <json|->` with a JSON array of records; it cannot be combined with the other item flags. rota checks every title, kind and field first, then files the records in order and returns one id per record under `items`. A batch title needs at least three words. A re-run cannot file twice: a title filed in the last 10 minutes, or a batch over 25 records, is refused with exit 4 before anything is filed (a batch is all-or-nothing, and the refusal names the existing items). Pass `--force` for an intentional repeat. If a record fails part way, the error names it and lists the ids already filed.
 
 ## Item templates
 
