@@ -7,7 +7,7 @@
 // A test that needs a global config sets ROTA_CONFIG_DIR (or XDG_CONFIG_HOME)
 // itself with t.Setenv.
 //
-// The same init scrubs the host-session variables (HERDR_*, TMUX*) by prefix,
+// The same init scrubs the host-session variables (HERDR_*, HC_*, TMUX*) by prefix,
 // so a test never inherits the herdr or tmux pane a round runs in. Tripwire
 // (tripwire.go) puts fake host binaries first on PATH for TestMains.
 package testiso
