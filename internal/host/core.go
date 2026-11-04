@@ -711,7 +711,8 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 	}
 	// An element opening identifies an unsigned relay as well as a signed
 	// one. Match the sent opening (including its round and sequence), never a
-	// task brief or a legacy bare marker, and require a fresh echo.
+	// task brief or a legacy bare marker. It must be absent from the entire
+	// pre-send screen, including its queue previews.
 	opening := ""
 	for _, line := range strings.Split(text, "\n") {
 		if harness.IsRelayOpen(line) && harness.RelaySequence(line) != "" {
@@ -727,7 +728,7 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 		}
 		return false
 	}
-	if opening != "" && seenOpening(output) && !seenOpening(old) {
+	if opening != "" && seenOpening(output) && !seenOpening(before) {
 		return "picked-up"
 	}
 	signature := ""
