@@ -102,6 +102,10 @@ type Deps struct {
 	// WorkerPoll classifies panes through the worker environment. Tests can
 	// replace the adapter without adding fixture switches to the CLI.
 	WorkerPoll func(context.Context, string, worker.PollOpts) (worker.PollResult, error)
+	// TrainPlan previews a train of PRs on a base (the `worker train --plan`
+	// answer) for the train nudge. Nil skips the preview and the nudge stays
+	// as it was; an error also leaves the nudge unchanged.
+	TrainPlan func(c *Ctx, root, base string, prs []string) (*worker.TrainPlan, error)
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
@@ -191,6 +195,7 @@ func defaultDeps() *Deps {
 		ReadCache:        tracker.NewReadCache(),
 		RecordMistakes:   true,
 	}
+	d.TrainPlan = planTrainNudge
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), rotatree.Config(root)) }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
