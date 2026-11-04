@@ -27,9 +27,9 @@ func SlotIdle(s *worker.Slot) bool {
 // a slot last ran under.
 func SlotAccount(s *worker.Slot) (kind, account string) {
 	if h := harness.ResolveAccounts(s.Kind()); !h.UsageMeter() {
-		return h.Kind(), s.HomeAccount()
+		kind = h.Kind()
 	}
-	return "", s.Account()
+	return kind, s.AccountFor("")
 }
 
 // SlotLoginProblem says why a slot's account cannot start a session: its
