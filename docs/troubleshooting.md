@@ -14,7 +14,7 @@ Choose **leave for later** during `/rota-init` and finish initialization with te
 
 In a new project, the agent recommends adding the first tests with the implementation; having no tests at init does not prevent starting that work. An existing build or lint command can be an explicitly agreed interim check, with reports identifying its limited coverage rather than claiming behavior tests ran.
 
-Set the agreed command through the agent or with `rota config set test.full '<your command>'`. A command inferred from a manifest is only a suggestion: check that it actually runs useful tests.
+Set the agreed command through the agent or with `rota config set test.full '["<your command>"]'`. A command inferred from a manifest is only a suggestion: check that it actually runs useful tests.
 
 Once verification is configured, later rounds use it without repeating the deferred-setup question unless something changes. See [a new project's first merge](first-round.md#starting-without-tests).
 
