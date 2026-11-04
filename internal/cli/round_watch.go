@@ -76,6 +76,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 
 		ctx, stop := workerContext()
 		defer stop()
+		ts := c.trackStatus("round watch")
+		ok := false
+		defer func() { ts.Finish(ok) }()
 		wenv := workerEnvCtx(c, ctx)
 		env := roundwatch.Env{
 			Now: lenv.Now,
@@ -112,9 +115,12 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
+			ok = ctx.Err() == nil
 			return watchResult(c, root, cd, lenv, res, nil, ""), nil
 		}
-		return autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, *pid, secs(*poll))
+		res, err := autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, *pid, secs(*poll))
+		ok = err == nil && ctx.Err() == nil
+		return res, err
 	}
 }
 

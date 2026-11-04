@@ -400,7 +400,17 @@ func ensureHook(hooks *jsonx.Object, event, matcher, command string) (bool, erro
 			}
 			if gobj, _ := g.(*jsonx.Object); matcher != "" && gobj != nil {
 				if m, _ := getAny(gobj, "matcher").(string); m != matcher {
-					gobj.Set("matcher", matcher)
+					if hasUnmarked(gobj) {
+						// The group's matcher also governs commands rota did not
+						// write; give the managed command its own group instead.
+						detachHook(gobj, h)
+						ng := jsonx.NewObject()
+						ng.Set("matcher", matcher)
+						ng.Set("hooks", []any{h})
+						hooks.Set(event, append(arr, ng))
+					} else {
+						gobj.Set("matcher", matcher)
+					}
 					changed = true
 				}
 			}
@@ -417,6 +427,30 @@ func ensureHook(hooks *jsonx.Object, event, matcher, command string) (bool, erro
 	group.Set("hooks", []any{entry})
 	hooks.Set(event, append(arr, group))
 	return true, nil
+}
+
+// hasUnmarked reports whether the group holds a command rota did not write.
+func hasUnmarked(g *jsonx.Object) bool {
+	arr, _ := getAny(g, "hooks").([]any)
+	for _, h := range arr {
+		ho, _ := h.(*jsonx.Object)
+		if c, _ := getAny(ho, "command").(string); ho == nil || !HasMarker(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// detachHook removes h from the group's inner hooks.
+func detachHook(g, h *jsonx.Object) {
+	arr, _ := getAny(g, "hooks").([]any)
+	kept := make([]any, 0, len(arr))
+	for _, x := range arr {
+		if xo, _ := x.(*jsonx.Object); xo != h {
+			kept = append(kept, x)
+		}
+	}
+	g.Set("hooks", kept)
 }
 
 // Uninstall removes exactly what Install marked from o and restores a wrapped
