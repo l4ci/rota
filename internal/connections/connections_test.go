@@ -20,6 +20,7 @@ type memStore struct {
 	vals    map[string]string
 	failSet error
 	failGet error
+	failDel error
 }
 
 func newMem(name string) *memStore { return &memStore{name: name, vals: map[string]string{}} }
@@ -39,7 +40,13 @@ func (m *memStore) Set(_ context.Context, n, s string) error {
 	m.vals[n] = s
 	return nil
 }
-func (m *memStore) Delete(_ context.Context, n string) error { delete(m.vals, n); return nil }
+func (m *memStore) Delete(_ context.Context, n string) error {
+	if m.failDel != nil {
+		return m.failDel
+	}
+	delete(m.vals, n)
+	return nil
+}
 
 type fakeTester struct{ err error }
 
@@ -479,29 +486,58 @@ func TestAddRejectsEnvVarCollision(t *testing.T) {
 	}
 }
 
-// failDelKeychain is a keychain whose Set and Delete fail while Get still
-// returns an old secret: the case where a stale entry would shadow the file.
-type failDelKeychain struct{ *memStore }
-
-func (f failDelKeychain) Delete(context.Context, string) error { return errors.New("locked") }
-
 func TestSaveFallbackNeverLeavesStaleKeychainSecret(t *testing.T) {
+	ctx := context.Background()
+	locked := errors.New("locked")
+	cases := []struct {
+		name    string
+		failGet error
+		wantErr bool
+	}{
+		{"verified stale", nil, true},
+		{"verification fails too", locked, true},
+	}
+	for _, c := range cases {
+		kc := newMem("keychain")
+		kc.vals["work"] = "old"
+		kc.failSet, kc.failDel, kc.failGet = ErrUnavailable, locked, c.failGet
+		file := newMem("file")
+		s := &Secrets{Keychain: kc, File: file}
+		if _, err := s.Save(ctx, "work", "new"); err == nil {
+			t.Fatalf("%s: Save reported a replacement the keychain could shadow", c.name)
+		}
+		if _, ok, _ := file.Get(ctx, "work"); ok {
+			t.Errorf("%s: failed Save wrote the file store", c.name)
+		}
+		// keychain recovers: the old secret is still what resolves, and Save said so
+		kc.failGet = nil
+		if v, store, _ := s.Resolve(ctx, "work"); v != "old" || store != StoreKeychain {
+			t.Errorf("%s: %q %q", c.name, v, store)
+		}
+	}
+}
+
+func TestSaveFallbackThenKeychainRecoveryKeepsReplacement(t *testing.T) {
 	ctx := context.Background()
 	kc := newMem("keychain")
 	kc.vals["work"] = "old"
 	kc.failSet = ErrUnavailable
 	file := newMem("file")
-	if _, err := (&Secrets{Keychain: failDelKeychain{kc}, File: file}).Save(ctx, "work", "new"); err == nil {
-		t.Fatal("a stale keychain entry survived a fallback save")
-	}
-	// when the delete works, the file holds the new secret and resolve returns it
 	s := &Secrets{Keychain: kc, File: file}
+	// delete works: the file holds the new secret
 	got, err := s.Save(ctx, "work", "new")
 	if err != nil || got.Store != StoreFile {
 		t.Fatalf("%+v %v", got, err)
 	}
+	kc.failSet = nil // keychain recovers
 	if v, store, _ := s.Resolve(ctx, "work"); v != "new" || store != StoreFile {
 		t.Errorf("shadowed: %q %q", v, store)
+	}
+	// no usable keychain at all: file fallback still works
+	kc2 := newMem("keychain")
+	kc2.failSet, kc2.failDel, kc2.failGet = ErrUnavailable, ErrUnavailable, ErrUnavailable
+	if got, err := (&Secrets{Keychain: kc2, File: newMem("file")}).Save(ctx, "w", "x"); err != nil || got.Store != StoreFile {
+		t.Errorf("%+v %v", got, err)
 	}
 }
 
