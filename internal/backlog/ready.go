@@ -57,6 +57,37 @@ func TemplateReasons(it Item, body string) []string {
 	return reasons
 }
 
+// HasNote reports whether the item has a design or plan note, in either
+// backend: a tracker note through ItemTracker, else the file backend's
+// .rota/designs and .rota/plans files. A backend that can show neither has none.
+func HasNote(be Backend, ref string) bool {
+	if t, ok := be.(ItemTracker); ok {
+		for _, kind := range []string{"design", "plan"} {
+			if text, _, err := t.NoteGet(ref, kind); err == nil && strings.TrimSpace(text) != "" {
+				return true
+			}
+		}
+		return false
+	}
+	if f, ok := be.(*File); ok {
+		return f.hasNote(ref)
+	}
+	return false
+}
+
+func (f *File) hasNote(ref string) bool {
+	if _, err := os.Stat(f.rota("designs", ref+".md")); err == nil {
+		return true
+	}
+	entries, _ := os.ReadDir(f.rota("plans"))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), "-"+ref+".md") {
+			return true
+		}
+	}
+	return false
+}
+
 // Ready lists what the item lacks to be startable (FileBackend.ready_reasons):
 // acceptance criteria in the detail file, or a design (.rota/designs/<ID>.md) or
 // plan (.rota/plans/*-<ID>.md) note. An empty list means ready.
@@ -64,19 +95,8 @@ func (f *File) Ready(ref string) ([]string, error) {
 	if _, _, ok := FindOrigin(f.Corpus(), ref); !ok {
 		return nil, errf(ErrNotFound, "[%s] not found in BACKLOG.md or ARCHIVE.md", ref)
 	}
-	note := false
-	if _, err := os.Stat(f.rota("designs", ref+".md")); err == nil {
-		note = true
-	}
-	if !note {
-		if entries, err := os.ReadDir(f.rota("plans")); err == nil {
-			for _, e := range entries {
-				note = note || strings.HasSuffix(e.Name(), "-"+ref+".md")
-			}
-		}
-	}
 	text, _, _ := f.Detail(ref)
-	return readyReasons(hasCriteria(text), note), nil
+	return readyReasons(hasCriteria(text), f.hasNote(ref)), nil
 }
 
 func validCommentKind(kind string) bool {

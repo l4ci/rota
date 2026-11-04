@@ -618,9 +618,15 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		return err
 	}
 	for _, c := range cands {
-		if c.Ready() && !slices.Contains(minted, c.ID) {
-			queue = append(queue, c.ID)
+		if !c.Ready() || slices.Contains(minted, c.ID) {
+			continue
 		}
+		// An epic or an unplanned Major item waits for a person (#2570).
+		if c.AutoHold != "" {
+			r.NeedsYou = append(r.NeedsYou, Item{"autopilot-hold", c.ID, c.AutoHold})
+			continue
+		}
+		queue = append(queue, c.ID)
 	}
 	for _, id := range queue {
 		if n == 0 {

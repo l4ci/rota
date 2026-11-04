@@ -720,3 +720,24 @@ func TestGateRunningRefusalDefersTheAssign(t *testing.T) {
 		t.Errorf("a deferred assign did %v and needs-you %v, want neither", r.Did, r.NeedsYou)
 	}
 }
+
+// #2570: a held candidate is never assigned; it is reported for a person and
+// the next ready one takes the slot.
+func TestTickSkipsAutopilotHolds(t *testing.T) {
+	held := cand("#16", true)
+	held.AutoHold = "an epic (its title says so): assign its child issues instead"
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}},
+		cands: []round.Candidate{held, cand("#19", true)},
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"#19"}; !reflect.DeepEqual(f.assigned, want) {
+		t.Fatalf("assigned %v, want %v", f.assigned, want)
+	}
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Kind != "autopilot-hold" || r.NeedsYou[0].Target != "#16" {
+		t.Fatalf("needs you %+v, want the held epic", r.NeedsYou)
+	}
+}
