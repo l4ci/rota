@@ -66,9 +66,10 @@ func TestStoresShareTheVerbs(t *testing.T) {
 	}
 }
 
-// The digit rule is the one place the stores differ: file designs are minted
-// as B07, so B7 is a typo there, while issue numbers have any digit count.
-func TestIDDigitsByStore(t *testing.T) {
+// The digit rule is the one place the stores differ for lettered IDs: file
+// designs are minted as B07, so B7 is a typo there, while issue numbers have
+// any digit count.
+func TestFileIDRules(t *testing.T) {
 	st := stores(t)
 	for _, c := range []struct {
 		store, id string
@@ -76,27 +77,68 @@ func TestIDDigitsByStore(t *testing.T) {
 	}{
 		{"files", "B7", 2}, {"files", "B07", 0}, {"files", "B1234", 0},
 		{"notes", "B7", 0}, {"notes", "B07", 0},
-		{"files", "S01", 2}, {"notes", "S01", 2}, {"files", "7", 2}, {"files", "#7", 2}, {"files", "#B07", 2},
-		{"notes", "7", 0}, {"notes", "#233", 0}, {"notes", "#", 2}, {"notes", "#B7", 2}, {"notes", "../x", 2},
+		{"files", "S01", 2}, {"files", "7", 2}, {"files", "#7", 2}, {"files", "#B07", 2},
+		{"files", "PROJ-123", 2},
 	} {
-		if exit := exitOf(CheckID(st[c.store].st, c.id)); exit != c.exit {
+		if exit := exitOf(st[c.store].st.CheckID(c.id)); exit != c.exit {
 			t.Errorf("%s %q: exit %d, want %d", c.store, c.id, exit, c.exit)
 		}
 	}
 }
 
-// The issue backend takes the number as N or #N; the stub never carries the
-// "#", which would turn the front-matter id into a YAML comment.
-func TestNotesAcceptIssueNumbers(t *testing.T) {
-	for _, id := range []string{"233", "#233"} {
-		notes := artifacttest.NewNotes()
-		st := NewNotes(func() (artifact.Notes, error) { return notes, nil })
-		if err := Add(st, id, "T", testDay); err != nil {
-			t.Fatalf("add %s: %v", id, err)
+// The note store reads item references through the backlog's grammar: numbers,
+// lettered numbers and tracker keys all create, read, replace and remove the
+// design of the one item they name, and the stub carries the normalized ID
+// (never a "#", which would turn the front-matter id into a YAML comment).
+func TestNotesStoreItemRefs(t *testing.T) {
+	for _, c := range []struct{ id, item string }{
+		{"42", "42"}, {"#42", "42"}, {"F7", "F7"}, {"PROJ-123", "PROJ-123"}, {"ENG-42", "ENG-42"}, {"proj-123", "PROJ-123"},
+	} {
+		t.Run(c.id, func(t *testing.T) {
+			notes := artifacttest.NewNotes()
+			st := NewNotes(func() (artifact.Notes, error) { return notes, nil })
+			if err := Add(st, c.id, "T", testDay); err != nil {
+				t.Fatalf("add: %v", err)
+			}
+			if _, ok := notes.M[[2]string{c.item, "design"}]; !ok {
+				t.Fatalf("design not stored on item %s: %v", c.item, notes.M)
+			}
+			got, err := Show(st, c.item)
+			if err != nil || !strings.HasPrefix(got, "---\nid: "+c.item+"\ntitle: T\n") {
+				t.Errorf("show: %q %v", got, err)
+			}
+			if changed, err := Put(st, c.id, "# new\n"); err != nil || !changed {
+				t.Errorf("put: %v %v", changed, err)
+			}
+			if err := Rm(st, c.id); err != nil {
+				t.Errorf("rm: %v", err)
+			}
+			if len(notes.M) != 0 {
+				t.Errorf("notes left behind: %v", notes.M)
+			}
+		})
+	}
+}
+
+// A malformed reference is exit 2 from every verb before the store opens the
+// item's notes, so the tracker is never reached.
+func TestNotesStoreRejectsMalformedBeforeTracker(t *testing.T) {
+	st := NewNotes(func() (artifact.Notes, error) {
+		t.Fatal("tracker reached")
+		return nil, nil
+	})
+	for _, id := range []string{"", "#", "S01", "#B7", "x/y", "233x", "PROJ-", "-123", "PROJ-12-3", " 42", "42 ", "PROJ 123", "M01-B07"} {
+		if err := Add(st, id, "T", testDay); exitOf(err) != 2 {
+			t.Errorf("add %q: %v, want exit 2", id, err)
 		}
-		got, err := Show(st, id)
-		if err != nil || !strings.HasPrefix(got, "---\nid: 233\ntitle: T\n") {
-			t.Errorf("show %s: %q %v", id, got, err)
+		if _, err := Show(st, id); exitOf(err) != 2 {
+			t.Errorf("show %q: %v, want exit 2", id, err)
+		}
+		if _, err := Put(st, id, "x"); exitOf(err) != 2 {
+			t.Errorf("put %q: %v, want exit 2", id, err)
+		}
+		if err := Rm(st, id); exitOf(err) != 2 {
+			t.Errorf("rm %q: %v, want exit 2", id, err)
 		}
 	}
 }
@@ -104,10 +146,10 @@ func TestNotesAcceptIssueNumbers(t *testing.T) {
 // A wrong ID names the shape the configured backend expects.
 func TestCheckIDErrorNamesBackendForm(t *testing.T) {
 	st := stores(t)
-	if err := CheckID(st["files"].st, "233x"); err == nil || !strings.Contains(err.Error(), `\d{2,}`) {
+	if err := st["files"].st.CheckID("233x"); err == nil || !strings.Contains(err.Error(), `\d{2,}`) {
 		t.Errorf("files error: %v", err)
 	}
-	if err := CheckID(st["notes"].st, "233x"); err == nil || !strings.Contains(err.Error(), "#N") {
+	if err := st["notes"].st.CheckID("233x"); err == nil || !strings.Contains(err.Error(), "#N") {
 		t.Errorf("notes error: %v", err)
 	}
 }

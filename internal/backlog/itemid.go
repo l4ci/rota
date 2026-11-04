@@ -1,12 +1,44 @@
 package backlog
 
 import (
+	"fmt"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode"
 )
+
+// IssueRef is one unqualified item reference on the issue backend: a number
+// ("42", "#42"), a lettered number ("F42") or a tracker key ("PROJ-123").
+// It is the single owner of that grammar: backlog lookups, plan and design
+// note access and the acceptance verbs all read references through
+// ParseIssueRef.
+type IssueRef struct {
+	// ID is the normalized spelling: no "#", upper case, digits as typed
+	// ("#42" gives "42", "f07" gives "F07", "proj-1" gives "PROJ-1").
+	ID string
+	// Key is the tracker key the reference resolves to.
+	Key tracker.IssueKey
+	// Letter is the type letter of a lettered number, "" otherwise.
+	Letter string
+}
+
+// ParseIssueRef reads s as an item reference. Unlike the lookups, which
+// ignore surrounding space, it takes the text exactly: a reference that
+// holds whitespace is not one.
+func ParseIssueRef(s string) (IssueRef, error) {
+	if strings.IndexFunc(s, unicode.IsSpace) >= 0 {
+		return IssueRef{}, fmt.Errorf("not an item reference: %q", s)
+	}
+	key, letter, err := resolveKey(s)
+	if err != nil {
+		return IssueRef{}, err
+	}
+	return IssueRef{ID: tracker.NormRef(s), Key: key, Letter: letter}, nil
+}
 
 // FileIDDigits is the fewest digits a file-mode item ID carries. IDs are
 // minted zero-padded (B07, F12), and a detail file, design or proof is

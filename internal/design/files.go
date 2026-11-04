@@ -22,7 +22,14 @@ type files struct{ root string }
 // Files is the file-mode store.
 func Files(root string) Store { return files{root} }
 
-func (files) Digits() int { return backlog.FileIDDigits }
+// CheckID: a file design is [BFT] and at least two digits, never per-slice or
+// per-milestone.
+func (files) CheckID(id string) error {
+	if backlog.ValidID(id, backlog.FileIDDigits) {
+		return nil
+	}
+	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, backlog.FileIDDigits, id)
+}
 
 func docs(root string) artifact.FileDocs {
 	return artifact.FileDocs{Root: root, Dir: rotatree.DesignsDir, Kind: "design"}
@@ -79,7 +86,7 @@ func List(root string) ([]Entry, error) {
 // heading is exit 3. changed is false when the file would not change. Amend
 // is file-only: issue-mode designs are edited whole with Put.
 func Amend(root, id, heading, mode, text string) (changed bool, err error) {
-	if err = CheckID(files{root}, id); err != nil {
+	if err = (files{root}).CheckID(id); err != nil {
 		return
 	}
 	if mode != "append" && mode != "replace" {
