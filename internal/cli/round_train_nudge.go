@@ -2,8 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
@@ -21,6 +24,7 @@ import (
 // the one rule the tick and the nudge share.
 type waitingPR struct {
 	PR, Base   string
+	Branch     string
 	Reviewed   bool
 	ReadySince time.Time
 	Immediate  bool
@@ -35,6 +39,13 @@ type trainNudge struct {
 	Reason     string
 	Wait       string
 	ReadyCount int
+	// Branches maps a PR number to its branch, for the preview cache key.
+	Branches map[string]string
+	// Conflicts and Blocked come from the `worker train --plan` preview: the
+	// reviewed pairs that conflict and the PRs left out of Landable because of
+	// them. Empty when the preview was skipped or found none.
+	Conflicts []worker.TrainConflict
+	Blocked   []worker.TrainBlocked
 }
 
 // Command is the train to run, the PR numbers as `rota worker train` takes them.
@@ -49,8 +60,32 @@ func (n trainNudge) Command() string {
 	return fmt.Sprintf("rota worker train %s --base %s", strings.Join(n.PRs, " "), base)
 }
 
-// Text is the nudge line `round wait` and `round watch` print.
+// Text is the nudge `round wait` and `round watch` print: one conflict line per
+// clashing pair first, then the train line.
 func (n trainNudge) Text() string {
+	var out []string
+	for _, c := range n.Conflicts {
+		out = append(out, n.conflictLine(c))
+	}
+	return strings.Join(append(out, n.trainLine()), "\n")
+}
+
+// conflictLine warns of two reviewed PRs that conflict before a train is
+// started, with the way out: land the first, then bring its base into the other.
+func (n trainNudge) conflictLine(c worker.TrainConflict) string {
+	first, second := c.A, c.B
+	if slices.Contains(n.PRs, second) && !slices.Contains(n.PRs, first) {
+		first, second = second, first
+	}
+	paths := ""
+	if len(c.Paths) > 0 {
+		paths = " on " + strings.Join(c.Paths, ", ")
+	}
+	return fmt.Sprintf("nudge\ttrain-conflict\t#%s conflicts with #%s%s; left out of the train\tland #%s first, then merge %s into #%s's branch or route the conflict to its worker",
+		first, second, paths, first, dash(n.Base), second)
+}
+
+func (n trainNudge) trainLine() string {
 	command := n.Command()
 	if n.Assign != nil {
 		command = n.Assign.First() + "; then " + command
@@ -71,10 +106,110 @@ func (n trainNudge) Text() string {
 			count = fmt.Sprintf("%d of %d", len(n.PRs), n.ReadyCount)
 			noun = "ready PRs"
 		}
-		return fmt.Sprintf("nudge\ttrain\t%s %s %s on %s (%s)%s\t%s", count, noun, verb, dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, command)
+		return fmt.Sprintf("nudge\ttrain\t%s %s %s on %s (%s)%s%s\t%s", count, noun, verb, dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, n.blockedNote(), command)
 	}
-	return fmt.Sprintf("nudge\ttrain\t%d reviewed PRs wait on %s (%s)%s\t%s",
-		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, command)
+	return fmt.Sprintf("nudge\ttrain\t%d reviewed PRs wait on %s (%s)%s%s\t%s",
+		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, n.blockedNote(), command)
+}
+
+// blockedNote lists the order-blocked PRs and the landable PRs each conflicts with.
+func (n trainNudge) blockedNote() string {
+	var parts []string
+	for _, b := range n.Blocked {
+		parts = append(parts, fmt.Sprintf("#%s (conflicts with %s)", b.Target, strings.Join(prHashes(b.By), " ")))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; order-blocked: " + strings.Join(parts, ", ")
+}
+
+// withPlan narrows a nudge to the largest conflict-free landable set of a train
+// preview and records the pairs and PRs it left out. A preview that finds no
+// conflict leaves the nudge as it was.
+func (n trainNudge) withPlan(p *worker.TrainPlan) trainNudge {
+	if p == nil || len(p.Landable) == 0 || len(p.Conflicts) == 0 {
+		return n
+	}
+	n.PRs = p.Landable
+	n.Conflicts, n.Blocked = p.Conflicts, p.Blocked
+	return n
+}
+
+// planTrainNudge runs the `worker train --plan` preview quietly: it maps
+// conflicts with git merge-tree, runs no tests and pushes nothing.
+func planTrainNudge(c *Ctx, root, base string, prs []string) (*worker.TrainPlan, error) {
+	quiet := *c
+	quiet.Stderr = io.Discard
+	run := runTrain(&quiet, root, trainRunOpts{Targets: prs, Base: base, Plan: true})
+	if run.Err != nil {
+		return nil, run.Err
+	}
+	return run.Result.Plan, nil
+}
+
+// trainPlanMemo remembers a preview per base and head SHAs for the life of the
+// process, so a watch re-evaluating an unchanged queue never re-plans. A failed
+// preview is remembered too: retrying it on every tick would repeat the fetch.
+var trainPlanMemo = struct {
+	sync.Mutex
+	m map[string]trainPlanMemoEntry
+}{m: map[string]trainPlanMemoEntry{}}
+
+type trainPlanMemoEntry struct {
+	plan *worker.TrainPlan
+	err  error
+}
+
+// trainPlanKey names the queue by root, base, the base tip and each PR's local
+// branch head. Local refs only, so it costs a few rev-parse calls.
+func trainPlanKey(c *Ctx, root string, n trainNudge) string {
+	rev := func(ref string) string {
+		r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", ref)
+		if err != nil || r.ExitCode != 0 {
+			return "?"
+		}
+		return strings.TrimSpace(r.Stdout)
+	}
+	parts := []string{root, n.Base, rev(n.Base), rev("origin/" + n.Base)}
+	for _, pr := range n.PRs {
+		parts = append(parts, pr+"="+rev(n.Branches[pr]))
+	}
+	return strings.Join(parts, "|")
+}
+
+// planNudges applies the train preview to each nudge naming two or more PRs.
+// The preview is read-only (a check-only gate per member: forge lookup and
+// `git fetch`, then git merge-tree; no worktree, lock or .rota write). Advice
+// only: no hook, or a preview that fails (base not checked out, forge
+// unreachable), keeps the unplanned nudge.
+func planNudges(c *Ctx, root string, ns []trainNudge) []trainNudge {
+	plan := c.deps().TrainPlan
+	if plan == nil {
+		return ns
+	}
+	for i, n := range ns {
+		if n.Base == "" || len(n.PRs) < 2 {
+			continue
+		}
+		key := trainPlanKey(c, root, n)
+		trainPlanMemo.Lock()
+		e, hit := trainPlanMemo.m[key]
+		trainPlanMemo.Unlock()
+		if !hit {
+			e.plan, e.err = plan(c, root, n.Base, n.PRs)
+			// The preview fetched, so heads may have moved: remember it under
+			// the state it left behind as well, which the next tick will read.
+			post := trainPlanKey(c, root, n)
+			trainPlanMemo.Lock()
+			trainPlanMemo.m[key], trainPlanMemo.m[post] = e, e
+			trainPlanMemo.Unlock()
+		}
+		if e.err == nil {
+			ns[i] = n.withPlan(e.plan)
+		}
+	}
+	return ns
 }
 
 func readyTrainNudges(c *Ctx, root string) []trainNudge {
@@ -84,7 +219,7 @@ func readyTrainNudges(c *Ctx, root string) []trainNudge {
 	if err != nil {
 		return nil
 	}
-	ns := trainNudgesWithFill(waitingPRs(c, root), fill, c.deps().Now())
+	ns := planNudges(c, root, trainNudgesWithFill(waitingPRs(c, root), fill, c.deps().Now()))
 	if len(ns) > 0 {
 		n := freeSlotAssignment(c, root)
 		for i := range ns {
@@ -150,6 +285,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 	oldest := map[string]time.Time{}
 	immediate := map[string][]string{}
 	ages := map[string]time.Time{}
+	branches := map[string]string{}
 	seen := map[int]bool{}
 	var bases []string
 	for _, w := range waiting {
@@ -166,6 +302,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 		}
 		by[w.Base] = append(by[w.Base], fmt.Sprint(n))
 		ages[fmt.Sprint(n)] = w.ReadySince
+		branches[fmt.Sprint(n)] = w.Branch
 		if w.Immediate {
 			immediate[w.Base] = append(immediate[w.Base], fmt.Sprint(n))
 		}
@@ -193,7 +330,7 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 			if fill.Max > 0 && len(prs) > fill.Max {
 				prs = roundcfg.OldestReady(prs, fill.Max, func(pr string) time.Time { return ages[pr] })
 			}
-			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count})
+			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count, Branches: branches})
 		}
 	}
 	return out
@@ -251,13 +388,13 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 				}
 			}
 			rd := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
-			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
+			out = append(out, waitingPR{PR: s.PR(), Branch: s.Branch(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
 			rd := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
-			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
+			out = append(out, waitingPR{PR: q.PR, Branch: q.Branch, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
@@ -322,6 +459,25 @@ func trainNudgeData(ns []trainNudge) []any {
 		o.Set("prs", strList(n.PRs))
 		o.Set("command", n.Command())
 		setIf(o, "reason", n.Reason)
+		if len(n.Conflicts) > 0 {
+			cs := make([]any, 0, len(n.Conflicts))
+			for _, c := range n.Conflicts {
+				co := jsonx.NewObject()
+				co.Set("a", c.A)
+				co.Set("b", c.B)
+				co.Set("paths", strList(c.Paths))
+				cs = append(cs, co)
+			}
+			o.Set("conflicts", cs)
+			bs := make([]any, 0, len(n.Blocked))
+			for _, b := range n.Blocked {
+				bo := jsonx.NewObject()
+				bo.Set("pr", b.Target)
+				bo.Set("conflictsWith", strList(b.By))
+				bs = append(bs, bo)
+			}
+			o.Set("orderBlocked", bs)
+		}
 		if n.Assign != nil {
 			a := n.Assign.data()
 			a.Set("command", n.Assign.Command()+" --agent "+n.Assign.Slot)
@@ -336,7 +492,7 @@ func trainNudgeData(ns []trainNudge) []any {
 func trainNudgeLines(ns []trainNudge) []string {
 	var out []string
 	for _, n := range ns {
-		out = append(out, n.Text())
+		out = append(out, strings.Split(n.Text(), "\n")...)
 	}
 	return out
 }

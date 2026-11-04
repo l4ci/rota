@@ -258,6 +258,13 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 Each verb's arguments, data and exit codes are in `docs/contributing/contract/`. Every verb
 takes `--json` for a machine-readable envelope.
 
+`rota worker gate`, `rota round watch` and the sharded `test/gate.sh` also report to the terminal
+over OSC 7501 (the Program Status Protocol herdr, Ghostty and the Core app read): `working` while
+they run, then `done` or `error` (a refused or failing gate is `error`; `test/gate.sh` adds
+`progress` as its checks finish). The record goes to stderr, only when stdout and stderr are both
+terminals and not under `--json`, so piped and JSON output are unchanged. Terminals that do not
+know the sequence ignore it.
+
 ## The status screen
 
 `rota round status --ui` (also Round status in the palette) is a read-only overview of the round, so you can watch it
@@ -503,6 +510,14 @@ is left out when it has a recorded FAIL review or second-opinion verdict, when i
 blocking finding, when the gate sent it back at its current head (a push clears that), or when
 it is already merged or closed. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
+
+When the preview finds two of the waiting PRs conflicting, the nudge says so before any train starts:
+one `nudge train-conflict` line per pair names the PRs and paths and suggests landing the first, then
+merging the base into the other's branch or routing the conflict to its worker. The `train` line then
+names the largest conflict-free set (the `worker train --plan` landable set) as its command and lists
+the order-blocked PRs with what they conflict with; `trainNudge` in JSON gains `conflicts` and
+`orderBlocked` rows. The preview needs the base checked out in the orchestrator's repo; without it the
+nudge reads as before.
 
 Set `round.trainMax` and `round.trainFillMinutes` to wait for a fuller train or an age deadline.
 The tick and nudge wait until either threshold fires on one base. For example, `3` and `60` wait
