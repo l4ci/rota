@@ -105,7 +105,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			return
 		}
 		res.Previous = s.State()
-		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind(), PR: s.PR()}
+		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.AccountFor(""), Harness: s.Kind(), PR: s.PR()}
 		stamped := ""
 		if o.Event != "" {
 			stamped = stamp.Format(e.now())

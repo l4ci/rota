@@ -95,8 +95,8 @@ func ledgerAppendErr(env Env, root string, e ledger.Entry) error {
 		// Only fills missing fields: a corrupt registry must not lose the entry.
 		if s := ledgerSlot(LoadRegistryTolerant(root), e); s != nil {
 			e.Slot = cmp.Or(e.Slot, s.Name())
-			e.Account = cmp.Or(e.Account, s.Account())
 			e.Harness = cmp.Or(e.Harness, s.Kind())
+			e.Account = cmp.Or(e.Account, s.AccountFor(e.Harness))
 		}
 	}
 	return ledger.Append(root, e)
@@ -174,7 +174,7 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 	if r.State != StateDone || strings.EqualFold(prev, "done") {
 		return e, false
 	}
-	return ledger.Entry{Issue: HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind(), PR: s.PR()}, true
+	return ledger.Entry{Issue: HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.AccountFor(""), Harness: s.Kind(), PR: s.PR()}, true
 }
 
 // gateLedger records a gate run: one gate entry with the verdict, and a merge
