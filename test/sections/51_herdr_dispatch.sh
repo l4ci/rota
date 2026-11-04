@@ -121,7 +121,9 @@ grep -q "^tab create --workspace w9 --cwd $WT1 --label w1 --no-focus --env CLAUD
   || fail "tab create must adopt the slot worktree with the account env; log: $(cat "$FAKE/log")"
 grep -q '^agent start rota-w1-w9-t7 --kind claude --pane w9:p17 --timeout 60000 -- --model sonnet --dangerously-skip-permissions$' "$FAKE/log" \
   || fail "agent start must run claude in the new pane with the worker args; log: $(cat "$FAKE/log")"
-grep -q '^do the task --wait --until working --until blocked --timeout 60000$' "$FAKE/log" \
+grep -q '^agent prompt rota-w1-w9-t7 <rota-relay round="1" from="orchestrator">$' "$FAKE/log" \
+  || fail "the brief must open with the rota-relay tag; log: $(cat "$FAKE/log")"
+grep -q '^</rota-relay> --wait --until working --until blocked --timeout 60000$' "$FAKE/log" \
   || fail "the brief must be confirmed by working/blocked, not by waiting for the whole task; log: $(cat "$FAKE/log")"
 [ "$(slot_field w1 handle)" = "w9:t7" ] || fail "dispatch did not record the tab id as handle"
 [ "$(slot_field w1 task)" = "T1" ] || fail "dispatch did not record slot.task"
@@ -143,8 +145,11 @@ if grep -q '^tab create\|^tab close\|^agent start' "$FAKE/log"; then
   fail "a relay must go into the running session, not a fresh one; log: $(cat "$FAKE/log")"
 fi
 grep -q 'ORCHESTRATOR RELAY' "$FAKE/last_prompt" || fail "relay text lost its ORCHESTRATOR RELAY marker"
-[ "$(head -n 1 "$FAKE/last_prompt")" = "--- ORCHESTRATOR (round 1) ---" ] \
-  || fail "a relay must open with the signature line, got: $(head -n 1 "$FAKE/last_prompt")"
+[ "$(head -n 1 "$FAKE/last_prompt")" = '<rota-relay n="1" round="1" from="orchestrator">' ] \
+  || fail "a relay must open with the rota-relay tag naming its sequence, got: $(head -n 1 "$FAKE/last_prompt")"
+[ "$(tail -n 1 "$FAKE/last_prompt")" = '</rota-relay>' ] \
+  || fail "a relay must end with the closing tag, got: $(tail -n 1 "$FAKE/last_prompt")"
+grep -q '^\[relay ' "$FAKE/last_prompt" && fail "the relay sequence rides on the opening tag, not a [relay K] line"
 [ "$(slot_field w1 task)" = "T2" ] || fail "a relay must not change slot.task"
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY'
 import json, sys
@@ -167,7 +172,7 @@ PY
 printf 'use the per-user cache\n' > "$TMP_HD/answer.md"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/answer.md" --relay --round 3 >/dev/null \
   || fail "relay with --round failed"
-[ "$(head -n 1 "$FAKE/last_prompt")" = "--- ORCHESTRATOR (round 3) ---" ] || fail "--round must set the signature"
+[ "$(head -n 1 "$FAKE/last_prompt")" = '<rota-relay n="2" round="3" from="orchestrator">' ] || fail "--round must set the tag's round, got: $(head -n 1 "$FAKE/last_prompt")"
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY' || fail "relays[] must hold both relays, newest round 3 with its summary"
 import json, sys
 d = json.load(open(sys.argv[1]))
@@ -177,8 +182,10 @@ PY
 # A task brief is signed too, and a new task starts a clean relay log.
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --task T3 >/dev/null \
   || fail "T3 dispatch failed"
-[ "$(head -n 1 "$FAKE/last_prompt")" = "--- ORCHESTRATOR (round 3) ---" ] \
-  || fail "a task brief must open with the signature, got: $(head -n 1 "$FAKE/last_prompt")"
+[ "$(head -n 1 "$FAKE/last_prompt")" = '<rota-relay round="3" from="orchestrator">' ] \
+  || fail "a task brief must open with the rota-relay tag (no n), got: $(head -n 1 "$FAKE/last_prompt")"
+[ "$(tail -n 1 "$FAKE/last_prompt")" = '</rota-relay>' ] \
+  || fail "a task brief must end with the closing tag, got: $(tail -n 1 "$FAKE/last_prompt")"
 [ "$(relays_json w1)" = "[]" ] || fail "a new task dispatch must reset relays[], got $(relays_json w1)"
 # A refused relay (dialog up, nothing sent) is not logged.
 echo agent_blocked > "$FAKE/prompt_error"
@@ -310,7 +317,7 @@ hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
 [ "$(slot_field w1 pr)" = "None" ] || fail "a branch name in ROTA-DONE must not become slot.pr"
 # The stalled relay above was logged: a done counts only once its echo is in the pane (#1017).
 K=$(slot_field w1 relayPending)
-printf -- '--- ORCHESTRATOR (round 1) ---\n[relay %s]\n\n● ROTA-DONE w1 https://github.com/o/r/pull/9\n' "$K" > "$FAKE/pane.txt"
+printf -- '<rota-relay n="%s" round="1" from="orchestrator">\n\n</rota-relay>\n● ROTA-DONE w1 https://github.com/o/r/pull/9\n' "$K" > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
 [ "$(slot_field w1 state)" = "done" ] || fail "poll did not write state=done"
 [ "$(slot_field w1 pr)" = "https://github.com/o/r/pull/9" ] || fail "poll did not record the PR URL in slot.pr"

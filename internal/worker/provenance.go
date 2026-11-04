@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -43,7 +44,7 @@ func LogRelay(root, slot string, round int, now time.Time, brief string) error {
 func relaySummary(text string) string {
 	for _, l := range pystr.Splitlines(text) {
 		l = strings.TrimSpace(l)
-		if l != "" && !strings.HasPrefix(l, "--- ORCHESTRATOR") {
+		if l != "" && !strings.HasPrefix(l, "--- ORCHESTRATOR") && !harness.IsRelayOpen(l) && !harness.IsRelayClose(l) {
 			if utf8.RuneCountInString(l) > 200 {
 				l = string([]rune(l)[:200])
 			}

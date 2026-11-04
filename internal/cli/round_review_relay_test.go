@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"os"
@@ -416,7 +417,7 @@ func TestWorkerDispatchReviewThroughIgnoresTheRelayText(t *testing.T) {
 			if code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
 				t.Fatalf("relay: %d %s", code, errOut)
 			}
-			if len(h.calls) != 1 || !strings.HasPrefix(h.calls[0], "send:") || !strings.Contains(h.calls[0], body) {
+			if len(h.calls) != 1 || !strings.HasPrefix(h.calls[0], "send:") || !strings.Contains(h.calls[0], harness.EscapeRelayBody(body)) {
 				t.Fatalf("slot did not receive relay body %q: %q", body, h.calls)
 			}
 			handBack(t, dir)

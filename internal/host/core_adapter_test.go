@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 // The fake speaks actual named Core RPC, with no executable dependency.
@@ -547,6 +549,35 @@ func TestCoreAdapterQueueAndPromptEvidence(t *testing.T) {
 	}
 	if got := coreDeliveryEvidence(sig+"\n› \n", text, working, sig+"\n› \n"); got != "" {
 		t.Fatal("old signature acknowledged as fresh pickup")
+	}
+}
+
+// The same evidence for a relay in the rota-relay element (#2658): the opening
+// line carries the sequence, so a preview that keeps only the first lines still
+// names the relay, and herdr-core's own wrapper may sit ahead of it.
+func TestCoreAdapterQueueAndPromptEvidenceForTheElement(t *testing.T) {
+	sig := "--- ROTA-SIG " + strings.Repeat("b", 64) + " ---"
+	open := harness.RelayOpen(35, 9)
+	text := open + "\n[ORCHESTRATOR RELAY — forwarded.]\n\n" + strings.Repeat("long body\n", 300) + harness.RelayClose + "\n" + sig
+	working := coreTerminal{Status: &coreStatus{App: "codex", State: "working"}}
+	for name, tc := range map[string]struct{ screen, want string }{
+		"queued, whole opening":    {"• Queued follow-up inputs\n  ↳ " + open + "\n    [ORCHESTRATOR RELAY — forwarded.]\n    long body…\n› \n", "queued"},
+		"queued, only the tag":     {"• Queued follow-up inputs\n  ↳ " + open + "\n› \n", "queued"},
+		"queued behind hc":         {"• Queued follow-up inputs\n  ↳ <hc from=\"t1\">" + open + "\n› \n", "queued"},
+		"steered":                  {"• Messages to be submitted after next tool call\n    " + open + "\n› \n", "queued"},
+		"end of turn":              {"• Messages to be submitted at end of turn\n    " + open + "\n› \n", "queued"},
+		"normal picked prompt":     {"› " + open + "\n" + harness.RelayClose + "\n" + sig + "\n› \n", "picked-up"},
+		"long clipped pickup":      {"earlier body missing from requested history\n" + sig + "\n› \n", "picked-up"},
+		"bare tag is insufficient": {open + "\n› \n", ""},
+		"wrong queued relay":       {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 8) + "\n› \n", ""},
+		"a task brief's tag":       {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 0) + "\n› \n", ""},
+	} {
+		if got := coreDeliveryEvidence(tc.screen, text, working, "› \n"); got != tc.want {
+			t.Fatalf("%s: got %q want %q", name, got, tc.want)
+		}
+	}
+	if got := coreDeliveryEvidence("• Queued follow-up inputs\n  ↳ "+open+"\n› \n", text, working, "• Queued follow-up inputs\n  ↳ "+open+"\n› \n"); got != "" {
+		t.Fatal("an already queued relay acknowledged as fresh")
 	}
 }
 

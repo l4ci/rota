@@ -437,8 +437,13 @@ func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
 	if ok, why := harness.CheckPrompt(k1, f.sent); !ok {
 		t.Fatalf("sent payload does not verify: %s\n%s", why, f.sent)
 	}
-	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") {
-		t.Errorf("header lost: %q", f.sent)
+	// The tags are inside the signed text: the MAC covers the element, and the
+	// signature trails its closing line.
+	if !strings.HasPrefix(f.sent, "<rota-relay round=\"1\" from=\"orchestrator\">\n") || !strings.Contains(f.sent, "\n</rota-relay>\n--- ROTA-SIG ") {
+		t.Errorf("element lost: %q", f.sent)
+	}
+	if ok, _ := harness.CheckPrompt(k1, strings.Replace(f.sent, "</rota-relay>", "", 1)); ok {
+		t.Error("a payload without its closing tag still verifies")
 	}
 	if slotField(t, dir, "w1", "kind") != harness.Codex {
 		t.Errorf("kind not recorded")
@@ -458,7 +463,7 @@ func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer\n"), Relay: true}); err != nil {
 		t.Fatal(err)
 	}
-	if ok, why := harness.CheckPrompt(k2, f.sent); !ok || !strings.Contains(f.sent, "ORCHESTRATOR RELAY") {
+	if ok, why := harness.CheckPrompt(k2, f.sent); !ok || !strings.Contains(f.sent, "ORCHESTRATOR RELAY") || !strings.HasPrefix(f.sent, "<rota-relay n=\"1\" round=\"1\" from=\"orchestrator\">\n") {
 		t.Fatalf("relay: %v %s\n%s", ok, why, f.sent)
 	}
 }

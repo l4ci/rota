@@ -520,7 +520,7 @@ func hasRelayMarker(text string) bool {
 }
 
 // relayQueued reports whether output, the pane text above the prompt line,
-// shows this relay: its `[relay K]` marker, or the brief's tail.
+// shows this relay: its opening-line marker, or the brief's tail.
 func relayQueued(output, text string) bool {
 	for _, line := range strings.Split(text, "\n") {
 		if seq := harness.RelaySequence(line); seq != "" {

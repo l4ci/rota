@@ -268,7 +268,7 @@ func TestWorkerDispatchVerb(t *testing.T) {
 	if code != 0 || d["slot"] != "w1" || d["handle"] != "rota:w1" || d["task"] != "T1" || d["round"] != 2.0 || d["relay"] != false || d["changed"] != true {
 		t.Fatalf("dispatch: %d %v", code, d)
 	}
-	if got := strings.Join(h.calls, ","); got != "kill,spawn,send:--- ORCHESTRATOR (round 2) ---\nhello\n" {
+	if got := strings.Join(h.calls, ","); got != "kill,spawn,send:<rota-relay round=\"2\" from=\"orchestrator\">\nhello\n</rota-relay>\n" {
 		t.Errorf("calls = %q", got)
 	}
 	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--json")
@@ -301,7 +301,7 @@ func TestWorkerDispatchBodyFromStdin(t *testing.T) {
 	defer os.Chdir(old)
 	var so, se bytes.Buffer
 	code := mainWith(deps, []string{"worker", "dispatch", "w1", "--body-file", "-", "--task", "T1"}, strings.NewReader("from stdin\n"), &so, &se)
-	if code != 0 || !strings.HasSuffix(strings.Join(h.calls, ","), "from stdin\n") {
+	if code != 0 || !strings.HasSuffix(strings.Join(h.calls, ","), "\nfrom stdin\n</rota-relay>\n") {
 		t.Errorf("exit %d calls %q err %s", code, h.calls, se.String())
 	}
 }
@@ -698,7 +698,11 @@ func TestWorkerDispatchAssignedCodexRebuildsBrief(t *testing.T) {
 		t.Fatalf("recovery: %d %s %s", code, out, errOut)
 	}
 	payload := h.calls[len(h.calls)-1]
-	original := strings.Split(assignedBrief, "--- ROTA-SIG ")[0]
+	// The notes land inside the element: the recovery payload is one element.
+	original := strings.Split(assignedBrief, "\n</rota-relay>\n--- ROTA-SIG ")[0]
+	if strings.Count(payload, "<rota-relay ") != 1 {
+		t.Errorf("recovery payload nests elements:\n%s", payload)
+	}
 	if !strings.HasPrefix(payload, original) {
 		t.Errorf("recovery lost assignment context:\n%s", payload)
 	}

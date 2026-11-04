@@ -25,7 +25,7 @@ import (
 const relayEchoEvidence = "relay sent, its echo is not in the pane yet; the ROTA-DONE shown predates it"
 
 // gateRelayEcho holds a done row busy while the pane cannot show it answers
-// the pending relay (#1017). Before the relay's `[relay K]` line has ever been
+// the pending relay (#1017). Before the relay's opening line has ever been
 // seen, a done in the capture is an earlier turn's. Once it has been seen, a
 // capture without it means it scrolled out, so a done in the capture came
 // after it. A done event the worker sent after the relay passes: the event, not
@@ -88,7 +88,7 @@ func doneEventAfterRelay(t pollTarget) bool {
 const relayFallbackWindow = 30 * time.Minute
 
 // noteRelayEcho records what the captures showed about each pending relay:
-// its `[relay K]` line seen, which is what tells a scrolled-out marker from an
+// its opening line seen, which is what tells a scrolled-out marker from an
 // unrendered one, or the relay given up on after round.stallMinutes without
 // the line (a collapsed paste shows none), which would hold the slot busy for
 // good. With round.stallMinutes at 0 the window is relayFallbackWindow. It updates the targets it was given, which a wait keeps across passes.
@@ -531,7 +531,7 @@ type pollTarget struct {
 	// done line has followed yet (0 for none). relays is the length of the
 	// slot's relay log.
 	relayPending  int
-	relaySeen     bool      // its `[relay K]` line has been seen in a capture
+	relaySeen     bool      // its opening line (`<rota-relay n="K" …>`) has been seen in a capture
 	relaySentAt   time.Time // when it went out
 	relayEvSeq    int       // the slot's event id when it went out; -1 when unrecorded
 	relayMarker   bool      // set by classify: the last capture shows the line

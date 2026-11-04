@@ -181,7 +181,7 @@ func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 		f.spawnOpts.Session != "rota" || f.spawnOpts.BootTimeout != 60 {
 		t.Errorf("spawn opts = %+v", f.spawnOpts)
 	}
-	if f.sent != "--- ORCHESTRATOR (round 3) ---\ndo the thing\n" {
+	if f.sent != "<rota-relay round=\"3\" from=\"orchestrator\">\ndo the thing\n</rota-relay>\n" {
 		t.Errorf("payload = %q", f.sent)
 	}
 	for k, want := range map[string]string{"handle": "w9:t7", "state": "busy", "task": "T1", "pr": "<null>", "branch": "rota-worker/w1-t1"} {
@@ -217,12 +217,21 @@ func TestDispatchDoesNotSignTwiceAndDefaultsRound(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
-	signed := "--- ORCHESTRATOR (round 1) ---\nbody line\n"
+	signed := "<rota-relay round=\"1\" from=\"orchestrator\">\nbody line\n</rota-relay>\n"
 	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, signed), Task: "T1"}); err != nil {
 		t.Fatal(err)
 	}
 	if f.sent != signed {
 		t.Errorf("payload = %q", f.sent)
+	}
+	// A brief headed the way an earlier rota signed it is wrapped, not nested.
+	f2 := tmuxFake()
+	legacy := "--- ORCHESTRATOR (round 1) ---\nbody line\n"
+	if _, err := envWith(f2).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, legacy), Task: "T2"}); err != nil {
+		t.Fatal(err)
+	}
+	if f2.sent != signed {
+		t.Errorf("legacy-headed payload = %q", f2.sent)
 	}
 }
 
@@ -290,8 +299,8 @@ func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
 	if strings.Join(f.calls, ",") != "send w1 w9:t7" {
 		t.Errorf("a relay must not kill or spawn: %v", f.calls)
 	}
-	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 2) ---\n[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n") ||
-		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n[relay 1]\n\n\n  the maintainer says use B  \nmore\n") {
+	if !strings.HasPrefix(f.sent, "<rota-relay n=\"1\" round=\"2\" from=\"orchestrator\">\n[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n") ||
+		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n\n\n  the maintainer says use B  \nmore\n</rota-relay>\n") || strings.Contains(f.sent, "[relay ") {
 		t.Errorf("payload = %q", f.sent)
 	}
 	relays, _ := LoadRegistryTolerant(dir).Slot("w1").Raw().Get("relays")
