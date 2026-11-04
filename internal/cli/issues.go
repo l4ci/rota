@@ -129,22 +129,31 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 // ---- label ------------------------------------------------------------------
 
 func issuesLabel(fs *flag.FlagSet) RunFunc {
-	add := fs.String("add", "", "label to add")
-	remove := fs.String("remove", "", "label to remove")
+	var add, remove stringList
+	fs.Var(&add, "add", "label to add (repeatable)")
+	fs.Var(&remove, "remove", "label to remove (repeatable)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 1, 1, "issues label takes one issue number or key"); err != nil {
 			return Result{}, err
 		}
-		given := givenFlags(fs)
-		if given["add"] == given["remove"] {
+		if (len(add) > 0) == (len(remove) > 0) {
 			return Result{}, Usage("%s: pass exactly one of --add and --remove", c.Path)
 		}
-		action, name := "add", *add
-		if given["remove"] {
-			action, name = "remove", *remove
+		// Every repeated --add (or --remove) applies (#2571): a repeated flag
+		// must never silently drop all but its last value.
+		isAdd, names := len(add) > 0, []string(add)
+		if !isAdd {
+			names = remove
 		}
-		if name == "" {
-			return Result{}, Usage("%s: --%s needs a label name", c.Path, action)
+		seen := map[string]bool{}
+		for _, name := range names {
+			if name == "" {
+				return Result{}, Usage("%s: --%s needs a label name", c.Path, labelAction(isAdd))
+			}
+			if seen[name] {
+				return Result{}, Usage("%s: label %s is named more than once", c.Path, name)
+			}
+			seen[name] = true
 		}
 		key, err := issueKeyArg(c, args[0])
 		if err != nil {
@@ -155,14 +164,36 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		auto, _ := config.Value(c.deps().Config(root), "issues.autoCreateLabel")
-		changed, err := issues.Label(c.Context(), env, dir, key, name, action == "add", auto != false && auto != nil)
-		if err != nil {
-			err = issuesErr(err)
-			return failData(err), err
+		action := labelAction(isAdd)
+		var done []any
+		var lines []string
+		anyChanged := false
+		for _, name := range names {
+			changed, err := issues.Label(c.Context(), env, dir, key, name, isAdd, auto != false && auto != nil)
+			if err != nil {
+				err = issuesErr(err)
+				if len(done) > 0 {
+					err = fmt.Errorf("%w (already applied: %s)", err, strings.Join(lines, "; "))
+				}
+				return failData(err), err
+			}
+			anyChanged = anyChanged || changed
+			done = append(done, jsonObj("label", name, "action", action, "changed", changed))
+			lines = append(lines, fmt.Sprintf("%s %s on %s", action, name, key.Ref()))
 		}
-		return Result{Data: jsonObj("issue", issueJSON(key), "label", name, "action", action, "changed", changed),
-			Text: fmt.Sprintf("%s %s on %s", action, name, key.Ref())}, nil
+		if len(names) == 1 {
+			return Result{Data: jsonObj("issue", issueJSON(key), "label", names[0], "action", action, "changed", anyChanged), Text: lines[0]}, nil
+		}
+		return Result{Data: jsonObj("issue", issueJSON(key), "labels", done, "changed", anyChanged), Text: strings.Join(lines, "\n")}, nil
 	}
+}
+
+// labelAction is the verb name a label change reports.
+func labelAction(add bool) string {
+	if add {
+		return "add"
+	}
+	return "remove"
 }
 
 // ---- imported ---------------------------------------------------------------
