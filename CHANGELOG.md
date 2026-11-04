@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.30.0 — 2026-11-04
+
+Claude workers on herdr-core, a tagged relay format, and terminal status from the gate and watch.
+
+### New
+
+- **Claude workers on herdr-core.** Claude Code reports its own status to Core, so a Claude worker now runs on Core like a Codex one. A worker stuck on a startup dialog (folder trust on a new slot folder) fails with an error that names the dialog and says to retry the assign with the same request id, instead of a socket timeout. Each new slot folder needs Claude's folder trust once.
+- **Relay tag.** Every brief and relay a worker receives sits inside one `<rota-relay round="N" from="orchestrator">` element (relays also carry `n="K"`). For Codex and OpenCode workers the element is inside the signed payload. The closing tag marks where orchestrator text ends, and quoted tags or signature lines in a relay body are escaped so they cannot end it early. Panes captured in the old format are still read.
+- **Terminal status.** `rota worker gate`, `rota round watch` and `test/gate.sh` emit OSC 7501 `working`/`done`/`error` records (the gate adds progress), so herdr, Ghostty and the Core app show gate state in the tab. Only when stdout and stderr are terminals and not under `--json`.
+- **Train nudge.** The nudge names the largest conflict-free set of reviewed PRs and warns about conflicting pairs before a train takes the lock (JSON: `conflicts` and `orderBlocked` on each `trainNudge`). Batching still uses `round.trainMax` and `round.trainFillMinutes`.
+- **Create guard.** `rota item create` refuses a repeated title for the same target within 10 minutes, or more than 25 creates in one run, unless `--force`.
+
+### Fixed
+
+- Host cleanup: a reused PID on herdr-core no longer blocks a slot forever (PIDs are recorded with their start time), and an unreachable tmux, herdr or tab host no longer counts as proof a session closed.
+- Changed paths are read byte-exact (`git diff -z`), so approvals and overlap checks see real filenames; unusual names are quoted wherever they are printed.
+- Plan, design, notes and `plan pass` share one item-reference grammar and accept tracker keys such as `PROJ-123`.
+- `Secrets.Save` fails instead of reporting success when it cannot rule out a stale keychain secret; hook upgrades keep a matcher shared with hooks rota did not write; `PlanPush` enforces the goreleaser push-mode guard itself.
+- Triage, review and debug skills treat issue and PR text as data, not instructions.
+- Core relay pickup is confirmed from turns, and autopilot holds epics and unplanned Major items (`autoHold` on candidates, `autopilot-hold` in `needsYou`). On forge-backed projects, assign is refused only for slots the running gate holds; the file backend still blocks every slot during a gate.
+- `rota issues label` applies every repeated `--add`/`--remove` (several labels return `labels[]`); repeating the same label exits 2. The ledger records the harness's own account on every completion, which corrects Codex attribution.
+
+### Exit codes and upgrade notes
+
+- `rota item create` exits 4 on a duplicate or over-cap run; pass `--force` to override.
+- Saving a connection exits 70 when the old keychain secret cannot be ruled out; fix the keychain or remove the entry, then retry.
+- `rota worker dispatch` exits 5 when the previous session's cleanup cannot be verified (host unreachable), instead of starting a second session.
+- Core worker PID records (`.pids`) move from plain PIDs to PID plus start time, rewritten automatically when the terminal is next observed. Old bare PIDs whose terminal is already gone are dropped, and older rota versions cannot read the new files, so upgrade every machine that runs rounds against the same Core state together.
+
+### Tests
+
+- Test environments scrub herdr-core (`HC_*`) and Orca (`ORCA_*`) variables, e2e scenarios run under the shared isolation, and source-scanning tests skip nested worktrees.
+
+## Stats
+34 commits, 155 files changed, +4314 −657 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.29.0...v0.30.0
+
 ## v0.29.0 — 2026-11-03
 
 Herdr App workers, Codex weekly capacity, and more reliable parallel rounds.
