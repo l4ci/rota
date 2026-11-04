@@ -83,3 +83,28 @@ func TestCoreDefiniteRetryClearsUnsentAndLogsRelay(t *testing.T) {
 		t.Fatalf("safe relay retry lost provenance/pending marker: %+v", s.Raw())
 	}
 }
+
+// #2640: a later message reconciles the unresolved one through the host first,
+// so a pickup the host can now prove frees the slot; until then it refuses.
+func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
+	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	h := &fakeHost{name: host.HerdrCore, sendErr: host.ErrSubmitted}
+	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+	e := rig.env(h)
+	task := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"}
+	if res, err := e.Dispatch(bg, dir, task); err != nil || res.Delivery != "submitted" {
+		t.Fatalf("task: %+v %v, want submitted", res, err)
+	}
+	relay := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer once"), Relay: true}
+	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery") {
+		t.Fatalf("unconfirmed task let a relay through: %v", err)
+	}
+	h.sendErr = nil // the host can now prove the task was picked up
+	if _, err := e.Dispatch(bg, dir, relay); err != nil {
+		t.Fatalf("relay after a proven pickup: %v", err)
+	}
+	if !strings.Contains(h.sent, "answer once") {
+		t.Errorf("relay not delivered; last send %q", h.sent)
+	}
+}
