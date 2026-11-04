@@ -430,6 +430,64 @@ func TestTmuxKillSurvivingPidIsAnError(t *testing.T) {
 	}
 }
 
+func TestTmuxKillTransportFailureIsUnproven(t *testing.T) {
+	down := Result{ExitCode: 1, Stderr: "host transport unreachable"}
+	t.Run("before and after", func(t *testing.T) {
+		f := &fake{handler: func(string, []string) Result { return down }}
+		err := New("tmux", deps(f, nil, &clock{})).Kill(bg, "w1", "rota:w1")
+		if err == nil || !strings.Contains(err.Error(), "could not be verified") {
+			t.Fatalf("Kill = %v, want unverified error", err)
+		}
+	})
+	t.Run("before only", func(t *testing.T) {
+		// The first listing fails (no pid evidence); later ones show it gone.
+		n := 0
+		f := &fake{handler: func(_ string, a []string) Result {
+			if a[0] == "list-windows" {
+				if n++; n == 1 {
+					return down
+				}
+			}
+			return Result{}
+		}}
+		err := New("tmux", deps(f, nil, &clock{})).Kill(bg, "w1", "rota:w1")
+		if err == nil || !strings.Contains(err.Error(), "no process evidence") {
+			t.Fatalf("Kill = %v, want no-evidence error", err)
+		}
+	})
+	t.Run("after only", func(t *testing.T) {
+		killed := false
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] {
+			case "kill-window":
+				killed = true
+			case "list-windows":
+				if killed {
+					return down
+				}
+				return Result{Stdout: "w1 4242\n"}
+			}
+			return Result{}
+		}}
+		err := New("tmux", deps(f, nil, &clock{})).Kill(bg, "w1", "rota:w1")
+		if err == nil || !strings.Contains(err.Error(), "failed after the close") {
+			t.Fatalf("Kill = %v, want failed-after error", err)
+		}
+	})
+}
+
+func TestTmuxKillMissingSessionIsGone(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "list-windows" {
+			return Result{ExitCode: 1, Stderr: "can't find session: rota"}
+		}
+		return Result{}
+	}}
+	if err := New("tmux", deps(f, nil, &clock{})).Kill(bg, "w1", "rota:w1"); err != nil {
+		t.Fatalf("a session tmux says does not exist is positive absence: %v", err)
+	}
+}
+
 func TestKillEmptyHandleIsNoop(t *testing.T) {
 	f := &fake{handler: func(string, []string) Result { t.Error("ran a command"); return Result{} }}
 	for _, d := range []Kind{Tmux, Herdr} {
@@ -980,6 +1038,61 @@ func TestHerdrKillSurvivors(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Kill = %v, want %q", err, want)
 	}
+}
+
+func TestHerdrKillTransportFailureIsUnproven(t *testing.T) {
+	down := Result{ExitCode: 1, Stderr: "host transport unreachable"}
+	t.Run("everything fails", func(t *testing.T) {
+		f := &fake{handler: func(string, []string) Result { return down }}
+		err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", "w9:t7")
+		if err == nil || !strings.Contains(err.Error(), "could not be verified") {
+			t.Fatalf("Kill = %v, want unverified error", err)
+		}
+	})
+	t.Run("agent query fails before close, verification says not found", func(t *testing.T) {
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] + " " + a[1] {
+			case "agent get":
+				return down
+			case "tab get":
+				return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
+			}
+			return Result{}
+		}}
+		err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", "w9:t7")
+		if err == nil || !strings.Contains(err.Error(), "no process evidence") {
+			t.Fatalf("Kill = %v, want no-evidence error", err)
+		}
+	})
+	t.Run("verification fails after close", func(t *testing.T) {
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] + " " + a[1] {
+			case "agent get":
+				return Result{Stdout: agentJSON("idle")}
+			case "tab get", "pane get": // the unreadable pane count also makes it a pane-only close
+				return down
+			}
+			return Result{}
+		}}
+		err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", "w9:t7")
+		if err == nil || !strings.Contains(err.Error(), "failed after the close") {
+			t.Fatalf("Kill = %v, want failed-after error", err)
+		}
+	})
+	t.Run("agent not found and tab not found is positive absence", func(t *testing.T) {
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] + " " + a[1] {
+			case "agent get":
+				return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")}
+			case "tab get":
+				return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
+			}
+			return Result{}
+		}}
+		if err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", "w9:t7"); err != nil {
+			t.Fatalf("Kill = %v, want nil", err)
+		}
+	})
 }
 
 func TestHerdrNotify(t *testing.T) {

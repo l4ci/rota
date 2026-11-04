@@ -87,8 +87,8 @@ func (h *herdr) onlyShells(ctx context.Context, pane string) bool {
 	return true
 }
 
-// CloseTab closes the tab and fails unless `tab get` then fails (tab ids are
-// never reused, so that is unambiguous).
+// CloseTab closes the tab and fails unless `tab get` then reports not-found (tab
+// ids are never reused, so that is unambiguous); a failed query is unproven.
 func (h *herdr) CloseTab(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("no tab id")
@@ -96,10 +96,33 @@ func (h *herdr) CloseTab(ctx context.Context, id string) error {
 	if r := h.herdr(ctx, "tab", "close", id); r.ExitCode != 0 {
 		return fmt.Errorf("herdr tab close %s failed: %s", id, strings.TrimSpace(r.Stderr))
 	}
-	if h.herdr(ctx, "tab", "get", id).ExitCode == 0 {
+	switch h.probe(ctx, "tab", id) {
+	case presentYes:
 		return fmt.Errorf("tab %s is still open after close", id)
+	case presentUnknown:
+		return fmt.Errorf("tab %s could not be verified closed: herdr query failed after close", id)
 	}
 	return nil
+}
+
+// notFound reads a failed herdr result: only herdr's own tab/pane not-found
+// error is positive absence; no server, a socket error or an unparsable reply
+// is unknown.
+func notFound(r Result) presence {
+	switch jget(r.Stderr, "error.code") {
+	case "tab_not_found", "pane_not_found":
+		return presentGone
+	}
+	return presentUnknown
+}
+
+// probe is `herdr <kind> get target` read as presence.
+func (h *herdr) probe(ctx context.Context, kind, target string) presence {
+	r := h.herdr(ctx, kind, "get", target)
+	if r.ExitCode == 0 {
+		return presentYes
+	}
+	return notFound(r)
 }
 
 // PaneSweeper is the optional way to close a slot's leftover shell panes by

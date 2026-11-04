@@ -61,6 +61,7 @@ case "$1 $2" in
     printf '%s' "$4" >"$F/last_prompt"
     [ -f "$F/prompt_error" ] && [ "$4" != "/exit" ] && err "$(cat "$F/prompt_error")"
     agent_json agent_prompted working ;;
+  "pane process-info") echo '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}' ;;
   "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
   *) err unknown_method ;;
 esac

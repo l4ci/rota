@@ -44,23 +44,48 @@ func TestHerdrTabsFailuresAreErrors(t *testing.T) {
 	}
 }
 
-func TestHerdrCloseTabProvesGone(t *testing.T) {
-	gone := true
-	f := &fake{handler: func(_ string, args []string) Result {
-		if args[0] == "tab" && args[1] == "get" && !gone {
-			return Result{}
-		}
-		if args[1] == "get" {
-			return Result{ExitCode: 1}
-		}
-		return Result{}
-	}}
-	h := New("herdr", deps(f, nil, &clock{})).(TabLister)
-	if err := h.CloseTab(bg, "w2:t1"); err != nil {
-		t.Errorf("close: %v", err)
+func TestHerdrCloseTabVerification(t *testing.T) {
+	const down = "host transport unreachable"
+	cases := []struct {
+		name    string
+		get     Result
+		wantErr string // "" = proven gone
+	}{
+		{"native not-found proves gone", Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}, ""},
+		{"still open", Result{}, "still open after close"},
+		{"transport failure is unproven", Result{ExitCode: 1, Stderr: down}, "could not be verified"},
+		{"other herdr error is unproven", Result{ExitCode: 1, Stderr: herdrErr("internal_error")}, "could not be verified"},
 	}
-	gone = false
-	if err := h.CloseTab(bg, "w2:t1"); err == nil {
-		t.Error("a tab that is still open is a failure")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &fake{handler: func(_ string, a []string) Result {
+				if a[0] == "tab" && a[1] == "get" {
+					return c.get
+				}
+				return Result{}
+			}}
+			err := New("herdr", deps(f, nil, &clock{})).(TabLister).CloseTab(bg, "w2:t1")
+			if c.wantErr == "" {
+				if err != nil {
+					t.Fatalf("CloseTab = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+				t.Fatalf("CloseTab = %v, want error containing %q", err, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestHerdrCloseTabCloseFailure(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "close" {
+			return Result{ExitCode: 1, Stderr: "host transport unreachable"}
+		}
+		return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
+	}}
+	if err := New("herdr", deps(f, nil, &clock{})).(TabLister).CloseTab(bg, "w2:t1"); err == nil {
+		t.Error("a failed close must be an error")
 	}
 }

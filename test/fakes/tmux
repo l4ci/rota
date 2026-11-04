@@ -31,7 +31,7 @@ case "$1" in
     fmt=""
     while [ $# -gt 0 ]; do [ "$1" = "-F" ] && fmt="$2"; shift; done
     case "$fmt" in
-      *pane_pid*) cat "$F/windows" 2>/dev/null ;;
+      *pane_pid*) cat "$F/windows" 2>/dev/null; true ;;
       *pane_current_path*) if [ -n "${FAKE_TMUX_SNAPSHOT:-}" ]; then cat "$FAKE_TMUX_SNAPSHOT" 2>/dev/null; fi; true ;;
       *) awk '{print $1}' "$F/windows" 2>/dev/null ;;
     esac ;;
