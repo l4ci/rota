@@ -269,6 +269,9 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 	inRelay, gutterRelay, echoRelay, tagRelay, closed := false, false, false, false, false
 	for i, l := range lines {
 		head, tag := isRelayHead(l, gutter)
+		if head && !tag && inRelay && tagRelay {
+			head = false // a legacy header quoted inside an element is its text
+		}
 		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !head {
 			inRelay, echoRelay, tagRelay = false, false, false
 		}

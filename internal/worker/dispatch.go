@@ -288,7 +288,9 @@ func signBrief(hz harness.Prompt, key []byte, round, seq int, preamble, brief st
 	case fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round):
 		brief = rest
 	}
-	return hz.Sign(key, open+"\n"+preamble+strings.TrimRight(brief, "\n")+"\n"+harness.RelayClose+"\n")
+	// WrapRelay escapes any tag the preamble or brief quotes, so an inner
+	// closing line (a pre-wrapped payload's, say) cannot end the element early.
+	return hz.Sign(key, harness.WrapRelay(round, seq, preamble+brief))
 }
 
 // sendSigned writes the signed payload to a temp file and hands it to the host.

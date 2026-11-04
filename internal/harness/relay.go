@@ -35,8 +35,34 @@ func RelayOpen(round, seq int) string {
 }
 
 // WrapRelay is text inside its opening and closing line, ending in a newline.
+// The text is escaped first (EscapeRelayBody), so the result holds exactly one
+// real opening and one real closing line, whatever the text quotes.
 func WrapRelay(round, seq int, text string) string {
-	return RelayOpen(round, seq) + "\n" + strings.TrimRight(text, "\n") + "\n" + RelayClose + "\n"
+	return RelayOpen(round, seq) + "\n" + strings.TrimRight(EscapeRelayBody(text), "\n") + "\n" + RelayClose + "\n"
+}
+
+var (
+	// bodyEscaper defuses the element's tags wherever they sit in a body: a
+	// body line that read as the closing line would end the orchestrator's
+	// text early in the pane classifier, and the rest would pass for the
+	// worker's own output. Not only whole lines are escaped: a pane splits
+	// lines on more than "\n", and a tag behind any prefix is still a tag.
+	bodyEscaper = strings.NewReplacer(
+		"<"+RelayTag, "&lt;"+RelayTag,
+		"</"+RelayTag, "&lt;/"+RelayTag,
+		"--- ORCHESTRATOR (round", "&#45;-- ORCHESTRATOR (round",
+	)
+	bodyLegacyMarker = regexp.MustCompile(`\[relay (\d+)\]`)
+)
+
+// EscapeRelayBody is text with every opening or closing tag of the element, the
+// legacy `--- ORCHESTRATOR (round N) ---` header and the legacy `[relay K]`
+// marker made unrecognisable to IsRelayOpen, IsRelayClose and RelaySequence
+// (`&lt;/rota-relay>`, `&#45;-- ORCHESTRATOR`, `&#91;relay K]`), so quoted text
+// cannot end, restart or impersonate the element. Escaped text is unchanged by
+// a second pass. Escape before signing: the signature covers the escaped text.
+func EscapeRelayBody(text string) string {
+	return bodyLegacyMarker.ReplaceAllString(bodyEscaper.Replace(text), "&#91;relay $1]")
 }
 
 // linePrefix is what a terminal puts before a line: indentation and an echo or
