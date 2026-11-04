@@ -190,7 +190,7 @@ func designPut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if err := design.CheckID(st, id); err != nil {
+		if err := st.CheckID(id); err != nil {
 			return failAny(err)
 		}
 		text, err := readBody(c, *file)
@@ -375,7 +375,7 @@ func planPut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if err := plan.CheckKey(st, key); err != nil {
+		if _, err := st.Resolve(key); err != nil {
 			return failAny(err)
 		}
 		text, err := readBody(c, *file)

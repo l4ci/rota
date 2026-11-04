@@ -24,9 +24,25 @@ type files struct{ root string }
 // Files is the file-mode store.
 func Files(root string) Store { return files{root} }
 
-func (files) Digits() int { return backlog.FileIDDigits }
+// Resolve: a file plan is always under its milestone.
+func (files) Resolve(key string) (Ref, error) {
+	if r, ok := Resolve(key); ok && r.Milestone != "" {
+		return r, nil
+	}
+	return Ref{}, exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", key)
+}
 
-func (files) ItemOnly() bool { return false }
+// fileSliceRe is a minted slice unit: S02, with at least FileIDDigits digits.
+var fileSliceRe = regexp.MustCompile(fmt.Sprintf(`^S\p{Nd}{%d,}$`, backlog.FileIDDigits))
+
+// CheckNew: file units are minted zero-padded, so B7 and S2 are typos.
+func (files) CheckNew(r Ref) error {
+	if (r.Slice && r.Unit != "" && !fileSliceRe.MatchString(r.Unit)) ||
+		(!r.Slice && !backlog.ValidID(r.Item.ID, backlog.FileIDDigits)) {
+		return exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", r.Milestone+"-"+r.UnitID())
+	}
+	return nil
+}
 
 func docs(root string) artifact.FileDocs {
 	return artifact.FileDocs{Root: root, Dir: rotatree.PlansDir, Kind: "plan"}
@@ -46,13 +62,14 @@ func (s files) DesignRef(_ bool, design string) (string, error) {
 	return ref, nil
 }
 
-func (s files) Create(milestone, unit string, render func(unit string) string) (key string, err error) {
+func (s files) Create(r Ref, render func(unit string) string) (key string, err error) {
+	milestone, unit := r.Milestone, r.UnitID()
 	dir := rotatree.File(s.root, rotatree.PlansDir)
 	// One lock per milestone for every S-unit, minted or explicit, so the
 	// existence check and the minted number cannot race; an item plan locks
 	// its own key.
 	lockPath := path(s.root, milestone+"-slice")
-	if unit != "" && !strings.HasPrefix(unit, "S") {
+	if !r.Slice {
 		lockPath = path(s.root, milestone+"-"+unit)
 	}
 	err = fsio.Locked(lockPath, fsio.LockTimeout, func() error {
