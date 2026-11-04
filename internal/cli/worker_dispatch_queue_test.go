@@ -21,13 +21,19 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 			name, preview string
 			want          int
 		}{
-			{"queued", "• Queued follow-up messages\n  ↳ --- ORCHESTRATOR (round 37) ---\n    [relay 1]\n", 0},
-			{"gutter", "┃ [relay 1]\n", 0},
-			{"captured delivered", "", 0},
+			// A busy Codex queues the relay in a preview that shows only its
+			// first lines: the opening tag and the start of the relay note.
+			{"queued", "• Queued follow-up messages\n  ↳ <rota-relay n=\"1\" round=\"37\" from=\"orchestrator\">\n    [ORCHESTRATOR RELAY — this text was forwarded by the /rota-work…\n", 0},
+			{"queued behind a core wrapper", "• Queued follow-up messages\n  ↳ <hc from=\"t1\"><rota-relay n=\"1\" round=\"37\" from=\"orchestrator\">\n", 0},
+			{"gutter", "┃ <rota-relay n=\"1\" round=\"37\" from=\"orchestrator\">\n", 0},
+			{"captured delivered-tag", "", 0},
+			{"captured delivered", "", 0}, // a pane captured before the element existed
 			{"captured absent", "", 6},
-			{"earlier", "• Queued follow-up messages\n    [relay 10]\n", 6},
+			{"earlier", "• Queued follow-up messages\n    <rota-relay n=\"10\" round=\"37\" from=\"orchestrator\">\n", 6},
 			{"absent", "", 6},
-			{"quoted", "The previous response mentioned [relay 1] in prose.\n", 6},
+			{"quoted", "The previous response mentioned <rota-relay n=\"1\" round=\"37\" from=\"orchestrator\"> in prose.\n", 6},
+			{"legacy queued", "• Queued follow-up messages\n  ↳ --- ORCHESTRATOR (round 37) ---\n    [relay 1]\n", 0},
+			{"legacy quoted", "The previous response mentioned [relay 1] in prose.\n", 6},
 		} {
 			t.Run(status+"/"+c.name, func(t *testing.T) {
 				deps := testDeps()
@@ -51,7 +57,7 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					captured = strings.ReplaceAll(string(b), "[relay 2]", "[relay 1]")
+					captured = strings.ReplaceAll(strings.ReplaceAll(string(b), "[relay 2]", "[relay 1]"), `n="2"`, `n="1"`)
 					b, err = os.ReadFile(filepath.Join("testdata", "codex-relay", "absent.txt"))
 					if err != nil {
 						t.Fatal(err)
@@ -101,7 +107,7 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 				if code != c.want {
 					t.Fatalf("queued relay dispatch: exit %d, want %d: %s %s", code, c.want, out, errOut)
 				}
-				if !strings.Contains(sent, "\n[relay 1]\n") || !strings.Contains(sent, "--- ROTA-SIG ") {
+				if !strings.HasPrefix(sent, "<rota-relay n=\"1\" round=\"37\" from=\"orchestrator\">\n") || !strings.Contains(sent, "\n</rota-relay>\n--- ROTA-SIG ") {
 					t.Fatalf("expected a signed, numbered relay, got %q", sent)
 				}
 				if code == 0 && data(t, out)["queued"] != true {
@@ -111,8 +117,8 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 					t.Fatalf("dispatch did not report a relay: %s", out)
 				}
 				if code == 0 {
-					c.preview = strings.ReplaceAll(c.preview, "[relay 1]", "[relay 2]")
-					captured = strings.ReplaceAll(captured, "[relay 1]", "[relay 2]")
+					c.preview = strings.ReplaceAll(strings.ReplaceAll(c.preview, "[relay 1]", "[relay 2]"), `n="1"`, `n="2"`)
+					captured = strings.ReplaceAll(strings.ReplaceAll(captured, "[relay 1]", "[relay 2]"), `n="1"`, `n="2"`)
 					code, out, errOut = rotaInWith(t, deps, root, "worker", "dispatch", "w1", "--relay", "--body-file", brief)
 					if code != 0 || !strings.HasPrefix(out, "queued: w1 (") {
 						t.Fatalf("text queued relay: exit %d: %s %s", code, out, errOut)

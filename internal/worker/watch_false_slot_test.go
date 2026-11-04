@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/stamp"
 	"strconv"
 	"strings"
@@ -48,9 +49,15 @@ func TestClassifyClaudeRunningCommandIsNotIdle(t *testing.T) {
 	}
 }
 
-// relayEcho is a relay as the pane echoes it: header, note, its `[relay K]`
-// line and a worker reply.
+// relayEcho is a relay as the pane echoes it: the rota-relay element (its
+// opening line carries the sequence K) and a worker reply.
 func relayEcho(k int) string {
+	return "❯ " + harness.RelayOpen(27, k) + "\n  [ORCHESTRATOR RELAY — forwarded.]\n\n  REVIEW\n  " + harness.RelayClose + "\n\n● on it\n"
+}
+
+// legacyRelayEcho is the same relay as a pane captured before the element
+// existed shows it: a header, the note and its `[relay K]` line.
+func legacyRelayEcho(k int) string {
 	return "❯ --- ORCHESTRATOR (round 27) ---\n  [ORCHESTRATOR RELAY — forwarded.]\n  [relay " + strconv.Itoa(k) + "]\n\n  REVIEW\n\n● on it\n"
 }
 

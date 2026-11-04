@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -243,11 +244,16 @@ func briefInPrompt(prompt, brief string) bool {
 }
 
 func briefTail(brief string) string {
-	tail := ""
+	tail, prev := "", ""
 	for _, l := range strings.Split(brief, "\n") {
 		if t := squeeze(l); t != "" {
-			tail = t
+			prev, tail = tail, t
 		}
+	}
+	// Every brief ends in the same closing line, which any earlier echo holds;
+	// the line above it makes the tail this brief's own.
+	if tail == harness.RelayClose {
+		tail = prev + tail
 	}
 	if len(tail) > 80 {
 		tail = tail[len(tail)-80:]

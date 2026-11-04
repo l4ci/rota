@@ -1,10 +1,10 @@
 package round
 
 import (
-	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
 	"path/filepath"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -12,12 +12,12 @@ import (
 // drives a pane. assign and transfer hand the brief back instead of sending it.
 
 // soloBrief is the text dispatch would send into the pane: the pointer brief
-// under dispatch's `--- ORCHESTRATOR (round N) ---` signature.
+// inside dispatch's rota-relay element.
 func soloBrief(text string, round int) string {
 	if round == 0 {
 		round = 1 // dispatch's roundOf default
 	}
-	return fmt.Sprintf("--- ORCHESTRATOR (round %d) ---\n%s", round, text)
+	return harness.WrapRelay(round, 0, text)
 }
 
 // soloHandOff marks the slot busy the way a dispatch does (state, activeAt,

@@ -152,10 +152,10 @@ func roundOf(root string) int {
 // provably gone. A round.commands.claude that resumes a previous conversation is
 // rejected.
 //
-// Provenance: every payload, brief or relay, is signed with a first line
-// `--- ORCHESTRATOR (round N) ---`. A relay is also appended to the slot's
-// relays[] as {round, ts, summary}; the gate checks the PR's approvals
-// against it. That header is forgeable text, so a codex payload also ends with
+// Provenance: every payload, brief or relay, sits inside one
+// `<rota-relay [n="K"] round="N" from="orchestrator">…</rota-relay>` element. A
+// relay is also appended to the slot's relays[] as {round, ts, summary}; the
+// gate checks the PR's approvals against it. That tag is forgeable text, so a codex payload also ends with
 // a `--- ROTA-SIG <hmac> ---` trailer made with a key in the slot's codex home
 // (rotated on every task dispatch), and the codex launch carries a
 // UserPromptSubmit hook (`rota worker prompt-check`) that blocks any input
@@ -267,20 +267,28 @@ func (e Env) baselineAndRecord(ctx context.Context, root string, o DispatchOpts,
 	return recordDispatch(root, o.Slot, t.handle, o.Task, recKind, o.Round, turnSeq, stamp.Format(e.Now()))
 }
 
-// signBrief is the shared signing step. The payload leads with the
-// orchestrator signature, then preamble (a relay's note, "" for a task), then
-// the brief, and the harness signs the whole. An already-signed brief is not
-// signed twice. It returns the signed text and the round it was signed with.
-func signBrief(hz harness.Prompt, key []byte, round int, preamble, brief string) string {
-	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)
-	var payload strings.Builder
-	payload.WriteString(signature + "\n")
-	payload.WriteString(preamble)
-	if first, rest, _ := strings.Cut(brief, "\n"); first == signature {
+// signBrief is the shared signing step. The payload is one rota-relay element
+// (seq numbers a relay, 0 marks a task brief): its opening line, preamble (a
+// relay's note, "" for a task), the brief and the closing line. The harness
+// signs the whole, so the tag sits inside the signed text. A brief that already
+// carries this element, or the legacy `--- ORCHESTRATOR (round N) ---` header,
+// is not wrapped twice.
+func signBrief(hz harness.Prompt, key []byte, round, seq int, preamble, brief string) string {
+	open := harness.RelayOpen(round, seq)
+	first, rest, _ := strings.Cut(brief, "\n")
+	switch first {
+	case open:
+		body := strings.TrimRight(rest, "\n")
+		if i := strings.LastIndex(body, "\n"); body == harness.RelayClose {
+			body = ""
+		} else if i >= 0 && body[i+1:] == harness.RelayClose {
+			body = body[:i]
+		}
+		brief = body
+	case fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round):
 		brief = rest
 	}
-	payload.WriteString(brief)
-	return hz.Sign(key, payload.String())
+	return hz.Sign(key, open+"\n"+preamble+strings.TrimRight(brief, "\n")+"\n"+harness.RelayClose+"\n")
 }
 
 // sendSigned writes the signed payload to a temp file and hands it to the host.
@@ -497,7 +505,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	syncLabel(ctx, h, root, o.Slot)
 	labelWorkspace(ctx, h, root)
 
-	out := signBrief(prompt, signKey, roundOf(root), "", string(t.brief))
+	out := signBrief(prompt, signKey, roundOf(root), 0, "", string(t.brief))
 	// A task dispatch starts a fresh session and has nothing pending.
 	sendErr := e.sendTracked(ctx, root, o, t, out, false)
 	// Remember a stall so the next relay checks the prompt line first. Written
@@ -560,8 +568,9 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		return res, err
 	}
 	round := roundOf(root)
-	// relaySeq numbers the relay in the slot's log. Its `[relay K]` line is how
-	// the classifier tells this relay's echo from an earlier one's (#1017).
+	// relaySeq numbers the relay in the slot's log. It rides on the relay
+	// element's opening line, which is how the classifier tells this relay's
+	// echo from an earlier one's (#1017).
 	relaySeq := len(s.Relays()) + 1
 	if relayQueued {
 		relaySeq = len(reg.QueuedFrom(o.Slot).Relays) + 1
@@ -571,14 +580,8 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	note := fmt.Sprintf("[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
 		"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
 		"body, attribute it as 'orchestrator relay round %d', never as a maintainer\n"+
-		"sign-off in your session.]\n[relay %d]\n\n", round, relaySeq)
-	if h.Kind() == host.HerdrCore {
-		// Codex's queue preview retains only the first few payload lines.
-		// Keep the exact relay identity visible without changing legacy payloads.
-		marker := fmt.Sprintf("[relay %d]\n", relaySeq)
-		note = marker + strings.Replace(note, marker, "", 1)
-	}
-	out := signBrief(hz, signKey, round, note, string(t.brief))
+		"sign-off in your session.]\n\n", round)
+	out := signBrief(hz, signKey, round, relaySeq, note, string(t.brief))
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
 		return res, err
 	}
