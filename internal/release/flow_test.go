@@ -48,23 +48,42 @@ func goreleaserDir(t *testing.T) string {
 	return dir
 }
 
-func TestCheckPushModeGoreleaserTagFirst(t *testing.T) {
-	plain, gr := t.TempDir(), goreleaserDir(t)
-	for _, m := range []PushMode{PushBoth, PushTagOnly, PushBranchOnly} {
-		if err := CheckPushMode(plain, m); err != nil {
-			t.Errorf("no goreleaser, mode %d: %v", m, err)
+// noIO fails the test on any call out to the repository.
+type noIO struct{ t *testing.T }
+
+func (g noIO) Query(args ...string) (string, bool, error) {
+	g.t.Helper()
+	g.t.Errorf("repository called before the mode guard: %v", args)
+	return "", false, nil
+}
+
+func TestPlanPushGoreleaserTagFirst(t *testing.T) {
+	forge := func() (Forge, error) {
+		t.Error("forge called before the mode guard")
+		return nil, nil
+	}
+	ok := fakeGit{"rev-parse": "abc", "symbolic-ref": "main", "remote": "https://example.com/o/r.git", "ls-remote": "abc\trefs/tags/v1.2.3"}
+	for _, cfg := range []string{".goreleaser.yaml", ".goreleaser.yml"} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, cfg), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := PlanPush(context.Background(), PushPorts{Git: noIO{t}, Forge: forge}, PushRequest{Dir: dir, Tag: "v1.2.3", Mode: PushBoth})
+		if exitOf(t, err) != exitcode.ExitRefused || !strings.Contains(err.Error(), cfg) {
+			t.Errorf("%s, both refs: %v", cfg, err)
+		}
+		if e := err.(*exitcode.Error); e.Data == nil || !strings.Contains(e.Hint, "--tag-only") {
+			t.Errorf("%s refusal data and hint: %+v", cfg, e)
+		}
+		for _, m := range []PushMode{PushTagOnly, PushBranchOnly} {
+			if _, err := PlanPush(context.Background(), pushPorts(ok, fakeForge{}), PushRequest{Dir: dir, Tag: "v1.2.3", Mode: m}); err != nil {
+				t.Errorf("%s, mode %d: %v", cfg, m, err)
+			}
 		}
 	}
-	err := CheckPushMode(gr, PushBoth)
-	if exitOf(t, err) != exitcode.ExitRefused || !strings.Contains(err.Error(), ".goreleaser.yaml") {
-		t.Errorf("both refs under goreleaser: %v", err)
-	}
-	if e := err.(*exitcode.Error); e.Data == nil || !strings.Contains(e.Hint, "--tag-only") {
-		t.Errorf("refusal data and hint: %+v", e)
-	}
-	for _, m := range []PushMode{PushTagOnly, PushBranchOnly} {
-		if err := CheckPushMode(gr, m); err != nil {
-			t.Errorf("goreleaser, mode %d: %v", m, err)
+	for _, m := range []PushMode{PushBoth, PushTagOnly, PushBranchOnly} {
+		if _, err := PlanPush(context.Background(), pushPorts(ok, fakeForge{}), PushRequest{Dir: t.TempDir(), Tag: "v1.2.3", Mode: m}); err != nil {
+			t.Errorf("no goreleaser, mode %d: %v", m, err)
 		}
 	}
 }
