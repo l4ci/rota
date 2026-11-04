@@ -769,13 +769,13 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 		}
 	}
 	probe := ev.aliveDeps(h)
-	alive, ok := killLoop(&probe, ev.pids(), func() bool {
+	alive, _, ok := killLoop(&probe, ev.pids(), func() presence {
 		if missing {
-			return true
+			return presentGone
 		}
 		var now coreTerminal
 		err := c.call("terminal.get", map[string]any{"terminal": v.Address}, &now)
-		return err == nil && coreMatch(v, now) && now.State == "finished"
+		return seenBool(err == nil && coreMatch(v, now) && now.State == "finished")
 	})
 	if !ok {
 		return fmt.Errorf("Core terminal %s cleanup unproved; surviving pids:%s; ownership evidence retained", v.Address, pidList(alive))
