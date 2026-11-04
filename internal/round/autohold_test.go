@@ -26,8 +26,6 @@ func TestAutoHold(t *testing.T) {
 	fr.add("3", "Fix the label flag", "", false, "## Acceptance\n- [ ] works\n\n## Depends on\n- #12\n- #13\n")
 	fr.add("4", "Big feature", "", false, "## Acceptance\n- [ ] works\n")
 	fr.items["4"].Tag = "Major"
-	fr.add("5", "Labelled epic", "", false, "")
-	fr.items["5"].Labels = []string{"Epic"}
 	cases := []struct {
 		be   backlog.Backend
 		id   string
@@ -38,7 +36,6 @@ func TestAutoHold(t *testing.T) {
 		{fr, "3", ""},
 		{fr, "4", "Major"},
 		{notedRemote{fr}, "4", ""},
-		{fr, "5", "labelled epic"},
 	}
 	for _, tc := range cases {
 		got := autoHold(tc.be, *fr.items[tc.id])

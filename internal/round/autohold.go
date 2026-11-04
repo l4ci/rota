@@ -2,7 +2,6 @@ package round
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -21,7 +20,8 @@ func autoHold(be backlog.Backend, it backlog.Item) string {
 	if why := epicOf(be, it); why != "" {
 		return why
 	}
-	if it.Tag != "Major" && !slices.Contains(it.Labels, "size:Major") {
+	// An issue's tag is its size label, read with the configured prefix.
+	if it.Tag != "Major" {
 		return ""
 	}
 	if backlog.HasNote(be, it.ID) {
@@ -31,17 +31,12 @@ func autoHold(be backlog.Backend, it backlog.Item) string {
 }
 
 // epicOf names why an item reads as an epic or umbrella issue: an Epic title
-// prefix, an epic label, or a body listing two or more child issues.
+// prefix, or a body listing two or more child issues.
 func epicOf(be backlog.Backend, it backlog.Item) string {
 	title := strings.ToLower(strings.TrimSpace(it.Title))
 	for _, p := range []string{"epic:", "epic -", "[epic]"} {
 		if strings.HasPrefix(title, p) {
 			return "an epic (its title says so): assign its child issues instead"
-		}
-	}
-	for _, l := range it.Labels {
-		if l = strings.ToLower(l); l == "epic" || l == "type:epic" {
-			return "an epic (labelled " + l + "): assign its child issues instead"
 		}
 	}
 	if body, _, err := be.Detail(it.ID); err == nil && len(childListRe.FindAllString(body, 2)) >= 2 {
