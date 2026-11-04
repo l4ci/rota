@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -79,7 +80,7 @@ func (n trainNudge) conflictLine(c worker.TrainConflict) string {
 	}
 	paths := ""
 	if len(c.Paths) > 0 {
-		paths = " on " + strings.Join(c.Paths, ", ")
+		paths = " on " + strings.Join(git.DisplayPaths(c.Paths), ", ")
 	}
 	return fmt.Sprintf("nudge\ttrain-conflict\t#%s conflicts with #%s%s; left out of the train\tland #%s first, then merge %s into #%s's branch or route the conflict to its worker",
 		first, second, paths, first, dash(n.Base), second)
