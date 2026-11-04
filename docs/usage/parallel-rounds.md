@@ -258,6 +258,13 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 Each verb's arguments, data and exit codes are in `docs/contributing/contract/`. Every verb
 takes `--json` for a machine-readable envelope.
 
+`rota worker gate`, `rota round watch` and the sharded `test/gate.sh` also report to the terminal
+over OSC 7501 (the Program Status Protocol herdr, Ghostty and the Core app read): `working` while
+they run, then `done` or `error` (a refused or failing gate is `error`; `test/gate.sh` adds
+`progress` as its checks finish). The record goes to stderr, only when stdout and stderr are both
+terminals and not under `--json`, so piped and JSON output are unchanged. Terminals that do not
+know the sequence ignore it.
+
 ## The status screen
 
 `rota round status --ui` (also Round status in the palette) is a read-only overview of the round, so you can watch it
