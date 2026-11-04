@@ -72,10 +72,17 @@ func (s *Secrets) Save(ctx context.Context, name, secret string) (Saved, error) 
 		}
 		note = "keychain not used: " + err.Error()
 		// Stored prefers the keychain: an old entry there would shadow the new
-		// file secret. Remove it, or fail rather than leave it.
-		_ = s.Keychain.Delete(ctx, name)
-		if _, stale, _ := s.Keychain.Get(ctx, name); stale {
+		// file secret once the keychain is readable again. Remove it, or fail
+		// rather than leave it. A failed delete that no read can confirm
+		// absent is unknown, not clean: only a keychain that is unusable
+		// outright (no tool, no session) is taken to hold nothing.
+		derr := s.Keychain.Delete(ctx, name)
+		_, stale, gerr := s.Keychain.Get(ctx, name)
+		if stale {
 			return Saved{}, fmt.Errorf("keychain refused the new secret (%v) and still holds an old one for %q; remove it with your keychain tool, then retry", err, name)
+		}
+		if derr != nil && !errors.Is(derr, ErrUnavailable) && gerr != nil {
+			return Saved{}, fmt.Errorf("keychain refused the new secret (%v), could not remove (%v) or read (%v) any old one for %q; fix the keychain or remove the entry with your keychain tool, then retry", err, derr, gerr, name)
 		}
 	} else {
 		note = "no keychain on this machine"
