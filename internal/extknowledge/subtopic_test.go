@@ -155,22 +155,34 @@ func TestAddToSubtopic(t *testing.T) {
 	}
 }
 
-func TestAddNewSubtopicUpdatesSubIndex(t *testing.T) {
-	f := splitFixture(t, "")
-	n := strings.TrimSpace(commitCount(t, f))
-	if _, err := f.clone().Add(context.Background(), AddIn{Topic: "Godot: Lobby", Title: "Ready check", Body: "all peers.", Date: "2026-10-25"}); err != nil {
-		t.Fatal(err)
-	}
-	readme := readIn(t, f, "topics/godot/README.md")
-	i, j, k := strings.Index(readme, "- [Networking]"), strings.Index(readme, "- [Lobby](lobby.md) — Ready check"), strings.Index(readme, "**Autoload order**")
-	if i < 0 || j < i || k < j {
-		t.Fatalf("README = %q", readme)
-	}
-	if !strings.Contains(readIn(t, f, "topics/godot/lobby.md"), "- **Ready check** — all peers.") {
-		t.Fatal("lobby.md missing the bullet")
-	}
-	if got := gittest.Run(t, f.a, "rev-list", "--count", "HEAD"); strings.TrimSpace(got) != incr(n) {
-		t.Fatalf("want exactly one new commit, %s -> %s", n, got)
+func TestAddNewSubtopicRoundTrips(t *testing.T) {
+	for _, sub := range []string{"Lobby", "C++ (interop)", "A[B", "Ünicode topics"} {
+		t.Run(sub, func(t *testing.T) {
+			f := splitFixture(t, "")
+			n := strings.TrimSpace(commitCount(t, f))
+			name := "Godot: " + sub
+			res, err := f.clone().Add(context.Background(), AddIn{Topic: name, Title: "Ready check", Body: "all peers.", Date: "2026-10-25"})
+			if err != nil || !res.Changed || !res.Pushed {
+				t.Fatalf("res = %+v, err = %v", res, err)
+			}
+			readme := readIn(t, f, "topics/godot/README.md")
+			i, j, k := strings.Index(readme, "- [Networking]"), strings.Index(readme, "- ["+sub+"]("), strings.Index(readme, "**Autoload order**")
+			if i < 0 || j < i || k < j {
+				t.Fatalf("README = %q", readme)
+			}
+			gittest.Run(t, f.b, "pull", "-q", "--ff-only")
+			reader := Clone{Dir: f.b}
+			if !has(topicNames(t, reader), name) {
+				t.Fatalf("created subtopic %q missing from index", name)
+			}
+			got, err := reader.QueryWith([]string{name}, QueryOpts{})
+			if err != nil || len(got.Missing) != 0 || !strings.Contains(got.Text, "## "+name+"\n") || !strings.Contains(got.Text, "- **Ready check** — all peers. <!-- 2026-10-25 -->") {
+				t.Fatalf("query = %+v, err = %v", got, err)
+			}
+			if got := gittest.Run(t, f.a, "rev-list", "--count", "HEAD"); strings.TrimSpace(got) != incr(n) {
+				t.Fatalf("want exactly one new commit, %s -> %s", n, got)
+			}
+		})
 	}
 }
 
