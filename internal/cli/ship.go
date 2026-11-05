@@ -123,6 +123,12 @@ func (v shipVerdictLookup) Block(branch string) error {
 	return v.local().Block(branch)
 }
 
+// BlockAt binds recovery and checking to the commit the local merge will land.
+func (v shipVerdictLookup) BlockAt(branch, head string) error {
+	lookupVerdicts(v.c, verdictBranch{root: v.root, dir: v.dir, repo: v.repo, branch: branch, key: verdict.BranchKey(v.repo, branch), head: head})
+	return v.local().BlockAt(branch, head)
+}
+
 // shipPRVerdict is the verdict gate for the head branch of PR pr, with the PR
 // number added to the refusal data.
 func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
@@ -430,10 +436,10 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		sha, ref, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
 			Recover: land.RecoveryGit(c.Context(), c.deps().Git, dir),
-			Verdict: shipVerdict(c, dir, shipRoot(dir)).Block,
-			Approve: func() (*exitcode.Refusal, error) {
+			Verdict: shipVerdict(c, dir, shipRoot(dir)).BlockAt,
+			Approve: func(head string) (*exitcode.Refusal, error) {
 				files := func() ([]string, error) {
-					fl, err := ship.ChangedFiles(g, base+"..."+branch)
+					fl, err := ship.ChangedFiles(g, base+"..."+head)
 					if err != nil {
 						_, err = shipErr(err)
 					}
