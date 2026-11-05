@@ -154,6 +154,20 @@ Orca types the launch command into its login shell, where it can enter history.
 Only account paths and slot/port/database variables belong in its environment
 prefix; never put secrets there or in the launch command. rota retains process
 evidence from boot and polling so an agent exit does not prevent later cleanup.
+Core and Orca compare retained PIDs with their observed process start times. A
+reused PID belongs to another process and neither blocks cleanup nor supplies
+new descendants. An unreadable start time stays conservative: a live recorded
+PID still blocks cleanup. Orca refreshes descendants only from a readable,
+matching incarnation.
+
+Existing Orca bare-PID tree files have no historical start times. Their live
+PIDs still block cleanup, but rota never assigns them today's start times or
+uses them to discover descendants. New observations use a versioned tree record
+with process incarnations, including an explicit empty list after all observed
+processes are gone. Only launch can establish the initial observation; cleanup
+and polling refuse to reconstruct missing history from a PID file. Core keeps
+its existing compatibility rule: legacy bare PIDs count only when independently
+observed in the live terminal's tree.
 
 Robert Braatz's reported Codex tests, relayed during round 41, confirmed multiline
 delivery, turn-start receipts and background creation. Live validation still
