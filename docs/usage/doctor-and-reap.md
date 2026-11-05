@@ -35,7 +35,9 @@ never exits 5.
 | `state dir` | the state dir that holds the project registry (`projects.json`) | never |
 | `external knowledge` | the path in `knowledge.external` is a git clone with a remote and a `rota-knowledge.json`. Fails when the path is missing, not a git repository or has no remote; warns when the policy file is missing (writes then default to push). See [External knowledge](external-knowledge.md) | nothing to report: the line appears only when `knowledge.external` is set |
 | `labels` | tracker label definitions against the [label registry](../reference/labels.md), including configured names and project extras. Warns about missing or undescribed labels; hint `rota labels sync` previews changes | no issue backend; an unavailable or name-only tracker (Jira, It's a Plan) reports `skip` with its reason. Shares a five-second limit with the stale-claim scan |
-| `codex` | `codex` runs, the default Codex home (or each `codex` account in `round.accounts`) logged in, herdr integration per home | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
+| `codex` | `codex` runs, the default Codex home (or each `codex` account in `round.accounts`) logged in, herdr integration per home when the resolved round host is herdr | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
+
+The `codex` integration check uses the same resolved host as worker preflight: a recorded round host takes precedence over `round.dispatch`, and automatic detection applies when dispatch is unset or `subagent`. A configured account's missing login or required integration fails the check; the default home's readiness problems remain advisory.
 
 `verify` also appears only when something is wrong: it warns when `test.full` and `test.e2e` are both empty under a local verify (`test.fullWhere` is `local`), because the merge gate refuses to merge then (`blockedBy: no-verify`). The hint is `run: rota config set test.full '[...]'`. It never fails the run. `rota init` and `rota round start` print the same warning.
 

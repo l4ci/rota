@@ -383,21 +383,59 @@ func TestSkillsCheckPluginExtras(t *testing.T) {
 	}
 }
 
+func TestCodexCheckResolvedHost(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		dispatch string
+		host     host.Kind
+		home     Home
+		status   string
+		detail   string
+		hint     string
+	}{
+		{"detected herdr requires integration", "subagent", host.Herdr, Home{"ben", "/h/ben"}, Fail,
+			"ben: herdr integration not current", "CODEX_HOME=/h/ben herdr integration install codex"},
+		{"unset dispatch detects herdr", "", host.Herdr, Home{"ben", "/h/ben"}, Fail,
+			"ben: herdr integration not current", "CODEX_HOME=/h/ben herdr integration install codex"},
+		{"recorded tmux skips integration", "herdr", host.Tmux, Home{"ben", "/h/ben"}, Pass,
+			"homes checked: ben", ""},
+		{"recorded herdr requires integration", "tmux", host.Herdr, Home{"ben", "/h/ben"}, Fail,
+			"ben: herdr integration not current", "CODEX_HOME=/h/ben herdr integration install codex"},
+		{"default home integration remains advisory", "subagent", host.Herdr, Home{}, Pass,
+			"default home: herdr integration not current (run `herdr integration install codex` before a Codex worker)", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &codexFake{fake: fake{
+				have: map[string]bool{"codex": true, "herdr": true},
+				reply: map[string]Result{
+					"codex --version":          {Stdout: "codex-cli 0.159.2\n"},
+					"codex login status":       {},
+					"herdr integration status": {Stdout: "codex: not installed (/x)\n"},
+				},
+			}}
+			in := Input{Dispatch: tc.dispatch, RoundHost: tc.host, Kinds: codexIn([]Home{tc.home}, false), Exec: f.exec, Look: f.look}
+			c := statusOf(Run(context.Background(), in), "codex")
+			if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) || c.Hint != tc.hint {
+				t.Fatalf("%+v, want %s %q hint %q", c, tc.status, tc.detail, tc.hint)
+			}
+		})
+	}
+}
+
 func TestCodexCheck(t *testing.T) {
 	// the claude fixtures carry a codex line of their own, so build these here
 	codexCur := "claude: current (v10)\ncodex: current (v8) (/x)\n"
-	codexMiss := "claude: current (v10)\ncodex: not installed (/x)\n"
 	homes := []Home{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
 	ver := Result{Stdout: "codex-cli 0.159.2\n"}
 	for _, tc := range []struct {
-		name     string
-		have     []string
-		dispatch string
-		homes    []Home
-		reply    map[string]Result
-		status   string
-		detail   string // substring
-		hint     string
+		name   string
+		have   []string
+		host   host.Kind
+		homes  []Home
+		reply  map[string]Result
+		status string
+		detail string // substring
+		hint   string
 	}{
 		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no codex account in round.accounts", ""},
 		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2; round.tiers.codex unset (optional)", ""},
@@ -414,15 +452,9 @@ func TestCodexCheck(t *testing.T) {
 		{"pass: logged in, herdr integration current", []string{"codex", "herdr"}, "herdr", homes,
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
 			Pass, "homes checked: ben, dana; round.tiers.codex unset (optional)", ""},
-		{"pass: tmux skips the integration", []string{"codex", "herdr"}, "tmux", homes,
-			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexMiss}},
-			Pass, "ben, dana", ""},
 		{"fail: not logged in", []string{"codex", "herdr"}, "herdr", homes,
 			map[string]Result{"codex --version": ver, "codex login status": {ExitCode: 1}, "herdr integration status": {Stdout: codexCur}},
 			Fail, "ben: not logged in", "CODEX_HOME=/h/ben codex login"},
-		{"fail: integration missing", []string{"codex", "herdr"}, "herdr", homes[:1],
-			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexMiss}},
-			Fail, "ben: herdr integration not current", "CODEX_HOME=/h/ben herdr integration install codex"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			have := map[string]bool{}
@@ -430,7 +462,7 @@ func TestCodexCheck(t *testing.T) {
 				have[n] = true
 			}
 			f := &codexFake{fake: fake{have: have, reply: tc.reply}}
-			c := statusOf(Run(context.Background(), Input{Dispatch: tc.dispatch, Kinds: codexIn(tc.homes, false), Exec: f.exec, Look: f.look}), "codex")
+			c := statusOf(Run(context.Background(), Input{RoundHost: tc.host, Kinds: codexIn(tc.homes, false), Exec: f.exec, Look: f.look}), "codex")
 			if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) || c.Hint != tc.hint {
 				t.Errorf("%+v, want %s %q hint %q", c, tc.status, tc.detail, tc.hint)
 			}
