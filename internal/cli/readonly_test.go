@@ -1,12 +1,18 @@
 package cli
 
 import (
+	"errors"
+	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/backlog"
 )
 
 // The read-only set is the contract's: a tracker verb whose data line has no
@@ -101,6 +107,84 @@ func TestWrongBackendRefusals(t *testing.T) {
 			}
 			if readOnlyVerbs[strings.TrimSuffix(strings.TrimSuffix(c.name, " --raw-file"), " --name detail")] != (c.exit == ExitFailed) {
 				t.Fatalf("%s: read-only set and expected exit disagree", c.name)
+			}
+		})
+	}
+}
+
+// Registration must preserve a shared failure for later ordinary commands.
+func TestRegisteredReadOnlyPreservesSharedFailure(t *testing.T) {
+	for _, wrapped := range []bool{false, true} {
+		t.Run(fmt.Sprintf("wrapped=%t", wrapped), func(t *testing.T) {
+			sentinel := errors.New("backend unavailable")
+			cause := &os.PathError{Op: "read", Path: "config", Err: sentinel}
+			data := jsonObj("blockedBy", "backend", "changed", false)
+			original := Refused("shared refusal").WithHint("try again")
+			original.Data, original.Cause = data, cause
+			before := *original
+			var supplied error = original
+			if wrapped {
+				supplied = fmt.Errorf("outer: %w", original)
+			}
+			wantResult := Result{Text: "answer", Data: data, Source: cause}
+			verb := func(*flag.FlagSet) RunFunc {
+				return func(*Ctx, []string) (Result, error) { return wantResult, supplied }
+			}
+			cmds := withReadOnly([]*Command{{Name: "config", Subs: []*Command{
+				{Name: "show", Verb: verb}, {Name: "set", Verb: verb},
+			}}})
+			// Repeated read-only calls must not affect ordinary reuse in either order.
+			for _, index := range []int{1, 0, 1, 0, 1} {
+				cmd := cmds[0].Subs[index]
+				res, err := cmd.Verb(newFlagSet(cmd.Name))(&Ctx{}, nil)
+				wantExit := ExitRefused
+				if index == 0 {
+					wantExit = ExitFailed
+				} else if err != supplied {
+					t.Error("ordinary command lost error identity")
+				}
+				coded := asError(err)
+				if coded.Exit != wantExit {
+					t.Errorf("%s exit = %d, want %d", cmd.Name, coded.Exit, wantExit)
+				}
+				if !reflect.DeepEqual(res, wantResult) {
+					t.Errorf("%s result = %#v, want %#v", cmd.Name, res, wantResult)
+				}
+				if *original != before {
+					t.Errorf("%s changed supplied failure: %#v; want %#v", cmd.Name, original, before)
+				}
+				if err.Error() != supplied.Error() || coded.Message != before.Message || coded.Hint != before.Hint || coded.Data != data || coded.Cause != cause {
+					t.Errorf("%s lost failure fields: %v / %#v", cmd.Name, err, coded)
+				}
+				var detail *os.PathError
+				if !errors.Is(err, supplied) || !errors.Is(err, original) || !errors.Is(err, sentinel) || !errors.As(err, &detail) || detail != cause {
+					t.Errorf("%s lost original error chain: %v", cmd.Name, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRegisteredReadOnlyPassthrough(t *testing.T) {
+	coded := Unavailable("offline").WithHint("retry later")
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"success", nil},
+		{"unclassified", errors.New("plain failure")},
+		{"domain refusal", backlog.ErrWrongBackend},
+		{"other classification", coded},
+		{"wrapped classification", fmt.Errorf("outer: %w", coded)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := Result{Text: "answer", Data: jsonObj("changed", false)}
+			cmds := withReadOnly([]*Command{{Name: "config", Subs: []*Command{{Name: "show", Verb: func(*flag.FlagSet) RunFunc {
+				return func(*Ctx, []string) (Result, error) { return want, tc.err }
+			}}}}})
+			got, err := cmds[0].Subs[0].Verb(newFlagSet("show"))(&Ctx{}, nil)
+			if err != tc.err || !reflect.DeepEqual(got, want) {
+				t.Fatalf("got (%#v, %v), want unchanged (%#v, %v)", got, err, want, tc.err)
 			}
 		})
 	}

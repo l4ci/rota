@@ -66,10 +66,7 @@ func markReadOnly(cmds []*Command, prefix string) {
 				run := verb(fs)
 				return func(c *Ctx, args []string) (Result, error) {
 					res, err := run(c, args)
-					var e *Error
-					if errors.As(err, &e) && e.Exit == ExitRefused {
-						e.Exit = ExitFailed
-					}
+					_, err = exitmap.Translate(err, exitmap.Options{ReadOnly: true})
 					return res, err
 				}
 			}
