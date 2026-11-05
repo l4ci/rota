@@ -250,6 +250,12 @@ type TurnReader interface {
 	Turn(ctx context.Context, slot, handle string) (t Turn, ok bool)
 }
 
+// DeliveryReconciler clears an unknown receipt only after the caller explicitly
+// confirms from the original screen that no input was typed. It never sends input.
+type DeliveryReconciler interface {
+	ConfirmNotSubmitted(ctx context.Context, handle, payload string) error
+}
+
 // CoreIdentity reports the identity and diagnostic build verified by Require.
 type CoreIdentity interface{ CoreIdentity() (id, version string) }
 
@@ -275,25 +281,26 @@ type WorkspaceCloser interface {
 // field means the host lacks that side (tmux has no Labeler, herdr no
 // Operator). It is the one place the optional interfaces are discovered.
 type Capabilities struct {
-	CoreIdentity    CoreIdentity
-	Resubmitter     Resubmitter
-	Explainer       Explainer
-	PaneReader      PaneReader
-	Labeler         Labeler
-	TurnReader      TurnReader
-	Watcher         Watcher
-	PaneSweeper     PaneSweeper
-	Layouter        Layouter
-	TabOpener       TabOpener
-	SessionStarter  SessionStarter
-	TabLister       TabLister
-	TabFollower     TabFollower
-	PaneHost        PaneHost
-	OutputWatcher   OutputWatcher
-	Operator        Operator
-	Snapshotter     Snapshotter
-	WorkspaceCloser WorkspaceCloser
-	LinkedLayouter  LinkedLayouter
+	CoreIdentity       CoreIdentity
+	DeliveryReconciler DeliveryReconciler
+	Resubmitter        Resubmitter
+	Explainer          Explainer
+	PaneReader         PaneReader
+	Labeler            Labeler
+	TurnReader         TurnReader
+	Watcher            Watcher
+	PaneSweeper        PaneSweeper
+	Layouter           Layouter
+	TabOpener          TabOpener
+	SessionStarter     SessionStarter
+	TabLister          TabLister
+	TabFollower        TabFollower
+	PaneHost           PaneHost
+	OutputWatcher      OutputWatcher
+	Operator           Operator
+	Snapshotter        Snapshotter
+	WorkspaceCloser    WorkspaceCloser
+	LinkedLayouter     LinkedLayouter
 	// RuntimeScopedHandles: a recorded handle dies with the host runtime while
 	// the agent may live on, so a handle missing from the live list proves
 	// nothing about the agent (Orca).
@@ -335,6 +342,7 @@ func (c Capabilities) CanGroup() bool {
 func CapabilitiesOf(h any) Capabilities {
 	var c Capabilities
 	c.CoreIdentity, _ = h.(CoreIdentity)
+	c.DeliveryReconciler, _ = h.(DeliveryReconciler)
 	c.Resubmitter, _ = h.(Resubmitter)
 	c.Explainer, _ = h.(Explainer)
 	c.PaneReader, _ = h.(PaneReader)

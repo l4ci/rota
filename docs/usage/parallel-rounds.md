@@ -211,8 +211,25 @@ identity. Legacy captures infer the adapter from the composer marker; a
 placeholder belonging to another harness remains draft text.
 Unknown layouts refuse dispatch; clear the draft or resolve the unsupported
 rendering before retrying. Retry the same message to reconcile its saved signed payload. An uncertain send is retained as
-unknown and never pasted again automatically; inspect the original worker before
-recovery. These client receipts do not promise formal exactly-once delivery
+unknown and never pasted again automatically. Inspect the original worker's
+screen first. If the maintainer confirms that nothing was typed, clear that
+unknown delivery without sending input:
+
+```bash
+rota worker dispatch ben --confirm-not-submitted
+```
+
+Then retry the original dispatch or send the next relay. Confirmation keeps the
+terminal and signing key and retracts the uncertain relay's provisional log entry,
+so retrying it keeps its sequence. It refuses accepted or queued input, positive
+pickup evidence and a replaced terminal. It also refuses when Core's turn has
+advanced or a previously idle or done worker starts working, even when the
+message echo has scrolled away. The saved delivery records that confirmation
+was made by hand and when. Use this flag alone, without a body file
+or other dispatch flags. Definite Core rejections, including `invalid_params`,
+report not submitted and allow a normal retry without confirmation.
+
+These client receipts do not promise formal exactly-once delivery
 against arbitrary concurrent human edits. Ownership records and delivery receipts
 live under `$XDG_STATE_HOME/rota/herdr-core` (default
 `~/.local/state/rota/herdr-core`); retain them through recovery so cleanup can
