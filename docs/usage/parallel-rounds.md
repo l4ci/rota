@@ -198,11 +198,17 @@ pickup even for unsigned Claude relays absorbed into a running turn. An earlier
 relay or a task brief's tag does not confirm pickup; a relay still visible in a
 queue preview stays queued, including an earlier entry when several messages
 share one footer. Claude's queue footer counts only beside the active composer;
-agent output quoting its label does not establish a queue. Startup dialogs,
-missing status and human drafts refuse input; Rota never forces a send or answers
+agent output quoting its label does not establish a queue. The captured Claude
+queue layouts have blank padding and an optional spinner above the composer
+rule. A queue with tip or todo rows below the spinner has not been captured or
+verified. Startup dialogs, missing status and human drafts refuse input; Rota
+never forces a send or answers
 an unknown dialog. Each accepted composer needs a complete read-only styled
 paint: the guard checks continuation rows as well as the prompt row, and literal
-prompt glyphs in drafts remain input.
+prompt glyphs in drafts remain input. Composer markers and empty-input
+placeholders come from the harness adapter selected by Core's native app
+identity. Legacy captures infer the adapter from the composer marker; a
+placeholder belonging to another harness remains draft text.
 Unknown layouts refuse dispatch; clear the draft or resolve the unsupported
 rendering before retrying. Retry the same message to reconcile its saved signed payload. An uncertain send is retained as
 unknown and never pasted again automatically; inspect the original worker before
