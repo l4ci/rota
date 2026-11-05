@@ -1,1310 +1,1320 @@
 {
-  "version": 1,
+  "version": 2,
   "entries": {
-    "Architecture::Extend an existing reviewer brief instead of dispatching a parallel pass": {
+    "QXJjaGl0ZWN0dXJl.RXh0ZW5kIGFuIGV4aXN0aW5nIHJldmlld2VyIGJyaWVmIGluc3RlYWQgb2YgZGlzcGF0Y2hpbmcgYSBwYXJhbGxlbCBwYXNz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-15"
     },
-    "Build & Tooling::`git branch -d` refuses on stale remote-tracking refs": {
+    "QnVpbGQgJiBUb29saW5n.YGdpdCBicmFuY2ggLWRgIHJlZnVzZXMgb24gc3RhbGUgcmVtb3RlLXRyYWNraW5nIHJlZnM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-15"
     },
-    "Build & Tooling::git checkout -b inherits HEAD's lead over base": {
+    "QnVpbGQgJiBUb29saW5n.Z2l0IGNoZWNrb3V0IC1iIGluaGVyaXRzIEhFQUQncyBsZWFkIG92ZXIgYmFzZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-15"
     },
-    "Architecture::Multi-mode skill folds use prefixed step keys (R/I), not renumbering": {
+    "QXJjaGl0ZWN0dXJl.TXVsdGktbW9kZSBza2lsbCBmb2xkcyB1c2UgcHJlZml4ZWQgc3RlcCBrZXlzIChSL0kpLCBub3QgcmVudW1iZXJpbmc": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::EnterWorktree branches from origin/main; rebase onto local main before editing": {
+    "QnVpbGQgJiBUb29saW5n.RW50ZXJXb3JrdHJlZSBicmFuY2hlcyBmcm9tIG9yaWdpbi9tYWluOyByZWJhc2Ugb250byBsb2NhbCBtYWluIGJlZm9yZSBlZGl0aW5n": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Worktree .hv/ is gitignored \u2014 run state helpers from main repo path": {
+    "QnVpbGQgJiBUb29saW5n.V29ya3RyZWUgLmh2LyBpcyBnaXRpZ25vcmVkIOKAlCBydW4gc3RhdGUgaGVscGVycyBmcm9tIG1haW4gcmVwbyBwYXRo": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::TODO field additions require three synchronized edits": {
+    "QnVpbGQgJiBUb29saW5n.VE9ETyBmaWVsZCBhZGRpdGlvbnMgcmVxdWlyZSB0aHJlZSBzeW5jaHJvbml6ZWQgZWRpdHM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::hv-append is the chokepoint for derived BACKLOG fields": {
+    "QnVpbGQgJiBUb29saW5n.aHYtYXBwZW5kIGlzIHRoZSBjaG9rZXBvaW50IGZvciBkZXJpdmVkIEJBQ0tMT0cgZmllbGRz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::ID-based drift detection must anchor in commit-graph state": {
+    "QXJjaGl0ZWN0dXJl.SUQtYmFzZWQgZHJpZnQgZGV0ZWN0aW9uIG11c3QgYW5jaG9yIGluIGNvbW1pdC1ncmFwaCBzdGF0ZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::bg-isolation guard blocks main-thread Edits under /hv-work branch isolation": {
+    "QnVpbGQgJiBUb29saW5n.YmctaXNvbGF0aW9uIGd1YXJkIGJsb2NrcyBtYWluLXRocmVhZCBFZGl0cyB1bmRlciAvaHYtd29yayBicmFuY2ggaXNvbGF0aW9u": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Skill folds need quadruple-update: SKILL.md, smoke assertions, references, plugin.json": {
+    "QXJjaGl0ZWN0dXJl.U2tpbGwgZm9sZHMgbmVlZCBxdWFkcnVwbGUtdXBkYXRlOiBTS0lMTC5tZCwgc21va2UgYXNzZXJ0aW9ucywgcmVmZXJlbmNlcywgcGx1Z2luLmpzb24": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Inline-fold drops slash-command surface; composite-fold preserves it as a flag mode": {
+    "QXJjaGl0ZWN0dXJl.SW5saW5lLWZvbGQgZHJvcHMgc2xhc2gtY29tbWFuZCBzdXJmYWNlOyBjb21wb3NpdGUtZm9sZCBwcmVzZXJ2ZXMgaXQgYXMgYSBmbGFnIG1vZGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Composite-fold deletion scope: orphan helpers + public docs are the predictable miss": {
+    "QXJjaGl0ZWN0dXJl.Q29tcG9zaXRlLWZvbGQgZGVsZXRpb24gc2NvcGU6IG9ycGhhbiBoZWxwZXJzICsgcHVibGljIGRvY3MgYXJlIHRoZSBwcmVkaWN0YWJsZSBtaXNz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Atomic-batch helpers validate the whole batch before any write": {
+    "QXJjaGl0ZWN0dXJl.QXRvbWljLWJhdGNoIGhlbHBlcnMgdmFsaWRhdGUgdGhlIHdob2xlIGJhdGNoIGJlZm9yZSBhbnkgd3JpdGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
+    "QnVpbGQgJiBUb29saW5n.U21va2Ugc2VjdGlvbnMgcnVuIG9ubHkgaW5zaWRlIHRoZSBydW5uZXI7IHN0YW5kYWxvbmUgbmVlZHMgYW4gZW52LXByZXAgd3JhcHBlcg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Generic dispatchers accumulate dead-letter keys when typed wrappers grow own parsers": {
+    "QnVpbGQgJiBUb29saW5n.R2VuZXJpYyBkaXNwYXRjaGVycyBhY2N1bXVsYXRlIGRlYWQtbGV0dGVyIGtleXMgd2hlbiB0eXBlZCB3cmFwcGVycyBncm93IG93biBwYXJzZXJz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
+    "QXJjaGl0ZWN0dXJl.VXNlIGxvYWRfcmVwb3MoKSBmb3IgdW1icmVsbGEgZGV0ZWN0aW9uIOKAlCBuZXZlciB0cnV0aHktdGVzdCByYXcgcmVwb3MuanNvbg": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling::Smoke fixtures for dirty-tree-refusing helpers redirect stderr into $TMP_*/.hv/": {
+    "QnVpbGQgJiBUb29saW5n.U21va2UgZml4dHVyZXMgZm9yIGRpcnR5LXRyZWUtcmVmdXNpbmcgaGVscGVycyByZWRpcmVjdCBzdGRlcnIgaW50byAkVE1QXyovLmh2Lw": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-17"
     },
-    "Build & Tooling::hv-preflight opens a smoke-failure window during major-version transitions": {
+    "QnVpbGQgJiBUb29saW5n.aHYtcHJlZmxpZ2h0IG9wZW5zIGEgc21va2UtZmFpbHVyZSB3aW5kb3cgZHVyaW5nIG1ham9yLXZlcnNpb24gdHJhbnNpdGlvbnM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Helper preamble naming convention: *-preamble.sh auto-invokes; *-locate.sh stays library": {
+    "QXJjaGl0ZWN0dXJl.SGVscGVyIHByZWFtYmxlIG5hbWluZyBjb252ZW50aW9uOiAqLXByZWFtYmxlLnNoIGF1dG8taW52b2tlczsgKi1sb2NhdGUuc2ggc3RheXMgbGlicmFyeQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
+    "QnVpbGQgJiBUb29saW5n.Qm9vdHN0cmFwLXN0YWdlIGhlbHBlcnMgY2FuJ3QgZGVwZW5kIG9uIGh2LXByZWFtYmxlLnNoIOKAlCBrZWVwIHRoZSBjYW5vbmljYWwgZXhjZXB0aW9uIGxpc3Q": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::hv-migrate --apply bumps the version stamp on every path, including nothing_to_do": {
+    "QnVpbGQgJiBUb29saW5n.aHYtbWlncmF0ZSAtLWFwcGx5IGJ1bXBzIHRoZSB2ZXJzaW9uIHN0YW1wIG9uIGV2ZXJ5IHBhdGgsIGluY2x1ZGluZyBub3RoaW5nX3RvX2Rv": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-17"
     },
-    "Architecture::Codemod mention/usage safety: code spans + helper-path tokens + structural block deletes": {
+    "QXJjaGl0ZWN0dXJl.Q29kZW1vZCBtZW50aW9uL3VzYWdlIHNhZmV0eTogY29kZSBzcGFucyArIGhlbHBlci1wYXRoIHRva2VucyArIHN0cnVjdHVyYWwgYmxvY2sgZGVsZXRlcw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-17"
     },
-    "Build & Tooling::Standalone smoke fixtures for preamble-sourcing helpers need .hv/ in the tempdir": {
+    "QnVpbGQgJiBUb29saW5n.U3RhbmRhbG9uZSBzbW9rZSBmaXh0dXJlcyBmb3IgcHJlYW1ibGUtc291cmNpbmcgaGVscGVycyBuZWVkIC5odi8gaW4gdGhlIHRlbXBkaXI": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-17"
     },
-    "Architecture::Deprecated-managed-block strip uses explicit allowlist, not heuristic 'not in v4 set'": {
+    "QXJjaGl0ZWN0dXJl.RGVwcmVjYXRlZC1tYW5hZ2VkLWJsb2NrIHN0cmlwIHVzZXMgZXhwbGljaXQgYWxsb3dsaXN0LCBub3QgaGV1cmlzdGljICdub3QgaW4gdjQgc2V0Jw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-17"
     },
-    "Build & Tooling: Helpers & migrations::hv-migrate --apply bumps the version stamp on every path, including nothing_to_do": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.aHYtbWlncmF0ZSAtLWFwcGx5IGJ1bXBzIHRoZSB2ZXJzaW9uIHN0YW1wIG9uIGV2ZXJ5IHBhdGgsIGluY2x1ZGluZyBub3RoaW5nX3RvX2Rv": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.Qm9vdHN0cmFwLXN0YWdlIGhlbHBlcnMgY2FuJ3QgZGVwZW5kIG9uIGh2LXByZWFtYmxlLnNoIOKAlCBrZWVwIHRoZSBjYW5vbmljYWwgZXhjZXB0aW9uIGxpc3Q": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::hv-preflight opens a smoke-failure window during major-version transitions": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.aHYtcHJlZmxpZ2h0IG9wZW5zIGEgc21va2UtZmFpbHVyZSB3aW5kb3cgZHVyaW5nIG1ham9yLXZlcnNpb24gdHJhbnNpdGlvbnM": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::Generic dispatchers accumulate dead-letter keys when typed wrappers grow own parsers": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.R2VuZXJpYyBkaXNwYXRjaGVycyBhY2N1bXVsYXRlIGRlYWQtbGV0dGVyIGtleXMgd2hlbiB0eXBlZCB3cmFwcGVycyBncm93IG93biBwYXJzZXJz": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::hv-append is the chokepoint for derived BACKLOG fields": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.aHYtYXBwZW5kIGlzIHRoZSBjaG9rZXBvaW50IGZvciBkZXJpdmVkIEJBQ0tMT0cgZmllbGRz": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::TODO field additions require three synchronized edits": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.VE9ETyBmaWVsZCBhZGRpdGlvbnMgcmVxdWlyZSB0aHJlZSBzeW5jaHJvbml6ZWQgZWRpdHM": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::`git branch -d` refuses on stale remote-tracking refs": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.YGdpdCBicmFuY2ggLWRgIHJlZnVzZXMgb24gc3RhbGUgcmVtb3RlLXRyYWNraW5nIHJlZnM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture::Flat-module extractions place functions by import-DAG, not nominal category": {
+    "QXJjaGl0ZWN0dXJl.RmxhdC1tb2R1bGUgZXh0cmFjdGlvbnMgcGxhY2UgZnVuY3Rpb25zIGJ5IGltcG9ydC1EQUcsIG5vdCBub21pbmFsIGNhdGVnb3J5": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture::Shim re-exports preserve private module-level names across extractions": {
+    "QXJjaGl0ZWN0dXJl.U2hpbSByZS1leHBvcnRzIHByZXNlcnZlIHByaXZhdGUgbW9kdWxlLWxldmVsIG5hbWVzIGFjcm9zcyBleHRyYWN0aW9ucw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::Re-grep the actual surface before executing a stored plan": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.UmUtZ3JlcCB0aGUgYWN0dWFsIHN1cmZhY2UgYmVmb3JlIGV4ZWN1dGluZyBhIHN0b3JlZCBwbGFu": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Module extraction & migration safety::Shim re-exports preserve private module-level names across extractions": {
+    "QXJjaGl0ZWN0dXJlOiBNb2R1bGUgZXh0cmFjdGlvbiAmIG1pZ3JhdGlvbiBzYWZldHk.U2hpbSByZS1leHBvcnRzIHByZXNlcnZlIHByaXZhdGUgbW9kdWxlLWxldmVsIG5hbWVzIGFjcm9zcyBleHRyYWN0aW9ucw": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Module extraction & migration safety::Flat-module extractions place functions by import-DAG, not nominal category": {
+    "QXJjaGl0ZWN0dXJlOiBNb2R1bGUgZXh0cmFjdGlvbiAmIG1pZ3JhdGlvbiBzYWZldHk.RmxhdC1tb2R1bGUgZXh0cmFjdGlvbnMgcGxhY2UgZnVuY3Rpb25zIGJ5IGltcG9ydC1EQUcsIG5vdCBub21pbmFsIGNhdGVnb3J5": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
-    "Architecture: Module extraction & migration safety::Deprecated-managed-block strip uses explicit allowlist, not heuristic 'not in v4 set'": {
+    "QXJjaGl0ZWN0dXJlOiBNb2R1bGUgZXh0cmFjdGlvbiAmIG1pZ3JhdGlvbiBzYWZldHk.RGVwcmVjYXRlZC1tYW5hZ2VkLWJsb2NrIHN0cmlwIHVzZXMgZXhwbGljaXQgYWxsb3dsaXN0LCBub3QgaGV1cmlzdGljICdub3QgaW4gdjQgc2V0Jw": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Module extraction & migration safety::Codemod mention/usage safety: code spans + helper-path tokens + structural block deletes": {
+    "QXJjaGl0ZWN0dXJlOiBNb2R1bGUgZXh0cmFjdGlvbiAmIG1pZ3JhdGlvbiBzYWZldHk.Q29kZW1vZCBtZW50aW9uL3VzYWdlIHNhZmV0eTogY29kZSBzcGFucyArIGhlbHBlci1wYXRoIHRva2VucyArIHN0cnVjdHVyYWwgYmxvY2sgZGVsZXRlcw": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Composite-fold deletion scope: orphan helpers + public docs are the predictable miss": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.Q29tcG9zaXRlLWZvbGQgZGVsZXRpb24gc2NvcGU6IG9ycGhhbiBoZWxwZXJzICsgcHVibGljIGRvY3MgYXJlIHRoZSBwcmVkaWN0YWJsZSBtaXNz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Inline-fold drops slash-command surface; composite-fold preserves it as a flag mode": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.SW5saW5lLWZvbGQgZHJvcHMgc2xhc2gtY29tbWFuZCBzdXJmYWNlOyBjb21wb3NpdGUtZm9sZCBwcmVzZXJ2ZXMgaXQgYXMgYSBmbGFnIG1vZGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Skill folds need quadruple-update: SKILL.md, smoke assertions, references, plugin.json": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2tpbGwgZm9sZHMgbmVlZCBxdWFkcnVwbGUtdXBkYXRlOiBTS0lMTC5tZCwgc21va2UgYXNzZXJ0aW9ucywgcmVmZXJlbmNlcywgcGx1Z2luLmpzb24": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Multi-mode skill folds use prefixed step keys (R/I), not renumbering": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.TXVsdGktbW9kZSBza2lsbCBmb2xkcyB1c2UgcHJlZml4ZWQgc3RlcCBrZXlzIChSL0kpLCBub3QgcmVudW1iZXJpbmc": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Extend an existing reviewer brief instead of dispatching a parallel pass": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
-    },
-    "Architecture: Skill authoring::Backlog 'near-isomorphic CRUD' framing overstates uniformity \u2014 verify against helper code": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Build & Tooling: Helpers & migrations::hv-knowledge-query matches exact full topic headings only": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-06-11"
-    },
-    "Build & Tooling: Helpers & migrations::No amend helper exists for design artifacts": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-06-11"
-    },
-    "Architecture: Skill authoring::hv-complete callers own the exit-3 proof path": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-10-01"
-    },
-    "Build & Tooling: Helpers & migrations::New bin/ helpers need the exec bit before commit": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.RXh0ZW5kIGFuIGV4aXN0aW5nIHJldmlld2VyIGJyaWVmIGluc3RlYWQgb2YgZGlzcGF0Y2hpbmcgYSBwYXJhbGxlbCBwYXNz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Architecture: Module extraction & migration safety::Golden harness proves byte-identical helper moves": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.QmFja2xvZyAnbmVhci1pc29tb3JwaGljIENSVUQnIGZyYW1pbmcgb3ZlcnN0YXRlcyB1bmlmb3JtaXR5IOKAlCB2ZXJpZnkgYWdhaW5zdCBoZWxwZXIgY29kZQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.aHYta25vd2xlZGdlLXF1ZXJ5IG1hdGNoZXMgZXhhY3QgZnVsbCB0b3BpYyBoZWFkaW5ncyBvbmx5": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-06-11"
+    },
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.Tm8gYW1lbmQgaGVscGVyIGV4aXN0cyBmb3IgZGVzaWduIGFydGlmYWN0cw": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-06-11"
+    },
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.aHYtY29tcGxldGUgY2FsbGVycyBvd24gdGhlIGV4aXQtMyBwcm9vZiBwYXRo": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
-    "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.TmV3IGJpbi8gaGVscGVycyBuZWVkIHRoZSBleGVjIGJpdCBiZWZvcmUgY29tbWl0": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-19"
+    },
+    "QXJjaGl0ZWN0dXJlOiBNb2R1bGUgZXh0cmFjdGlvbiAmIG1pZ3JhdGlvbiBzYWZldHk.R29sZGVuIGhhcm5lc3MgcHJvdmVzIGJ5dGUtaWRlbnRpY2FsIGhlbHBlciBtb3Zlcw": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-10-01"
+    },
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.Q29kZXggZHJvcHMgc2tpbGxzIHdob3NlIHVucXVvdGVkIGRlc2NyaXB0aW9uIGhhcyAnOiAnIG9yICcgIyc": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-31"
     },
-    "Build & Tooling: Git & isolation::Repo-wide renames: one sweep PR owns shared code, slices stack on it": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.UmVwby13aWRlIHJlbmFtZXM6IG9uZSBzd2VlcCBQUiBvd25zIHNoYXJlZCBjb2RlLCBzbGljZXMgc3RhY2sgb24gaXQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-04"
     },
-    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts \u2014 commit before /rota-work": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.L3JvdGEtYnJhaW5zdG9ybSBhbmQgL3JvdGEtcGxhbiB3cml0ZSB0cmFja2VkIGFydGlmYWN0cyDigJQgY29tbWl0IGJlZm9yZSAvcm90YS13b3Jr": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored \u2014 run state helpers from main repo path": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.V29ya3RyZWUgLnJvdGEvIHJ1bnRpbWUgaXMgZ2l0aWdub3JlZCDigJQgcnVuIHN0YXRlIGhlbHBlcnMgZnJvbSBtYWluIHJlcG8gcGF0aA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::update-golden writes compact JSON": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.dXBkYXRlLWdvbGRlbiB3cml0ZXMgY29tcGFjdCBKU09O": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2hvcnRlbiBza2lsbHMgc3RydWN0dXJhbGx5LCBub3QgYnkgcmV3b3JkaW5n": {
       "tier": "confirmed",
       "hits": 5,
       "lastSeen": "2026-10-26"
     },
-    "Product: Market & competitors::Market review lives in docs/contributing": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.TWFya2V0IHJldmlldyBsaXZlcyBpbiBkb2NzL2NvbnRyaWJ1dGluZw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Product: Market & competitors::Four bets with proven demand": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.Rm91ciBiZXRzIHdpdGggcHJvdmVuIGRlbWFuZA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Product: Market & competitors::Worktrees isolate files, not plans": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.V29ya3RyZWVzIGlzb2xhdGUgZmlsZXMsIG5vdCBwbGFucw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Product: Market & competitors::First-party parallelism changed the ground": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.Rmlyc3QtcGFydHkgcGFyYWxsZWxpc20gY2hhbmdlZCB0aGUgZ3JvdW5k": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Product: Market & competitors::Quota burn scales per worker": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.UXVvdGEgYnVybiBzY2FsZXMgcGVyIHdvcmtlcg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Product: Market & competitors::Keep knowledge human-curated": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.S2VlcCBrbm93bGVkZ2UgaHVtYW4tY3VyYXRlZA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Build & Tooling: Git & isolation::Reviewer subagents export with git archive, never worktree add": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.UmV2aWV3ZXIgc3ViYWdlbnRzIGV4cG9ydCB3aXRoIGdpdCBhcmNoaXZlLCBuZXZlciB3b3JrdHJlZSBhZGQ": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers read stdin only when an argument takes it": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2Vz.V3JhcHBlcnMgcmVhZCBzdGRpbiBvbmx5IHdoZW4gYW4gYXJndW1lbnQgdGFrZXMgaXQ": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Umbrella scope as the degenerate 1-element case of hybrid `file_pairs`": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.VW1icmVsbGEgc2NvcGUgYXMgdGhlIGRlZ2VuZXJhdGUgMS1lbGVtZW50IGNhc2Ugb2YgaHlicmlkIGBmaWxlX3BhaXJzYA": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Optional-value flags use `${PARAM:?$USAGE}` to reject bare trailing flag values": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.T3B0aW9uYWwtdmFsdWUgZmxhZ3MgdXNlIGAke1BBUkFNOj8kVVNBR0V9YCB0byByZWplY3QgYmFyZSB0cmFpbGluZyBmbGFnIHZhbHVlcw": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Scope-axis additions keep the default path byte-identical via literal legacy resolution": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.U2NvcGUtYXhpcyBhZGRpdGlvbnMga2VlcCB0aGUgZGVmYXVsdCBwYXRoIGJ5dGUtaWRlbnRpY2FsIHZpYSBsaXRlcmFsIGxlZ2FjeSByZXNvbHV0aW9u": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Sourced libs needing caller cwd must restore HV_ORIG_PWD (hv-preamble.sh cds first)": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.U291cmNlZCBsaWJzIG5lZWRpbmcgY2FsbGVyIGN3ZCBtdXN0IHJlc3RvcmUgSFZfT1JJR19QV0QgKGh2LXByZWFtYmxlLnNoIGNkcyBmaXJzdCk": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Field writers co-locate with the read-grammar SoT; order-agnostic parse allows append-at-end": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.RmllbGQgd3JpdGVycyBjby1sb2NhdGUgd2l0aCB0aGUgcmVhZC1ncmFtbWFyIFNvVDsgb3JkZXItYWdub3N0aWMgcGFyc2UgYWxsb3dzIGFwcGVuZC1hdC1lbmQ": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Sourceable artifact libs (hv-artifact-VERB.sh) are per-verb, not per-kind": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.U291cmNlYWJsZSBhcnRpZmFjdCBsaWJzIChodi1hcnRpZmFjdC1WRVJCLnNoKSBhcmUgcGVyLXZlcmIsIG5vdCBwZXIta2luZA": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Helper preamble naming convention: *-preamble.sh auto-invokes; *-locate.sh stays library": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.SGVscGVyIHByZWFtYmxlIG5hbWluZyBjb252ZW50aW9uOiAqLXByZWFtYmxlLnNoIGF1dG8taW52b2tlczsgKi1sb2NhdGUuc2ggc3RheXMgbGlicmFyeQ": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.VXNlIGxvYWRfcmVwb3MoKSBmb3IgdW1icmVsbGEgZGV0ZWN0aW9uIOKAlCBuZXZlciB0cnV0aHktdGVzdCByYXcgcmVwb3MuanNvbg": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Atomic-batch helpers validate the whole batch before any write": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.QXRvbWljLWJhdGNoIGhlbHBlcnMgdmFsaWRhdGUgdGhlIHdob2xlIGJhdGNoIGJlZm9yZSBhbnkgd3JpdGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::ID-based drift detection must anchor in commit-graph state": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBTaGVsbCBoZWxwZXJz.SUQtYmFzZWQgZHJpZnQgZGV0ZWN0aW9uIG11c3QgYW5jaG9yIGluIGNvbW1pdC1ncmFwaCBzdGF0ZQ": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.U29ubmV0IHdvcmtlcnMgd3JpdGUgdGVzdHMgYWZ0ZXIgdGhlIGNvZGUgdW5sZXNzIHRoZSBicmllZiBuYW1lcyB0aGUgUkVE": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Workers & relays::A Claude Code dialog on the prompt line reads as a human draft": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBDbGF1ZGUgQ29kZSBkaWFsb2cgb24gdGhlIHByb21wdCBsaW5lIHJlYWRzIGFzIGEgaHVtYW4gZHJhZnQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Workers & relays::Cite a transfer brief as a transfer note, not a relay": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.Q2l0ZSBhIHRyYW5zZmVyIGJyaWVmIGFzIGEgdHJhbnNmZXIgbm90ZSwgbm90IGEgcmVsYXk": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-08"
     },
-    "Rounds: Orchestration: Workers & relays::Worker workarounds are bug reproductions": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V29ya2VyIHdvcmthcm91bmRzIGFyZSBidWcgcmVwcm9kdWN0aW9ucw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-06"
     },
-    "Rounds: Orchestration: Workers & relays::Workers often skip the ROTA-DONE sentinel": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V29ya2VycyBvZnRlbiBza2lwIHRoZSBST1RBLURPTkUgc2VudGluZWw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-05"
     },
-    "Rounds: Orchestration: Workers & relays::Record maintainer answers by their real channel, never as a relay": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UmVjb3JkIG1haW50YWluZXIgYW5zd2VycyBieSB0aGVpciByZWFsIGNoYW5uZWwsIG5ldmVyIGFzIGEgcmVsYXk": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-08"
     },
-    "Rounds: Orchestration: Slate & issues::Smoke section reservation keys on the words 'smoke section' or 'test/sections'": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.U21va2Ugc2VjdGlvbiByZXNlcnZhdGlvbiBrZXlzIG9uIHRoZSB3b3JkcyAnc21va2Ugc2VjdGlvbicgb3IgJ3Rlc3Qvc2VjdGlvbnMn": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-18"
     },
-    "Rounds: Orchestration: Slate & issues::Check the titles the architecture review files": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.Q2hlY2sgdGhlIHRpdGxlcyB0aGUgYXJjaGl0ZWN0dXJlIHJldmlldyBmaWxlcw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Slate & issues::Label a split issue partial-slice before its first slice merges": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.TGFiZWwgYSBzcGxpdCBpc3N1ZSBwYXJ0aWFsLXNsaWNlIGJlZm9yZSBpdHMgZmlyc3Qgc2xpY2UgbWVyZ2Vz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Slate & issues::Overlap counts the held issue's pointers until merge": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.T3ZlcmxhcCBjb3VudHMgdGhlIGhlbGQgaXNzdWUncyBwb2ludGVycyB1bnRpbCBtZXJnZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-12"
     },
-    "Rounds: Orchestration: Slate & issues::Serialize sibling refactors that share a seam": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.U2VyaWFsaXplIHNpYmxpbmcgcmVmYWN0b3JzIHRoYXQgc2hhcmUgYSBzZWFt": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
     },
-    "Rounds: Orchestration: Slate & issues::Architecture-review issues can propose seams that already exist": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.QXJjaGl0ZWN0dXJlLXJldmlldyBpc3N1ZXMgY2FuIHByb3Bvc2Ugc2VhbXMgdGhhdCBhbHJlYWR5IGV4aXN0": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
     },
-    "Rounds: Orchestration: Workers & relays::No harness version pins; Codex uses the default account": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.Tm8gaGFybmVzcyB2ZXJzaW9uIHBpbnM7IENvZGV4IHVzZXMgdGhlIGRlZmF1bHQgYWNjb3VudA": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-06"
     },
-    "Rounds: Orchestration: Workers & relays::focused: true can be a selected idle tab, not a person typing": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.Zm9jdXNlZDogdHJ1ZSBjYW4gYmUgYSBzZWxlY3RlZCBpZGxlIHRhYiwgbm90IGEgcGVyc29uIHR5cGluZw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
     },
-    "Rounds: Orchestration: Workers & relays::A worker's own PR reply shows up as a review change": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSB3b3JrZXIncyBvd24gUFIgcmVwbHkgc2hvd3MgdXAgYXMgYSByZXZpZXcgY2hhbmdl": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
     },
-    "Rounds: Orchestration: Workers & relays::An agent-start timeout on assign resumes with the receipt id": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QW4gYWdlbnQtc3RhcnQgdGltZW91dCBvbiBhc3NpZ24gcmVzdW1lcyB3aXRoIHRoZSByZWNlaXB0IGlk": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
     },
-    "Rounds: Orchestration: Workers & relays::Brief implementers to leave .rota/knowledge-tier.json alone": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QnJpZWYgaW1wbGVtZW50ZXJzIHRvIGxlYXZlIC5yb3RhL2tub3dsZWRnZS10aWVyLmpzb24gYWxvbmU": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Build & Tooling: Helpers & migrations::This repo's milestone store is the tracker; .rota/milestones/ files are stale": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.VGhpcyByZXBvJ3MgbWlsZXN0b25lIHN0b3JlIGlzIHRoZSB0cmFja2VyOyAucm90YS9taWxlc3RvbmVzLyBmaWxlcyBhcmUgc3RhbGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-18"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::A verb captured in $(...) aborts the section silently when it exits non-zero": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSB2ZXJiIGNhcHR1cmVkIGluICQoLi4uKSBhYm9ydHMgdGhlIHNlY3Rpb24gc2lsZW50bHkgd2hlbiBpdCBleGl0cyBub24temVybw": {
       "tier": "confirmed",
       "hits": 10,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Inverted grep assertion (grep && fail) aborts the section under set -e": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.SW52ZXJ0ZWQgZ3JlcCBhc3NlcnRpb24gKGdyZXAgJiYgZmFpbCkgYWJvcnRzIHRoZSBzZWN0aW9uIHVuZGVyIHNldCAtZQ": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U21va2Ugc2VjdGlvbnMgcnVuIG9ubHkgaW5zaWRlIHRoZSBydW5uZXI7IHN0YW5kYWxvbmUgbmVlZHMgYW4gZW52LXByZXAgd3JhcHBlcg": {
       "tier": "deprecated",
       "hits": 2,
       "lastSeen": "2026-10-01"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Smoke fixtures for dirty-tree-refusing helpers redirect stderr into $TMP_*/.hv/": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U21va2UgZml4dHVyZXMgZm9yIGRpcnR5LXRyZWUtcmVmdXNpbmcgaGVscGVycyByZWRpcmVjdCBzdGRlcnIgaW50byAkVE1QXyovLmh2Lw": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Pinned-surface sentinels need a live-scan drift guard": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.UGlubmVkLXN1cmZhY2Ugc2VudGluZWxzIG5lZWQgYSBsaXZlLXNjYW4gZHJpZnQgZ3VhcmQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-06-11"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Fixtures that expect issue or forge reads must pin the source and forge": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.Rml4dHVyZXMgdGhhdCBleHBlY3QgaXNzdWUgb3IgZm9yZ2UgcmVhZHMgbXVzdCBwaW4gdGhlIHNvdXJjZSBhbmQgZm9yZ2U": {
       "tier": "confirmed",
       "hits": 3,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Failing-verify tests must own their TMPDIR": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.RmFpbGluZy12ZXJpZnkgdGVzdHMgbXVzdCBvd24gdGhlaXIgVE1QRElS": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::No tracked .rota/ writes while the gate runs": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.Tm8gdHJhY2tlZCAucm90YS8gd3JpdGVzIHdoaWxlIHRoZSBnYXRlIHJ1bnM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-18"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.UGluIFJPVEFfRlJPWkVOX0RBWSB3aGVuIHJlZ2VuZXJhdGluZyBmcm96ZW4gcmVjb3Jkcw": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-22"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::A config key change regenerates the frozen config record": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QSBjb25maWcga2V5IGNoYW5nZSByZWdlbmVyYXRlcyB0aGUgZnJvemVuIGNvbmZpZyByZWNvcmQ": {
       "tier": "confirmed",
       "hits": 3,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::A gate that crosses UTC midnight fails the frozen tests": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QSBnYXRlIHRoYXQgY3Jvc3NlcyBVVEMgbWlkbmlnaHQgZmFpbHMgdGhlIGZyb3plbiB0ZXN0cw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Shared-text changes need the full smoke run before merge": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.U2hhcmVkLXRleHQgY2hhbmdlcyBuZWVkIHRoZSBmdWxsIHNtb2tlIHJ1biBiZWZvcmUgbWVyZ2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-04"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QmVoYXZpb3ItY2hhbmdpbmcgdGFza3MgbXVzdCBzd2VlcCBzbW9rZSBzZWN0aW9ucyBhc3NlcnRpbmcgdGhlIG9sZCBiZWhhdmlvcg": {
       "tier": "confirmed",
       "hits": 7,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Pre-existing smoke failures: check main before triaging your branch": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.UHJlLWV4aXN0aW5nIHNtb2tlIGZhaWx1cmVzOiBjaGVjayBtYWluIGJlZm9yZSB0cmlhZ2luZyB5b3VyIGJyYW5jaA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Orchestrator owns the 44 NAMES sync across parallel waves": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.T3JjaGVzdHJhdG9yIG93bnMgdGhlIDQ0IE5BTUVTIHN5bmMgYWNyb3NzIHBhcmFsbGVsIHdhdmVz": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Standalone smoke fixtures for preamble-sourcing helpers need .hv/ in the tempdir": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U3RhbmRhbG9uZSBzbW9rZSBmaXh0dXJlcyBmb3IgcHJlYW1ibGUtc291cmNpbmcgaGVscGVycyBuZWVkIC5odi8gaW4gdGhlIHRlbXBkaXI": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Fakes hide real-host bugs: run one live check before a release": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.RmFrZXMgaGlkZSByZWFsLWhvc3QgYnVnczogcnVuIG9uZSBsaXZlIGNoZWNrIGJlZm9yZSBhIHJlbGVhc2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-04"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Host CLI argv needs one real-host run": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.SG9zdCBDTEkgYXJndiBuZWVkcyBvbmUgcmVhbC1ob3N0IHJ1bg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Rounds: Orchestration: Slate & issues::Add acceptance to a thin issue by REST, from the repo root, after test -s": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.QWRkIGFjY2VwdGFuY2UgdG8gYSB0aGluIGlzc3VlIGJ5IFJFU1QsIGZyb20gdGhlIHJlcG8gcm9vdCwgYWZ0ZXIgdGVzdCAtcw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Workers & relays::A watch wake of done after a bounce relay can be the old sentinel": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSB3YXRjaCB3YWtlIG9mIGRvbmUgYWZ0ZXIgYSBib3VuY2UgcmVsYXkgY2FuIGJlIHRoZSBvbGQgc2VudGluZWw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger fires in a one-item round": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.VGhlIHF1ZXVlLWVtcHR5IGFyY2hpdGVjdHVyZSB0cmlnZ2VyIGZpcmVzIGluIGEgb25lLWl0ZW0gcm91bmQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Workers & relays::A limited wake can be the brief quoting limit phrases": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBsaW1pdGVkIHdha2UgY2FuIGJlIHRoZSBicmllZiBxdW90aW5nIGxpbWl0IHBocmFzZXM": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Workers & relays::Claude Code echoes a brief as a \u276f header with a two-space body": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.Q2xhdWRlIENvZGUgZWNob2VzIGEgYnJpZWYgYXMgYSDina8gaGVhZGVyIHdpdGggYSB0d28tc3BhY2UgYm9keQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger re-fires on every idle check": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.VGhlIHF1ZXVlLWVtcHR5IGFyY2hpdGVjdHVyZSB0cmlnZ2VyIHJlLWZpcmVzIG9uIGV2ZXJ5IGlkbGUgY2hlY2s": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Slate & issues::Overlap reads issue pointers, not PR diffs": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.T3ZlcmxhcCByZWFkcyBpc3N1ZSBwb2ludGVycywgbm90IFBSIGRpZmZz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Workers & relays::An account without a token stalls the slots mapped to it": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QW4gYWNjb3VudCB3aXRob3V0IGEgdG9rZW4gc3RhbGxzIHRoZSBzbG90cyBtYXBwZWQgdG8gaXQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Check the branch head against the reviewed sha before verdict add": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.Q2hlY2sgdGhlIGJyYW5jaCBoZWFkIGFnYWluc3QgdGhlIHJldmlld2VkIHNoYSBiZWZvcmUgdmVyZGljdCBhZGQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Verdicts record the sha of the slot's worktree, not origin": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.VmVyZGljdHMgcmVjb3JkIHRoZSBzaGEgb2YgdGhlIHNsb3QncyB3b3JrdHJlZSwgbm90IG9yaWdpbg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Fast-forward the local ref after an orchestrator push before verdict add": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.RmFzdC1mb3J3YXJkIHRoZSBsb2NhbCByZWYgYWZ0ZXIgYW4gb3JjaGVzdHJhdG9yIHB1c2ggYmVmb3JlIHZlcmRpY3QgYWRk": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Train the waiting PRs once two or more are reviewed": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gdGhlIHdhaXRpbmcgUFJzIG9uY2UgdHdvIG9yIG1vcmUgYXJlIHJldmlld2Vk": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Read held commits before reaping a round": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.UmVhZCBoZWxkIGNvbW1pdHMgYmVmb3JlIHJlYXBpbmcgYSByb3VuZA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-06"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Stash the tier sidecar around a gate run on main": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.U3Rhc2ggdGhlIHRpZXIgc2lkZWNhciBhcm91bmQgYSBnYXRlIHJ1biBvbiBtYWlu": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Commit knowledge-hit bookkeeping before wind-down": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Q29tbWl0IGtub3dsZWRnZS1oaXQgYm9va2tlZXBpbmcgYmVmb3JlIHdpbmQtZG93bg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Learn and docs bookkeeping commits go straight to main": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.TGVhcm4gYW5kIGRvY3MgYm9va2tlZXBpbmcgY29tbWl0cyBnbyBzdHJhaWdodCB0byBtYWlu": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::gh pr edit fails silently on this repo": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Z2ggcHIgZWRpdCBmYWlscyBzaWxlbnRseSBvbiB0aGlzIHJlcG8": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-05"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Contract-doc stamps make waiting PRs conflict with each other": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Q29udHJhY3QtZG9jIHN0YW1wcyBtYWtlIHdhaXRpbmcgUFJzIGNvbmZsaWN0IHdpdGggZWFjaCBvdGhlcg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Train PRs with disjoint paths; a new config key reds the frozen config record": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gUFJzIHdpdGggZGlzam9pbnQgcGF0aHM7IGEgbmV3IGNvbmZpZyBrZXkgcmVkcyB0aGUgZnJvemVuIGNvbmZpZyByZWNvcmQ": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Gating a PR outside a round": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.R2F0aW5nIGEgUFIgb3V0c2lkZSBhIHJvdW5k": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-06"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Review subagents must not touch the repo's worktrees or checkout during a gate": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.UmV2aWV3IHN1YmFnZW50cyBtdXN0IG5vdCB0b3VjaCB0aGUgcmVwbydzIHdvcmt0cmVlcyBvciBjaGVja291dCBkdXJpbmcgYSBnYXRl": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Rebuild the installed rota after merging round-verb fixes": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.UmVidWlsZCB0aGUgaW5zdGFsbGVkIHJvdGEgYWZ0ZXIgbWVyZ2luZyByb3VuZC12ZXJiIGZpeGVz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-08"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Name the smoke section in the brief when a change touches host or dispatch": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.TmFtZSB0aGUgc21va2Ugc2VjdGlvbiBpbiB0aGUgYnJpZWYgd2hlbiBhIGNoYW5nZSB0b3VjaGVzIGhvc3Qgb3IgZGlzcGF0Y2g": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Light reviews still carry the acceptance criteria": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.TGlnaHQgcmV2aWV3cyBzdGlsbCBjYXJyeSB0aGUgYWNjZXB0YW5jZSBjcml0ZXJpYQ": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Commit the hit sidecar before a gate instead of stashing it": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Q29tbWl0IHRoZSBoaXQgc2lkZWNhciBiZWZvcmUgYSBnYXRlIGluc3RlYWQgb2Ygc3Rhc2hpbmcgaXQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Fast tests skip the dependents of a shared package": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.RmFzdCB0ZXN0cyBza2lwIHRoZSBkZXBlbmRlbnRzIG9mIGEgc2hhcmVkIHBhY2thZ2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::A new lock shows up as one line in every golden": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QSBuZXcgbG9jayBzaG93cyB1cCBhcyBvbmUgbGluZSBpbiBldmVyeSBnb2xkZW4": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Workers & relays::Worker context is mostly fixed preamble": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V29ya2VyIGNvbnRleHQgaXMgbW9zdGx5IGZpeGVkIHByZWFtYmxl": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::rota test run fast skips the frozen config test": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.cm90YSB0ZXN0IHJ1biBmYXN0IHNraXBzIHRoZSBmcm96ZW4gY29uZmlnIHRlc3Q": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::A new required config key goes into the F78 complete-config fixture": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBuZXcgcmVxdWlyZWQgY29uZmlnIGtleSBnb2VzIGludG8gdGhlIEY3OCBjb21wbGV0ZS1jb25maWcgZml4dHVyZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Grep open PR heads for callers before landing a symbol removal": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.R3JlcCBvcGVuIFBSIGhlYWRzIGZvciBjYWxsZXJzIGJlZm9yZSBsYW5kaW5nIGEgc3ltYm9sIHJlbW92YWw": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Slate & issues::Keep deferred findings out of the round that filed them": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.S2VlcCBkZWZlcnJlZCBmaW5kaW5ncyBvdXQgb2YgdGhlIHJvdW5kIHRoYXQgZmlsZWQgdGhlbQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Workers & relays::A bounce relay goes under Notes, not Approvals": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBib3VuY2UgcmVsYXkgZ29lcyB1bmRlciBOb3Rlcywgbm90IEFwcHJvdmFscw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Never queue two gates for one PR": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.TmV2ZXIgcXVldWUgdHdvIGdhdGVzIGZvciBvbmUgUFI": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Reviewers record verdicts under the bare branch key": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.UmV2aWV3ZXJzIHJlY29yZCB2ZXJkaWN0cyB1bmRlciB0aGUgYmFyZSBicmFuY2gga2V5": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Workers & relays::Rounds ignore work.isolation and run as many slots as were ever provisioned": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.Um91bmRzIGlnbm9yZSB3b3JrLmlzb2xhdGlvbiBhbmQgcnVuIGFzIG1hbnkgc2xvdHMgYXMgd2VyZSBldmVyIHByb3Zpc2lvbmVk": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Slate & issues::Sibling follow-ups from one review can contradict": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.U2libGluZyBmb2xsb3ctdXBzIGZyb20gb25lIHJldmlldyBjYW4gY29udHJhZGljdA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Workers & relays::A busy background shell reads as idle": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBidXN5IGJhY2tncm91bmQgc2hlbGwgcmVhZHMgYXMgaWRsZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Reviews & verdicts::Reviewers must stop when the archive extract fails": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM.UmV2aWV3ZXJzIG11c3Qgc3RvcCB3aGVuIHRoZSBhcmNoaXZlIGV4dHJhY3QgZmFpbHM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Doctor changes must run smoke 83": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.RG9jdG9yIGNoYW5nZXMgbXVzdCBydW4gc21va2UgODM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Wind-down verifies the real checkout, not a scratch merge": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.V2luZC1kb3duIHZlcmlmaWVzIHRoZSByZWFsIGNoZWNrb3V0LCBub3QgYSBzY3JhdGNoIG1lcmdl": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Workers & relays::Release a held issue before closing it": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UmVsZWFzZSBhIGhlbGQgaXNzdWUgYmVmb3JlIGNsb3NpbmcgaXQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::printf into head dies under pipefail": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.cHJpbnRmIGludG8gaGVhZCBkaWVzIHVuZGVyIHBpcGVmYWls": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Process: Knowledge capture::Tool gotchas become issues; knowledge only for current blockers": {
+    "UHJvY2VzczogS25vd2xlZGdlIGNhcHR1cmU.VG9vbCBnb3RjaGFzIGJlY29tZSBpc3N1ZXM7IGtub3dsZWRnZSBvbmx5IGZvciBjdXJyZW50IGJsb2NrZXJz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Until #1480: no assign or transfer while a gate runs": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VW50aWwgIzE0ODA6IG5vIGFzc2lnbiBvciB0cmFuc2ZlciB3aGlsZSBhIGdhdGUgcnVucw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Orchestrator fix on a live slot branch": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.T3JjaGVzdHJhdG9yIGZpeCBvbiBhIGxpdmUgc2xvdCBicmFuY2g": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::ENOSPC reds are environmental": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.RU5PU1BDIHJlZHMgYXJlIGVudmlyb25tZW50YWw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Shape changes hide in smoke sections": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U2hhcGUgY2hhbmdlcyBoaWRlIGluIHNtb2tlIHNlY3Rpb25z": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::The worker forge must not share the read cache": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.VGhlIHdvcmtlciBmb3JnZSBtdXN0IG5vdCBzaGFyZSB0aGUgcmVhZCBjYWNoZQ": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Chained background scripts wait on a unique marker, not a shared phrase": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Q2hhaW5lZCBiYWNrZ3JvdW5kIHNjcmlwdHMgd2FpdCBvbiBhIHVuaXF1ZSBtYXJrZXIsIG5vdCBhIHNoYXJlZCBwaHJhc2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Kill a chained shell by its tee pid, never by the log name": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.S2lsbCBhIGNoYWluZWQgc2hlbGwgYnkgaXRzIHRlZSBwaWQsIG5ldmVyIGJ5IHRoZSBsb2cgbmFtZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Build & Tooling: Git & isolation::Use an unshipped verb from a scratch build beside the installed binary": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.VXNlIGFuIHVuc2hpcHBlZCB2ZXJiIGZyb20gYSBzY3JhdGNoIGJ1aWxkIGJlc2lkZSB0aGUgaW5zdGFsbGVkIGJpbmFyeQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Workers & relays::A brief never narrows the issue's acceptance": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBicmllZiBuZXZlciBuYXJyb3dzIHRoZSBpc3N1ZSdzIGFjY2VwdGFuY2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Workers & relays::Weekly limit: answer Stop-and-wait, reassign the account, resume the slot": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V2Vla2x5IGxpbWl0OiBhbnN3ZXIgU3RvcC1hbmQtd2FpdCwgcmVhc3NpZ24gdGhlIGFjY291bnQsIHJlc3VtZSB0aGUgc2xvdA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::test.slots defaults to 1 and queues every proof and the gate": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-27"
-    },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::The autopilot gates a fresh push and counts stale as a bounce": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
-    "Rounds: Orchestration: Slate & issues::round start --scope slate replaces the slate": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
-    "Rounds: Orchestration: Slate & issues::Criteria-blocked bug reports take their ACs from the assign brief": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.dGVzdC5zbG90cyBkZWZhdWx0cyB0byAxIGFuZCBxdWV1ZXMgZXZlcnkgcHJvb2YgYW5kIHRoZSBnYXRl": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Slate & issues::Overlap checks include directory-level pointers": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VGhlIGF1dG9waWxvdCBnYXRlcyBhIGZyZXNoIHB1c2ggYW5kIGNvdW50cyBzdGFsZSBhcyBhIGJvdW5jZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Workers & relays::herdr lists the tabs of every workspace in one flat list": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.cm91bmQgc3RhcnQgLS1zY29wZSBzbGF0ZSByZXBsYWNlcyB0aGUgc2xhdGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Workers & relays::An assignment brief is not a relay": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.Q3JpdGVyaWEtYmxvY2tlZCBidWcgcmVwb3J0cyB0YWtlIHRoZWlyIEFDcyBmcm9tIHRoZSBhc3NpZ24gYnJpZWY": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-27"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.T3ZlcmxhcCBjaGVja3MgaW5jbHVkZSBkaXJlY3RvcnktbGV2ZWwgcG9pbnRlcnM": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.aGVyZHIgbGlzdHMgdGhlIHRhYnMgb2YgZXZlcnkgd29ya3NwYWNlIGluIG9uZSBmbGF0IGxpc3Q": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QW4gYXNzaWdubWVudCBicmllZiBpcyBub3QgYSByZWxheQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::A key rename must grep test/sections for the old key": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBrZXkgcmVuYW1lIG11c3QgZ3JlcCB0ZXN0L3NlY3Rpb25zIGZvciB0aGUgb2xkIGtleQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Skill lints must accept a minimal skill tree": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U2tpbGwgbGludHMgbXVzdCBhY2NlcHQgYSBtaW5pbWFsIHNraWxsIHRyZWU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
     },
-    "Build & Tooling: Helpers & migrations::A local array key replaces the global one whole": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.QSBsb2NhbCBhcnJheSBrZXkgcmVwbGFjZXMgdGhlIGdsb2JhbCBvbmUgd2hvbGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
     },
-    "Rounds: Orchestration: Workers & relays::Run proof records for one issue one at a time": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UnVuIHByb29mIHJlY29yZHMgZm9yIG9uZSBpc3N1ZSBvbmUgYXQgYSB0aW1l": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Rounds: Orchestration: Workers & relays::Slot not in the pool from a worktree: check the main registry": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.U2xvdCBub3QgaW4gdGhlIHBvb2wgZnJvbSBhIHdvcmt0cmVlOiBjaGVjayB0aGUgbWFpbiByZWdpc3RyeQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Rounds: Orchestration: Workers & relays::A Codex 'never picked up' dispatch is often queued, not lost": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBDb2RleCAnbmV2ZXIgcGlja2VkIHVwJyBkaXNwYXRjaCBpcyBvZnRlbiBxdWV1ZWQsIG5vdCBsb3N0": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Clear CODEX_HOME for smoke runs from a Codex worker": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.Q2xlYXIgQ09ERVhfSE9NRSBmb3Igc21va2UgcnVucyBmcm9tIGEgQ29kZXggd29ya2Vy": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Skill authoring::Skill files live at the top of the skill folder": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2tpbGwgZmlsZXMgbGl2ZSBhdCB0aGUgdG9wIG9mIHRoZSBza2lsbCBmb2xkZXI": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-31"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::A new config key shifts every later frozen config-show/all row": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QSBuZXcgY29uZmlnIGtleSBzaGlmdHMgZXZlcnkgbGF0ZXIgZnJvemVuIGNvbmZpZy1zaG93L2FsbCByb3c": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Git & isolation::gh pr edit fails on this repo; patch via REST": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.Z2ggcHIgZWRpdCBmYWlscyBvbiB0aGlzIHJlcG87IHBhdGNoIHZpYSBSRVNU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Herdr fakes must answer tab get with pane_count": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.SGVyZHIgZmFrZXMgbXVzdCBhbnN3ZXIgdGFiIGdldCB3aXRoIHBhbmVfY291bnQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Gate a slot's PR by slot name, not PR number": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.R2F0ZSBhIHNsb3QncyBQUiBieSBzbG90IG5hbWUsIG5vdCBQUiBudW1iZXI": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::A new section can expose an old fixture leak": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBuZXcgc2VjdGlvbiBjYW4gZXhwb3NlIGFuIG9sZCBmaXh0dXJlIGxlYWs": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Report upsert tests need an owned comment with changed content": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.UmVwb3J0IHVwc2VydCB0ZXN0cyBuZWVkIGFuIG93bmVkIGNvbW1lbnQgd2l0aCBjaGFuZ2VkIGNvbnRlbnQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Separate issue source from code forge in local-origin tests": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.U2VwYXJhdGUgaXNzdWUgc291cmNlIGZyb20gY29kZSBmb3JnZSBpbiBsb2NhbC1vcmlnaW4gdGVzdHM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QmVoYXZpb3ItY2hhbmdpbmcgdGFza3MgbXVzdCBzd2VlcCBzbW9rZSBzZWN0aW9ucyBhc3NlcnRpbmcgdGhlIG9sZCBiZWhhdmlvcg": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Skill authoring::Skill files live at top of the skill folder": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2tpbGwgZmlsZXMgbGl2ZSBhdCB0b3Agb2YgdGhlIHNraWxsIGZvbGRlcg": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Product: Market & competitors::gstack entered the orchestration lane": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.Z3N0YWNrIGVudGVyZWQgdGhlIG9yY2hlc3RyYXRpb24gbGFuZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Product: Market & competitors::Question-heavy planning drives users away": {
+    "UHJvZHVjdDogTWFya2V0ICYgY29tcGV0aXRvcnM.UXVlc3Rpb24taGVhdnkgcGxhbm5pbmcgZHJpdmVzIHVzZXJzIGF3YXk": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Never push to main while a gate runs": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.TmV2ZXIgcHVzaCB0byBtYWluIHdoaWxlIGEgZ2F0ZSBydW5z": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Skill authoring::Smoke sections grep skill text where it lives": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U21va2Ugc2VjdGlvbnMgZ3JlcCBza2lsbCB0ZXh0IHdoZXJlIGl0IGxpdmVz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Skill authoring::Re-check generic rules when a skill step becomes a verb": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.UmUtY2hlY2sgZ2VuZXJpYyBydWxlcyB3aGVuIGEgc2tpbGwgc3RlcCBiZWNvbWVzIGEgdmVyYg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Approvals must match logged relays both ways": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.QXBwcm92YWxzIG11c3QgbWF0Y2ggbG9nZ2VkIHJlbGF5cyBib3RoIHdheXM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Rounds: Orchestration: Workers & relays::Item comments have no design kind": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.SXRlbSBjb21tZW50cyBoYXZlIG5vIGRlc2lnbiBraW5k": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::Regenerate only the frozen suite you touched": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.UmVnZW5lcmF0ZSBvbmx5IHRoZSBmcm96ZW4gc3VpdGUgeW91IHRvdWNoZWQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::docs pages that tests read are risky paths": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.ZG9jcyBwYWdlcyB0aGF0IHRlc3RzIHJlYWQgYXJlIHJpc2t5IHBhdGhz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::runner.sh ignores a section argument": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.cnVubmVyLnNoIGlnbm9yZXMgYSBzZWN0aW9uIGFyZ3VtZW50": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-11-03"
     },
-    "Build & Tooling: Git & isolation::gittest owns test git identity and config isolation": {
+    "QnVpbGQgJiBUb29saW5nOiBHaXQgJiBpc29sYXRpb24.Z2l0dGVzdCBvd25zIHRlc3QgZ2l0IGlkZW50aXR5IGFuZCBjb25maWcgaXNvbGF0aW9u": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Build & Tooling: Helpers & migrations::Stamp source builds as -dev": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.U3RhbXAgc291cmNlIGJ1aWxkcyBhcyAtZGV2": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Bounce cap: AtCap parks, not only Capped": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Qm91bmNlIGNhcDogQXRDYXAgcGFya3MsIG5vdCBvbmx5IENhcHBlZA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Train refusals: stale review aborts, body gaps skip": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gcmVmdXNhbHM6IHN0YWxlIHJldmlldyBhYm9ydHMsIGJvZHkgZ2FwcyBza2lw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
     },
-    "Build & Tooling: Video pipeline::Kokoro flaps the T in rota: use the lexicon": {
+    "QnVpbGQgJiBUb29saW5nOiBWaWRlbyBwaXBlbGluZQ.S29rb3JvIGZsYXBzIHRoZSBUIGluIHJvdGE6IHVzZSB0aGUgbGV4aWNvbg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
     },
-    "Build & Tooling: Video pipeline::Install Git LFS before committing renders": {
+    "QnVpbGQgJiBUb29saW5nOiBWaWRlbyBwaXBlbGluZQ.SW5zdGFsbCBHaXQgTEZTIGJlZm9yZSBjb21taXR0aW5nIHJlbmRlcnM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-31"
     },
-    "Rounds: Orchestration: Workers & relays::A bounce never reaches a pane that printed ROTA-DONE": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBib3VuY2UgbmV2ZXIgcmVhY2hlcyBhIHBhbmUgdGhhdCBwcmludGVkIFJPVEEtRE9ORQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::The last slice of a partial-slice issue gates with --final-slice": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VGhlIGxhc3Qgc2xpY2Ugb2YgYSBwYXJ0aWFsLXNsaWNlIGlzc3VlIGdhdGVzIHdpdGggLS1maW5hbC1zbGljZQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Rounds: Orchestration: Workers & relays::A proof row can be lost to a tracker error": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBwcm9vZiByb3cgY2FuIGJlIGxvc3QgdG8gYSB0cmFja2VyIGVycm9y": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::A bare local remote does not keep forge reads offline": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBiYXJlIGxvY2FsIHJlbW90ZSBkb2VzIG5vdCBrZWVwIGZvcmdlIHJlYWRzIG9mZmxpbmU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Build & Tooling: Smoke testing: Gate & frozen records::The fast tier skips source-scanning guards": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.VGhlIGZhc3QgdGllciBza2lwcyBzb3VyY2Utc2Nhbm5pbmcgZ3VhcmRz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Build & Tooling: Helpers & migrations::proof record keeps only an output hash": {
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.cHJvb2YgcmVjb3JkIGtlZXBzIG9ubHkgYW4gb3V0cHV0IGhhc2g": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Architecture: Skill authoring::Skill lints must accept a minimal skill tree": {
+    "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2tpbGwgbGludHMgbXVzdCBhY2NlcHQgYSBtaW5pbWFsIHNraWxsIHRyZWU": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-31"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Capture host process evidence while the agent lives": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.Q2FwdHVyZSBob3N0IHByb2Nlc3MgZXZpZGVuY2Ugd2hpbGUgdGhlIGFnZW50IGxpdmVz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::New terminal hosts need real-adapter round tests": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.TmV3IHRlcm1pbmFsIGhvc3RzIG5lZWQgcmVhbC1hZGFwdGVyIHJvdW5kIHRlc3Rz": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Verdict fallback tests need mixed kinds and same-sha updates": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.VmVyZGljdCBmYWxsYmFjayB0ZXN0cyBuZWVkIG1peGVkIGtpbmRzIGFuZCBzYW1lLXNoYSB1cGRhdGVz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Wrappers that embed IssueTracker hide optional interfaces": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.V3JhcHBlcnMgdGhhdCBlbWJlZCBJc3N1ZVRyYWNrZXIgaGlkZSBvcHRpb25hbCBpbnRlcmZhY2Vz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Set Item.Type explicitly in round tests": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.U2V0IEl0ZW0uVHlwZSBleHBsaWNpdGx5IGluIHJvdW5kIHRlc3Rz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Completion tests need the real backlog backend": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.Q29tcGxldGlvbiB0ZXN0cyBuZWVkIHRoZSByZWFsIGJhY2tsb2cgYmFja2VuZA": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Tests that read slot env must stub Getenv": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.VGVzdHMgdGhhdCByZWFkIHNsb3QgZW52IG11c3Qgc3R1YiBHZXRlbnY": {
       "tier": "confirmed",
       "hits": 25,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Isolate the global config without a temp dir leak": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.SXNvbGF0ZSB0aGUgZ2xvYmFsIGNvbmZpZyB3aXRob3V0IGEgdGVtcCBkaXIgbGVhaw": {
       "tier": "confirmed",
       "hits": 8,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::A bigger timeout is not a flake fix": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.QSBiaWdnZXIgdGltZW91dCBpcyBub3QgYSBmbGFrZSBmaXg": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation::Embedding host fakes must redeclare Capabilities": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.RW1iZWRkaW5nIGhvc3QgZmFrZXMgbXVzdCByZWRlY2xhcmUgQ2FwYWJpbGl0aWVz": {
       "tier": "confirmed",
       "hits": 12,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::GateResult.OK stays narrower than CLI success": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.R2F0ZVJlc3VsdC5PSyBzdGF5cyBuYXJyb3dlciB0aGFuIENMSSBzdWNjZXNz": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Typed stage handoffs copy slices and move cleanup ownership": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.VHlwZWQgc3RhZ2UgaGFuZG9mZnMgY29weSBzbGljZXMgYW5kIG1vdmUgY2xlYW51cCBvd25lcnNoaXA": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The worker forge must not share the read cache": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.VGhlIHdvcmtlciBmb3JnZSBtdXN0IG5vdCBzaGFyZSB0aGUgcmVhZCBjYWNoZQ": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::The tracker REST layer never resends a POST after a 5xx": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.VGhlIHRyYWNrZXIgUkVTVCBsYXllciBuZXZlciByZXNlbmRzIGEgUE9TVCBhZnRlciBhIDV4eA": {
       "tier": "confirmed",
       "hits": 5,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Gate steps read the forge only after stepRemote": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.R2F0ZSBzdGVwcyByZWFkIHRoZSBmb3JnZSBvbmx5IGFmdGVyIHN0ZXBSZW1vdGU": {
       "tier": "confirmed",
       "hits": 9,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::Gate target fields change mid-run": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.R2F0ZSB0YXJnZXQgZmllbGRzIGNoYW5nZSBtaWQtcnVu": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-10-24"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Gate & tracker plumbing::A per-invocation cache must reset per pass in long-running verbs": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.QSBwZXItaW52b2NhdGlvbiBjYWNoZSBtdXN0IHJlc2V0IHBlciBwYXNzIGluIGxvbmctcnVubmluZyB2ZXJicw": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::hvmigrate.splitLines is not a pystr copy": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.aHZtaWdyYXRlLnNwbGl0TGluZXMgaXMgbm90IGEgcHlzdHIgY29weQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Classify every new verb in the support fence": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Q2xhc3NpZnkgZXZlcnkgbmV3IHZlcmIgaW4gdGhlIHN1cHBvcnQgZmVuY2U": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A registry-derived guard cannot find what the registry lacks": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.QSByZWdpc3RyeS1kZXJpdmVkIGd1YXJkIGNhbm5vdCBmaW5kIHdoYXQgdGhlIHJlZ2lzdHJ5IGxhY2tz": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Serialize proof records for one item until #2169 lands": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.U2VyaWFsaXplIHByb29mIHJlY29yZHMgZm9yIG9uZSBpdGVtIHVudGlsICMyMTY5IGxhbmRz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Knowledge path metadata goes before the date stamp": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.S25vd2xlZGdlIHBhdGggbWV0YWRhdGEgZ29lcyBiZWZvcmUgdGhlIGRhdGUgc3RhbXA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Contract data lines decide read-only verbs": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Q29udHJhY3QgZGF0YSBsaW5lcyBkZWNpZGUgcmVhZC1vbmx5IHZlcmJz": {
       "tier": "confirmed",
       "hits": 8,
       "lastSeen": "2026-10-27"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.QSBjb25maWcgZW51bSBvZiBoYXJuZXNzIGtpbmRzIG11c3QgYmUgYWxsb3dsaXN0ZWQgaW4gdGhlIGtpbmQtc3dpdGNoIGd1YXJk": {
       "tier": "confirmed",
       "hits": 5,
       "lastSeen": "2026-11-03"
     },
-    "Architecture: Helper conventions & invariants: Go verbs & fakes: Verb registration & guards::Palette entries name the verb that registers the View": {
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.UGFsZXR0ZSBlbnRyaWVzIG5hbWUgdGhlIHZlcmIgdGhhdCByZWdpc3RlcnMgdGhlIFZpZXc": {
       "tier": "confirmed",
       "hits": 3,
       "lastSeen": "2026-10-24"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewer briefs ask for smoke and guard-test impact": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmV2aWV3ZXIgYnJpZWZzIGFzayBmb3Igc21va2UgYW5kIGd1YXJkLXRlc3QgaW1wYWN0": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-01"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewer binary probes run in a scratch HOME": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmV2aWV3ZXIgYmluYXJ5IHByb2JlcyBydW4gaW4gYSBzY3JhdGNoIEhPTUU": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Cross-harness Codex runs here need the unsandboxed rerun and a ChatGPT-account model": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.Q3Jvc3MtaGFybmVzcyBDb2RleCBydW5zIGhlcmUgbmVlZCB0aGUgdW5zYW5kYm94ZWQgcmVydW4gYW5kIGEgQ2hhdEdQVC1hY2NvdW50IG1vZGVs": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Reviewers build, vet and read; named tests only": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmV2aWV3ZXJzIGJ1aWxkLCB2ZXQgYW5kIHJlYWQ7IG5hbWVkIHRlc3RzIG9ubHk": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Rebuild a missing reviewer verdict file from the report's JSON block": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmVidWlsZCBhIG1pc3NpbmcgcmV2aWV3ZXIgdmVyZGljdCBmaWxlIGZyb20gdGhlIHJlcG9ydCdzIEpTT04gYmxvY2s": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Packages before -run in review test commands": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UGFja2FnZXMgYmVmb3JlIC1ydW4gaW4gcmV2aWV3IHRlc3QgY29tbWFuZHM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Have the reviewer write its verdict JSON to a file": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.SGF2ZSB0aGUgcmV2aWV3ZXIgd3JpdGUgaXRzIHZlcmRpY3QgSlNPTiB0byBhIGZpbGU": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Mutation-check source-grep guard tests": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.TXV0YXRpb24tY2hlY2sgc291cmNlLWdyZXAgZ3VhcmQgdGVzdHM": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Refactor reviews need an old-vs-new input table": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmVmYWN0b3IgcmV2aWV3cyBuZWVkIGFuIG9sZC12cy1uZXcgaW5wdXQgdGFibGU": {
       "tier": "confirmed",
       "hits": 5,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct::Renamed Go tests can silently stop running": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmVuYW1lZCBHbyB0ZXN0cyBjYW4gc2lsZW50bHkgc3RvcCBydW5uaW5n": {
       "tier": "confirmed",
       "hits": 6,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A triggered lens needs its own review-security verdict": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.QSB0cmlnZ2VyZWQgbGVucyBuZWVkcyBpdHMgb3duIHJldmlldy1zZWN1cml0eSB2ZXJkaWN0": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Check triggered review lenses before gating": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.Q2hlY2sgdHJpZ2dlcmVkIHJldmlldyBsZW5zZXMgYmVmb3JlIGdhdGluZw": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::rota verdict add body rules": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.cm90YSB2ZXJkaWN0IGFkZCBib2R5IHJ1bGVz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A forge-reading gate step skips on error; the smoke fake cannot answer it": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.QSBmb3JnZS1yZWFkaW5nIGdhdGUgc3RlcCBza2lwcyBvbiBlcnJvcjsgdGhlIHNtb2tlIGZha2UgY2Fubm90IGFuc3dlciBpdA": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Record verdicts at review package data.head": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.UmVjb3JkIHZlcmRpY3RzIGF0IHJldmlldyBwYWNrYWdlIGRhdGEuaGVhZA": {
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-27"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::Verdict severities are blocker, major, minor and info": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.VmVyZGljdCBzZXZlcml0aWVzIGFyZSBibG9ja2VyLCBtYWpvciwgbWlub3IgYW5kIGluZm8": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A commit after the review makes its PASS stale, bookkeeping included": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.QSBjb21taXQgYWZ0ZXIgdGhlIHJldmlldyBtYWtlcyBpdHMgUEFTUyBzdGFsZSwgYm9va2tlZXBpbmcgaW5jbHVkZWQ": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-18"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::A string ship.review fixes the depth for every branch, labels included": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.QSBzdHJpbmcgc2hpcC5yZXZpZXcgZml4ZXMgdGhlIGRlcHRoIGZvciBldmVyeSBicmFuY2gsIGxhYmVscyBpbmNsdWRlZA": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses::rota verdict add takes no extra top-level fields": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.cm90YSB2ZXJkaWN0IGFkZCB0YWtlcyBubyBleHRyYSB0b3AtbGV2ZWwgZmllbGRz": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::An orchestrator commit on a worker branch needs an independent reviewer": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.QW4gb3JjaGVzdHJhdG9yIGNvbW1pdCBvbiBhIHdvcmtlciBicmFuY2ggbmVlZHMgYW4gaW5kZXBlbmRlbnQgcmV2aWV3ZXI": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::A gate failure on a PASS-reviewed PR needs round bounce --force": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.QSBnYXRlIGZhaWx1cmUgb24gYSBQQVNTLXJldmlld2VkIFBSIG5lZWRzIHJvdW5kIGJvdW5jZSAtLWZvcmNl": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::CONCERNS on a round PR is the orchestrator's call, not a picker": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.Q09OQ0VSTlMgb24gYSByb3VuZCBQUiBpcyB0aGUgb3JjaGVzdHJhdG9yJ3MgY2FsbCwgbm90IGEgcGlja2Vy": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::Re-reviews are one reviewer, majors only, fix range only": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.UmUtcmV2aWV3cyBhcmUgb25lIHJldmlld2VyLCBtYWpvcnMgb25seSwgZml4IHJhbmdlIG9ubHk": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-22"
     },
-    "Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews::A tiny fix range is re-reviewed by the orchestrator itself": {
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.QSB0aW55IGZpeCByYW5nZSBpcyByZS1yZXZpZXdlZCBieSB0aGUgb3JjaGVzdHJhdG9yIGl0c2VsZg": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::CLI package stubs do not isolate smoke binaries": {
+    "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.Q0xJIHBhY2thZ2Ugc3R1YnMgZG8gbm90IGlzb2xhdGUgc21va2UgYmluYXJpZXM": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-03"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UmUtYXJtIHRoZSB3YXRjaCBhZnRlciBjaGFuZ2luZyByb3VuZC5yb3N0ZXI": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-05"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJlZS1zY2FuIHJlZ2lzdHJ5IGNvbmZsaWN0cyBvbmx5IHNob3cgb24gdGhlIG1lcmdlZCB0cmVl": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-05"
     }
   }
 }
