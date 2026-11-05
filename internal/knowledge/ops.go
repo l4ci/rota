@@ -20,7 +20,7 @@ var (
 	ErrExists = errors.New("already exists")
 	// ErrAmbiguous: a fragment matches in more than one file.
 	ErrAmbiguous = errors.New("ambiguous")
-	// ErrMultiMatch: a replace fragment matches more than one bullet.
+	// ErrMultiMatch: a fragment, title or legacy tier key can match multiple bullets.
 	ErrMultiMatch = errors.New("matches several bullets")
 )
 

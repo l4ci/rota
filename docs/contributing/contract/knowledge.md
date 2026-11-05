@@ -19,8 +19,8 @@ sidecar writes use schema version 2: `entries` keys are unpadded base64url(topic
 without writes; uniquely split legacy `topic::title` records retain their fields
 and order. Ambiguous legacy keys, including overlapping separators such as
 `A:::B`, are retained in `legacyEntries` on a successful version 2 write.
-Commands needing an ambiguous key refuse with its possible owners and a repair
-diagnostic before changing its metadata or markdown. Unrelated keys and queries
+Commands needing an ambiguous key refuse with exit 4 (`blockedBy: "ambiguous"`),
+its possible owners and a repair diagnostic before changing metadata or markdown. Unrelated keys and queries
 remain usable; complete tier listing needs every key and therefore refuses.
 Glossary bypasses tier identity as before. See
 [legacy repair](../../usage/learning.md#tier-identity-and-legacy-repair).
