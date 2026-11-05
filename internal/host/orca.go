@@ -208,9 +208,6 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	return h, fmt.Errorf("slot %q input did not come up within %ds", s.Slot, s.BootTimeout)
 }
 
-var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(harness.ResolveInputSyntax(harness.Codex).Composer) + `(?:[ \t]|$)`)
-var orcaCodexModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
-
 const orcaTrustQuestion = "Do you trust the contents of this directory?"
 
 func orcaDialog(p string) (Dialog, bool) {
@@ -223,9 +220,15 @@ func orcaReady(p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
-	model := orcaCodexModel.FindStringSubmatch(p)
-	if len(model) > 0 || orcaCodexPrompt.MatchString(p) {
-		return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && orcaCodexPrompt.MatchString(p)
+	for _, syntax := range harness.InputSyntaxes() {
+		if syntax.ReadyModel == nil {
+			continue
+		}
+		model := syntax.ReadyModel.FindStringSubmatch(p)
+		prompt := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(syntax.Composer) + `(?:[ \t]|$)`).MatchString(p)
+		if len(model) > 0 || prompt {
+			return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && prompt
+		}
 	}
 	if !strings.Contains(p, harness.DefaultInputSyntax().Composer) {
 		return false
