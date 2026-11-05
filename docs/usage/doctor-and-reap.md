@@ -85,6 +85,12 @@ still reads the registry, round status and worktree list to establish ownership 
 | `lease` | the round lease, when its holder is gone | the staleness is proven again under the lease lock |
 | `skillcache` | an extracted skill tree (`rota/skills/<version>/` in the user cache) of a rota version other than the running one | always; the running version's tree and a tree being written are never listed |
 
+Before removing a worktree, reap checks ownership and work retention again. A checkout that
+gained unmerged commits since discovery stays, including a detached checkout. If Git cannot
+prove its current HEAD is reachable from the base or `origin/<base>`, removal fails and the
+checkout stays. Prunable checkouts keep Git's cleanup behavior; dirty and locked checkouts
+remain protected.
+
 **What reap never removes.**
 
 - A running agent. A tab or process with a live agent under it is not listed.
