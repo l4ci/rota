@@ -41,6 +41,8 @@ On another machine, clone the same repo and set the key there.
 
 Topic names are technology names (Go, git, GitHub Actions), not project names. External bullets have no tier or hit lifecycle: they are written by a learn pass that already judged them.
 
+New topic and subtopic names must fit the index's unescaped link labels: one line without `]`. `add` refuses an unsupported name with exit 4 before writing topic content or committing. Split plans apply the same label rule and retain their stricter name checks (no `[` or nested `: `); invalid plan names remain exit 2.
+
 ## Read it
 
 ```bash

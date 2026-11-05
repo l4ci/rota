@@ -12,9 +12,19 @@ import (
 	"github.com/l4ci/rota/internal/toolver"
 )
 
+// indexNamePattern is the unescaped label the index format can represent.
+// Writers validate against the same grammar the root and sub-index readers use.
+const indexNamePattern = `[^\]]+`
+
+var indexNameRe = regexp.MustCompile(`^` + indexNamePattern + `$`)
+
+func validIndexName(name string) bool {
+	return !strings.ContainsAny(name, "\r\n") && indexNameRe.MatchString(name)
+}
+
 // indexRe is one index entry: "- [Name](topics/slug.md) — hook", or for a
 // split topic "- [Name](topics/slug/README.md) — hook".
-var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([a-z0-9-]+)(\.md|/README\.md)\)(?:\s+—\s+(.*))?\s*$`)
+var indexRe = regexp.MustCompile(`^- \[(` + indexNamePattern + `)\]\(topics/([a-z0-9-]+)(\.md|/README\.md)\)(?:\s+—\s+(.*))?\s*$`)
 
 // looseIndexRe is any index line that points into topics/. One that indexRe
 // rejects names a path outside the slugs rota writes (a glob, "..", capitals):
