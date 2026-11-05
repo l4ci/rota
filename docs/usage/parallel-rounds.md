@@ -224,8 +224,14 @@ terminal and signing key and retracts the uncertain relay's provisional log entr
 so retrying it keeps its sequence. It refuses accepted or queued input, positive
 pickup evidence and a replaced terminal. It also refuses when Core's turn has
 advanced or a previously idle or done worker starts working, even when the
-message echo has scrolled away. The saved delivery records that confirmation
-was made by hand and when. Use this flag alone, without a body file
+message echo has scrolled away. When native activity blocks confirmation,
+inspect the worker's output and treat the message as delivered, or release and
+reassign the slot. This refusal keeps the strict turn check even when the
+worker was already working at the attempted send and has since finished that
+task. A missing delivery receipt reports "no baseline recorded" and refuses
+confirmation; the current terminal activity cannot replace that baseline.
+The saved delivery records that confirmation was made by hand and when.
+Use this flag alone, without a body file
 or other dispatch flags. Definite Core rejections, including `invalid_params`,
 report not submitted and allow a normal retry without confirmation.
 
