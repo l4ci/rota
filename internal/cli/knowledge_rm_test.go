@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/knowledge"
 )
 
 func TestKnowledgeRm(t *testing.T) {
@@ -26,9 +28,12 @@ func TestKnowledgeRm(t *testing.T) {
 	if k := read("KNOWLEDGE.md"); k != want {
 		t.Errorf("KNOWLEDGE.md:\n%s\nwant:\n%s", k, want)
 	}
-	tier := read("knowledge-tier.json")
-	if strings.Contains(tier, "Beta rule") || !strings.Contains(tier, "Architecture::Alpha rule") || !strings.Contains(tier, "Architecture::Old rule") {
-		t.Errorf("sidecar:\n%s", tier)
+	st := knowledge.Store{Root: dir}
+	for _, title := range []string{"Beta rule", "Alpha rule", "Old rule"} {
+		_, found, err := st.TierGet(knowledge.Umbrella, "Architecture", title)
+		if err != nil || found != (title != "Beta rule") {
+			t.Errorf("%s: found=%v err=%v", title, found, err)
+		}
 	}
 
 	// Last bullet of a section keeps the blank line before the next heading.

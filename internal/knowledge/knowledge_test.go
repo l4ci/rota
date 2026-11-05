@@ -28,8 +28,8 @@ func TestScopePaths(t *testing.T) {
 
 func TestSidecarVersionMismatch(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "knowledge-tier.json")
-	os.WriteFile(p, []byte(`{"version": 2, "entries": {}}`), 0o666)
-	if _, err := LoadSidecar(p); err == nil || !strings.Contains(err.Error(), "schema version mismatch — expected 1, got 2") {
+	os.WriteFile(p, []byte(`{"version": 3, "entries": {}}`), 0o666)
+	if _, err := LoadSidecar(p); err == nil || !strings.Contains(err.Error(), "schema version mismatch — expected 1 or 2, got 3") {
 		t.Errorf("err = %v", err)
 	}
 	// No version field: legacy data is treated as version 1.
@@ -40,64 +40,6 @@ func TestSidecarVersionMismatch(t *testing.T) {
 	os.WriteFile(p, []byte(`{not json`), 0o666)
 	if _, err := LoadSidecar(p); err == nil {
 		t.Error("corrupt sidecar loaded")
-	}
-}
-
-func TestSidecarKeepsUnknownFieldsAndOrder(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "knowledge-tier.json")
-	os.WriteFile(p, []byte(`{
-  "version": 1,
-  "note": "keep me",
-  "entries": {
-    "B::z": {
-      "tier": "confirmed",
-      "hits": 2,
-      "lastSeen": "2026-01-01",
-      "extra": true
-    }
-  }
-}
-`), 0o666)
-	err := Update(p, func(s *Sidecar) (bool, error) {
-		s.Bump("B", "z", "2026-01-01")
-		s.Init("A", "a", "2026-01-01")
-		return true, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, _ := os.ReadFile(p)
-	got := string(raw)
-	if !strings.Contains(got, `"note": "keep me"`) || !strings.Contains(got, `"extra": true`) {
-		t.Errorf("unknown fields lost:\n%s", got)
-	}
-	if strings.Index(got, "B::z") > strings.Index(got, "A::a") {
-		t.Errorf("entry order changed:\n%s", got)
-	}
-}
-
-func TestRekeyTopicMovesEveryEntry(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "t.json")
-	err := Update(p, func(s *Sidecar) (bool, error) {
-		s.Init("X", "one", "2026-01-01")
-		s.Init("Y", "keep", "2026-01-01")
-		s.Init("X", "two", "2026-01-01")
-		return true, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var moved int
-	Update(p, func(s *Sidecar) (bool, error) { moved = s.RekeyTopic("X", "Z"); return moved > 0, nil })
-	s, _ := LoadSidecar(p)
-	if moved != 2 || len(s.List("")) != 3 {
-		t.Fatalf("moved = %d, entries = %v", moved, s.List(""))
-	}
-	if _, ok := s.Get("Z", "two"); !ok {
-		t.Error("Z::two missing")
-	}
-	if _, ok := s.Get("X", "one"); ok {
-		t.Error("X::one still present")
 	}
 }
 

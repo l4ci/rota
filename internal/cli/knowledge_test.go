@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/knowledge"
 )
 
 // The parity tests run a rota verb on a fixture and compare its output and the
@@ -313,10 +314,8 @@ func TestKnowledgeSequence(t *testing.T) {
 		knNew(t, dir, "", "knowledge", "hit", "--topic", "Build", "--title", "Gamma tip")
 	}
 	knNew(t, dir, "", "knowledge", "tier", "fold")
-	if tier := knTree(t, dir)["knowledge-tier.json"]; !strings.Contains(tier, `"Build::Gamma tip": {
-      "tier": "provisional",
-      "hits": 4`) {
-		t.Errorf("promotion was not blocked:\n%s", tier)
+	if e, found, err := (knowledge.Store{Root: dir}).TierGet(knowledge.Umbrella, "Build", "Gamma tip"); err != nil || !found || e.Tier != knowledge.Provisional || e.Hits != 4 {
+		t.Errorf("promotion was not blocked: %+v found=%v err=%v", e, found, err)
 	}
 }
 

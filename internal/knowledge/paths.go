@@ -84,7 +84,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 		if err != nil {
 			return err
 		}
-		tiers, err := s.tierMap(scope)
+		tiers, err := s.effective(scope)
 		if err != nil {
 			return err
 		}
@@ -92,8 +92,19 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 			for _, loc := range bulletStart.FindAllStringSubmatchIndex(topic.Body, -1) {
 				title := topic.Body[loc[2]:loc[3]]
 				block := strings.TrimSpace(topic.Body[loc[0]:bulletEnd(topic.Body, loc[0])])
-				if tiers[[2]string{topic.Name, title}] != Deprecated && scopedMatch(block, relative) {
-					entries = append(entries, PathEntry{p + "::" + topic.Name + "::" + title, "Knowledge: " + topic.Name + "\n" + block})
+				if !scopedMatch(block, relative) {
+					continue
+				}
+				tier := ""
+				if topic.Name != GlossaryTopic {
+					e, _, err := tiers.Get(topic.Name, title)
+					if err != nil {
+						return err
+					}
+					tier = e.Tier
+				}
+				if tier != Deprecated {
+					entries = append(entries, PathEntry{p + "::" + key(topic.Name, title), "Knowledge: " + topic.Name + "\n" + block})
 				}
 			}
 		}

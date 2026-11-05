@@ -11,6 +11,36 @@ refs:
 
 Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. `rename-topic`, `replace`, `rm` and `tier set` fold the buffered hits (see `knowledge hit`) under the `KNOWLEDGE.md` lock before they touch the sidecar. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
+### Local tier identity
+
+The Sidecar module owns tuple encoding, decoding and topic membership. New
+sidecar writes use schema version 2: `entries` keys are unpadded base64url(topic)
++ `.` + unpadded base64url(title). Version 1 and missing-version files are read
+without writes; uniquely split legacy `topic::title` records retain their fields
+and order. Ambiguous legacy keys, including overlapping separators such as
+`A:::B`, are retained in `legacyEntries` on a successful version 2 write.
+Commands needing an ambiguous key refuse with exit 4 (`blockedBy: "ambiguous"`),
+its possible owners and a repair diagnostic before changing metadata or markdown. Unrelated keys and queries
+remain usable; complete tier listing needs every key and therefore refuses.
+Folding applies unambiguous-owner hits and retains ambiguous-owner hits in the
+buffer for a later fold after repair, so unrelated tier writes succeed.
+
+The first successful upgraded write converts the tracked, shared sidecar to
+version 2. Older rota fails every knowledge read against it with
+`schema version mismatch — expected 1, got 2`. Every machine sharing
+`.rota/knowledge-tier.json` or `.rota/knowledge/<name>/knowledge-tier.json` must
+upgrade before that write. No backup is created. To downgrade, stop all writers,
+run `git restore --source=PRE_UPGRADE_COMMIT -- .rota/knowledge-tier.json`
+(replace `PRE_UPGRADE_COMMIT` with the last version 1 commit, or use the
+repo-local sidecar path), then stage that path, commit and push; all
+machines must pull the rollback before older rota resumes. This discards all
+tier, hit and `lastSeen` changes after that commit; newer bullets become
+untracked/provisional. It does not revert markdown, and delimiter-bearing names
+remain incompatible with the old encoding.
+
+Glossary bypasses tier identity as before. See
+[legacy repair](../../usage/learning.md#tier-identity-and-legacy-repair).
+
 ### External knowledge (`--external`)
 note: external mutations (`add`, `amend`, `rm`, `replace`, `split` and `migrate external-knowledge --apply`) reserve the checkout through a nonblocking advisory lock in its Git directory before synchronization and input reads, holding it through planning, commit, policy landing, branch restoration and rollback. A contending write exits 4 before changing the checkout and can retry after release. Freshening takes the same reservation; contention returns a warning and reads as-is without fetching or fast-forwarding. Separate path aliases and projects using the same checkout share ownership; separate clones do not. Hit-log writes stay outside this lifecycle.
 note: `query --external --match "rpc authority" [<topic>…]` prints `## <Topic>` sections (subtopics as `## Topic: Subtopic`) holding only the bullets, with their continuation lines, whose title or body contain every word, in index order. Words split on whitespace only and match as case-insensitive literal substrings (`RPC.call`, `--force`); the stamp never matches; sub-index lines are never printed. Topic arguments narrow the search (a split parent includes its subtopics, a stray flat file beside it is searched and labelled `(stray: file)`; an unknown topic is a `missing` warning); without them every topic is searched, so topics are optional here. The recheck marker shows on matched bullets. No hit is exit 0, empty `text`, `data.matches: 0`; JSON keeps `text`, `missing`, `recheck` and adds `matches`. `--match ""`, `--match` without `--external` and `--match` with `--all` are exit 2.
@@ -157,7 +187,7 @@ repo: scoped (scope S)
 data: {"hits": number, "changed": bool, "skipped": number}
 exit: implied only
 old: none (new in #1290)
-note: applies the buffered hits of S to the tracked sidecar and empties the buffer: the one verb that writes the sidecar for hits, so the caller commits the result (text: `folded N hit(s) into the sidecar: commit <sidecar>`, or `no buffered hits`). Promotion at `learn.promoteThreshold` and the contradiction block apply as on a hit. `skipped` counts malformed buffer lines, which are dropped. The buffer is claimed by rename and its name recorded in the sidecar before it is removed, so a fold that dies midway does not replay hits. With nothing buffered it takes no lock and writes nothing.
+note: applies S's buffered hits with unambiguous owners to the tracked sidecar and keeps ambiguous-owner hits buffered until a later fold after repair: the one verb that writes the sidecar for hits, so the caller commits the result (text: `folded N hit(s) into the sidecar: commit <sidecar>`, or `no buffered hits`). Promotion at `learn.promoteThreshold` and the contradiction block apply as on a hit. `skipped` counts malformed buffer lines, which are dropped. The buffer is claimed by rename. The existing `foldedBuffer` receipt records the claimed file and, when needed, deferred pending hits until the claimed file is rewritten with those hits; the receipt is then cleared. A fold that dies midway resumes without replaying applied hits or losing deferred hits. With nothing buffered it takes no lock and writes nothing.
 
 ### rota knowledge contradiction add
 rota knowledge contradiction add --topic <T> --title <S> --text <text>

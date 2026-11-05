@@ -140,10 +140,10 @@ func TestRenameTopicMovesEveryBulletUnderConcurrency(t *testing.T) {
 		if !strings.Contains(string(got)[newStart:], "**"+title+"**") {
 			t.Errorf("%s not moved in markdown", title)
 		}
-		if _, ok := sc.Get("Old: New", title); !ok {
+		if _, ok, _ := sc.Get("Old: New", title); !ok {
 			t.Errorf("%s not re-keyed under Old: New", title)
 		}
-		if _, ok := sc.Get("Old", title); ok {
+		if _, ok, _ := sc.Get("Old", title); ok {
 			t.Errorf("%s still keyed under Old", title)
 		}
 	}
@@ -223,10 +223,10 @@ func TestRenameTopicFoldsHitsInsideItsLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := sc.Get("New", "b"); !ok {
+	if _, ok, _ := sc.Get("New", "b"); !ok {
 		t.Error("hit not re-keyed under New")
 	}
-	if _, ok := sc.Get("Old", "b"); ok {
+	if _, ok, _ := sc.Get("Old", "b"); ok {
 		t.Error("hit still keyed under Old")
 	}
 }
