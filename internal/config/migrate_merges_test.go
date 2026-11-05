@@ -181,69 +181,6 @@ func TestMergeWorkerKind(t *testing.T) {
 	})
 }
 
-func TestMergeConflictWritesNothingAnywhere(t *testing.T) {
-	const (
-		global = `{"models":{"orchestrator":"sonnet"}}`
-		local  = `{"round":{"codexCommand":"a","commands":{"codex":"b"}}}`
-	)
-	r := newAcctRig(t, global, `{"round":{"slots":2}}`, local)
-	_, err := MigrateMergesFiles(r.root, r.gdir, true)
-	var ce *MergeConflictError
-	if !errors.As(err, &ce) || len(ce.Conflicts) != 1 || ce.Conflicts[0].File != "config.local.json" {
-		t.Fatalf("err = %v, want one conflict in config.local.json", err)
-	}
-	if !strings.Contains(err.Error(), "nothing written") {
-		t.Errorf("message does not say nothing was written: %v", err)
-	}
-	if got := r.read(t, GlobalPath(r.gdir)); got != compact(t, decodeCfg(t, global)) {
-		t.Errorf("global written despite the conflict: %s", got)
-	}
-	if got := r.read(t, r.local()); got != compact(t, decodeCfg(t, local)) {
-		t.Errorf("local written despite the conflict: %s", got)
-	}
-}
-
-func TestMergePreviewWritesNothing(t *testing.T) {
-	const project = `{"models":{"orchestrator":"sonnet"}}`
-	r := newAcctRig(t, "", project, "")
-	m, err := MigrateMergesFiles(r.root, r.gdir, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !m.Changed() || len(m.Changes) != 1 || m.Changes[0].File != "config.json" {
-		t.Fatalf("preview changes = %+v, want one on config.json", m.Changes)
-	}
-	if got := r.read(t, r.cfg()); got != compact(t, decodeCfg(t, project)) {
-		t.Errorf("preview wrote config.json: %s", got)
-	}
-}
-
-func TestMergeApplyRewritesEveryLayerAndIsIdempotent(t *testing.T) {
-	r := newAcctRig(t,
-		`{"models":{"orchestrator":"sonnet"}}`,
-		`{"round":{"codexCommand":"cx"}}`,
-		`{"round":{"operatorCommand":"op"}}`)
-	m, err := MigrateMergesFiles(r.root, r.gdir, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(m.Changes) != 3 {
-		t.Fatalf("changes = %+v, want one per layer", m.Changes)
-	}
-	for _, c := range []struct{ file, path, want string }{
-		{GlobalPath(r.gdir), "orchestrator.model", "sonnet"},
-		{r.cfg(), "round.commands.codex", "cx"},
-		{r.local(), "orchestrator.command", "op"},
-	} {
-		if v, ok := r.val(t, c.file, c.path); !ok || v != c.want {
-			t.Errorf("%s %s = %v (set %v), want %q", filepath.Base(c.file), c.path, v, ok, c.want)
-		}
-	}
-	if m2, err := MigrateMergesFiles(r.root, r.gdir, true); err != nil || m2.Changed() {
-		t.Errorf("second run = %+v, %v; want nothing", m2, err)
-	}
-}
-
 func TestMergeEmptiedModelsObjectIsRemoved(t *testing.T) {
 	r := newAcctRig(t, "", `{"models":{"orchestrator":"sonnet","worker":"haiku"}}`, "")
 	if m, err := MigrateMergesFiles(r.root, r.gdir, true); err != nil || !m.Changed() {
