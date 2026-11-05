@@ -255,7 +255,14 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return run(Tree(), invocationDeps(), args, stdin, stdout, stderr)
 }
 
-func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
+func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return runWithContext(sigCtx, root, deps, args, stdin, stdout, stderr)
+}
+
+// runWithContext borrows the caller's lifetime for views hosted by the palette.
+func runWithContext(ctx context.Context, root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
 	// Until the arguments parse, an error answers in JSON if any token
 	// before "--" is exactly --json.
 	if deps != nil && deps.ReadCache != nil {
@@ -263,9 +270,7 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 		deps.ReadCache = tracker.NewReadCache()
 	}
 	c := &Ctx{Path: "rota", Stdin: stdin, Stdout: stdout, Stderr: stderr, Deps: deps, JSON: containsJSON(args), dashAt: -1}
-	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	c.ctx = sigCtx
+	c.ctx = ctx
 	defer func() {
 		if r := recover(); r != nil {
 			e := asError(fmt.Errorf("panic: %v", r))
