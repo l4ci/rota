@@ -3,7 +3,9 @@
 # worker runs before a PR. Called as `bash test/fast.sh <files...>` via
 # `rota test run fast` ({files} = files changed against the base branch).
 # Go changes also run test/gofmt.sh on the changed files (the check CI runs).
-# Anything not mapped here is left to the merge gate (test/gate.sh).
+# Repository source scans always run, independently of this mapping. Their
+# registry and registration check live in test/treescan/.
+# Anything else not mapped here is left to the merge gate (test/gate.sh).
 #
 # Mapping: a .go file runs its package; a file under <pkg>/testdata/ (goldens,
 # frozen jsonl) runs <pkg>; an asset in a dir whose .go files //go:embed (e.g.
@@ -24,11 +26,6 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-
-if [ "$#" -eq 0 ]; then
-  echo "fast: no changed files"
-  exit 0
-fi
 
 go_all=0
 docs=0
@@ -98,7 +95,8 @@ for f in "$@"; do
     internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
   esac
   case "$f" in
-    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate_retry_test.py) infra=1 ;;
+    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate_retry_test.py|test/fast.sh|test/fast_*test.py) infra=1 ;;
+    test/treescan/*) add_pkg ./test/treescan ;;
   esac
   case "$f" in
     skills/*|docs/*|*.md|test/validate-skills.py|test/doclint.sh) docs=1 ;;
@@ -162,6 +160,18 @@ if [ "${FAST_DRY_RUN:-}" = 1 ]; then
   [ "$infra" = 1 ] && echo "plan: infra"
   [ "$frozen" = 1 ] && echo "plan: frozen-config"
   for s in ${sections[@]+"${sections[@]}"}; do echo "plan: section $s"; done
+  echo "plan: tree-scans"
+  exit 0
+fi
+
+# Run before selected package tests so a cheap architecture guard fails early.
+# The runner validates registration even for changes with no package mapping,
+# and bypasses Go's test cache so every invocation executes the scans afresh.
+echo "fast: tree-scans"
+go run ./test/treescan
+
+if [ "$#" -eq 0 ]; then
+  echo "fast: no changed files"
   exit 0
 fi
 
@@ -205,6 +215,7 @@ if [ "$infra" = 1 ]; then
   done
   python3 test/runner_leak_test.py
   python3 test/gate_retry_test.py
+  python3 test/fast_tree_scans_test.py
 fi
 
 if [ "${#sections[@]}" -gt 0 ]; then
