@@ -96,7 +96,7 @@ for f in "$@"; do
   esac
   case "$f" in
     test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate_retry_test.py|test/fast.sh|test/fast_*test.py) infra=1 ;;
-    test/treescan/*) add_pkg ./test/treescan ;;
+    test/treescan/*) infra=1; add_pkg ./test/treescan ;;
   esac
   case "$f" in
     skills/*|docs/*|*.md|test/validate-skills.py|test/doclint.sh) docs=1 ;;
