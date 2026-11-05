@@ -30,6 +30,10 @@ The argument rule, exactly:
 - Any flag that takes a file path also accepts `-`, which means stdin. Bodies always come in this way (`--body-file -`), never as positional text.
 - `rota` never prompts and never reads a TTY. A verb that needs a decision fails with usage (exit 2) and names the missing flag. Asking the human is the skill's job. Four things are terminal-only, styled and interactive, and none runs without a terminal: the palette (bare `rota`), `rota setup` (#25), `rota config edit` and the `--ui` views. Plain text with no ANSI codes stays the default output and the machine contract.
 
+Views captured by the palette borrow its host context, so deferred reads remain usable after
+the entry command finishes. The host cancels that context when it exits or receives SIGINT or
+SIGTERM. A direct `--ui` invocation owns its context until the screen returns, then cancels it.
+
 ## Global flags
 
 | Flag | Meaning |
