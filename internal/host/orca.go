@@ -448,7 +448,20 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	}
 	probe := evidence.aliveDeps(o.d)
 	if alive, _, ok := killLoop(&probe, evidence.pids(), func() presence { return seenBool(gone()) }); !ok {
-		return fmt.Errorf("orca close unproven; surviving processes:%s", pidList(alive))
+		var unknown []int
+		for _, pid := range alive {
+			for _, p := range evidence {
+				if p.PID == pid && p.Start == 0 {
+					unknown = append(unknown, pid)
+					break
+				}
+			}
+		}
+		detail := ""
+		if len(unknown) > 0 {
+			detail = fmt.Sprintf("; no recorded start time (legacy or unreadable at observation):%s; inspect these processes before retrying cleanup", pidList(unknown))
+		}
+		return fmt.Errorf("orca close unproven; surviving processes:%s%s", pidList(alive), detail)
 	}
 	o.d.FS.Remove(h.PIDFile + ".json")
 	return nil
