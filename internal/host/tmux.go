@@ -84,12 +84,18 @@ var bootPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`Welcome to Claude Code`),            // Claude Code, older banner
 	regexp.MustCompile(`╭─`),                                // older box-drawn frame (Claude Code, Codex)
 	regexp.MustCompile(`Claude Code v\d+\.\d+`),             // Claude Code 2.1.289 banner
-	regexp.MustCompile(`Ask Codex to do anything`),          // Codex 0.159.2 prompt placeholder
 	regexp.MustCompile(`tab\s+agents\s+ctrl\+p\s+commands`), // OpenCode 1.17 footer
 	regexp.MustCompile(`OpenCode \d+\.\d+`),                 // OpenCode version line
 }
 
 func looksBooted(p string) bool {
+	for _, syntax := range harness.InputSyntaxes() {
+		for _, pattern := range syntax.BootPatterns {
+			if regexp.MustCompile(pattern).MatchString(p) {
+				return true
+			}
+		}
+	}
 	for _, re := range bootPatterns {
 		if re.MatchString(p) {
 			return true

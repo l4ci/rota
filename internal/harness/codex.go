@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -445,11 +446,16 @@ func (codex) StartupDialogRecovery(_ string) string {
 	return "for Codex folder trust, accept the default \"Trust and continue\" in the worker terminal; \"Folder access\" applies to the repository root, once per project"
 }
 
+var codexReadyModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
+
 func (codex) InputSyntax() InputSyntax {
+	placeholder := "Ask Codex to do anything"
 	return InputSyntax{
 		Composer:            "›",
+		BootPatterns:        []string{regexp.QuoteMeta(placeholder)},
+		ReadyModel:          codexReadyModel,
 		QueueHeadings:       []string{"Queued follow-up inputs", "Messages to be submitted after next tool call", "Messages to be submitted at end of turn"},
 		PlaceholderPrefixes: []string{`Try "`},
-		Placeholders:        []string{"Ask Codex to do anything", "Ask a follow-up question"},
+		Placeholders:        []string{placeholder, "Ask a follow-up question"},
 	}
 }

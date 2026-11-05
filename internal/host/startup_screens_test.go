@@ -15,6 +15,20 @@ func readFixture(t *testing.T, name string) string {
 	return string(b)
 }
 
+func TestPromptPlaceholderBelongsToComposer(t *testing.T) {
+	for _, tc := range []struct{ pane, want string }{
+		{"› Ask a follow-up question", ""},
+		{"› Ask Codex to do anything", ""},
+		{"› Ask Codex to do anything tomorrow", "Ask Codex to do anything tomorrow"},
+		{"❯ Ask Codex to do anything", "Ask Codex to do anything"},
+		{"❯ Try \"fix tests\"", ""},
+	} {
+		if got := promptLine(tc.pane); got != tc.want {
+			t.Errorf("promptLine(%q) = %q, want %q", tc.pane, got, tc.want)
+		}
+	}
+}
+
 // The Claude first-run theme picker is a startup dialog to drive through
 // (Enter keeps the highlighted default), not an unknown screen (#1777).
 func TestDialogKeysOnboardingThemePicker(t *testing.T) {

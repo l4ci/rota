@@ -285,18 +285,18 @@ func (h *coreHost) guard(ctx context.Context, v coreHandle, t coreTerminal, plai
 	}
 	return h.composer(ctx, v, t, plain)
 }
-func coreComposer(text string) error {
+func coreComposer(kind, text string) error {
 	if d, ok := ReadDialog(text); ok {
 		return &DialogError{First: d.First}
 	}
-	i := coreComposerStart(text)
+	i := coreComposerStart(kind, text)
 	if i < 0 {
-		return fmt.Errorf("%w: no recognized Codex composer", ErrNotSubmitted)
+		return fmt.Errorf("%w: no recognized %s composer", ErrNotSubmitted, kind)
 	}
 	// A blank marker row does not establish empty input: retained text may
 	// continue on following rows. Plain text is only a conservative hint;
 	// the styled observer supplies the authoritative composer boundaries.
-	if strings.TrimSpace(text[i+len(harness.CheckedComposerSyntax().Composer):]) != "" {
+	if strings.TrimSpace(text[i+len(harness.ResolveInputSyntax(kind).Composer):]) != "" {
 		return ErrDraftOnPrompt
 	}
 	return nil
@@ -305,9 +305,9 @@ func coreComposer(text string) error {
 // Native Codex renders its prompt at the left margin and indents draft
 // continuations. A prompt-like rune inside that content is not a boundary.
 // This hint never authorizes input without the styled observer.
-func coreComposerStart(text string) int {
+func coreComposerStart(kind, text string) int {
 	start, offset := -1, 0
-	marker := harness.CheckedComposerSyntax().Composer
+	marker := harness.ResolveInputSyntax(kind).Composer
 	for _, line := range strings.SplitAfter(text, "\n") {
 		if composerRow(line, marker) {
 			start = offset

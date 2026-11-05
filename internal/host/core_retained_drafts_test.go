@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/harness"
 	"os"
 	"strings"
 	"testing"
@@ -70,7 +71,7 @@ func TestCoreRetainedDraftPlainGuard(t *testing.T) {
 	fixture := loadCoreRetained(t)
 	for _, name := range []string{"leading-newline-draft", "trailing-glyph-draft"} {
 		t.Run(name, func(t *testing.T) {
-			if e := coreComposer(fixture.capture(t, name).Plain); !errors.Is(e, ErrDraftOnPrompt) {
+			if e := coreComposer(harness.Codex, fixture.capture(t, name).Plain); !errors.Is(e, ErrDraftOnPrompt) {
 				t.Fatalf("plain retained composer accepted: %v", e)
 			}
 		})
@@ -81,7 +82,7 @@ func TestCoreRetainedDraftStyledGuard(t *testing.T) {
 	for _, name := range []string{"leading-newline-draft", "trailing-glyph-draft", "leading-newline-cursor-on-first-row"} {
 		t.Run(name, func(t *testing.T) {
 			capture := fixture.capture(t, name)
-			if e := coreStyledComposer([]byte(capture.Paint), fixture.Cols, fixture.Rows, capture.Plain); !errors.Is(e, ErrDraftOnPrompt) {
+			if e := coreStyledComposer(harness.Codex, []byte(capture.Paint), fixture.Cols, fixture.Rows, capture.Plain); !errors.Is(e, ErrDraftOnPrompt) {
 				t.Fatalf("styled retained composer accepted: %v", e)
 			}
 		})
@@ -92,7 +93,7 @@ func TestCoreRetainedCapturedEmptyAndBusyReadiness(t *testing.T) {
 	for _, name := range []string{"before", "leading-newline-cleared", "trailing-glyph-cleared"} {
 		t.Run(name, func(t *testing.T) {
 			capture := fixture.capture(t, name)
-			if e := coreStyledComposer([]byte(capture.Paint), fixture.Cols, fixture.Rows, capture.Plain); e != nil {
+			if e := coreStyledComposer(harness.Codex, []byte(capture.Paint), fixture.Cols, fixture.Rows, capture.Plain); e != nil {
 				t.Fatalf("actual empty/placeholder composer refused: %v", e)
 			}
 			h, f := coreFixture(t)
