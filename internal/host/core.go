@@ -55,6 +55,20 @@ type coreRPCError struct {
 
 func (e *coreRPCError) Error() string { return "Core RPC: " + e.Message + " (" + e.Data.Kind + ")" }
 
+// Only protocol validation failures and Core's explicit pre-input refusals
+// prove nothing was typed. A generic RPC/server error may follow side effects.
+func (e *coreRPCError) rejectsSend() bool {
+	switch e.Code {
+	case -32600, -32601, -32602: // invalid request, missing method, invalid params
+		return true
+	}
+	switch e.Data.Kind {
+	case "blocked", "status_mismatch", "invalid_params":
+		return true
+	}
+	return false
+}
+
 type coreConn struct {
 	net.Conn
 	enc           *json.Encoder
@@ -551,6 +565,53 @@ func deliveryError(state string) error {
 		return ErrDeliveryUnknown
 	}
 }
+
+// ConfirmNotSubmitted is an operator assertion, never an inference from an
+// empty screen. Positive submission/pickup evidence still refuses recovery.
+func (h *coreHost) ConfirmNotSubmitted(ctx context.Context, handle, payload string) error {
+	v, err := h.owned(handle)
+	if err != nil {
+		return err
+	}
+	p, err := h.recordPath(v)
+	if err != nil {
+		return err
+	}
+	text := strings.TrimRight(payload, "\n")
+	sum := sha256.Sum256([]byte(text))
+	receipt := p + "." + hex.EncodeToString(sum[:]) + ".delivery"
+	return h.d.FS.Locked(receipt, 30*time.Second, func() error {
+		var prior coreDelivery
+		b, err := h.d.FS.ReadFile(receipt)
+		if err == nil {
+			if json.Unmarshal(b, &prior) != nil || prior.State != "unknown" || prior.Sent {
+				return fmt.Errorf("Core receipt is not an unconfirmed unknown delivery")
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		v, c, t, err := h.terminal(ctx, handle)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		if err = h.checkProgram(v, t); err != nil {
+			return err
+		}
+		var screen struct{ Text string }
+		if err = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); err != nil {
+			return err
+		}
+		if evidence := deliveryEvidence(screen.Text, text, t, prior); evidence != "" {
+			return fmt.Errorf("Core delivery has %s evidence; cannot confirm not submitted", evidence)
+		}
+		if err = h.d.FS.Remove(receipt); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	})
+}
+
 func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 	text, e := h.d.readFile(file)
 	if e != nil {
@@ -633,14 +694,14 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 		// already checked its composer.
 		if e = c.call("terminal.send", params, &result); e != nil {
 			var rpc *coreRPCError
-			if errors.As(e, &rpc) && (rpc.Data.Kind == "blocked" || rpc.Data.Kind == "status_mismatch") {
+			if errors.As(e, &rpc) && rpc.rejectsSend() {
 				if e = h.d.FS.Remove(receipt); e != nil {
 					return ErrDeliveryUnknown
 				}
 				if rpc.Data.Kind == "blocked" {
 					return ErrDialogOpen
 				}
-				return ErrNotSubmitted
+				return fmt.Errorf("%w: %v", ErrNotSubmitted, rpc)
 			}
 			return fmt.Errorf("%w: %v", ErrDeliveryUnknown, e)
 		}

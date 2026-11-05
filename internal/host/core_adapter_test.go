@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -59,6 +60,8 @@ type coreFake struct {
 	app                string
 	sendIf             []any
 	unreported         bool
+	sendError          string
+	sendErrorCode      int
 }
 
 func (f *coreFake) serve(c net.Conn) {
@@ -112,6 +115,15 @@ func (f *coreFake) serve(c net.Conn) {
 		case "terminal.read":
 			v = map[string]any{"text": f.screen, "complete": true, "how": "screen"}
 		case "terminal.send":
+			if f.sendError != "" || f.sendErrorCode != 0 {
+				kind, code := f.sendError, f.sendErrorCode
+				if code == 0 {
+					code = -32000
+				}
+				f.mu.Unlock()
+				e.Encode(map[string]any{"jsonrpc": "2.0", "id": q.ID, "error": map[string]any{"code": code, "message": "send rejected", "data": map[string]string{"kind": kind}}})
+				continue
+			}
 			if f.blocked {
 				f.mu.Unlock()
 				e.Encode(map[string]any{"jsonrpc": "2.0", "id": q.ID, "error": map[string]any{"code": -32000, "message": "blocked", "data": map[string]string{"kind": "blocked"}}})
@@ -965,6 +977,104 @@ func TestCoreClaudeQueueFooterOnlyBesideComposer(t *testing.T) {
 			terminal := coreTerminal{Status: &coreStatus{App: "claude-code", State: "working"}}
 			if got := coreDeliveryEvidence(tc.screen, opening+"\n</rota-relay>", terminal, "❯ \n"); got != "picked-up" {
 				t.Fatalf("evidence = %q, want picked-up", got)
+			}
+		})
+	}
+}
+
+func TestCoreAdapterRejectedSendCanRetry(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		code       int
+	}{
+		{"invalid_params", "invalid_params", -32602},
+		{"invalid_params_code", "", -32602},
+		{"invalid_request_code", "", -32600},
+		{"method_not_found_code", "", -32601},
+		{"blocked", "blocked", -32000},
+		{"status_mismatch", "status_mismatch", -32000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, f := coreFixture(t)
+			s := coreSpawn(t, h)
+			p := coreBrief(t, "relay rejected before input")
+			f.sendError, f.sendErrorCode = tc.kind, tc.code
+			err := h.Send(context.Background(), "dana", s, p)
+			want := ErrNotSubmitted
+			if tc.kind == "blocked" {
+				want = ErrDialogOpen
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("rejection = %v, want %v", err, want)
+			}
+			f.sendError, f.sendErrorCode = "", 0
+			if err := h.Send(context.Background(), "dana", s, p); !errors.Is(err, ErrSubmitted) {
+				t.Fatalf("retry = %v, want submitted", err)
+			}
+			if f.sends != 1 {
+				t.Fatalf("accepted sends = %d, want 1", f.sends)
+			}
+		})
+	}
+}
+
+func TestCoreAdapterUnknownRPCErrorDoesNotReplay(t *testing.T) {
+	h, f := coreFixture(t)
+	s := coreSpawn(t, h)
+	p := coreBrief(t, "possibly typed relay")
+	f.sendError = "internal_error"
+	if err := h.Send(bg, "dana", s, p); !errors.Is(err, ErrDeliveryUnknown) {
+		t.Fatalf("unexpected RPC error = %v", err)
+	}
+	f.sendError = ""
+	if err := h.Send(bg, "dana", s, p); !errors.Is(err, ErrDeliveryUnknown) {
+		t.Fatalf("retry = %v", err)
+	}
+	if f.sends != 0 {
+		t.Fatalf("unknown error replayed input: %d", f.sends)
+	}
+}
+
+func TestCoreAdapterConfirmationRetainsPositiveEvidence(t *testing.T) {
+	for _, state := range []string{"queued", "picked-up", "accepted", "replaced", "unreadable-receipt"} {
+		t.Run(state, func(t *testing.T) {
+			h, f := coreFixture(t)
+			s := coreSpawn(t, h)
+			payload := "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\na unique delivery payload\n</rota-relay>"
+			p := coreBrief(t, payload)
+			f.lose = state != "accepted"
+			h.Send(bg, "dana", s, p)
+			f.lose = false
+			switch state {
+			case "queued":
+				f.screen = "• Queued follow-up inputs\n" + payload + "\n› \n"
+			case "picked-up":
+				f.screen = payload + "\n› \n"
+			case "replaced":
+				f.pid = 99
+			case "unreadable-receipt":
+				v, err := h.(*coreHost).owned(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path, err := h.(*coreHost).recordPath(v)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file := fmt.Sprintf("%s.%x.delivery", path, sha256.Sum256([]byte(payload)))
+				if err := os.WriteFile(file, []byte("corrupt"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := h.Capabilities().DeliveryReconciler.ConfirmNotSubmitted(bg, s, payload); err == nil {
+				t.Fatal("confirmation discarded delivery evidence")
+			}
+			// Restoring the screen and process must still leave the original
+			// receipt fencing sends; a failed confirmation must not erase it.
+			f.screen, f.pid = "› \n", 42
+			h.Send(bg, "dana", s, p)
+			if f.sends != 1 {
+				t.Fatalf("refusal erased receipt: %d sends", f.sends)
 			}
 		})
 	}

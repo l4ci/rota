@@ -418,6 +418,7 @@ func bodyPath(c *Ctx, path string) (string, func(), error) {
 }
 
 func workerDispatch(fs *flag.FlagSet) RunFunc {
+	confirmNotSubmitted := fs.Bool("confirm-not-submitted", false, "after screen inspection confirms nothing was typed: clear the unknown Core delivery without sending")
 	body := fs.String("body-file", "", "brief to send; - reads stdin")
 	task := fs.String("task", "", "task id: recreates the slot's session and cuts its branch")
 	relay := fs.Bool("relay", false, "inject into the running session as an orchestrator relay")
@@ -430,6 +431,29 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		slot, err := oneArg(args, "slot")
 		if err != nil {
 			return Result{}, err
+		}
+		if *confirmNotSubmitted {
+			for _, name := range []string{"body-file", "task", "relay", "round", "review-through", "boot-timeout", "kind", "accept-codex-version"} {
+				provided := false
+				fs.Visit(func(f *flag.Flag) {
+					if f.Name == name {
+						provided = true
+					}
+				})
+				if provided {
+					return Result{}, Usage("--confirm-not-submitted must be used alone")
+				}
+			}
+			root, err := c.Root()
+			if err != nil {
+				return Result{}, err
+			}
+			ctx, stop := workerContext()
+			defer stop()
+			if err := workerEnvCtx(c, ctx).ConfirmCoreNotSubmitted(ctx, root, slot); err != nil {
+				return Result{}, err
+			}
+			return Result{Data: knObj("slot", slot, "delivery", "not-submitted", "changed", true), Text: fmt.Sprintf("%s: confirmed not submitted; retry the dispatch when ready", slot)}, nil
 		}
 		if *body == "" {
 			return Result{}, Usage("--body-file is required")
