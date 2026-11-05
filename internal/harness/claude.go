@@ -204,11 +204,22 @@ func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) {
 	return Setup{}, nil
 }
 
+// A live queue has prompt-shaped entries followed by one footer, blank padding,
+// the current spinner (when present), and the rule above the active composer.
+var claudeQueueGap = regexp.MustCompile(`\A(?:[ \t]*\n)*(?:[·✢✳✶✻✽][^\n]*\n)?(?:[ \t]*\n)*[─━]+\n\z`)
+
+func (claude) InputSyntax() InputSyntax {
+	return InputSyntax{
+		Composer: "❯", QueueFooter: "  ctrl+enter to send now",
+		QueueGap: claudeQueueGap, PlaceholderPrefixes: []string{`Try "`},
+	}
+}
+
 // CoreStatusApp is Claude Code's native OSC 7501 reporting identity.
 func (claude) CoreStatusApp() string { return "claude-code" }
 
-func (claude) StartupDialogRecovery() string {
-	return "for Claude folder trust, select \"Yes, I trust this folder\" in the worker terminal; the dialog defaults to \"No, exit\" (Down, then Enter, or `hc keys <terminal> down` then `hc keys <terminal> enter` from another terminal)"
+func (claude) StartupDialogRecovery(terminal string) string {
+	return fmt.Sprintf("for Claude folder trust (once per slot worktree), select \"Yes, I trust this folder\" in the worker terminal; the dialog defaults to \"No, exit\" (Down, then Enter, or `hc keys %s down` then `hc keys %s enter` from another terminal)", terminal, terminal)
 }
 
 // CoreSkipsComposerCheck: rota does not guard a half-typed human draft in a
