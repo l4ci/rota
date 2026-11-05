@@ -48,7 +48,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 		if sha = strings.TrimSpace(sha); sha == "" || strings.TrimSpace(check) == "" {
 			return Result{}, Usage("--proof must be <sha>:<check>")
 		}
-		_, issue, err := modeRoot(c)
+		root, issue, err := modeRoot(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -107,13 +107,8 @@ func planPass(fs *flag.FlagSet) RunFunc {
 				return backlogFail(err)
 			}
 		}
-		note, _, err := wf.NoteGet(ref, "acceptance")
-		if err != nil {
-			return backlogFail(err)
-		}
-		marks := acceptance.Upsert(acceptance.ParseMarks(note), acceptance.Mark{
+		put, err := markAcceptance(c, root, id, acceptance.Mark{
 			ID: ac, Date: todayDate(c), Sha: row.Sha, Check: row.Check, Text: crit.Text})
-		put, err := wf.NotePut(ref, "acceptance", acceptance.RenderMarks(marks))
 		if err != nil {
 			return backlogFail(err)
 		}
