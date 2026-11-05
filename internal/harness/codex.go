@@ -440,3 +440,7 @@ func (codex) Command(Config) ([]string, error) { return []string{"codex"}, nil }
 
 // CoreStatusApp is Codex's native OSC 7501 reporting identity.
 func (codex) CoreStatusApp() string { return Codex }
+
+func (codex) StartupDialogRecovery() string {
+	return "for Codex folder trust, accept the default \"Trust and continue\" in the worker terminal; \"Folder access\" applies to the repository root, once per project"
+}

@@ -207,6 +207,10 @@ func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) {
 // CoreStatusApp is Claude Code's native OSC 7501 reporting identity.
 func (claude) CoreStatusApp() string { return "claude-code" }
 
+func (claude) StartupDialogRecovery() string {
+	return "for Claude folder trust, open `claude` once in the slot folder and select \"Yes, I trust this folder\"; the dialog defaults to \"No, exit\" (Down, then Enter)"
+}
+
 // CoreSkipsComposerCheck: rota does not guard a half-typed human draft in a
 // Claude input box on Core. Core's blocked status and the dialog check still
 // refuse a send into a permission prompt or question.

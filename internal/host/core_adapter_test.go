@@ -561,16 +561,16 @@ func TestCoreAdapterQueueAndPromptEvidenceForTheElement(t *testing.T) {
 	text := open + "\n[ORCHESTRATOR RELAY — forwarded.]\n\n" + strings.Repeat("long body\n", 300) + harness.RelayClose + "\n" + sig
 	working := coreTerminal{Status: &coreStatus{App: "codex", State: "working"}}
 	for name, tc := range map[string]struct{ screen, want string }{
-		"queued, whole opening":    {"• Queued follow-up inputs\n  ↳ " + open + "\n    [ORCHESTRATOR RELAY — forwarded.]\n    long body…\n› \n", "queued"},
-		"queued, only the tag":     {"• Queued follow-up inputs\n  ↳ " + open + "\n› \n", "queued"},
-		"queued behind hc":         {"• Queued follow-up inputs\n  ↳ <hc from=\"t1\">" + open + "\n› \n", "queued"},
-		"steered":                  {"• Messages to be submitted after next tool call\n    " + open + "\n› \n", "queued"},
-		"end of turn":              {"• Messages to be submitted at end of turn\n    " + open + "\n› \n", "queued"},
-		"normal picked prompt":     {"› " + open + "\n" + harness.RelayClose + "\n" + sig + "\n› \n", "picked-up"},
-		"long clipped pickup":      {"earlier body missing from requested history\n" + sig + "\n› \n", "picked-up"},
-		"bare tag is insufficient": {open + "\n› \n", ""},
-		"wrong queued relay":       {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 8) + "\n› \n", ""},
-		"a task brief's tag":       {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 0) + "\n› \n", ""},
+		"queued, whole opening": {"• Queued follow-up inputs\n  ↳ " + open + "\n    [ORCHESTRATOR RELAY — forwarded.]\n    long body…\n› \n", "queued"},
+		"queued, only the tag":  {"• Queued follow-up inputs\n  ↳ " + open + "\n› \n", "queued"},
+		"queued behind hc":      {"• Queued follow-up inputs\n  ↳ <hc from=\"t1\">" + open + "\n› \n", "queued"},
+		"steered":               {"• Messages to be submitted after next tool call\n    " + open + "\n› \n", "queued"},
+		"end of turn":           {"• Messages to be submitted at end of turn\n    " + open + "\n› \n", "queued"},
+		"normal picked prompt":  {"› " + open + "\n" + harness.RelayClose + "\n" + sig + "\n› \n", "picked-up"},
+		"long clipped pickup":   {"earlier body missing from requested history\n" + sig + "\n› \n", "picked-up"},
+		"opening proves pickup": {open + "\n› \n", "picked-up"},
+		"wrong queued relay":    {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 8) + "\n› \n", ""},
+		"a task brief's tag":    {"• Queued follow-up inputs\n    " + harness.RelayOpen(35, 0) + "\n› \n", ""},
 	} {
 		if got := coreDeliveryEvidence(tc.screen, text, working, "› \n"); got != tc.want {
 			t.Fatalf("%s: got %q want %q", name, got, tc.want)
@@ -833,6 +833,72 @@ func TestCorePickedUpNeedsASentMessage(t *testing.T) {
 	}
 	if corePickedUp(coreDelivery{Sent: true, Turn: 5, Was: "idle"}, coreTerminal{Status: &coreStatus{State: "working"}, Turn: 5}) {
 		t.Error("an unreported status counts as picked up")
+	}
+}
+
+// Claude can consume a relay inside the current turn: Core only advances once
+// when that turn ends, so the fresh unsigned prompt echo must prove pickup.
+func TestCoreAdapterUnsignedRelayAbsorbedIntoRunningTurn(t *testing.T) {
+	h, f := coreFixture(t)
+	f.app = "claude-code"
+	f.screen = "❯ \n"
+	s, err := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead the relay.\n</rota-relay>"
+	p := coreBrief(t, text)
+	f.status = "working"
+	startTurn := f.turn
+	if err := h.Send(context.Background(), "dana", s, p); !errors.Is(err, ErrSubmitted) {
+		t.Fatalf("initial send = %v, want submitted", err)
+	}
+	f.turn, f.status = 1, "done"
+	f.screen = "❯ <hc from=\"t1\"><rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n  Read the relay.\n  </rota-relay></hc>\n\n● Followed the relay.\n❯ \n"
+	fresh := New(HerdrCore, h.(*coreHost).d)
+	t.Logf("Core turn delta=%d; submitted copies=%d", f.turn-startTurn, f.sends)
+	if err := fresh.Send(context.Background(), "dana", s, p); err != nil {
+		t.Fatalf("fresh unsigned relay echo after one completed turn = %v, want picked up", err)
+	}
+	if f.sends != 1 {
+		t.Fatalf("reconciliation sent %d copies, want 1", f.sends)
+	}
+}
+
+func TestCoreUnsignedRelayScreenEvidence(t *testing.T) {
+	const opening = `<rota-relay n="9" round="50" from="orchestrator">`
+	text := opening + "\nRead the relay.\n</rota-relay>"
+	for _, tc := range []struct {
+		name, screen, before, want string
+	}{
+		{"fresh Claude echo", "❯ " + opening + "\n  Read the relay.\n  </rota-relay>\n❯ \n", "❯ \n", "picked-up"},
+		{"earlier relay", "❯ <rota-relay n=\"8\" round=\"50\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
+		{"earlier round", "❯ <rota-relay n=\"9\" round=\"49\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
+		{"task brief", "❯ <rota-relay round=\"50\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
+		{"old echo", "❯ " + opening + "\n  </rota-relay>\n❯ \n", "❯ " + opening + "\n  </rota-relay>\n❯ \n", ""},
+		{"tag already in pre-send queue", "❯ " + opening + "\n  </rota-relay>\n❯ \n", "• Queued follow-up inputs\n  ↳ " + opening + "\n❯ \n", ""},
+		{"queued", "• Queued follow-up inputs\n  ↳ " + opening + "\n❯ \n", "❯ \n", "queued"},
+		{"next tool call", "• Messages to be submitted after next tool call\n    " + opening + "\n❯ \n", "❯ \n", "queued"},
+		{"end of turn", "• Messages to be submitted at end of turn\n    " + opening + "\n❯ \n", "❯ \n", "queued"},
+		{"earlier queue above current queue", "• Queued follow-up inputs\n  ↳ <rota-relay n=\"8\" round=\"50\" from=\"orchestrator\">\n• Messages to be submitted at end of turn\n    " + opening + "\n❯ \n", "❯ \n", "queued"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			terminal := coreTerminal{Reported: true, Status: &coreStatus{App: "claude-code", State: "done"}, Turn: 1}
+			prior := coreDelivery{Sent: true, Was: "working", Before: tc.before}
+			if got := deliveryEvidence(tc.screen, text, terminal, prior); got != tc.want {
+				t.Fatalf("evidence = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCoreQueuedRelayWinsOverTurnEvidence(t *testing.T) {
+	const opening = `<rota-relay n="9" round="50" from="orchestrator">`
+	terminal := coreTerminal{Reported: true, Status: &coreStatus{App: "claude-code", State: "working"}, Turn: 1}
+	prior := coreDelivery{Sent: true, Was: "working", Before: "❯ \n"}
+	screen := "• Messages to be submitted at end of turn\n    " + opening + "\n❯ \n"
+	if got := deliveryEvidence(screen, opening+"\n</rota-relay>", terminal, prior); got != "queued" {
+		t.Fatalf("visible queued relay with an advanced turn = %q, want queued", got)
 	}
 }
 
