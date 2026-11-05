@@ -91,12 +91,20 @@ func (c Clone) topicFiles() ([]topicFileRef, error) {
 // needs a clean, current clone and lands one commit by the policy. A suffix
 // that is not trailing, sits on a continuation line or does not parse goes to
 // ManualReview and is left in place.
-func (c Clone) MigrateSeen(ctx context.Context, apply bool) (MigrateReport, error) {
+func (c Clone) MigrateSeen(ctx context.Context, apply bool) (res MigrateReport, err error) {
+	if !apply {
+		return c.migrateSeen(ctx, false)
+	}
+	err = c.mutate(ctx, func() error {
+		res, err = c.migrateSeen(ctx, true)
+		return err
+	})
+	return res, err
+}
+
+func (c Clone) migrateSeen(ctx context.Context, apply bool) (MigrateReport, error) {
 	var pol Policy
 	if apply {
-		if err := c.syncForWrite(ctx); err != nil {
-			return MigrateReport{}, err
-		}
 		var err error
 		if pol, err = c.Policy(); err != nil {
 			return MigrateReport{}, err

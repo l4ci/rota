@@ -28,6 +28,7 @@ const (
 // Sentinels the verbs map to exit codes.
 var (
 	ErrDirty      = errors.New("clone has uncommitted changes")
+	ErrBusy       = errors.New("clone is busy with another knowledge operation")
 	ErrDiverged   = errors.New("clone has diverged from its remote")
 	ErrOffline    = errors.New("remote not reachable")
 	ErrNotFound   = errors.New("not found")
