@@ -324,10 +324,19 @@ func TestProjectStateReadsRoundAndLease(t *testing.T) {
 	}
 }
 
-func TestProjectsViewHonorsCancellation(t *testing.T) {
+func TestProjectsDirectUIOwnsInvocationLifetime(t *testing.T) {
 	projectsXDG(t)
+	t.Setenv("TERM", "xterm")
 	root, common := trProject(t, "{}"), t.TempDir()
 	d := testDeps()
+	d.Getwd = func() (string, error) { return root, nil }
+	d.Getenv = func(k string) string {
+		if k == "ROTA_SLOT" {
+			return ""
+		}
+		return os.Getenv(k)
+	}
+	d.IsTerminal = func(any) bool { return true }
 	if _, err := projects.Register(d.projectsEnv(), root, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -339,23 +348,37 @@ func TestProjectsViewHonorsCancellation(t *testing.T) {
 	d.Git = func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
 		return git.Result{Stdout: common}, ctx.Err()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	c := &Ctx{Deps: d, ctx: ctx}
-	res, err := runProjects(c, nil)
-	if err != nil {
-		t.Fatal(err)
+	var screen projects.Screen
+	var invocation context.Context
+	d.RunView = func(c *Ctx, m tui.Model) error {
+		invocation = c.Context()
+		if err := invocation.Err(); err != nil {
+			t.Fatalf("context ended while screen open: %v", err)
+		}
+		var ok bool
+		screen, ok = m.(projects.Screen)
+		if !ok {
+			t.Fatalf("projects --ui opened %T", m)
+		}
+		rows, err := screen.Load()
+		if err != nil || len(rows) != 1 || rows[0].Round != "7" || rows[0].Lease != "held by pid 100" {
+			t.Fatalf("open screen: rows=%+v err=%v; want held round 7", rows, err)
+		}
+		return nil
 	}
-	m, err := projectsView(c, res)
-	if err != nil {
-		t.Fatal(err)
+	var out, errs strings.Builder
+	if code := run(Tree(), d, []string{"projects", "--ui"}, strings.NewReader(""), &out, &errs); code != ExitOK {
+		t.Fatalf("projects --ui exit %d: %s", code, errs.String())
 	}
-	if rendered := m.Render(160, 20, tui.Style{}); !strings.Contains(rendered, "round lease: none") {
-		t.Fatalf("canceled view read the lease:\n%s", rendered)
+	if invocation == nil {
+		t.Fatal("projects --ui did not open a screen")
 	}
-	rows, err := m.(projects.Screen).Load()
+	if invocation.Err() != context.Canceled {
+		t.Fatalf("returned invocation context: %v; want canceled", invocation.Err())
+	}
+	rows, err := screen.Load()
 	if err != nil || len(rows) != 1 || rows[0].Round != "none" || rows[0].Lease != "none" {
-		t.Fatalf("canceled reload: %+v, %v; want no round or lease", rows, err)
+		t.Fatalf("closed screen: rows=%+v err=%v; want no round or lease", rows, err)
 	}
 }
 
