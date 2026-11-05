@@ -267,6 +267,7 @@
     "./internal/knowledge/TestDecisionLegacyMetadataOrders": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestRemove": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestRenameTopicMovesEveryBulletUnderConcurrency": "Globs temporary knowledge files to check that concurrent updates leave no scratch files.",
+    "./internal/knowledge/TestTierAmbiguousLegacyRefusesOnlyNeededKeys": "Reads temporary knowledge files and asserts a docs anchor in diagnostics; never reads repository docs.",
     "./internal/knowledge/TestWriteCustomBlockRewritesPreRenameSkillsBlock": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/labels/TestLabelLiteralGuardCatchesNewPaths": "Runs the label guard on planted temporary source or skill files.",
     "./internal/labels/TestSkillLabelGuardRequiresRegistration": "Runs the label guard on planted temporary source or skill files.",

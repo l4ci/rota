@@ -104,7 +104,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 					tier = e.Tier
 				}
 				if tier != Deprecated {
-					entries = append(entries, PathEntry{p + "::" + topic.Name + "::" + title, "Knowledge: " + topic.Name + "\n" + block})
+					entries = append(entries, PathEntry{p + "::" + key(topic.Name, title), "Knowledge: " + topic.Name + "\n" + block})
 				}
 			}
 		}
