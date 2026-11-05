@@ -14,13 +14,14 @@ import (
 
 // MergePorts are what MergeBranch leaves to its caller. Verdict is the B3
 // gate and Approve the merge-approval gate (B1); both run before anything
-// changes. Verdict's error passes through unchanged; Approve returns its
-// refusal as a value, and its error is a gate that could not run.
+// changes and receive the pinned landing commit. Verdict also receives the
+// branch for store lookup and messages. Verdict's error passes through unchanged;
+// Approve returns its refusal as a value, and its error is a gate that could not run.
 type MergePorts struct {
 	Git      Git
 	Recover  land.Git // optional recovery runner, independent of caller cancellation
-	Verdict  func(branch string) error
-	Approve  func() (*exitcode.Refusal, error)
+	Verdict  func(branch, head string) error
+	Approve  func(head string) (*exitcode.Refusal, error)
 	Checkout Checkout // where the merge runs; scopes worktree cleanup
 }
 
@@ -41,10 +42,11 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 	if pin.ExitCode != 0 {
 		return "", nil, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(pin.Stderr)}
 	}
-	if err := p.Verdict(branch); err != nil {
+	head := line(pin.Stdout)
+	if err := p.Verdict(branch, head); err != nil {
 		return "", nil, err
 	}
-	if ref, err := p.Approve(); ref != nil || err != nil {
+	if ref, err := p.Approve(head); ref != nil || err != nil {
 		return "", ref, err
 	}
 	if err := ClearWorktree(p.Git, branch, p.Checkout); err != nil {
@@ -61,7 +63,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 	if recover == nil {
 		recover = p.Git.Run
 	}
-	switch err := land.MergeLocal(p.Git.Run, line(pin.Stdout), msg, recover); {
+	switch err := land.MergeLocal(p.Git.Run, head, msg, recover); {
 	case err == nil:
 	case errors.As(err, new(*land.CleanupError)):
 		return "", nil, err

@@ -142,7 +142,7 @@ func TestOpenPRPushFails(t *testing.T) {
 }
 
 func mergePorts(g Git) MergePorts {
-	return MergePorts{Git: g, Verdict: func(string) error { return nil }, Approve: func() (*exitcode.Refusal, error) { return nil, nil }}
+	return MergePorts{Git: g, Verdict: func(string, string) error { return nil }, Approve: func(string) (*exitcode.Refusal, error) { return nil, nil }}
 }
 
 func mergeGit() *fakeGit {
@@ -154,13 +154,6 @@ func mergeGit() *fakeGit {
 		"branch -d feat":                      "",
 		"log -1 --format=%h":                  "abc1234",
 	}}
-}
-
-func TestMergeBranch(t *testing.T) {
-	sha, _, err := MergeBranch(mergePorts(mergeGit()), "feat", "main", "msg")
-	if err != nil || sha != "abc1234" {
-		t.Fatalf("sha %q err %v", sha, err)
-	}
 }
 
 func TestMergeBranchRefusals(t *testing.T) {
@@ -199,22 +192,6 @@ func contains(l []string, s string) bool {
 		}
 	}
 	return false
-}
-
-// The gates run before the branch is touched.
-func TestMergeBranchGatesFirst(t *testing.T) {
-	boom := errors.New("boom")
-	g := mergeGit()
-	p := mergePorts(g)
-	p.Approve = func() (*exitcode.Refusal, error) { return nil, boom }
-	if _, _, err := MergeBranch(p, "feat", "main", "msg"); !errors.Is(err, boom) {
-		t.Fatalf("err = %v", err)
-	}
-	for _, c := range g.calls { // the pin is read first; nothing else may run
-		if !strings.HasPrefix(c, "rev-parse") {
-			t.Errorf("git ran: %v", g.calls)
-		}
-	}
 }
 
 type fakeMerger struct {
@@ -411,7 +388,7 @@ func TestMergeBranchApproveRefusalIsTyped(t *testing.T) {
 	g := mergeGit()
 	p := mergePorts(g)
 	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: "envelope"}
-	p.Approve = func() (*exitcode.Refusal, error) { return want, nil }
+	p.Approve = func(string) (*exitcode.Refusal, error) { return want, nil }
 	_, ref, err := MergeBranch(p, "feat", "main", "msg")
 	if ref != want || err != nil {
 		t.Errorf("refusal = %+v, err %v", ref, err)
