@@ -729,8 +729,12 @@ func (o *orca) inputReady(h orcaHandle, p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
-	if m := orcaCodexModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
-		return false
+	for _, syntax := range harness.InputSyntaxes() {
+		if syntax.ReadyModel != nil {
+			if m := syntax.ReadyModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
+				return false
+			}
+		}
 	}
 	if _, e := o.d.FS.Stat(h.PIDFile + ".ready"); e != nil {
 		return false
