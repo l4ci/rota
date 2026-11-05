@@ -2,15 +2,20 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"flag"
-	"github.com/l4ci/rota/internal/gittest"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 )
@@ -158,39 +163,92 @@ func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	}
 }
 
-func TestPaletteProjectsEntryOpensTheProjectsScreen(t *testing.T) {
-	deps := testDeps()
-	bareRig(deps)
+func TestPaletteProjectsReloadKeepsHostLifetime(t *testing.T) {
 	projectsXDG(t)
-	// Projects (5) opens `projects`'s view inside the palette; q leaves the
-	// screen, the second q quits the palette.
-	term := &scriptedKeys{[]string{"5", "q", "q"}}
-	var outb, errb bytes.Buffer
-	// Only the process streams are terminals, like the real check: a capture
-	// buffer is never one.
-	deps.IsTerminal = func(w any) bool { return w == term || w == &outb }
-	deps.Palette = func(cfg palette.Config) error {
-		cfg.In = term
-		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
-		cfg.Width = func() int { return 100 }
-		return palette.Run(cfg)
-	}
 	t.Setenv("TERM", "xterm")
-	r := useLaunchRig(deps, nil)
-	root := trackerProject(t, "")
-	wd, _ := os.Getwd()
-	defer os.Chdir(wd)
-	if err := os.Chdir(root); err != nil {
+	root, common := trProject(t, "{}"), t.TempDir()
+	d := testDeps()
+	d.Getwd = func() (string, error) { return root, nil }
+	d.Getenv = func(k string) string {
+		if k == "ROTA_SLOT" {
+			return ""
+		}
+		return os.Getenv(k)
+	}
+	d.TempDirs = func() []string { return []string{"/os-temporary-storage"} }
+	if _, err := projects.Register(d.projectsEnv(), root, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	code := mainWith(deps, nil, term, &outb, &errb)
-	if code != 0 || len(r.execs) != 0 {
-		t.Fatalf("exit %d execs %v: %s", code, r.execs, errb.String())
+	lease := roundlease.Env{Host: "test-host", Alive: func(int) bool { return true }, Now: time.Now}
+	if _, _, _, err := lease.Acquire(common, root, roundlease.Holder{PID: 100}, 7); err != nil {
+		t.Fatal(err)
 	}
-	out := tui.Strip(outb.String())
-	if !strings.Contains(out, "c cleanup · d remove") || strings.Contains(out, "press any key") || len(term.keys) != 0 {
-		t.Errorf("projects screen not opened in place (keys left %v):\n%s", term.keys, out)
+	d.LeaseEnv = func() roundlease.Env { return lease }
+	d.Git = func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
+		return git.Result{Stdout: common}, ctx.Err()
 	}
+	var out, errs bytes.Buffer
+	term := strings.NewReader("")
+	// Capturing the view must still check the host terminal, not its private buffer.
+	d.IsTerminal = func(w any) bool { return w == term || w == &out }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &Ctx{Deps: d, ctx: ctx, Stdin: term, Stdout: &out, Stderr: &errs}
+	var screen projects.Screen
+	found := false
+	for _, entry := range paletteEntries(c, &paletteOutcome{}) {
+		if entry.Label != "Projects" {
+			continue
+		}
+		found = true
+		if entry.View == nil {
+			t.Fatal("Projects entry has no view")
+		}
+		m, err := entry.View()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ok bool
+		screen, ok = m.(projects.Screen)
+		if !ok {
+			t.Fatalf("Projects entry opened %T", m)
+		}
+	}
+	if !found {
+		t.Fatal("Projects entry missing")
+	}
+	if frame := screen.Render(160, 20, tui.Style{}); !strings.Contains(frame, "held by pid 100") || !strings.Contains(frame, "last round: 7") {
+		t.Fatalf("initial screen missing held round and lease:\n%s", frame)
+	}
+	check := func(stage string, round, held string) {
+		t.Helper()
+		rows, err := screen.Load()
+		if err != nil || len(rows) != 1 || rows[0].Path != root || rows[0].Round != round || rows[0].Lease != held {
+			t.Fatalf("%s: rows=%+v err=%v; want round %s, lease %s", stage, rows, err, round, held)
+		}
+	}
+	check("reload after capture", "7", "held by pid 100")
+	other := trProject(t, "{}")
+	if _, err := projects.Register(d.projectsEnv(), other, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := screen.Run("projects", "cleanup"); err != nil {
+		t.Fatal(err)
+	}
+	check("reload after cleanup", "7", "held by pid 100")
+	other = trProject(t, "{}")
+	if _, err := projects.Register(d.projectsEnv(), other, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := screen.Run("projects", "remove", other); err != nil {
+		t.Fatal(err)
+	}
+	check("reload after removal", "7", "held by pid 100")
+	cancel()
+	check("reload after host ends", "none", "none")
 }
 
 func TestPaletteNotOpenedForPipeOrJSON(t *testing.T) {
