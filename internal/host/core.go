@@ -790,8 +790,8 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 			return e
 		}
 	}
-	probe := ev.aliveDeps(h)
-	alive, _, ok := killLoop(&probe, ev.pids(), func() presence {
+	probe := ev.procs.aliveDeps(h.d)
+	alive, _, ok := killLoop(&probe, ev.procs.pids(), func() presence {
 		if missing {
 			return presentGone
 		}

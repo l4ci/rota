@@ -107,7 +107,7 @@ func TestOrcaLifecycleWithInjectedFileSystem(t *testing.T) {
 				t.Fatalf("PID files=%v error=%v", pids, err)
 			}
 			pid := pids[0]
-			for suffix, want := range map[string]string{"": "123\n", ".json": handle, ".ready": "ready", ".tree": "[123,456]"} {
+			for suffix, want := range map[string]string{"": "123\n", ".json": handle, ".ready": "ready", ".tree": `{"version":1,"processes":[{"pid":123,"start":123},{"pid":456}]}`} {
 				b, err := files.ReadFile(pid + suffix)
 				if err != nil || string(b) != want {
 					t.Fatalf("proof %s = %q, %v; want %q", suffix, b, err, want)
