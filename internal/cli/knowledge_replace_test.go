@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/knowledge"
 )
 
 func TestKnowledgeReplace(t *testing.T) {
@@ -58,9 +60,12 @@ func TestKnowledgeReplace(t *testing.T) {
 	if code, _, _ := rotaIn(t, dir, "knowledge", "replace", "--topic", "Architecture", "--old", "**Beta rule**", "--new", "**Beta law**"); code != 0 {
 		t.Fatalf("retitle: exit %d", code)
 	}
-	tier := read("knowledge-tier.json")
-	if strings.Contains(tier, "Architecture::Beta rule") || !strings.Contains(tier, "Architecture::Beta law") {
-		t.Errorf("sidecar not re-keyed:\n%s", tier)
+	st := knowledge.Store{Root: dir}
+	if e, found, err := st.TierGet(knowledge.Umbrella, "Architecture", "Beta law"); err != nil || !found || e.Tier != knowledge.Provisional || e.Hits != 1 {
+		t.Errorf("retitled metadata: %+v found=%v err=%v", e, found, err)
+	}
+	if _, found, err := st.TierGet(knowledge.Umbrella, "Architecture", "Beta rule"); err != nil || found {
+		t.Errorf("old title remains: found=%v err=%v", found, err)
 	}
 }
 

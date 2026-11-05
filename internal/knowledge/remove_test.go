@@ -43,11 +43,11 @@ func TestRemove(t *testing.T) {
 				t.Errorf("KNOWLEDGE.md = %q, want %q", got, want)
 			}
 			e, _ := LoadSidecar(sc)
-			if _, ok := e.Get("A", c.title); ok == (c.tierGone && c.err == nil) && c.title != "Nope" {
+			if _, ok, _ := e.Get("A", c.title); ok == (c.tierGone && c.err == nil) && c.title != "Nope" {
 				t.Errorf("tier entry for %q present=%v", c.title, ok)
 			}
 			if c.err != nil {
-				if _, ok := e.Get("A", "One"); !ok {
+				if _, ok, _ := e.Get("A", "One"); !ok {
 					t.Error("refused rm dropped a tier entry")
 				}
 			}

@@ -108,6 +108,11 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 			return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 		}
 	}
+	if topic != GlossaryTopic {
+		if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {
+			return AddResult{}, err
+		}
+	}
 	bullet := renderBullet(title, body, date, sha)
 	rest := strings.TrimLeft(content[start:end], "\n")
 	newBody := "\n" + bullet + "\n" + rest
@@ -127,16 +132,29 @@ func (s Store) initTierUnlessGlossary(scope, topic, title string) error {
 	return s.initTier(scope, topic, title)
 }
 
-// initTier registers a bullet as provisional. A failure here is not fatal to
-// the caller: the bullet already landed, and the next read initializes lazily.
+// initTier registers a bullet as provisional.
 func (s Store) initTier(scope, topic, title string) error {
 	p, err := s.TierPath(scope)
 	if err != nil {
 		return err
 	}
-	// The old helper swallowed every error from hv-knowledge-tier --init.
-	_ = Update(p, func(sc *Sidecar) (bool, error) { return sc.Init(topic, title, s.today()), nil })
-	return nil
+	return Update(p, func(sc *Sidecar) (bool, error) { return sc.Init(topic, title, s.today()) })
+}
+
+// preflightTier checks an operation against the sidecar without writing it.
+func (s Store) preflightTier(scope string, check func(*Sidecar) error) error {
+	p, err := s.TierPath(scope)
+	if err != nil {
+		return err
+	}
+	sc, err := LoadSidecar(p)
+	if err != nil {
+		return err
+	}
+	if sc.saveErr != nil {
+		return sc.saveErr
+	}
+	return check(sc)
 }
 
 // Amend appends text to the body of the bullet under "## topic" that contains
@@ -253,6 +271,16 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 	}
 	var res RenameResult
 	err = lockFiles([]string{km}, func() (err error) {
+		if err := s.preflightTier(scope, func(sc *Sidecar) error {
+			if title == "" {
+				_, err := sc.RekeyTopic(from, to)
+				return err
+			}
+			_, err := sc.Rekey(from, title, to)
+			return err
+		}); err != nil {
+			return err
+		}
 		// Buffered hits are keyed by the old names: fold them under the lock,
 		// right before the re-key, so none lands in the gap between the two.
 		if _, err := s.FoldHits(scope); err != nil {
@@ -278,11 +306,11 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	}
 	dstStart, dstEnd, dstOK := section.Find(content, to)
 
-	rekey := func(fn func(*Sidecar) bool) error {
+	rekey := func(fn func(*Sidecar) (bool, error)) error {
 		if !fileExists(sidecar) {
 			return nil
 		}
-		return Update(sidecar, func(sc *Sidecar) (bool, error) { return fn(sc), nil })
+		return Update(sidecar, fn)
 	}
 
 	if title == "" {
@@ -298,7 +326,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 		if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 			return RenameResult{}, err
 		}
-		if err := rekey(func(sc *Sidecar) bool { return sc.RekeyTopic(from, to) > 0 }); err != nil {
+		if err := rekey(func(sc *Sidecar) (bool, error) { n, err := sc.RekeyTopic(from, to); return n > 0, err }); err != nil {
 			return RenameResult{}, err
 		}
 		return RenameResult{Mode: mode, Changed: true}, nil
@@ -347,7 +375,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return RenameResult{}, err
 	}
-	if err := rekey(func(sc *Sidecar) bool { return sc.Rekey(from, title, to) }); err != nil {
+	if err := rekey(func(sc *Sidecar) (bool, error) { return sc.Rekey(from, title, to) }); err != nil {
 		return RenameResult{}, err
 	}
 	return RenameResult{Mode: mode, Changed: true}, nil
@@ -410,23 +438,28 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 	h := hits[0]
 	block := body[h.a:h.b]
 	edited := strings.ReplaceAll(block, old, new)
+	oldTitle, newTitle := bulletTitle(block), bulletTitle(edited)
+	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
+		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Retitle(topic, oldTitle, newTitle); return err }); err != nil {
+			return res, err
+		}
+		if _, err := s.FoldHits(scope); err != nil {
+			return res, err
+		}
+	}
 	next := content[:st] + body[:h.a] + edited + body[h.b:] + content[en:]
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return res, err
 	}
 	res.Changed = true
 
-	oldTitle, newTitle := bulletTitle(block), bulletTitle(edited)
 	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
 		sidecar, err := s.TierPath(scope)
 		if err != nil {
 			return res, err
 		}
-		if _, err := s.FoldHits(scope); err != nil {
-			return res, err
-		}
 		if fileExists(sidecar) {
-			err = Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle), nil })
+			err = Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle) })
 		}
 		return res, err
 	}
@@ -491,6 +524,9 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 				tail = tail[1:]
 			}
 		}
+		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Delete(topic, title); return err }); err != nil {
+			return err
+		}
 		// Buffered hits are keyed by this bullet: fold them before the write
 		// so a failed fold changes nothing and no later fold recreates the entry.
 		if _, err := s.FoldHits(scope); err != nil {
@@ -503,7 +539,7 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		if !fileExists(sidecar) {
 			return nil
 		}
-		return Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Delete(topic, title), nil })
+		return Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Delete(topic, title) })
 	})
 	return res, err
 }

@@ -54,7 +54,7 @@ func TestFoldHitsAppliesBufferOnceAndEmptiesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := sc.Get("Arch", "bullet"); e.Hits != 2 || e.Tier != Provisional {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Hits != 2 || e.Tier != Provisional {
 		t.Fatalf("folded entry = %+v", e)
 	}
 	hp, _ := s.HitsPath(Umbrella)
@@ -86,7 +86,7 @@ func TestHitBufferHonoursContradictionQueue(t *testing.T) {
 	}
 	p, _ := s.TierPath(Umbrella)
 	sc, _ := LoadSidecar(p)
-	if e, _ := sc.Get("Arch", "bullet"); e.Tier != Provisional || e.Hits != 3 {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Tier != Provisional || e.Hits != 3 {
 		t.Fatalf("folded = %+v", e)
 	}
 }
@@ -168,7 +168,7 @@ func TestFoldHitsAfterCrashDoesNotDoubleCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := sc.Get("Arch", "bullet"); e.Hits != 3 {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Hits != 3 {
 		t.Fatalf("hits = %d, want 3", e.Hits)
 	}
 	if foldedMark(sc) != "" {
@@ -252,10 +252,10 @@ func TestReplaceRetitleFoldsBufferedHitsFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, ok := sc.Get("Arch", "new"); !ok || e.Hits != 2 {
+	if e, ok, _ := sc.Get("Arch", "new"); !ok || e.Hits != 2 {
 		t.Errorf("hits not carried to the new title: %+v ok=%v", e, ok)
 	}
-	if _, ok := sc.Get("Arch", "old"); ok {
+	if _, ok, _ := sc.Get("Arch", "old"); ok {
 		t.Error("hits still keyed under the old title")
 	}
 	hp, _ := s.HitsPath(Umbrella)
