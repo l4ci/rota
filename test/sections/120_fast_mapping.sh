@@ -7,16 +7,16 @@ OUT=$(fast_plan internal/knowledge/instructions.go)
 [ "$(head -1 <<<"$OUT")" = "plan: go ./internal/knowledge" ] || fail "a .go file should select its package first: $OUT"
 
 OUT=$(fast_plan internal/knowledge/instructions_test.go)
-[ "$OUT" = "plan: go ./internal/knowledge" ] || fail "a _test.go file should select only its package: $OUT"
+[ "$OUT" = $'plan: go ./internal/knowledge\nplan: tree-scans' ] || fail "a _test.go file should select its package and tree scans: $OUT"
 
 OUT=$(fast_plan "$GOLD")
-[ "$OUT" = "plan: go ./internal/cli" ] || fail "testdata should select its owning package: $OUT"
+[ "$OUT" = $'plan: go ./internal/cli\nplan: tree-scans' ] || fail "testdata should select its owning package and tree scans: $OUT"
 
 OUT=$(fast_plan internal/knowledge/skills_block.md)
 grep -qx "plan: go ./internal/knowledge" <<<"$OUT" || fail "a go:embed asset should select its package: $OUT"
 
 OUT=$(fast_plan test/lib/isolate.sh test/fakes/fake_forge.py)
-[ "$OUT" = "plan: infra" ] || fail "test infra should select the infra check: $OUT"
+[ "$OUT" = $'plan: infra\nplan: tree-scans' ] || fail "test infra should select the infra check and tree scans: $OUT"
 
 LINT="plan: section test/sections/71_no_pipe_grep_q.sh"
 OUT=$(fast_plan test/sections/120_fast_mapping.sh)
@@ -35,7 +35,11 @@ OUT=$(fast_plan internal/no_such_pkg_dir/gone.go)
 grep -qx "plan: go-all" <<<"$OUT" || fail "a .go file whose directory is gone should run everything: $OUT"
 
 OUT=$(fast_plan notes/unmapped.txt)
-[ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
+[ "$OUT" = "plan: tree-scans" ] || fail "an unmapped file should still select tree scans: $OUT"
+OUT=$(fast_plan)
+[ "$OUT" = "plan: tree-scans" ] || fail "an empty change should still select tree scans: $OUT"
+OUT=$(fast_plan docs/README.md)
+grep -qx "plan: tree-scans" <<<"$OUT" || fail "a docs change should select tree scans: $OUT"
 # #1303: shared packages pull in their dependents; config, doctor and host map to checks.
 OUT=$(fast_plan internal/fsio/fsio.go)
 for dep in ./internal/fsio ./internal/section ./internal/cli ./cmd/rota; do
@@ -69,7 +73,7 @@ OUT=$(fast_plan internal/worker/other.go)
 if grep -q "section" <<<"$OUT"; then fail "other worker files must not run section 51: $OUT"; fi
 pass "fast.sh adds dependents of shared packages, the frozen config test and doctor/host smoke sections"
 
-pass "fast.sh selects package, testdata, embed and infra checks; unmapped files select none"
+pass "fast.sh selects package, testdata, embed and infra checks; tree scans always run"
 
 # #2628: use a real graph to cover internal/external tests and their transitive
 # imports. A production importer of a test-only consumer must stay unselected.
@@ -110,12 +114,13 @@ plan: go ./leaf
 plan: go ./production
 plan: go ./transexternal
 plan: go ./transinternal
+plan: tree-scans
 EOF
 )
 [ "$(sort <<<"$OUT")" = "$EXPECTED" ] || fail "a helper change should select exactly its production and test consumers: $OUT"
 
 OUT=$(GOWORK=off FAST_DRY_RUN=1 bash "$FAST_GRAPH/test/fast.sh" leaf/leaf_test.go)
-[ "$OUT" = "plan: go ./leaf" ] || fail "a test-file-only change must not select consumers: $OUT"
+[ "$OUT" = $'plan: go ./leaf\nplan: tree-scans' ] || fail "a test-file-only change should select its package and tree scans: $OUT"
 rm -rf "$FAST_GRAPH"
 pass "fast.sh selects exact runnable owners of direct/transitive test imports without propagating test-only edges"
 
