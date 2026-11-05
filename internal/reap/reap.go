@@ -352,6 +352,21 @@ func (s *state) checkoutAt(path string) *checkout {
 	return nil
 }
 
+// heldWorktree reads current work-retention facts for discovery and removal.
+// A prunable checkout has no working directory to inspect; preserve Git's
+// existing cleanup behavior for that case.
+func (s *state) heldWorktree(ctx context.Context, c *checkout) string {
+	if c.isPrunable {
+		return ""
+	}
+	if st, code, err := s.git(ctx, c.path, "status", "--porcelain"); err != nil || code != 0 {
+		return "git status failed"
+	} else if strings.TrimSpace(st) != "" {
+		return "uncommitted changes"
+	}
+	return s.heldUnmerged(ctx, c.path, "HEAD")
+}
+
 func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 	if !s.hostOK {
 		s.warn("host unavailable: no agent can be matched by cwd, so no .worktrees/ checkout is listed")
@@ -365,19 +380,11 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 		}
 		name := filepath.Base(c.path)
 		cand := Candidate{ID: KindWorktree + ":" + name, Kind: KindWorktree, Name: name, Path: c.path}
+		cand.Held = s.heldWorktree(ctx, c)
 		if c.isPrunable {
 			cand.Reason = "git marks the checkout prunable: " + c.prunable
-			out = append(out, cand)
-			continue
-		}
-		cand.Reason = "no live owner"
-		rev := "HEAD"
-		if st, code, err := s.git(ctx, c.path, "status", "--porcelain"); err != nil || code != 0 {
-			cand.Held = "git status failed"
-		} else if strings.TrimSpace(st) != "" {
-			cand.Held = "uncommitted changes"
-		} else if h := s.heldUnmerged(ctx, c.path, rev); h != "" {
-			cand.Held = h
+		} else {
+			cand.Reason = "no live owner"
 		}
 		out = append(out, cand)
 	}
@@ -481,8 +488,8 @@ func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 // Apply removes every candidate without Held. A removal that fails is a
 // Failure and the rest still run. Each removal re-proves its own safety
 // first: a worktree, tab or process is re-checked against the live set so an
-// agent that appeared since Find is never disturbed, and git refuses a dirty
-// or locked worktree on its own.
+// agent that appeared since Find is never disturbed. Worktree retention is
+// checked again, and git also refuses a dirty or locked worktree on its own.
 func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 	var res Result
 	var s *state
@@ -525,8 +532,8 @@ func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 func (s *state) remove(ctx context.Context, c Candidate) error {
 	switch c.Kind {
 	case KindWorktree:
-		// Re-prove no live owner; git itself refuses a dirty or locked checkout
-		// (no --force).
+		// Re-prove ownership and work retention; git also refuses a dirty or
+		// locked checkout (no --force).
 		if !s.hostOK {
 			return fmt.Errorf("host unavailable; %s left alone", c.Name)
 		}
@@ -536,6 +543,9 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		}
 		if s.live.Worktree(co) {
 			return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
+		}
+		if h := s.heldWorktree(ctx, co); h != "" {
+			return fmt.Errorf("%s holds work: %s; left alone", c.Name, h)
 		}
 		res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
 		errOut, code := res.Stderr, res.ExitCode
