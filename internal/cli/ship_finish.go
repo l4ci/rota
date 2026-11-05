@@ -25,7 +25,7 @@ const (
 // branch's status entry and handoff, complete the referenced items, and
 // evaluate the post-cycle trigger gate. It never dispatches a skill.
 func shipFinish(fs *flag.FlagSet) RunFunc {
-	commitFlag := fs.String("commit", "", "merge commit to read the cycle from once the branch is gone; default HEAD")
+	commitFlag := fs.String("commit", "", "merge commit to read the cycle from, even if the branch remains; default HEAD once gone")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) > 1 {
 			return Result{}, Usage("ship finish takes at most one branch")
@@ -66,15 +66,15 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("name the finished branch: %s is the base branch", base)
 		}
 
-		// The cycle: the branch against the base while it exists, else the
-		// merge commit M as M^1..M^2.
+		// An explicit merge commit owns the cycle even if its branch remains
+		// at a later tip. Otherwise use the branch, or HEAD once it is gone.
 		t := branchTarget{Dir: dir, Branch: branch, Base: base, CorpusRoot: root}
 		commit := ""
 		exists, err := r.Verify(ctx, branch+"^{commit}")
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
-		if exists {
+		if exists && *commitFlag == "" {
 			commit, err = finishRev(c, dir, "--short", branch)
 		} else {
 			m := *commitFlag
@@ -84,6 +84,9 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 			if ok, e := r.Verify(ctx, m+"^2^{commit}"); e != nil {
 				return Result{}, gitErr(e)
 			} else if !ok {
+				if exists {
+					return Result{}, Resolution("%s is not a merge commit", m)
+				}
 				return Result{}, Resolution("branch '%s' is gone and %s is not a merge commit", branch, m)
 			}
 			if t.Base, err = finishRev(c, dir, m+"^1"); err == nil {
