@@ -5,10 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // The slot retains the signed payload as well as the host's durable transport
@@ -65,7 +70,7 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		switch state {
 		case "prepared", "unknown", "submitted":
 			res.Handle, res.Delivery = t.handle, jsonx.Str(p, "state")
-			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and reconcile that message before sending another")
+			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; before using rota worker dispatch "+o.Slot+" --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed")
 		}
 		return false, res, nil
 	}
@@ -100,8 +105,15 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
+		request := coreRequest(t, o)
 		p := jsonx.NewObject()
-		p.Set("request", coreRequest(t, o))
+		// A relay retry rebuilds its delivery record; retain the manual
+		// confirmation for this same request instead of erasing its audit.
+		if prior := corePending(s); prior != nil && jsonx.Str(prior, "request") == request && jsonx.Bool(prior, "confirmedByHand") {
+			p.Set("confirmedByHand", true)
+			p.Set("confirmedAt", jsonx.Str(prior, "confirmedAt"))
+		}
+		p.Set("request", request)
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		s.o.Set("coreDelivery", p)
@@ -113,4 +125,75 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		return errors.Join(host.ErrDeliveryUnknown, saveErr)
 	}
 	return err
+}
+
+// ConfirmCoreNotSubmitted reconciles only the saved unknown delivery. It sends
+// nothing and keeps the session and signing key, so the next dispatch can retry.
+func (e Env) ConfirmCoreNotSubmitted(ctx context.Context, root, slot string) error {
+	e = e.WithDefaults()
+	if err := SoloRefusal(root, "solo rounds have no Core deliveries"); err != nil {
+		return err
+	}
+	h := e.NewHost(e.hostKind(root))
+	r := h.Capabilities().DeliveryReconciler
+	if h.Kind() != host.HerdrCore || r == nil {
+		return fail(exitcode.ExitRefused, "delivery confirmation requires herdr-core")
+	}
+	if err := h.Require(); err != nil {
+		return fail(exitcode.ExitUnavailable, err.Error())
+	}
+	var reconcileErr error
+	err := Update(root, func(d *Doc) {
+		s := d.Slot(slot)
+		if s == nil {
+			reconcileErr = fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
+			return
+		}
+		p := corePending(s)
+		if s.IsExternal() || s.PaneHandle() == "" || p == nil || jsonx.Str(p, "state") != "unknown" {
+			reconcileErr = fail(exitcode.ExitRefused, "slot has no unknown Core delivery to confirm")
+			return
+		}
+		payload := jsonx.Str(p, "payload")
+		if payload == "" {
+			reconcileErr = fail(exitcode.ExitRefused, "saved Core delivery has no payload")
+			return
+		}
+		// An uncertain relay was provisionally logged. Retract just that last
+		// entry, preserving older approvals and its sequence for the retry.
+		var relayLog *jsonx.Object
+		var relays []any
+		if strings.HasPrefix(jsonx.Str(p, "request"), "relay:") {
+			seq, _ := strconv.Atoi(harness.RelaySequence(strings.SplitN(payload, "\n", 2)[0]))
+			relayLog = s.o
+			if s.HeldID() == "" && s.PR() == "" {
+				for _, q := range d.queued() {
+					if jsonx.Str(q, "from") == slot {
+						relayLog = q
+					}
+				}
+			}
+			relays = listOf(relayLog, "relays")
+			if seq <= 0 || seq != len(relays) {
+				reconcileErr = fail(exitcode.ExitRefused, "unknown relay does not match the last logged relay; retain its evidence")
+				return
+			}
+		}
+		if err := r.ConfirmNotSubmitted(ctx, s.PaneHandle(), payload); err != nil {
+			reconcileErr = fail(exitcode.ExitRefused, err.Error())
+			return
+		}
+		if relayLog != nil {
+			relayLog.Set("relays", relays[:len(relays)-1])
+		}
+		p.Set("state", "not-submitted")
+		p.Set("confirmedByHand", true)
+		p.Set("confirmedAt", stamp.Format(e.Now()))
+		s.SetUnsent(true)
+		s.ClearRelayPending()
+	})
+	if err != nil {
+		return err
+	}
+	return reconcileErr
 }
