@@ -58,7 +58,7 @@ func TestDoctorCodexReadinessResolvedHost(t *testing.T) {
 				t.Fatalf("dispatch %q, host %q; want %q, %q", in.Dispatch, in.RoundHost, tc.dispatch, tc.host)
 			}
 			for _, c := range doctor.Run(context.Background(), in).Checks {
-				if c.Name != "codex" {
+				if c.Name != harness.Codex {
 					continue
 				}
 				if c.Status != tc.status || strings.Contains(c.Detail, "herdr integration not current") != (tc.status == doctor.Fail) {
