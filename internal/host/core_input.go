@@ -20,7 +20,10 @@ func composerRow(line, marker string) bool {
 // coreEvidenceRegions excludes the active composer and locates pending input.
 // Every index is a byte offset in the original capture, including queue cuts.
 func coreEvidenceRegions(screen string) (output string, queue int) {
-	syntaxes := harness.InputSyntaxes()
+	return coreEvidenceRegionsFor(screen, harness.InputSyntaxes())
+}
+
+func coreEvidenceRegionsFor(screen string, syntaxes []harness.InputSyntax) (output string, queue int) {
 	composer, offset := -1, 0
 	for _, line := range strings.SplitAfter(screen, "\n") {
 		for _, syntax := range syntaxes {
@@ -41,7 +44,7 @@ func coreEvidenceRegions(screen string) (output string, queue int) {
 				queue = i
 			}
 		}
-		if composer < 0 || syntax.QueueFooter == "" {
+		if composer < 0 || syntax.QueueFooter == "" || syntax.QueueGap == nil {
 			continue
 		}
 		lines := strings.SplitAfter(output, "\n")

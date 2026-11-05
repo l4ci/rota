@@ -208,7 +208,7 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	return h, fmt.Errorf("slot %q input did not come up within %ds", s.Slot, s.BootTimeout)
 }
 
-var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(harness.CheckedComposerSyntax().Composer) + `(?:[ \t]|$)`)
+var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(harness.ResolveInputSyntax(harness.Codex).Composer) + `(?:[ \t]|$)`)
 var orcaCodexModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
 
 const orcaTrustQuestion = "Do you trust the contents of this directory?"
@@ -231,9 +231,6 @@ func orcaReady(p string) bool {
 		return false
 	}
 	for _, pattern := range bootPatterns {
-		if strings.Contains(pattern.String(), "Ask Codex") {
-			continue
-		}
 		if pattern.MatchString(p) {
 			return true
 		}
