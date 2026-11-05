@@ -15,12 +15,9 @@ type edit struct {
 	lines []string
 }
 
-// beginEdit is the start of every write that changes an existing bullet: the
-// clean-clone and divergence refusals, the policy and the topic file.
+// beginEdit reads the policy and topic file while mutate owns a clean,
+// current checkout.
 func (c Clone) beginEdit(ctx context.Context, name string) (*edit, error) {
-	if err := c.syncForWrite(ctx); err != nil {
-		return nil, err
-	}
 	pol, err := c.Policy()
 	if err != nil {
 		return nil, err
@@ -48,7 +45,15 @@ func (e *edit) bullets() []bullet { return e.topic.bullets(strings.Join(e.lines,
 
 // Remove deletes the one bullet whose bold title equals in.Title
 // (case-insensitive), with its indented continuation lines, then lands it.
-func (c Clone) Remove(ctx context.Context, in RmIn) (WriteResult, error) {
+func (c Clone) Remove(ctx context.Context, in RmIn) (res WriteResult, err error) {
+	err = c.mutate(ctx, func() error {
+		res, err = c.remove(ctx, in)
+		return err
+	})
+	return res, err
+}
+
+func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	e, err := c.beginEdit(ctx, in.Topic)
 	if err != nil {
 		return WriteResult{}, err
@@ -82,10 +87,18 @@ func (c Clone) Remove(ctx context.Context, in RmIn) (WriteResult, error) {
 // Replace swaps in.Old for in.New inside the title and body of the one bullet
 // that holds in.Old, then lands it. The stamp is not searched or changed, so
 // an Old that touches it matches nothing. Old equal to New is no change.
-func (c Clone) Replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
+func (c Clone) Replace(ctx context.Context, in ReplaceIn) (res WriteResult, err error) {
 	if err := checkLine("replacement", in.New); err != nil {
 		return WriteResult{}, err
 	}
+	err = c.mutate(ctx, func() error {
+		res, err = c.replace(ctx, in)
+		return err
+	})
+	return res, err
+}
+
+func (c Clone) replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 	e, err := c.beginEdit(ctx, in.Topic)
 	if err != nil {
 		return WriteResult{}, err

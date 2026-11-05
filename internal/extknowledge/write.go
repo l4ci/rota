@@ -93,7 +93,7 @@ func (c Clone) topicFile(name string) (Topic, []byte, error) {
 // Add writes one bullet under the topic, creating the topic file and its
 // index line when the topic is new, then lands it by the repo's policy. A
 // bullet whose title already exists (case-insensitive) is a no-op.
-func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
+func (c Clone) Add(ctx context.Context, in AddIn) (res WriteResult, err error) {
 	for _, f := range []struct{ what, s string }{{"title", in.Title}, {"body", strings.TrimRight(in.Body, "\r\n")}, {"topic", in.Topic}, {"hook", in.Hook}, {"source", in.Source}} {
 		if err := checkLine(f.what, f.s); err != nil {
 			return WriteResult{}, err
@@ -102,9 +102,15 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	if strings.Contains(in.Title, "*") {
 		return WriteResult{}, fmt.Errorf("%w: title must not contain %q", ErrContent, "*")
 	}
-	if err := c.syncForWrite(ctx); err != nil {
-		return WriteResult{}, err
-	}
+	err = c.mutate(ctx, func() error {
+		res, err = c.add(ctx, in)
+		return err
+	})
+	return res, err
+}
+
+// add plans and lands an addition while mutate owns the checkout.
+func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 	pol, err := c.Policy()
 	if err != nil {
 		return WriteResult{}, err
@@ -284,7 +290,7 @@ func insertBullet(body, bullet string) string {
 // Amend edits the one bullet under the topic that contains the fragment
 // (case-sensitive): it appends text before the date stamp and rewrites the
 // stamp's date and seen: list, then lands it by policy.
-func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
+func (c Clone) Amend(ctx context.Context, in AmendIn) (res WriteResult, err error) {
 	if err := checkLine("text", strings.TrimRight(in.Text, "\r\n")); err != nil {
 		return WriteResult{}, err
 	}
@@ -296,6 +302,14 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 			return WriteResult{}, fmt.Errorf("%w: date %q is not a real YYYY-MM-DD", ErrUsage, in.Date)
 		}
 	}
+	err = c.mutate(ctx, func() error {
+		res, err = c.amend(ctx, in)
+		return err
+	})
+	return res, err
+}
+
+func (c Clone) amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	e, err := c.beginEdit(ctx, in.Topic)
 	if err != nil {
 		return WriteResult{}, err

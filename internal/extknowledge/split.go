@@ -189,10 +189,15 @@ func checkPlan(parent string, plan *SplitPlan) ([]planSub, error) {
 // folds into the README (or into the plan's subtopics) and goes with its root
 // line. Every bullet line is kept; the plan is validated in full before
 // anything is written. A rerun of the same plan changes nothing.
-func (c Clone) Split(ctx context.Context, in SplitIn) (SplitResult, WriteResult, error) {
-	if err := c.syncForWrite(ctx); err != nil {
-		return SplitResult{}, WriteResult{}, err
-	}
+func (c Clone) Split(ctx context.Context, in SplitIn) (res SplitResult, wr WriteResult, err error) {
+	err = c.mutate(ctx, func() error {
+		res, wr, err = c.split(ctx, in)
+		return err
+	})
+	return res, wr, err
+}
+
+func (c Clone) split(ctx context.Context, in SplitIn) (SplitResult, WriteResult, error) {
 	pol, err := c.Policy()
 	if err != nil {
 		return SplitResult{}, WriteResult{}, err
