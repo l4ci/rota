@@ -36,6 +36,54 @@ func shipMoveAfterPin(t *testing.T, deps *Deps, work, branch, next string) *bool
 	return &moved
 }
 
+func TestShipMergeReportsUnmergedTipAfterPin(t *testing.T) {
+	shipDeterministic(t)
+	for _, jsonMode := range []bool{false, true} {
+		t.Run(map[bool]string{false: "text", true: "json"}[jsonMode], func(t *testing.T) {
+			work := shipFixture(t, "")
+			shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "pinned feature", ""})
+			pin := gittest.Run(t, work, "rev-parse", "feat/x")
+			base := gittest.Run(t, work, "rev-parse", "main")
+			gittest.Run(t, work, "checkout", "-q", "feat/x")
+			shipCommit(t, work, "later.txt", "later feature", "")
+			tip := gittest.Run(t, work, "rev-parse", "HEAD")
+			gittest.Run(t, work, "checkout", "-q", "main")
+			gittest.Run(t, work, "update-ref", "refs/heads/feat/x", pin)
+			deps := testDeps()
+			moved := shipMoveAfterPin(t, deps, work, "feat/x", tip)
+			args := []string{"ship", "merge", "feat/x", "--body-file", "-"}
+			if jsonMode {
+				args = append(args, "--json")
+			}
+			out := trRunWith(t, deps, work, "merge: pinned feature", args...)
+			if !*moved || out.code != ExitRefused {
+				t.Errorf("moved branch must report retained cleanup with exit 4: moved=%v output=%+v", *moved, out)
+			}
+			for _, want := range []string{"pinned commit " + pin + " landed", "feat/x", tip, "not gated or merged", "branch kept", "own review and merge"} {
+				if !strings.Contains(out.stderr, want) {
+					t.Errorf("report lacks %q: %s", want, out.stderr)
+				}
+			}
+			if parents := gittest.Run(t, work, "log", "-1", "--format=%P", "main"); parents != base+" "+pin {
+				t.Errorf("landed parents = %s, want base and pinned commit", parents)
+			}
+			if got := gittest.Run(t, work, "rev-parse", "feat/x"); got != tip {
+				t.Errorf("retained branch tip = %s, want %s", got, tip)
+			}
+			if _, err := os.Stat(filepath.Join(work, "later.txt")); !os.IsNotExist(err) {
+				t.Errorf("later commit landed: stat later.txt = %v", err)
+			}
+			if jsonMode {
+				d := data(t, out.stdout)
+				merge := gittest.Run(t, work, "rev-parse", "--short", "main")
+				if d["changed"] != true || d["branch"] != "feat/x" || d["base"] != "main" || d["sha"] != merge || d["pinned"] != pin || d["tip"] != tip || d["branchKept"] != true || d["blockedBy"] != "branch moved" {
+					t.Errorf("partial-success data = %v", d)
+				}
+			}
+		})
+	}
+}
+
 func TestShipMergeApprovesAndLandsPinAfterRefMoves(t *testing.T) {
 	shipDeterministic(t)
 	for _, confirmed := range []bool{false, true} {
@@ -67,8 +115,11 @@ func TestShipMergeApprovesAndLandsPinAfterRefMoves(t *testing.T) {
 				}
 				return
 			}
-			if out.code != 0 {
-				t.Fatalf("approved merge refused: %+v", out)
+			if out.code != ExitRefused || d["changed"] != true || d["pinned"] != pin || d["tip"] != base || d["branchKept"] != true {
+				t.Fatalf("approved pin must land and keep the moved branch: %+v", out)
+			}
+			if got := gittest.Run(t, work, "rev-parse", "feat/x"); got != base {
+				t.Errorf("retained branch tip = %s, want %s", got, base)
 			}
 			if parents := gittest.Run(t, work, "log", "-1", "--format=%P", "main"); parents != base+" "+pin {
 				t.Errorf("landed parents = %s, want base and pinned commit", parents)

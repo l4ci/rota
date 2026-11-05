@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -451,6 +452,11 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		}, branch, base, msg)
 		if ref != nil {
 			return shipRefusal(ref)
+		}
+		var moved *ship.BranchMovedError
+		if errors.As(err, &moved) {
+			return Result{Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true,
+				"blockedBy", blockedby.BranchMoved, "pinned", moved.Pinned, "tip", moved.Tip, "branchKept", true)}, Refused("%s", moved.Error())
 		}
 		if err != nil {
 			return shipErr(err)
