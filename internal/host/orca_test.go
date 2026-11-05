@@ -50,7 +50,7 @@ func newOrcaFakeAt(cwd string) *orcaFake {
 	return &orcaFake{fs: OSFileSystem{}, cwd: cwd, title: "r:ben", branch: "ben/2203-orca", gitBranch: "ben/2203-orca", screens: []string{orcaEmptyReady}, receipt: `{"stages":["input_accepted","turn_started"],"provider":"codex","observation":"supported"}`, status: `{"running":true}`, alive: map[int]bool{123: true}}
 }
 func (f *orcaFake) deps() Deps {
-	return Deps{FS: f.fs, Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(p int) bool { return f.alive[p] }, Tree: func(p int) []int {
+	return Deps{FS: f.fs, Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(p int) bool { return f.alive[p] }, Start: func(p int) (uint64, bool) { return uint64(p), f.alive[p] }, Tree: func(p int) []int {
 		if f.alive[p] {
 			return []int{p, 456}
 		}
@@ -341,8 +341,13 @@ func TestOrcaDialogAppearingDuringGuardRefusesSend(t *testing.T) {
 }
 func TestOrcaCloseFailureNeverProvesGone(t *testing.T) {
 	f := newOrcaFake(t)
+	h := New(Orca, f.deps())
+	handle, err := h.Spawn(context.Background(), SpawnOpts{Session: "r", Slot: "ben", Cwd: f.cwd, Launch: "codex", BootTimeout: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
 	f.closeFails = true
-	if e := New(Orca, f.deps()).Kill(context.Background(), "ben", f.handle(t)); e == nil {
-		t.Fatal("failed close proved gone")
+	if err := h.Kill(context.Background(), "ben", handle); err == nil || !strings.Contains(err.Error(), "close failed") {
+		t.Fatalf("failed close was not preserved: %v", err)
 	}
 }
