@@ -97,6 +97,8 @@ Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't 
 | `"direct"` | Merges to main and deletes the branch locally. | Solo work, fast iteration. |
 | `"pr"` | Pushes the branch and opens a GitHub PR or GitLab MR with a generated body. | Team work, required code review. |
 
+For a local direct merge, `rota ship merge` resolves the branch to a commit before running its gates. Verdict recovery, verdict checks, approval paths and the merge all use that commit, even if the branch moves while the operation runs. A branch with no verdict still follows the existing merge policy; a locally recorded stale FAIL still blocks.
+
 The PR body is built from commit subjects, the list of resolved item IDs, and a short test plan derived from the touched areas.
 
 See [configuration](configuration.md) for the full `work` block.
