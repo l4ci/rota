@@ -55,7 +55,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	w = &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
 		open := itemNotes(c, id, w)
-		return root, proof.NewNotes(proofLockDir(c, root), func() (artifact.Notes, error) {
+		return root, proof.NewNotes(itemNoteLockDir(c, root), func() (artifact.Notes, error) {
 			// Update calls this under its append lock. The command may have
 			// run for hours since validation read the note, and another
 			// process may have appended meanwhile. Read the current note,
@@ -67,10 +67,10 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	return root, proof.Files(root), w, nil
 }
 
-// proofLockDir is where the proof-note lockfiles live: the rota state dir under
+// itemNoteLockDir is where item-note lockfiles live: the rota state dir under
 // the git common dir, so the main checkout and every linked worktree lock the
 // same file. Outside a repository it falls back to the project's .rota.
-func proofLockDir(c *Ctx, root string) string {
+func itemNoteLockDir(c *Ctx, root string) string {
 	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
 		return rotastate.Dir(cd)
 	}
