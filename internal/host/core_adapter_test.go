@@ -1118,12 +1118,41 @@ func TestCoreAdapterConfirmationChecksUnacknowledgedBaseline(t *testing.T) {
 				if err == nil {
 					t.Fatal("confirmation discarded native activity after the unknown send")
 				}
+				want := "Core native activity advanced since the attempted send; cannot confirm not submitted; inspect the worker's output and treat the message as delivered, or release and reassign the slot"
+				if err.Error() != want {
+					t.Fatalf("refusal = %q, want %q", err, want)
+				}
 				h.Send(bg, "dana", handle, file)
 				if f.sends != 1 {
 					t.Fatalf("refusal erased receipt and duplicated input: %d sends", f.sends)
 				}
 			} else if err != nil {
 				t.Fatalf("unchanged baseline refused explicit confirmation: %v", err)
+			}
+		})
+	}
+}
+
+func TestCoreAdapterConfirmationWithoutReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name, status string
+		turn         int
+	}{
+		{"zero-turn", "idle", 0},
+		{"later-turn", "idle", 8},
+		{"working", "working", 8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, f := coreFixture(t)
+			handle := coreSpawn(t, h)
+			f.status, f.turn = tc.status, tc.turn
+			err := h.Capabilities().DeliveryReconciler.ConfirmNotSubmitted(bg, handle, "relay never sent")
+			want := "Core delivery has no baseline recorded; cannot confirm not submitted"
+			if err == nil || err.Error() != want {
+				t.Fatalf("missing receipt refusal = %v, want %q", err, want)
+			}
+			if f.sends != 0 {
+				t.Fatalf("confirmation sent input: %d sends", f.sends)
 			}
 		})
 	}
