@@ -53,24 +53,40 @@ func TestCoreCallRefreshesDeadlinePerRPC(t *testing.T) {
 	}
 }
 
-const claudeTrustScreen = " Do you trust the files in this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit\n"
+const claudeTrustScreen = " Do you trust the files in this folder?\n   Yes, I trust this folder\n ❯ No, exit\n\n Enter to confirm · Esc to cancel\n"
 
 func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
-	h, f := coreFixture(t)
-	f.app = "claude-code"
-	f.unreported = true
-	f.screen = claudeTrustScreen
-	_, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: "claude", BootTimeout: 2})
-	if e == nil {
-		t.Fatal("spawn succeeded on an unanswered trust dialog")
-	}
-	for _, want := range []string{"Do you trust the files in this folder?", "open `claude` once in the slot folder", "same request id"} {
-		if !strings.Contains(e.Error(), want) {
-			t.Errorf("error %q lacks %q", e, want)
-		}
-	}
-	if strings.Contains(e.Error(), "timeout") {
-		t.Errorf("error reads as a socket timeout: %v", e)
+	for _, tc := range []struct {
+		name, app, launch, screen string
+		want                      []string
+		absent                    string
+	}{
+		{"Claude", "claude-code", "claude", claudeTrustScreen,
+			[]string{"Do you trust the files in this folder?", "open `claude` once in the slot folder", "Yes, I trust this folder", `defaults to "No, exit"`, "Down, then Enter", "same request id"}, "Trust and continue"},
+		{"Codex", "codex", "codex", " Folder access\n /project\n\n › 1. Trust and continue\n   2. Exit\n\n Press Enter to continue\n",
+			[]string{"Folder access", "Trust and continue", "repository root", "once per project", "same request id"}, "claude"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, f := coreFixture(t)
+			f.app = tc.app
+			f.unreported = true
+			f.screen = tc.screen
+			_, e := h.Spawn(context.Background(), SpawnOpts{Slot: "dana", Cwd: "/work", Launch: tc.launch, BootTimeout: 2})
+			if e == nil {
+				t.Fatal("spawn succeeded on an unanswered trust dialog")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(e.Error(), want) {
+					t.Errorf("error %q lacks %q", e, want)
+				}
+			}
+			if strings.Contains(e.Error(), tc.absent) || strings.Contains(e.Error(), "timeout") {
+				t.Errorf("error has unrelated recovery or reads as a socket timeout: %v", e)
+			}
+			if f.sends != 0 {
+				t.Fatal("startup dialog was answered automatically")
+			}
+		})
 	}
 }
 
