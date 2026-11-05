@@ -53,7 +53,9 @@ func TestCoreCallRefreshesDeadlinePerRPC(t *testing.T) {
 	}
 }
 
-const claudeTrustScreen = " Do you trust the files in this folder?\n   Yes, I trust this folder\n ❯ No, exit\n\n Enter to confirm · Esc to cancel\n"
+// Option order confirmed by the live v0.30.0 check recorded in #2708:
+// Down moves from the default No to Yes.
+const claudeTrustScreen = " Do you trust the files in this folder?\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
 
 func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
 	for _, tc := range []struct {
@@ -62,7 +64,7 @@ func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
 		absent                    string
 	}{
 		{"Claude", "claude-code", "claude", claudeTrustScreen,
-			[]string{"Do you trust the files in this folder?", "open `claude` once in the slot folder", "Yes, I trust this folder", `defaults to "No, exit"`, "Down, then Enter", "same request id"}, "Trust and continue"},
+			[]string{"Do you trust the files in this folder?", "worker terminal", "Yes, I trust this folder", `defaults to "No, exit"`, "Down, then Enter", "hc keys <terminal> down", "hc keys <terminal> enter", "same request id"}, "open `claude`"},
 		{"Codex", "codex", "codex", " Folder access\n /project\n\n › 1. Trust and continue\n   2. Exit\n\n Press Enter to continue\n",
 			[]string{"Folder access", "Trust and continue", "repository root", "once per project", "same request id"}, "claude"},
 	} {
