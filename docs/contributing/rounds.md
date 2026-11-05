@@ -90,6 +90,20 @@ Run `go run ./test/treescan --check` to validate the registry without executing 
 The registry test removes each registered guard in turn to check detection. The fast-tier
 wiring test runs for scanner changes and in smoke section 175 at the merge gate.
 
+Round 50 measured `go run ./test/treescan` on base `9c89bab1` and the scan changes
+at `a711d110` on the shared round machine:
+
+| Scan-step cost | Base | After the scan changes |
+| --- | --- | --- |
+| Warm, two runs after warmup | 13.345s, 15.517s | 9.991s, 8.064s |
+| Cold Go build cache, one run | 177.740s | 80.236s |
+
+Cold runs used separate, initially empty `GOCACHE` directories and retained the module
+cache. CPU contention differed between runs; these are observed samples rather than timing
+guarantees. The round-50 orchestrator accepted the remaining 8–10s warm scan cost under
+AC-2 of #2733 (orchestrator relay round 50). The two removed fixture-behavior checks still
+run in the normal package suite.
+
 If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
 (`.rota/KNOWLEDGE.md`, "Build & Tooling: Smoke testing: Gate & frozen records", entry "Pre-existing smoke failures: check main before
 triaging your branch"). A failure that main shares pre-exists the PR and is captured as its own bug; otherwise the
