@@ -109,6 +109,57 @@ Three explicit flags bypass the heuristic flow when you already know what you wa
 
 All three operate on `(topic, title)` pairs. The tier sidecar is the source of truth for the lifecycle state. `KNOWLEDGE.md` itself stays human-readable without tier annotations.
 
+### Tier identity and legacy repair
+
+Topic and title names may contain `::`. New sidecar writes use schema version 2:
+each `entries` key joins the unpadded URL-safe base64 of the topic and title
+with a period. This keeps `(A::B, C)` separate from `(A, B::C)` through tier
+updates, hit folding, moves, renames and deletion. Glossary remains untiered.
+
+Version 1 sidecars (including files without a version) remain readable. A
+legacy key with exactly one possible `::` split keeps its tier, hits, date and
+unknown fields. Reads convert it only in memory; the next successful write
+saves version 2. Entry order and unknown document fields are preserved. If a version 1 file
+already has an extension field named `legacyEntries`, reads still work, but
+writes require preserving that field under another name to avoid overwriting it.
+
+A legacy key such as `A::B::C` could belong to either `(A, B::C)` or `(A::B, C)`.
+Rota refuses operations that need that key's tier and names every possible
+owner in the diagnostic. It leaves the sidecar bytes unchanged on refusal;
+unrelated keys and topic queries continue to work. A complete tier list needs
+all records, so it refuses until the ambiguity is repaired. Hit folding also
+needs every buffered owner; repair ambiguous buffered owners before folding.
+Unrelated successful
+writes retain unresolved records under `legacyEntries` in version 2.
+
+To repair an ambiguous record:
+
+1. Stop writers and back up the sidecar. Use the knowledge file and Git history
+   to determine which bullet owned the metadata. The flattened key alone cannot
+   recover ownership; do not assign the same record to every possible owner.
+2. In a version 2 file, move the entire record from `legacyEntries` to `entries`,
+   using the chosen pair's encoded key, and remove the old legacy key. Keep
+   unknown record fields. If the file is still version 1, convert each
+   unambiguous key to this encoding, move unresolved keys to `legacyEntries`,
+   and set `version` to `2`, retaining other document fields.
+3. Read the chosen pair with `rota knowledge tier get --topic "A::B" --title C`
+   and query both topics to check that only the intended bullet is filtered.
+
+For example, the key for topic `A::B` and title `C` is `QTo6Qg.Qw`.
+To calculate a key for other names:
+
+```python
+import base64
+
+def component(name):
+    return base64.urlsafe_b64encode(name.encode("utf-8")).decode("ascii").rstrip("=")
+
+print(component("A::B") + "." + component("C"))
+```
+
+Version 2 sidecars require a rota version that supports this format. Restore
+the backup before returning to an older writer.
+
 ### Retrospective: `--retro [<session-id|path>]`
 
 `/rota-learn --retro` looks at the session's mistakes instead of its discoveries. It reads the newest session transcript for this worktree, or the one you name with `--retro <session-id|path>` (Claude Code under `~/.claude/projects/`, Codex under `~/.codex/sessions/`) and cites the line or entry for each repeated-work, ignored-plan or skipped-step mistake; one with no citable evidence is marked unverified, not filed. With no transcript it falls back to session memory and recent commits and says so. It sorts each into one of five classes: a **guardrail** (lint, test, hook or CI check), a **written standard** (a `KNOWLEDGE.md` bullet or a decision), a **navigation pointer** (a map entry or an `AGENTS.md` line), a **tool-economy fix** or an **information-access** gap (logs not captured, no read-only service access; filed as an item like a guardrail). Guardrail candidates are filed as items with `rota item create` and never built in the same run. The retro also lists bullets that look like no-ops (never hit, or restating code) as removal candidates. It does not delete or deprecate them; you decide, then use `--deprecate`. It also audits `AGENTS.md`, `CLAUDE.md` and your global instructions, reporting lines that restate code or docs, dead lines and file size without editing them, and reports a repo whose check command runs in no CI workflow or hook as a no-guardrail finding.
