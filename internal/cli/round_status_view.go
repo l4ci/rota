@@ -101,9 +101,8 @@ func snapFromReport(rep *round.Report) roundSnap {
 // loadRoundSnap is one full pass: status, then the candidates. Nothing prints:
 // a warning on stderr would tear the screen, so warnings become Notes.
 func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) {
-	// Every read below goes through c.Context(). The pass's own ctx outlives
-	// the command that built c (a palette entry's run has returned by now) and
-	// ends with the screen.
+	// Every read below goes through c.Context(), so use the pass context
+	// to cancel all of its reads together when the pass ends.
 	cc := *c
 	cc.ctx = ctx
 	c = &cc

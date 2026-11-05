@@ -50,7 +50,8 @@ func findVerb(root *Command, verb []string) *Command {
 
 // paletteView runs `<verb> --ui` in-process and keeps the screen instead of
 // running it: the palette hosts the model, so the verb's own checks (terminal,
-// --json) and its View are the ones a typed --ui would hit.
+// --json) and its View are the ones a typed --ui would hit. Deferred reads
+// borrow the palette host's context after this builder returns.
 func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 	var m tui.Model
 	d := *c.deps()
@@ -65,7 +66,7 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 		}
 		return isTerminal(w)
 	}
-	run(root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
+	runWithContext(c.Context(), root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
 	if m == nil {
 		return nil, errors.New(firstText("no view", errb.String(), out.String()))
 	}
