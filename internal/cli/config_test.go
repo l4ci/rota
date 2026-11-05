@@ -97,6 +97,71 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConfigSetListRequiresJSON(t *testing.T) {
+	root := trackerProject(t, "{}\n")
+	before := readConfig(t, root)
+	code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "test.full", "go test ./...")
+	if code != ExitUsage || !strings.Contains(stderr, "expected list") || !strings.Contains(stderr, `["go test ./..."]`) {
+		t.Fatalf("bare command: exit %d, stderr=%s", code, stderr)
+	}
+	if got := readConfig(t, root); got != before {
+		t.Fatalf("refused set changed config: %s", got)
+	}
+	code, env, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "test.full", `["go test ./..."]`)
+	if code != ExitOK {
+		t.Fatalf("JSON list: exit %d, stderr=%s", code, stderr)
+	}
+	value, _ := get(dataOf(env), "value").([]any)
+	if len(value) != 1 || value[0] != "go test ./..." {
+		t.Fatalf("saved value=%v, want one command in a list", value)
+	}
+}
+
+func TestConfigSetRejectsMismatchedTypes(t *testing.T) {
+	for _, tc := range []struct{ key, raw, expected string }{
+		{"test.full", `{}`, "list"},
+		{"test.full", `42`, "list"},
+		{"test.full", `null`, "list"},
+		{"orchestrator.model", `[]`, "string"},
+		{"ship.qa", `"yes"`, "bool"},
+		{"round.slots", `1.5`, "int"},
+		{"round.commands", `[]`, "object"},
+	} {
+		t.Run(tc.key+"="+tc.raw, func(t *testing.T) {
+			root := trackerProject(t, "{}\n")
+			code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", tc.key, tc.raw)
+			if code != ExitUsage || !strings.Contains(stderr, tc.key) || !strings.Contains(stderr, "expected "+tc.expected) {
+				t.Fatalf("exit %d, stderr=%s", code, stderr)
+			}
+			if got := readConfig(t, root); got != "{}\n" {
+				t.Fatalf("refused set changed project config: %s", got)
+			}
+			if _, err := os.Stat(filepath.Join(root, ".rota", "config.local.json")); !os.IsNotExist(err) {
+				t.Fatalf("refused set created local config: %v", err)
+			}
+		})
+	}
+}
+
+func TestConfigCheckReportsStoredTypeMismatch(t *testing.T) {
+	root := trackerProject(t, `{"test":{"full":"go test ./..."}}`+"\n")
+	if code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "fill"); code != ExitOK {
+		t.Fatalf("fill: exit %d, stderr=%s", code, stderr)
+	}
+	before := readConfig(t, root)
+	code, env, stderr := rotaRun(t, "--json", "-C", root, "config", "check")
+	invalid, _ := get(dataOf(env), "invalid").([]any)
+	if code != ExitFailed || len(invalid) != 1 || !strings.Contains(stderr, "test.full") || !strings.Contains(stderr, "expected list") {
+		t.Fatalf("check: exit %d, data=%v, stderr=%s", code, dataOf(env), stderr)
+	}
+	if get(dataOf(env), "upToDate") != false {
+		t.Errorf("invalid config reported up to date: %v", dataOf(env))
+	}
+	if got := readConfig(t, root); got != before {
+		t.Fatalf("check rewrote existing value: %s", got)
+	}
+}
+
 func TestConfigNeedsProjectAndRegisteredRepo(t *testing.T) {
 	if code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "config", "check"); code != ExitResolution {
 		t.Errorf("no .rota: %d", code)

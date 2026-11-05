@@ -187,19 +187,14 @@ func TestShowLine(t *testing.T) {
 	}
 }
 
-func TestSetCoercions(t *testing.T) {
+func TestCoerceJSONThenString(t *testing.T) {
 	for raw, want := range map[string]string{
 		"true": "true", "42": "42", `"x"`: `"x"`, "[1, 2]": "[1, 2]", `{"a": 1}`: `{"a": 1}`,
 		"opus": `"opus"`, "": `""`, "1.50": "1.5", "True": `"True"`, " 7 ": "7",
 	} {
-		root := project(t, "", "")
-		res, err := Set(root, "orchestrator.model", raw)
-		if err != nil {
-			t.Fatalf("%q: %v", raw, err)
-		}
-		b, _ := jsonx.MarshalCompact(res.Value)
+		b, _ := jsonx.MarshalCompact(Coerce(raw))
 		if string(b) != want {
-			t.Errorf("Set %q stored %s, want %s", raw, b, want)
+			t.Errorf("Coerce %q = %s, want %s", raw, b, want)
 		}
 	}
 }
