@@ -75,6 +75,8 @@ func shipErr(err error) (Result, error) {
 	var nc *ship.NoCommitsError
 	var ui *ship.UnknownItemError
 	switch {
+	case errors.As(err, new(*ship.PostMergeError)):
+		return Result{}, Unavailable("%s", err.Error())
 	case errors.As(err, new(*land.CleanupError)):
 		return Result{}, Unavailable("%s", err.Error())
 	case errors.As(err, &ref):
@@ -455,7 +457,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		}
 		var moved *ship.BranchMovedError
 		if errors.As(err, &moved) {
-			return Result{Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true,
+			return Result{Text: sha, Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true,
 				"blockedBy", blockedby.BranchMoved, "pinned", moved.Pinned, "tip", moved.Tip, "branchKept", true)}, Refused("%s", moved.Error())
 		}
 		if err != nil {

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -73,12 +74,82 @@ func TestShipMergeReportsUnmergedTipAfterPin(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(work, "later.txt")); !os.IsNotExist(err) {
 				t.Errorf("later commit landed: stat later.txt = %v", err)
 			}
+			merge := gittest.Run(t, work, "rev-parse", "--short", "main")
+			if !strings.Contains(out.stderr, "landed on main as merge "+merge) {
+				t.Errorf("report must name the base and landed merge: %s", out.stderr)
+			}
+			if !jsonMode && out.stdout != merge+"\n" {
+				t.Errorf("text stdout = %q, want merge SHA as the last line", out.stdout)
+			}
 			if jsonMode {
 				d := data(t, out.stdout)
-				merge := gittest.Run(t, work, "rev-parse", "--short", "main")
 				if d["changed"] != true || d["branch"] != "feat/x" || d["base"] != "main" || d["sha"] != merge || d["pinned"] != pin || d["tip"] != tip || d["branchKept"] != true || d["blockedBy"] != "branch moved" {
 					t.Errorf("partial-success data = %v", d)
 				}
+			}
+		})
+	}
+}
+
+func TestShipMergePostMergeFailuresReportLanding(t *testing.T) {
+	shipDeterministic(t)
+	for _, tc := range []struct {
+		name, command string
+		runnerError   bool
+		unreadableSHA bool
+	}{
+		{name: "tip exit", command: "rev-parse --verify -q feat/x^{commit}"},
+		{name: "tip runner", command: "rev-parse --verify -q feat/x^{commit}", runnerError: true},
+		{name: "delete exit", command: "branch -d feat/x"},
+		{name: "delete runner", command: "branch -d feat/x", runnerError: true},
+		{name: "hash exit", command: "log -1 --format=%h"},
+		{name: "hash runner", command: "log -1 --format=%h", runnerError: true},
+		{name: "hash unreadable", command: "log -1 --format=%h", unreadableSHA: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			work := shipFixture(t, "")
+			shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "pinned feature", ""})
+			pin := gittest.Run(t, work, "rev-parse", "feat/x")
+			base := gittest.Run(t, work, "rev-parse", "main")
+			deps := testDeps()
+			realGit := deps.Git
+			landed := false
+			deps.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+				command := strings.Join(args, " ")
+				if landed && (command == tc.command || (tc.unreadableSHA && command == "rev-parse --short main")) {
+					if tc.runnerError {
+						return git.Result{}, errors.New("injected git runner failure")
+					}
+					return git.Result{ExitCode: 128, Stderr: "injected git failure"}, nil
+				}
+				res, err := realGit(ctx, dir, args...)
+				if strings.HasPrefix(command, "merge --no-ff ") && err == nil && res.ExitCode == 0 {
+					landed = true
+				}
+				return res, err
+			}
+			out := trRunWith(t, deps, work, "merge: pinned feature", "ship", "merge", "feat/x", "--body-file", "-")
+			if !landed || out.code != ExitUnavailable {
+				t.Errorf("post-merge failure must exit 5 after landing: landed=%v output=%+v", landed, out)
+			}
+			merge := gittest.Run(t, work, "rev-parse", "--short", "main")
+			for _, want := range []string{"pinned commit " + pin + " landed on main", "injected git", "Do not retry the merge"} {
+				if !strings.Contains(out.stderr, want) {
+					t.Errorf("post-merge failure lacks %q: %s", want, out.stderr)
+				}
+			}
+			if tc.unreadableSHA {
+				if !strings.Contains(out.stderr, "merge SHA could not be read") {
+					t.Errorf("unreadable merge must be explicit: %s", out.stderr)
+				}
+			} else if !strings.Contains(out.stderr, "as merge "+merge) {
+				t.Errorf("post-merge failure must name merge %s: %s", merge, out.stderr)
+			}
+			if parents := gittest.Run(t, work, "log", "-1", "--format=%P", "main"); parents != base+" "+pin {
+				t.Errorf("landed parents = %s, want base and pinned commit", parents)
+			}
+			if got := gittest.Run(t, work, "rev-parse", "feat/x"); got != pin {
+				t.Errorf("post-merge failure must keep branch: %s, want %s", got, pin)
 			}
 		})
 	}
