@@ -26,13 +26,13 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 	if err != nil {
 		return "", nil, err
 	}
-	umbrellaTier, err := s.tierMap(Umbrella)
+	umbrellaTier, err := s.effective(Umbrella)
 	if err != nil {
 		return "", nil, err
 	}
 	type pair struct {
 		file  string
-		tiers map[[2]string]string
+		tiers *Sidecar
 		label string
 	}
 	pairs := []pair{{umbrellaFile, umbrellaTier, ".rota/KNOWLEDGE.md"}}
@@ -42,14 +42,14 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		if err != nil {
 			return "", nil, err
 		}
-		t, err := s.tierMap(scope)
+		t, err := s.effective(scope)
 		if err != nil {
 			return "", nil, err
 		}
 		pairs = append(pairs, pair{f, t, ".rota/knowledge/" + scope + "/KNOWLEDGE.md"})
 	}
 
-	filter := func(body, name string, tiers map[[2]string]string) []string {
+	filter := func(body, name string, tiers *Sidecar) ([]string, error) {
 		var out []string
 		for _, line := range pystr.Splitlines(body) {
 			title, text, stamp, ok := parseBullet(strings.TrimRight(line, " \t\r\f\v"))
@@ -57,7 +57,14 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 				out = append(out, line)
 				continue
 			}
-			tier := tiers[[2]string{name, title}]
+			tier := ""
+			if name != GlossaryTopic {
+				e, _, err := tiers.Get(name, title)
+				if err != nil {
+					return nil, err
+				}
+				tier = e.Tier
+			}
 			if o.Tier != "" && tier != o.Tier {
 				continue
 			}
@@ -69,7 +76,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 			}
 			out = append(out, line)
 		}
-		return out
+		return out, nil
 	}
 
 	var b strings.Builder
@@ -104,7 +111,11 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 				b.WriteString("\n")
 			}
 			b.WriteString("## " + t.Name + "\n")
-			b.WriteString(strings.TrimRight(strings.Join(filter(t.Body, t.Name, pairs[0].tiers), "\n"), " \t\n\r\f\v") + "\n")
+			lines, err := filter(t.Body, t.Name, pairs[0].tiers)
+			if err != nil {
+				return "", nil, err
+			}
+			b.WriteString(strings.TrimRight(strings.Join(lines, "\n"), " \t\n\r\f\v") + "\n")
 			first = false
 		}
 	} else {
@@ -138,7 +149,10 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 						if strings.ToLower(t.Name) != hl {
 							continue
 						}
-						lines := filter(t.Body, t.Name, p.tiers)
+						lines, err := filter(t.Body, t.Name, p.tiers)
+						if err != nil {
+							return "", nil, err
+						}
 						if len(lines) == 0 {
 							break
 						}
@@ -168,20 +182,6 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		}
 	}
 	return b.String(), missing, nil
-}
-
-// tierMap loads the (topic, title) → tier lookup of scope's sidecar. A
-// missing sidecar is empty, so every bullet prints unfiltered.
-func (s Store) tierMap(scope string) (map[[2]string]string, error) {
-	sc, err := s.effective(scope)
-	if err != nil {
-		return nil, err
-	}
-	m := map[[2]string]string{}
-	for _, e := range sc.List("") {
-		m[[2]string{e.Topic, e.Title}] = e.Tier
-	}
-	return m, nil
 }
 
 // Stat is one topic's size.

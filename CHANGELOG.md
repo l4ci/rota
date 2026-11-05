@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+- **Knowledge tier sidecars now write schema 2 (one-way).** Before the first write, upgrade every machine sharing the tracked sidecar. Older rota rejects it with `schema version mismatch — expected 1, got 2`. [Git rollback](docs/usage/learning.md#tier-identity-and-legacy-repair) loses metadata changes since the restored commit; it does not revert knowledge markdown.
+
 ## v0.30.0 — 2026-11-04
 
 Claude workers on herdr-core, a tagged relay format, and terminal status from the gate and watch.

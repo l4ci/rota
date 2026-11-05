@@ -60,3 +60,23 @@ func TestScopedMatchGlobsAndInvalidFields(t *testing.T) {
 		}
 	}
 }
+
+func TestPathEntriesDelimiterIdentitiesRemainDistinct(t *testing.T) {
+	s := lockedStore(t)
+	km, _ := s.KnowledgePath(Umbrella)
+	if err := os.WriteFile(km, []byte("## A::B\n\n## A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range [][2]string{{"A::B", "C"}, {"A", "B::C"}} {
+		if _, err := s.Add(Umbrella, p[0], p[1], "distinct learning", "2026-01-01", "", "src/**"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := s.PathEntries(filepath.Join(s.Root, "src/example.go"))
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("recall entries: %+v err=%v", entries, err)
+	}
+	if entries[0].ID == entries[1].ID {
+		t.Fatalf("distinct learnings share recall identity: %+v", entries)
+	}
+}

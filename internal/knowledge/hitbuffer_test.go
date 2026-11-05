@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,7 @@ func TestFoldHitsAppliesBufferOnceAndEmptiesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := sc.Get("Arch", "bullet"); e.Hits != 2 || e.Tier != Provisional {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Hits != 2 || e.Tier != Provisional {
 		t.Fatalf("folded entry = %+v", e)
 	}
 	hp, _ := s.HitsPath(Umbrella)
@@ -86,7 +87,7 @@ func TestHitBufferHonoursContradictionQueue(t *testing.T) {
 	}
 	p, _ := s.TierPath(Umbrella)
 	sc, _ := LoadSidecar(p)
-	if e, _ := sc.Get("Arch", "bullet"); e.Tier != Provisional || e.Hits != 3 {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Tier != Provisional || e.Hits != 3 {
 		t.Fatalf("folded = %+v", e)
 	}
 }
@@ -168,7 +169,7 @@ func TestFoldHitsAfterCrashDoesNotDoubleCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := sc.Get("Arch", "bullet"); e.Hits != 3 {
+	if e, _, _ := sc.Get("Arch", "bullet"); e.Hits != 3 {
 		t.Fatalf("hits = %d, want 3", e.Hits)
 	}
 	if foldedMark(sc) != "" {
@@ -252,10 +253,10 @@ func TestReplaceRetitleFoldsBufferedHitsFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, ok := sc.Get("Arch", "new"); !ok || e.Hits != 2 {
+	if e, ok, _ := sc.Get("Arch", "new"); !ok || e.Hits != 2 {
 		t.Errorf("hits not carried to the new title: %+v ok=%v", e, ok)
 	}
-	if _, ok := sc.Get("Arch", "old"); ok {
+	if _, ok, _ := sc.Get("Arch", "old"); ok {
 		t.Error("hits still keyed under the old title")
 	}
 	hp, _ := s.HitsPath(Umbrella)
@@ -337,5 +338,57 @@ func TestReadPendingSurvivesLongLine(t *testing.T) {
 	hits, skipped, err := readPending(p)
 	if err != nil || len(hits) != 2 || skipped != 0 {
 		t.Fatalf("hits=%d skipped=%d err=%v", len(hits), skipped, err)
+	}
+}
+
+func TestPartialFoldRecoveryKeepsDeferredHits(t *testing.T) {
+	for _, rewritten := range []bool{false, true} {
+		t.Run(fmt.Sprintf("buffer-rewritten-%v", rewritten), func(t *testing.T) {
+			s := lockedStore(t)
+			p := mustTier(t, s)
+			// Safe hits are persisted, but cleanup may have stopped on either side of
+			// the atomic claimed-file rewrite. Both states have the same receipt.
+			raw := `{"version":2,"entries":{"U2FmZQ.S25vd24":{"tier":"confirmed","hits":4}},"legacyEntries":{"A::B::C":{"tier":"deprecated","hits":7}},"foldedBuffer":{"name":"knowledge-hits.jsonl.saved.folding","pending":[{"topic":"A::B","title":"C","date":"2026-01-01"}]}}`
+			if err := os.WriteFile(p, []byte(raw), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			hp, _ := s.HitsPath(Umbrella)
+			claimed := hp + ".saved.folding"
+			if !rewritten {
+				for range 2 {
+					if err := appendPending(claimed, pendingHit{Topic: "Safe", Title: "Known", Date: "2026-01-01"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if err := appendPending(claimed, pendingHit{Topic: "A::B", Title: "C", Date: "2026-01-01"}); err != nil {
+				t.Fatal(err)
+			}
+			check := func() {
+				t.Helper()
+				e, found, err := s.TierGet(Umbrella, "Safe", "Known")
+				if err != nil || !found || e.Hits != 4 {
+					t.Fatalf("applied hits replayed: %+v found=%v err=%v", e, found, err)
+				}
+			}
+			check()
+			res, err := s.FoldHits(Umbrella)
+			if err != nil || res.Hits != 0 || !res.Changed {
+				t.Fatalf("recover partial fold: %+v err=%v", res, err)
+			}
+			check()
+			pending, skipped, err := readPending(claimed)
+			if err != nil || skipped != 0 || len(pending) != 1 || pending[0] != (pendingHit{Topic: "A::B", Title: "C", Date: "2026-01-01"}) {
+				t.Fatalf("remainder lost: %+v skipped=%d err=%v", pending, skipped, err)
+			}
+			b, err := os.ReadFile(p)
+			if err != nil || strings.Contains(string(b), `"foldedBuffer"`) {
+				t.Fatalf("receipt not cleared: %s err=%v", b, err)
+			}
+			res, err = s.FoldHits(Umbrella)
+			if err != nil || res.Hits != 0 || res.Changed {
+				t.Fatalf("second recovery: %+v err=%v", res, err)
+			}
+		})
 	}
 }
