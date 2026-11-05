@@ -97,8 +97,8 @@ func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
 		t.Fatalf("task: %+v %v, want submitted", res, err)
 	}
 	relay := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer once"), Relay: true}
-	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery") {
-		t.Fatalf("unconfirmed task let a relay through: %v", err)
+	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery") || !strings.Contains(err.Error(), "the maintainer must confirm after reading the original terminal screen") {
+		t.Fatalf("unconfirmed task must require the maintainer's screen confirmation: %v", err)
 	}
 	h.sendErr = nil // the host can now prove the task was picked up
 	if _, err := e.Dispatch(bg, dir, relay); err != nil {

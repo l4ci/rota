@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // The slot retains the signed payload as well as the host's durable transport
@@ -69,7 +70,7 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		switch state {
 		case "prepared", "unknown", "submitted":
 			res.Handle, res.Delivery = t.handle, jsonx.Str(p, "state")
-			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; if nothing was typed, run rota worker dispatch "+o.Slot+" --confirm-not-submitted before sending another")
+			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; before using rota worker dispatch "+o.Slot+" --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed")
 		}
 		return false, res, nil
 	}
@@ -104,8 +105,15 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
+		request := coreRequest(t, o)
 		p := jsonx.NewObject()
-		p.Set("request", coreRequest(t, o))
+		// A relay retry rebuilds its delivery record; retain the manual
+		// confirmation for this same request instead of erasing its audit.
+		if prior := corePending(s); prior != nil && jsonx.Str(prior, "request") == request && jsonx.Bool(prior, "confirmedByHand") {
+			p.Set("confirmedByHand", true)
+			p.Set("confirmedAt", jsonx.Str(prior, "confirmedAt"))
+		}
+		p.Set("request", request)
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		s.o.Set("coreDelivery", p)
@@ -179,6 +187,8 @@ func (e Env) ConfirmCoreNotSubmitted(ctx context.Context, root, slot string) err
 			relayLog.Set("relays", relays[:len(relays)-1])
 		}
 		p.Set("state", "not-submitted")
+		p.Set("confirmedByHand", true)
+		p.Set("confirmedAt", stamp.Format(e.Now()))
 		s.SetUnsent(true)
 		s.ClearRelayPending()
 	})

@@ -1079,3 +1079,43 @@ func TestCoreAdapterConfirmationRetainsPositiveEvidence(t *testing.T) {
 		})
 	}
 }
+
+func TestCoreAdapterConfirmationChecksUnacknowledgedBaseline(t *testing.T) {
+	for _, tc := range []struct {
+		name, before, after string
+		turn                int
+		refuse              bool
+	}{
+		{"idle-turn-advanced", "idle", "idle", 8, true},
+		{"working-turn-advanced", "working", "idle", 8, true},
+		{"idle-started-working", "idle", "working", 7, true},
+		{"done-started-working", "done", "working", 7, true},
+		{"unchanged-idle", "idle", "idle", 7, false},
+		{"unchanged-working", "working", "working", 7, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, f := coreFixture(t)
+			handle := coreSpawn(t, h)
+			payload := "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nrelay whose echo scrolled away\n</rota-relay>"
+			file := coreBrief(t, payload)
+			f.status, f.turn, f.lose = tc.before, 7, true
+			if err := h.Send(bg, "dana", handle, file); !errors.Is(err, ErrDeliveryUnknown) {
+				t.Fatalf("lost send = %v", err)
+			}
+			f.status, f.turn, f.lose = tc.after, tc.turn, false
+			f.screen = strings.Repeat("later output without relay echo\n", 200) + "› \n"
+			err := h.Capabilities().DeliveryReconciler.ConfirmNotSubmitted(bg, handle, payload)
+			if tc.refuse {
+				if err == nil {
+					t.Fatal("confirmation discarded native activity after the unknown send")
+				}
+				h.Send(bg, "dana", handle, file)
+				if f.sends != 1 {
+					t.Fatalf("refusal erased receipt and duplicated input: %d sends", f.sends)
+				}
+			} else if err != nil {
+				t.Fatalf("unchanged baseline refused explicit confirmation: %v", err)
+			}
+		})
+	}
+}

@@ -19,6 +19,7 @@ func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
 		t.Run(map[bool]string{false: "held-issue", true: "queued-pr"}[queued], func(t *testing.T) {
 			dir := workerProject(t, `{"round":{"dispatch":"herdr-core"}}`)
 			deps := testDeps()
+			pinNow(deps, "2026-11-05T12:34:56Z")
 			peer, h := coretest.New(t, "claude-code")
 			useHost(deps, h)
 			deps.Getenv = func(string) string { return "" }
@@ -65,6 +66,10 @@ func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
 					t.Fatalf("%s delivery confirmation exit=%d, want 4", mode, code)
 				}
 			}
+			failedRecord, _ := worker.LoadRegistryTolerant(dir).Slot("w1").Raw().Get("coreDelivery")
+			if p := failedRecord.(*jsonx.Object); jsonx.Bool(p, "confirmedByHand") || jsonx.Str(p, "confirmedAt") != "" {
+				t.Fatalf("refused confirmation wrote a manual audit: %v", p)
+			}
 			peer.Mode("")
 			code, out, errs := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--confirm-not-submitted", "--json")
 			if code != 0 {
@@ -83,11 +88,21 @@ func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
 			if queued {
 				logs = reg.QueuedFrom("w1").Relays
 			}
+			pending, _ := s.Raw().Get("coreDelivery")
+			confirmation := pending.(*jsonx.Object)
+			if !jsonx.Bool(confirmation, "confirmedByHand") || jsonx.Str(confirmation, "confirmedAt") != "2026-11-05T12:34:56Z" {
+				t.Fatalf("manual confirmation audit missing: %v", confirmation)
+			}
 			if s.Handle() != handle || len(logs) != 1 || s.RelayPending() != 0 {
 				t.Fatalf("reconciliation changed ownership or retained false provenance: %+v logs=%v", s.Raw(), logs)
 			}
 			if code, out, errs := rotaInWith(t, deps, dir, send...); code != 0 {
 				t.Fatalf("retry: %d %s %s", code, out, errs)
+			}
+			pending, _ = worker.LoadRegistryTolerant(dir).Slot("w1").Raw().Get("coreDelivery")
+			confirmation = pending.(*jsonx.Object)
+			if !jsonx.Bool(confirmation, "confirmedByHand") || jsonx.Str(confirmation, "confirmedAt") != "2026-11-05T12:34:56Z" {
+				t.Fatalf("retry erased manual confirmation audit: %v", confirmation)
 			}
 			sent := peer.Sent()
 			if len(sent) != 2 || sent[0] != sent[1] || !strings.Contains(sent[1], `n="2"`) {
