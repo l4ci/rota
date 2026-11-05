@@ -1,4 +1,4 @@
-{"utc":"2026-10-28","local":"2026-10-28"}
+{"utc":"2026-11-05","local":"2026-11-05"}
 {"name":"claim/already-holder","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"65a31659890ddc93"}]}
 {"name":"claim/arrow-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
@@ -106,7 +106,7 @@
 {"name":"note-add/file-backend","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"rota design or rota plan","message":"item note add is not available when issues.source is file"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"note-add/grow-parts","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"7d2ce0a473b7ce3a"}]}
 {"name":"note-add/identical","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"5","kind":"design","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
-{"name":"note-add/long-line","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"design","type":"B"},"ok":true},"db":"b7e0258616197b78"}]}
+{"name":"note-add/long-line","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"design","type":"B"},"ok":true},"db":"59e1b30f3ace5625"}]}
 {"name":"note-add/new-proof","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
 {"name":"note-add/new-proof/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
 {"name":"note-add/new-proof/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
