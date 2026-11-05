@@ -6,6 +6,7 @@ refs:
   - internal/cli/labels.go
   - internal/cli/item_template.go
   - internal/itembody
+  - internal/notechunk
 ---
 
 ## A4: backlog, capture, IDs, status
@@ -117,6 +118,7 @@ data: {"id": string, "type": "B"|"F"|"T", "kind": string, "changed": bool}
 exit: 2 for an invalid kind or an empty body; 3 item unknown; backend (issue-only; hint: `rota design` or `rota plan`); tracker
 old: hv-item-note <ID> --kind <kind> --body-file <path|->
 shim: `changed` true (old skips identical writes silently). `ROTA_NOTE_LIMIT` stays an env hook for the split size.
+note: the limit counts runes in each complete comment, including its marker and newline. Numbered parts reserve enough space for the final part count, including counts above 99. Splitting prefers line boundaries and cuts longer lines by rune; CRLF becomes LF and trailing newlines are dropped before splitting.
 note: split from the old `--show` and `--rm` action flags (old let the last one win).
 note: `acceptance` is reserved: written by `rota plan pass`, so `add` and `rm` exit 2 for it; `show` reads it.
 

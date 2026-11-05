@@ -35,7 +35,7 @@ func TestCoreClaudeSpawnReadyOnNativeStatus(t *testing.T) {
 }
 
 func TestCoreClaudeSendSkipsComposerCheck(t *testing.T) {
-	for _, tc := range []struct{ state, wantIf string }{{"idle", "idle"}, {"done", "done"}, {"working", "working"}} {
+	for _, tc := range []struct{ state, wantIf string }{{"idle", "idle"}, {"done", ""}, {"working", "working"}} {
 		t.Run(tc.state, func(t *testing.T) {
 			h, f, s := claudeCoreSpawn(t)
 			f.status = tc.state
@@ -43,7 +43,10 @@ func TestCoreClaudeSendSkipsComposerCheck(t *testing.T) {
 			if e != nil && !errors.Is(e, ErrSubmitted) {
 				t.Fatalf("send=%v", e)
 			}
-			if f.sends != 1 || len(f.sendIf) != 1 || f.sendIf[0] != tc.wantIf {
+			if f.sends != 1 || len(f.sendIf) != 1 {
+				t.Fatalf("sends=%d if=%v want %s", f.sends, f.sendIf, tc.wantIf)
+			}
+			if got, _ := f.sendIf[0].(string); got != tc.wantIf {
 				t.Fatalf("sends=%d if=%v want %s", f.sends, f.sendIf, tc.wantIf)
 			}
 		})
@@ -85,7 +88,7 @@ func TestCoreCodexSendStillChecksComposer(t *testing.T) {
 	f.screen = "› \n"
 	f.status = "done"
 	h.Send(context.Background(), "dana", s, coreBrief(t, "task3"))
-	if len(f.sendIf) != 1 || f.sendIf[0] != "done" {
+	if len(f.sendIf) != 1 || f.sendIf[0] != nil {
 		t.Fatalf("codex done send if=%v", f.sendIf)
 	}
 }

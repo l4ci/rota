@@ -162,6 +162,9 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if subSlug == "" || subSlug == "readme" {
 			return WriteResult{}, fmt.Errorf("%w: subtopic %q has no usable file name", ErrNotFound, sub)
 		}
+		if !validIndexName(sub) {
+			return WriteResult{}, fmt.Errorf("%w: subtopic name %q must be one line without ]", ErrContent, sub)
+		}
 		dir := strings.TrimSuffix(parent.File, "/README.md")
 		rel := dir + "/" + subSlug + ".md"
 		if _, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil {
@@ -182,6 +185,9 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 		slug := Slugify(in.Topic)
 		if slug == "" {
 			return WriteResult{}, fmt.Errorf("%w: topic %q has no usable file name", ErrNotFound, in.Topic)
+		}
+		if !validIndexName(in.Topic) {
+			return WriteResult{}, fmt.Errorf("%w: topic name %q must be one line without ]", ErrContent, in.Topic)
 		}
 		hook := in.Hook
 		if hook == "" {

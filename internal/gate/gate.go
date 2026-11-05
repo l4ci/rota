@@ -95,11 +95,15 @@ func (r *Refused) Hint() string {
 	return `ask the user, then re-run with --confirm --confirm-note "<their answer>"`
 }
 
-// Clear lets a gated action through or refuses it. Without --confirm it
-// returns *Refused, whatever autonomy.level says. With it, it appends the
-// approval to the audit log before the caller acts. paths travels into the
-// refusal for merge-approval.
+// Clear lets a gated action through or refuses it. Malformed confirmation
+// pairs return ErrBadConfirm before any audit write. Without --confirm it
+// returns *Refused, whatever autonomy.level says. With a valid confirmation,
+// it appends the approval to the audit log before the caller acts. paths
+// travels into the refusal for merge-approval.
 func Clear(root string, cfg any, now time.Time, name, verb, target string, c Confirm, paths []string) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
 	if !c.Given {
 		if paths == nil {
 			paths = []string{}
