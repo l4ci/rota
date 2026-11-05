@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -236,11 +237,104 @@ func TestStatusFailureHoldsTheWorktree(t *testing.T) {
 	}
 }
 
+func TestApplyReprovesWorktreeRetention(t *testing.T) {
+	for _, tc := range []struct {
+		name, branch, status                                      string
+		ancestry                                                  gitResp
+		locked, remote, unreadableStatus, runnerError, wantRemove bool
+	}{
+		{name: "detached unmerged", ancestry: gitResp{code: 1}},
+		{name: "branch unmerged", branch: "kit/1-a", ancestry: gitResp{code: 1}},
+		{name: "detached unreadable", ancestry: gitResp{code: 128, err: "fatal: cannot read HEAD"}},
+		{name: "branch unreadable", branch: "kit/1-a", ancestry: gitResp{code: 128, err: "fatal: cannot read HEAD"}},
+		{name: "still retained", wantRemove: true},
+		{name: "retained by remote base", ancestry: gitResp{code: 1}, remote: true, wantRemove: true},
+		{name: "new dirty files", status: " M seed\n"},
+		{name: "unreadable status", unreadableStatus: true},
+		{name: "ancestry runner error", runnerError: true},
+		{name: "new lock", locked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := repo([]wt{{"old", tc.branch, ""}}, nil, "HEAD")
+			g.clean("old")
+			g.resp["worktree remove /r/.worktrees/old"] = gitResp{}
+			in := input(g, nil, []host.Agent{}, nil)
+			res := find(t, in, KindWorktree)
+			if got := ids(res.Candidates); !reflect.DeepEqual(got, []string{"worktree:old"}) {
+				t.Fatalf("candidates = %v", got)
+			}
+			// Change current facts without changing the discovery-time verdict.
+			g.resp["merge-base --is-ancestor HEAD main"] = tc.ancestry
+			g.resp["/r/.worktrees/old|status --porcelain"] = gitResp{out: tc.status}
+			if tc.remote {
+				g.resp["rev-parse --verify -q origin/main"] = gitResp{out: "abc"}
+				g.resp["merge-base --is-ancestor HEAD origin/main"] = gitResp{}
+			}
+			if tc.unreadableStatus {
+				g.resp["/r/.worktrees/old|status --porcelain"] = gitResp{code: 128, err: "fatal"}
+			}
+			if tc.runnerError {
+				in.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+					if len(args) > 0 && args[0] == "merge-base" {
+						return git.Result{}, errors.New("git unavailable")
+					}
+					return g.run(ctx, dir, args...)
+				}
+			}
+			if tc.locked {
+				list := g.resp["worktree list --porcelain"].out
+				g.resp["worktree list --porcelain"] = gitResp{out: strings.TrimSuffix(list, "\n\n") + "\nlocked in use\n\n"}
+			}
+			g.calls = nil
+			out := Apply(bg, in, res.Candidates)
+			if tc.wantRemove {
+				if !reflect.DeepEqual(out.Reaped, []string{"worktree:old"}) || len(out.Failed) != 0 || !g.ran("worktree remove") {
+					t.Fatalf("eligible checkout kept: apply = %+v, calls %v", out, g.calls)
+				}
+			} else if len(out.Reaped) != 0 || len(out.Failed) != 1 || g.ran("worktree remove") {
+				t.Fatalf("unsafe checkout removed: apply = %+v, calls %v", out, g.calls)
+			}
+		})
+	}
+}
+
+func TestApplyKeepsNewDetachedCommit(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	project := gittest.NewRepo(t, "main")
+	path := filepath.Join(project, ".worktrees", "old")
+	gittest.Run(t, project, "worktree", "add", "--detach", path, "main")
+	in := Input{Root: project, Base: "main", Git: git.Exec, Report: &round.Report{}}
+	res := find(t, in, KindWorktree)
+	if got := ids(res.Candidates); !reflect.DeepEqual(got, []string{"worktree:old"}) {
+		t.Fatalf("candidates = %v", got)
+	}
+	commit := gittest.Commit(t, path, "unretained", "seed", "new work\n")
+	if out := gittest.Run(t, path, "status", "--porcelain"); out != "" {
+		t.Fatalf("checkout is dirty: %s", out)
+	}
+	if out := gittest.Run(t, project, "for-each-ref", "--contains", commit); out != "" {
+		t.Fatalf("new detached commit is unexpectedly retained by a ref: %s", out)
+	}
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Reaped) != 0 || len(out.Failed) != 1 {
+		t.Fatalf("apply = %+v", out)
+	}
+	if got := gittest.Run(t, path, "rev-parse", "--short", "HEAD"); got != commit {
+		t.Fatalf("HEAD = %s, want retained checkout at %s", got, commit)
+	}
+}
+
 func TestPrunableWorktreeIsACandidate(t *testing.T) {
 	g := repo([]wt{{"gone", "kit/1-a", "prunable gitdir file points to non-existent location"}}, nil)
-	res := find(t, input(g, nil, []host.Agent{}, nil), KindWorktree)
+	in := input(g, nil, []host.Agent{}, nil)
+	res := find(t, in, KindWorktree)
 	if len(res.Candidates) != 1 || res.Candidates[0].Held != "" || !strings.Contains(res.Candidates[0].Reason, "prunable") {
 		t.Errorf("candidates = %+v", res.Candidates)
+	}
+	g.resp["worktree remove /r/.worktrees/gone"] = gitResp{}
+	if out := Apply(bg, in, res.Candidates); !reflect.DeepEqual(out.Reaped, []string{"worktree:gone"}) || len(out.Failed) != 0 {
+		t.Fatalf("apply = %+v", out)
 	}
 }
 
