@@ -387,6 +387,12 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 			res.Text += "\n" + globalCorruptLine(gerr)
 		}
 		if status == config.UpToDate || status == config.Stale {
+			if invalid := config.TypeProblems(c.deps().projectsEnv(), root); len(invalid) > 0 {
+				data.Set("invalid", anySlice(invalid))
+				data.Set("upToDate", false)
+				res.Text = "INVALID: " + strings.Join(invalid, "; ")
+				return res, Failed("%s", invalid[0])
+			}
 			if retired := config.Retired(c.deps().projectsEnv(), root); len(retired) > 0 {
 				data.Set("retired", anySlice(retired))
 				res.Text = "RETIRED: " + strings.Join(retired, "; ")

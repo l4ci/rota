@@ -49,7 +49,7 @@ Each key has a scope, which `rota config show` prints beside the source (`(sourc
 
 `rota config set` picks the file from the scope and says so: a machine key prints `local: <key> = <value> (.rota/config.local.json: a machine key, this machine only; ...)`. `--local` sends any key to `config.local.json`, `--global` to the global config, and `--project` to `.rota/config.json` (on a machine key it warns, after the write, that the tracked value shadows every developer's global config). `rota config show --local` lists `config.local.json`'s own values. On the config screen, Enter edits a machine key in `config.local.json`.
 
-`rota setup` writes a project answer to `.rota/config.json`, a machine answer to `config.local.json`, and a taste answer to `.rota/config.json` only when you typed or `--set` it and it differs from what the project would inherit. A suggestion you accept, such as `worktree` because `.worktrees/` exists, is not written, so `rota setup --yes` pins no taste key. `rota config check` warns, without failing, about a machine key in `.rota/config.json` and about a taste key pinned there at its default, and fails on a key the schema does not know.
+`rota setup` writes a project answer to `.rota/config.json`, a machine answer to `config.local.json`, and a taste answer to `.rota/config.json` only when you typed or `--set` it and it differs from what the project would inherit. A suggestion you accept, such as `worktree` because `.worktrees/` exists, is not written, so `rota setup --yes` pins no taste key. `rota config check` warns, without failing, about a machine key in `.rota/config.json` and about a taste key pinned there at its default, and fails on a key the schema does not know. It also reports stored values with the wrong JSON type, naming the key, expected type and config layer, including values hidden by another layer. It leaves those values for you to correct with `rota config set`.
 
 `rota config check` and `rota config fill` count a required key as supplied when the project, local or global layer holds a non-null value for it. The global layer excludes project-owned keys. For example, `docs.path` set only in `config.local.json` satisfies the check, and fill leaves it there without adding a tracked default. When every required key is supplied and no migration or removal is pending, fill reports `changed: false` and leaves the project file unchanged.
 
@@ -389,6 +389,8 @@ Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one
 ```bash
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
 ```
+
+List keys require a JSON list, even for one command. A bare command such as `rota config set test.full 'go test ./...'` exits 2 with an example of the JSON form. Values of a different type from the key are also refused before writing, such as an object for `test.full` or a list for `orchestrator.model`.
 
 ### Running the full tier on CI
 
@@ -1039,7 +1041,7 @@ Keys sit under their section (`orchestrator`, `work`, `ship`, `round`, ...). Eac
 | `/` | filter the rows by any part of the row; `Enter` ends typing, `Esc` clears |
 | `q` / `Esc` | back (`Esc` clears a filter first) |
 
-While editing, a boolean is a toggle (`Space`), a key with choices is a picker (`←` `→`), and any other key is a text field. `Enter` saves and `Esc` cancels. The text is checked as `rota config set` checks it: JSON when it parses, else a string, and a project-relative path key such as `release.versionFile` refuses a path outside the project. Nothing else is checked, so a number key accepts text just as `config set` does. Every save is written at once, through the code behind `config set`, so leaving the screen never loses or half-applies a change. A key set in `config.local.json` still wins on this machine after a project edit; the screen says so.
+While editing, a boolean is a toggle (`Space`), a key with choices is a picker (`←` `→`), and any other key is a text field. `Enter` saves and `Esc` cancels. The text is checked as `rota config set` checks it: JSON when it parses, else a string, and a project-relative path key such as `release.versionFile` refuses a path outside the project. The value must match the key's declared JSON type, so a number key refuses text and a list key requires a JSON list. `ship.review` also accepts its documented boolean and object forms. Every save is written at once, through the code behind `config set`, so leaving the screen never loses or half-applies a change. A key set in `config.local.json` still wins on this machine after a project edit; the screen says so.
 
 ## The global config dir
 
