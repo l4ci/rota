@@ -130,18 +130,19 @@ terminal. An explicit conflicting launch host is refused.
 
 Core workers currently support **Codex and Claude with native OSC 7501 status reporting**.
 Rota probes the launch flags and account login, then requires the spawned process
-to report readiness. If folder trust appears first, trust the primary project in
-a regular Codex session and retry; Rota leaves that dialog untouched. Codex's "Folder access"
-dialog applies to the repository root, so it comes up once per project, and its default answer,
-"Trust and continue", is the one you want. Codex keeps the default account unless configured otherwise.
+to report readiness. If Codex's "Folder access" dialog appears first, accept the
+default "Trust and continue" in the worker terminal, then retry the assign with
+the same request id. Rota leaves that dialog untouched. It applies to the
+repository root, once per project. Codex keeps the default account unless
+configured otherwise.
 Claude workers need Claude Code's folder trust once for each new slot worktree
-folder: open `claude` once in that folder and accept the prompt. Claude's dialog defaults to
-"No, exit", so pressing Enter straight away quits the worker: select "Yes, I trust this folder"
-first (Down, then Enter, or `hc keys <terminal> down` then `hc keys <terminal> enter` from another
-terminal). Until then the
-worker sits on the trust dialog and assign fails after the boot timeout with an
-error naming the dialog; accept it, then retry the assign with the same request id. Beyond that, Claude needs no
-extra setup: Claude Code reports its status to Core itself, and
+folder. In the worker terminal, select "Yes, I trust this folder". Claude's dialog
+defaults to "No, exit", so pressing Enter straight away quits the worker. Select Yes
+first (Down, then Enter, or `hc keys <terminal> down` then
+`hc keys <terminal> enter` from another terminal). Until then the worker sits on
+the trust dialog and assign fails after the boot timeout with an error naming
+the dialog; accept it, then retry the assign with the same request id. Beyond
+that, Claude needs no extra setup: Claude Code reports its status to Core itself, and
 rota skips the empty-composer check for it (a half-typed human draft is not guarded
 against; Core's `blocked` status and rota's dialog check still refuse a send into a
 permission prompt or question). OpenCode preflight refuses Core with guidance to
@@ -191,11 +192,12 @@ the exact terminal address; no app configuration or document edits are needed.
 
 Delivery reports distinguish submitted, queued and picked-up input. A successful
 Core send alone proves submission. Exact message evidence is needed for queue or
-pickup acknowledgment. A fresh echo of the sent relay's opening tag outside the
-queue preview confirms pickup even for unsigned Claude relays absorbed into a
-running turn. An earlier relay or a task brief's tag does not confirm pickup;
-a relay still visible in a queue preview stays queued. Startup dialogs, missing status and human drafts refuse
-input; Rota never forces a send or answers an unknown dialog. Each accepted
+pickup acknowledgment. A fresh echo of the sent relay's opening tag, including
+its round and sequence, outside the active composer and queue preview confirms
+pickup even for unsigned Claude relays absorbed into a running turn. An earlier
+relay or a task brief's tag does not confirm pickup; a relay still visible in a
+queue preview stays queued. Startup dialogs, missing status and human drafts
+refuse input; Rota never forces a send or answers an unknown dialog. Each accepted
 composer needs a complete read-only styled paint: the guard checks continuation
 rows as well as the prompt row, and literal prompt glyphs in drafts remain input.
 Unknown layouts refuse dispatch; clear the draft or resolve the unsupported
