@@ -34,10 +34,12 @@ type inventory struct {
 }
 
 type function struct {
-	scans bool
-	reads bool
-	calls []string
-	test  string
+	scans    bool
+	reads    bool
+	executes bool
+	rootHint bool
+	calls    []string
+	test     string
 }
 
 func main() {
@@ -147,7 +149,7 @@ func testName(name string) bool {
 	return true
 }
 
-// discover parses every test file, including build-tagged files. Test helpers
+// discover parses every Go file, including build-tagged files. Test helpers
 // are joined across files in the same Go package; recursive calls terminate.
 func discover(root string) (inventory, error) {
 	inv := inventory{Tests: map[string]bool{}, Candidates: map[string]bool{}}
@@ -170,10 +172,10 @@ func discover(root string) (inventory, error) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(name, "_test.go") {
+		if !strings.HasSuffix(name, ".go") {
 			return nil
 		}
-		file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
@@ -207,6 +209,20 @@ func discover(root string) (inventory, error) {
 				continue
 			}
 			f := function{}
+			if !strings.HasSuffix(name, "_test.go") {
+				// Production helpers contribute direct reads only. Following
+				// application call graphs would classify fixture tests as guards.
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					if sel, ok := n.(*ast.SelectorExpr); ok {
+						if id, ok := sel.X.(*ast.Ident); ok && diskReader(imports[id.Name], sel.Sel.Name) {
+							f.reads = true
+						}
+					}
+					return true
+				})
+				groups[group][fn.Name.Name] = append(groups[group][fn.Name.Name], f)
+				continue
+			}
 			sourceHint := false
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
 				if lit, ok := n.(*ast.BasicLit); ok && sourcePath([]ast.Expr{lit}) {
@@ -228,6 +244,9 @@ func discover(root string) (inventory, error) {
 					if id, ok := sel.X.(*ast.Ident); ok {
 						if scanCall(imports[id.Name], sel.Sel.Name, nil) {
 							f.scans = true
+						}
+						if imports[id.Name] == "os/exec" && (sel.Sel.Name == "Command" || sel.Sel.Name == "CommandContext") {
+							f.executes = true
 						}
 						if diskReader(imports[id.Name], sel.Sel.Name) {
 							f.reads = true
@@ -252,6 +271,16 @@ func discover(root string) (inventory, error) {
 				case *ast.SelectorExpr:
 					if id, ok := callee.X.(*ast.Ident); ok {
 						if p, imported := imports[id.Name]; imported {
+							if p == "path/filepath" && (callee.Sel.Name == "Abs" || callee.Sel.Name == "Join") {
+								for _, arg := range call.Args {
+									if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+										value, _ := strconv.Unquote(lit.Value)
+										if value == ".." || value == "../.." {
+											f.rootHint = true
+										}
+									}
+								}
+							}
 							if scanCall(p, callee.Sel.Name, call.Args) {
 								f.scans = true
 							}
@@ -265,7 +294,7 @@ func discover(root string) (inventory, error) {
 			})
 			// A path assembled before the read still depends on source/docs.
 			// Keep these hints local; helper reachability is handled below.
-			f.scans = f.scans || f.reads && sourceHint
+			f.scans = f.scans || (f.reads || f.executes) && sourceHint
 			groups[group][fn.Name.Name] = append(groups[group][fn.Name.Name], f)
 		}
 		return nil
@@ -274,27 +303,33 @@ func discover(root string) (inventory, error) {
 		return inv, err
 	}
 	for _, funcs := range groups {
-		var reachesScan func(string, map[string]bool) bool
-		reachesScan = func(name string, seen map[string]bool) bool {
+		var reachesScan func(string, map[string]bool) function
+		reachesScan = func(name string, seen map[string]bool) function {
 			if seen[name] {
-				return false
+				return function{}
 			}
 			seen[name] = true
+			var result function
 			for _, f := range funcs[name] {
-				if f.scans {
-					return true
-				}
+				result.scans = result.scans || f.scans
+				result.reads = result.reads || f.reads
+				result.rootHint = result.rootHint || f.rootHint
 				for _, next := range f.calls {
-					if reachesScan(next, seen) {
-						return true
-					}
+					reached := reachesScan(next, seen)
+					result.scans = result.scans || reached.scans
+					result.reads = result.reads || reached.reads
+					result.rootHint = result.rootHint || reached.rootHint
 				}
 			}
-			return false
+			return result
 		}
 		for name, variants := range funcs {
 			for _, f := range variants {
-				if f.test != "" && reachesScan(name, map[string]bool{}) {
+				if f.test == "" {
+					continue
+				}
+				reached := reachesScan(name, map[string]bool{})
+				if reached.scans || reached.reads && reached.rootHint {
 					inv.Candidates[f.test] = true
 				}
 			}
@@ -317,6 +352,8 @@ func scanCall(pkg, name string, args []ast.Expr) bool {
 		return name == "ReadDir" || name == "ReadFile" && sourcePath(args)
 	case "io/fs":
 		return name == "ReadDir" || name == "WalkDir" || name == "Glob"
+	case "os/exec":
+		return execScan(name, args)
 	case "go/parser":
 		if name == "ParseDir" {
 			return true
@@ -329,9 +366,45 @@ func scanCall(pkg, name string, args []ast.Expr) bool {
 	return false
 }
 
+// execScan recognizes external tree enumerators, including aliased imports and
+// CommandContext. Other commands qualify through source-path hints in their
+// containing helper, for example a repository hook resolved with filepath.Abs.
+func execScan(name string, args []ast.Expr) bool {
+	if name == "CommandContext" {
+		if len(args) == 0 {
+			return false
+		}
+		args = args[1:]
+	} else if name != "Command" {
+		return false
+	}
+	if len(args) == 0 {
+		return false
+	}
+	literal := func(expr ast.Expr) string {
+		if lit, ok := expr.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+			value, _ := strconv.Unquote(lit.Value)
+			return value
+		}
+		return ""
+	}
+	tool := path.Base(literal(args[0]))
+	if tool == "grep" || tool == "egrep" || tool == "fgrep" || tool == "rg" {
+		return true
+	}
+	if tool == "git" {
+		for _, arg := range args[1:] {
+			if value := literal(arg); value == "grep" || value == "ls-files" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Fixed source/doc reads also depend on files outside the Go build graph.
-// Dynamic paths remain a manual registry responsibility; this deliberately
-// avoids guessing where variables point and keeps fixture exemptions explicit.
+// Hints and disk reads propagate through local helpers, including repo-root
+// helpers; fixture-only callers must explain their exemption in the registry.
 func sourcePath(args []ast.Expr) bool {
 	if len(args) == 0 {
 		return false
@@ -343,7 +416,7 @@ func sourcePath(args []ast.Expr) bool {
 			return true
 		}
 		value, err := strconv.Unquote(lit.Value)
-		if err == nil && (value == ".." || strings.Contains(value, "../") || strings.Contains(value, ".go") || strings.Contains(value, ".md")) {
+		if err == nil && (value == ".." || strings.Contains(value, "../") || strings.Contains(value, ".go") || strings.Contains(value, ".md") || value == "VERSION" || strings.HasPrefix(value, "hooks/") || strings.HasPrefix(value, ".github/")) {
 			found = true
 		}
 		return true
