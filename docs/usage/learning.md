@@ -127,10 +127,10 @@ A legacy key such as `A::B::C` could belong to either `(A, B::C)` or `(A::B, C)`
 Rota refuses operations that need that key's tier and names every possible
 owner in the diagnostic. It leaves the sidecar bytes unchanged on refusal;
 unrelated keys and topic queries continue to work. A complete tier list needs
-all records, so it refuses until the ambiguity is repaired. Hit folding also
-needs every buffered owner; repair ambiguous buffered owners before folding.
-Unrelated successful
-writes retain unresolved records under `legacyEntries` in version 2.
+all records, so it refuses until the ambiguity is repaired. Hit folding applies
+every hit with an unambiguous owner and keeps ambiguous-owner hits buffered;
+a later fold applies them after repair. Unrelated tier writes succeed and retain
+unresolved records under `legacyEntries` in version 2.
 
 To repair an ambiguous record:
 
@@ -157,8 +157,31 @@ def component(name):
 print(component("A::B") + "." + component("C"))
 ```
 
-Version 2 sidecars require a rota version that supports this format. Restore
-the backup before returning to an older writer.
+The first successful upgraded write is a one-way format change. Older rota
+fails every knowledge read against a version 2 sidecar with
+`schema version mismatch — expected 1, got 2`. The sidecar is tracked and shared:
+upgrade every machine sharing it **before the first upgraded write**, including
+read-only users. This applies to `.rota/knowledge-tier.json` and repo-local
+`.rota/knowledge/<name>/knowledge-tier.json` sidecars. Rota creates no backup.
+
+To return to an older rota, stop writers on every machine and coordinate a Git
+rollback of each affected sidecar. Replace `PRE_UPGRADE_COMMIT` below with a
+commit where the sidecar still used version 1:
+
+```sh
+git restore --source=PRE_UPGRADE_COMMIT -- .rota/knowledge-tier.json
+git add -- .rota/knowledge-tier.json
+git commit -m "Restore version 1 knowledge tier metadata"
+git push
+```
+
+For repo-local metadata, use `.rota/knowledge/<name>/knowledge-tier.json` in
+those commands. Have every machine pull the rollback before resuming older
+rota, and prevent upgraded writers from converting it again. This loses all
+tier, hit and `lastSeen` changes after the restored commit. Newer bullets have
+no tracked metadata and are treated as provisional. Restoring metadata does
+not revert `KNOWLEDGE.md`; names containing `::` remain incompatible with the
+old encoding and must be resolved separately before using older rota.
 
 ### Retrospective: `--retro [<session-id|path>]`
 

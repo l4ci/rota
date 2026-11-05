@@ -22,6 +22,22 @@ and order. Ambiguous legacy keys, including overlapping separators such as
 Commands needing an ambiguous key refuse with exit 4 (`blockedBy: "ambiguous"`),
 its possible owners and a repair diagnostic before changing metadata or markdown. Unrelated keys and queries
 remain usable; complete tier listing needs every key and therefore refuses.
+Folding applies unambiguous-owner hits and retains ambiguous-owner hits in the
+buffer for a later fold after repair, so unrelated tier writes succeed.
+
+The first successful upgraded write converts the tracked, shared sidecar to
+version 2. Older rota fails every knowledge read against it with
+`schema version mismatch — expected 1, got 2`. Every machine sharing
+`.rota/knowledge-tier.json` or `.rota/knowledge/<name>/knowledge-tier.json` must
+upgrade before that write. No backup is created. To downgrade, stop all writers,
+run `git restore --source=PRE_UPGRADE_COMMIT -- .rota/knowledge-tier.json`
+(replace `PRE_UPGRADE_COMMIT` with the last version 1 commit, or use the
+repo-local sidecar path), then stage that path, commit and push; all
+machines must pull the rollback before older rota resumes. This discards all
+tier, hit and `lastSeen` changes after that commit; newer bullets become
+untracked/provisional. It does not revert markdown, and delimiter-bearing names
+remain incompatible with the old encoding.
+
 Glossary bypasses tier identity as before. See
 [legacy repair](../../usage/learning.md#tier-identity-and-legacy-repair).
 
@@ -171,7 +187,7 @@ repo: scoped (scope S)
 data: {"hits": number, "changed": bool, "skipped": number}
 exit: implied only
 old: none (new in #1290)
-note: applies the buffered hits of S to the tracked sidecar and empties the buffer: the one verb that writes the sidecar for hits, so the caller commits the result (text: `folded N hit(s) into the sidecar: commit <sidecar>`, or `no buffered hits`). Promotion at `learn.promoteThreshold` and the contradiction block apply as on a hit. `skipped` counts malformed buffer lines, which are dropped. The buffer is claimed by rename and its name recorded in the sidecar before it is removed, so a fold that dies midway does not replay hits. With nothing buffered it takes no lock and writes nothing.
+note: applies S's buffered hits with unambiguous owners to the tracked sidecar and keeps ambiguous-owner hits buffered until a later fold after repair: the one verb that writes the sidecar for hits, so the caller commits the result (text: `folded N hit(s) into the sidecar: commit <sidecar>`, or `no buffered hits`). Promotion at `learn.promoteThreshold` and the contradiction block apply as on a hit. `skipped` counts malformed buffer lines, which are dropped. The buffer is claimed by rename. The existing `foldedBuffer` receipt records the claimed file and, when needed, deferred pending hits until the claimed file is rewritten with those hits; the receipt is then cleared. A fold that dies midway resumes without replaying applied hits or losing deferred hits. With nothing buffered it takes no lock and writes nothing.
 
 ### rota knowledge contradiction add
 rota knowledge contradiction add --topic <T> --title <S> --text <text>
