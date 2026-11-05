@@ -135,18 +135,18 @@ default "Trust and continue" in the worker terminal, then retry the assign with
 the same request id. Rota leaves that dialog untouched. It applies to the
 repository root, once per project. Codex keeps the default account unless
 configured otherwise.
-Claude workers need Claude Code's folder trust once for each new slot worktree
-folder. In the worker terminal, select "Yes, I trust this folder". Claude's dialog
-defaults to "No, exit", so pressing Enter straight away quits the worker. Select Yes
-first (Down, then Enter, or `hc keys <terminal> down` then
-`hc keys <terminal> enter` from another terminal). Until then the worker sits on
-the trust dialog and assign fails after the boot timeout with an error naming
-the dialog; accept it, then retry the assign with the same request id. Beyond
-that, Claude needs no extra setup: Claude Code reports its status to Core itself, and
-rota skips the empty-composer check for it (a half-typed human draft is not guarded
-against; Core's `blocked` status and rota's dialog check still refuse a send into a
+Claude workers need Claude Code's folder trust once per slot worktree. The dialog
+defaults to "No, exit", so pressing Enter straight away quits the worker. Select
+"Yes, I trust this folder" with Down, then Enter, or run `hc keys <terminal> down`
+then `hc keys <terminal> enter` from another terminal. Until then, assign fails
+after the boot timeout with an error naming the dialog and the worker's real
+terminal address in those commands. Accept it, then retry the assign with the
+same request id. Claude Code reports its status to Core itself, and rota skips
+the empty-composer check for it (a half-typed human draft is not guarded against;
+Core's `blocked` status and rota's dialog check still refuse a send into a
 permission prompt or question). OpenCode preflight refuses Core with guidance to
-use Codex, Claude or an existing host. No template or legacy integration installation is required.
+use Codex, Claude or an existing host. No template or legacy integration
+installation is required.
 
 Core launches preserve terminal identity inside Codex shell tools with per-run
 native `shell_environment_policy.set` values. They read the actual terminal's
@@ -196,10 +196,13 @@ pickup acknowledgment. A fresh echo of the sent relay's opening tag, including
 its round and sequence, outside the active composer and queue preview confirms
 pickup even for unsigned Claude relays absorbed into a running turn. An earlier
 relay or a task brief's tag does not confirm pickup; a relay still visible in a
-queue preview stays queued. Startup dialogs, missing status and human drafts
-refuse input; Rota never forces a send or answers an unknown dialog. Each accepted
-composer needs a complete read-only styled paint: the guard checks continuation
-rows as well as the prompt row, and literal prompt glyphs in drafts remain input.
+queue preview stays queued, including an earlier entry when several messages
+share one footer. Claude's queue footer counts only beside the active composer;
+agent output quoting its label does not establish a queue. Startup dialogs,
+missing status and human drafts refuse input; Rota never forces a send or answers
+an unknown dialog. Each accepted composer needs a complete read-only styled
+paint: the guard checks continuation rows as well as the prompt row, and literal
+prompt glyphs in drafts remain input.
 Unknown layouts refuse dispatch; clear the draft or resolve the unsupported
 rendering before retrying. Retry the same message to reconcile its saved signed payload. An uncertain send is retained as
 unknown and never pasted again automatically; inspect the original worker before
