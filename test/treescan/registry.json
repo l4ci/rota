@@ -4,7 +4,6 @@
       "TestAutonomyReferenceLevelsAndStops",
       "TestCodexPluginManifest",
       "TestCodexPluginTree",
-      "TestFoldedFrontMatterReadersAgree",
       "TestPluginManifest",
       "TestPluginSessionStartHook",
       "TestRoundWorkerLearningAligned",
@@ -12,8 +11,7 @@
       "TestSkillLayoutRealTree",
       "TestSkillLayoutSupportedContentShips",
       "TestSkillsCiteAutonomyReference",
-      "TestSkillsHarnessNeutral",
-      "TestValidatorLintsPluginSkills"
+      "TestSkillsHarnessNeutral"
     ],
     "./internal/blockedby": [
       "TestAllListsEveryConst",
@@ -82,6 +80,8 @@
     ]
   },
   "fixtures": {
+    "./TestFoldedFrontMatterReadersAgree": "Tests front-matter readers and site generation against a mutated temporary copy; not a cross-tree source guard.",
+    "./TestValidatorLintsPluginSkills": "Tests validator behavior by mutating copied skills in a temporary project; the real skills validator runs separately for skill changes and at the gate.",
     "./cmd/rota/TestConfigSetStoresNaNAsString": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./cmd/rota/TestDFakesFirst": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./cmd/rota/TestFakesFirst": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
@@ -317,6 +317,7 @@
     "./internal/skills/TestUnmanagedOnlyBlocksAsUnmanaged": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
     "./internal/testiso/TestNestedCheckoutSkipsPlantedWorktree": "Walks a temporary tree containing planted nested checkouts to test traversal isolation.",
     "./internal/worker/TestCoreAdapterRelayRetainedComposer": "Reads retained-draft JSON from sibling host/testdata; fixtures, not repository source.",
+    "./internal/worker/TestDispatchHostTraffic": "Executes fake host scripts and reads temporary project traffic, briefs and golden fixtures; does not enforce repository source invariants.",
     "./internal/worker/TestGateBehaviourHomeGoneAfterAFailedStep": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestGateBehaviourHomeLeftBehindIsAWarning": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestLandingAbandonedIntentDoesNotWedgeRuns": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
@@ -325,6 +326,7 @@
     "./internal/worker/TestLandingReadOnlyGateAndTrainBypassIntentAndLock": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestOrcaDispatchClaudeAndCodexThroughAdapter": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestOrcaPoolReapThroughAdapterAfterAgentExit": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
+    "./internal/worker/TestSessionEnsureTmuxHostTraffic": "Executes fake host scripts and reads temporary project traffic, briefs and golden fixtures; does not enforce repository source invariants.",
     "./internal/worker/TestVerifyPassRemovesLogAndNoCommandsIsFlagged": "Enumerates temporary worker, landing, behaviour, or verification fixture directories."
   }
 }
