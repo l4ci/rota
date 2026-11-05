@@ -172,6 +172,9 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	if e := o.d.FS.WriteFile(pidfile+".json", []byte(encoded), 0600); e != nil {
 		return encoded, fmt.Errorf("persist Orca identity: %w", e)
 	}
+	// Capture immediately when the new shell has already written its PID.
+	// Spawn retries at readiness if the shell is still starting.
+	_, _ = o.processes(h, orcaBootEvidence)
 	return encoded, nil
 }
 func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
@@ -188,7 +191,7 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 		}
 		if e == nil && orcaReady(p) {
 			meta, _ := o.decodeOrca(h)
-			if _, e := o.processes(meta, true); e != nil {
+			if _, e := o.processes(meta, orcaBootEvidence); e != nil {
 				return h, fmt.Errorf("record Orca boot process evidence: %w", e)
 			}
 			if e := o.d.FS.WriteFile(meta.PIDFile+".ready", []byte("ready"), 0600); e != nil {
@@ -248,7 +251,7 @@ func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, 
 		// Keep observed descendants while the agent is alive, before a crash
 		// can reparent them. Missing proof during early boot does not hide a
 		// dialog; Spawn requires a successful snapshot before returning ready.
-		_, _ = o.processes(*v, true)
+		_, _ = o.processes(*v, orcaRefreshEvidence)
 	}
 	if v.ID == "" {
 		return "", fmt.Errorf("unverifiable Orca terminal: native handle missing")
@@ -406,7 +409,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if h.ID == "" {
 		return fmt.Errorf("unverifiable Orca close: native handle missing")
 	}
-	pids, e := o.processes(h, true)
+	evidence, e := o.processes(h, orcaRefreshEvidence)
 	if e != nil {
 		return e
 	}
@@ -443,25 +446,55 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 		}
 		return true
 	}
-	if alive, _, ok := killLoop(&o.d, pids, func() presence { return seenBool(gone()) }); !ok {
-		return fmt.Errorf("orca close unproven; surviving processes:%s", pidList(alive))
+	probe := evidence.aliveDeps(o.d)
+	if alive, _, ok := killLoop(&probe, evidence.pids(), func() presence { return seenBool(gone()) }); !ok {
+		var unknown []int
+		for _, pid := range alive {
+			for _, p := range evidence {
+				if p.PID == pid && p.Start == 0 {
+					unknown = append(unknown, pid)
+					break
+				}
+			}
+		}
+		detail := ""
+		if len(unknown) > 0 {
+			detail = fmt.Sprintf("; no recorded start time (legacy or unreadable at observation):%s; inspect these processes before retrying cleanup", pidList(unknown))
+		}
+		return fmt.Errorf("orca close unproven; surviving processes:%s%s", pidList(alive), detail)
 	}
 	o.d.FS.Remove(h.PIDFile + ".json")
 	return nil
 }
 
+type orcaEvidenceMode int
+
+const (
+	orcaReadEvidence orcaEvidenceMode = iota
+	orcaRefreshEvidence
+	orcaBootEvidence // only a newly created terminal may establish its root
+)
+
 // processes retains observations from boot, polling and cleanup. Serialize
 // updates so a polling process cannot discard descendants saved by cleanup.
-func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
-	var pids []int
+func (o *orca) processes(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
+	var evidence processEvidence
 	err := o.d.FS.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
 		var err error
-		pids, err = o.processesLocked(h, snapshot)
+		evidence, err = o.processesLocked(h, mode)
 		return err
 	})
-	return pids, err
+	return evidence, err
 }
-func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
+
+// orcaProcessRecord distinguishes a proved empty modern tree from an invalid
+// empty legacy list. Ownership metadata remains in Orca's separate identity file.
+type orcaProcessRecord struct {
+	Version   int              `json:"version"`
+	Processes *processEvidence `json:"processes"`
+}
+
+func (o *orca) processesLocked(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
 	raw, e := o.d.FS.ReadFile(h.PIDFile)
 	if e != nil {
 		return nil, fmt.Errorf("missing Orca PID proof: %w", e)
@@ -470,48 +503,46 @@ func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
 	if e != nil || pid <= 0 {
 		return nil, fmt.Errorf("missing Orca PID proof")
 	}
-	pids := []int{pid}
+	var evidence processEvidence
 	treeFile := h.PIDFile + ".tree"
 	if raw, e := o.d.FS.ReadFile(treeFile); e == nil {
-		var stored []int
-		if json.Unmarshal(raw, &stored) != nil || len(stored) == 0 {
-			return nil, fmt.Errorf("unreadable Orca tree proof")
+		if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
+			var record orcaProcessRecord
+			if json.Unmarshal(raw, &record) != nil || record.Version != 1 || record.Processes == nil {
+				return nil, fmt.Errorf("unreadable Orca tree proof")
+			}
+			evidence = *record.Processes
+		} else {
+			stored, legacy, err := decodeProcessEvidence(raw)
+			if err != nil || len(stored)+len(legacy) == 0 {
+				return nil, fmt.Errorf("unreadable Orca tree proof")
+			}
+			// Old Orca numbers remain unknown, conservative blockers. Never
+			// upgrade them from, or expand the tree of, today's process table.
+			evidence = append(stored, unknownProcesses(legacy)...)
 		}
-		for _, p := range stored {
-			if p <= 0 {
+		for _, p := range evidence {
+			if p.PID <= 0 {
 				return nil, fmt.Errorf("invalid Orca tree proof")
 			}
 		}
-		pids = append(pids, stored...)
 	} else if !os.IsNotExist(e) {
 		return nil, e
-	} else if !snapshot || !o.d.Alive(pid) {
+	} else if mode != orcaBootEvidence || !o.d.Alive(pid) {
 		return nil, fmt.Errorf("missing Orca retained process-tree proof; inspect the slot processes before retrying cleanup")
+	} else {
+		// First observation of the newly launched worker, before its root
+		// exits. Subsequent refreshes require the retained incarnation.
+		evidence = observeProcesses(o.d, append([]int{pid}, o.d.Tree(pid)...))
 	}
-	if snapshot {
-		// An observed child may have outlived the original agent and spawned
-		// its own descendants. Refresh every retained live root, not just PID.
-		for _, root := range append([]int(nil), pids...) {
-			if o.d.Alive(root) {
-				pids = append(pids, o.d.Tree(root)...)
-			}
-		}
-	}
-	unique := []int{}
-	seen := map[int]bool{}
-	for _, p := range pids {
-		if p > 0 && !seen[p] {
-			unique = append(unique, p)
-			seen[p] = true
-		}
-	}
-	if snapshot {
-		raw, _ := json.Marshal(unique)
+	if mode != orcaReadEvidence {
+		evidence = evidence.refresh(o.d)
+		raw, _ := json.Marshal(orcaProcessRecord{Version: 1, Processes: &evidence})
 		if e := o.d.FS.WriteFileAtomic(treeFile, raw); e != nil {
 			return nil, e
 		}
 	}
-	return unique, nil
+	return evidence, nil
 }
 
 func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {
@@ -614,12 +645,13 @@ func (o *orca) Snapshot(ctx context.Context) ([]Agent, error) {
 // Only rota-owned, retained process evidence can prove a terminal agentless;
 // connected/writable/orphaned and absent runtime handles cannot.
 func (o *orca) processesGone(h orcaHandle) bool {
-	pids, err := o.processes(h, false)
+	evidence, err := o.processes(h, orcaReadEvidence)
 	if err != nil {
 		return false
 	}
-	for _, pid := range pids {
-		if o.d.Alive(pid) {
+	probe := evidence.aliveDeps(o.d)
+	for _, pid := range evidence.pids() {
+		if probe.Alive(pid) {
 			return false
 		}
 	}
