@@ -15,6 +15,7 @@ Alternative: [Homebrew](reference/installation.md#homebrew) · [curl](reference/
 - [Get started](getting-started.md): install, set up your project and start a round from your coding agent.
 - [Worker setup](first-round.md): harnesses, accounts and the checks for your first round.
 - [Behind the scenes](how-it-works.md): the orchestrator, CLI commands and worker sessions.
+- [Videos](videos.md): short episodes about why rota exists and how to use it.
 
 ### Understand the checks
 

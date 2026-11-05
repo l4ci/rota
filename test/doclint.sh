@@ -46,13 +46,15 @@ pass "skills-docs --check fails when a skill page changes without regenerating"
 
 # ── site-sync publishes llms.txt raw and rejects dead links (#2220) ──
 SS="$TMP/site"; mkdir -p "$SS"
-OUT="$(python3 "$REPO/scripts/site-sync.py" "$SS" 2>&1)" || fail "site-sync fails on the repo (llms.txt links to no page?): $OUT"
+# CI keeps LFS media as pointers. General docs checks use a source-only copy;
+# site_sync_test.py supplies tiny MP4s for the published-episode checks below.
+SSR="$TMP/siterepo"; mkdir -p "$SSR"
+cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSR/"
+OUT="$(python3 "$SSR/scripts/site-sync.py" "$SS" 2>&1)" || fail "site-sync fails on the repo (llms.txt links to no page?): $OUT"
 if grep -qF "page unreachable" <<<"$OUT"; then fail "docs navigation leaves unreachable pages: $OUT"; fi
 cmp -s "$REPO/llms.txt" "$SS/rota/llms.txt" \
   || fail "site-sync did not publish llms.txt raw under rota/"
 [ ! -e "$SS/rota/install.md" ] || fail "site-sync published install.md to the site"
-SSR="$TMP/siterepo"; mkdir -p "$SSR"
-cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$SSR/"
 sed 's#/rota/docs/getting-started/#/rota/docs/no-such-page/#' "$REPO/llms.txt" > "$SSR/llms.txt"
 RC=0; OUT="$(python3 "$SSR/scripts/site-sync.py" "$TMP/site" 2>&1)" || RC=$?
 [ "$RC" != 0 ] && grep -qF "no-such-page" <<<"$OUT" || fail "site-sync accepted an llms.txt link to no docs page (rc $RC): $OUT"
@@ -75,6 +77,10 @@ RC=0; OUT="$(python3 "$SSL/scripts/site-sync.py" "$TMP/sitelane-out" 2>&1)" || R
 [ "$RC" != 0 ] && grep -qF "docs/skills/rota-work.md: lane 'nowhere' is not one of" <<<"$OUT" && ! grep -qF "Traceback" <<<"$OUT" \
   || fail "site-sync did not exit with the lane message on a bad lane (rc $RC): $OUT"
 pass "site-sync exits with skills-docs' lane message on a bad lane"
+
+# ── site-sync generates the published video catalog (#2538) ──
+OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video catalog: $OUT"
+pass "site-sync generates published episodes and refreshes their media links"
 
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even
