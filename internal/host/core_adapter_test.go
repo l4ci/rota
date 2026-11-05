@@ -453,7 +453,7 @@ func TestCoreAdapterKillProvesRetainedChildren(t *testing.T) {
 }
 func TestCoreAdapterConservativePlainComposer(t *testing.T) {
 	for _, screen := range []string{"› Try \"fix tests\"\n", "› Ask Codex to do anything\n", "› 1. Trust folder\nEnter to confirm", "$ \n"} {
-		if e := coreComposer(screen); e == nil {
+		if e := coreComposer(harness.Codex, screen); e == nil {
 			t.Fatalf("ambiguous composer accepted %q", screen)
 		}
 	}
@@ -528,18 +528,18 @@ func TestCoreAdapterLostSpawnReplyReconcilesOwnedTerminal(t *testing.T) {
 }
 func TestCoreAdapterStyledPaintGuards(t *testing.T) {
 	base := "\x18\x1b[!p\x1b[?1049l\x1b[H\x1b[2J\x1b[2;1H› \x1b[38;5;245mTry \"fix tests\"\x1b[0m\x1b[2;3H\x1b[?9001l"
-	if e := coreStyledComposer([]byte(base), 80, 24, "› Try \"fix tests\"\n"); e != nil {
+	if e := coreStyledComposer(harness.Codex, []byte(base), 80, 24, "› Try \"fix tests\"\n"); e != nil {
 		t.Fatalf("upstream positioned gray ghost: %v", e)
 	}
 	for name, paint := range map[string]string{"unsupported control": strings.Replace(base, "\x1b[2;3H", "\x1b[3L", 1), "wrong cursor": strings.Replace(base, "\x1b[2;3H", "\x1b[1;3H", 1), "truncated escape": base + "\x1b["} {
-		if e := coreStyledComposer([]byte(paint), 80, 24, "› Try \"fix tests\"\n"); e == nil {
+		if e := coreStyledComposer(harness.Codex, []byte(paint), 80, 24, "› Try \"fix tests\"\n"); e == nil {
 			t.Fatalf("accepted %s", name)
 		}
 	}
-	if e := coreStyledComposer([]byte(base), 80, 24, "› different human text\n"); e == nil {
+	if e := coreStyledComposer(harness.Codex, []byte(base), 80, 24, "› different human text\n"); e == nil {
 		t.Fatal("conflicting plain capture accepted")
 	}
-	if e := coreStyledComposer([]byte(base), 10000, 24, "› Try \"fix tests\"\n"); e == nil {
+	if e := coreStyledComposer(harness.Codex, []byte(base), 10000, 24, "› Try \"fix tests\"\n"); e == nil {
 		t.Fatal("oversized grid accepted")
 	}
 }
@@ -623,20 +623,29 @@ func TestCoreAdapterCapturedCodexFirstPaint(t *testing.T) {
 	if e = json.Unmarshal(data, &fixture); e != nil {
 		t.Fatal(e)
 	}
-	if e = coreStyledComposer([]byte(fixture.Paint), 200, 120, fixture.Plain); e != nil {
+	if e = coreStyledComposer(harness.Codex, []byte(fixture.Paint), 200, 120, fixture.Plain); e != nil {
 		t.Fatalf("captured idle Codex first paint: %v", e)
 	}
 }
 func TestCoreAdapterObserverCustomTabs(t *testing.T) {
 	paint := "\x18\x1b[H\x1b[2J\x1b[3g\x1b[5G\x1bH\x1b[1G\t› \x1b[2mAsk Codex to do anything\x1b[0m\x1b[1;7H\x1b[?9001l"
-	if e := coreStyledComposer([]byte(paint), 80, 24, "› Ask Codex to do anything\n"); e != nil {
+	if e := coreStyledComposer(harness.Codex, []byte(paint), 80, 24, "› Ask Codex to do anything\n"); e != nil {
 		t.Fatalf("custom tabstop positioning: %v", e)
+	}
+}
+
+func TestCoreAdapterObserverUsesHarnessKind(t *testing.T) {
+	paint := "\x18\x1b[H\x1b[2J› \x1b[2mAsk Codex to do anything\x1b[0m\x1b[1;3H\x1b[?9001l"
+	for _, kind := range []string{harness.Claude, "unknown"} {
+		if e := coreStyledComposer(kind, []byte(paint), 80, 24, "› Ask Codex to do anything\n"); e == nil {
+			t.Errorf("%s guard accepted a Codex composer", kind)
+		}
 	}
 }
 
 func TestCoreAdapterObserverBackgroundIsNotDim(t *testing.T) {
 	paint := "\x18\x1b[H\x1b[2J› \x1b[48;2;65;69;76mAsk Codex to do anything\x1b[0m\x1b[1;3H\x1b[?9001l"
-	if e := coreStyledComposer([]byte(paint), 80, 24, "› Ask Codex to do anything\n"); !errors.Is(e, ErrDraftOnPrompt) {
+	if e := coreStyledComposer(harness.Codex, []byte(paint), 80, 24, "› Ask Codex to do anything\n"); !errors.Is(e, ErrDraftOnPrompt) {
 		t.Fatalf("normal-style draft with Codex background was treated as ghost text: %v", e)
 	}
 }

@@ -208,9 +208,6 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	return h, fmt.Errorf("slot %q input did not come up within %ds", s.Slot, s.BootTimeout)
 }
 
-var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(harness.CheckedComposerSyntax().Composer) + `(?:[ \t]|$)`)
-var orcaCodexModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
-
 const orcaTrustQuestion = "Do you trust the contents of this directory?"
 
 func orcaDialog(p string) (Dialog, bool) {
@@ -223,17 +220,20 @@ func orcaReady(p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
-	model := orcaCodexModel.FindStringSubmatch(p)
-	if len(model) > 0 || orcaCodexPrompt.MatchString(p) {
-		return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && orcaCodexPrompt.MatchString(p)
+	for _, syntax := range harness.InputSyntaxes() {
+		if syntax.ReadyModel == nil {
+			continue
+		}
+		model := syntax.ReadyModel.FindStringSubmatch(p)
+		prompt := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(syntax.Composer) + `(?:[ \t]|$)`).MatchString(p)
+		if len(model) > 0 || prompt {
+			return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && prompt
+		}
 	}
 	if !strings.Contains(p, harness.DefaultInputSyntax().Composer) {
 		return false
 	}
 	for _, pattern := range bootPatterns {
-		if strings.Contains(pattern.String(), "Ask Codex") {
-			continue
-		}
 		if pattern.MatchString(p) {
 			return true
 		}
@@ -729,8 +729,12 @@ func (o *orca) inputReady(h orcaHandle, p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
-	if m := orcaCodexModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
-		return false
+	for _, syntax := range harness.InputSyntaxes() {
+		if syntax.ReadyModel != nil {
+			if m := syntax.ReadyModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
+				return false
+			}
+		}
 	}
 	if _, e := o.d.FS.Stat(h.PIDFile + ".ready"); e != nil {
 		return false
