@@ -70,6 +70,8 @@ printf '%s' "$BODY" | rota knowledge add --external --topic Go --title "Per-case
 rota knowledge amend --external --topic Go --fragment "Per-case test names" --mode append --body-file -
 ```
 
+External writes (`add`, `amend`, `rm`, `replace`, `split` and migration with `--apply`) reserve the shared checkout before synchronization and reading their inputs, and keep it reserved through landing and cleanup. Another write to that checkout exits 4 without changing it; retry after the active operation finishes. Read freshening uses the same reservation: when busy, it warns and reads the current copy without fetching or fast-forwarding. The reservation is local to this checkout and releases even when an operation fails.
+
 A write needs a clean clone. It pulls (fast-forward only), writes the bullet to `topics/<slug>.md`, adds the topic and its `README.md` line when the topic is new (`--hook` sets the line, default the bullet title), commits and then follows the repo's policy in `rota-knowledge.json`:
 
 ```json
