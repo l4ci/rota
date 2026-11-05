@@ -2,11 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -153,33 +151,14 @@ func deletePath(doc *jsonx.Object, segs []string) {
 // malformed file or a conflict (*MergeConflictError) writes nothing. A missing
 // file has nothing to migrate.
 func MigrateMergesFiles(root, globalDir string, apply bool) (MergesMigration, error) {
-	files := []*accountFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root)}}
-	if globalDir != "" {
-		files = append([]*accountFile{{name: "global config.json", path: GlobalPath(globalDir), global: true}}, files...)
-	}
 	var m MergesMigration
-	var lock func(i int) error
-	lock = func(i int) error {
-		if i == len(files) {
-			return migrateMergesPlan(files, &m, apply)
-		}
-		if _, err := os.Stat(files[i].path); err != nil {
-			return lock(i + 1)
-		}
-		return fsio.Locked(files[i].path, fsio.LockTimeout, func() error { return lock(i + 1) })
-	}
-	err := lock(0)
+	err := migrateLayerFiles(root, globalDir, apply, func(files []*migrationFile) error {
+		return migrateMergesPlan(files, &m)
+	})
 	return m, err
 }
 
-func migrateMergesPlan(files []*accountFile, m *MergesMigration, apply bool) error {
-	for _, f := range files {
-		doc, err := readAccountTarget(f)
-		if err != nil {
-			return err
-		}
-		f.doc = doc
-	}
+func migrateMergesPlan(files []*migrationFile, m *MergesMigration) error {
 	var conflicts []MergeConflict
 	var below []any
 	for _, f := range files {
@@ -207,16 +186,6 @@ func migrateMergesPlan(files []*accountFile, m *MergesMigration, apply bool) err
 	if len(conflicts) > 0 {
 		*m = MergesMigration{}
 		return &MergeConflictError{Conflicts: conflicts}
-	}
-	if !apply {
-		return nil
-	}
-	for _, f := range files {
-		if f.changed {
-			if err := fsio.WriteJSONAtomic(f.path, f.doc); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
