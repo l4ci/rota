@@ -144,7 +144,7 @@ func checkPlan(parent string, plan *SplitPlan) ([]planSub, error) {
 		if name == "" {
 			return nil, fmt.Errorf("%w: a subtopic has an empty name", ErrUsage)
 		}
-		if strings.ContainsAny(name, "\r\n[]") || strings.Contains(name, ": ") {
+		if !validIndexName(name) || strings.Contains(name, "[") || strings.Contains(name, ": ") {
 			return nil, fmt.Errorf("%w: subtopic name %q must be one line without [, ] or %q", ErrUsage, name, ": ")
 		}
 		slug := Slugify(name)

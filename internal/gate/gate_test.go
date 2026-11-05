@@ -80,20 +80,25 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
-func TestConfirmValidate(t *testing.T) {
-	for _, c := range []struct {
+func TestClearRejectsMalformedConfirmation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
 		conf Confirm
-		ok   bool
 	}{
-		{Confirm{}, true},
-		{Confirm{Given: true, Note: "yes, push it"}, true},
-		{Confirm{Given: true}, false},
-		{Confirm{Given: true, Note: "  "}, false},
-		{Confirm{Note: "yes"}, false},
+		{"empty note", Confirm{Given: true}},
+		{"whitespace note", Confirm{Given: true, Note: " \t\n\u2003"}},
+		{"note without confirmation", Confirm{Note: "yes"}},
 	} {
-		if err := c.conf.Validate(); (err == nil) != c.ok {
-			t.Errorf("%+v: %v", c.conf, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			root := project(t, "")
+			err := Clear(root, diskCfg(root), fixedNow, TagPush, "release push", "v1", tc.conf, nil)
+			if !errors.Is(err, ErrBadConfirm) {
+				t.Errorf("Clear returned %v, want ErrBadConfirm", err)
+			}
+			if lines := auditLines(t, root); len(lines) != 0 {
+				t.Errorf("malformed confirmation audited %v", lines)
+			}
+		})
 	}
 }
 
@@ -189,9 +194,21 @@ func TestClearRecordsEscalation(t *testing.T) {
 	}
 }
 
-func TestValidateIgnoresEscalation(t *testing.T) {
-	if err := (Confirm{Escalation: "e1"}).Validate(); err != nil {
-		t.Errorf("Validate must keep --confirm semantics: %v", err)
+func TestClearEscalationWithoutConfirmationRefuses(t *testing.T) {
+	root := project(t, "")
+	err := Clear(root, diskCfg(root), fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Escalation: "e1"}, []string{"protected.go"})
+	var refused *Refused
+	if !errors.As(err, &refused) {
+		t.Fatalf("Clear returned %v, want Refused", err)
+	}
+	if refused.Gate != MergeApproval || !reflect.DeepEqual(refused.Paths, []string{"protected.go"}) {
+		t.Errorf("refusal lost gate or paths: %+v", refused)
+	}
+	if refused.Error() != "manual gate 'merge-approval' is not cleared" || refused.Hint() != `ask the user, then re-run with --confirm --confirm-note "<their answer>"` {
+		t.Errorf("refusal wording changed: %s; %s", refused.Error(), refused.Hint())
+	}
+	if lines := auditLines(t, root); len(lines) != 0 {
+		t.Errorf("an escalation without confirmation audited %v", lines)
 	}
 }
 
