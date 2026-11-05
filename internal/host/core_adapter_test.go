@@ -117,6 +117,12 @@ func (f *coreFake) serve(c net.Conn) {
 				e.Encode(map[string]any{"jsonrpc": "2.0", "id": q.ID, "error": map[string]any{"code": -32000, "message": "blocked", "data": map[string]string{"kind": "blocked"}}})
 				continue
 			}
+			// Real Core (hc 0.1.17) accepts only these send preconditions.
+			if w, ok := q.Params["if"]; ok && w != "idle" && w != "working" {
+				f.mu.Unlock()
+				e.Encode(map[string]any{"jsonrpc": "2.0", "id": q.ID, "error": map[string]any{"code": -32602, "message": "unknown variant `" + fmt.Sprint(w) + "`, expected `idle` or `working`", "data": map[string]string{"kind": "invalid_params"}}})
+				continue
+			}
 			f.sends++
 			f.sendIf = append(f.sendIf, q.Params["if"])
 			if f.lose {
