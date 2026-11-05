@@ -587,7 +587,9 @@ func (h *coreHost) ConfirmNotSubmitted(ctx context.Context, handle, payload stri
 			if json.Unmarshal(b, &prior) != nil || prior.State != "unknown" || prior.Sent {
 				return fmt.Errorf("Core receipt is not an unconfirmed unknown delivery")
 			}
-		} else if !errors.Is(err, os.ErrNotExist) {
+		} else if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("Core delivery has no baseline recorded; cannot confirm not submitted")
+		} else {
 			return err
 		}
 		v, c, t, err := h.terminal(ctx, handle)
@@ -602,7 +604,7 @@ func (h *coreHost) ConfirmNotSubmitted(ctx context.Context, handle, payload stri
 		// Native activity since its baseline contradicts non-submission when
 		// the echo has already scrolled out of the bounded screen capture.
 		if t.Turn > prior.Turn || (prior.Was != "working" && t.Status != nil && t.Status.State == "working") {
-			return fmt.Errorf("Core native activity advanced since the attempted send; cannot confirm not submitted")
+			return fmt.Errorf("Core native activity advanced since the attempted send; cannot confirm not submitted; inspect the worker's output and treat the message as delivered, or release and reassign the slot")
 		}
 		var screen struct{ Text string }
 		if err = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); err != nil {
