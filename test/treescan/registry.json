@@ -203,7 +203,6 @@
     "./internal/counter/TestNext": "Reads temporary counters while testing backlog and archive fixture scenarios.",
     "./internal/design/TestAddMatchesOldHelper": "Reads design testdata golden Markdown while exercising a temporary project.",
     "./internal/design/TestAmendMatchesOldHelper": "Reads generated design Markdown and checked-in golden fixtures.",
-    "./internal/extknowledge/TestAddPushesNewTopicAndIndexLine": "Reads Markdown from temporary knowledge checkout fixtures to verify mutations and synchronization.",
     "./internal/extknowledge/TestAddRefusesSymlinkedTopicFile": "Reads planted Markdown in temporary knowledge checkout fixtures to verify synchronization and mutations.",
     "./internal/extknowledge/TestAddRetriesRejectedPushOnce": "Reads Markdown from temporary knowledge checkout fixtures to verify mutations and synchronization.",
     "./internal/extknowledge/TestAddWritesSeenStamp": "Reads Markdown from temporary knowledge checkout fixtures to verify mutations and synchronization.",
