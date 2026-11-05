@@ -210,6 +210,7 @@ func TestExtErrExitCodes(t *testing.T) {
 		{extknowledge.ErrOffline, ExitUnavailable},
 		{extknowledge.ErrPush, ExitFailed},
 		{extknowledge.ErrDirty, ExitRefused},
+		{extknowledge.ErrBusy, ExitRefused},
 	}
 	for _, tc := range cases {
 		var e *Error

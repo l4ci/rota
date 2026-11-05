@@ -125,7 +125,7 @@ func extErr(err error) error {
 		return Resolution("%s", err)
 	case errors.Is(err, extknowledge.ErrIdentity):
 		return Refused("%s", err).WithHint("in the knowledge clone, set git config user.name and git config user.email")
-	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
+	case errors.Is(err, extknowledge.ErrBusy), errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
 	case errors.Is(err, extknowledge.ErrUsage):
 		return Usage("%s", err)

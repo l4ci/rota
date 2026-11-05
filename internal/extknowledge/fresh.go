@@ -125,6 +125,18 @@ func (c Clone) divergence(ctx context.Context) (ahead, behind int, ok bool) {
 // or diverged clone, or an unreachable remote, comes back as a one-line
 // warning and the caller reads what is on disk.
 func (c Clone) Freshen(ctx context.Context) string {
+	var warning string
+	err := c.withCheckout(ctx, func() error {
+		warning = c.freshen(ctx)
+		return nil
+	})
+	if err != nil {
+		return "reading stale copy: " + err.Error()
+	}
+	return warning
+}
+
+func (c Clone) freshen(ctx context.Context) string {
 	if c.fresh() || !c.hasRemote(ctx) {
 		return ""
 	}
@@ -149,7 +161,8 @@ func (c Clone) Freshen(ctx context.Context) string {
 }
 
 // syncForWrite is Freshen's strict twin: a write needs a clean clone and a
-// current base, so every problem is an error instead of a warning.
+// current base, so every problem is an error instead of a warning. The caller
+// must own the checkout reservation.
 func (c Clone) syncForWrite(ctx context.Context) error {
 	d, err := c.dirty(ctx)
 	if err != nil {
