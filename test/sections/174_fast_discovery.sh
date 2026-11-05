@@ -59,7 +59,7 @@ pass "fast.sh discards partial graph output in normal and dry-run modes"
 # No dependents is a successful discovery too: do not queue an empty package.
 OUT=$(GOWORK=off GOPROXY=off GOTOOLCHAIN=local FAST_DRY_RUN=1 \
   bash "$TMP_FAST_DISCOVERY/test/fast.sh" leaf/leaf.go) || fail "valid graph must succeed: $OUT"
-[ "$OUT" = 'plan: go ./leaf' ] || fail "a graph without dependents must select only the leaf: $OUT"
+[ "$OUT" = $'plan: go ./leaf\nplan: tree-scans' ] || fail "a graph without dependents should select the leaf and tree scans: $OUT"
 
 rm -rf "$TMP_FAST_DISCOVERY"
 trap 'rm -rf "$TMP"' EXIT
