@@ -195,3 +195,35 @@ func TestCoreAdapterRelayRetainedComposer(t *testing.T) {
 		})
 	}
 }
+
+func TestCoreAdapterUnknownTaskCanBeConfirmedAndRetried(t *testing.T) {
+	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	peer, h := coretest.New(t, harness.Codex)
+	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+	e := rig.env(h)
+	e.Getenv = func(string) string { return "" }
+	task := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "original unknown assignment"), Task: "T1", Kind: harness.Codex}
+	peer.Mode("uncertain")
+	if _, err := e.Dispatch(bg, dir, task); err == nil {
+		t.Fatal("uncertain task acknowledged")
+	}
+	handle := LoadRegistryTolerant(dir).Slot("w1").Handle()
+	peer.Mode("")
+	if err := e.ConfirmCoreNotSubmitted(bg, dir, "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if !LoadRegistryTolerant(dir).Slot("w1").Unsent() {
+		t.Fatal("confirmation did not report not submitted")
+	}
+	if _, err := e.Dispatch(bg, dir, task); err != nil {
+		t.Fatal(err)
+	}
+	sent := peer.Sent()
+	runs, sends, _ := peer.Counts()
+	if runs != 1 || sends != 2 || sent[0] != sent[1] || LoadRegistryTolerant(dir).Slot("w1").Handle() != handle {
+		t.Fatalf("recovery replaced original assignment: runs=%d sends=%d payloads=%v", runs, sends, sent)
+	}
+}
