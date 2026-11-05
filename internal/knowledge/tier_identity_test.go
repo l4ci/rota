@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -156,7 +157,7 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 				if err == nil {
 					t.Fatal("ambiguous legacy metadata silently assigned")
 				}
-				for _, want := range []string{c.raw, c.topic, c.title, c.otherTopic, c.otherTitle, "repair"} {
+				for _, want := range []string{c.raw, c.topic, c.title, c.otherTopic, c.otherTitle, "repair", "docs/usage/learning.md#tier-identity-and-legacy-repair"} {
 					if !strings.Contains(err.Error(), want) {
 						t.Errorf("diagnostic %q omits %q", err, want)
 					}
@@ -212,17 +213,9 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 			if err != nil || !strings.Contains(out, "**Known**") {
 				t.Fatalf("unrelated query: %s err=%v", out, err)
 			}
-			_, err = s.FoldHits(Umbrella)
-			mustRefuse(err)
-			// Remove the obsolete hit buffer left claimed by the refused fold.
-			claims, err := claimedBuffers(hp)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, path := range claims {
-				if err := os.Remove(path); err != nil {
-					t.Fatal(err)
-				}
+			res, err := s.FoldHits(Umbrella)
+			if err != nil || res.Hits != 0 || res.Changed {
+				t.Fatalf("ambiguous-only fold: %+v err=%v", res, err)
 			}
 			if _, _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
 				t.Fatal(err)
@@ -236,29 +229,6 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 				t.Fatal("migration bypassed ambiguity refusal")
 			}
 		})
-	}
-}
-
-func TestTierFoldAmbiguityLeavesAllRecordsUnchanged(t *testing.T) {
-	s := lockedStore(t)
-	p := mustTier(t, s)
-	raw := `{"version":1,"entries":{"A::B::C":{"tier":"deprecated","hits":7},"Safe::Known":{"tier":"confirmed","hits":2}}}`
-	if err := os.WriteFile(p, []byte(raw), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	hp, _ := s.HitsPath(Umbrella)
-	// Two buffers can survive an interrupted fold. The safe one sorts first.
-	if err := appendPending(hp+".a.folding", pendingHit{Topic: "Safe", Title: "Known", Date: "2026-01-01"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := appendPending(hp+".z.folding", pendingHit{Topic: "A::B", Title: "C", Date: "2026-01-01"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.FoldHits(Umbrella); err == nil {
-		t.Fatal("ambiguous fold accepted")
-	}
-	if b, _ := os.ReadFile(p); string(b) != raw {
-		t.Fatalf("refused fold changed earlier metadata: %s", b)
 	}
 }
 
@@ -278,5 +248,76 @@ func TestTierLegacyReservedFieldRemainsReadable(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p); string(b) != raw {
 		t.Fatalf("extension field changed: %s", b)
+	}
+}
+
+func TestTierSetFoldsSafeHitsAndRetainsAmbiguousHits(t *testing.T) {
+	s := lockedStore(t)
+	p := mustTier(t, s)
+	if err := os.WriteFile(p, []byte(`{"version":1,"entries":{"A::B::C":{"tier":"deprecated","hits":7},"Safe::Known":{"tier":"confirmed","hits":2}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	for _, h := range []pendingHit{
+		{Topic: "Safe", Title: "Known", Date: "2026-01-01"},
+		{Topic: "A::B", Title: "C", Date: "2026-01-01"},
+		{Topic: "Safe", Title: "Known", Date: "2026-01-02"},
+	} {
+		if err := appendPending(hp, h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
+		t.Fatalf("unrelated tier set blocked by another owner: %v", err)
+	}
+	for range 2 {
+		e, found, err := s.TierGet(Umbrella, "Safe", "Known")
+		if err != nil || !found || e.Tier != Provisional || e.Hits != 4 {
+			t.Fatalf("safe hits or requested tier lost/replayed: %+v found=%v err=%v", e, found, err)
+		}
+		if res, err := s.FoldHits(Umbrella); err != nil || res.Hits != 0 || res.Changed {
+			t.Fatalf("deferred-only fold: %+v err=%v", res, err)
+		}
+	}
+	if _, _, err := s.TierGet(Umbrella, "A::B", "C"); err == nil {
+		t.Fatal("ambiguous owner no longer refuses")
+	}
+	// Repair the persisted record without discarding its history or buffered hit.
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Version int                        `json:"version"`
+		Entries map[string]json.RawMessage `json:"entries"`
+		Legacy  map[string]json.RawMessage `json:"legacyEntries"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	rec := doc.Legacy["A::B::C"]
+	if len(rec) == 0 {
+		t.Fatal("unresolved record lost")
+	}
+	// Literal v2 key for (A::B,C); do not reproduce the production encoder.
+	doc.Entries["QTo6Qg.Qw"] = rec
+	delete(doc.Legacy, "A::B::C")
+	repaired, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, repaired, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.FoldHits(Umbrella)
+	if err != nil || res.Hits != 1 {
+		t.Fatalf("retained hit was lost: %+v err=%v", res, err)
+	}
+	e, found, err := s.TierGet(Umbrella, "A::B", "C")
+	if err != nil || !found || e.Tier != Deprecated || e.Hits != 8 {
+		t.Fatalf("repaired metadata/hit: %+v found=%v err=%v", e, found, err)
+	}
+	if res, err := s.FoldHits(Umbrella); err != nil || res.Hits != 0 || res.Changed {
+		t.Fatalf("retained hit replayed: %+v err=%v", res, err)
 	}
 }

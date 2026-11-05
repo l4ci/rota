@@ -3,11 +3,14 @@ package knowledge
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // HitsFile is the gitignored, per-developer buffer of hits not yet folded into
@@ -73,9 +76,9 @@ func (s Store) contradicted() (map[[2]string]bool, error) {
 	return m, nil
 }
 
-// foldedKey is the sidecar field naming the claimed buffer whose hits the
-// sidecar already holds. A fold that dies after the sidecar write leaves that
-// buffer behind; the mark is how the next fold or read knows not to replay it.
+// foldedKey is the receipt for a claimed buffer whose safe hits are applied.
+// A string names a fully applied file; an object also preserves deferred hits
+// until the claimed file is rewritten. Reads and recovery never replay safe hits.
 const foldedKey = "foldedBuffer"
 
 const claimedSuffix = ".folding"
@@ -104,8 +107,75 @@ func claimedBuffers(hp string) ([]string, error) {
 
 func foldedMark(sc *Sidecar) string {
 	v, _ := sc.obj.Get(foldedKey)
+	if o, ok := v.(*jsonx.Object); ok {
+		v, _ = o.Get("name")
+	}
 	name, _ := v.(string)
 	return name
+}
+
+// foldedPending is the remainder of a partially applied claimed buffer.
+// Keeping it in the same atomic write as the hit counts makes rewriting that
+// buffer recoverable: reads use this remainder until the receipt is cleared.
+func foldedPending(sc *Sidecar) ([]pendingHit, error) {
+	v, _ := sc.obj.Get(foldedKey)
+	o, ok := v.(*jsonx.Object)
+	if !ok {
+		// The legacy string receipt applied the whole file.
+		return nil, nil
+	}
+	v, found := o.Get("pending")
+	if !found {
+		return nil, fmt.Errorf("%s: foldedBuffer receipt has no pending hits", sc.path)
+	}
+	raw, err := jsonx.MarshalCompact(v)
+	if err != nil {
+		return nil, err
+	}
+	var hits []pendingHit
+	if err := json.Unmarshal(raw, &hits); err != nil {
+		return nil, fmt.Errorf("%s: invalid foldedBuffer pending hits: %w", sc.path, err)
+	}
+	for _, h := range hits {
+		if h.Topic == "" || h.Title == "" {
+			return nil, fmt.Errorf("%s: invalid foldedBuffer pending owner", sc.path)
+		}
+	}
+	return hits, nil
+}
+
+func retainPending(path string, hits []pendingHit) error {
+	if len(hits) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	var b strings.Builder
+	for _, h := range hits {
+		raw, err := json.Marshal(h)
+		if err != nil {
+			return err
+		}
+		b.Write(raw)
+		b.WriteByte('\n')
+	}
+	return fsio.WriteFileAtomic(path, []byte(b.String()))
+}
+
+// finishFold rewrites the claimed buffer before clearing its receipt. A crash
+// between the two leaves an idempotent rewrite, not a replay of applied hits.
+func finishFold(path, claimed string, pending []pendingHit) error {
+	if err := retainPending(claimed, pending); err != nil {
+		return err
+	}
+	return Update(path, func(sc *Sidecar) (bool, error) {
+		if foldedMark(sc) != filepath.Base(claimed) {
+			return false, fmt.Errorf("%s: foldedBuffer receipt changed during recovery", path)
+		}
+		sc.obj.Delete(foldedKey)
+		return true, nil
+	})
 }
 
 // unfoldedHits is every buffered hit the sidecar does not yet hold: claimed
@@ -115,7 +185,10 @@ func unfoldedHits(sc *Sidecar, hp string) ([]pendingHit, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []pendingHit
+	out, err := foldedPending(sc)
+	if err != nil {
+		return nil, err
+	}
 	for _, c := range claimed {
 		if filepath.Base(c) == foldedMark(sc) {
 			continue
@@ -195,14 +268,10 @@ func claim(hp string) (string, error) {
 	return dst, nil
 }
 
-// FoldHits applies the buffered hits of scope to its tracked sidecar and
-// empties the buffer. It is the one verb that writes the sidecar for hits, so
-// the caller commits the result.
-//
-// A fold is crash-safe: the buffer is claimed by rename, the sidecar write
-// records the claimed file's name, and only then is the file removed. A fold
-// that dies, or fails to remove, after the sidecar write leaves a claimed file
-// the sidecar already marks, which the next fold removes without replaying.
+// FoldHits applies hits whose owners are unambiguous and keeps the others
+// buffered for repair. A receipt atomically records applied counts and any
+// remainder before the claimed file is rewritten; recovery never replays the
+// applied hits or loses the remainder.
 func (s Store) FoldHits(scope string) (FoldResult, error) {
 	var res FoldResult
 	p, err := s.TierPath(scope)
@@ -226,32 +295,29 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 		if err != nil || len(claimed) == 0 {
 			return err
 		}
-		// Drop the already-folded leftover before anything overwrites the mark.
 		sc, err := LoadSidecar(p)
 		if err != nil {
 			return err
 		}
-		recovered := foldedMark(sc) != "" // a crashed fold left its mark in the tracked sidecar
-		pending := claimed[:0:0]
-		for _, c := range claimed {
-			if filepath.Base(c) != foldedMark(sc) {
-				pending = append(pending, c)
-			} else if err := os.Remove(c); err != nil {
-				return err
+		if name := foldedMark(sc); name != "" {
+			// A receipt is a basename in this buffer's directory, never an arbitrary path.
+			prefix := filepath.Base(hp) + "."
+			if filepath.Base(name) != name || !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, claimedSuffix) || len(name) <= len(prefix)+len(claimedSuffix) {
+				return fmt.Errorf("%s: invalid foldedBuffer name %q", p, name)
 			}
-		}
-		// Validate every claimed buffer before saving any of them. Otherwise a
-		// later ambiguous owner could refuse after earlier buffers changed the file.
-		for _, c := range pending {
-			hits, _, err := readPending(c)
+			remaining, err := foldedPending(sc)
 			if err != nil {
 				return err
 			}
-			for _, h := range hits {
-				if err := sc.checkIdentity(h.Topic, h.Title); err != nil {
-					return err
-				}
+			if err := finishFold(p, filepath.Join(filepath.Dir(hp), name), remaining); err != nil {
+				return err
 			}
+			res.Changed = true
+		}
+		// Recovery may have removed a completed file or retained only its remainder.
+		pending, err := claimedBuffers(hp)
+		if err != nil {
+			return err
 		}
 		cm, err := s.contradicted()
 		if err != nil {
@@ -266,39 +332,47 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 			}
 			res.Skipped += skipped
 			var applied int
+			var remaining []pendingHit
 			if err := Update(p, func(sc *Sidecar) (bool, error) {
 				for _, h := range hits {
+					if err := sc.checkIdentity(h.Topic, h.Title); err != nil {
+						remaining = append(remaining, h)
+						continue
+					}
 					if _, _, _, err := bumpHit(sc, h, th, cm); err != nil {
 						return false, err
 					}
+					applied++
 				}
-				sc.obj.Set(foldedKey, name)
-				applied = len(hits)
+				if applied == 0 {
+					return false, nil
+				}
+				if len(remaining) == 0 {
+					sc.obj.Set(foldedKey, name)
+				} else {
+					receipt := jsonx.NewObject()
+					receipt.Set("name", name)
+					receipt.Set("pending", remaining)
+					sc.obj.Set(foldedKey, receipt)
+				}
 				return true, nil
 			}); err != nil {
 				return err
 			}
-			if applied > 0 {
-				res.Hits += applied
-				res.Changed = true
+			if applied == 0 {
+				// No counts changed, so retaining this subset needs no sidecar receipt.
+				if err := retainPending(c, remaining); err != nil {
+					return err
+				}
+				continue
 			}
-			if err := os.Remove(c); err != nil {
+			res.Hits += applied
+			res.Changed = true
+			if err := finishFold(p, c, remaining); err != nil {
 				return err
 			}
 		}
-		// The mark has done its job; clear it so the tracked sidecar carries no
-		// per-fold noise. Names are unique, so a failure here leaves it harmless.
-		return Update(p, func(sc *Sidecar) (bool, error) {
-			if foldedMark(sc) == "" {
-				return false, nil
-			}
-			sc.obj.Delete(foldedKey)
-			// A mark this fold set and cleared nets out; one it found was a rewrite.
-			if recovered {
-				res.Changed = true
-			}
-			return true, nil
-		})
+		return nil
 	})
 	return res, err
 }

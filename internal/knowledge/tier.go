@@ -237,7 +237,7 @@ func (s *Sidecar) checkIdentity(topic, title string) error {
 			}
 		}
 		if needed {
-			return fmt.Errorf("%w: %s ambiguous legacy key %q has possible owners %s; repair legacyEntries by assigning the record to the intended encoded topic/title entry", ErrMultiMatch, filepath.Base(s.path), raw, strings.Join(labels, ", "))
+			return fmt.Errorf("%w: %s ambiguous legacy key %q has possible owners %s; repair legacyEntries by assigning the record to the intended encoded topic/title entry; see docs/usage/learning.md#tier-identity-and-legacy-repair", ErrMultiMatch, filepath.Base(s.path), raw, strings.Join(labels, ", "))
 		}
 	}
 	return nil
