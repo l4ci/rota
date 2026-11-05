@@ -99,6 +99,8 @@ Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't 
 
 For a local direct merge, `rota ship merge` resolves the branch to a commit before running its gates. Verdict recovery, verdict checks, approval paths and the merge all use that commit, even if the branch moves while the operation runs. A branch with no verdict still follows the existing merge policy; a locally recorded stale FAIL still blocks.
 
+Commits added after that pin are not gated or merged by the operation; they need their own review and merge. If the branch tip differs from the pin after the merge, the command keeps the branch and exits 4. Its report names the landed pin and the current tip. In JSON, `changed: true` and `sha` confirm that the base advanced; `pinned`, `tip` and `branchKept: true` describe the retained branch, with `blockedBy: "branch moved"`. Read this result before retrying: the pinned commit has already landed.
+
 The PR body is built from commit subjects, the list of resolved item IDs, and a short test plan derived from the touched areas.
 
 See [configuration](configuration.md) for the full `work` block.
