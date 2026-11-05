@@ -72,6 +72,18 @@ For source changes, fast-tier selection requires a complete Go dependency graph,
 imports. A discovery failure stops both normal and `FAST_DRY_RUN=1` invocations with a diagnostic
 before they report a plan or execute checks; partial graph output cannot produce green proof.
 
+Every fast-tier run also executes the repository source guards, even for docs, unmapped paths
+or an empty change. `test/treescan/registry.json` declares the tests to run; the runner validates
+registration before running those tests with the Go test cache disabled, so every invocation
+executes the scans afresh. This step runs before the selected package checks.
+`FAST_DRY_RUN=1` includes `plan: tree-scans` without executing the guards.
+
+When adding a source-scanning test, register it there. The registration check follows test
+helpers across files and flags unregistered tests that enumerate directories or parse source
+files from disk. Tests that only enumerate isolated fixtures carry an explicit reason in the
+same registry. Fixed-file checks of other packages or docs also belong in the scan list.
+Run `go run ./test/treescan --check` to validate the registry without executing its tests.
+
 If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
 (`.rota/KNOWLEDGE.md`, "Build & Tooling: Smoke testing: Gate & frozen records", entry "Pre-existing smoke failures: check main before
 triaging your branch"). A failure that main shares pre-exists the PR and is captured as its own bug; otherwise the
