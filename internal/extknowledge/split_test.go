@@ -108,6 +108,10 @@ func TestSplitMovesBulletsAndKeepsEveryLine(t *testing.T) {
 	if sr.Subtopics[0].Name != "Godot: Networking" || sr.Subtopics[0].File != "topics/godot/networking.md" || sr.Subtopics[0].Bullets != 3 {
 		t.Fatalf("subtopics = %+v", sr.Subtopics)
 	}
+	got, err := f.clone().QueryWith([]string{"Godot: Networking"}, QueryOpts{})
+	if err != nil || len(got.Missing) != 0 || !strings.Contains(got.Text, "**RPC authority** — Only the server decides.") {
+		t.Fatalf("query after split = %+v, err = %v", got, err)
+	}
 	sameUnits(t, before, bulletUnits(t, f.a))
 	if _, err := os.Stat(filepath.Join(f.a, "topics/godot.md")); !os.IsNotExist(err) {
 		t.Fatalf("flat file must be deleted: %v", err)
@@ -188,6 +192,9 @@ func TestSplitValidatesBeforeWriting(t *testing.T) {
 		{"duplicate name", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "A", Titles: []string{"Signals"}}, {Name: "a", Titles: []string{"Lobby code"}}}}}, ErrUsage},
 		{"slug clash", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "Net work", Titles: []string{"Signals"}}, {Name: "Net-work", Titles: []string{"Lobby code"}}}}}, ErrUsage},
 		{"empty name", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: " ", Titles: []string{"Signals"}}}}}, ErrUsage},
+		{"closing bracket", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "A]B", Titles: []string{"Signals"}}}}}, ErrUsage},
+		{"opening bracket", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "A[B", Titles: []string{"Signals"}}}}}, ErrUsage},
+		{"name with a line break", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "A\nB", Titles: []string{"Signals"}}}}}, ErrUsage},
 		{"readme name", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "README", Titles: []string{"Signals"}}}}}, ErrUsage},
 		{"no titles", SplitIn{Topic: "Godot", Plan: &SplitPlan{Subtopics: []SplitSubtopic{{Name: "A"}}}}, ErrUsage},
 		{"no subtopics", SplitIn{Topic: "Godot", Plan: &SplitPlan{}}, ErrUsage},

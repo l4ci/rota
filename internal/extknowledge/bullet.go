@@ -115,7 +115,7 @@ func parseStamp(b *bullet, comment string) {
 // subIndexRe is one sub-index line of a split topic's README.md:
 // "- [Name](<sub>.md) — hook". The path is matched loosely; a path that is not
 // a plain slug is reported by Malformed and never followed.
-var subIndexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(([^)]*)\.md\)(?:\s+—\s+(.*))?\s*$`)
+var subIndexRe = regexp.MustCompile(`^- \[(` + indexNamePattern + `)\]\(([^)]*)\.md\)(?:\s+—\s+(.*))?\s*$`)
 
 // isSubIndexLine reports whether a line of a split topic's README is one of
 // its sub-index entries rather than a bullet.

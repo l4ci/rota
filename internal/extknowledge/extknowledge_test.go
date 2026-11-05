@@ -270,31 +270,65 @@ func TestPolicyDefaultsToPushWhenFileMissing(t *testing.T) {
 	}
 }
 
-func TestAddPushesNewTopicAndIndexLine(t *testing.T) {
-	f := newFixture(t, `{"write":"push","branch":"main"}`)
-	c := f.clone()
-	res, err := c.Add(context.Background(), AddIn{Topic: "Git", Title: "Worktrees", Body: "share one object store.", Date: "2026-10-25", Source: "rota"})
-	if err != nil {
-		t.Fatal(err)
+func TestAddRejectsUnreadableIndexName(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		topic string
+		file  string
+		seed  func(*testing.T, string) *fixture
+	}{
+		{"root", "A]B", "topics/a-b.md", newFixture},
+		{"subtopic", "Godot: A]B", "topics/godot/a-b.md", splitFixture},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := tc.seed(t, "")
+			head := headSHA(t, f)
+			remote := gittest.Run(t, f.remote, "rev-parse", "HEAD")
+			res, err := f.clone().Add(context.Background(), AddIn{Topic: tc.topic, Title: "Tip", Body: "Keep it reachable."})
+			if !errors.Is(err, ErrContent) {
+				t.Errorf("err = %v, want ErrContent", err)
+			}
+			if res.Changed || res.Pushed || headSHA(t, f) != head || gittest.Run(t, f.a, "status", "--porcelain", "--untracked-files=all") != "" {
+				t.Error("refused creation changed the checkout or commit history")
+			}
+			if gittest.Run(t, f.remote, "rev-parse", "HEAD") != remote {
+				t.Error("refused creation changed remote history")
+			}
+			if _, err := os.Stat(filepath.Join(f.a, tc.file)); !os.IsNotExist(err) {
+				t.Errorf("refused topic file exists: %v", err)
+			}
+		})
 	}
-	if !res.Changed || !res.Pushed || res.Policy.Write != "push" {
-		t.Fatalf("res = %+v", res)
-	}
-	gittest.Run(t, f.b, "pull", "-q", "--ff-only")
-	topic, _ := os.ReadFile(filepath.Join(f.b, "topics/git.md"))
-	if !strings.Contains(string(topic), "- **Worktrees** — share one object store. <!-- 2026-10-25 source:rota -->") {
-		t.Fatalf("topic file = %q", topic)
-	}
-	idx, _ := os.ReadFile(filepath.Join(f.b, IndexFile))
-	if !strings.Contains(string(idx), "- [Git](topics/git.md) — ") {
-		t.Fatalf("index = %q", idx)
-	}
-	msg := gittest.Run(t, f.b, "log", "-1", "--format=%B")
-	if strings.Contains(msg, "Co-Authored-By") {
-		t.Fatalf("commit message carries a trailer: %q", msg)
-	}
-	if gittest.Run(t, f.a, "status", "--porcelain") != "" {
-		t.Fatal("clone must be clean after a write")
+}
+
+func TestAddNewTopicRoundTrips(t *testing.T) {
+	for _, name := range []string{"Git", "C++ (interop)", "A[B", "Ünicode topics"} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t, `{"write":"push","branch":"main"}`)
+			res, err := f.clone().Add(context.Background(), AddIn{Topic: name, Title: "Worktrees", Body: "share one object store.", Date: "2026-10-25", Source: "rota"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.Changed || !res.Pushed || res.Policy.Write != "push" {
+				t.Fatalf("res = %+v", res)
+			}
+			gittest.Run(t, f.b, "pull", "-q", "--ff-only")
+			reader := Clone{Dir: f.b}
+			if !has(topicNames(t, reader), name) {
+				t.Fatalf("created topic %q missing from index", name)
+			}
+			got, err := reader.QueryWith([]string{name}, QueryOpts{})
+			if err != nil || len(got.Missing) != 0 || !strings.Contains(got.Text, "## "+name+"\n") || !strings.Contains(got.Text, "- **Worktrees** — share one object store. <!-- 2026-10-25 source:rota -->") {
+				t.Fatalf("query = %+v, err = %v", got, err)
+			}
+			msg := gittest.Run(t, f.b, "log", "-1", "--format=%B")
+			if strings.Contains(msg, "Co-Authored-By") {
+				t.Fatalf("commit message carries a trailer: %q", msg)
+			}
+			if gittest.Run(t, f.a, "status", "--porcelain") != "" {
+				t.Fatal("clone must be clean after a write")
+			}
+		})
 	}
 }
 
