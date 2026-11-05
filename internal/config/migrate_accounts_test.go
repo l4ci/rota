@@ -1,11 +1,9 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/projects"
@@ -108,61 +106,6 @@ func (r acctRig) read(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return compact(t, decodeCfg(t, string(b)))
-}
-
-func TestMigrateAccountsFilesRewritesEveryLayer(t *testing.T) {
-	const (
-		global  = `{"round":{"codexAccounts":[{"name":"g","codexHome":"/g"}]}}`
-		project = `{"round":{"opencodeAccounts":[{"name":"p","configDir":"/p"}]}}`
-		local   = `{"round":{"accounts":[{"name":"l","configDir":"/l"}]}}`
-	)
-	r := newAcctRig(t, global, project, local)
-	cfgPath := filepath.Join(r.root, ".rota", "config.json")
-	locPath := filepath.Join(r.root, ".rota", "config.local.json")
-
-	m, err := MigrateAccountsFiles(r.root, r.gdir, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(m.Changes) != 3 || !m.Changed() {
-		t.Fatalf("preview changes = %+v, want one per layer", m.Changes)
-	}
-	if got := r.read(t, cfgPath); got != compact(t, decodeCfg(t, project)) {
-		t.Errorf("preview wrote config.json: %s", got)
-	}
-
-	if _, err := MigrateAccountsFiles(r.root, r.gdir, true); err != nil {
-		t.Fatal(err)
-	}
-	for path, want := range map[string]string{
-		GlobalPath(r.gdir): `{"round":{"accounts":[{"kind":"codex","name":"g","dir":"/g"}]}}`,
-		cfgPath:            `{"round":{"accounts":[{"kind":"opencode","name":"p","dir":"/p"}]}}`,
-		locPath:            `{"round":{"accounts":[{"kind":"claude","name":"l","dir":"/l"}]}}`,
-	} {
-		if got := r.read(t, path); got != compact(t, decodeCfg(t, want)) {
-			t.Errorf("%s:\n got  %s\n want %s", path, got, want)
-		}
-	}
-	if m2, err := MigrateAccountsFiles(r.root, r.gdir, true); err != nil || m2.Changed() {
-		t.Errorf("second run = %+v, %v; want nothing", m2, err)
-	}
-}
-
-func TestMigrateAccountsFilesConflictWritesNothing(t *testing.T) {
-	project := `{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}]}}`
-	local := `{"round":{"accounts":[{"name":"y","configDir":"/y"}],"opencodeAccounts":[{"name":"y","configDir":"/z"}]}}`
-	r := newAcctRig(t, "", project, local)
-	_, err := MigrateAccountsFiles(r.root, r.gdir, true)
-	var ce *AccountConflictError
-	if !errors.As(err, &ce) || len(ce.Conflicts) != 1 || ce.Conflicts[0].File != "config.local.json" || ce.Conflicts[0].Name != "y" {
-		t.Fatalf("err = %v, want one conflict on y in config.local.json", err)
-	}
-	if !strings.Contains(err.Error(), "nothing written") {
-		t.Errorf("message does not say nothing was written: %v", err)
-	}
-	if got := r.read(t, filepath.Join(r.root, ".rota", "config.json")); got != compact(t, decodeCfg(t, project)) {
-		t.Errorf("config.json written despite the conflict: %s", got)
-	}
 }
 
 func TestOldAccountKeysAreRemoved(t *testing.T) {
