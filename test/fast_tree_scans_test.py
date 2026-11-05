@@ -27,8 +27,14 @@ class FastTreeScansTest(unittest.TestCase):
         (self.root / "test/treescan").mkdir(exist_ok=True)
         (self.root / "test/treescan/registry.json").write_text(json.dumps({
             "scans": {"./internal/harness": ["TestNoKindNamedOutsideHarness"]},
-            "fixtures": {"./internal/harness/TestKindGuardFindsEachPlantedShape":
-                         "Only scans planted files in t.TempDir()."}
+            "fixtures": {
+                "./internal/harness/TestKindGuardFindsEachPlantedShape":
+                    "Only scans planted files in t.TempDir().",
+                "./internal/harness/TestKindExclusionsStillApply":
+                    "The disposable module omits the real exclusion targets.",
+                "./test/treescan/TestRegistry":
+                    "The disposable module uses a minimal integration registry."
+            }
         }))
         (self.root / "go.mod").write_text("module github.com/l4ci/rota\n\ngo 1.22\n")
         (self.root / "leaf").mkdir()
@@ -78,6 +84,15 @@ func TestNewSourceGuard(t *testing.T) { inspectSource() }
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("unregistered tree scan ./leaf/TestNewSourceGuard", result.stdout)
         self.assertNotIn("fast: go vet", result.stdout)
+
+    def test_scanner_changes_select_the_wiring_test(self):
+        for file in ("test/treescan/main.go", "test/treescan/main_test.go",
+                     "test/treescan/registry.json"):
+            with self.subTest(file=file):
+                result = self.fast(file, dry=True)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn("plan: infra", result.stdout)
+                self.assertIn("plan: go ./test/treescan", result.stdout)
 
 
 if __name__ == "__main__":
