@@ -872,6 +872,8 @@ func TestCoreUnsignedRelayScreenEvidence(t *testing.T) {
 		name, screen, before, want string
 	}{
 		{"fresh Claude echo", "❯ " + opening + "\n  Read the relay.\n  </rota-relay>\n❯ \n", "❯ \n", "picked-up"},
+		{"active Claude composer", "● Working.\n────────────────\n❯ " + opening + "\n  Read the relay.\n  </rota-relay>\n────────────────\n", "❯ \n", ""},
+		{"literal glyphs in Claude draft", "● Working.\n────────────────\n❯ " + opening + "\n  Literal ❯ and › in a draft.\n  </rota-relay>\n────────────────\n", "❯ \n", ""},
 		{"earlier relay", "❯ <rota-relay n=\"8\" round=\"50\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
 		{"earlier round", "❯ <rota-relay n=\"9\" round=\"49\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
 		{"task brief", "❯ <rota-relay round=\"50\" from=\"orchestrator\">\n  </rota-relay>\n❯ \n", "❯ \n", ""},
@@ -899,6 +901,21 @@ func TestCoreQueuedRelayWinsOverTurnEvidence(t *testing.T) {
 	screen := "• Messages to be submitted at end of turn\n    " + opening + "\n❯ \n"
 	if got := deliveryEvidence(screen, opening+"\n</rota-relay>", terminal, prior); got != "queued" {
 		t.Fatalf("visible queued relay with an advanced turn = %q, want queued", got)
+	}
+}
+
+func TestCoreClaudeLiveQueuedRelay(t *testing.T) {
+	// hc read capture from a live Claude Code v2.1.318 worker, 2026-11-05.
+	// The second hc send arrived while the first response was working.
+	screen, err := os.ReadFile("testdata/claude-queued-relay.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const text = "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nQueue capture only. Reply captured.\n</rota-relay>"
+	terminal := coreTerminal{Reported: true, Status: &coreStatus{App: "claude-code", State: "working"}, Turn: 1}
+	prior := coreDelivery{Sent: true, Was: "working", Before: "❯ \n"}
+	if got := deliveryEvidence(string(screen), text, terminal, prior); got != "queued" {
+		t.Fatalf("live Claude queued relay = %q, want queued", got)
 	}
 }
 

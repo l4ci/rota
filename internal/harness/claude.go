@@ -208,7 +208,7 @@ func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) {
 func (claude) CoreStatusApp() string { return "claude-code" }
 
 func (claude) StartupDialogRecovery() string {
-	return "for Claude folder trust, open `claude` once in the slot folder and select \"Yes, I trust this folder\"; the dialog defaults to \"No, exit\" (Down, then Enter)"
+	return "for Claude folder trust, select \"Yes, I trust this folder\" in the worker terminal; the dialog defaults to \"No, exit\" (Down, then Enter, or `hc keys <terminal> down` then `hc keys <terminal> enter` from another terminal)"
 }
 
 // CoreSkipsComposerCheck: rota does not guard a half-typed human draft in a
