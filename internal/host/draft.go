@@ -25,8 +25,8 @@ const (
 	draftWait    = 2 * time.Second
 )
 
-// promptMarkers start the input line: Claude Code's and Codex's.
-const promptMarkers = "❯›"
+// promptMarkers come from the harness adapters, including legacy captures.
+var promptMarkers = harness.ComposerMarkers()
 
 // dialogOption: a dialog marks its selected choice with the same glyph.
 var dialogOption = regexp.MustCompile(`^\d+[.)]\s`)

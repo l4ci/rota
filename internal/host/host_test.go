@@ -134,23 +134,23 @@ func TestLaunchArgsKindFromBasename(t *testing.T) {
 }
 
 func TestDialogKeys(t *testing.T) {
-	trust := " Do you trust the files in this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit\n"
+	trust := claudeTrustScreen(t)
 	bypass := " WARNING: Bypass Permissions mode\n   1. No, exit\n ❯ 2. Yes, I accept\n"
 	cursorOnNo := "   1. Yes, proceed\n ❯ 2. No\n"
-	noCursor := "   1. Yes, I trust this folder\n   2. No, exit\n"
+	noCursor := "   1. Yes, proceed\n   2. No, exit\n"
 	cases := []struct {
 		name, pane string
 		want       []string
 		ok         bool
 	}{
-		{"trust", trust, []string{"enter"}, true},
+		{"trust", trust, []string{"down", "enter"}, true},
 		{"bypass", bypass, []string{"enter"}, true},
 		{"accept above cursor", cursorOnNo, []string{"up", "enter"}, true},
 		{"accept below cursor", "❯ 1. No, exit\n  2. Other\n  3. Yes, I accept\n", []string{"down", "down", "enter"}, true},
 		{"no cursor defaults to 1", noCursor, []string{"enter"}, true},
-		// Smoke fixtures: bypass puts the cursor on "No, exit", trust on "Yes".
+		// Both startup dialogs initially select "No, exit".
 		{"bypass cursor on No, exit", "WARNING: Claude Code running in Bypass Permissions mode\n ❯ 1. No, exit\n   2. Yes, I accept\n", []string{"down", "enter"}, true},
-		{"trust dialog", "Do you trust this folder?\n ❯ 1. Yes, I trust this folder\n   2. No, exit\n", []string{"enter"}, true},
+		{"trust dialog", trust, []string{"down", "enter"}, true},
 		{"unknown dialog", "Pick a colour\n ❯ 1. Red\n   2. Blue\n", nil, false},
 		{"unknown", "1. Something else\n2. Other\n", nil, false},
 		// Claude Code v2.1.288 dropped the numbers (#209).
@@ -608,7 +608,7 @@ func TestHerdrSpawnTabCreateFailures(t *testing.T) {
 
 func TestHerdrSpawnAnswersStartupDialogs(t *testing.T) {
 	dialogs := []string{
-		"Do you trust?\n ❯ 1. Yes, I trust this folder\n   2. No, exit\n",
+		claudeTrustScreen(t),
 		"Bypass\n   1. No, exit\n ❯ 2. Yes, I accept\n",
 	}
 	read, waits := 0, 0
@@ -635,7 +635,7 @@ func TestHerdrSpawnAnswersStartupDialogs(t *testing.T) {
 	if err != nil || got != "w9:t7" {
 		t.Fatalf("Spawn = %q, %v", got, err)
 	}
-	if f.count("herdr agent send-keys rota-w1-w9-t7 enter") != 2 {
+	if f.count("herdr agent send-keys rota-w1-w9-t7 down enter") != 1 || f.count("herdr agent send-keys rota-w1-w9-t7 enter") != 1 {
 		t.Errorf("want two answered dialogs:\n%s", f.log())
 	}
 	if !strings.Contains(f.log(), "agent wait rota-w1-w9-t7 --until idle --until blocked --timeout 30000") {
@@ -1461,7 +1461,7 @@ func TestTmuxSendEmptyPromptAndPlaceholders(t *testing.T) {
 
 // A dialog's option row is neither a draft nor safe to type over: refused as a dialog.
 func TestTmuxSendRefusesDialogOptionAsDialog(t *testing.T) {
-	err, f, _ := tmuxDraftSend(t, "❯ 1. Yes, I trust this folder\n", "sig\nthe last line of the brief\n")
+	err, f, _ := tmuxDraftSend(t, claudeTrustScreen(t), "sig\nthe last line of the brief\n")
 	if !errors.Is(err, ErrDialogOpen) || f.count("tmux paste-buffer") != 0 {
 		t.Errorf("Send = %v:\n%s", err, f.log())
 	}

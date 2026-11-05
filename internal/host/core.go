@@ -296,7 +296,7 @@ func coreComposer(text string) error {
 	// A blank marker row does not establish empty input: retained text may
 	// continue on following rows. Plain text is only a conservative hint;
 	// the styled observer supplies the authoritative composer boundaries.
-	if strings.TrimSpace(text[i+len("›"):]) != "" {
+	if strings.TrimSpace(text[i+len(harness.CheckedComposerSyntax().Composer):]) != "" {
 		return ErrDraftOnPrompt
 	}
 	return nil
@@ -307,8 +307,9 @@ func coreComposer(text string) error {
 // This hint never authorizes input without the styled observer.
 func coreComposerStart(text string) int {
 	start, offset := -1, 0
+	marker := harness.CheckedComposerSyntax().Composer
 	for _, line := range strings.SplitAfter(text, "\n") {
-		if strings.HasPrefix(line, "› ") || line == "›\n" || line == "›" {
+		if composerRow(line, marker) {
 			start = offset
 		}
 		offset += len(line)
@@ -660,36 +661,8 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 	})
 }
 func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) string {
-	withoutComposer := func(s string) string {
-		// Claude's submitted prompts and queue entries also start with ❯.
-		// Only the final prompt is the active composer; continuation rows
-		// are indented, including any literal prompt glyphs in a draft.
-		at := strings.LastIndex("\n"+s, "\n›")
-		if i := strings.LastIndex("\n"+s, "\n❯"); i > at {
-			at = i
-		}
-		if at >= 0 {
-			return s[:at]
-		}
-		return s
-	}
-	output, old := withoutComposer(screen), withoutComposer(before)
-	queueStart := func(s string) int {
-		at := -1
-		for _, heading := range []string{"Queued follow-up inputs", "Messages to be submitted after next tool call", "Messages to be submitted at end of turn"} {
-			if i := strings.Index(s, heading); i >= 0 && (at < 0 || i < at) {
-				at = i
-			}
-		}
-		// Claude renders pending input like a submitted ❯ prompt, but
-		// follows it with this queue-only action (above the composer).
-		if footer := strings.Index(s, "\n  ctrl+enter to send now\n"); footer >= 0 {
-			if i := strings.LastIndex("\n"+s[:footer], "\n❯"); i >= 0 && (at < 0 || i < at) {
-				at = i
-			}
-		}
-		return at
-	}
+	output, q := coreEvidenceRegions(screen)
+	old, oldQueue := coreEvidenceRegions(before)
 	marker := ""
 	for _, line := range strings.Split(text, "\n") {
 		if seq := harness.RelaySequence(line); seq != "" {
@@ -699,8 +672,6 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 	}
 	seenMarker := func(s string) bool {
 		for _, line := range strings.Split(s, "\n") {
-			line = strings.TrimSpace(line)
-			line = strings.TrimSpace(strings.TrimPrefix(line, "↳"))
 			if harness.RelaySequence(line) == marker && marker != "" {
 				return true
 			}
@@ -709,8 +680,6 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 	}
 	// Only actual pending-input preview sections establish queue delivery. A
 	// working native status plus a normal prompt echo is pickup, never a queue.
-	q := queueStart(output)
-	oldQueue := queueStart(old)
 	if q >= 0 && seenMarker(output[q:]) && (oldQueue < 0 || !seenMarker(old[oldQueue:])) {
 		return "queued"
 	}
@@ -935,7 +904,7 @@ func (h *coreHost) bootScreen(c *coreConn, t coreTerminal, launch string) string
 	if d, ok := ReadDialog(read.Text); ok {
 		kind, _, _, _ := LaunchArgs(launch)
 		recovery := ""
-		if hint := harness.StartupDialogRecovery(kind); hint != "" {
+		if hint := harness.StartupDialogRecovery(kind, t.Address); hint != "" {
 			recovery = " (" + hint + ")"
 		}
 		return fmt.Sprintf("; worker is waiting on a dialog (%q): answer it in the worker terminal%s, then retry the assign with the same request id", d.First, recovery)

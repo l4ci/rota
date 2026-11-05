@@ -931,3 +931,41 @@ func (f *coreFake) appName() string {
 	}
 	return f.app
 }
+
+// Captured with hc read from Claude Code v2.1.318 on 2026-11-05.
+// Two sends arrived during a running story response; one footer covers both.
+func TestCoreClaudeLiveMultiQueuedRelays(t *testing.T) {
+	screen, err := os.ReadFile("testdata/claude-multi-queued-relays.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := coreTerminal{Reported: true, Status: &coreStatus{App: "claude-code", State: "working"}, Turn: 1}
+	for _, sequence := range []int{19, 20} {
+		text := harness.RelayOpen(50, sequence) + "\nRendering capture only.\n</rota-relay>"
+		prior := coreDelivery{Sent: true, Was: "working", Before: "❯ \n"}
+		got := deliveryEvidence(string(screen), text, terminal, prior)
+		t.Logf("queued input %d: %s", sequence, got)
+		if got != "queued" {
+			t.Errorf("relay %d in live multi-entry queue = %q, want queued", sequence, got)
+		}
+	}
+}
+
+func TestCoreClaudeQueueFooterOnlyBesideComposer(t *testing.T) {
+	const opening = `<rota-relay n="9" round="50" from="orchestrator">`
+	echo := "❯ " + opening + "\n  Read the relay.\n  </rota-relay>\n"
+	composer := "────────────────\n❯ \n────────────────\n"
+	for _, tc := range []struct{ name, screen string }{
+		{"quoted footer in agent paragraph", echo + "● The queue action says:\n  ctrl+enter to send now\n\n  I have read the relay.\n" + composer},
+		{"quoted footer immediately above composer", echo + "● The queue action says:\n  ctrl+enter to send now\n\n" + composer},
+		{"quoted footer before fresh echo", "❯ Earlier task.\n● The queue action says:\n  ctrl+enter to send now\n\n  That is the label.\n" + echo + "● Read the relay.\n" + composer},
+		{"quoted footer and a different actual queue", echo + "● The queue action says:\n  ctrl+enter to send now\n\n  Read the relay.\n❯ Other pending input.\n  ctrl+enter to send now\n\n✽ Working…\n\n" + composer},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			terminal := coreTerminal{Status: &coreStatus{App: "claude-code", State: "working"}}
+			if got := coreDeliveryEvidence(tc.screen, opening+"\n</rota-relay>", terminal, "❯ \n"); got != "picked-up" {
+				t.Fatalf("evidence = %q, want picked-up", got)
+			}
+		})
+	}
+}

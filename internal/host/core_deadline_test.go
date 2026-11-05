@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -53,9 +54,14 @@ func TestCoreCallRefreshesDeadlinePerRPC(t *testing.T) {
 	}
 }
 
-// Option order confirmed by the live v0.30.0 check recorded in #2708:
-// Down moves from the default No to Yes.
-const claudeTrustScreen = " Do you trust the files in this folder?\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+func claudeTrustScreen(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/trust-dialog-2.1.288.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
 
 func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
 	for _, tc := range []struct {
@@ -63,8 +69,8 @@ func TestCoreSpawnBootTimeoutNamesTrustDialog(t *testing.T) {
 		want                      []string
 		absent                    string
 	}{
-		{"Claude", "claude-code", "claude", claudeTrustScreen,
-			[]string{"Do you trust the files in this folder?", "worker terminal", "Yes, I trust this folder", `defaults to "No, exit"`, "Down, then Enter", "hc keys <terminal> down", "hc keys <terminal> enter", "same request id"}, "open `claude`"},
+		{"Claude", "claude-code", "claude", claudeTrustScreen(t),
+			[]string{"Accessing workspace:", "worker terminal", "Yes, I trust this folder", `defaults to "No, exit"`, "Down, then Enter", "hc keys t2 down", "hc keys t2 enter", "once per slot worktree", "same request id"}, "open `claude`"},
 		{"Codex", "codex", "codex", " Folder access\n /project\n\n › 1. Trust and continue\n   2. Exit\n\n Press Enter to continue\n",
 			[]string{"Folder access", "Trust and continue", "repository root", "once per project", "same request id"}, "claude"},
 	} {

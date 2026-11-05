@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -207,7 +208,7 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	return h, fmt.Errorf("slot %q input did not come up within %ds", s.Slot, s.BootTimeout)
 }
 
-var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*›(?:[ \t]|$)`)
+var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(harness.CheckedComposerSyntax().Composer) + `(?:[ \t]|$)`)
 var orcaCodexModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
 
 const orcaTrustQuestion = "Do you trust the contents of this directory?"
@@ -226,7 +227,7 @@ func orcaReady(p string) bool {
 	if len(model) > 0 || orcaCodexPrompt.MatchString(p) {
 		return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && orcaCodexPrompt.MatchString(p)
 	}
-	if !strings.Contains(p, "❯") {
+	if !strings.Contains(p, harness.DefaultInputSyntax().Composer) {
 		return false
 	}
 	for _, pattern := range bootPatterns {

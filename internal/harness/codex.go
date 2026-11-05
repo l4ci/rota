@@ -441,6 +441,15 @@ func (codex) Command(Config) ([]string, error) { return []string{"codex"}, nil }
 // CoreStatusApp is Codex's native OSC 7501 reporting identity.
 func (codex) CoreStatusApp() string { return Codex }
 
-func (codex) StartupDialogRecovery() string {
+func (codex) StartupDialogRecovery(_ string) string {
 	return "for Codex folder trust, accept the default \"Trust and continue\" in the worker terminal; \"Folder access\" applies to the repository root, once per project"
+}
+
+func (codex) InputSyntax() InputSyntax {
+	return InputSyntax{
+		Composer:            "›",
+		QueueHeadings:       []string{"Queued follow-up inputs", "Messages to be submitted after next tool call", "Messages to be submitted at end of turn"},
+		PlaceholderPrefixes: []string{`Try "`},
+		Placeholders:        []string{"Ask Codex to do anything", "Ask a follow-up question"},
+	}
 }
