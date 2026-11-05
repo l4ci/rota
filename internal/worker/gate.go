@@ -145,7 +145,7 @@ const PartialSliceLabel = labels.PartialSlice
 // test.full under a local verify, shared by the gate and the train.
 func noVerifyRefusal(what string) (msg, hint string) {
 	return fmt.Sprintf("%s refused — test.full is empty (read from config key %s), so nothing would verify the merged tree; nothing landed", what, config.TestFullKey),
-		"set it with `rota config set test.full <command>`, or pass --no-verify to merge unverified on purpose"
+		"set it with `rota config set test.full '[\"<command>\"]'`, or pass --no-verify to merge unverified on purpose"
 }
 
 // GateOpts are the flags of `rota worker gate`.
