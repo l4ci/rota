@@ -1,0 +1,120 @@
+
+ ▐▛███▛█   Claude Code v2.1.318
+▝▜██████▀  Sonnet 5.5 · Claude Team
+ ▝▝   ▝▝   ~/dev/rota/.worktrees/ben
+
+⚠ Safe mode: all customizations are disabled (CLAUDE.md, skills, plugins, hooks, MCP, agents, and more)
+  Restart without --safe-mode to re-enable
+
+❯ For a terminal queue regression capture, run sleep 90 in Bash in the foreground, then reply done. Do not inspect or edit files. Stay within this task.
+
+  Ran 1 shell command
+
+● I couldn't do this. The Bash tool blocked sleep 90 as a standalone foreground command, and its error says not to work around the block with shorter chained sleeps. I didn't retry, and I didn't touch
+  any files.
+
+  If you still want the capture, I can run it in the background or wait with Monitor instead. Neither is the foreground Bash call you asked for, so I held off.
+
+✻ Brewed for 4s · done 12:44 AM
+
+❯ <hc from="t25 rota-ben-4fc7fff3619f5ad25f0b">For this terminal rendering test, write a 2000-word story about a lighthouse. Use no tools.</hc>
+
+❯ <hc from="t25 rota-ben-4fc7fff3619f5ad25f0b"><rota-relay n="9" round="50" from="orchestrator">
+  Queue capture only. Reply captured.
+  </rota-relay></hc>
+  ctrl+enter to send now
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✢ Determining…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Press up to edit queued messages
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt
