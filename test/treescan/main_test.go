@@ -32,6 +32,24 @@ func TestRegistry(t *testing.T) {
 	if err := validate(r, inv); err != nil {
 		t.Fatal(err)
 	}
+	// Exercise the same validation as --check, removing each real guard in turn.
+	for pkg, names := range r.Scans {
+		for i, name := range names {
+			t.Run(pkg+"/"+name, func(t *testing.T) {
+				missing := registry{Scans: map[string][]string{}, Fixtures: r.Fixtures}
+				for p, tests := range r.Scans {
+					missing.Scans[p] = append([]string(nil), tests...)
+				}
+				missing.Scans[pkg] = append(missing.Scans[pkg][:i], missing.Scans[pkg][i+1:]...)
+				if len(missing.Scans[pkg]) == 0 {
+					delete(missing.Scans, pkg)
+				}
+				if err := validate(missing, inv); err == nil || !strings.Contains(err.Error(), "unregistered tree scan "+pkg+"/"+name) {
+					t.Fatalf("removed scan was not detected: %v", err)
+				}
+			})
+		}
+	}
 }
 
 func TestMissingRegistrationThroughHelpersAndAliases(t *testing.T) {
@@ -200,5 +218,42 @@ func TestOrdinaryVariable(t *testing.T) { src := "fixture.txt"; os.ReadFile(src)
 	}
 	if inv.Candidates["./TestOrdinaryVariable"] {
 		t.Error("ordinary fixture path classified as source read")
+	}
+}
+
+func TestDynamicRepoPathsAndExecScans(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "scan_test.go", `package scan
+import ("context"; "os"; e "os/exec"; "testing")
+func TestTable(t *testing.T) { root := repoRoot(); for _, file := range files { os.ReadFile(root + file) } }
+func TestReaderHelper(t *testing.T) { read(repoRoot() + files[0]) }
+func TestGrep(t *testing.T) { e.Command("grep", "-R", "guard", "skills/") }
+func TestGitGrep(t *testing.T) { e.Command("git", "-C", repoRoot(), "grep", "guard") }
+func TestGitFiles(t *testing.T) { e.CommandContext(context.Background(), "git", "ls-files") }
+func TestOrdinaryCommand(t *testing.T) { e.Command("git", "status") }
+func TestFixtureRead(t *testing.T) { os.ReadFile("fixture.txt") }
+`)
+	writeSource(t, root, "root_test.go", `package scan
+import "path/filepath"
+func repoRoot() string { return rootPath() }
+func rootPath() string { root, _ := filepath.Abs("../.."); return root }
+`)
+	writeSource(t, root, "reader.go", `package scan
+import "os"
+func read(name string) { os.ReadFile(name) }
+`)
+	inv, err := discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"./TestTable": true, "./TestReaderHelper": true, "./TestGrep": true,
+		"./TestGitGrep": true, "./TestGitFiles": true,
+	}
+	if !reflect.DeepEqual(inv.Candidates, want) {
+		t.Fatalf("dynamic and exec scans = %v, want %v", inv.Candidates, want)
+	}
+	if err := validate(registry{}, inv); err == nil {
+		t.Fatal("unregistered planted scans accepted")
 	}
 }
