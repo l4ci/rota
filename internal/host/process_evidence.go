@@ -54,7 +54,7 @@ func (ev processEvidence) retain(d Deps, observed []int) processEvidence {
 	for _, n := range now {
 		dup := false
 		for _, p := range out {
-			dup = dup || p == n
+			dup = dup || p == n || (p.PID == n.PID && n.Start == 0)
 		}
 		if !dup {
 			out = append(out, n)

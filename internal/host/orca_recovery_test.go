@@ -74,6 +74,9 @@ func TestOrcaRecoveryLegacyEvidenceDoesNotAdoptCurrentProcesses(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "456") || strings.Contains(err.Error(), "789") {
 		t.Fatalf("legacy process must block without adopting descendants: %v", err)
 	}
+	if !strings.Contains(err.Error(), "no recorded start time (legacy or unreadable at observation): 456") {
+		t.Fatalf("cleanup refusal must explain unknown legacy identity: %v", err)
+	}
 	raw, err := os.ReadFile(meta.PIDFile + ".tree")
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +87,12 @@ func TestOrcaRecoveryLegacyEvidenceDoesNotAdoptCurrentProcesses(t *testing.T) {
 	}
 	if got := *record.Processes; len(got) != 1 || got[0] != (processIdentity{PID: 456}) {
 		t.Fatalf("legacy PID acquired a current start identity: %v", got)
+	}
+	// The rewritten versioned record must keep the same unknown-start
+	// blocker and diagnostic, without adopting the current descendants.
+	err = adapter.Kill(context.Background(), "ben", h)
+	if err == nil || !strings.Contains(err.Error(), "no recorded start time (legacy or unreadable at observation): 456") || strings.Contains(err.Error(), "789") {
+		t.Fatalf("versioned unknown identity must block without expanding: %v", err)
 	}
 	f.alive[456] = false
 	if err := adapter.Kill(context.Background(), "ben", h); err != nil {

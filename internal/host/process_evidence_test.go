@@ -126,6 +126,22 @@ func TestProcessEvidenceRetentionPrunesAndUpgradesTrustedObservations(t *testing
 	}
 }
 
+func TestProcessEvidenceUnreadableObservationPreservesKnownIncarnation(t *testing.T) {
+	d, p := evidenceFixture()
+	p.set(456, true, 100)
+	ev := observeProcesses(d, []int{456})
+	p.hidden[456] = true
+	ev = ev.retain(d, []int{456})
+	if !ev.aliveDeps(d).Alive(456) {
+		t.Fatal("unreadable observation discarded a surviving recorded process")
+	}
+	p.hidden[456] = false
+	p.set(456, true, 200)
+	if ev.aliveDeps(d).Alive(456) {
+		t.Fatal("unreadable fresh observation left an unknown blocker for a reused PID")
+	}
+}
+
 func TestProcessEvidenceLegacyCompatibility(t *testing.T) {
 	procs, legacy, err := decodeProcessEvidence([]byte(`[3, {"pid":4,"start":9}, {"pid":5}]`))
 	if err != nil || !reflect.DeepEqual(procs, processEvidence{{4, 9}, {PID: 5}}) || !reflect.DeepEqual(legacy, []int{3}) {
