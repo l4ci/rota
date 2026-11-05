@@ -43,17 +43,22 @@ func appendPending(path string, h pendingHit) error {
 
 // bumpHit registers one hit on sc in memory and promotes a provisional bullet
 // at the threshold unless the pair is queued as a contradiction.
-func bumpHit(sc *Sidecar, h pendingHit, threshold int, contradicted map[[2]string]bool) (e Entry, promoted, blocked bool) {
-	e = sc.Bump(h.Topic, h.Title, h.Date)
+func bumpHit(sc *Sidecar, h pendingHit, threshold int, contradicted map[[2]string]bool) (e Entry, promoted, blocked bool, err error) {
+	e, err = sc.Bump(h.Topic, h.Title, h.Date)
+	if err != nil {
+		return e, false, false, err
+	}
 	if e.Tier == Provisional && e.Hits >= threshold {
 		if contradicted[[2]string{h.Topic, h.Title}] {
-			return e, false, true
+			return e, false, true, nil
 		}
-		sc.Promote(h.Topic, h.Title)
+		if err := sc.Promote(h.Topic, h.Title); err != nil {
+			return e, false, false, err
+		}
 		e.Tier = Confirmed
 		promoted = true
 	}
-	return e, promoted, false
+	return e, promoted, false, nil
 }
 
 func (s Store) contradicted() (map[[2]string]bool, error) {
@@ -66,22 +71,6 @@ func (s Store) contradicted() (map[[2]string]bool, error) {
 		m[[2]string{c.Topic, c.Title}] = true
 	}
 	return m, nil
-}
-
-// applyPending replays the buffered hits onto sc in memory.
-func (s Store) applyPending(sc *Sidecar, hits []pendingHit) error {
-	if len(hits) == 0 {
-		return nil
-	}
-	cm, err := s.contradicted()
-	if err != nil {
-		return err
-	}
-	th := s.PromoteThreshold()
-	for _, h := range hits {
-		bumpHit(sc, h, th, cm)
-	}
-	return nil
 }
 
 // foldedKey is the sidecar field naming the claimed buffer whose hits the
@@ -163,7 +152,23 @@ func (s Store) effective(scope string) (*Sidecar, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sc, s.applyPending(sc, hits)
+	if len(hits) > 0 {
+		cm, err := s.contradicted()
+		if err != nil {
+			return nil, err
+		}
+		for _, h := range hits {
+			if err := sc.checkIdentity(h.Topic, h.Title); err != nil {
+				// Leave this hit buffered; a read of its owner still refuses through Get.
+				// Replaying it must not prevent an unrelated key from being read.
+				continue
+			}
+			if _, _, _, err := bumpHit(sc, h, s.PromoteThreshold(), cm); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return sc, nil
 }
 
 // FoldResult reports FoldHits.
@@ -235,6 +240,19 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 				return err
 			}
 		}
+		// Validate every claimed buffer before saving any of them. Otherwise a
+		// later ambiguous owner could refuse after earlier buffers changed the file.
+		for _, c := range pending {
+			hits, _, err := readPending(c)
+			if err != nil {
+				return err
+			}
+			for _, h := range hits {
+				if err := sc.checkIdentity(h.Topic, h.Title); err != nil {
+					return err
+				}
+			}
+		}
 		cm, err := s.contradicted()
 		if err != nil {
 			return err
@@ -250,7 +268,9 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 			var applied int
 			if err := Update(p, func(sc *Sidecar) (bool, error) {
 				for _, h := range hits {
-					bumpHit(sc, h, th, cm)
+					if _, _, _, err := bumpHit(sc, h, th, cm); err != nil {
+						return false, err
+					}
 				}
 				sc.obj.Set(foldedKey, name)
 				applied = len(hits)

@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,7 +27,7 @@ func ValidTier(t string) bool { return t == Provisional || t == Confirmed || t =
 // GlossaryTopic holds terms, which are canonical names and never tiered.
 const GlossaryTopic = "Glossary"
 
-// Entry is one sidecar record, keyed "<topic>::<title>" in the file.
+// Entry is one sidecar record, identified by its topic and title.
 type Entry struct {
 	Topic, Title string
 	Tier         string
@@ -34,25 +35,50 @@ type Entry struct {
 	LastSeen     string
 }
 
-func key(topic, title string) string { return topic + "::" + title }
+func key(topic, title string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(topic)) + "." + base64.RawURLEncoding.EncodeToString([]byte(title))
+}
+
+func decodeKey(k string) (topic, title string, ok bool) {
+	a, b, found := strings.Cut(k, ".")
+	if !found {
+		return "", "", false
+	}
+	t, e1 := base64.RawURLEncoding.DecodeString(a)
+	u, e2 := base64.RawURLEncoding.DecodeString(b)
+	return string(t), string(u), e1 == nil && e2 == nil && key(string(t), string(u)) == k
+}
+
+// legacyOwners counts overlapping separators too: A:::B has two owners.
+func legacyOwners(k string) [][2]string {
+	var out [][2]string
+	for i := 0; i+1 < len(k); i++ {
+		if k[i:i+2] == "::" {
+			out = append(out, [2]string{k[:i], k[i+2:]})
+		}
+	}
+	return out
+}
 
 // Sidecar is a loaded knowledge-tier.json.
 type Sidecar struct {
-	path string
-	obj  *jsonx.Object // whole document, so unknown fields survive a rewrite
-	ents *jsonx.Object
+	path    string
+	obj     *jsonx.Object // whole document, so unknown fields survive a rewrite
+	ents    *jsonx.Object
+	legacy  *jsonx.Object
+	saveErr error // reserved-field collisions can be read but cannot be rewritten
 }
 
 func newSidecarDoc() *jsonx.Object {
 	o := jsonx.NewObject()
-	o.Set("version", json.Number("1"))
+	o.Set("version", json.Number("2"))
 	o.Set("entries", jsonx.NewObject())
 	return o
 }
 
 // LoadSidecar reads the sidecar at path. A missing file is an empty sidecar.
-// A version other than 1 is an error ("<file> schema version mismatch …");
-// a file without a version is treated as version 1, as load_sidecar does.
+// Versions 1 and 2 are accepted; a missing version means version 1. Legacy
+// records are migrated in memory, and unresolved owners are preserved separately.
 func LoadSidecar(path string) (*Sidecar, error) {
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -71,15 +97,57 @@ func LoadSidecar(path string) (*Sidecar, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: not a JSON object", filepath.Base(path))
 	}
-	if err := checkVersion(path, doc); err != nil {
-		return nil, err
+	version := "1"
+	if got, has := doc.Get("version"); has && got != nil {
+		n, numeric := got.(json.Number)
+		if !numeric || (n.String() != "1" && n.String() != "2") {
+			return nil, fmt.Errorf("%s schema version mismatch — expected 1 or 2, got %s", filepath.Base(path), fmtJSON(got))
+		}
+		version = n.String()
 	}
 	ev, _ := doc.Get("entries")
 	ents, ok := ev.(*jsonx.Object)
 	if !ok {
 		return nil, fmt.Errorf("%s: entries is not an object", filepath.Base(path))
 	}
-	return &Sidecar{path: path, obj: doc, ents: ents}, nil
+	legacy := jsonx.NewObject()
+	var saveErr error
+	if v, exists := doc.Get("legacyEntries"); exists && version == "2" {
+		var valid bool
+		legacy, valid = v.(*jsonx.Object)
+		if !valid {
+			return nil, fmt.Errorf("%s: legacyEntries is not an object", filepath.Base(path))
+		}
+	}
+	if version == "1" {
+		if _, exists := doc.Get("legacyEntries"); exists {
+			saveErr = fmt.Errorf("%s: version 1 field legacyEntries conflicts with version 2 migration; preserve and rename that field before writing", filepath.Base(path))
+		}
+		migrated := jsonx.NewObject()
+		for _, k := range ents.Keys() {
+			v, _ := ents.Get(k)
+			owners := legacyOwners(k)
+			if len(owners) == 1 {
+				migrated.Set(key(owners[0][0], owners[0][1]), v)
+			} else {
+				legacy.Set(k, v)
+			}
+		}
+		ents = migrated
+		doc.Set("entries", ents)
+	}
+	if version == "2" {
+		for _, k := range ents.Keys() {
+			if _, _, ok := decodeKey(k); !ok {
+				return nil, fmt.Errorf("%s: invalid encoded entry key %q", filepath.Base(path), k)
+			}
+		}
+	}
+	doc.Set("version", json.Number("2"))
+	if len(legacy.Keys()) > 0 && saveErr == nil {
+		doc.Set("legacyEntries", legacy)
+	}
+	return &Sidecar{path: path, obj: doc, ents: ents, legacy: legacy, saveErr: saveErr}, nil
 }
 
 // checkVersion applies load_sidecar's schema rule to doc: version 1, or no
@@ -113,6 +181,9 @@ func fmtJSON(v any) string {
 
 // Save writes the sidecar atomically.
 func (s *Sidecar) Save() error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	return writeJSON(s.path, s.obj)
 }
 
@@ -150,68 +221,114 @@ func newRec(tier string, hits int, today string) *jsonx.Object {
 	return o
 }
 
-// Get returns the entry for (topic, title); ok is false when untracked.
-func (s *Sidecar) Get(topic, title string) (Entry, bool) {
-	r := s.rec(key(topic, title))
-	if r == nil {
-		return Entry{}, false
+// checkIdentity refuses any possible owner of an unresolved legacy record.
+func (s *Sidecar) checkIdentity(topic, title string) error {
+	if s.legacy == nil {
+		return nil
 	}
-	return entryOf(topic, title, r), true
+	for _, raw := range s.legacy.Keys() {
+		owners := legacyOwners(raw)
+		needed := false
+		var labels []string
+		for _, owner := range owners {
+			labels = append(labels, fmt.Sprintf("(%q, %q)", owner[0], owner[1]))
+			if owner == [2]string{topic, title} {
+				needed = true
+			}
+		}
+		if needed {
+			return fmt.Errorf("%w: %s legacy key %q has possible owners %s; repair legacyEntries by assigning the record to the intended encoded topic/title entry", ErrAmbiguous, filepath.Base(s.path), raw, strings.Join(labels, ", "))
+		}
+	}
+	return nil
 }
 
-// Set puts (topic, title) on tier. An untracked entry starts at 0 hits. It
-// returns the previous tier ("" when there was none).
-func (s *Sidecar) Set(topic, title, tier, today string) (previous string) {
+// Get returns the entry for (topic, title); ok is false when untracked.
+func (s *Sidecar) Get(topic, title string) (Entry, bool, error) {
+	if err := s.checkIdentity(topic, title); err != nil {
+		return Entry{}, false, err
+	}
+	r := s.rec(key(topic, title))
+	if r == nil {
+		return Entry{}, false, nil
+	}
+	return entryOf(topic, title, r), true, nil
+}
+
+// Set assigns a tier, retaining hits and unknown fields. It returns the previous tier.
+func (s *Sidecar) Set(topic, title, tier, today string) (previous string, err error) {
+	if err = s.checkIdentity(topic, title); err != nil {
+		return "", err
+	}
 	k := key(topic, title)
 	if r := s.rec(k); r != nil {
 		if v, ok := r.Get("tier"); ok {
 			previous, _ = v.(string)
 		}
 		r.Set("tier", tier)
-		return previous
+		return previous, nil
 	}
 	s.ents.Set(k, newRec(tier, 0, today))
-	return ""
+	return "", nil
 }
 
-// Init adds (topic, title) as provisional with 0 hits unless it is tracked.
-func (s *Sidecar) Init(topic, title, today string) (created bool) {
+// Init adds a provisional record at zero hits unless the pair is already tracked.
+func (s *Sidecar) Init(topic, title, today string) (bool, error) {
+	if err := s.checkIdentity(topic, title); err != nil {
+		return false, err
+	}
 	k := key(topic, title)
 	if s.rec(k) != nil {
-		return false
+		return false, nil
 	}
 	s.ents.Set(k, newRec(Provisional, 0, today))
-	return true
+	return true, nil
 }
 
-// Bump registers a hit: an existing entry gets hits+1 and today's date, a
-// new one starts provisional at 1 hit (bump_hit).
-func (s *Sidecar) Bump(topic, title, today string) Entry {
+// Bump counts one hit, starting an untracked pair as provisional.
+func (s *Sidecar) Bump(topic, title, today string) (Entry, error) {
+	if err := s.checkIdentity(topic, title); err != nil {
+		return Entry{}, err
+	}
 	k := key(topic, title)
 	if r := s.rec(k); r != nil {
 		e := entryOf(topic, title, r)
 		r.Set("hits", json.Number(fmt.Sprint(e.Hits+1)))
 		r.Set("lastSeen", today)
-		return entryOf(topic, title, r)
+		return entryOf(topic, title, r), nil
 	}
 	r := newRec(Provisional, 1, today)
 	s.ents.Set(k, r)
-	return entryOf(topic, title, r)
+	return entryOf(topic, title, r), nil
 }
 
-// Promote moves a tracked entry to confirmed.
-func (s *Sidecar) Promote(topic, title string) {
+// Promote moves a tracked pair to confirmed.
+func (s *Sidecar) Promote(topic, title string) error {
+	if err := s.checkIdentity(topic, title); err != nil {
+		return err
+	}
 	if r := s.rec(key(topic, title)); r != nil {
 		r.Set("tier", Confirmed)
 	}
+	return nil
 }
 
-// List returns the entries in file order, skipping Glossary and, when tier is
-// not empty, every other tier.
-func (s *Sidecar) List(tier string) []Entry {
+// List returns entries in file order. An unresolved legacy owner prevents a full list.
+func (s *Sidecar) List(tier string) ([]Entry, error) {
+	if s.legacy != nil {
+		for _, raw := range s.legacy.Keys() {
+			for _, owner := range legacyOwners(raw) {
+				if owner[0] != GlossaryTopic {
+					if err := s.checkIdentity(owner[0], owner[1]); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
 	out := []Entry{}
 	for _, k := range s.ents.Keys() {
-		topic, title, ok := strings.Cut(k, "::")
+		topic, title, ok := decodeKey(k)
 		if !ok || topic == GlossaryTopic {
 			continue
 		}
@@ -220,81 +337,93 @@ func (s *Sidecar) List(tier string) []Entry {
 			continue
 		}
 		e := entryOf(topic, title, r)
-		if tier != "" && e.Tier != tier {
-			continue
+		if tier == "" || e.Tier == tier {
+			out = append(out, e)
 		}
-		out = append(out, e)
 	}
-	return out
+	return out, nil
 }
 
-// Rekey moves oldKey to newKey in place of nothing: a missing oldKey and any
-// Glossary key are left alone. It reports whether anything moved.
-func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) bool {
+// Rekey moves one record between topics; Glossary and missing records are left alone.
+func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) (bool, error) {
 	if oldTopic == GlossaryTopic {
-		return false
+		return false, nil
 	}
-	ok := key(oldTopic, oldTitle)
-	r := s.rec(ok)
-	if r == nil {
-		return false
-	}
-	s.ents.Delete(ok)
-	s.ents.Set(key(newTopic, oldTitle), r)
-	return true
+	return s.move(oldTopic, oldTitle, newTopic, oldTitle)
 }
 
-// Delete drops the entry of a removed bullet. A missing entry and the
-// Glossary topic are left alone. It reports whether anything was dropped.
-func (s *Sidecar) Delete(topic, title string) bool {
+// Delete removes a record; Glossary and missing records are left alone.
+func (s *Sidecar) Delete(topic, title string) (bool, error) {
 	if topic == GlossaryTopic {
-		return false
+		return false, nil
+	}
+	if err := s.checkIdentity(topic, title); err != nil {
+		return false, err
 	}
 	k := key(topic, title)
 	if s.rec(k) == nil {
-		return false
+		return false, nil
 	}
 	s.ents.Delete(k)
-	return true
+	return true, nil
 }
 
-// Retitle moves the entry of a retitled bullet within one topic. A missing
-// entry and the Glossary topic are left alone. It reports whether anything
-// moved.
-func (s *Sidecar) Retitle(topic, oldTitle, newTitle string) bool {
+// Retitle moves one record to a new title within its topic.
+func (s *Sidecar) Retitle(topic, oldTitle, newTitle string) (bool, error) {
 	if topic == GlossaryTopic {
-		return false
+		return false, nil
 	}
-	ok := key(topic, oldTitle)
-	r := s.rec(ok)
-	if r == nil {
-		return false
-	}
-	s.ents.Delete(ok)
-	s.ents.Set(key(topic, newTitle), r)
-	return true
+	return s.move(topic, oldTitle, topic, newTitle)
 }
 
-// RekeyTopic moves every "<old>::*" entry to "<new>::*" and reports how many
-// moved. Moved entries land after the existing ones, as in the Python helper.
-func (s *Sidecar) RekeyTopic(oldTopic, newTopic string) int {
-	prefix := oldTopic + "::"
-	type kv struct {
-		k string
-		v any
+func (s *Sidecar) move(oldTopic, oldTitle, newTopic, newTitle string) (bool, error) {
+	if err := s.checkIdentity(oldTopic, oldTitle); err != nil {
+		return false, err
 	}
-	var moved []kv
-	for _, k := range s.ents.Keys() {
-		if strings.HasPrefix(k, prefix) {
-			v, _ := s.ents.Get(k)
-			moved = append(moved, kv{newTopic + "::" + k[len(prefix):], v})
-			s.ents.Delete(k)
+	if err := s.checkIdentity(newTopic, newTitle); err != nil {
+		return false, err
+	}
+	k := key(oldTopic, oldTitle)
+	r := s.rec(k)
+	if r == nil {
+		return false, nil
+	}
+	s.ents.Delete(k)
+	s.ents.Set(key(newTopic, newTitle), r)
+	return true, nil
+}
+
+// RekeyTopic moves exactly the old topic's records, appending them in their original order.
+func (s *Sidecar) RekeyTopic(oldTopic, newTopic string) (int, error) {
+	// Preflight both source owners and every destination before changing anything.
+	if s.legacy != nil {
+		for _, raw := range s.legacy.Keys() {
+			for _, owner := range legacyOwners(raw) {
+				if owner[0] == oldTopic {
+					if err := s.checkIdentity(owner[0], owner[1]); err != nil {
+						return 0, err
+					}
+				}
+			}
 		}
 	}
-	for _, m := range moved {
-		s.ents.Set(m.k, m.v)
+	var titles []string
+	for _, k := range s.ents.Keys() {
+		topic, title, ok := decodeKey(k)
+		if ok && topic == oldTopic {
+			if err := s.checkIdentity(newTopic, title); err != nil {
+				return 0, err
+			}
+			titles = append(titles, title)
+		}
 	}
-	return len(moved)
+	for _, title := range titles {
+		k := key(oldTopic, title)
+		v, _ := s.ents.Get(k)
+		s.ents.Delete(k)
+		s.ents.Set(key(newTopic, title), v)
+	}
+	return len(titles), nil
 }
 
 // Update runs a locked read-modify-write of the sidecar at path. fn mutates
@@ -319,12 +448,36 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 	if topic == GlossaryTopic {
 		return Entry{}, false, nil
 	}
-	sc, err := s.effectiveBackfilled(scope)
+	sc, err := s.effective(scope)
 	if err != nil {
 		return Entry{}, false, err
 	}
-	e, ok := sc.Get(topic, title)
-	return e, ok, nil
+	e, ok, err := sc.Get(topic, title)
+	if err != nil || ok {
+		return e, ok, err
+	}
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return Entry{}, false, err
+	}
+	content, err := ReadFile(km)
+	if err != nil {
+		return Entry{}, false, err
+	}
+	for _, t := range section.Topics(content) {
+		if t.Name != topic {
+			continue
+		}
+		for _, line := range pystr.Splitlines(t.Body) {
+			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil && m[1] == title {
+				if _, err := sc.Init(topic, title, s.today()); err != nil {
+					return Entry{}, false, err
+				}
+				return sc.Get(topic, title)
+			}
+		}
+	}
+	return Entry{}, false, nil
 }
 
 // TierSet puts (topic, title) on tier and returns the previous tier ("" for an
@@ -337,6 +490,9 @@ func (s Store) TierSet(scope, topic, title, tier string) (previous string, chang
 	if err != nil {
 		return "", false, err
 	}
+	if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {
+		return "", false, err
+	}
 	// Buffered hits predate this write: fold them first so the set is not
 	// replayed over by hits that were already counted (a demotion would
 	// otherwise promote again on read).
@@ -344,7 +500,10 @@ func (s Store) TierSet(scope, topic, title, tier string) (previous string, chang
 		return "", false, err
 	}
 	err = Update(p, func(sc *Sidecar) (bool, error) {
-		previous = sc.Set(topic, title, tier, s.today())
+		previous, err = sc.Set(topic, title, tier, s.today())
+		if err != nil {
+			return false, err
+		}
 		changed = previous != tier
 		return true, nil
 	})
@@ -357,7 +516,7 @@ func (s Store) TierList(scope, tier string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sc.List(tier), nil
+	return sc.List(tier)
 }
 
 // effectiveBackfilled is effective plus, in memory, a provisional entry for
@@ -384,7 +543,9 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
 			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-				sc.Init(t.Name, m[1], s.today())
+				if _, err := sc.Init(t.Name, m[1], s.today()); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

@@ -52,7 +52,10 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 			return err
 		}
 		h := pendingHit{Topic: topic, Title: title, Date: s.today()}
-		res.Entry, res.Promoted, res.PromotionBlocked = bumpHit(sc, h, s.PromoteThreshold(), cm)
+		res.Entry, res.Promoted, res.PromotionBlocked, err = bumpHit(sc, h, s.PromoteThreshold(), cm)
+		if err != nil {
+			return err
+		}
 		res.Changed = true
 		return appendPending(hp, h)
 	})
