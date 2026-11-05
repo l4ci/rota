@@ -51,7 +51,26 @@ func Parts(kind, text string, limit int) []string {
 	if runes(single)+runes(text) <= limit {
 		return []string{single + text}
 	}
-	budget := limit - runes(marker.NoteHeader(kind, 99, 99))
+	// Start with the smallest multipart header, then retry if the resulting
+	// count needs more digits. The last part's header bounds every index.
+	total := 2
+	var chunks []string
+	for {
+		headerSize := runes(marker.NoteHeader(kind, total, total))
+		chunks = split(text, limit-headerSize)
+		if runes(marker.NoteHeader(kind, len(chunks), len(chunks))) <= headerSize {
+			break
+		}
+		total = len(chunks)
+	}
+	out := make([]string, len(chunks))
+	for i, c := range chunks {
+		out[i] = marker.NoteHeader(kind, i+1, len(chunks)) + c
+	}
+	return out
+}
+
+func split(text string, budget int) []string {
 	var chunks []string
 	cur := ""
 	for _, line := range KeepLines(text) {
@@ -71,9 +90,5 @@ func Parts(kind, text string, limit int) []string {
 		cur += line
 	}
 	chunks = append(chunks, cur)
-	out := make([]string, len(chunks))
-	for i, c := range chunks {
-		out[i] = marker.NoteHeader(kind, i+1, len(chunks)) + c
-	}
-	return out
+	return chunks
 }
