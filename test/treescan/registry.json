@@ -147,6 +147,7 @@
     "./internal/cli/TestKnowledgeAddStoresShaBesideDate": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestKnowledgeAmendRejectsEmptyBody": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestKnowledgeCRLFMatchGolden": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
+    "./internal/cli/TestKnowledgeLegacyTierAmbiguityIsScoped": "Enumerates and reads a temporary CLI knowledge project through fixture helpers; does not scan repository sources.",
     "./internal/cli/TestKnowledgeQueryMatchGolden": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestKnowledgeReplace": "Reads generated or planted files in temporary CLI test projects; source-path hints occur in fixture setup or assertions.",
     "./internal/cli/TestKnowledgeRm": "Reads generated or planted files in temporary CLI test projects; source-path hints occur in fixture setup or assertions.",
