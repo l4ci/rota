@@ -191,7 +191,10 @@ the exact terminal address; no app configuration or document edits are needed.
 
 Delivery reports distinguish submitted, queued and picked-up input. A successful
 Core send alone proves submission. Exact message evidence is needed for queue or
-pickup acknowledgment. Startup dialogs, missing status and human drafts refuse
+pickup acknowledgment. A fresh echo of the sent relay's opening tag outside the
+queue preview confirms pickup even for unsigned Claude relays absorbed into a
+running turn. An earlier relay or a task brief's tag does not confirm pickup;
+a relay still visible in a queue preview stays queued. Startup dialogs, missing status and human drafts refuse
 input; Rota never forces a send or answers an unknown dialog. Each accepted
 composer needs a complete read-only styled paint: the guard checks continuation
 rows as well as the prompt row, and literal prompt glyphs in drafts remain input.
