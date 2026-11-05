@@ -18,9 +18,9 @@ If `ROTA_SLOT` is set, or the brief says you are a round worker, stop: *"/rota-g
 3. **Cheap checks.** Only `gofmt -l .` (must print nothing), `go vet ./...`, `go build ./...` (the project's equivalents elsewhere). Never `go test`, `bash test/smoke.sh`, `rota test run`, or `/rota-review`.
 4. **On failure,** fix and rerun all three. Never land with a failing cheap check. If you cannot fix it, stop and report.
 5. **Land.** `rota ship strategy --json`, then:
-   - `direct`: `rota ship merge <branch> --body-file -` with a subject starting `merge: ` and the footer below. Exit 4 `manual gate`: ask, rerun with `--confirm --confirm-note`.
+   - `direct`: `rota ship merge <branch> --body-file - --json` with a subject starting `merge: ` and the footer below. Read the JSON even on a nonzero exit. Exit 4 with `data.blockedBy: "branch moved"` and `data.changed: true` means the pinned commit landed and the branch was kept: save `data.sha`, continue Step 6 for the pinned work, and never retry the merge. Tell the user that `data.pinned` landed on `data.base` as `data.sha`; the branch remains at `data.tip`, and commits added after the pin need their own review and merge. Exit 4 `manual gate`: ask, rerun with `--confirm --confirm-note`. Verdict refusals and aborted conflicts stop the flow.
    - `pr` (also a tracker, which forces it): write the body to a file first: a summary, the `Closes #<ID>` line, `## Assumptions` and `## Rulings` (`None.` when empty), then the footer below. Then `rota ship pr <branch> --title "<issue title>" --body-file <f> --items <ID>`.
-6. **Close out.** `rota ship finish --json <branch> [--commit <data.sha>]`; act on its JSON as `/rota-ship` Steps 8 to 9.5 do. On a tracker the PR merge closes the issue.
+6. **Close out.** `rota ship finish --json <branch> [--commit <data.sha>]`; on the direct path always pass `--commit <data.sha>` from the merge result, including when the branch was kept. This scopes bookkeeping to the pinned work in `M^1..M^2`, where `M` is that merge commit, and excludes later work on the branch. Act on its JSON as `/rota-ship` Steps 8 to 9.5 do. On a tracker the PR merge closes the issue.
 
 ## Footer (merge commit or PR body)
 

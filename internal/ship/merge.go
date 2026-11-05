@@ -28,11 +28,30 @@ type MergePorts struct {
 
 // BranchMovedError reports a landed pin whose branch must be kept because its
 // current tip differs. MergeBranch returns the merge hash alongside this error.
-type BranchMovedError struct{ Branch, Pinned, Tip string }
+type BranchMovedError struct{ Branch, Base, Pinned, Tip, MergeSHA string }
 
 func (e *BranchMovedError) Error() string {
-	return fmt.Sprintf("pinned commit %s landed; branch %s moved to %s; that tip was not gated or merged by this operation; branch kept; commits added after the pin need their own review and merge", e.Pinned, e.Branch, e.Tip)
+	return fmt.Sprintf("pinned commit %s landed on %s as merge %s. Branch %s moved to %s; that tip was not gated or merged by this operation; branch kept. Commits added after the pin need their own review and merge", e.Pinned, e.Base, e.MergeSHA, e.Branch, e.Tip)
 }
+
+// PostMergeError preserves the landed commit when later Git work fails.
+// MergeSHA is empty only when both the normal and recovery reads failed.
+type PostMergeError struct {
+	Pinned, Base, MergeSHA string
+	Err                    error
+}
+
+func (e *PostMergeError) Error() string {
+	landing := fmt.Sprintf("pinned commit %s landed on %s", e.Pinned, e.Base)
+	if e.MergeSHA != "" {
+		landing += " as merge " + e.MergeSHA
+	} else {
+		landing += "; merge SHA could not be read"
+	}
+	return landing + ". Post-merge cleanup failed: " + e.Err.Error() + ". Do not retry the merge"
+}
+
+func (e *PostMergeError) Unwrap() error { return e.Err }
 
 // MergeBranch merges branch into base with --no-ff and deletes it if its tip
 // still matches the pin, returning the merge commit's short hash. A moved tip
@@ -86,28 +105,45 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 		}
 		return "", nil, err
 	}
-	sha, err := p.Git.Run("log", "-1", "--format=%h")
-	if err != nil {
-		return "", nil, err
+	postMerge := func(sha string, err error) error {
+		return &PostMergeError{Pinned: head, Base: base, MergeSHA: sha, Err: err}
 	}
+	sha, err := p.Git.Run("log", "-1", "--format=%h")
+	if err != nil || sha.ExitCode != 0 || line(sha.Stdout) == "" {
+		if err == nil {
+			err = &GitError{Msg: "git log -1 --format=%h: " + strutil.FirstLine(sha.Stderr)}
+		}
+		// The caller's context may have been cancelled after the merge. Read
+		// the base through the bounded recovery runner before reporting it.
+		read, readErr := recover("rev-parse", "--short", base)
+		if readErr != nil {
+			err = errors.Join(err, readErr)
+		} else if read.ExitCode == 0 && line(read.Stdout) != "" {
+			return line(read.Stdout), nil, postMerge(line(read.Stdout), err)
+		} else {
+			err = errors.Join(err, &GitError{Msg: "git rev-parse --short " + base + ": " + strutil.FirstLine(read.Stderr)})
+		}
+		return "", nil, postMerge("", err)
+	}
+	mergedSHA := line(sha.Stdout)
 	tip, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
 	if err != nil {
-		return "", nil, err
+		return mergedSHA, nil, postMerge(mergedSHA, err)
 	}
 	if tip.ExitCode != 0 {
-		return "", nil, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)}
+		return mergedSHA, nil, postMerge(mergedSHA, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)})
 	}
 	if current := line(tip.Stdout); current != head {
-		return line(sha.Stdout), nil, &BranchMovedError{Branch: branch, Pinned: head, Tip: current}
+		return mergedSHA, nil, &BranchMovedError{Branch: branch, Base: base, Pinned: head, Tip: current, MergeSHA: mergedSHA}
 	}
 	del, err := p.Git.Run("branch", "-d", branch)
 	if err != nil {
-		return "", nil, err
+		return mergedSHA, nil, postMerge(mergedSHA, err)
 	}
 	if del.ExitCode != 0 {
-		return "", nil, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)}
+		return mergedSHA, nil, postMerge(mergedSHA, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)})
 	}
-	return line(sha.Stdout), nil, nil
+	return mergedSHA, nil, nil
 }
 
 // ChangedFiles lists the files a merge range changes, for the merge-approval
