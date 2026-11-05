@@ -20,11 +20,18 @@ import (
 // Plain text cannot distinguish continuation rows or ghost text safely.
 // No bytes are ever written to a terminal stream channel.
 func (h *coreHost) composer(ctx context.Context, v coreHandle, t coreTerminal, plain string) error {
-	if _, ok := ReadDialog(plain); ok {
-		return coreComposer(plain)
+	if t.Status == nil {
+		return fmt.Errorf("%w: missing Core reporting identity", ErrNotSubmitted)
 	}
-	if coreComposerStart(plain) < 0 {
-		return coreComposer(plain)
+	harnessKind, ok := harness.CoreWorkerKind(t.Status.App)
+	if !ok {
+		return fmt.Errorf("%w: unknown Core reporting identity", ErrNotSubmitted)
+	}
+	if _, ok := ReadDialog(plain); ok {
+		return coreComposer(harnessKind, plain)
+	}
+	if coreComposerStart(harnessKind, plain) < 0 {
+		return coreComposer(harnessKind, plain)
 	}
 	c, e := h.connectMode(ctx, v.Endpoint, v.Core, true)
 	if e != nil {
@@ -82,7 +89,7 @@ func (h *coreHost) composer(ctx context.Context, v coreHandle, t coreTerminal, p
 			}
 		}
 		if end >= 0 {
-			return coreStyledComposer(paint[:end], attach.Terminal.Cols, attach.Terminal.Rows, plain)
+			return coreStyledComposer(harnessKind, paint[:end], attach.Terminal.Cols, attach.Terminal.Rows, plain)
 		}
 	}
 	return fmt.Errorf("%w: Core first paint exceeded frame budget", ErrDraftOnPrompt)
@@ -121,8 +128,8 @@ type coreCell struct {
 // This bounded first-paint decoder is intentionally not a live VT emulator.
 // It accepts the positioning/erase/style subset emitted by Core's screen
 // formatter, and refuses unsupported controls rather than guessing a draft.
-func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
-	syntax := harness.CheckedComposerSyntax()
+func coreStyledComposer(kind string, paint []byte, cols, rows int, plain string) error {
+	syntax := harness.ResolveInputSyntax(kind)
 	marker, _ := utf8.DecodeRuneInString(syntax.Composer)
 	fail := func(why string) error { return fmt.Errorf("%w: %s", ErrDraftOnPrompt, why) }
 	if cols < 1 || cols > 500 || rows < 1 || rows > 300 || len(paint) == 0 || paint[0] != 0x18 {
@@ -491,7 +498,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		}
 		return strings.TrimSpace(b.String())
 	}
-	pi := coreComposerStart(plain)
+	pi := coreComposerStart(kind, plain)
 	if pi < 0 {
 		return fail("plain capture has no composer")
 	}
@@ -511,13 +518,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 	}
 	observed := rowText(grid[markerRow][markerCol:], false)
 	ghost := strings.TrimSpace(strings.TrimPrefix(observed, syntax.Composer))
-	known := ghost == ""
-	for _, placeholder := range syntax.Placeholders {
-		known = known || ghost == placeholder
-	}
-	for _, prefix := range syntax.PlaceholderPrefixes {
-		known = known || strings.HasPrefix(ghost, prefix)
-	}
+	known := ghost == "" || syntax.IsPlaceholder(ghost)
 	if !known {
 		return fail("unknown dim composer content")
 	}

@@ -58,3 +58,14 @@ func CoreStatusSupported(app string) bool {
 	}
 	return false
 }
+
+// CoreWorkerKind resolves a native reporting identity to its registered kind.
+func CoreWorkerKind(app string) (string, bool) {
+	for _, kind := range CoreWorkerKinds() {
+		h, _ := lookup(kind)
+		if h.(coreReporter).CoreStatusApp() == app {
+			return kind, true
+		}
+	}
+	return "", false
+}

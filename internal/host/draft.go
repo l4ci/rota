@@ -35,10 +35,6 @@ var dialogOption = regexp.MustCompile(`^\d+[.)]\s`)
 // choice (Claude Code's folder-trust dialog) that dialogOption cannot.
 var dialogFooter = regexp.MustCompile(`(?i)enter (to )?(confirm|select)|esc (to cancel|not now)`)
 
-// promptPlaceholders are what an empty prompt line shows. They read as text but
-// nobody typed them.
-var promptPlaceholders = []string{`Try "`, "Ask Codex to do anything"}
-
 // promptLine returns the text after the pane's last prompt marker, up to the
 // end of that line, "" when the pane has no marker or the line is empty or a
 // placeholder.
@@ -47,15 +43,15 @@ func promptLine(pane string) string {
 	if i < 0 {
 		return ""
 	}
-	_, size := utf8.DecodeRuneInString(pane[i:])
+	marker, size := utf8.DecodeRuneInString(pane[i:])
 	rest := pane[i+size:]
 	line, _, _ := strings.Cut(rest, "\n")
 	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
 	if isDialog(line, rest) {
 		return "" // a dialog's selected option, not a prompt
 	}
-	for _, p := range promptPlaceholders {
-		if strings.HasPrefix(line, p) {
+	for _, syntax := range harness.InputSyntaxes() {
+		if strings.ContainsRune(syntax.Composer, marker) && syntax.IsPlaceholder(line) {
 			return ""
 		}
 	}
