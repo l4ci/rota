@@ -659,18 +659,31 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 	})
 }
 func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) string {
-	output := screen
-	if i := strings.LastIndex(screen, "›"); i >= 0 {
-		output = screen[:i]
+	withoutComposer := func(s string) string {
+		// Claude's submitted prompts and queue entries also start with ❯.
+		// Only the final prompt is the active composer; continuation rows
+		// are indented, including any literal prompt glyphs in a draft.
+		at := strings.LastIndex("\n"+s, "\n›")
+		if i := strings.LastIndex("\n"+s, "\n❯"); i > at {
+			at = i
+		}
+		if at >= 0 {
+			return s[:at]
+		}
+		return s
 	}
-	old := before
-	if i := strings.LastIndex(before, "›"); i >= 0 {
-		old = before[:i]
-	}
+	output, old := withoutComposer(screen), withoutComposer(before)
 	queueStart := func(s string) int {
 		at := -1
 		for _, heading := range []string{"Queued follow-up inputs", "Messages to be submitted after next tool call", "Messages to be submitted at end of turn"} {
 			if i := strings.Index(s, heading); i >= 0 && (at < 0 || i < at) {
+				at = i
+			}
+		}
+		// Claude renders pending input like a submitted ❯ prompt, but
+		// follows it with this queue-only action (above the composer).
+		if footer := strings.Index(s, "\n  ctrl+enter to send now\n"); footer >= 0 {
+			if i := strings.LastIndex("\n"+s[:footer], "\n❯"); i >= 0 && (at < 0 || i < at) {
 				at = i
 			}
 		}
