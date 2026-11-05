@@ -137,6 +137,7 @@ const (
 	Worktree            = "worktree"
 	Attempt             = "attempt"
 	BaseBranch          = "base branch"
+	BranchMoved         = "branch moved"
 	NotOnBaseBranch     = "not on base branch"
 	DirtyTreeShip       = "dirty tree"
 	NotAMerge           = "not a merge"
@@ -164,6 +165,6 @@ func All() []string {
 		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
 		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
 		AccountConflict, ConfigConflict, ConfigMigration, BothDirs, DirtyTree, LockHeld, BackupDir, Worktree,
-		Attempt, BaseBranch, NotOnBaseBranch, DirtyTreeShip, NotAMerge, MergeSubject, PostMergeCommits, PRMode, RoundWorker, DuplicateCreate, BatchCap,
+		Attempt, BaseBranch, BranchMoved, NotOnBaseBranch, DirtyTreeShip, NotAMerge, MergeSubject, PostMergeCommits, PRMode, RoundWorker, DuplicateCreate, BatchCap,
 	}
 }

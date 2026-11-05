@@ -1,0 +1,121 @@
+
+ ▐▛███▛█   Claude Code v2.1.318
+▝▜██████▀  Sonnet 5.5 · Claude Team
+ ▝▝   ▝▝   ~/dev/rota/.worktrees/dana
+
+⚠ Safe mode: all customizations are disabled (CLAUDE.md, skills, plugins, hooks, MCP, agents, and more)
+  Restart without --safe-mode to re-enable
+
+❯ <hc from="t2t rota-dana-97ef7710f73fa9851909">Terminal rendering capture only: write a 5000-word fictional story about a lighthouse. Use no tools, do not inspect or edit files.</hc>
+
+❯ <hc from="t2t rota-dana-97ef7710f73fa9851909"><rota-relay n="19" round="50" from="orchestrator">
+  Rendering capture only. Reply first queued.
+  </rota-relay></hc>
+
+❯ <hc from="t2t rota-dana-97ef7710f73fa9851909"><rota-relay n="20" round="50" from="orchestrator">
+  Rendering capture only. Reply second queued.
+  </rota-relay></hc>
+  ctrl+enter to send now
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✽ Deciphering…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Press up to edit queued messages
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt
+[hc] only its screen: it is working; read again once it stops for its history

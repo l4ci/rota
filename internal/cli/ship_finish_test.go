@@ -159,6 +159,42 @@ func TestShipFinishAfterMerge(t *testing.T) {
 	}
 }
 
+func TestShipFinishUsesExplicitMergeWithRetainedBranch(t *testing.T) {
+	work := finishFixture(t, 1, false)
+	finishProve(t, work, "F71", "F72")
+	pin := gittest.Run(t, work, "rev-parse", "rota/fin")
+	gittest.Run(t, work, "checkout", "-q", "rota/fin")
+	shipCommit(t, work, "later.txt", "feat: later work", "Refs [F72]")
+	tip := gittest.Run(t, work, "rev-parse", "HEAD")
+	gittest.Run(t, work, "checkout", "-q", "main")
+	gittest.Run(t, work, "update-ref", "refs/heads/rota/fin", pin)
+	deps := finishDeps("")
+	shipMoveAfterPin(t, deps, work, "rota/fin", tip)
+	out := trRunWith(t, deps, work, "merge: fin", "ship", "merge", "rota/fin", "--body-file", "-", "--json")
+	landed := data(t, out.stdout)
+	if out.code != ExitRefused || landed["changed"] != true || landed["blockedBy"] != "branch moved" {
+		t.Fatalf("merge must land and retain branch: %+v", out)
+	}
+	merge := landed["sha"].(string)
+	got := finishRun(t, finishDeps(""), work, 0, "rota/fin", "--commit", merge)
+	if got["commit"] != merge {
+		t.Errorf("bookkeeping commit = %v, want landed merge %s", got["commit"], merge)
+	}
+	if items := sub(got, "items"); !reflect.DeepEqual(items["completed"], []any{"F71"}) || !reflect.DeepEqual(items["referenced"], []any{"F71"}) {
+		t.Errorf("only pinned work may be completed: %v", items)
+	}
+	if signals := sub(got, "signals"); signals["files"] != float64(1) || signals["items"] != float64(1) {
+		t.Errorf("only pinned work may count toward post-merge gates: %v", signals)
+	}
+	if got := gittest.Run(t, work, "rev-parse", "rota/fin"); got != tip {
+		t.Errorf("bookkeeping changed kept branch: %s, want %s", got, tip)
+	}
+	b, err := os.ReadFile(filepath.Join(work, ".rota", "BACKLOG.md"))
+	if err != nil || !strings.Contains(string(b), "- **[F72]") || strings.Contains(string(b), "~~**[F72]") {
+		t.Errorf("later work must stay open: %s, %v", b, err)
+	}
+}
+
 func TestShipFinishRoundWorker(t *testing.T) {
 	work := finishFixture(t, 2, false)
 	before := shipTree(t, work)

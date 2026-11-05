@@ -7,7 +7,7 @@ func TestStartupDialogRecoveryGenericFallback(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			// An empty hint leaves the caller's generic worker-terminal
 			// guidance intact rather than borrowing another adapter's hint.
-			if got := StartupDialogRecovery(kind); got != "" {
+			if got := StartupDialogRecovery(kind, "t2"); got != "" {
 				t.Fatalf("StartupDialogRecovery(%q) = %q, want generic fallback", kind, got)
 			}
 		})

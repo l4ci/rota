@@ -12,6 +12,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 // Every accepted composer requires an authoritative styled first paint.
@@ -120,6 +122,8 @@ type coreCell struct {
 // It accepts the positioning/erase/style subset emitted by Core's screen
 // formatter, and refuses unsupported controls rather than guessing a draft.
 func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
+	syntax := harness.CheckedComposerSyntax()
+	marker, _ := utf8.DecodeRuneInString(syntax.Composer)
 	fail := func(why string) error { return fmt.Errorf("%w: %s", ErrDraftOnPrompt, why) }
 	if cols < 1 || cols > 500 || rows < 1 || rows > 300 || len(paint) == 0 || paint[0] != 0x18 {
 		return fail("unsupported observer paint/grid")
@@ -451,7 +455,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		// and no content below it. Without a surface boundary, a footer or a
 		// second prompt-looking row is ambiguous rather than empty input.
 		for r, row := range grid {
-			if c := firstInk(row); c >= 0 && row[c].r == '›' {
+			if c := firstInk(row); c >= 0 && row[c].r == marker {
 				if markerRow >= 0 {
 					return fail("observer has ambiguous uncolored prompts")
 				}
@@ -459,7 +463,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			}
 		}
 	}
-	if markerRow < 0 || grid[markerRow][markerCol].r != '›' ||
+	if markerRow < 0 || grid[markerRow][markerCol].r != marker ||
 		y != markerRow || x != markerCol+2 {
 		return fail("observer cursor does not identify an empty composer")
 	}
@@ -480,7 +484,7 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 			if r == 0 {
 				r = ' '
 			}
-			if hideDim && c.dim && r != '›' {
+			if hideDim && c.dim && r != marker {
 				r = ' '
 			}
 			b.WriteRune(r)
@@ -506,8 +510,14 @@ func coreStyledComposer(paint []byte, cols, rows int, plain string) error {
 		}
 	}
 	observed := rowText(grid[markerRow][markerCol:], false)
-	ghost := strings.TrimSpace(strings.TrimPrefix(observed, "›"))
-	known := ghost == "" || strings.HasPrefix(ghost, "Try \"") || ghost == "Ask Codex to do anything" || ghost == "Ask a follow-up question"
+	ghost := strings.TrimSpace(strings.TrimPrefix(observed, syntax.Composer))
+	known := ghost == ""
+	for _, placeholder := range syntax.Placeholders {
+		known = known || ghost == placeholder
+	}
+	for _, prefix := range syntax.PlaceholderPrefixes {
+		known = known || strings.HasPrefix(ghost, prefix)
+	}
 	if !known {
 		return fail("unknown dim composer content")
 	}
