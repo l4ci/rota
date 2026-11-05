@@ -2,6 +2,8 @@
 refs:
   - internal/milestone
   - internal/cli/milestone.go
+  - internal/cli/plan_pass.go
+  - internal/cli/acceptance_marks.go
 ---
 
 ## A6: milestones, plans, designs, spikes, proof, debug
@@ -171,6 +173,7 @@ old: none (new)
 note: the only way to mark an acceptance criterion met. The mark goes in the item's `acceptance` note (`- AC-<n> · <date> · <sha> · <check> · <criterion text>`), never in the body. `--proof` splits on the first `:`, so the check may contain colons; it must equal a `check` that `rota proof show` prints, and the sha matches a row's sha as a prefix either way (4 characters or more). The latest matching row decides, so a FAIL recorded after a PASS refuses. Re-passing a criterion replaces its mark; `changed` is false when nothing differs.
 note: `<key>` names the item (`M01-B07` is B07; `#7` and `B7` also work); the issue backend is required because item notes live there. A body captured without ids is numbered (`AC-1`, `AC-2`, … in order, existing ids kept) in the same call, after the proof check passes. `rota item create` numbers new bodies on the issue backend.
 note: the `acceptance` note kind is reserved: `rota item note show` reads it, `rota item note add` and `rm` exit 2.
+note: acceptance marking reads fresh notes, merges the mark and writes the note under one per-item lock in the repository's shared git state directory (or `.rota` outside git). Overlapping invocations, including linked worktrees, preserve unrelated marks. Coordination is local to the repository on this machine; it does not serialize writers on other machines. Tracker I/O holds the lock; a wait exceeding 10 seconds fails without writing a stale snapshot.
 
 ### rota plan check
 rota plan check <key>
