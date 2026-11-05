@@ -2,10 +2,8 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -150,14 +148,6 @@ func accountConflicts(own []Account) []AccountConflict {
 	return out
 }
 
-// accountFile is one config layer the step reads, lowest layer first.
-type accountFile struct {
-	name, path string
-	global     bool // the global config layer, skipped when unusable rather than refused
-	doc        *jsonx.Object
-	changed    bool
-}
-
 // MigrateAccountsFiles runs the accounts step on the global config under
 // globalDir ("" for none), root's .rota/config.json and its
 // .rota/config.local.json. With apply it writes the files that changed, under
@@ -165,33 +155,14 @@ type accountFile struct {
 // a malformed file or a conflict (*AccountConflictError) writes nothing. A
 // missing file has nothing to migrate.
 func MigrateAccountsFiles(root, globalDir string, apply bool) (AccountsMigration, error) {
-	files := []*accountFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root)}}
-	if globalDir != "" {
-		files = append([]*accountFile{{name: "global config.json", path: GlobalPath(globalDir), global: true}}, files...)
-	}
 	var m AccountsMigration
-	var lock func(i int) error
-	lock = func(i int) error {
-		if i == len(files) {
-			return migrateAccountsPlan(files, &m, apply)
-		}
-		if _, err := os.Stat(files[i].path); err != nil {
-			return lock(i + 1)
-		}
-		return fsio.Locked(files[i].path, fsio.LockTimeout, func() error { return lock(i + 1) })
-	}
-	err := lock(0)
+	err := migrateLayerFiles(root, globalDir, apply, func(files []*migrationFile) error {
+		return migrateAccountsPlan(files, &m)
+	})
 	return m, err
 }
 
-func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool) error {
-	for _, f := range files {
-		doc, err := readAccountTarget(f)
-		if err != nil {
-			return err
-		}
-		f.doc = doc
-	}
+func migrateAccountsPlan(files []*migrationFile, m *AccountsMigration) error {
 	var conflicts []AccountConflict
 	for _, f := range files {
 		if f.doc == nil {
@@ -215,27 +186,5 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 		*m = AccountsMigration{}
 		return &AccountConflictError{Conflicts: conflicts}
 	}
-	if !apply {
-		return nil
-	}
-	for _, f := range files {
-		if f.changed {
-			if err := fsio.WriteJSONAtomic(f.path, f.doc); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
-}
-
-// readAccountTarget reads one layer: nil when the file is missing (or, for
-// config.local.json, blank), an error naming the file when it is not a JSON
-// object. The global config is skipped when unusable, as Load skips it
-// (GlobalError reports why): a step that runs inside `config fill` must not
-// fail on a file it cannot see.
-func readAccountTarget(f *accountFile) (*jsonx.Object, error) {
-	if !f.global {
-		return readMigrateTarget(f.path, f.name)
-	}
-	return readObject(f.path), nil
 }
