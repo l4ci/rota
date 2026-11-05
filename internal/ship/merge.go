@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -25,8 +26,17 @@ type MergePorts struct {
 	Checkout Checkout // where the merge runs; scopes worktree cleanup
 }
 
-// MergeBranch merges branch into base with --no-ff and deletes it, returning
-// the merge commit's short hash. A refused Approve returns its refusal and
+// BranchMovedError reports a landed pin whose branch must be kept because its
+// current tip differs. MergeBranch returns the merge hash alongside this error.
+type BranchMovedError struct{ Branch, Pinned, Tip string }
+
+func (e *BranchMovedError) Error() string {
+	return fmt.Sprintf("pinned commit %s landed; branch %s moved to %s; that tip was not gated or merged by this operation; branch kept; commits added after the pin need their own review and merge", e.Pinned, e.Branch, e.Tip)
+}
+
+// MergeBranch merges branch into base with --no-ff and deletes it if its tip
+// still matches the pin, returning the merge commit's short hash. A moved tip
+// returns that hash and a BranchMovedError. A refused Approve returns its refusal and
 // nothing changes. Failed merges attempt an abort; recovery
 // failures pass through with their original merge error.
 func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refusal, error) {
@@ -76,16 +86,26 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 		}
 		return "", nil, err
 	}
+	sha, err := p.Git.Run("log", "-1", "--format=%h")
+	if err != nil {
+		return "", nil, err
+	}
+	tip, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
+	if err != nil {
+		return "", nil, err
+	}
+	if tip.ExitCode != 0 {
+		return "", nil, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)}
+	}
+	if current := line(tip.Stdout); current != head {
+		return line(sha.Stdout), nil, &BranchMovedError{Branch: branch, Pinned: head, Tip: current}
+	}
 	del, err := p.Git.Run("branch", "-d", branch)
 	if err != nil {
 		return "", nil, err
 	}
 	if del.ExitCode != 0 {
 		return "", nil, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)}
-	}
-	sha, err := p.Git.Run("log", "-1", "--format=%h")
-	if err != nil {
-		return "", nil, err
 	}
 	return line(sha.Stdout), nil, nil
 }
