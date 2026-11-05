@@ -158,7 +158,9 @@ Core and Orca compare retained PIDs with their observed process start times. A
 reused PID belongs to another process and neither blocks cleanup nor supplies
 new descendants. An unreadable start time stays conservative: a live recorded
 PID still blocks cleanup. Orca refreshes descendants only from a readable,
-matching incarnation.
+matching incarnation. If a start time was unreadable at the first observation,
+that entry cannot discover later descendants; restoring readability alone does
+not prove that it is still the original process.
 
 Existing Orca bare-PID tree files have no historical start times. Their live
 PIDs still block cleanup, but rota never assigns them today's start times or
@@ -168,6 +170,36 @@ processes are gone. Only launch can establish the initial observation; cleanup
 and polling refuse to reconstruct missing history from a PID file. Core keeps
 its existing compatibility rule: legacy bare PIDs count only when independently
 observed in the live terminal's tree.
+
+**Upgrading with Orca slots running:** finish the slots before upgrading when
+possible. A slot with legacy evidence loses tracking of children it starts
+after the upgrade; once the recorded PIDs exit, cleanup can pass while those
+unrecorded children remain. If already upgraded, stop assigning work to those
+slots, finish their current work and inspect the worker's processes and children
+in Orca before cleanup. Shut down any remaining worker applications normally,
+then reassign or restart the slots with the new binary to establish fresh
+incarnation evidence. Apply the same precaution to an unknown-start observation.
+Core can independently observe a live terminal's process tree; Orca's retained
+PID file cannot provide that independent proof, so it cannot safely upgrade a
+legacy identity from today's process table.
+
+**`orca close unproven; surviving processes: …`:** a recorded incarnation is
+still alive, its current start time cannot be read, or an entry has no recorded
+start time. A readable, mismatched start time is PID reuse and does not block.
+Entries with no recorded start are listed separately as
+`no recorded start time (legacy or unreadable at observation): …`. Inspect each
+listed PID, for example with `ps -p <pid> -o pid,ppid,lstart,args`, and compare it
+with the worker's launch time and application. If it is clearly unrelated, wait
+for it to exit or shut down its owning application through its normal shutdown
+flow. Retry cleanup after that numeric PID is absent; the next refresh prunes
+the entry. If the application cannot be stopped, defer reclaim until it exits.
+Do not signal retained PIDs directly, remove evidence files or fill in a current
+start time to clear the refusal. `--force` still requires process proof.
+
+**Downgrading:** the versioned Orca tree format is forward-only. Older binaries
+refuse a rewritten file with `unreadable Orca tree proof`. Use a compatible
+binary to finish cleanup before downgrading; do not delete the proof to make an
+older binary proceed.
 
 Robert Braatz's reported Codex tests, relayed during round 41, confirmed multiline
 delivery, turn-start receipts and background creation. Live validation still
