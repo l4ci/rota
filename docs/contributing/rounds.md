@@ -80,9 +80,15 @@ executes the scans afresh. This step runs before the selected package checks.
 
 When adding a source-scanning test, register it there. The registration check follows test
 helpers across files and flags unregistered tests that enumerate directories or parse source
-files from disk. Tests that only enumerate isolated fixtures carry an explicit reason in the
-same registry. Fixed-file checks of other packages or docs also belong in the scan list.
+files from disk. It also recognizes external `grep`, `git grep` and `git ls-files` commands,
+and combines disk reads with repository-root paths reached through helpers. Production
+helpers contribute direct disk reads; the check does not follow their application call graphs.
+Tests that only inspect isolated fixtures carry an explicit reason in the same registry.
+Fixed-file checks of other packages or docs also belong in the scan list. Tests of tooling
+behavior against mutated fixture trees run with their package rather than on every fast run.
 Run `go run ./test/treescan --check` to validate the registry without executing its tests.
+The registry test removes each registered guard in turn to check detection. The fast-tier
+wiring test runs for scanner changes and in smoke section 175 at the merge gate.
 
 If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
 (`.rota/KNOWLEDGE.md`, "Build & Tooling: Smoke testing: Gate & frozen records", entry "Pre-existing smoke failures: check main before
