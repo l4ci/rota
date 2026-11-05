@@ -304,6 +304,11 @@ func suiteConfig(t *testing.T) {
 			eq(t, e, "data.value", c.want)
 			eq(t, e, "data.changed", true)
 		})
+		if _, isString := c.want.(string); !isString {
+			// Coercion still parses JSON, but a model key only stores strings.
+			s.want = 2
+			s.check = eqCheck("error.message", "invalid value for orchestrator.model: expected string")
+		}
 		if strings.HasPrefix(c.raw, "-") {
 			// a value that starts with - is a flag until -- (conventions, rule 7)
 			s.argv = setArgv("orchestrator.model", "--", c.raw)
@@ -322,7 +327,9 @@ func suiteConfig(t *testing.T) {
 		set("previous/same-value-is-a-no-op", fx{config: "{\n  \"orchestrator\": {\n    \"model\": \"opus\"\n  }\n}\n"}, "orchestrator.model", "opus",
 			both(eqCheck("data.changed", false), eqCheck("data.previous", "opus"))),
 		set("previous/same-value-compact-file-is-reformatted", fx{config: `{"orchestrator":{"model":"opus"}}`}, "orchestrator.model", "opus", eqCheck("data.changed", false)),
-		set("previous/int-vs-float-differs", fx{config: `{"round": {"slots": 3}}`}, "round.slots", "3.0", eqCheck("data.changed", true)),
+		scn{name: "config-set/previous/float-for-int-is-refused", fx: fx{config: `{"round": {"slots": 3}}`},
+			argv: setArgv("round.slots", "3.0"), want: 2,
+			check: eqCheck("error.message", "invalid value for round.slots: expected int")},
 		set("parent/created", fx{config: `{"issues": {"source": "file"}}`}, "docs.path", "d", eqCheck("data.changed", true)),
 		set("parent/scalar-replaced", fx{config: `{"round": "scalar"}`}, "round.dispatch", "tmux", eqCheck("data.previous", nil)),
 		set("parent/list-replaced", fx{config: `{"round": [1, 2]}`}, "round.dispatch", "tmux", nil),
