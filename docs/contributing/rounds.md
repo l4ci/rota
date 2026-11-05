@@ -68,6 +68,10 @@ in a sandbox (sections are never executable alone). Several workers running full
 starve the CPU and turn time-budgeted tests into false reds. A stale branch does not need a re-run
 either: the merge gate verifies the merged tree.
 
+For source changes, fast-tier selection requires a complete Go dependency graph, including test
+imports. A discovery failure stops both normal and `FAST_DRY_RUN=1` invocations with a diagnostic
+before they report a plan or execute checks; partial graph output cannot produce green proof.
+
 If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
 (`.rota/KNOWLEDGE.md`, "Build & Tooling: Smoke testing: Gate & frozen records", entry "Pre-existing smoke failures: check main before
 triaging your branch"). A failure that main shares pre-exists the PR and is captured as its own bug; otherwise the

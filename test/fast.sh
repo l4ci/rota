@@ -116,10 +116,14 @@ done
 # production Match records remain, while synthetic test mains are excluded.
 # rel() strips the literal module path so names match add_pkg's "./dir".
 if [ "${#src_pkgs[@]}" -gt 0 ]; then
-  mod="$(go list -m)"
-  while IFS= read -r dep; do
-    add_pkg "$dep"
-  done < <(go list -test -f '{{if or .ForTest .Match}}{{if .ForTest}}{{.ForTest}}{{else}}{{.ImportPath}}{{end}} {{join .Deps " "}}{{end}}' ./... | awk -v mod="$mod" -v list="${src_pkgs[*]}" '
+  if ! mod="$(go list -m)"; then
+    echo "fast: dependency discovery failed (go list -m)" >&2
+    exit 1
+  fi
+  # Check the whole producer pipeline before consuming any output. Process
+  # substitution hides its status, even with pipefail, and may yield a partial
+  # graph after go list fails to load another package's test imports.
+  if ! deps="$(go list -test -f '{{if or .ForTest .Match}}{{if .ForTest}}{{.ForTest}}{{else}}{{.ImportPath}}{{end}} {{join .Deps " "}}{{end}}' ./... | awk -v mod="$mod" -v list="${src_pkgs[*]}" '
     function rel(p) {
       if (p == mod) return "."
       if (index(p, mod "/") == 1) return "./" substr(p, length(mod)+2)
@@ -131,7 +135,15 @@ if [ "${#src_pkgs[@]}" -gt 0 ]; then
       owner = rel($1)
       if (owner == "") next
       for (i = 2; i <= NF; i++) if (rel($i) in want) { print owner; break }
-    }' | sort -u)
+    }' | sort -u)"; then
+    echo "fast: dependency discovery failed (go list -test); selection aborted" >&2
+    exit 1
+  fi
+  if [ -n "$deps" ]; then
+    while IFS= read -r dep; do
+      add_pkg "$dep"
+    done <<<"$deps"
+  fi
 fi
 
 # Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
