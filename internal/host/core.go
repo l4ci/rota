@@ -626,9 +626,10 @@ func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
 			params["if"] = "working"
 		case "idle":
 			params["if"] = "idle"
-		case "done":
-			params["if"] = "done"
 		}
+		// Core accepts only idle and working as a send precondition; a worker
+		// whose turn is done gets no precondition, as the screen guard above
+		// already checked its composer.
 		if e = c.call("terminal.send", params, &result); e != nil {
 			var rpc *coreRPCError
 			if errors.As(e, &rpc) && (rpc.Data.Kind == "blocked" || rpc.Data.Kind == "status_mismatch") {
