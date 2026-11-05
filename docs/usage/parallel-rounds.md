@@ -216,7 +216,10 @@ rota worker dispatch ben --confirm-not-submitted
 Then retry the original dispatch or send the next relay. Confirmation keeps the
 terminal and signing key and retracts the uncertain relay's provisional log entry,
 so retrying it keeps its sequence. It refuses accepted or queued input, positive
-pickup evidence and a replaced terminal. Use this flag alone, without a body file
+pickup evidence and a replaced terminal. It also refuses when Core's turn has
+advanced or a previously idle or done worker starts working, even when the
+message echo has scrolled away. The saved delivery records that confirmation
+was made by hand and when. Use this flag alone, without a body file
 or other dispatch flags. Definite Core rejections, including `invalid_params`,
 report not submitted and allow a normal retry without confirmation.
 

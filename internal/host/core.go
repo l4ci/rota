@@ -598,6 +598,12 @@ func (h *coreHost) ConfirmNotSubmitted(ctx context.Context, handle, payload stri
 		if err = h.checkProgram(v, t); err != nil {
 			return err
 		}
+		// A lost send reply leaves Sent false even if Core typed the payload.
+		// Native activity since its baseline contradicts non-submission when
+		// the echo has already scrolled out of the bounded screen capture.
+		if t.Turn > prior.Turn || (prior.Was != "working" && t.Status != nil && t.Status.State == "working") {
+			return fmt.Errorf("Core native activity advanced since the attempted send; cannot confirm not submitted")
+		}
 		var screen struct{ Text string }
 		if err = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); err != nil {
 			return err
