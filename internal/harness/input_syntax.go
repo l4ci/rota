@@ -11,8 +11,11 @@ import (
 // Without QueueGap, footer-based queue evidence is disabled. BootPatterns
 // supplies legacy boot evidence; hosts may require stronger readiness checks.
 type InputSyntax struct {
-	Composer            string
-	BootPatterns        []string
+	Composer     string
+	BootPatterns []string
+	// ReadyModel identifies a model row whose first capture must be loaded
+	// before a legacy host treats this composer's prompt as ready.
+	ReadyModel          *regexp.Regexp
 	QueueHeadings       []string
 	QueueFooter         string
 	QueueGap            *regexp.Regexp
