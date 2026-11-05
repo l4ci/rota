@@ -875,7 +875,7 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
 - **A missing review verdict.** The depth `ship.review` resolves for the branch (diff size, the issue's labels) decides what must be on record: `full` both the Spec and Standards verdicts, `light` the Spec verdict (the Standards verdict when the slot has no issue), `none` nothing (`blockedBy: review-missing`). Run `/rota-review`, which records them.
 - **Nothing to verify with.** When `test.full` and `test.e2e` are both empty and `test.fullWhere` is
   `local`, the gate would merge a tree no command checked, so it stops (`blockedBy: no-verify`). Set
-  one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
+  one with `rota config set test.full '["<command>"]'`, or pass `--no-verify` to merge unverified on purpose.
   The train takes the same flag.
 
 A train excludes PRs missing these headings or a required review verdict at their current head
