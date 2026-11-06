@@ -305,6 +305,7 @@
     "./internal/receipt/TestPruneDropsTheFileAndTheClaims": "Checks the temporary receipt directory for removed claims.",
     "./internal/round/TestAssessOldFileFeatureTemplate": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
     "./internal/round/TestBriefPathFallsBackToTheSkillsCache": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
+    "./internal/round/TestInspectReconcilePreservesStateAndAgreesWithApply": "Walks a temporary round fixture to prove inspection leaves its files, indexes and state unchanged.",
     "./internal/round/TestOrcaForceReclaimUsesAdapterRetainedProcessProof": "Globs temporary Orca adapter metadata for child-process PID files.",
     "./internal/round/TestStatusCodexTerminalWait": "Reads pane captures from sibling worker/testdata; fixtures, not repository source.",
     "./internal/section/TestUpsertBlockIsIdempotent": "Reads generated instruction Markdown in a temporary section fixture.",
