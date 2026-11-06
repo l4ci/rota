@@ -1740,3 +1740,54 @@ func TestAssignWhileGateHoldsAnotherSlot(t *testing.T) {
 		}
 	})
 }
+
+// #2745: a PR queued in review from a slot that now holds another branch does
+// not gate that slot; a slot still holding the queued branch stays gated, and an
+// unresolvable holder gates every slot.
+func TestAssignQueuedOriginMovedOnWhileGateHolds(t *testing.T) {
+	for _, tc := range []struct {
+		name, holder string
+		sameBranch   bool
+		gated        bool
+	}{
+		{"moved on", "#484", false, false},
+		{"still on the queued branch", "#484", true, true},
+		{"empty holder", "", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newAssignFixture(t)
+			cd, err := rotastatetest.CommonDir(f.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			holder := rotastate.File(cd, "land") + worker.LandHolderSuffix
+			if err := os.MkdirAll(filepath.Dir(holder), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			branch := "ben/99-old"
+			if tc.sameBranch {
+				branch = worker.LoadRegistryTolerant(f.root).Slot("ben").Branch()
+			}
+			if err := worker.Update(f.root, func(d *worker.Doc) {
+				d.QueuePR(worker.QueuedPR{Issue: "99", PR: "#484", From: "ben", Branch: branch})
+			}); err != nil {
+				t.Fatal(err)
+			}
+			holdLandLock(t, f.root, func() {
+				if err := os.WriteFile(holder, []byte(tc.holder), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				_, err := f.assign("12", "ben", nil)
+				if tc.gated {
+					if by := blockedBy(t, err); by != worker.GateRunning {
+						t.Errorf("want gate-running, got %v", err)
+					} else if tc.holder != "" && !strings.Contains(err.Error(), tc.holder) {
+						t.Errorf("refusal should name the guarded %s: %v", tc.holder, err)
+					}
+				} else if err != nil {
+					t.Errorf("assign = %v, want it to run", err)
+				}
+			})
+		})
+	}
+}
