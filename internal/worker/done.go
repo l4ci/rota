@@ -69,6 +69,7 @@ type DoneResult struct {
 	// Changed is false when the slot was already done.
 	Changed        bool
 	Unread         int
+	Pending        int
 	Dirty          bool
 	Unpushed       bool
 	ProofSkipped   bool
@@ -81,7 +82,7 @@ type DoneResult struct {
 	Warnings       []string
 }
 
-// Done is the worker's last action: the attempt fence, unread mail, a settled
+// Done is the worker's last action: the attempt fence, pending/unread mail, a settled
 // pushed branch, the test.fast (or targeted) proof at HEAD for every open
 // bundle issue, acceptance marks for a completed outcome, the RED check and
 // advisory PR-section warnings, then the slot's done event, state and ledger row.
@@ -125,6 +126,7 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	// the worker must do, and the proof below would be of the old work.
 	if err := unreadMailRefusal(sl); err != nil {
 		res.Unread = len(sl.Unread())
+		res.Pending = len(sl.Pending())
 		return err
 	}
 	dir := doneDir(sl, req.Root)
@@ -310,7 +312,7 @@ func doneRed(env Env, req DoneRequest, dp DoneDeps, id, dir string, bundle func(
 func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res *DoneResult) error {
 	changed := false
 	var fenced, mailErr error
-	lateUnread := 0
+	lateUnread, latePending := 0, 0
 	if err := Update(req.PoolRoot, func(doc *Doc) {
 		s := doc.Slot(req.Slot)
 		if s == nil {
@@ -320,7 +322,7 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 			return
 		}
 		if mailErr = unreadMailRefusal(s); mailErr != nil {
-			lateUnread = len(s.Unread())
+			lateUnread, latePending = len(s.Unread()), len(s.Pending())
 			return
 		}
 		now := stamp.Format(env.Now())
@@ -352,7 +354,7 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 		return noData{fenced}
 	}
 	if mailErr != nil {
-		res.Unread = lateUnread
+		res.Unread, res.Pending = lateUnread, latePending
 		return mailErr
 	}
 	if changed {
@@ -363,14 +365,15 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 }
 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
-// holds mail the worker has not read, nil when there is none.
+// holds unread mail or unresolved requests, including requests already read.
 func unreadMailRefusal(s *Slot) error {
 	n := len(s.Unread())
-	if n == 0 {
+	pending := len(s.Pending())
+	if n == 0 && pending == 0 {
 		return nil
 	}
-	e := fail(exitcode.ExitRefused, fmt.Sprintf("slot %s has %d unread mail: read it before done", s.Name(), n))
-	e.Hint = fmt.Sprintf("run `rota worker inbox %s --ack`, act on what it says, then `rota worker done %s` again", s.Name(), s.Name())
+	e := fail(exitcode.ExitRefused, fmt.Sprintf("slot %s has %d unread mail and %d pending requests: resolve them before done", s.Name(), n, pending))
+	e.Hint = fmt.Sprintf("run `rota worker inbox %s --ack`, then resolve each request with --handled <seq> or --returned <seq> and --reason <text> before `rota worker done %s`", s.Name(), s.Name())
 	return e
 }
 

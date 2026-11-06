@@ -250,8 +250,14 @@ func (s *Slot) SetClaimID(id string) {
 	s.o.Set("claimId", id)
 }
 
-// SetTask renames the issue the slot works on (a tracker migration).
-func (s *Slot) SetTask(t string) { s.o.Set("task", t) }
+// SetTask changes the issue the slot works on, returning unresolved requests
+// when its normalized identity changes (including tracker migrations).
+func (s *Slot) SetTask(t string) {
+	if NormID(s.Task()) != NormID(t) {
+		s.endInboxAssignment()
+	}
+	s.o.Set("task", t)
+}
 
 // Window is the pre-handle field name for the pane handle.
 func (s *Slot) Window() string { return jsonx.Str(s.o, "window") }
@@ -285,6 +291,9 @@ func (s *Slot) IsExternal() bool { return s != nil && s.Kind() == KindExternal }
 
 // MarkExternal makes the slot an adopted one holding task, with pr when known.
 func (s *Slot) MarkExternal(task, pr string) {
+	if NormID(s.Task()) != NormID(task) {
+		s.endInboxAssignment()
+	}
 	s.o.Set("kind", KindExternal)
 	s.o.Set("task", task)
 	s.SetPR(pr)
@@ -350,11 +359,13 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	if task == "" {
 		return
 	}
+	if NormID(s.Task()) != NormID(task) {
+		s.endInboxAssignment()
+	}
 	s.o.Set("task", task)
 	s.o.Set("pr", nil)
 	s.o.Delete("reviewSeen")
 	s.o.Set("relays", []any{})
-	s.o.Delete("inbox")
 	s.o.Delete("unsent")
 	if kind != "" && (!harness.IsDefault(kind) || s.Kind() != "") {
 		s.o.Set("kind", kind)
@@ -420,6 +431,9 @@ type Binding struct {
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
 func (s *Slot) Bind(b Binding) {
+	if NormID(s.Task()) != NormID(b.Task) || s.Attempt() != b.Attempt {
+		s.endInboxAssignment()
+	}
 	s.SetBriefContext("", nil)
 	s.SetBriefDecisionContext("")
 	s.o.Delete("awaitingDone")
@@ -449,11 +463,12 @@ func smokeStr(n int) string {
 // PR read null, the optional binding fields (claim, kind, tier, model, tier
 // reason) are removed so a freed slot reports nothing of the last issue.
 func (s *Slot) Unbind() {
+	s.endInboxAssignment()
 	s.SetBriefContext("", nil)
 	s.SetBriefDecisionContext("")
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewNoFindings", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding", "awaitingDone"} {
+	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewNoFindings", "reviewSeen", "event", "heartbeatAt", "outcome", "finding", "awaitingDone"} {
 		s.o.Delete(k)
 	}
 }
