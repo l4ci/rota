@@ -43,6 +43,7 @@ type hostFake struct {
 	// sendErr, when set, is what Send returns after recording the brief.
 	sendErr error
 	capture string
+	status  string
 }
 
 func (h *hostFake) Kind() host.Kind {
@@ -69,7 +70,7 @@ func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
 	return h.sendErr
 }
 func (h *hostFake) Capture(context.Context, string, string, int) string { return h.capture }
-func (h *hostFake) Status(context.Context, string, string) string       { return "" }
+func (h *hostFake) Status(context.Context, string, string) string       { return h.status }
 func (h *hostFake) Kill(context.Context, string, string) error          { return nil }
 func (h *hostFake) Notify(context.Context, string, string)              {}
 
