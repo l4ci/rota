@@ -81,6 +81,7 @@ func TestAcceptRefusals(t *testing.T) {
 	t.Run("busy slot", func(t *testing.T) {
 		f := newMoveFx(t)
 		f.mintReview(t, "12")
+		f.host.status = "working"
 		if _, err := f.accept("12", func(in *AcceptInput) { in.Issues = []string{"#1"} }); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}

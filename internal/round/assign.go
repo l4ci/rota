@@ -302,6 +302,11 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 	}
 	// Last, so it is the final thing read: a worker that ends on a prose summary
 	// of its PR otherwise never prints the sentinel the poll routes on.
+	if t.Review {
+		b.WriteString("\nThis is an architecture-review item: file findings as issues, change no code and open no PR. Hosted workers report completion by printing the final ROTA-DONE line; `rota round report` is solo-only.\n")
+		fmt.Fprintf(&b, "\nFinal step, after your findings summary: print exactly `ROTA-DONE %s issues:#a,#b` with the issues you filed, or `ROTA-DONE %s issues:none` when there are no findings, as the last line of your last message, then stop.\n", agent, agent)
+		return b.String()
+	}
 	if t.Decision == DecisionResearch {
 		fmt.Fprintf(&b, "\nThis is a research item: its deliverable is a finding, not code. Answer the question the ticket asks, post the answer with `rota --json item comment add %s --kind finding --body-file <file>` (the finding's sections follow /rota-spike: question, findings, decision), commit nothing and open no PR. The orchestrator reads the finding and closes the item.\n", tracker.RefOf(id))
 		fmt.Fprintf(&b, "\nFinal step, after your summary: print exactly `ROTA-DONE %s finding:<comment-id>` (the `commentId` that command printed) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.\n", agent)
@@ -480,6 +485,8 @@ type tierBrief struct {
 	// Decision is the item's decision type: a research worker posts a finding
 	// comment and opens no PR.
 	Decision string
+	// Review delivers filed issues (or an explicit no-findings result), no PR.
+	Review bool
 	// Smoke is the reserved smoke section number, 0 for none.
 	Smoke int
 	// Attempt is the id of this assignment; the worker passes it back as
@@ -526,15 +533,15 @@ func (t tierBrief) text() string {
 		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (test/sections/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, t.Smoke)
 	}
 	if t.Attempt != "" {
-		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more. End every commit message with the trailer `Rota-Attempt: %s` (`git commit --trailer \"Rota-Attempt: %s\"`): the merge gate refuses a PR with a commit stamped by an attempt you no longer hold.\n", t.Attempt, t.Attempt, t.Attempt, t.Attempt)
+		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and, in solo rounds only, to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more. End every commit message with the trailer `Rota-Attempt: %s` (`git commit --trailer \"Rota-Attempt: %s\"`): the merge gate refuses a PR with a commit stamped by an attempt you no longer hold.\n", t.Attempt, t.Attempt, t.Attempt, t.Attempt)
 	}
-	if t.FullOnly {
+	if t.FullOnly && !t.Review {
 		b.WriteString("test.fast is empty here: run `rota test run full` and have it green before `rota worker done`. `worker done` skips the proof-row check, so missing proof rows are expected.\n")
 	}
-	if t.TDD {
+	if t.TDD && !t.Review {
 		b.WriteString("work.tdd is on: for a behavior change, show a failing test first. Run the new test before the production change and see it fail on an assertion, recording the run with `rota proof record <ID> -- <test command>`, then record the PASS row the same way after. `rota worker done` warns when non-test Go changed and no row is a FAIL.\n")
 	}
-	if t.Decision != DecisionResearch {
+	if t.Decision != DecisionResearch && !t.Review {
 		b.WriteString("Pre-flight before `rota worker done`: run the tier this brief assigns you")
 		if t.FullOnly {
 			b.WriteString(" (`rota test run full`), plus any per-AC command.\n")
@@ -544,7 +551,9 @@ func (t tierBrief) text() string {
 		b.WriteString("For every acceptance bullet that states a number, ratio, size or percentage, measure it on the base and on your branch and paste both values in the PR body.\n")
 		b.WriteString("If a numeric criterion cannot be measured or a check fails, run `rota worker done` with `--outcome partial` naming that criterion on the summary's third line, and still print `ROTA-DONE` last.\n")
 	}
-	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
+	if !t.Review {
+		fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
+	}
 	return b.String()
 }
 
@@ -1350,7 +1359,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, decisionContext: run.decisionContext, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Review: IsReviewTitle(it.Title), Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

@@ -95,11 +95,30 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if err != nil {
 		return res, err
 	}
+	if dec != DecisionResearch {
+		if it, err = e.reviewItem(ctx, root, be, s.Name(), id, "accept needs an architecture review or a research item"); err != nil {
+			return res, err
+		}
+	}
+	// Status/watch can observe a fresh sentinel without persisting it. Before
+	// refusing an unsettled hosted slot, let the normal poll record its current
+	// state and completion evidence. Solo and adopted slots have no pane.
+	if !worker.Settled(s.State()) && reg.Host() != "" && !worker.IsSoloHost(reg.Host()) && !s.IsExternal() {
+		if _, err := e.Worker.Poll(ctx, root, worker.PollOpts{Slot: s.Name()}); err != nil {
+			return res, err
+		}
+		fresh, err := worker.LoadRegistry(root)
+		if err != nil {
+			return res, err
+		}
+		next := fresh.Slot(s.Name())
+		if next == nil || next.HeldID() != id || next.Attempt() != s.Attempt() {
+			return res, blocked(BlockNoSlotHolds, "slot %s no longer holds the same assignment of %s", s.Name(), tracker.RefOf(id))
+		}
+		s = next
+	}
 	if dec == DecisionResearch {
 		return e.acceptResearch(ctx, root, be, s, it, in, res)
-	}
-	if it, err = e.reviewItem(ctx, root, be, s.Name(), id, "accept needs an architecture review or a research item"); err != nil {
-		return res, err
 	}
 	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
 		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), id, why))
