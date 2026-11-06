@@ -127,6 +127,32 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 	}
 }
 
+// #2745: landing a queued PR whose origin slot now holds another issue leaves
+// that slot's record (task, branch, PR, state) as it was.
+func TestGateLandingQueuedPRLeavesReassignedSlot(t *testing.T) {
+	w := newWorld(t, "")
+	w.setPRBody("Closes #5\n")
+	doc := `{"slots":[{"name":"w2","branch":"w2/9-new","task":"9","pr":"https://example.test/o/r/pull/485","state":"working","base":"main"}],"prs":[{"issue":"5","branch":"w1","pr":"` + ghURL + `","base":"main","from":"w2","claimId":"w2@1","round":1,"relays":[]}]}`
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(doc), 0o644)
+	before := LoadRegistryTolerant(w.dir).Slot("w2")
+	want := [4]string{before.Task(), before.Branch(), before.PR(), before.State()}
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "#7", Base: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Changed {
+		t.Fatalf("verdict=%s changed=%v: %s", res.Verdict, res.Changed, res.Err)
+	}
+	reg := LoadRegistryTolerant(w.dir)
+	if n := len(reg.PRs()); n != 0 {
+		t.Errorf("the landed PR stays queued: %d record(s)", n)
+	}
+	after := reg.Slot("w2")
+	if got := [4]string{after.Task(), after.Branch(), after.PR(), after.State()}; got != want || want[0] == "" {
+		t.Errorf("slot w2 record changed by landing: before %v, after %v", want, got)
+	}
+}
+
 // A queued PR's slot moved on, so the author kind comes from the issue's latest
 // assign ledger entry: a Codex-built PR needs a claude cross review, not codex.
 func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
