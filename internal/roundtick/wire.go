@@ -61,6 +61,7 @@ type World interface {
 
 // Config is the tick's settings: what the round is set to, not what it reads.
 type Config struct {
+	Observe       bool
 	Settings      roundcfg.Settings
 	MergeApproval string
 	BaseOverride  string
@@ -94,10 +95,15 @@ func NewEnv(w World, cfg Config) Env {
 		return active
 	}
 	e.Queued = func() []string { return QueuedRefs(w.TolerantRegistry().PRs()) }
+	var repairProposals []string
+	e.ReconcileProposals = func() []string { return repairProposals }
 	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
 		out, err := w.Reconcile(ctx)
 		if err != nil {
 			return nil, nil, err
+		}
+		for _, f := range out.Proposed {
+			repairProposals = append(repairProposals, f.Kind+" "+f.Key())
 		}
 		repaired, drift := ReconcileLines(out)
 		return repaired, drift, nil
@@ -155,7 +161,9 @@ func NewEnv(w World, cfg Config) Env {
 	e.Say = w.Say
 	e.OpenItems = func(context.Context) int { return w.OpenItems() }
 	e.Candidates = w.Candidates
-	e.Review = w.Review()
+	if !cfg.Observe {
+		e.Review = w.Review()
+	}
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
 		res, err := w.Assign(ctx, id)
 		if err != nil {
@@ -165,6 +173,14 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit
+	if cfg.Observe {
+		e.Observe = &ObservationSources{}
+		if observer, ok := w.(ObservationWorld); ok {
+			e.Observe.Reconcile = observer.InspectReconcile
+			e.Observe.ReviewLoop = func(_ context.Context, s Slot) ReviewOutcome { return observer.InspectReviewLoop(s.Name) }
+			e.Observe.ReviewFacts = observer.InspectReviewFacts
+		}
+	}
 	return e
 }
 
@@ -221,4 +237,12 @@ func (k *wiring) head(ctx context.Context, target string) (string, error) {
 		return "", fmt.Errorf("PR %s has no head SHA", t.PR)
 	}
 	return fmt.Sprintf("%d:%s", n, info.HeadSHA), nil
+}
+
+// ObservationWorld supplies only inspection methods. Execution's World methods
+// remain wired but Run never invokes its mutation adapters in observation mode.
+type ObservationWorld interface {
+	InspectReconcile(context.Context) (Inspection, error)
+	InspectReviewLoop(string) ReviewOutcome
+	InspectReviewFacts(context.Context) (round.Architecture, bool, error)
 }

@@ -24,6 +24,8 @@ type RelayResult struct {
 // forge, the registry and the config into it; the decision between manual and
 // auto, and every hold, live in ReviewStep.
 type ReviewSources struct {
+	// Observe reads pending input without invoking Relay.
+	Observe  bool
 	Slot, PR string
 	// Auto is round.reviewLoop auto; MaxBounces is the cap as text.
 	Auto       bool
@@ -53,18 +55,24 @@ func ReviewStep(ctx context.Context, s ReviewSources) ReviewOutcome {
 	// every time; the error text goes to stderr.
 	pollFailed := func(err error) ReviewOutcome {
 		s.Warn("review poll of %s: %v", s.Slot, err)
+		if s.Observe {
+			return ReviewOutcome{Hold: s.Auto, Unknown: "review input could not be read: " + err.Error()}
+		}
 		return ReviewOutcome{Hold: s.Auto}
 	}
 	if s.SetupErr != nil {
 		return pollFailed(s.SetupErr)
 	}
-	if !s.Auto {
+	if !s.Auto || s.Observe {
 		summary, err := s.Poll(ctx)
 		if err != nil {
 			return pollFailed(err)
 		}
 		if summary == "" {
 			return ReviewOutcome{}
+		}
+		if s.Auto {
+			return ReviewOutcome{Proposed: true, Detail: summary}
 		}
 		return ReviewOutcome{Pending: true, Detail: summary}
 	}
