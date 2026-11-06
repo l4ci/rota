@@ -166,7 +166,7 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 	var first, last time.Time
 	doneAt := map[string]time.Time{} // slot -> its first done since the last assign
 	for _, e := range entries {
-		if e.Round != round {
+		if e.Round != round || e.Kind == KindVerification {
 			continue
 		}
 		switch {

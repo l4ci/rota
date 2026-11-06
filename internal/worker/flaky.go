@@ -31,9 +31,14 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 	e = e.WithDefaults()
 	now := e.Now()
 	var flakes []flakeledger.Entry
-	shell := func(ctx context.Context, dir, cmd string) (string, int) {
+	var suites []VerificationSuite
+	shell := func(ctx context.Context, dir, cmd string) (out string, code int) {
+		started := e.Now()
+		defer func() {
+			suites = append(suites, VerificationSuite{Command: cmd, WallSeconds: max(0, e.Now().Sub(started).Seconds()), ExitCode: code})
+		}()
 		tree := e.cleanVerifyTree(ctx, dir)
-		out, code := e.Shell(ctx, dir, cmd)
+		out, code = e.Shell(ctx, dir, cmd)
 		subchecks, parseErr := gateSubchecks(out, tree, e.Now())
 		if parseErr != nil {
 			return out + "\n" + parseErr.Error() + "\n", 1
@@ -50,9 +55,9 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 		if !eligible || ctx.Err() != nil || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
 			return out, code
 		}
-		started := e.Now()
+		retryStarted := e.Now()
 		again, retryCode := e.Shell(ctx, dir, cmd)
-		elapsed := max(0, e.Now().Sub(started).Seconds())
+		elapsed := max(0, e.Now().Sub(retryStarted).Seconds())
 		combined := out + "\n== RETRY " + cmd + "\n" + again
 		if retryCode == 0 && ctx.Err() == nil && e.cleanVerifyTree(ctx, dir) == tree {
 			flakes = append(flakes, flakeledger.NewEntry(cmd, tests, tree, e.Now(), flakeledger.Run{Output: out, ExitCode: code}, flakeledger.Run{Output: again, ExitCode: retryCode, WallSeconds: elapsed}))
@@ -66,6 +71,10 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 	}
 	r, err := runVerifyCmds(ctx, shell, cmds, dir, e.Getenv("TMPDIR"), led, now)
 	r.Flaky = flakes
+	if len(suites) > 0 {
+		elapsed := max(0, e.Now().Sub(now).Seconds())
+		r.WallSeconds, r.Suites = &elapsed, suites
+	}
 	return r, err
 }
 

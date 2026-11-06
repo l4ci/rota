@@ -358,6 +358,7 @@ All writes target the umbrella `.rota/DECISIONS.md`, reject `--repo`, and refres
 | `rota test lock -- <cmd> [<arg>...]` | run any command holding a slot of the machine-wide test lock (`test.slots`, default 1), passing stdin, stdout and stderr through; the exit code is the command's |
 | `rota test ledger check` | report expired and malformed entries in `.rota/test-ledger.json`; exit 1 when there are any |
 | `rota test flakes` | rank the flaky command and test pairs recorded in `.rota/flakes.jsonl` by repeat count; see [flaky checks](../usage/parallel-rounds.md) |
+| `rota test-audit [--check]` | report recorded suite durations and flakes, the Playwright run matrix from `playwright test --list`, test files per module, repeated helpers, test scripts no `test.*` command references and README counts that drift from `--list`; runs no suite. A complete run records an audit checkpoint under the git common dir. `--check` reads only recorded data and the checkpoint and sets `data.telemetry.suggestMaintenance` when `test.audit.maxFullGateSeconds` or `test.audit.prsBetweenAudits` is exceeded; see [test maintenance](../usage/parallel-rounds.md#test-maintenance) |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |
