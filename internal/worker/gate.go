@@ -1723,6 +1723,11 @@ func (g *gateOperation) verifyTiers(cfg GateConfig, first, dir string, landed bo
 			if g.res.PR != "" {
 				prs = append(prs, g.res.PR)
 			}
+			measuredTier := tier
+			if tier == tierFull && g.tierCfg != nil {
+				measuredTier = "test." + g.res.Tier
+			}
+			g.e.recordVerification(g.root, g.o.Round, measuredTier, GateTarget{Name: g.res.TargetSlot, Issue: g.res.Issue, PR: g.res.PR}, prs, vr)
 			err = g.e.recordFlakes(g.root, g.o.Round, prs, vr)
 		}
 		return vr, err
