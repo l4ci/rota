@@ -241,6 +241,12 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 			Failed("no skills install found in scope").WithHint(hint)
 	}
 	out, err := skillsInstallResult(c, "update", res)
+	if stale, lines := promptsUpgradeReport(c.deps().Toplevel(c.Context())); len(lines) > 0 {
+		if o, ok := out.Data.(*jsonx.Object); ok && len(stale) > 0 {
+			o.Set("prompts", stale)
+		}
+		out.Text = strings.Join(append([]string{out.Text}, lines...), "\n")
+	}
 	return withSkipped(out, skipped), err
 }
 

@@ -21,7 +21,7 @@ Verbs are not skills: skills are the `/rota-*` slash commands (see [skills](../s
 - **Start and finish a work cycle.** [`rota work start`](#rota-work) does the guard, branch, status entry and claim that open `/rota-work`; [`rota ship finish`](#rota-ship) does the status, item and nudge bookkeeping that closes `/rota-ship`. Round workers and umbrella projects use the step-by-step skill path instead.
 - **Run a round.** [`rota orchestrate`](#rota-orchestrate) starts the orchestrator. [`rota round`](#rota-round) takes the lease, assigns issues, waits, summarizes cost (`round summary`) and winds down. [`rota worker`](#rota-worker) holds the slot registry and the merge gate (`rota worker gate <PR>` gates any open PR by number).
 - **Keep a round healthy.** [`rota doctor`](#rota-doctor) preflights the machine. [`rota reap`](#rota-reap) removes leftovers. [`rota layout`](#rota-layout) folds panes into a split view or back into tabs. [`rota keepalive`](#rota-keepalive), [`rota limit`](#rota-limit), [`rota hook`](#rota-hook) and [`rota statusline`](#rota-statusline) cover unattended rounds. [`rota verdict`](#rota-verdict) records review and QA verdicts.
-- **Agents and projects.** [`rota agents write`](#rota-agents) writes the role subagent files. `rota projects` (under [`rota init`](#rota-init)) lists the projects registered on this machine.
+- **Agents and projects.** [`rota agents write`](#rota-agents) writes the role subagent files; [`rota prompts`](#rota-prompts) versions team overrides of their report formats. `rota projects` (under [`rota init`](#rota-init)) lists the projects registered on this machine.
 
 See [parallel rounds](../usage/parallel-rounds.md) and [unattended rounds](../usage/unattended-rounds.md).
 
@@ -433,6 +433,18 @@ A second `round start` is refused (exit 4) while another orchestrator holds the 
 | `rota agents write [--check]` | write `.claude/agents/rota-{explorer,implementer,reasoner}.md`, and `.codex/agents/rota-*.toml` when Codex is configured, from the `roles.*` and `round.tiers.*` config |
 
 Idempotent. Exit 4 when a target exists without the generated-by-rota header (nothing is written) or a role's effort is one Codex cannot express. `--check` writes nothing and exits 1 when a file is missing or has drifted. See [configuration](../usage/configuration.md#roles-keys-and-rota-agents-write).
+
+## `rota prompts`
+
+| Usage | What it does |
+|---|---|
+| `rota prompts list` | list the reporting sections with their saved revision and upstream status |
+| `rota prompts show <section>` | print the effective text, the revision, the recorded baseline, the current default, the override and the history |
+| `rota prompts save <section> --expect <n> --body-file <path>` | save a reporting override as revision `n+1` |
+| `rota prompts adopt <section> --expect <n>` | follow the current built-in default as revision `n+1`, keeping the history |
+| `rota prompts restore <section> --expect <n> --revision <r>` | copy revision `r` as revision `n+1`, with the baseline it recorded |
+
+Team overrides of the agent report formats, stored in the tracked `.rota/prompts.json`. The sections are `agents.explorer.report`, `agents.implementer.report` and `agents.reasoner.report`; any other name exits 2. A save never changes the agent files: `rota agents write` activates it. A write whose `--expect` is not the current revision exits 4 and leaves the store and the draft untouched; so does a write to a removed section. Status is `default` (never saved), `unchanged`, `changed` (the built-in default moved since the revision's baseline) or `removed`. See [configuration](../usage/configuration.md#team-report-overrides).
 
 ## `rota doctor`
 

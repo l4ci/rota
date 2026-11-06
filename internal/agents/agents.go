@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/prompts"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
@@ -85,16 +86,32 @@ var descriptions = map[string]string{
 	"reasoner":    "Hard reasoning for rota workers: design, a tricky debugging hypothesis, an architecture call. Use sparingly.",
 }
 
-var instructions = map[string]string{
-	"explorer":    "You explore a codebase and report what you found. Search and read; never edit or write files. Answer with file paths and line numbers, and say plainly what you could not find. Report in at most 15 lines, one finding per line as `path:line: what`, then a `Not found:` line (`none` if everything was found), and end with one last-line token: `done.`, `too-big.` (the lookup is wider than one report) or `ambiguous.` (the brief admits several readings). A brief that names its own closing tokens overrides these. Quote code, paths and errors verbatim; cut the prose around them.",
-	"implementer": "You implement a change from the brief you were given. Write the code and its tests, run the targeted checks for the files you touched, and report what changed. Stay inside the brief; if it is wrong or unclear, say so instead of guessing. Report in at most 15 lines: one `path: what changed` line per file, the check you ran and its result, a `Not done:` line (`none` if the brief is fully met), and end with one last-line token: `done.`, `too-big.` (the brief needs splitting) or `ambiguous.` (the brief admits several readings; nothing guessed). Quote code, paths and errors verbatim; cut the prose around them.",
-	"reasoner":    "You work through a hard problem: a design choice, a debugging hypothesis, a tradeoff. State your assumptions, weigh the alternatives against the code, and end with one recommendation and what would change it. Report in at most 20 lines: assumptions, the alternatives in one line each, the recommendation, a `Not checked:` line for what you did not verify (`none` if nothing), and end with one last-line token: `done.`, `too-big.` (the question needs splitting) or `ambiguous.` (the question admits several readings). Quote code, paths and errors verbatim; cut the prose around them.",
+var duties = map[string]string{
+	"explorer":    "You explore a codebase and report what you found. Search and read; never edit or write files. Answer with file paths and line numbers, and say plainly what you could not find. ",
+	"implementer": "You implement a change from the brief you were given. Write the code and its tests, run the targeted checks for the files you touched, and report what changed. Stay inside the brief; if it is wrong or unclear, say so instead of guessing. ",
+	"reasoner":    "You work through a hard problem: a design choice, a debugging hypothesis, a tradeoff. State your assumptions, weigh the alternatives against the code, and end with one recommendation and what would change it. ",
+}
+
+const quotationRules = " Quote code, paths and errors verbatim; cut the prose around them."
+
+func defaultInstructions() map[string]string {
+	text := make(map[string]string, len(duties))
+	catalog := prompts.Catalog()
+	for role, duty := range duties {
+		sec := catalog["agents."+role+".report"]
+		text[role] = duty + sec.Report(sec.Default) + quotationRules
+	}
+	return text
 }
 
 // Render returns the files for spec, in the order of its kinds. A role effort
 // a kind cannot express is an error naming the role and value; nothing is
 // rendered.
 func Render(sp Spec) ([]File, error) {
+	return renderInstructions(sp, defaultInstructions())
+}
+
+func renderInstructions(sp Spec, text map[string]string) ([]File, error) {
 	var out []File
 	for _, k := range sp.Kinds {
 		h, ok := harness.LookupAgentWriter(k)
@@ -102,7 +119,7 @@ func Render(sp Spec) ([]File, error) {
 			return nil, fmt.Errorf("%q is not a worker harness", k)
 		}
 		for _, r := range sp.Roles {
-			files, err := h.AgentFiles(harness.AgentRole{Name: r.Name, Description: descriptions[r.Name], Instructions: instructions[r.Name], Effort: r.Effort}, r.Models[k])
+			files, err := h.AgentFiles(harness.AgentRole{Name: r.Name, Description: descriptions[r.Name], Instructions: text[r.Name], Effort: r.Effort}, r.Models[k])
 			if err != nil {
 				return nil, err
 			}
@@ -124,6 +141,10 @@ func Compare(root string, cfg any) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	return compare(root, files)
+}
+
+func compare(root string, files []File) ([]Entry, error) {
 	var out []Entry
 	for _, f := range files {
 		e := Entry{File: f}
@@ -181,6 +202,10 @@ func WriteOnly(root string, cfg any, keep func(path string) bool) ([]Entry, erro
 	if err != nil {
 		return nil, err
 	}
+	return writeEntries(root, es, keep)
+}
+
+func writeEntries(root string, es []Entry, keep func(path string) bool) ([]Entry, error) {
 	if keep != nil {
 		es = Restrict(es, keep)
 	}
@@ -229,7 +254,7 @@ func symlinkIn(root, rel string) string {
 // each for `rota doctor`, limited to the paths keep accepts (all when keep is
 // nil); a config or render error is one line too.
 func ProblemsOnly(root string, cfg any, keep func(path string) bool) []string {
-	es, err := Compare(root, cfg)
+	es, err := CompareWithPrompts(root, cfg)
 	if err != nil {
 		return []string{err.Error()}
 	}
@@ -240,4 +265,42 @@ func ProblemsOnly(root string, cfg any, keep func(path string) bool) []string {
 		}
 	}
 	return out
+}
+
+// CompareWithPrompts compares the explicitly customized desired definitions.
+func CompareWithPrompts(root string, cfg any) ([]Entry, error) {
+	sp, err := FromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	views, err := prompts.Open(root, prompts.Catalog()).List()
+	if err != nil {
+		return nil, err
+	}
+	text := defaultInstructions()
+	for _, v := range views {
+		if v.Status == "removed" {
+			continue
+		}
+		role := strings.TrimSuffix(strings.TrimPrefix(v.Name, "agents."), ".report")
+		duty, ok := duties[role]
+		if !ok {
+			continue
+		}
+		text[role] = duty + v.Effective + quotationRules
+	}
+	files, err := renderInstructions(sp, text)
+	if err != nil {
+		return nil, err
+	}
+	return compare(root, files)
+}
+
+// WriteWithPrompts activates saved reporting choices into generated files.
+func WriteWithPrompts(root string, cfg any, keep func(path string) bool) ([]Entry, error) {
+	es, err := CompareWithPrompts(root, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return writeEntries(root, es, keep)
 }

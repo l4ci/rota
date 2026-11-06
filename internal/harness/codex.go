@@ -205,8 +205,29 @@ func (codex) AgentFiles(r AgentRole, model string) ([]AgentFile, error) {
 	if r.Name == "explorer" {
 		b.WriteString("sandbox_mode = \"read-only\"\n")
 	}
-	b.WriteString("developer_instructions = \"\"\"\n" + r.Instructions + "\n\"\"\"\n")
+	b.WriteString("developer_instructions = \"\"\"\n" + codexInstructionTOML(r.Instructions) + "\n\"\"\"\n")
 	return []AgentFile{{".codex/agents/rota-" + r.Name + ".toml", b.String()}}, nil
+}
+
+// codexInstructionTOML escapes a multiline TOML basic string's contents while
+// preserving the readable layout of ordinary instructions. In particular, a
+// backslash must stay literal rather than escape a newline or the closing quotes.
+func codexInstructionTOML(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == '\\':
+			b.WriteString(`\\`)
+		case c == '"' && strings.HasPrefix(s[i:], `"""`):
+			b.WriteString(`\"\"\"`)
+			i += 2
+		case c < 0x20 && c != '\n' && c != '\t' || c == 0x7f:
+			fmt.Fprintf(&b, `\u%04X`, c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // Doctor: the binary, its login per home and the herdr integration.
