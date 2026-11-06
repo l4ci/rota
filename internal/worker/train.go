@@ -990,7 +990,6 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
 		if o.OnFail == OnFailStop {
-			passing = 0
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
 		}
@@ -1247,7 +1246,16 @@ func (t *trainRun) stopTrain(res *TrainResult, p trainPlan, tier, baseSHA string
 	}
 	res.Stop = st
 	res.Verdict = GateVerifyFailed
-	res.Err = fmt.Sprintf("TRAIN-FAIL — the train fails %s; no culprit attributed, diagnosis skipped (--on-fail stop); nothing landed\n%s", tier, failed.detail())
+	var b strings.Builder
+	fmt.Fprintf(&b, "TRAIN-FAIL — the train fails %s; no culprit attributed, diagnosis skipped (--on-fail stop); nothing landed\nfailed command: %s\n", tier, st.Command)
+	if len(st.Tests) > 0 {
+		fmt.Fprintf(&b, "failing tests: %s\n", strings.Join(st.Tests, ", "))
+	}
+	fmt.Fprintf(&b, "scratch tree: %s (removed on exit)\nbase: %s\n", st.Scratch, st.Base)
+	for _, m := range st.Members {
+		fmt.Fprintf(&b, "member %s: %s\n", m.Target, m.SHA)
+	}
+	res.Err = b.String() + failed.detail()
 	res.Hint = "fix the failure shown, or re-run without --on-fail stop to bisect for the member"
 }
 

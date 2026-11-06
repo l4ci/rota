@@ -1349,3 +1349,33 @@ func TestTrainRejectsUnknownOnFail(t *testing.T) {
 		t.Error("an unknown policy must be refused")
 	}
 }
+
+// A go-test-shaped failure: stop names the failing test in the record and the
+// text, blames no member in the train cache and ignores --land-green.
+func TestTrainOnFailStopNamesTestsAndBlamesNobody(t *testing.T) {
+	cmd := `test ! -f b2.txt || { printf -- '--- FAIL: TestWidget (0.00s)\nFAIL\n'; exit 1; }`
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, OnFail: OnFailStop, LandGreen: true})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Stop == nil {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if strings.Join(res.Stop.Tests, ",") != "TestWidget" {
+		t.Errorf("stop tests: %v", res.Stop.Tests)
+	}
+	if len(res.Landed) != 0 || res.Changed || w.onMain("b1.txt") {
+		t.Errorf("stop lands nothing, even under --land-green: %+v", res)
+	}
+	for _, want := range []string{"failed command: ", "failing tests: TestWidget", "scratch tree: " + res.Stop.Scratch, "base: " + res.Stop.Base} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("text lacks %q:\n%s", want, res.Err)
+		}
+	}
+	for _, m := range res.Stop.Members {
+		if !strings.Contains(res.Err, "member "+m.Target+": "+m.SHA) {
+			t.Errorf("text lacks member %s %s:\n%s", m.Target, m.SHA, res.Err)
+		}
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("no member may be blamed in the train cache: %+v", c.f.Culprits)
+	}
+}
