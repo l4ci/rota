@@ -1079,7 +1079,10 @@ assigns best-of issues but never picks: the pick is yours.
 An architecture-review item ends with its review result and no PR. When its worker prints
 `ROTA-DONE <slot> issues:#a,#b`, read the issues and run `rota round accept <ID>`. It closes the
 item with a note listing them, releases its claim and frees the slot, so no `reclaim` is needed.
-If the worker filed issues but the slot did not record them, pass `--issues #a,#b`.
+On a hosted round, accept polls a slot whose saved state would block acceptance, so a fresh
+completion line needs no manual `worker poll`. Hosted review workers report completion by
+printing that line; `rota round report` is solo-only. If the worker filed issues but the slot
+did not record them, pass `--issues #a,#b`.
 A completed review with no findings prints `ROTA-DONE <slot> issues:none` instead. Accept it
 with `rota round accept <ID>`: it closes with `Review done: no findings.` and frees the slot,
 without a fabricated finding issue. An omitted list or bare `issues:` is missing evidence

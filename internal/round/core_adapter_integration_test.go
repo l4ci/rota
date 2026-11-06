@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -103,6 +104,40 @@ func TestCoreAdapterRoundReplacementNeverCompletesIssue(t *testing.T) {
 	_, _, kills := peer.Counts()
 	if kills != 0 {
 		t.Fatal("monitoring killed replacement shell")
+	}
+}
+
+func TestCoreAdapterAcceptReadsReviewCompletionWithoutPoll(t *testing.T) {
+	for _, replaced := range []bool{false, true} {
+		t.Run(fmt.Sprint(replaced), func(t *testing.T) {
+			f := newMoveFx(t)
+			f.mintReview(t, "12")
+			peer, h := coretest.New(t, harness.Codex)
+			handle, err := h.Spawn(bg, host.SpawnOpts{Slot: "ben", Cwd: f.wt("ben"), Launch: "codex", BootTimeout: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			setHost(t, f.root, host.HerdrCore)
+			if err := rawSlot(f.root, "ben", func(s *jsonx.Object) {
+				s.Set("handle", handle)
+				s.Set("kind", harness.Codex)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return h } })
+			peer.Capture("ROTA-DONE ben issues:none\n", "", 80, 24)
+			if replaced {
+				peer.Mode("replaced")
+			}
+			res, err := f.accept("12", nil)
+			if replaced {
+				if blockedBy(t, err) != BlockSlotBusy || res.Changed || f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
+					t.Fatalf("replacement accepted: %+v %v", res, err)
+				}
+			} else if err != nil || !res.Changed || !res.NoFindings || !f.be.items["12"].Closed || f.slot("ben").Task() != "" {
+				t.Fatalf("current completion not accepted: %+v %v", res, err)
+			}
+		})
 	}
 }
 
