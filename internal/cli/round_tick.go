@@ -32,6 +32,7 @@ import (
 var errAutopilotStopped = errors.New("this process holds no round lease: the autopilot stops")
 
 func roundTick(fs *flag.FlagSet) RunFunc {
+	observe := fs.Bool("observe", false, "report proposed autopilot actions without executing them")
 	base := fs.String("base", "", "the cycle branch PRs merge into (default each PR's recorded base)")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid for the lease, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -46,10 +47,10 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !set.Autopilot {
+		if !set.Autopilot && !*observe {
 			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
-		r, err := autopilotTick(c, root, set, *base, *pid)
+		r, err := runAutopilotTick(c, root, set, *base, *pid, *observe)
 		switch {
 		case errors.Is(err, errAutopilotStopped):
 			d := jsonx.NewObject()
@@ -64,7 +65,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		visible := r
 		visible.Holding = r.FillStatus
 		text := tickLines(visible)
-		if lines := addTrainNudge(c, root, d, nil); len(lines) > 0 {
+		if lines := tickNudge(c, root, d, r.Observed); len(lines) > 0 {
 			if text == "nothing to do" {
 				text = ""
 			} else {
@@ -79,6 +80,10 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // autopilotTick runs one tick for the lease holder. The lease is checked on
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
+	return runAutopilotTick(c, root, set, baseOverride, pid, false)
+}
+
+func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int, observe bool) (roundtick.Result, error) {
 	c.deps().freshReads()
 	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
@@ -110,7 +115,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
 	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state}
-	e := roundtick.NewEnv(w, roundtick.Config{Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
+	e := roundtick.NewEnv(w, roundtick.Config{Observe: observe, Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
 	if state.Stopped {
 		return roundtick.Result{}, errAutopilotStopped
 	}
@@ -119,8 +124,10 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if err != nil {
 		return r, err
 	}
-	if err := roundtick.SaveState(cd, lease.Round, r); err != nil {
-		c.Warn("autopilot state not saved: %v", err)
+	if !observe {
+		if err := roundtick.SaveState(cd, lease.Round, r); err != nil {
+			c.Warn("autopilot state not saved: %v", err)
+		}
 	}
 	return r, nil
 }
@@ -172,6 +179,21 @@ func tickData(r roundtick.Result) *jsonx.Object {
 		did = append(did, o)
 	}
 	d.Set("did", did)
+	if r.Observed {
+		d.Set("observed", true)
+		d.Set("notice", observationNotice)
+		proposed := make([]any, 0, len(r.Proposed))
+		for _, p := range r.Proposed {
+			o := jsonx.NewObject()
+			o.Set("action", p.Action.Action)
+			o.Set("target", p.Target)
+			o.Set("detail", p.Detail)
+			o.Set("conditional", p.Conditional)
+			o.Set("unchecked", strList(p.Unchecked))
+			proposed = append(proposed, o)
+		}
+		d.Set("proposed", proposed)
+	}
 	setIf(d, "capped", r.Capped)
 	if r.BatchFull {
 		d.Set("batchFull", true)
@@ -188,6 +210,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 		}
 		return out
 	}
+	if r.Observed {
+		d.Set("unknown", items(r.Unknown))
+	}
 	d.Set("needsYou", items(r.NeedsYou))
 	d.Set("new", items(r.New))
 	return d
@@ -195,6 +220,19 @@ func tickData(r roundtick.Result) *jsonx.Object {
 
 func tickLines(r roundtick.Result) string {
 	var lines []string
+	if r.Observed {
+		lines = append(lines, observationNotice)
+		for _, p := range r.Proposed {
+			kind := "proposed"
+			if p.Conditional {
+				kind = "proposed (conditional)"
+			}
+			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s; unchecked: %s", kind, p.Action.Action, p.Target, p.Detail, strings.Join(p.Unchecked, "; ")))
+		}
+		for _, u := range r.Unknown {
+			lines = append(lines, fmt.Sprintf("unknown\t%s\t%s\t%s", u.Kind, u.Target, u.Why))
+		}
+	}
 	lines = append(lines, r.Holding...)
 	for _, a := range r.Did {
 		lines = append(lines, fmt.Sprintf("did\t%s\t%s\t%s", a.Action, a.Target, dash(a.Detail)))
@@ -220,6 +258,10 @@ func tickLines(r roundtick.Result) string {
 // reviewStep wires the forge, registry and config into roundtick.ReviewStep,
 // which owns the manual/auto decision and the holds.
 func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
+	return reviewStepMode(c, root, set, slot, false)
+}
+
+func reviewStepMode(c *Ctx, root string, set roundcfg.Settings, slot string, observe bool) roundtick.ReviewOutcome {
 	ctx := c.Context()
 	// Tolerant: a failed read is a failed poll (reviewOpts reads strictly).
 	s := worker.LoadRegistryTolerant(root).Slot(slot)
@@ -229,7 +271,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	}
 	o, err := reviewOpts(c, root, set, slot)
 	src := roundtick.ReviewSources{
-		Slot: slot, PR: pr, Auto: set.ReviewLoop == roundcfg.ReviewLoopAuto,
+		Observe: observe, Slot: slot, PR: pr, Auto: set.ReviewLoop == roundcfg.ReviewLoopAuto,
 		MaxBounces: maxText(set.MaxBounces), SetupErr: err, Warn: c.Warn,
 	}
 	if err != nil {

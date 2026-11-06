@@ -712,7 +712,7 @@ worker that sits in the split view stops its agent but leaves its pane open as a
 
 ## Autopilot
 
-Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs exit 4. With it on, `rota round watch --autopilot` (or one pass of
+Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs exit 4 (`round tick --observe`, below, is the read-only exception). With it on, `rota round watch --autopilot` (or one pass of
 `rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
 
 1. repair the safe drift (`reconcile --apply`);
@@ -733,6 +733,14 @@ If a manual gate or train is running or waiting for the land lock, the tick
 defers its merges until that work finishes. It reports `deferred`, keeps the
 train nudge visible when reviewed PRs wait, and retries on the next tick.
 This is a wait, so it creates no gate failure, bounce or hold.
+
+To see what a pass would do before you turn it on, run `rota round tick --observe`. It works
+under any `autonomy.level`, needs the round lease like a real tick, and changes nothing: no
+dispatch, claim, relay, gate, merge, mint, audit line or saved autopilot state. It lists each
+proposed repair, review relay, landing and assignment with the checks a real tick still runs,
+marks every proposal after the first as conditional on the earlier ones, and lists what it could
+not check as `unknown`. It is a preview, not an approval: a real tick re-reads state and runs
+every gate.
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
