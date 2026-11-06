@@ -625,7 +625,8 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots .
 
 // gatedSlots resolves a land-lock holder (a slot, a PR or a train's
 // comma-separated targets) to the slots whose branch it gates: a named slot,
-// and every slot or queued PR's origin slot whose PR number a target names.
+// and every slot or queued PR's origin slot whose PR number a target names,
+// unless that origin slot has moved on to another branch.
 // all is true when the holder is empty or a target is neither, so the caller
 // cannot tell which slots are safe.
 func gatedSlots(root, holder string) (gated map[string]bool, all bool) {
@@ -650,12 +651,21 @@ func gatedSlots(root, holder string) (gated map[string]bool, all bool) {
 			}
 		}
 		for _, q := range reg.PRs() {
-			if m, ok := worker.PRRefNumber(q.PR); ok && m == n && q.From != "" {
+			if m, ok := worker.PRRefNumber(q.PR); ok && m == n && q.From != "" && !movedOn(reg, q) {
 				gated[q.From] = true
 			}
 		}
 	}
 	return gated, false
+}
+
+// movedOn reports whether a queued PR's origin slot now holds a different
+// branch. The gate merges the PR from its own record and scratch tree and
+// the landing bookkeeping drops only that record, so the slot's worktree is
+// not at risk. An idle slot (no branch) stays gated.
+func movedOn(reg worker.Registry, q worker.QueuedPR) bool {
+	s := reg.Slot(q.From)
+	return s != nil && s.Branch() != "" && s.Branch() != q.Branch
 }
 
 // holderPRs rewrites each comma-separated holder that names a slot with a
