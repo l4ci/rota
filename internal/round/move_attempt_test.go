@@ -231,3 +231,28 @@ func TestTransferThatSendsNoBriefLogsNoRelay(t *testing.T) {
 		})
 	}
 }
+
+// A transfer returns the sender's unresolved follow-up to the orchestrator;
+// it does not silently authorize the receiver to act on the old request.
+func TestTransferReturnsPendingInboxToOrchestrator(t *testing.T) {
+	f := newMoveFx(t)
+	attempt := f.slot("ben").Attempt()
+	m, err := worker.PostMail(f.root, "ben", worker.MailReview, "resolve the review", f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.AckUnread(0) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.transfer("12", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	ben := f.slot("ben")
+	got := ben.Inbox()
+	if len(got) != 1 || got[0].Seq != m.Seq || got[0].Disposition != "returned" || got[0].Task != "12" || got[0].Attempt != attempt || got[0].Reason == "" {
+		t.Fatalf("sender follow-up lost on transfer: %+v", got)
+	}
+	if len(ben.Waiting()) != 0 || len(f.slot("dana").Waiting()) != 0 {
+		t.Fatal("transfer attached an unresolved request to another assignment")
+	}
+}
