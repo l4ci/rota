@@ -32,6 +32,42 @@ repo: none
 data: as `skills install`
 exit: 1 when no root in scope has a manifest (`roots` empty; hint `run: rota skills install`); otherwise as `skills install`
 note: refreshes only roots that already have a manifest. With no flags, it covers every root in both scopes for the current directory, so `rota skills update` after an upgrade refreshes whatever was installed. Each root keeps the mode its manifest records unless `--stub` or `--full` switches it; `--stub` with `--full` exits 1. It never creates a root.
+note: in a git work tree with a `.rota/prompts.json`, data also carries `prompts`: [{"name": string, "status": "changed"|"removed", "revision": int}], one per saved section whose built-in default changed or was removed since its latest revision, and the text adds one line per section naming `rota prompts show`. It reads the store only: no revision is written and no agent file is activated (#2581).
+
+### rota prompts list
+rota prompts list
+repo: none
+data: {"sections": [View]}, where View is {"name": string, "revision": int, "status": "default"|"unchanged"|"changed"|"removed", "baseline": string, "baselineDigest": string, "default": string, "template": string, "override": string|null, "effective": string, "history": [{"revision": int, "baseline": string, "baselineDigest": string, "override": string|null}]}
+exit: 1 when `.rota/prompts.json` is malformed or a symlink
+note: read-only. Lists the catalog sections (`agents.explorer.report`, `agents.implementer.report`, `agents.reasoner.report`) plus any saved section this binary no longer has (`removed`). `revision` 0 is never saved. `baseline` is the expanded built-in text the latest revision was saved against (the current default when never saved); `default` and `template` are the current built-in, expanded and raw; `effective` is what `rota agents write` renders (empty for `removed`). A null `override` records an adoption.
+
+### rota prompts show
+rota prompts show <section>
+repo: none
+data: View (as `prompts list`)
+exit: 2 when the section is neither in the catalog nor saved; 1 as `prompts list`
+note: read-only. A removed section is still shown.
+
+### rota prompts save
+rota prompts save <section> --expect <n> --body-file <path|->
+repo: none
+data: {"section": View, "changed": true}
+exit: 2 when `--expect` or `--body-file` is missing, the section is unknown, or the template lacks exactly one `{{status}}` and one `{{closing}}` or holds another placeholder; 4 when `--expect` is not the current revision (conflict) or the section is removed; 1 as `prompts list`
+note: appends revision n+1 with the override, the expanded current default as `baseline` and its sha256 as `baselineDigest`, under the store's lock. A refusal writes nothing and never touches the draft file. It does not change agent files: `rota agents write` activates the effective text. `rota init` skips its agent write once the store exists.
+
+### rota prompts adopt
+rota prompts adopt <section> --expect <n>
+repo: none
+data: as `prompts save`
+exit: as `prompts save`
+note: appends a revision with a null override against the current default, so the section follows the default. Earlier revisions stay.
+
+### rota prompts restore
+rota prompts restore <section> --expect <n> --revision <r>
+repo: none
+data: as `prompts save`
+exit: as `prompts save`; 2 also when revision r does not exist
+note: appends a copy of revision r, keeping r's `baseline`, so an upstream change since r still reports `changed`. A removed section cannot be restored.
 
 ### rota skills list
 rota skills list

@@ -31,6 +31,7 @@ func Tree() *Command {
 			projectsCommand(),
 			connectCommand(),
 			skillsCommands(),
+			promptsCommands(),
 		},
 	}
 	root.Subs = append(root.Subs, designPlanCommands()...)

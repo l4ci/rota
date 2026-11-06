@@ -145,7 +145,17 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	if !noBlocks {
 		// Ruling (#405): init writes the agent files, best effort. A foreign
 		// file or a bad role config must not fail the seed; it warns.
-		es, err := agents.Write(dir, c.deps().Config(dir))
+		var es []agents.Entry
+		var err error
+		// Saved team prompts activate only on an explicit agents write. An init
+		// rerun must neither activate a pending save nor erase active output.
+		if _, statErr := os.Lstat(filepath.Join(dir, ".rota", "prompts.json")); errors.Is(statErr, os.ErrNotExist) {
+			es, err = agents.Write(dir, c.deps().Config(dir))
+		} else if statErr != nil {
+			err = statErr
+		} else {
+			warnings = append(warnings, "saved prompt history: agent files kept; run rota agents write to activate")
+		}
 		if err != nil {
 			warnings = append(warnings, "agent files not written: "+err.Error())
 		}
