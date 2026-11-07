@@ -51,8 +51,9 @@ type Env struct {
 	LookPath func(string) (string, error)
 	// Forge returns the forge for the project, an error when none resolves.
 	Forge func(ctx context.Context, root string) (Forge, error)
-	// Host returns the herdr host (never tmux, which has no notifications).
-	Host func() host.Host
+	// Host returns the adapter for a kind; notification is its optional
+	// Notifier side.
+	Host func(host.Kind) host.Host
 	// Config returns the merged project config; nil is no config (the schema defaults).
 	Config func(root string) any
 }
@@ -227,21 +228,22 @@ func pendingData(id string) *jsonx.Object {
 	return d
 }
 
-// notify raises the herdr notification when the host is herdr: round.dispatch
-// is herdr or the process runs inside herdr, and the binary is installed.
+// notify raises a notification when the round's host has a notification side
+// (herdr today) and its binary is installed.
 func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []string) (bool, []string) {
-	switch worker.ResolveHost(root, worker.ParseHostConfig(env.config(root)), env.Getenv, env.LookPath) {
-	case host.Solo: // the PR comment is the only channel
+	kind := worker.ResolveHost(root, worker.ParseHostConfig(env.config(root)), env.Getenv, env.LookPath)
+	if kind == host.Solo { // the PR comment is the only channel
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
-	case host.Herdr:
-	default:
-		return false, append(warns, "no notification: the host is not herdr (the round, round.dispatch and the environment do not name herdr)")
 	}
-	h := env.Host()
+	h := env.Host(kind)
+	n := h.Capabilities().Notifier
+	if n == nil {
+		return false, append(warns, fmt.Sprintf("no notification: the %s host has no notification surface", kind))
+	}
 	if err := h.Require(); err != nil {
 		return false, append(warns, "no notification: "+err.Error())
 	}
-	h.Notify(ctx, "rota escalation "+id, fmt.Sprintf("%s (%s)", o.Title, o.Ref()))
+	n.Notify(ctx, "rota escalation "+id, fmt.Sprintf("%s (%s)", o.Title, o.Ref()))
 	return true, warns
 }
 

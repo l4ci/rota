@@ -142,7 +142,10 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 		return err
 	}
 	// A human typing in the pane would get the brief pasted into their draft.
-	text, _ := t.d.readFile(file)
+	text, err := t.d.readBrief(file)
+	if err != nil {
+		return err
+	}
 	text = strings.TrimRight(text, "\n")
 	if waitNoDraft(&t.d, read, text) != "" {
 		return ErrDraftOnPrompt
@@ -267,24 +270,18 @@ func (t *tmux) Kill(ctx context.Context, slot, handle string) error {
 	if pid != 0 {
 		pids = t.d.Tree(pid)
 	}
-	t.tmux(ctx, "kill-window", "-t", handle)
-	alive, unknown, ok := killLoop(&t.d, pids, func() presence {
-		_, p := t.windowPID(ctx, handle)
-		return p
+	out, err := runKill(killSteps{
+		deps: &t.d, pids: pids, unverifiedBefore: before == presentUnknown,
+		close: func() error { t.tmux(ctx, "kill-window", "-t", handle); return nil },
+		gone: func() presence {
+			_, p := t.windowPID(ctx, handle)
+			return p
+		},
 	})
-	if before == presentUnknown {
-		return fmt.Errorf("slot '%s' previous session could not be verified (window %s): tmux query failed before the close, so no process evidence was collected; not spawning a second one",
-			slot, handle)
+	if err != nil {
+		return err
 	}
-	if ok {
-		return nil
-	}
-	if unknown {
-		return fmt.Errorf("slot '%s' previous session could not be verified (window %s%s): tmux query failed after the close; not spawning a second one",
-			slot, handle, pidSuffix(alive))
-	}
-	return fmt.Errorf("slot '%s' previous session is still running (window %s%s); not spawning a second one",
-		slot, handle, pidSuffix(alive))
+	return out.err(slot, "tmux", "window "+handle)
 }
 
 func pidSuffix(alive []int) string {
@@ -293,9 +290,6 @@ func pidSuffix(alive []int) string {
 	}
 	return ", pids" + pidList(alive)
 }
-
-// Notify: tmux has no notification surface.
-func (t *tmux) Notify(ctx context.Context, title, body string) {}
 
 // OperatorOpts describes the operator window `worker session ensure` opens
 // when the orchestrator is not inside tmux.

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"testing"
 	"time"
@@ -88,6 +89,11 @@ func TestSendInitialRecordWriteFailureDoesNotPost(t *testing.T) {
 	}
 }
 
+// bareHost is a host without the optional Notifier side.
+type bareHost struct{ host.Host }
+
+func (bareHost) Capabilities() host.Capabilities { return host.Capabilities{} }
+
 // The host decision reads the injected config, not .rota/config.json.
 func TestNotifyReadsTheInjectedConfig(t *testing.T) {
 	v, err := jsonx.Decode([]byte(`{"round":{"dispatch":"tmux"}}`))
@@ -96,8 +102,9 @@ func TestNotifyReadsTheInjectedConfig(t *testing.T) {
 	}
 	env := Env{Getenv: func(string) string { return "" }, Config: func(string) any { return v },
 		LookPath: func(string) (string, error) { return "", errors.New("none") }}
+	env.Host = func(host.Kind) host.Host { return bareHost{} }
 	sent, warns := notify(context.Background(), env, t.TempDir(), "e1", SendOpts{Title: "t"}, nil)
-	if sent || len(warns) != 1 || !strings.Contains(warns[0], "host is not herdr") {
+	if sent || len(warns) != 1 || !strings.Contains(warns[0], "no notification surface") {
 		t.Fatalf("sent=%v warns=%v", sent, warns)
 	}
 }

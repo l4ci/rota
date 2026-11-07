@@ -32,6 +32,11 @@ func corePending(s *Slot) *jsonx.Object {
 	p, _ := v.(*jsonx.Object)
 	return p
 }
+
+// receipts: the host keeps delivery receipts (Core), so its ErrNotSubmitted is
+// proof that nothing went out and its outcome is recorded on the dispatch.
+func receipts(h host.Host) bool { return h.Capabilities().DeliveryReconciler != nil }
+
 func coreOutcome(err error) string {
 	switch {
 	case err == nil:
@@ -47,7 +52,7 @@ func coreOutcome(err error) string {
 	}
 }
 func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, res DispatchResult) (bool, DispatchResult, error) {
-	if t.h.Kind() != host.HerdrCore || t.handle == "" {
+	if !receipts(t.h) || t.handle == "" {
 		return false, res, nil
 	}
 	p := corePending(t.slot)
@@ -101,7 +106,7 @@ func setCoreOutcome(root, slot string, err error) error {
 	return saveErr
 }
 func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, payload string, resubmit bool) error {
-	if t.h.Kind() != host.HerdrCore {
+	if !receipts(t.h) {
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
@@ -122,7 +127,7 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 	}
 	err := e.sendSigned(ctx, t, o.Slot, payload, false)
 	if saveErr := setCoreOutcome(root, o.Slot, err); saveErr != nil {
-		return errors.Join(host.ErrDeliveryUnknown, saveErr)
+		return errors.Join(host.ErrDeliveryUnknown, host.ErrMaybeSubmitted, saveErr)
 	}
 	return err
 }
@@ -136,7 +141,7 @@ func (e Env) ConfirmCoreNotSubmitted(ctx context.Context, root, slot string) err
 	}
 	h := e.NewHost(e.hostKind(root))
 	r := h.Capabilities().DeliveryReconciler
-	if h.Kind() != host.HerdrCore || r == nil {
+	if r == nil {
 		return fail(exitcode.ExitRefused, "delivery confirmation requires herdr-core")
 	}
 	if err := h.Require(); err != nil {

@@ -240,7 +240,6 @@ func (h *cliHost) Kill(context.Context, string, string) error {
 	h.calls = append(h.calls, "kill")
 	return nil
 }
-func (h *cliHost) Notify(context.Context, string, string) {}
 
 func useHost(d *Deps, h host.Host) {
 	d.WorkerEnv = func() worker.Env {

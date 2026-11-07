@@ -498,7 +498,6 @@ func (h *coreHost) Explain(ctx context.Context, slot, s string) string {
 	}
 	return "Core " + v.Core + " terminal " + v.Address
 }
-func (h *coreHost) Notify(context.Context, string, string) {}
 func (h *coreHost) Label(ctx context.Context, slot, s, title string) {
 	v, c, t, e := h.terminal(ctx, s)
 	if e != nil {
@@ -621,9 +620,13 @@ func (h *coreHost) ConfirmNotSubmitted(ctx context.Context, handle, payload stri
 }
 
 func (h *coreHost) Send(ctx context.Context, slot, s, file string) error {
-	text, e := h.d.readFile(file)
+	return classifySend(h.send(ctx, s, file))
+}
+
+func (h *coreHost) send(ctx context.Context, s, file string) error {
+	text, e := h.d.readBrief(file)
 	if e != nil {
-		return fmt.Errorf("%w: %v", ErrNotSubmitted, e)
+		return e
 	}
 	text = strings.TrimRight(text, "\n")
 	if text == "" {
@@ -836,23 +839,30 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 	if e = h.rememberPIDs(v, ev.observed); e != nil {
 		return fmt.Errorf("Core pre-close process evidence could not persist: %w", e)
 	}
-	var out coreTerminal
-	if !missing {
-		if e = c.call("terminal.kill", map[string]any{"terminal": v.Address}, &out); e != nil {
-			return e
-		}
-	}
 	probe := ev.procs.aliveDeps(h.d)
-	alive, _, ok := killLoop(&probe, ev.procs.pids(), func() presence {
-		if missing {
-			return presentGone
-		}
-		var now coreTerminal
-		err := c.call("terminal.get", map[string]any{"terminal": v.Address}, &now)
-		return seenBool(err == nil && coreMatch(v, now) && now.State == "finished")
+	out, e := runKill(killSteps{
+		deps: &probe, pids: ev.procs.pids(),
+		close: func() error {
+			if missing {
+				return nil
+			}
+			var closed coreTerminal
+			return c.call("terminal.kill", map[string]any{"terminal": v.Address}, &closed)
+		},
+		gone: func() presence {
+			if missing {
+				return presentGone
+			}
+			var now coreTerminal
+			err := c.call("terminal.get", map[string]any{"terminal": v.Address}, &now)
+			return seenBool(err == nil && coreMatch(v, now) && now.State == "finished")
+		},
 	})
-	if !ok {
-		return fmt.Errorf("Core terminal %s cleanup unproved; surviving pids:%s; ownership evidence retained", v.Address, pidList(alive))
+	if e != nil {
+		return e
+	}
+	if !out.ok {
+		return fmt.Errorf("Core terminal %s cleanup unproved; surviving pids:%s; ownership evidence retained", v.Address, pidList(out.alive))
 	}
 	return h.clearSpawnIntent(v)
 }
