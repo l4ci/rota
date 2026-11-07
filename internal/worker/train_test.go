@@ -1427,3 +1427,41 @@ func TestTrainPhasesTimingAndFailureOrigin(t *testing.T) {
 		}
 	}
 }
+
+// A prefix run that fails only on something the original run never showed does
+// not reproduce the original failure, so bisection does not name its last
+// member as the culprit (#2753 AC-4).
+func TestTrainDiagnosticOnlyPrefixIsNotCulprit(t *testing.T) {
+	// The full tree fails TestA, which b4 brings in. The prefix b1+b2 fails only
+	// TestB, a failure the original run never showed.
+	cmd := `if test -f b4.txt; then echo '--- FAIL: TestA (0.00s)'; echo FAIL; exit 1; fi; if test -f b2.txt && ! test -f b3.txt; then echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Culprit != "b4" || res.Members[1].Culprit {
+		t.Fatalf("culprit %q, members %+v: a diagnostic-only failure named the culprit", res.Culprit, res.Members)
+	}
+	var only []string
+	for _, d := range res.Diagnostic {
+		only = append(only, d.OnlyInDiagnostic...)
+	}
+	if strings.Join(only, ",") != "TestB" {
+		t.Fatalf("diagnostic-only failures: %+v", res.Diagnostic)
+	}
+	if c, ok := loadTrainCache(w.dir).f.Culprits[res.Members[1].Branch]; ok {
+		t.Errorf("b2 blamed in the train cache: %+v", c)
+	}
+}
+
+// onlyIn compares commands when either run names no test (#2753).
+func TestTrainFailureOnlyInCommand(t *testing.T) {
+	orig := TrainFailure{Command: "go test ./...", Tests: []string{"TestA"}}
+	if got := (TrainFailure{Command: "go vet ./..."}).onlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
+		t.Errorf("different command, no tests: %q", got)
+	}
+	if got := (TrainFailure{Command: "go test ./..."}).onlyIn(orig); len(got) != 0 {
+		t.Errorf("same command, no tests: %q", got)
+	}
+}
