@@ -86,7 +86,12 @@ Check the diff against each entry. One the diff contradicts or ignores is a CONC
 3. **Tests** — flag a **tautological** test and an **implementation-coupled** test, and a mock of anything but an external boundary, as defined in `references/test-quality.md`. Each is a CONCERN with file:line.
 4. **Stale scaffolding** — judge each `**Possible stale scaffolding:**` match: a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have gone once the work landed is a CONCERN with file:line; legitimate prose (a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, a `Task <N>` in a per-task brief or test name) is a PASS. Many matches are benign.
 5. **Silent failure check** — for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply the four-question rubric: (a) what does this verify concretely? (b) is the asserted-on shape the same shape the real consumer reads? (c) was the new code path actually exercised? (d) if you deleted the new code, would the assertion still pass? Any *no* or *unclear* is a `SILENT-FAIL` with file:line and a one-sentence explanation; treat it as a CONCERN. Full rubric: `references/silent-failure-hunter.md`.
-6. **Decision violations** — compare the diff against `**Hard boundaries:**`. Any forbidden pattern present = FAIL.
+6. **Test placement (`test-placement`)** — inspect added test files and helpers against existing tests and the PR body. Name the violating file and the existing counterpart in each finding:
+   - A new test file for a source module that already has a test file needs a stated reason in the PR body; without one, flag it.
+   - A new test helper whose name or signature already exists under `tests/` or `packages/*/test` is flagged, even when the implementation differs; show both declarations so the author can consolidate or explain.
+   - A new Playwright spec must state which browser projects it needs and why (in the spec or PR body). Flag a missing statement; do not assume every project is necessary.
+   Report these as `test-placement` findings with file:line and evidence, using the ordinary severity rules. The category belongs in the finding title; do not add fields to the verdict schema. Inspect the gate's browser matrix and unreferenced test scripts as well as redundant tests: a reasonable individual test does not prove the gate shape is right.
+7. **Decision violations** — compare the diff against `**Hard boundaries:**`. Any forbidden pattern present = FAIL.
 ```
 
 ## Both briefs end with

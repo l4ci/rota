@@ -712,7 +712,7 @@ worker that sits in the split view stops its agent but leaves its pane open as a
 
 ## Autopilot
 
-Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs exit 4. With it on, `rota round watch --autopilot` (or one pass of
+Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs exit 4 (`round tick --observe`, below, is the read-only exception). With it on, `rota round watch --autopilot` (or one pass of
 `rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
 
 1. repair the safe drift (`reconcile --apply`);
@@ -733,6 +733,16 @@ If a manual gate or train is running or waiting for the land lock, the tick
 defers its merges until that work finishes. It reports `deferred`, keeps the
 train nudge visible when reviewed PRs wait, and retries on the next tick.
 This is a wait, so it creates no gate failure, bounce or hold.
+
+To see what a pass would do before you turn it on, run `rota round tick --observe`. It works
+under any `autonomy.level`, needs the round lease like a real tick, and changes nothing: no
+dispatch, claim, relay, gate, merge, mint, audit line or saved autopilot state. It lists each
+proposed repair, review relay, landing and assignment with the checks a real tick still runs,
+marks a proposal conditional when an earlier proposal or an `unknown` entry comes before it, and
+lists what it could not check as `unknown`. A finished PR whose review verdicts are missing is held
+in `needsYou` as `awaiting-review`, as a real tick holds it; the preview reads local verdicts and the
+remote refs as last fetched, so a verdict that exists only as a PR report shows as missing. It is a preview, not an approval: a real tick re-reads state and runs
+every gate.
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
@@ -946,6 +956,27 @@ A missing or unreadable ledger makes that metric unavailable, rather than claimi
 CI verification, `rota test run` and `## Try it` steps do not retry. Wrapper output that does
 not identify assertion failures also stays red; this repo's `test/gate.sh` needs the separate
 adapter tracked in #2196 before it can use sequential retries.
+
+### Test maintenance
+
+Each local gate and train run also writes a `verification` row to the round ledger: the tier, its
+wall time and each configured command's wall time and exit code. Cached and CI answers write none,
+so older rounds and CI-verified merges have no timing, and the audit says so rather than reporting
+zero.
+
+`rota test-audit` turns those rows, `.rota/flakes.jsonl` and `.rota/gate-audit.jsonl` into a report,
+then adds what the repo shows: runs per Playwright project and spec from `playwright test --list`
+(each config, with the repo's own installed runner; nothing is downloaded), test files per source
+module, helpers declared in more than one test file, `package.json` test scripts that no `test.fast`,
+`test.full` or `test.e2e` command references, and README counts that disagree with `--list`. It runs
+no suite and changes no test. A report with no missing evidence records an audit checkpoint.
+
+Two opt-in thresholds (0, the default, disables each) make `/rota-work` and `/rota-orchestrate`
+suggest a maintenance round in their reconcile step: `test.audit.maxFullGateSeconds` (the latest
+measured `test.full` after the last audit is slower) and `test.audit.prsBetweenAudits` (that many
+merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. Every item a
+maintenance round creates carries two rules in its Out of scope: no assertion is dropped without a note
+in the PR body, and stored refs and the pixel tolerance stay untouched.
 
 After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of the slot's issue on the merged tree, in order, stopping at the first failure. A step fails on a non-zero exit or a missing `expect:` substring (`verify-failed`, nothing lands). The steps run only when the issue's author and last editor have write access on the forge (a file issue source runs unchecked); otherwise the gate notes `BEHAVIOUR-SKIP` and continues. The transcript goes to `.rota/qa-runs/behaviour/` and a `behaviour` verdict is recorded. `--check-only` and `--no-verify` skip the run.
 
