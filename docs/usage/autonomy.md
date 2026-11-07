@@ -29,7 +29,7 @@ Every stop carries options and a recommendation. Solo skills ask one question in
 
 ## Autonomy and rounds
 
-`auto` turns on the round autopilot. `rota round tick` and `rota round watch --autopilot` run only under `autonomy.level: auto`; under `off` or `roundtrip` they exit 4 with "the autopilot runs only under autonomy.level auto" and the hint `rota config set autonomy.level auto`. The key `round.autopilot` is gone. `round.scope` still says which issues a round may take, and `round.autopilotCap` still bounds each tick.
+`auto` turns on the round autopilot. `rota round tick` and `rota round watch --autopilot` run only under `autonomy.level: auto`; under `off` or `roundtrip` they exit 4 with "the autopilot runs only under autonomy.level auto" and the hint `rota config set autonomy.level auto`. The exception is `rota round tick --observe`, which works at any level: it lists what a pass would do and changes nothing (see [the preview](parallel-rounds.md#autopilot)). The key `round.autopilot` is gone. `round.scope` still says which issues a round may take, and `round.autopilotCap` still bounds each tick.
 
 `ship.mergeApproval` binds the merge verbs at every level; see [merge approval](parallel-rounds.md#merge-approval).
 

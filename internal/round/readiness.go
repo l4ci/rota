@@ -528,7 +528,7 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 			add(p)
 		}
 	}
-	if res, err := e.Git(ctx, wt, "status", "--porcelain"); err == nil && res.ExitCode == 0 {
+	if res, err := e.Git(ctx, wt, e.statusArgs("--porcelain")...); err == nil && res.ExitCode == 0 {
 		out := res.Stdout
 		for _, l := range strings.Split(out, "\n") {
 			if len(l) > 3 {
