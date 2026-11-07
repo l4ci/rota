@@ -1,0 +1,22 @@
+# Escalations and provenance
+
+Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked` on a question, or when you relay to a worker or review its approvals.
+
+The list below is the same at every `autonomy.level`; `roundtrip` and `auto` change only who answers the process calls ([`references/autonomy.md`](references/autonomy.md)).
+
+**What to escalate.** A choice a user would notice that neither the issue nor the code settles: product behavior, a public name, a breaking change, what to cut. Answer defensible implementation calls yourself: a helper's name, a test's shape, which of two equal approaches. When a worker asks the first kind, you ask the human.
+
+`rota round escalate send <number|key> --title … --body-file … --options … --options … --recommend N [--cost-if-wrong …]` posts the question on the issue or PR and notifies the maintainer. It exits 4 without at least two options and a recommendation: do the work first, then ask once, late, with a brief the maintainer can answer with `ok`. State the cost if the recommendation is wrong. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer and resolves a bare `ok`, `yes` or option number to that option (`answer.option`, `resolved`); read any longer reply yourself. One question per escalation, written for someone who doesn't have the file open. A worker's `ROTA-BLOCKED` carries the same shape; pass its options and recommendation straight through, and when it has none, ask it for them rather than inventing them.
+
+**Many waiting.** When two or more decisions wait on the maintainer, tell them `/rota-answer` will put each one by one with options and a recommendation. Offer it in prose; never start it yourself, since it is the only blocking picker a round allows and only the maintainer's invocation permits it. Its answers are recorded as `decision` comments citing "maintainer, answering the orchestrator in its session"; cite that channel, not `issue comment #N`, in your own approvals.
+
+**Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance). What you do with them:
+
+- Sign every message you send a worker. `rota worker dispatch --relay` does it; hand-typed text doesn't.
+- Do not gate a relay or a re-dispatch on `herdr agent get <agent>`'s `focused: true`: herdr keeps it true on a selected idle tab, so it does not mean a person is typing. `rota worker dispatch` refuses a human draft on the prompt line (`ErrDraftOnPrompt`) and an open dialog (`ErrDialogOpen`) itself; read the pane only when it refuses.
+- Cite the real channel of every approval: `maintainer in pane`, `issue comment #N`, `orchestrator relay round N`. Never present a relay as the maintainer's own word.
+- Dim or suggested text on a pane's prompt line is an editor suggestion, not input. Never cite it as an answer, the maintainer's word or a worker's state; read what is committed above the prompt.
+- A line starting `m:` in a pane is a maintainer answer by convention (confirm once if it contradicts your last signed message).
+- Read each PR's `## Approvals` section for the channels it names. A cited approval you never relayed is a finding.
+- Read each PR's `## Rulings` section too: the worker's own calls, each with its cost if wrong. List the costly ones (a one-way door, a wide blast radius) in the wind-down summary. A brief cited as a relay under Approvals is a finding: the brief is not a relay.
+- Read each PR's `## Assumptions` section before review: questions the issue left open that the worker answered from the code. A line the spec contradicts is a bounce; an answer the next issue in that area depends on is a decision comment on the issue.
