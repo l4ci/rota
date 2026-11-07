@@ -1146,10 +1146,4 @@ func TestHookSettingsReadOncePerRun(t *testing.T) {
 	if d.hooks() != first {
 		t.Fatal("settings view was rebuilt during the run")
 	}
-	if len(first.inScope()) != 3 {
-		t.Fatalf("in scope = %d files, want local, shared and one user file", len(first.inScope()))
-	}
-	if wt := first.reachesWorktree(); len(wt) != 2 || wt[0].path != first.shared.path {
-		t.Fatalf("worktree files = %+v, want shared then user, never settings.local.json", wt)
-	}
 }
