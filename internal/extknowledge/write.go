@@ -9,29 +9,26 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 var (
-	slugRe    = regexp.MustCompile(`[^a-z0-9]+`)
 	stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
 	titleRe   = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 )
 
 // Slugify is the topic file name for a topic name.
-func Slugify(name string) string {
-	return strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
-}
+func Slugify(name string) string { return topicmatch.Slugify(name) }
 
-// exact finds the index entry whose name or slug equals want
-// (case-insensitive). Writes never fall back to a partial match.
+// exact finds the index entry a write targets; the rule is
+// topicmatch.WriteIndex (never a partial match).
 func exact(want string, topics []Topic) (Topic, bool) {
-	w := strings.ToLower(strings.TrimSpace(want))
-	for _, t := range topics {
-		if strings.ToLower(t.Name) == w || t.Slug == w || t.Slug == Slugify(want) {
-			return t, true
-		}
+	i, ok := topicmatch.WriteIndex(want, entries(topics))
+	if !ok {
+		return Topic{}, false
 	}
-	return Topic{}, false
+	return topics[i], true
 }
 
 // plan is the files a write changes, by repo-relative path.

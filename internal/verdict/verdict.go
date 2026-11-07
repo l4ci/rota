@@ -527,48 +527,56 @@ func AddItem(root, id string, r Record) (failed int, err error) {
 	return
 }
 
-// resetStarts returns the index in list from which each counter counts: debug
-// is the position after the latest debug-reset record, work the position after
-// the latest work-fix-reset or work-fix PASS record. It is the one place that
-// names the reset kinds; FailedFixes, WorkFixAttempts and appendItem's
-// retention cut all read it.
-func resetStarts(list []Record) (debug, work int) {
+// counter is one failed-attempt rule: failKind FAIL records count, from the
+// position after the latest record isReset accepts. debugCounter and
+// workCounter are the one place that names the failure and reset kinds;
+// FailedFixes, WorkFixAttempts, the reset verbs and appendItem's retention cut
+// all read them.
+type counter struct {
+	failKind string
+	isReset  func(Record) bool
+}
+
+var (
+	debugCounter = counter{DebugFix, func(r Record) bool { return r.Kind == DebugReset }}
+	workCounter  = counter{WorkFix, func(r Record) bool {
+		return r.Kind == WorkFixReset || r.Kind == WorkFix && r.Verdict == Pass
+	}}
+)
+
+// failed reports whether r is a failed attempt of this counter.
+func (c counter) failed(r Record) bool { return r.Kind == c.failKind && r.Verdict == Fail }
+
+// start is the index in list from which the counter counts: the position
+// after its latest reset record.
+func (c counter) start(list []Record) int {
+	at := 0
 	for i, r := range list {
-		switch {
-		case r.Kind == DebugReset:
-			debug = i + 1
-		case r.Kind == WorkFixReset, r.Kind == WorkFix && r.Verdict == Pass:
-			work = i + 1
+		if c.isReset(r) {
+			at = i + 1
 		}
 	}
-	return debug, work
+	return at
+}
+
+// count is the failed attempts since the counter's latest reset.
+func (c counter) count(list []Record) int {
+	n := 0
+	for _, r := range list[c.start(list):] {
+		if c.failed(r) {
+			n++
+		}
+	}
+	return n
 }
 
 // FailedFixes counts an item's failed debug-fix records after its latest
 // debug-reset record.
-func FailedFixes(list []Record) int {
-	debug, _ := resetStarts(list)
-	n := 0
-	for _, r := range list[debug:] {
-		if r.Kind == DebugFix && r.Verdict == Fail {
-			n++
-		}
-	}
-	return n
-}
+func FailedFixes(list []Record) int { return debugCounter.count(list) }
 
 // WorkFixAttempts counts an item's work-fix attempts since the latest
 // work-fix PASS or work-fix-reset record.
-func WorkFixAttempts(list []Record) int {
-	_, work := resetStarts(list)
-	n := 0
-	for _, r := range list[work:] {
-		if r.Kind == WorkFix && r.Verdict == Fail {
-			n++
-		}
-	}
-	return n
-}
+func WorkFixAttempts(list []Record) int { return workCounter.count(list) }
 
 // AddWorkFix appends r, a work-fix record, to an item's list and returns the
 // item's attempt count after it. A FAIL record is refused (ok false, nothing
@@ -587,27 +595,28 @@ func AddWorkFix(root, id string, r Record) (attempts int, ok bool, err error) {
 	return
 }
 
-// ResetWorkFix appends the work-fix-reset record r when the item has attempts
-// to clear, and returns that count. With none it appends nothing.
-func ResetWorkFix(root, id string, r Record) (cleared int, err error) {
+// resetCounter appends the reset record r to an item's list when c has
+// attempts to clear, and returns that count. With none it appends nothing.
+func resetCounter(root, id string, r Record, c counter) (cleared int, err error) {
 	err = update(root, func(s *Store) {
-		if cleared = WorkFixAttempts(s.Items[id]); cleared > 0 {
+		if cleared = c.count(s.Items[id]); cleared > 0 {
 			s.Items[id] = appendItem(s.Items[id], r)
 		}
 	})
 	return
 }
 
+// ResetWorkFix appends the work-fix-reset record r when the item has attempts
+// to clear, and returns that count. With none it appends nothing.
+func ResetWorkFix(root, id string, r Record) (int, error) {
+	return resetCounter(root, id, r, workCounter)
+}
+
 // ResetItem appends the reset record r to an item's list when the item has
 // failed fixes to clear, and returns that count. With none it appends
 // nothing and returns 0.
-func ResetItem(root, id string, r Record) (cleared int, err error) {
-	err = update(root, func(s *Store) {
-		if cleared = FailedFixes(s.Items[id]); cleared > 0 {
-			s.Items[id] = appendItem(s.Items[id], r)
-		}
-	})
-	return
+func ResetItem(root, id string, r Record) (int, error) {
+	return resetCounter(root, id, r, debugCounter)
 }
 
 // Latest is the newest record of kind in list.

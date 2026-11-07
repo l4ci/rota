@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/toolver"
+	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 // indexNamePattern is the unescaped label the index format can represent.
@@ -153,24 +154,23 @@ func bulletLines(body string) []string {
 	return out
 }
 
-// resolve maps a requested topic to the index entries it names: the entry
-// whose name or slug equals want (case-insensitive) alone when there is one,
-// else every entry whose name contains want.
+// resolve maps a requested topic to the index entries it names for a read;
+// the rule is topicmatch.ReadIndex.
 func resolve(want string, topics []Topic) []Topic {
-	w := strings.ToLower(strings.TrimSpace(want))
-	if w == "" {
-		return nil
+	var out []Topic
+	for _, i := range topicmatch.ReadIndex(want, entries(topics)) {
+		out = append(out, topics[i])
 	}
-	var partial []Topic
-	for _, t := range topics {
-		if strings.ToLower(t.Name) == w || t.Slug == w {
-			return []Topic{t}
-		}
-		if strings.Contains(strings.ToLower(t.Name), w) {
-			partial = append(partial, t)
-		}
+	return out
+}
+
+// entries is the name/slug view of topics the matchers work on.
+func entries(topics []Topic) []topicmatch.Entry {
+	out := make([]topicmatch.Entry, len(topics))
+	for i, t := range topics {
+		out[i] = topicmatch.Entry{Name: t.Name, Slug: t.Slug}
 	}
-	return partial
+	return out
 }
 
 // Recheck is one tool a bullet was seen on that the project has since outgrown.
