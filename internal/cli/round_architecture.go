@@ -94,6 +94,19 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			d.Set("changed", len(ids) > 0)
 			return Result{Data: d}, ferr
 		}
+		if len(ids) == 0 {
+			// Another run or the autopilot tick minted between our read and the
+			// lock: the review is in flight, and assigning again would double it.
+			d.Set("minted", []any{})
+			d.Set("changed", false)
+			pending := round.PendingReviews(root, be)
+			d.Set("pending", strs(pending))
+			text := "architecture review already in flight"
+			if len(pending) > 0 {
+				text += " (" + strings.Join(pending, ", ") + ")"
+			}
+			return Result{Data: d, Text: text}, nil
+		}
 		d.Set("minted", strs(ids))
 		d.Set("changed", true)
 
