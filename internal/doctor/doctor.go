@@ -147,6 +147,9 @@ type Input struct {
 	// AgentProblems are the generated subagent files that are missing or have
 	// drifted from config (agents.Problems); empty adds no line.
 	AgentProblems []string
+	// AgentStoreFault is set when AgentProblems comes from the saved prompt
+	// store (damaged or from a newer rota), which `rota agents write` cannot fix.
+	AgentStoreFault bool
 
 	// Gitignore is the project's .gitignore text; nil when the file does not
 	// exist, which is not drift (init creates it) and adds no line.
@@ -376,7 +379,11 @@ func (d *runner) agents() (Check, bool) {
 	if len(d.in.AgentProblems) == 0 {
 		return Check{}, false
 	}
-	return Check{Name: "agents", Status: Warn, Detail: strings.Join(d.in.AgentProblems, "; "), Hint: "run: rota agents write"}, true
+	hint := "run: rota agents write"
+	if d.in.AgentStoreFault {
+		hint = "repair .rota/prompts.json (restore it from git, or upgrade rota if a newer version wrote it); rota agents write fails until then"
+	}
+	return Check{Name: "agents", Status: Warn, Detail: strings.Join(d.in.AgentProblems, "; "), Hint: hint}, true
 }
 
 func (d *runner) gitignore() (Check, bool) {
