@@ -57,22 +57,38 @@ func TemplateReasons(it Item, body string) []string {
 	return reasons
 }
 
+// noteText is the one definition of a present note: text with something in it.
+// A whitespace-only note reads as absent.
+func noteText(text string) bool { return strings.TrimSpace(text) != "" }
+
+// trackerHasNote is whether a tracker holds a design or plan note for ref. A
+// note that cannot be read is an error, never a silent "no note": Ready and
+// HasNote both go through here, so they share one answer and one error policy.
+func trackerHasNote(t ItemTracker, ref string) (bool, error) {
+	for _, kind := range []string{"design", "plan"} {
+		text, _, err := t.NoteGet(ref, kind)
+		if err != nil {
+			return false, err
+		}
+		if noteText(text) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // HasNote reports whether the item has a design or plan note, in either
 // backend: a tracker note through ItemTracker, else the file backend's
-// .rota/designs and .rota/plans files. A backend that can show neither has none.
-func HasNote(be Backend, ref string) bool {
+// .rota/designs and .rota/plans files. A backend that can show neither has
+// none. A tracker note that cannot be read returns its error.
+func HasNote(be Backend, ref string) (bool, error) {
 	if t, ok := be.(ItemTracker); ok {
-		for _, kind := range []string{"design", "plan"} {
-			if text, _, err := t.NoteGet(ref, kind); err == nil && strings.TrimSpace(text) != "" {
-				return true
-			}
-		}
-		return false
+		return trackerHasNote(t, ref)
 	}
 	if nf, ok := be.(noteFiler); ok {
-		return nf.hasNote(ref)
+		return nf.hasNote(ref), nil
 	}
-	return false
+	return false, nil
 }
 
 // noteFiler is a backend that keeps design and plan notes in files.

@@ -24,7 +24,11 @@ func autoHold(be backlog.Backend, it backlog.Item) string {
 	if it.Tag != "Major" {
 		return ""
 	}
-	if backlog.HasNote(be, it.ID) {
+	has, err := backlog.HasNote(be, it.ID)
+	if err != nil {
+		return "a Major item whose design or plan note cannot be read (" + err.Error() + "): assign it by hand"
+	}
+	if has {
 		return ""
 	}
 	return "a Major item with no design or plan note: brainstorm or plan it, or assign it by hand"

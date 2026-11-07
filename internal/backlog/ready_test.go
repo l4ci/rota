@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -133,4 +134,52 @@ func TestAddCommentStampsInjectedToday(t *testing.T) {
 	if !strings.Contains(got, "- 2001-02-03 · question") || !strings.Contains(got, "- 2001-02-04 · question") {
 		t.Errorf("rows not stamped from the injected clock:\n%s", got)
 	}
+}
+
+// One definition of "has a design or plan note" for Ready and HasNote: a
+// whitespace-only note is no note, and an unreadable note is an error in both.
+func TestNotePresenceAgrees(t *testing.T) {
+	const missing = "no design or plan note"
+	ready := func(b *Issues) []string {
+		t.Helper()
+		reasons, err := b.Ready("1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return reasons
+	}
+	t.Run("whitespace-only note", func(t *testing.T) {
+		b, _ := newIssues(t, `{}`, open(1))
+		if _, err := b.NotePut("1", "design", "  \t "); err != nil {
+			t.Fatal(err)
+		}
+		if has, err := HasNote(b, "1"); has || err != nil {
+			t.Errorf("HasNote = %v, %v; want false", has, err)
+		}
+		if !slices.Contains(ready(b), missing) {
+			t.Errorf("Ready = %v; a whitespace-only note must read as absent", ready(b))
+		}
+	})
+	t.Run("real note", func(t *testing.T) {
+		b, _ := newIssues(t, `{}`, open(1))
+		if _, err := b.NotePut("1", "plan", "do x"); err != nil {
+			t.Fatal(err)
+		}
+		if has, err := HasNote(b, "1"); !has || err != nil {
+			t.Errorf("HasNote = %v, %v; want true", has, err)
+		}
+		if slices.Contains(ready(b), missing) {
+			t.Errorf("Ready = %v; a real note must read as present", ready(b))
+		}
+	})
+	t.Run("NoteGet error", func(t *testing.T) {
+		b, tr := newIssues(t, `{}`, open(1))
+		tr.Fail = map[string]error{"comments": errors.New("boom")}
+		if _, err := b.Ready("1"); err == nil {
+			t.Error("Ready swallowed the NoteGet error")
+		}
+		if has, err := HasNote(b, "1"); has || err == nil {
+			t.Errorf("HasNote = %v, %v; want the NoteGet error", has, err)
+		}
+	})
 }
