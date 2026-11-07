@@ -23,7 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
-	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -803,7 +803,7 @@ func verdictRefusal(verdict string, ref *exitcode.Refusal, err error, msg, hint 
 // recordedFailRefusal turns a recorded-FAIL refusal from the gate or train into the
 // exit-4 envelope the ship paths give: d plus blockedBy verdict and the record.
 func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
-	var vb *ship.VerdictBlockedError
+	var vb *verdict.BlockedError
 	if !errors.As(err, &vb) {
 		return Result{}, err
 	}
@@ -917,14 +917,6 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if !*check {
 			if run.BookErr != nil {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
-			}
-			if n := run.Book.Bounces; n > 0 {
-				d := res.Data.(*jsonx.Object)
-				d.Set("bounces", n)
-				d.Set("parked", run.Book.Parked)
-			}
-			if run.Book.Parked {
-				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", run.Issue, run.Book.Bounces)
 			}
 		}
 		if r.Verdict == worker.GateAlreadyMerged {
