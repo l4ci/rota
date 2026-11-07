@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/version"
 )
 
 // fakeGit answers by the first git args, so a test names only what it needs.
@@ -58,7 +59,7 @@ func TestStaleBinaryWarns(t *testing.T) {
 		}
 	}
 	// AC-4: the rebuild keeps Version equal to VERSION.
-	if !strings.Contains(f.Rebuild, "internal/version.Version=$(cat VERSION)") || !strings.Contains(f.Rebuild, "./cmd/rota") {
+	if !strings.Contains(f.Rebuild, "-X "+version.Symbol("Version")+"=$(cat VERSION)") || !strings.Contains(f.Rebuild, "./cmd/rota") {
 		t.Errorf("rebuild = %q", f.Rebuild)
 	}
 }
