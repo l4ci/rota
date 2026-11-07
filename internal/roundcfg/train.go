@@ -97,3 +97,75 @@ func (f TrainFill) Due(count int, oldest, now time.Time) string {
 	}
 	return ""
 }
+
+// FillCandidate is one reviewed PR waiting on a base. Ready is its ready time
+// (zero when unknown); Immediate marks a PR that needs no fill because review
+// is disabled and no ready time exists.
+type FillCandidate struct {
+	ID        string
+	Ready     time.Time
+	Immediate bool
+}
+
+// FillDecision is the per-base answer shared by the tick, the train nudge and
+// status. Land is the PRs to land now, in candidate order; empty means hold.
+type FillDecision struct {
+	Land []string
+	// Reason names the rule that fired; empty for the legacy zero-policy rule.
+	Reason string
+	// Wait describes the observed age; set only when the policy is enabled and
+	// the base is due.
+	Wait string
+	// Holding is the status line while the train fills; set only on hold.
+	Holding string
+	// Count is how many candidates waited, before any immediate override or trim.
+	Count int
+}
+
+// Decide is the one due-and-trim decision for a base. limit caps the PRs
+// landed (0 caps at Max). With the policy disabled it keeps the legacy rule: a
+// base is due at two candidates. An enabled policy that is not yet due still
+// lands the Immediate candidates alone, without a wait. Callers that handle
+// immediates themselves pass candidates without the flag.
+func (f TrainFill) Decide(base string, cands []FillCandidate, limit int, now time.Time) FillDecision {
+	d := FillDecision{Count: len(cands)}
+	if len(cands) == 0 {
+		return d
+	}
+	ready := map[string]time.Time{}
+	var all, immediate []string
+	var oldest time.Time
+	for _, c := range cands {
+		ready[c.ID] = c.Ready
+		all = append(all, c.ID)
+		if c.Immediate {
+			immediate = append(immediate, c.ID)
+		}
+		if !c.Ready.IsZero() && (oldest.IsZero() || c.Ready.Before(oldest)) {
+			oldest = c.Ready
+		}
+	}
+	since := func(id string) time.Time { return ready[id] }
+	if !f.Enabled() {
+		if len(all) >= 2 {
+			d.Land = OldestReady(all, limit, since)
+		}
+		return d
+	}
+	land, observed := all, oldest
+	d.Reason = f.Due(len(all), oldest, now)
+	if d.Reason == "" && len(immediate) > 0 {
+		d.Reason = "review disabled; ready time unavailable, land now"
+		land, observed = immediate, time.Time{}
+	}
+	if d.Reason == "" {
+		d.Holding = f.Holding(base, len(all), oldest, now)
+		return d
+	}
+	d.Wait = f.Wait(observed, now)
+	if f.Max > 0 && (limit <= 0 || f.Max < limit) {
+		limit = f.Max
+	}
+	d.Land = OldestReady(land, limit, since)
+	return d
+}
