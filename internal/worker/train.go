@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Merge train (#83): verify several queued PRs together once, then land them.
@@ -120,6 +121,7 @@ func (r TrainResult) owned() TrainResult {
 	r.Order = slices.Clone(r.Order)
 	r.CacheHits = slices.Clone(r.CacheHits)
 	r.Transient = slices.Clone(r.Transient)
+	r.Diagnostic = slices.Clone(r.Diagnostic)
 	r.Excluded = slices.Clone(r.Excluded)
 	r.Expired = slices.Clone(r.Expired)
 	return r
@@ -177,6 +179,28 @@ type TrainResult struct {
 	Plan *TrainPlan
 	// Stop is the evidence of a red tier under OnFailStop; nil otherwise.
 	Stop *TrainStop
+	// VerifyTime is the time spent verifying the whole train; DiagnoseTime the
+	// time spent on prefix runs that look for the culprit (#2753).
+	VerifyTime, DiagnoseTime time.Duration
+	// Original is the failure of the full-train run that started a diagnosis;
+	// Diagnostic lists the prefix runs that failed after it. Nil/empty when no
+	// tier failed.
+	Original   *TrainFailure
+	Diagnostic []TrainFailure
+}
+
+// TrainFailure is one failed verify run: the tier, the failed command, the
+// failing tests its output names and the tree under test.
+type TrainFailure struct {
+	Tier    string
+	Command string
+	Tests   []string
+	Members int    // members merged on the base for this run
+	Tip     string // tip SHA of the tree under test
+	// OnlyInDiagnostic names the tests (or, when none are named, the commands)
+	// that failed here but not in the original run. Such a failure is not
+	// confirmed as a cause: it needs a passing-alone check.
+	OnlyInDiagnostic []string
 }
 
 // TrainStop is what a train that stopped on a red tier (OnFailStop) hands the
@@ -287,6 +311,48 @@ type trainPlan struct {
 	cleanup func()
 }
 
+// phase reports the stage the train is in on o.Say, one PHASE line per change
+// (#2753), so an operator watching a long train sees where it is.
+func (t *trainRun) phase(format string, args ...any) {
+	if t.o.Say != nil {
+		t.o.Say("PHASE " + fmt.Sprintf(format, args...))
+	}
+}
+
+// tipAt is the short SHA of the tree with k members merged; "" when the plan
+// carries no such tip.
+func tipAt(tips []string, k int) string {
+	if k < 0 || k >= len(tips) {
+		return ""
+	}
+	return strutil.ShortSHA(tips[k])
+}
+
+// failureOf describes one failed verify run of the tree with members merged.
+func failureOf(tier string, vr VerifyResult, members int, tip string) TrainFailure {
+	f := TrainFailure{Tier: tier, Command: strings.Join(vr.Failed, "; "), Members: members, Tip: tip}
+	f.Tests, _ = testledger.FailingTests(vr.Log)
+	return f
+}
+
+// onlyIn lists what f shows failing that orig does not: its tests, or its
+// command when the output names no test.
+func (f TrainFailure) onlyIn(orig TrainFailure) []string {
+	if len(f.Tests) == 0 && len(orig.Tests) == 0 {
+		if f.Command != "" && f.Command != orig.Command {
+			return []string{f.Command}
+		}
+		return nil
+	}
+	var out []string
+	for _, tn := range f.Tests {
+		if !slices.Contains(orig.Tests, tn) {
+			out = append(out, tn)
+		}
+	}
+	return out
+}
+
 func (p trainPlan) rem() string { return p.in.cfg.RemoteName() }
 func (p trainPlan) verifyCfg() GateConfig {
 	if p.tierCfg != nil {
@@ -342,6 +408,7 @@ func trainBrokeResult(res *TrainResult, msg string) (bool, error) {
 // returned scratch tree on every exit.
 func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped bool, stageErr error) {
 	p := trainPlanning{res: TrainResult{Base: t.o.Base}}
+	t.phase("plan: %d target(s) onto %s", len(t.o.Targets), t.o.Base)
 	// Until a normal return transfers cleanup in out, planning still owns it.
 	// This also releases the scratch tree on a panic before the handoff exists.
 	defer func() {
@@ -623,6 +690,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			return p.trainPlan, p.res, done, err
 		}
 	}
+	t.phase("merge: %d member(s) onto %s %s", len(res.Members), o.Base, strutil.ShortSHA(baseSHA))
 	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, p.heads)
 	p.tips = tips
 	if brokeMsg != "" {
@@ -947,7 +1015,19 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 				res.CacheHits = append(res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
 				return VerifyResult{Cached: true, Verified: v.Verified}, nil
 			}
+			diagnosing := k != n
+			if diagnosing {
+				t.phase("diagnose %s: base + %d member(s), tip %s", tier, k, tipAt(tips, k))
+			} else {
+				t.phase("verify %s: base + %d member(s), tip %s", tier, k, tipAt(tips, k))
+			}
+			began := time.Now()
 			r, err := run()
+			if diagnosing {
+				res.DiagnoseTime += time.Since(began)
+			} else {
+				res.VerifyTime += time.Since(began)
+			}
 			if err == nil {
 				prs := []string{}
 				for _, m := range res.Members[:k] {
@@ -989,6 +1069,8 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, p.in.cfg.E2E, scratch, p.in.ledger) })
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
+		orig := failureOf(tier, failed, n, tipAt(tips, n))
+		res.Original = &orig
 		if o.OnFail == OnFailStop {
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
@@ -1120,6 +1202,7 @@ func (t *trainRun) land(p trainPlan, result TrainResult, prefix trainVerified) (
 		}
 	}
 	verdict, culprit := res.Verdict, res.Culprit
+	t.phase("land: %d member(s), tip %s", passing, tipAt(tips, passing))
 	if cur, _ := e.git(root, "rev-parse", baseRef); cur != baseSHA {
 		return e.trainMoved(res, "", fmt.Sprintf("%s moved from %s to %s while the train verified", baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur)))
 	}
@@ -1296,6 +1379,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		if pr.OK() {
 			lo = mid
 		} else {
+			recordDiagnostic(res, tier, pr, mid, tips[mid])
 			os.Remove(failed.LogPath)
 			failed, hi = pr, mid
 		}
@@ -1309,6 +1393,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 			return 0, true, err
 		}
 		if !br.OK() {
+			recordDiagnostic(res, tier, br, 0, tips[0])
 			os.Remove(failed.LogPath)
 			res.Verdict = GateVerifyFailed
 			res.Err = fmt.Sprintf("TRAIN-FAIL base — the base fails verification on its own (%s), so no member can be blamed\n%s",
@@ -1323,11 +1408,38 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 	res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails %s once %s (%s) is merged; the first %d member(s) pass\n%s",
 		c.Target, tier, c.Target, c.Branch, lo, failed.detail())
 	res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
+	if only := diagnosticOnly(res); len(only) > 0 {
+		res.Err += fmt.Sprintf("\nDIAGNOSTIC-ONLY %s failed in a diagnostic prefix run but not in the original run; it is not confirmed as the cause of the original failure (no passing-alone check ran)", strings.Join(only, ", "))
+	}
 	if !landGreen || lo == 0 {
 		return 0, true, nil
 	}
 	res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", lo)
 	return lo, false, nil
+}
+
+// recordDiagnostic appends a failed prefix run to res.Diagnostic, marking what
+// the original run did not show (#2753).
+func recordDiagnostic(res *TrainResult, tier string, vr VerifyResult, members int, tip string) {
+	f := failureOf(tier, vr, members, tip)
+	if res.Original != nil {
+		f.OnlyInDiagnostic = f.onlyIn(*res.Original)
+	}
+	res.Diagnostic = append(res.Diagnostic, f)
+}
+
+// diagnosticOnly lists, once each, everything a diagnostic run failed on that
+// the original run did not.
+func diagnosticOnly(res *TrainResult) []string {
+	var out []string
+	for _, d := range res.Diagnostic {
+		for _, x := range d.OnlyInDiagnostic {
+			if !slices.Contains(out, x) {
+				out = append(out, x)
+			}
+		}
+	}
+	return out
 }
 
 // trainFoot is what one member changes against the base: the paths (read as the

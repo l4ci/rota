@@ -1379,3 +1379,51 @@ func TestTrainOnFailStopNamesTestsAndBlamesNobody(t *testing.T) {
 		t.Errorf("no member may be blamed in the train cache: %+v", c.f.Culprits)
 	}
 }
+
+// A failing train reports its phases as it goes, the time spent verifying
+// versus diagnosing, the original failure apart from failures that only a
+// diagnostic prefix run showed (#2753).
+func TestTrainPhasesTimingAndFailureOrigin(t *testing.T) {
+	// The full tree (b1..b4) fails TestA. The prefix b1+b2 fails TestA too, and
+	// TestB as well: a failure the original run never showed.
+	cmd := `if test -f b2.txt; then echo '--- FAIL: TestA (0.00s)'; test -f b3.txt || echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, Say: func(l string) { said = append(said, l) }})
+	if err != nil || res.Culprit != "b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	phases := []string{}
+	for _, l := range said {
+		if strings.HasPrefix(l, "PHASE ") {
+			phases = append(phases, l)
+		}
+	}
+	for _, want := range []string{"PHASE plan", "PHASE merge", "PHASE verify test.full: base + 4 member(s), tip ", "PHASE diagnose test.full: base + 2 member(s), tip "} {
+		if !slices.ContainsFunc(phases, func(l string) bool { return strings.HasPrefix(l, want) }) {
+			t.Errorf("no phase line starting %q in %q", want, phases)
+		}
+	}
+	if slices.ContainsFunc(phases, func(l string) bool { return strings.HasPrefix(l, "PHASE land") }) {
+		t.Errorf("nothing was verified, so no land phase: %q", phases)
+	}
+	if res.VerifyTime <= 0 || res.DiagnoseTime <= 0 {
+		t.Errorf("timing: verify %v diagnose %v", res.VerifyTime, res.DiagnoseTime)
+	}
+	o := res.Original
+	if o == nil || strings.Join(o.Tests, ",") != "TestA" || o.Members != 4 {
+		t.Fatalf("original failure: %+v", o)
+	}
+	var only []string
+	for _, d := range res.Diagnostic {
+		only = append(only, d.OnlyInDiagnostic...)
+	}
+	if strings.Join(only, ",") != "TestB" {
+		t.Fatalf("diagnostic-only failures: %+v", res.Diagnostic)
+	}
+	for _, want := range []string{"TestB", "diagnostic", "passing-alone"} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("culprit text lacks %q:\n%s", want, res.Err)
+		}
+	}
+}
