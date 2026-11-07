@@ -2,6 +2,8 @@ package worker
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,6 +25,23 @@ func TestCoreDispatchPreservesUncertainDelivery(t *testing.T) {
 	_, err := sendFailure(h, "w1", DispatchResult{}, fmt.Errorf("%w: transport lost after possible submission", host.ErrMaybeSubmitted))
 	if err == nil || !strings.Contains(err.Error(), "possible submission") || strings.Contains(err.Error(), "never picked up") {
 		t.Fatalf("uncertain Core delivery was rewritten as safe-to-retry: %v", err)
+	}
+}
+
+// Core's Send ran, then the outcome record could not be saved: delivery is
+// unknown, so dispatch reports the error text (exit 5), never "never picked up".
+func TestCoreOutcomeSaveFailureIsUncertainThroughDispatch(t *testing.T) {
+	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	h := &fakeHost{receipts: true, name: host.HerdrCore}
+	h.onSend = func() {
+		os.Chmod(filepath.Join(dir, ".rota"), 0o500)
+		t.Cleanup(func() { os.Chmod(filepath.Join(dir, ".rota"), 0o755) })
+	}
+	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+	_, err := rig.env(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"})
+	if err == nil || exitOf(err) != 5 || strings.Contains(err.Error(), "never picked up") || !strings.Contains(err.Error(), host.ErrDeliveryUnknown.Error()) {
+		t.Fatalf("outcome-save failure = exit %d, %v; want exit 5 with the uncertain-delivery text", exitOf(err), err)
 	}
 }
 
