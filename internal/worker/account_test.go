@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func TestAccountListMeters(t *testing.T) {
 	for _, m := range got {
 		var resets any
 		if m.ResetsAt != nil {
-			resets = ISOFormat(*m.ResetsAt)
+			resets = stamp.ISO(*m.ResetsAt)
 		}
 		rows = append(rows, map[string]any{"name": m.Name, "configDir": m.ConfigDir, "verdict": m.Verdict, "reason": m.Reason,
 			"fiveHour": m.FiveHour, "sevenDay": m.SevenDay, "headroom": m.Headroom, "resetsAt": resets})
@@ -273,19 +274,12 @@ func TestPoolInitSpreadsAccounts(t *testing.T) {
 	}
 }
 
-func TestISOFormatMatchesPython(t *testing.T) {
-	for in, want := range map[string]string{
-		"2026-10-02T15:00:00Z":             "2026-10-02T15:00:00+00:00",
-		"2026-10-02T15:00:00.5Z":           "2026-10-02T15:00:00.500000+00:00",
-		"2026-10-02T17:00:00.123456+02:00": "2026-10-02T17:00:00.123456+02:00",
-	} {
-		tm := parseReset(in)
-		if tm == nil || ISOFormat(*tm) != want {
-			t.Errorf("%s -> %v, want %s", in, tm, want)
-		}
-	}
-	if parseReset("garbage") != nil || parseReset(nil) != nil || parseReset("") != nil {
+func TestParseResetReadsStringsOnly(t *testing.T) {
+	if parseReset("garbage") != nil || parseReset(nil) != nil || parseReset("") != nil || parseReset(5) != nil {
 		t.Error("unparseable resets must read as none")
+	}
+	if parseReset("2026-10-02T15:00:00Z") == nil {
+		t.Error("a valid reset must parse")
 	}
 }
 

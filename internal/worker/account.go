@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/stamp"
 	"io"
 	"math"
 	"net/http"
@@ -229,12 +230,7 @@ func parseReset(v any) *time.Time {
 	if !ok || s == "" {
 		return nil
 	}
-	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02T15:04:05", "2006-01-02"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return &t
-		}
-	}
-	return nil
+	return stamp.ParseISO(s)
 }
 
 // defaultFetch reads ROTA_ACCOUNT_USAGE_DIR/<name>.json when set, else the OAuth
@@ -580,15 +576,6 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 	return account, changed, nil
 }
 
-// ISOFormat renders a time like Python's datetime.isoformat().
-func ISOFormat(t time.Time) string {
-	s := t.Format("2006-01-02T15:04:05")
-	if us := t.Nanosecond() / 1000; us != 0 {
-		s += fmt.Sprintf(".%06d", us)
-	}
-	return s + t.Format("-07:00")
-}
-
 // accountLimited says why the round.accounts account behind configDir cannot
 // take a new session: its meter is cooling, the verdict the quota fallback
 // uses. "" when it can, when the harness has no config-dir accounts, when
@@ -605,7 +592,7 @@ func (e Env) accountLimited(ctx context.Context, root string, hz harness.Account
 		if m.Name == name && m.Verdict == VerdictCooling {
 			why := "account " + name + " is at its usage limit"
 			if m.ResetsAt != nil {
-				why += "; it resets at " + ISOFormat(*m.ResetsAt)
+				why += "; it resets at " + stamp.ISO(*m.ResetsAt)
 			}
 			return why
 		}
