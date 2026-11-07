@@ -58,3 +58,27 @@ func TestMalformedLedgerIsNotAPartialCount(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendRefusesIncompleteEntryAndLogStaysReadable(t *testing.T) {
+	root := t.TempDir()
+	good := Entry{Check: "check", Tests: []string{"TestA"}, Tree: "tree", TS: time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC), First: Run{ExitCode: 1}, Retry: Run{ExitCode: 0}}
+	if err := Append(root, good); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(Path(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := good
+	bad.Tests = nil
+	if err := Append(root, bad); err == nil {
+		t.Fatal("incomplete entry must be refused")
+	}
+	after, err := os.ReadFile(Path(root))
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("refused append must not touch the file: err=%v", err)
+	}
+	if rows, err := Load(root); err != nil || len(rows) != 1 {
+		t.Fatalf("log must still load: rows=%d err=%v", len(rows), err)
+	}
+}
