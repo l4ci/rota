@@ -140,7 +140,7 @@ func promptsUpgradeReport(root string) (stale []any, lines []string) {
 	}
 	views, err := prompts.Open(root, prompts.Catalog()).List()
 	if err != nil {
-		return nil, []string{"prompts: " + err.Error()}
+		return nil, []string{"prompts: " + tui.Sanitize(err.Error(), false)}
 	}
 	for _, v := range views {
 		if v.Status != "changed" && v.Status != "removed" {
@@ -197,17 +197,19 @@ func promptText(v prompts.View) string {
 // stale or removed write is 4, and a damaged store (malformed, symlinked) or
 // anything else is 1. name is the section the verb was given, "" for list.
 func promptsErr(err error, name string) error {
+	msg := tui.Sanitize(err.Error(), false)
+	name = tui.Sanitize(name, false)
 	switch {
 	case errors.Is(err, prompts.ErrCorrupt):
-		return Failed("%v", err).WithHint("repair or restore .rota/prompts.json from git; rota never rewrites a damaged store")
+		return Failed("%s", msg).WithHint("repair or restore .rota/prompts.json from git; rota never rewrites a damaged store")
 	case errors.Is(err, prompts.ErrUnknown):
-		return Usage("%v", err).WithHint("run: rota prompts list")
+		return Usage("%s", msg).WithHint("run: rota prompts list")
 	case errors.Is(err, prompts.ErrInvalid):
-		return Usage("%v", err)
+		return Usage("%s", msg)
 	case errors.Is(err, prompts.ErrConflict):
-		return Refused("%v", err).WithHint(fmt.Sprintf("run: rota prompts show %s, then retry with --expect set to the current revision; your draft is untouched", name))
+		return Refused("%s", msg).WithHint(fmt.Sprintf("run: rota prompts show %s, then retry with --expect set to the current revision; your draft is untouched", name))
 	case errors.Is(err, prompts.ErrRemoved):
-		return Refused("%v", err).WithHint(fmt.Sprintf("this binary no longer has the section; its history stays readable with rota prompts show %s", name))
+		return Refused("%s", msg).WithHint(fmt.Sprintf("this binary no longer has the section; its history stays readable with rota prompts show %s", name))
 	}
-	return Failed("%v", err)
+	return Failed("%s", msg)
 }
