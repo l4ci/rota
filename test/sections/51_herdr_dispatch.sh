@@ -85,15 +85,12 @@ hd() {
   ( cd "$TMP_HD/repo" && PATH="$FAKE/bin:$PATH" FAKE_HERDR="$FAKE" HERDR_ENV=1 \
       HERDR_WORKSPACE_ID=w9 "$@" )
 }
-slot_field() {
-  python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]==sys.argv[2]][0]; print(s.get(sys.argv[3]))' \
-    "$TMP_HD/repo/.rota/workers.json" "$1" "$2"
-}
+HD_REG="$TMP_HD/repo/.rota/workers.json"
 
 # ── (a) pool ────────────────────────────────────────────────────────────────
 hd "$ROTA_BIN" worker pool init --slots 2 --base main >/dev/null || fail "worker pool init failed under herdr"
-[ "$(slot_field w1 handle)" = "None" ] \
-  || fail "herdr pool slot should start with a null handle (tab ids exist only after dispatch), got $(slot_field w1 handle)"
+[ -z "$(slot_field "$HD_REG" w1 handle)" ] \
+  || fail "herdr pool slot should start with a null handle (tab ids exist only after dispatch), got $(slot_field "$HD_REG" w1 handle)"
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p))
@@ -101,12 +98,12 @@ s = d["slots"][1]; s.pop("handle", None); s["window"] = "rota:w2"
 json.dump(d, open(p, "w"))
 PY
 hd "$ROTA_BIN" worker pool init --slots 2 --base main >/dev/null || fail "worker pool re-init failed"
-[ "$(slot_field w2 handle)" = "rota:w2" ] || fail "init did not migrate window -> handle, got $(slot_field w2 handle)"
-[ "$(slot_field w2 window)" = "None" ] || fail "init left the legacy window field behind"
+[ "$(slot_field "$HD_REG" w2 handle)" = "rota:w2" ] || fail "init did not migrate window -> handle, got $(slot_field "$HD_REG" w2 handle)"
+[ -z "$(slot_field "$HD_REG" w2 window)" ] || fail "init left the legacy window field behind"
 pass "worker pool: herdr slots start without a handle; init migrates window -> handle"
 
 # ── (b) dispatch ────────────────────────────────────────────────────────────
-WT1="$(slot_field w1 worktree)"
+WT1="$(slot_field "$HD_REG" w1 worktree)"
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p))
@@ -125,9 +122,9 @@ grep -q '^agent prompt rota-w1-w9-t7 <rota-relay round="1" from="orchestrator">$
   || fail "the brief must open with the rota-relay tag; log: $(cat "$FAKE/log")"
 grep -q '^</rota-relay> --wait --until working --until blocked --timeout 60000$' "$FAKE/log" \
   || fail "the brief must be confirmed by working/blocked, not by waiting for the whole task; log: $(cat "$FAKE/log")"
-[ "$(slot_field w1 handle)" = "w9:t7" ] || fail "dispatch did not record the tab id as handle"
-[ "$(slot_field w1 task)" = "T1" ] || fail "dispatch did not record slot.task"
-[ "$(slot_field w1 state)" = "busy" ] || fail "dispatch did not set slot.state=busy"
+[ "$(slot_field "$HD_REG" w1 handle)" = "w9:t7" ] || fail "dispatch did not record the tab id as handle"
+[ "$(slot_field "$HD_REG" w1 task)" = "T1" ] || fail "dispatch did not record slot.task"
+[ "$(slot_field "$HD_REG" w1 state)" = "busy" ] || fail "dispatch did not set slot.state=busy"
 pass "worker dispatch: tab create -> agent start -> confirmed prompt; handle, task, state recorded"
 
 : >"$FAKE/log"
@@ -135,7 +132,7 @@ hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --task T2 >/dev
   || fail "herdr re-dispatch failed"
 grep -q '^agent prompt rota-w1-w9-t7 /exit$' "$FAKE/log" || fail "re-dispatch did not /exit the old session"
 grep -q '^tab close w9:t7$' "$FAKE/log" || fail "re-dispatch did not close the old tab"
-[ "$(slot_field w1 handle)" = "w9:t8" ] || fail "re-dispatch did not record the new tab"
+[ "$(slot_field "$HD_REG" w1 handle)" = "w9:t8" ] || fail "re-dispatch did not record the new tab"
 pass "worker dispatch: a task re-dispatch closes the old tab and starts fresh"
 
 : >"$FAKE/log"
@@ -150,7 +147,7 @@ grep -q 'ORCHESTRATOR RELAY' "$FAKE/last_prompt" || fail "relay text lost its OR
 [ "$(tail -n 1 "$FAKE/last_prompt")" = '</rota-relay>' ] \
   || fail "a relay must end with the closing tag, got: $(tail -n 1 "$FAKE/last_prompt")"
 grep -q '^\[relay ' "$FAKE/last_prompt" && fail "the relay sequence rides on the opening tag, not a [relay K] line"
-[ "$(slot_field w1 task)" = "T2" ] || fail "a relay must not change slot.task"
+[ "$(slot_field "$HD_REG" w1 task)" = "T2" ] || fail "a relay must not change slot.task"
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p))
@@ -163,7 +160,7 @@ hd "$ROTA_BIN" worker dispatch w2 --body-file "$TMP_HD/brief.md" --relay >/dev/n
 pass "worker dispatch --relay reuses the live session and keeps the relay marker"
 
 # ── (b1) provenance: signature + relay log ──────────────────────────────────
-relays_json() { slot_field "$1" relays; }
+relays_json() { slot_field "$HD_REG" "$1" relays; }
 python3 - "$TMP_HD/repo/.rota/workers.json" <<'PY' || fail "relay was not logged as {round, ts, summary}"
 import json, sys
 r = json.load(open(sys.argv[1]))["slots"][0]["relays"]
@@ -304,7 +301,7 @@ pass "worker poll maps herdr agent states (sentinels win; unknown is never done)
 echo blocked > "$FAKE/status"
 : >"$FAKE/log"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null || fail "live herdr poll failed"
-[ "$(slot_field w1 state)" = "needs-permission" ] || fail "poll did not write slot.state, got $(slot_field w1 state)"
+[ "$(slot_field "$HD_REG" w1 state)" = "needs-permission" ] || fail "poll did not write slot.state, got $(slot_field "$HD_REG" w1 state)"
 [ "$(grep -c '^notification show' "$FAKE/log")" = "1" ] || fail "a newly blocked slot should notify once"
 : >"$FAKE/log"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null || fail "second live herdr poll failed"
@@ -314,21 +311,21 @@ fi
 echo idle > "$FAKE/status"
 printf 'ROTA-DONE w1 rota-worker/w1\n' > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
-[ "$(slot_field w1 pr)" = "None" ] || fail "a branch name in ROTA-DONE must not become slot.pr"
+[ -z "$(slot_field "$HD_REG" w1 pr)" ] || fail "a branch name in ROTA-DONE must not become slot.pr"
 # The stalled relay above was logged: a done counts only once its echo is in the pane (#1017).
-K=$(slot_field w1 relayPending)
+K=$(slot_field "$HD_REG" w1 relayPending)
 printf -- '<rota-relay n="%s" round="1" from="orchestrator">\n\n</rota-relay>\n● ROTA-DONE w1 https://github.com/o/r/pull/9\n' "$K" > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
-[ "$(slot_field w1 state)" = "done" ] || fail "poll did not write state=done"
-[ "$(slot_field w1 pr)" = "https://github.com/o/r/pull/9" ] || fail "poll did not record the PR URL in slot.pr"
+[ "$(slot_field "$HD_REG" w1 state)" = "done" ] || fail "poll did not write state=done"
+[ "$(slot_field "$HD_REG" w1 pr)" = "https://github.com/o/r/pull/9" ] || fail "poll did not record the PR URL in slot.pr"
 # Claude Code v2.1.288 starts a reply with "● ": a sentinel after it is still seen (#210).
 printf '● ROTA-DONE w1 https://github.com/o/r/pull/10\n' > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
-[ "$(slot_field w1 pr)" = "https://github.com/o/r/pull/10" ] || fail "ROTA-DONE after the reply bullet should be seen, pr is $(slot_field w1 pr)"
+[ "$(slot_field "$HD_REG" w1 pr)" = "https://github.com/o/r/pull/10" ] || fail "ROTA-DONE after the reply bullet should be seen, pr is $(slot_field "$HD_REG" w1 pr)"
 # Codex 0.159.x starts a reply with "• " (#68).
 printf '\342\200\242 ROTA-DONE w1 https://github.com/o/r/pull/11\n\n  Worked for 21s \342\200\242 5:40 AM\n' > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
-[ "$(slot_field w1 pr)" = "https://github.com/o/r/pull/11" ] || fail "ROTA-DONE after the codex bullet should be seen, pr is $(slot_field w1 pr)"
+[ "$(slot_field "$HD_REG" w1 pr)" = "https://github.com/o/r/pull/11" ] || fail "ROTA-DONE after the codex bullet should be seen, pr is $(slot_field "$HD_REG" w1 pr)"
 touch "$FAKE/gone"
 STATE="$( hd "$ROTA_BIN" --json worker poll w1 --settle 0 | jget 'data.slots[0].state' )"
 [ "$STATE" = "dead" ] || fail "a slot whose agent is gone should poll dead, got $STATE"
@@ -356,7 +353,7 @@ pass "worker session keys on HERDR_ENV; ensure refuses outside herdr"
 ( cd "$TMP_HD/repo" && PATH="$FAKE/bin:$PATH" FAKE_HERDR="$FAKE" HERDR_ENV=1 HERDR_WORKSPACE_ID=w1W \
     "$ROTA_BIN" worker dispatch w2 --body-file "$TMP_HD/brief.md" --task T9 >/dev/null 2>&1 ) \
   || fail "dispatch in an uppercase workspace should start the agent: $(cat "$FAKE/log")"
-case "$(slot_field w2 handle)" in w1W:t*) ;; *) fail "the handle keeps the real tab id, got $(slot_field w2 handle)" ;; esac
+case "$(slot_field "$HD_REG" w2 handle)" in w1W:t*) ;; *) fail "the handle keeps the real tab id, got $(slot_field "$HD_REG" w2 handle)" ;; esac
 NAME="$(awk '$1=="agent" && $2=="start" {print $3}' "$FAKE/log")"
 [[ "$NAME" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || fail "the agent name herdr gets must be valid, got '$NAME'"
 pass "worker dispatch in an uppercase workspace starts an agent with a valid name"

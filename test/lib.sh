@@ -59,6 +59,44 @@ print(v if isinstance(v, str) else json.dumps(v, separators=(",", ":")))
 ' "$1"
 }
 
+# Registry and doctor helpers shared by the dispatch, worker and doctor sections.
+#
+# slot_field <workers.json> <slot> <field> prints one field of a slot; a missing
+# or null field prints nothing, so test it with `-z`.
+slot_field() {
+  python3 -c 'import json,sys; s=[x for x in json.load(open(sys.argv[1]))["slots"] if x["name"]==sys.argv[2]][0]; v=s.get(sys.argv[3]); print("" if v is None else v)' "$1" "$2" "$3"
+}
+
+# doctor_run <dir> [VAR=value ...] runs `rota --json doctor` in <dir> with the
+# extra environment and sets RC and OUT. Env prefixed to the call
+# (`ROTA_FAKE_X=1 doctor_run ...`) reaches doctor as well.
+doctor_run() {
+  local dir="$1"; shift
+  RC=0; OUT=$( cd "$dir" && env "$@" "$ROTA_BIN" --json doctor 2>/dev/null ) || RC=$?
+}
+
+# doctor_check_field <check> <field> prints a field of one doctor check from $OUT
+# (ABSENT when the check lacks the field).
+doctor_check_field() {
+  python3 -c '
+import json,sys
+cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
+print(cs[sys.argv[1]].get(sys.argv[2],"ABSENT"))' "$1" "$2" <<<"$OUT"
+}
+
+# hookin <prompt> prints the UserPromptSubmit hook payload for a prompt.
+hookin() { python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$1"; }
+
+# parked <repo> <slot> succeeds when the slot's worktree sits on park/<slot>.
+parked() { [ "$(git -C "$1/.worktrees/$2" symbolic-ref --short HEAD)" = "park/$2" ]; }
+
+# cfg <config.json> <dispatch> [claude-command] writes a minimal round config.
+cfg() {
+  local extra=""
+  [ -n "${3:-}" ] && extra=",\"commands\":{\"claude\":\"$3\"}"
+  printf '{"round":{"dispatch":"%s"%s}}\n' "$2" "$extra" > "$1"
+}
+
 # F62 — preamble convention scan. Reads every test/sections/*.sh and fails
 # if any forbidden pattern is found. Catches the class of regressions where
 # per-section drift would shadow runner state or violate the F38 local-trap

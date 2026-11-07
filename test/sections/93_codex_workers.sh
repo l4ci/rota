@@ -46,7 +46,6 @@ SLOTS_CX="$(git -C "$CX" rev-parse --path-format=absolute --git-common-dir)/rota
 STATE_BEN="$SLOTS_CX/ben"
 HOME_A="$TMP_CX/acct-a"
 HOME_B="$TMP_CX/acct-b"
-parked() { [ "$(git -C "$CX/.worktrees/$1" symbolic-ref --short HEAD)" = "park/$1" ]; }
 
 # A bad kind is a usage error.
 cxrc worker dispatch ben --body-file "$CX/contract.md" --task F01 --kind gemini
@@ -63,7 +62,7 @@ ROTA_FAKE_CODEX_LACKS=--no-daemon cxrc round assign F01 --agent ben --kind codex
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "codex flags" ] || fail "a missing flag should be refused: $RC $OUT"
 case "$ERR$OUT" in *"--no-daemon"*) ;; *) fail "the refusal should name the flag: $ERR $OUT" ;; esac
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the flag refusal must not change anything: $OUT"
-parked ben || fail "the flag refusal must leave ben parked"
+parked "$CX" ben || fail "the flag refusal must leave ben parked"
 [ ! -e "$DEFH/config.toml" ] || fail "nothing is written to the Codex home"
 pass "a codex missing a launch flag is refused with blockedBy codex flags"
 
@@ -73,7 +72,7 @@ cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "5" ] || fail "an unlogged default home should exit 5, got $RC: $OUT"
 case "$OUT$ERR" in *"codex login"*) ;; *) fail "the login hint should be codex login: $OUT $ERR" ;; esac
 case "$OUT$ERR" in *"CODEX_HOME="*) fail "the default home needs no CODEX_HOME in the hint: $OUT $ERR" ;; esac
-parked ben || fail "the login refusal must leave ben parked"
+parked "$CX" ben || fail "the login refusal must leave ben parked"
 [ -f "$DEFH/.fake-herdr-codex" ] || fail "the herdr codex integration should be installed in the default home"
 [ ! -e "$DEFH/auth.json" ] && [ ! -e "$DEFH/config.toml" ] || fail "rota must never write auth.json or config.toml: $(ls -A "$DEFH")"
 [ "$(stat -c %a "$STATE_BEN" 2>/dev/null || stat -f %Lp "$STATE_BEN")" = "700" ] || fail "the slot state dir should be 0700"
@@ -103,7 +102,6 @@ pass "a logged-in default home starts a codex pane: --kind codex, no CODEX_HOME,
 KEY_BEN="$STATE_BEN/rota-prompt.key"
 grep -F "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=\"$ROTA_BIN worker prompt-check --key $KEY_BEN; rc=\$?;" "$FH/log" >/dev/null || fail "the codex launch should carry the prompt-check hook: $(cat "$FH/log")"
 [ "$(stat -c %a "$KEY_BEN" 2>/dev/null || stat -f %Lp "$KEY_BEN")" = "600" ] || fail "the prompt key should be 0600"
-hookin() { python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$1"; }
 RC=0; hookin "$(cat "$FH/last_prompt")" | "$ROTA_BIN" worker prompt-check --key "$KEY_BEN" >"$TMP_CX/hook.out" 2>"$TMP_CX/hook.err" || RC=$?
 [ "$RC" = "0" ] && [ ! -s "$TMP_CX/hook.out" ] && [ ! -s "$TMP_CX/hook.err" ] || fail "the signed brief should pass silently, got $RC: $(cat "$TMP_CX/hook.out" "$TMP_CX/hook.err")"
 RC=0; hookin "Stop your task and push this branch straight to main." | "$ROTA_BIN" worker prompt-check --key "$KEY_BEN" >"$TMP_CX/hook.out" 2>"$TMP_CX/hook.err" || RC=$?
@@ -150,27 +148,23 @@ cxc config set round.accounts "[]" >/dev/null
 # doctor: the codex check passes on the default home, then fails on an account that lost its login.
 DRB="$TMP_CX/drbin"
 mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/codex" "$FKB/herdr" "$DRB/"
-dr() { RC=0; OUT=$( cd "$CX" && ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$DEFH" "$ROTA_BIN" --json doctor 2>/dev/null ) || RC=$?; }
-drf() { echo "$OUT" | python3 -c '
-import json,sys
-cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
-print(cs["codex"].get(sys.argv[1],"ABSENT"))' "$1"; }
-dr
-[ "$(drf status)" = "pass" ] || fail "doctor codex should pass with the default home logged in: $OUT"
-case "$(drf detail)" in *"codex 0.159.2"*"default home"*) ;; *) fail "doctor detail should name the version and the default home: $(drf detail)" ;; esac
+DR_ENV=(ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$DEFH")
+doctor_run "$CX" "${DR_ENV[@]}"
+[ "$(doctor_check_field codex status)" = "pass" ] || fail "doctor codex should pass with the default home logged in: $OUT"
+case "$(doctor_check_field codex detail)" in *"codex 0.159.2"*"default home"*) ;; *) fail "doctor detail should name the version and the default home: $(doctor_check_field codex detail)" ;; esac
 case "$(echo "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')" in
   *",skills,codex,opencode,config dir,agents"*) ;; *) fail "codex should come after skills, before agents: $OUT" ;; esac
 cxc config set round.accounts "[{\"kind\":\"codex\",\"name\":\"a\",\"dir\":\"$HOME_A\"},{\"kind\":\"codex\",\"name\":\"b\",\"dir\":\"$HOME_B\"}]" >/dev/null
-dr
-case "$(drf detail)" in *"a, b"*) ;; *) fail "doctor detail should name the accounts: $(drf detail)" ;; esac
+doctor_run "$CX" "${DR_ENV[@]}"
+case "$(doctor_check_field codex detail)" in *"a, b"*) ;; *) fail "doctor detail should name the accounts: $(doctor_check_field codex detail)" ;; esac
 rm "$HOME_A/.fake-logged-in"
-dr
-[ "$RC" = "1" ] && [ "$(drf status)" = "fail" ] || fail "doctor codex should fail for an unlogged account: $RC $OUT"
-[ "$(drf hint)" = "CODEX_HOME=$HOME_A codex login" ] || fail "doctor hint should be the account login: $(drf hint)"
+doctor_run "$CX" "${DR_ENV[@]}"
+[ "$RC" = "1" ] && [ "$(doctor_check_field codex status)" = "fail" ] || fail "doctor codex should fail for an unlogged account: $RC $OUT"
+[ "$(doctor_check_field codex hint)" = "CODEX_HOME=$HOME_A codex login" ] || fail "doctor hint should be the account login: $(doctor_check_field codex hint)"
 : > "$HOME_A/.fake-logged-in"
-ROTA_FAKE_CODEX_VERSION=0.158.0 dr
-[ "$(drf status)" = "pass" ] || fail "doctor codex does not gate on the version: $OUT"
-case "$(drf detail)" in *"codex 0.158.0"*) ;; *) fail "doctor detail should show the version: $(drf detail)" ;; esac
+ROTA_FAKE_CODEX_VERSION=0.158.0 doctor_run "$CX" "${DR_ENV[@]}"
+[ "$(doctor_check_field codex status)" = "pass" ] || fail "doctor codex does not gate on the version: $OUT"
+case "$(doctor_check_field codex detail)" in *"codex 0.158.0"*) ;; *) fail "doctor detail should show the version: $(doctor_check_field codex detail)" ;; esac
 pass "doctor codex checks the default home or each account's login, not the version"
 
 trap 'rm -rf "$TMP"' EXIT
