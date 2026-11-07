@@ -4,6 +4,7 @@
 package version
 
 import (
+	"reflect"
 	"runtime"
 	"runtime/debug"
 )
@@ -14,6 +15,15 @@ var (
 	Commit  = ""
 	Date    = ""
 )
+
+// Symbol is the -ldflags -X target for one of the link-time variables above
+// ("Version", "Commit" or "Date"). It is the single definition: the package path
+// comes from the compiler, so moving the package cannot leave a stale copy here,
+// and TestLDFlagsSpellingsMatch fails on any script or config that still
+// spells an old one.
+func Symbol(name string) string {
+	return reflect.TypeOf(Info{}).PkgPath() + "." + name
+}
 
 // Info is what `rota version` prints.
 type Info struct {
