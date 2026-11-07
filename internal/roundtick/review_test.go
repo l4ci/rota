@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -233,7 +236,7 @@ func TestTickDoneSlotWithoutReviewVerdictsIsNotGated(t *testing.T) {
 	if want := []string{"main:dana"}; !slices.Equal(f.gated, want) {
 		t.Fatalf("gated %v, want %v: ben waits for review", f.gated, want)
 	}
-	if want := []Item{{"awaiting-review", "ben", "waiting for review verdicts at head"}}; !slices.Equal(r.NeedsYou, want) {
+	if want := []Item{{Kind: "awaiting-review", Target: "ben", Why: "waiting for review verdicts at head"}}; !slices.Equal(r.NeedsYou, want) {
 		t.Fatalf("needs-you %+v, want %+v", r.NeedsYou, want)
 	}
 	if len(r.Held) != 0 {
@@ -246,5 +249,43 @@ func TestWaitingForReviewIsAPlainLine(t *testing.T) {
 	want := "waiting for review verdicts at head (review depth full (default depth) needs a recorded review-spec and review-quality verdict); run /rota-review on ben/7-x"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestReviewReadinessOfMapsEveryVerdict(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		r        worker.GateResult
+		err      error
+		wantWhy  string // substring; "" means exactly empty
+		wantGate bool
+	}{
+		{"stale", worker.GateResult{Verdict: worker.GateStale}, nil, "", true},
+		{"pr mismatch", worker.GateResult{Verdict: worker.GatePRMismatch}, nil, "", true},
+		{"already merged", worker.GateResult{Verdict: worker.GateAlreadyMerged}, nil, "", true},
+		{"merged remotely", worker.GateResult{Verdict: worker.GateMergedRemotely}, nil, "", true},
+		{"review missing", worker.GateResult{Verdict: worker.GateReviewMissing, Err: "x — no review at head; nothing landed", Branch: "ben/1-x"}, nil, "waiting for review verdicts at head (no review at head); run /rota-review on ben/1-x", false},
+		{"review missing falls back to the slot", worker.GateResult{Verdict: worker.GateReviewMissing, Err: "gone"}, nil, "run /rota-review on ben", false},
+		{"fresh", worker.GateResult{Verdict: worker.GateFresh}, nil, "", false},
+		{"other verdict", worker.GateResult{Verdict: worker.GateRunning, Err: "busy\nmore"}, nil, "cannot confirm review verdicts at head: busy", false},
+		{"other verdict without a message", worker.GateResult{Verdict: worker.GateRunning}, nil, "cannot confirm review verdicts at head: " + worker.GateRunning, false},
+		{"read error", worker.GateResult{Verdict: worker.GateFresh}, errors.New("boom\nx"), "cannot confirm review verdicts at head: boom", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			why, now := ReviewReadinessOf(tc.r, tc.err, "ben")
+			if now != tc.wantGate || (tc.wantWhy == "" && why != "") || !strings.Contains(why, tc.wantWhy) {
+				t.Fatalf("ReviewReadinessOf = %q, %v; want %q, %v", why, now, tc.wantWhy, tc.wantGate)
+			}
+		})
+	}
+}
+
+func TestRelayResultOfMarksTheBounceCap(t *testing.T) {
+	capped := &exitcode.Error{Exit: 4, Message: "cap", Data: worker.BlockData{BlockedBy: blockedby.MaxBounces}}
+	if got := RelayResultOf(false, 2, 3, capped); !got.AtCap || got.Items != 2 || got.Bounces != 3 {
+		t.Fatalf("capped = %+v", got)
+	}
+	if got := RelayResultOf(true, 0, 0, errors.New("other")); got.AtCap || !got.Nothing {
+		t.Fatalf("plain error = %+v", got)
 	}
 }

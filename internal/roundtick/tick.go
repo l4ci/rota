@@ -26,6 +26,9 @@ import (
 	"time"
 )
 
+// ErrStopped says the round is winding down: Run assigns and merges nothing.
+var ErrStopped = errors.New("the round is stopped (wind-down): the autopilot stops")
+
 // DefaultCap is round.autopilotCap: the most assigns, and the most merges, one
 // tick does.
 const DefaultCap = 3
@@ -78,6 +81,9 @@ type Reviewer interface {
 
 // Env is the outside world of a tick.
 type Env struct {
+	// Stopped is the round's wind-down flag (State.Stopped): Run refuses before
+	// it reconciles, merges or assigns.
+	Stopped bool
 	// Observe supplies read-only replacements for adapters that may mutate.
 	// A non-nil value selects observation; missing probes are reported unknown.
 	Observe *ObservationSources
@@ -124,7 +130,7 @@ type Env struct {
 	Active func() []string
 	// Reconcile applies the safe repairs and returns what it repaired and the
 	// drift it leaves.
-	Reconcile func(ctx context.Context) (repaired, drift []string, err error)
+	Reconcile func(ctx context.Context) (repaired, drift []Finding, err error)
 	// Candidates are the assignable items in backlog order.
 	Candidates func(ctx context.Context) ([]round.Candidate, error)
 	// Assign hands an item to the first idle slot and returns the slot names
@@ -178,10 +184,18 @@ type FailedHead struct {
 }
 
 // Action is something the tick did.
-type Action struct{ Action, Target, Detail string }
+type Action struct {
+	Action, Target, Detail string
+	// Drift is the reconcile finding kind behind the action, "" for other actions.
+	Drift DriftKind
+}
 
 // Item is something the orchestrator has to look at.
-type Item struct{ Kind, Target, Why string }
+type Item struct {
+	Kind, Target, Why string
+	// Drift is the reconcile finding kind of a drift item, "" for other items.
+	Drift DriftKind
+}
 
 // Key identifies an item across ticks.
 func (i Item) Key() string { return i.Kind + " " + i.Target }
@@ -245,6 +259,9 @@ func (e Env) audit(r *Result, a Action) {
 // The merge comes before the assign so the next assignment branches from the
 // gated base (rota-orchestrate, section 6), not from before the merge.
 func Run(ctx context.Context, e Env) (Result, error) {
+	if e.Stopped {
+		return Result{}, ErrStopped
+	}
 	r := Result{Observed: e.Observe != nil, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
 	if r.FailedHeads == nil {
 		r.FailedHeads = map[string]FailedHead{}
@@ -260,18 +277,18 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		}
 	}
 
-	var repaired, drift []string
+	var repaired, drift []Finding
 	var err error
 	if e.Observe != nil {
 		if e.Observe.Reconcile == nil {
-			r.Unknown = append(r.Unknown, Item{"reconcile", "round", "repair inspection is unavailable"})
+			r.Unknown = append(r.Unknown, Item{Kind: "reconcile", Target: "round", Why: "repair inspection is unavailable"})
 		} else {
 			var inspection Inspection
 			inspection, err = e.Observe.Reconcile(ctx)
 			drift = inspection.Drift
 			r.Unknown = append(r.Unknown, inspection.Unknown...)
 			for _, f := range inspection.Proposed {
-				r.propose(Action{"reconcile", f, "safe repair selected"}, "repair prerequisites and result")
+				r.propose(Action{Action: "reconcile", Target: f.String(), Detail: "safe repair selected", Drift: f.Kind}, "repair prerequisites and result")
 			}
 		}
 	} else {
@@ -281,10 +298,10 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		return r, err
 	}
 	for _, f := range repaired {
-		e.audit(&r, Action{"reconcile", f, "repaired"})
+		e.audit(&r, Action{Action: "reconcile", Target: f.String(), Detail: "repaired", Drift: f.Kind})
 	}
 	for _, f := range drift {
-		r.NeedsYou = append(r.NeedsYou, Item{"drift", f, "drift the autopilot does not repair"})
+		r.NeedsYou = append(r.NeedsYou, Item{Kind: "drift", Target: f.String(), Why: "drift the autopilot does not repair", Drift: f.Kind})
 	}
 
 	slots := e.Slots()
@@ -296,29 +313,29 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			if s.Issue != "" {
 				why += " on " + s.Issue
 			}
-			r.NeedsYou = append(r.NeedsYou, Item{s.State, s.Name, why})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: s.State, Target: s.Name, Why: why})
 		case worker.IsDone(s.State) && s.PR != "":
 			reviewLoop := e.ReviewLoop
 			if e.Observe != nil {
 				reviewLoop = e.Observe.ReviewLoop
 				if reviewLoop == nil && e.ReviewLoop != nil {
-					r.Unknown = append(r.Unknown, Item{"review", s.Name, "review input inspection is unavailable"})
+					r.Unknown = append(r.Unknown, Item{Kind: "review", Target: s.Name, Why: "review input inspection is unavailable"})
 				}
 			}
 			if reviewLoop != nil {
 				out := reviewLoop(ctx, s)
 				if out.Unknown != "" {
-					r.Unknown = append(r.Unknown, Item{"review", s.Name, out.Unknown})
+					r.Unknown = append(r.Unknown, Item{Kind: "review", Target: s.Name, Why: out.Unknown})
 				}
 				switch {
 				case out.Proposed:
-					r.propose(Action{"review-relay", s.Name, out.Detail}, "bounce cap, relay authorization and delivery")
+					r.propose(Action{Action: "review-relay", Target: s.Name, Detail: out.Detail}, "bounce cap, relay authorization and delivery")
 					continue
 				case out.Relayed:
-					e.audit(&r, Action{"review-relay", s.Name, out.Detail})
+					e.audit(&r, Action{Action: "review-relay", Target: s.Name, Detail: out.Detail})
 					continue
 				case out.Pending:
-					r.NeedsYou = append(r.NeedsYou, Item{"review", s.Name, out.Detail})
+					r.NeedsYou = append(r.NeedsYou, Item{Kind: "review", Target: s.Name, Why: out.Detail})
 					if out.Hold {
 						continue
 					}
@@ -331,13 +348,13 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				if e.Observe != nil {
 					awaiting = e.Observe.AwaitingReview
 					if awaiting == nil {
-						r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review readiness inspection is unavailable; landing not proposed"})
+						r.Unknown = append(r.Unknown, Item{Kind: "awaiting-review", Target: s.Name, Why: "review readiness inspection is unavailable; landing not proposed"})
 						continue
 					}
-					r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review verdicts read from local records and last-fetched refs; execution fetches and recovers PR verdict reports"})
+					r.Unknown = append(r.Unknown, Item{Kind: "awaiting-review", Target: s.Name, Why: "review verdicts read from local records and last-fetched refs; execution fetches and recovers PR verdict reports"})
 				}
 				if why := awaiting(ctx, s, e.targetBase(s.Name)); why != "" {
-					r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", s.Name, why})
+					r.NeedsYou = append(r.NeedsYou, Item{Kind: "awaiting-review", Target: s.Name, Why: why})
 					continue
 				}
 			}
@@ -375,7 +392,8 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	sort.SliceStable(r.NeedsYou, func(i, j int) bool { return r.NeedsYou[i].Key() < r.NeedsYou[j].Key() })
 	for _, it := range r.NeedsYou {
 		key := it.Key()
-		if name, ok := strings.CutPrefix(it.Target, round.BranchNoPR+" "); it.Kind == "drift" && ok {
+		if it.Drift == round.BranchNoPR {
+			name := strings.TrimPrefix(it.Target, string(it.Drift)+" ")
 			// A missing PR is news again when its slot changes state or
 			// takes another issue, even while the finding stays present.
 			for _, s := range slots {
@@ -394,7 +412,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		r.Held, r.FailedHeads, r.Reported, r.Filling = maps.Clone(e.Held), maps.Clone(e.FailedHeads), maps.Clone(e.Reported), maps.Clone(e.Filling)
 		r.New = nil
 		if len(r.Proposed) > 0 {
-			r.Unknown = append(r.Unknown, Item{"downstream", "round", "later proposals use the current snapshot; repairs, relays, landings and minted items may change or enable later actions"})
+			r.Unknown = append(r.Unknown, Item{Kind: "downstream", Target: "round", Why: "later proposals use the current snapshot; repairs, relays, landings and minted items may change or enable later actions"})
 		}
 	}
 	return r, nil
@@ -409,7 +427,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	}
 	if e.humanMerge() {
 		for _, t := range targets {
-			r.NeedsYou = append(r.NeedsYou, Item{"merge", t, "ship.mergeApproval asks for a person; the autopilot merges nothing"})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "merge", Target: t, Why: "ship.mergeApproval asks for a person; the autopilot merges nothing"})
 		}
 		return nil
 	}
@@ -424,7 +442,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 				if err != nil {
 					detail += ": " + strutil.FirstLine(err.Error())
 				}
-				r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, detail})
+				r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: t, Why: detail})
 				continue
 			}
 			heads[t] = head
@@ -447,11 +465,11 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			if e.Head != nil {
 				detail += heldHeadHint
 			}
-			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, detail})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: t, Why: detail})
 			continue
 		}
 		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) && (e.FillBypass == nil || !e.FillBypass(t)) {
-			r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", t, "PR is not ready for train fill; waiting for current-head review readiness"})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "awaiting-review", Target: t, Why: "PR is not ready for train fill; waiting for current-head review readiness"})
 			continue
 		}
 		if e.TrainFill.Enabled() || len(run) < e.cap() {
@@ -467,9 +485,9 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		case m.Verdict == worker.GateRunning:
 			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
-			e.audit(r, Action{"merge", m.Target, m.Detail})
+			e.audit(r, Action{Action: "merge", Target: m.Target, Detail: m.Detail})
 		case m.Verdict == "":
-			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", m.Target, strutil.FirstNonEmpty(m.Detail, "the gate did not pass")})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: m.Target, Why: strutil.FirstNonEmpty(m.Detail, "the gate did not pass")})
 		default:
 			why := m.Verdict
 			if m.Detail != "" {
@@ -484,7 +502,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			if e.Head != nil && failedHeadVerdict(m.Verdict) {
 				why += heldHeadHint
 			}
-			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", m.Target, why})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: m.Target, Why: why})
 		}
 	}
 	return nil
@@ -630,7 +648,7 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 		facts = e.Observe.ReviewFacts
 		if facts == nil {
 			if e.Review != nil {
-				r.Unknown = append(r.Unknown, Item{"architecture-review", "round", "architecture facts inspection is unavailable"})
+				r.Unknown = append(r.Unknown, Item{Kind: "architecture-review", Target: "round", Why: "architecture facts inspection is unavailable"})
 			}
 			return nil, nil
 		}
@@ -643,22 +661,22 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 	var ids []string
 	if err == nil {
 		if a.Count < 0 && e.Observe != nil {
-			r.Unknown = append(r.Unknown, Item{"architecture-review", "round", a.Unavailable})
+			r.Unknown = append(r.Unknown, Item{Kind: "architecture-review", Target: "round", Why: a.Unavailable})
 		}
 		if a = round.DecideReview(a, ready); a.Due {
-			r.propose(Action{"mint", strings.Join(a.Areas, ","), "architecture review: " + a.Trigger}, "item creation and minted IDs")
+			r.propose(Action{Action: "mint", Target: strings.Join(a.Areas, ","), Detail: "architecture review: " + a.Trigger}, "item creation and minted IDs")
 			if e.Observe != nil {
-				r.Unknown = append(r.Unknown, Item{"assign", "minted reviews", "new review IDs and priority assignments depend on successful minting"})
+				r.Unknown = append(r.Unknown, Item{Kind: "assign", Target: "minted reviews", Why: "new review IDs and priority assignments depend on successful minting"})
 			} else {
 				ids, err = e.Review.Mint(ctx, a)
 			}
 		}
 	}
 	if err != nil {
-		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", strutil.FirstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
+		r.NeedsYou = append(r.NeedsYou, Item{Kind: "architecture-review", Target: "mint", Why: strutil.FirstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
 	}
 	for _, id := range ids {
-		e.audit(r, Action{"mint", id, "architecture review"})
+		e.audit(r, Action{Action: "mint", Target: id, Detail: "architecture review"})
 	}
 	return ids, nil
 }
@@ -696,13 +714,13 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 	for _, c := range cands {
 		if !c.Ready() || slices.Contains(minted, c.ID) {
 			if e.Observe != nil && !c.Ready() {
-				r.NeedsYou = append(r.NeedsYou, Item{"candidate-hold", c.ID, "candidate is not ready: " + candidateHold(c)})
+				r.NeedsYou = append(r.NeedsYou, Item{Kind: "candidate-hold", Target: c.ID, Why: "candidate is not ready: " + candidateHold(c)})
 			}
 			continue
 		}
 		// An epic or an unplanned Major item waits for a person (#2570).
 		if c.AutoHold != "" {
-			r.NeedsYou = append(r.NeedsYou, Item{"autopilot-hold", c.ID, c.AutoHold})
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "autopilot-hold", Target: c.ID, Why: c.AutoHold})
 			continue
 		}
 		queue = append(queue, c.ID)
@@ -711,7 +729,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 		if n == 0 {
 			break
 		}
-		r.propose(Action{"assign", id, "ready candidate; active idle slot available"}, "claim, slot selection, branch creation and dispatch preflight")
+		r.propose(Action{Action: "assign", Target: id, Detail: "ready candidate; active idle slot available"}, "claim, slot selection, branch creation and dispatch preflight")
 		if e.Observe != nil {
 			n--
 			continue
@@ -719,7 +737,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 		agents, err := e.Assign(ctx, id)
 		switch {
 		case err == nil:
-			e.audit(r, Action{"assign", id, "to " + strings.Join(agents, " and ")})
+			e.audit(r, Action{Action: "assign", Target: id, Detail: "to " + strings.Join(agents, " and ")})
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.

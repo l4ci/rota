@@ -25,8 +25,8 @@ func cand(id string, ready bool) round.Candidate {
 type fake struct {
 	slots    []Slot
 	queued   []string
-	repaired []string
-	drift    []string
+	repaired []Finding
+	drift    []Finding
 	cands    []round.Candidate
 	gated    []string
 	trained  [][]string
@@ -45,7 +45,7 @@ func (f *fake) env() Env {
 		MergeApproval: gate.MergeNone,
 		Slots:         func() []Slot { return f.slots },
 		Queued:        func() []string { return f.queued },
-		Reconcile: func(context.Context) ([]string, []string, error) {
+		Reconcile: func(context.Context) ([]Finding, []Finding, error) {
 			return f.repaired, f.drift, nil
 		},
 		Base: "main",
@@ -200,7 +200,7 @@ func TestEscalatesAttentionStatesAndDriftWithoutActing(t *testing.T) {
 		slots: []Slot{
 			{Name: "ben", State: "blocked", Issue: "#1"}, {Name: "dana", State: "needs-permission"},
 			{Name: "nia", State: "limited"}, {Name: "kit", State: "dead"}},
-		drift: []string{"stalled kit"},
+		drift: []Finding{{"stalled", "kit"}},
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -308,7 +308,7 @@ func TestAssignFailureStopsTheTick(t *testing.T) {
 }
 
 func TestReconcileRepairsAreAudited(t *testing.T) {
-	f := &fake{repaired: []string{"pr-unrecorded ben"}}
+	f := &fake{repaired: []Finding{{"pr-unrecorded", "ben"}}}
 	r, _ := Run(context.Background(), f.env())
 	if len(r.Did) != 1 || f.audit[0] != "reconcile pr-unrecorded ben" {
 		t.Fatalf("%+v %v", r.Did, f.audit)
@@ -747,5 +747,47 @@ func TestTickSkipsAutopilotHolds(t *testing.T) {
 	}
 	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Kind != "autopilot-hold" || r.NeedsYou[0].Target != "#16" {
 		t.Fatalf("needs you %+v, want the held epic", r.NeedsYou)
+	}
+}
+
+func TestStoppedRoundAssignsAndMergesNothing(t *testing.T) {
+	f := &fake{
+		slots:  []Slot{{Name: "ben", State: "done", PR: "#7"}, {Name: "dana", State: "idle"}},
+		queued: []string{"#7"},
+		cands:  []round.Candidate{cand("#2", true)},
+	}
+	e := f.env()
+	e.Stopped = true
+	r, err := Run(context.Background(), e)
+	if !errors.Is(err, ErrStopped) {
+		t.Fatalf("err = %v, want ErrStopped", err)
+	}
+	if len(f.assigned) != 0 || len(f.gated)+len(f.trained) != 0 || len(r.Did) != 0 {
+		t.Fatalf("a stopped round acted: assigned=%v gated=%v trained=%v did=%v", f.assigned, f.gated, f.trained, r.Did)
+	}
+}
+
+func TestStateStoppedReachesTheEnv(t *testing.T) {
+	var e Env
+	State{Stopped: true}.Apply(&e)
+	if !e.Stopped {
+		t.Fatal("State.Apply dropped Stopped")
+	}
+}
+
+func TestDriftKindSurvivesTheSeam(t *testing.T) {
+	f := &fake{
+		repaired: []Finding{{Kind: "dead-tab", Key: "ben"}},
+		drift:    []Finding{{Kind: round.BranchNoPR, Key: "kit"}},
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Did) != 1 || r.Did[0].Drift != "dead-tab" || r.Did[0].Target != "dead-tab ben" {
+		t.Fatalf("did %+v", r.Did)
+	}
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Drift != round.BranchNoPR || r.NeedsYou[0].Target != round.BranchNoPR+" kit" {
+		t.Fatalf("needsYou %+v", r.NeedsYou)
 	}
 }

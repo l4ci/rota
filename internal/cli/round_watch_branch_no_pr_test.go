@@ -31,12 +31,12 @@ func TestWatchBranchNoPRReportsStateChanges(t *testing.T) {
 			Slots: func() []roundtick.Slot {
 				return []roundtick.Slot{{Name: "kit", State: step.state, Issue: "2179"}}
 			},
-			Reconcile: func(context.Context) ([]string, []string, error) {
+			Reconcile: func(context.Context) ([]roundtick.Finding, []roundtick.Finding, error) {
 				if step.state == "busy" {
 					return nil, nil, nil
 				}
 				// Keep another drift kind present to guard the ticket's scope.
-				return nil, []string{round.BranchNoPR + " kit", round.LabelMissing + " kit"}, nil
+				return nil, []roundtick.Finding{{Kind: round.BranchNoPR, Key: "kit"}, {Kind: round.LabelMissing, Key: "kit"}}, nil
 			},
 		}
 		roundtick.LoadState(cd, 40).Apply(&e)

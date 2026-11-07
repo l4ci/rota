@@ -32,7 +32,7 @@ func TestTickFirstFailedHeadReportExplainsRetry(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := v + "; held at PR head; push a new head to retry"
-				if len(first.New) != 1 || first.New[0] != (Item{"gate-failed", "ben", want}) {
+				if len(first.New) != 1 || first.New[0] != (Item{Kind: "gate-failed", Target: "ben", Why: want}) {
 					t.Fatalf("first report lacks held-head next step: %+v", first.New)
 				}
 				cd := t.TempDir()

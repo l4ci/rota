@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
@@ -18,7 +16,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -30,6 +27,12 @@ import (
 // errAutopilotStopped says the autopilot has no round to work for: the lease is
 // gone (wind-down released it, or another orchestrator took it).
 var errAutopilotStopped = errors.New("this process holds no round lease: the autopilot stops")
+
+// isAutopilotStopped is true when the tick found no round to work for: the lease
+// is gone, or the round is stopped for wind-down.
+func isAutopilotStopped(err error) bool {
+	return errors.Is(err, errAutopilotStopped) || errors.Is(err, roundtick.ErrStopped)
+}
 
 func roundTick(fs *flag.FlagSet) RunFunc {
 	observe := fs.Bool("observe", false, "report proposed autopilot actions without executing them")
@@ -52,7 +55,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		}
 		r, err := runAutopilotTick(c, root, set, *base, *pid, *observe)
 		switch {
-		case errors.Is(err, errAutopilotStopped):
+		case isAutopilotStopped(err):
 			d := jsonx.NewObject()
 			d.Set("stopped", true)
 			d.Set("changed", false)
@@ -119,9 +122,6 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	}
 	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state}
 	e := roundtick.NewEnv(w, roundtick.Config{Observe: observe, Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
-	if state.Stopped {
-		return roundtick.Result{}, errAutopilotStopped
-	}
 	state.Apply(&e)
 	r, err := roundtick.Run(ctx, e)
 	if err != nil {
@@ -148,22 +148,7 @@ func reviewReadinessMode(c *Ctx, root, slot, base string, observe bool) (string,
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, ItemBody: lazyItemBody(c, root)})
-	if err != nil {
-		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error()), false
-	}
-	switch r.Verdict {
-	case worker.GateStale, worker.GatePRMismatch, worker.GateAlreadyMerged, worker.GateMergedRemotely:
-		// These describe the branch or PR, not missing review verdicts. The
-		// real gate sends stale work back or handles the PR's current state.
-		return "", true
-	}
-	if r.Verdict == worker.GateReviewMissing {
-		return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot)), false
-	}
-	if r.Verdict != worker.GateFresh {
-		return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict), false
-	}
-	return "", false
+	return roundtick.ReviewReadinessOf(r, err, slot)
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
@@ -291,11 +276,7 @@ func reviewStepMode(c *Ctx, root string, set roundcfg.Settings, slot string, obs
 	}
 	src.Relay = func(ctx context.Context) (roundtick.RelayResult, error) {
 		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
-		out := roundtick.RelayResult{Nothing: res.Nothing, Items: res.Items, Bounces: res.Bounces}
-		if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == blockedby.MaxBounces {
-			out.AtCap = true
-		}
-		return out, err
+		return roundtick.RelayResultOf(res.Nothing, res.Items, res.Bounces, err), err
 	}
 	return roundtick.ReviewStep(ctx, src)
 }

@@ -21,18 +21,18 @@ func (w *tickWorld) InspectReconcile(ctx context.Context) (roundtick.Inspection,
 	out, err := w.renv.InspectReconcile(ctx, w.root)
 	var inspection roundtick.Inspection
 	for _, f := range out.Proposed {
-		inspection.Proposed = append(inspection.Proposed, f.Kind+" "+f.Key())
+		inspection.Proposed = append(inspection.Proposed, roundtick.FindingOf(f))
 	}
 	// InspectReconcile retains all drift, including repairable findings. A
 	// proposed repair belongs in proposals rather than also an unrepairable hold.
 	proposed := map[string]bool{}
 	for _, f := range inspection.Proposed {
-		proposed[f] = true
+		proposed[f.String()] = true
 	}
 	for _, f := range out.Drift {
-		line := f.Kind + " " + f.Key()
-		if !proposed[line] {
-			inspection.Drift = append(inspection.Drift, line)
+		finding := roundtick.FindingOf(f)
+		if !proposed[finding.String()] {
+			inspection.Drift = append(inspection.Drift, finding)
 		}
 	}
 	if out.Report != nil {
