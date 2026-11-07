@@ -36,9 +36,9 @@ type Started struct {
 	Slots      []*jsonx.Object
 	Slate      []string
 	Host       host.Kind // the round's host: herdr, tmux or solo
-	Lease      Lease
-	LeaseState LeaseState
-	Reclaimed  Lease // the stale lease replaced, zero when none
+	Lease      roundlease.Lease
+	LeaseState roundlease.State
+	Reclaimed  roundlease.Lease // the stale lease replaced, zero when none
 	Outcome    roundlease.Outcome
 	Changed    bool
 	Warnings   []string

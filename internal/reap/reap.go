@@ -88,8 +88,8 @@ type HostOps interface {
 // LeaseOps is the round lease as internal/round exposes it: round.Env
 // satisfies it. A nil LeaseOps finds no lease.
 type LeaseOps interface {
-	ReadLease(ctx context.Context, root string) (round.Lease, round.LeaseState, error)
-	ClearStaleLease(ctx context.Context, root string) (round.Lease, bool, error)
+	ReadLease(ctx context.Context, root string) (roundlease.Lease, roundlease.State, error)
+	ClearStaleLease(ctx context.Context, root string) (roundlease.Lease, bool, error)
 }
 
 // Input is everything Find and Apply need from the outside.

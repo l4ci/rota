@@ -1,7 +1,6 @@
 package hook
 
 import (
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -17,8 +16,8 @@ type Who struct {
 // nearest non-shell ancestor (or holderPID when non-zero) must be the live
 // lease's holder, matched the way `rota round start` recorded it. A read error
 // is "not the orchestrator".
-func Identify(p round.LeaseProbe, commonDir string) Who {
-	l, st, held, err := round.HoldsLease(p, commonDir)
+func Identify(env roundlease.Env, holderPID int, getenv func(string) string, commonDir string) Who {
+	l, st, held, err := env.Holds(commonDir, holderPID, getenv)
 	w := Who{Lease: l, State: st}
 	if err != nil {
 		return w
