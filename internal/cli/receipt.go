@@ -87,6 +87,8 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 					switch {
 					case errors.As(runErr, &se):
 						e.FailedStage, e.Residual = se.Stage, se.Residual
+					case ae.Exit == ExitFailed && verdictOf(res.Data) == worker.GateCancelled:
+						e.Status = receipt.Cancelled // settled once; resuming a cancelled train is out of scope
 					case ae.Exit == ExitFailed && hasVerdict(res.Data):
 						e.Status = receipt.Done // a verdict is the run's answer, not an interrupted run
 					}
@@ -131,21 +133,24 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 }
 
 // hasVerdict reports whether a result carries a gate or train verdict.
-func hasVerdict(data any) bool {
+func hasVerdict(data any) bool { return verdictOf(data) != "" }
+
+// verdictOf is the gate or train verdict a result carries, "" when none.
+func verdictOf(data any) string {
 	o, ok := data.(*jsonx.Object)
 	if !ok {
-		return false
+		return ""
 	}
 	v, _ := o.Get("verdict")
 	s, _ := v.(string)
-	return s != ""
+	return s
 }
 
 // retryHint tells the caller what stopped and how to retry; an exit-5 failure
 // carries no data envelope, so the hint is where the stage and residue show.
 // A settled verdict is not retried by id, so it names what reruns it instead.
 func retryHint(id string, e receipt.Entry) string {
-	if e.Status == receipt.Done { // a settled verdict: the same id replays it
+	if e.Status == receipt.Done || e.Status == receipt.Cancelled { // a settled verdict: the same id replays it
 		return "request " + id + " replays this verdict; rerun with a fresh call without --request-id (after a push if the head should change)"
 	}
 	h := "retry with --request-id " + id

@@ -48,6 +48,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateMergedRemotely:     {Hold: true},
 	GateMergeFailed:        {Hold: true},
 	GateCheckBroke:         {Hold: true},
+	GateCancelled:          {}, // stopped on request: no finding, nobody waits on it
 	GateCINotRun:           {Hold: true},
 	GateVerifyTimeout:      {Hold: true},
 	GateCIConfigChanged:    {Hold: true},
