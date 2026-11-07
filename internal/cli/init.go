@@ -148,13 +148,18 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		var es []agents.Entry
 		var err error
 		// Saved team prompts activate only on an explicit agents write. An init
-		// rerun must neither activate a pending save nor erase active output.
+		// rerun must neither activate a pending save nor erase active output, but
+		// it creates files that are missing (a fresh clone has no gitignored
+		// .codex files) from the saved prompts.
 		if _, statErr := os.Lstat(rotatree.Prompts(dir)); errors.Is(statErr, os.ErrNotExist) {
 			es, err = agents.Write(dir, c.deps().Config(dir))
 		} else if statErr != nil {
 			err = statErr
 		} else {
-			warnings = append(warnings, "saved prompt history: agent files kept; run rota agents write to activate")
+			es, err = agents.WriteMissingWithPrompts(dir, c.deps().Config(dir))
+			if err == nil {
+				warnings = append(warnings, "saved prompt history: existing agent files kept; run rota agents write to activate")
+			}
 		}
 		if err != nil {
 			warnings = append(warnings, "agent files not written: "+err.Error())

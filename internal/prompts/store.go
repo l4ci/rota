@@ -21,6 +21,7 @@ import (
 var (
 	ErrInvalid  = errors.New("invalid prompt")
 	ErrCorrupt  = errors.New("damaged prompt store")
+	ErrNewer    = errors.New("prompt store written by a newer rota")
 	ErrConflict = errors.New("prompt revision conflict")
 	ErrUnknown  = errors.New("unknown prompt section")
 	ErrRemoved  = errors.New("prompt section removed")
@@ -49,6 +50,9 @@ type View struct {
 	History        []Revision `json:"history"`
 }
 
+// document is schema version 1. The reader rejects unknown fields, so every
+// additive change must bump Version; an older binary then reports ErrNewer
+// instead of misreading the tracked file as damaged.
 type document struct {
 	Version  int                   `json:"version"`
 	Sections map[string][]Revision `json:"sections"`
@@ -126,6 +130,14 @@ func (s Store) read() (document, error) {
 	}
 	if !utf8.Valid(b) {
 		return d, fmt.Errorf("%w: prompts.json is not valid UTF-8", ErrCorrupt)
+	}
+	// Version first: a newer rota's file is not damage, and its extra fields
+	// must not be judged by this binary's strict v1 schema.
+	var probe struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(b, &probe); err == nil && probe.Version > 1 {
+		return d, fmt.Errorf("%w: prompts.json is version %d, this rota reads version 1", ErrNewer, probe.Version)
 	}
 	d = document{}
 	dec := json.NewDecoder(bytes.NewReader(b))

@@ -116,7 +116,7 @@ func TestExpandedBaselineTracksContractChanges(t *testing.T) {
 }
 
 func TestMalformedStoreNeverOverwritten(t *testing.T) {
-	for _, raw := range []string{`{}`, `{"version":1}`, `{"version":2,"sections":{}}`, `{"version":1,"sections":{"report":[]}}`, `{"version":1,"sections":{}} trailing`, `{"version":1,"sections":{},"unknown":true}`, `{"version":1,"sections":{"report":[{"revision":1,"baseline":"old","baselineDigest":"wrong","override":null}]}}`} {
+	for _, raw := range []string{`{}`, `{"version":1}`, `{"version":1,"sections":{"report":[]}}`, `{"version":1,"sections":{}} trailing`, `{"version":1,"sections":{},"unknown":true}`, `{"version":1,"sections":{"report":[{"revision":1,"baseline":"old","baselineDigest":"wrong","override":null}]}}`} {
 		t.Run(raw, func(t *testing.T) {
 			root := t.TempDir()
 			path := filepath.Join(root, ".rota", "prompts.json")
@@ -245,5 +245,30 @@ func TestAdoptedSectionFollowsLaterUpstreamChange(t *testing.T) {
 	}
 	if got.Status != "unchanged" || got.Effective != "Two S C" {
 		t.Fatalf("adopted after upstream change: status %q effective %q, want unchanged / Two S C", got.Status, got.Effective)
+	}
+}
+
+func TestNewerStoreIsNotDamage(t *testing.T) {
+	for _, raw := range []string{`{"version":2,"sections":{}}`, `{"version":3,"sections":{},"extra":true}`} {
+		root := t.TempDir()
+		path := filepath.Join(root, ".rota", "prompts.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		s := Open(root, Catalog())
+		for name, err := range map[string]error{
+			"list": func() error { _, e := s.List(); return e }(),
+			"save": func() error { _, e := s.Save("agents.explorer.report", "{{status}} {{closing}}", 0); return e }(),
+		} {
+			if !errors.Is(err, ErrNewer) || errors.Is(err, ErrCorrupt) {
+				t.Fatalf("%s %s: %v, want ErrNewer and not ErrCorrupt", raw, name, err)
+			}
+		}
+		if after, _ := os.ReadFile(path); string(after) != raw {
+			t.Fatal("newer store overwritten")
+		}
 	}
 }

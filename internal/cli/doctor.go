@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/prompts"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -143,6 +144,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		keep = agents.Untracked
 	}
 	in.AgentProblems = agents.ProblemsOnly(root, cfg, keep)
+	if len(in.AgentProblems) > 0 {
+		_, storeErr := prompts.Open(root, prompts.Catalog()).List()
+		in.AgentStoreFault = storeErr != nil
+	}
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		text := string(raw)
 		in.Gitignore = &text

@@ -244,3 +244,78 @@ func TestPromptsErrorStripsTerminalEscapes(t *testing.T) {
 		t.Fatalf("exit %d, want 1 with no control characters: %q", code, stderr)
 	}
 }
+
+func saveTeamPrompt(t *testing.T, dir, section string) {
+	t.Helper()
+	draft := filepath.Join(t.TempDir(), "draft.md")
+	if err := os.WriteFile(draft, []byte("Team report. {{status}} {{closing}}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	promptCommand(t, dir, "prompts", "save", section, "--expect", "0", "--body-file", draft)
+}
+
+// A saved override is drift for agents write --check and doctor until agents
+// write activates it; a damaged or newer store fails both with a repair hint.
+func TestAgentsCheckAndDoctorSeeSavedPrompts(t *testing.T) {
+	d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	dir := agentsProject(t, `{}`)
+	promptCommand(t, dir, "agents", "write")
+	if code, out, e := rotaIn(t, dir, "agents", "write", "--check"); code != 0 {
+		t.Fatalf("clean check: %d %s %s", code, out, e)
+	}
+	saveTeamPrompt(t, dir, "agents.explorer.report")
+	if code, _, _ := rotaIn(t, dir, "agents", "write", "--check"); code != 1 {
+		t.Fatalf("check after save: %d, want 1", code)
+	}
+	_, out, _ := rotaInWith(t, d, dir, "doctor", "--json")
+	if _, c := doctorData(t, out); c["agents"] == nil || !strings.Contains(c["agents"]["hint"].(string), "rota agents write") {
+		t.Fatalf("doctor misses drift: %v", c["agents"])
+	}
+	promptCommand(t, dir, "agents", "write")
+	if code, _, _ := rotaIn(t, dir, "agents", "write", "--check"); code != 0 {
+		t.Fatalf("check after write: %d", code)
+	}
+	for _, raw := range []string{`{"version":1,"oops`, `{"version":2,"sections":{}}`} {
+		os.WriteFile(filepath.Join(dir, ".rota/prompts.json"), []byte(raw), 0o644)
+		if code, _, _ := rotaIn(t, dir, "agents", "write", "--check"); code != 1 {
+			t.Fatalf("%s: check exit %d, want 1", raw, code)
+		}
+		if code, _, _ := rotaIn(t, dir, "agents", "write"); code != 1 {
+			t.Fatalf("%s: write exit %d, want 1", raw, code)
+		}
+		_, out, _ := rotaInWith(t, d, dir, "doctor", "--json")
+		_, c := doctorData(t, out)
+		hint, _ := c["agents"]["hint"].(string)
+		if c["agents"] == nil || !strings.Contains(hint, "prompts.json") || strings.Contains(hint, "run: rota agents write") {
+			t.Fatalf("%s: doctor hint %q", raw, hint)
+		}
+	}
+}
+
+// A fresh clone has the tracked prompts.json but not the gitignored agent
+// files: init creates the missing files from the saved prompts and leaves
+// existing ones (a pending save) alone.
+func TestInitWritesMissingAgentFilesFromSavedPrompts(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, _, e := rotaIn(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	saveTeamPrompt(t, dir, "agents.explorer.report")
+	saveTeamPrompt(t, dir, "agents.implementer.report")
+	claude := filepath.Join(dir, ".claude/agents/rota-explorer.md")
+	before, _ := os.ReadFile(claude)
+	codex := filepath.Join(dir, ".claude/agents/rota-implementer.md")
+	if err := os.Remove(codex); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, e := rotaIn(t, dir, "init"); code != 0 {
+		t.Fatalf("re-init: %d %s", code, e)
+	}
+	got, err := os.ReadFile(codex)
+	if err != nil || !strings.Contains(string(got), "Team report") {
+		t.Fatalf("missing file not recreated from saved prompts: %v %s", err, got)
+	}
+	if after, _ := os.ReadFile(claude); string(after) != string(before) {
+		t.Fatal("init activated a pending save in an existing file")
+	}
+}
