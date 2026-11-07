@@ -16,6 +16,7 @@ import (
 type Outcome struct {
 	Report   *Report
 	Drift    []Finding
+	Proposed []Finding // eligible repairs; execution may still fail its live checks
 	Repaired []Finding
 }
 
@@ -32,6 +33,23 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 // worker's act; resetting a slot and removing a label are the orchestrator's).
 // A repair that fails becomes a warning and leaves its finding in Drift.
 func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, error) {
+	return e.reconcile(ctx, root, apply, apply)
+}
+
+// InspectReconcile discovers the repairs an applying pass would attempt, but
+// leaves every finding in Drift and never calls a repair adapter.
+func (e Env) InspectReconcile(ctx context.Context, root string) (Outcome, error) {
+	return e.ReadOnly().reconcile(ctx, root, false, true)
+}
+
+// ReadOnly returns e with its shared probes in observation mode: git status
+// takes no optional locks and remote activity that needs a fetch is unknown.
+func (e Env) ReadOnly() Env {
+	e.inspectReads = true
+	return e
+}
+
+func (e Env) reconcile(ctx context.Context, root string, apply, propose bool) (Outcome, error) {
 	rep, err := e.Status(ctx, root)
 	if err != nil {
 		return Outcome{}, err
@@ -50,7 +68,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
-		if !apply || f.Repair == "" {
+		if !propose || f.Repair == "" {
 			out.Drift = append(out.Drift, f)
 			continue
 		}
@@ -58,6 +76,11 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 			// A finding computed without its source is a guess, and repairing
 			// on a guess releases or parks a slot that may be fine (#579).
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s skipped: %s was unreadable this run", f.Kind, strutil.FirstNonEmpty(f.Slot, f.branch), src))
+			out.Drift = append(out.Drift, f)
+			continue
+		}
+		out.Proposed = append(out.Proposed, f)
+		if !apply {
 			out.Drift = append(out.Drift, f)
 			continue
 		}
