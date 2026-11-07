@@ -46,7 +46,7 @@ func unavailable(format string, a ...any) error {
 // added and untracked (a new directory by its own name), a rename by its new
 // name.
 func (e Env) dirtyPaths(ctx context.Context, wt string) ([]string, error) {
-	res, err := e.Git(ctx, wt, "status", "--porcelain", "-z")
+	res, err := e.Git(ctx, wt, e.statusArgs("--porcelain", "-z")...)
 	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil || code != 0 {
 		return nil, unavailable("git status failed in %s: %s", wt, strings.TrimSpace(errOut))
@@ -220,4 +220,14 @@ func (e Env) Stalled(ctx context.Context, in StallInput, now time.Time) Stall {
 	st.Idle = now.Sub(last)
 	st.Stalled = st.Idle >= time.Duration(in.Minutes)*time.Minute
 	return st
+}
+
+// statusArgs is `git status <flags>`, read-only under ReadOnly: git status may
+// otherwise refresh the index, an optional write in a live worker worktree.
+func (e Env) statusArgs(flags ...string) []string {
+	args := append([]string{"status"}, flags...)
+	if e.inspectReads {
+		args = append([]string{"--no-optional-locks"}, args...)
+	}
+	return args
 }

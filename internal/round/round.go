@@ -92,7 +92,10 @@ type Forge interface {
 // Env is what a round touches outside its own memory. A nil Snapshot or Forge
 // means that source is unavailable; tests fill every field with fakes.
 type Env struct {
-	Git git.Runner
+	// inspectReads keeps observation's shared status probes read-only. Remote
+	// activity requiring a fetch is reported as unknown instead.
+	inspectReads bool
+	Git          git.Runner
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)

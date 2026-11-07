@@ -114,6 +114,16 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 // nothing: the counter, the pending items, the idle slots, and whether any
 // candidate is ready. DecideReview turns them into Due.
 func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (a Architecture, ready bool, err error) {
+	return e.architectureFacts(ctx, root, be, set, cands, true)
+}
+
+// InspectArchitectureFacts reads the same review inputs without seeding the
+// review timestamp or updating the closed-item cache in the registry.
+func (e Env) InspectArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (Architecture, bool, error) {
+	return e.architectureFacts(ctx, root, be, set, cands, false)
+}
+
+func (e Env) architectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate, persist bool) (a Architecture, ready bool, err error) {
 	a = Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root), IdleMinItems: set.ArchitectureIdleMinItems}
 	if a.Every == 0 {
 		return a, false, nil
@@ -133,7 +143,7 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	a.Idle = CountIdle(reg, active)
 	a.Areas = reviewAreas(root, set)
 
-	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
+	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since, persist)
 	if at, err := stamp.Parse(a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
 		a.Cooling = e.now().Sub(at) < time.Duration(set.ArchitectureIdleMinHours)*time.Hour
 	}
@@ -199,7 +209,7 @@ func DecideReview(a Architecture, ready bool) Architecture {
 // a long closed history does not trigger a review at once. The forge listing
 // is cached in the registry for closedCacheTTL: status, candidates and start
 // would otherwise each fetch every closed issue.
-func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string) (int, string) {
+func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string, persist bool) (int, string) {
 	if rc, ok := backlog.RefactorOf(be); ok {
 		feats, bugs, err := rc.RefactorAge()
 		if err != nil {
@@ -212,8 +222,10 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	if *since == "" {
 		at := stamp.Format(e.now())
-		if err := worker.Update(root, func(d *worker.Doc) { SeedReview(d, at) }); err != nil {
-			return -1, err.Error()
+		if persist {
+			if err := worker.Update(root, func(d *worker.Doc) { SeedReview(d, at) }); err != nil {
+				return -1, err.Error()
+			}
 		}
 		*since = at
 		return 0, ""
@@ -241,7 +253,9 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	checked := stamp.Format(e.now())
 	// A failed cache write only costs the next call a refetch.
-	_ = worker.Update(root, func(d *worker.Doc) { CacheClosedCount(d, checked, *since, n) })
+	if persist {
+		_ = worker.Update(root, func(d *worker.Doc) { CacheClosedCount(d, checked, *since, n) })
+	}
 	return n, ""
 }
 

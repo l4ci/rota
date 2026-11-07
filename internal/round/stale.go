@@ -183,6 +183,9 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 		if branchKey, ok := worker.BranchIssue(branch); (!ok || branchKey != key) && !slices.Contains(prBranches, branch) {
 			continue
 		}
+		if e.inspectReads {
+			return time.Time{}, fmt.Errorf("remote stale-claim age unavailable during observation: dating %s requires fetching its commit", branch)
+		}
 		res, err = run(ctx, root, "fetch", "--no-tags", remote, fields[1])
 		if err != nil {
 			return time.Time{}, err
