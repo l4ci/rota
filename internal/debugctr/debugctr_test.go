@@ -159,19 +159,11 @@ func TestInitConcurrent(t *testing.T) {
 }
 
 // TestTimestampsComeFromTheInjectedClock fixes the clock and asserts the
-// stamped bytes, with and without microseconds.
+// stamped bytes; the microsecond rule is tested in stamp.
 func TestTimestampsComeFromTheInjectedClock(t *testing.T) {
 	c, err := Open(repo(t), nil)
 	if err != nil {
 		t.Fatal(err)
-	}
-	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 0, time.UTC) }
-	if got := c.nowISO(); got != "2031-07-09T23:59:01+00:00" {
-		t.Errorf("whole second: %q", got)
-	}
-	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 5000, time.UTC) }
-	if got := c.nowISO(); got != "2031-07-09T23:59:01.000005+00:00" {
-		t.Errorf("microseconds: %q", got)
 	}
 	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 0, time.UTC) }
 	if _, err := c.Init("B07"); err != nil {
