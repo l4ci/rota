@@ -377,6 +377,18 @@ func TestRestore(t *testing.T) {
 	}
 }
 
+// A tracker-backed refusal names the tracker, never BACKLOG.md.
+func TestRestoreTrackerNoopNamesTracker(t *testing.T) {
+	var warn strings.Builder
+	r := &fakeReopener{name: "issues", changed: false}
+	if err := Restore(r, t.TempDir(), []string{"42"}, &warn); err != nil {
+		t.Fatal(err)
+	}
+	if want := "noop: [42] already open on the tracker\n"; warn.String() != want {
+		t.Errorf("warn %q", warn.String())
+	}
+}
+
 func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
 	g := mergeGit()
 	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true, "merge --abort": true}
