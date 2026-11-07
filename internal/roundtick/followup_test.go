@@ -241,3 +241,31 @@ func TestFollowUpSupportStartsNothing(t *testing.T) {
 		t.Fatalf("started %v on a support machine", x.started)
 	}
 }
+
+// #2579: observation proposes the follow-up start without calling Start, and
+// backlog does not propose the slot it would take.
+func TestFollowUpObserveProposesOnly(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "working", Issue: "#3"}},
+		cands: []round.Candidate{cand("#5", true)},
+	}
+	x := &fu{list: []FollowUp{{Issue: "#7", PR: "#70", Who: "alice"}}}
+	e := f.env()
+	e.Active = func() []string { return []string{"ben", "dana"} }
+	e.Observe = &ObservationSources{}
+	x.wire(f, &e)
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.started) != 0 || len(f.assigned) != 0 {
+		t.Fatalf("observation started %v assigned %v", x.started, f.assigned)
+	}
+	var got []string
+	for _, p := range r.Proposed {
+		got = append(got, p.Action.Action+" "+p.Target)
+	}
+	if strings.Join(got, ",") != "followup #7" {
+		t.Fatalf("proposed %v, want only the follow-up on the one idle slot", got)
+	}
+}

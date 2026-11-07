@@ -196,6 +196,11 @@ type GateOpts struct {
 	// before it gates, since the gate's freshness check runs first and reads a
 	// done awaiting review as stale.
 	ReviewsOnly bool
+	// Observe is ReviewsOnly with no writes at all, for a read-only autopilot
+	// preview: it judges the remote refs as last fetched instead of fetching,
+	// and reads local verdicts only, without recovering PR verdict reports
+	// into the store. Execution's own ReviewsOnly run does both.
+	Observe bool
 	// Approval is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. Its thread comes from the
 	// resolved target. A refusal or an error stops the gate with verdict
@@ -416,6 +421,9 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	e = e.WithDefaults()
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
+	}
+	if o.Observe {
+		o.ReviewsOnly = true
 	}
 	if o.ReviewsOnly {
 		o.CheckOnly, o.CheckReviews = true, true
@@ -978,8 +986,10 @@ func (runner gate) stepRefs(result GateResult, branch string, remote bool) (gate
 		}
 		return finish(false, nil)
 	}
-	if _, code := g.git(root, "fetch", g.rem(), "-q"); code != 0 {
-		return finish(g.broke("git fetch " + g.rem() + " failed"))
+	if !o.Observe {
+		if _, code := g.git(root, "fetch", g.rem(), "-q"); code != 0 {
+			return finish(g.broke("git fetch " + g.rem() + " failed"))
+		}
 	}
 	g.headRef, g.baseRef = g.rem()+"/"+g.branch, g.rem()+"/"+o.Base
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.headRef+"^{commit}"); code != 0 {

@@ -42,20 +42,21 @@ type FollowUpSources struct {
 // idle active slot, else the first free reserve slot. One that cannot start
 // stays pending (nothing it consumed moved) and is reported as a followup item
 // naming what it lacks. A support machine starts none: the queued PRs are main's.
-func (e Env) followUps(ctx context.Context, r *Result) (int, error) {
+// Under observation each start is a proposal and Start is never called. taken
+// names the slots the follow-ups took (or would take), which assign skips.
+func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []string, err error) {
 	src := e.FollowUp
 	if src.List == nil || src.Start == nil || e.Role == roundcfg.RoleSupport {
-		return 0, nil
+		return 0, nil, nil
 	}
 	list, err := src.List(ctx)
 	if err != nil {
 		r.NeedsYou = append(r.NeedsYou, Item{"followup", "poll", "the follow-up poll failed: " + strutil.FirstLine(err.Error())})
-		return 0, nil
+		return 0, nil, nil
 	}
 	pending := func(f FollowUp, why string) {
 		r.NeedsYou = append(r.NeedsYou, Item{"followup", f.Issue, fmt.Sprintf("%s on %s waits: %s", strutil.FirstNonEmpty(f.Who, "review input"), f.PR, why)})
 	}
-	started := 0
 	for _, f := range list {
 		switch {
 		case !src.Auto:
@@ -68,22 +69,30 @@ func (e Env) followUps(ctx context.Context, r *Result) (int, error) {
 			pending(f, fmt.Sprintf("this tick already started %d (round.autopilotCap)", started))
 			continue
 		}
-		slot, reserve, why := e.followUpSlot()
+		slot, reserve, why := e.followUpSlot(taken)
 		if slot == "" {
 			pending(f, why)
+			continue
+		}
+		detail := "to " + slot
+		if reserve {
+			detail += " (reserve)"
+		}
+		detail += ", asked by " + strutil.FirstNonEmpty(f.Who, "a person") + " on " + f.PR
+		r.propose(Action{"followup", f.Issue, detail}, "bounce cap, claim, overlap, account preflight and dispatch")
+		if e.Observe != nil {
+			started++
+			taken = append(taken, slot)
 			continue
 		}
 		err := src.Start(ctx, f, slot, reserve)
 		switch {
 		case err == nil:
-			detail := "to " + slot
-			if reserve {
-				detail += " (reserve)"
-			}
-			e.audit(r, Action{"followup", f.Issue, detail + ", asked by " + strutil.FirstNonEmpty(f.Who, "a person") + " on " + f.PR})
+			e.audit(r, Action{"followup", f.Issue, detail})
 			started++
+			taken = append(taken, slot)
 		case !isRefusal(err) && errors.As(err, new(*round.BlockedError)):
-			return started, fmt.Errorf("follow-up %s: %w", f.Issue, err) // no round to work for
+			return started, taken, fmt.Errorf("follow-up %s: %w", f.Issue, err) // no round to work for
 		default:
 			// Any other failure leaves the follow-up pending: nothing it consumed
 			// moved, and the next tick tries again.
@@ -92,24 +101,24 @@ func (e Env) followUps(ctx context.Context, r *Result) (int, error) {
 			var blk *round.BlockedError
 			if errors.As(err, &blk) && blk.By == worker.GateRunning {
 				r.Deferred = "gate running, deferred: " + blk.Msg
-				return started, nil
+				return started, taken, nil
 			}
 		}
 	}
-	return started, nil
+	return started, taken, nil
 }
 
 // followUpSlot picks a follow-up's receiver: the first idle active slot, else
 // the first reserve slot that is idle or done with its PR (the transfer queues
 // that PR). why names the limiting resource when there is none.
-func (e Env) followUpSlot() (slot string, reserve bool, why string) {
+func (e Env) followUpSlot(taken []string) (slot string, reserve bool, why string) {
 	slots := e.Slots()
 	var active []string
 	if e.Active != nil {
 		active = e.Active()
 	}
 	for _, s := range slots {
-		if (active == nil || slices.Contains(active, s.Name)) && (worker.IsIdle(s.State) || s.State == "") && s.Issue == "" {
+		if !slices.Contains(taken, s.Name) && (active == nil || slices.Contains(active, s.Name)) && (worker.IsIdle(s.State) || s.State == "") && s.Issue == "" {
 			return s.Name, false, ""
 		}
 	}
@@ -127,6 +136,10 @@ func (e Env) followUpSlot() (slot string, reserve bool, why string) {
 	var busy []string
 	for _, name := range names {
 		i := slices.IndexFunc(slots, func(s Slot) bool { return s.Name == name })
+		if slices.Contains(taken, name) {
+			busy = append(busy, name+" taken this tick")
+			continue
+		}
 		if i < 0 {
 			busy = append(busy, name+" not provisioned (run `rota round start`)")
 			continue
