@@ -299,7 +299,7 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 		comments []tracker.Comment
 		have     bool
 	)
-	if hist, ok := be.(backlog.ClaimHistorian); ok {
+	if hist, ok := backlog.Optional[backlog.ClaimHistorian](be, func(c backlog.Capabilities) bool { return c.ClaimHistory }); ok {
 		comments, have, err = hist.ClaimComments(key)
 	}
 	if !have {

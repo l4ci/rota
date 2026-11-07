@@ -87,6 +87,52 @@ type Capabilities struct {
 	// False: the backend does not implement ItemTracker, so a caller that
 	// wants a status or a note checks this or asserts ItemTracker.
 	ItemStatus bool
+	// The flags below each promise one optional interface: a backend sets the
+	// flag exactly when it implements the interface (TestCapabilitiesMatchInterfaces).
+	// SharedClaims: SharedClaimer, an item can hold several claims.
+	SharedClaims bool
+	// ClaimHistory: ClaimHistorian, raw claim comments can be read back.
+	ClaimHistory bool
+	// ClaimLabels: ClaimLabelSyncer, claim-derived labels can be repaired.
+	ClaimLabels bool
+	// BodyEdit: BodyEditor, the issue body can be rewritten.
+	BodyEdit bool
+	// SectionEdit: SectionEditor, one body section can be replaced.
+	SectionEdit bool
+	// HarnessField: HarnessSetter, the harness lives in a bullet field.
+	HarnessField bool
+}
+
+// capabilitiesFor is the one place the capability literals are spelled: the
+// file backend, the single-repo issues backend and the umbrella.
+func capabilitiesFor(k backendKind) Capabilities {
+	if k == kindFile {
+		return Capabilities{HarnessField: true}
+	}
+	return Capabilities{
+		IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true,
+		SharedClaims: true, ClaimHistory: true, ClaimLabels: true, BodyEdit: true, SectionEdit: true,
+		Umbrella: k == kindUmbrella,
+	}
+}
+
+type backendKind int
+
+const (
+	kindFile backendKind = iota
+	kindIssues
+	kindUmbrella
+)
+
+// Optional resolves an optional interface of be, gated on its declared
+// capability: callers never assert the interface themselves.
+func Optional[T any](be Backend, has func(Capabilities) bool) (T, bool) {
+	var zero T
+	if be == nil || !has(be.Capabilities()) {
+		return zero, false
+	}
+	v, ok := be.(T)
+	return v, ok
 }
 
 // CapabilitiesFor is what Open's backend will report, from the loaded config
@@ -104,9 +150,9 @@ func CapabilitiesFor(cfg any) (Capabilities, error) {
 // resolved issues.source string; "" is the file source.
 func CapabilitiesForSource(source string) Capabilities {
 	if source == config.SourceFile || source == "" {
-		return (&File{}).Capabilities()
+		return capabilitiesFor(kindFile)
 	}
-	return (&Issues{}).Capabilities()
+	return capabilitiesFor(kindIssues)
 }
 
 // WorkflowOf is the backend's claim and state verbs. Both backends have them;
