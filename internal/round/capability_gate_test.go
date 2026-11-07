@@ -1,7 +1,6 @@
 package round
 
 import (
-	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -79,7 +78,7 @@ type historyBoard struct {
 	comments []tracker.Comment
 }
 
-func (b *historyBoard) ClaimComments(_ context.Context, _ tracker.IssueKey) ([]tracker.Comment, bool, error) {
+func (b *historyBoard) ClaimComments(_ tracker.IssueKey) ([]tracker.Comment, bool, error) {
 	return b.comments, true, nil
 }
 

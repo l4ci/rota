@@ -1,7 +1,6 @@
 package backlog
 
 import (
-	"context"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
@@ -52,17 +51,18 @@ type SharedClaimer interface {
 
 // ClaimHistorian reads the raw tracker comments that carry claim markers, for
 // a caller that audits who held an item. ok is false when the backend has no
-// tracker to read; only the single-repo issues backend implements it.
+// tracker to read. The issues and umbrella backends implement it; the
+// context is the backend's own, as in every sibling method.
 type ClaimHistorian interface {
-	ClaimComments(ctx context.Context, key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error)
+	ClaimComments(key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error)
 }
 
 // ClaimComments lists the issue's tracker comments.
-func (b *Issues) ClaimComments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, bool, error) {
+func (b *Issues) ClaimComments(key tracker.IssueKey) ([]tracker.Comment, bool, error) {
 	if b.Tracker == nil {
 		return nil, false, nil
 	}
-	comments, err := b.Tracker.Comments(ctx, key)
+	comments, err := b.Tracker.Comments(b.ctx(), key)
 	return comments, true, err
 }
 

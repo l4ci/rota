@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -262,6 +263,29 @@ func TestAdoptRefusesReclaimedBranch(t *testing.T) {
 	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
 	if err == nil {
 		t.Fatal("adopted reclaimed branch, want blocked claimed")
+	}
+	if got := blockedBy(t, err); got != BlockClaimed {
+		t.Fatalf("blockedBy %q, want claimed", got)
+	}
+	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
+		t.Fatal("refused adoption registered slot")
+	}
+}
+
+// TestAdoptRefusesReclaimedBranchThroughUmbrella: the umbrella backend must
+// forward claim history, or the reclaimed-branch check is silently skipped.
+func TestAdoptRefusesReclaimedBranchThroughUmbrella(t *testing.T) {
+	root, e, _, remote := adoptClaimHistoryFixture(t, []tracker.Comment{
+		{Body: "<!-- rota:claim codex@3 -->"},
+		{Body: "<!-- rota:release codex@3 -->"},
+		{Body: "<!-- rota:claim dana@5 -->"},
+	})
+	u := &backlog.Umbrella{Cfg: jsonx.NewObject(),
+		Repos:      []repos.Repo{{Name: "web", Rel: "web", Path: "/umb/web"}},
+		NewTracker: func(string) (backlog.Tracker, error) { return remote, nil }}
+	res, err := e.Adopt(bg, root, u, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err == nil {
+		t.Fatalf("adopted reclaimed branch through umbrella: %+v", res)
 	}
 	if got := blockedBy(t, err); got != BlockClaimed {
 		t.Fatalf("blockedBy %q, want claimed", got)
