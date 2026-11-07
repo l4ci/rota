@@ -31,14 +31,17 @@ func TestQueuedRefsSkipsRecordsWithoutAPR(t *testing.T) {
 	}
 }
 
-func TestReconcileLinesNameKindAndKey(t *testing.T) {
+func TestReconcileFindingsKeepTheKindTyped(t *testing.T) {
 	out := round.Outcome{
 		Repaired: []round.Finding{{Kind: "dead-tab", Slot: "ben"}},
 		Drift:    []round.Finding{{Kind: "pr-missing", Issue: "42"}},
 	}
-	rep, drift := ReconcileLines(out)
-	if !slices.Equal(rep, []string{"dead-tab ben"}) || len(drift) != 1 || drift[0] != "pr-missing "+out.Drift[0].Key() {
+	rep, drift := ReconcileFindings(out)
+	if !slices.Equal(rep, []Finding{{Kind: "dead-tab", Key: "ben"}}) || !slices.Equal(drift, []Finding{{Kind: "pr-missing", Key: out.Drift[0].Key()}}) {
 		t.Fatalf("repaired=%v drift=%v", rep, drift)
+	}
+	if drift[0].String() != "pr-missing "+out.Drift[0].Key() {
+		t.Fatalf("display form %q", drift[0])
 	}
 }
 

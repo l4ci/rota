@@ -51,11 +51,11 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 	}
 	list, err := src.List(ctx)
 	if err != nil {
-		r.NeedsYou = append(r.NeedsYou, Item{"followup", "poll", "the follow-up poll failed: " + strutil.FirstLine(err.Error())})
+		r.NeedsYou = append(r.NeedsYou, Item{Kind: "followup", Target: "poll", Why: "the follow-up poll failed: " + strutil.FirstLine(err.Error())})
 		return 0, nil, nil
 	}
 	pending := func(f FollowUp, why string) {
-		r.NeedsYou = append(r.NeedsYou, Item{"followup", f.Issue, fmt.Sprintf("%s on %s waits: %s", strutil.FirstNonEmpty(f.Who, "review input"), f.PR, why)})
+		r.NeedsYou = append(r.NeedsYou, Item{Kind: "followup", Target: f.Issue, Why: fmt.Sprintf("%s on %s waits: %s", strutil.FirstNonEmpty(f.Who, "review input"), f.PR, why)})
 	}
 	for _, f := range list {
 		switch {
@@ -79,7 +79,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 			detail += " (reserve)"
 		}
 		detail += ", asked by " + strutil.FirstNonEmpty(f.Who, "a person") + " on " + f.PR
-		r.propose(Action{"followup", f.Issue, detail}, "bounce cap, claim, overlap, account preflight and dispatch")
+		r.propose(Action{Action: "followup", Target: f.Issue, Detail: detail}, "bounce cap, claim, overlap, account preflight and dispatch")
 		if e.Observe != nil {
 			started++
 			taken = append(taken, slot)
@@ -88,7 +88,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 		err := src.Start(ctx, f, slot, reserve)
 		switch {
 		case err == nil:
-			e.audit(r, Action{"followup", f.Issue, detail})
+			e.audit(r, Action{Action: "followup", Target: f.Issue, Detail: detail})
 			started++
 			taken = append(taken, slot)
 		case !isRefusal(err) && errors.As(err, new(*round.BlockedError)):

@@ -17,7 +17,7 @@ func (s *spy) hit(name string) { s.calls = append(s.calls, name) }
 // read-only probes return the same facts the execution adapters would act on.
 func observed(f *fake, s *spy, review *round.Architecture) Env {
 	e := f.env()
-	e.Reconcile = func(context.Context) ([]string, []string, error) { s.hit("reconcile"); return nil, nil, nil }
+	e.Reconcile = func(context.Context) ([]Finding, []Finding, error) { s.hit("reconcile"); return nil, nil, nil }
 	e.RunGate = func(context.Context, string, string) GateRun { s.hit("gate"); return GateRun{} }
 	e.RunTrain = func(context.Context, []string, string) TrainRun { s.hit("train"); return TrainRun{} }
 	e.Assign = func(context.Context, string) ([]string, error) { s.hit("assign"); return nil, nil }
@@ -49,7 +49,7 @@ func TestObserveInvokesNoMutationAdapter(t *testing.T) {
 	f := &fake{
 		slots:    []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}},
 		queued:   []string{"#11"},
-		repaired: []string{"slot-stuck dana"},
+		repaired: []Finding{{"slot-stuck", "dana"}},
 		cands:    []round.Candidate{cand("#2", true), cand("#3", false)},
 	}
 	s := &spy{}
@@ -86,7 +86,7 @@ func TestObserveInvokesNoMutationAdapter(t *testing.T) {
 func TestObserveLabelsConditionalAndUnknown(t *testing.T) {
 	f := &fake{
 		slots:    []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}},
-		repaired: []string{"slot-stuck dana"},
+		repaired: []Finding{{"slot-stuck", "dana"}},
 		cands:    []round.Candidate{cand("#2", true)},
 	}
 	e := observed(f, &spy{}, &round.Architecture{Every: 3, Count: 3})
@@ -122,7 +122,7 @@ func TestObserveLabelsConditionalAndUnknown(t *testing.T) {
 func TestObserveFirstActionMatchesExecution(t *testing.T) {
 	for name, mk := range map[string]func() *fake{
 		"repair first": func() *fake {
-			return &fake{repaired: []string{"slot-stuck ben"}, slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#2", true)}}
+			return &fake{repaired: []Finding{{"slot-stuck", "ben"}}, slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#2", true)}}
 		},
 		"landing first": func() *fake {
 			return &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}}, cands: []round.Candidate{cand("#2", true)}}

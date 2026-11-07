@@ -97,12 +97,12 @@ func NewEnv(w World, cfg Config) Env {
 		return active
 	}
 	e.Queued = func() []string { return QueuedRefs(w.TolerantRegistry().PRs()) }
-	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
+	e.Reconcile = func(ctx context.Context) ([]Finding, []Finding, error) {
 		out, err := w.Reconcile(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		repaired, drift := ReconcileLines(out)
+		repaired, drift := ReconcileFindings(out)
 		return repaired, drift, nil
 	}
 	e.Target = func(target string) (worker.GateTarget, error) {
