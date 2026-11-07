@@ -8,7 +8,7 @@ import (
 
 func TestWriteManifestWritesJsonxBytes(t *testing.T) {
 	root := t.TempDir()
-	if err := writeManifest(root, Manifest{Schema: 1, Version: fsiotest.Hostile, Files: map[string]string{"a": "b"}}); err != nil {
+	if err := writeManifest(root, Manifest{Schema: ManifestSchema, Version: fsiotest.Hostile, Files: map[string]string{"a": "b"}}); err != nil {
 		t.Fatal(err)
 	}
 	fsiotest.RequireJsonxBytes(t, manifestPath(root))

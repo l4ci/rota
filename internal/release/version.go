@@ -27,20 +27,45 @@ var (
 	ErrBadArg = errors.New("bad argument")
 )
 
-// Kind is one entry of the version-file registry.
+// Kind is one entry of the version-file registry: how to recognise, read and
+// write one kind of version file. Adding a kind is adding one entry here.
 type Kind struct {
 	Name  string
 	Files []string
+	// Match reports whether a file's base name is this kind.
+	Match func(name string) bool
+	// Read extracts the version from a file's text: ok is false when the
+	// file carries none (a parse failure is an error).
+	Read func(text string) (v string, ok bool, err error)
+	// Write stores version into the file at path (rel names it in errors).
+	Write func(path, rel, version string) error
 }
 
 // Registry lists the version-file kinds in detection order
-// (hvlib_version.VERSION_KIND_REGISTRY).
+// (hvlib_version.VERSION_KIND_REGISTRY). KindFromName takes the first Match.
 var Registry = []Kind{
-	{"plugin-json", []string{".claude-plugin/plugin.json"}},
-	{"package-json", []string{"package.json"}},
-	{"pyproject", []string{"pyproject.toml"}},
-	{"cargo", []string{"Cargo.toml"}},
-	{"plain", []string{"VERSION", "version.txt"}},
+	{"plugin-json", []string{".claude-plugin/plugin.json"},
+		func(n string) bool { return n == "plugin.json" }, readJSONVersion, writeJSONVersion},
+	{"package-json", []string{"package.json"},
+		func(n string) bool { return strings.HasSuffix(n, ".json") }, readJSONVersion, writeJSONVersion},
+	{"pyproject", []string{"pyproject.toml"},
+		func(n string) bool { return n == "pyproject.toml" },
+		tomlReader("project", "tool.poetry"), tomlWriter("project", "tool.poetry")},
+	{"cargo", []string{"Cargo.toml"},
+		func(n string) bool { return n == "Cargo.toml" },
+		tomlReader("package"), tomlWriter("package")},
+	// version.txt needs an explicit kind: only a bare VERSION matches by name.
+	{"plain", []string{"VERSION", "version.txt"},
+		func(n string) bool { return n == "VERSION" }, readPlainVersion, writePlainVersion},
+}
+
+func lookup(kind string) (Kind, bool) {
+	for _, k := range Registry {
+		if k.Name == kind {
+			return k, true
+		}
+	}
+	return Kind{}, false
 }
 
 // KnownKinds is the registry's kind names in order.
@@ -50,15 +75,6 @@ func KnownKinds() []string {
 		out = append(out, k.Name)
 	}
 	return out
-}
-
-func known(kind string) bool {
-	for _, k := range Registry {
-		if k.Name == kind {
-			return true
-		}
-	}
-	return false
 }
 
 // InferKind is hvlib.infer_version_kind: the kind by file name, "plain" for
@@ -74,17 +90,10 @@ func InferKind(path string) string {
 // manifest (a bare VERSION is plain; version.txt needs an explicit kind).
 func KindFromName(path string) string {
 	name := filepath.Base(path)
-	switch {
-	case name == "plugin.json":
-		return "plugin-json"
-	case strings.HasSuffix(name, ".json"):
-		return "package-json"
-	case name == "pyproject.toml":
-		return "pyproject"
-	case name == "Cargo.toml":
-		return "cargo"
-	case name == "VERSION":
-		return "plain"
+	for _, k := range Registry {
+		if k.Match(name) {
+			return k.Name
+		}
 	}
 	return ""
 }
@@ -119,50 +128,92 @@ func ParseTOMLVersion(text string, sections []string) (string, bool) {
 	return "", false
 }
 
-var tomlSections = map[string][]string{
-	"pyproject": {"project", "tool.poetry"},
-	"cargo":     {"package"},
-}
-
-// parseVersion reads the version out of a file's text: ok is false when the
-// file carries none (a parse failure is an error).
-func parseVersion(kind, text string) (v string, ok bool, err error) {
-	switch kind {
-	case "plugin-json", "package-json":
-		doc, err := jsonx.Decode([]byte(text))
-		if err != nil {
-			return "", false, err
-		}
-		obj, isObj := doc.(*jsonx.Object)
-		if !isObj {
-			return "", false, errors.New("top-level JSON value is not an object")
-		}
-		raw, found := obj.Get("version")
-		if !found || raw == nil {
-			return "", false, nil
-		}
-		s, isStr := raw.(string)
-		if !isStr {
-			return "", false, errors.New("version is not a string")
-		}
-		return s, true, nil
-	case "pyproject", "cargo":
-		v, ok := ParseTOMLVersion(text, tomlSections[kind])
-		return v, ok, nil
-	default: // plain: the first non-blank line
-		for _, line := range pystr.Splitlines(text) {
-			if s := pystr.Strip(line); s != "" {
-				return s, true, nil
-			}
-		}
+func readJSONVersion(text string) (string, bool, error) {
+	doc, err := jsonx.Decode([]byte(text))
+	if err != nil {
+		return "", false, err
+	}
+	obj, isObj := doc.(*jsonx.Object)
+	if !isObj {
+		return "", false, errors.New("top-level JSON value is not an object")
+	}
+	raw, found := obj.Get("version")
+	if !found || raw == nil {
 		return "", false, nil
 	}
+	s, isStr := raw.(string)
+	if !isStr {
+		return "", false, errors.New("version is not a string")
+	}
+	return s, true, nil
+}
+
+// writeJSONVersion goes through the ordered encoder.
+func writeJSONVersion(path, rel, version string) error {
+	doc := fsio.LoadJSON(path, jsonx.NewObject())
+	obj, ok := doc.(*jsonx.Object)
+	if !ok {
+		return fmt.Errorf("%s: top-level JSON value is not an object", rel)
+	}
+	obj.Set("version", version)
+	return fsio.WriteJSONAtomic(path, obj)
+}
+
+func tomlReader(sections ...string) func(string) (string, bool, error) {
+	return func(text string) (string, bool, error) {
+		v, ok := ParseTOMLVersion(text, sections)
+		return v, ok, nil
+	}
+}
+
+// tomlWriter substitutes the first version line of the first listed section
+// that has one.
+func tomlWriter(sections ...string) func(path, rel, version string) error {
+	return func(path, _, version string) error {
+		text, err := fsio.ReadText(path)
+		if err != nil {
+			return err
+		}
+		for _, s := range sections {
+			sec := tomlSection(s).FindStringIndex(text)
+			if sec == nil {
+				continue
+			}
+			end := len(text)
+			if n := nextSection.FindStringIndex(text[sec[1]:]); n != nil {
+				end = sec[1] + n[0]
+			}
+			body := text[sec[1]:end]
+			m := versionSub.FindStringSubmatchIndex(body)
+			if m == nil {
+				continue
+			}
+			body = body[:m[0]] + body[m[2]:m[3]] + `"` + version + `"` + body[m[1]:]
+			return fsio.WriteFileAtomic(path, []byte(text[:sec[1]]+body+text[end:]))
+		}
+		return fmt.Errorf("%s: no version field in section", path)
+	}
+}
+
+// readPlainVersion is the first non-blank line.
+func readPlainVersion(text string) (string, bool, error) {
+	for _, line := range pystr.Splitlines(text) {
+		if s := pystr.Strip(line); s != "" {
+			return s, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func writePlainVersion(path, _, version string) error {
+	return fsio.WriteFileAtomic(path, []byte(version+"\n"))
 }
 
 // ReadVersion is hvlib.get_version_or_die for the file rel under dir; error
 // messages name rel, as the old helper's stderr did.
 func ReadVersion(dir, rel, kind string) (string, error) {
-	if !known(kind) {
+	k, found := lookup(kind)
+	if !found {
 		return "", fmt.Errorf("%s: unknown version kind: '%s'", rel, kind)
 	}
 	text, err := fsio.ReadText(filepath.Join(dir, rel))
@@ -172,7 +223,7 @@ func ReadVersion(dir, rel, kind string) (string, error) {
 		}
 		return "", fmt.Errorf("%s: %v", rel, err)
 	}
-	v, ok, err := parseVersion(kind, text)
+	v, ok, err := k.Read(text)
 	if err != nil {
 		return "", fmt.Errorf("%s: %v", rel, err)
 	}
@@ -207,50 +258,28 @@ func Detect(dir, override string) (file, version, kind string, err error) {
 
 // WriteVersion writes version into the file rel under dir the way the old
 // writers did: JSON through the ordered encoder, TOML by substituting the
-// first version line of the section, plain as "<version>\n".
+// first version line of the section, plain as "<version>\n". An unknown kind
+// is written as plain.
 func WriteVersion(dir, rel, kind, version string) error {
-	path := filepath.Join(dir, rel)
-	switch kind {
-	case "plugin-json", "package-json":
-		doc := fsio.LoadJSON(path, jsonx.NewObject())
-		obj, ok := doc.(*jsonx.Object)
-		if !ok {
-			return fmt.Errorf("%s: top-level JSON value is not an object", rel)
-		}
-		obj.Set("version", version)
-		return fsio.WriteJSONAtomic(path, obj)
-	case "pyproject", "cargo":
-		text, err := fsio.ReadText(path)
-		if err != nil {
-			return err
-		}
-		for _, s := range tomlSections[kind] {
-			sec := tomlSection(s).FindStringIndex(text)
-			if sec == nil {
-				continue
-			}
-			end := len(text)
-			if n := nextSection.FindStringIndex(text[sec[1]:]); n != nil {
-				end = sec[1] + n[0]
-			}
-			body := text[sec[1]:end]
-			m := versionSub.FindStringSubmatchIndex(body)
-			if m == nil {
-				continue
-			}
-			body = body[:m[0]] + body[m[2]:m[3]] + `"` + version + `"` + body[m[1]:]
-			return fsio.WriteFileAtomic(path, []byte(text[:sec[1]]+body+text[end:]))
-		}
-		return fmt.Errorf("%s: no version field in section", path)
-	default:
-		return fsio.WriteFileAtomic(path, []byte(version+"\n"))
+	k, ok := lookup(kind)
+	if !ok {
+		k, _ = lookup("plain")
 	}
+	return k.Write(filepath.Join(dir, rel), rel, version)
 }
 
 var semverRe = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
 // IsSemver reports whether s is a bare X.Y.Z.
 func IsSemver(s string) bool { return semverRe.MatchString(s) }
+
+// checkBump is the one place the bump grammar lives: patch|minor|major or X.Y.Z.
+func checkBump(bump string) error {
+	if bump != "patch" && bump != "minor" && bump != "major" && !IsSemver(bump) {
+		return fmt.Errorf("%w: bump must be patch|minor|major or X.Y.Z, got '%s'", ErrBadArg, bump)
+	}
+	return nil
+}
 
 func parseSemver(v string) [3]*big.Int {
 	var out [3]*big.Int
@@ -263,8 +292,8 @@ func parseSemver(v string) [3]*big.Int {
 // NextVersion applies bump (patch, minor, major or an explicit X.Y.Z) to
 // current. An explicit version must be strictly greater (ErrNotGreater).
 func NextVersion(current, bump string) (string, error) {
-	if bump != "patch" && bump != "minor" && bump != "major" && !IsSemver(bump) {
-		return "", fmt.Errorf("%w: bump must be patch|minor|major or X.Y.Z, got '%s'", ErrBadArg, bump)
+	if err := checkBump(bump); err != nil {
+		return "", err
 	}
 	if !IsSemver(current) {
 		return "", fmt.Errorf("current version '%s' is not X.Y.Z semver", current)
@@ -296,11 +325,11 @@ func NextVersion(current, bump string) (string, error) {
 // Bump is hv-release-bump-version: it validates, computes the next version
 // of the file rel under dir and, unless dryRun, writes it.
 func Bump(dir, rel, kind, bump string, dryRun bool) (string, error) {
-	if !known(kind) {
+	if _, ok := lookup(kind); !ok {
 		return "", fmt.Errorf("%w: unknown kind '%s' (known: %s)", ErrBadArg, kind, strings.Join(sortedKinds(), ", "))
 	}
-	if bump != "patch" && bump != "minor" && bump != "major" && !IsSemver(bump) {
-		return "", fmt.Errorf("%w: bump must be patch|minor|major or X.Y.Z, got '%s'", ErrBadArg, bump)
+	if err := checkBump(bump); err != nil {
+		return "", err
 	}
 	if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
 		return "", fmt.Errorf("file not found: %s", rel)
