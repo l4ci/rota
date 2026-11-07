@@ -48,6 +48,25 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	if r.Culprit != "" {
 		d.Set("culprit", r.Culprit)
 	}
+	if r.Stop != nil {
+		st := jsonx.NewObject()
+		st.Set("tier", r.Stop.Tier)
+		st.Set("command", r.Stop.Command)
+		st.Set("tests", strList(r.Stop.Tests))
+		st.Set("scratch", r.Stop.Scratch)
+		st.Set("base", r.Stop.Base)
+		ms := []any{}
+		for _, m := range r.Stop.Members {
+			o := jsonx.NewObject()
+			o.Set("target", m.Target)
+			o.Set("sha", m.SHA)
+			ms = append(ms, o)
+		}
+		st.Set("members", ms)
+		st.Set("culprit", nil)
+		st.Set("diagnosed", false)
+		d.Set("stop", st)
+	}
 	d.Set("landed", strList(r.Landed))
 	d.Set("verified", strList(r.Verified))
 	if r.Tier != "" {
@@ -126,6 +145,7 @@ type trainRunOpts struct {
 	Order               []string
 	Plan                bool
 	LandGreen, NoVerify bool
+	OnFail              string
 	FinalSlice          []string
 	Confirm             gate.Confirm
 	Approval            approvalReq
@@ -149,7 +169,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 	if err != nil {
 		return postgate.Env{}, postgate.Request{}, err
 	}
-	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)}
+	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)}
 	return landingEnv(c, ctx, root), postgate.Request{Train: &opts}, nil
 }
 
@@ -184,6 +204,7 @@ func milestoneSyncBase(c *Ctx, ctx context.Context, root, base string) (string, 
 func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
+	onFail := fs.String("on-fail", worker.OnFailBisect, "what a red tier does: bisect (name the culprit by re-verifying prefixes) or stop (end now, no attribution)")
 	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
 	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
@@ -206,6 +227,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *onFail != worker.OnFailStop && *onFail != worker.OnFailBisect {
+			return Result{}, Usage("--on-fail takes stop or bisect, got %q", *onFail)
+		}
 		if *plan && *order != "" {
 			return Result{}, Usage("--plan previews the computed order; it cannot be combined with --order")
 		}
@@ -224,7 +248,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if !*plan && !*noAssignCheck {
 			warnAssignFirst(c, root)
 		}
-		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, OnFail: *onFail, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		// Exclusion notes must remain visible when no member survives the checks.
 		for _, n := range r.Notes {
