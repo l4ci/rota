@@ -39,8 +39,14 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 // InspectReconcile discovers the repairs an applying pass would attempt, but
 // leaves every finding in Drift and never calls a repair adapter.
 func (e Env) InspectReconcile(ctx context.Context, root string) (Outcome, error) {
+	return e.ReadOnly().reconcile(ctx, root, false, true)
+}
+
+// ReadOnly returns e with its shared probes in observation mode: git status
+// takes no optional locks and remote activity that needs a fetch is unknown.
+func (e Env) ReadOnly() Env {
 	e.inspectReads = true
-	return e.reconcile(ctx, root, false, true)
+	return e
 }
 
 func (e Env) reconcile(ctx context.Context, root string, apply, propose bool) (Outcome, error) {

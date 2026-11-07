@@ -81,8 +81,6 @@ type Env struct {
 	// Observe supplies read-only replacements for adapters that may mutate.
 	// A non-nil value selects observation; missing probes are reported unknown.
 	Observe *ObservationSources
-	// ReconcileProposals reads the repair attempts selected by reconciliation.
-	ReconcileProposals func() []string
 	// BaseOverride wins over a recorded target base; Base is the fallback
 	// when the target has none or its registry lookup fails.
 	Base, BaseOverride string
@@ -275,13 +273,6 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		}
 	} else {
 		repaired, drift, err = e.Reconcile(ctx)
-		proposed := repaired
-		if e.ReconcileProposals != nil {
-			proposed = e.ReconcileProposals()
-		}
-		for _, f := range proposed {
-			r.propose(Action{"reconcile", f, "safe repair selected"}, "repair prerequisites and result")
-		}
 	}
 	if err != nil {
 		return r, err
@@ -321,7 +312,6 @@ func Run(ctx context.Context, e Env) (Result, error) {
 					r.propose(Action{"review-relay", s.Name, out.Detail}, "bounce cap, relay authorization and delivery")
 					continue
 				case out.Relayed:
-					r.propose(Action{"review-relay", s.Name, out.Detail}, "bounce cap, relay authorization and delivery")
 					e.audit(&r, Action{"review-relay", s.Name, out.Detail})
 					continue
 				case out.Pending:
@@ -334,9 +324,16 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				}
 			}
 			if e.AwaitingReview != nil {
+				awaiting := e.AwaitingReview
 				if e.Observe != nil {
-					r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "required review depth and current-head verdicts are checked by execution; no gate ran"})
-				} else if why := e.AwaitingReview(ctx, s, e.targetBase(s.Name)); why != "" {
+					awaiting = e.Observe.AwaitingReview
+					if awaiting == nil {
+						r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review readiness inspection is unavailable; landing not proposed"})
+						continue
+					}
+					r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review verdicts read from local records and last-fetched refs; execution fetches and recovers PR verdict reports"})
+				}
+				if why := awaiting(ctx, s, e.targetBase(s.Name)); why != "" {
 					r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", s.Name, why})
 					continue
 				}
@@ -400,11 +397,6 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		return nil
 	}
 	if e.Role == roundcfg.RoleSupport {
-		if e.Observe != nil {
-			for _, t := range targets {
-				r.NeedsYou = append(r.NeedsYou, Item{"merge", t, "support role leaves landing to main"})
-			}
-		}
 		return nil
 	}
 	if e.humanMerge() {

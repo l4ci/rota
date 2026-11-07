@@ -103,6 +103,9 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	ctx := c.Context()
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
 	renv.HolderPID = pid
+	if observe {
+		renv = renv.ReadOnly()
+	}
 	state := roundtick.LoadState(cd, lease.Round)
 
 	be, err := openBacklog(c, root, false, "")
@@ -136,9 +139,15 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 // and whether its identity/state verdict must go straight to the real gate;
 // an incomplete probe or a read error cannot confirm readiness.
 func reviewReadiness(c *Ctx, root, slot, base string) (string, bool) {
+	return reviewReadinessMode(c, root, slot, base, false)
+}
+
+// reviewReadinessMode is reviewReadiness; observe asks the gate for its
+// no-write variant (no fetch, no verdict-report recovery).
+func reviewReadinessMode(c *Ctx, root, slot, base string, observe bool) (string, bool) {
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, ItemBody: lazyItemBody(c, root)})
 	if err != nil {
 		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error()), false
 	}
@@ -227,7 +236,7 @@ func tickLines(r roundtick.Result) string {
 			if p.Conditional {
 				kind = "proposed (conditional)"
 			}
-			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s; unchecked: %s", kind, p.Action.Action, p.Target, p.Detail, strings.Join(p.Unchecked, "; ")))
+			lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s\tunchecked: %s", kind, p.Action.Action, p.Target, p.Detail, strings.Join(p.Unchecked, "; ")))
 		}
 		for _, u := range r.Unknown {
 			lines = append(lines, fmt.Sprintf("unknown\t%s\t%s\t%s", u.Kind, u.Target, u.Why))

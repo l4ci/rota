@@ -54,6 +54,10 @@ func (w *tickWorld) InspectReviewFacts(ctx context.Context) (round.Architecture,
 	return w.renv.InspectArchitectureFacts(ctx, w.root, w.board, w.set, candidates)
 }
 
+func (w *tickWorld) InspectReviewReadiness(slot, base string) (string, bool) {
+	return reviewReadinessMode(w.c, w.root, slot, base, true)
+}
+
 func (w *tickWorld) InspectReviewLoop(slot string) roundtick.ReviewOutcome {
 	return reviewStepMode(w.c, w.root, w.set, slot, true)
 }
