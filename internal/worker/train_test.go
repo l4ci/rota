@@ -1279,3 +1279,103 @@ func TestTrainSyncPlanReadsOriginBase(t *testing.T) {
 		t.Errorf("a plan must push nothing: %s -> %s", before, after)
 	}
 }
+
+// stopCountingVerify fails once b2 is merged and appends a line to a counter file
+// per run, so a test can tell how many verifies a policy launched.
+func stopCountingVerify(t *testing.T) (cmd, counter string) {
+	t.Helper()
+	counter = filepath.Join(t.TempDir(), "runs")
+	return "echo run >> " + counter + "; test ! -f b2.txt", counter
+}
+
+func verifyRuns(t *testing.T, counter string) int {
+	t.Helper()
+	b, _ := os.ReadFile(counter)
+	return strings.Count(string(b), "run")
+}
+
+func TestTrainOnFailStopEndsWithoutPrefixVerifies(t *testing.T) {
+	cmd, counter := stopCountingVerify(t)
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, OnFail: OnFailStop})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Changed || len(res.Landed) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if n := verifyRuns(t, counter); n != 1 {
+		t.Errorf("stop runs the full tier once and no prefix verify, got %d runs", n)
+	}
+	if res.Culprit != "" || res.Members[1].Culprit {
+		t.Errorf("stop attributes no culprit: %q %+v", res.Culprit, res.Members)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("nothing lands")
+	}
+	s := res.Stop
+	if s == nil {
+		t.Fatalf("no stop record: %+v", res)
+	}
+	if !strings.Contains(s.Command, "test ! -f b2.txt") || s.Scratch == "" || len(s.Members) != 4 {
+		t.Errorf("stop record: %+v", s)
+	}
+	for _, m := range s.Members {
+		if len(m.SHA) != 40 {
+			t.Errorf("member %s SHA %q", m.Target, m.SHA)
+		}
+	}
+	for _, want := range []string{"no culprit", "diagnosis skipped"} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("message lacks %q: %s", want, res.Err)
+		}
+	}
+}
+
+func TestTrainOnFailBisectIsTheDefault(t *testing.T) {
+	for _, onFail := range []string{"", OnFailBisect} {
+		cmd, counter := stopCountingVerify(t)
+		w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+		res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, OnFail: onFail})
+		if err != nil || res.Culprit != "b2" || res.Stop != nil {
+			t.Fatalf("%q: %+v %v", onFail, res, err)
+		}
+		if n := verifyRuns(t, counter); n < 2 {
+			t.Errorf("%q: bisect re-runs prefixes, got %d runs", onFail, n)
+		}
+	}
+}
+
+func TestTrainRejectsUnknownOnFail(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	if _, err := w.train(TrainOpts{Targets: []string{"b1"}, OnFail: "retry"}); err == nil {
+		t.Error("an unknown policy must be refused")
+	}
+}
+
+// A go-test-shaped failure: stop names the failing test in the record and the
+// text, blames no member in the train cache and ignores --land-green.
+func TestTrainOnFailStopNamesTestsAndBlamesNobody(t *testing.T) {
+	cmd := `test ! -f b2.txt || { printf -- '--- FAIL: TestWidget (0.00s)\nFAIL\n'; exit 1; }`
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, OnFail: OnFailStop, LandGreen: true})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Stop == nil {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if strings.Join(res.Stop.Tests, ",") != "TestWidget" {
+		t.Errorf("stop tests: %v", res.Stop.Tests)
+	}
+	if len(res.Landed) != 0 || res.Changed || w.onMain("b1.txt") {
+		t.Errorf("stop lands nothing, even under --land-green: %+v", res)
+	}
+	for _, want := range []string{"failed command: ", "failing tests: TestWidget", "scratch tree: " + res.Stop.Scratch, "base: " + res.Stop.Base} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("text lacks %q:\n%s", want, res.Err)
+		}
+	}
+	for _, m := range res.Stop.Members {
+		if !strings.Contains(res.Err, "member "+m.Target+": "+m.SHA) {
+			t.Errorf("text lacks member %s %s:\n%s", m.Target, m.SHA, res.Err)
+		}
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("no member may be blamed in the train cache: %+v", c.f.Culprits)
+	}
+}
