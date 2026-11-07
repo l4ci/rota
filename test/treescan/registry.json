@@ -259,7 +259,7 @@
     "./internal/golden/TestCheckUpdateRewritesOutputsOnly": "Enumerates temporary golden-record fixtures to exercise the checker.",
     "./internal/harness/TestKindGuardFindsEachPlantedShape": "Enumerates a temporary prompt-key home or runs the kind guard on planted temporary sources.",
     "./internal/harness/TestNewPromptKey": "Enumerates a temporary prompt-key home or runs the kind guard on planted temporary sources.",
-    "./internal/hook/TestConsumeRenames": "Reads a planted temporary hook file after renaming it.",
+    "./internal/hook/TestNoteConsumeArchivesTheBodyAlreadyRead": "Reads a planted temporary hook file after renaming it.",
     "./internal/host/TestOrcaRelayCreateCapturesBranchAndHandle": "Enumerates the fake relay test checkout for temporary agent PID files.",
     "./internal/hvmigrate/TestRunHvApplyIsCompleteAndIdempotent": "Walks copied testdata migration fixtures to compare files before and after migration.",
     "./internal/hvmigrate/TestRunHvDryRunWritesNothing": "Walks copied testdata migration fixtures to compare files before and after migration.",

@@ -98,7 +98,7 @@ func TestShouldInject(t *testing.T) {
 		source     string
 		orch, free bool
 		ho         Handoff
-		head       string
+		body       string
 		want       bool
 	}{
 		{"orchestrator startup", "startup", true, false, ho, "x", true},
@@ -107,33 +107,13 @@ func TestShouldInject(t *testing.T) {
 		{"compact keeps", "compact", true, false, ho, "x", false},
 		{"no file", "startup", true, false, Handoff{}, "", false},
 		{"other holder", "startup", false, false, ho, HandoffMarker, false},
-		{"no lease, marked, fresh", "startup", false, true, ho, HandoffMarker, true},
+		{"no lease, marked, fresh", "startup", false, true, ho, HandoffMarker + "\n", true},
 		{"no lease, unmarked", "startup", false, true, ho, "# pause", false},
 		{"no lease, marked, old", "startup", false, true, Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, HandoffMarker, false},
 	} {
-		if got := ShouldInject(c.source, c.orch, c.free, c.ho, c.head, max, t0); got != c.want {
+		if got := ShouldInject(c.source, c.orch, c.free, Note{Handoff: c.ho, Body: c.body}, max, t0); got != c.want {
 			t.Errorf("%s: got %v", c.name, got)
 		}
-	}
-}
-
-func TestConsumeRenames(t *testing.T) {
-	d := t.TempDir()
-	p := filepath.Join(d, "main.md")
-	os.WriteFile(p, []byte("body"), 0o644)
-	os.WriteFile(p+".consumed", []byte("older"), 0o644)
-	body, ok := Consume(p)
-	if !ok || body != "body" {
-		t.Fatal(body, ok)
-	}
-	if _, err := os.Stat(p); !os.IsNotExist(err) {
-		t.Error("file should be gone")
-	}
-	if b, _ := os.ReadFile(p + ".consumed"); string(b) != "body" {
-		t.Errorf("consumed: %q", b)
-	}
-	if _, ok := Consume(p); ok {
-		t.Error("second consume must fail")
 	}
 }
 
