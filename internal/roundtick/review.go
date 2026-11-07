@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -140,4 +143,35 @@ func WaitingForReview(gateErr, branch string) string {
 	}
 	line = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line), "; nothing landed"))
 	return fmt.Sprintf("waiting for review verdicts at head (%s); run /rota-review on %s", line, branch)
+}
+
+// ReviewReadinessOf classifies the review-only gate probe of a done slot: why it
+// still waits for required reviews, and whether its state must go straight to
+// the real gate. The caller passes the gate's raw answer. An incomplete probe
+// or a read error cannot confirm readiness.
+func ReviewReadinessOf(r worker.GateResult, err error, slot string) (why string, gateNow bool) {
+	if err != nil {
+		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error()), false
+	}
+	switch r.Verdict {
+	case worker.GateStale, worker.GatePRMismatch, worker.GateAlreadyMerged, worker.GateMergedRemotely:
+		// These describe the branch or PR, not missing review verdicts. The
+		// real gate sends stale work back or handles the PR's current state.
+		return "", true
+	case worker.GateReviewMissing:
+		return WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot)), false
+	case worker.GateFresh:
+		return "", false
+	}
+	return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict), false
+}
+
+// RelayResultOf maps a review relay's raw answer to the tick's: a refusal for
+// the bounce cap (blockedby.MaxBounces) marks the item AtCap.
+func RelayResultOf(nothing bool, items, bounces int, err error) RelayResult {
+	out := RelayResult{Nothing: nothing, Items: items, Bounces: bounces}
+	if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == blockedby.MaxBounces {
+		out.AtCap = true
+	}
+	return out
 }

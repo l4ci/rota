@@ -20,7 +20,7 @@ type ObservationSources struct {
 
 // Inspection describes repair attempts without claiming their success.
 type Inspection struct {
-	Proposed, Drift []string
+	Proposed, Drift []Finding
 	Unknown         []Item
 }
 
@@ -47,7 +47,7 @@ func (e Env) land(ctx context.Context, r *Result, targets []string, base string)
 	if len(targets) > 1 {
 		action = "train"
 	}
-	r.propose(Action{action, strings.Join(targets, ","), "eligible to attempt landing into " + base}, "current state, reviews, manual gates, verification and merge result")
+	r.propose(Action{Action: action, Target: strings.Join(targets, ","), Detail: "eligible to attempt landing into " + base}, "current state, reviews, manual gates, verification and merge result")
 	if e.Observe != nil {
 		return nil
 	}
