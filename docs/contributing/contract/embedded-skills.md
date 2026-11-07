@@ -53,7 +53,7 @@ rota prompts save <section> --expect <n> --body-file <path|->
 repo: none
 data: {"section": View, "changed": true}
 exit: 2 when `--expect` or `--body-file` is missing, the section is unknown, or the template lacks exactly one `{{status}}` and one `{{closing}}` or holds another placeholder; 4 when `--expect` is not the current revision (conflict) or the section is removed; 1 as `prompts list`
-note: appends revision n+1 with the override, the expanded current default as `baseline` and its sha256 as `baselineDigest`, under the store's lock. A refusal writes nothing and never touches the draft file. It does not change agent files: `rota agents write` activates the effective text. `rota init` skips its agent write once the store exists.
+note: appends revision n+1 with the override, the expanded current default as `baseline` and its sha256 as `baselineDigest`, under the store's lock. A refusal writes nothing and never touches the draft file. It does not change agent files: `rota agents write` activates the effective text. Once the store exists, `rota init` only creates agent files that are missing (from the saved prompts) and leaves existing ones alone. A store written by a newer rota (`version` above 1) is refused with an upgrade hint, not treated as damage; every additive schema change bumps the version.
 
 ### rota prompts adopt
 rota prompts adopt <section> --expect <n>

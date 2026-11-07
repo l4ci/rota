@@ -785,7 +785,7 @@ rota agents write                                         # activate it in the a
 
 Every write names the revision it expects (`--expect`, `0` before the first save). When someone saved in the meantime, the write exits 4, changes nothing and leaves your draft file as it was: run `show`, merge, and save again with the new number.
 
-A save does not touch the agent files; only `rota agents write` puts the effective text into them, for sessions started afterwards. `rota init` leaves the agent files alone once `.rota/prompts.json` exists. A section never saved, or one whose latest revision is an adoption, follows the binary's current default.
+A save does not touch the agent files; only `rota agents write` puts the effective text into them, for sessions started afterwards. Once `.rota/prompts.json` exists, `rota init` only creates agent files that are missing (a fresh clone has no gitignored `.codex` files) from the saved prompts and leaves existing ones alone. A section never saved, or one whose latest revision is an adoption, follows the binary's current default.
 
 After an upgrade, a saved override whose built-in default moved shows `changed`, and a section this binary no longer has shows `removed`. An adopted section just follows the new default. `rota skills update` lists both and changes nothing; `rota prompts show` prints the old baseline, the new default and the override side by side. Then pick one:
 
