@@ -352,7 +352,7 @@ func Run(ctx context.Context, in Input) Report {
 type runner struct {
 	in       Input
 	ctx      context.Context
-	settings *hookSettings // read once per run, see hookSettings
+	settings *hook.View // read once per run
 }
 
 var configDirWhy = map[string]string{
@@ -796,25 +796,14 @@ const (
 	guardHookHint  = "rota hook install --scope project (or --scope user)"
 )
 
-// hookSettings is the Claude settings files a run looks at, read once: the
-// project's two files in precedence order, then one user file per config dir.
-// It owns the scope rule for the hook checks.
-type hookSettings struct {
-	local, shared hookFile   // settings.local.json, settings.json
-	users         []hookFile // one per in.ConfigDirs entry, same order
-}
-
 // hooks returns the run's settings view, reading the files on first use.
-func (d *runner) hooks() *hookSettings {
+func (d *runner) hooks() *hook.View {
 	if d.settings == nil {
-		h := &hookSettings{
-			local:  d.read(hook.SettingsPath(hook.ScopeProjectLocal, d.in.ProjectRoot)),
-			shared: d.read(hook.SettingsPath(hook.ScopeProject, d.in.ProjectRoot)),
-		}
+		var dirs []string
 		for _, dir := range d.configDirs() {
-			h.users = append(h.users, d.read(hook.SettingsPath(hook.ScopeUser, d.expand(dir))))
+			dirs = append(dirs, d.expand(dir))
 		}
-		d.settings = h
+		d.settings = hook.LoadView(d.in.ProjectRoot, dirs)
 	}
 	return d.settings
 }
@@ -834,54 +823,17 @@ func (d *runner) configDirs() []string {
 	return dirs
 }
 
-// project is the project's files in precedence order.
-func (h *hookSettings) project() []hookFile { return []hookFile{h.local, h.shared} }
-
-// inScope is every file a hook in this run may live in.
-func (h *hookSettings) inScope() []hookFile { return append(h.project(), h.users...) }
-
-// reachesWorktree is the files a worker worktree reads: settings.local.json is
-// untracked, so it never gets there.
-func (h *hookSettings) reachesWorktree() []hookFile {
-	return append([]hookFile{h.shared}, h.users...)
-}
-
-type hookFile struct {
-	path   string
-	events map[string]string
-	slCmd  string
-	hasSL  bool
-	exists bool
-	err    error
-}
-
-func (d *runner) read(path string) hookFile {
-	f := hookFile{path: path}
-	o, err := hook.ReadSettings(path)
-	if err != nil {
-		f.err, f.exists = err, true
-		return f
-	}
-	if o == nil {
-		return f
-	}
-	f.exists = true
-	f.events = hook.MarkedEvents(o)
-	_, f.slCmd, f.hasSL = hook.StatusLine(o)
-	return f
-}
-
 // optIn reports whether anything `rota hook install` writes is present in any
 // settings file in scope: a `# rota-hook` entry for any event, or a statusLine
 // that runs `rota statusline dump`. The hooks are opt-in, so with none of that
 // the checks skip; they fail only on a broken or partial install. Unreadable
 // files are returned so a skip can say it could not look there.
 func (d *runner) optIn() (in bool, unreadable []string) {
-	for _, f := range d.hooks().inScope() {
-		if f.err != nil {
-			unreadable = append(unreadable, f.path)
+	for _, f := range d.hooks().InScope() {
+		if f.Err != nil {
+			unreadable = append(unreadable, f.Path)
 		}
-		if len(f.events) > 0 || (f.hasSL && hook.IsOurStatusLine(f.slCmd)) {
+		if len(f.Events) > 0 || (f.HasStatusLine && hook.IsOurStatusLine(f.StatusLineCmd)) {
 			in = true
 		}
 	}
@@ -905,30 +857,30 @@ func (d *runner) statusline() Check {
 		return notInstalled(name, bad)
 	}
 	h := d.hooks()
-	proj := h.project()
-	users := h.users
+	proj := h.Project()
+	users := h.Users
 	labels := d.configDirs()
 	if len(users) == 0 {
-		users, labels = []hookFile{{}}, []string{""}
+		users, labels = []hook.File{{}}, []string{""}
 	}
-	anyFile := h.local.exists || h.shared.exists
+	anyFile := h.Local.Exists || h.Shared.Exists
 	var parts, bad []string
 	for i, dir := range labels {
-		files := append([]hookFile{}, proj...)
+		files := append([]hook.File{}, proj...)
 		label := "project"
 		if dir != "" {
 			files = append(files, users[i])
 			label = dir
-			anyFile = anyFile || users[i].exists
+			anyFile = anyFile || users[i].Exists
 		}
-		var eff *hookFile
+		var eff *hook.File
 		broken := ""
 		for i := range files {
-			if files[i].err != nil {
-				broken = files[i].path
+			if files[i].Err != nil {
+				broken = files[i].Path
 				break
 			}
-			if files[i].hasSL {
+			if files[i].HasStatusLine {
 				eff = &files[i]
 				break
 			}
@@ -938,10 +890,10 @@ func (d *runner) statusline() Check {
 			bad = append(bad, label+": cannot read "+broken)
 		case eff == nil:
 			bad = append(bad, label+": no statusLine")
-		case !hook.IsOurStatusLine(eff.slCmd):
-			bad = append(bad, label+": statusLine does not run rota statusline dump ("+eff.path+")")
+		case !hook.IsOurStatusLine(eff.StatusLineCmd):
+			bad = append(bad, label+": statusLine does not run rota statusline dump ("+eff.Path+")")
 		default:
-			parts = append(parts, label+": "+eff.path)
+			parts = append(parts, label+": "+eff.Path)
 		}
 	}
 	if !anyFile {
@@ -990,11 +942,11 @@ func (d *runner) stopHook() Check {
 	}
 	found := map[string]string{}
 	var unreadable []string
-	for _, f := range d.hooks().inScope() {
-		if f.err != nil {
-			unreadable = append(unreadable, f.path)
+	for _, f := range d.hooks().InScope() {
+		if f.Err != nil {
+			unreadable = append(unreadable, f.Path)
 		}
-		for ev, c := range f.events {
+		for ev, c := range f.Events {
 			if _, ok := found[ev]; !ok {
 				found[ev] = c
 			}
@@ -1034,11 +986,11 @@ func (d *runner) guardHook() Check {
 	}
 	var unreadable []string
 	cmd := ""
-	for _, f := range d.hooks().reachesWorktree() {
-		if f.err != nil {
-			unreadable = append(unreadable, f.path)
+	for _, f := range d.hooks().Worktree() {
+		if f.Err != nil {
+			unreadable = append(unreadable, f.Path)
 		}
-		if c, ok := f.events[hook.EventGuard]; ok && cmd == "" {
+		if c, ok := f.Events[hook.EventGuard]; ok && cmd == "" {
 			cmd = c
 		}
 	}
