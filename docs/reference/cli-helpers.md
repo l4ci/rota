@@ -346,7 +346,7 @@ All writes target the umbrella `.rota/DECISIONS.md`, reject `--repo`, and refres
 | `rota worker pool list` | list the registered slots |
 | `rota worker pool reap (<slot>... \| --all)` | remove slots, their worktrees and branches |
 | `rota worker reset <slot> [--task <id>] [--check-only]` | refuse a slot that holds work, else cut a fresh task branch |
-| `rota worker inbox <slot> [--ack [--upto <seq>]]` | the relays `round review-relay` wrote to the slot's durable inbox; `--ack` marks them read (`--upto` bounds it to what the listing showed). `worker done` refuses (exit 4) while any is unread |
+| `rota worker inbox <slot> [--ack [--upto <seq>] \| --handled <seq> --reason <text> \| --returned <seq> --reason <text> \| --all]` | the relays `round review-relay` and the base retarget wrote to the slot's durable inbox; `--ack` marks them read (`--upto` bounds it to what the listing showed) without resolving an actionable request; `--handled` or `--returned` resolves one REVIEW/BASE request with a reason; `--all` lists history, returned requests included. `worker done` refuses (exit 4) while mail is unread or an actionable request is pending |
 | `rota worker reply <slot> --body-file <path\|->` | answer a reviewer on the slot's PR through the tracker; the comment carries a `worker-reply` marker |
 | `rota worker dispatch <slot> --body-file <path\|-> [--task <id>] [--relay] [--round <n>] [--boot-timeout <s>] [--kind <claude\|codex>]` | send a brief into a slot's session; refuses (exit 5) a human draft on the prompt line, and any dialog except the autocompact picker (`blockedBy: dialog`), which it dismisses once with Escape |
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |

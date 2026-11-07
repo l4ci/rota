@@ -8,6 +8,7 @@ Three verbs move an assigned issue:
 
 - **`rota round return`** is the worker's own verb for giving an issue back (blocked, wrong premise). You don't use it. The branch is pushed and kept, the claim is released, and the issue is a candidate again. A fresh `assign` starts clean; it does not continue the pushed branch.
 - **`rota round transfer <issue> --to <slot>`** continues the pushed branch in another slot, with the handoff comment named in the brief. Use it when the work is good and the worker is the problem (dead, wrong account, out of quota). `--to human` labels the issue `needs-human` and dispatches nothing: use it when the next step is a person's call.
+  A transfer, reclaim or reassignment returns the old assignment's pending inbox requests (REVIEW, BASE) with an automatic reason, and a worker can return one itself with `--returned`. Read them with `rota worker inbox <old slot> --all` and route each one explicitly (relay it to the new holder, capture it, or drop it); a returned request authorizes no work by itself.
 - **`rota round reclaim <slot>`** frees a `dead` or `stalled` slot and does not reassign; `assign` or `transfer` is your next call. Reclaiming a stalled slot kills its pane, so read the pane first and decide it is hung. A healthy slot needs `--force`, which you almost never want.
 
 All three push the branch before moving the slot off it, so no work is lost. `rota reap` never reclaims a stalled slot and never kills a live agent.

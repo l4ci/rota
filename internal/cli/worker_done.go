@@ -242,6 +242,9 @@ func doneData(r *worker.DoneResult) *jsonx.Object {
 	if r.Unread > 0 {
 		d.Set("unread", r.Unread)
 	}
+	if r.Pending > 0 {
+		d.Set("pending", r.Pending)
+	}
 	if r.Dirty {
 		d.Set("dirty", true)
 	}
