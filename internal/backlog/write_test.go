@@ -380,15 +380,7 @@ func TestComplete(t *testing.T) {
 			t.Fatalf("err = %v", err)
 		}
 	})
-	t.Run("reason and note on the done line", func(t *testing.T) {
-		f, _ := proj(t, rotaFiles(nil))
-		if _, err := f.Complete("T01", CompleteInput{Commit: "abc", Date: "2026-10-02", Reason: "blocked", Note: "waits"}); err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(read(t, f, ".rota/BACKLOG.md"), "Done 2026-10-02 [`abc`] (blocked: waits)\n") {
-			t.Error(read(t, f, ".rota/BACKLOG.md"))
-		}
-	})
+	// the blocked reason and note on the done line: TestBlockedCompletion.
 	t.Run("creates the Completed section", func(t *testing.T) {
 		f, _ := proj(t, map[string]string{".rota/BACKLOG.md": "# TODO\n\n## Bugs\n- **[B01] [P1] x.** y\n"})
 		if _, err := f.Complete("B01", CompleteInput{Commit: "abc", Date: "d", Reason: "dropped"}); err != nil {

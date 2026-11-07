@@ -167,17 +167,7 @@ func TestIssuesComplete(t *testing.T) {
 		wantCalls(t, tr, `get[5] close[5,"not_planned","Closed: `+reason+` — n\n\n<!-- rota:closed -->"]`)
 	}
 
-	// blocked: label plus comment, no proof gate; blocked again is a no-op.
-	b, tr = newIssues(t, `{}`, open(6))
-	if ok, err := b.Complete("6", CompleteInput{Reason: "blocked", Note: "waiting"}); !ok || err != nil {
-		t.Fatal(ok, err)
-	}
-	wantCalls(t, tr, `get[6] add_labels[6,["blocked"],true] add_comment[6,"Blocked — waiting\n\n<!-- rota:blocked -->"]`)
-	tr.Calls = nil
-	if ok, _ := b.Complete("6", CompleteInput{Reason: "blocked"}); ok {
-		t.Fatal("already blocked must be a no-op")
-	}
-	wantCalls(t, tr, `get[6]`)
+	// blocked completion is pinned per backend by TestBlockedCompletion.
 
 	// already closed, unknown, wrong letter
 	b, tr = newIssues(t, `{}`, Issue{Key: tracker.NumKey(3), State: "closed"})
