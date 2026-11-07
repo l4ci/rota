@@ -110,3 +110,45 @@ func TestWorkerTrainPlanRefusesOrder(t *testing.T) {
 		t.Errorf("exit %d: %s %s", code, out, errOut)
 	}
 }
+
+func TestWorkerTrainOnFailStopJSONAndText(t *testing.T) {
+	cmd := `printf -- '--- FAIL: TestWidget (0.00s)\nFAIL\n'; exit 1`
+	dir := planProject(t, gateConfig(t, `{"test":{"full":["`+strings.ReplaceAll(cmd, `"`, `\"`)+`"]}}`, "off", nil), false)
+	code, out, errOut := rotaIn(t, dir, "--json", "worker", "train", "w1", "w2", "--base", "main", "--on-fail", "stop", "--no-assign-check")
+	if code != 1 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	var j struct {
+		Data struct {
+			Verdict string `json:"verdict"`
+			Changed bool   `json:"changed"`
+			Culprit string `json:"culprit"`
+			Stop    struct {
+				Command   string                         `json:"command"`
+				Tests     []string                       `json:"tests"`
+				Scratch   string                         `json:"scratch"`
+				Base      string                         `json:"base"`
+				Culprit   *string                        `json:"culprit"`
+				Diagnosed bool                           `json:"diagnosed"`
+				Members   []struct{ Target, SHA string } `json:"members"`
+			} `json:"stop"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &j); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	s := j.Data.Stop
+	if j.Data.Verdict != "verify-failed" || j.Data.Changed || j.Data.Culprit != "" || s.Command == "" ||
+		strings.Join(s.Tests, ",") != "TestWidget" || s.Scratch == "" || s.Base == "" || s.Culprit != nil || s.Diagnosed || len(s.Members) != 2 || len(s.Members[0].SHA) != 40 {
+		t.Errorf("stop data: %s", out)
+	}
+	code, out, errOut = rotaIn(t, dir, "worker", "train", "w1", "w2", "--base", "main", "--on-fail", "stop", "--no-assign-check")
+	if code != 1 {
+		t.Fatalf("text exit %d: %s %s", code, out, errOut)
+	}
+	for _, want := range []string{"diagnosis skipped", "failing tests: TestWidget", "scratch tree: ", "member w1: ", "member w2: "} {
+		if !strings.Contains(out+errOut, want) {
+			t.Errorf("text lacks %q:\n%s%s", want, out, errOut)
+		}
+	}
+}
