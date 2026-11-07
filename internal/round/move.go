@@ -601,6 +601,9 @@ type TransferOpts struct {
 	// Kind and Model override the item's labels, as in assign. Refused when
 	// To is the human.
 	Kind, Model string
+	// Reserve lets a follow-up reserve slot (Reserve) receive the issue: only
+	// Continue sets it, for a follow-up a person asked for.
+	Reserve bool
 	// CapReason says why an item at the bounce cap moves: ledger.CapAmbiguousCriteria
 	// (to the human, after the criteria audit) or ledger.CapTier (to a stronger
 	// worker) or ledger.CapFresh (to a fresh context at round.freshAt, below
@@ -902,7 +905,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		if err := fenceExternal(run.to, "transfer", "check a branch out in a worktree"); err != nil {
 			return nil, err
 		}
-		if err := checkActive(reg, set, o.To, resuming); err != nil {
+		if err := checkActive(reg, set, o.To, resuming, o.Reserve); err != nil {
 			return nil, err
 		}
 		if !resuming {

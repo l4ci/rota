@@ -86,6 +86,19 @@ func HoldsWork(reg worker.Registry, s *worker.Slot) bool {
 	return false
 }
 
+// Reserve is the follow-up reserve (round.followupReserve, #2580): the roster
+// names right after the active ones, at most that many and never past the
+// roster. Only a follow-up a person asked for may take one (Transfer with
+// Reserve); backlog work never does. A reserve slot holding a follow-up is a
+// draining slot like any past the slot count: in use while it holds work, free
+// once that lands or moves, so the reserve keeps no state of its own.
+func Reserve(reg worker.Registry, set roundcfg.Settings) []string {
+	active, _ := Members(reg, set)
+	n := len(active)
+	end := min(n+max(set.FollowupReserve, 0), len(set.Roster))
+	return slices.Clone(set.Roster[n:end])
+}
+
 // CountIdle is how many roster slots are idle.
 func CountIdle(reg worker.Registry, roster []string) int {
 	n := 0
@@ -175,9 +188,9 @@ func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Set
 // checkActive refuses new work for a roster slot past the round's slot count:
 // it drains, or is parked outside the round. resuming is a slot taking back
 // the issue it already holds, which is not new work.
-func checkActive(reg worker.Registry, set roundcfg.Settings, name string, resuming bool) error {
+func checkActive(reg worker.Registry, set roundcfg.Settings, name string, resuming, reserve bool) error {
 	active, draining := Members(reg, set)
-	if resuming || slices.Contains(active, name) {
+	if resuming || slices.Contains(active, name) || reserve && slices.Contains(Reserve(reg, set), name) {
 		return nil
 	}
 	why := "is parked outside the round"

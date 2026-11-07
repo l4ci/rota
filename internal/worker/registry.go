@@ -199,6 +199,10 @@ type QueuedPR struct {
 	DecisionContext                        string // assignment snapshot retained when its slot is reused
 	Round                                  int
 	Relays                                 []any
+	// ReviewSeen is the review cursor the PR's slot held when it moved on
+	// (Slot.ReviewSeen): input after it is new. "" on a record from before
+	// cursors were kept.
+	ReviewSeen string
 	// Bundle is the member issues the PR closes beside Issue (a bundled slot's
 	// PR that was queued), none for one issue.
 	Bundle []string
@@ -218,8 +222,8 @@ func queuedFrom(o *jsonx.Object) QueuedPR {
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		DecisionContext: jsonx.Str(o, "decisionContext"),
-		Round:           round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
+		DecisionContext: jsonx.Str(o, "decisionContext"), ReviewSeen: jsonx.Str(o, "reviewSeen"),
+		Round: round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
 	}
 }
 
@@ -240,6 +244,9 @@ func (q QueuedPR) object() *jsonx.Object {
 	setStrList(o, "bundle", q.Bundle)
 	if q.DecisionContext != "" {
 		o.Set("decisionContext", q.DecisionContext)
+	}
+	if q.ReviewSeen != "" {
+		o.Set("reviewSeen", q.ReviewSeen)
 	}
 	return o
 }

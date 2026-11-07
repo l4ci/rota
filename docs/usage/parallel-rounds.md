@@ -719,13 +719,15 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
 2. gate and merge every finished PR, as one `worker train` when several wait, at most
    `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`.
    When train fill thresholds are enabled, wait for their count or age rule first;
-3. run the architecture-review trigger (`rota round architecture`): when the
+3. start the [follow-ups](#follow-ups) a person asked for, before any backlog work and within
+   the same `round.autopilotCap`;
+4. run the architecture-review trigger (`rota round architecture`): when the
    threshold is reached, or a slot is idle with nothing assignable, mint the review items
    (`round.architectureEvery` 0 never mints), one audit line per mint;
-4. assign the first ready candidate of the round's scope to each idle slot, at most
+5. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
-   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`). Likewise
+   down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
    go on, and the next tick assigns once an item has landed.
 
@@ -788,6 +790,31 @@ A worker that printed `ROTA-DONE` keeps its PR open for review. When a reviewer 
 - `round.reviewLoop: auto`: `round watch` and `round tick` run it themselves, and a tick lists it as `did review-relay`.
 
 `review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.freshAt` (default 2) the relay is a transfer instead: the branch moves to a free slot at the same tier with a brief of the findings still open in the last review and the review link, so the second attempt does not inherit a context that already holds the wrong model. With no free slot it relays in place and says so. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and under `auto` the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges. Under `manual` the tick only lists the review item and merges as before; under `auto` it skips the merge for a slot it relayed or could not relay. The same text is written to the slot's durable inbox first: the pane copy can cross a worker's `ROTA-DONE`, so `rota worker inbox <slot>` shows the worker what it missed and `rota worker done` refuses while that mail is unread.
+
+## Follow-ups
+
+A PR in review has no slot. When a person then asks for more work on it, that request should not
+wait behind fresh backlog work. rota reads each queued PR for review input newer than what its worker
+already saw. The PR becomes a follow-up when that input includes at least one comment or review by a
+person: a login with write access that is not a bot (`<name>[bot]`, GitLab's `project_<n>_bot`
+users). rota's own marked comments, approvals, review verdicts and input from bots or from users
+without write access never make a follow-up. Once a person has asked, they go to the worker in the
+same brief.
+
+Under `round.reviewLoop: auto` the autopilot starts a follow-up before it assigns any backlog item:
+`round transfer` moves the issue to an idle round slot with the review input as the brief, and counts
+a bounce. Everything a transfer checks still applies: the claim, overlap, the harness and account
+checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it.
+
+`round.followupReserve: N` (default 0) keeps the N roster names after the round's slots for
+follow-ups. `round start` provisions them; `round assign` and the tick never put backlog work there.
+When every round slot is busy, a follow-up takes a free reserve slot: an idle one, or one whose
+follow-up is done (its PR goes back to review). A reserve slot that holds work drains like any slot
+past `round.slots`, so restarting the watch or the round loses nothing.
+
+A follow-up that cannot start stays pending and the tick lists it as a `followup` item with the
+reason: no idle slot and no reserve, the reserve busy, a roster too short for the reserve, accounts
+cooling down, `round.reviewLoop: manual`, the bounce cap, or the transfer's refusal.
 
 ## Asking the maintainer
 
