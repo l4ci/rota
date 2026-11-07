@@ -131,6 +131,15 @@ func trainSummary(r worker.TrainResult) string {
 	return fmt.Sprintf("verify %s, diagnose %s; %s", r.VerifyTime.Round(time.Millisecond), r.DiagnoseTime.Round(time.Millisecond), landed)
 }
 
+// trainFailText is the failed train's message, with the timing summary only
+// when verify or diagnose ran: a refusal before verify has none to report.
+func trainFailText(r worker.TrainResult) string {
+	if r.VerifyTime == 0 && r.DiagnoseTime == 0 {
+		return r.Err
+	}
+	return r.Err + "\n" + trainSummary(r)
+}
+
 func planData(p *worker.TrainPlan) *jsonx.Object {
 	o := jsonx.NewObject()
 	cs := []any{}
@@ -317,7 +326,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s\n%s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "), trainSummary(r))
 			return res, nil
 		}
-		e := Failed("%s\n%s", r.Err, trainSummary(r))
+		e := Failed("%s", trainFailText(r))
 		e.Hint = r.Hint
 		return res, e
 	}

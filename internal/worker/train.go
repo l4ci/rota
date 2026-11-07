@@ -335,22 +335,39 @@ func failureOf(tier string, vr VerifyResult, members int, tip string) TrainFailu
 	return f
 }
 
-// onlyIn lists what f shows failing that orig does not: its tests, or its
-// command when the output names no test.
+// onlyIn lists what f shows failing that orig does not: its tests, or, when
+// either run names no test, its failed commands.
 func (f TrainFailure) onlyIn(orig TrainFailure) []string {
-	if len(f.Tests) == 0 && len(orig.Tests) == 0 {
-		if f.Command != "" && f.Command != orig.Command {
-			return []string{f.Command}
-		}
-		return nil
+	mine, theirs := f.Tests, orig.Tests
+	if len(mine) == 0 || len(theirs) == 0 {
+		mine, theirs = f.commands(), orig.commands()
 	}
 	var out []string
-	for _, tn := range f.Tests {
-		if !slices.Contains(orig.Tests, tn) {
-			out = append(out, tn)
+	for _, x := range mine {
+		if !slices.Contains(theirs, x) {
+			out = append(out, x)
 		}
 	}
 	return out
+}
+
+// commands splits the joined failed commands back into a list.
+func (f TrainFailure) commands() []string {
+	if f.Command == "" {
+		return nil
+	}
+	return strings.Split(f.Command, "; ")
+}
+
+// reproduces reports whether f shows any failure of orig: a run whose every
+// failure is diagnostic-only does not, so it cannot pin the original failure
+// on a member.
+func (f TrainFailure) reproduces(orig TrainFailure) bool {
+	mine := f.Tests
+	if len(mine) == 0 || len(orig.Tests) == 0 {
+		mine = f.commands()
+	}
+	return len(mine) == 0 || len(f.OnlyInDiagnostic) < len(mine)
 }
 
 func (p trainPlan) rem() string { return p.in.cfg.RemoteName() }
@@ -1069,8 +1086,10 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, p.in.cfg.E2E, scratch, p.in.ledger) })
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
-		orig := failureOf(tier, failed, n, tipAt(tips, n))
-		res.Original = &orig
+		if res.Original == nil {
+			orig := failureOf(tier, failed, n, tipAt(tips, n))
+			res.Original = &orig
+		}
 		if o.OnFail == OnFailStop {
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
@@ -1378,11 +1397,17 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		}
 		if pr.OK() {
 			lo = mid
-		} else {
-			recordDiagnostic(res, tier, pr, mid, tips[mid])
-			os.Remove(failed.LogPath)
-			failed, hi = pr, mid
+			continue
 		}
+		// A prefix failing only on what the original run never showed does not
+		// reproduce it: keep looking later, the evidence stays the earlier run.
+		if f := recordDiagnostic(res, tier, pr, mid, tips[mid]); res.Original != nil && !f.reproduces(*res.Original) {
+			os.Remove(pr.LogPath)
+			lo = mid
+			continue
+		}
+		os.Remove(failed.LogPath)
+		failed, hi = pr, mid
 	}
 	if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
 		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
@@ -1409,7 +1434,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		c.Target, tier, c.Target, c.Branch, lo, failed.detail())
 	res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
 	if only := diagnosticOnly(res); len(only) > 0 {
-		res.Err += fmt.Sprintf("\nDIAGNOSTIC-ONLY %s failed in a diagnostic prefix run but not in the original run; it is not confirmed as the cause of the original failure (no passing-alone check ran)", strings.Join(only, ", "))
+		res.Err += fmt.Sprintf("\nDIAGNOSTIC-ONLY %s failed in a diagnostic prefix run but not in the original run; it is not confirmed as the cause of the original failure (no passing-alone check ran) and did not pick the culprit", strings.Join(only, ", "))
 	}
 	if !landGreen || lo == 0 {
 		return 0, true, nil
@@ -1420,12 +1445,13 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 
 // recordDiagnostic appends a failed prefix run to res.Diagnostic, marking what
 // the original run did not show (#2753).
-func recordDiagnostic(res *TrainResult, tier string, vr VerifyResult, members int, tip string) {
+func recordDiagnostic(res *TrainResult, tier string, vr VerifyResult, members int, tip string) TrainFailure {
 	f := failureOf(tier, vr, members, tip)
 	if res.Original != nil {
 		f.OnlyInDiagnostic = f.onlyIn(*res.Original)
 	}
 	res.Diagnostic = append(res.Diagnostic, f)
+	return f
 }
 
 // diagnosticOnly lists, once each, everything a diagnostic run failed on that

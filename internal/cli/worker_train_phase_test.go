@@ -45,3 +45,13 @@ func TestTrainDataTimingAndFailureOrigin(t *testing.T) {
 		t.Errorf("summary: %q", s)
 	}
 }
+
+// A train refused before verify carries no timing summary in its message.
+func TestTrainFailTextSummaryOnlyAfterVerify(t *testing.T) {
+	if got := trainFailText(worker.TrainResult{Err: "refused"}); got != "refused" {
+		t.Errorf("refusal: %q", got)
+	}
+	if got := trainFailText(worker.TrainResult{Err: "red", VerifyTime: time.Second}); !strings.Contains(got, "verify 1s") {
+		t.Errorf("after verify: %q", got)
+	}
+}
