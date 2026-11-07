@@ -34,13 +34,28 @@ type fakeHost struct {
 	calls      []string
 	sent       string
 	spawnOpts  host.SpawnOpts
+	onSend     func() // runs inside Send, before it returns
+	receipts   bool   // advertise the DeliveryReconciler side (Core)
 }
 
-func (f *fakeHost) Kind() host.Kind                 { return f.name }
-func (f *fakeHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(f) }
-func (f *fakeHost) Require() error                  { return f.requireErr }
-func (f *fakeHost) InSession() bool                 { return f.inSession }
-func (f *fakeHost) Where() string                   { return f.where }
+// unconfirmed is a DeliveryReconciler that never confirms anything.
+type unconfirmed struct{}
+
+func (unconfirmed) ConfirmNotSubmitted(context.Context, string, string) error {
+	return errors.New("unconfirmed")
+}
+
+func (f *fakeHost) Kind() host.Kind { return f.name }
+func (f *fakeHost) Capabilities() host.Capabilities {
+	c := host.CapabilitiesOf(f)
+	if f.receipts {
+		c.DeliveryReconciler = unconfirmed{}
+	}
+	return c
+}
+func (f *fakeHost) Require() error  { return f.requireErr }
+func (f *fakeHost) InSession() bool { return f.inSession }
+func (f *fakeHost) Where() string   { return f.where }
 func (f *fakeHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	f.calls = append(f.calls, "spawn "+o.Slot)
 	f.spawnOpts = o
@@ -53,6 +68,9 @@ func (f *fakeHost) Send(_ context.Context, slot, handle, file string) error {
 	f.calls = append(f.calls, "send "+slot+" "+handle)
 	b, _ := os.ReadFile(file)
 	f.sent = string(b)
+	if f.onSend != nil {
+		f.onSend()
+	}
 	return f.sendErr
 }
 func (f *fakeHost) Capture(_ context.Context, slot, handle string, _ int) string {

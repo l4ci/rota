@@ -179,14 +179,31 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 	}
 }
 
-func TestOrcaDispatchPreservesHostFailureEvidence(t *testing.T) {
-	for _, detail := range []string{"prompt already submitted: branch changed from ben/2203 to auto-name; disable autoRenameBranchFromWork", "brief has 122881 bytes; limit is 122880 bytes"} {
+// A send the host classifies as maybe-submitted keeps its evidence; dispatch
+// reads the class off the error, never the host kind.
+func TestDispatchPreservesMaybeSubmittedEvidence(t *testing.T) {
+	for _, kind := range []host.Kind{host.Orca, host.Tmux} {
+		for _, detail := range []string{"prompt already submitted: branch changed from ben/2203 to auto-name; disable autoRenameBranchFromWork", "brief has 122881 bytes; limit is 122880 bytes"} {
+			dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
+			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+			h := &fakeHost{name: kind, sendErr: fmt.Errorf("%w: %s", host.ErrMaybeSubmitted, detail)}
+			_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
+			if exitOf(err) != 5 || !strings.Contains(err.Error(), detail) {
+				t.Fatalf("%s: send evidence hidden: %v", kind, err)
+			}
+		}
+	}
+}
+
+// A not-submitted send is safe to resend on any host kind: a retry exit.
+func TestDispatchNotSubmittedIsRetryOnEveryKind(t *testing.T) {
+	for _, kind := range []host.Kind{host.Orca, host.Tmux} {
 		dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-		h := &fakeHost{name: host.Orca, sendErr: errors.New(detail)}
+		h := &fakeHost{name: kind, sendErr: fmt.Errorf("%w: cannot read brief", host.ErrNotSubmitted)}
 		_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
-		if exitOf(err) != 5 || !strings.Contains(err.Error(), detail) {
-			t.Fatalf("Orca safety evidence hidden: %v", err)
+		if exitOf(err) != 6 || !strings.Contains(err.Error(), "never picked up") {
+			t.Fatalf("%s: %v", kind, err)
 		}
 	}
 }

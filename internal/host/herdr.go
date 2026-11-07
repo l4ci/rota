@@ -445,9 +445,9 @@ func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
 // herdr can type the brief and lose the Enter (#89). A brief left on the
 // prompt line is submitted with bounded Enter retries instead of failing.
 func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
-	text, err := h.d.readFile(file)
+	text, err := h.d.readBrief(file)
 	if err != nil {
-		return ErrNotSubmitted
+		return err
 	}
 	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
 	name := AgentName(slot, handle)
@@ -748,48 +748,45 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 		}
 		pids = processPIDs(pi.Stdout)
 	}
-	h.herdr(ctx, "agent", "prompt", name, "/exit")
-	// A handle naming a pane is one that shares its tab with panes rota does
-	// not own (the orchestrator's): only the pane closes, never that tab.
-	paneOnly := isPaneHandle(handle)
-	if paneOnly && pane == "" {
-		pane = handle
-	}
-	// A tab handle recorded while the pane was alone goes stale when other
-	// panes join that tab. Ask at kill time; a count that cannot be read is
-	// not proof the tab is the slot's own.
-	if !paneOnly && pane != "" {
-		// A tab herdr says is already gone holds nothing to protect.
-		if n, gone, ok := h.tabPanes(ctx, handle); !gone && (!ok || n != 1) {
-			paneOnly = true
-		}
-	}
-	if !paneOnly {
-		h.herdr(ctx, "tab", "close", handle)
-	}
-	// A `layout split` moves the pane out of its tab, so closing the tab no
-	// longer reaches it: close the pane itself.
-	if pane != "" {
-		h.herdr(ctx, "pane", "close", pane)
-	}
 	kind, target := "tab", handle
-	if paneOnly {
-		kind, target = "pane", pane
+	out, err := runKill(killSteps{
+		deps: &h.d, pids: pids, unverifiedBefore: evidenceUnknown,
+		close: func() error {
+			h.herdr(ctx, "agent", "prompt", name, "/exit")
+			// A handle naming a pane is one that shares its tab with panes rota does
+			// not own (the orchestrator's): only the pane closes, never that tab.
+			paneOnly := isPaneHandle(handle)
+			if paneOnly && pane == "" {
+				pane = handle
+			}
+			// A tab handle recorded while the pane was alone goes stale when other
+			// panes join that tab. Ask at kill time; a count that cannot be read is
+			// not proof the tab is the slot's own.
+			if !paneOnly && pane != "" {
+				// A tab herdr says is already gone holds nothing to protect.
+				if n, gone, ok := h.tabPanes(ctx, handle); !gone && (!ok || n != 1) {
+					paneOnly = true
+				}
+			}
+			if !paneOnly {
+				h.herdr(ctx, "tab", "close", handle)
+			}
+			// A `layout split` moves the pane out of its tab, so closing the tab no
+			// longer reaches it: close the pane itself.
+			if pane != "" {
+				h.herdr(ctx, "pane", "close", pane)
+			}
+			if paneOnly {
+				kind, target = "pane", pane
+			}
+			return nil
+		},
+		gone: func() presence { return h.probe(ctx, kind, target) },
+	})
+	if err != nil {
+		return err
 	}
-	alive, unknown, ok := killLoop(&h.d, pids, func() presence { return h.probe(ctx, kind, target) })
-	if evidenceUnknown {
-		return fmt.Errorf("slot '%s' previous session could not be verified (tab %s): herdr query failed before the close, so no process evidence was collected; not spawning a second one",
-			slot, handle)
-	}
-	if ok {
-		return nil
-	}
-	if unknown {
-		return fmt.Errorf("slot '%s' previous session could not be verified (tab %s%s): herdr query failed after the close; not spawning a second one",
-			slot, handle, pidSuffix(alive))
-	}
-	return fmt.Errorf("slot '%s' previous session is still running (tab %s%s); not spawning a second one",
-		slot, handle, pidSuffix(alive))
+	return out.err(slot, "herdr", "tab "+handle)
 }
 
 // CloseWorkspace implements WorkspaceCloser.

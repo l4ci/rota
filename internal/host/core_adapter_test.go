@@ -1032,7 +1032,7 @@ func TestCoreAdapterUnknownRPCErrorDoesNotReplay(t *testing.T) {
 	s := coreSpawn(t, h)
 	p := coreBrief(t, "possibly typed relay")
 	f.sendError = "internal_error"
-	if err := h.Send(bg, "dana", s, p); !errors.Is(err, ErrDeliveryUnknown) {
+	if err := h.Send(bg, "dana", s, p); !errors.Is(err, ErrDeliveryUnknown) || !errors.Is(err, ErrMaybeSubmitted) {
 		t.Fatalf("unexpected RPC error = %v", err)
 	}
 	f.sendError = ""

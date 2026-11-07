@@ -33,8 +33,9 @@ type notifyHerdr struct {
 	notes []string
 }
 
-func (*notifyHerdr) Kind() host.Kind { return host.Herdr }
-func (*notifyHerdr) Require() error  { return nil }
+func (*notifyHerdr) Kind() host.Kind                   { return host.Herdr }
+func (h *notifyHerdr) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+func (*notifyHerdr) Require() error                    { return nil }
 func (h *notifyHerdr) Notify(_ context.Context, title, _ string) {
 	h.notes = append(h.notes, title)
 }
@@ -65,7 +66,12 @@ func TestKeepaliveNotifyHostFollowsDepsEnv(t *testing.T) {
 	t.Setenv("TMUX", "")
 	fake := &notifyHerdr{}
 	deps := testDeps()
-	deps.Host = func(host.Kind) host.Host { return fake }
+	deps.Host = func(k host.Kind) host.Host {
+		if k == host.Herdr {
+			return fake
+		}
+		return &cliHost{} // no Notifier side
+	}
 	c := &Ctx{Deps: deps, Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
 
 	keepaliveNotify(context.Background(), c, root, "none", "")

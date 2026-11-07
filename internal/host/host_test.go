@@ -326,7 +326,9 @@ func TestTmuxSendPasteFails(t *testing.T) {
 		}
 		return Result{}
 	}}
-	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", "/f"); err != ErrNotSubmitted {
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte("go"), 0o644)
+	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); err != ErrNotSubmitted {
 		t.Errorf("Send = %v", err)
 	}
 	if f.count("tmux send-keys") != 0 {
@@ -1097,12 +1099,16 @@ func TestHerdrKillTransportFailureIsUnproven(t *testing.T) {
 
 func TestHerdrNotify(t *testing.T) {
 	f := &fake{handler: func(string, []string) Result { return Result{} }}
-	New("herdr", deps(f, herdrEnv, &clock{})).Notify(bg, "T", "B")
+	New("herdr", deps(f, herdrEnv, &clock{})).Capabilities().Notifier.Notify(bg, "T", "B")
 	if f.log() != "herdr notification show T --body B --sound request" {
 		t.Errorf("call = %s", f.log())
 	}
-	g := &fake{handler: func(string, []string) Result { t.Error("tmux has no notification surface"); return Result{} }}
-	New("tmux", deps(g, nil, &clock{})).Notify(bg, "T", "B")
+	// Hosts without the side advertise none; callers ask, they never call a no-op.
+	for _, k := range []Kind{Tmux, Orca, HerdrCore} {
+		if n := New(k, deps(&fake{handler: func(string, []string) Result { return Result{} }}, nil, &clock{})).Capabilities().Notifier; n != nil {
+			t.Errorf("%s advertises a Notifier, want none", k)
+		}
+	}
 }
 
 func TestTmuxEnsureOperator(t *testing.T) {
@@ -1653,7 +1659,7 @@ func TestHerdrNotifyReportsDroppedAlerts(t *testing.T) {
 		var errb strings.Builder
 		d := deps(f, herdrEnv, &clock{})
 		d.Stderr = &errb
-		New("herdr", d).Notify(bg, "rota worker w1: BLOCKED", "B")
+		New("herdr", d).Capabilities().Notifier.Notify(bg, "rota worker w1: BLOCKED", "B")
 		if f.count("herdr notification show") != 1 {
 			t.Errorf("%s: notify called %d times, want 1", reason, f.count("herdr notification show"))
 		}

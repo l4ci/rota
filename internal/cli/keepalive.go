@@ -291,17 +291,19 @@ func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) kee
 	}
 }
 
-// keepaliveNotify raises the herdr notification alone, when the round's host
-// is herdr.
+// keepaliveNotify raises the round host's notification alone, when that host
+// has a notification side.
 func keepaliveNotify(ctx context.Context, c *Ctx, root string, title, body string) {
-	if c.deps().resolveHost(root) != host.Herdr {
+	kind := c.deps().resolveHost(root)
+	if kind == host.Solo {
 		return
 	}
-	h := c.deps().Host(host.Herdr)
-	if h.Require() != nil {
+	h := c.deps().Host(kind)
+	n := h.Capabilities().Notifier
+	if n == nil || h.Require() != nil {
 		return
 	}
-	h.Notify(ctx, title, body)
+	n.Notify(ctx, title, body)
 }
 
 func keepaliveStatus(c *Ctx, args []string) (Result, error) {

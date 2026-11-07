@@ -220,6 +220,7 @@ func TestOrcaGuardsAndFallback(t *testing.T) {
 		{"draft only", orcaEmptyReady, "model: gpt-5.3-codex\n› do work", "{}", ErrNotSubmitted, 1},
 		{"submitted echo", orcaEmptyReady, "do work\nresult follows\n› ", "{}", ErrNotSubmitted, 1},
 		{"busy evidence", orcaEmptyReady, "Working… esc to interrupt\n› ", "{}", nil, 1},
+		{"input not ready", "Booting the agent…", "", "{}", ErrMaybeSubmitted, 0},
 		{"malformed receipt", orcaEmptyReady, "", `not-json`, fmt.Errorf("malformed"), 1},
 		{"unchanged", orcaEmptyReady, orcaEmptyReady, "{}", ErrNotSubmitted, 1},
 	} {
@@ -234,8 +235,8 @@ func TestOrcaGuardsAndFallback(t *testing.T) {
 					t.Fatal(e)
 				}
 			} else if tc.name == "malformed receipt" {
-				if e == nil {
-					t.Fatal("malformed reply proved pickup")
+				if !errors.Is(e, ErrMaybeSubmitted) {
+					t.Fatalf("malformed reply = %v, want ErrMaybeSubmitted", e)
 				}
 			} else if !errors.Is(e, tc.want) {
 				t.Fatalf("got %v want %v", e, tc.want)
