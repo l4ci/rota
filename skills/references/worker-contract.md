@@ -230,10 +230,12 @@ Work only this task, then stop.
   not code, so it has no PR. When every finding is filed, print
   `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated), or
   `ROTA-DONE <slot> issues:none` when the completed review found nothing, and stop.
+  Hosted workers (herdr-core, herdr, tmux or Orca) report completion by printing
+  that line; do not run `rota round report`, which is solo-only.
   Do not open a PR for it.
 ```
 
-`rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
+`rota round accept` polls an unsettled hosted slot before its busy check, so the orchestrator needs no manual `worker poll` after a fresh completion line. `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
 An explicitly completed review with no findings prints `ROTA-DONE <slot> issues:none`; under solo, record it with `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed). This is completion evidence, unlike a bare `issues:` or an omitted issue list. Acceptance closes it with `Review done: no findings.` and frees the slot, with no PR or fabricated issue.
 
