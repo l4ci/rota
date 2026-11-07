@@ -63,3 +63,42 @@ func TestParseRejectsOffsets(t *testing.T) {
 		}
 	}
 }
+
+func TestISOMatchesPython(t *testing.T) {
+	plus2 := time.FixedZone("x", 2*3600)
+	for _, c := range []struct {
+		at   time.Time
+		want string
+	}{
+		{time.Date(2026, 10, 2, 15, 0, 0, 0, time.UTC), "2026-10-02T15:00:00+00:00"},
+		{time.Date(2026, 10, 2, 15, 0, 0, 5000, time.UTC), "2026-10-02T15:00:00.000005+00:00"},
+		{time.Date(2026, 10, 2, 15, 0, 0, 999, time.UTC), "2026-10-02T15:00:00+00:00"},
+		{time.Date(2026, 10, 2, 17, 0, 0, 123456000, plus2), "2026-10-02T17:00:00.123456+02:00"},
+	} {
+		if got := ISO(c.at); got != c.want {
+			t.Errorf("ISO(%v) = %q, want %q", c.at, got, c.want)
+		}
+	}
+}
+
+func TestParseISOIsTolerant(t *testing.T) {
+	for in, want := range map[string]string{
+		"2026-10-02T15:00:00Z":             "2026-10-02T15:00:00+00:00",
+		"2026-10-02T15:00:00.5Z":           "2026-10-02T15:00:00.500000+00:00",
+		"2026-10-02T17:00:00.123456+02:00": "2026-10-02T17:00:00.123456+02:00",
+		"2026-10-02T15:00:00+00:00":        "2026-10-02T15:00:00+00:00",
+		"2026-10-02T15:00:00.25":           "2026-10-02T15:00:00.250000+00:00",
+		"2026-10-02T15:00:00":              "2026-10-02T15:00:00+00:00",
+		"2026-10-02":                       "2026-10-02T00:00:00+00:00",
+	} {
+		tm := ParseISO(in)
+		if tm == nil || ISO(*tm) != want {
+			t.Errorf("ParseISO(%q) = %v, want %s", in, tm, want)
+		}
+	}
+	for _, in := range []string{"", "garbage", "2026-10-02 15:00:00"} {
+		if ParseISO(in) != nil {
+			t.Errorf("ParseISO(%q) parsed, want nil", in)
+		}
+	}
+}
