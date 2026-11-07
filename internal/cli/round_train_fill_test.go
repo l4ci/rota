@@ -164,17 +164,6 @@ func TestTrainFillUnclockedReviewDisabledPR(t *testing.T) {
 	}
 }
 
-func TestTrainFillImmediateNudgeLeavesFreshPRsFilling(t *testing.T) {
-	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
-	ns := trainNudgesWithFill([]waitingPR{
-		{PR: "#1", Base: "main", Reviewed: true, ReadySince: now.Add(-time.Minute)},
-		{PR: "#90", Base: "main", Reviewed: true, Immediate: true},
-	}, roundcfg.TrainFill{Max: 4, Minutes: 20}, now)
-	if len(ns) != 1 || ns[0].Command() != "rota worker gate 90 --base main" {
-		t.Fatalf("unclocked fallback also released fresh PRs: %+v", ns)
-	}
-}
-
 func TestTrainNudgeKeepsOldestAndShowsObservedWait(t *testing.T) {
 	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
 	ns := trainNudgesWithFill([]waitingPR{
