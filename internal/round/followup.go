@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -45,9 +45,11 @@ func IsBotLogin(login string) bool { return botLogin.MatchString(strings.ToLower
 
 // FollowUps lists the queued PRs a person asked to continue, oldest request
 // first. A person is a login with write access (the forge's CanPush) that is
-// no bot. Comments carrying a rota marker, approvals, verdicts and input from
-// bots or strangers never make a follow-up; they ride along in the brief once
-// a person asked. A record without a cursor (queued before cursors were kept)
+// no bot. Comments carrying a rota marker (main's review-bounce included: rota
+// posts it under the maintainer's login), approvals, verdicts and input from
+// bots or strangers never make a follow-up. Once a person asked, the bot and
+// stranger comments and a review-bounce ride along in the brief; approvals,
+// verdicts and other marked comments are not review input. A record without a cursor (queued before cursors were kept)
 // or whose PR is not open is skipped. A PR the forge cannot read is skipped
 // with a warning, so one bad PR does not hold the others.
 func (e Env) FollowUps(ctx context.Context, root string, f ReviewForge) ([]FollowUp, []string, error) {
@@ -81,7 +83,8 @@ func (e Env) FollowUps(ctx context.Context, root string, f ReviewForge) ([]Follo
 		}
 		u := FollowUp{Issue: q.Issue, PR: q.PR, From: q.From, Head: info.HeadSHA, Seen: q.ReviewSeen, Batch: b}
 		for _, it := range b.Items {
-			if it.Author == "" || IsBotLogin(it.Author) {
+			// A marked comment is rota's own post, whatever login it came from.
+			if it.Author == "" || IsBotLogin(it.Author) || marker.Has(it.Body) {
 				continue
 			}
 			w, err := trust.Writer(it.Author)
@@ -121,7 +124,8 @@ type ContinueOpts struct {
 // Continue starts a follow-up: the queued PR's issue moves to the receiving
 // slot (Transfer) with the review input as its brief, counted as a bounce, and
 // the receiver's review cursor starts at the batch so the same input is not
-// relayed again. Everything Transfer checks still holds: the claim, overlap,
+// relayed again; Transfer sets the cursor in the same registry write that hands
+// the receiver the queued PR. Everything Transfer checks still holds: the claim, overlap,
 // the harness and account preflight, the receiver's guard. At round.maxBounces
 // it refuses (BlockMaxBounces), and a record that moved since FollowUps read
 // it (another start, a merge) refuses too; either way nothing moves, so the
@@ -154,7 +158,7 @@ func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts
 	var terr error
 	bres, err := worker.Bounce(store, nil, u.Issue, u.From, u.Head, o.MaxBounces, func(rec worker.BounceRecord) error {
 		res, terr = e.Transfer(ctx, root, be, TransferOpts{
-			Issue: u.Issue, To: o.To, Reserve: o.Reserve,
+			Issue: u.Issue, To: o.To, Reserve: o.Reserve, ReviewSeen: u.Batch.Cursor,
 			Decisions: ReviewRelayText(u.Batch),
 			Note:      fmt.Sprintf("follow-up asked by %s on %s (bounce %d): the PR waited in the review queue, so it moves to %s", strutil.FirstNonEmpty(who, "a person"), prLabel(u.PR), rec.N, o.To),
 		})
@@ -172,9 +176,6 @@ func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts
 	}
 	if bres.NotifyErr != nil {
 		return res, bres.Err()
-	}
-	if _, serr := worker.UpdateSlot(root, o.To, func(t *worker.Slot) { t.SetReviewSeen(u.Batch.Cursor) }); serr != nil {
-		terr = errors.Join(terr, serr)
 	}
 	return res, terr
 }

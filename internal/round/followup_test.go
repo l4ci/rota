@@ -82,6 +82,54 @@ func TestFollowUpsTellPeopleFromAutomation(t *testing.T) {
 	}
 }
 
+// Rota posts as the maintainer's login on a support PR, so main's own
+// review-bounce comment comes from a writer who is no bot. It rides along in
+// the brief once a person asked, but never makes a follow-up by itself: rota
+// would otherwise restart its own work until round.maxBounces.
+func TestFollowUpsIgnoreRotaReviewBounce(t *testing.T) {
+	f, fg := followFx(t)
+	bounce := tracker.Comment{ID: "7", Author: "alice", Body: marker.ReviewBounce("abc123") + "\nplease fix the failing test", CreatedAt: f.later(time.Hour)}
+	fg.notes = []tracker.Comment{bounce}
+	got, warns, err := f.env.FollowUps(bg, f.root, fg)
+	if err != nil || len(warns) != 0 {
+		t.Fatalf("%v %v", err, warns)
+	}
+	if len(got) != 0 {
+		t.Fatalf("follow-ups %+v, want none: a rota review-bounce is no person asking", got)
+	}
+
+	fg.notes = append(fg.notes, tracker.Comment{ID: "8", Author: "alice", Body: "and the empty case", CreatedAt: f.later(2 * time.Hour)})
+	got, _, err = f.env.FollowUps(bg, f.root, fg)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("follow-ups %+v %v, want one", got, err)
+	}
+	if !got[0].At.Equal(f.later(2*time.Hour)) || len(got[0].Batch.Items) != 2 {
+		t.Fatalf("follow-up %+v: asked at the person's comment, the bounce rides along", got[0])
+	}
+}
+
+// pushErrForge cannot tell who may push.
+type pushErrForge struct{ reviewForgeFake }
+
+func (pushErrForge) CanPush(context.Context, string) (bool, error) {
+	return false, errors.New("permission lookup failed")
+}
+
+// A write-access lookup that fails closes the follow-up: no start, a warning.
+func TestFollowUpsFailClosedOnLookupError(t *testing.T) {
+	f, _ := followFx(t)
+	fg := &pushErrForge{reviewForgeFake{head: "abc123", notes: []tracker.Comment{
+		{ID: "6", Author: "alice", Body: "more please", CreatedAt: f.later(time.Hour)},
+	}}}
+	got, warns, err := f.env.FollowUps(bg, f.root, fg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 || len(warns) != 1 || !strings.Contains(warns[0], "permission lookup failed") {
+		t.Fatalf("follow-ups %+v warns %v, want none and one warning", got, warns)
+	}
+}
+
 func TestFollowUpsSkipRecordWithoutCursor(t *testing.T) {
 	f, fg := followFx(t)
 	if err := worker.Update(f.root, func(d *worker.Doc) {

@@ -60,7 +60,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 	for _, f := range list {
 		switch {
 		case !src.Auto:
-			pending(f, "round.reviewLoop is manual; run `rota round transfer "+f.Issue+" --to <free slot> --body-file <review>`")
+			pending(f, "round.reviewLoop is manual; run `rota round transfer "+f.Issue+" --to <free round slot> --body-file <review>`; reserve slots take follow-ups from the auto tick only")
 			continue
 		case r.Capped != "":
 			pending(f, r.Capped)
