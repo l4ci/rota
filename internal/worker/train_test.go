@@ -1465,3 +1465,22 @@ func TestTrainFailureOnlyInCommand(t *testing.T) {
 		t.Errorf("same command, no tests: %q", got)
 	}
 }
+
+// Under --land-green only a prefix that ran green lands: one that failed only
+// on a diagnostic-only test was red, so it never lands (#2753).
+func TestTrainLandGreenSkipsDiagnosticOnlyRedPrefix(t *testing.T) {
+	// b3 brings in TestA, the original failure. The prefix b1+b2 fails only
+	// TestB, which the original run never showed.
+	cmd := `if test -f b3.txt; then echo '--- FAIL: TestA (0.00s)'; echo FAIL; exit 1; fi; if test -f b2.txt; then echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, LandGreen: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Culprit != "b3" {
+		t.Fatalf("culprit %q: %+v", res.Culprit, res.Members)
+	}
+	if len(res.Landed) > 1 {
+		t.Fatalf("landed %q: the b1+b2 prefix ran red", res.Landed)
+	}
+}
