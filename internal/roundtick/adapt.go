@@ -35,14 +35,30 @@ func QueuedRefs(prs []worker.QueuedPR) []string {
 	return out
 }
 
-// ReconcileLines renders a reconcile outcome as what it repaired and the drift
-// it left, one "kind key" string per finding.
-func ReconcileLines(out round.Outcome) (repaired, drift []string) {
+// DriftKind is the kind of a reconcile finding (round.Finding.Kind). It crosses
+// the seam typed, so the tick can branch on it without parsing a line.
+type DriftKind string
+
+// Finding is one reconcile finding as the tick carries it: its kind and its key.
+type Finding struct {
+	Kind DriftKind
+	Key  string
+}
+
+// String is the finding's display and audit form, "kind key".
+func (f Finding) String() string { return string(f.Kind) + " " + f.Key }
+
+// FindingOf maps a reconcile finding to the tick's typed one.
+func FindingOf(f round.Finding) Finding { return Finding{Kind: DriftKind(f.Kind), Key: f.Key()} }
+
+// ReconcileFindings maps a reconcile outcome to what it repaired and the drift
+// it left.
+func ReconcileFindings(out round.Outcome) (repaired, drift []Finding) {
 	for _, f := range out.Repaired {
-		repaired = append(repaired, f.Kind+" "+f.Key())
+		repaired = append(repaired, FindingOf(f))
 	}
 	for _, f := range out.Drift {
-		drift = append(drift, f.Kind+" "+f.Key())
+		drift = append(drift, FindingOf(f))
 	}
 	return repaired, drift
 }

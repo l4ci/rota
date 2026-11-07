@@ -46,6 +46,7 @@ func LoadState(commonDir string, round int) State {
 
 // Apply loads the state into an env.
 func (s State) Apply(e *Env) {
+	e.Stopped = s.Stopped
 	e.Held = s.Held
 	e.FailedHeads = s.FailedHeads
 	e.Filling = s.Filling

@@ -42,7 +42,7 @@ func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 	assigned := 0
 	e := roundtick.Env{
 		Cap:       1,
-		Reconcile: func(context.Context) ([]string, []string, error) { return nil, nil, nil },
+		Reconcile: func(context.Context) ([]roundtick.Finding, []roundtick.Finding, error) { return nil, nil, nil },
 		Slots:     func() []roundtick.Slot { return []roundtick.Slot{{Name: "ben", State: "idle"}} },
 		Candidates: func(context.Context) ([]round.Candidate, error) {
 			return []round.Candidate{{ID: "#1"}}, nil
