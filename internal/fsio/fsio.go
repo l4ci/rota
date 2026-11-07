@@ -162,6 +162,9 @@ var ErrUnreadable = errors.New("state file unreadable")
 // lockSuffix names a data file's lock sidecar: "<path>" + lockSuffix.
 const lockSuffix = ".lock"
 
+// LockPath is the lock sidecar Locked takes for path.
+func LockPath(path string) string { return path + lockSuffix }
+
 // Locked runs fn while holding an exclusive flock on "<path>.lock". The lock
 // sits on a sibling file because the atomic rename swaps the data file's
 // inode. A busy lock is retried every 50 ms until timeout. The kernel drops

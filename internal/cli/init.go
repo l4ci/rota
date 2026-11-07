@@ -149,7 +149,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		var err error
 		// Saved team prompts activate only on an explicit agents write. An init
 		// rerun must neither activate a pending save nor erase active output.
-		if _, statErr := os.Lstat(filepath.Join(dir, ".rota", "prompts.json")); errors.Is(statErr, os.ErrNotExist) {
+		if _, statErr := os.Lstat(rotatree.Prompts(dir)); errors.Is(statErr, os.ErrNotExist) {
 			es, err = agents.Write(dir, c.deps().Config(dir))
 		} else if statErr != nil {
 			err = statErr
