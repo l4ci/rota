@@ -398,8 +398,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UmVjb3JkIG1haW50YWluZXIgYW5zd2VycyBieSB0aGVpciByZWFsIGNoYW5uZWwsIG5ldmVyIGFzIGEgcmVsYXk": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-08"
+      "hits": 2,
+      "lastSeen": "2026-11-07"
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.U21va2Ugc2VjdGlvbiByZXNlcnZhdGlvbiBrZXlzIG9uIHRoZSB3b3JkcyAnc21va2Ugc2VjdGlvbicgb3IgJ3Rlc3Qvc2VjdGlvbnMn": {
       "tier": "provisional",
@@ -643,8 +643,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gUFJzIHdpdGggZGlzam9pbnQgcGF0aHM7IGEgbmV3IGNvbmZpZyBrZXkgcmVkcyB0aGUgZnJvemVuIGNvbmZpZyByZWNvcmQ": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
+      "hits": 2,
+      "lastSeen": "2026-11-06"
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.R2F0aW5nIGEgUFIgb3V0c2lkZSBhIHJvdW5k": {
       "tier": "deprecated",
@@ -773,8 +773,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VW50aWwgIzE0ODA6IG5vIGFzc2lnbiBvciB0cmFuc2ZlciB3aGlsZSBhIGdhdGUgcnVucw": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.T3JjaGVzdHJhdG9yIGZpeCBvbiBhIGxpdmUgc2xvdCBicmFuY2g": {
       "tier": "provisional",
@@ -813,8 +813,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBicmllZiBuZXZlciBuYXJyb3dzIHRoZSBpc3N1ZSdzIGFjY2VwdGFuY2U": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V2Vla2x5IGxpbWl0OiBhbnN3ZXIgU3RvcC1hbmQtd2FpdCwgcmVhc3NpZ24gdGhlIGFjY291bnQsIHJlc3VtZSB0aGUgc2xvdA": {
       "tier": "provisional",
@@ -853,8 +853,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QW4gYXNzaWdubWVudCBicmllZiBpcyBub3QgYSByZWxheQ": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-24"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBrZXkgcmVuYW1lIG11c3QgZ3JlcCB0ZXN0L3NlY3Rpb25zIGZvciB0aGUgb2xkIGtleQ": {
       "tier": "provisional",
@@ -913,8 +913,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.R2F0ZSBhIHNsb3QncyBQUiBieSBzbG90IG5hbWUsIG5vdCBQUiBudW1iZXI": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-26"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBTZWN0aW9ucyAmIGZpeHR1cmVz.QSBuZXcgc2VjdGlvbiBjYW4gZXhwb3NlIGFuIG9sZCBmaXh0dXJlIGxlYWs": {
       "tier": "provisional",
@@ -1001,15 +1001,10 @@
       "hits": 0,
       "lastSeen": "2026-10-30"
     },
-    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Qm91bmNlIGNhcDogQXRDYXAgcGFya3MsIG5vdCBvbmx5IENhcHBlZA": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-31"
-    },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gcmVmdXNhbHM6IHN0YWxlIHJldmlldyBhYm9ydHMsIGJvZHkgZ2FwcyBza2lw": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-31"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "QnVpbGQgJiBUb29saW5nOiBWaWRlbyBwaXBlbGluZQ.S29rb3JvIGZsYXBzIHRoZSBUIGluIHJvdGE6IHVzZSB0aGUgbGV4aWNvbg": {
       "tier": "provisional",
@@ -1023,8 +1018,8 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.QSBib3VuY2UgbmV2ZXIgcmVhY2hlcyBhIHBhbmUgdGhhdCBwcmludGVkIFJPVEEtRE9ORQ": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-11-01"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VGhlIGxhc3Qgc2xpY2Ugb2YgYSBwYXJ0aWFsLXNsaWNlIGlzc3VlIGdhdGVzIHdpdGggLS1maW5hbC1zbGljZQ": {
       "tier": "provisional",
@@ -1058,13 +1053,13 @@
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.Q2FwdHVyZSBob3N0IHByb2Nlc3MgZXZpZGVuY2Ugd2hpbGUgdGhlIGFnZW50IGxpdmVz": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-11-03"
+      "hits": 2,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.TmV3IHRlcm1pbmFsIGhvc3RzIG5lZWQgcmVhbC1hZGFwdGVyIHJvdW5kIHRlc3Rz": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-11-03"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.VmVyZGljdCBmYWxsYmFjayB0ZXN0cyBuZWVkIG1peGVkIGtpbmRzIGFuZCBzYW1lLXNoYSB1cGRhdGVz": {
       "tier": "provisional",
@@ -1073,38 +1068,38 @@
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.V3JhcHBlcnMgdGhhdCBlbWJlZCBJc3N1ZVRyYWNrZXIgaGlkZSBvcHRpb25hbCBpbnRlcmZhY2Vz": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 1,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.U2V0IEl0ZW0uVHlwZSBleHBsaWNpdGx5IGluIHJvdW5kIHRlc3Rz": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-27"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.Q29tcGxldGlvbiB0ZXN0cyBuZWVkIHRoZSByZWFsIGJhY2tsb2cgYmFja2VuZA": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-11-03"
+      "hits": 6,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.VGVzdHMgdGhhdCByZWFkIHNsb3QgZW52IG11c3Qgc3R1YiBHZXRlbnY": {
       "tier": "confirmed",
-      "hits": 25,
-      "lastSeen": "2026-11-03"
+      "hits": 29,
+      "lastSeen": "2026-11-07"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.SXNvbGF0ZSB0aGUgZ2xvYmFsIGNvbmZpZyB3aXRob3V0IGEgdGVtcCBkaXIgbGVhaw": {
       "tier": "confirmed",
-      "hits": 8,
-      "lastSeen": "2026-11-03"
+      "hits": 10,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.QSBiaWdnZXIgdGltZW91dCBpcyBub3QgYSBmbGFrZSBmaXg": {
       "tier": "confirmed",
-      "hits": 6,
-      "lastSeen": "2026-11-03"
+      "hits": 8,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.RW1iZWRkaW5nIGhvc3QgZmFrZXMgbXVzdCByZWRlY2xhcmUgQ2FwYWJpbGl0aWVz": {
       "tier": "confirmed",
-      "hits": 12,
-      "lastSeen": "2026-11-03"
+      "hits": 13,
+      "lastSeen": "2026-11-06"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.R2F0ZVJlc3VsdC5PSyBzdGF5cyBuYXJyb3dlciB0aGFuIENMSSBzdWNjZXNz": {
       "tier": "provisional",
@@ -1148,8 +1143,8 @@
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Q2xhc3NpZnkgZXZlcnkgbmV3IHZlcmIgaW4gdGhlIHN1cHBvcnQgZmVuY2U": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 2,
+      "lastSeen": "2026-11-07"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.QSByZWdpc3RyeS1kZXJpdmVkIGd1YXJkIGNhbm5vdCBmaW5kIHdoYXQgdGhlIHJlZ2lzdHJ5IGxhY2tz": {
       "tier": "provisional",
@@ -1168,8 +1163,8 @@
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Q29udHJhY3QgZGF0YSBsaW5lcyBkZWNpZGUgcmVhZC1vbmx5IHZlcmJz": {
       "tier": "confirmed",
-      "hits": 8,
-      "lastSeen": "2026-10-27"
+      "hits": 10,
+      "lastSeen": "2026-11-07"
     },
     "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.QSBjb25maWcgZW51bSBvZiBoYXJuZXNzIGtpbmRzIG11c3QgYmUgYWxsb3dsaXN0ZWQgaW4gdGhlIGtpbmQtc3dpdGNoIGd1YXJk": {
       "tier": "confirmed",
@@ -1313,8 +1308,153 @@
     },
     "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJlZS1zY2FuIHJlZ2lzdHJ5IGNvbmZsaWN0cyBvbmx5IHNob3cgb24gdGhlIG1lcmdlZCB0cmVl": {
       "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.VHJlZS1zY2FuIHJlZ2lzdHJ5IGZvciB0ZW1wLXRyZWUgd2Fsa2Vycw": {
+      "tier": "provisional",
       "hits": 0,
-      "lastSeen": "2026-11-05"
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.TW92aW5nIGEgcmVnaXN0ZXJlZCB0ZXN0IG1vdmVzIGl0cyByZWdpc3RyeSBlbnRyeQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.UmVhZCBwYXRocyBpbiBpbnRlcm5hbC9yb3VuZCBhcmUgbm90IGFsbCByZWFkLW9ubHk": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.R2F0ZU9wdHMuUmV2aWV3c09ubHkgc3RpbGwgd3JpdGVzOyB1c2UgT2JzZXJ2ZQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.VGVsZW1ldHJ5IGxlZGdlciBraW5kcyBhcmUgc2tpcHBlZCBpbiBsZWRnZXIuRm9sZA": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.U2xvdCBpbmJveCBvdXRsaXZlcyBhc3NpZ25tZW50cw": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.U2xvdC5TZXRUYXNrIGlzIGEgcmVuYW1lLCBub3QgYW4gYXNzaWdubWVudCBjaGFuZ2U": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.RmFpbGluZ1Rlc3RzIG5lZWRzIGdvIHRlc3QgRkFJTCBsaW5lcw": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.VHJhaW4gLS1sYW5kLWdyZWVuIGxhbmRzIGdyZWVuLCBub3QgbG8": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UXVldWVkIFBSIHJlY29yZHMgY2FycnkgdGhlaXIgb3duIHJldmlldyBjdXJzb3I": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.cmV2aWV3IHNjYWZmb2xkaW5nIGZsYWdzICJpbiBmbGlnaHQiIGluIGZpeHR1cmVz": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.VHJhbnNmZXIgc2V0cyB0aGUgcmV2aWV3IGN1cnNvciBpbiBhZG9wdA": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.U2hpZWxkIGEgc3RlcCBmcm9tIGNhbmNlbCBvbiBib3RoIGUuQ3R4IGFuZCBjdHg": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.Q2FuY2VsbGVkIHZlcmlmeSBsb29rcyBsaWtlIGEgcmVkIHZlcmlmeQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Um90YXRyZWUgbGVhayBndWFyZCBtaXNzZXMgcmF3IHN0cmluZ3M": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.R3VhcmQgcG9saWN5IGFuZCBwYXJzZVNjcmlwdCBieXRlIGNsYXNzZXM": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.aGVyZHIgZmFrZSBzZW5kLWtleXMga2VlcHMgcGFuZS50eHQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.Q29kZXggYWdlbnQgVE9NTCBuZWVkcyBjb2RleEluc3RydWN0aW9uVE9NTA": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.U2ltdWxhdGUgYSBwcm9tcHRzIHVwZ3JhZGUgd2l0aCBhIHNlY29uZCBjYXRhbG9n": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBWZXJiIHJlZ2lzdHJhdGlvbiAmIGd1YXJkcw.U2FuaXRpemUgdGV4dCBmcm9tIHRyYWNrZWQgcHJvbXB0cy5qc29u": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.cm91bmQuaGFybmVzc2VzIG92ZXJyaWRlcyAtLWtpbmQgb24gdHJhbnNmZXI": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.cm91bmQgYm91bmNlIGNvdW50cyBvbmx5OyB0aGUgYnJpZWYgZ29lcyBieSByZWxheQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.UGFydGlhbCBvdXRjb21lcyBibG9jayBhc3NpZ24gYW5kIGdhdGU": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.QnVuZGxlIG92ZXJsYXBwaW5nIHJlZmFjdG9ycyBvbiBvbmUgc2xvdA": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.Q2hlY2sgdGhlIFBSIGhlYWQgYmVmb3JlIGEgcmUtcmV2aWV3": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFJldmlld2VyIGJyaWVmcyAmIGNvbmR1Y3Q.UmV2aWV3ZXJzIG5ldmVyIHByaW50IHRoZSBlbnZpcm9ubWVudA": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IFZlcmRpY3QgcmVjb3JkcyAmIGxlbnNlcw.RmluZGluZ3Mtb25seSByZXZpZXdzIGNsb3NlIHdpdGggcm91bmQgYWNjZXB0": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.UXVldWUgZ2F0ZXMgYXMgb25lIGxvb3AsIG5ldmVyIGdyZXAgd2FpdGVycw": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZw.Qm91bmNlcyBhcmUgY291bnRlZCBieSByZXZpZXcgdmVyYnMsIG5vdCB0aGUgZ2F0ZQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-07"
     }
   }
 }
