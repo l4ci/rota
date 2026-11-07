@@ -29,7 +29,6 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/skills"
-	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -191,11 +190,7 @@ func branchHandoffFile(d *Deps, root, cwd string) string {
 	if err != nil || branch == "" {
 		return ""
 	}
-	rel, err := status.HandoffPath(branch, "")
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(root, filepath.FromSlash(rel))
+	return hook.NotePath(root, branch)
 }
 
 // noHandoffBaseMsg says why handoffFile found no path: the named key when
@@ -219,14 +214,10 @@ func handoffFile(d *Deps, root string, cfg any) string {
 		configured, _ = v.(string)
 	}
 	base, ok, _ := d.Repo(root).Base(context.Background(), configured)
-	if !ok || base == "" {
+	if !ok {
 		return ""
 	}
-	rel, err := status.HandoffPath(base, "")
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(root, filepath.FromSlash(rel))
+	return hook.NotePath(root, base)
 }
 
 func hookStop(c *Ctx, args []string) (res Result, _ error) {
@@ -357,16 +348,16 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 		return Result{}, nil
 	}
 	source := hc.payload.String("source")
-	ho := hook.StatHandoff(hc.handoff)
-	if !ho.Exists {
+	note, err := hook.ReadNote(hc.handoff)
+	if err != nil || !note.Exists {
 		return Result{}, nil
 	}
 	maxAge := time.Duration(hc.set.HandoffMaxAge) * time.Second
-	if !hook.ShouldInject(source, hc.who.Orchestrator, hc.who.LeaseFree, ho, hook.FirstLine(hc.handoff), maxAge, hc.now()) {
+	if !hook.ShouldInject(source, hc.who.Orchestrator, hc.who.LeaseFree, note, maxAge, hc.now()) {
 		return Result{}, nil
 	}
-	body, ok := hook.Consume(hc.handoff)
-	if !ok {
+	body, err := note.Consume()
+	if err != nil {
 		return Result{}, nil
 	}
 	out := map[string]any{"hookSpecificOutput": map[string]any{
