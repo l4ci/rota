@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Files of the knowledge repo.
@@ -40,10 +39,16 @@ var (
 	ErrIdentity   = errors.New("git has no author identity")
 )
 
+// PROpener opens a pull request on the knowledge repo's forge. The caller
+// adapts its forge to it, so this package does not import the tracker.
+type PROpener interface {
+	OpenPR(ctx context.Context, base, head, title, body string) (string, error)
+}
+
 // Env is everything the package reaches outside its own memory.
 type Env struct {
 	Git      git.Runner
-	NewForge func(context.Context, string) (tracker.Forge, error) // resolves the knowledge clone's forge
+	NewForge func(context.Context, string) (PROpener, error) // resolves the knowledge clone's forge; required for write: pr
 	Now      func() time.Time
 	StateDir string // per-clone fetch stamps live here
 	TTL      time.Duration
