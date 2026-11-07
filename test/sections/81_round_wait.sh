@@ -75,7 +75,6 @@ mkdir -p "$TMP_RW/repo/.rota"
   git commit -q -m seed
 ) || fail "round-wait fixture repo setup failed"
 
-cfg() { printf '{"round":{"dispatch":"%s"}}\n' "$1" > "$TMP_RW/repo/.rota/config.json"; }
 slots() { # slots <handle> <state>: a registry with w1 running, w2 parked
   printf '{"session":"rota","round":1,"slots":[{"name":"w1","branch":"b1","worktree":"%s/w1","base":"main","handle":"%s","state":"%s","task":"T1","relays":[]},{"name":"w2","branch":"b2","worktree":"%s/w2","base":"main","handle":"rota:w2","state":"idle","task":null,"relays":[]}]}\n' \
     "$TMP_RW" "$1" "$2" "$TMP_RW" > "$TMP_RW/repo/.rota/workers.json"
@@ -83,7 +82,7 @@ slots() { # slots <handle> <state>: a registry with w1 running, w2 parked
 rw() { ( cd "$TMP_RW/repo" && PATH="$FK/bin:$PATH" FAKE_HERDR="$FK" FAKE_TMUX="$FK/tmux" HERDR_SOCKET_PATH="$FK/herdr.sock" "$@" ); }
 
 # ── herdr: wait for the socket event ────────────────────────────────────────
-cfg herdr
+cfg "$TMP_RW/repo/.rota/config.json" herdr
 slots w9:t7 busy
 python3 "$FK/server.py" "$FK/herdr.sock" "$FK" >/dev/null 2>&1 &
 SRV=$!
@@ -142,7 +141,7 @@ RC=0; rw hvj round wait --settle 0 >/dev/null 2>&1 || RC=$?
 pass "round wait: bad flag exits 2, unknown slot and nothing-to-watch exit 3"
 
 # ── tmux: no events, classified from the pane ───────────────────────────────
-cfg tmux
+cfg "$TMP_RW/repo/.rota/config.json" tmux
 slots rota:w1 busy
 printf 'ROTA-DONE w1 rota-worker/w1\n' > "$FK/tmux/pane"
 RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?

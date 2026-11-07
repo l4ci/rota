@@ -64,7 +64,6 @@ l = [e for e in d.get("limits", []) if e["id"] == sys.argv[2]]
 print((l[0].get(sys.argv[3], "") if l else "NOENTRY"))' "${LMREG:-$REG}" "$1" "$2"; }
 nlim() { python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("limits", [])))' "${LMREG:-$REG}"; }
 reset_log() { python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop("limits",None); json.dump(d,open(p,"w"),indent=2)' "${LMREG:-$REG}"; }
-reg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); s=[x for x in d["slots"] if x["name"]==sys.argv[2]][0]; v=s.get(sys.argv[3]); print("" if v is None else v)' "$REG" "$1" "$2"; }
 set_slot() { python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); [s.__setitem__(sys.argv[3], json.loads(sys.argv[4])) for s in d["slots"] if s["name"]==sys.argv[2]]; json.dump(d,open(p,"w"),indent=2)' "$REG" "$1" "$2" "$3"; }
 dbq() { python3 -c '
 import json, sys
@@ -101,7 +100,7 @@ usage_fix a 5 null; usage_fix b 30 null
 OUT="$(hvlm round start --holder-pid "$HOLDER" --scope slate --items 1,2,3 --slots 2)" || fail "D3: round start failed: $OUT"
 OUT="$(hvlm round assign 1 --agent ben --holder-pid "$HOLDER")" || fail "D3: assign 1 to ben failed: $OUT"
 hvlm worker account assign dana --account b >/dev/null || fail "D3: could not put dana on account b"
-[ "$(reg ben account)" = "a" ] && [ "$(reg dana account)" = "b" ] && [ "$(reg ben task)" = "1" ] && [ -z "$(reg dana task)" ] || fail "D3: fixture: $(cat "$REG")"
+[ "$(slot_field "$REG" ben account)" = "a" ] && [ "$(slot_field "$REG" dana account)" = "b" ] && [ "$(slot_field "$REG" ben task)" = "1" ] && [ -z "$(slot_field "$REG" dana task)" ] || fail "D3: fixture: $(cat "$REG")"
 CD="$(git -C "$PROJ" rev-parse --path-format=absolute --git-common-dir)"
 
 # --- sleep mode: a slot's limit waits for the meter's reset, then resumes --------------
@@ -113,7 +112,7 @@ RC=0; OUT="$(watch_)" || RC=$?
 [ "$(lim l1 session)" = "ben" ] && [ "$(lim l1 source)" = "data" ] && [ "$(lim l1 window)" = "five_hour" ] && [ "$(lim l1 resetsAt)" = "2026-10-03T14:00:00Z" ] || fail "D3: the entry must take the meter's reset: $(cat "$REG")"
 [ "$(lim l1 status)" = "waiting" ] && [ "$(lim l1 action)" = "sleep" ] && [ "$(lim l1 account)" = "a" ] || fail "D3: sleep entry: $(cat "$REG")"
 case "$(lim l1 note)" in *"limits.mode is sleep"*) ;; *) fail "D3: the entry must say why it sleeps: $(lim l1 note)" ;; esac
-[ "$(sent)" = "0" ] && [ "$(reg ben task)" = "1" ] || fail "D3: nothing must be typed or moved before the reset"
+[ "$(sent)" = "0" ] && [ "$(slot_field "$REG" ben task)" = "1" ] || fail "D3: nothing must be typed or moved before the reset"
 OUT="$(hvlm round status)"
 [ "$(jget 'data.limits[0].id' <<<"$OUT")" = "l1" ] && [ "$(jget 'data.limits[0].status' <<<"$OUT")" = "waiting" ] || fail "D3: round status must list the waiting limit: $OUT"
 OUT="$(hvlm round reconcile)"
@@ -139,7 +138,7 @@ RC=0; OUT="$(watch_)" || RC=$?
 [ "$RC" = "0" ] && [ "$(jget data.switched <<<"$OUT")" = "1" ] && [ "$(jget data.waiting <<<"$OUT")" = "0" ] || fail "D3: switch: rc=$RC $OUT"
 [ "$(lim l1 status)" = "switched" ] && [ "$(lim l1 action)" = "switch" ] && [ "$(lim l1 account)" = "a" ] && [ "$(lim l1 to)" = "dana" ] && [ "$(lim l1 session)" = "ben" ] || fail "D3: switched entry: $(cat "$REG")"
 [ -n "$(lim l1 resolvedAt)" ] && [ "$(nlim)" = "1" ] || fail "D3: one resolved entry: $(cat "$REG")"
-[ "$(reg dana task)" = "1" ] && [ -z "$(reg ben task)" ] || fail "D3: the issue must move to dana: $(cat "$REG")"
+[ "$(slot_field "$REG" dana task)" = "1" ] && [ -z "$(slot_field "$REG" ben task)" ] || fail "D3: the issue must move to dana: $(cat "$REG")"
 [ "$(dbq 1 | grep -c -F '**rota handoff** (transfer, from ben)')" = "1" ] || fail "D3: transfer must run once, with its handoff comment: $(dbq 1)"
 RC=0; OUT="$(watch_)" || RC=$?
 [ "$RC" = "0" ] && [ "$(nlim)" = "1" ] || fail "D3: ben is idle now, so its pane's old message starts nothing: $(cat "$REG")"
@@ -151,20 +150,20 @@ reset_log
 pane "Welcome to Claude Code"
 usage_fix a 5 null; usage_fix b 100 "2026-10-03T14:00:00+00:00"
 OUT="$(hvlm round assign 2 --agent ben --holder-pid "$HOLDER")" || fail "D3: assign 2 to ben failed: $OUT"
-[ "$(reg ben account)" = "a" ] || fail "D3: ben must keep account a: $(cat "$REG")"
+[ "$(slot_field "$REG" ben account)" = "a" ] || fail "D3: ben must keep account a: $(cat "$REG")"
 pane "$LIMIT_MSG"
 RC=0; OUT="$(watch_)" || RC=$?
 [ "$RC" = "0" ] && [ "$(nlim)" = "1" ] || fail "D3: only dana is limited (ben's meter is free): rc=$RC $(cat "$REG")"
 [ "$(lim l1 session)" = "dana" ] && [ "$(lim l1 status)" = "waiting" ] && [ "$(lim l1 action)" = "sleep" ] && [ "$(lim l1 account)" = "b" ] || fail "D3: no idle slot on a means sleep: $(cat "$REG")"
 case "$(lim l1 note)" in *"No idle slot on account a"*) ;; *) fail "D3: the entry must say why: $(lim l1 note)" ;; esac
-[ "$(reg dana task)" = "1" ] || fail "D3: nothing must move"
+[ "$(slot_field "$REG" dana task)" = "1" ] || fail "D3: nothing must move"
 reset_log
 usage_fix a 100 "2026-10-03T14:00:00+00:00"
 watch_ >/dev/null || true
 [ "$(nlim)" = "2" ] || fail "D3: both slots are limited now: $(cat "$REG")"
 [ "$(lim l1 action)" = "sleep" ] && [ "$(lim l2 action)" = "sleep" ] || fail "D3: no usable account means sleep: $(cat "$REG")"
 case "$(lim l1 note)" in *"No usable account"*) ;; *) fail "D3: the entry must say why: $(lim l1 note)" ;; esac
-[ "$(reg dana task)" = "1" ] && [ "$(reg ben task)" = "2" ] || fail "D3: nothing must move"
+[ "$(slot_field "$REG" dana task)" = "1" ] && [ "$(slot_field "$REG" ben task)" = "2" ] || fail "D3: nothing must move"
 pass "D3: with no idle slot on the second account, or no usable account, the same limit sleeps and the entry says why"
 
 # --- text with no data: a parsed reset, a fallback, and the resume cap (3) ---------------------

@@ -53,7 +53,6 @@ for kv in round.brief="$OC/contract.md" round.tiers.opencode.light=oc-go/light r
   occ config set "${kv%%=*}" "${kv#*=}" >/dev/null || fail "config set ${kv%%=*} failed"
 done
 SLOT_DIR="$(git -C "$OC" rev-parse --path-format=absolute --git-common-dir)/rota/opencode/ben"
-parked() { [ "$(git -C "$OC/.worktrees/$1" symbolic-ref --short HEAD)" = "park/$1" ]; }
 
 # The kind is a valid --kind and worker kind; the tier map picks the model.
 ocrc round assign F01 --agent ben --kind opencode --check-only --holder-pid "$HOLDER"
@@ -72,7 +71,7 @@ ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode flags" ] || fail "a missing flag should be refused: $RC $OUT"
 case "$ERR$OUT" in *"--rota-no-such-flag"*) ;; *) fail "the refusal should name the flag: $ERR $OUT" ;; esac
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the flag refusal must not change anything: $OUT"
-parked ben || fail "the flag refusal must leave ben parked"
+parked "$OC" ben || fail "the flag refusal must leave ben parked"
 occ config set round.commands.opencode "" >/dev/null
 if [ "${ROTA_SMOKE_HARNESS:-}" != opencode ]; then
   ROTA_FAKE_OPENCODE_LACKS=--model ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
@@ -89,7 +88,7 @@ printf '#!/bin/sh\nexit 127\n' > "$TMP_OC/nobin/opencode"
 chmod +x "$TMP_OC/nobin/opencode"
 RC=0; OUT=$( cd "$OC" && env FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$TMP_OC/dc" HERDR_ENV=1 HERDR_WORKSPACE_ID=w9 PATH="$TMP_OC/nobin:$PATH" "$ROTA_BIN" --json round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER" 2>/dev/null ) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode binary" ] || fail "an opencode that will not run should be refused: $RC $OUT"
-parked ben || fail "the binary refusal must leave ben parked"
+parked "$OC" ben || fail "the binary refusal must leave ben parked"
 pass "an opencode that will not run is refused with blockedBy opencode binary"
 
 # A real assignment: --kind opencode on herdr, the guard on the launch line as
@@ -106,7 +105,6 @@ case "$(cat "$FH/log")" in *CLAUDE_CONFIG_DIR*|*CODEX_HOME*|*OPENCODE_CONFIG_DIR
 [ -s "$SLOT_DIR/rota-guard.js" ] || fail "the guard plugin should be written to the slot state dir"
 [ "$(stat -c %a "$SLOT_DIR/rota-prompt.key" 2>/dev/null || stat -f %Lp "$SLOT_DIR/rota-prompt.key")" = "600" ] || fail "the prompt key should be 0600"
 case "$(git -C "$OC" status --porcelain --ignored)" in *rota/opencode*) fail "the slot state must stay outside the worktree tree" ;; esac
-hookin() { python3 -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1]}))' "$1"; }
 RC=0; hookin "$(cat "$FH/last_prompt")" | "$ROTA_BIN" worker prompt-check --key "$SLOT_DIR/rota-prompt.key" >"$TMP_OC/hook.out" 2>"$TMP_OC/hook.err" || RC=$?
 [ "$RC" = "0" ] || fail "the brief should be signed with the slot's key: $RC $(cat "$TMP_OC/hook.out" "$TMP_OC/hook.err")"
 if command -v node >/dev/null 2>&1; then
@@ -183,16 +181,12 @@ pass "agents write emits .opencode/agents/rota-<role>.md for the three roles"
 DRB="$TMP_OC/drbin"
 mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/opencode" "$FKB/herdr" "$DRB/"
 [ ! -e "$FKB/opencode.fake" ] || cp "$FKB/opencode.fake" "$DRB/"
-dr() { RC=0; OUT=$( cd "$OC" && ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$TMP_OC/dc" "$ROTA_BIN" --json doctor 2>/dev/null ) || RC=$?; }
-drf() { echo "$OUT" | python3 -c '
-import json,sys
-cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
-print(cs["opencode"].get(sys.argv[1],"ABSENT"))' "$1"; }
-dr
-[ "$(drf status)" = "pass" ] || fail "doctor opencode should pass: $OUT"
-case "$(drf detail)" in *"opencode "*) ;; *) fail "doctor detail should show the version: $(drf detail)" ;; esac
-ROTA_FAKE_OPENCODE_VERSION=99.0.0 dr
-[ "$(drf status)" = "pass" ] || fail "doctor opencode does not gate on the version: $OUT"
+DR_ENV=(ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$TMP_OC/dc")
+doctor_run "$OC" "${DR_ENV[@]}"
+[ "$(doctor_check_field opencode status)" = "pass" ] || fail "doctor opencode should pass: $OUT"
+case "$(doctor_check_field opencode detail)" in *"opencode "*) ;; *) fail "doctor detail should show the version: $(doctor_check_field opencode detail)" ;; esac
+ROTA_FAKE_OPENCODE_VERSION=99.0.0 doctor_run "$OC" "${DR_ENV[@]}"
+[ "$(doctor_check_field opencode status)" = "pass" ] || fail "doctor opencode does not gate on the version: $OUT"
 pass "doctor reports the opencode binary and version without gating on it"
 
 rm -rf "$TMP_OC"

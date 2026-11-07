@@ -26,7 +26,6 @@ gslabels() { python3 -c '
 import json, sys
 issue = next(i for i in json.load(open(sys.argv[1]))["issues"] if i["number"] == 1)
 print(",".join(sorted(issue["labels"])))' "$TMP_GS/db.json"; }
-gsslot() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); s=[x for x in d["slots"] if x["name"]=="ben"][0]; v=s.get(sys.argv[2]); print("" if v is None else v)' "$GPROJ/.rota/workers.json" "$1"; }
 # gsmain <file>: land a commit on main in the gate checkout.
 gsmain() { ( cd "$GPROJ" && echo main > "$1" && git add "$1" && git -c user.email=t@t -c user.name=t commit -q -m "main adds $1" ); }
 # gswork <file>: a commit on the slot's branch.
@@ -59,7 +58,7 @@ for N in 1 2 3 4; do
   [ -z "$(echo "$OUT" | jget data.bounces 2>/dev/null || true)" ] && [ -z "$(echo "$OUT" | jget data.parked 2>/dev/null || true)" ] \
     || fail "a stale merge is no bounce, refusal $N: $OUT"
 done
-[ "$(gsslot task)" = "1" ] || fail "the slot still holds the issue past the old cap"
+[ "$(slot_field "$GPROJ/.rota/workers.json" ben task)" = "1" ] || fail "the slot still holds the issue past the old cap"
 [ "$(gslabels)" = "$LABELS0" ] || fail "a stale merge must not park the issue: $(gslabels)"
 pass "a conflicting branch is refused stale without a bounce: nothing is counted and the issue is never parked"
 

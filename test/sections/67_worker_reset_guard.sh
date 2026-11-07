@@ -41,16 +41,12 @@ mkdir -p "$TMP_RG/repo/.rota"
 rg()  { ( cd "$TMP_RG/repo" && "$@" ); }
 rgh() { ( cd "$TMP_RG/repo" && PATH="$FK/bin:$PATH" FAKE_HERDR="$FK" HERDR_ENV=1 HERDR_WORKSPACE_ID=w9 ROTA_HOST_KILL_WAIT=1 "$@" ); }
 rgt() { ( cd "$TMP_RG/repo" && PATH="$FK/bin:$PATH" FAKE_TMUX="$FK" ROTA_HOST_KILL_WAIT=1 "$@" ); }
-slot_field() {
-  python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]==sys.argv[2]][0]; print(s.get(sys.argv[3]))' \
-    "$TMP_RG/repo/.rota/workers.json" "$1" "$2"
-}
-cfg() { local extra=""; [ -n "${2:-}" ] && extra=",\"commands\":{\"claude\":\"$2\"}"; printf '{"round":{"dispatch":"%s"%s}}\n' "$1" "$extra" > "$TMP_RG/repo/.rota/config.json"; }
+RG_REG="$TMP_RG/repo/.rota/workers.json"
 
 rg hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "pool init failed"
-WT="$(slot_field w1 worktree)"
+WT="$(slot_field "$RG_REG" w1 worktree)"
 echo brief > "$TMP_RG/brief.md"
-cfg herdr
+cfg "$TMP_RG/repo/.rota/config.json" herdr
 
 # ── (a) refuse a slot that holds work ──────────────────────────────────────
 echo wip > "$WT/scratch.txt"
@@ -90,15 +86,15 @@ OUT="$(rg hvj worker reset w1 --task B07 2>/dev/null)" || fail "a merged slot mu
 rg hvj worker reset w1 --task B07 --check-only >/dev/null 2>&1 || fail "--check-only must exit 0 on a clean slot"
 [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = "rota-worker/w1-b07" ] || fail "slot is on $(git -C "$WT" rev-parse --abbrev-ref HEAD), expected rota-worker/w1-b07"
 [ "$(git -C "$WT" rev-parse HEAD)" = "$(git -C "$TMP_RG/repo" rev-parse main)" ] || fail "fresh branch must start at the tip of the cycle branch"
-[ "$(slot_field w1 branch)" = "rota-worker/w1-b07" ] || fail "registry must record the per-task branch for worker gate"
+[ "$(slot_field "$RG_REG" w1 branch)" = "rota-worker/w1-b07" ] || fail "registry must record the per-task branch for worker gate"
 git -C "$TMP_RG/repo" rev-parse --verify --quiet rota-worker/w1 >/dev/null && fail "the proved-merged previous branch should be deleted"
 rg hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "re-init failed"
-[ "$(slot_field w1 branch)" = "rota-worker/w1-b07" ] || fail "re-running pool init must not rewind the slot's branch"
+[ "$(slot_field "$RG_REG" w1 branch)" = "rota-worker/w1-b07" ] || fail "re-running pool init must not rewind the slot's branch"
 pass "a clean slot is cut a fresh per-task branch from the cycle branch; registry and worker pool init agree"
 
 # ── (c) provable close ──────────────────────────────────────────────────────
 rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T2 >/dev/null || fail "first herdr dispatch failed"
-[ "$(slot_field w1 handle)" = "w9:t7" ] || fail "dispatch did not record the tab"
+[ "$(slot_field "$RG_REG" w1 handle)" = "w9:t7" ] || fail "dispatch did not record the tab"
 
 touch "$FK/close_fails"; : >"$FK/log"
 RC=0; OUT="$(rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T3 2>/dev/null)" || RC=$?
@@ -118,7 +114,7 @@ rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T3 >/dev/null \
   || fail "herdr: dispatch must succeed once the old tab closes and its pids are gone"
 
 # tmux twin: first the window refuses to die, then it dies but a pid survives.
-cfg tmux
+cfg "$TMP_RG/repo/.rota/config.json" tmux
 python3 - "$TMP_RG/repo/.rota/workers.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p))
@@ -156,7 +152,7 @@ cfgj "claude --model sonnet -p"; dispatch_rc
 pass "worker dispatch refuses resume flags in every spelling, even inside sh -c or env, and unparseable commands"
 
 # ── (e) retry of the slot's own task keeps its WIP ──────────────────────────
-cfg herdr
+cfg "$TMP_RG/repo/.rota/config.json" herdr
 echo wip > "$WT/retry.txt"; git -C "$WT" add retry.txt; git -C "$WT" commit -q -m "task wip"; echo dirty > "$WT/dirty.txt"
 BR="$(git -C "$WT" symbolic-ref --short HEAD)"; HEADSHA="$(git -C "$WT" rev-parse HEAD)"
 OUT="$(rg hvj worker reset w1 --task T5 2>/dev/null)" || fail "retry of the slot's own task must not be refused: $OUT"
@@ -168,21 +164,21 @@ rm "$WT/dirty.txt"; git -C "$WT" reset -q --hard main
 pass "re-dispatching the slot's own task continues it in place; any other task is still refused"
 
 # ── (f) the session died but the second reset refused: handle must not go stale
-[ "$(slot_field w1 handle)" != "None" ] || fail "fixture: slot should hold a handle here"
+[ -n "$(slot_field "$RG_REG" w1 handle)" ] || fail "fixture: slot should hold a handle here"
 rm -f "$FK/closed"; echo "$WT/raced.txt" > "$FK/dirty_on_close"
 RC=0; OUT="$(rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T7 2>/dev/null)" || RC=$?
 rm -f "$FK/dirty_on_close" "$WT/raced.txt"
 [ "$RC" = "4" ] || fail "a reset refused after the kill must exit 4, got $RC: $OUT"
-[ "$(slot_field w1 handle)" = "None" ] || fail "the dead session's handle must be cleared, got $(slot_field w1 handle)"
-[ "$(slot_field w1 state)" = "idle" ] || fail "the slot must not stay busy with no session, got $(slot_field w1 state)"
+[ -z "$(slot_field "$RG_REG" w1 handle)" ] || fail "the dead session's handle must be cleared, got $(slot_field "$RG_REG" w1 handle)"
+[ "$(slot_field "$RG_REG" w1 state)" = "idle" ] || fail "the slot must not stay busy with no session, got $(slot_field "$RG_REG" w1 state)"
 pass "a failure after the kill clears the slot's stale handle"
 
 # ── (g) a detached worktree is not registered as branch 'HEAD' ──────────────
 git -C "$WT" switch -q --detach
-BEFORE_BR="$(slot_field w1 branch)"
+BEFORE_BR="$(slot_field "$RG_REG" w1 branch)"
 rg hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "re-init on a detached worktree failed"
-[ "$(slot_field w1 branch)" = "$BEFORE_BR" ] && [ "$(slot_field w1 branch)" != "HEAD" ] \
-  || fail "pool init registered '$(slot_field w1 branch)' for a detached worktree, expected $BEFORE_BR (registry value kept)"
+[ "$(slot_field "$RG_REG" w1 branch)" = "$BEFORE_BR" ] && [ "$(slot_field "$RG_REG" w1 branch)" != "HEAD" ] \
+  || fail "pool init registered '$(slot_field "$RG_REG" w1 branch)' for a detached worktree, expected $BEFORE_BR (registry value kept)"
 pass "worker pool init keeps the slot's branch when its worktree is detached"
 
 trap 'rm -rf "$TMP"' EXIT

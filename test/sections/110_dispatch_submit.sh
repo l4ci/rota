@@ -24,16 +24,13 @@ chmod +x "$SF/bin/herdr"
 printf '{"round":{"dispatch":"herdr"}}\n' > "$TMP_SU/repo/.rota/config.json"
 
 su()  { ( cd "$TMP_SU/repo" && PATH="$SF/bin:$PATH" FAKE_HERDR="$SF" HERDR_ENV=1 HERDR_WORKSPACE_ID=w9 "$@" ); }
-slot_field() {
-  python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]==sys.argv[2]][0]; print(s.get(sys.argv[3]))' \
-    "$TMP_SU/repo/.rota/workers.json" "$1" "$2"
-}
+SU_REG="$TMP_SU/repo/.rota/workers.json"
 
 su hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "pool init failed"
 printf 'first line\nthe last line of the brief\n' > "$TMP_SU/brief.md"
 : >"$SF/log"
 su hvj worker dispatch w1 --body-file "$TMP_SU/brief.md" --task T1 >/dev/null 2>&1 || fail "first dispatch failed"
-[ "$(slot_field w1 unsent)" = "None" ] || fail "a clean dispatch must not mark the slot unsent"
+[ -z "$(slot_field "$SU_REG" w1 unsent)" ] || fail "a clean dispatch must not mark the slot unsent"
 
 # (a) first Enter lost: the prompt stalls, the brief is visible, the Enter lands.
 echo agent_prompt_stalled > "$SF/prompt_error"
@@ -54,7 +51,7 @@ echo idle > "$SF/wait_status"
 RC=0; su hvj worker dispatch w1 --body-file "$TMP_SU/brief.md" --relay >/dev/null 2>&1 || RC=$?
 [ "$RC" = "6" ] || fail "Enters that never land must exit 6, got $RC"
 [ "$(grep -c '^agent send-keys ' "$SF/log")" = "3" ] || fail "Enter retries must stop at 3; log: $(cat "$SF/log")"
-[ "$(slot_field w1 unsent)" = "True" ] || fail "a stalled dispatch must mark the slot unsent, got $(slot_field w1 unsent)"
+[ "$(slot_field "$SU_REG" w1 unsent)" = "True" ] || fail "a stalled dispatch must mark the slot unsent, got $(slot_field "$SU_REG" w1 unsent)"
 pass "Enter retries are bounded; a stall marks the slot unsent"
 
 # (c) the resend submits what is on the prompt line and types nothing.
@@ -63,7 +60,7 @@ echo working > "$SF/wait_status"
 RC=0; su hvj worker dispatch w1 --body-file "$TMP_SU/brief.md" --relay >/dev/null 2>&1 || RC=$?
 [ "$RC" = "0" ] || fail "the resend must submit the pending brief, got exit $RC"
 grep -q '^agent prompt ' "$SF/log" && fail "a resend must not type the brief again; log: $(cat "$SF/log")"
-[ "$(slot_field w1 unsent)" = "None" ] || fail "a submitted brief must clear the unsent mark"
+[ -z "$(slot_field "$SU_REG" w1 unsent)" ] || fail "a submitted brief must clear the unsent mark"
 pass "a resend submits the pending brief without retyping it"
 
 trap 'rm -rf "$TMP"' EXIT
