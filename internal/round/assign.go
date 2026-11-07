@@ -82,6 +82,8 @@ const (
 	// BlockDraining: the slot is past the round's slot count (round.slots,
 	// --slots); it finishes the work it holds and takes nothing new.
 	BlockDraining = blockedby.Draining
+	// BlockMaxBounces: the item is at round.maxBounces; a follow-up does not start.
+	BlockMaxBounces = blockedby.MaxBounces
 	// BlockQuota: every account the worker kind could run under is cooling down.
 	BlockQuota        = blockedby.Quota
 	BlockBriefMissing = blockedby.BriefMissing
@@ -884,7 +886,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if slot == nil {
 			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
-		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
+		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id), false); err != nil {
 			return run, false, err
 		}
 		if why := e.SlotLoginProblem(slot); why != "" {

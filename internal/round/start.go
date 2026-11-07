@@ -152,7 +152,8 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	res.Scope = scope
 
 	pool, err := e.Worker.PoolInit(ctx, root, worker.InitOpts{
-		Base: base, Session: "rota", Names: set.Roster[:n], BranchPrefix: worker.ParkPrefix,
+		// The follow-up reserve is provisioned with the active slots (#2580).
+		Base: base, Session: "rota", Names: set.Roster[:min(n+max(set.FollowupReserve, 0), len(set.Roster))], BranchPrefix: worker.ParkPrefix,
 	}, nil)
 	if err != nil {
 		return res, err
