@@ -11,11 +11,12 @@ mkdir -p "$ORP/.rota" "$TMP_ORCH/bin" "$TMP_ORCH/home"
   cd "$ORP" && git init -q -b main . && printf '.worktrees/\n' > .gitignore &&
     git add .gitignore && git -c user.email=a@b -c user.name=n commit -q -m init
 ) || fail "orchestrate fixture repo setup failed"
-printf '#!/bin/sh\ncase "$1" in --version) echo "herdr 0.9.3" ;; *) echo "herdr $*" >> "%s/herdr.log"; exit 99 ;; esac\n' "$TMP_ORCH" > "$TMP_ORCH/bin/herdr"
+mkdir -p "$TMP_ORCH/herdr"
+cp "$TESTDIR/fakes/herdr" "$TMP_ORCH/bin/herdr"  # logs every call to $FAKE_HERDR/log
 printf '#!/bin/sh\necho "codex-cli 0.159.2"\n' > "$TMP_ORCH/bin/codex"
 chmod +x "$TMP_ORCH/bin/herdr" "$TMP_ORCH/bin/codex"
 or_cfg() { printf '{"git":{"baseBranch":"main"}%s}\n' "$1" > "$ORP/.rota/config.json"; }
-or_dry() { (cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" HOME="$TMP_ORCH/home" "$ROTA_BIN" --json orchestrate --dry-run 2>&1); }
+or_dry() { (cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" FAKE_HERDR="$TMP_ORCH/herdr" HOME="$TMP_ORCH/home" "$ROTA_BIN" --json orchestrate --dry-run 2>&1); }
 
 # Default: claude, in a herdr session of rota's own (herdr is preferred outside a multiplexer).
 or_cfg ''
@@ -49,19 +50,20 @@ RC=0; OUT="$(or_dry)" || RC=$?
 case $OUT in *"claude, codex, hermes, opencode"*) ;; *) fail "unknown harness should list the choices: $OUT" ;; esac
 
 # Nothing the dry runs did reached herdr beyond --version.
-[ ! -s "$TMP_ORCH/herdr.log" ] || fail "dry-run touched herdr: $(cat "$TMP_ORCH/herdr.log")"
+# the --version probe is fine; any other call is a touch
+[ -z "$(grep -v '^--version$' "$TMP_ORCH/herdr/log" 2>/dev/null || true)" ] || fail "dry-run touched herdr: $(cat "$TMP_ORCH/herdr/log")"
 
 # Bare rota without a terminal: the usage error it always had, never a session
 # nobody can see, in an initialized project and outside one, with and without --json.
 or_cfg ''
-RC=0; OUT="$(cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" HOME="$TMP_ORCH/home" "$ROTA_BIN" </dev/null 2>&1)" || RC=$?
+RC=0; OUT="$(cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" FAKE_HERDR="$TMP_ORCH/herdr" HOME="$TMP_ORCH/home" "$ROTA_BIN" </dev/null 2>&1)" || RC=$?
 [ "$RC" = 2 ] || fail "bare rota without a terminal should exit 2, got $RC: $OUT"
 case $OUT in *"missing command"*) ;; *) fail "bare rota should say 'missing command': $OUT" ;; esac
-RC=0; OUT="$(cd "$TMP_ORCH" && PATH="$TMP_ORCH/bin:$PATH" HOME="$TMP_ORCH/home" "$ROTA_BIN" </dev/null 2>&1)" || RC=$?
+RC=0; OUT="$(cd "$TMP_ORCH" && PATH="$TMP_ORCH/bin:$PATH" FAKE_HERDR="$TMP_ORCH/herdr" HOME="$TMP_ORCH/home" "$ROTA_BIN" </dev/null 2>&1)" || RC=$?
 [ "$RC" = 2 ] || fail "bare rota outside a project should exit 2, got $RC: $OUT"
-RC=0; OUT="$(cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" HOME="$TMP_ORCH/home" "$ROTA_BIN" --json 2>&1 </dev/null)" || RC=$?
+RC=0; OUT="$(cd "$ORP" && PATH="$TMP_ORCH/bin:$PATH" FAKE_HERDR="$TMP_ORCH/herdr" HOME="$TMP_ORCH/home" "$ROTA_BIN" --json 2>&1 </dev/null)" || RC=$?
 [ "$RC" = 2 ] || fail "bare rota --json should exit 2, got $RC: $OUT"
-[ ! -s "$TMP_ORCH/herdr.log" ] || fail "bare rota touched herdr: $(cat "$TMP_ORCH/herdr.log")"
+[ -z "$(grep -v '^--version$' "$TMP_ORCH/herdr/log" 2>/dev/null || true)" ] || fail "bare rota touched herdr: $(cat "$TMP_ORCH/herdr/log")"
 
 rm -rf "$TMP_ORCH"
 trap 'rm -rf "$TMP"' EXIT
