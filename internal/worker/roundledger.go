@@ -279,3 +279,19 @@ func AdoptedBranches(root string) (map[string]bool, error) {
 	}
 	return out, err
 }
+
+// recordVerification notes a fresh local tier execution once. Cached and CI
+// answers carry no measurements; replaying a verdict must not invent elapsed time.
+func (env Env) recordVerification(root string, m *RoundMemo, tier string, target GateTarget, prs []string, vr VerifyResult) {
+	if vr.CI || vr.Cached || vr.WallSeconds == nil || len(vr.Suites) == 0 {
+		return
+	}
+	detail := ledger.Detail("tier", tier, "wallSeconds", *vr.WallSeconds, "suites", vr.Suites)
+	if len(prs) > 0 {
+		detail.Set("prs", prs)
+	}
+	if target.PR == "" && len(prs) == 1 {
+		target.PR = prs[0]
+	}
+	LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindVerification, Issue: target.Issue, Slot: target.Name, PR: target.PR, Detail: detail})
+}

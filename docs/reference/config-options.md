@@ -290,6 +290,8 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `test.fast` | project (tracked) | list | `[]` |  | Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it. |
 | `test.full` | project (tracked) | list | `[]` |  | Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify. |
 | `test.e2e` | project (tracked) | list | `[]` |  | Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step. |
+| `test.audit.maxFullGateSeconds` | project (tracked) | int | `0` |  | Suggest a test-maintenance round when the latest recorded test.full duration after the last audit exceeds this many seconds. 0 disables the duration trigger. |
+| `test.audit.prsBetweenAudits` | project (tracked) | int | `0` |  | Suggest a test-maintenance round after this many distinct recorded merged PRs since the last audit. 0 disables the PR trigger. |
 | `test.fullWhere` | project (tracked) | enum | `"local"` | `local`, `ci` | Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks). |
 | `test.vacuousCheck` | project (tracked) | bool | `false` |  | Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default. |
 | `test.filePattern` | project (tracked) | string | `"_test\\.go$"` |  | Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files. |

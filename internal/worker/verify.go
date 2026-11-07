@@ -12,14 +12,25 @@ import (
 	"github.com/l4ci/rota/internal/testledger"
 )
 
-// VerifyResult is one run of test.full. Callers only phrase the
-// verdict; reading the key, running the commands and keeping the log live here.
+// VerificationSuite measures one configured command, including any retry.
+type VerificationSuite struct {
+	Command     string  `json:"command"`
+	WallSeconds float64 `json:"wallSeconds"`
+	ExitCode    int     `json:"exitCode"`
+}
+
+// VerifyResult is one verification run. Callers phrase the verdict; the runner
+// owns execution, measurements and logs.
 type VerifyResult struct {
-	Flaky      []flakeledger.Entry // assertion failures recovered on one sequential retry
-	NoCommands bool                // test.full is empty: nothing was run
-	Verified   []string            // commands that passed
-	Failed     []string            // commands that failed
-	Log        string              // every command's output, as it ran
+	// WallSeconds and Suites exist only for measured local gate/train runs.
+	// A nil duration means unknown (CI, cache or no command), never zero.
+	WallSeconds *float64
+	Suites      []VerificationSuite
+	Flaky       []flakeledger.Entry // assertion failures recovered on one sequential retry
+	NoCommands  bool                // test.full is empty: nothing was run
+	Verified    []string            // commands that passed
+	Failed      []string            // commands that failed
+	Log         string              // every command's output, as it ran
 	// LogPath is the same log on disk, set only when a command failed. The
 	// caller owns it: report it, or remove it.
 	LogPath string
