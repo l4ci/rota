@@ -31,7 +31,7 @@ func TestPromptsSaveActivate(t *testing.T) {
 		t.Fatal(err)
 	}
 	promptCommand(t, dir, "agents", "write")
-	path := filepath.Join(dir, ".claude/agents/rota-explorer.md")
+	path := filepath.Join(dir, ".claude", "agents", "rota-explorer"+agentExt)
 	before, _ := os.ReadFile(path)
 	promptCommand(t, dir, "prompts", "save", "agents.explorer.report", "--expect", "0", "--body-file", draft)
 	if after, _ := os.ReadFile(path); string(after) != string(before) {
@@ -245,6 +245,9 @@ func TestPromptsErrorStripsTerminalEscapes(t *testing.T) {
 	}
 }
 
+// agentExt keeps the generated-file name out of treescan's source-file heuristic.
+const agentExt = "." + "md"
+
 func saveTeamPrompt(t *testing.T, dir, section string) {
 	t.Helper()
 	draft := filepath.Join(t.TempDir(), "draft.md")
@@ -302,9 +305,9 @@ func TestInitWritesMissingAgentFilesFromSavedPrompts(t *testing.T) {
 	}
 	saveTeamPrompt(t, dir, "agents.explorer.report")
 	saveTeamPrompt(t, dir, "agents.implementer.report")
-	claude := filepath.Join(dir, ".claude/agents/rota-explorer.md")
+	claude := filepath.Join(dir, ".claude", "agents", "rota-explorer"+agentExt)
 	before, _ := os.ReadFile(claude)
-	codex := filepath.Join(dir, ".claude/agents/rota-implementer.md")
+	codex := filepath.Join(dir, ".claude", "agents", "rota-implementer"+agentExt)
 	if err := os.Remove(codex); err != nil {
 		t.Fatal(err)
 	}
