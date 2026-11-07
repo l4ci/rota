@@ -163,3 +163,7 @@ func TestRunRecordedPRWithoutOriginNeverReachesForge(t *testing.T) {
 		t.Fatalf("run: %+v", r)
 	}
 }
+
+func bounces(root, issue string) int {
+	return worker.LoadRegistryTolerant(root).Bounces(issue)
+}
