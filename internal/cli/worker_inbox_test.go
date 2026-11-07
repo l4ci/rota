@@ -150,3 +150,33 @@ func TestWorkerInboxDispositionValidationAndHistory(t *testing.T) {
 		t.Fatalf("returned blocks done: %d %s", code, out)
 	}
 }
+
+// The text says what is still owed, confirms a disposition and names the
+// conflicting flag, so a worker never has to guess the next command.
+func TestWorkerInboxTextNamesWhatIsOwed(t *testing.T) {
+	dir := doneProject(t, "")
+	if code, out, _ := rotaIn(t, dir, "worker", "inbox", "ben", "--all"); code != 0 || out != "no mail\n" {
+		t.Fatalf("empty --all: %d %q", code, out)
+	}
+	postMail(t, dir, "REVIEW https://github.com/o/r/pull/9 (1 items)")
+	code, out, _ := rotaIn(t, dir, "worker", "inbox", "ben", "--ack", "--upto", "1")
+	if code != 0 || !strings.Contains(out, "acknowledged 1 mail(s)") || !strings.Contains(out, "resolve pending request 1 with `rota worker inbox ben --handled <seq>") || strings.Contains(out, "--ack --upto") {
+		t.Fatalf("ack must name the pending request and no further ack: %d %q", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "worker", "inbox", "ben", "--ack")
+	if code != 0 || !strings.Contains(out, "no unread mail; still to do: resolve pending request 1") {
+		t.Fatalf("ack with nothing unread must still name the pending request: %d %q", code, out)
+	}
+	code, out, errOut := rotaIn(t, dir, "worker", "done", "ben")
+	if code != 4 || !strings.Contains(errOut+out, "1 pending request(s)") || strings.Contains(errOut+out, "0 unread") || strings.Contains(errOut+out, "--ack") {
+		t.Fatalf("done refusal must be built from state: %d %q %q", code, out, errOut)
+	}
+	_, _, errOut = rotaIn(t, dir, "worker", "inbox", "ben", "--handled", "1", "--ack", "--reason", "x")
+	if !strings.Contains(errOut, "--handled cannot be combined with --ack") {
+		t.Fatalf("usage error must name the flag: %q", errOut)
+	}
+	code, out, _ = rotaIn(t, dir, "worker", "inbox", "ben", "--handled", "1", "--reason", "renamed x")
+	if code != 0 || !strings.Contains(out, "mail 1 marked handled") || strings.Contains(out, "still to do") {
+		t.Fatalf("disposition must be confirmed: %d %q", code, out)
+	}
+}

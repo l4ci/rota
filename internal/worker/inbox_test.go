@@ -136,9 +136,10 @@ func TestInboxAssignmentIdentityAndSequence(t *testing.T) {
 		}
 		s.SetTask("13")
 	})
+	// SetTask is a rename of the running work: its request follows the new name.
 	s = LoadRegistryTolerant(root).Slot("ben")
-	if len(s.Waiting()) != 0 || s.Inbox()[0].Disposition != "returned" || s.Inbox()[0].Task != "12" {
-		t.Fatalf("SetTask retained old request: %+v", s.Inbox())
+	if p := s.Pending(); len(p) != 1 || p[0].Seq != next.Seq || p[0].Task != "13" || p[0].Attempt != "second" {
+		t.Fatalf("SetTask rename: %+v", s.Inbox())
 	}
 }
 
@@ -219,5 +220,27 @@ func TestResolveInboxPreservesUnknownFields(t *testing.T) {
 	m := LoadRegistryTolerant(root).Slot("ben").Inbox()[0]
 	if !m.Read || m.Reason != "retargeted to main" || m.Disposition != "handled" {
 		t.Fatalf("disposition not durable: %+v", m)
+	}
+}
+
+func TestPromoteBundleLeadKeepsPendingRequests(t *testing.T) {
+	root := inboxRoot(t)
+	if _, err := UpdateSlot(root, "ben", func(s *Slot) {
+		s.Bind(Binding{Task: "12", Attempt: "run"})
+		s.SetBundle([]string{"15", "16"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := PostMail(root, "ben", MailReview, "REVIEW fix the bundle", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := PromoteBundleLead(root, "12"); err != nil {
+		t.Fatal(err)
+	}
+	s := LoadRegistryTolerant(root).Slot("ben")
+	got := s.Pending()
+	if s.Task() != "15" || len(got) != 1 || got[0].Seq != m.Seq || got[0].Task != "15" || got[0].Read {
+		t.Fatalf("promotion must keep the running assignment's request pending and unread: task %q inbox %+v", s.Task(), s.Inbox())
 	}
 }

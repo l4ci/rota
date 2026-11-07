@@ -367,13 +367,18 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
 // holds unread mail or unresolved requests, including requests already read.
 func unreadMailRefusal(s *Slot) error {
-	n := len(s.Unread())
-	pending := len(s.Pending())
-	if n == 0 && pending == 0 {
+	var owed []string
+	if n := len(s.Unread()); n > 0 {
+		owed = append(owed, fmt.Sprintf("%d unread mail", n))
+	}
+	if n := len(s.Pending()); n > 0 {
+		owed = append(owed, fmt.Sprintf("%d pending request(s)", n))
+	}
+	if len(owed) == 0 {
 		return nil
 	}
-	e := fail(exitcode.ExitRefused, fmt.Sprintf("slot %s has %d unread mail and %d pending requests: resolve them before done", s.Name(), n, pending))
-	e.Hint = fmt.Sprintf("run `rota worker inbox %s --ack`, then resolve each request with --handled <seq> or --returned <seq> and --reason <text> before `rota worker done %s`", s.Name(), s.Name())
+	e := fail(exitcode.ExitRefused, fmt.Sprintf("slot %s has %s: resolve them before done", s.Name(), strings.Join(owed, " and ")))
+	e.Hint = fmt.Sprintf("read it with `rota worker inbox %s` and act on it, %s, then `rota worker done %s` again", s.Name(), s.InboxNext(), s.Name())
 	return e
 }
 

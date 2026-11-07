@@ -25,11 +25,25 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 		flags := map[string]bool{}
 		fs.Visit(func(f *flag.Flag) { flags[f.Name] = true })
 		resolving := flags["handled"] || flags["returned"]
-		if (flags["handled"] && flags["returned"]) || (resolving && (*ack || *all || flags["upto"])) {
-			return Result{}, Usage("--handled and --returned must be used alone with --reason")
+		if flags["handled"] && flags["returned"] {
+			return Result{}, Usage("--handled and --returned cannot be combined: resolve one request per call")
 		}
-		if resolving && ((*handled <= 0 && flags["handled"]) || (*returned <= 0 && flags["returned"]) || strings.TrimSpace(*reason) == "") {
-			return Result{}, Usage("a positive mail sequence and nonblank --reason are required")
+		if resolving {
+			verb := "--handled"
+			if flags["returned"] {
+				verb = "--returned"
+			}
+			for _, other := range []string{"ack", "all", "upto"} {
+				if flags[other] {
+					return Result{}, Usage("%s cannot be combined with --%s", verb, other)
+				}
+			}
+			if (*handled <= 0 && flags["handled"]) || (*returned <= 0 && flags["returned"]) {
+				return Result{}, Usage("%s needs a positive mail sequence number", verb)
+			}
+			if strings.TrimSpace(*reason) == "" {
+				return Result{}, Usage("%s needs a nonblank --reason", verb)
+			}
 		}
 		if flags["reason"] && !resolving {
 			return Result{}, Usage("--reason needs --handled or --returned")
@@ -53,6 +67,7 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 		}
 		var mail []worker.Mail
 		unreadAfter, pendingAfter := 0, 0
+		next := ""
 		var dispositionErr error
 		found, err := worker.UpdateSlot(poolRoot, slotName, func(s *worker.Slot) {
 			if resolving {
@@ -73,6 +88,7 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 				mail = s.Waiting()
 			}
 			unreadAfter, pendingAfter = len(s.Unread()), len(s.Pending())
+			next = s.InboxNext()
 		})
 		if err != nil {
 			return Result{}, err
@@ -95,7 +111,14 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 		d.Set("acked", ackedCount(*ack, len(mail)))
 		d.Set("changed", (*ack || resolving) && len(mail) > 0)
 		if len(mail) == 0 {
-			return Result{Data: d, Text: "no unread mail"}, nil
+			text := "no unread mail"
+			if *all {
+				text = "no mail"
+			}
+			if next != "" {
+				text += "; still to do: " + next
+			}
+			return Result{Data: d, Text: text}, nil
 		}
 		var sb strings.Builder
 		for i, m := range mail {
@@ -103,22 +126,43 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 				sb.WriteString("\n")
 			}
 			fmt.Fprintf(&sb, "mail %d (%s, orchestrator relay round %d, %s):\n%s\n", m.Seq, m.Kind, m.Round, m.At, strings.TrimRight(m.Text, "\n"))
-			if m.Actionable {
-				fmt.Fprintf(&sb, "actionable: %s; task %s; attempt %s; read %t\n", m.Disposition, m.Task, m.Attempt, m.Read)
-				if m.Reason != "" {
-					fmt.Fprintf(&sb, "reason: %s\n", m.Reason)
-				}
-			} else {
-				sb.WriteString("informational (legacy acknowledgement applies)\n")
-			}
+			sb.WriteString(mailStatus(m) + "\n")
 		}
-		if *ack {
+		switch {
+		case resolving:
+			fmt.Fprintf(&sb, "\nmail %d marked %s\n", mail[0].Seq, mail[0].Disposition)
+		case *ack:
 			fmt.Fprintf(&sb, "\nacknowledged %d mail(s)\n", len(mail))
-		} else if !resolving && !*all {
-			fmt.Fprintf(&sb, "\n%d unread, %d pending: mark read with `rota worker inbox %s --ack --upto %d`; resolve requests with --handled <seq> or --returned <seq> and --reason <text>\n", unreadAfter, pendingAfter, slotName, mail[len(mail)-1].Seq)
+		}
+		if next != "" && !*all {
+			fmt.Fprintf(&sb, "\nstill to do: %s\n", next)
 		}
 		return Result{Data: d, Text: strings.TrimRight(sb.String(), "\n")}, nil
 	}
+}
+
+// mailStatus is the line under a listed mail saying what it still needs.
+func mailStatus(m worker.Mail) string {
+	if !m.Actionable {
+		return "informational: --ack is enough"
+	}
+	parts := []string{"request " + m.Disposition}
+	if m.Task != "" {
+		parts = append(parts, "task "+m.Task)
+	}
+	if m.Attempt != "" {
+		parts = append(parts, "attempt "+m.Attempt)
+	}
+	if m.Read {
+		parts = append(parts, "read")
+	} else {
+		parts = append(parts, "unread")
+	}
+	line := strings.Join(parts, "; ")
+	if m.Reason != "" {
+		line += "\nreason: " + m.Reason
+	}
+	return line
 }
 
 func ackedCount(ack bool, n int) int {

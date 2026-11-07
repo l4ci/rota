@@ -250,11 +250,12 @@ func (s *Slot) SetClaimID(id string) {
 	s.o.Set("claimId", id)
 }
 
-// SetTask changes the issue the slot works on, returning unresolved requests
-// when its normalized identity changes (including tracker migrations).
+// SetTask renames the issue the slot works on (a tracker migration or a
+// bundle-lead promotion). The assignment continues, so its pending requests
+// follow the new name instead of being returned.
 func (s *Slot) SetTask(t string) {
 	if NormID(s.Task()) != NormID(t) {
-		s.endInboxAssignment()
+		s.renameInboxTask(t)
 	}
 	s.o.Set("task", t)
 }
