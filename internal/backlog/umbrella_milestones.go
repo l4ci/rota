@@ -113,25 +113,25 @@ func (u *Umbrella) MilestoneShow(mid string) (string, error) {
 }
 
 // MilestonePut replaces the milestone plan on the home sub-repo.
-func (u *Umbrella) MilestonePut(mid, text string) error {
-	_, err := viaHome(u, func(home *Issues) (struct{}, error) { return struct{}{}, home.MilestonePut(mid, text) })
-	return err
+func (u *Umbrella) MilestonePut(mid, text string) (bool, error) {
+	return viaHome(u, func(home *Issues) (bool, error) { return home.MilestonePut(mid, text) })
 }
 
 // MilestoneStatus moves the milestone on the home sub-repo, then opens or
 // closes the native milestone in every other sub-repo that has one.
-func (u *Umbrella) MilestoneStatus(mid, status string) error {
+func (u *Umbrella) MilestoneStatus(mid, status string) (bool, error) {
 	home, err := u.homeSub()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if err := home.MilestoneStatus(mid, status); err != nil {
-		return err
+	changed, err := home.MilestoneStatus(mid, status)
+	if err != nil {
+		return false, err
 	}
 	want := nativeStateOf(status)
 	set, err := u.fetchNatives()
 	if err != nil {
-		return err
+		return false, err
 	}
 	for name, m := range set.of(mid) {
 		if name == home.Repo || m.State == want {
@@ -139,15 +139,16 @@ func (u *Umbrella) MilestoneStatus(mid, status string) error {
 		}
 		sub, err := u.sub(name)
 		if err != nil {
-			return err
+			return false, err
 		}
 		mt, err := sub.milestoneTracker()
 		if err != nil {
-			return err
+			return false, err
 		}
 		if err := mt.EditMilestone(u.ctx(), m.Number, tracker.MilestoneEdit{State: &want}); err != nil {
-			return err
+			return false, err
 		}
+		changed = true
 	}
-	return nil
+	return changed, nil
 }

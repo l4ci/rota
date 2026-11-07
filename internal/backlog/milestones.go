@@ -287,32 +287,39 @@ func (b *Issues) MilestoneShow(mid string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	text, _, _ := ParseFieldsBlock(is.Body)
+	return milestonePlanText(is.Body), nil
+}
+
+// milestonePlanText is the plan text of a tracking issue body: the body
+// without its fields block and child list, trailing newlines trimmed.
+func milestonePlanText(body string) string {
+	text, _, _ := ParseFieldsBlock(body)
 	text, _, _ = ms.SplitChildren(text)
-	return strings.TrimRight(text, "\n"), nil
+	return strings.TrimRight(text, "\n")
 }
 
 // MilestoneStatus moves milestone mid to planned, active, shipped or
 // archived: it swaps the status label, syncs the body frontmatter, closes
 // (shipped: completed, archived: not planned) or reopens the tracking issue,
 // and does the same to the native milestone.
-func (b *Issues) MilestoneStatus(mid, status string) error {
+func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	if !slices.Contains(MilestoneStatuses, status) {
-		return errf(ErrInvalid, "status must be one of: %s", strings.Join(MilestoneStatuses, " "))
+		return false, errf(ErrInvalid, "status must be one of: %s", strings.Join(MilestoneStatuses, " "))
 	}
 	mt, err := b.milestoneTracker()
 	if err != nil {
-		return err
+		return false, err
 	}
 	is, err := b.TrackerIssue(mid)
 	if err != nil {
-		return err
+		return false, err
 	}
+	changed := msStatusOf(is) != status
 	summary := ""
 	if status == "shipped" && (is.State != "closed" || is.StateReason != tracker.CloseCompleted) {
 		children, err := mt.List(b.ctx(), tracker.ListFilter{State: "closed", Milestone: is.Milestone})
 		if err != nil {
-			return err
+			return false, err
 		}
 		sort.SliceStable(children, func(i, j int) bool { return tracker.CompareKeys(children[i].Key, children[j].Key) < 0 })
 		var closed []string
@@ -333,19 +340,19 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 	}
 	if !slices.Contains(is.Labels, label) {
 		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
-			return err
+			return false, err
 		}
 	}
 	if len(stale) > 0 {
 		if err := mt.RemoveLabels(b.ctx(), n, stale); err != nil {
-			return err
+			return false, err
 		}
 	}
 	text, block, order := ParseFieldsBlock(is.Body)
 	if newText, _ := frontmatter.UpdateField(text, "status", status); newText != text {
 		body := RenderFieldsBlock(newText, order, block)
 		if err := mt.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
-			return err
+			return false, err
 		}
 	}
 	want := nativeStateOf(status)
@@ -356,23 +363,25 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 	}
 	if is.State == "closed" && (!wantClosed || is.StateReason != reason) {
 		if err := mt.Reopen(b.ctx(), n); err != nil {
-			return err
+			return false, err
 		}
 		is.State = "open"
 	}
 	if wantClosed && is.State == "open" {
 		if err := mt.Close(b.ctx(), n, reason, summary); err != nil {
-			return err
+			return false, err
 		}
 	}
 	nm, err := b.nativeMilestone(mt, mid, is)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if nm != nil && nm.State != want {
-		return mt.EditMilestone(b.ctx(), nm.Number, tracker.MilestoneEdit{State: &want})
+		if err := mt.EditMilestone(b.ctx(), nm.Number, tracker.MilestoneEdit{State: &want}); err != nil {
+			return false, err
+		}
 	}
-	return nil
+	return changed, nil
 }
 
 // nativeMilestone is the native milestone of mid: the issue's own, else the
@@ -388,20 +397,21 @@ func (b *Issues) nativeMilestone(mt MilestoneTracker, mid string, is Issue) (*tr
 // MilestonePut replaces the milestone plan text of the tracking issue. The
 // text must carry frontmatter with `id: <mid>` (else ErrMilestoneText);
 // `status` follows the label and `depends`, when present, updates the
-// Depends field.
-func (b *Issues) MilestonePut(mid, text string) error {
+// Depends field. It reports whether the plan text (as MilestoneShow reads
+// it) changed.
+func (b *Issues) MilestonePut(mid, text string) (bool, error) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	fm, _, _ := frontmatter.Parse(text)
 	if frontmatter.Str(fm, "id") != mid {
-		return errf(ErrMilestoneText, "milestone text needs frontmatter with 'id: %s'", mid)
+		return false, errf(ErrMilestoneText, "milestone text needs frontmatter with 'id: %s'", mid)
 	}
 	is, err := b.TrackerIssue(mid)
 	if err != nil {
-		return err
+		return false, err
 	}
 	mt, err := b.milestoneTracker()
 	if err != nil {
-		return err
+		return false, err
 	}
 	old, block, order := ParseFieldsBlock(is.Body)
 	_, children, _ := ms.SplitChildren(old)
@@ -413,7 +423,10 @@ func (b *Issues) MilestonePut(mid, text string) error {
 	}
 	text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
 	body := RenderFieldsBlock(ms.JoinChildren(text, children), order, block)
-	return mt.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+	if err := mt.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
+		return false, err
+	}
+	return milestonePlanText(is.Body) != milestonePlanText(body), nil
 }
 
 // ChildSync is the outcome of SyncMilestoneChildren: whether the tracking
