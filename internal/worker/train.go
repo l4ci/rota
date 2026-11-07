@@ -984,6 +984,7 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 						prs = append(prs, m.PR)
 					}
 				}
+				e.recordVerification(t.root, o.Round, tier, GateTarget{}, prs, r)
 				err = e.recordFlakes(t.root, o.Round, prs, r)
 				// Prefix verifies run inside bisect, outside the tier walk.
 				if k != n {
@@ -1537,6 +1538,11 @@ func (t *trainRun) verifyLanded(p trainPlan, res *TrainResult) (bool, error) {
 		return false, nil
 	}
 	full, err := p.verify(t.root)
+	tier := p.tierRan
+	if tier == "" {
+		tier = tierFull
+	}
+	t.e.recordVerification(t.root, t.o.Round, tier, GateTarget{}, landedPRs(res), full)
 	if err != nil {
 		return true, err
 	}
@@ -1550,6 +1556,7 @@ func (t *trainRun) verifyLanded(p trainPlan, res *TrainResult) (bool, error) {
 	if full.OK() {
 		e2e, err := t.e.runE2E(t.ctx, p.in.cfg.E2E, t.root, p.in.ledger)
 		if err == nil {
+			t.e.recordVerification(t.root, t.o.Round, tierE2E, GateTarget{}, landedPRs(res), e2e)
 			err = t.e.recordFlakes(t.root, t.o.Round, landedPRs(res), e2e)
 		}
 		if err != nil {
