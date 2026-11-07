@@ -3,8 +3,8 @@ package round
 import (
 	"context"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -67,10 +67,6 @@ func (e Env) issuesOfPRs(prs []tracker.PR, skip string) map[tracker.IssueKey]int
 	return out
 }
 
-// deferredFromRe marks an item that `verdict add --file-deferred` filed: its
-// fix builds on the PR the finding came from.
-var deferredFromRe = regexp.MustCompile(`(?m)^Deferred \w+ finding from the .* verdict on `)
-
 // deferredDependency is the open PR a --file-deferred item was filed from, 0
 // when it is not such an item or that PR is no longer open. Another item that
 // merely relates to an open PR is not held back.
@@ -84,7 +80,7 @@ func deferredDependency(be backlog.Backend, it backlog.Item, open map[int]bool) 
 		return 0
 	}
 	body, _, _ := be.Detail(it.ID)
-	if !deferredFromRe.MatchString(body) {
+	if !verdict.IsDeferredFinding(body) {
 		return 0
 	}
 	refs := strings.FieldsFunc(it.Fields.Related, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
