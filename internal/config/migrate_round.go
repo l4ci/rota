@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Rename is one round-only key that moved out of work.* (#1097).
@@ -72,7 +73,7 @@ func (e *ConflictError) Error() string {
 // ErrCorrupt still matches a malformed config.local.json.
 type corruptFile struct{ name string }
 
-func (e corruptFile) Error() string        { return ".rota/" + e.name + " is not a valid JSON object" }
+func (e corruptFile) Error() string        { return rotatree.Rel(e.name) + " is not a valid JSON object" }
 func (e corruptFile) Is(target error) bool { return target == ErrCorrupt }
 
 // MigrateRoundKeys moves every RoundKeyRenames key present in doc to its new
@@ -210,7 +211,7 @@ func readMigrateTarget(path, name string) (*jsonx.Object, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf(".rota/%s: %w", name, err)
+		return nil, fmt.Errorf("%s: %w", rotatree.Rel(name), err)
 	}
 	if name == "config.local.json" && len(bytes.TrimSpace(raw)) == 0 {
 		return nil, nil

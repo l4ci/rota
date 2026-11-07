@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -167,7 +168,7 @@ func verdictArtifacts(root string, r verdict.Record) []string {
 	for _, path := range qaArtifactRE.FindAllString(text, -1) {
 		path = strings.TrimRight(path, ".:")
 		clean := filepath.Clean(path)
-		if !strings.HasPrefix(filepath.ToSlash(clean), ".rota/qa-runs/") {
+		if !strings.HasPrefix(filepath.ToSlash(clean), rotatree.RelPrefix+rotatree.QARunsDir+"/") {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(root, clean)); err == nil && !slices.Contains(paths, path) {
