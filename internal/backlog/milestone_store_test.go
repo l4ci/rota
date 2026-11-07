@@ -46,3 +46,45 @@ func TestTrackerStoreRoundTrip(t *testing.T) {
 		t.Fatalf("put same text = %v %v", changed, err)
 	}
 }
+
+// callsOf counts the recorded tracker calls named method.
+func callsOf(f *trackertest.MS, method string) int {
+	n := 0
+	for _, c := range f.Calls {
+		if c.Method == method {
+			n++
+		}
+	}
+	return n
+}
+
+// Put and SetStatus take the changed result from the adapter write: neither
+// reads the milestone back, so each looks the tracking issue up once.
+func TestTrackerStoreWritesMakeNoReadBack(t *testing.T) {
+	f := &trackertest.MS{Fake: &trackertest.Fake{}, Native: []tracker.Milestone{}}
+	st := msIssues(f).MilestoneStore()
+	id, err := st.Add("Title", "Summary.", nil, "delivery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := st.Show(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f.Calls = nil
+	if changed, err := st.Put(id, text+"\nMore.\n"); err != nil || !changed {
+		t.Fatalf("put new text = %v %v", changed, err)
+	}
+	if n := callsOf(f, "list"); n != 1 {
+		t.Errorf("put listed %d times, want 1: %+v", n, f.Calls)
+	}
+
+	f.Calls = nil
+	if changed, err := st.SetStatus(id, "active"); err != nil || !changed {
+		t.Fatalf("set status = %v %v", changed, err)
+	}
+	if n := callsOf(f, "list"); n != 1 {
+		t.Errorf("set status listed %d times, want 1: %+v", n, f.Calls)
+	}
+}
