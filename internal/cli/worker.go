@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -286,7 +287,7 @@ func accountObject(m worker.Meter) *jsonx.Object {
 		}
 	}
 	if m.ResetsAt != nil {
-		o.Set("resetsAt", worker.ISOFormat(*m.ResetsAt))
+		o.Set("resetsAt", stamp.ISO(*m.ResetsAt))
 	}
 	if m.Headroom != nil {
 		o.Set("headroom", *m.Headroom)
@@ -318,7 +319,7 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 		}
 		note := m.Reason
 		if note == "" && m.ResetsAt != nil {
-			note = worker.ISOFormat(*m.ResetsAt)
+			note = stamp.ISO(*m.ResetsAt)
 		}
 		lines = append(lines, fmt.Sprintf("%-12s %-8s %-9s 5h=%-5s 7d=%-5s %s", m.Name, config.KindClaude, m.Verdict, pct(m.FiveHour), pct(m.SevenDay), note))
 	}
