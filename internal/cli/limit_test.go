@@ -288,7 +288,7 @@ func TestOrchestratorDataIsTheNewestSessionFileOfTheRoot(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	write := func(id, cwd string, at time.Time, used int, reset time.Time) {
 		payload := `{"session_id":"` + id + `","cwd":"` + cwd + `","rate_limits":{"five_hour":{"used_percentage":` + strconv.Itoa(used) + `,"resets_at":` + strconv.FormatInt(reset.Unix(), 10) + `}}}`
-		if err := hook.Dump(cd, []byte(payload), at); err != nil {
+		if err := hook.Dump(cd, mustPayload(t, payload), at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -348,4 +348,13 @@ func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	if got, ok := rig.W.Move.IdleSlot(context.Background(), "", "c"); ok {
 		t.Fatalf("no slot is idle on account c, got %q", got)
 	}
+}
+
+func mustPayload(t *testing.T, s string) hook.Payload {
+	t.Helper()
+	p, err := hook.ParsePayload([]byte(s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	labeldefs "github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/reviewpolicy"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -53,7 +54,7 @@ type ReviewDepth struct {
 	// HasSpec and Members identify the review set gathered by BuildReviewInputs.
 	HasSpec bool
 	Members []tracker.IssueKey
-	config.ReviewDecision
+	reviewpolicy.Decision
 	Changed int
 	Labels  []string
 	// Cross is the harness that must record a review-cross verdict, CrossNone
@@ -90,7 +91,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}
-	in := config.ReviewInput{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
+	in := reviewpolicy.Input{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
 	// The PR body is read at most once, for the tier's Door line and the policy's.
 	prRead := false
 	var prBody string
@@ -114,7 +115,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if in.Tier == change.TierDocs {
 		needsIssue = len(s.Policy.Labels) > 0 // no drift to read the issue for
 	}
-	decide := s.Policy.Decide
+	decide := func(in reviewpolicy.Input) reviewpolicy.Decision { return reviewpolicy.Decide(s.Policy, in) }
 	// Each issue's own labels decide its cross requirement, as they do its
 	// depth: one issue's review:none must not skip another's.
 	labelSets := [][]string{in.Labels}
@@ -144,8 +145,8 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			// One decision per bundled issue, the highest wins: a union of
 			// labels would let a `none` on one issue beat another's default.
 			// The PR body is read below, once, for every decision.
-			decide = func(in config.ReviewInput) config.ReviewDecision {
-				var best config.ReviewDecision
+			decide = func(in reviewpolicy.Input) reviewpolicy.Decision {
+				var best reviewpolicy.Decision
 				for i, is := range got {
 					one := in
 					one.Labels = slices.Clone(s.Labels)
@@ -154,7 +155,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 							one.Labels = append(one.Labels, l)
 						}
 					}
-					if d := s.Policy.Decide(one); i == 0 || d.Depth.Outranks(best.Depth) {
+					if d := reviewpolicy.Decide(s.Policy, one); i == 0 || d.Depth.Outranks(best.Depth) {
 						best = d
 					}
 				}
@@ -173,11 +174,11 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			in.PRBody = body
 		}
 	}
-	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels, Tier: tier}
+	out := ReviewDepth{Decision: decide(in), Changed: changed, Labels: in.Labels, Tier: tier}
 	// A depth of none reviews nothing, so no lens runs either. in.Labels is the
 	// union of the lead's and every member's, so any bundled issue can trigger.
 	if out.Depth != config.DepthNone {
-		out.Lenses = s.Lenses.Match(files, in.Labels)
+		out.Lenses = reviewpolicy.MatchLenses(s.Lenses, files, in.Labels)
 	}
 	author, _ := harness.ResolveAuthor(harness.AuthorSources{
 		Slot: s.Author, Labels: labelSets[0], Project: s.Cross.DefaultKind,
@@ -251,7 +252,7 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string) (strin
 // read, when the depth is full, when a label mapped to none (final, so the line
 // cannot change it) or when the policy cannot come out below full.
 func DoorNote(policy config.ReviewPolicy, res ReviewDepth, prFound, noForge bool) string {
-	labelNone := res.Signal == config.SignalLabel && res.Depth == config.DepthNone
+	labelNone := res.Signal == reviewpolicy.SignalLabel && res.Depth == config.DepthNone
 	if prFound || res.Depth == config.DepthFull || labelNone || !policy.MayBeBelowFull() {
 		return ""
 	}

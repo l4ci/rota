@@ -47,7 +47,7 @@ func proofAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		row, changed, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: *sha})
+		row, changed, err := proof.Add(st, id, c.deps().Today(), proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: proofSha(c, root, *sha)})
 		if err != nil {
 			return failAny(err)
 		}
@@ -100,7 +100,7 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		if code != 0 {
 			result = "FAIL"
 		}
-		row, changed, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence()})
+		row, changed, err := proof.Add(st, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: proofSha(c, root, "")})
 		if err != nil {
 			return failAny(err)
 		}

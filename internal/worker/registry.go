@@ -199,6 +199,10 @@ type QueuedPR struct {
 	DecisionContext                        string // assignment snapshot retained when its slot is reused
 	Round                                  int
 	Relays                                 []any
+	// ReviewSeen is the review cursor the PR's slot held when it moved on
+	// (Slot.ReviewSeen): input after it is new. "" on a record from before
+	// cursors were kept.
+	ReviewSeen string
 	// Bundle is the member issues the PR closes beside Issue (a bundled slot's
 	// PR that was queued), none for one issue.
 	Bundle []string
@@ -218,8 +222,8 @@ func queuedFrom(o *jsonx.Object) QueuedPR {
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		DecisionContext: jsonx.Str(o, "decisionContext"),
-		Round:           round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
+		DecisionContext: jsonx.Str(o, "decisionContext"), ReviewSeen: jsonx.Str(o, "reviewSeen"),
+		Round: round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
 	}
 }
 
@@ -240,6 +244,9 @@ func (q QueuedPR) object() *jsonx.Object {
 	setStrList(o, "bundle", q.Bundle)
 	if q.DecisionContext != "" {
 		o.Set("decisionContext", q.DecisionContext)
+	}
+	if q.ReviewSeen != "" {
+		o.Set("reviewSeen", q.ReviewSeen)
 	}
 	return o
 }
@@ -904,12 +911,17 @@ func execRun(ctx context.Context, name string, args, env []string) (host.Result,
 	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Env: env, Timeout: host.CallTimeout})
 }
 
+// killTree is the cancel of a verification command: its process group and
+// every descendant, so a test server in its own session does not outlive a
+// cancelled or timed-out gate or train (#2751).
+func killTree(pid int) error { return pidlive.KillTree(pidlive.Real{}, pid) }
+
 // execShell is the production Env.Shell. A verification command may run as
 // long as the caller's context allows, so it sets no timeout of its own.
 func execShell(ctx context.Context, dir, command string) (string, int) {
 	res, err := proc.Run(ctx, proc.Cmd{
 		Name: "sh", Args: []string{"-c", command}, Dir: dir,
-		Timeout: proc.NoTimeout, Combined: true, Group: true,
+		Timeout: proc.NoTimeout, Combined: true, Group: true, Kill: killTree,
 	})
 	if err != nil {
 		return err.Error(), 127
@@ -927,7 +939,7 @@ func execShellEnv(ctx context.Context, dir, command string, environ []string) (s
 	}
 	res, err := proc.Run(ctx, proc.Cmd{
 		Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
-		Timeout: proc.NoTimeout, Combined: true, Group: true, MaxOutput: behaviourMaxOutput,
+		Timeout: proc.NoTimeout, Combined: true, Group: true, Kill: killTree, MaxOutput: behaviourMaxOutput,
 	})
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		// keep what the step wrote before it was stopped: it shows where it hung

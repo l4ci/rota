@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -56,6 +57,10 @@ func TestGuardDenies(t *testing.T) {
 		"git push origin :main",
 		"git push --delete origin main",
 		"git push --mirror",
+		`echo \>&& git push --force origin main`,
+		`echo \>& git -C /repo reset --hard`,
+		"git -C /repo reset --hard &>/dev/null",
+		"git push --force origin main &>/dev/null",
 		"git push -fu origin other",
 		"git push origin HEAD:main --force",
 		"git -C /repo push --force origin main",
@@ -105,6 +110,11 @@ func TestGuardDenies(t *testing.T) {
 		"cat <<EOF\n$(git push -f origin main)\nEOF",
 		"cat <<EOF\n`git push -f origin main`\nEOF",
 		"cat <<-EOF\n\t$(git add -A)\n\tEOF",
+		`echo "$(echo "$(git push -f origin main)")"`,
+		`echo '"' $(git push -f origin main)`,
+		`echo "a\"b" && git push -f origin main`,
+		`echo "x" 'y'; git push -f origin main`,
+		"echo $((1 + 2)); git push -f origin main",
 		"git -C " + gOther + " push --force origin " + gOtherBranch,
 		"git -C " + gOther + " push --force origin HEAD",
 		"git -C " + gOther + " push --force-with-lease",
@@ -123,6 +133,8 @@ func TestGuardDenies(t *testing.T) {
 func TestGuardAllows(t *testing.T) {
 	for _, line := range []string{
 		"git push origin HEAD",
+		"ls &>/dev/null",
+		"go test ./... &>/tmp/x",
 		"git push -u origin " + gBranch,
 		"git push --force-with-lease origin " + gBranch,
 		"git push --force-with-lease",
@@ -160,6 +172,12 @@ func TestGuardAllows(t *testing.T) {
 		"gh pr view 12",
 		"gh pr create --title x",
 		"for f in a b; do git add $f; done",
+		`echo "a\"; git push -f origin main"`,
+		`echo a\; git push -f origin main`,
+		`echo '$(git push -f origin main)'`,
+		`echo a\;git push -f origin main`,
+		`echo "it's" '"git push -f origin main"'`,
+		"echo $((1 + 2))",
 		"",
 	} {
 		t.Run(line, func(t *testing.T) {
@@ -208,18 +226,21 @@ func TestGuardFailsClosedOnGit(t *testing.T) {
 	}
 }
 
-func TestParseScript(t *testing.T) {
-	p, err := parseScript("a b && c 'd e' | f\n# note\ng >out 2>&1 h; i")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := [][]string{{"a", "b"}, {"c", "d e"}, {"f"}, {"g", "h"}, {"i"}}
-	if len(p.cmds) != len(want) {
-		t.Fatalf("%q", p.cmds)
-	}
-	for i, w := range want {
-		if strings.Join(p.cmds[i], "\x00") != strings.Join(w, "\x00") {
-			t.Errorf("cmd %d = %q, want %q", i, p.cmds[i], w)
-		}
+// parseScript must advance on every byte: an `&` that is a redirect once hung
+// the loop, stalling the PreToolUse hook (#2855).
+func TestParseScriptAlwaysAdvances(t *testing.T) {
+	for _, line := range []string{"ls &>/dev/null", "cmd &>>log", "cat <<&", "cat <(&>", "&>", "<&", "echo a &>"} {
+		t.Run(line, func(t *testing.T) {
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_, _ = parseScript(line)
+			}()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("parseScript(%q) did not return", line)
+			}
+		})
 	}
 }

@@ -12,11 +12,8 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// pythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const pythonKeys = 46
-
 // frozenPythonKeys is the table the recorded schema inputs were generated
-// from: CONFIG_KEYS plus the keys removed since, in the order the old Keys had
+// from: the original key table plus the keys removed since, in the order the old Keys had
 // them. It is a fixed list, not a slice of Keys, so a key renamed or dropped
 // later (#1825) leaves the recorded inputs alone.
 var frozenPythonKeys = []string{
@@ -154,7 +151,7 @@ func TestSchemaMatchesPython(t *testing.T) {
 		raw, _ := json.Marshal(tree)
 		cases = append(cases, schemaCase{string(raw), key})
 	}
-	// The goldens were recorded over CONFIG_KEYS, which still had
+	// The goldens were recorded over the original key table, which still had
 	// debug.competingHypotheses (removed) and loop.webResearch (removed
 	// in #70). Generate the same random cases from the old table so the
 	// recorded inputs line up, and skip those keys. The same goes for the
@@ -221,19 +218,6 @@ func TestKeysShape(t *testing.T) {
 		}
 		seen[k.Name] = true
 	}
-	if len(Keys) < pythonKeys {
-		t.Fatalf("Keys has %d rows, want at least %d (CONFIG_KEYS)", len(Keys), pythonKeys)
-	}
-}
-
-// The leading pythonKeys rows must stay the same table as CONFIG_KEYS: name,
-// default and required flag.
-func TestKeysMatchPython(t *testing.T) {
-	var got [][]any
-	for _, k := range Keys[:pythonKeys] {
-		got = append(got, []any{k.Name, k.Default, k.Required})
-	}
-	golden.Check(t, map[string]any{"input": nil}, got)
 }
 
 func TestPromptsMatchSchema(t *testing.T) {

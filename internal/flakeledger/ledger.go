@@ -5,6 +5,7 @@ package flakeledger
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -38,8 +39,18 @@ type Entry struct {
 
 func Path(root string) string { return rotatree.File(root, File) }
 
+// complete is the validity predicate shared by Append and Load: a record
+// Load would reject is never written.
+func (e Entry) complete() bool {
+	return e.Check != "" && len(e.Tests) > 0 && e.Tree != "" && !e.TS.IsZero() && e.First.ExitCode == 1 && e.Retry.ExitCode == 0
+}
+
 // Append serializes writers and syncs the complete JSON line before returning.
+// An incomplete entry is refused without touching the file.
 func Append(root string, e Entry) error {
+	if !e.complete() {
+		return errors.New("flake ledger: refusing incomplete recovery record")
+	}
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -74,7 +85,7 @@ func Load(root string) ([]Entry, error) {
 		if err := json.Unmarshal(line, &e); err != nil {
 			return nil, fmt.Errorf("flake ledger line %d: %w", i+1, err)
 		}
-		if e.Check == "" || len(e.Tests) == 0 || e.Tree == "" || e.TS.IsZero() || e.First.ExitCode != 1 || e.Retry.ExitCode != 0 {
+		if !e.complete() {
 			return nil, fmt.Errorf("flake ledger line %d: incomplete recovery record", i+1)
 		}
 		out = append(out, e)

@@ -24,7 +24,7 @@ import (
 )
 
 // File is the receipts file, relative to the project root.
-const File = ".rota/" + rotatree.ReceiptsFile
+const File = rotatree.RelPrefix + rotatree.ReceiptsFile
 
 const lockWait = 10 * time.Second
 
@@ -36,6 +36,9 @@ const claimWait = 10 * time.Minute
 const (
 	Done   = "done"   // the verb finished; a retry replays Data and Text
 	Failed = "failed" // the verb stopped part way; a retry runs again
+	// Cancelled: the call was cancelled on request (a train, #2751). It is
+	// settled like Done: a retry replays it and nothing resumes it.
+	Cancelled = "cancelled"
 )
 
 // Entry is one recorded call.
@@ -129,7 +132,7 @@ type Outcome struct {
 // second waits, then finds the first's receipt and replays it.
 //
 // An id used before for another verb or fingerprint is a *Mismatch and run
-// does not run. A done receipt replays and run does not run. Otherwise run gets
+// does not run. A done or cancelled receipt replays and run does not run. Otherwise run gets
 // the failed receipt of an earlier attempt (zero when there is none) and
 // returns the entry to record; false means the call wrote nothing and leaves
 // no receipt. Do fills in ID, Verb, Fingerprint, At and Attempts.
@@ -142,7 +145,7 @@ func (s *Store) Do(call Call, run func(prior Entry) (Entry, bool)) (Outcome, err
 		if err != nil {
 			return err
 		}
-		if found && prior.Status == Done {
+		if found && (prior.Status == Done || prior.Status == Cancelled) {
 			out = Outcome{Replayed: true, Entry: prior}
 			return nil
 		}

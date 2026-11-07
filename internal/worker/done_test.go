@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -115,6 +116,22 @@ const (
 	fastCfg    = `{"test":{"fast":["go test ./x"]}}`
 	tddCfg     = `{"test":{"fast":["go test ./x"]},"work":{"tdd":true}}`
 )
+
+func TestDoneAckedRequestSurvivesInterruption(t *testing.T) {
+	r := newDoneRig(t, oneSlot, `{}`)
+	if _, err := PostMail(r.root, "ben", MailReview, "please address the review", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.AckUnread(0) }); err != nil {
+		t.Fatal(err)
+	}
+	// Done loads a fresh registry, as after interruption and restart.
+	res, err := r.done(DoneRequest{})
+	if err == nil || r.state() == "done" {
+		t.Fatalf("acknowledgement discharged unfinished review after reload: result %+v err %v state %s", res, err, r.state())
+	}
+	wantExit(t, err, exitcode.ExitRefused)
+}
 
 func TestDoneRefusesWithoutAProofRow(t *testing.T) {
 	r := newDoneRig(t, oneSlot, fastCfg)
@@ -548,6 +565,64 @@ func TestDoneUnrecordedPRCleanCases(t *testing.T) {
 			res, err := r.done(DoneRequest{})
 			if err != nil || !res.Changed || r.state() != "done" || len(res.Warnings) != 0 {
 				t.Fatalf("res %+v err %v state %s", res, err, r.state())
+			}
+		})
+	}
+}
+
+func TestDoneFinalLockRefusesLateRequests(t *testing.T) {
+	for _, ack := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unread", true: "already read"}[ack], func(t *testing.T) {
+			r := newDoneRig(t, oneSlot, `{}`)
+			r.deps.RunTargeted = func(dir, command, base, head string, ids []string) (string, error) {
+				if _, err := PostMail(r.root, "ben", MailBase, "base changed during verification", time.Now()); err != nil {
+					t.Fatal(err)
+				}
+				if ack {
+					if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.AckUnread(0) }); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return command, nil
+			}
+			res, err := r.done(DoneRequest{Targeted: "go test ./x"})
+			wantExit(t, err, exitcode.ExitRefused)
+			if res.Changed || res.Pending != 1 || r.state() == "done" {
+				t.Fatalf("late request passed final lock: %+v err %v state %s", res, err, r.state())
+			}
+			wantUnread := 1
+			if ack {
+				wantUnread = 0
+			}
+			if res.Unread != wantUnread {
+				t.Fatalf("unread %d, want %d", res.Unread, wantUnread)
+			}
+		})
+	}
+}
+
+func TestDoneLegacyAndInformationalMailKeepAcknowledgementSemantics(t *testing.T) {
+	for _, kind := range []string{"legacy", "informational"} {
+		t.Run(kind, func(t *testing.T) {
+			slot := oneSlot
+			if kind == "legacy" {
+				slot = `{"name":"ben","branch":"ben/7-x","task":"7","state":"busy","inbox":[{"seq":1,"kind":"review","text":"old review"}]}`
+			}
+			r := newDoneRig(t, slot, `{}`)
+			if kind == "informational" {
+				if _, err := PostMail(r.root, "ben", "notice", "context only", time.Now()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := r.done(DoneRequest{}); err == nil {
+				t.Fatal("unread informational mail did not block done")
+			}
+			if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.AckUnread(0) }); err != nil {
+				t.Fatal(err)
+			}
+			res, err := r.done(DoneRequest{})
+			if err != nil || !res.Changed || r.state() != "done" {
+				t.Fatalf("legacy/informational ack did not discharge: %+v %v", res, err)
 			}
 		})
 	}

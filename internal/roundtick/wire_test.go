@@ -53,6 +53,7 @@ func (w *fakeWorld) Landing(_ context.Context, req postgate.Request) (postgate.E
 func (w *fakeWorld) ReviewReadiness(string, string) (string, bool) { return "", false }
 func (w *fakeWorld) ReviewLoop(string) ReviewOutcome               { return ReviewOutcome{} }
 func (w *fakeWorld) Capped(context.Context) string                 { return "" }
+func (w *fakeWorld) FollowUp() FollowUpSources                     { return FollowUpSources{} }
 func (w *fakeWorld) OpenItems() int                                { return 0 }
 func (w *fakeWorld) Candidates(context.Context) ([]round.Candidate, error) {
 	return nil, nil

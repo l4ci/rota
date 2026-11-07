@@ -341,7 +341,7 @@ func pendingHitFolds(root string) (cmds, sidecars []string) {
 	}
 	if nonEmpty(rotatree.File(root, rotatree.KnowledgeHits)) {
 		cmds = append(cmds, "rota knowledge tier fold")
-		sidecars = append(sidecars, ".rota/knowledge-tier.json")
+		sidecars = append(sidecars, rotatree.Rel(rotatree.KnowledgeTier))
 	}
 	scopes := rotatree.File(root, rotatree.KnowledgeDir)
 	for _, d := range fsio.GlobDir(scopes, "*") {
@@ -349,7 +349,7 @@ func pendingHitFolds(root string) (cmds, sidecars []string) {
 		name := filepath.Base(d)
 		if nonEmpty(f) && hitScopeName.MatchString(name) {
 			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
-			sidecars = append(sidecars, ".rota/knowledge/"+name+"/knowledge-tier.json")
+			sidecars = append(sidecars, rotatree.Rel(rotatree.KnowledgeDir, name, rotatree.KnowledgeTier))
 		}
 	}
 	return cmds, sidecars

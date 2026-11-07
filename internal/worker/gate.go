@@ -89,6 +89,9 @@ const (
 	GateMergedRemotely = "merged-remotely"
 	GateMergeFailed    = "merge-failed"
 	GateCheckBroke     = "check-broke"
+	// GateCancelled: the train was cancelled (rota worker train cancel, SIGINT
+	// or SIGTERM) before it finished. Not a code or test failure.
+	GateCancelled = "cancelled"
 	// GateApprovalRequired: the merge-approval gate (B1) refused before the
 	// merge; the CLI exits 4 with it.
 	GateApprovalRequired = "approval-required"
@@ -1733,6 +1736,11 @@ func (g *gateOperation) verifyTiers(cfg GateConfig, first, dir string, landed bo
 			if g.res.PR != "" {
 				prs = append(prs, g.res.PR)
 			}
+			measuredTier := tier
+			if tier == tierFull && g.tierCfg != nil {
+				measuredTier = "test." + g.res.Tier
+			}
+			g.e.recordVerification(g.root, g.o.Round, measuredTier, GateTarget{Name: g.res.TargetSlot, Issue: g.res.Issue, PR: g.res.PR}, prs, vr)
 			err = g.e.recordFlakes(g.root, g.o.Round, prs, vr)
 		}
 		return vr, err

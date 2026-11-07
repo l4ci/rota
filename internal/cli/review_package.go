@@ -9,10 +9,11 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).
-const reviewPackageDir = ".rota/review"
+const reviewPackageDir = rotatree.RelPrefix + rotatree.ReviewDir
 
 // reviewPackageContext is the unified-diff context a package carries, so the
 // reviewer sees each change in its surroundings.

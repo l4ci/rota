@@ -10,30 +10,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 var (
-	slugRe    = regexp.MustCompile(`[^a-z0-9]+`)
 	stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
 	titleRe   = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 )
 
 // Slugify is the topic file name for a topic name.
-func Slugify(name string) string {
-	return strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
-}
+func Slugify(name string) string { return topicmatch.Slugify(name) }
 
-// exact finds the index entry whose name or slug equals want
-// (case-insensitive). Writes never fall back to a partial match.
+// exact finds the index entry a write targets; the rule is
+// topicmatch.WriteIndex (never a partial match).
 func exact(want string, topics []Topic) (Topic, bool) {
-	w := strings.ToLower(strings.TrimSpace(want))
-	for _, t := range topics {
-		if strings.ToLower(t.Name) == w || t.Slug == w || t.Slug == Slugify(want) {
-			return t, true
-		}
+	i, ok := topicmatch.WriteIndex(want, entries(topics))
+	if !ok {
+		return Topic{}, false
 	}
-	return Topic{}, false
+	return topics[i], true
 }
 
 // plan is the files a write changes, by repo-relative path.
@@ -549,19 +544,16 @@ func (c Clone) pruneEmptyDirs(rels []string) {
 }
 
 func (c Clone) openPR(ctx context.Context, pol Policy, branch, title string) (string, error) {
-	var forge tracker.Forge
-	var err error
-	if c.NewForge != nil {
-		forge, err = c.NewForge(ctx, c.Dir)
-	} else {
-		forge, err = tracker.NewForge(ctx, tracker.Settings{}, "", c.Dir)
-	}
 	var url string
-	if err == nil {
-		url, err = forge.PRCreate(ctx, tracker.PRSpec{
-			Base: pol.Branch, Head: branch, Title: title,
-			Body: "Opened by `rota knowledge` from the external knowledge base policy (write: pr).",
-		})
+	var err error
+	if c.NewForge == nil {
+		err = errors.New("no forge injected (Env.NewForge is required for write: pr)")
+	} else {
+		var forge PROpener
+		if forge, err = c.NewForge(ctx, c.Dir); err == nil {
+			url, err = forge.OpenPR(ctx, pol.Branch, branch, title,
+				"Opened by `rota knowledge` from the external knowledge base policy (write: pr).")
+		}
 	}
 	if err != nil {
 		return "", fmt.Errorf("%w: open PR: %w (branch %s is pushed)", ErrPush, err, branch)

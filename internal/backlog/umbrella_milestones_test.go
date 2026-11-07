@@ -81,8 +81,8 @@ func TestUmbrellaMilestoneStatusSyncsEverySubRepo(t *testing.T) {
 		}
 		return rows[0].Status
 	}
-	if err := u.MilestoneStatus("M01", "shipped"); err != nil {
-		t.Fatal(err)
+	if changed, err := u.MilestoneStatus("M01", "shipped"); err != nil || !changed {
+		t.Fatalf("ship = %v %v", changed, err)
 	}
 	for name, f := range fakes {
 		if f.Native[len(f.Native)-1].State != "closed" {
@@ -100,7 +100,7 @@ func TestUmbrellaMilestoneStatusSyncsEverySubRepo(t *testing.T) {
 	if s := status(); s != "active" {
 		t.Errorf("one open = %q, want active", s)
 	}
-	if err := u.MilestoneStatus("M01", "planned"); err != nil {
+	if _, err := u.MilestoneStatus("M01", "planned"); err != nil {
 		t.Fatal(err)
 	}
 	for name, f := range fakes {
@@ -119,7 +119,7 @@ func TestUmbrellaMilestoneListReadyFollowsAggregatedStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	fakes["api"].CreateMilestone(nil, "M01 — One", "")
-	if err := u.MilestoneStatus("M01", "shipped"); err != nil {
+	if _, err := u.MilestoneStatus("M01", "shipped"); err != nil {
 		t.Fatal(err)
 	}
 	open := "open"

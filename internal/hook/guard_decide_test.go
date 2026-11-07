@@ -38,7 +38,6 @@ func TestDecideGuard(t *testing.T) {
 		cwd     string
 		deny    string // substring of the expected reason; "" means the call passes
 	}{
-		{"bad json passes", []byte("{"), gWork, ""},
 		{"non-bash tool passes", payload("Edit", "git push --force origin main", gWork), gWork, ""},
 		{"empty command passes", payload("Bash", "", gWork), gWork, ""},
 		{"force push denied", payload("Bash", "git push --force origin main", gWork), gWork, "force"},
@@ -48,10 +47,11 @@ func TestDecideGuard(t *testing.T) {
 		{"missing cwd uses default", payload("Bash", "git reset --hard", ""), gWork, ""},
 		{"missing cwd, default outside worktree", payload("Bash", "git reset --hard", ""), "/repo", "outside this worktree"},
 		{"payload cwd beats default", payload("Bash", "git reset --hard", "/repo"), gWork, "outside this worktree"},
+		{"workspace.current_dir beats default", []byte(`{"tool_name":"Bash","tool_input":{"command":"git reset --hard"},"workspace":{"current_dir":"/repo"}}`), gWork, "outside this worktree"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := DecideGuard(GuardRequest{Payload: tc.payload, Slot: "dana", DefaultCwd: tc.cwd, Git: fakeGit})
+			got := DecideGuard(GuardRequest{Payload: mustPayload(t, tc.payload), Slot: "dana", DefaultCwd: tc.cwd, Git: fakeGit})
 			if (tc.deny == "" && got != "") || !strings.Contains(got, tc.deny) {
 				t.Fatalf("reason = %q, want substring %q", got, tc.deny)
 			}

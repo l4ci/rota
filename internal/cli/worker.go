@@ -23,7 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
-	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -50,7 +50,7 @@ func workerCommands() *Command {
 		}},
 		{Name: "adopt", Summary: "register a branch or worktree another tool started as a hostless slot", Verb: workerAdopt},
 		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
-		{Name: "inbox", Summary: "list the relays written to the slot's durable inbox; --ack marks them read", Verb: workerInbox},
+		{Name: "inbox", Summary: "list the slot's durable inbox; --ack marks mail read, --handled/--returned resolve a request", Verb: workerInbox},
 		{Name: "reply", Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
 		{Name: "send", Summary: "record a typed event for the slot: blocked, question or heartbeat", Verb: workerSend},
 		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
@@ -61,7 +61,9 @@ func workerCommands() *Command {
 		}},
 		{Name: "done", Summary: "refuse a finished slot without a test.fast proof row at HEAD, else mark it done", Verb: workerDone},
 		{Name: "gate", Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
-		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain},
+		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain, Subs: []*Command{
+			{Name: "cancel", Summary: "cancel the running train that holds a request id", Verb: workerTrainCancel},
+		}},
 		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
 			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},
@@ -801,7 +803,7 @@ func verdictRefusal(verdict string, ref *exitcode.Refusal, err error, msg, hint 
 // recordedFailRefusal turns a recorded-FAIL refusal from the gate or train into the
 // exit-4 envelope the ship paths give: d plus blockedBy verdict and the record.
 func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
-	var vb *ship.VerdictBlockedError
+	var vb *verdict.BlockedError
 	if !errors.As(err, &vb) {
 		return Result{}, err
 	}
@@ -915,14 +917,6 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if !*check {
 			if run.BookErr != nil {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
-			}
-			if n := run.Book.Bounces; n > 0 {
-				d := res.Data.(*jsonx.Object)
-				d.Set("bounces", n)
-				d.Set("parked", run.Book.Parked)
-			}
-			if run.Book.Parked {
-				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", run.Issue, run.Book.Bounces)
 			}
 		}
 		if r.Verdict == worker.GateAlreadyMerged {

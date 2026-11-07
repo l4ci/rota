@@ -154,11 +154,11 @@ func TestNextMilestoneIDCountsGapsAndClosed(t *testing.T) {
 
 func TestMilestoneStatusNeedsMilestoneTracker(t *testing.T) {
 	b := &Issues{Cfg: jsonx.NewObject(), Tracker: &trackertest.Fake{}} // a Fake alone has no native milestone calls
-	if err := b.MilestoneStatus("M01", "active"); err == nil || !strings.Contains(err.Error(), "native milestone") {
+	if _, err := b.MilestoneStatus("M01", "active"); err == nil || !strings.Contains(err.Error(), "native milestone") {
 		t.Errorf("err = %v", err)
 	}
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
-	if err := msIssues(f).MilestoneStatus("M01", "bogus"); err == nil || !strings.Contains(err.Error(), "planned active shipped archived") {
+	if _, err := msIssues(f).MilestoneStatus("M01", "bogus"); err == nil || !strings.Contains(err.Error(), "planned active shipped archived") {
 		t.Errorf("bad status: %v", err)
 	}
 }
@@ -373,8 +373,8 @@ func TestMilestonePutKeepsChildrenAndSyncKeepsPlan(t *testing.T) {
 	if _, err := b.SyncMilestoneChildren("M01"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.MilestonePut("M01", "---\nid: M01\n---\n\n# Rewritten plan"); err != nil {
-		t.Fatal(err)
+	if changed, err := b.MilestonePut("M01", "---\nid: M01\n---\n\n# Rewritten plan"); err != nil || !changed {
+		t.Fatalf("put = %v %v", changed, err)
 	}
 	body := trackerBody(t, b, "M01")
 	if !strings.Contains(body, "Rewritten plan") || !strings.Contains(body, "- #50 kid") {

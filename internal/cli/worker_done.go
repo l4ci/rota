@@ -242,6 +242,9 @@ func doneData(r *worker.DoneResult) *jsonx.Object {
 	if r.Unread > 0 {
 		d.Set("unread", r.Unread)
 	}
+	if r.Pending > 0 {
+		d.Set("pending", r.Pending)
+	}
 	if r.Dirty {
 		d.Set("dirty", true)
 	}
@@ -311,7 +314,7 @@ func targetedProof(c *Ctx, root, dir, command, base, head string, ids []string) 
 		if run.code != 0 {
 			result = "FAIL"
 		}
-		if _, _, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: head}); err != nil {
+		if _, _, err := proof.Add(st, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: head}); err != nil {
 			_, err = failAny(err)
 			return command, err
 		}

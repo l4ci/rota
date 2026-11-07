@@ -220,12 +220,12 @@ func mergeRecorded(root string, e ledger.Entry) bool {
 // members that passed theirs but did not land. Landed members, and the member
 // whose landing gate failed, were recorded by that gate. Only the culprit
 // carries the train's verdict; the others name it as the culprit.
-func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[string]bool) {
+func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult, gated map[string]bool) {
 	if res.Verdict == "" {
 		return
 	}
 	ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindTrain, Round: m.Round(env, root),
-		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped))})
+		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped), "requestId", requestID)})
 	for _, culprit := range res.Culprits {
 		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
 	}
@@ -278,4 +278,20 @@ func AdoptedBranches(root string) (map[string]bool, error) {
 		}
 	}
 	return out, err
+}
+
+// recordVerification notes a fresh local tier execution once. Cached and CI
+// answers carry no measurements; replaying a verdict must not invent elapsed time.
+func (env Env) recordVerification(root string, m *RoundMemo, tier string, target GateTarget, prs []string, vr VerifyResult) {
+	if vr.CI || vr.Cached || vr.WallSeconds == nil || len(vr.Suites) == 0 {
+		return
+	}
+	detail := ledger.Detail("tier", tier, "wallSeconds", *vr.WallSeconds, "suites", vr.Suites)
+	if len(prs) > 0 {
+		detail.Set("prs", prs)
+	}
+	if target.PR == "" && len(prs) == 1 {
+		target.PR = prs[0]
+	}
+	LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindVerification, Issue: target.Issue, Slot: target.Name, PR: target.PR, Detail: detail})
 }

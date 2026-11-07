@@ -32,7 +32,6 @@
     "./internal/config": [
       "TestNoLabelOrRetryDefaultRestatedOutsideConfig",
       "TestNoRoundKeyLiteralOutsideConfig",
-      "TestOwnConfigTriggersSecurityLens",
       "TestReadKeysExistInSchema",
       "TestReferencePageIsCurrent"
     ],
@@ -60,7 +59,11 @@
     "./internal/marker": [
       "TestReportGrammarOwnedByMarker"
     ],
+    "./internal/reviewpolicy": [
+      "TestOwnConfigTriggersSecurityLens"
+    ],
     "./internal/rotatree": [
+      "TestMessageAllowedEntriesUsed",
       "TestNoLiteralRotaDir"
     ],
     "./internal/skills": [
@@ -68,6 +71,9 @@
     ],
     "./internal/verdict": [
       "TestReviewKindLoopsStayInVerdict"
+    ],
+    "./internal/version": [
+      "TestLDFlagsSpellingsMatch"
     ],
     "./internal/worker": [
       "TestEventTableCoversEveryKind",
@@ -96,6 +102,8 @@
     "./cmd/rota/TestFrozenUmbrella": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./cmd/rota/TestFrozenUmbrellaFile": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./cmd/rota/TestIssueFakesFirst": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
+    "./cmd/rota/TestTrainCancelByRequestID": "Builds a temporary train project and reads its pid files and worktree list; does not enumerate repository sources.",
+    "./cmd/rota/TestTrainInterruptIsACancel": "Builds a temporary train project and reads its pid files and worktree list; does not enumerate repository sources.",
     "./cmd/rota/TestUbFakesFirst": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./internal/agents/TestPromptsExplicitActivation": "Reads generated agent files and .rota/prompts.json in a temporary test project; does not inspect repository source/docs.",
     "./internal/agents/TestWriteIdempotentAndCheck": "Reads generated agent Markdown from a temporary project.",
@@ -105,6 +113,8 @@
     "./internal/backlog/TestNextIDMatchesPython": "Reads temporary counter/backlog fixtures while testing ID allocation.",
     "./internal/backlog/TestNextIDRefusesFractionalCounter": "Reads temporary counter/backlog fixtures while testing ID allocation.",
     "./internal/blockedby/TestBlockedByGuardOwnerBoundary": "Runs the guard against planted source files in t.TempDir(), not the repository.",
+    "./internal/cli/TestAddAndShowMatchOldHelpers": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
+    "./internal/cli/TestAddCRLFDetailFile": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/cli/TestAgentsWriteAndCheck": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestAgentsWriteRefusals": "Reads generated or planted files in temporary CLI test projects; source-path hints occur in fixture setup or assertions.",
     "./internal/cli/TestBlockIsIdempotent": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
@@ -129,6 +139,8 @@
     "./internal/cli/TestFileDeferredFloor": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredOneItemPerPR": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredSkipsFollowUpPR": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
+    "./internal/cli/TestFileDoneRequiresProof": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
+    "./internal/cli/TestFileProofJudgesIDs": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/cli/TestGateReportFileOutcomes": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestGlossaryImportMatchGolden": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestGlossaryReadMatchGolden": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
@@ -145,6 +157,7 @@
     "./internal/cli/TestItemCreateBatchPairsTitleAndBody": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestItemCreateBatchRefusesRecentDuplicate": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestItemCreateRefusesRecentDuplicate": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
+    "./internal/cli/TestItemNoteLockDirIsSharedAcrossWorktrees": "Builds a temporary repository and linked worktree; does not enumerate repository sources.",
     "./internal/cli/TestKnowledgeAddStoresShaBesideDate": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestKnowledgeAmendRejectsEmptyBody": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestKnowledgeCRLFMatchGolden": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
@@ -196,6 +209,7 @@
     "./internal/cli/TestSkillsInstallStub": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestSpikeLifecycle": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestUmbrellaFileModeKeepsOneBacklog": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
+    "./internal/cli/TestUnreadableDetailFileIsExit70": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/cli/TestVerdictAddFileDeferredIsIdempotent": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestVerdictAddFileDeferredProblemAndFix": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestVerdictAddFileDeferredWritesAcceptance": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
@@ -294,17 +308,13 @@
     "./internal/plan/TestAddMatchesOldHelper": "Reads generated plan Markdown and checked-in golden fixtures.",
     "./internal/plan/TestExplicitAndMintedSliceRace": "Walks copied plan fixtures or checks temporary slice files.",
     "./internal/plan/TestUncertainMatchesOldHelper": "Walks copied plan fixtures or checks temporary slice files.",
-    "./internal/proof/TestAddAndShowMatchOldHelpers": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestAddCRLFDetailFile": "Walks checked-in proof testdata while constructing temporary test projects.",
     "./internal/proof/TestAddConcurrentIdenticalRows": "Walks checked-in proof testdata while constructing temporary test projects.",
     "./internal/proof/TestAddDatesRowWithTheGivenDay": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestAddExits": "Walks checked-in proof testdata while constructing temporary test projects.",
+    "./internal/proof/TestAddRejectsBadInput": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
+    "./internal/proof/TestAddWithoutShaStoresDash": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/proof/TestConcurrentAddsKeepEveryRow": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestDefaultShaFromGit": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestFileDoneRequiresProof": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestLegacyDetailRowsAreReadAndSeedTheSidecar": "Walks checked-in proof testdata while constructing temporary test projects.",
+    "./internal/proof/TestLegacyRowsAreReadAndSeedTheSidecar": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/proof/TestStoresShareTheVerbs": "Walks checked-in proof testdata while constructing temporary test projects.",
-    "./internal/proof/TestUnreadableDetailFileIsExit70": "Walks checked-in proof testdata while constructing temporary test projects.",
     "./internal/receipt/TestPruneDropsTheFileAndTheClaims": "Checks the temporary receipt directory for removed claims.",
     "./internal/round/TestAssessOldFileFeatureTemplate": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
     "./internal/round/TestBriefPathFallsBackToTheSkillsCache": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
@@ -321,7 +331,6 @@
     "./internal/skills/TestLegacySymlinkReplaced": "Reads installed SKILL.md from a temporary legacy-install fixture.",
     "./internal/skills/TestManifestTraversalIgnored": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
     "./internal/skills/TestSymlinkedParentNotFollowed": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
-    "./internal/skills/TestUnmanagedOnlyBlocksAsUnmanaged": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
     "./internal/testiso/TestNestedCheckoutSkipsPlantedWorktree": "Walks a temporary tree containing planted nested checkouts to test traversal isolation.",
     "./internal/worker/TestCoreAdapterRelayRetainedComposer": "Reads retained-draft JSON from sibling host/testdata; fixtures, not repository source.",
     "./internal/worker/TestDispatchHostTraffic": "Executes fake host scripts and reads temporary project traffic, briefs and golden fixtures; does not enforce repository source invariants.",

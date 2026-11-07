@@ -176,25 +176,17 @@ func num(v any) (float64, bool) {
 // Dump records one statusline refresh: it parses payload, merges it into the
 // session's state file (the Stop hook's counters survive) and sweeps state
 // files untouched for StateTTL. An error means nothing useful was written.
-func Dump(commonDir string, payload []byte, now time.Time) error {
-	var in map[string]any
-	dec := json.NewDecoder(bytes.NewReader(payload))
-	if err := dec.Decode(&in); err != nil || in == nil {
-		return fmt.Errorf("statusline input is not a JSON object")
-	}
-	id, _ := in["session_id"].(string)
+func Dump(commonDir string, payload Payload, now time.Time) error {
+	id := payload.SessionID
 	path, err := StatePath(commonDir, id)
 	if err != nil {
 		return err
 	}
 	var raw bytes.Buffer
-	if err := json.Compact(&raw, bytes.TrimSpace(payload)); err != nil {
+	if err := json.Compact(&raw, bytes.TrimSpace(payload.Raw)); err != nil {
 		return err
 	}
-	cwd, _ := in["cwd"].(string)
-	if ws, _ := in["workspace"].(map[string]any); cwd == "" && ws != nil {
-		cwd, _ = ws["current_dir"].(string)
-	}
+	in, cwd := payload.Fields, payload.Cwd
 	var rl json.RawMessage
 	if v, ok := in["rate_limits"]; ok && v != nil {
 		rl, _ = json.Marshal(v)

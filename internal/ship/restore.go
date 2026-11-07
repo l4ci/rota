@@ -28,7 +28,11 @@ func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 			}
 		}
 		if !changed {
-			fmt.Fprintf(warn, "noop: [%s] already active in BACKLOG.md\n", id)
+			state := "active in BACKLOG.md"
+			if b.Capabilities().IssueIDs {
+				state = "open on the tracker"
+			}
+			fmt.Fprintf(warn, "noop: [%s] already %s\n", id, state)
 		}
 	}
 	return nil

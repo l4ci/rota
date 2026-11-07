@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Type is the kind of value a key holds, for editors and the reference page.
@@ -54,6 +55,7 @@ const (
 	RoundStallMinutesKey             = "round.stallMinutes"
 	RoundMaxBouncesKey               = "round.maxBounces"
 	RoundFreshAtKey                  = "round.freshAt"
+	RoundFollowupReserveKey          = "round.followupReserve"
 	RoundLedgerKeepKey               = "round.ledgerKeep"
 	RoundArchitectureEveryKey        = "round.architectureEvery"
 	RoundArchitectureAreasKey        = "round.architectureAreas"
@@ -153,9 +155,7 @@ func emptyUnset(key Key) Key {
 func num(s string) json.Number { return json.Number(s) }
 
 // Keys is the table of every known config key. Leaf keys only: object-valued
-// parents are not rows. The first 46 rows are CONFIG_KEYS of the
-// retired bin/hvlib_config.py, in its order, which the parity goldens freeze;
-// keys added in 5.0 follow them. A Desc comes from docs/usage/configuration.md,
+// parents are not rows. A Desc comes from docs/usage/configuration.md,
 // else from the code that reads the key; docs/reference/config-options.md is
 // generated from this table (go generate ./internal/config).
 var Keys = []Key{
@@ -198,14 +198,16 @@ var Keys = []Key{
 	k("issues.labels.sizePrefix", ScopeProject, labels.SizePrefix, false, TypeString, "Prefix of feature size labels, such as size:Major."),
 	k("issues.autoCreateLabel", ScopeProject, true, false, TypeBool, "Create a tracker label the first time something asks for it. When off, adding a missing label fails."),
 	k("issues.homeRepo", ScopeProject, "", false, TypeString, "Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo."),
-	k("release.checklistPath", ScopeProject, ".rota/RELEASE.md", false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
+	k("release.checklistPath", ScopeProject, rotatree.Rel("RELEASE.md"), false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
 	k("release.confirmLargePushCommits", ScopeProject, num("10"), false, TypeInt, "Unpushed commits /rota-release pushes without asking under autonomy.level roundtrip or auto. At or above this it asks once."),
 	k("release.nudgeAfterCommits", ScopeProject, num("10"), false, TypeInt, "Commits since the last release tag before rota release pending suggests /rota-release."),
 	k("release.nudgeAfterDays", ScopeProject, num("14"), false, TypeInt, "Days since the last release tag before rota release pending suggests /rota-release."),
-	// Test tiers (replace refactor.verifyCommands): not in CONFIG_KEYS.
+	// Test tiers (replace refactor.verifyCommands).
 	k("test.fast", ScopeProject, []any{}, true, TypeList, "Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it."),
 	k("test.full", ScopeProject, []any{}, true, TypeList, "Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify."),
 	k("test.e2e", ScopeProject, []any{}, true, TypeList, "Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step."),
+	k("test.audit.maxFullGateSeconds", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round when the latest recorded test.full duration after the last audit exceeds this many seconds. 0 disables the duration trigger."),
+	k("test.audit.prsBetweenAudits", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round after this many distinct recorded merged PRs since the last audit. 0 disables the PR trigger."),
 	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.vacuousCheck", ScopeProject, false, false, TypeBool, "Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default."),
 	k("test.filePattern", ScopeProject, `_test\.go$`, false, TypeString, "Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files."),
@@ -223,7 +225,6 @@ var Keys = []Key{
 	// backlog.backend and issues.provider (migrated by rota migrate source).
 	k("issues.source", ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
 	k("forge.provider", ScopeProject, "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
-	// 5.0 keys: not in CONFIG_KEYS.
 	k("ship.mergeApproval", ScopeProject, "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", ScopeProject, []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
 	k("review.fileDeferred", ScopeTaste, "major", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. A PR that closes a deferred-findings item files none.", "minor", "major", "off"),
@@ -266,6 +267,7 @@ var Keys = []Key{
 	k(RoundClaimStaleMinutesMajorKey, ScopeProject, num("480"), false, TypeInt, "Rounds: Minutes without branch or PR activity before a Major feature claim is stale. 0 disables stale detection for this class."),
 	k(RoundStallMinutesKey, ScopeProject, num("30"), false, TypeInt, "Rounds: Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off."),
 	k(RoundMaxBouncesKey, ScopeProject, num("3"), false, TypeInt, "Rounds: How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off."),
+	k(RoundFollowupReserveKey, ScopeMachine, num("0"), false, TypeInt, "Rounds: Roster slots past round.slots kept for follow-ups a person asks for on a PR whose worker moved on. Under round.reviewLoop auto the autopilot starts such a follow-up before backlog work, on an idle round slot or else one of these; backlog work never goes to them. rota round start provisions them. 0 keeps none."),
 	k(RoundFreshAtKey, ScopeProject, num("2"), false, TypeInt, "Rounds: Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."),
 	k(RoundLedgerKeepKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."),
 	k(RoundArchitectureEveryKey, ScopeProject, num("20"), false, TypeInt, "Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off."),

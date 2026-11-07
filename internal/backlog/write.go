@@ -288,7 +288,7 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 		parts = append(parts, d)
 	}
 	res := CreateResult{ID: id, Type: kindLetter[in.Kind]}
-	rel := ".rota/" + in.Kind + "/" + id + ".md"
+	rel := rotatree.Rel(in.Kind, id+".md")
 	if in.HasBody {
 		parts = append(parts, "Detail: `"+rel+"`")
 	}
