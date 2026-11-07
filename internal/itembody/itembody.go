@@ -27,6 +27,9 @@ var (
 	// milestone changes, one per bullet, optionally tagged.
 	CapabilitiesHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+capabilities[ \t]*$`)
 
+	// PointersHeadRe matches a "Pointers" heading: the files an issue points at.
+	PointersHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+pointers[ \t]*$`)
+
 	anyHeadRe = regexp.MustCompile(`(?m)^#{1,6}[ \t]`)
 )
 
@@ -42,6 +45,20 @@ func Section(text string, head *regexp.Regexp) (string, bool) {
 		rest = rest[:n[0]]
 	}
 	return rest, true
+}
+
+// Sections is every section under head, in order. A bundle's issue bodies are
+// joined, so the joined text can hold one Files section per issue.
+func Sections(text string, head *regexp.Regexp) []string {
+	var out []string
+	for {
+		sec, ok := Section(text, head)
+		if !ok {
+			return out
+		}
+		out = append(out, sec)
+		text = text[head.FindStringIndex(text)[1]+len(sec):]
+	}
 }
 
 // Entry normalises the text of one bullet: spaces and surrounding backticks
@@ -140,4 +157,53 @@ func SetSection(text, name, content string) string {
 		sec += "\n"
 	}
 	return sec + text[end:]
+}
+
+// BulletPaths reads the paths of each bullet in a section: every backticked
+// token and every bare word. pathLike keeps only entries with a slash or glob;
+// otherwise (a Files section) a bullet with no backticks gives its first word.
+func BulletPaths(section string, pathLike bool) []string {
+	var out []string
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+			continue
+		}
+		line = strings.TrimSpace(line[2:])
+		line = strings.TrimPrefix(strings.TrimPrefix(line, "[ ] "), "[x] ")
+		// backticked tokens, plus the bare words outside the backticks
+		var toks []string
+		bare := line
+		for rest := line; ; {
+			a := strings.Index(rest, "`")
+			if a < 0 {
+				break
+			}
+			b := strings.Index(rest[a+1:], "`")
+			if b < 0 {
+				break
+			}
+			tok := rest[a+1 : a+1+b]
+			toks = append(toks, tok)
+			bare = strings.Replace(bare, "`"+tok+"`", " ", 1)
+			rest = rest[a+b+2:]
+		}
+		words := strings.Fields(bare)
+		if !pathLike && len(toks) == 0 && len(words) > 0 {
+			words = words[:1] // a Files bullet with no backticks names its path first
+		} else if !pathLike {
+			words = nil
+		}
+		for _, w := range words {
+			toks = append(toks, strings.Trim(w, ",;()"))
+		}
+		for _, tok := range toks {
+			tok = strings.TrimSpace(tok)
+			if tok == "" || (pathLike && !strings.ContainsAny(tok, "/*")) {
+				continue
+			}
+			out = append(out, tok)
+		}
+	}
+	return out
 }
