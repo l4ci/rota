@@ -68,10 +68,11 @@ func (r shipGitRunner) Run(args ...string) (git.Result, error) {
 // error it does not know is already shaped by the port that raised it.
 func shipErr(err error) (Result, error) {
 	var ref *ship.Refusal
+	var gr *ship.GateRefusedError
 	var nf *ship.NotFoundError
 	var ge *ship.GitError
 	var pe *ship.PartialError
-	var vb *ship.VerdictBlockedError
+	var vb *verdict.BlockedError
 	var nc *ship.NoCommitsError
 	var ui *ship.UnknownItemError
 	switch {
@@ -85,6 +86,8 @@ func shipErr(err error) (Result, error) {
 			e.(*Error).WithHint(ref.Hint)
 		}
 		return res, e
+	case errors.As(err, &gr):
+		return shipRefusal(gr.Ref)
 	case errors.As(err, &vb):
 		return verdictBlocked(vb, nil, true)
 	case errors.As(err, &nf), errors.As(err, &ui):
@@ -99,7 +102,7 @@ func shipErr(err error) (Result, error) {
 
 // shipVerdictLookup refreshes the local store after gate report recovery.
 type shipVerdictLookup struct {
-	ship.VerdictCheck
+	verdict.Check
 	c               *Ctx
 	dir, root, repo string
 }
@@ -113,12 +116,12 @@ func shipVerdict(c *Ctx, dir, root string) shipVerdictLookup {
 		}
 	}
 	v := shipVerdictLookup{c: c, dir: dir, root: root, repo: repo}
-	v.VerdictCheck = v.local()
+	v.Check = v.local()
 	return v
 }
 
-func (v shipVerdictLookup) local() ship.VerdictCheck {
-	return ship.VerdictCheck{Git: shipGitRunner{v.c, v.dir}, Store: verdict.Load(v.root), Repo: v.repo}
+func (v shipVerdictLookup) local() verdict.Check {
+	return verdict.Check{Git: shipGitRunner{v.c, v.dir}, Store: verdict.Load(v.root), Repo: v.repo}
 }
 
 func (v shipVerdictLookup) Block(branch string) error {
@@ -436,7 +439,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		g := shipGitRunner{c, dir}
-		sha, ref, err := ship.MergeBranch(ship.MergePorts{
+		sha, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
 			Recover: land.RecoveryGit(c.Context(), c.deps().Git, dir),
 			Verdict: shipVerdict(c, dir, shipRoot(dir)).BlockAt,
@@ -452,9 +455,6 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 			},
 			Checkout: ship.Checkout{Cwd: cwd, Dir: dir, Repo: c.Repo},
 		}, branch, base, msg)
-		if ref != nil {
-			return shipRefusal(ref)
-		}
 		var moved *ship.BranchMovedError
 		if errors.As(err, &moved) {
 			return Result{Text: sha, Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true,
@@ -527,9 +527,10 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		merged, err := ship.MergePR(be, pr, items, approve)
 		var refused *land.MergeRefusedError
 		var unproven *ship.UnprovenError
+		var gateRefused *ship.GateRefusedError
 		switch {
-		case merged.Refusal != nil:
-			return shipRefusal(merged.Refusal)
+		case errors.As(err, &gateRefused):
+			return shipRefusal(gateRefused.Ref)
 		case errors.As(err, &refused):
 			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
 				Refused("%s", err.Error())
