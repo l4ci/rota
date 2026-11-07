@@ -541,33 +541,28 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			if len(ts) == 0 {
 				continue
 			}
-			var oldest time.Time
-			if e.ReadySince != nil {
-				for _, t := range ts {
-					if at := e.ReadySince(t); !at.IsZero() && (oldest.IsZero() || at.Before(oldest)) {
-						oldest = at
-					}
+			cands := make([]roundcfg.FillCandidate, len(ts))
+			for i, t := range ts {
+				cands[i].ID = t
+				if e.ReadySince != nil {
+					cands[i].Ready = e.ReadySince(t)
 				}
 			}
 			now := time.Now()
 			if e.Now != nil {
 				now = e.Now()
 			}
-			if e.TrainFill.Due(len(ts), oldest, now) == "" {
-				line := e.TrainFill.Holding(b, len(ts), oldest, now)
+			d := e.TrainFill.Decide(b, cands, remaining, now)
+			if len(d.Land) == 0 {
 				key := fmt.Sprintf("%s:%d/%d", b, len(ts), e.TrainFill.Max)
-				r.FillStatus = append(r.FillStatus, line)
+				r.FillStatus = append(r.FillStatus, d.Holding)
 				r.Filling[b] = key
 				if e.Filling[b] != key {
-					r.Holding = append(r.Holding, line)
+					r.Holding = append(r.Holding, d.Holding)
 				}
 				continue
 			}
-			limit := remaining
-			if e.TrainFill.Max > 0 {
-				limit = min(limit, e.TrainFill.Max)
-			}
-			ts = roundcfg.OldestReady(ts, limit, e.ReadySince)
+			ts = d.Land
 		}
 		out = append(out, e.land(ctx, r, ts, b)...)
 		remaining -= len(ts)
