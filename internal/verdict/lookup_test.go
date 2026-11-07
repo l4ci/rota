@@ -220,3 +220,46 @@ func TestRecoverPRStampsRecordedAtWithRegistryLayout(t *testing.T) {
 		t.Fatalf("RecordedAt = %q, want %q", r.RecordedAt, want)
 	}
 }
+
+// The fakes state the capabilities RecoverPR reads: the source seam is required,
+// the trust lookup is the named optional one.
+var (
+	_ ReportSource = (*lookupSource)(nil)
+	_ AuthorTrust  = (*lookupSource)(nil)
+)
+
+// identityOnly is a GitLab-shaped source: it knows who is authenticated but
+// cannot answer write-access questions.
+type identityOnly struct{ *lookupSource }
+
+func (identityOnly) CanPush() {} // shadows AuthorTrust with a non-matching signature
+
+func TestRecoverPRTrustPaths(t *testing.T) {
+	const head = "abcdef1"
+	note := func(author string) tracker.Comment {
+		return tracker.Comment{Author: author, Body: RenderReport(NewRecord(ReviewSpec, Fail, head, Body{}, recAt), nil)}
+	}
+	for name, tc := range map[string]struct {
+		source  func(*lookupSource) ReportSource
+		author  string
+		trusted bool
+	}{
+		"can push":           {func(s *lookupSource) ReportSource { return s }, "ann", true},
+		"cannot push":        {func(s *lookupSource) ReportSource { return s }, "bob", false},
+		"push check errors":  {func(s *lookupSource) ReportSource { return s }, "err", false},
+		"no trust seam":      {func(s *lookupSource) ReportSource { return identityOnly{s} }, "ann", false},
+		"self needs no seam": {func(s *lookupSource) ReportSource { return identityOnly{s} }, "me", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			base := &lookupSource{self: "me", notes: []tracker.Comment{note(tc.author)},
+				writers: map[string]bool{"ann": true}, permissionErrors: map[string]error{"err": errors.New("down")}}
+			if err := RecoverPR(context.Background(), root, "feature", head, 20, tc.source(base)); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := Blocking(ForHead(Load(root).Branches["feature"], head)); ok != tc.trusted {
+				t.Fatalf("trusted = %v, want %v", ok, tc.trusted)
+			}
+		})
+	}
+}
