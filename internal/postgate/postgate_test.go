@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
@@ -26,36 +25,18 @@ func (p *parked) park(issue, _ string) error {
 	return nil
 }
 
-// bouncing gives stale and provenance-fail the bounce meaning, which no shipped
-// verdict carries now, so the counting and parking below still run.
-func bouncing(t *testing.T) {
-	t.Helper()
-	old := classify
-	classify = func(v string) worker.VerdictMeaning {
-		m := old(v)
-		m.Bounce = m.Bounce || v == worker.GateStale || v == worker.GateProvenanceFail
-		return m
-	}
-	t.Cleanup(func() { classify = old })
-}
-
 // Neither verdict counts, writes a ledger row or parks the item, even with the
 // count already at round.maxBounces (#2072).
 func TestStaleAndProvenanceFailNeverCountOrPark(t *testing.T) {
 	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail} {
 		root := t.TempDir()
-		p := &parked{}
 		for i := 1; i <= 5; i++ {
-			o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: v, Slot: "w1", SHA: "sha" + strconv.Itoa(i)}, p.park)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if o != (Outcome{}) {
-				t.Fatalf("%s #%d: %+v, want no bounce", v, i, o)
+			if err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: v, Slot: "w1", SHA: "sha" + strconv.Itoa(i)}); err != nil {
+				t.Fatalf("%s #%d: %v", v, i, err)
 			}
 		}
-		if n := bounces(root, "7"); n != 0 || len(p.issues) != 0 {
-			t.Errorf("%s: count %d, parked %v", v, n, p.issues)
+		if n := bounces(root, "7"); n != 0 {
+			t.Errorf("%s: count %d", v, n)
 		}
 		if es, _ := ledger.Load(root); len(es) != 0 {
 			t.Errorf("%s wrote ledger rows: %+v", v, es)
@@ -74,124 +55,19 @@ func TestGatePassEndsTheItemClockAndBestOf(t *testing.T) {
 	}
 	worker.Update(root, func(d *worker.Doc) { d.SetBestOf(worker.BestOf{Issue: "12"}) })
 	// A verdict nobody bounces or lands on keeps the item running.
-	if _, err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: "other"}, nil); err != nil {
+	if err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: "other"}); err != nil {
 		t.Fatal(err)
 	}
 	reg := worker.LoadRegistryTolerant(root)
 	if _, ok := reg.ItemStart("12"); !ok || reg.BestOf("12") == nil {
 		t.Fatal("a non-pass verdict must keep the clock and the best-of record")
 	}
-	if _, err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil {
+	if err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: worker.GatePass}); err != nil {
 		t.Fatal(err)
 	}
 	reg = worker.LoadRegistryTolerant(root)
 	if _, ok := reg.ItemStart("12"); ok || reg.BestOf("12") != nil {
 		t.Error("a gate pass must clear the item start and the best-of record")
-	}
-}
-
-func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	cfg, err := jsonx.Decode([]byte(`{"round":{"maxBounces":3}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	env := worker.Env{Config: func(string) any { return cfg }}
-	p := &parked{}
-	for i := 1; i <= 3; i++ {
-		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if o.Bounces != i || o.Parked != (i == 3) {
-			t.Fatalf("bounce %d: %+v", i, o)
-		}
-	}
-	if len(p.issues) != 1 || p.issues[0] != "7" {
-		t.Fatalf("parked %v", p.issues)
-	}
-	if n := bounces(root, "7"); n != 0 {
-		t.Errorf("parking must clear the count, got %d", n)
-	}
-}
-
-func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "a", 0)
-	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "b", 0)
-	o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string) error { return errors.New("no lease") })
-	if err == nil || o.Parked || o.Bounces != 3 {
-		t.Fatalf("%+v %v", o, err)
-	}
-}
-
-// `rota worker gate 847` after the slot moved on sets the result's slot to the
-// PR number. The stale refusal's bounce must fold into the issue's own row: no
-// slot or account total named by the PR number.
-func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
-	if err := ledger.Append(root, ledger.Entry{TS: at, Kind: ledger.KindAssign, Issue: "12", Slot: "nia", Account: "work", Harness: "claude", PR: "847"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Gate(worker.Env{Config: diskConfig, Now: func() time.Time { return at }}, root, "12", worker.GateResult{Verdict: worker.GateStale, Slot: "847", PR: "847", SHA: "h1"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	es, err := ledger.Load(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := ledger.Fold(es, nil, 0)
-	if len(s.Issues) != 1 || s.Issues[0].Slot != "nia" || s.Issues[0].Bounces != 1 {
-		t.Fatalf("issue rows %+v, want one row for nia carrying the bounce", s.Issues)
-	}
-	for _, tot := range append(append([]ledger.Total{}, s.Slots...), s.Accounts...) {
-		if tot.Name == "847" || tot.Name == "-" {
-			t.Errorf("total named %q: slots %+v accounts %+v", tot.Name, s.Slots, s.Accounts)
-		}
-	}
-}
-
-// The gate result carries the slot its target resolved to; the bounce is
-// recorded under it even when the registry no longer holds that slot, so the
-// attribution never depends on a late pool lookup.
-func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
-	res := worker.GateResult{Verdict: worker.GateStale, Slot: "847", TargetSlot: "nia", PR: "847", SHA: "h1"}
-	if _, err := Gate(worker.Env{Config: diskConfig, Now: func() time.Time { return at }}, root, "12", res, nil); err != nil {
-		t.Fatal(err)
-	}
-	es, err := ledger.Load(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(es) != 1 || es[0].Kind != ledger.KindBounce || es[0].Slot != "nia" {
-		t.Fatalf("entries %+v, want one bounce for nia", es)
-	}
-}
-
-// The bounce accounting reads round.maxBounces from Env.Config, not from the
-// project config on disk: root holds no .rota/config.json here.
-func TestBounceReadsMaxBouncesFromTheInjectedConfig(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	cfg, err := jsonx.Decode([]byte(`{"round":{"maxBounces":1}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	env := worker.Env{Config: func(string) any { return cfg }}
-	p := &parked{}
-	o, err := Gate(env, root, "9", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha1"}, p.park)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if o.Bounces != 1 || !o.Parked || len(p.issues) != 1 {
-		t.Fatalf("maxBounces 1 from the injected config must park on the first bounce: %+v, parked %v", o, p.issues)
 	}
 }
 
@@ -219,51 +95,6 @@ func (c *issueComments) AddComment(_ context.Context, _ tracker.IssueKey, body s
 
 func (c *issueComments) DeleteComment(context.Context, tracker.IssueKey, string) error {
 	return c.deleteErr
-}
-
-// #1598 AC-7: with round.support set the gate counts and parks from the issue,
-// never the registry, and parking posts the reset.
-func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ic := &issueComments{}
-	nf := &noteForge{}
-	env := worker.Env{
-		Config:        diskConfig,
-		IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil },
-		Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
-	}
-	p := &parked{}
-	for i, sha := range []string{"a1", "a1", "b2", "c3"} {
-		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "ext-1", SHA: sha,
-			Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: "stale: the PR head moved"}, p.park)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := max(i, 1); o.Bounces != want || o.Parked != (i == 3) {
-			t.Fatalf("gate %d at %s: %+v", i, sha, o)
-		}
-	}
-	if len(p.issues) != 1 || bounces(root, "7") != 0 {
-		t.Fatalf("parked %v, registry count %d", p.issues, bounces(root, "7"))
-	}
-	if n := len(ic.bodies); n != 4 || !strings.HasPrefix(ic.bodies[3], "<!-- rota:bounce reset -->") {
-		t.Fatalf("issue comments %q", ic.bodies)
-	}
-	if _, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil || len(ic.bodies) != 4 {
-		t.Errorf("a pass with no bounces posts nothing: %v %q", err, ic.bodies)
-	}
-	// Each counted bounce short of the cap reaches the support worker on the
-	// PR; the deduped re-gate and the parking one do not.
-	if len(nf.bodies) != 2 || !strings.HasPrefix(nf.bodies[0], "<!-- rota:review-bounce head=a1 -->") || !strings.HasPrefix(nf.bodies[1], "<!-- rota:review-bounce head=b2 -->") {
-		t.Errorf("PR comments %q", nf.bodies)
-	}
 }
 
 // noteForge records the PR comments posted through it.
@@ -295,67 +126,6 @@ func (f *noteForge) MRNotes(context.Context, int) ([]tracker.Comment, error) {
 
 func (f *noteForge) Reviews(context.Context, int) ([]tracker.Review, error) { return nil, nil }
 
-// A bounce counted on the issue whose post on the PR failed, with the undo
-// failing too, is not lost: the retry finds the head already counted and still
-// posts the review-bounce.
-func TestGateRetryPostsTheReviewBounceAfterAFailedUndo(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ic := &issueComments{deleteErr: errors.New("issue tracker down")}
-	nf := &noteForge{failPosts: 1}
-	env := worker.Env{
-		Config:        diskConfig,
-		IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil },
-		Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
-	}
-	res := worker.GateResult{Verdict: worker.GateStale, Slot: "ext-1", SHA: "a1b2c3d",
-		Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: "stale: the PR head moved"}
-	if _, err := Gate(env, root, "7", res, (&parked{}).park); err == nil {
-		t.Fatal("the failed post was not reported")
-	}
-	if len(ic.bodies) != 1 || len(nf.bodies) != 0 {
-		t.Fatalf("after the failure: issue %q, PR %q", ic.bodies, nf.bodies)
-	}
-	o, err := Gate(env, root, "7", res, (&parked{}).park)
-	if err != nil || o.Bounces != 1 {
-		t.Fatalf("retry: %+v %v", o, err)
-	}
-	if len(ic.bodies) != 1 || len(nf.bodies) != 1 || !strings.HasPrefix(nf.bodies[0], "<!-- rota:review-bounce head=a1b2c3d -->") {
-		t.Errorf("the retry did not post: issue %q, PR %q", ic.bodies, nf.bodies)
-	}
-}
-
-// One bounce, two machines: the gate's 7-character head and the relay's full
-// head are one bounce on the issue.
-func TestGateAndRelayHeadsCountOnce(t *testing.T) {
-	bouncing(t)
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ic := &issueComments{}
-	env := worker.Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil }}
-	store, err := env.BounceStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "ext-1", SHA: "a1b2c3d", Branch: "ben/7-thing"}, (&parked{}).park); err != nil {
-		t.Fatal(err)
-	}
-	if r, err := store.Record(nil, "7", "", "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", 3); err != nil || r.Counted || r.N != 1 {
-		t.Errorf("the relay counted the gate's bounce again: %+v %v", r, err)
-	}
-}
-
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
 func diskConfig(root string) any { return config.Load(projects.OSEnv(), rotatree.Config(root)) }
 
@@ -377,17 +147,15 @@ func TestStaleAndProvenanceFailPostTheReviewBounceUncounted(t *testing.T) {
 			IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return &issueComments{}, nil },
 			Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
 		}
-		p := &parked{}
 		res := worker.GateResult{Verdict: v, Slot: "ext-1", SHA: "a1b2c3d", Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: v + ": fix it"}
-		o, err := Gate(env, root, "7", res, p.park)
-		if err != nil || o != (Outcome{}) {
-			t.Fatalf("%s: %+v %v", v, o, err)
+		if err := Gate(env, root, "7", res); err != nil {
+			t.Fatalf("%s: %v", v, err)
 		}
 		if len(nf.bodies) != 1 || !strings.HasPrefix(nf.bodies[0], "<!-- rota:review-bounce head=a1b2c3d -->") {
 			t.Errorf("%s: PR comments %q, want one review-bounce", v, nf.bodies)
 		}
-		if n := bounces(root, "7"); n != 0 || len(p.issues) != 0 {
-			t.Errorf("%s: count %d, parked %v", v, n, p.issues)
+		if n := bounces(root, "7"); n != 0 {
+			t.Errorf("%s: count %d", v, n)
 		}
 	}
 }
