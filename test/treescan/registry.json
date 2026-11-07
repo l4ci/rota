@@ -325,7 +325,6 @@
     "./internal/skills/TestLegacySymlinkReplaced": "Reads installed SKILL.md from a temporary legacy-install fixture.",
     "./internal/skills/TestManifestTraversalIgnored": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
     "./internal/skills/TestSymlinkedParentNotFollowed": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
-    "./internal/skills/TestUnmanagedOnlyBlocksAsUnmanaged": "Reads temporary installed skill or manifest fixtures to verify overwrite and traversal protections.",
     "./internal/testiso/TestNestedCheckoutSkipsPlantedWorktree": "Walks a temporary tree containing planted nested checkouts to test traversal isolation.",
     "./internal/worker/TestCoreAdapterRelayRetainedComposer": "Reads retained-draft JSON from sibling host/testdata; fixtures, not repository source.",
     "./internal/worker/TestDispatchHostTraffic": "Executes fake host scripts and reads temporary project traffic, briefs and golden fixtures; does not enforce repository source invariants.",
