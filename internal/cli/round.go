@@ -10,7 +10,7 @@ func roundCommands() *Command {
 		{Name: "watch", Summary: "background watch: exit on a slot, PR or escalation change, or a heartbeat", Verb: roundWatch},
 		{Name: "status", Summary: "list the round's slots with host, PR and drift", Verb: roundStatus, View: roundStatusView, UIFirst: true},
 		{Name: "reconcile", Summary: "report drift between registry, host, git and forge; --apply repairs the safe kinds", Verb: roundReconcile},
-		{Name: "tick", Summary: "one autopilot pass: repair, merge finished PRs behind the gate, assign ready items (autonomy.level auto)", Verb: roundTick},
+		{Name: "tick", Summary: "one autopilot pass: repair, merge finished PRs behind the gate, assign ready items (autonomy.level auto; --observe previews at any level)", Verb: roundTick},
 		roundEscalate(),
 		roundSupport(),
 		{Name: "start", Summary: "take the orchestrator lease, provision the roster, list candidates", Verb: roundStart},

@@ -55,6 +55,9 @@ type Merged struct {
 // Detail saying why.
 type ReviewOutcome struct {
 	Relayed, Pending bool
+	// Proposed is review input that observation would relay, without sending it.
+	Proposed bool
+	Unknown  string
 	// Hold keeps the slot from merging this tick: a Pending outcome under
 	// round.reviewLoop auto (the item is at the cap, the relay or the poll
 	// failed). Under manual a Pending outcome is a report only; the gate runs.
@@ -75,6 +78,9 @@ type Reviewer interface {
 
 // Env is the outside world of a tick.
 type Env struct {
+	// Observe supplies read-only replacements for adapters that may mutate.
+	// A non-nil value selects observation; missing probes are reported unknown.
+	Observe *ObservationSources
 	// BaseOverride wins over a recorded target base; Base is the fallback
 	// when the target has none or its registry lookup fails.
 	Base, BaseOverride string
@@ -181,7 +187,10 @@ func (i Item) Key() string { return i.Kind + " " + i.Target }
 // earlier tick: the watch wakes the orchestrator for those, not for the same
 // blocked slot every pass.
 type Result struct {
-	Did []Action
+	Observed bool
+	Proposed []Proposal
+	Unknown  []Item
+	Did      []Action
 	// Holding contains changed, non-actionable train fill status lines.
 	Holding []string
 	// FillStatus is the current rendered progress, including observed time.
@@ -233,7 +242,7 @@ func (e Env) audit(r *Result, a Action) {
 // The merge comes before the assign so the next assignment branches from the
 // gated base (rota-orchestrate, section 6), not from before the merge.
 func Run(ctx context.Context, e Env) (Result, error) {
-	r := Result{Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
+	r := Result{Observed: e.Observe != nil, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
 	if r.FailedHeads == nil {
 		r.FailedHeads = map[string]FailedHead{}
 	}
@@ -248,7 +257,23 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		}
 	}
 
-	repaired, drift, err := e.Reconcile(ctx)
+	var repaired, drift []string
+	var err error
+	if e.Observe != nil {
+		if e.Observe.Reconcile == nil {
+			r.Unknown = append(r.Unknown, Item{"reconcile", "round", "repair inspection is unavailable"})
+		} else {
+			var inspection Inspection
+			inspection, err = e.Observe.Reconcile(ctx)
+			drift = inspection.Drift
+			r.Unknown = append(r.Unknown, inspection.Unknown...)
+			for _, f := range inspection.Proposed {
+				r.propose(Action{"reconcile", f, "safe repair selected"}, "repair prerequisites and result")
+			}
+		}
+	} else {
+		repaired, drift, err = e.Reconcile(ctx)
+	}
 	if err != nil {
 		return r, err
 	}
@@ -270,8 +295,22 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			}
 			r.NeedsYou = append(r.NeedsYou, Item{s.State, s.Name, why})
 		case worker.IsDone(s.State) && s.PR != "":
-			if e.ReviewLoop != nil {
-				switch out := e.ReviewLoop(ctx, s); {
+			reviewLoop := e.ReviewLoop
+			if e.Observe != nil {
+				reviewLoop = e.Observe.ReviewLoop
+				if reviewLoop == nil && e.ReviewLoop != nil {
+					r.Unknown = append(r.Unknown, Item{"review", s.Name, "review input inspection is unavailable"})
+				}
+			}
+			if reviewLoop != nil {
+				out := reviewLoop(ctx, s)
+				if out.Unknown != "" {
+					r.Unknown = append(r.Unknown, Item{"review", s.Name, out.Unknown})
+				}
+				switch {
+				case out.Proposed:
+					r.propose(Action{"review-relay", s.Name, out.Detail}, "bounce cap, relay authorization and delivery")
+					continue
 				case out.Relayed:
 					e.audit(&r, Action{"review-relay", s.Name, out.Detail})
 					continue
@@ -285,7 +324,16 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				}
 			}
 			if e.AwaitingReview != nil {
-				if why := e.AwaitingReview(ctx, s, e.targetBase(s.Name)); why != "" {
+				awaiting := e.AwaitingReview
+				if e.Observe != nil {
+					awaiting = e.Observe.AwaitingReview
+					if awaiting == nil {
+						r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review readiness inspection is unavailable; landing not proposed"})
+						continue
+					}
+					r.Unknown = append(r.Unknown, Item{"awaiting-review", s.Name, "review verdicts read from local records and last-fetched refs; execution fetches and recovers PR verdict reports"})
+				}
+				if why := awaiting(ctx, s, e.targetBase(s.Name)); why != "" {
 					r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", s.Name, why})
 					continue
 				}
@@ -332,6 +380,13 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		r.Reported[key] = true
 		if !e.Reported[key] {
 			r.New = append(r.New, it)
+		}
+	}
+	if e.Observe != nil {
+		r.Held, r.FailedHeads, r.Reported, r.Filling = maps.Clone(e.Held), maps.Clone(e.FailedHeads), maps.Clone(e.Reported), maps.Clone(e.Filling)
+		r.New = nil
+		if len(r.Proposed) > 0 {
+			r.Unknown = append(r.Unknown, Item{"downstream", "round", "later proposals use the current snapshot; repairs, relays, landings and minted items may change or enable later actions"})
 		}
 	}
 	return r, nil
@@ -465,7 +520,7 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			var filling []string
 			for _, target := range ts {
 				if e.FillBypass != nil && e.FillBypass(target) {
-					out = append(out, e.gate(ctx, target, b))
+					out = append(out, e.land(ctx, r, []string{target}, b)...)
 					remaining--
 					if remaining == 0 {
 						return out
@@ -506,11 +561,7 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			}
 			ts = roundcfg.OldestReady(ts, limit, e.ReadySince)
 		}
-		if len(ts) == 1 {
-			out = append(out, e.gate(ctx, ts[0], b))
-		} else {
-			out = append(out, e.train(ctx, ts, b)...)
-		}
+		out = append(out, e.land(ctx, r, ts, b)...)
 		remaining -= len(ts)
 		if remaining == 0 {
 			break
@@ -571,14 +622,33 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 // review mints the due architecture reviews. A failed mint is the
 // orchestrator's to look at, not a reason to stop the tick's other steps.
 func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
-	if e.Review == nil {
+	var facts func(context.Context) (round.Architecture, bool, error)
+	if e.Observe != nil {
+		facts = e.Observe.ReviewFacts
+		if facts == nil {
+			if e.Review != nil {
+				r.Unknown = append(r.Unknown, Item{"architecture-review", "round", "architecture facts inspection is unavailable"})
+			}
+			return nil, nil
+		}
+	} else if e.Review != nil {
+		facts = e.Review.Facts
+	} else {
 		return nil, nil
 	}
-	a, ready, err := e.Review.Facts(ctx)
+	a, ready, err := facts(ctx)
 	var ids []string
 	if err == nil {
+		if a.Count < 0 && e.Observe != nil {
+			r.Unknown = append(r.Unknown, Item{"architecture-review", "round", a.Unavailable})
+		}
 		if a = round.DecideReview(a, ready); a.Due {
-			ids, err = e.Review.Mint(ctx, a)
+			r.propose(Action{"mint", strings.Join(a.Areas, ","), "architecture review: " + a.Trigger}, "item creation and minted IDs")
+			if e.Observe != nil {
+				r.Unknown = append(r.Unknown, Item{"assign", "minted reviews", "new review IDs and priority assignments depend on successful minting"})
+			} else {
+				ids, err = e.Review.Mint(ctx, a)
+			}
 		}
 	}
 	if err != nil {
@@ -619,6 +689,9 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	}
 	for _, c := range cands {
 		if !c.Ready() || slices.Contains(minted, c.ID) {
+			if e.Observe != nil && !c.Ready() {
+				r.NeedsYou = append(r.NeedsYou, Item{"candidate-hold", c.ID, "candidate is not ready: " + candidateHold(c)})
+			}
 			continue
 		}
 		// An epic or an unplanned Major item waits for a person (#2570).
@@ -631,6 +704,11 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	for _, id := range queue {
 		if n == 0 {
 			break
+		}
+		r.propose(Action{"assign", id, "ready candidate; active idle slot available"}, "claim, slot selection, branch creation and dispatch preflight")
+		if e.Observe != nil {
+			n--
+			continue
 		}
 		agents, err := e.Assign(ctx, id)
 		switch {
