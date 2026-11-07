@@ -3,6 +3,8 @@ package cycle
 import (
 	"path"
 	"strings"
+
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Kind classifies a dirty path for the clean-tree sweep.
@@ -28,7 +30,7 @@ func Classify(p string, tracked func(string) bool, itemIDs []string) Kind {
 	p = path.Clean(strings.ReplaceAll(p, "\\", "/"))
 	base := path.Base(p)
 	for _, id := range itemIDs {
-		if p == ".rota/designs/"+id+".md" || p == ".rota/plans/"+id+".md" {
+		if p == rotatree.Rel(rotatree.DesignsDir, id+".md") || p == rotatree.Rel(rotatree.PlansDir, id+".md") {
 			return Artifact
 		}
 	}

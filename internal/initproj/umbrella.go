@@ -221,7 +221,7 @@ func ignoreBlock(root string, names []string) (bool, error) {
 	for _, l := range lines {
 		have[l] = true
 	}
-	wanted := []string{".claude/", ".rota/"}
+	wanted := []string{".claude/", rotatree.RelPrefix}
 	for _, n := range names {
 		wanted = append(wanted, "/"+n+"/")
 	}

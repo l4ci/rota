@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -411,7 +411,7 @@ func hasConcept(root string) (bool, string) {
 			return true, name
 		}
 	}
-	for _, dir := range []string{"docs", ".rota/designs", ".rota/plans", ".rota/spikes"} {
+	for _, dir := range []string{"docs", rotatree.Rel(rotatree.DesignsDir), rotatree.Rel(rotatree.PlansDir), rotatree.Rel(rotatree.SpikesDir)} {
 		var evidence string
 		_ = filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, err error) error {
 			if err == nil && entry.Type().IsRegular() && (dir != "docs" || filepath.Ext(path) == ".md") {

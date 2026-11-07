@@ -24,7 +24,7 @@ import (
 )
 
 // File is the receipts file, relative to the project root.
-const File = ".rota/" + rotatree.ReceiptsFile
+const File = rotatree.RelPrefix + rotatree.ReceiptsFile
 
 const lockWait = 10 * time.Second
 

@@ -43,7 +43,7 @@ func Check(root string, cfg any, drift func() string) CheckResult {
 	}
 	for _, f := range CoreFiles {
 		if !isFile(filepath.Join(rota, f)) {
-			res.Missing = append(res.Missing, ".rota/"+f)
+			res.Missing = append(res.Missing, rotatree.Rel(f))
 		}
 	}
 	if len(res.Missing) > 0 {

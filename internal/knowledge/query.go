@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -35,7 +36,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		tiers *Sidecar
 		label string
 	}
-	pairs := []pair{{umbrellaFile, umbrellaTier, ".rota/KNOWLEDGE.md"}}
+	pairs := []pair{{umbrellaFile, umbrellaTier, rotatree.Rel(rotatree.KnowledgeFile)}}
 	hybrid := scope != "" && scope != Umbrella
 	if hybrid {
 		f, err := s.KnowledgePath(scope)
@@ -46,7 +47,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		if err != nil {
 			return "", nil, err
 		}
-		pairs = append(pairs, pair{f, t, ".rota/knowledge/" + scope + "/KNOWLEDGE.md"})
+		pairs = append(pairs, pair{f, t, rotatree.Rel(rotatree.KnowledgeDir, scope, rotatree.KnowledgeFile)})
 	}
 
 	filter := func(body, name string, tiers *Sidecar) ([]string, error) {
