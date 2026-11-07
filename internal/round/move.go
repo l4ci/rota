@@ -604,6 +604,9 @@ type TransferOpts struct {
 	// Reserve lets a follow-up reserve slot (Reserve) receive the issue: only
 	// Continue sets it, for a follow-up a person asked for.
 	Reserve bool
+	// ReviewSeen is the receiver's review cursor, set with the queued PR it
+	// adopts so the review input in its brief is not relayed again; "" leaves none.
+	ReviewSeen string
 	// CapReason says why an item at the bounce cap moves: ledger.CapAmbiguousCriteria
 	// (to the human, after the criteria audit) or ledger.CapTier (to a stronger
 	// worker) or ledger.CapFresh (to a fresh context at round.freshAt, below
@@ -1130,6 +1133,9 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 		if err := editSlot(root, o.To, func(s *worker.Slot) error {
 			s.SetPR(pr)
 			s.AppendRelays(relays)
+			if o.ReviewSeen != "" {
+				s.SetReviewSeen(o.ReviewSeen)
+			}
 			return nil
 		}); err != nil {
 			return err

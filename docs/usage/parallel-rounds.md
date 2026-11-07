@@ -807,20 +807,24 @@ A PR in review has no slot. When a person then asks for more work on it, that re
 wait behind fresh backlog work. rota reads each queued PR for review input newer than what its worker
 already saw. The PR becomes a follow-up when that input includes at least one comment or review by a
 person: a login with write access that is not a bot (`<name>[bot]`, GitLab's `project_<n>_bot`
-users). rota's own marked comments, approvals, review verdicts and input from bots or from users
-without write access never make a follow-up. Once a person has asked, they go to the worker in the
-same brief.
+users). rota's own marked comments (main's `review-bounce` of a support PR included, since rota
+posts it under the maintainer's login), approvals, review verdicts and input from bots or from users
+without write access never make a follow-up. Once a person has asked, the bot and stranger comments
+and a `review-bounce` go to the worker in the same brief. Telling a person from a stranger needs the
+forge's write-access lookup, which rota has for GitHub only: on GitLab no PR becomes a follow-up.
 
 Under `round.reviewLoop: auto` the autopilot starts a follow-up before it assigns any backlog item:
 `round transfer` moves the issue to an idle round slot with the review input as the brief, and counts
 a bounce. Everything a transfer checks still applies: the claim, overlap, the harness and account
-checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it.
+checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it, and
+`round transfer` by hand takes a free round slot: only the `auto` tick uses reserve slots.
 
 `round.followupReserve: N` (default 0) keeps the N roster names after the round's slots for
 follow-ups. `round start` provisions them; `round assign` and the tick never put backlog work there.
 When every round slot is busy, a follow-up takes a free reserve slot: an idle one, or one whose
 follow-up is done (its PR goes back to review). A reserve slot that holds work drains like any slot
-past `round.slots`, so restarting the watch or the round loses nothing.
+past `round.slots`, so restarting the watch or the round loses nothing. `round status` shows a busy
+reserve slot as `draining` and an idle one as a plain idle row.
 
 A follow-up that cannot start stays pending and the tick lists it as a `followup` item with the
 reason: no idle slot and no reserve, the reserve busy, a roster too short for the reserve, accounts
