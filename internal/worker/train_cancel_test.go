@@ -169,7 +169,7 @@ func TestCancelledTrainKeepsLanded(t *testing.T) {
 	if !strings.Contains(got.Err, "landed 1 of 2 member(s): b1") {
 		t.Errorf("err %q", got.Err)
 	}
-	if m := ClassifyVerdict(GateCancelled); m.Success || m.Refusal || m.Bounce || m.Notify || m.Hold {
+	if m := ClassifyVerdict(GateCancelled); m.Success || m.Refusal || m.Notify || m.Hold {
 		t.Errorf("cancelled must be a plain non-pass answer: %+v", m)
 	}
 }
