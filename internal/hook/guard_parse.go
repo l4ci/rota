@@ -80,6 +80,12 @@ func parseScript(s string) (parsed, error) {
 			if err := sc.redirect(); err != nil {
 				return p, err
 			}
+		case c == '&':
+			// Only reachable when ampersandIsRedirect: `&>file`, `<&3`.
+			// word() stops on a break byte without advancing, so consume it here.
+			if err := sc.redirect(); err != nil {
+				return p, err
+			}
 		default:
 			w, err := sc.word()
 			if err != nil {

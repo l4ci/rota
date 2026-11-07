@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -56,6 +57,8 @@ func TestGuardDenies(t *testing.T) {
 		"git push origin :main",
 		"git push --delete origin main",
 		"git push --mirror",
+		"git -C /repo reset --hard &>/dev/null",
+		"git push --force origin main &>/dev/null",
 		"git push -fu origin other",
 		"git push origin HEAD:main --force",
 		"git -C /repo push --force origin main",
@@ -128,6 +131,8 @@ func TestGuardDenies(t *testing.T) {
 func TestGuardAllows(t *testing.T) {
 	for _, line := range []string{
 		"git push origin HEAD",
+		"ls &>/dev/null",
+		"go test ./... &>/tmp/x",
 		"git push -u origin " + gBranch,
 		"git push --force-with-lease origin " + gBranch,
 		"git push --force-with-lease",
@@ -216,5 +221,24 @@ func TestGuardFailsClosedOnGit(t *testing.T) {
 	}
 	if got := Guard("digit 'unterminated", guardEnv()); got != "" {
 		t.Errorf("digit is not git: %q", got)
+	}
+}
+
+// parseScript must advance on every byte: an `&` that is a redirect once hung
+// the loop, stalling the PreToolUse hook (#2855).
+func TestParseScriptAlwaysAdvances(t *testing.T) {
+	for _, line := range []string{"ls &>/dev/null", "cmd &>>log", "cat <<&", "cat <(&>", "&>", "<&", "echo a &>"} {
+		t.Run(line, func(t *testing.T) {
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_, _ = parseScript(line)
+			}()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("parseScript(%q) did not return", line)
+			}
+		})
 	}
 }
