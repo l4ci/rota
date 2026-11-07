@@ -300,7 +300,7 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 		have     bool
 	)
 	if hist, ok := be.(backlog.ClaimHistorian); ok {
-		comments, have, err = hist.ClaimComments(ctx, key)
+		comments, have, err = hist.ClaimComments(key)
 	}
 	if !have {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s unavailable; reclaimed-branch check skipped", issue)), nil
