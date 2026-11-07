@@ -21,38 +21,46 @@ var literalAllowed = map[string]string{
 }
 
 // messageAllowed names the user-facing message literals that start with
-// ".rota/". They are text shown to people, not paths a program opens, and
-// rewording them is out of scope. Keyed by exact literal, so a new path
-// literal in the same file still fails.
-var messageAllowed = map[string]bool{
-	".rota/BACKLOG.md not found":                   true,
-	".rota/config.json is not a valid JSON object": true,
-	".rota/config.json is not a JSON object":       true,
-	".rota/config.local.json is not a JSON object": true,
-	".rota/config.local.json does not decode: ":    true,
-	".rota/config.local.json cannot be read: ":     true,
-	".rota/":                             true, // migrate_round.go: prefix of a corrupt-file message
-	".rota/%s: %w":                       true,
-	".rota/designs/%s.md already exists": true,
-	".rota/plans/%s.md already exists":   true,
-	".rota/spikes/%s.md already exists":  true,
-	".rota/counters.json is not valid JSON; fix or remove it":    true,
-	".rota/counters.json is not a JSON object; fix or remove it": true,
+// ".rota/", per file. They are text shown to people, not paths a program opens,
+// and rewording them is out of scope. Keyed by file and exact literal, so a new
+// path literal, or the same text in another file, still fails.
+var messageAllowed = map[string]map[string]bool{
+	"internal/backlog/write.go":          {".rota/BACKLOG.md not found": true},
+	"internal/plan/uncertain.go":         {".rota/BACKLOG.md not found": true},
+	"internal/cli/config.go":             {".rota/config.json is not a valid JSON object": true},
+	"internal/config/fill.go":            {".rota/config.json is not a valid JSON object": true},
+	"internal/config/verbs.go":           {".rota/config.json is not a JSON object": true, ".rota/config.local.json is not a JSON object": true},
+	"internal/roundcfg/support_fence.go": {".rota/config.local.json does not decode: ": true, ".rota/config.local.json cannot be read: ": true},
+	"internal/design/files.go":           {".rota/designs/%s.md already exists": true},
+	"internal/plan/files.go":             {".rota/plans/%s.md already exists": true},
+	"internal/spike/spike.go":            {".rota/spikes/%s.md already exists": true},
+	"internal/initproj/init.go": {
+		".rota/counters.json is not valid JSON; fix or remove it":    true,
+		".rota/counters.json is not a JSON object; fix or remove it": true,
+	},
 }
 
-// isLeak reports whether a string literal spells the state directory or a path
-// under it and is not an allowed message.
-func isLeak(s string) bool {
-	return (s == DirName || strings.HasPrefix(s, DirName+"/")) && !messageAllowed[s]
+// isLeak reports whether a string literal in file rel spells the state
+// directory or a path under it and is not an allowed message for that file.
+func isLeak(rel, s string) bool {
+	return (s == DirName || strings.HasPrefix(s, DirName+"/")) && !messageAllowed[rel][s]
 }
 
 func TestIsLeak(t *testing.T) {
-	for s, want := range map[string]bool{
-		DirName: true, DirName + "/plans/x.md": true, DirName + "/BACKLOG.md not found": false,
-		"docs/" + DirName: false, "other": false, "": false,
+	const file = "internal/backlog/write.go"
+	for _, c := range []struct {
+		rel, s string
+		want   bool
+	}{
+		{file, DirName, true}, {file, DirName + "/plans/x.md", true},
+		{file, DirName + "/BACKLOG.md not found", false},
+		{"internal/other/x.go", DirName + "/BACKLOG.md not found", true},
+		{"internal/other/x.go", DirName + "/", true},
+		{"internal/other/x.go", DirName + "/%s: %w", true},
+		{file, "docs/" + DirName, false}, {file, "other", false}, {file, "", false},
 	} {
-		if got := isLeak(s); got != want {
-			t.Errorf("isLeak(%q) = %v, want %v", s, got, want)
+		if got := isLeak(c.rel, c.s); got != c.want {
+			t.Errorf("isLeak(%q, %q) = %v, want %v", c.rel, c.s, got, c.want)
 		}
 	}
 }
@@ -86,7 +94,8 @@ func TestNoLiteralRotaDir(t *testing.T) {
 				if !ok || lit.Kind != token.STRING {
 					return true
 				}
-				if s, err := strconv.Unquote(lit.Value); err == nil && isLeak(s) {
+				s, err := strconv.Unquote(lit.Value)
+				if err == nil && isLeak(rel, s) {
 					t.Errorf("%s: literal %q; use rotatree.Dir, rotatree.File or rotatree.Rel", fset.Position(lit.Pos()), s)
 				}
 				return true
@@ -95,6 +104,34 @@ func TestNoLiteralRotaDir(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// TestMessageAllowedEntriesUsed fails on an allowlist entry no literal matches,
+// so a dead entry cannot quietly widen the exemption.
+func TestMessageAllowedEntriesUsed(t *testing.T) {
+	root := filepath.Join("..", "..")
+	fset := token.NewFileSet()
+	for rel, lits := range messageAllowed {
+		f, err := parser.ParseFile(fset, filepath.Join(root, filepath.FromSlash(rel)), nil, 0)
+		if err != nil {
+			t.Errorf("%s: %v", rel, err)
+			continue
+		}
+		seen := map[string]bool{}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if s, err := strconv.Unquote(lit.Value); err == nil {
+					seen[s] = true
+				}
+			}
+			return true
+		})
+		for s := range lits {
+			if !seen[s] {
+				t.Errorf("messageAllowed[%q] has unused entry %q", rel, s)
+			}
 		}
 	}
 }
