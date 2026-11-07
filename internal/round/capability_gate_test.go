@@ -22,7 +22,7 @@ type noStatusBoard struct {
 }
 
 func (b *noStatusBoard) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}
+	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, SharedClaims: true}
 }
 
 func (b *noStatusBoard) Status(ref string) (*backlog.Status, error) {
@@ -76,6 +76,12 @@ func TestSupportQueueMarksItemsUnknownWithoutItemStatus(t *testing.T) {
 type historyBoard struct {
 	*fakeRemote
 	comments []tracker.Comment
+}
+
+func (b *historyBoard) Capabilities() backlog.Capabilities {
+	c := b.fakeRemote.Capabilities()
+	c.ClaimHistory = true
+	return c
 }
 
 func (b *historyBoard) ClaimComments(_ tracker.IssueKey) ([]tracker.Comment, bool, error) {
