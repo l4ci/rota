@@ -984,6 +984,27 @@ CI verification, `rota test run` and `## Try it` steps do not retry. Wrapper out
 not identify assertion failures also stays red; this repo's `test/gate.sh` needs the separate
 adapter tracked in #2196 before it can use sequential retries.
 
+### Test maintenance
+
+Each local gate and train run also writes a `verification` row to the round ledger: the tier, its
+wall time and each configured command's wall time and exit code. Cached and CI answers write none,
+so older rounds and CI-verified merges have no timing, and the audit says so rather than reporting
+zero.
+
+`rota test-audit` turns those rows, `.rota/flakes.jsonl` and `.rota/gate-audit.jsonl` into a report,
+then adds what the repo shows: runs per Playwright project and spec from `playwright test --list`
+(each config, with the repo's own installed runner; nothing is downloaded), test files per source
+module, helpers declared in more than one test file, `package.json` test scripts that no `test.fast`,
+`test.full` or `test.e2e` command references, and README counts that disagree with `--list`. It runs
+no suite and changes no test. A report with no missing evidence records an audit checkpoint.
+
+Two opt-in thresholds (0, the default, disables each) make `/rota-work` and `/rota-orchestrate`
+suggest a maintenance round in their reconcile step: `test.audit.maxFullGateSeconds` (the latest
+measured `test.full` after the last audit is slower) and `test.audit.prsBetweenAudits` (that many
+merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. Every item a
+maintenance round creates carries two rules in its Out of scope: no assertion is dropped without a note
+in the PR body, and stored refs and the pixel tolerance stay untouched.
+
 After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of the slot's issue on the merged tree, in order, stopping at the first failure. A step fails on a non-zero exit or a missing `expect:` substring (`verify-failed`, nothing lands). The steps run only when the issue's author and last editor have write access on the forge (a file issue source runs unchecked); otherwise the gate notes `BEHAVIOUR-SKIP` and continues. The transcript goes to `.rota/qa-runs/behaviour/` and a `behaviour` verdict is recorded. `--check-only` and `--no-verify` skip the run.
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
