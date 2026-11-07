@@ -20,6 +20,7 @@ import (
 
 var (
 	ErrInvalid  = errors.New("invalid prompt")
+	ErrCorrupt  = errors.New("damaged prompt store")
 	ErrConflict = errors.New("prompt revision conflict")
 	ErrUnknown  = errors.New("unknown prompt section")
 	ErrRemoved  = errors.New("prompt section removed")
@@ -81,7 +82,7 @@ func validate(body string) error {
 	}
 	for _, p := range placeholder.FindAllString(body, -1) {
 		if p != "{{status}}" && p != "{{closing}}" {
-			return fmt.Errorf("%w: unknown placeholder %s", ErrInvalid, p)
+			return fmt.Errorf("%w: unknown placeholder %s; only {{status}} and {{closing}} are allowed", ErrInvalid, p)
 		}
 	}
 	rest := strings.ReplaceAll(strings.ReplaceAll(body, "{{status}}", ""), "{{closing}}", "")
@@ -106,7 +107,7 @@ func (s Store) safe() error {
 			return err
 		}
 		if fi.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%w: %s is a symlink", ErrInvalid, p)
+			return fmt.Errorf("%w: %s is a symlink", ErrCorrupt, p)
 		}
 	}
 	return nil
@@ -124,31 +125,31 @@ func (s Store) read() (document, error) {
 		return d, err
 	}
 	if !utf8.Valid(b) {
-		return d, fmt.Errorf("%w: prompts.json is not valid UTF-8", ErrInvalid)
+		return d, fmt.Errorf("%w: prompts.json is not valid UTF-8", ErrCorrupt)
 	}
 	d = document{}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&d); err != nil {
-		return d, fmt.Errorf("%w: prompts.json: %v", ErrInvalid, err)
+		return d, fmt.Errorf("%w: prompts.json: %v", ErrCorrupt, err)
 	}
 	if err := dec.Decode(new(any)); err != io.EOF {
-		return d, fmt.Errorf("%w: trailing prompts.json content", ErrInvalid)
+		return d, fmt.Errorf("%w: trailing prompts.json content", ErrCorrupt)
 	}
 	if d.Version != 1 || d.Sections == nil {
-		return d, fmt.Errorf("%w: unsupported or malformed prompts.json", ErrInvalid)
+		return d, fmt.Errorf("%w: unsupported or malformed prompts.json", ErrCorrupt)
 	}
 	for name, h := range d.Sections {
 		if name == "" || len(h) == 0 {
-			return d, fmt.Errorf("%w: empty section history", ErrInvalid)
+			return d, fmt.Errorf("%w: empty section history", ErrCorrupt)
 		}
 		for i, r := range h {
 			if r.Revision != i+1 || r.BaselineDigest != digest(r.Baseline) {
-				return d, fmt.Errorf("%w: corrupt revision in %s", ErrInvalid, name)
+				return d, fmt.Errorf("%w: corrupt revision in %s", ErrCorrupt, name)
 			}
 			if r.Override != nil {
 				if err := validate(*r.Override); err != nil {
-					return d, err
+					return d, fmt.Errorf("%w: %s revision %d: %v", ErrCorrupt, name, r.Revision, err)
 				}
 			}
 		}
@@ -176,7 +177,7 @@ func (s Store) view(name string, d document) (View, error) {
 		v.Status = "unchanged"
 		if !ok {
 			v.Status = "removed"
-		} else if digest(expand(sec.Default, sec)) != r.BaselineDigest {
+		} else if r.Override != nil && digest(expand(sec.Default, sec)) != r.BaselineDigest {
 			v.Status = "changed"
 		}
 		if ok && r.Override != nil {
@@ -282,7 +283,7 @@ func (s Store) append(name string, expect int, next func(h []Revision, baseline 
 			return fmt.Errorf("%w: %s expected %d, current %d", ErrConflict, name, expect, len(h))
 		}
 		if err := validate(sec.Default); err != nil {
-			return err
+			return fmt.Errorf("built-in %s default: %v", name, err)
 		}
 		r, err := next(h, expand(sec.Default, sec))
 		if err != nil {
