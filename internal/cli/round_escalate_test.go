@@ -119,7 +119,12 @@ func useEscalation(deps *Deps, h *escHost, herdrEnv string, clock *time.Time) {
 			Now:      func() time.Time { return *clock },
 			Getenv:   func(k string) string { return map[string]string{"HERDR_ENV": herdrEnv}[k] },
 			LookPath: func(n string) (string, error) { return "/bin/" + n, nil },
-			Host:     func() host.Host { return h },
+			Host: func(k host.Kind) host.Host {
+				if k == host.Herdr {
+					return h
+				}
+				return &cliHost{} // no Notifier side
+			},
 		}
 	}
 }

@@ -313,7 +313,7 @@ func (e Env) sendSigned(ctx context.Context, t *dispatchTarget, slot, payload st
 // sendFailure maps a failed send onto dispatch's exits. A queued send and a
 // clean one are not failures: it returns res, nil for both.
 func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (DispatchResult, error) {
-	if h.Kind() == host.HerdrCore {
+	if receipts(h) {
 		res.Delivery = coreOutcome(sendErr)
 		if errors.Is(sendErr, host.ErrSubmitted) {
 			res.Warnings = append(res.Warnings, "Core submitted the message; pickup remains unconfirmed. Monitor or retry the same message to reconcile; do not paste another copy.")
@@ -336,9 +336,10 @@ func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (D
 			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", slot))
-	case (h.Kind() == host.Orca || h.Kind() == host.HerdrCore) && !errors.Is(sendErr, host.ErrNotSubmitted):
-		// Orca can discover a branch rename after the prompt has been accepted.
-		// Preserve that evidence instead of suggesting the brief was never sent.
+	case errors.Is(sendErr, host.ErrMaybeSubmitted):
+		// The host said delivery is unknown (Orca can discover a branch rename
+		// after the prompt was accepted). Preserve that evidence instead of
+		// suggesting the brief was never sent.
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", slot, sendErr))
 	default:
 		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", slot))
@@ -593,7 +594,7 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || s.Unsent() {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
 	}
-	if errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt) || (h.Kind() == host.HerdrCore && errors.Is(sendErr, host.ErrNotSubmitted)) {
+	if errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt) || (receipts(h) && errors.Is(sendErr, host.ErrNotSubmitted)) {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
 	} else {
 		// Log the relay once it was (or may have been) sent. A stall does not

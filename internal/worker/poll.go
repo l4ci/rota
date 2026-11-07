@@ -262,7 +262,9 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		t := targets[i]
 		fresh := t.evSeq > 0 && r.State == StateBlocked && !t.ev.Notified
 		if ((r.State == StateBlocked || r.State == StateNeedsPermission) && t.prev != strings.ToLower(r.State)) || fresh {
-			h.Notify(ctx, fmt.Sprintf("rota worker %s: %s", r.Name, r.State), r.Evidence)
+			if n := h.Capabilities().Notifier; n != nil {
+				n.Notify(ctx, fmt.Sprintf("rota worker %s: %s", r.Name, r.State), r.Evidence)
+			}
 			if fresh {
 				notified[r.Name] = t.evSeq
 			}
