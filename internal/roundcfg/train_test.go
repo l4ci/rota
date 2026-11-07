@@ -1,6 +1,7 @@
 package roundcfg
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,6 +51,53 @@ func TestTrainFillSingleThresholds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.fill.Due(tc.count, tc.at, now); got != tc.want {
 				t.Errorf("reason = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTrainFillDecide(t *testing.T) {
+	now := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	c := func(id string, age time.Duration) FillCandidate {
+		return FillCandidate{ID: id, Ready: now.Add(-age)}
+	}
+	imm := FillCandidate{ID: "90", Immediate: true}
+	for _, tc := range []struct {
+		name       string
+		fill       TrainFill
+		cands      []FillCandidate
+		limit      int
+		land       []string
+		reasonPart string
+		wait       string
+		holding    string
+	}{
+		{name: "no candidates", fill: TrainFill{Max: 2}},
+		{name: "disabled lone PR holds", fill: TrainFill{}, cands: []FillCandidate{c("1", 0)}},
+		{name: "disabled two PRs land", fill: TrainFill{}, cands: []FillCandidate{c("1", 0), c("2", 0)}, land: []string{"1", "2"}},
+		{name: "count due", fill: TrainFill{Max: 2, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", time.Minute)}, land: []string{"1", "2"}, reasonPart: "round.trainMax", wait: "oldest waited 1m of 60m"},
+		{name: "age due", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", 61*time.Minute), c("2", time.Minute)}, land: []string{"1", "2"}, reasonPart: "round.trainFillMinutes", wait: "oldest waited 61m of 60m"},
+		{name: "filling holds", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", time.Minute)}, holding: "holding train for main: 2/3 ready, oldest waited 1m of 60m"},
+		{name: "unknown ready time cannot fire age", fill: TrainFill{Minutes: 5}, cands: []FillCandidate{{ID: "1"}}, holding: "holding train for main: 1 ready, oldest wait unknown"},
+		{name: "immediate lands alone", fill: TrainFill{Max: 4, Minutes: 20}, cands: []FillCandidate{c("1", time.Minute), imm}, land: []string{"90"}, reasonPart: "review disabled", wait: "oldest wait unknown"},
+		{name: "due wins over immediate", fill: TrainFill{Max: 2}, cands: []FillCandidate{c("1", time.Minute), imm}, land: []string{"1", "90"}, reasonPart: "round.trainMax", wait: "oldest waited 1m; no time limit"},
+		{name: "trim to Max keeps oldest in input order", fill: TrainFill{Max: 2, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", 2*time.Minute), c("90", 65*time.Minute)}, land: []string{"2", "90"}, reasonPart: "round.trainMax", wait: "oldest waited 65m of 60m"},
+		{name: "limit below Max trims further", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", 2*time.Minute), c("3", 3*time.Minute)}, limit: 1, land: []string{"3"}, reasonPart: "round.trainMax", wait: "oldest waited 3m of 60m"},
+		{name: "limit above Max defers to Max", fill: TrainFill{Max: 2}, cands: []FillCandidate{c("1", 3*time.Minute), c("2", 2*time.Minute), c("3", time.Minute)}, limit: 9, land: []string{"1", "2"}, reasonPart: "round.trainMax", wait: "oldest waited 3m; no time limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := tc.fill.Decide("main", tc.cands, tc.limit, now)
+			if strings.Join(d.Land, ",") != strings.Join(tc.land, ",") {
+				t.Errorf("Land = %v, want %v", d.Land, tc.land)
+			}
+			if !strings.Contains(d.Reason, tc.reasonPart) || (tc.reasonPart == "" && d.Reason != "") {
+				t.Errorf("Reason = %q, want it to contain %q", d.Reason, tc.reasonPart)
+			}
+			if d.Wait != tc.wait || d.Holding != tc.holding {
+				t.Errorf("Wait/Holding = %q / %q, want %q / %q", d.Wait, d.Holding, tc.wait, tc.holding)
+			}
+			if d.Count != len(tc.cands) {
+				t.Errorf("Count = %d, want %d", d.Count, len(tc.cands))
 			}
 		})
 	}
