@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/testaudit"
 )
 
@@ -159,7 +160,7 @@ func auditJSON(v any) any { b, _ := json.Marshal(v); o, _ := jsonx.Decode(b); re
 func auditExcludedPath(p string) bool {
 	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
 		switch part {
-		case ".git", ".worktrees", "node_modules", ".rota", "vendor", "dist", "build":
+		case ".git", ".worktrees", "node_modules", rotatree.DirName, "vendor", "dist", "build":
 			return true
 		}
 	}
