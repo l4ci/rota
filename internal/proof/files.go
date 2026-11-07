@@ -8,38 +8,41 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 )
 
-// files keeps the rows in a gitignored sidecar beside the item's detail file,
-// .rota/<bugs|features|tasks>/<ID>.proof under root, so recording proof never
-// dirties the worktree. Rows recorded in the detail file before the sidecar
-// existed are still read, and seed the sidecar on its first write.
-type files struct{ root string }
-
-// Files is the file-mode store.
-func Files(root string) Store { return files{root} }
-
-// proofFile is the proof sidecar of a valid file-mode ID.
-func proofFile(root, id string) (string, error) {
-	if !backlog.ValidID(id, backlog.FileIDDigits) {
-		return "", exitcode.Errf(exitcode.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
-	}
-	return backlog.ProofPath(root, id), nil
+// Sidecar is what the file-mode store asks of the caller, which owns the item
+// model: where an item's proof sidecar lives and whether the item exists. The
+// store itself judges nothing about ids.
+type Sidecar struct {
+	// Path is the sidecar of id, or an error when id cannot name an item.
+	Path func(id string) (string, error)
+	// Title is the item's title (empty when it has none), or an error when no
+	// such item exists. Update asks it before writing.
+	Title func(id string) (string, error)
+	// Text is the item's current proof text: the sidecar, else the detail file
+	// an older rota wrote rows into. ok is false when neither exists.
+	Text func(id string) (content string, ok bool, err error)
 }
 
+// files keeps the rows in a gitignored sidecar beside the item's detail file,
+// so recording proof never dirties the worktree. Rows recorded in the detail
+// file before the sidecar existed are still read, and seed the sidecar on its
+// first write.
+type files struct{ sc Sidecar }
+
+// Files is the file-mode store.
+func Files(sc Sidecar) Store { return files{sc} }
+
 func (s files) Update(id string, fn func(string) (string, bool, error)) error {
-	path, err := proofFile(s.root, id)
+	path, err := s.sc.Path(id)
 	if err != nil {
 		return err
 	}
-	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
-	f := &backlog.File{Root: s.root}
-	_, title, found := backlog.FindOrigin(f.Corpus(), id)
-	if !found {
-		return exitcode.Errf(exitcode.ExitResolution, "[%s] not found in BACKLOG.md or ARCHIVE.md", id)
+	title, err := s.sc.Title(id)
+	if err != nil {
+		return err
 	}
 	if title == "" {
 		title = id
@@ -51,7 +54,7 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 		}
 		if rerr != nil { // missing: start the sidecar, from the legacy rows when the detail file has any
 			content = fmt.Sprintf("# %s: %s\n", id, title)
-			legacy, _, lerr := backlog.ProofText(s.root, id)
+			legacy, _, lerr := s.sc.Text(id)
 			if lerr != nil {
 				return exitcode.Errf(exitcode.ExitInternal, "cannot read proof of %s: %v", id, lerr)
 			}
@@ -72,11 +75,11 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 
 // Read: no sidecar and no detail file is no text, as in the old helper.
 func (s files) Read(id string) (string, bool, error) {
-	path, err := proofFile(s.root, id)
+	path, err := s.sc.Path(id)
 	if err != nil {
 		return "", false, err
 	}
-	content, ok, rerr := backlog.ProofText(s.root, id)
+	content, ok, rerr := s.sc.Text(id)
 	if rerr != nil {
 		return "", false, exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", path, rerr)
 	}
