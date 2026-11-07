@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/version"
 )
 
 // ---- config fixtures ---------------------------------------------------------------
@@ -162,7 +163,7 @@ func updFixtures(t *testing.T) {
 			return d
 		}
 		upd.bin = filepath.Join(harnessTmp, "rota-stamped")
-		build := exec.Command("go", "build", "-ldflags", "-X github.com/l4ci/rota/internal/version.Version="+instVersion, "-o", upd.bin, ".")
+		build := exec.Command("go", "build", "-ldflags", "-X "+version.Symbol("Version")+"="+instVersion, "-o", upd.bin, ".")
 		build.Dir = filepath.Join(repoDir, "cmd", "rota")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("go build: %v\n%s", err, out)
