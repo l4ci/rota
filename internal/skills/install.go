@@ -141,6 +141,9 @@ func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, 
 	return out, nil
 }
 
+// ManifestSchema is the version of the manifest file format.
+const ManifestSchema = 1
+
 // Manifest is <root>/.rota-manifest.json: exactly what rota wrote.
 type Manifest struct {
 	Schema  int               `json:"schema"`
@@ -157,7 +160,7 @@ func manifestPath(root string) string { return filepath.Join(root, ManifestName)
 // does not parse (every file is then unmanaged, which keeps all of them).
 func ReadManifest(root string) (m Manifest, ok bool) {
 	b, err := os.ReadFile(manifestPath(root))
-	if err != nil || json.Unmarshal(b, &m) != nil || m.Schema != 1 {
+	if err != nil || json.Unmarshal(b, &m) != nil || m.Schema != ManifestSchema {
 		return Manifest{}, false
 	}
 	files := map[string]string{}
@@ -300,150 +303,164 @@ func (full *Set) installRoot(r Root, o Options, mode string) (RootResult, error)
 		}
 	}
 	res := RootResult{Root: r, Version: o.Version, Digest: s.digest, Mode: mode}
-	mp := manifestPath(r.Path)
-	err := fsio.Locked(mp, fsio.LockTimeout, func() error {
+	err := fsio.Locked(manifestPath(r.Path), fsio.LockTimeout, func() error {
 		old, hadManifest := ReadManifest(r.Path)
 		if !hadManifest {
 			old = Manifest{Files: map[string]string{}}
 		}
-		next := map[string]string{}
-		var removed []string
-		record := func(p, st string) { res.Files = append(res.Files, FileResult{p, st}) }
-		keep := func(p, st string) {
-			record(p, st)
-			res.Kept = append(res.Kept, p)
-			if res.BlockedBy == "" || st == Edited {
-				res.BlockedBy = st
-			}
+		plan, err := s.planRoot(r, o, old)
+		if err != nil {
+			return err
 		}
+		return s.applyPlan(r, o, mode, old, hadManifest, plan, &res)
+	})
+	return res, err
+}
 
-		// A skill directory that is a symlink: the legacy `rota init --codex`
-		// link holds no user content and is replaced; any other symlink is
-		// not ours to write through.
-		blocked := map[string]bool{}
-		for _, skill := range s.skills {
-			dir := filepath.Join(r.Path, skill)
-			fi, err := os.Lstat(dir)
-			if err != nil || fi.Mode()&os.ModeSymlink == 0 {
-				continue
-			}
-			_, serr := os.Stat(filepath.Join(dir, "SKILL.md"))
-			if serr == nil || o.Overwrite {
-				if err := os.Remove(dir); err != nil {
-					return err
-				}
-				record(skill, Replaced)
-				res.Changed = true
-				continue
-			}
-			blocked[skill] = true
+// step is one path of an install plan and what to do about it.
+type step struct {
+	path string
+	dec  decision
+	st   pathState
+}
+
+// rootPlan is what an install will do to a root: the legacy symlinked skill
+// directories to replace, then one step per path of the set, then one per path
+// the manifest lists that the set no longer has.
+type rootPlan struct {
+	links []string
+	steps []step
+}
+
+// planRoot reads the root and decides every path; it writes nothing.
+func (s *Set) planRoot(r Root, o Options, old Manifest) (rootPlan, error) {
+	var plan rootPlan
+	// A skill directory that is a symlink: the legacy `rota init --codex`
+	// link holds no user content and is replaced; any other symlink is
+	// not ours to write through.
+	blocked, replaced := map[string]bool{}, map[string]bool{}
+	for _, skill := range s.skills {
+		dir := filepath.Join(r.Path, skill)
+		fi, err := os.Lstat(dir)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			continue
 		}
+		if _, serr := os.Stat(filepath.Join(dir, "SKILL.md")); serr == nil || o.Overwrite {
+			plan.links = append(plan.links, skill)
+			replaced[skill] = true
+			continue
+		}
+		blocked[skill] = true
+	}
 
-		for _, p := range s.paths {
-			if blocked[strings.SplitN(p, "/", 2)[0]] || unsafe(r.Path, p) {
-				keep(p, Unmanaged)
-				continue
-			}
-			want := hashBytes(s.files[p])
-			abs := filepath.Join(r.Path, filepath.FromSlash(p))
-			have, err := diskHash(abs)
+	// state reads one path. Under a replaced link the directory is gone by the
+	// time the plan runs, so nothing is there.
+	state := func(p string, st pathState) (pathState, error) {
+		skill := strings.SplitN(p, "/", 2)[0]
+		st.Recorded, st.Managed = old.Files[p]
+		st.Overwrite = o.Overwrite
+		if replaced[skill] {
+			return st, nil
+		}
+		st.Unsafe = blocked[skill] || unsafe(r.Path, p)
+		if !st.Unsafe {
+			var err error
+			st.Have, err = diskHash(filepath.Join(r.Path, filepath.FromSlash(p)))
 			if err != nil {
-				return err
-			}
-			recorded, managed := old.Files[p]
-			write := func(st string) error {
-				if have == "?" {
-					if err := os.Remove(abs); err != nil {
-						return err
-					}
-				}
-				if err := os.MkdirAll(filepath.Dir(abs), 0o777); err != nil {
-					return err
-				}
-				if err := fsio.WriteFileAtomic(abs, s.files[p]); err != nil {
-					return err
-				}
-				next[p] = want
-				record(p, st)
-				res.Changed = true
-				return nil
-			}
-			switch {
-			case have == "":
-				if err := write(Created); err != nil {
-					return err
-				}
-			case have == want:
-				// Same bytes: adopt them, whether or not the manifest knew the path.
-				next[p] = want
-				record(p, Unchanged)
-			case managed && have == recorded:
-				if err := write(Updated); err != nil {
-					return err
-				}
-			default:
-				st := Unmanaged
-				if managed {
-					st = Edited
-				}
-				if o.Overwrite {
-					if err := write(Replaced); err != nil {
-						return err
-					}
-					break
-				}
-				keep(p, st)
-				if managed {
-					next[p] = recorded // still edited next time
-				}
+				return st, err
 			}
 		}
+		return st, nil
+	}
 
-		// Manifest paths the new set no longer has.
-		var gone []string
-		for p := range old.Files {
-			if _, ok := s.files[p]; !ok {
-				gone = append(gone, p)
-			}
+	for _, p := range s.paths {
+		st, err := state(p, pathState{Want: hashBytes(s.files[p]), Wanted: true})
+		if err != nil {
+			return plan, err
 		}
-		sort.Strings(gone)
-		for _, p := range gone {
-			abs := filepath.Join(r.Path, filepath.FromSlash(p))
-			if unsafe(r.Path, p) {
-				keep(p, Edited)
-				next[p] = old.Files[p]
-				continue
-			}
-			have, err := diskHash(abs)
-			if err != nil {
-				return err
-			}
-			switch {
-			case have == "":
-			case have == old.Files[p] || o.Overwrite:
+		plan.steps = append(plan.steps, step{p, classify(st), st})
+	}
+
+	// Manifest paths the new set no longer has.
+	var gone []string
+	for p := range old.Files {
+		if _, ok := s.files[p]; !ok {
+			gone = append(gone, p)
+		}
+	}
+	sort.Strings(gone)
+	for _, p := range gone {
+		st, err := state(p, pathState{})
+		if err != nil {
+			return plan, err
+		}
+		plan.steps = append(plan.steps, step{p, classify(st), st})
+	}
+	return plan, nil
+}
+
+// applyPlan carries the plan out and writes the manifest, recording what it
+// did in res.
+func (s *Set) applyPlan(r Root, o Options, mode string, old Manifest, hadManifest bool, plan rootPlan, res *RootResult) error {
+	next := map[string]string{}
+	var removed []string
+	record := func(p, st string) { res.Files = append(res.Files, FileResult{p, st}) }
+	for _, skill := range plan.links {
+		if err := os.Remove(filepath.Join(r.Path, skill)); err != nil {
+			return err
+		}
+		record(skill, Replaced)
+		res.Changed = true
+	}
+	for _, sp := range plan.steps {
+		p, abs := sp.path, filepath.Join(r.Path, filepath.FromSlash(sp.path))
+		switch sp.dec.Action {
+		case actCreate, actUpdate, actReplace:
+			if sp.st.Have == "?" {
 				if err := os.Remove(abs); err != nil {
 					return err
 				}
-				removed = append(removed, p)
-				record(p, Removed)
-				res.Changed = true
-			default:
-				keep(p, Edited)
-				next[p] = old.Files[p]
 			}
-		}
-		pruneEmpty(r.Path, removed)
-
-		m := Manifest{Schema: 1, Version: o.Version, Digest: s.digest, Agent: r.Agent, Files: next, Mode: mode}
-		if !hadManifest || !sameManifest(old, m) {
-			if err := writeManifest(r.Path, m); err != nil {
+			if err := os.MkdirAll(filepath.Dir(abs), 0o777); err != nil {
 				return err
 			}
+			if err := fsio.WriteFileAtomic(abs, s.files[p]); err != nil {
+				return err
+			}
+			next[p] = sp.st.Want
+			record(p, sp.dec.Status)
+			res.Changed = true
+		case actAdopt:
+			next[p] = sp.st.Want
+			record(p, sp.dec.Status)
+		case actKeep:
+			record(p, sp.dec.Status)
+			res.Kept = append(res.Kept, p)
+			if res.BlockedBy == "" || sp.dec.Status == Edited {
+				res.BlockedBy = sp.dec.Status
+			}
+			if sp.dec.Retain {
+				next[p] = sp.st.Recorded
+			}
+		case actRemove:
+			if err := os.Remove(abs); err != nil {
+				return err
+			}
+			removed = append(removed, p)
+			record(p, sp.dec.Status)
 			res.Changed = true
 		}
-		return nil
-	})
-	return res, err
+	}
+	pruneEmpty(r.Path, removed)
+
+	m := Manifest{Schema: ManifestSchema, Version: o.Version, Digest: s.digest, Agent: r.Agent, Files: next, Mode: mode}
+	if !hadManifest || !sameManifest(old, m) {
+		if err := writeManifest(r.Path, m); err != nil {
+			return err
+		}
+		res.Changed = true
+	}
+	return nil
 }
 
 func sameManifest(a, b Manifest) bool {
@@ -496,7 +513,7 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 		err := fsio.Locked(manifestPath(r.Path), fsio.LockTimeout, func() error {
 			m, ok := ReadManifest(r.Path)
 			if !ok {
-				m = Manifest{Schema: 1, Agent: r.Agent, Files: map[string]string{}}
+				m = Manifest{Schema: ManifestSchema, Agent: r.Agent, Files: map[string]string{}}
 			}
 			var paths []string
 			for p := range m.Files {
@@ -504,20 +521,18 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 			}
 			sort.Strings(paths)
 			for _, p := range paths {
-				abs := filepath.Join(r.Path, filepath.FromSlash(p))
-				if unsafe(r.Path, p) {
-					res.Kept = append(res.Kept, p)
-					continue
+				st := pathState{Recorded: m.Files[p], Managed: true, Overwrite: o.Overwrite}
+				if st.Unsafe = unsafe(r.Path, p); !st.Unsafe {
+					var err error
+					if st.Have, err = diskHash(filepath.Join(r.Path, filepath.FromSlash(p))); err != nil {
+						return err
+					}
 				}
-				have, err := diskHash(abs)
-				if err != nil {
-					return err
-				}
-				switch {
-				case have == "":
+				switch classify(st).Action {
+				case actForget:
 					delete(m.Files, p)
-				case have == m.Files[p] || o.Overwrite:
-					if err := os.Remove(abs); err != nil {
+				case actRemove:
+					if err := os.Remove(filepath.Join(r.Path, filepath.FromSlash(p))); err != nil {
 						return err
 					}
 					delete(m.Files, p)
@@ -628,13 +643,10 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 				if err != nil {
 					return rep, err
 				}
-				if unsafe(r.Path, p) {
-					have = "?"
-				}
-				switch {
-				case have == "":
+				switch classify(pathState{Recorded: m.Files[p], Managed: true, Have: have, Unsafe: unsafe(r.Path, p)}).Action {
+				case actForget:
 					st.Missing = append(st.Missing, p)
-				case have != m.Files[p]:
+				case actKeep:
 					st.Edited = append(st.Edited, p)
 				}
 			}
