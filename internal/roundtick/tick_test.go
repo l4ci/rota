@@ -36,6 +36,8 @@ type fake struct {
 	trainOut func(targets []string) TrainRun
 	baseOf   func(target string) string
 	assignFn func(id string) ([]string, error)
+	// awaiting, when set, is the review-readiness answer per slot.
+	awaiting func(s Slot) string
 }
 
 func (f *fake) env() Env {
@@ -76,6 +78,12 @@ func (f *fake) env() Env {
 			return []string{"ben"}, nil
 		},
 		Audit: func(a Action) { f.audit = append(f.audit, a.Action+" "+a.Target) },
+		AwaitingReview: func(_ context.Context, sl Slot, _ string) string {
+			if f.awaiting == nil {
+				return ""
+			}
+			return f.awaiting(sl)
+		},
 	}
 }
 
