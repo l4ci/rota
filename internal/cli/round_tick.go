@@ -89,7 +89,7 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}
-	lease, _, held, err := round.HoldsLease(round.LeaseProbe{Env: c.deps().LeaseEnv(), HolderPID: pid, Getenv: c.deps().Getenv}, cd)
+	lease, _, held, err := c.deps().LeaseEnv().Holds(cd, pid, c.deps().Getenv)
 	if err != nil {
 		return roundtick.Result{}, err
 	}

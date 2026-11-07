@@ -570,7 +570,7 @@ func TestFindExcludesUnselectedDiscoveryWarnings(t *testing.T) {
 // fakeLease scripts the round lease.
 type fakeLease struct {
 	reads    int
-	l        round.Lease
+	l        roundlease.Lease
 	st       roundlease.State
 	readErr  error
 	clearErr error
@@ -578,14 +578,14 @@ type fakeLease struct {
 	cleared  int
 }
 
-func (f *fakeLease) ReadLease(context.Context, string) (round.Lease, round.LeaseState, error) {
+func (f *fakeLease) ReadLease(context.Context, string) (roundlease.Lease, roundlease.State, error) {
 	f.reads++
 	return f.l, f.st, f.readErr
 }
 
-func (f *fakeLease) ClearStaleLease(context.Context, string) (round.Lease, bool, error) {
+func (f *fakeLease) ClearStaleLease(context.Context, string) (roundlease.Lease, bool, error) {
 	if f.clearErr != nil || !f.stale {
-		return round.Lease{}, false, f.clearErr
+		return roundlease.Lease{}, false, f.clearErr
 	}
 	f.cleared++
 	return f.l, true, nil
@@ -597,7 +597,7 @@ func leaseInput(f *fakeLease) Input {
 	return in
 }
 
-var deadHolder = round.Lease{PID: 4242, Host: "h", Round: 3, StartedAt: "2026-01-02T03:04:05Z"}
+var deadHolder = roundlease.Lease{PID: 4242, Host: "h", Round: 3, StartedAt: "2026-01-02T03:04:05Z"}
 
 func TestStaleLeaseIsListedAndClearedOnApply(t *testing.T) {
 	f := &fakeLease{l: deadHolder, st: roundlease.Stale, stale: true}

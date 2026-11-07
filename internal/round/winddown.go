@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
@@ -57,8 +58,8 @@ type WoundDown struct {
 	Verified      []string
 	VerifySkipped bool
 	Drift         int
-	Lease         *Lease // present unless the lease was released
-	Retained      bool   // some slot still holds work
+	Lease         *roundlease.Lease // present unless the lease was released
+	Retained      bool              // some slot still holds work
 	Changed       bool
 	Warnings      []string
 	VerifyLog     string
@@ -78,7 +79,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	if err != nil {
 		return res, err
 	}
-	lease, _, held, err := HoldsLease(LeaseProbe{Env: e.Lease, HolderPID: o.HolderPID, Getenv: e.getenv()}, cd)
+	lease, _, held, err := e.Lease.Holds(cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return res, err
 	}
