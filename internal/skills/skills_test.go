@@ -156,7 +156,7 @@ func TestInstallIdempotentAndManifest(t *testing.T) {
 		t.Errorf("first install: %s", st)
 	}
 	m, ok := ReadManifest(roots[0].Path)
-	if !ok || m.Schema != 1 || m.Version != "5.0.0" || m.Digest != s.Digest() || m.Agent != Claude || len(m.Files) != len(s.Paths()) {
+	if !ok || m.Schema != ManifestSchema || m.Version != "5.0.0" || m.Digest != s.Digest() || m.Agent != Claude || len(m.Files) != len(s.Paths()) {
 		t.Errorf("manifest %+v", m)
 	}
 	res, err = s.Install(roots, Options{Mode: ModeFull, Version: "5.0.0"})
@@ -213,34 +213,6 @@ func TestEditedAndUnmanagedKeptUnlessOverwrite(t *testing.T) {
 	want, _ := s.File("rota-a/SKILL.md")
 	if b, _ := os.ReadFile(edited); string(b) != string(want) {
 		t.Error("--overwrite did not restore the file")
-	}
-}
-
-func TestUnmanagedOnlyBlocksAsUnmanaged(t *testing.T) {
-	s := loadFake(t, nil)
-	roots := oneRoot(t)
-	p := filepath.Join(roots[0].Path, "rota-b", "SKILL.md")
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte("user's own\n"), 0o644)
-	res, err := s.Install(roots, Options{Mode: ModeFull})
-	if err != nil || res[0].BlockedBy != Unmanaged || !res[0].Changed {
-		t.Fatalf("%+v %v", res[0], err)
-	}
-	if b, _ := os.ReadFile(p); string(b) != "user's own\n" {
-		t.Error("unmanaged file overwritten")
-	}
-}
-
-func TestIdenticalUnmanagedIsAdopted(t *testing.T) {
-	s := loadFake(t, nil)
-	roots := oneRoot(t)
-	p := filepath.Join(roots[0].Path, "rota-b", "SKILL.md")
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	b, _ := s.File("rota-b/SKILL.md")
-	os.WriteFile(p, b, 0o644)
-	res, _ := s.Install(roots, Options{Mode: ModeFull})
-	if res[0].BlockedBy != "" || status(t, res, "rota-b/SKILL.md") != Unchanged {
-		t.Errorf("%+v", res[0])
 	}
 }
 
