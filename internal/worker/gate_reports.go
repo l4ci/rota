@@ -19,7 +19,7 @@ func (runner gate) stepVerdictReports(result GateResult, target GateTarget, forg
 		return struct{}{}, *g.res, done, err
 	}
 
-	if !g.remote || g.pr == "" || !backlog.CapabilitiesForSource(g.in.cfg.Tracker.Source).IssueIDs {
+	if g.o.Observe || !g.remote || g.pr == "" || !backlog.CapabilitiesForSource(g.in.cfg.Tracker.Source).IssueIDs {
 		return finish(false, nil)
 	}
 	source, ok := g.forge.(verdict.ReportSource)
