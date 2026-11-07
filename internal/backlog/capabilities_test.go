@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/tracker"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -83,6 +85,47 @@ func TestBackendBehavior(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBlockedCompletion pins what Complete(reason=blocked) does on each
+// backend, through the Backend interface alone. The two differ on purpose and
+// the contract (docs/contributing/contract/backlog.md, item complete) says so:
+// the file backend closes the bullet into ## Completed with a (blocked: note)
+// mark; the issues backend leaves the issue open, adds the blocked label and a
+// blocked comment. Neither runs the proof gate; repeating it is a no-op.
+func TestBlockedCompletion(t *testing.T) {
+	in := CompleteInput{Commit: "abc", Date: "2026-10-06", Reason: "blocked", Note: "waiting"}
+	t.Run("file closes the bullet", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		var be Backend = f
+		if changed, err := be.Complete("B01", in); err != nil || !changed {
+			t.Fatalf("Complete = %v, %v", changed, err)
+		}
+		it, err := be.Get("B01")
+		if err != nil || !it.Closed || it.Reason != "blocked" || it.Note != "waiting" {
+			t.Errorf("Get = %+v, %v; want closed, reason blocked, note waiting", it, err)
+		}
+		if again, err := be.Complete("B01", in); err != nil || again {
+			t.Errorf("Complete twice = %v, %v; want a no-op", again, err)
+		}
+		if !strings.Contains(read(t, f, ".rota/BACKLOG.md"), "Done 2026-10-06 [`abc`] (blocked: waiting)\n") {
+			t.Error(read(t, f, ".rota/BACKLOG.md"))
+		}
+	})
+	t.Run("issues keeps the issue open", func(t *testing.T) {
+		b, _ := newIssues(t, `{}`, open(6))
+		var be Backend = b
+		if changed, err := be.Complete("6", in); err != nil || !changed {
+			t.Fatalf("Complete = %v, %v", changed, err)
+		}
+		it, err := be.Get("6")
+		if err != nil || it.Closed || !slices.Contains(it.Labels, "blocked") {
+			t.Errorf("Get = %+v, %v; want open with the blocked label", it, err)
+		}
+		if again, err := be.Complete("6", in); err != nil || again {
+			t.Errorf("Complete twice = %v, %v; want a no-op", again, err)
+		}
+	})
 }
 
 // TestCapabilitiesMatchInterfaces: a backend declares an optional capability

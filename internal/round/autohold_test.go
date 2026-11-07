@@ -1,6 +1,7 @@
 package round
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,6 +14,23 @@ type notedRemote struct{ *fakeRemote }
 func (notedRemote) NoteGet(_, kind string) (string, bool, error) {
 	if kind == "design" {
 		return "the design", true, nil
+	}
+	return "", false, nil
+}
+
+// brokenRemote is a fakeRemote whose notes cannot be read.
+type brokenRemote struct{ *fakeRemote }
+
+func (brokenRemote) NoteGet(_, _ string) (string, bool, error) {
+	return "", false, errors.New("tracker down")
+}
+
+// whitespaceRemote is a fakeRemote whose design note holds only whitespace.
+type whitespaceRemote struct{ *fakeRemote }
+
+func (whitespaceRemote) NoteGet(_, kind string) (string, bool, error) {
+	if kind == "design" {
+		return "  \t ", true, nil
 	}
 	return "", false, nil
 }
@@ -36,6 +54,8 @@ func TestAutoHold(t *testing.T) {
 		{fr, "3", ""},
 		{fr, "4", "Major"},
 		{notedRemote{fr}, "4", ""},
+		{whitespaceRemote{fr}, "4", "Major"},
+		{brokenRemote{fr}, "4", "tracker down"},
 	}
 	for _, tc := range cases {
 		got := autoHold(tc.be, *fr.items[tc.id])
