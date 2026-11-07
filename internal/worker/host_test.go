@@ -35,7 +35,7 @@ type fakeHost struct {
 	sent       string
 	spawnOpts  host.SpawnOpts
 	onSend     func() // runs inside Send, before it returns
-	receipts   bool // advertise the DeliveryReconciler side (Core)
+	receipts   bool   // advertise the DeliveryReconciler side (Core)
 }
 
 // unconfirmed is a DeliveryReconciler that never confirms anything.
