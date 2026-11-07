@@ -850,7 +850,8 @@ func (m *migrator) milestoneStatus(mid, status string) error {
 	if err != nil {
 		return err
 	}
-	return be.MilestoneStatus(mid, status)
+	_, err = be.MilestoneStatus(mid, status)
+	return err
 }
 
 // putMilestone copies the milestone plan text to the tracking issue; a text
@@ -860,7 +861,7 @@ func (m *migrator) putMilestone(mid string, ms *migMilestone) error {
 	if err != nil {
 		return err
 	}
-	err = be.MilestonePut(mid, m.rewrite(ms.text, false))
+	_, err = be.MilestonePut(mid, m.rewrite(ms.text, false))
 	if errors.Is(err, backlog.ErrMilestoneText) {
 		m.o.Warn(fmt.Sprintf("%s: plan body not copied (%s)", mid, err.Error()))
 		return nil

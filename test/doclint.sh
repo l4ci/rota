@@ -78,6 +78,15 @@ RC=0; OUT="$(python3 "$SSL/scripts/site-sync.py" "$TMP/sitelane-out" 2>&1)" || R
   || fail "site-sync did not exit with the lane message on a bad lane (rc $RC): $OUT"
 pass "site-sync exits with skills-docs' lane message on a bad lane"
 
+# ── site-sync reports a page missing a required key with the validator's message (#2823) ──
+SSK="$TMP/sitekey"; mkdir -p "$SSK" "$TMP/sitekey-out"
+cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSK/"
+sed -i '/^order: /d' "$SSK/docs/skills/rota-work.md"
+RC=0; OUT="$(python3 "$SSK/scripts/site-sync.py" "$TMP/sitekey-out" 2>&1)" || RC=$?
+[ "$RC" != 0 ] && grep -qF "docs/skills/rota-work.md: missing required key 'order'" <<<"$OUT" && ! grep -qF "Traceback" <<<"$OUT" \
+  || fail "site-sync did not exit with the validator message on a page missing order (rc $RC): $OUT"
+pass "site-sync exits with skills-docs' message on a skill page missing a required key"
+
 # ── site-sync generates the published video catalog (#2538) ──
 OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video catalog: $OUT"
 pass "site-sync generates published episodes and refreshes their media links"

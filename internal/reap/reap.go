@@ -153,19 +153,21 @@ type state struct {
 }
 
 // A finder names the kind it discovers so Find can select sources before
-// invoking them.
+// invoking them, and carries the remover that re-proves and removes one of
+// that kind's candidates, so a kind's safety proof sits in one entry.
 type finder struct {
-	kind string
-	find func(ctx context.Context, s *state) ([]Candidate, error)
+	kind   string
+	find   func(ctx context.Context, s *state) ([]Candidate, error)
+	remove func(ctx context.Context, s *state, c Candidate) error
 }
 
 var finders = []finder{
-	{KindWorktree, findWorktrees},
-	{KindBranch, findBranches},
-	{KindTab, findTabs},
-	{KindProcess, findProcesses},
-	{KindLease, findLeases},
-	{KindSkillCache, findSkillCache},
+	{KindWorktree, findWorktrees, removeWorktree},
+	{KindBranch, findBranches, removeBranch},
+	{KindTab, findTabs, removeTab},
+	{KindProcess, findProcesses, removeProcess},
+	{KindLease, findLeases, removeLease},
+	{KindSkillCache, findSkillCache, removeSkillCache},
 }
 
 // findLeases lists the round lease when its holder is gone. A live, foreign
@@ -529,94 +531,110 @@ func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 	return res
 }
 
+// remove dispatches to the kind's registered remover.
 func (s *state) remove(ctx context.Context, c Candidate) error {
-	switch c.Kind {
-	case KindWorktree:
-		// Re-prove ownership and work retention; git also refuses a dirty or
-		// locked checkout (no --force).
-		if !s.hostOK {
-			return fmt.Errorf("host unavailable; %s left alone", c.Name)
+	for _, f := range finders {
+		if f.kind == c.Kind {
+			return f.remove(ctx, s, c)
 		}
-		co := s.checkoutAt(c.Path)
-		if co == nil || filepath.Dir(co.path) != s.wtDir() {
-			return fmt.Errorf("%s is not a .worktrees/ checkout", c.Path)
-		}
-		if s.live.Worktree(co) {
-			return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
-		}
-		if h := s.heldWorktree(ctx, co); h != "" {
-			return fmt.Errorf("%s holds work: %s; left alone", c.Name, h)
-		}
-		res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
-		errOut, code := res.Stderr, res.ExitCode
-		return gitErr(errOut, code, err)
-	case KindBranch:
-		if s.checkedOut[c.Name] || s.live.Branch(c.Name) {
-			return fmt.Errorf("%s is checked out or protected", c.Name)
-		}
-		if h := s.heldUnmerged(ctx, s.root, c.Name); h != "" {
-			return fmt.Errorf("no longer provably merged: %s", h)
-		}
-		res, err := s.in.Git(ctx, s.root, "branch", "-D", c.Name)
-		errOut, code := res.Stderr, res.ExitCode
-		return gitErr(errOut, code, err)
-	case KindTab:
-		if s.in.Host == nil {
-			return fmt.Errorf("no host")
-		}
-		tabs, err := s.in.Host.Tabs(ctx)
-		if err != nil {
-			return err
-		}
-		for _, t := range tabs {
-			if t.ID == c.Name {
-				if s.live.Tab(t) {
-					return fmt.Errorf("an agent may be running in %s; left open", c.Name)
-				}
-				return s.in.Host.CloseTab(ctx, c.Name)
-			}
-		}
-		return fmt.Errorf("tab %s is gone", c.Name)
-	case KindSkillCache:
-		if s.in.SkillCache == "" || !(s.skillTree(c.Name) || s.orphanExtract(c.Name)) {
-			return fmt.Errorf("%s is not a removable skills cache tree", c.Name)
-		}
-		return os.RemoveAll(filepath.Join(s.in.SkillCache, c.Name))
-	case KindLease:
-		if s.in.Lease == nil {
-			return fmt.Errorf("no lease access")
-		}
-		// ClearStaleLease re-proves staleness under the lease lock.
-		_, cleared, err := s.in.Lease.ClearStaleLease(ctx, s.in.Root)
-		if err == nil && !cleared {
-			return fmt.Errorf("the lease is no longer stale; left alone")
-		}
-		return err
-	case KindProcess:
-		if s.in.Host == nil {
-			return fmt.Errorf("no host")
-		}
-		if c.PID <= 0 {
-			return fmt.Errorf("process candidate %s carries no pid", c.ID)
-		}
-		if !s.hostOK {
-			return fmt.Errorf("host unavailable; process %d left alone", c.PID)
-		}
-		procs, err := s.in.Host.Processes(ctx)
-		if err != nil {
-			return err
-		}
-		for _, p := range procs {
-			if p.PID == c.PID {
-				if s.live.Process(p) {
-					return fmt.Errorf("an agent may own process %d; left running", c.PID)
-				}
-				return s.in.Host.StopProcess(ctx, c.PID)
-			}
-		}
-		return fmt.Errorf("process %d is gone", c.PID)
 	}
 	return fmt.Errorf("unknown kind %s", c.Kind)
+}
+
+// removeWorktree re-proves ownership and work retention; git also refuses a
+// dirty or locked checkout (no --force).
+func removeWorktree(ctx context.Context, s *state, c Candidate) error {
+	if !s.hostOK {
+		return fmt.Errorf("host unavailable; %s left alone", c.Name)
+	}
+	co := s.checkoutAt(c.Path)
+	if co == nil || filepath.Dir(co.path) != s.wtDir() {
+		return fmt.Errorf("%s is not a .worktrees/ checkout", c.Path)
+	}
+	if s.live.Worktree(co) {
+		return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
+	}
+	if h := s.heldWorktree(ctx, co); h != "" {
+		return fmt.Errorf("%s holds work: %s; left alone", c.Name, h)
+	}
+	res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
+	errOut, code := res.Stderr, res.ExitCode
+	return gitErr(errOut, code, err)
+}
+
+func removeBranch(ctx context.Context, s *state, c Candidate) error {
+	if s.checkedOut[c.Name] || s.live.Branch(c.Name) {
+		return fmt.Errorf("%s is checked out or protected", c.Name)
+	}
+	if h := s.heldUnmerged(ctx, s.root, c.Name); h != "" {
+		return fmt.Errorf("no longer provably merged: %s", h)
+	}
+	res, err := s.in.Git(ctx, s.root, "branch", "-D", c.Name)
+	errOut, code := res.Stderr, res.ExitCode
+	return gitErr(errOut, code, err)
+}
+
+func removeTab(ctx context.Context, s *state, c Candidate) error {
+	if s.in.Host == nil {
+		return fmt.Errorf("no host")
+	}
+	tabs, err := s.in.Host.Tabs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range tabs {
+		if t.ID == c.Name {
+			if s.live.Tab(t) {
+				return fmt.Errorf("an agent may be running in %s; left open", c.Name)
+			}
+			return s.in.Host.CloseTab(ctx, c.Name)
+		}
+	}
+	return fmt.Errorf("tab %s is gone", c.Name)
+}
+
+func removeSkillCache(ctx context.Context, s *state, c Candidate) error {
+	if s.in.SkillCache == "" || !(s.skillTree(c.Name) || s.orphanExtract(c.Name)) {
+		return fmt.Errorf("%s is not a removable skills cache tree", c.Name)
+	}
+	return os.RemoveAll(filepath.Join(s.in.SkillCache, c.Name))
+}
+
+func removeLease(ctx context.Context, s *state, c Candidate) error {
+	if s.in.Lease == nil {
+		return fmt.Errorf("no lease access")
+	}
+	// ClearStaleLease re-proves staleness under the lease lock.
+	_, cleared, err := s.in.Lease.ClearStaleLease(ctx, s.in.Root)
+	if err == nil && !cleared {
+		return fmt.Errorf("the lease is no longer stale; left alone")
+	}
+	return err
+}
+
+func removeProcess(ctx context.Context, s *state, c Candidate) error {
+	if s.in.Host == nil {
+		return fmt.Errorf("no host")
+	}
+	if c.PID <= 0 {
+		return fmt.Errorf("process candidate %s carries no pid", c.ID)
+	}
+	if !s.hostOK {
+		return fmt.Errorf("host unavailable; process %d left alone", c.PID)
+	}
+	procs, err := s.in.Host.Processes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range procs {
+		if p.PID == c.PID {
+			if s.live.Process(p) {
+				return fmt.Errorf("an agent may own process %d; left running", c.PID)
+			}
+			return s.in.Host.StopProcess(ctx, c.PID)
+		}
+	}
+	return fmt.Errorf("process %d is gone", c.PID)
 }
 
 func gitErr(errOut string, code int, err error) error {

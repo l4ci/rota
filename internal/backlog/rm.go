@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/status"
 )
@@ -255,7 +256,7 @@ func (f *File) planFiles(id string) []string {
 	sort.Strings(names)
 	out := make([]string, len(names))
 	for i, n := range names {
-		out[i] = ".rota/plans/" + n
+		out[i] = rotatree.Rel(rotatree.PlansDir, n)
 	}
 	return out
 }
@@ -334,7 +335,7 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 			}
 			if dir := detailDir(id); dir != "" {
 				if _, err := os.Stat(f.rota(dir, id+".md")); err == nil {
-					info.DetailFile = ".rota/" + dir + "/" + id + ".md"
+					info.DetailFile = rotatree.Rel(dir, id+".md")
 					detail = append(detail, info.DetailFile)
 				}
 			}

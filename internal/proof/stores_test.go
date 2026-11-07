@@ -10,21 +10,18 @@ import (
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/artifact/artifacttest"
-	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
 // Both stores keep rows the same way: same idempotence, same row format, no
 // rows for an item that has none yet.
 func TestStoresShareTheVerbs(t *testing.T) {
 	notes := artifacttest.NewNotes()
-	root := project(t)
+	root := t.TempDir()
 	for _, s := range []struct {
 		name, id string
 		st       Store
 	}{
-		{"files", "B07", Files(root)},
+		{"files", "B07", flat(t)},
 		{"notes", "7", newTestNotes(root, notes)},
 	} {
 		t.Run(s.name, func(t *testing.T) {
@@ -32,24 +29,24 @@ func TestStoresShareTheVerbs(t *testing.T) {
 				t.Fatalf("show before add: %v %v %v", rows, lines, err)
 			}
 			o := AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ok", Sha: "abc1234"}
-			if row, changed, err := Add(s.st, root, s.id, proofDay, o); err != nil || !changed || row.Check != "unit tests" {
+			if row, changed, err := Add(s.st, s.id, proofDay, o); err != nil || !changed || row.Check != "unit tests" {
 				t.Fatalf("add: %+v %v %v", row, changed, err)
 			}
-			if _, changed, err := Add(s.st, root, s.id, proofDay, o); err != nil || changed {
+			if _, changed, err := Add(s.st, s.id, proofDay, o); err != nil || changed {
 				t.Errorf("identical add: changed=%v err=%v", changed, err)
 			}
 			o.Result = "FAIL"
-			if _, changed, err := Add(s.st, root, s.id, proofDay, o); err != nil || !changed {
+			if _, changed, err := Add(s.st, s.id, proofDay, o); err != nil || !changed {
 				t.Errorf("second row: changed=%v err=%v", changed, err)
 			}
 			rows, _, err := Show(s.st, s.id)
 			if err != nil || len(rows) != 2 || rows[0].Result != "PASS" || rows[1].Result != "FAIL" {
 				t.Errorf("show: %+v %v", rows, err)
 			}
-			if _, _, err := Add(s.st, root, s.id, proofDay, AddOpts{Check: " ", Result: "PASS", Evidence: "e"}); exitOf(err) != 2 {
+			if _, _, err := Add(s.st, s.id, proofDay, AddOpts{Check: " ", Result: "PASS", Evidence: "e"}); exitOf(err) != 2 {
 				t.Errorf("empty check: %v, want exit 2", err)
 			}
-			if _, _, err := Add(s.st, root, s.id, proofDay, AddOpts{Check: "c", Result: "MAYBE", Evidence: "e"}); exitOf(err) != 2 {
+			if _, _, err := Add(s.st, s.id, proofDay, AddOpts{Check: "c", Result: "MAYBE", Evidence: "e"}); exitOf(err) != 2 {
 				t.Errorf("bad result: %v, want exit 2", err)
 			}
 		})
@@ -78,13 +75,13 @@ func (n *slowNotes) NotePut(ref, kind, text string) (bool, error) {
 
 // Overlapping appends on one item keep every measured row, in both stores.
 func TestConcurrentAddsKeepEveryRow(t *testing.T) {
-	root := project(t)
+	root := t.TempDir()
 	notes := &slowNotes{Notes: artifacttest.NewNotes()}
 	for _, s := range []struct {
 		name, id string
 		st       Store
 	}{
-		{"files", "B07", Files(root)},
+		{"files", "B07", flat(t)},
 		{"notes", "7", newTestNotes(root, notes)},
 	} {
 		t.Run(s.name, func(t *testing.T) {
@@ -95,7 +92,7 @@ func TestConcurrentAddsKeepEveryRow(t *testing.T) {
 				go func(i int) {
 					defer wg.Done()
 					o := AddOpts{Check: fmt.Sprintf("check %d", i), Result: "PASS", Evidence: "ok", Sha: "abc1234"}
-					if _, _, err := Add(s.st, root, s.id, proofDay, o); err != nil {
+					if _, _, err := Add(s.st, s.id, proofDay, o); err != nil {
 						t.Errorf("add %d: %v", i, err)
 					}
 				}(i)
@@ -113,20 +110,17 @@ func newTestNotes(root string, n artifact.Notes) Store {
 	return NewNotes(filepath.Join(root, ".rota"), func() (artifact.Notes, error) { return n, nil })
 }
 
-// Two checkouts of one repository (the main one and a linked worktree) share
-// the issue note, so their appends must share a lock too.
-func TestConcurrentAddsAcrossWorktreesKeepEveryRow(t *testing.T) {
-	repo := gittest.NewRepo(t, "main")
-	wt := filepath.Join(t.TempDir(), "wt")
-	gittest.Run(t, repo, "worktree", "add", "-q", wt, "-b", "other")
+// Two stores over one issue note (two checkouts of one repository) must share
+// a lock through the lockDir the caller hands them. Which directory that is
+// (the git common dir's rota state) is the caller's call; here it is any
+// directory both stores are given.
+func TestConcurrentAddsAcrossStoresSharingALockDirKeepEveryRow(t *testing.T) {
+	lockDir := t.TempDir()
 	notes := &slowNotes{Notes: artifacttest.NewNotes()}
+	repo := "checkout-a"
 	stores := map[string]Store{}
-	for _, root := range []string{repo, wt} {
-		cd, err := rotastatetest.CommonDir(root)
-		if err != nil {
-			t.Fatal(err)
-		}
-		stores[root] = NewNotes(rotastate.Dir(cd), func() (artifact.Notes, error) { return notes, nil })
+	for _, root := range []string{repo, "checkout-b"} {
+		stores[root] = NewNotes(lockDir, func() (artifact.Notes, error) { return notes, nil })
 	}
 	const n = 3
 	var wg sync.WaitGroup
@@ -136,7 +130,7 @@ func TestConcurrentAddsAcrossWorktreesKeepEveryRow(t *testing.T) {
 			go func(root string, st Store, i int) {
 				defer wg.Done()
 				o := AddOpts{Check: fmt.Sprintf("check %d in %s", i, filepath.Base(root)), Result: "PASS", Evidence: "ok", Sha: "abc1234"}
-				if _, _, err := Add(st, root, "7", proofDay, o); err != nil {
+				if _, _, err := Add(st, "7", proofDay, o); err != nil {
 					t.Errorf("add %d: %v", i, err)
 				}
 			}(root, st, i)

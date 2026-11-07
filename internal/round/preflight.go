@@ -169,6 +169,6 @@ func (e Env) canRecordHarness(be backlog.Backend) bool {
 	if be.Capabilities().IssueIDs {
 		return e.forgeOn(be)
 	}
-	_, ok := be.(backlog.HarnessSetter)
+	_, ok := backlog.Optional[backlog.HarnessSetter](be, func(c backlog.Capabilities) bool { return c.HarnessField })
 	return ok
 }

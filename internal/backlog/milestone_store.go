@@ -13,8 +13,10 @@ type milestoneOps interface {
 	MilestoneAdd(mid, title, summary string, depends []string, kind, today string) (string, error)
 	MilestoneList() ([]ms.Entry, error)
 	MilestoneShow(mid string) (string, error)
-	MilestonePut(mid, text string) error
-	MilestoneStatus(mid, status string) error
+	// MilestonePut and MilestoneStatus report whether the write changed the
+	// milestone, so the store never reads it back to find out.
+	MilestonePut(mid, text string) (changed bool, err error)
+	MilestoneStatus(mid, status string) (changed bool, err error)
 }
 
 // MilestoneStore is the ms.Store of one repo's tracker.
@@ -42,36 +44,10 @@ func (t trackerMilestones) Show(id string) (string, error) {
 	return text + "\n", err
 }
 
-func (t trackerMilestones) Put(id, text string) (bool, error) {
-	before, err := t.ops.MilestoneShow(id)
-	if err != nil {
-		return false, err
-	}
-	if err := t.ops.MilestonePut(id, text); err != nil {
-		return false, err
-	}
-	after, err := t.ops.MilestoneShow(id)
-	if err != nil {
-		return false, err
-	}
-	return before != after, nil
-}
+func (t trackerMilestones) Put(id, text string) (bool, error) { return t.ops.MilestonePut(id, text) }
 
 func (t trackerMilestones) SetStatus(id, status string) (bool, error) {
-	rows, err := t.ops.MilestoneList()
-	if err != nil {
-		return false, err
-	}
-	was := ""
-	for _, r := range rows {
-		if r.ID == id {
-			was = r.Status
-		}
-	}
-	if err := t.ops.MilestoneStatus(id, status); err != nil {
-		return false, err
-	}
-	return was != status, nil
+	return t.ops.MilestoneStatus(id, status)
 }
 
 func (trackerMilestones) OnTracker() bool { return true }

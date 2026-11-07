@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -516,9 +517,9 @@ func (m configScreen) updateEdit(k tui.Key) (tui.Model, tui.Cmd) {
 // write sends raw to the store; the rows are read again once it is written.
 func (m configScreen) write(row int, raw string, local bool) (tui.Model, tui.Cmd) {
 	r, store := m.rows[row], m.store
-	where := ".rota/config.json"
+	where := rotatree.Rel(rotatree.ConfigFile)
 	if local {
-		where = ".rota/config.local.json"
+		where = rotatree.Rel(rotatree.ConfigLocalFile)
 	}
 	if store.Global() {
 		where = "the global config"
@@ -711,9 +712,9 @@ func (m configScreen) describe() tui.Detail {
 func sourceWhere(src string) string {
 	switch src {
 	case "local":
-		return ".rota/config.local.json"
+		return rotatree.Rel(rotatree.ConfigLocalFile)
 	case "project":
-		return ".rota/config.json"
+		return rotatree.Rel(rotatree.ConfigFile)
 	case "global":
 		return "the global config"
 	}

@@ -100,8 +100,7 @@ func newFollowUp(f Finding, pr, kind, v string) followUp {
 		}
 		fmt.Fprintf(&b, "\nWhere: `%s`\n", loc)
 	}
-	// The line backlog's deferredDependency keys on: keep its wording.
-	fmt.Fprintf(&b, "\nDeferred %s finding from the %s %s verdict on %s.\n", f.Severity, kind, v, pr)
+	b.WriteString("\n" + DeferredLine(f.Severity, kind, v, pr) + "\n")
 	if patch := strings.TrimRight(f.Patch, "\n"); patch != "" {
 		fence := "```"
 		for strings.Contains(patch, fence) {
@@ -115,6 +114,18 @@ func newFollowUp(f Finding, pr, kind, v string) followUp {
 	}
 	return followUp{key: findingKey(title, f.File), block: b.String(), ac: ac}
 }
+
+// DeferredLine is the line a filed --file-deferred item carries to name the
+// verdict it came from. IsDeferredFinding recognises it: change both together.
+func DeferredLine(severity, kind, v, pr string) string {
+	return fmt.Sprintf("Deferred %s finding from the %s %s verdict on %s.", severity, kind, v, pr)
+}
+
+var deferredRe = regexp.MustCompile(`(?m)^Deferred \w+ finding from the .* verdict on `)
+
+// IsDeferredFinding reports whether body holds a DeferredLine: the item was
+// filed by `verdict add --file-deferred`, so its fix builds on the source PR.
+func IsDeferredFinding(body string) bool { return deferredRe.MatchString(body) }
 
 var (
 	whereRe = regexp.MustCompile("(?m)^Where: `([^`]+)`$")
