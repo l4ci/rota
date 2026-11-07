@@ -210,3 +210,21 @@ func TestPromptsSkillsUpdateReportsWithoutInstall(t *testing.T) {
 		t.Fatalf("prompts report: got %s, want %s", got, want)
 	}
 }
+
+// TestPromptsTextStripsTerminalEscapes: .rota/prompts.json is tracked, so a
+// cloned repo controls its text; human output must not pass escapes through.
+func TestPromptsTextStripsTerminalEscapes(t *testing.T) {
+	dir := agentsProject(t, `{}`)
+	sum := func(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
+	base := "old\x1b]0;title\x07"
+	quoted, _ := json.Marshal(base)
+	store := fmt.Sprintf(`{"version":1,"sections":{"agents.explorer.report":[{"revision":1,"baseline":%s,"baselineDigest":%q,"override":"Team \u001b[2J{{status}} {{closing}}"}],"gone\u001b[31m":[{"revision":1,"baseline":"b","baselineDigest":%q,"override":null}]}}`, quoted, sum(base), sum("b"))
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "prompts.json"), []byte(store), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"prompts", "show", "agents.explorer.report"}, {"prompts", "list"}} {
+		if out := promptCommand(t, dir, args...); strings.ContainsAny(out, "\x1b\x07") {
+			t.Errorf("%v: control characters in text output: %q", args, out)
+		}
+	}
+}
