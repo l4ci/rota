@@ -2,37 +2,11 @@ package hook
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/stamp"
 )
-
-// HandoffMarker is the first line of a handoff the Stop hook asked for.
-const HandoffMarker = "<!-- rota-handoff: orchestrator -->"
-
-// Handoff is what the filesystem says about the handoff file.
-type Handoff struct {
-	Exists  bool
-	ModTime time.Time
-}
-
-// Fresh is the freshness rule of every D1 and D2 decision: the handoff exists
-// and was written no more than maxAge ago. A consumed handoff (renamed to
-// .consumed) does not exist, so it is never fresh.
-func (h Handoff) Fresh(maxAge time.Duration, now time.Time) bool {
-	return h.Exists && now.Sub(h.ModTime) <= maxAge
-}
-
-// StatHandoff reads the handoff file's presence and mtime.
-func StatHandoff(path string) Handoff {
-	fi, err := os.Stat(path)
-	if err != nil || !fi.Mode().IsRegular() {
-		return Handoff{}
-	}
-	return Handoff{Exists: true, ModTime: fi.ModTime()}
-}
 
 // StopIn is the Stop payload's relevant fields.
 type StopIn struct {
