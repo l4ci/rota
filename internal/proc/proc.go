@@ -52,6 +52,10 @@ type Cmd struct {
 	// Group runs the command in its own process group and kills the whole
 	// group on cancel, for a shell whose child would otherwise hold the pipes.
 	Group bool
+	// Kill, with Group, replaces the group kill on cancel: it gets the
+	// command's pid (the group's id) and must stop the group and whatever else
+	// it owns, such as descendants that moved to their own group or session.
+	Kill func(pid int) error
 	// MaxOutput, when > 0, keeps at most that many bytes of stdout and of
 	// stderr (of the shared buffer when Combined); the rest is read and
 	// discarded so the child never blocks on a full pipe, and Result.Truncated
@@ -91,6 +95,9 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	if c.Group {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+		if c.Kill != nil {
+			cmd.Cancel = func() error { return c.Kill(cmd.Process.Pid) }
+		}
 	}
 	cmd.WaitDelay = WaitDelay
 	out, errb := &capBuf{max: c.MaxOutput}, &capBuf{max: c.MaxOutput}

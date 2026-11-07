@@ -106,6 +106,10 @@ type TrainOpts struct {
 	// ItemBody is GateOpts.ItemBody for every member's behaviour run (#915);
 	// nil leaves the run out.
 	ItemBody func(issue string) (body string, found bool, err error)
+	// RequestID is the receipt id of this call. When set, the train writes a
+	// live marker under it (see TrainRun) so `rota worker train cancel` can
+	// find and stop it; "" writes none.
+	RequestID string
 }
 
 // owned gives a stage its own writable slices, including member flags.
@@ -179,6 +183,8 @@ type TrainResult struct {
 	Plan *TrainPlan
 	// Stop is the evidence of a red tier under OnFailStop; nil otherwise.
 	Stop *TrainStop
+	// Log is the verify log a cancelled train kept on disk; "" otherwise.
+	Log string
 	// VerifyTime is the time spent verifying the whole train; DiagnoseTime the
 	// time spent on prefix runs that look for the culprit (#2753).
 	VerifyTime, DiagnoseTime time.Duration
@@ -261,11 +267,25 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
 		return e.train(ctx, root, o, nil, nil)
 	}
+	if o.RequestID != "" {
+		release, err := e.claimTrainRun(ctx, root, o)
+		if err != nil && ctx.Err() == nil {
+			return TrainResult{}, err
+		}
+		if release != nil {
+			defer release()
+		}
+	}
 	err := e.withLandingRun(ctx, root, strings.Join(o.Targets, ", "), o.NoWait, func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
-		trainLedger(e, o.Round, root, res, gated)
+		book := e
+		if ctx.Err() != nil && res.Verdict != GatePass {
+			res, err = cancelledTrain(res), nil
+			book.Ctx = context.WithoutCancel(e.Ctx) // the ledger still records the cancel
+		}
+		trainLedger(book, o.Round, root, o.RequestID, res, gated)
 		if cache.dirty {
 			if serr := cache.save(); serr != nil {
 				res.Notes = append(res.Notes, "TRAIN-CACHE not saved — "+serr.Error())
@@ -273,9 +293,12 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		return err
 	})
-	if errors.Is(err, errLandingBusy) {
+	switch {
+	case errors.Is(err, errLandingBusy):
 		res = TrainResult{Base: o.Base, Verdict: GateRunning, Err: err.Error()}
 		err = nil
+	case err != nil && ctx.Err() != nil: // cancelled while queued for the land lock
+		res, err = cancelledTrain(TrainResult{Base: o.Base, Members: membersOf(o.Targets)}), nil
 	}
 	return res, err
 }
@@ -1045,6 +1068,12 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			} else {
 				res.VerifyTime += time.Since(began)
 			}
+			if err == nil && ctx.Err() != nil && !r.OK() {
+				// A command the cancel stopped is no finding: keep its log, run no
+				// bisect, flake record or cache write on it.
+				res.Log = r.LogPath
+				return r, ctx.Err()
+			}
 			if err == nil {
 				prs := []string{}
 				for _, m := range res.Members[:k] {
@@ -1096,7 +1125,9 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			return true, nil
 		}
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
-		blame(key)
+		if ctx.Err() == nil {
+			blame(key)
+		}
 		return stop, err
 	}
 	// 4b. E2E: the most expensive tier runs once, on the train result, after
@@ -1170,6 +1201,9 @@ func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerifi
 		return v, result, false, nil
 	}
 	for i := 0; i < v.passing; i++ {
+		if ctx.Err() != nil { // cancelled: run no further member's steps
+			return v, result, true, nil
+		}
 		m := res.Members[i]
 		// Files an earlier member's steps wrote must not reach this member's run.
 		if _, code := e.git(p.scratch, "clean", "-q", "-fdx"); code != 0 {
@@ -1182,6 +1216,9 @@ func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerifi
 		}
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews,
 			ItemBody: o.ItemBody, BehaviourDir: p.scratch})
+		if ctx.Err() != nil { // a step the cancel stopped is no finding
+			return v, result, true, nil
+		}
 		if err != nil {
 			return v, result, true, err
 		}
@@ -1237,6 +1274,9 @@ func (t *trainRun) land(p trainPlan, result TrainResult, prefix trainVerified) (
 		}
 	}
 	for i := 0; i < passing; i++ {
+		if ctx.Err() != nil { // cancelled: land no further member
+			return res, nil
+		}
 		m := res.Members[i]
 		if i > 0 { // each landing must start from exactly the tree the scratch merge had at that point
 			if p.remote {
@@ -1250,7 +1290,11 @@ func (t *trainRun) land(p trainPlan, result TrainResult, prefix trainVerified) (
 			}
 		}
 		t.gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
+		// A landing that started runs to its end: a cancel mid-push would leave
+		// the member's state unknown, so it takes effect before the next member.
+		shielded := e
+		shielded.Ctx = context.WithoutCancel(e.Ctx)
+		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
 		res.Notes = appendNew(res.Notes, gr.Warnings...)
 		res.Changed = res.Changed || gr.Changed

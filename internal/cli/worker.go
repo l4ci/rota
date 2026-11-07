@@ -61,7 +61,9 @@ func workerCommands() *Command {
 		}},
 		{Name: "done", Summary: "refuse a finished slot without a test.fast proof row at HEAD, else mark it done", Verb: workerDone},
 		{Name: "gate", Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
-		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain},
+		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain, Subs: []*Command{
+			{Name: "cancel", Summary: "cancel the running train that holds a request id", Verb: workerTrainCancel},
+		}},
 		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
 			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},

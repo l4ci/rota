@@ -1091,6 +1091,15 @@ One merge approval covers the whole train. Bounces are not counted.
 
 To find the members that can go together before a train refuses, run `rota worker train <members> --base <branch> --plan`. It runs no tests and pushes nothing. It lists the member pairs that conflict, names the largest conflict-free subset in merge order, lists the rest as order-blocked with the member each conflicts with, and prints the `rota worker train ... --order ...` line that lands that subset. It exits 0 with or without conflicts.
 
+To stop a train that is running or still queued, run `rota worker train cancel --request-id <id>`.
+The id is the `requestId` the train printed (pass your own with `--request-id` to know it up front),
+and `rota round status` lists each running train with it. Ctrl-C or SIGTERM on the train does the
+same. The train stops its test commands and anything they started, removes its scratch tree, frees
+the land lock and answers with verdict `cancelled`: the members that landed before the cancel (none
+if it was still verifying), and the path of the verify log, which it keeps. A cancel blames no
+member and counts no bounce; `rota receipt show <id>` reports it as `cancelled`. There is no resume:
+run the train again.
+
 The train remembers what it has verified. Each passing `test.full` or `test.e2e` run is recorded in
 `.rota/train-cache.json` (per developer, gitignored) under the tier, the base commit and the ordered
 member heads. A re-run of the same train, or a bisect step that repeats a combination, reuses the pass

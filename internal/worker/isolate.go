@@ -90,7 +90,7 @@ func IsolatedShell(environ []string) func(ctx context.Context, dir, command stri
 	return func(ctx context.Context, dir, command string) (string, int) {
 		res, err := proc.Run(ctx, proc.Cmd{
 			Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
-			Timeout: proc.NoTimeout, Combined: true, Group: true,
+			Timeout: proc.NoTimeout, Combined: true, Group: true, Kill: killTree,
 		})
 		if err != nil {
 			return err.Error(), 127

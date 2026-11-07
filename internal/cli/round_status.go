@@ -165,6 +165,8 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 			d.Set("holding", strList(holding))
 			lines = append(lines, holding...)
 		}
+		trainLines := trainStatus(c, root, d)
+		lines = append(lines, trainLines...)
 		frozen, ferr := landfreeze.Load(ctx, c.deps().Git, root)
 		if ferr != nil && !errors.Is(ferr, rotastate.ErrNotRepo) {
 			c.Warn("%s", landfreeze.UnreadableLine(ferr))

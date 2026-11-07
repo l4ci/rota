@@ -19,6 +19,7 @@ func receiptCommands() *Command {
 const (
 	receiptCompleted = "completed" // a done receipt: read the stored result
 	receiptPending   = "pending"   // a failed receipt: replay with the same id
+	receiptCancelled = "cancelled" // a cancelled train: settled, read the stored result
 	receiptAbsent    = "absent"    // no receipt: inspect the state, then decide
 )
 
@@ -47,8 +48,12 @@ func runReceiptShow(c *Ctx, args []string) (Result, error) {
 	d.Set("verb", e.Verb)
 	d.Set("attempts", e.Attempts)
 	d.Set("at", e.At)
-	if e.Status == receipt.Done {
-		d.Set("state", receiptCompleted)
+	if e.Status == receipt.Done || e.Status == receipt.Cancelled {
+		state, text := receiptCompleted, fmt.Sprintf("completed: %s applied (%s); the stored result is the answer, do not re-run\n%s", e.Verb, e.At, e.Text)
+		if e.Status == receipt.Cancelled {
+			state, text = receiptCancelled, fmt.Sprintf("cancelled: %s was cancelled (%s) and is settled; %s\n%s", e.Verb, e.At, e.Message, e.Text)
+		}
+		d.Set("state", state)
 		if len(e.Data) > 0 {
 			v, err := jsonx.Decode(e.Data)
 			if err != nil {
@@ -57,7 +62,10 @@ func runReceiptShow(c *Ctx, args []string) (Result, error) {
 			d.Set("result", v)
 		}
 		d.Set("text", e.Text)
-		return Result{Data: d, Text: fmt.Sprintf("completed: %s applied (%s); the stored result is the answer, do not re-run\n%s", e.Verb, e.At, e.Text)}, nil
+		if e.Status == receipt.Cancelled {
+			d.Set("message", e.Message)
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 	d.Set("state", receiptPending)
 	if len(e.Args) > 0 {
