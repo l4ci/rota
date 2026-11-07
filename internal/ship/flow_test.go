@@ -158,7 +158,7 @@ func mergeGit() *fakeGit {
 
 func TestMergeBranchRefusals(t *testing.T) {
 	var ref *Refusal
-	if _, _, err := MergeBranch(mergePorts(mergeGit()), "main", "main", "msg"); !errors.As(err, &ref) || ref.By != "base branch" {
+	if _, err := MergeBranch(mergePorts(mergeGit()), "main", "main", "msg"); !errors.As(err, &ref) || ref.By != "base branch" {
 		t.Errorf("base: %v", err)
 	}
 	g := mergeGit()
@@ -167,7 +167,7 @@ func TestMergeBranchRefusals(t *testing.T) {
 	g.out["merge --abort"] = ""
 	// A conflict aborts the merge and refuses.
 	cg := &conflictGit{fakeGit: g}
-	if _, _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
+	if _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
 		t.Errorf("conflict: %v", err)
 	}
 	if !contains(cg.calls, "merge --abort") {
@@ -218,6 +218,12 @@ func TestMergePR(t *testing.T) {
 	if !errors.As(err, &rf) {
 		t.Errorf("refused: %v", err)
 	}
+	ref := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}}
+	var gr *GateRefusedError
+	_, err = MergePR(fakeMerger{res: backlog.MergeResult{Refusal: ref}}, 3, nil, nil)
+	if !errors.As(err, &gr) || gr.Ref != ref {
+		t.Errorf("gate refusal: %v", err)
+	}
 	other := errors.New("other")
 	if _, err = MergePR(fakeMerger{err: other}, 3, nil, nil); !errors.Is(err, other) {
 		t.Errorf("passthrough: %v", err)
@@ -228,16 +234,16 @@ func TestVerdictCheck(t *testing.T) {
 	rec := verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abc"}
 	store := verdict.Store{Branches: map[string][]verdict.Record{"feat": {rec}}}
 	g := &fakeGit{out: map[string]string{"rev-parse --short feat": "abc"}}
-	err := VerdictCheck{Git: g, Store: store}.Block("feat")
-	var vb *VerdictBlockedError
+	err := verdict.Check{Git: g, Store: store}.Block("feat")
+	var vb *verdict.BlockedError
 	if !errors.As(err, &vb) || vb.Stale {
 		t.Fatalf("err = %v", err)
 	}
 	g.out["rev-parse --short feat"] = "def"
-	if err = (VerdictCheck{Git: g, Store: store}).Block("feat"); !errors.As(err, &vb) || !vb.Stale {
+	if err = (verdict.Check{Git: g, Store: store}).Block("feat"); !errors.As(err, &vb) || !vb.Stale {
 		t.Errorf("stale: %v", err)
 	}
-	if err = (VerdictCheck{Git: g, Store: store}).Block("other"); err != nil {
+	if err = (verdict.Check{Git: g, Store: store}).Block("other"); err != nil {
 		t.Errorf("unrecorded branch blocked: %v", err)
 	}
 }
@@ -374,7 +380,7 @@ func TestRestore(t *testing.T) {
 func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
 	g := mergeGit()
 	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true, "merge --abort": true}
-	_, _, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
+	_, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
 	if err == nil || !strings.Contains(err.Error(), "git merge --abort failed") || !strings.Contains(err.Error(), "CONFLICT") || strings.Contains(err.Error(), "merge aborted") {
 		t.Fatalf("cleanup failure lost: %v", err)
 	}
@@ -389,9 +395,10 @@ func TestMergeBranchApproveRefusalIsTyped(t *testing.T) {
 	p := mergePorts(g)
 	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: "envelope"}
 	p.Approve = func(string) (*exitcode.Refusal, error) { return want, nil }
-	_, ref, err := MergeBranch(p, "feat", "main", "msg")
-	if ref != want || err != nil {
-		t.Errorf("refusal = %+v, err %v", ref, err)
+	_, err := MergeBranch(p, "feat", "main", "msg")
+	var gr *GateRefusedError
+	if !errors.As(err, &gr) || gr.Ref != want {
+		t.Errorf("err = %v, want *GateRefusedError carrying the refusal", err)
 	}
 }
 
@@ -400,8 +407,8 @@ func TestExpiredReportDoesNotMaskLocalFail(t *testing.T) {
 		{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "1111111"},
 		{Kind: verdict.ReviewQuality, Verdict: verdict.Pass, Combined: verdict.Pass, Sha: "1111111", FromReport: true},
 	}}}
-	err := (VerdictCheck{Store: store}).BlockAt("feat", "2222222")
-	var blocked *VerdictBlockedError
+	err := (verdict.Check{Store: store}).BlockAt("feat", "2222222")
+	var blocked *verdict.BlockedError
 	if !errors.As(err, &blocked) || !blocked.Stale || blocked.Record.Kind != verdict.ReviewSpec {
 		t.Fatalf("expired cached PASS masked local stale FAIL: %v", err)
 	}

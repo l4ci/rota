@@ -81,6 +81,8 @@ pass "site-sync exits with skills-docs' lane message on a bad lane"
 # ── site-sync generates the published video catalog (#2538) ──
 OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video catalog: $OUT"
 pass "site-sync generates published episodes and refreshes their media links"
+OUT="$(python3 "$TESTDIR/video_catalog_test.py" 2>&1)" || fail "video_catalog: $OUT"
+pass "video_catalog reads 32/64-bit mvhd and rejects a missing duration"
 
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even

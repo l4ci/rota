@@ -69,6 +69,9 @@
     "./internal/verdict": [
       "TestReviewKindLoopsStayInVerdict"
     ],
+    "./internal/version": [
+      "TestLDFlagsSpellingsMatch"
+    ],
     "./internal/worker": [
       "TestEventTableCoversEveryKind",
       "TestForgeModesMatchPythonFake",
