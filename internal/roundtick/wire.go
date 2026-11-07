@@ -53,6 +53,8 @@ type World interface {
 	Candidates(ctx context.Context) ([]round.Candidate, error)
 	Assign(ctx context.Context, id string) (round.Assigned, error)
 	Review() Reviewer
+	// FollowUp supplies the follow-up step (#2580); the zero value has none.
+	FollowUp() FollowUpSources
 	Audit(Action)
 	Say(string)
 	Warn(string)
@@ -159,6 +161,8 @@ func NewEnv(w World, cfg Config) Env {
 	if !cfg.Observe {
 		e.Review = w.Review()
 	}
+	// The follow-up list is a read; observation never calls its Start.
+	e.FollowUp = w.FollowUp()
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
 		res, err := w.Assign(ctx, id)
 		if err != nil {

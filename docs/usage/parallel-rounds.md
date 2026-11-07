@@ -719,13 +719,15 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
 2. gate and merge every finished PR, as one `worker train` when several wait, at most
    `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`.
    When train fill thresholds are enabled, wait for their count or age rule first;
-3. run the architecture-review trigger (`rota round architecture`): when the
+3. start the [follow-ups](#follow-ups) a person asked for, before any backlog work and within
+   the same `round.autopilotCap`;
+4. run the architecture-review trigger (`rota round architecture`): when the
    threshold is reached, or a slot is idle with nothing assignable, mint the review items
    (`round.architectureEvery` 0 never mints), one audit line per mint;
-4. assign the first ready candidate of the round's scope to each idle slot, at most
+5. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
-   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`). Likewise
+   down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
    go on, and the next tick assigns once an item has landed.
 
@@ -797,7 +799,60 @@ A worker that printed `ROTA-DONE` keeps its PR open for review. When a reviewer 
 - `round.reviewLoop: manual` (the default): `rota round watch` wakes you with a `review/<slot>` change and `rota round tick` lists a `review` item. You run `rota round review-relay <slot>`.
 - `round.reviewLoop: auto`: `round watch` and `round tick` run it themselves, and a tick lists it as `did review-relay`.
 
-`review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.freshAt` (default 2) the relay is a transfer instead: the branch moves to a free slot at the same tier with a brief of the findings still open in the last review and the review link, so the second attempt does not inherit a context that already holds the wrong model. With no free slot it relays in place and says so. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and under `auto` the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges. Under `manual` the tick only lists the review item and merges as before; under `auto` it skips the merge for a slot it relayed or could not relay. The same text is written to the slot's durable inbox first: the pane copy can cross a worker's `ROTA-DONE`, so `rota worker inbox <slot>` shows the worker what it missed and `rota worker done` refuses while that mail is unread.
+`review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.freshAt` (default 2) the relay is a transfer instead: the branch moves to a free slot at the same tier with a brief of the findings still open in the last review and the review link, so the second attempt does not inherit a context that already holds the wrong model. With no free slot it relays in place and says so. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and under `auto` the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges. Under `manual` the tick only lists the review item and merges as before; under `auto` it skips the merge for a slot it relayed or could not relay. The same text is written to the slot's durable inbox first: the pane copy can cross a worker's `ROTA-DONE`, so `rota worker inbox <slot>` shows the worker what it missed and `rota worker done` refuses while that mail is unread or its request remains pending.
+
+### Reading and resolving inbox requests
+
+New REVIEW and BASE mail is actionable. Reading it, or acknowledging it with
+`rota worker inbox <slot> --ack --upto <seq>`, leaves its request pending. The
+worker must resolve each request before reporting done:
+
+```sh
+rota worker inbox nia
+rota worker inbox nia --handled 3 --reason "Fixed the reported cases and posted proof on the PR"
+rota worker inbox nia --returned 4 --reason "This request belongs to another issue"
+```
+
+`--handled` records the completed work; `--returned` hands the request back for
+orchestrator routing. Both require a reason. Returning a request grants no
+permission to expand the assignment. Informational mail and records written by
+older rota versions retain the acknowledgement-only path.
+
+An interrupted worker sees pending requests again even if it already acknowledged
+them. When an assignment ends, unresolved actionable requests are returned with
+their original task and attempt. The next assignment does not inherit those
+obligations. The orchestrator reads `rota worker inbox <slot> --all` to see returned
+requests and their reasons, then explicitly routes any follow-up through the
+normal assignment or relay flow. The same history includes handled requests.
+
+## Follow-ups
+
+A PR in review has no slot. When a person then asks for more work on it, that request should not
+wait behind fresh backlog work. rota reads each queued PR for review input newer than what its worker
+already saw. The PR becomes a follow-up when that input includes at least one comment or review by a
+person: a login with write access that is not a bot (`<name>[bot]`, GitLab's `project_<n>_bot`
+users). rota's own marked comments (main's `review-bounce` of a support PR included, since rota
+posts it under the maintainer's login), approvals, review verdicts and input from bots or from users
+without write access never make a follow-up. Once a person has asked, the bot and stranger comments
+and a `review-bounce` go to the worker in the same brief. Telling a person from a stranger needs the
+forge's write-access lookup, which rota has for GitHub only: on GitLab no PR becomes a follow-up.
+
+Under `round.reviewLoop: auto` the autopilot starts a follow-up before it assigns any backlog item:
+`round transfer` moves the issue to an idle round slot with the review input as the brief, and counts
+a bounce. Everything a transfer checks still applies: the claim, overlap, the harness and account
+checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it, and
+`round transfer` by hand takes a free round slot: only the `auto` tick uses reserve slots.
+
+`round.followupReserve: N` (default 0) keeps the N roster names after the round's slots for
+follow-ups. `round start` provisions them; `round assign` and the tick never put backlog work there.
+When every round slot is busy, a follow-up takes a free reserve slot: an idle one, or one whose
+follow-up is done (its PR goes back to review). A reserve slot that holds work drains like any slot
+past `round.slots`, so restarting the watch or the round loses nothing. `round status` shows a busy
+reserve slot as `draining` and an idle one as a plain idle row.
+
+A follow-up that cannot start stays pending and the tick lists it as a `followup` item with the
+reason: no idle slot and no reserve, the reserve busy, a roster too short for the reserve, accounts
+cooling down, `round.reviewLoop: manual`, the bounce cap, or the transfer's refusal.
 
 ## Asking the maintainer
 
@@ -957,6 +1012,27 @@ CI verification, `rota test run` and `## Try it` steps do not retry. Wrapper out
 not identify assertion failures also stays red; this repo's `test/gate.sh` needs the separate
 adapter tracked in #2196 before it can use sequential retries.
 
+### Test maintenance
+
+Each local gate and train run also writes a `verification` row to the round ledger: the tier, its
+wall time and each configured command's wall time and exit code. Cached and CI answers write none,
+so older rounds and CI-verified merges have no timing, and the audit says so rather than reporting
+zero.
+
+`rota test-audit` turns those rows, `.rota/flakes.jsonl` and `.rota/gate-audit.jsonl` into a report,
+then adds what the repo shows: runs per Playwright project and spec from `playwright test --list`
+(each config, with the repo's own installed runner; nothing is downloaded), test files per source
+module, helpers declared in more than one test file, `package.json` test scripts that no `test.fast`,
+`test.full` or `test.e2e` command references, and README counts that disagree with `--list`. It runs
+no suite and changes no test. A report with no missing evidence records an audit checkpoint.
+
+Two opt-in thresholds (0, the default, disables each) make `/rota-work` and `/rota-orchestrate`
+suggest a maintenance round in their reconcile step: `test.audit.maxFullGateSeconds` (the latest
+measured `test.full` after the last audit is slower) and `test.audit.prsBetweenAudits` (that many
+merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. Every item a
+maintenance round creates carries two rules in its Out of scope: no assertion is dropped without a note
+in the PR body, and stored refs and the pixel tolerance stay untouched.
+
 After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of the slot's issue on the merged tree, in order, stopping at the first failure. A step fails on a non-zero exit or a missing `expect:` substring (`verify-failed`, nothing lands). The steps run only when the issue's author and last editor have write access on the forge (a file issue source runs unchecked); otherwise the gate notes `BEHAVIOUR-SKIP` and continues. The transcript goes to `.rota/qa-runs/behaviour/` and a `behaviour` verdict is recorded. `--check-only` and `--no-verify` skip the run.
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
@@ -1014,6 +1090,15 @@ member that conflicts with the base plus the ones before it is `merge-failed` wi
 One merge approval covers the whole train. Bounces are not counted.
 
 To find the members that can go together before a train refuses, run `rota worker train <members> --base <branch> --plan`. It runs no tests and pushes nothing. It lists the member pairs that conflict, names the largest conflict-free subset in merge order, lists the rest as order-blocked with the member each conflicts with, and prints the `rota worker train ... --order ...` line that lands that subset. It exits 0 with or without conflicts.
+
+To stop a train that is running or still queued, run `rota worker train cancel --request-id <id>`.
+The id is the `requestId` the train printed (pass your own with `--request-id` to know it up front),
+and `rota round status` lists each running train with it. Ctrl-C or SIGTERM on the train does the
+same. The train stops its test commands and anything they started, removes its scratch tree, frees
+the land lock and answers with verdict `cancelled`: the members that landed before the cancel (none
+if it was still verifying), and the path of the verify log, which it keeps. A cancel blames no
+member and counts no bounce; `rota receipt show <id>` reports it as `cancelled`. There is no resume:
+run the train again.
 
 The train remembers what it has verified. Each passing `test.full` or `test.e2e` run is recorded in
 `.rota/train-cache.json` (per developer, gitignored) under the tier, the base commit and the ordered

@@ -237,11 +237,7 @@ func trainHoldingLines(c *Ctx, root string) []string {
 	if err != nil || !fill.Enabled() {
 		return nil
 	}
-	type group struct {
-		count  int
-		oldest time.Time
-	}
-	groups := map[string]group{}
+	groups := map[string][]roundcfg.FillCandidate{}
 	var bases []string
 	seen := map[int]bool{}
 	for _, w := range waitingPRs(c, root) {
@@ -250,22 +246,16 @@ func trainHoldingLines(c *Ctx, root string) []string {
 			continue
 		}
 		seen[n] = true
-		g, known := groups[w.Base]
-		if !known {
+		if _, known := groups[w.Base]; !known {
 			bases = append(bases, w.Base)
 		}
-		g.count++
-		if !w.ReadySince.IsZero() && (g.oldest.IsZero() || w.ReadySince.Before(g.oldest)) {
-			g.oldest = w.ReadySince
-		}
-		groups[w.Base] = g
+		groups[w.Base] = append(groups[w.Base], roundcfg.FillCandidate{ID: fmt.Sprint(n), Ready: w.ReadySince})
 	}
 	now := c.deps().Now()
 	var lines []string
 	for _, base := range bases {
-		g := groups[base]
-		if fill.Due(g.count, g.oldest, now) == "" {
-			lines = append(lines, fill.Holding(base, g.count, g.oldest, now))
+		if d := fill.Decide(base, groups[base], 0, now); d.Holding != "" {
+			lines = append(lines, d.Holding)
 		}
 	}
 	return lines
@@ -279,13 +269,11 @@ func prHashes(prs []string) []string {
 	return out
 }
 
-// trainNudgesWithFill groups reviewed PRs by base and proposes due groups.
-// The zero policy preserves the legacy nudge at two reviewed PRs.
+// trainNudgesWithFill groups reviewed PRs by base and proposes due groups from
+// the shared roundcfg decision. The zero policy preserves the legacy nudge at
+// two reviewed PRs.
 func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.Time) []trainNudge {
-	by := map[string][]string{}
-	oldest := map[string]time.Time{}
-	immediate := map[string][]string{}
-	ages := map[string]time.Time{}
+	cands := map[string][]roundcfg.FillCandidate{}
 	branches := map[string]string{}
 	seen := map[int]bool{}
 	var bases []string
@@ -298,40 +286,22 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 			continue
 		}
 		seen[n] = true
-		if _, known := by[w.Base]; !known {
+		if _, known := cands[w.Base]; !known {
 			bases = append(bases, w.Base)
 		}
-		by[w.Base] = append(by[w.Base], fmt.Sprint(n))
-		ages[fmt.Sprint(n)] = w.ReadySince
-		branches[fmt.Sprint(n)] = w.Branch
-		if w.Immediate {
-			immediate[w.Base] = append(immediate[w.Base], fmt.Sprint(n))
-		}
-		if at := w.ReadySince; !at.IsZero() && (oldest[w.Base].IsZero() || at.Before(oldest[w.Base])) {
-			oldest[w.Base] = at
-		}
+		id := fmt.Sprint(n)
+		cands[w.Base] = append(cands[w.Base], roundcfg.FillCandidate{ID: id, Ready: w.ReadySince, Immediate: w.Immediate})
+		branches[id] = w.Branch
 	}
 	var out []trainNudge
 	for _, b := range bases {
-		prs := by[b]
-		count := len(prs)
-		observedSince := oldest[b]
-		reason := fill.Due(len(prs), oldest[b], now)
-		if fill.Enabled() && reason == "" && len(immediate[b]) > 0 {
-			reason = "review disabled; ready time unavailable, land now"
-			prs = immediate[b]
-			observedSince = time.Time{}
-		}
-		if fill.Enabled() && reason != "" || !fill.Enabled() && len(prs) >= 2 {
-			wait := ""
-			if fill.Enabled() {
-				wait = fill.Wait(observedSince, now)
-			}
-			sort.Slice(prs, func(i, j int) bool { return len(prs[i]) < len(prs[j]) || len(prs[i]) == len(prs[j]) && prs[i] < prs[j] })
-			if fill.Max > 0 && len(prs) > fill.Max {
-				prs = roundcfg.OldestReady(prs, fill.Max, func(pr string) time.Time { return ages[pr] })
-			}
-			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count, Branches: branches})
+		cs := cands[b]
+		sort.Slice(cs, func(i, j int) bool {
+			return len(cs[i].ID) < len(cs[j].ID) || len(cs[i].ID) == len(cs[j].ID) && cs[i].ID < cs[j].ID
+		})
+		d := fill.Decide(b, cs, 0, now)
+		if len(d.Land) > 0 {
+			out = append(out, trainNudge{Base: b, PRs: d.Land, Reason: d.Reason, Wait: d.Wait, ReadyCount: d.Count, Branches: branches})
 		}
 	}
 	return out

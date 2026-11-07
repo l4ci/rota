@@ -77,20 +77,17 @@ func TestVerdictsAreClassified(t *testing.T) {
 
 func TestVerdictMeaningsAreCoherent(t *testing.T) {
 	for v, m := range verdictMeanings {
-		if m.Success && (m.Refusal || m.Bounce) {
+		if m.Success && m.Refusal {
 			t.Errorf("%q succeeds yet refuses or bounces", v)
-		}
-		if m.Refusal && m.Bounce {
-			t.Errorf("%q both refuses and bounces", v)
 		}
 		if m.BlockedBy != "" && !m.Refusal {
 			t.Errorf("%q names blockedBy %q but is no refusal", v, m.BlockedBy)
 		}
-		if m.Bounce && m.Hold {
+		if m.Notify && m.Hold {
 			t.Errorf("%q goes back to a worker, so nobody holds it", v)
 		}
 	}
-	if m := ClassifyVerdict("unheard-of"); m.Success || m.Refusal || m.Bounce || !m.Hold {
+	if m := ClassifyVerdict("unheard-of"); m.Success || m.Refusal || m.Notify || !m.Hold {
 		t.Errorf("an unclassified verdict should be a plain held failure, got %+v", m)
 	}
 }
@@ -127,11 +124,12 @@ func TestClaimLostIsHeldRefusal(t *testing.T) {
 }
 
 // A stale merge and a provenance failure are bookkeeping the worker repairs,
-// not review findings: neither counts toward round.maxBounces (#2072).
-func TestStaleAndProvenanceFailAreNotBounces(t *testing.T) {
+// not review findings: they go back to the worker notify-only and are never
+// held for a person (#2072).
+func TestStaleAndProvenanceFailAreNotifyOnly(t *testing.T) {
 	for _, v := range []string{GateStale, GateProvenanceFail} {
-		if m := ClassifyVerdict(v); m.Bounce {
-			t.Errorf("%q must not count as a bounce: %+v", v, m)
+		if m := ClassifyVerdict(v); !m.Notify || m.Hold || m.Refusal || m.Success {
+			t.Errorf("%q must be notify-only: %+v", v, m)
 		}
 	}
 }

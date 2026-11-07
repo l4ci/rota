@@ -82,6 +82,8 @@ const (
 	// BlockDraining: the slot is past the round's slot count (round.slots,
 	// --slots); it finishes the work it holds and takes nothing new.
 	BlockDraining = blockedby.Draining
+	// BlockMaxBounces: the item is at round.maxBounces; a follow-up does not start.
+	BlockMaxBounces = blockedby.MaxBounces
 	// BlockQuota: every account the worker kind could run under is cooling down.
 	BlockQuota        = blockedby.Quota
 	BlockBriefMissing = blockedby.BriefMissing
@@ -884,7 +886,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if slot == nil {
 			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
-		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
+		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id), false); err != nil {
 			return run, false, err
 		}
 		if why := e.SlotLoginProblem(slot); why != "" {
@@ -1434,7 +1436,7 @@ func claimStep(be Board, id, claimID string, holders int, resuming bool, mine *o
 			holder string
 			err    error
 		)
-		sc, shared := be.(backlog.SharedClaimer)
+		sc, shared := backlog.Optional[backlog.SharedClaimer](be, func(c backlog.Capabilities) bool { return c.SharedClaims })
 		switch {
 		case holders <= 1:
 			won, holder, err = be.Claim(id, claimID)
@@ -1573,7 +1575,7 @@ func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fal
 		return step{name: "harness", skip: func() bool { return true }}
 	}
 	if !be.Capabilities().IssueIDs {
-		hs, ok := be.(backlog.HarnessSetter)
+		hs, ok := backlog.Optional[backlog.HarnessSetter](be, func(c backlog.Capabilities) bool { return c.HarnessField })
 		if !ok {
 			return step{name: "harness field", do: func() error {
 				return blocked(BlockQuota, "%s cannot record the harness pick", be.Name())

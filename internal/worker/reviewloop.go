@@ -205,8 +205,23 @@ func (s *Slot) SetReviewSeen(c string) {
 // moved it) keeps it, so input that arrived while the worker reworked stays new.
 func (s *Slot) BaselineReview(now time.Time) {
 	if s.ReviewSeen() == "" {
-		s.SetReviewSeen(formatCursor(now.Truncate(time.Second).Add(time.Second), nil))
+		s.SetReviewSeen(ReviewBaseline(now))
 	}
+}
+
+// ReviewBaseline is the cursor that starts at now: only input after the next
+// second is new.
+func ReviewBaseline(now time.Time) string {
+	return formatCursor(now.Truncate(time.Second).Add(time.Second), nil)
+}
+
+// ReviewSlot is a queued PR seen as the slot that held it, for the review
+// poll: its origin slot's name, the PR and the record's cursor.
+func (q QueuedPR) ReviewSlot() *Slot {
+	s := NewSlot(q.From, q.Branch, "", q.Base, "")
+	s.SetPR(q.PR)
+	s.SetReviewSeen(q.ReviewSeen)
+	return s
 }
 
 // isReviewBounce reports whether body is main's bounce of a support PR.

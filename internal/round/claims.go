@@ -112,7 +112,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 	if !labelsOK {
 		return
 	}
-	if syncer, ok := e.Board.(backlog.ClaimLabelSyncer); ok {
+	if syncer, ok := backlog.Optional[backlog.ClaimLabelSyncer](e.Board, func(c backlog.Capabilities) bool { return c.ClaimLabels }); ok {
 		refs := map[string]bool{}
 		for id := range held {
 			refs[id] = true

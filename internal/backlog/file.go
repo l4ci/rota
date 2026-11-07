@@ -37,7 +37,7 @@ type File struct {
 func (f *File) Name() string { return "file" }
 
 // Capabilities: BACKLOG.md bullets, no tracker.
-func (f *File) Capabilities() Capabilities { return Capabilities{} }
+func (f *File) Capabilities() Capabilities { return capabilitiesFor(kindFile) }
 
 // Rows reads every open bullet, indented ones too, as the helpers do.
 func (f *File) Rows() ([]Row, error) {

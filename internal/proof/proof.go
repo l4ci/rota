@@ -8,10 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"context"
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -22,8 +20,9 @@ const sep = " · "
 type Row struct{ Date, Check, Result, Sha, Evidence string }
 
 // Store keeps the text an item's proof rows live in. Judging whether id
-// names an item is the store's job: file mode needs a letter and digits and
-// an entry in the backlog (exit 2, 3); issue mode asks the tracker.
+// names an item is the store's job, and the caller builds the store with the
+// means to judge: file mode (Files) takes a Sidecar from the caller; issue
+// mode asks the tracker.
 type Store interface {
 	// Update hands fn the item's text (a starter text when it has none yet)
 	// and stores what fn returns when changed is true, under whatever lock
@@ -35,14 +34,14 @@ type Store interface {
 
 func one(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// AddOpts are Add's arguments; Sha "" means the HEAD of the repository at dir.
+// AddOpts are Add's arguments. Sha is the commit the check ran against, which
+// the caller resolves; "" stores "-" (no commit).
 type AddOpts struct{ Check, Result, Evidence, Sha string }
 
-// Add appends a proof row for id. dir is the working repository, read for
-// HEAD when o.Sha is empty. changed is false when an identical row (check,
+// Add appends a proof row for id. changed is false when an identical row (check,
 // result, sha, evidence; date ignored) already exists. The returned Row
 // carries the whitespace-collapsed values that were stored.
-func Add(s Store, dir, id string, today time.Time, o AddOpts) (row Row, changed bool, err error) {
+func Add(s Store, id string, today time.Time, o AddOpts) (row Row, changed bool, err error) {
 	check, evidence := one(o.Check), one(o.Evidence)
 	if check == "" || evidence == "" {
 		return row, false, exitcode.Errf(exitcode.ExitUsage, "--check and --evidence must not be empty")
@@ -52,7 +51,7 @@ func Add(s Store, dir, id string, today time.Time, o AddOpts) (row Row, changed 
 	}
 	sha := one(o.Sha)
 	if sha == "" {
-		sha = headSha(dir)
+		sha = "-"
 	}
 	row = Row{today.Format("2006-01-02"), check, o.Result, sha, evidence}
 	line := "- " + strings.Join([]string{row.Date, row.Check, row.Result, row.Sha, row.Evidence}, sep)
@@ -99,15 +98,6 @@ func Show(s Store, id string) (rows []Row, lines []string, err error) {
 		return []Row{}, []string{}, nil
 	}
 	return parseRows(content)
-}
-
-// headSha is the abbreviated HEAD of the repository at dir, "-" when there is none.
-func headSha(dir string) string {
-	res, _ := git.Repo{Dir: dir}.Run(context.Background(), "log", "-1", "--format=%h")
-	if sha := one(res.Stdout); sha != "" {
-		return sha
-	}
-	return "-"
 }
 
 // rowLines is the "- " lines of the "## Proof" section of content: the one

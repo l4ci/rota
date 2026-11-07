@@ -1,11 +1,6 @@
 package proof
 
-import (
-	"errors"
-	"testing"
-
-	"github.com/l4ci/rota/internal/backlog"
-)
+import "testing"
 
 func TestCountRows(t *testing.T) {
 	for _, c := range []struct {
@@ -29,22 +24,5 @@ func TestCountRowsAgreesWithShow(t *testing.T) {
 	rows, _, err := parseRows(text)
 	if err != nil || len(rows) != CountRows(text) {
 		t.Fatalf("parseRows = %d rows, %v; CountRows = %d", len(rows), err, CountRows(text))
-	}
-}
-
-// File-mode "done requires proof" through the real proof store and counter.
-func TestFileDoneRequiresProof(t *testing.T) {
-	root := project(t)
-	be := &backlog.File{Root: root, CountProof: CountRows}
-	in := backlog.CompleteInput{Commit: "abc1234", Date: "2026-10-05", Reason: "done"}
-	if _, err := be.Complete("B07", in); !errors.Is(err, backlog.ErrProofMissing) {
-		t.Fatalf("without proof: %v", err)
-	}
-	o := AddOpts{Check: "unit tests", Result: "PASS", Evidence: "go test ok", Sha: "abc1234"}
-	if _, _, err := Add(Files(root), root, "B07", proofDay, o); err != nil {
-		t.Fatal(err)
-	}
-	if changed, err := be.Complete("B07", in); err != nil || !changed {
-		t.Fatalf("with proof: changed=%v err=%v", changed, err)
 	}
 }

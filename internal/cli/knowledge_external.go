@@ -108,10 +108,14 @@ func externalClone(c *Ctx) (extknowledge.Clone, error) {
 	state, _ := projects.StateDir(d.projectsEnv())
 	return extknowledge.Clone{Dir: path, Env: extknowledge.Env{
 		Git: d.Git, Now: d.Now, StateDir: state, TTL: time.Duration(ttl) * time.Minute,
-		NewForge: func(ctx context.Context, dir string) (tracker.Forge, error) {
+		NewForge: func(ctx context.Context, dir string) (extknowledge.PROpener, error) {
 			// The shared knowledge clone has its own origin; the project's
 			// forge.provider and issue tracker do not describe it.
-			return d.forge(ctx, nil, "", dir)
+			f, err := d.forge(ctx, nil, "", dir)
+			if err != nil {
+				return nil, err
+			}
+			return prOpener{f}, nil
 		},
 	}}, nil
 }
@@ -449,4 +453,11 @@ func extLanded(res extknowledge.WriteResult) string {
 // externalFlag defines --external on a knowledge verb.
 func externalFlag(fs *flag.FlagSet) *bool {
 	return fs.Bool("external", false, "act on the external knowledge repo ("+externalKey+") instead of .rota/KNOWLEDGE.md")
+}
+
+// prOpener adapts a tracker forge to extknowledge.PROpener.
+type prOpener struct{ tracker.Forge }
+
+func (p prOpener) OpenPR(ctx context.Context, base, head, title, body string) (string, error) {
+	return p.PRCreate(ctx, tracker.PRSpec{Base: base, Head: head, Title: title, Body: body})
 }

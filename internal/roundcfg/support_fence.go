@@ -34,7 +34,7 @@ const (
 
 var supportFenced = []string{
 	// Merge.
-	"rota worker gate", "rota worker train",
+	"rota worker gate", "rota worker train", "rota worker train cancel",
 	"rota ship merge", "rota ship pr-merge", "rota ship undo",
 	// Runs an arbitrary command.
 	"rota test lock", "rota review probe",
@@ -108,6 +108,8 @@ var supportAllowed = []string{
 	"rota spike list", "rota spike show",
 	"rota status show", "rota statusline dump", "rota summary",
 	"rota test flakes", "rota test ledger check", "rota test run",
+	// Reads records; writes only its gitignored checkpoint under the git common dir.
+	"rota test-audit",
 	"rota tracker suggest-upstream", "rota update", "rota verdict show", "rota version",
 	"rota worker account list", "rota worker pool list", "rota worker prompt-check", "rota worker session check",
 	// The tracker: item, design, plan and proof writers keep their text on the

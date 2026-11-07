@@ -163,7 +163,7 @@ type fileBoard struct {
 }
 
 func (b *fileBoard) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{ClaimWrites: true}
+	return backlog.Capabilities{ClaimWrites: true, HarnessField: true}
 }
 
 func (b *fileBoard) SetHarness(ref, kind string) (bool, error) {

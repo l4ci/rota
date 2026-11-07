@@ -104,6 +104,9 @@ type Settings struct {
 	// transfers the branch to a fresh slot instead of resuming the worker; 0
 	// turns it off.
 	FreshAt int
+	// FollowupReserve is round.followupReserve: how many roster slots past
+	// round.slots only follow-ups a person asked for may take (#2580); 0 is none.
+	FollowupReserve int
 	// LedgerKeep is round.ledgerKeep: how many rounds of the round ledger a
 	// new round keeps; 0 keeps everything.
 	LedgerKeep int
@@ -250,6 +253,9 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	if s.FreshAt, err = config.Int(cfg, config.RoundFreshAtKey, 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.FollowupReserve, err = config.Int(cfg, config.RoundFollowupReserveKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.LedgerKeep, err = config.Int(cfg, config.RoundLedgerKeepKey, 0, config.MaxInt); err != nil {

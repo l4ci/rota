@@ -5,6 +5,7 @@ package fsio
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -171,6 +172,13 @@ func LockPath(path string) string { return path + lockSuffix }
 // the lock if the process dies; the empty .lock file stays in place.
 // Callers taking multiple locks must use a consistent order across operations.
 func Locked(path string, timeout time.Duration, fn func() error) error {
+	return LockedCtx(context.Background(), path, timeout, fn)
+}
+
+// LockedCtx is Locked that also stops waiting when ctx ends, returning
+// ctx.Err() without running fn. A held lock is never interrupted: ctx only
+// bounds the wait.
+func LockedCtx(ctx context.Context, path string, timeout time.Duration, fn func() error) error {
 	lockPath := path + lockSuffix
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o777); err != nil {
 		return err
@@ -193,7 +201,11 @@ func Locked(path string, timeout time.Duration, fn func() error) error {
 			return fmt.Errorf("timed out after %ss waiting for lock %s: %w",
 				jsonx.PyFloat(timeout.Seconds()), lockPath, ErrLockTimeout)
 		}
-		time.Sleep(lockPoll)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(lockPoll):
+		}
 	}
 	return fn()
 }

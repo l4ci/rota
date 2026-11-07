@@ -89,7 +89,7 @@ func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 	if err != nil {
 		return nil, nil
 	}
-	d, ok := gitMtime(root, ".rota/KNOWLEDGE.md")
+	d, ok := gitMtime(root, rotatree.Rel(rotatree.KnowledgeFile))
 	if !ok || !isStale(d, today, days) {
 		return nil, nil
 	}

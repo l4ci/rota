@@ -46,7 +46,7 @@ func TestFileFollowUpsOnIssueBackend(t *testing.T) {
 	}
 }
 
-// The item body is the shape backlog's deferredDependency and the gate read:
+// The item body is the shape round's deferredDependency (via verdict.IsDeferredFinding) and the gate read:
 // a Problem block per finding, the finding's fix (else the neutral line) as its criterion.
 func TestFollowUpBodyShape(t *testing.T) {
 	fs := []Finding{
@@ -190,5 +190,16 @@ func TestDeferredAboveMajorFloor(t *testing.T) {
 	got := DeferredAbove(fs, FloorMajor)
 	if len(got) != 1 || got[0].Title != "m" {
 		t.Errorf("major floor kept %v", got)
+	}
+}
+
+// The deferred line is one contract: what DeferredLine writes, IsDeferredFinding reads.
+func TestDeferredLineRoundTrip(t *testing.T) {
+	line := DeferredLine("minor", "review-spec", "FAIL", "#9")
+	if !IsDeferredFinding("## Problem\n\nx\n\n" + line + "\n\n## Acceptance\n") {
+		t.Errorf("recogniser rejects its own line %q", line)
+	}
+	if IsDeferredFinding("Related to a verdict on #9.\n") {
+		t.Error("recogniser accepts an unrelated body")
 	}
 }

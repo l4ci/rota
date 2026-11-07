@@ -133,7 +133,7 @@ func (u *Umbrella) Name() string { return "issues" }
 
 // Capabilities: tracker issues across sub-repos.
 func (u *Umbrella) Capabilities() Capabilities {
-	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true, ItemStatus: true}
+	return capabilitiesFor(kindUmbrella)
 }
 
 // Rows lists the open issues of every sub-repo, each naming its owner.
@@ -473,6 +473,15 @@ func (u *Umbrella) Release(ref, claimID string) (bool, error) {
 // ReleaseByHand gives the item back as a person's deliberate release.
 func (u *Umbrella) ReleaseByHand(ref, claimID string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.ReleaseByHand(plain, claimID) })
+}
+
+// ClaimComments lists the owning tracker's comments on the item.
+func (u *Umbrella) ClaimComments(key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error) {
+	err = u.onOwner(key.Ref(), func(s *Issues, plain string) (e error) {
+		comments, ok, e = s.ClaimComments(key)
+		return
+	})
+	return
 }
 
 // ClaimLabelDrift reads the owning tracker's derived claim labels.

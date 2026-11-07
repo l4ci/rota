@@ -1,7 +1,6 @@
 package round
 
 import (
-	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,7 +22,7 @@ type noStatusBoard struct {
 }
 
 func (b *noStatusBoard) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}
+	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, SharedClaims: true}
 }
 
 func (b *noStatusBoard) Status(ref string) (*backlog.Status, error) {
@@ -79,7 +78,13 @@ type historyBoard struct {
 	comments []tracker.Comment
 }
 
-func (b *historyBoard) ClaimComments(_ context.Context, _ tracker.IssueKey) ([]tracker.Comment, bool, error) {
+func (b *historyBoard) Capabilities() backlog.Capabilities {
+	c := b.fakeRemote.Capabilities()
+	c.ClaimHistory = true
+	return c
+}
+
+func (b *historyBoard) ClaimComments(_ tracker.IssueKey) ([]tracker.Comment, bool, error) {
 	return b.comments, true, nil
 }
 

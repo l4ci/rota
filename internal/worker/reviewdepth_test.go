@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/reviewpolicy"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -51,19 +52,19 @@ func TestResolveReviewDepthSignals(t *testing.T) {
 	src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat"}
 
 	got, err := ResolveReviewDepth(context.Background(), src)
-	if err != nil || got.Depth != config.DepthLight || got.Signal != config.SignalSize {
+	if err != nil || got.Depth != config.DepthLight || got.Signal != reviewpolicy.SignalSize {
 		t.Fatalf("size: %+v %v", got, err)
 	}
 
 	src.PRBody = func() (string, error) { return "Door: one-way. Blast radius: schema.", nil }
-	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Depth != config.DepthFull || got.Signal != config.SignalDoor {
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Depth != config.DepthFull || got.Signal != reviewpolicy.SignalDoor {
 		t.Fatalf("door: %+v %v", got, err)
 	}
 
 	src.PRBody = nil
 	src.Issue = tracker.NumKey(5)
 	src.Issues = fakeIssueGet{is: tracker.Issue{Body: "## Files\n\n- y.txt\n"}}
-	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Signal != config.SignalScopeDrift || !strings.Contains(got.Why, "x.txt") {
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Signal != reviewpolicy.SignalScopeDrift || !strings.Contains(got.Why, "x.txt") {
 		t.Fatalf("drift: %+v %v", got, err)
 	}
 
@@ -93,7 +94,7 @@ func TestResolveReviewDepthSeesBothSidesOfARename(t *testing.T) {
 	pol.LightBelow = 1000
 	pol.Paths = map[string]config.ReviewDepth{"migrations/**": config.DepthFull}
 	got, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "mv...mv2"})
-	if err != nil || got.Signal != config.SignalPath {
+	if err != nil || got.Signal != reviewpolicy.SignalPath {
 		t.Fatalf("rename out of migrations/: %+v %v", got, err)
 	}
 }
@@ -110,7 +111,7 @@ func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
 	pol.LightBelow = 1000
 	pol.Paths = map[string]config.ReviewDepth{"migrations/**": config.DepthFull}
 	got, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat"})
-	if err != nil || got.Signal != config.SignalPath || !strings.Contains(got.Why, "ä\"x.sql") {
+	if err != nil || got.Signal != reviewpolicy.SignalPath || !strings.Contains(got.Why, "ä\"x.sql") {
 		t.Fatalf("quoted name: %+v %v", got, err)
 	}
 }
@@ -118,8 +119,8 @@ func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
 func TestDoorNote(t *testing.T) {
 	below := config.ReviewPolicy{Default: config.DepthLight}
 	full := config.ReviewPolicy{Default: config.DepthFull}
-	light := ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthLight}}
-	labelNone := ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthNone, Signal: config.SignalLabel}}
+	light := ReviewDepth{Decision: reviewpolicy.Decision{Depth: config.DepthLight}}
+	labelNone := ReviewDepth{Decision: reviewpolicy.Decision{Depth: config.DepthNone, Signal: reviewpolicy.SignalLabel}}
 	for name, c := range map[string]struct {
 		p                config.ReviewPolicy
 		res              ReviewDepth
@@ -129,7 +130,7 @@ func TestDoorNote(t *testing.T) {
 		"no pr":       {below, light, false, false, "; no PR yet, so no Door line was read"},
 		"no forge":    {below, light, false, true, "; no forge to read, so no Door line was read"},
 		"pr read":     {below, light, true, false, ""},
-		"full":        {below, ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthFull}}, false, false, ""},
+		"full":        {below, ReviewDepth{Decision: reviewpolicy.Decision{Depth: config.DepthFull}}, false, false, ""},
 		"label none":  {below, labelNone, false, false, ""},
 		"never below": {full, light, false, false, ""},
 	} {
@@ -171,7 +172,7 @@ func TestReviewDepthBundleTakesHighest(t *testing.T) {
 
 	// a file named by any bundled issue is not scope drift
 	src.Issues = byKeyIssues{lead: {Body: "## Files\n\n- y.txt\n"}, member: {Body: "## Files\n\n- x.txt\n"}}
-	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Signal == config.SignalScopeDrift {
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Signal == reviewpolicy.SignalScopeDrift {
 		t.Fatalf("member's file is drift: %+v %v", got, err)
 	}
 

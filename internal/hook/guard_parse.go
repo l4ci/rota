@@ -1,8 +1,9 @@
 package hook
 
 import (
-	"errors"
 	"strings"
+
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // A small shell tokenizer for the guard (#702). It does not run or expand
@@ -10,8 +11,6 @@ import (
 // and collects the scripts nested in $(...), backticks and process
 // substitution, so the policy sees every command the line would run. Text in
 // an argument is never a command; only argv[0] positions are.
-
-var errUnterminated = errors.New("unterminated quote or substitution")
 
 // parsed is one script: its simple commands in order and the scripts nested
 // inside it (command substitutions).
@@ -21,10 +20,9 @@ type parsed struct {
 }
 
 type scanner struct {
-	s       string
-	i       int
-	nested  []string
+	shlex.Scanner
 	pending []heredoc
+	opEnd   int // index just past the last redirect operator the scanner consumed
 }
 
 type heredoc struct {
@@ -34,7 +32,7 @@ type heredoc struct {
 }
 
 func parseScript(s string) (parsed, error) {
-	sc := &scanner{s: s}
+	sc := &scanner{Scanner: shlex.Scanner{S: s}}
 	var p parsed
 	var cur []string
 	lastEnd := -1 // index just past the last word, for `2>file` fd prefixes
@@ -44,42 +42,49 @@ func parseScript(s string) (parsed, error) {
 		}
 		cur = nil
 	}
-	for sc.i < len(sc.s) {
-		c := sc.s[sc.i]
+	for sc.I < len(sc.S) {
+		c := sc.S[sc.I]
 		switch {
 		case c == ' ' || c == '\t' || c == '\r':
-			sc.i++
+			sc.I++
 		case c == '\n':
-			sc.i++
+			sc.I++
 			flush()
 			if err := sc.skipHeredocs(); err != nil {
 				return p, err
 			}
 		case c == ';' || c == '(' || c == ')':
-			sc.i++
+			sc.I++
 			flush()
 		case c == '|' || (c == '&' && !sc.ampersandIsRedirect()):
-			sc.i++
-			if sc.i < len(sc.s) && sc.s[sc.i] == c {
-				sc.i++
+			sc.I++
+			if sc.I < len(sc.S) && sc.S[sc.I] == c {
+				sc.I++
 			}
 			flush()
-		case c == '#' && (sc.i == 0 || strings.ContainsRune(" \t\n;|&()", rune(sc.s[sc.i-1]))):
-			for sc.i < len(sc.s) && sc.s[sc.i] != '\n' {
-				sc.i++
+		case c == '#' && (sc.I == 0 || strings.ContainsRune(" \t\n;|&()", rune(sc.S[sc.I-1]))):
+			for sc.I < len(sc.S) && sc.S[sc.I] != '\n' {
+				sc.I++
 			}
 		case c == '<' || c == '>':
-			if (sc.peek(1) == '(') && (c == '<' || c == '>') {
-				sc.i++ // process substitution: the ( ends the command and starts a new one
+			if (sc.Peek(1) == '(') && (c == '<' || c == '>') {
+				sc.I++ // process substitution: the ( ends the command and starts a new one
+				sc.opEnd = sc.I
 				continue
 			}
-			if c == '<' && sc.peek(1) == '<' && sc.peek(2) != '<' {
+			if c == '<' && sc.Peek(1) == '<' && sc.Peek(2) != '<' {
 				if err := sc.heredocHeader(); err != nil {
 					return p, err
 				}
 				continue
 			}
-			cur = dropFdPrefix(cur, lastEnd, sc.i)
+			cur = dropFdPrefix(cur, lastEnd, sc.I)
+			if err := sc.redirect(); err != nil {
+				return p, err
+			}
+		case c == '&':
+			// Only reachable when ampersandIsRedirect: `&>file`, `<&3`.
+			// word() stops on a break byte without advancing, so consume it here.
 			if err := sc.redirect(); err != nil {
 				return p, err
 			}
@@ -89,11 +94,11 @@ func parseScript(s string) (parsed, error) {
 				return p, err
 			}
 			cur = append(cur, w)
-			lastEnd = sc.i
+			lastEnd = sc.I
 		}
 	}
 	flush()
-	p.nested = sc.nested
+	p.nested = sc.Nested
 	return p, nil
 }
 
@@ -118,8 +123,8 @@ func isDigits(s string) bool {
 }
 
 func (sc *scanner) peek(n int) byte {
-	if sc.i+n < len(sc.s) {
-		return sc.s[sc.i+n]
+	if sc.I+n < len(sc.S) {
+		return sc.S[sc.I+n]
 	}
 	return 0
 }
@@ -127,21 +132,24 @@ func (sc *scanner) peek(n int) byte {
 // ampersandIsRedirect: `2>&1`, `>&2` and `&>file` are redirections, not
 // command separators.
 func (sc *scanner) ampersandIsRedirect() bool {
-	if sc.i > 0 && (sc.s[sc.i-1] == '>' || sc.s[sc.i-1] == '<') {
+	// The previous byte only counts when the scanner consumed it as an
+	// operator: an escaped or quoted `>` (`echo \>&& cmd`) is a word byte.
+	if sc.I > 0 && sc.opEnd == sc.I && (sc.S[sc.I-1] == '>' || sc.S[sc.I-1] == '<') {
 		return true
 	}
-	return sc.peek(1) == '>'
+	return sc.Peek(1) == '>'
 }
 
 // redirect consumes a redirection operator and its target word.
 func (sc *scanner) redirect() error {
-	for sc.i < len(sc.s) && strings.IndexByte("<>&|", sc.s[sc.i]) >= 0 {
-		sc.i++
+	for sc.I < len(sc.S) && strings.IndexByte("<>&|", sc.S[sc.I]) >= 0 {
+		sc.I++
 	}
-	for sc.i < len(sc.s) && (sc.s[sc.i] == ' ' || sc.s[sc.i] == '\t') {
-		sc.i++
+	sc.opEnd = sc.I
+	for sc.I < len(sc.S) && (sc.S[sc.I] == ' ' || sc.S[sc.I] == '\t') {
+		sc.I++
 	}
-	if sc.i >= len(sc.s) || sc.isBreak(sc.s[sc.i]) {
+	if sc.I >= len(sc.S) || sc.isBreak(sc.S[sc.I]) {
 		return nil
 	}
 	_, err := sc.word()
@@ -154,22 +162,23 @@ func (sc *scanner) isBreak(c byte) bool {
 
 // heredocHeader reads `<<[-] [quote]DELIM[quote]` and queues the body skip.
 func (sc *scanner) heredocHeader() error {
-	sc.i += 2
+	sc.I += 2
+	sc.opEnd = sc.I
 	h := heredoc{}
-	if sc.peek(0) == '-' {
+	if sc.Peek(0) == '-' {
 		h.strip = true
-		sc.i++
+		sc.I++
 	}
-	for sc.i < len(sc.s) && (sc.s[sc.i] == ' ' || sc.s[sc.i] == '\t') {
-		sc.i++
+	for sc.I < len(sc.S) && (sc.S[sc.I] == ' ' || sc.S[sc.I] == '\t') {
+		sc.I++
 	}
-	start := sc.i
+	start := sc.I
 	w, err := sc.word()
 	if err != nil {
 		return err
 	}
 	h.delim = w
-	h.raw = strings.ContainsAny(sc.s[start:sc.i], `'"\\`)
+	h.raw = strings.ContainsAny(sc.S[start:sc.I], `'"\\`)
 	sc.pending = append(sc.pending, h)
 	return nil
 }
@@ -182,16 +191,16 @@ func (sc *scanner) skipHeredocs() error {
 	pending := sc.pending
 	sc.pending = nil
 	for _, h := range pending {
-		bodyStart := sc.i
-		bodyEnd := len(sc.s)
-		for sc.i < len(sc.s) {
-			lineStart := sc.i
-			end := strings.IndexByte(sc.s[sc.i:], '\n')
+		bodyStart := sc.I
+		bodyEnd := len(sc.S)
+		for sc.I < len(sc.S) {
+			lineStart := sc.I
+			end := strings.IndexByte(sc.S[sc.I:], '\n')
 			var line string
 			if end < 0 {
-				line, sc.i = sc.s[sc.i:], len(sc.s)
+				line, sc.I = sc.S[sc.I:], len(sc.S)
 			} else {
-				line, sc.i = sc.s[sc.i:sc.i+end], sc.i+end+1
+				line, sc.I = sc.S[sc.I:sc.I+end], sc.I+end+1
 			}
 			if h.strip {
 				line = strings.TrimLeft(line, "\t")
@@ -204,7 +213,7 @@ func (sc *scanner) skipHeredocs() error {
 		if h.raw {
 			continue
 		}
-		if err := sc.expandBody(sc.s[bodyStart:bodyEnd]); err != nil {
+		if err := sc.expandBody(sc.S[bodyStart:bodyEnd]); err != nil {
 			return err
 		}
 	}
@@ -214,156 +223,26 @@ func (sc *scanner) skipHeredocs() error {
 // expandBody collects the command substitutions of an unquoted here-document
 // body, which bash expands like a double-quoted string.
 func (sc *scanner) expandBody(body string) error {
-	sub := &scanner{s: body}
-	for sub.i < len(sub.s) {
+	sub := &scanner{Scanner: shlex.Scanner{S: body}}
+	for sub.I < len(sub.S) {
 		switch {
-		case sub.s[sub.i] == '\\':
-			sub.i += 2
-		case sub.s[sub.i] == '`':
-			if err := sub.backtick(); err != nil {
+		case sub.S[sub.I] == '\\':
+			sub.I += 2
+		case sub.S[sub.I] == '`':
+			if err := sub.Backtick(); err != nil {
 				return err
 			}
-		case sub.s[sub.i] == '$' && sub.peek(1) == '(':
-			if err := sub.substitution(); err != nil {
+		case sub.S[sub.I] == '$' && sub.Peek(1) == '(':
+			if err := sub.Substitution(); err != nil {
 				return err
 			}
 		default:
-			sub.i++
+			sub.I++
 		}
 	}
-	sc.nested = append(sc.nested, sub.nested...)
+	sc.Nested = append(sc.Nested, sub.Nested...)
 	return nil
 }
 
-// word reads one shell word, resolving quotes and escapes and collecting
-// command substitutions into sc.nested.
-func (sc *scanner) word() (string, error) {
-	var b strings.Builder
-	for sc.i < len(sc.s) {
-		c := sc.s[sc.i]
-		switch {
-		case c == '\\':
-			if sc.i+1 < len(sc.s) {
-				if sc.s[sc.i+1] != '\n' {
-					b.WriteByte(sc.s[sc.i+1])
-				}
-				sc.i += 2
-			} else {
-				sc.i++
-			}
-		case c == '\'':
-			end := strings.IndexByte(sc.s[sc.i+1:], '\'')
-			if end < 0 {
-				return "", errUnterminated
-			}
-			b.WriteString(sc.s[sc.i+1 : sc.i+1+end])
-			sc.i += end + 2
-		case c == '"':
-			if err := sc.doubleQuoted(&b); err != nil {
-				return "", err
-			}
-		case c == '`':
-			if err := sc.backtick(); err != nil {
-				return "", err
-			}
-		case c == '$' && sc.peek(1) == '(':
-			if err := sc.substitution(); err != nil {
-				return "", err
-			}
-		case sc.isBreak(c):
-			return b.String(), nil
-		default:
-			b.WriteByte(c)
-			sc.i++
-		}
-	}
-	return b.String(), nil
-}
-
-func (sc *scanner) doubleQuoted(b *strings.Builder) error {
-	sc.i++ // opening quote
-	for sc.i < len(sc.s) {
-		c := sc.s[sc.i]
-		switch {
-		case c == '"':
-			sc.i++
-			return nil
-		case c == '\\' && sc.i+1 < len(sc.s):
-			n := sc.s[sc.i+1]
-			if strings.IndexByte("$`\"\\\n", n) >= 0 {
-				if n != '\n' {
-					b.WriteByte(n)
-				}
-			} else {
-				b.WriteByte('\\')
-				b.WriteByte(n)
-			}
-			sc.i += 2
-		case c == '`':
-			if err := sc.backtick(); err != nil {
-				return err
-			}
-		case c == '$' && sc.peek(1) == '(':
-			if err := sc.substitution(); err != nil {
-				return err
-			}
-		default:
-			b.WriteByte(c)
-			sc.i++
-		}
-	}
-	return errUnterminated
-}
-
-func (sc *scanner) backtick() error {
-	j := sc.i + 1
-	for j < len(sc.s) && sc.s[j] != '`' {
-		if sc.s[j] == '\\' {
-			j++
-		}
-		j++
-	}
-	if j >= len(sc.s) {
-		return errUnterminated
-	}
-	sc.nested = append(sc.nested, sc.s[sc.i+1:j])
-	sc.i = j + 1
-	return nil
-}
-
-// substitution consumes `$(...)`, or `$((...))` arithmetic, which is not a
-// script. Parentheses inside quotes do not count.
-func (sc *scanner) substitution() error {
-	arith := sc.peek(2) == '('
-	start := sc.i + 2
-	depth, j := 1, start
-	for j < len(sc.s) && depth > 0 {
-		switch sc.s[j] {
-		case '\\':
-			j++
-		case '\'':
-			if end := strings.IndexByte(sc.s[j+1:], '\''); end >= 0 {
-				j += end + 1
-			}
-		case '"':
-			for j++; j < len(sc.s) && sc.s[j] != '"'; j++ {
-				if sc.s[j] == '\\' {
-					j++
-				}
-			}
-		case '(':
-			depth++
-		case ')':
-			depth--
-		}
-		j++
-	}
-	if depth > 0 {
-		return errUnterminated
-	}
-	if !arith {
-		sc.nested = append(sc.nested, sc.s[start:j-1])
-	}
-	sc.i = j
-	return nil
-}
+// word reads one shell word through the shared quote core.
+func (sc *scanner) word() (string, error) { return sc.Word(sc.isBreak) }

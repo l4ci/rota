@@ -1,33 +1,51 @@
 // Package postgate is the item bookkeeping that follows a merge gate or a merge
-// train: a landed PR ends its item's clocks and counts, a PR the gate sends
-// back to its worker counts one bounce, and an item bounced round.maxBounces
-// times is parked for a human. Gate and train share one rule here, so the verbs
-// and the round autopilot cannot drift apart.
+// train: a landed PR ends its item's clocks and bounce count, and a PR the gate
+// sends back to its worker (a stale merge, a provenance failure) is told on the
+// PR without counting. No gate or train verdict counts a bounce; review bounces
+// are counted by the round review verbs. Gate and train share one rule here, so
+// the verbs and the round autopilot cannot drift apart.
 package postgate
 
 import (
-	"fmt"
-	"strings"
-
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// classify says what a verdict means to the bookkeeping. A variable so the
-// tests can give a verdict the bounce meaning no shipped verdict carries now
-// (a stale merge and a provenance failure go back to the worker uncounted).
-var classify = worker.ClassifyVerdict
+// Book is the item bookkeeping a landing leaves behind: the operations Gate
+// and Train need, so they run against an in-memory fake without a .rota tree.
+// WorkerBook is the production adapter.
+type Book interface {
+	// ClearItemStart ends the item's wall-clock (round.itemTimeoutMinutes).
+	ClearItemStart(root, issue string) error
+	// ClearBestOf drops the item's best-of record.
+	ClearBestOf(root, issue string) error
+	// ClearBounces forgets the item's bounce count.
+	ClearBounces(root, issue string) error
+	// PostReviewBounce tells a support machine's worker its PR was sent back.
+	// It is a no-op for any other branch.
+	PostReviewBounce(root, branch, pr, head, why string) error
+}
 
-// Park sends an item to a human: the move `round transfer --to human` makes.
-// note is the comment it leaves on the item.
-type Park func(issue, note string) error
+var _ Book = WorkerBook{}
 
-// Outcome is what the bookkeeping did for one item. Bounces is the item's
-// count after a bounce (0 when the verdict was no bounce), Parked whether the
-// count reached round.maxBounces and the item was parked.
-type Outcome struct {
-	Bounces int
-	Parked  bool
+// WorkerBook adapts a worker.Env to Book.
+type WorkerBook struct{ Env worker.Env }
+
+func (b WorkerBook) ClearItemStart(root, issue string) error {
+	return worker.ClearItemStart(root, issue)
+}
+func (b WorkerBook) ClearBestOf(root, issue string) error { return worker.ClearBestOf(root, issue) }
+
+func (b WorkerBook) ClearBounces(root, issue string) error {
+	store, err := b.Env.BounceStore(root)
+	if err != nil {
+		return err
+	}
+	return store.Clear(issue)
+}
+
+func (b WorkerBook) PostReviewBounce(root, branch, pr, head, why string) error {
+	_, err := b.Env.PostReviewBounce(root, branch, pr, head, why)
+	return err
 }
 
 // Failure is a bookkeeping step that failed for one target. The verdict stands;
@@ -37,53 +55,42 @@ type Failure struct {
 	Err    error
 }
 
-// Gate does the per-item bounce accounting after a real gate run (never
-// --check-only: that would count a peek). A pass forgets the item's count and
-// ends its clocks. A verdict that bounces sends the PR back to its worker: it
-// counts, and at round.maxBounces the item is parked instead (the PR stays
-// open) so it is never re-dispatched silently. A stale merge and a provenance
-// failure are not bounces (worker.verdictMeanings): they count nothing and
-// never park the item, but a support machine's worker is still told on its PR.
-func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
+// Gate does the item bookkeeping after a real gate run (never --check-only:
+// that would post on a peek). A pass forgets the item's bounce count and ends
+// its clocks. A stale merge and a provenance failure are bookkeeping the worker
+// repairs (worker.verdictMeanings): they count nothing and never park the item,
+// but a support machine's worker is still told on its PR.
+func Gate(book Book, root, issue string, r worker.GateResult) error {
 	if issue == "" {
-		return Outcome{}, nil
+		return nil
 	}
-	switch m := classify(r.Verdict); {
+	switch m := worker.ClassifyVerdict(r.Verdict); {
 	case r.OK():
-		return Outcome{}, landed(env, root, issue)
-	case m.Bounce:
-		return bounce(env, root, issue, r, park)
+		return landed(book, root, issue)
 	case m.Notify:
-		return Outcome{}, notify(env, root, r)
+		return notify(book, root, r)
 	}
-	return Outcome{}, nil
+	return nil
 }
 
-// Train does the same accounting after a merge train, for every member it
+// Train does the same bookkeeping after a merge train, for every member it
 // names. issues maps a train target to its item; a target with none (a slot
 // without one) is skipped. A landed member ends its item's clocks and count. A
-// culprit whose verdict bounces counts like a gate bounce.
-func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[string]string, r worker.TrainResult, park Park) []Failure {
+// culprit whose verdict notifies is told on its PR.
+func Train(book Book, round *worker.RoundMemo, root string, issues map[string]string, r worker.TrainResult) []Failure {
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
-			if err := landed(env, root, issue); err != nil {
+			if err := landed(book, root, issue); err != nil {
 				fails = append(fails, Failure{m.Target, err})
 			}
 		}
 	}
-	if issue := issues[r.Culprit]; issue != "" {
+	if issue := issues[r.Culprit]; issue != "" && worker.ClassifyVerdict(r.Verdict).Notify {
 		g := trainCulprit(issues, r)
 		g.Slot, g.Round = r.Culprit, round
-		switch m := classify(r.Verdict); {
-		case m.Bounce:
-			if _, err := bounce(env, root, issue, g, park); err != nil {
-				fails = append(fails, Failure{r.Culprit, err})
-			}
-		case m.Notify:
-			if err := notify(env, root, g); err != nil {
-				fails = append(fails, Failure{r.Culprit, err})
-			}
+		if err := notify(book, root, g); err != nil {
+			fails = append(fails, Failure{r.Culprit, err})
 		}
 	}
 	return fails
@@ -91,66 +98,19 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 
 // landed ends an item whose PR landed: its wall-clock (round.itemTimeoutMinutes),
 // its best-of record and its bounce count.
-func landed(env worker.Env, root, issue string) error {
-	if err := worker.ClearItemStart(root, issue); err != nil {
+func landed(book Book, root, issue string) error {
+	if err := book.ClearItemStart(root, issue); err != nil {
 		return err
 	}
-	if err := worker.ClearBestOf(root, issue); err != nil {
+	if err := book.ClearBestOf(root, issue); err != nil {
 		return err
 	}
-	store, err := env.BounceStore(root)
-	if err != nil {
-		return err
-	}
-	return store.Clear(issue)
+	return book.ClearBounces(root, issue)
 }
 
 // notify tells a support machine's worker its PR was sent back, with no count
 // and no park. The post is idempotent per head, so a tick that gates the same
 // head again posts nothing new.
-func notify(env worker.Env, root string, r worker.GateResult) error {
-	_, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
-	return err
-}
-
-// bounce counts one bounce for the item and parks it at round.maxBounces. A
-// failure to park is returned, the count stands.
-func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
-	// r.Slot echoes the gate argument, a PR number after its slot moved on; the
-	// slot the target resolved to names the ledger row.
-	set, err := roundcfg.FromConfig(env.WithDefaults().Config(root))
-	if err != nil {
-		return Outcome{}, err
-	}
-	store, err := env.BounceStore(root)
-	if err != nil {
-		return Outcome{}, err
-	}
-	// A support machine's worker learns of the bounce on its PR (#1598). The
-	// post is idempotent per head, so it also goes out for a head already
-	// counted: a failed post whose undo failed too still lands on the retry.
-	res, err := worker.Bounce(store, r.Round, issue, r.TargetSlot, r.SHA, set.MaxBounces, func(rec worker.BounceRecord) error {
-		if worker.AtCap(rec.N, set.MaxBounces) {
-			return nil // this bounce reaches the cap: it is parked below, not sent back
-		}
-		_, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
-		return err
-	})
-	if err != nil {
-		return Outcome{}, err
-	}
-	n := res.N
-	if !worker.AtCap(n, set.MaxBounces) {
-		return Outcome{Bounces: n}, res.Err()
-	}
-	why, _, _ := strings.Cut(r.Err, "\n")
-	what := r.PR
-	if what == "" {
-		what = "branch " + r.Branch
-	}
-	note := fmt.Sprintf("The merge gate sent %s back %d time(s) (round.maxBounces is %d), so it is parked for a human instead of going back to a worker. Last refusal: %s", what, n, set.MaxBounces, why)
-	if err := park(issue, note); err != nil {
-		return Outcome{Bounces: n}, fmt.Errorf("could not park %s as needs-human: %w", issue, err)
-	}
-	return Outcome{Bounces: n, Parked: true}, store.Clear(issue)
+func notify(book Book, root string, r worker.GateResult) error {
+	return book.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
 }

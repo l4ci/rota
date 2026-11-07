@@ -155,6 +155,9 @@ type Env struct {
 	// is minted or assigned. <= 0 means no limit. Merges and repairs run as usual.
 	Batch     int
 	OpenItems func(ctx context.Context) int
+	// FollowUp is the follow-up step (#2580): queued PRs a person asked to
+	// continue start before backlog work. The zero value has none.
+	FollowUp FollowUpSources
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -354,12 +357,17 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if e.batchFull(ctx) {
 		r.BatchFull = true
 	}
+	// A follow-up reopens no item, so a full batch does not hold it.
+	started, taken, err := e.followUps(ctx, &r)
+	if err != nil {
+		return r, err
+	}
 	if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
 		minted, err := e.review(ctx, &r)
 		if err != nil {
 			return r, err
 		}
-		if err := e.assign(ctx, &r, minted); err != nil {
+		if err := e.assign(ctx, &r, minted, started, taken); err != nil {
 			return r, err
 		}
 	}
@@ -533,33 +541,28 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			if len(ts) == 0 {
 				continue
 			}
-			var oldest time.Time
-			if e.ReadySince != nil {
-				for _, t := range ts {
-					if at := e.ReadySince(t); !at.IsZero() && (oldest.IsZero() || at.Before(oldest)) {
-						oldest = at
-					}
+			cands := make([]roundcfg.FillCandidate, len(ts))
+			for i, t := range ts {
+				cands[i].ID = t
+				if e.ReadySince != nil {
+					cands[i].Ready = e.ReadySince(t)
 				}
 			}
 			now := time.Now()
 			if e.Now != nil {
 				now = e.Now()
 			}
-			if e.TrainFill.Due(len(ts), oldest, now) == "" {
-				line := e.TrainFill.Holding(b, len(ts), oldest, now)
+			d := e.TrainFill.Decide(b, cands, remaining, now)
+			if len(d.Land) == 0 {
 				key := fmt.Sprintf("%s:%d/%d", b, len(ts), e.TrainFill.Max)
-				r.FillStatus = append(r.FillStatus, line)
+				r.FillStatus = append(r.FillStatus, d.Holding)
 				r.Filling[b] = key
 				if e.Filling[b] != key {
-					r.Holding = append(r.Holding, line)
+					r.Holding = append(r.Holding, d.Holding)
 				}
 				continue
 			}
-			limit := remaining
-			if e.TrainFill.Max > 0 {
-				limit = min(limit, e.TrainFill.Max)
-			}
-			ts = roundcfg.OldestReady(ts, limit, e.ReadySince)
+			ts = d.Land
 		}
 		out = append(out, e.land(ctx, r, ts, b)...)
 		remaining -= len(ts)
@@ -660,10 +663,13 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 	return ids, nil
 }
 
-func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
+// assign hands ready candidates to idle active slots, within the cap less the
+// follow-ups this tick already started, and never onto a slot one took
+// (observation leaves the registry as it was, so Slots still shows it idle).
+func (e Env) assign(ctx context.Context, r *Result, minted []string, started int, taken []string) error {
 	idle := 0
 	for _, s := range e.Slots() {
-		if e.Active != nil && !slices.Contains(e.Active(), s.Name) {
+		if e.Active != nil && !slices.Contains(e.Active(), s.Name) || slices.Contains(taken, s.Name) {
 			continue
 		}
 		if worker.IsIdle(s.State) || s.State == "" {
@@ -673,10 +679,10 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		}
 	}
 	n := idle
-	if c := e.cap(); n > c {
+	if c := e.cap() - started; n > c {
 		n = c
 	}
-	if n == 0 {
+	if n <= 0 {
 		return nil
 	}
 	// The minted reviews go first: they are the reason the tick minted them.

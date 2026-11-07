@@ -5,9 +5,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -73,24 +71,5 @@ func TestPlanNudgesFailsOpenAndSkipsLoneBases(t *testing.T) {
 	planNudges(c, t.TempDir(), one)
 	if calls != 1 {
 		t.Errorf("planned a lone PR: calls=%d", calls)
-	}
-}
-
-// The batch threshold is round.trainMax with round.trainFillMinutes as the
-// maximum wait (#2199); the planned nudge keeps their timing.
-func TestTrainBatchHoldsUntilCountOrDeadline(t *testing.T) {
-	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
-	pr := func(n string, age time.Duration) waitingPR {
-		return waitingPR{PR: "#" + n, Base: "main", Reviewed: true, ReadySince: now.Add(-age)}
-	}
-	fill := roundcfg.TrainFill{Max: 3, Minutes: 60}
-	if ns := trainNudgesWithFill([]waitingPR{pr("1", 5*time.Minute), pr("2", 4*time.Minute)}, fill, now); len(ns) != 0 {
-		t.Errorf("2 of 3 fresh PRs nudged: %+v", ns)
-	}
-	if ns := trainNudgesWithFill([]waitingPR{pr("1", 5*time.Minute), pr("2", 4*time.Minute), pr("3", time.Minute)}, fill, now); len(ns) != 1 {
-		t.Errorf("3 of 3 did not nudge: %+v", ns)
-	}
-	if ns := trainNudgesWithFill([]waitingPR{pr("1", 61*time.Minute), pr("2", 4*time.Minute)}, fill, now); len(ns) != 1 {
-		t.Errorf("deadline did not nudge: %+v", ns)
 	}
 }

@@ -58,7 +58,7 @@ func (e Env) withLandLockMode(ctx context.Context, root, holder string, noWait b
 		if noWait {
 			return errLandingBusy
 		}
-		return fsio.Locked(path, landLockTimeout, held(true))
+		return fsio.LockedCtx(ctx, path, landLockTimeout, held(true))
 	}
 	return err
 }
