@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -24,7 +24,7 @@ func blockedRefusal(d *jsonx.Object, by, msg, hint string, extra ...any) (Result
 // verdictBlocked is the refusal for a recorded FAIL verdict. withVerdict adds
 // the record's verdict, which the ship paths report and the gate's d already
 // carries as the gate verdict.
-func verdictBlocked(vb *ship.VerdictBlockedError, d *jsonx.Object, withVerdict bool) (Result, error) {
+func verdictBlocked(vb *verdict.BlockedError, d *jsonx.Object, withVerdict bool) (Result, error) {
 	extra := []any{"kind", vb.Record.Kind}
 	if withVerdict {
 		extra = append(extra, "verdict", vb.Record.Verdict)

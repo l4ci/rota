@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -13,7 +12,7 @@ import (
 // envelope moved into refusal(): the wire shape skills parse. They are copied,
 // not called, so the test compares against the old shape and not the new code.
 
-func legacyRecordedFail(vb *ship.VerdictBlockedError, d *jsonx.Object) (Result, error) {
+func legacyRecordedFail(vb *verdict.BlockedError, d *jsonx.Object) (Result, error) {
 	d.Set("blockedBy", "verdict")
 	d.Set("kind", vb.Record.Kind)
 	d.Set("sha", vb.Record.Sha)
@@ -22,7 +21,7 @@ func legacyRecordedFail(vb *ship.VerdictBlockedError, d *jsonx.Object) (Result, 
 	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
 }
 
-func legacyShipVerdict(vb *ship.VerdictBlockedError) (Result, error) {
+func legacyShipVerdict(vb *verdict.BlockedError) (Result, error) {
 	d := gitObj("blockedBy", "verdict", "kind", vb.Record.Kind, "verdict", vb.Record.Verdict, "sha", vb.Record.Sha, "stale", vb.Stale, "changed", false)
 	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
 }
@@ -67,7 +66,7 @@ func gateBase() *jsonx.Object {
 }
 
 func TestRefusalEnvelopeMatchesLegacyShape(t *testing.T) {
-	vb := &ship.VerdictBlockedError{Branch: "b", Record: verdict.Record{Kind: "quality", Verdict: "FAIL", Sha: "abc"}, Stale: true}
+	vb := &verdict.BlockedError{Branch: "b", Record: verdict.Record{Kind: "quality", Verdict: "FAIL", Sha: "abc"}, Stale: true}
 	cases := []struct {
 		name        string
 		legacy, now func() (Result, error)
