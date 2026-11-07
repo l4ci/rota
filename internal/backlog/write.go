@@ -350,7 +350,7 @@ func (f *File) SetHarness(ref, kind string) (bool, error) {
 		if err != nil {
 			return err
 		}
-		re := regexp.MustCompile(`(?m)^- \*\*\[` + regexp.QuoteMeta(ref) + `\].*$`)
+		re := activeLine(ref)
 		m := re.FindStringIndex(content)
 		if m == nil {
 			return errf(ErrNotFound, "[%s] has no open bullet in .rota/BACKLOG.md (unknown, completed, or archived)", ref)
@@ -386,7 +386,7 @@ func (f *File) SetField(ref, field, value string) (bool, error) {
 		if err != nil {
 			return err
 		}
-		re := regexp.MustCompile(`(?m)^- \*\*\[` + regexp.QuoteMeta(ref) + `\].*$`)
+		re := activeLine(ref)
 		m := re.FindStringIndex(content)
 		if m == nil {
 			if _, gerr := f.Get(ref); gerr == nil {
@@ -453,10 +453,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 		if err != nil {
 			return err
 		}
-		q := regexp.QuoteMeta(ref)
-		active := regexp.MustCompile(`(?m)^- \*\*\[` + q + `\].*$`)
-		completed := regexp.MustCompile(`(?m)^- ~~\*\*\[` + q + `\].*~~[` + pystr.SpaceClass + `]+Done[` +
-			pystr.SpaceClass + `]+\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}`)
+		active, completed := activeLine(ref), completedMark(ref)
 		m := active.FindStringIndex(content)
 		if m == nil {
 			if completed.MatchString(content) {
@@ -719,7 +716,7 @@ func (f *File) SetDetail(ref, text string) error {
 func activeBullets(content, ref string) [][]int {
 	cs, ce, hasC := section.Find(content, "Completed")
 	var out [][]int
-	for _, m := range regexp.MustCompile(`(?m)^- \*\*\[`+regexp.QuoteMeta(ref)+`\]`).FindAllStringIndex(content, -1) {
+	for _, m := range activeHead(ref).FindAllStringIndex(content, -1) {
 		if !hasC || m[0] < cs || m[0] >= ce {
 			out = append(out, m)
 		}

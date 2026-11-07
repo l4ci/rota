@@ -469,7 +469,7 @@ var (
 // title is the text up to the first "." after the ID and tag; it is "" where
 // Python returns None, which also covers a title that is all whitespace.
 func FindOrigin(corpus, id string) (line, title string, ok bool) {
-	re := regexp.MustCompile(`(?m)^- (?:~~)?\*\*\[` + regexp.QuoteMeta(id) + `\].*$`)
+	re := originLine(id)
 	m := re.FindString(corpus)
 	if m == "" {
 		return "", "", false
@@ -479,7 +479,7 @@ func FindOrigin(corpus, id string) (line, title string, ok bool) {
 	if s := strikeRe.FindStringSubmatch(line); s != nil {
 		line = s[1]
 	}
-	tre := regexp.MustCompile(`\[` + regexp.QuoteMeta(id) + `\](?:` + sp + `+\[[^\]]+\])?` + sp + `+([^.\n]+)\.`)
+	tre := titleAfterRef(id)
 	if t := tre.FindStringSubmatch(line); t != nil {
 		title = pystr.Strip(t[1])
 	}

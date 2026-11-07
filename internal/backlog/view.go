@@ -194,7 +194,7 @@ var (
 // of the item's bullet, which keeps the [tag] of a tagged item; "?" when the
 // ID has no bullet or no ".".
 func titleOf(md, id string) string {
-	m := regexp.MustCompile(`\*\*\[` + regexp.QuoteMeta(id) + `\][^*]*\*\*`).FindString(md)
+	m := boldRef(id).FindString(md)
 	if m == "" {
 		return "?"
 	}

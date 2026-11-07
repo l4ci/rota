@@ -411,16 +411,9 @@ func (b *Issues) Ready(ref string) ([]string, error) {
 		return nil, err
 	}
 	text, _, _ := ParseFieldsBlock(is.Body)
-	note := false
-	for _, kind := range []string{"design", "plan"} {
-		body, _, err := b.NoteGet(ref, kind)
-		if err != nil {
-			return nil, err
-		}
-		if body != "" {
-			note = true
-			break
-		}
+	note, err := trackerHasNote(b, ref)
+	if err != nil {
+		return nil, err
 	}
 	return readyReasons(hasCriteria(text), note), nil
 }

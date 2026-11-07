@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -95,7 +94,7 @@ func itemFromCorpus(corpus, ref string) (*Item, bool) {
 		it.Tag, it.Title = b.Tag, b.Title
 	}
 	// The closure reason lives on the done marker, which FindOrigin strips.
-	doneLine := regexp.MustCompile(`(?m)^- ~~\*\*\[` + regexp.QuoteMeta(ref) + `\].*$`).FindString(corpus)
+	doneLine := doneLine(ref).FindString(corpus)
 	if d, ok := ParseDone(doneLine); ok {
 		it.Closed, it.Reason, it.Note, it.ClosedAt = true, d.Reason, d.Note, d.Date
 	}

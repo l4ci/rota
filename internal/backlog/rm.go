@@ -112,7 +112,7 @@ func removeIDFromRelated(line, id string) string {
 // that list id in their Related field, except id's own bullet.
 func collectCrossRefs(content, id string, sections []string) []XRef {
 	var hits []XRef
-	origin := regexp.MustCompile(`\A- (?:~~)?\*\*\[` + regexp.QuoteMeta(id) + `\]`)
+	origin := originStart(id)
 	for _, name := range sections {
 		s, e, ok := section.Find(content, name)
 		if !ok {
@@ -149,9 +149,7 @@ func applyCrossRefs(content string, xrefs []XRef) string {
 // findBulletIn is find_bullet_in_content: the section and line of id, open
 // bullets before done ones within a section.
 func findBulletIn(content, id string, sections []string) (sec, line string, ok bool) {
-	q := regexp.QuoteMeta(id)
-	open := regexp.MustCompile(`(?m)^- \*\*\[` + q + `\].*$`)
-	done := regexp.MustCompile(`(?m)^- ~~\*\*\[` + q + `\].*$`)
+	open, done := activeLine(id), doneLine(id)
 	for _, name := range sections {
 		s, e, found := section.Find(content, name)
 		if !found {
