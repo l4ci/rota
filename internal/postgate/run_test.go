@@ -73,9 +73,6 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, _ := jsonx.Decode([]byte(`{"test":{"full":["fixture-check"]},"round":{"maxBounces":3}}`))
-	old := classify
-	classify = func(v string) worker.VerdictMeaning { m := old(v); m.Bounce = v == worker.GateVerifyFailed; return m }
-	t.Cleanup(func() { classify = old })
 	forge := &reportForge{}
 	tmpDir := t.TempDir()
 	e := Env{Worker: worker.Env{Getenv: func(key string) string {
@@ -88,7 +85,7 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 			return "broken feature", 1
 		}
 		return "", 0
-	}}, Park: (&parked{}).park}
+	}}}
 	e.Report = func(ctx context.Context, _ string, r Report) error {
 		// The report is durable before any clocks or bounce accounting change.
 		if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); !ok {
@@ -110,14 +107,9 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 	if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); ok {
 		t.Error("landed item clock still running")
 	}
-	if bounces(root, "12") != 1 || bounces(root, "1") != 0 {
+	// A failed verify counts no bounce: only a gate pass or a review does.
+	if bounces(root, "12") != 0 || bounces(root, "1") != 0 {
 		t.Fatalf("bounces culprit=%d landed=%d", bounces(root, "12"), bounces(root, "1"))
-	}
-	// Repeating the culprit's head does not count a second bounce.
-	e.Report = nil
-	run = e.Run(context.Background(), root, Request{Train: &worker.TrainOpts{Targets: []string{"kit"}, Base: "main"}}).Train
-	if run.Err != nil || bounces(root, "12") != 1 {
-		t.Fatalf("repeat: %+v count=%d", run, bounces(root, "12"))
 	}
 }
 
@@ -138,7 +130,7 @@ func TestRunPreviewsNeverReportOrBookkeep(t *testing.T) {
 				t.Fatal(err)
 			}
 			called := false
-			e := Env{Worker: worker.Env{}, Report: func(context.Context, string, Report) error { called = true; return nil }, Park: func(string, string) error { t.Fatal("preview parked"); return nil }}
+			e := Env{Worker: worker.Env{}, Report: func(context.Context, string, Report) error { called = true; return nil }}
 			req := Request{Gate: &worker.GateOpts{Slot: "kit", Base: "main", CheckOnly: true}}
 			if train {
 				req = Request{Train: &worker.TrainOpts{Targets: []string{"kit"}, Base: "main", Plan: true}}

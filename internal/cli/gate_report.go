@@ -20,7 +20,7 @@ func gateReportTransport(c *Ctx) func(context.Context, string, postgate.Report) 
 }
 
 func landingEnv(c *Ctx, ctx context.Context, root string) postgate.Env {
-	return postgate.Env{Worker: workerEnvCtx(c, ctx), Report: gateReportTransport(c), Park: parkNeedsHuman(c, root)}
+	return postgate.Env{Worker: workerEnvCtx(c, ctx), Report: gateReportTransport(c)}
 }
 
 func reportWarnings(c *Ctx, warnings []string) {

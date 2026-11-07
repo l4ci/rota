@@ -4,7 +4,7 @@ import "github.com/l4ci/rota/internal/blockedby"
 
 // VerdictMeaning is what one gate or train verdict means to a caller: whether
 // it succeeds, whether the CLI turns it into an exit-4 refusal (and which
-// blockedBy it names), whether it sends the PR back to its worker as a bounce,
+// blockedBy it names), whether it sends the PR back to its worker uncounted,
 // and whether a refused target then waits for a person.
 type VerdictMeaning struct {
 	// Success: the gate or train passed (fresh under CheckOnly, pass).
@@ -17,8 +17,6 @@ type VerdictMeaning struct {
 	// ViaError: the refusal travels with a non-nil error from the gate. Every
 	// other refusal arrives with a nil error.
 	ViaError bool
-	// Bounce: the PR goes back to its worker and the item's bounce count rises.
-	Bounce bool
 	// Notify: the PR goes back to its worker without counting. A stale merge and
 	// a provenance failure are bookkeeping the worker repairs, not review
 	// findings, so they never count toward round.maxBounces or park the item
