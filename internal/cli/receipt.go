@@ -203,10 +203,14 @@ func replay(c *Ctx, e receipt.Entry) (Result, error) {
 	return res, nil
 }
 
-// previewOnly is a --plan run: it changes nothing, so it leaves no receipt.
+// previewOnly identifies read-only plans and observations: neither leaves a receipt.
 func previewOnly(fs *flag.FlagSet) bool {
-	f := fs.Lookup("plan")
-	return f != nil && f.Value.String() == "true"
+	for _, name := range []string{"plan", "observe"} {
+		if f := fs.Lookup(name); f != nil && f.Value.String() == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 func checkOnly(fs *flag.FlagSet) bool {

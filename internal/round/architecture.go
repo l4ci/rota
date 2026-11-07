@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -112,6 +114,16 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 // nothing: the counter, the pending items, the idle slots, and whether any
 // candidate is ready. DecideReview turns them into Due.
 func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (a Architecture, ready bool, err error) {
+	return e.architectureFacts(ctx, root, be, set, cands, true)
+}
+
+// InspectArchitectureFacts reads the same review inputs without seeding the
+// review timestamp or updating the closed-item cache in the registry.
+func (e Env) InspectArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (Architecture, bool, error) {
+	return e.architectureFacts(ctx, root, be, set, cands, false)
+}
+
+func (e Env) architectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate, persist bool) (a Architecture, ready bool, err error) {
 	a = Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root), IdleMinItems: set.ArchitectureIdleMinItems}
 	if a.Every == 0 {
 		return a, false, nil
@@ -122,12 +134,7 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	if err != nil {
 		return a, false, err
 	}
-	minted := MintedReviews(root)
-	for _, it := range items {
-		if IsReviewTitle(it.Title) && minted[worker.NormID(it.ID)] {
-			a.Pending = append(a.Pending, it.ID)
-		}
-	}
+	a.Pending = pendingReviews(root, items)
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return a, false, err
@@ -136,7 +143,7 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	a.Idle = CountIdle(reg, active)
 	a.Areas = reviewAreas(root, set)
 
-	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
+	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since, persist)
 	if at, err := stamp.Parse(a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
 		a.Cooling = e.now().Sub(at) < time.Duration(set.ArchitectureIdleMinHours)*time.Hour
 	}
@@ -147,6 +154,28 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 		}
 	}
 	return a, ready, nil
+}
+
+// pendingReviews are the open review items this round minted.
+func pendingReviews(root string, items []backlog.Item) []string {
+	var out []string
+	minted := MintedReviews(root)
+	for _, it := range items {
+		if IsReviewTitle(it.Title) && minted[worker.NormID(it.ID)] {
+			out = append(out, it.ID)
+		}
+	}
+	return out
+}
+
+// PendingReviews lists the open review items this round minted, nil when the
+// backlog cannot be read.
+func PendingReviews(root string, be backlog.Backend) []string {
+	items, err := be.List(false)
+	if err != nil {
+		return nil
+	}
+	return pendingReviews(root, items)
 }
 
 // DecideReview is the one rule for when a review is due, shared by the tick,
@@ -180,7 +209,7 @@ func DecideReview(a Architecture, ready bool) Architecture {
 // a long closed history does not trigger a review at once. The forge listing
 // is cached in the registry for closedCacheTTL: status, candidates and start
 // would otherwise each fetch every closed issue.
-func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string) (int, string) {
+func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string, persist bool) (int, string) {
 	if rc, ok := backlog.RefactorOf(be); ok {
 		feats, bugs, err := rc.RefactorAge()
 		if err != nil {
@@ -193,8 +222,10 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	if *since == "" {
 		at := stamp.Format(e.now())
-		if err := worker.Update(root, func(d *worker.Doc) { SeedReview(d, at) }); err != nil {
-			return -1, err.Error()
+		if persist {
+			if err := worker.Update(root, func(d *worker.Doc) { SeedReview(d, at) }); err != nil {
+				return -1, err.Error()
+			}
 		}
 		*since = at
 		return 0, ""
@@ -222,7 +253,9 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	checked := stamp.Format(e.now())
 	// A failed cache write only costs the next call a refetch.
-	_ = worker.Update(root, func(d *worker.Doc) { CacheClosedCount(d, checked, *since, n) })
+	if persist {
+		_ = worker.Update(root, func(d *worker.Doc) { CacheClosedCount(d, checked, *since, n) })
+	}
 	return n, ""
 }
 
@@ -321,7 +354,48 @@ func ReviewSince(root string) string {
 // MintReview creates one review item per area, labels them refactor in issue
 // mode, and records the review so the counter restarts. It returns the new
 // item IDs in area order. Call it only when Architecture says Due.
+//
+// The facts a caller decided on were read before this call, so a concurrent
+// caller (a `round architecture` run beside the autopilot tick) may have
+// minted in between. MintReview serialises callers on a review-mint lock and
+// re-checks under it: when the review time moved or a review item is already
+// open, the facts are stale and it mints nothing, returning no ids and no
+// error (#2747).
 func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a Architecture, round int) ([]string, error) {
+	var ids []string
+	err := fsio.Locked(filepath.Join(filepath.Dir(worker.RegistryPath(root)), "review-mint"), mintLockTimeout, func() error {
+		stale, err := e.reviewStale(root, be, a)
+		if err != nil || stale {
+			return err
+		}
+		ids, err = e.mintReview(ctx, root, be, a, round)
+		return err
+	})
+	return ids, err
+}
+
+// mintLockTimeout bounds the wait for another caller's mint, which creates
+// one tracker item per area.
+const mintLockTimeout = 5 * time.Minute
+
+// reviewStale says whether a review was minted since the caller read a: the
+// recorded review time moved, or a review item is open.
+func (e Env) reviewStale(root string, be backlog.Backend, a Architecture) (bool, error) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return false, err
+	}
+	if ReviewOf(reg).At != a.Since {
+		return true, nil
+	}
+	items, err := be.List(false)
+	if err != nil {
+		return false, err
+	}
+	return len(pendingReviews(root, items)) > 0, nil
+}
+
+func (e Env) mintReview(ctx context.Context, root string, be backlog.Backend, a Architecture, round int) ([]string, error) {
 	var ids []string
 	// Created items are recorded even when a later step fails: they are then
 	// recognised and show as a review in flight, so the next run neither
