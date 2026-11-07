@@ -232,16 +232,7 @@ unset LMNOW
 pass "D3: the orchestrator sleeps on its session file's rate limits, never switches, and a pane-only message gets a parsed reset and the same resume"
 
 # --- herdr: pane.output_matched over the socket, the poll fallback, the version pin -----
-cat > "$FK/bin/herdr" <<'SH'
-#!/usr/bin/env bash
-F="$FAKE_HERDR"
-printf '%s\n' "$*" >>"$F/log"
-case "$1 $2" in
-  "--version "*|"--version") echo "herdr $(cat "$F/version" 2>/dev/null || echo 0.9.3)" ;;
-  "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
-  *) echo '{"error":{"code":"unknown_method","message":"fake"}}' >&2; exit 1 ;;
-esac
-SH
+cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"
 chmod +x "$FK/bin/herdr"
 cat > "$FK/server.py" <<'PY'
 import json, os, socket, sys, threading, time

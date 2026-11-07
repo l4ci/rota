@@ -2,6 +2,7 @@ package itembody
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +147,27 @@ func TestSetSection(t *testing.T) {
 		if got := SetSection(c.text, c.section, c.content); got != c.want {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestSectionsAndBulletPaths(t *testing.T) {
+	text := "## Files\n\n- `a/x.go`\n- b.go extra\n\n## Files\n\n- `c/y.go`\n\n## Pointers\n\n- d/z.go (note), see `e.md`\n- plain words\n"
+	secs := Sections(text, FilesHeadRe)
+	if len(secs) != 2 {
+		t.Fatalf("Sections = %d, want 2 (one per Files heading)", len(secs))
+	}
+	var files []string
+	for _, s := range secs {
+		files = append(files, BulletPaths(s, false)...)
+	}
+	if got := strings.Join(files, ","); got != "a/x.go,b.go,c/y.go" {
+		t.Errorf("Files paths = %s", got)
+	}
+	ptr := Sections(text, PointersHeadRe)
+	if len(ptr) != 1 {
+		t.Fatalf("pointer sections = %d", len(ptr))
+	}
+	if got := strings.Join(BulletPaths(ptr[0], true), ","); got != "d/z.go" {
+		t.Errorf("Pointers paths = %s", got)
 	}
 }

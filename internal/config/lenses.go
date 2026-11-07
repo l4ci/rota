@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/overlap"
 )
 
 // LensesKey is the config key the review lenses live under.
@@ -65,7 +64,7 @@ func ParseLenses(v any) (Lenses, error) {
 				for _, g := range strs {
 					// path.Match has no "**": only a trailing /** (a directory) is
 					// supported, and any other use would silently match less.
-					if _, err := path.Match(dirGlob(g), ""); err != nil || strings.Contains(dirGlob(g), "**") {
+					if _, err := path.Match(DirGlob(g), ""); err != nil || strings.Contains(DirGlob(g), "**") {
 						return nil, fmt.Errorf("%s.paths: glob %q is not supported: use * within a segment, or a trailing /** for a directory", key, g)
 					}
 				}
@@ -112,38 +111,4 @@ func (l Lenses) UsesLabels() bool {
 		}
 	}
 	return false
-}
-
-// Match lists the lenses files or labels trigger, in LensNames order, each
-// with the first path (else label) that did it.
-func (l Lenses) Match(files, labels []string) []LensHit {
-	var hits []LensHit
-	for _, name := range LensNames {
-		lens, ok := l[name]
-		if !ok {
-			continue
-		}
-		why := ""
-	paths:
-		for _, g := range lens.Paths {
-			for _, f := range files {
-				if overlap.MatchPath(dirGlob(g), f) {
-					why = "path " + f
-					break paths
-				}
-			}
-		}
-		if why == "" {
-			for _, lb := range labels {
-				if slices.Contains(lens.Labels, lb) {
-					why = "label " + lb
-					break
-				}
-			}
-		}
-		if why != "" {
-			hits = append(hits, LensHit{name, why})
-		}
-	}
-	return hits
 }

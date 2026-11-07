@@ -56,7 +56,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
 				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
 		}
-		_, wf, id, _, err := itemTrack(c, ref, "plan pass", backlog.FileNoteHint)
+		be, wf, id, _, err := itemTrack(c, ref, "plan pass", backlog.FileNoteHint)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -99,7 +99,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 
 		changed := false
 		if renumbered {
-			ed, can := wf.(backlog.BodyEditor)
+			ed, can := backlog.Optional[backlog.BodyEditor](be, func(c backlog.Capabilities) bool { return c.BodyEdit })
 			if !can {
 				return Result{}, Failed("this backend cannot write acceptance ids into the body")
 			}

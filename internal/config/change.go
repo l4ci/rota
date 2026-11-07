@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	"github.com/l4ci/rota/internal/change"
@@ -115,4 +116,6 @@ func changeProblems(cfg any) []string {
 
 // DoorOneWay reports whether a PR body carries a "Door: one-way" line: the one
 // definition review depth and the change tier share.
+var doorOneWay = regexp.MustCompile(`(?mi)^[ \t]*Door:[ \t]*one-way\b`)
+
 func DoorOneWay(body string) bool { return doorOneWay.MatchString(body) }

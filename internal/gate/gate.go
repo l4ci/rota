@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
 )
 
@@ -57,7 +58,7 @@ var Registry = []Gate{
 }
 
 // AuditFile is the audit log, relative to the project root.
-const AuditFile = ".rota/gate-audit.jsonl"
+const AuditFile = rotatree.RelPrefix + rotatree.GateAuditFile
 
 // Confirm is the human approval a gated verb was given: --confirm and the
 // quoted answer from --confirm-note. Escalation is the id of the C5 escalation

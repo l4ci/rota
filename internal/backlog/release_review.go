@@ -444,7 +444,7 @@ func (b *Issues) ReleaseClose(mid, tag string) (issues int, changed bool, err er
 	if issues, err = cp.labelReleased(mid, tag, false); err != nil {
 		return issues, wc.n > 0, err
 	}
-	err = cp.MilestoneStatus(mid, "shipped")
+	_, err = cp.MilestoneStatus(mid, "shipped")
 	return issues, wc.n > 0, err
 }
 
@@ -633,7 +633,7 @@ func (u *Umbrella) milestoneShipped(mid string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		err = hc.MilestoneStatus(mid, "shipped")
+		_, err = hc.MilestoneStatus(mid, "shipped")
 		return hw.n > 0, err
 	})
 }

@@ -20,25 +20,11 @@ cp "$TESTDIR/fakes/tmux" "$FK/bin/tmux"
 # finished (the `snapshot` marker: a snapshot reads the pane twice, then asks
 # for the status), never after a fixed delay: a delay lets a loaded machine take
 # the snapshot after the event.
-cat > "$FK/bin/herdr" <<'SH'
-#!/usr/bin/env bash
-F="$FAKE_HERDR"
-printf '%s\n' "$*" >>"$F/log"
-case "$1 $2" in
-  "--version "*|"--version") echo "herdr $(cat "$F/version" 2>/dev/null || echo 0.9.3)" ;;
-  "agent get")
-    st=working; [ -f "$F/fired" ] && st=done
-    printf '{"id":"cli","result":{"type":"agent_info","agent":{"agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7"}}}\n' "$st"
-    : >"$F/snapshot" ;;
-  "agent read")
-    t="working"; [ -f "$F/fired" ] && t="ROTA-DONE w1 https://github.com/o/r/pull/7"
-    # A loaded machine stalls the snapshot read; the lag file stands in for that, once.
-    if [ -f "$F/lag" ]; then sleep "$(cat "$F/lag")"; rm -f "$F/lag"; fi
-    printf '%s\n' "$t" ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
-  *) echo '{"error":{"code":"unknown_method","message":"fake"}}' >&2; exit 1 ;;
-esac
-SH
+cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"
 chmod +x "$FK/bin/herdr"
+# Steer the shared fake: working until the server fires, then done with the PR in the pane.
+echo working >"$FK/status"; echo working >"$FK/pane.txt"
+echo done >"$FK/fired_status"; echo "ROTA-DONE w1 https://github.com/o/r/pull/7" >"$FK/fired_pane.txt"
 
 cat > "$FK/server.py" <<'PY'
 import json, os, socket, sys, time

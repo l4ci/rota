@@ -16,7 +16,8 @@ import json, os, re, shutil, sys, posixpath
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fmlite  # noqa: E402
 import video_catalog  # noqa: E402
-from lanes import LANES, LANE_NAME, lane_error  # noqa: E402
+import skilldocs  # noqa: E402
+from lanes import LANES, LANE_NAME  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(REPO, "docs")
@@ -242,24 +243,19 @@ def with_source_url(ex):
 def skill_data():
     """Skill cards and chains for the site, from docs/skills/ plus each SKILL.md description."""
     lane_ix = {k: i for i, (k, _) in enumerate(LANES)}
+    try:
+        meta, chains = skilldocs.load(REPO)
+    except skilldocs.Fail as e:
+        sys.exit(str(e))
     skills = []
-    for rel in MD:
-        if not re.match(r"^skills/rota-[a-z-]+\.md$", rel):
-            continue
-        fm, _ = fmlite.load_front_matter(os.path.join(DOCS, rel))
-        err = lane_error("docs/" + rel, fm.get("lane"))
-        if err:
-            sys.exit(err)
-        name = fm["skill"]
+    for name, fm in meta.items():
         sk, _ = fmlite.load_front_matter(os.path.join(REPO, "skills", name, "SKILL.md"))
         fm["when"] = sk.get("description", "")
         fm["lane_name"] = LANE_NAME[fm["lane"]]
-        fm["url"] = permalink(rel)
+        fm["url"] = permalink("skills/%s.md" % name)
         with_source_url(fm.get("example"))
         skills.append(fm)
     skills.sort(key=lambda d: (lane_ix[d["lane"]], d["order"]))
-    idx, _ = fmlite.load_front_matter(os.path.join(DOCS, "skills", "README.md"))
-    chains = idx.get("chains", [])
     for c in chains:
         c["walkthrough_url"] = resolve(c["walkthrough"], "README.md") if c.get("walkthrough") else None
         for st in c.get("steps", []):

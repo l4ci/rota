@@ -18,56 +18,10 @@ trap 'rm -rf "$TMP_HD"' EXIT
 
 FAKE="$TMP_HD/fake"
 mkdir -p "$FAKE/bin" "$TMP_HD/repo/.rota"
-cat > "$FAKE/bin/herdr" <<'SH'
-#!/usr/bin/env bash
-# Fake herdr: logs argv, answers from files in $FAKE_HERDR.
-F="$FAKE_HERDR"
-printf '%s\n' "$*" >>"$F/log"
-err() { printf '{"error":{"code":"%s","message":"fake"},"id":"cli"}\n' "$1" >&2; exit 1; }
-agent_json() {
-  printf '{"id":"cli","result":{"type":"%s","agent":{"agent":"claude","agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7","focused":false}}}\n' "$1" "$2"
-}
-# herdr 0.9.3 accepts only these agent names; tab ids come from --workspace.
-case "$1 $2" in
-  "agent start"|"agent get"|"agent read"|"agent send-keys"|"agent wait"|"agent prompt")
-    [[ "$3" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || err invalid_agent_name ;;
-esac
-case "$1 $2" in
-  "tab create")
-    ws=w9; prev=""; for a in "$@"; do [ "$prev" = "--workspace" ] && ws="$a"; prev="$a"; done
-    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"; rm -f "$F/closed"
-    printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
-  "tab close") : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
-  "tab get") [ -f "$F/closed" ] && err tab_not_found; echo '{"id":"cli","result":{"tab":{"pane_count":1,"tab_id":"w9:t7"},"type":"tab_info"}}' ;;
-  "agent start")
-    if [ -f "$F/start_busy" ]; then
-      n=$(cat "$F/start_busy")
-      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$F/start_busy"; err agent_pane_busy; fi
-    fi
-    [ -f "$F/start_not_ready" ] && err agent_not_ready
-    agent_json agent_started idle ;;
-  "agent get")
-    [ -f "$F/gone" ] && err agent_not_found
-    agent_json agent_info "$(cat "$F/status" 2>/dev/null || echo idle)" ;;
-  "agent wait") agent_json agent_info "$(cat "$F/wait_status" 2>/dev/null || echo idle)" ;;
-  "agent read")
-    [ -f "$F/gone" ] && err agent_not_found
-    cat "$F/pane.txt" 2>/dev/null ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
-  "agent send-keys")
-    # Answering a dialog (enter) or declining it (esc) takes it off the pane.
-    for k in "${@:4}"; do case "$k" in enter|esc) : >"$F/pane.txt" ;; esac; done
-    echo '{"id":"cli","result":{"type":"ok"}}' ;;
-  "agent prompt")
-    printf '%s' "$4" >"$F/last_prompt"
-    [ -f "$F/prompt_error" ] && [ "$4" != "/exit" ] && err "$(cat "$F/prompt_error")"
-    agent_json agent_prompted working ;;
-  "pane process-info") echo '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}' ;;
-  "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
-  *) err unknown_method ;;
-esac
-SH
+cp "$TESTDIR/fakes/herdr" "$FAKE/bin/herdr"  # the shared fake: log plus canned JSON
 chmod +x "$FAKE/bin/herdr"
 : >"$FAKE/pane.txt"
+: >"$FAKE/keys_clear_pane"  # answering or declining a startup dialog takes it off the pane
 
 (
   cd "$TMP_HD/repo"

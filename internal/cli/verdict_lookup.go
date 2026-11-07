@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -18,7 +20,12 @@ func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
 		if err == nil {
 			for _, pr := range prs {
 				if pr.Branch == t.branch && pr.SameRepository {
-					err = verdict.RecoverPR(c.Context(), t.root, t.key, t.head, pr.Number, f)
+					source, ok := f.(verdict.ReportSource)
+					if !ok {
+						err = fmt.Errorf("%s cannot resolve the authenticated report author", f.Provider())
+						break
+					}
+					err = verdict.RecoverPR(c.Context(), t.root, t.key, t.head, pr.Number, source)
 					break
 				}
 			}

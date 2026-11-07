@@ -260,8 +260,8 @@ func HandoffPath(branch, repo string) (string, error) {
 	if repo != "" {
 		name += "@" + repo
 	}
-	p := ".rota/handoff/" + name + ".md"
-	rel, err := filepath.Rel(".rota/handoff", filepath.FromSlash(p))
+	p := rotatree.Rel(rotatree.HandoffDir, name+".md")
+	rel, err := filepath.Rel(rotatree.Rel(rotatree.HandoffDir), filepath.FromSlash(p))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return "", ErrEscapes
 	}

@@ -2,6 +2,7 @@ package verdict
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
@@ -44,10 +45,20 @@ func ParseReport(text string) (Record, bool) {
 	return Record{Kind: kind, Verdict: body.Verdict, Sha: sha, Summary: body.Summary, Findings: body.Findings, Items: body.Items, Declined: body.Declined}, true
 }
 
-// ReportSource is the forge surface needed to recover a verdict. Authentication
-// and optional repository write access are resolved through the same adapter.
+// ReportSource is the forge surface RecoverPR needs to recover a verdict: the PR
+// notes and the authenticated user, whose own reports are always trusted. A
+// source that also implements AuthorTrust extends trust to other authors.
 type ReportSource interface {
 	MRNotes(context.Context, int) ([]tracker.Comment, error)
+	AuthenticatedUser(context.Context) (string, error)
+}
+
+// AuthorTrust is the optional capability that says whether a report author holds
+// write access. GitHub implements it; GitLab does not, so there only the
+// authenticated user's reports are trusted. A lookup error leaves that author
+// untrusted without discarding other authors' reports.
+type AuthorTrust interface {
+	CanPush(ctx context.Context, login string) (bool, error)
 }
 
 // RecoverPR reads trusted PR reports only when no local record exists at head.
@@ -75,16 +86,17 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 		allowed, known := trusted[note.Author]
 		if !known {
 			if self == "" {
-				self, err = tracker.ReportAuthor(ctx, source)
+				self, err = source.AuthenticatedUser(ctx)
 				if err != nil {
 					return err
+				}
+				if self == "" {
+					return errors.New("tracker returned an empty authenticated report author")
 				}
 			}
 			allowed = note.Author == self
 			if !allowed {
-				if access, ok := source.(interface {
-					CanPush(context.Context, string) (bool, error)
-				}); ok {
+				if access, ok := source.(AuthorTrust); ok {
 					canPush, permissionErr := access.CanPush(ctx, note.Author)
 					// An unverifiable author is untrusted, not a reason to
 					// discard another author's already verified FAIL.

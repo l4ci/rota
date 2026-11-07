@@ -92,3 +92,25 @@ func TestFootprintClash(t *testing.T) {
 		}
 	}
 }
+
+// TestBothVersusPaths pins the intended split: Both (gate, changed files)
+// is exact equality, Paths (readiness, declared footprints) honours globs and
+// directories. The same inputs must give different answers.
+func TestBothVersusPaths(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		a, b       []string
+		both, path []string
+	}{
+		{"glob vs file", []string{"docs/*.md"}, []string{"docs/a.md"}, nil, []string{"docs/a.md"}},
+		{"dir vs file", []string{"internal/x/"}, []string{"internal/x/a.go"}, nil, []string{"internal/x/a.go"}},
+		{"identical", []string{"a.go"}, []string{"a.go"}, []string{"a.go"}, []string{"a.go"}},
+	} {
+		if got := Both(c.a, c.b, nil); !reflect.DeepEqual(got, c.both) {
+			t.Errorf("%s: Both = %v, want %v", c.name, got, c.both)
+		}
+		if got := Paths(c.a, c.b); !reflect.DeepEqual(got, c.path) {
+			t.Errorf("%s: Paths = %v, want %v", c.name, got, c.path)
+		}
+	}
+}

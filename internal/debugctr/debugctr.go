@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strconv"
 	"strings"
@@ -48,11 +49,7 @@ func (c *Counter) nowISO() string {
 	if now == nil {
 		now = time.Now
 	}
-	t := now().UTC()
-	if t.Nanosecond()/1000 == 0 {
-		return t.Format("2006-01-02T15:04:05") + "+00:00"
-	}
-	return t.Format("2006-01-02T15:04:05.000000") + "+00:00"
+	return stamp.ISO(now().UTC())
 }
 
 func (c *Counter) def() *jsonx.Object {

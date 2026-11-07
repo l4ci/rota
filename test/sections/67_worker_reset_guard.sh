@@ -12,30 +12,8 @@ trap 'rm -rf "$TMP_RG"' EXIT
 FK="$TMP_RG/fake"
 mkdir -p "$FK/bin"
 
-cat > "$FK/bin/herdr" <<'SH'
-#!/usr/bin/env bash
-F="$FAKE_HERDR"
-printf '%s\n' "$*" >>"$F/log"
-err() { printf '{"error":{"code":"%s","message":"fake"},"id":"cli"}\n' "$1" >&2; exit 1; }
-agent_json() {
-  printf '{"id":"cli","result":{"type":"%s","agent":{"agent":"claude","agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7","focused":false}}}\n' "$1" "$2"
-}
-case "$1 $2" in
-  "tab create") touch "$F/tab_alive"
-    printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"w9:t7"},"root_pane":{"pane_id":"w9:p17"}}}\n' ;;
-  "tab close") [ -f "$F/dirty_on_close" ] && echo wip > "$(cat "$F/dirty_on_close")"
-    [ -f "$F/close_fails" ] || rm -f "$F/tab_alive"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
-  "tab get") [ -f "$F/tab_alive" ] || err tab_not_found; echo '{"id":"cli","result":{"tab":{"pane_count":1,"tab_id":"w9:t7"},"type":"tab_info"}}' ;;
-  "pane process-info")
-    procs=""; [ -f "$F/pid" ] && procs="{\"pid\":$(cat "$F/pid")}"
-    printf '{"id":"cli","result":{"process_info":{"foreground_processes":[%s]}}}\n' "$procs" ;;
-  "agent start") agent_json agent_started idle ;;
-  "agent get") agent_json agent_info idle ;;
-  "agent wait") agent_json agent_info idle ;;
-  "agent prompt") agent_json agent_prompted working ;;
-  *) err unknown_method ;;
-esac
-SH
+cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"  # the shared fake; no tab is open until `tab create`
+: >"$FK/closed"
 cat > "$FK/bin/tmux" <<'SH'
 #!/usr/bin/env bash
 F="$FAKE_TMUX"
@@ -131,7 +109,7 @@ kill "$SLEEPER" 2>/dev/null || true
 [ "$RC" = "5" ] || fail "herdr: a surviving agent process must exit 5 even when the tab is gone, got $RC: $OUT"
 case "$(jget error.message <<<"$OUT")" in *"$SLEEPER"*) ;; *) fail "herdr: refusal must name the surviving pid, got: $OUT" ;; esac
 rm -f "$FK/pid"
-touch "$FK/tab_alive"
+rm -f "$FK/closed"
 rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T3 >/dev/null \
   || fail "herdr: dispatch must succeed once the old tab closes and its pids are gone"
 
@@ -187,7 +165,7 @@ pass "re-dispatching the slot's own task continues it in place; any other task i
 
 # ── (f) the session died but the second reset refused: handle must not go stale
 [ -n "$(slot_field "$RG_REG" w1 handle)" ] || fail "fixture: slot should hold a handle here"
-touch "$FK/tab_alive"; echo "$WT/raced.txt" > "$FK/dirty_on_close"
+rm -f "$FK/closed"; echo "$WT/raced.txt" > "$FK/dirty_on_close"
 RC=0; OUT="$(rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T7 2>/dev/null)" || RC=$?
 rm -f "$FK/dirty_on_close" "$WT/raced.txt"
 [ "$RC" = "4" ] || fail "a reset refused after the kill must exit 4, got $RC: $OUT"
