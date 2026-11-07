@@ -206,6 +206,8 @@ var Keys = []Key{
 	k("test.fast", ScopeProject, []any{}, true, TypeList, "Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it."),
 	k("test.full", ScopeProject, []any{}, true, TypeList, "Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify."),
 	k("test.e2e", ScopeProject, []any{}, true, TypeList, "Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step."),
+	k("test.audit.maxFullGateSeconds", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round when the latest recorded test.full duration after the last audit exceeds this many seconds. 0 disables the duration trigger."),
+	k("test.audit.prsBetweenAudits", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round after this many distinct recorded merged PRs since the last audit. 0 disables the PR trigger."),
 	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.vacuousCheck", ScopeProject, false, false, TypeBool, "Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default."),
 	k("test.filePattern", ScopeProject, `_test\.go$`, false, TypeString, "Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files."),
