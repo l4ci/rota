@@ -61,6 +61,7 @@
       "TestReportGrammarOwnedByMarker"
     ],
     "./internal/rotatree": [
+      "TestMessageAllowedEntriesUsed",
       "TestNoLiteralRotaDir"
     ],
     "./internal/skills": [
