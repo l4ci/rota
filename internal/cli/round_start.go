@@ -128,7 +128,7 @@ func emptyNote(ctx context.Context, d *jsonx.Object, lines []string, env round.E
 	return append(lines, fmt.Sprintf("no candidates: %s\tnext: %s", why.Reason, why.Next))
 }
 
-func leaseData(l round.Lease, st round.LeaseState) *jsonx.Object {
+func leaseData(l roundlease.Lease, st roundlease.State) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("pid", l.PID)
 	if l.Start != 0 {

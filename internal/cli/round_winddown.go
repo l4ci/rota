@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 )
 
@@ -122,7 +123,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		d.Set("verifySkipped", res.VerifySkipped)
 		d.Set("drift", res.Drift)
 		if res.Lease != nil {
-			d.Set("lease", leaseData(*res.Lease, round.LeaseState("live")))
+			d.Set("lease", leaseData(*res.Lease, roundlease.Live))
 		}
 		d.Set("changed", res.Changed)
 		var lines []string

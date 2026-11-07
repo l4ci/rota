@@ -13,22 +13,16 @@ import (
 // `rota round start` reclaims it.
 const LeaseStale = "lease-stale"
 
-// Lease aliases, so reconcile and reap import one package.
-type (
-	Lease      = roundlease.Lease
-	LeaseState = roundlease.State
-)
-
 // commonDir is the git common dir of root, through the Env's git.
 func (e Env) commonDir(ctx context.Context, root string) (string, error) {
 	return worker.CommonDir(ctx, e.Git, root)
 }
 
 // ReadLease is the repo's orchestrator lease and its state.
-func (e Env) ReadLease(ctx context.Context, root string) (Lease, LeaseState, error) {
+func (e Env) ReadLease(ctx context.Context, root string) (roundlease.Lease, roundlease.State, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
-		return Lease{}, roundlease.None, err
+		return roundlease.Lease{}, roundlease.None, err
 	}
 	return e.Lease.Read(cd)
 }
@@ -36,10 +30,10 @@ func (e Env) ReadLease(ctx context.Context, root string) (Lease, LeaseState, err
 // ClearStaleLease removes the lease when its holder is gone and reports what
 // it removed. A live or foreign lease is left alone. It is the seam `rota reap`
 // calls.
-func (e Env) ClearStaleLease(ctx context.Context, root string) (Lease, bool, error) {
+func (e Env) ClearStaleLease(ctx context.Context, root string) (roundlease.Lease, bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
-		return Lease{}, false, err
+		return roundlease.Lease{}, false, err
 	}
 	return e.Lease.ClearStale(cd)
 }
@@ -57,27 +51,13 @@ func (e Env) leaseFinding(ctx context.Context, root string, rep *Report) {
 	rep.add(Finding{Kind: LeaseStale, Detail: "the round lease is held by " + who + ", which is gone; `rota round start` reclaims it, `rota reap` clears it"})
 }
 
-// LeaseProbe is who is asking: the lease env, the pid to match (0 walks up to
-// the nearest non-shell ancestor) and the env reader for the holder's pane.
-type LeaseProbe struct {
-	Env       roundlease.Env
-	HolderPID int
-	Getenv    func(string) string
-}
-
-// HoldsLease is the one rule for "this process is the orchestrator the round
-// lease names". Held implies the lease is Live and err is nil; callers map
-// held=false and a lookup error onto their own refusal.
-func HoldsLease(p LeaseProbe, commonDir string) (Lease, LeaseState, bool, error) {
-	return p.Env.Holds(commonDir, p.HolderPID, p.Getenv)
-}
-
-// heldLease is HoldsLease for the Env's own lease, keyed off the repo at root.
-func (e Env) heldLease(ctx context.Context, root string, pid int) (Lease, bool, error) {
+// heldLease reports whether pid is the orchestrator the Env's lease names,
+// keyed off the repo at root.
+func (e Env) heldLease(ctx context.Context, root string, pid int) (roundlease.Lease, bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
-		return Lease{}, false, err
+		return roundlease.Lease{}, false, err
 	}
-	l, _, held, err := HoldsLease(LeaseProbe{Env: e.Lease, HolderPID: pid, Getenv: e.getenv()}, cd)
+	l, _, held, err := e.Lease.Holds(cd, pid, e.getenv())
 	return l, held, err
 }

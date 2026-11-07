@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -147,18 +146,18 @@ func TestIdentify(t *testing.T) {
 		Now:       func() time.Time { return t0 },
 	}
 	noenv := func(string) string { return "" }
-	if w := Identify(round.LeaseProbe{Env: env, HolderPID: 10, Getenv: noenv}, cd); w.Orchestrator || !w.LeaseFree {
+	if w := Identify(env, 10, noenv, cd); w.Orchestrator || !w.LeaseFree {
 		t.Fatalf("no lease: %+v", w)
 	}
 	env.Acquire(cd, "/r", roundlease.Holder{PID: 10, Start: 100}, 1)
-	if w := Identify(round.LeaseProbe{Env: env, HolderPID: 10, Getenv: noenv}, cd); !w.Orchestrator || w.LeaseFree {
+	if w := Identify(env, 10, noenv, cd); !w.Orchestrator || w.LeaseFree {
 		t.Fatalf("holder: %+v", w)
 	}
-	if w := Identify(round.LeaseProbe{Env: env, HolderPID: 20, Getenv: noenv}, cd); w.Orchestrator || w.LeaseFree {
+	if w := Identify(env, 20, noenv, cd); w.Orchestrator || w.LeaseFree {
 		t.Fatalf("worker: %+v", w)
 	}
 	delete(alive, 10)
-	if w := Identify(round.LeaseProbe{Env: env, HolderPID: 10, Getenv: noenv}, cd); w.Orchestrator || !w.LeaseFree {
+	if w := Identify(env, 10, noenv, cd); w.Orchestrator || !w.LeaseFree {
 		t.Fatalf("stale: %+v", w)
 	}
 }
