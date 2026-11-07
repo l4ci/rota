@@ -7,10 +7,22 @@ import (
 	"testing"
 )
 
+// Hand-written expectations per backend, deliberately not derived from
+// capabilitiesFor so a wrong flag there fails a test.
+var (
+	literalFile   = Capabilities{HarnessField: true}
+	literalIssues = Capabilities{
+		IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true,
+		SharedClaims: true, ClaimHistory: true, ClaimLabels: true, BodyEdit: true, SectionEdit: true,
+	}
+	literalUmbrella = func() Capabilities { c := literalIssues; c.Umbrella = true; return c }()
+)
+
 // TestBackendBehavior runs Get, Claim, Complete and title handling against
 // both backends through the Backend and Workflow interfaces alone, so what a
 // capability promises is checked without the cli in the way.
 func TestBackendBehavior(t *testing.T) {
+	wantFile, wantIssues := literalFile, literalIssues
 	file := func(t *testing.T) (Backend, string) {
 		f, _ := proj(t, rotaFiles(nil))
 		return f, "B01"
@@ -25,8 +37,8 @@ func TestBackendBehavior(t *testing.T) {
 		caps  Capabilities
 		title string
 	}{
-		{"file", file, capabilitiesFor(kindFile), "First"},
-		{"issues", issues, capabilitiesFor(kindIssues), "First"},
+		{"file", file, wantFile, "First"},
+		{"issues", issues, wantIssues, "First"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			be, id := c.open(t)
@@ -75,7 +87,8 @@ func TestBackendBehavior(t *testing.T) {
 
 // TestCapabilitiesMatchInterfaces: a backend declares an optional capability
 // exactly when it implements the interface behind it, so a new interface
-// without a flag (or a flag without an implementation) fails here.
+// without a flag (or a flag without an implementation) fails here. The probe
+// list must be extended by hand for each new capability flag.
 func TestCapabilitiesMatchInterfaces(t *testing.T) {
 	probes := []struct {
 		flag string
@@ -108,13 +121,48 @@ func TestCapabilitiesFor(t *testing.T) {
 		source string
 		want   Capabilities
 	}{
-		{"file", (&File{}).Capabilities()},
-		{"github", (&Issues{}).Capabilities()},
+		{"file", literalFile},
+		{"github", literalIssues},
 	} {
 		got, err := CapabilitiesFor(mustDecode(t, `{"issues":{"source":"`+c.source+`"}}`))
 		if err != nil || got != c.want {
 			t.Errorf("CapabilitiesFor(%s) = %+v, %v; want %+v", c.source, got, err, c.want)
 		}
+	}
+}
+
+// TestBackendLiterals pins each backend's declared capabilities.
+func TestBackendLiterals(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		be   Backend
+		want Capabilities
+	}{
+		{"file", &File{}, literalFile},
+		{"issues", &Issues{}, literalIssues},
+		{"umbrella", &Umbrella{}, literalUmbrella},
+	} {
+		if got := c.be.Capabilities(); got != c.want {
+			t.Errorf("%s Capabilities = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestOptional: the flag gates the interface, in both directions.
+func TestOptional(t *testing.T) {
+	claims := func(c Capabilities) bool { return c.SharedClaims }
+	if _, ok := Optional[SharedClaimer](nil, claims); ok {
+		t.Error("nil backend resolved")
+	}
+	if _, ok := Optional[SharedClaimer](&Issues{}, claims); !ok {
+		t.Error("flag true and interface implemented: want ok")
+	}
+	if _, ok := Optional[SharedClaimer](&File{}, claims); ok {
+		t.Error("flag false, interface absent: want !ok")
+	}
+	// Flag false while the interface is implemented: Issues has no HarnessField.
+	if _, ok := Optional[SharedClaimer](&Issues{}, func(Capabilities) bool { return false }); ok {
+		t.Error("flag false with interface implemented resolved")
 	}
 }
 
