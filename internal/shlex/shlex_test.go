@@ -2,6 +2,7 @@ package shlex
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +46,41 @@ func TestQuoteAlways(t *testing.T) {
 	for in, want := range map[string]string{"abc": "'abc'", "": "''", "it's": `'it'\''s'`} {
 		if got := QuoteAlways(in); got != want {
 			t.Errorf("QuoteAlways(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+func TestScannerWord(t *testing.T) {
+	isBreak := func(c byte) bool { return c == ' ' || c == ';' }
+	for _, tc := range []struct {
+		in, word string
+		rest     string
+		nested   []string
+	}{
+		{`a'b c'"d\"e"f g`, `ab cd"ef`, " g", nil},
+		{`x\;y;z`, `x;y`, ";z", nil},
+		{`"$(echo "$(inner)")" tail`, ``, " tail", []string{`echo "$(inner)"`}},
+		{"`cmd`;", ``, ";", []string{"cmd"}},
+		{`$((1+2)) z`, ``, " z", nil},
+	} {
+		sc := &Scanner{S: tc.in}
+		got, err := sc.Word(isBreak)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.in, err)
+		}
+		if tc.word != "" && got != tc.word {
+			t.Errorf("%q: word %q, want %q", tc.in, got, tc.word)
+		}
+		if sc.S[sc.I:] != tc.rest {
+			t.Errorf("%q: rest %q, want %q", tc.in, sc.S[sc.I:], tc.rest)
+		}
+		if strings.Join(sc.Nested, "|") != strings.Join(tc.nested, "|") {
+			t.Errorf("%q: nested %q, want %q", tc.in, sc.Nested, tc.nested)
+		}
+	}
+	for _, bad := range []string{`'open`, `"open`, "`open", `$(open`} {
+		if _, err := (&Scanner{S: bad}).Word(isBreak); err != ErrUnbalanced {
+			t.Errorf("%q: err %v", bad, err)
 		}
 	}
 }

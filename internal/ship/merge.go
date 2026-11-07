@@ -17,7 +17,8 @@ import (
 // gate and Approve the merge-approval gate (B1); both run before anything
 // changes and receive the pinned landing commit. Verdict also receives the
 // branch for store lookup and messages. Verdict's error passes through unchanged;
-// Approve returns its refusal as a value, and its error is a gate that could not run.
+// Approve returns its refusal as a value, which MergeBranch turns into a
+// *GateRefusedError; its error is a gate that could not run.
 type MergePorts struct {
 	Git      Git
 	Recover  land.Git // optional recovery runner, independent of caller cancellation
@@ -55,38 +56,40 @@ func (e *PostMergeError) Unwrap() error { return e.Err }
 
 // MergeBranch merges branch into base with --no-ff and deletes it if its tip
 // still matches the pin, returning the merge commit's short hash. A moved tip
-// returns that hash and a BranchMovedError. A refused Approve returns its refusal and
-// nothing changes. Failed merges attempt an abort; recovery
+// returns that hash and a BranchMovedError. A refused Approve returns a
+// *GateRefusedError and nothing changes. Failed merges attempt an abort; recovery
 // failures pass through with their original merge error.
-func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refusal, error) {
+func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if base == branch {
-		return "", nil, &Refusal{By: blockedby.BaseBranch, Msg: "'" + branch + "' is the base branch"}
+		return "", &Refusal{By: blockedby.BaseBranch, Msg: "'" + branch + "' is the base branch"}
 	}
 	// The commit the gates judge is the commit that lands: a push to the
 	// branch after this point cannot ride in.
 	pin, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	if pin.ExitCode != 0 {
-		return "", nil, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(pin.Stderr)}
+		return "", &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(pin.Stderr)}
 	}
 	head := line(pin.Stdout)
 	if err := p.Verdict(branch, head); err != nil {
-		return "", nil, err
+		return "", err
 	}
-	if ref, err := p.Approve(head); ref != nil || err != nil {
-		return "", ref, err
+	if ref, err := p.Approve(head); ref != nil {
+		return "", &GateRefusedError{Ref: ref}
+	} else if err != nil {
+		return "", err
 	}
 	if err := ClearWorktree(p.Git, branch, p.Checkout); err != nil {
-		return "", nil, err
+		return "", err
 	}
 	co, err := p.Git.Run("checkout", "-q", base)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	if co.ExitCode != 0 {
-		return "", nil, &GitError{Msg: "git checkout " + base + ": " + strutil.FirstLine(co.Stderr)}
+		return "", &GitError{Msg: "git checkout " + base + ": " + strutil.FirstLine(co.Stderr)}
 	}
 	recover := p.Recover
 	if recover == nil {
@@ -95,15 +98,15 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 	switch err := land.MergeLocal(p.Git.Run, head, msg, recover); {
 	case err == nil:
 	case errors.As(err, new(*land.CleanupError)):
-		return "", nil, err
+		return "", err
 	case errors.As(err, new(*land.ConflictError)):
-		return "", nil, &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
+		return "", &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
 	default:
 		var me *land.MergeError
 		if errors.As(err, &me) {
-			return "", nil, &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(me.Out)}
+			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(me.Out)}
 		}
-		return "", nil, err
+		return "", err
 	}
 	postMerge := func(sha string, err error) error {
 		return &PostMergeError{Pinned: head, Base: base, MergeSHA: sha, Err: err}
@@ -119,31 +122,31 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 		if readErr != nil {
 			err = errors.Join(err, readErr)
 		} else if read.ExitCode == 0 && line(read.Stdout) != "" {
-			return line(read.Stdout), nil, postMerge(line(read.Stdout), err)
+			return line(read.Stdout), postMerge(line(read.Stdout), err)
 		} else {
 			err = errors.Join(err, &GitError{Msg: "git rev-parse --short " + base + ": " + strutil.FirstLine(read.Stderr)})
 		}
-		return "", nil, postMerge("", err)
+		return "", postMerge("", err)
 	}
 	mergedSHA := line(sha.Stdout)
 	tip, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
 	if err != nil {
-		return mergedSHA, nil, postMerge(mergedSHA, err)
+		return mergedSHA, postMerge(mergedSHA, err)
 	}
 	if tip.ExitCode != 0 {
-		return mergedSHA, nil, postMerge(mergedSHA, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)})
+		return mergedSHA, postMerge(mergedSHA, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)})
 	}
 	if current := line(tip.Stdout); current != head {
-		return mergedSHA, nil, &BranchMovedError{Branch: branch, Base: base, Pinned: head, Tip: current, MergeSHA: mergedSHA}
+		return mergedSHA, &BranchMovedError{Branch: branch, Base: base, Pinned: head, Tip: current, MergeSHA: mergedSHA}
 	}
 	del, err := p.Git.Run("branch", "-d", branch)
 	if err != nil {
-		return mergedSHA, nil, postMerge(mergedSHA, err)
+		return mergedSHA, postMerge(mergedSHA, err)
 	}
 	if del.ExitCode != 0 {
-		return mergedSHA, nil, postMerge(mergedSHA, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)})
+		return mergedSHA, postMerge(mergedSHA, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)})
 	}
-	return mergedSHA, nil, nil
+	return mergedSHA, nil
 }
 
 // ChangedFiles lists the files a merge range changes, for the merge-approval
@@ -172,20 +175,18 @@ func (e *UnprovenError) Error() string { return "an item has no proof; not merge
 type MergedPR struct {
 	SHA    string
 	Closed []backlog.ItemRef
-	// Refusal is the approver's refusal: nothing merged.
-	Refusal *exitcode.Refusal
 }
 
 // MergePR merges PR pr through the gated issue backend. A refused merge is a
-// *land.MergeRefusedError and a proof failure an *UnprovenError; the approver's refusal
-// comes back in MergedPR.Refusal. Any other error passes through unchanged.
+// *land.MergeRefusedError, a proof failure an *UnprovenError and the approver's
+// refusal a *GateRefusedError. Any other error passes through unchanged.
 func MergePR(be PRMerger, pr int, items []string, approve backlog.MergeApprover) (MergedPR, error) {
 	res, err := be.MergePRGated(pr, items, approve, landForge)
 	switch {
 	case err != nil:
 		return MergedPR{}, err
 	case res.Refusal != nil:
-		return MergedPR{Refusal: res.Refusal}, nil
+		return MergedPR{}, &GateRefusedError{Ref: res.Refusal}
 	case len(res.Unproven) > 0:
 		ids := []string{}
 		for _, u := range res.Unproven {
