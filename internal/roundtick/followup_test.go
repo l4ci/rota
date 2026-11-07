@@ -199,7 +199,7 @@ func TestFollowUpPendingReasons(t *testing.T) {
 		{"roster short", busy, fu{size: 2}, "", "roster"},
 		{"manual loop", []Slot{{Name: "ben", State: "idle"}}, fu{manual: true}, "", "round.reviewLoop is manual"},
 		{"accounts cooling", []Slot{{Name: "ben", State: "idle"}}, fu{}, "every account is cooling down", "every account is cooling down"},
-		{"refused", []Slot{{Name: "ben", State: "idle"}}, fu{refuse: map[string]error{"#7": &round.BlockedError{By: round.BlockOverlap, Msg: "#7 overlaps work in flight"}}}, "", "#7 overlaps work in flight"},
+		{"refused", []Slot{{Name: "ben", State: "idle"}}, fu{refuse: map[string]error{"#7": &round.BlockedError{By: round.BlockOverlap, Msg: "the receiver guard said no"}}}, "", "the receiver guard said no"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
