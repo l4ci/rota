@@ -221,7 +221,7 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
 	res := TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
 		Members: []TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
-	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, res, map[string]bool{})
+	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
@@ -282,7 +282,7 @@ func TestGateAndTrainLedgerRowsTakeTheEnvClock(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
 	gateLedger(env, nil, dir, GateTarget{Name: "b1", Branch: "b1"}, GateResult{Verdict: GatePass})
-	trainLedger(env, nil, dir, TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Members: []TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
+	trainLedger(env, nil, dir, "", TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Members: []TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
 	es, _ := ledger.Load(dir)
 	if len(es) != 4 { // gate, merge, train outcome, train gate
 		t.Fatalf("entries %+v", es)

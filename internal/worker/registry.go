@@ -904,12 +904,17 @@ func execRun(ctx context.Context, name string, args, env []string) (host.Result,
 	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Env: env, Timeout: host.CallTimeout})
 }
 
+// killTree is the cancel of a verification command: its process group and
+// every descendant, so a test server in its own session does not outlive a
+// cancelled or timed-out gate or train (#2751).
+func killTree(pid int) error { return pidlive.KillTree(pidlive.Real{}, pid) }
+
 // execShell is the production Env.Shell. A verification command may run as
 // long as the caller's context allows, so it sets no timeout of its own.
 func execShell(ctx context.Context, dir, command string) (string, int) {
 	res, err := proc.Run(ctx, proc.Cmd{
 		Name: "sh", Args: []string{"-c", command}, Dir: dir,
-		Timeout: proc.NoTimeout, Combined: true, Group: true,
+		Timeout: proc.NoTimeout, Combined: true, Group: true, Kill: killTree,
 	})
 	if err != nil {
 		return err.Error(), 127
@@ -927,7 +932,7 @@ func execShellEnv(ctx context.Context, dir, command string, environ []string) (s
 	}
 	res, err := proc.Run(ctx, proc.Cmd{
 		Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
-		Timeout: proc.NoTimeout, Combined: true, Group: true, MaxOutput: behaviourMaxOutput,
+		Timeout: proc.NoTimeout, Combined: true, Group: true, Kill: killTree, MaxOutput: behaviourMaxOutput,
 	})
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		// keep what the step wrote before it was stopped: it shows where it hung

@@ -87,6 +87,9 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	if r.Plan != nil {
 		d.Set("plan", planData(r.Plan))
 	}
+	if r.Log != "" {
+		d.Set("log", r.Log)
+	}
 	return d
 }
 
@@ -149,6 +152,8 @@ type trainRunOpts struct {
 	FinalSlice          []string
 	Confirm             gate.Confirm
 	Approval            approvalReq
+	// RequestID is the call's receipt id: the train's live marker carries it.
+	RequestID string
 }
 
 // trainRun is one train run and the bookkeeping that followed it.
@@ -169,7 +174,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 	if err != nil {
 		return postgate.Env{}, postgate.Request{}, err
 	}
-	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root)}
+	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root), RequestID: o.RequestID}
 	return landingEnv(c, ctx, root), postgate.Request{Train: &opts}, nil
 }
 
@@ -248,7 +253,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if !*plan && !*noAssignCheck {
 			warnAssignFirst(c, root)
 		}
-		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, OnFail: *onFail, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, OnFail: *onFail, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req, RequestID: invocationReceipt(c.Context()).ID})
 		r, err := run.Result, run.Err
 		// Exclusion notes must remain visible when no member survives the checks.
 		for _, n := range r.Notes {
@@ -276,10 +281,26 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "))
 			return res, nil
 		}
+		if r.Verdict == worker.GateCancelled {
+			res.Text = cancelledText(r)
+		}
 		e := Failed("%s", r.Err)
 		e.Hint = r.Hint
 		return res, e
 	}
+}
+
+// cancelledText is the text answer of a cancelled train: what landed and
+// where the verify log was kept.
+func cancelledText(r worker.TrainResult) string {
+	t := fmt.Sprintf("cancelled: train -> %s; landed %d of %d", r.Base, len(r.Landed), len(r.Members))
+	if len(r.Landed) > 0 {
+		t += ": " + strings.Join(r.Landed, ", ")
+	}
+	if r.Log != "" {
+		t += "\nlogs: " + r.Log
+	}
+	return t
 }
 
 func containsStr(list []string, s string) bool {

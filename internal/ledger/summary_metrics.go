@@ -120,7 +120,7 @@ func ratio(rule string, n, d int, reason string) RatioMetric {
 }
 
 func trainRate(entries []Entry, round int) RatioMetric {
-	const rule = "non-pass train outcomes / recorded train outcomes; one per completed invocation including refusals, excluding plans and usage errors without verdicts; member gates excluded"
+	const rule = "non-pass train outcomes / recorded train outcomes; one per completed invocation including refusals, excluding plans, cancelled trains and usage errors without verdicts; member gates excluded"
 	red, trains := 0, 0
 	reason := ""
 	for _, e := range entries {
@@ -130,7 +130,7 @@ func trainRate(entries []Entry, round int) RatioMetric {
 		if e.Kind == KindGate && e.Detail != nil && jsonx.Bool(e.Detail, "train") && trains == 0 {
 			reason = "legacy train members without recorded train outcomes"
 		}
-		if e.Kind != KindTrain {
+		if e.Kind != KindTrain || e.DetailStr("verdict") == "cancelled" { // a cancel is no outcome of the code
 			continue
 		}
 		trains++
