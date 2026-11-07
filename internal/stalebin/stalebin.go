@@ -15,15 +15,16 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/version"
 )
 
 const module = "github.com/l4ci/rota"
 
 // Rebuild keeps Version equal to VERSION (doctor's skills check compares the
 // two) and stamps Commit and Date; replace the installed binary with an atomic mv.
-const Rebuild = `go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$(cat VERSION)` +
-	` -X github.com/l4ci/rota/internal/version.Commit=$(git rev-parse HEAD)` +
-	` -X github.com/l4ci/rota/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"` +
+var Rebuild = `go build -ldflags "-X ` + version.Symbol("Version") + `=$(cat VERSION)` +
+	` -X ` + version.Symbol("Commit") + `=$(git rev-parse HEAD)` +
+	` -X ` + version.Symbol("Date") + `=$(date -u +%Y-%m-%dT%H:%M:%SZ)"` +
 	` -o rota.new ./cmd/rota && mv rota.new ~/.local/bin/rota`
 
 // Finding is a binary that is behind its checkout.
