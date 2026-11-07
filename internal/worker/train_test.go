@@ -1379,3 +1379,108 @@ func TestTrainOnFailStopNamesTestsAndBlamesNobody(t *testing.T) {
 		t.Errorf("no member may be blamed in the train cache: %+v", c.f.Culprits)
 	}
 }
+
+// A failing train reports its phases as it goes, the time spent verifying
+// versus diagnosing, the original failure apart from failures that only a
+// diagnostic prefix run showed (#2753).
+func TestTrainPhasesTimingAndFailureOrigin(t *testing.T) {
+	// The full tree (b1..b4) fails TestA. The prefix b1+b2 fails TestA too, and
+	// TestB as well: a failure the original run never showed.
+	cmd := `if test -f b2.txt; then echo '--- FAIL: TestA (0.00s)'; test -f b3.txt || echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, Say: func(l string) { said = append(said, l) }})
+	if err != nil || res.Culprit != "b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	phases := []string{}
+	for _, l := range said {
+		if strings.HasPrefix(l, "PHASE ") {
+			phases = append(phases, l)
+		}
+	}
+	for _, want := range []string{"PHASE plan", "PHASE merge", "PHASE verify test.full: base + 4 member(s), tip ", "PHASE diagnose test.full: base + 2 member(s), tip "} {
+		if !slices.ContainsFunc(phases, func(l string) bool { return strings.HasPrefix(l, want) }) {
+			t.Errorf("no phase line starting %q in %q", want, phases)
+		}
+	}
+	if slices.ContainsFunc(phases, func(l string) bool { return strings.HasPrefix(l, "PHASE land") }) {
+		t.Errorf("nothing was verified, so no land phase: %q", phases)
+	}
+	if res.VerifyTime <= 0 || res.DiagnoseTime <= 0 {
+		t.Errorf("timing: verify %v diagnose %v", res.VerifyTime, res.DiagnoseTime)
+	}
+	o := res.Original
+	if o == nil || strings.Join(o.Tests, ",") != "TestA" || o.Members != 4 {
+		t.Fatalf("original failure: %+v", o)
+	}
+	var only []string
+	for _, d := range res.Diagnostic {
+		only = append(only, d.OnlyInDiagnostic...)
+	}
+	if strings.Join(only, ",") != "TestB" {
+		t.Fatalf("diagnostic-only failures: %+v", res.Diagnostic)
+	}
+	for _, want := range []string{"TestB", "diagnostic", "passing-alone"} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("culprit text lacks %q:\n%s", want, res.Err)
+		}
+	}
+}
+
+// A prefix run that fails only on something the original run never showed does
+// not reproduce the original failure, so bisection does not name its last
+// member as the culprit (#2753 AC-4).
+func TestTrainDiagnosticOnlyPrefixIsNotCulprit(t *testing.T) {
+	// The full tree fails TestA, which b4 brings in. The prefix b1+b2 fails only
+	// TestB, a failure the original run never showed.
+	cmd := `if test -f b4.txt; then echo '--- FAIL: TestA (0.00s)'; echo FAIL; exit 1; fi; if test -f b2.txt && ! test -f b3.txt; then echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Culprit != "b4" || res.Members[1].Culprit {
+		t.Fatalf("culprit %q, members %+v: a diagnostic-only failure named the culprit", res.Culprit, res.Members)
+	}
+	var only []string
+	for _, d := range res.Diagnostic {
+		only = append(only, d.OnlyInDiagnostic...)
+	}
+	if strings.Join(only, ",") != "TestB" {
+		t.Fatalf("diagnostic-only failures: %+v", res.Diagnostic)
+	}
+	if c, ok := loadTrainCache(w.dir).f.Culprits[res.Members[1].Branch]; ok {
+		t.Errorf("b2 blamed in the train cache: %+v", c)
+	}
+}
+
+// onlyIn compares commands when either run names no test (#2753).
+func TestTrainFailureOnlyInCommand(t *testing.T) {
+	orig := TrainFailure{Command: "go test ./...", Tests: []string{"TestA"}}
+	if got := (TrainFailure{Command: "go vet ./..."}).onlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
+		t.Errorf("different command, no tests: %q", got)
+	}
+	if got := (TrainFailure{Command: "go test ./..."}).onlyIn(orig); len(got) != 0 {
+		t.Errorf("same command, no tests: %q", got)
+	}
+}
+
+// Under --land-green only a prefix that ran green lands: one that failed only
+// on a diagnostic-only test was red, so it never lands (#2753).
+func TestTrainLandGreenSkipsDiagnosticOnlyRedPrefix(t *testing.T) {
+	// b3 brings in TestA, the original failure. The prefix b1+b2 fails only
+	// TestB, which the original run never showed.
+	cmd := `if test -f b3.txt; then echo '--- FAIL: TestA (0.00s)'; echo FAIL; exit 1; fi; if test -f b2.txt; then echo '--- FAIL: TestB (0.00s)'; echo FAIL; exit 1; fi`
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, LandGreen: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Culprit != "b3" {
+		t.Fatalf("culprit %q: %+v", res.Culprit, res.Members)
+	}
+	if len(res.Landed) > 1 {
+		t.Fatalf("landed %q: the b1+b2 prefix ran red", res.Landed)
+	}
+}

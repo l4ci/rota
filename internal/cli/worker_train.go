@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
@@ -68,6 +69,18 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		d.Set("stop", st)
 	}
 	d.Set("landed", strList(r.Landed))
+	d.Set("anyLanded", len(r.Landed) > 0)
+	d.Set("timing", trainTimingData(r))
+	if r.Original != nil {
+		d.Set("originalFailure", failureData(*r.Original))
+	}
+	if len(r.Diagnostic) > 0 {
+		fs := []any{}
+		for _, f := range r.Diagnostic {
+			fs = append(fs, failureData(f))
+		}
+		d.Set("diagnosticFailures", fs)
+	}
 	d.Set("verified", strList(r.Verified))
 	if r.Tier != "" {
 		d.Set("tier", r.Tier)
@@ -91,6 +104,43 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		d.Set("log", r.Log)
 	}
 	return d
+}
+
+func trainTimingData(r worker.TrainResult) *jsonx.Object {
+	o := jsonx.NewObject()
+	o.Set("verifyMs", r.VerifyTime.Milliseconds())
+	o.Set("diagnoseMs", r.DiagnoseTime.Milliseconds())
+	return o
+}
+
+func failureData(f worker.TrainFailure) *jsonx.Object {
+	o := jsonx.NewObject()
+	o.Set("tier", f.Tier)
+	o.Set("command", f.Command)
+	o.Set("tests", strList(f.Tests))
+	o.Set("members", f.Members)
+	o.Set("tip", f.Tip)
+	o.Set("onlyInDiagnostic", strList(f.OnlyInDiagnostic))
+	return o
+}
+
+// trainSummary is the closing line of a train's text: what was spent verifying
+// versus diagnosing and whether anything landed (#2753).
+func trainSummary(r worker.TrainResult) string {
+	landed := "nothing landed"
+	if len(r.Landed) > 0 {
+		landed = fmt.Sprintf("landed %d of %d member(s)", len(r.Landed), len(r.Members))
+	}
+	return fmt.Sprintf("verify %s, diagnose %s; %s", r.VerifyTime.Round(time.Millisecond), r.DiagnoseTime.Round(time.Millisecond), landed)
+}
+
+// trainFailText is the failed train's message, with the timing summary only
+// when verify or diagnose ran: a refusal before verify has none to report.
+func trainFailText(r worker.TrainResult) string {
+	if r.VerifyTime == 0 && r.DiagnoseTime == 0 {
+		return r.Err
+	}
+	return r.Err + "\n" + trainSummary(r)
 }
 
 func planData(p *worker.TrainPlan) *jsonx.Object {
@@ -278,13 +328,13 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			return res, nil
 		}
 		if r.OK() {
-			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "))
+			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s\n%s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "), trainSummary(r))
 			return res, nil
 		}
 		if r.Verdict == worker.GateCancelled {
 			res.Text = cancelledText(r)
 		}
-		e := Failed("%s", r.Err)
+		e := Failed("%s", trainFailText(r))
 		e.Hint = r.Hint
 		return res, e
 	}
