@@ -40,26 +40,20 @@ func (m Mail) Object() *jsonx.Object {
 	o.Set("ts", m.At)
 	o.Set("kind", m.Kind)
 	o.Set("text", m.Text)
+	o.Set("read", m.Read)
 	if m.Actionable {
 		o.Set("actionable", true)
-		o.Set("task", m.Task)
-		o.Set("attempt", m.Attempt)
 		o.Set("disposition", m.Disposition)
-		o.Set("read", m.Read)
-		if m.Reason != "" {
-			o.Set("reason", m.Reason)
+		for _, kv := range [][2]string{{"task", m.Task}, {"attempt", m.Attempt}, {"reason", m.Reason}} {
+			if kv[1] != "" {
+				o.Set(kv[0], kv[1])
+			}
 		}
 	}
 	return o
 }
 
-func (m Mail) raw() *jsonx.Object {
-	o := m.Object()
-	if m.Read {
-		o.Set("read", true)
-	}
-	return o
-}
+func (m Mail) raw() *jsonx.Object { return m.Object() }
 
 func mailFrom(o *jsonx.Object) Mail {
 	seq, _ := o.Get("seq")
@@ -123,6 +117,24 @@ func (s *Slot) Waiting() []Mail {
 	return out
 }
 
+// InboxNext names the inbox commands the slot still owes, built from its state:
+// the --ack step only while mail is unread, the resolve step naming each
+// pending request. "" when nothing is owed.
+func (s *Slot) InboxNext() string {
+	var steps []string
+	if u := s.Unread(); len(u) > 0 {
+		steps = append(steps, fmt.Sprintf("mark the %d unread mail read with `rota worker inbox %s --ack --upto %d`", len(u), s.Name(), u[len(u)-1].Seq))
+	}
+	if p := s.Pending(); len(p) > 0 {
+		seqs := make([]string, len(p))
+		for i, m := range p {
+			seqs[i] = fmt.Sprint(m.Seq)
+		}
+		steps = append(steps, fmt.Sprintf("resolve pending request %s with `rota worker inbox %s --handled <seq> --reason <text>` (`--returned <seq>` when it belongs outside this assignment)", strings.Join(seqs, ", "), s.Name()))
+	}
+	return strings.Join(steps, "; ")
+}
+
 // ResolveMail records an explicit disposition without rewriting previous outcomes.
 // Callers hold the registry update lock.
 func (s *Slot) ResolveMail(seq int, disposition, reason string) (Mail, error) {
@@ -161,6 +173,18 @@ func (s *Slot) endInboxAssignment() {
 				o.Set("reason", "assignment ended; returned to orchestrator for routing")
 			}
 			o.Set("read", true)
+		}
+	}
+}
+
+// renameInboxTask moves the current assignment's pending requests to task, the
+// new name of the same work. Mail of earlier assignments keeps its owner.
+func (s *Slot) renameInboxTask(task string) {
+	v, _ := s.o.Get("inbox")
+	l, _ := v.([]any)
+	for _, e := range l {
+		if o, ok := e.(*jsonx.Object); ok && mailFrom(o).pendingFor(s) {
+			o.Set("task", task)
 		}
 	}
 }
@@ -208,12 +232,13 @@ func (s *Slot) postMail(m Mail) Mail {
 }
 
 func (s *Slot) retractMail(seq int) {
+	hv, _ := s.o.Get("inboxSeq")
+	high, _ := jsonx.Int(hv)
 	for _, m := range s.Inbox() {
-		v, _ := s.o.Get("inboxSeq")
-		n, _ := jsonx.Int(v)
-		if m.Seq > n {
-			s.o.Set("inboxSeq", m.Seq)
-		}
+		high = max(high, m.Seq)
+	}
+	if high > 0 {
+		s.o.Set("inboxSeq", high)
 	}
 	v, _ := s.o.Get("inbox")
 	l, _ := v.([]any)
