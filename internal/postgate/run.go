@@ -15,11 +15,10 @@ type Report struct {
 	Ref, Body string
 }
 
-// Env supplies worker operations and the remote report and parking boundaries.
+// Env supplies worker operations and the remote report boundary.
 type Env struct {
 	Worker worker.Env
 	Report func(context.Context, string, Report) error
-	Park   Park
 }
 
 // Request selects exactly one landing operation. Worker options carry approval
@@ -36,7 +35,6 @@ type GateRun struct {
 	Err      error
 	Issue    string
 	Refused  bool
-	Book     Outcome
 	BookErr  error
 	Warnings []string
 }
@@ -71,7 +69,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		}
 		run.Warnings = e.report(ctx, root, r)
 		if !run.Refused && err == nil {
-			run.Book, run.BookErr = Gate(e.Worker, root, r.Issue, r, e.Park)
+			run.BookErr = Gate(e.Worker, root, r.Issue, r)
 		}
 		return Result{Gate: run}
 	}
@@ -123,7 +121,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		run.Warnings = append(run.Warnings, e.report(ctx, root, g)...)
 	}
 	if !run.Refused && err == nil {
-		run.Book = Train(e.Worker, o.Round, root, issues, r, e.Park)
+		run.Book = Train(e.Worker, o.Round, root, issues, r)
 	}
 	return Result{Train: run}
 }

@@ -918,14 +918,6 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			if run.BookErr != nil {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
 			}
-			if n := run.Book.Bounces; n > 0 {
-				d := res.Data.(*jsonx.Object)
-				d.Set("bounces", n)
-				d.Set("parked", run.Book.Parked)
-			}
-			if run.Book.Parked {
-				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", run.Issue, run.Book.Bounces)
-			}
 		}
 		if r.Verdict == worker.GateAlreadyMerged {
 			res.Text = r.Err
