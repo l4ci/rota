@@ -69,7 +69,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		}
 		run.Warnings = e.report(ctx, root, r)
 		if !run.Refused && err == nil {
-			run.BookErr = Gate(e.Worker, root, r.Issue, r)
+			run.BookErr = Gate(WorkerBook{e.Worker}, root, r.Issue, r)
 		}
 		return Result{Gate: run}
 	}
@@ -121,7 +121,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		run.Warnings = append(run.Warnings, e.report(ctx, root, g)...)
 	}
 	if !run.Refused && err == nil {
-		run.Book = Train(e.Worker, o.Round, root, issues, r)
+		run.Book = Train(WorkerBook{e.Worker}, o.Round, root, issues, r)
 	}
 	return Result{Train: run}
 }
