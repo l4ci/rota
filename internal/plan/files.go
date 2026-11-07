@@ -55,7 +55,7 @@ func (s files) DesignRef(_ bool, design string) (string, error) {
 	if !backlog.ValidID(design, backlog.FileIDDigits) {
 		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like B07, got %q", design)
 	}
-	ref := ".rota/designs/" + design + ".md"
+	ref := rotatree.Rel(rotatree.DesignsDir, design+".md")
 	if _, err := os.Stat(filepath.Join(s.root, ref)); err != nil {
 		return "", exitcode.Errf(exitcode.ExitResolution, "--design file not found: %s", ref)
 	}

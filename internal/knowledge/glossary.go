@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -407,13 +408,13 @@ func (s Store) GlossaryRead(scope string, terms []string) (string, []string, err
 	if err != nil {
 		return "", nil, err
 	}
-	srcs := []src{{up, ".rota/KNOWLEDGE.md"}}
+	srcs := []src{{up, rotatree.Rel(rotatree.KnowledgeFile)}}
 	if scope != "" && scope != Umbrella {
 		sp, err := s.KnowledgePath(scope)
 		if err != nil {
 			return "", nil, err
 		}
-		srcs = append(srcs, src{sp, ".rota/knowledge/" + scope + "/KNOWLEDGE.md"})
+		srcs = append(srcs, src{sp, rotatree.Rel(rotatree.KnowledgeDir, scope, rotatree.KnowledgeFile)})
 	}
 	var b strings.Builder
 	printed := false
