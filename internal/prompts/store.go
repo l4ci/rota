@@ -82,7 +82,7 @@ func validate(body string) error {
 	}
 	for _, p := range placeholder.FindAllString(body, -1) {
 		if p != "{{status}}" && p != "{{closing}}" {
-			return fmt.Errorf("%w: unknown placeholder %s; only {{status}} and {{closing}} are allowed", ErrInvalid, p)
+			return fmt.Errorf("%w: unknown placeholder %q; only {{status}} and {{closing}} are allowed", ErrInvalid, p)
 		}
 	}
 	rest := strings.ReplaceAll(strings.ReplaceAll(body, "{{status}}", ""), "{{closing}}", "")

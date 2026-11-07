@@ -228,3 +228,19 @@ func TestPromptsTextStripsTerminalEscapes(t *testing.T) {
 		}
 	}
 }
+
+// TestPromptsErrorStripsTerminalEscapes: a stored override with a crafted
+// placeholder fails validation, and the error naming it must not carry the
+// escape to the terminal.
+func TestPromptsErrorStripsTerminalEscapes(t *testing.T) {
+	dir := agentsProject(t, `{}`)
+	sum := sha256.Sum256([]byte("b"))
+	store := fmt.Sprintf(`{"version":1,"sections":{"agents.explorer.report":[{"revision":1,"baseline":"b","baselineDigest":%q,"override":"{{status}} {{closing}} {{\u001b]0;x\u0007}}"}]}}`, hex.EncodeToString(sum[:]))
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "prompts.json"), []byte(store), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := rotaIn(t, dir, "prompts", "list")
+	if code != 1 || strings.ContainsAny(stderr, "\x1b\x07") {
+		t.Fatalf("exit %d, want 1 with no control characters: %q", code, stderr)
+	}
+}
