@@ -356,3 +356,48 @@ func TestArchitectureSeededFirstLookCools(t *testing.T) {
 		t.Fatalf("a seeded first look is a review time of now: it cools: %+v", a)
 	}
 }
+
+// Two callers (a `round architecture` run and an autopilot tick) read the
+// facts while the review is due, then both mint. The loser decided on facts
+// the winner has since invalidated, so it must mint nothing (#2747).
+func TestMintReviewStaleFactsMintsNothing(t *testing.T) {
+	closed := []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z")}
+	root, e, be, set := archFixture(t, 2, closed)
+	ctx := context.Background()
+	seedReview(t, root)
+	first, err := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	if err != nil || !first.Due {
+		t.Fatalf("first caller: %+v %v", first, err)
+	}
+	second, err := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	if err != nil || !second.Due {
+		t.Fatalf("second caller: %+v %v", second, err)
+	}
+	if ids, err := e.MintReview(ctx, root, be, first, 3); err != nil || len(ids) != 2 {
+		t.Fatalf("winner minted %v err %v", ids, err)
+	}
+	ids, err := e.MintReview(ctx, root, be, second, 3)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("loser minted %v err %v, want nothing", ids, err)
+	}
+	if len(be.made) != 2 {
+		t.Fatalf("want one item per area, backend created %d", len(be.made))
+	}
+}
+
+// A mint that failed part way leaves recorded items open with the review time
+// unchanged; a caller holding older facts must not mint beside them.
+func TestMintReviewStaleFactsAfterPartialMint(t *testing.T) {
+	closed := []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z")}
+	root, e, be, set := archFixture(t, 2, closed)
+	ctx := context.Background()
+	seedReview(t, root)
+	stale, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	be.add("101", ReviewTitle("cli"), "", false, "")
+	if err := worker.Update(root, func(d *worker.Doc) { RecordReviewItems(d, []string{"101"}) }); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := e.MintReview(ctx, root, be, stale, 3); err != nil || len(ids) != 0 || len(be.made) != 0 {
+		t.Fatalf("minted %v err %v made %d, want nothing", ids, err, len(be.made))
+	}
+}
