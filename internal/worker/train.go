@@ -1385,7 +1385,9 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		}
 		return r, false, nil
 	}
-	lo, hi := 0, len(res.Members)
+	// green is the longest prefix that ran green: a diagnostic-only red prefix
+	// moves lo past it but never makes it landable.
+	lo, hi, green := 0, len(res.Members), 0
 	for hi-lo > 1 {
 		mid := (lo + hi) / 2
 		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
@@ -1396,7 +1398,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 			return 0, true, err
 		}
 		if pr.OK() {
-			lo = mid
+			lo, green = mid, mid
 			continue
 		}
 		// A prefix failing only on what the original run never showed does not
@@ -1431,16 +1433,16 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 	res.Members[hi-1].Culprit = true
 	res.Culprit, res.Verdict = c.Target, GateVerifyFailed
 	res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails %s once %s (%s) is merged; the first %d member(s) pass\n%s",
-		c.Target, tier, c.Target, c.Branch, lo, failed.detail())
+		c.Target, tier, c.Target, c.Branch, green, failed.detail())
 	res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
 	if only := diagnosticOnly(res); len(only) > 0 {
 		res.Err += fmt.Sprintf("\nDIAGNOSTIC-ONLY %s failed in a diagnostic prefix run but not in the original run; it is not confirmed as the cause of the original failure (no passing-alone check ran) and did not pick the culprit", strings.Join(only, ", "))
 	}
-	if !landGreen || lo == 0 {
+	if !landGreen || green == 0 {
 		return 0, true, nil
 	}
-	res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", lo)
-	return lo, false, nil
+	res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", green)
+	return green, false, nil
 }
 
 // recordDiagnostic appends a failed prefix run to res.Diagnostic, marking what
