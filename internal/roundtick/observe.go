@@ -13,6 +13,9 @@ type ObservationSources struct {
 	Reconcile   func(context.Context) (Inspection, error)
 	ReviewLoop  func(context.Context, Slot) ReviewOutcome
 	ReviewFacts func(context.Context) (round.Architecture, bool, error)
+	// AwaitingReview is Env.AwaitingReview without writes: it judges the
+	// last-fetched refs and the local verdicts only.
+	AwaitingReview func(context.Context, Slot, string) string
 }
 
 // Inspection describes repair attempts without claiming their success.
@@ -30,8 +33,12 @@ type Proposal struct {
 	Unchecked   []string
 }
 
+// propose records a in an observation; execution reports what it did instead.
 func (r *Result) propose(a Action, unchecked ...string) {
-	r.Proposed = append(r.Proposed, Proposal{Action: a, Conditional: r.Observed && (len(r.Proposed) > 0 || len(r.Unknown) > 0), Unchecked: unchecked})
+	if !r.Observed {
+		return
+	}
+	r.Proposed = append(r.Proposed, Proposal{Action: a, Conditional: (len(r.Proposed) > 0 || len(r.Unknown) > 0), Unchecked: unchecked})
 }
 
 // land is the shared action boundary after target selection and train fill.

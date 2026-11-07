@@ -95,15 +95,10 @@ func NewEnv(w World, cfg Config) Env {
 		return active
 	}
 	e.Queued = func() []string { return QueuedRefs(w.TolerantRegistry().PRs()) }
-	var repairProposals []string
-	e.ReconcileProposals = func() []string { return repairProposals }
 	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
 		out, err := w.Reconcile(ctx)
 		if err != nil {
 			return nil, nil, err
-		}
-		for _, f := range out.Proposed {
-			repairProposals = append(repairProposals, f.Kind+" "+f.Key())
 		}
 		repaired, drift := ReconcileLines(out)
 		return repaired, drift, nil
@@ -179,6 +174,11 @@ func NewEnv(w World, cfg Config) Env {
 			e.Observe.Reconcile = observer.InspectReconcile
 			e.Observe.ReviewLoop = func(_ context.Context, s Slot) ReviewOutcome { return observer.InspectReviewLoop(s.Name) }
 			e.Observe.ReviewFacts = observer.InspectReviewFacts
+			e.Observe.AwaitingReview = func(_ context.Context, sl Slot, base string) string {
+				why, now := observer.InspectReviewReadiness(sl.Name, base)
+				k.bypass[sl.Name] = now
+				return why
+			}
 		}
 	}
 	return e
@@ -245,4 +245,5 @@ type ObservationWorld interface {
 	InspectReconcile(context.Context) (Inspection, error)
 	InspectReviewLoop(string) ReviewOutcome
 	InspectReviewFacts(context.Context) (round.Architecture, bool, error)
+	InspectReviewReadiness(slot, base string) (string, bool)
 }

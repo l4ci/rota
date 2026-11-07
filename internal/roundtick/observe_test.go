@@ -31,6 +31,12 @@ func observed(f *fake, s *spy, review *round.Architecture) Env {
 			return Inspection{Proposed: f.repaired, Drift: f.drift}, nil
 		},
 		ReviewLoop: func(context.Context, Slot) ReviewOutcome { return ReviewOutcome{} },
+		AwaitingReview: func(_ context.Context, sl Slot, _ string) string {
+			if f.awaiting == nil {
+				return ""
+			}
+			return f.awaiting(sl)
+		},
 	}
 	if review != nil {
 		a := *review
@@ -121,6 +127,13 @@ func TestObserveFirstActionMatchesExecution(t *testing.T) {
 		"landing first": func() *fake {
 			return &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}}, cands: []round.Candidate{cand("#2", true)}}
 		},
+		"review missing holds landing": func() *fake {
+			return &fake{
+				slots:    []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}},
+				cands:    []round.Candidate{cand("#2", true)},
+				awaiting: func(s Slot) string { return "waiting for review-spec, review-quality at head" },
+			}
+		},
 		"assignment first": func() *fake {
 			return &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", false), cand("#2", true)}}
 		},
@@ -143,6 +156,9 @@ func TestObserveFirstActionMatchesExecution(t *testing.T) {
 			}
 			if o.Action != x.Action || o.Target != x.Target {
 				t.Fatalf("observation first %s %s, execution first %s %s", o.Action, o.Target, x.Action, x.Target)
+			}
+			if hasItem(exec.NeedsYou, "awaiting-review", "ben") != hasItem(obs.NeedsYou, "awaiting-review", "ben") {
+				t.Fatalf("awaiting-review hold differs: observed %+v executed %+v", obs.NeedsYou, exec.NeedsYou)
 			}
 		})
 	}

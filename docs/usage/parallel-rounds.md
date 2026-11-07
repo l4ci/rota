@@ -738,8 +738,10 @@ To see what a pass would do before you turn it on, run `rota round tick --observ
 under any `autonomy.level`, needs the round lease like a real tick, and changes nothing: no
 dispatch, claim, relay, gate, merge, mint, audit line or saved autopilot state. It lists each
 proposed repair, review relay, landing and assignment with the checks a real tick still runs,
-marks every proposal after the first as conditional on the earlier ones, and lists what it could
-not check as `unknown`. It is a preview, not an approval: a real tick re-reads state and runs
+marks a proposal conditional when an earlier proposal or an `unknown` entry comes before it, and
+lists what it could not check as `unknown`. A finished PR whose review verdicts are missing is held
+in `needsYou` as `awaiting-review`, as a real tick holds it; the preview reads local verdicts and the
+remote refs as last fetched, so a verdict that exists only as a PR report shows as missing. It is a preview, not an approval: a real tick re-reads state and runs
 every gate.
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
