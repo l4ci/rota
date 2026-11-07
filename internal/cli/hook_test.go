@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -551,5 +552,24 @@ func TestHookStopContextGuardAutoPassesOnBranchHandoff(t *testing.T) {
 	os.WriteFile(note, []byte("paused\n"), 0o644)
 	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); out != "" {
 		t.Errorf("a fresh note at the branch path must pass: %q", out)
+	}
+}
+
+// A payload that names its directory only as workspace.current_dir resolves to
+// it in the statusline, from a process whose own cwd is not a project (AC-3;
+// the hook verbs and the guard share the same Payload rule, see
+// hook.TestParsePayload and hook.TestDecideGuard).
+func TestStatuslineDumpResolvesWorkspaceCurrentDir(t *testing.T) {
+	dir := orchProject(t, false)
+	other := t.TempDir()
+	in := `{"session_id":"s9","workspace":{"current_dir":"` + dir + `"}}`
+	if code, _, errOut := rotaStdin(t, other, in, "statusline", "dump"); code != 0 {
+		t.Fatalf("dump: %d %s", code, errOut)
+	}
+	cd, _ := rotastatetest.CommonDir(dir)
+	p, _ := hook.StatePath(cd, "s9")
+	st, found, err := hook.ReadState(p)
+	if err != nil || !found || st.Cwd != dir {
+		t.Fatalf("state cwd = %q (found %v, err %v), want %q", st.Cwd, found, err, dir)
 	}
 }

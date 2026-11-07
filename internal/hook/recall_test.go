@@ -30,7 +30,7 @@ func TestRecallClaimsConcurrentEntriesAndPreservesRefresh(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("injected %d times, want 1", count)
 	}
-	if err := Dump(dir, []byte(`{"session_id":"session","cwd":"/project"}`), now); err != nil {
+	if err := Dump(dir, mustPayload(t, []byte(`{"session_id":"session","cwd":"/project"}`)), now); err != nil {
 		t.Fatal(err)
 	}
 	if got := Recall(dir, "session", entry, now); got != "" {
@@ -38,7 +38,7 @@ func TestRecallClaimsConcurrentEntriesAndPreservesRefresh(t *testing.T) {
 	}
 	// Another session's statusline cleanup must not forget a still-open
 	// session's already-injected entries, even after the readings expire.
-	if err := Dump(dir, []byte(`{"session_id":"other","cwd":"/project"}`), now.Add(25*time.Hour)); err != nil {
+	if err := Dump(dir, mustPayload(t, []byte(`{"session_id":"other","cwd":"/project"}`)), now.Add(25*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if got := Recall(dir, "session", entry, now.Add(25*time.Hour)); got != "" {

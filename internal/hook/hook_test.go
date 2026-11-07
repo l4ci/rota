@@ -50,7 +50,7 @@ func TestContextPct(t *testing.T) {
 func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 	cd := t.TempDir()
 	in := `{"session_id":"s1","cwd":"/w","context_window":{"used_percentage":10},"rate_limits":{"five_hour":{"used_percentage":3}}}`
-	if err := Dump(cd, []byte(in), t0); err != nil {
+	if err := Dump(cd, mustPayload(t, []byte(in)), t0); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := StatePath(cd, "s1")
@@ -60,7 +60,7 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 	}
 	// Stop hook counters survive the next refresh.
 	UpdateState(p, func(s State, _ bool) State { s.HandoffBlocks, s.HandoffFailed = 2, true; return s })
-	if err := Dump(cd, []byte(`{"session_id":"s1","context_window":{"used_percentage":20}}`), t0.Add(time.Minute)); err != nil {
+	if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"s1","context_window":{"used_percentage":20}}`)), t0.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	st, _, _ = ReadState(p)
@@ -68,8 +68,8 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 		t.Fatalf("counters lost or stale fields kept: %+v", st)
 	}
 	// An old session is swept by another session's dump; a fresh one stays.
-	Dump(cd, []byte(`{"session_id":"old"}`), t0.Add(-48*time.Hour))
-	Dump(cd, []byte(`{"session_id":"s2"}`), t0.Add(2*time.Minute))
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"old"}`)), t0.Add(-48*time.Hour))
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"s2"}`)), t0.Add(2*time.Minute))
 	if _, err := os.Stat(filepath.Join(cd, "rota", "session", "old.json")); !os.IsNotExist(err) {
 		t.Fatalf("old state should be swept: %v", err)
 	}
@@ -80,8 +80,8 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 
 func TestDumpRejectsBadInput(t *testing.T) {
 	cd := t.TempDir()
-	for _, in := range []string{``, `not json`, `[]`, `{}`, `{"session_id":"../x"}`, `{"session_id":"a/b"}`} {
-		if err := Dump(cd, []byte(in), t0); err == nil {
+	for _, in := range []string{`{}`, `{"session_id":"../x"}`, `{"session_id":"a/b"}`} {
+		if err := Dump(cd, mustPayload(t, []byte(in)), t0); err == nil {
 			t.Errorf("%q should fail", in)
 		}
 	}
