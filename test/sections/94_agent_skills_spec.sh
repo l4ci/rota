@@ -184,22 +184,22 @@ pass "F6a[g]: project scope installs at the git toplevel, exits 3 outside a repo
 # (h) doctor: skip with nothing installed, pass when current, fail on an edit
 DRB="$SPEC_TMP/drbin"; mkdir -p "$DRB"; ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq"
 DHOME="$SPEC_TMP/dhome"; DREPO="$SPEC_TMP/drepo"; mkdir -p "$DHOME" "$DREPO"; git -C "$DREPO" init -q
-# dr runs doctor (RC, OUT); dsk <field> reads a field of its skills check.
-dr() { RC=0; OUT="$( cd "$DREPO" && HOME="$DHOME" CLAUDE_CONFIG_DIR= ROTA_TEST_DOCTOR_PATH="$DRB" "$ROTA_BIN" --json doctor 2>/dev/null )" || RC=$?; }
+# dsk <field> reads a field of the skills check in the last doctor run (OUT).
+DR_ENV=(HOME="$DHOME" CLAUDE_CONFIG_DIR= ROTA_TEST_DOCTOR_PATH="$DRB")
 dsk() {
   python3 -c '
 import json, sys
 cs = {c["name"]: c for c in json.load(sys.stdin)["data"]["checks"]}
 print(cs["skills"].get(sys.argv[1], "ABSENT"))' "$1" <<<"$OUT"
 }
-dr
+doctor_run "$DREPO" "${DR_ENV[@]}"
 [ "$(dsk status)" = "skip" ] || fail "F6a[h]: doctor should skip with nothing installed: ${OUT:0:300}"
 case "$(dsk detail)" in *"rota skills install"*) ;; *) fail "F6a[h]: skip detail lacks the install command: ${OUT:0:300}" ;; esac
 hs "$DHOME" "$DREPO" install --agent claude --full
-dr
+doctor_run "$DREPO" "${DR_ENV[@]}"
 [ "$(dsk status)" = "pass" ] || fail "F6a[h]: doctor should pass on a current install: ${OUT:0:300}"
 echo "mine" > "$DHOME/.claude/skills/rota-work/$SK"
-dr
+doctor_run "$DREPO" "${DR_ENV[@]}"
 [ "$(dsk status)" = "fail" ] && [ "$RC" = 1 ] || fail "F6a[h]: doctor should fail on an edited file (rc $RC): ${OUT:0:300}"
 [ "$(dsk hint)" = "run: rota skills update --overwrite" ] || fail "F6a[h]: doctor hint: $(dsk hint)"
 pass "F6a[h]: doctor skips until installed, passes when current, fails on an edit"

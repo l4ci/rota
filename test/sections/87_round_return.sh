@@ -43,7 +43,6 @@ if mode == "labels":
     print(",".join(sorted(issue["labels"])))
 else:
     print("\n=====\n".join(c["body"] for c in issue["comments"]))' "$1" "$2" "$TMP_RR/db.json"; }
-reg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); s=[x for x in d["slots"] if x["name"]==sys.argv[2]][0]; v=s.get(sys.argv[3]); print("" if v is None else v)' "$PROJ/.rota/workers.json" "$1" "$2"; }
 branch_of() { git -C "$PROJ/.worktrees/$1" symbolic-ref --short HEAD; }
 # drifts: "<kind>:<slot>,..|<repaired kind>,.." of a reconcile envelope on stdin.
 drifts() { python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(",".join(x["kind"]+":"+x.get("slot","") for x in d["drift"]) + "|" + ",".join(x["kind"] for x in d["repaired"]))'; }
@@ -92,7 +91,7 @@ for W in '**rota handoff** (return, from ben)' "Branch: \`$B1\`" 'State: committ
   case "$HANDOFF" in *"$W"*) ;; *) fail "handoff comment lacks '$W': $HANDOFF" ;; esac
 done
 case "$HANDOFF" in *"<!-- rota:release ben@1 -->"*) ;; *) fail "the claim must be released: $HANDOFF" ;; esac
-[ -z "$(reg ben task)" ] && [ -z "$(reg ben claimId)" ] && [ "$(reg ben state)" = "idle" ] || fail "ben's slot must be free: $(cat "$PROJ/.rota/workers.json")"
+[ -z "$(slot_field "$PROJ/.rota/workers.json" ben task)" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" ben claimId)" ] && [ "$(slot_field "$PROJ/.rota/workers.json" ben state)" = "idle" ] || fail "ben's slot must be free: $(cat "$PROJ/.rota/workers.json")"
 pass "return pushes the branch, salvages dirty work, posts the handoff, releases the claim and parks the worker's worktree"
 
 # ── return then assign: the issue is a candidate again ──────────────────────
@@ -121,7 +120,7 @@ OUT=$(rr round transfer 1 --to ben --holder-pid "$HOLDER" --note-file "$TMP_RR/n
 [ "$(branch_of ben)" = "$B2" ] || fail "ben must have the existing branch checked out, on $(branch_of ben)"
 [ -f "$PROJ/.worktrees/ben/step.txt" ] || fail "the receiver starts from the pushed work"
 [ "$(branch_of dana)" = "park/dana" ] || fail "the sender is parked, on $(branch_of dana)"
-[ "$(reg ben task)" = "1" ] && [ "$(reg ben claimId)" = "ben@1" ] && [ -z "$(reg dana task)" ] || fail "registry after the transfer: $(cat "$PROJ/.rota/workers.json")"
+[ "$(slot_field "$PROJ/.rota/workers.json" ben task)" = "1" ] && [ "$(slot_field "$PROJ/.rota/workers.json" ben claimId)" = "ben@1" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" dana task)" ] || fail "registry after the transfer: $(cat "$PROJ/.rota/workers.json")"
 [ "$(dbq labels 1)" = "claimed:ben@main,in-progress,type:task" ] || fail "in-progress stays on across a transfer: $(dbq labels 1)"
 case "$(dbq comments 1)" in *"(transfer, from dana)"*"<!-- rota:release dana@1 -->"*"<!-- rota:claim ben@1 -->"*) ;; *) fail "transfer comment and claim order: $(dbq comments 1)" ;; esac
 case "$(cat "$FK/tmux/payload")" in *"handed to you by dana"*) ;; *) fail "the receiver's brief names the handoff: $(cat "$FK/tmux/payload")" ;; esac
@@ -134,7 +133,7 @@ OUT=$(rr round transfer 1 --to human --holder-pid "$HOLDER" --note-file "$TMP_RR
 [ -z "$(echo "$OUT" | jget data.claimId 2>/dev/null || true)" ] || fail "no claim is taken for the human: $OUT"
 [ "$(dbq labels 1)" = "needs-human,type:task" ] || fail "the issue gets needs-human and loses in-progress: $(dbq labels 1)"
 if grep -q 'new-window\|load-buffer' "$FK/tmux/log"; then fail "nothing may be dispatched for the human: $(cat "$FK/tmux/log")"; fi
-[ "$(branch_of ben)" = "park/ben" ] && [ -z "$(reg ben task)" ] || fail "the sender is parked and free"
+[ "$(branch_of ben)" = "park/ben" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" ben task)" ] || fail "the sender is parked and free"
 case ",$(cands)," in *,1,*) fail "candidates must skip a needs-human issue: $(cands)" ;; esac
 gh_ issue edit 1 --remove-label needs-human >/dev/null || fail "could not clear the label"
 case ",$(cands)," in *,1,*) ;; *) fail "clearing the label puts the issue back: $(cands)" ;; esac
@@ -163,7 +162,7 @@ if grep -q 'kill-window' "$FK/tmux/log"; then fail "a refused reclaim must not k
 # the slot unverifiable with its reason. Status shows both, reclaim refuses it
 # (exit 4, blockedBy unverifiable) and --force still needs a host to kill
 # through, so it refuses as above.
-PREV_DANA_STATE="$(reg dana state)"
+PREV_DANA_STATE="$(slot_field "$PROJ/.rota/workers.json" dana state)"
 dana_seed() { python3 - "$PROJ/.rota/workers.json" "$1" "$2" <<'PY' || fail "could not seed dana's state"
 import json, sys
 p, state, reason = sys.argv[1:4]
@@ -194,7 +193,7 @@ pass "an unverifiable slot shows its reason in status, reclaim exits 4 without -
 OUT=$(rr round reclaim dana --holder-pid "$HOLDER" --note-file "$TMP_RR/note.md") || fail "reclaim of a dead slot failed: $OUT"
 [ "$(echo "$OUT" | jget data.health)" = "dead" ] && [ "$(echo "$OUT" | jget data.salvaged)" = "true" ] && [ "$(echo "$OUT" | jget data.released)" = "true" ] && [ "$(echo "$OUT" | jget data.parked)" = "true" ] || fail "reclaim data: $OUT"
 [ -n "$(git -C "$ORIGIN" rev-parse --verify -q "refs/heads/dana/2-second-thing")" ] || fail "reclaim must push the branch"
-[ "$(branch_of dana)" = "park/dana" ] && [ -z "$(reg dana task)" ] && [ -z "$(reg dana handle)" ] && [ "$(reg dana state)" = "idle" ] || fail "dana's slot must be parked and free: $(cat "$PROJ/.rota/workers.json")"
+[ "$(branch_of dana)" = "park/dana" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" dana task)" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" dana handle)" ] && [ "$(slot_field "$PROJ/.rota/workers.json" dana state)" = "idle" ] || fail "dana's slot must be parked and free: $(cat "$PROJ/.rota/workers.json")"
 [ "$(dbq labels 2)" = "type:task" ] || fail "in-progress must be gone: $(dbq labels 2)"
 case "$(dbq comments 2)" in *"Reason: reclaimed, dead"*"rota:handoff dana@1"*) ;; *) fail "reclaim handoff: $(dbq comments 2)" ;; esac
 OUT=$(rr round reclaim dana --holder-pid "$HOLDER") || fail "reclaim of an idle slot failed: $OUT"
@@ -230,7 +229,7 @@ OUT=$(rrsnap round reconcile)
 case "$(echo "$OUT" | drifts)" in *claim-mismatch:ben*) ;; *) fail "reconcile should report the claim mismatch: $OUT" ;; esac
 OUT=$(rrsnap round reconcile --apply)
 case "$(echo "$OUT" | drifts)" in *"|claim-mismatch"*) ;; *) fail "apply should repair the claim: $OUT" ;; esac
-[ "$(reg ben claimId)" = "ben@1" ] && [ "$(reg ben task)" = "3" ] || fail "claimId and task kept: $(cat "$PROJ/.rota/workers.json")"
+[ "$(slot_field "$PROJ/.rota/workers.json" ben claimId)" = "ben@1" ] && [ "$(slot_field "$PROJ/.rota/workers.json" ben task)" = "3" ] || fail "claimId and task kept: $(cat "$PROJ/.rota/workers.json")"
 case "$(dbq comments 3)" in *"rota:claim ben@1"*"rota:release ben@1"*"rota:claim ben@1"*) ;; *) fail "the slot's claim is posted again: $(dbq comments 3)" ;; esac
 
 : > "$FK/tmux/log"
@@ -238,7 +237,7 @@ OUT=$(rrsnap round reclaim ben --holder-pid "$HOLDER") || fail "reclaim of a sta
 [ "$(echo "$OUT" | jget data.health)" = "stalled" ] && [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "stalled reclaim data: $OUT"
 [ "$(echo "$OUT" | jget data.released)" = "true" ] || fail "the re-armed claim is released by the reclaim: $OUT"
 grep -q 'kill-window' "$FK/tmux/log" || fail "a live pane must be killed before its worktree is parked: $(cat "$FK/tmux/log")"
-[ "$(branch_of ben)" = "park/ben" ] && [ -z "$(reg ben task)" ] || fail "ben must be parked and free"
+[ "$(branch_of ben)" = "park/ben" ] && [ -z "$(slot_field "$PROJ/.rota/workers.json" ben task)" ] || fail "ben must be parked and free"
 case "$(dbq comments 3)" in *"Reason: reclaimed, stalled"*) ;; *) fail "reclaim reason: $(dbq comments 3)" ;; esac
 # ── request ids: assign retried after a simulated gh failure (#822) ─────────
 # 3 is free again (ben was just reclaimed). A flaky gh lets the claim land, then
