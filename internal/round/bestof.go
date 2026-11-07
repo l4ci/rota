@@ -81,7 +81,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	set := e.Round
 	id := it.ID
 	res.ID, res.Type = id, it.Type
-	if _, ok := be.(backlog.SharedClaimer); !ok {
+	if _, ok := backlog.Optional[backlog.SharedClaimer](be, func(c backlog.Capabilities) bool { return c.SharedClaims }); !ok {
 		return res, usage("%s is best-of:2, but this backlog cannot hold two claims", id)
 	}
 	if err := o.checkAgent(e.Round.Roster); err != nil {

@@ -205,7 +205,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 	case ClaimMismatch:
 		return e.rearmClaim(root, f)
 	case ClaimLabelDrift:
-		syncer, ok := e.Board.(backlog.ClaimLabelSyncer)
+		syncer, ok := backlog.Optional[backlog.ClaimLabelSyncer](e.Board, func(c backlog.Capabilities) bool { return c.ClaimLabels })
 		if !ok {
 			return fmt.Errorf("backlog cannot sync claim labels")
 		}
