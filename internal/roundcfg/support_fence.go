@@ -34,7 +34,7 @@ const (
 
 var supportFenced = []string{
 	// Merge.
-	"rota worker gate", "rota worker train",
+	"rota worker gate", "rota worker train", "rota worker train cancel",
 	"rota ship merge", "rota ship pr-merge", "rota ship undo",
 	// Runs an arbitrary command.
 	"rota test lock", "rota review probe",
