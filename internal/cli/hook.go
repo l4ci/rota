@@ -61,21 +61,6 @@ func readInput(c *Ctx) []byte {
 	return b
 }
 
-// payloadCwd is the cwd a hook or statusline payload names, else the process
-// working directory.
-func payloadCwd(c *Ctx, m map[string]any) string {
-	if s, _ := m["cwd"].(string); s != "" {
-		return s
-	}
-	if ws, _ := m["workspace"].(map[string]any); ws != nil {
-		if s, _ := ws["current_dir"].(string); s != "" {
-			return s
-		}
-	}
-	d, _ := c.deps().Getwd()
-	return d
-}
-
 func statuslineDump(fs *flag.FlagSet) RunFunc {
 	then := fs.String("then", "", "shell command to run with the same input (the statusline being wrapped)")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -109,15 +94,19 @@ func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
-	var m map[string]any
-	if json.Unmarshal(input, &m) != nil || m == nil {
-		return fmt.Errorf("input is not a JSON object")
-	}
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, payloadCwd(c, m))
+	p, err := hook.ParsePayload(input)
 	if err != nil {
 		return err
 	}
-	return hook.Dump(cd, input, now)
+	cwd := p.Cwd
+	if cwd == "" {
+		cwd, _ = c.deps().Getwd()
+	}
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
+	if err != nil {
+		return err
+	}
+	return hook.Dump(cd, p, now)
 }
 
 // hookPrint is a hook's stdout: one JSON line, no HTML escaping.
@@ -134,7 +123,7 @@ func hookPrint(v any) Result {
 // hookContext is what both hooks need: who the session is relative to the
 // lease, the config of the lease's project and the handoff path.
 type hookContext struct {
-	payload   map[string]any
+	payload   hook.Payload
 	commonDir string
 	who       hook.Who
 	root      string
@@ -156,10 +145,12 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 // not the orchestrator (the context guard), using the project root found from
 // its cwd. The caller tells the two apart by hc.who.Orchestrator.
 func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bool) {
-	if json.Unmarshal(readInput(c), &hc.payload) != nil || hc.payload == nil {
+	var err error
+	if hc.payload, err = hook.ParsePayload(readInput(c)); err != nil {
 		return hc, false
 	}
-	cwd := payloadCwd(c, hc.payload)
+	wd, _ := c.deps().Getwd()
+	cwd := hc.payload.CwdOr(wd)
 	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
 	if err != nil {
 		return hc, false
@@ -249,8 +240,8 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 	if !ok {
 		return Result{}, nil
 	}
-	sid, _ := hc.payload["session_id"].(string)
-	active, _ := hc.payload["stop_hook_active"].(bool)
+	sid := hc.payload.SessionID
+	active, _ := hc.payload.Fields["stop_hook_active"].(bool)
 	if !hc.who.Orchestrator {
 		if d, ok := guardStop(hc, sid); ok && d.Block {
 			return hookPrint(hook.StopOutput(d.Reason)), nil
@@ -320,7 +311,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 		return Result{}, nil
 	}
 	if !hc.who.Orchestrator {
-		sid, _ := hc.payload["session_id"].(string)
+		sid := hc.payload.SessionID
 		line := guardPrompt(hc, sid)
 		if line == "" {
 			return Result{}, nil
@@ -365,7 +356,7 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 	if !ok {
 		return Result{}, nil
 	}
-	source, _ := hc.payload["source"].(string)
+	source := hc.payload.String("source")
 	ho := hook.StatHandoff(hc.handoff)
 	if !ho.Exists {
 		return Result{}, nil
@@ -395,23 +386,18 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 			res = Result{}
 		}
 	}()
-	input := readInput(c)
-	var payload struct {
-		Tool    string `json:"tool_name"`
-		Session string `json:"session_id"`
-		Input   struct {
-			File string `json:"file_path"`
-		} `json:"tool_input"`
+	payload, err := hook.ParsePayload(readInput(c))
+	if err != nil {
+		return Result{}, nil
 	}
-	if json.Unmarshal(input, &payload) == nil && (payload.Tool == "Edit" || payload.Tool == "Write") {
-		var m map[string]any
-		_ = json.Unmarshal(input, &m)
-		cwd := payloadCwd(c, m)
+	wd, _ := c.deps().Getwd()
+	if tool := payload.String("tool_name"); tool == "Edit" || tool == "Write" {
+		cwd := payload.CwdOr(wd)
+		file := payload.String("tool_input", "file_path")
 		root, found := rotatree.Find(cwd)
-		if !found || payload.Input.File == "" {
+		if !found || file == "" {
 			return Result{}, nil
 		}
-		file := payload.Input.File
 		if !filepath.IsAbs(file) {
 			file = filepath.Join(cwd, file)
 		}
@@ -424,7 +410,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		if err != nil {
 			return Result{}, nil
 		}
-		context := hook.Recall(cd, payload.Session, entries, c.deps().Now())
+		context := hook.Recall(cd, payload.SessionID, entries, c.deps().Now())
 		if context == "" {
 			return Result{}, nil
 		}
@@ -446,8 +432,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		}
 		return strings.TrimSpace(r.Stdout), nil
 	}
-	wd, _ := c.deps().Getwd()
-	if reason := hook.DecideGuard(hook.GuardRequest{Payload: input, Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
+	if reason := hook.DecideGuard(hook.GuardRequest{Payload: payload, Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil
