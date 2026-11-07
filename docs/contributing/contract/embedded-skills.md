@@ -32,14 +32,14 @@ repo: none
 data: as `skills install`
 exit: 1 when no root in scope has a manifest (`roots` empty; hint `run: rota skills install`); otherwise as `skills install`
 note: refreshes only roots that already have a manifest. With no flags, it covers every root in both scopes for the current directory, so `rota skills update` after an upgrade refreshes whatever was installed. Each root keeps the mode its manifest records unless `--stub` or `--full` switches it; `--stub` with `--full` exits 1. It never creates a root.
-note: in a git work tree with a `.rota/prompts.json`, data also carries `prompts`: [{"name": string, "status": "changed"|"removed", "revision": int}], one per saved section whose built-in default changed or was removed since its latest revision, and the text adds one line per section naming `rota prompts show`. It reads the store only: no revision is written and no agent file is activated (#2581).
+note: in a git work tree with a `.rota/prompts.json`, data also carries `prompts`: [{"name": string, "status": "changed"|"removed", "revision": int}], one per saved section whose built-in default changed or was removed since its latest revision, and the text adds one line per section naming `rota prompts show`. The report rides on the exit-1 "no skills install found" result too, so a plugin-path project still sees it. It reads the store only: no revision is written and no agent file is activated (#2581).
 
 ### rota prompts list
 rota prompts list
 repo: none
 data: {"sections": [View]}, where View is {"name": string, "revision": int, "status": "default"|"unchanged"|"changed"|"removed", "baseline": string, "baselineDigest": string, "default": string, "template": string, "override": string|null, "effective": string, "history": [{"revision": int, "baseline": string, "baselineDigest": string, "override": string|null}]}
-exit: 1 when `.rota/prompts.json` is malformed or a symlink
-note: read-only. Lists the catalog sections (`agents.explorer.report`, `agents.implementer.report`, `agents.reasoner.report`) plus any saved section this binary no longer has (`removed`). `revision` 0 is never saved. `baseline` is the expanded built-in text the latest revision was saved against (the current default when never saved); `default` and `template` are the current built-in, expanded and raw; `effective` is what `rota agents write` renders (empty for `removed`). A null `override` records an adoption.
+exit: 1 when `.rota/prompts.json` (or `.rota`, or its lock) is malformed, a symlink or holds a stored override that fails template validation
+note: read-only. Lists the catalog sections (`agents.explorer.report`, `agents.implementer.report`, `agents.reasoner.report`) plus any saved section this binary no longer has (`removed`). `revision` 0 is never saved. `baseline` is the expanded built-in text the latest revision was saved against (the current default when never saved); `default` and `template` are the current built-in, expanded and raw; `effective` is what `rota agents write` renders (empty for `removed`). A null `override` records an adoption; such a section follows the default and reports `unchanged` whatever the default became. `changed` means the default moved since an override's baseline.
 
 ### rota prompts show
 rota prompts show <section>

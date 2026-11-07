@@ -85,10 +85,10 @@ func TestSaveValidationAndSafeReads(t *testing.T) {
 				t.Fatal(err)
 			}
 			s := Open(root, Catalog())
-			if _, err := s.List(); !errors.Is(err, ErrInvalid) {
+			if _, err := s.List(); !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("symlink read: %v", err)
 			}
-			if _, err := s.Save("agents.explorer.report", "{{status}} {{closing}}", 0); !errors.Is(err, ErrInvalid) {
+			if _, err := s.Save("agents.explorer.report", "{{status}} {{closing}}", 0); !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("symlink save: %v", err)
 			}
 		})
@@ -127,10 +127,10 @@ func TestMalformedStoreNeverOverwritten(t *testing.T) {
 				t.Fatal(err)
 			}
 			s := Open(root, Catalog())
-			if _, err := s.List(); !errors.Is(err, ErrInvalid) {
+			if _, err := s.List(); !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("malformed read: %v", err)
 			}
-			if _, err := s.Save("agents.explorer.report", "{{status}} {{closing}}", 0); !errors.Is(err, ErrInvalid) {
+			if _, err := s.Save("agents.explorer.report", "{{status}} {{closing}}", 0); !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("malformed save: %v", err)
 			}
 			after, err := os.ReadFile(path)
@@ -226,5 +226,24 @@ func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	}
 	if kept.Status != "unchanged" || kept.Baseline != "New S C" || kept.Effective != "Team modified S C" {
 		t.Fatalf("retained: %+v", kept)
+	}
+}
+
+// TestAdoptedSectionFollowsLaterUpstreamChange: a section whose latest
+// revision adopts the default has nothing to compare, so a later upstream
+// change leaves it unchanged rather than flagging it for review.
+func TestAdoptedSectionFollowsLaterUpstreamChange(t *testing.T) {
+	root := t.TempDir()
+	v1 := Open(root, map[string]Section{"report": {Default: "One {{status}} {{closing}}", Status: "S", Closing: "C"}})
+	if _, err := v1.Adopt("report", 0); err != nil {
+		t.Fatal(err)
+	}
+	v2 := Open(root, map[string]Section{"report": {Default: "Two {{status}} {{closing}}", Status: "S", Closing: "C"}})
+	got, err := v2.Show("report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "unchanged" || got.Effective != "Two S C" {
+		t.Fatalf("adopted after upstream change: status %q effective %q, want unchanged / Two S C", got.Status, got.Effective)
 	}
 }

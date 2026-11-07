@@ -125,3 +125,88 @@ func TestPromptsSkillsUpdateReportsUpstream(t *testing.T) {
 		t.Fatal("skills update activated agent files")
 	}
 }
+
+// TestPromptsDamagedStoreExitsFailed: a malformed or symlinked
+// .rota/prompts.json is store damage, exit 1 on every prompts verb; a bad
+// template from the user stays a usage error, exit 2.
+func TestPromptsDamagedStoreExitsFailed(t *testing.T) {
+	draft := filepath.Join(t.TempDir(), "draft.md")
+	if err := os.WriteFile(draft, []byte("Ok {{status}} {{closing}}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	verbs := [][]string{
+		{"prompts", "list"},
+		{"prompts", "show", "agents.explorer.report"},
+		{"prompts", "save", "agents.explorer.report", "--expect", "1", "--body-file", draft},
+		{"prompts", "adopt", "agents.explorer.report", "--expect", "1"},
+		{"prompts", "restore", "agents.explorer.report", "--expect", "1", "--revision", "1"},
+	}
+	damage := map[string]func(t *testing.T, path string){
+		"malformed": func(t *testing.T, path string) {
+			if err := os.WriteFile(path, []byte(`{"version":1,"sections":{`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"bad stored override": func(t *testing.T, path string) {
+			sum := sha256.Sum256([]byte("b"))
+			body := fmt.Sprintf(`{"version":1,"sections":{"agents.explorer.report":[{"revision":1,"baseline":"b","baselineDigest":%q,"override":"no placeholders"}]}}`, hex.EncodeToString(sum[:]))
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"symlink": func(t *testing.T, path string) {
+			target := filepath.Join(t.TempDir(), "elsewhere.json")
+			if err := os.WriteFile(target, []byte(`{"version":1,"sections":{}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	for name, plant := range damage {
+		t.Run(name, func(t *testing.T) {
+			dir := agentsProject(t, `{}`)
+			path := filepath.Join(dir, ".rota", "prompts.json")
+			plant(t, path)
+			for _, args := range verbs {
+				if code, _, stderr := rotaIn(t, dir, args...); code != 1 {
+					t.Errorf("%v: exit %d, want 1: %s", args, code, stderr)
+				}
+			}
+		})
+	}
+	dir := agentsProject(t, `{}`)
+	bad := filepath.Join(t.TempDir(), "bad.md")
+	if err := os.WriteFile(bad, []byte("no placeholders"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := rotaIn(t, dir, "prompts", "save", "agents.explorer.report", "--expect", "0", "--body-file", bad)
+	if code != 2 || !strings.Contains(stderr, "{{status}}") {
+		t.Fatalf("bad template: exit %d, want 2 naming {{status}}: %s", code, stderr)
+	}
+}
+
+// TestPromptsSkillsUpdateReportsWithoutInstall: a project whose skills come
+// from the plugin has no install for skills update to refresh; the update
+// still fails, and still names a saved section whose default changed.
+func TestPromptsSkillsUpdateReportsWithoutInstall(t *testing.T) {
+	home := t.TempDir()
+	proj, _ := filepath.EvalSymlinks(t.TempDir())
+	gittest.Init(t, proj, "main")
+	sum := sha256.Sum256([]byte("old explorer"))
+	store := fmt.Sprintf(`{"version":1,"sections":{"agents.explorer.report":[{"revision":1,"baseline":"old explorer","baselineDigest":%q,"override":"Team {{status}} {{closing}}"}]}}`, hex.EncodeToString(sum[:]))
+	path := filepath.Join(proj, ".rota", "prompts.json")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.WriteFile(path, []byte(store), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, env, errOut := skillsRun(t, home, proj, "skills", "update", "--agent", "claude", "--scope", "project")
+	if code != 1 {
+		t.Fatalf("update without install: exit %d, want 1: %s", code, errOut)
+	}
+	got, _ := json.Marshal(skData(env)["prompts"])
+	if want := `[{"name":"agents.explorer.report","revision":1,"status":"changed"}]`; string(got) != want {
+		t.Fatalf("prompts report: got %s, want %s", got, want)
+	}
+}
