@@ -304,3 +304,20 @@ func WriteWithPrompts(root string, cfg any, keep func(path string) bool) ([]Entr
 	}
 	return writeEntries(root, es, keep)
 }
+
+// WriteMissingWithPrompts creates only the files that do not exist yet, from
+// the saved prompts. Existing files, drifted or not, are left alone, so a
+// pending save is not activated and active output is not erased.
+func WriteMissingWithPrompts(root string, cfg any) ([]Entry, error) {
+	es, err := CompareWithPrompts(root, cfg)
+	if err != nil {
+		return nil, err
+	}
+	missing := map[string]bool{}
+	for _, e := range es {
+		if e.Status == StatusMissing {
+			missing[e.Path] = true
+		}
+	}
+	return writeEntries(root, es, func(path string) bool { return missing[path] })
+}

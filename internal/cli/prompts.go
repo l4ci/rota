@@ -202,6 +202,8 @@ func promptsErr(err error, name string) error {
 	switch {
 	case errors.Is(err, prompts.ErrCorrupt):
 		return Failed("%s", msg).WithHint("repair or restore .rota/prompts.json from git; rota never rewrites a damaged store")
+	case errors.Is(err, prompts.ErrNewer):
+		return Failed("%s", msg).WithHint("upgrade rota: .rota/prompts.json was written by a newer version and is left untouched")
 	case errors.Is(err, prompts.ErrUnknown):
 		return Usage("%s", msg).WithHint("run: rota prompts list")
 	case errors.Is(err, prompts.ErrInvalid):
