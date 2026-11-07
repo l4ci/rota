@@ -37,7 +37,7 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 			keep = agents.Untracked
 		}
 		if *check {
-			es, err := agents.Compare(root, c.deps().Config(root))
+			es, err := agents.CompareWithPrompts(root, c.deps().Config(root))
 			if err != nil {
 				return Result{}, agentsErr(err)
 			}
@@ -50,7 +50,7 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 			}
 			return Result{Data: data, Text: text}, nil
 		}
-		es, err := agents.WriteOnly(root, c.deps().Config(root), keep)
+		es, err := agents.WriteWithPrompts(root, c.deps().Config(root), keep)
 		if err != nil {
 			return Result{}, agentsErr(err)
 		}

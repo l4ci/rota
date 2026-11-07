@@ -237,11 +237,29 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top); len(plugin) > 0 {
 			hint = "the rota plugin is updated by Claude Code: claude plugin update rota@rota"
 		}
-		return withSkipped(Result{Data: knObj("roots", []any{}, "changed", false)}, skipped),
+		return withSkipped(withPromptsReport(c, Result{Data: knObj("roots", []any{}, "changed", false)}), skipped),
 			Failed("no skills install found in scope").WithHint(hint)
 	}
 	out, err := skillsInstallResult(c, "update", res)
-	return withSkipped(out, skipped), err
+	return withSkipped(withPromptsReport(c, out), skipped), err
+}
+
+// withPromptsReport adds the saved prompt sections whose built-in default
+// changed or was removed, on every skills update path, including a project
+// whose skills come from the plugin and so has no install to update.
+func withPromptsReport(c *Ctx, out Result) Result {
+	stale, lines := promptsUpgradeReport(c.deps().Toplevel(c.Context()))
+	if len(lines) == 0 {
+		return out
+	}
+	if o, ok := out.Data.(*jsonx.Object); ok && len(stale) > 0 {
+		o.Set("prompts", stale)
+	}
+	if out.Text != "" {
+		lines = append([]string{out.Text}, lines...)
+	}
+	out.Text = strings.Join(lines, "\n")
+	return out
 }
 
 // skillsInstallResult renders install and update results, exit 4 when a path

@@ -39,6 +39,7 @@ var supportFenced = []string{
 	// Runs an arbitrary command.
 	"rota test lock", "rota review probe",
 	// Tracked .rota/ writes.
+	"rota prompts save", "rota prompts adopt", "rota prompts restore",
 	"rota decisions supersede", "rota decisions retire", "rota decisions add", "rota decisions amend",
 	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm", "rota knowledge split",
 	"rota knowledge tier fold", "rota knowledge tier set",
@@ -76,6 +77,7 @@ var supportAllowed = []string{
 	// The support machine's hand-back; main is refused inside the verb.
 	"rota round support return",
 	// Reads.
+	"rota prompts list", "rota prompts show",
 	"rota backlog drift", "rota backlog ids", "rota backlog list", "rota backlog milestones", "rota backlog stale",
 	"rota config check", "rota config show",
 	"rota connect list", "rota connect test",
