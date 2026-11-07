@@ -56,6 +56,12 @@ const GateOrder = "order"
 // the CLI exits 0 with the conflict map.
 const GatePlan = "plan"
 
+// The values of TrainOpts.OnFail.
+const (
+	OnFailBisect = "bisect"
+	OnFailStop   = "stop"
+)
+
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
 	// NoWait is GateOpts.NoWait for an autopilot train.
@@ -71,6 +77,10 @@ type TrainOpts struct {
 	// LandGreen lands the verified prefix before the culprit when the train
 	// fails verification.
 	LandGreen bool
+	// OnFail is what a red tier does next: OnFailBisect (the default, "") bisects
+	// growing prefixes to name a culprit; OnFailStop ends the train at once with
+	// the failure as evidence and no attribution.
+	OnFail string
 	// NoVerify lets the train run with an empty test.full (it is refused
 	// otherwise); a set test.full is still run.
 	NoVerify bool
@@ -165,7 +175,24 @@ type TrainResult struct {
 	Excluded, Expired []testledger.Entry
 	// Plan is the conflict map of a --plan run; nil otherwise.
 	Plan *TrainPlan
+	// Stop is the evidence of a red tier under OnFailStop; nil otherwise.
+	Stop *TrainStop
 }
+
+// TrainStop is what a train that stopped on a red tier (OnFailStop) hands the
+// orchestrator in place of a culprit: the failed command, the failing tests
+// when its output names them, the scratch tree and the SHAs that were tested.
+type TrainStop struct {
+	Tier    string
+	Command string   // the failed command (CI: the failed check)
+	Tests   []string // go test's `--- FAIL:` names; empty when the output names none
+	Scratch string   // the scratch tree path; removed when the train exits
+	Base    string   // the base SHA the members were merged onto
+	Members []TrainStopMember
+}
+
+// TrainStopMember is one tested member head.
+type TrainStopMember struct{ Target, SHA string }
 
 // TrainPlan is a train's dry-run answer: which member pairs conflict, the
 // largest conflict-free subset in merge order and the members left out.
@@ -200,6 +227,9 @@ func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	e = e.WithDefaults()
+	if o.OnFail != "" && o.OnFail != OnFailBisect && o.OnFail != OnFailStop {
+		return TrainResult{}, fmt.Errorf("unknown on-fail policy %q: want %s or %s", o.OnFail, OnFailStop, OnFailBisect)
+	}
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
 	}
@@ -959,6 +989,10 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, p.in.cfg.E2E, scratch, p.in.ledger) })
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
+		if o.OnFail == OnFailStop {
+			t.stopTrain(res, p, tier, baseSHA, failed)
+			return true, nil
+		}
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
 		blame(key)
 		return stop, err
@@ -1200,6 +1234,29 @@ func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, erro
 	res.Err = fmt.Sprintf("BASE-MOVED train — %s; landed %d of %d member(s): %s", msg, len(res.Landed), len(res.Members), strings.Join(res.Landed, ", "))
 	res.Hint = fmt.Sprintf("landed %d of %d member(s); re-run the train for the rest on the new base", len(res.Landed), len(res.Members))
 	return res, nil
+}
+
+// stopTrain ends a red tier without diagnosis (OnFailStop): no prefix verify
+// runs, no member is blamed, and the answer carries the evidence in res.Stop.
+func (t *trainRun) stopTrain(res *TrainResult, p trainPlan, tier, baseSHA string, failed VerifyResult) {
+	st := &TrainStop{Tier: tier, Command: strings.Join(failed.Failed, "; "), Scratch: p.scratch, Base: baseSHA}
+	st.Tests, _ = testledger.FailingTests(failed.Log)
+	for i, m := range res.Members {
+		st.Members = append(st.Members, TrainStopMember{Target: m.Target, SHA: p.heads[i]})
+	}
+	res.Stop = st
+	res.Verdict = GateVerifyFailed
+	var b strings.Builder
+	fmt.Fprintf(&b, "TRAIN-FAIL — the train fails %s; no culprit attributed, diagnosis skipped (--on-fail stop); nothing landed\nfailed command: %s\n", tier, st.Command)
+	if len(st.Tests) > 0 {
+		fmt.Fprintf(&b, "failing tests: %s\n", strings.Join(st.Tests, ", "))
+	}
+	fmt.Fprintf(&b, "scratch tree: %s (removed on exit)\nbase: %s\n", st.Scratch, st.Base)
+	for _, m := range st.Members {
+		fmt.Fprintf(&b, "member %s: %s\n", m.Target, m.SHA)
+	}
+	res.Err = b.String() + failed.detail()
+	res.Hint = "fix the failure shown, or re-run without --on-fail stop to bisect for the member"
 }
 
 // bisectTrain finds the first member whose merge makes tier fail, using verify
