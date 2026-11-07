@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.32.0 — 2026-11-07
+
+Train cancel and stop-on-fail, autopilot preview and human follow-ups, a test audit and versioned team prompt overrides.
+
+### Upgrade notes
+
+- **`rota worker done` now waits on actionable mail.** A REVIEW or BASE relay stays pending until the worker resolves it with `rota worker inbox --handled` or `--returned` (each needs `--reason`); `--ack` only marks it read. Ending an assignment returns pending requests to the orchestrator instead of dropping them (#2757).
+- **A damaged `.rota/prompts.json` exits 1, not 2.** A store written by a newer rota is reported as needing an upgrade, not as damage (#2759).
+
+### New
+
+- **Train control.**
+  - `rota worker train cancel` stops a running or queued train. A cancelled train skips bisect and blame, lands nothing further, kills its verify process trees and records verdict `cancelled` (#2790).
+  - `rota worker train --on-fail stop|bisect`. `stop` ends after the failed run with its evidence and names no culprit; `bisect` stays the default (#2754).
+  - Train output prints `PHASE` lines, splits verify and diagnosis timing, and keeps the original failure apart from diagnostic prefix runs (#2761).
+- `rota round tick --observe` shows what the autopilot would do, read-only, through the same ordering, caps and holds as a real tick (#2756).
+- **Human follow-ups.** The autopilot starts a person's request for more work on a queued PR before backlog work. `round.followupReserve` keeps roster slots past `round.slots` for these follow-ups only (#2762).
+- `rota test-audit` reports gate and train durations, flakes, per-module test files, repeated helpers, unwired scripts and README count drift without running a suite. Review gains test-placement rules, and the opt-in `test.audit.maxFullGateSeconds` and `test.audit.prsBetweenAudits` let reconcile suggest a maintenance round (#2758).
+- **Team prompt overrides.** Teams can reword each agent role's report format (`agents.<role>.report`). `.rota/prompts.json` keeps revisions with the baseline each was written against, so an upgrade shows old baseline, new default and override side by side. Only `rota agents write` activates saved text (#2759).
+
+### Fixed
+
+- The PreToolUse worker guard no longer hangs on an `&>` redirect (#2875).
+- `rota round accept` takes a hosted review's completion without a manual poll (#2748).
+- A herdr-core send whose outcome failed to save reports maybe-submitted, not "never picked up" (exit 6) (#2886).
+- A slot whose queued PR waits in a train is assignable again once it moved to other work (#2749).
+- `--land-green` lands only prefixes whose own run was green (#2761).
+- Rota's own review-bounce comment no longer counts as a person's follow-up request (#2762).
+- Pending inbox requests survive a bundle-lead promotion or tracker migration (#2757).
+- Architecture review mints are serialised, so a round run beside the tick no longer mints duplicates (#2760).
+
+### Internal
+
+- About 50 refactors from the latest architecture review: optional backend interfaces declared as capabilities, single owners for shared formats and rules, tree-scan leak guards widened to `.rota/` path literals, and smoke sections moved onto shared `test/lib.sh` helpers and `test/fakes/herdr`.
+
+## Stats
+84 commits, 355 files changed, +13797 −4149 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.31.0...v0.32.0
+
 ## v0.31.0 — 2026-11-05
 
 Safer Core relay delivery, a strict config type check, pinned ship merges and a one-way knowledge tier format.
