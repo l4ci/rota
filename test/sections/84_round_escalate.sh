@@ -12,7 +12,7 @@ mkdir -p "$FK/bin" "$FK/nobin" "$FK/herdr"
 
 # PATH-first wrappers, so `gh` and `herdr` can only be the fakes.
 printf '#!/usr/bin/env bash\nexec bash "%s/fakes/gh" "$@"\n' "$TESTDIR" > "$FK/bin/gh"
-printf '#!/usr/bin/env bash\nexec bash "%s/fakes/herdr" "$@"\n' "$TESTDIR" > "$FK/bin/herdr"
+cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"
 chmod +x "$FK/bin/gh" "$FK/bin/herdr"
 # A PATH without any herdr: only gh (the fake) and what the fakes themselves need.
 cp "$FK/bin/gh" "$FK/nobin/gh"

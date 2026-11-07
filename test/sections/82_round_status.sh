@@ -5,12 +5,9 @@ echo "round status/reconcile: rebuild a round from worktrees and the host snapsh
 # reported unavailable and the host and worktree drift kinds are what we cover.
 RS="$(mktemp -d "$TMP/round-status.XXXXXX")"
 mkdir -p "$RS/fakebin"
-cat > "$RS/fakebin/herdr" <<SH
-#!/usr/bin/env bash
-[ "\$1 \$2" = "api snapshot" ] || { echo "fake herdr: unexpected call \$*" >&2; exit 98; }
-cat "$RS/snapshot.json"
-SH
+cp "$TESTDIR/fakes/herdr" "$RS/fakebin/herdr"  # `api snapshot` prints $FAKE_HERDR/snapshot.json
 chmod +x "$RS/fakebin/herdr"
+mkdir -p "$RS/herdr"
 
 (
   cd "$RS" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
@@ -18,7 +15,7 @@ chmod +x "$RS/fakebin/herdr"
     && git worktree add -q -b dana/58-thing .worktrees/dana main
 ) || fail "round fixture repo setup failed"
 mkdir -p "$RS/.rota"
-printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_status":"working","cwd":"%s/.worktrees/dana","name":"dana","tab_id":"w2:t1"},{"agent":"claude","agent_status":"idle","cwd":"%s/.worktrees/ghost","name":"ghost","tab_id":"w3:t1"},{"agent":"claude","agent_status":"working","cwd":"%s","name":"orchestrator","tab_id":"w4:t1"}]}}}\n' "$RS" "$RS" "$RS" > "$RS/snapshot.json"
+printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_status":"working","cwd":"%s/.worktrees/dana","name":"dana","tab_id":"w2:t1"},{"agent":"claude","agent_status":"idle","cwd":"%s/.worktrees/ghost","name":"ghost","tab_id":"w3:t1"},{"agent":"claude","agent_status":"working","cwd":"%s","name":"orchestrator","tab_id":"w4:t1"}]}}}\n' "$RS" "$RS" "$RS" > "$RS/herdr/snapshot.json"
 # Quota reads use an explicitly enabled executable fake; all other tools retain
 # the runner's poison guard. The fake never opens a Codex home or credentials.
 cat > "$RS/fakebin/codex" <<SH
@@ -29,7 +26,7 @@ chmod +x "$RS/fakebin/codex"
 cat > "$RS/quota.json" <<'JSON'
 {"accountId":"fixture-account","rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":25,"windowDurationMins":10080,"resetsAt":4102444800},"secondary":{"usedPercent":10,"windowDurationMins":300,"resetsAt":4102444800}}}}
 JSON
-RSENV="env HERDR_ENV=1 PATH=$RS/fakebin:$PATH CODEX_HOME=$RS/codex-current ROTA_FAKE_CODEX_QUOTA_FILE=$RS/quota.json ROTA_FAKE_CODEX_QUOTA_LOG=$RS/quota-calls.jsonl"
+RSENV="env HERDR_ENV=1 FAKE_HERDR=$RS/herdr PATH=$RS/fakebin:$PATH CODEX_HOME=$RS/codex-current ROTA_FAKE_CODEX_QUOTA_FILE=$RS/quota.json ROTA_FAKE_CODEX_QUOTA_LOG=$RS/quota-calls.jsonl"
 
 # Empty registry: rows come from the worktrees, matched to the snapshot by cwd.
 OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null ) || vfail
