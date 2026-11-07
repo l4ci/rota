@@ -34,6 +34,7 @@ type fakeHost struct {
 	calls      []string
 	sent       string
 	spawnOpts  host.SpawnOpts
+	onSend     func() // runs inside Send, before it returns
 	receipts   bool // advertise the DeliveryReconciler side (Core)
 }
 
@@ -67,6 +68,9 @@ func (f *fakeHost) Send(_ context.Context, slot, handle, file string) error {
 	f.calls = append(f.calls, "send "+slot+" "+handle)
 	b, _ := os.ReadFile(file)
 	f.sent = string(b)
+	if f.onSend != nil {
+		f.onSend()
+	}
 	return f.sendErr
 }
 func (f *fakeHost) Capture(_ context.Context, slot, handle string, _ int) string {
