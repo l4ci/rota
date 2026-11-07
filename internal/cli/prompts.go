@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/prompts"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 func promptsCommands() *Command {
@@ -34,7 +35,7 @@ func promptsList(fs *flag.FlagSet) RunFunc {
 		}
 		lines := make([]string, 0, len(views))
 		for _, v := range views {
-			lines = append(lines, fmt.Sprintf("%s\trevision %d\t%s", v.Name, v.Revision, v.Status))
+			lines = append(lines, fmt.Sprintf("%s\trevision %d\t%s", tui.Sanitize(v.Name, false), v.Revision, v.Status))
 		}
 		return Result{Data: jsonObj("sections", views), Text: strings.Join(lines, "\n")}, nil
 	}
@@ -146,7 +147,8 @@ func promptsUpgradeReport(root string) (stale []any, lines []string) {
 			continue
 		}
 		stale = append(stale, jsonObj("name", v.Name, "status", v.Status, "revision", v.Revision))
-		lines = append(lines, fmt.Sprintf("prompt %s: built-in default %s since revision %d; compare with: rota prompts show %s", v.Name, v.Status, v.Revision, v.Name))
+		name := tui.Sanitize(v.Name, false)
+		lines = append(lines, fmt.Sprintf("prompt %s: built-in default %s since revision %d; compare with: rota prompts show %s", name, v.Status, v.Revision, name))
 	}
 	return stale, lines
 }
@@ -161,20 +163,22 @@ func promptResult(v prompts.View, changed bool) Result {
 
 // promptText renders a View as labelled blocks, so the recorded baseline, the
 // current default and the override read side by side; --json keeps the View.
+// The store is tracked, so a cloned repo writes its text: every string from it
+// is sanitized before it reaches the terminal.
 func promptText(v prompts.View) string {
 	override := "(none: follows the built-in default)"
 	if v.Override != nil {
 		override = *v.Override
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\trevision %d\t%s\n", v.Name, v.Revision, v.Status)
+	fmt.Fprintf(&b, "%s\trevision %d\t%s\n", tui.Sanitize(v.Name, false), v.Revision, v.Status)
 	for _, blk := range [][2]string{
 		{"Baseline (saved against)", v.Baseline},
 		{"Default (this binary)", v.Default},
 		{"Override", override},
 		{"Effective (rota agents write renders)", v.Effective},
 	} {
-		fmt.Fprintf(&b, "\n%s:\n  %s\n", blk[0], strings.ReplaceAll(blk[1], "\n", "\n  "))
+		fmt.Fprintf(&b, "\n%s:\n  %s\n", blk[0], strings.ReplaceAll(tui.Sanitize(blk[1], true), "\n", "\n  "))
 	}
 	if len(v.History) > 0 {
 		b.WriteString("\nHistory:\n")
@@ -183,7 +187,7 @@ func promptText(v prompts.View) string {
 			if r.Override == nil {
 				kind = "adopt default"
 			}
-			fmt.Fprintf(&b, "  %d\t%s\tbaseline %.12s\n", r.Revision, kind, r.BaselineDigest)
+			fmt.Fprintf(&b, "  %d\t%s\tbaseline %.12s\n", r.Revision, kind, tui.Sanitize(r.BaselineDigest, false))
 		}
 	}
 	return strings.TrimSuffix(b.String(), "\n")

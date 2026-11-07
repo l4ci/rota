@@ -145,11 +145,11 @@ func (s Store) read() (document, error) {
 		}
 		for i, r := range h {
 			if r.Revision != i+1 || r.BaselineDigest != digest(r.Baseline) {
-				return d, fmt.Errorf("%w: corrupt revision in %s", ErrCorrupt, name)
+				return d, fmt.Errorf("%w: corrupt revision in %q", ErrCorrupt, name)
 			}
 			if r.Override != nil {
 				if err := validate(*r.Override); err != nil {
-					return d, fmt.Errorf("%w: %s revision %d: %v", ErrCorrupt, name, r.Revision, err)
+					return d, fmt.Errorf("%w: %q revision %d: %v", ErrCorrupt, name, r.Revision, err)
 				}
 			}
 		}
