@@ -90,6 +90,11 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		}
 	}
 	r, err := e.Worker.Train(ctx, root, o)
+	if r.Verdict == worker.GateCancelled {
+		// The cancel stopped the train, not its bookkeeping: the reports of the
+		// members that landed still go out.
+		ctx = context.WithoutCancel(ctx)
+	}
 	run := TrainRun{Result: r, Err: err, Refused: r.Refused(err)}
 	if o.Plan {
 		return Result{Train: run}

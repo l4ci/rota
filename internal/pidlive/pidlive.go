@@ -129,6 +129,31 @@ func Tree(src Source, root int) []int {
 	return out
 }
 
+// KillTree SIGKILLs the process group of pid (a group leader) and every
+// descendant of pid, also one that moved to its own group or session, such as
+// a test server started with setsid. It reads the tree before it kills
+// anything, so a child the group kill orphans is still in the snapshot, and it
+// kills a snapshot pid only while it is still the process that was read (same
+// start time). The error is the group kill's.
+func KillTree(src Source, pid int) error {
+	tree := Tree(src, pid)
+	starts := make(map[int]uint64, len(tree))
+	for _, p := range tree[1:] {
+		if _, st, ok := src.Stat(p); ok {
+			starts[p] = st
+		}
+	}
+	err := syscall.Kill(-pid, syscall.SIGKILL)
+	for _, p := range tree[1:] {
+		if want, known := starts[p]; known {
+			if _, st, ok := src.Stat(p); ok && st == want {
+				_ = syscall.Kill(p, syscall.SIGKILL)
+			}
+		}
+	}
+	return err
+}
+
 // State reads the ps state letters of pid.
 func (r Real) State(pid int) (string, bool) {
 	out, err := r.ps("-o", "stat=", "-p", strconv.Itoa(pid))

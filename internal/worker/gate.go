@@ -89,6 +89,9 @@ const (
 	GateMergedRemotely = "merged-remotely"
 	GateMergeFailed    = "merge-failed"
 	GateCheckBroke     = "check-broke"
+	// GateCancelled: the train was cancelled (rota worker train cancel, SIGINT
+	// or SIGTERM) before it finished. Not a code or test failure.
+	GateCancelled = "cancelled"
 	// GateApprovalRequired: the merge-approval gate (B1) refused before the
 	// merge; the CLI exits 4 with it.
 	GateApprovalRequired = "approval-required"
