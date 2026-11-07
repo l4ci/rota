@@ -631,7 +631,7 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("empty section body")
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-			ed, ok := be.(backlog.SectionEditor)
+			ed, ok := backlog.Optional[backlog.SectionEditor](be, func(c backlog.Capabilities) bool { return c.SectionEdit })
 			if !ok {
 				return Result{}, &backlog.RefusedError{BlockedBy: blockedby.Backend, Err: backlog.ErrWrongBackend,
 					Hint: "in file mode edit the item's detail file under .rota/ directly",
