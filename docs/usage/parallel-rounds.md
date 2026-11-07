@@ -719,13 +719,15 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
 2. gate and merge every finished PR, as one `worker train` when several wait, at most
    `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`.
    When train fill thresholds are enabled, wait for their count or age rule first;
-3. run the architecture-review trigger (`rota round architecture`): when the
+3. start the [follow-ups](#follow-ups) a person asked for, before any backlog work and within
+   the same `round.autopilotCap`;
+4. run the architecture-review trigger (`rota round architecture`): when the
    threshold is reached, or a slot is idle with nothing assignable, mint the review items
    (`round.architectureEvery` 0 never mints), one audit line per mint;
-4. assign the first ready candidate of the round's scope to each idle slot, at most
+5. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
-   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`). Likewise
+   down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
    go on, and the next tick assigns once an item has landed.
 
@@ -822,6 +824,35 @@ their original task and attempt. The next assignment does not inherit those
 obligations. The orchestrator reads `rota worker inbox <slot> --all` to see returned
 requests and their reasons, then explicitly routes any follow-up through the
 normal assignment or relay flow. The same history includes handled requests.
+
+## Follow-ups
+
+A PR in review has no slot. When a person then asks for more work on it, that request should not
+wait behind fresh backlog work. rota reads each queued PR for review input newer than what its worker
+already saw. The PR becomes a follow-up when that input includes at least one comment or review by a
+person: a login with write access that is not a bot (`<name>[bot]`, GitLab's `project_<n>_bot`
+users). rota's own marked comments (main's `review-bounce` of a support PR included, since rota
+posts it under the maintainer's login), approvals, review verdicts and input from bots or from users
+without write access never make a follow-up. Once a person has asked, the bot and stranger comments
+and a `review-bounce` go to the worker in the same brief. Telling a person from a stranger needs the
+forge's write-access lookup, which rota has for GitHub only: on GitLab no PR becomes a follow-up.
+
+Under `round.reviewLoop: auto` the autopilot starts a follow-up before it assigns any backlog item:
+`round transfer` moves the issue to an idle round slot with the review input as the brief, and counts
+a bounce. Everything a transfer checks still applies: the claim, overlap, the harness and account
+checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it, and
+`round transfer` by hand takes a free round slot: only the `auto` tick uses reserve slots.
+
+`round.followupReserve: N` (default 0) keeps the N roster names after the round's slots for
+follow-ups. `round start` provisions them; `round assign` and the tick never put backlog work there.
+When every round slot is busy, a follow-up takes a free reserve slot: an idle one, or one whose
+follow-up is done (its PR goes back to review). A reserve slot that holds work drains like any slot
+past `round.slots`, so restarting the watch or the round loses nothing. `round status` shows a busy
+reserve slot as `draining` and an idle one as a plain idle row.
+
+A follow-up that cannot start stays pending and the tick lists it as a `followup` item with the
+reason: no idle slot and no reserve, the reserve busy, a roster too short for the reserve, accounts
+cooling down, `round.reviewLoop: manual`, the bounce cap, or the transfer's refusal.
 
 ## Asking the maintainer
 

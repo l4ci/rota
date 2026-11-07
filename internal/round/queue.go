@@ -182,6 +182,8 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(p.Branch, s.Branch()), PR: pr,
 		Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
 		Round: registryRound(root), Relays: s.Relays(), Bundle: s.Bundle(), DecisionContext: s.BriefDecisionContext(),
+		// Input the worker already had is not a follow-up (#2580).
+		ReviewSeen: strutil.FirstNonEmpty(s.ReviewSeen(), worker.ReviewBaseline(e.Worker.Now())),
 	}
 	return worker.Update(root, func(doc *worker.Doc) {
 		if !merged {

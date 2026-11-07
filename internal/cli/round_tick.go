@@ -413,6 +413,47 @@ func (w *tickWorld) Review() roundtick.Reviewer {
 	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
 }
 
+// FollowUp wires the follow-up step (#2580) to the forge and the transfer
+// verb. A round with no queued PR asks the forge nothing.
+func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
+	read := map[string]round.FollowUp{}
+	return roundtick.FollowUpSources{
+		Auto:    w.set.ReviewLoop == roundcfg.ReviewLoopAuto,
+		Size:    w.set.FollowupReserve,
+		Reserve: func() []string { return round.Reserve(w.TolerantRegistry(), w.set) },
+		List: func(ctx context.Context) ([]roundtick.FollowUp, error) {
+			if len(w.TolerantRegistry().PRs()) == 0 {
+				return nil, nil
+			}
+			fg, err := w.c.deps().forge(ctx, w.c.deps().Config(w.root), "", w.root)
+			if err != nil {
+				return nil, trackerErr(err)
+			}
+			list, warns, err := w.renv.FollowUps(ctx, w.root, fg)
+			for _, warn := range warns {
+				w.c.Warn("%s", warn)
+			}
+			var out []roundtick.FollowUp
+			for _, u := range list {
+				read[u.Issue] = u
+				out = append(out, roundtick.FollowUp{Issue: u.Issue, PR: u.PR, Who: strings.Join(u.Humans, ", ")})
+			}
+			return out, err
+		},
+		Start: func(ctx context.Context, f roundtick.FollowUp, slot string, reserve bool) error {
+			u, ok := read[f.Issue]
+			if !ok {
+				return fmt.Errorf("follow-up %s was not read this tick", f.Issue)
+			}
+			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: u, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
+			for _, warn := range res.Warnings {
+				w.c.Warn("%s", warn)
+			}
+			return err
+		},
+	}
+}
+
 func (w *tickWorld) Audit(a roundtick.Action) {
 	if err := gate.Autopilot(w.root, w.c.deps().Now(), "round tick "+a.Action, a.Target, a.Detail); err != nil {
 		w.c.Warn("audit line not written: %v", err)
