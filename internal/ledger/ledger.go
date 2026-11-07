@@ -34,6 +34,8 @@ const (
 	KindPick     = "pick"
 	KindPark     = "park"
 	KindGate     = "gate"
+	// KindVerification records one measured local verification tier, including failed runs.
+	KindVerification = "verification"
 	// KindTrain records one completed train invocation, rather than a member.
 	KindTrain = "train"
 	KindMerge = "merge"
