@@ -16,6 +16,22 @@
 #   pane.txt           text `agent read` prints (plain text, as herdr 0.9.3 does)
 #   prompt_error       error code `agent prompt` fails with (except /exit)
 #   tab_stays          `tab get` keeps succeeding after `tab close`
+#   closed             present: `tab get` fails with tab_not_found. `tab close` creates
+#                      it, `tab create` removes it; a test creates it to start with no tab
+#   close_fails        `tab close` leaves the tab open (no `closed` file)
+#   dirty_on_close     path of a file `tab close` writes "wip" into (an agent racing the close)
+#   pid                a pid `pane process-info` lists as a foreground process
+#   version            what `--version` prints after "herdr " (default 0.9.3)
+#   snapshot.json      what `api snapshot` prints (required for that call)
+#   fired              present: `agent get` reports fired_status (default done) and
+#                      `agent read` prints fired_pane.txt. A test (or its fake socket
+#                      server) creates it to stand for "the agent finished now"
+#   fired_status       agent_status for `agent get` once `fired` exists (default done)
+#   fired_pane.txt     text `agent read` prints once `fired` exists
+#   lag                seconds the next `agent read` sleeps first, once (a loaded machine)
+#   keys_clear_pane    present: `agent send-keys` with enter or esc empties pane.txt (a startup
+#                      dialog is answered or declined); absent: the pane is left alone
+#   snapshot           created by every `agent get`: the marker that a snapshot read finished
 # `integration status` reports the codex line from $CODEX_HOME/.fake-herdr-codex
 # (present: current, absent: not installed); `integration install codex` writes
 # that file. With CODEX_HOME unset they use $FAKE_DEFAULT_CODEX_HOME (the
@@ -36,11 +52,15 @@ case "$1 $2" in
     [[ "$3" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || err invalid_agent_name ;;
 esac
 case "$1 $2" in
+  "--version "*|"--version") echo "herdr $(<"$F/version" 2>/dev/null || echo 0.9.3)" ;;
+  "api snapshot") [ -f "$F/snapshot.json" ] || err snapshot_unset; cat "$F/snapshot.json" ;;
   "tab create")
     ws=w9; prev=""; for a in "$@"; do [ "$prev" = "--workspace" ] && ws="$a"; prev="$a"; done
-    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"
+    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"; rm -f "$F/closed"
     printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
-  "tab close") : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab close")
+    [ -f "$F/dirty_on_close" ] && echo wip >"$(cat "$F/dirty_on_close")"
+    [ -f "$F/close_fails" ] || : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
   "tab get")
     if [ -f "$F/closed" ] && [ ! -f "$F/tab_stays" ]; then err tab_not_found; fi
     echo '{"id":"cli","result":{"tab":{"agent_status":"unknown","focused":false,"label":"x","number":7,"pane_count":1,"tab_id":"w9:t7","workspace_id":"w9"},"type":"tab_info"}}' ;;
@@ -53,17 +73,25 @@ case "$1 $2" in
     agent_json agent_started idle ;;
   "agent get")
     [ -f "$F/gone" ] && err agent_not_found
-    agent_json agent_info "$(cat "$F/status" 2>/dev/null || echo idle)" ;;
+    st="$(cat "$F/status" 2>/dev/null || echo idle)"
+    [ -f "$F/fired" ] && st="$(cat "$F/fired_status" 2>/dev/null || echo done)"
+    : >"$F/snapshot"
+    agent_json agent_info "$st" ;;
   "agent wait") agent_json agent_info "$(cat "$F/wait_status" 2>/dev/null || echo idle)" ;;
   "agent read")
     [ -f "$F/gone" ] && err agent_not_found
-    cat "$F/pane.txt" 2>/dev/null ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
-  "agent send-keys") echo '{"id":"cli","result":{"type":"ok"}}' ;;
+    if [ -f "$F/lag" ]; then sleep "$(cat "$F/lag")"; rm -f "$F/lag"; fi
+    if [ -f "$F/fired" ] && [ -f "$F/fired_pane.txt" ]; then cat "$F/fired_pane.txt"; else cat "$F/pane.txt" 2>/dev/null; fi ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
+  "agent send-keys")
+    [ -f "$F/keys_clear_pane" ] && for k in "${@:4}"; do case "$k" in enter|esc) : >"$F/pane.txt" ;; esac; done
+    echo '{"id":"cli","result":{"type":"ok"}}' ;;
   "agent prompt")
     printf '%s' "$4" >"$F/last_prompt"
     [ -f "$F/prompt_error" ] && [ "$4" != "/exit" ] && err "$(cat "$F/prompt_error")"
     agent_json agent_prompted working ;;
-  "pane process-info") echo '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}' ;;
+  "pane process-info")
+    procs=""; [ -f "$F/pid" ] && procs="{\"pid\":$(cat "$F/pid")}"
+    printf '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[%s],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}\n' "$procs" ;;
   "integration status")
     CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     echo "claude: current (v10) (/x/hook.sh)"

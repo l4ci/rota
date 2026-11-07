@@ -22,16 +22,8 @@ FK="$TMP_DY/fake"
 mkdir -p "$FK/bin" "$FK/herdr" "$FK/doctor"
 
 # ── fakes ───────────────────────────────────────────────────────────────────
-# herdr: test/fakes/herdr plus the two calls it lacks. `api snapshot` prints
-# $FK/snapshot.json; --version reports a supported minor.
-cat > "$FK/bin/herdr" <<SH
-#!/usr/bin/env bash
-case "\$1" in
-  --version) echo "herdr 0.9.3"; exit 0 ;;
-  api) [ "\$2" = snapshot ] && { cat "$FK/snapshot.json"; exit 0; } ;;
-esac
-exec bash "$TESTDIR/fakes/herdr" "\$@"
-SH
+# herdr: test/fakes/herdr. `api snapshot` prints $FK/herdr/snapshot.json.
+cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"
 # gh: pr view|merge go to the one-PR forge fake (real git underneath), the rest
 # (issue and PR threads, pr create) to the tracker fake.
 cat > "$FK/bin/gh" <<SH
@@ -48,17 +40,12 @@ chmod +x "$FK/bin/herdr" "$FK/bin/gh"
 ln -s "$(command -v git)" "$FK/doctor/git"; printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/jq"; chmod +x "$FK/doctor/jq"
 # The bare origin names no forge, so doctor (a reader) assumes github and asks gh (#889).
 printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/gh"; chmod +x "$FK/doctor/gh"
-cat > "$FK/doctor/herdr" <<'SH'
-#!/bin/sh
-case "$1 $2" in
-  "--version "*) echo "herdr 0.9.3" ;;
-  "integration status") echo "claude: current (v10) (/x/hook.sh)"; echo "codex: current (v8) (/x/codex.sh)" ;;
-  *) exit 99 ;;
-esac
-SH
-chmod +x "$FK/doctor/herdr"
+# Doctor's PATH holds only these fakes, so the shared fake gets a bash to run on.
+cp "$TESTDIR/fakes/herdr" "$FK/doctor/herdr"; chmod +x "$FK/doctor/herdr"
+ln -s "$(command -v bash)" "$FK/doctor/bash"
 mkdir -p "$TMP_DY/acct"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' > "$TMP_DY/acct/.credentials.json"
+: > "$TMP_DY/acct/.fake-herdr-codex"  # the fake reports the codex integration as current
 
 # ── fixture repo: bare origin, project clone, one milestone, one item ──────
 # The standing brief `round assign` hands over by pointer: assign refuses
@@ -95,7 +82,7 @@ dyj() { dy "$ROTA_BIN" --json "$@" 2>/dev/null; }
 [ "$(dy bash -c "command -v herdr")" = "$FK/bin/herdr" ] || fail "dry round: herdr must resolve to the fake"
 
 # ── 1. doctor ───────────────────────────────────────────────────────────────
-rc=0; OUT="$(ROTA_TEST_DOCTOR_PATH="$FK/doctor" CLAUDE_CONFIG_DIR="$TMP_DY/acct" "$ROTA_BIN" --json -C "$DY" doctor 2>/dev/null)" || rc=$?
+rc=0; OUT="$(ROTA_TEST_DOCTOR_PATH="$FK/doctor" FAKE_HERDR="$FK/herdr" CODEX_HOME="$TMP_DY/acct" CLAUDE_CONFIG_DIR="$TMP_DY/acct" "$ROTA_BIN" --json -C "$DY" doctor 2>/dev/null)" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: doctor should pass on the fixture, got $rc: $OUT"
 [ "$(jget data.ok <<<"$OUT")" = "true" ] || fail "dry round: doctor data.ok: $OUT"
 [ "$(jget data.checks[2].name <<<"$OUT")" = "host" ] && [ "$(jget data.checks[2].status <<<"$OUT")" = "pass" ] || fail "dry round: doctor host check: $OUT"
@@ -111,7 +98,7 @@ pass "doctor: healthy on the fixture, exit 1 and ok false once herdr is gone"
 printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"forge":{"provider":"github"},"issues":{},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all","review":"none"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
 dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
   || fail "dry round: item create failed"
-printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
+printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/herdr/snapshot.json"
 rc=0; OUT="$(dyj round start --holder-pid "$DYHOLD" --slots 1)" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: start exit $rc: $OUT"
 [ "$(jget data.round <<<"$OUT")" = "1" ] || fail "dry round: first start is round 1: $OUT"
@@ -170,7 +157,7 @@ PY
 : > "$TMP_DY/forge.log"
 # The host still reports ben working; the socket server flips it to done one
 # second after the subscription and sends the event.
-printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_status":"done","cwd":"%s/.worktrees/ben","name":"ben","tab_id":"w9:t7"}]}}}\n' "$DY" > "$FK/snapshot.json"
+printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_status":"done","cwd":"%s/.worktrees/ben","name":"ben","tab_id":"w9:t7"}]}}}\n' "$DY" > "$FK/herdr/snapshot.json"
 cat > "$FK/server.py" <<'PY'
 import json, os, socket, sys, time
 sock, herdr, pr = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -284,7 +271,7 @@ sys.exit(0 if line["gate"] == "merge-approval" and line["note"] == "approve" and
 pass "gate: reuses the approval request, refreshes the report, then merges with the answer in the audit line"
 
 # ── 8. wind-down, then reap ─────────────────────────────────────────────────
-printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
+printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/herdr/snapshot.json"
 rc=0; OUT="$(dyj round wind-down --holder-pid "$DYHOLD")" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: wind-down exit $rc: $OUT"
 [ "$(jget data.verdict <<<"$OUT")" = "clean" ] || fail "dry round: wind-down should be clean: $OUT"
