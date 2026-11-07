@@ -22,6 +22,7 @@ type parsed struct {
 type scanner struct {
 	shlex.Scanner
 	pending []heredoc
+	opEnd   int // index just past the last redirect operator the scanner consumed
 }
 
 type heredoc struct {
@@ -68,6 +69,7 @@ func parseScript(s string) (parsed, error) {
 		case c == '<' || c == '>':
 			if (sc.Peek(1) == '(') && (c == '<' || c == '>') {
 				sc.I++ // process substitution: the ( ends the command and starts a new one
+				sc.opEnd = sc.I
 				continue
 			}
 			if c == '<' && sc.Peek(1) == '<' && sc.Peek(2) != '<' {
@@ -130,7 +132,9 @@ func (sc *scanner) peek(n int) byte {
 // ampersandIsRedirect: `2>&1`, `>&2` and `&>file` are redirections, not
 // command separators.
 func (sc *scanner) ampersandIsRedirect() bool {
-	if sc.I > 0 && (sc.S[sc.I-1] == '>' || sc.S[sc.I-1] == '<') {
+	// The previous byte only counts when the scanner consumed it as an
+	// operator: an escaped or quoted `>` (`echo \>&& cmd`) is a word byte.
+	if sc.I > 0 && sc.opEnd == sc.I && (sc.S[sc.I-1] == '>' || sc.S[sc.I-1] == '<') {
 		return true
 	}
 	return sc.Peek(1) == '>'
@@ -141,6 +145,7 @@ func (sc *scanner) redirect() error {
 	for sc.I < len(sc.S) && strings.IndexByte("<>&|", sc.S[sc.I]) >= 0 {
 		sc.I++
 	}
+	sc.opEnd = sc.I
 	for sc.I < len(sc.S) && (sc.S[sc.I] == ' ' || sc.S[sc.I] == '\t') {
 		sc.I++
 	}
@@ -158,6 +163,7 @@ func (sc *scanner) isBreak(c byte) bool {
 // heredocHeader reads `<<[-] [quote]DELIM[quote]` and queues the body skip.
 func (sc *scanner) heredocHeader() error {
 	sc.I += 2
+	sc.opEnd = sc.I
 	h := heredoc{}
 	if sc.Peek(0) == '-' {
 		h.strip = true

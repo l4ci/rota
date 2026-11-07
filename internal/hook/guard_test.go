@@ -57,6 +57,8 @@ func TestGuardDenies(t *testing.T) {
 		"git push origin :main",
 		"git push --delete origin main",
 		"git push --mirror",
+		`echo \>&& git push --force origin main`,
+		`echo \>& git -C /repo reset --hard`,
 		"git -C /repo reset --hard &>/dev/null",
 		"git push --force origin main &>/dev/null",
 		"git push -fu origin other",
