@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Type is the kind of value a key holds, for editors and the reference page.
@@ -197,7 +198,7 @@ var Keys = []Key{
 	k("issues.labels.sizePrefix", ScopeProject, labels.SizePrefix, false, TypeString, "Prefix of feature size labels, such as size:Major."),
 	k("issues.autoCreateLabel", ScopeProject, true, false, TypeBool, "Create a tracker label the first time something asks for it. When off, adding a missing label fails."),
 	k("issues.homeRepo", ScopeProject, "", false, TypeString, "Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo."),
-	k("release.checklistPath", ScopeProject, ".rota/RELEASE.md", false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
+	k("release.checklistPath", ScopeProject, rotatree.Rel("RELEASE.md"), false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
 	k("release.confirmLargePushCommits", ScopeProject, num("10"), false, TypeInt, "Unpushed commits /rota-release pushes without asking under autonomy.level roundtrip or auto. At or above this it asks once."),
 	k("release.nudgeAfterCommits", ScopeProject, num("10"), false, TypeInt, "Commits since the last release tag before rota release pending suggests /rota-release."),
 	k("release.nudgeAfterDays", ScopeProject, num("14"), false, TypeInt, "Days since the last release tag before rota release pending suggests /rota-release."),

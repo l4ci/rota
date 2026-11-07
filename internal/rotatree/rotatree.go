@@ -5,6 +5,7 @@
 package rotatree
 
 import (
+	"path"
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -32,6 +33,8 @@ const (
 	DecisionsFile   = "DECISIONS.md"
 	MilestonesFile  = "MILESTONES.md"
 	KnowledgeHits   = "knowledge-hits.jsonl"
+	GateAuditFile   = "gate-audit.jsonl"
+	KnowledgeTier   = "knowledge-tier.json"
 
 	DesignsDir    = "designs"
 	PlansDir      = "plans"
@@ -42,7 +45,13 @@ const (
 	KnowledgeDir  = "knowledge"
 	DebugDir      = "debug"
 	QARunsDir     = "qa-runs"
+	HandoffDir    = "handoff"
+	ReviewDir     = "review"
 )
+
+// RelPrefix starts a repo-relative slash path under .rota/; concatenate it
+// with a name constant where a constant is needed, else use Rel.
+const RelPrefix = DirName + "/"
 
 // Dir is the .rota directory of the project at root.
 func Dir(root string) string { return filepath.Join(root, DirName) }
@@ -51,6 +60,10 @@ func Dir(root string) string { return filepath.Join(root, DirName) }
 func File(root string, parts ...string) string {
 	return filepath.Join(append([]string{root, DirName}, parts...)...)
 }
+
+// Rel is the repo-relative, slash-separated path of parts under .rota/, the
+// form git, ignore files and user-facing labels use.
+func Rel(parts ...string) string { return path.Join(append([]string{DirName}, parts...)...) }
 
 // Config is the tracked config.json.
 func Config(root string) string { return File(root, ConfigFile) }

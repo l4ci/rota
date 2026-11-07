@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // validateType checks JSON shapes, leaving enum choices and key-specific rules
@@ -68,8 +69,8 @@ func TypeProblems(env projects.Env, root string) []string {
 		doc  any
 	}{
 		{"global config", globalLayer(env)},
-		{".rota/config.json", fsio.LoadJSON(configPath(root), nil)},
-		{".rota/config.local.json", fsio.LoadJSON(localPath(root), nil)},
+		{rotatree.Rel(rotatree.ConfigFile), fsio.LoadJSON(configPath(root), nil)},
+		{rotatree.Rel(rotatree.ConfigLocalFile), fsio.LoadJSON(localPath(root), nil)},
 	} {
 		for _, k := range Keys {
 			if value, present := walk(layer.doc, k.Name); present {
