@@ -25,6 +25,7 @@ const (
 	ReceiptsFile    = "receipts.json"
 	CountersFile    = "counters.json"
 	IssueMapFile    = "issue-map.json"
+	PromptsFile     = "prompts.json"
 	TestLedgerFile  = "test-ledger.json"
 	BacklogFile     = "BACKLOG.md"
 	ArchiveFile     = "ARCHIVE.md"
@@ -91,6 +92,9 @@ func Milestones(root string) string { return File(root, MilestonesFile) }
 
 // IssueMap is the backlog-ID to issue-number map.
 func IssueMap(root string) string { return File(root, IssueMapFile) }
+
+// Prompts is the team prompt-override store (internal/prompts).
+func Prompts(root string) string { return File(root, PromptsFile) }
 
 // Doc is the markdown file name under a directory such as PlansDir.
 func Doc(root, dir, name string) string { return File(root, dir, name+".md") }

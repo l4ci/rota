@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 var (
@@ -93,11 +93,11 @@ func validate(body string) error {
 func expand(body string, sec Section) string {
 	return strings.NewReplacer("{{status}}", sec.Status, "{{closing}}", sec.Closing).Replace(body)
 }
-func (s Store) path() string { return filepath.Join(s.root, ".rota", "prompts.json") }
+func (s Store) path() string { return rotatree.Prompts(s.root) }
 
 // safe refuses symlinks for reads as well as writes, including the lock sidecar.
 func (s Store) safe() error {
-	for _, p := range []string{filepath.Join(s.root, ".rota"), s.path(), s.path() + ".lock"} {
+	for _, p := range []string{rotatree.Dir(s.root), s.path(), fsio.LockPath(s.path())} {
 		fi, err := os.Lstat(p)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
