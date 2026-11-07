@@ -1436,7 +1436,7 @@ func claimStep(be Board, id, claimID string, holders int, resuming bool, mine *o
 			holder string
 			err    error
 		)
-		sc, shared := be.(backlog.SharedClaimer)
+		sc, shared := backlog.Optional[backlog.SharedClaimer](be, func(c backlog.Capabilities) bool { return c.SharedClaims })
 		switch {
 		case holders <= 1:
 			won, holder, err = be.Claim(id, claimID)
@@ -1575,7 +1575,7 @@ func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fal
 		return step{name: "harness", skip: func() bool { return true }}
 	}
 	if !be.Capabilities().IssueIDs {
-		hs, ok := be.(backlog.HarnessSetter)
+		hs, ok := backlog.Optional[backlog.HarnessSetter](be, func(c backlog.Capabilities) bool { return c.HarnessField })
 		if !ok {
 			return step{name: "harness field", do: func() error {
 				return blocked(BlockQuota, "%s cannot record the harness pick", be.Name())

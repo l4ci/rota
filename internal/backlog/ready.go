@@ -69,11 +69,16 @@ func HasNote(be Backend, ref string) bool {
 		}
 		return false
 	}
-	if f, ok := be.(*File); ok {
-		return f.hasNote(ref)
+	if nf, ok := be.(noteFiler); ok {
+		return nf.hasNote(ref)
 	}
 	return false
 }
+
+// noteFiler is a backend that keeps design and plan notes in files.
+type noteFiler interface{ hasNote(ref string) bool }
+
+var _ noteFiler = (*File)(nil)
 
 func (f *File) hasNote(ref string) bool {
 	if _, err := os.Stat(f.rota("designs", ref+".md")); err == nil {
