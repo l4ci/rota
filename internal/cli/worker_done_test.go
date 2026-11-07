@@ -542,7 +542,7 @@ func TestProofRecordFeedsWorkerDone(t *testing.T) {
 					return expandFiles(c, dir, base, proof.ShellLines(lines)...)
 				},
 				ProofRows: func(id string) ([]proof.Row, error) {
-					rows, _, err := proof.Show(proof.Files(dir), id)
+					rows, _, err := proof.Show(fileProof(dir), id)
 					return rows, err
 				},
 			})

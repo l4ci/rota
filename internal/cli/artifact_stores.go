@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/design"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -64,7 +67,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 			return open()
 		}), w, nil
 	}
-	return root, proof.Files(root), w, nil
+	return root, fileProof(root), w, nil
 }
 
 // itemNoteLockDir is where item-note lockfiles live: the rota state dir under
@@ -113,4 +116,39 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 		be, _, _, err := itemOpen(c, id)
 		return be, err
 	}), nil
+}
+
+// fileProof is the file-mode proof store: the proof package keeps the rows,
+// the backlog says what an item is and where its sidecar lives.
+func fileProof(root string) proof.Store {
+	return proof.Files(proof.Sidecar{
+		Path: func(id string) (string, error) {
+			if !backlog.ValidID(id, backlog.FileIDDigits) {
+				return "", exitcode.Errf(exitcode.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
+			}
+			return backlog.ProofPath(root, id), nil
+		},
+		Title: func(id string) (string, error) {
+			f := &backlog.File{Root: root}
+			_, title, found := backlog.FindOrigin(f.Corpus(), id)
+			if !found {
+				return "", exitcode.Errf(exitcode.ExitResolution, "[%s] not found in BACKLOG.md or ARCHIVE.md", id)
+			}
+			return title, nil
+		},
+		Text: func(id string) (string, bool, error) { return backlog.ProofText(root, id) },
+	})
+}
+
+// proofSha is the commit a proof row names: sha when given, else the HEAD of
+// the repository at dir, "-" when there is none.
+func proofSha(c *Ctx, dir, sha string) string {
+	if sha = strings.Join(strings.Fields(sha), " "); sha != "" {
+		return sha
+	}
+	res, _ := c.deps().Git(c.Context(), dir, "log", "-1", "--format=%h")
+	if h := strings.TrimSpace(res.Stdout); h != "" {
+		return h
+	}
+	return "-"
 }
