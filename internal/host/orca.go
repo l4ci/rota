@@ -295,13 +295,12 @@ func (o *orca) Capture(ctx context.Context, s, h string, n int) string {
 	return p
 }
 func (o *orca) Status(context.Context, string, string) string { return "" }
-func (o *orca) Notify(context.Context, string, string)        {}
 func (o *orca) Send(ctx context.Context, slot, handle, file string) error {
-	text, err := o.d.readFile(file)
+	text, err := o.d.readBrief(file)
 	if err != nil {
 		return err
 	}
-	return o.send(ctx, handle, text)
+	return classifySend(o.send(ctx, handle, text))
 }
 
 const orcaBriefLimit = 120 * 1024
@@ -427,30 +426,38 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if len(matches) > 1 {
 		return fmt.Errorf("unverifiable Orca close: duplicate native handle")
 	}
-	if len(matches) == 1 {
-		if _, e = o.call(ctx, "terminal", "close", "--terminal", h.ID, "--json"); e != nil {
-			return e
-		}
-	}
 	// A runtime restart can remove the native handle without a prior close.
 	// Absence is not process proof: the retained tree must still be all gone.
 	// Round reclaim owns the --force guard for an unverifiable stale handle.
-	gone := func() bool {
-		ts, e := o.terminals(ctx)
-		if e != nil {
-			return false
-		}
-		for _, t := range ts {
-			if t.ID == h.ID && !t.Exited {
-				return false
-			}
-		}
-		return true
-	}
 	probe := evidence.aliveDeps(o.d)
-	if alive, _, ok := killLoop(&probe, evidence.pids(), func() presence { return seenBool(gone()) }); !ok {
+	out, e := runKill(killSteps{
+		deps: &probe, pids: evidence.pids(),
+		close: func() error {
+			if len(matches) == 1 {
+				_, err := o.call(ctx, "terminal", "close", "--terminal", h.ID, "--json")
+				return err
+			}
+			return nil
+		},
+		gone: func() presence {
+			ts, e := o.terminals(ctx)
+			if e != nil {
+				return presentYes
+			}
+			for _, t := range ts {
+				if t.ID == h.ID && !t.Exited {
+					return presentYes
+				}
+			}
+			return presentGone
+		},
+	})
+	if e != nil {
+		return e
+	}
+	if !out.ok {
 		var unknown []int
-		for _, pid := range alive {
+		for _, pid := range out.alive {
 			for _, p := range evidence {
 				if p.PID == pid && p.Start == 0 {
 					unknown = append(unknown, pid)
@@ -462,7 +469,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 		if len(unknown) > 0 {
 			detail = fmt.Sprintf("; no recorded start time (legacy or unreadable at observation):%s; inspect these processes before retrying cleanup", pidList(unknown))
 		}
-		return fmt.Errorf("orca close unproven; surviving processes:%s%s", pidList(alive), detail)
+		return fmt.Errorf("orca close unproven; surviving processes:%s%s", pidList(out.alive), detail)
 	}
 	o.d.FS.Remove(h.PIDFile + ".json")
 	return nil

@@ -11,6 +11,7 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -234,6 +235,13 @@ type Labeler interface {
 	LabelWorkspace(ctx context.Context, token string)
 }
 
+// Notifier is implemented by a host that can raise a user-visible notification
+// (herdr). A host without one (tmux, Core, Orca) has no notification surface;
+// callers ask Capabilities().Notifier instead of a Kind.
+type Notifier interface {
+	Notify(ctx context.Context, title, body string)
+}
+
 // Turn is a host's numbered view of an agent: its native status, the sequence
 // number of its latest state change and, when that change was a finished turn,
 // the same number as CompletionSeq. A field the host did not report is 0.
@@ -287,6 +295,7 @@ type Capabilities struct {
 	Explainer          Explainer
 	PaneReader         PaneReader
 	Labeler            Labeler
+	Notifier           Notifier
 	TurnReader         TurnReader
 	Watcher            Watcher
 	PaneSweeper        PaneSweeper
@@ -347,6 +356,7 @@ func CapabilitiesOf(h any) Capabilities {
 	c.Explainer, _ = h.(Explainer)
 	c.PaneReader, _ = h.(PaneReader)
 	c.Labeler, _ = h.(Labeler)
+	c.Notifier, _ = h.(Notifier)
 	c.TurnReader, _ = h.(TurnReader)
 	c.Watcher, _ = h.(Watcher)
 	c.PaneSweeper, _ = h.(PaneSweeper)
@@ -398,8 +408,6 @@ type Host interface {
 	Status(ctx context.Context, slot, handle string) string
 	// Kill destroys the slot's session and proves it gone.
 	Kill(ctx context.Context, slot, handle string) error
-	// Notify raises a notification where the backend has one.
-	Notify(ctx context.Context, title, body string)
 }
 
 // New returns the selected terminal adapter. Unknown kinds and Solo retain
@@ -459,6 +467,60 @@ func killLoop(d *Deps, pids []int, gone func() presence) (alive []int, unknown, 
 		}
 		d.Sleep(time.Second)
 	}
+}
+
+// killSteps is what an adapter contributes to the shared kill sequence: the
+// process evidence it read before the close, how to close its handle, and how
+// to ask whether the handle is gone. runKill owns the ordering around them.
+type killSteps struct {
+	// deps supplies liveness and the poll clock (an adapter that probes
+	// retained identity passes its own).
+	deps *Deps
+	// pids were read before the close. unverifiedBefore says the query that
+	// should have read them failed, so no later absence can prove cleanup.
+	pids             []int
+	unverifiedBefore bool
+	// close destroys the handle; an error ends the kill without proof.
+	close func() error
+	// gone reports whether the handle no longer exists.
+	gone func() presence
+}
+
+// killOutcome is runKill's verdict: the pids still alive, and whether the last
+// query could not tell (unknown) or everything is proved gone (ok).
+type killOutcome struct {
+	alive            []int
+	unknown, ok      bool
+	unverifiedBefore bool
+}
+
+// runKill is the one kill ordering: close the handle, then poll until both the
+// handle and every pre-recorded pid are gone. A pre-close query that failed
+// downgrades even a clean poll to unproved.
+func runKill(k killSteps) (killOutcome, error) {
+	if err := k.close(); err != nil {
+		return killOutcome{}, err
+	}
+	alive, unknown, ok := killLoop(k.deps, k.pids, k.gone)
+	return killOutcome{alive: alive, unknown: unknown, ok: ok && !k.unverifiedBefore, unverifiedBefore: k.unverifiedBefore}, nil
+}
+
+// err words the outcome for the hosts that answer in a window or tab: nil when
+// proved, else the "could not be verified" or "still running" refusal. tool
+// names the query that failed ("tmux"), target the handle ("window w1:2").
+func (o killOutcome) err(slot, tool, target string) error {
+	switch {
+	case o.ok:
+		return nil
+	case o.unverifiedBefore:
+		return fmt.Errorf("slot '%s' previous session could not be verified (%s): %s query failed before the close, so no process evidence was collected; not spawning a second one",
+			slot, target, tool)
+	case o.unknown:
+		return fmt.Errorf("slot '%s' previous session could not be verified (%s%s): %s query failed after the close; not spawning a second one",
+			slot, target, pidSuffix(o.alive), tool)
+	}
+	return fmt.Errorf("slot '%s' previous session is still running (%s%s); not spawning a second one",
+		slot, target, pidSuffix(o.alive))
 }
 
 func pidList(pids []int) string {

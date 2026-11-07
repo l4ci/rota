@@ -212,7 +212,7 @@ func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
 	fake := &cliHost{}
 	d.Host = func(kind host.Kind) host.Host { asked = append(asked, kind); return fake }
 	if d.workerEnv().NewHost("tmux") != host.Host(fake) ||
-		d.escalationEnv().Host() != host.Host(fake) ||
+		d.escalationEnv().Host("herdr") != host.Host(fake) ||
 		d.orchestrateEnv().Host("herdr") != host.Host(fake) {
 		t.Fatal("a hook built its own host instead of asking Deps.Host")
 	}

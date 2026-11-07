@@ -32,6 +32,11 @@ func corePending(s *Slot) *jsonx.Object {
 	p, _ := v.(*jsonx.Object)
 	return p
 }
+
+// receipts: the host keeps delivery receipts (Core), so its ErrNotSubmitted is
+// proof that nothing went out and its outcome is recorded on the dispatch.
+func receipts(h host.Host) bool { return h.Capabilities().DeliveryReconciler != nil }
+
 func coreOutcome(err error) string {
 	switch {
 	case err == nil:

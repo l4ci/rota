@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,8 +19,8 @@ func TestCorePoolStartsWithoutInventedTerminalHandle(t *testing.T) {
 }
 
 func TestCoreDispatchPreservesUncertainDelivery(t *testing.T) {
-	h := &fakeHost{name: host.HerdrCore}
-	_, err := sendFailure(h, "w1", DispatchResult{}, errors.New("transport lost after possible submission"))
+	h := &fakeHost{receipts: true, name: host.HerdrCore}
+	_, err := sendFailure(h, "w1", DispatchResult{}, fmt.Errorf("%w: transport lost after possible submission", host.ErrMaybeSubmitted))
 	if err == nil || !strings.Contains(err.Error(), "possible submission") || strings.Contains(err.Error(), "never picked up") {
 		t.Fatalf("uncertain Core delivery was rewritten as safe-to-retry: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestCoreDispatchPreservesUncertainDelivery(t *testing.T) {
 func TestCoreTaskRetryKeepsOriginalSession(t *testing.T) {
 	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	h := &fakeHost{name: host.HerdrCore, sendErr: host.ErrDeliveryUnknown}
+	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrDeliveryUnknown}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
 	e := rig.env(h)
 	o := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"}
@@ -56,7 +56,7 @@ func TestCoreTaskRetryKeepsOriginalSession(t *testing.T) {
 func TestCoreDefiniteRetryClearsUnsentAndLogsRelay(t *testing.T) {
 	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	h := &fakeHost{name: host.HerdrCore, sendErr: host.ErrNotSubmitted}
+	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrNotSubmitted}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
 	e := rig.env(h)
 	task := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"}
@@ -89,7 +89,7 @@ func TestCoreDefiniteRetryClearsUnsentAndLogsRelay(t *testing.T) {
 func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
 	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	h := &fakeHost{name: host.HerdrCore, sendErr: host.ErrSubmitted}
+	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrSubmitted}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
 	e := rig.env(h)
 	task := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"}

@@ -402,15 +402,14 @@ func (d *Deps) baseRoundEnv() round.Env {
 	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(d.workerEnv()), Login: d.credentials()}
 }
 
-// escalationEnv is the EscalationEnv hook with its host (always herdr, the
-// only one with notifications) filled from Host.
+// escalationEnv is the EscalationEnv hook with its host filled from Host.
 func (d *Deps) escalationEnv() escalation.Env {
 	e := d.EscalationEnv()
 	if e.Config == nil {
 		e.Config = d.Config
 	}
 	if e.Host == nil {
-		e.Host = func() host.Host { return d.Host(host.Herdr) }
+		e.Host = d.Host
 	}
 	if e.Now == nil {
 		e.Now = d.Now
