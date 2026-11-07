@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
@@ -525,17 +526,23 @@ func TestBlockingLens(t *testing.T) {
 }
 
 func TestLensKinds(t *testing.T) {
-	for _, name := range []string{"security", "perf", "ux"} {
-		k := LensKind(name)
-		if !IsLens(k) || !slices.Contains(BranchKinds, k) {
-			t.Errorf("%s: IsLens=%v, in BranchKinds=%v", k, IsLens(k), slices.Contains(BranchKinds, k))
+	if len(LensKinds) != len(config.LensNames) {
+		t.Fatalf("LensKinds %v does not follow config.LensNames %v", LensKinds, config.LensNames)
+	}
+	for i, name := range config.LensNames {
+		k := LensKinds[i]
+		if k != LensKind(name) || !slices.Contains(BranchKinds, k) {
+			t.Errorf("%s: kind %q, in BranchKinds=%v", name, k, slices.Contains(BranchKinds, k))
 		}
 		if !slices.Contains(kindVerdicts[k], Concerns) {
 			t.Errorf("%s does not accept CONCERNS", k)
 		}
 	}
-	if IsLens(ReviewCross) {
+	if slices.Contains(LensKinds, ReviewCross) {
 		t.Error("review-cross is not a lens")
+	}
+	if got := lensKinds(append(slices.Clone(config.LensNames), "a11y")); !slices.Contains(got, "review-a11y") {
+		t.Errorf("a new lens name does not extend the kinds: %v", got)
 	}
 }
 

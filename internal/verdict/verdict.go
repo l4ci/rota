@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
@@ -70,25 +71,33 @@ const (
 var BranchKinds = append(slices.Clone(readinessReviewKinds), QA, Behaviour)
 
 // LensKinds are the lens review kinds, one per lens name.
-var LensKinds = []string{ReviewSecurity, ReviewPerf, ReviewUX}
+var LensKinds = lensKinds(config.LensNames)
+
+func lensKinds(names []string) []string {
+	kinds := make([]string, len(names))
+	for i, n := range names {
+		kinds[i] = LensKind(n)
+	}
+	return kinds
+}
 
 // LensKind is the verdict kind of the lens called name: review-<name>.
 func LensKind(name string) string { return "review-" + name }
 
-// IsLens reports whether kind is a lens review kind.
-func IsLens(kind string) bool { return slices.Contains(LensKinds, kind) }
-
 var kindVerdicts = map[string][]string{
-	ReviewSpec:     {Pass, Concerns, Fail},
-	ReviewQuality:  {Pass, Concerns, Fail},
-	ReviewCross:    {Pass, Concerns, Fail},
-	ReviewSecurity: {Pass, Concerns, Fail},
-	ReviewPerf:     {Pass, Concerns, Fail},
-	ReviewUX:       {Pass, Concerns, Fail},
-	SecondOpinion:  {Pass, Concerns, Fail},
-	QA:             {Pass, Concerns, Fail, InfraFail},
-	DebugFix:       {Pass, Fail},
-	Behaviour:      {Pass, Fail},
+	ReviewSpec:    {Pass, Concerns, Fail},
+	ReviewQuality: {Pass, Concerns, Fail},
+	ReviewCross:   {Pass, Concerns, Fail},
+	SecondOpinion: {Pass, Concerns, Fail},
+	QA:            {Pass, Concerns, Fail, InfraFail},
+	DebugFix:      {Pass, Fail},
+	Behaviour:     {Pass, Fail},
+}
+
+func init() {
+	for _, k := range LensKinds {
+		kindVerdicts[k] = []string{Pass, Concerns, Fail}
+	}
 }
 
 var rank = map[string]int{Pass: 0, Concerns: 1, Fail: 2, InfraFail: 3}
