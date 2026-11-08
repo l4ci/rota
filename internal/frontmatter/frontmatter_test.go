@@ -44,3 +44,22 @@ func TestCRLF(t *testing.T) {
 		t.Fatalf("got %q %v", got, ok)
 	}
 }
+
+func TestSetField(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"replace", "---\nstatus: open\nfinished: old\n---\nb\n", "---\nstatus: open\nfinished: D\n---\nb\n"},
+		{"insert after", "---\nstatus: done\nz: 1\n---\nb\n", "---\nstatus: done\nfinished: D\nz: 1\n---\nb\n"},
+		{"insert after crlf", "---\r\nstatus: done\r\nz: 1\r\n---\r\nb\r\n", "---\r\nstatus: done\r\nfinished: D\r\nz: 1\r\n---\r\nb\r\n"},
+		{"after absent goes last", "---\nz: 1\n---\nb\n", "---\nz: 1\nfinished: D\n---\nb\n"},
+		{"body line ignored", "---\nstatus: done\n---\nfinished: body\n", "---\nstatus: done\nfinished: D\n---\nfinished: body\n"},
+		{"no frontmatter", "plain\n", "plain\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := SetField(tc.in, "finished", "D", "status")
+			if got != tc.want || ok != (tc.name != "no frontmatter") {
+				t.Errorf("SetField = (%q, %v), want %q", got, ok, tc.want)
+			}
+		})
+	}
+}

@@ -136,34 +136,21 @@ func Finish(root, name string, today func() time.Time) (changed bool, err error)
 	if err = checkName(name); err != nil {
 		return
 	}
-	path := file(root, name)
-	content, rerr := fsio.ReadText(path)
-	if rerr != nil {
-		return false, exitcode.Errf(exitcode.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
-	}
-	fm, _, _ := frontmatter.Parse(content)
-	if _, has := fm["status"]; !has {
-		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
-	}
-	if frontmatter.Str(fm, "status") == "done" {
-		return false, nil
-	}
-	updated, found := frontmatter.UpdateField(content, "status", "done")
-	if !found {
-		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
-	}
-	date := today().Format("2006-01-02")
-	finished := regexp.MustCompile(`(?m)^(finished:\s*).+$`)
-	if finished.MatchString(updated) {
-		loc := finished.FindStringSubmatchIndex(updated)
-		updated = updated[:loc[3]] + date + updated[loc[1]:]
-	} else {
-		st := regexp.MustCompile(`(?m)^(status:\s*done)$`)
-		if loc := st.FindStringSubmatchIndex(updated); loc != nil {
-			updated = updated[:loc[1]] + "\nfinished: " + date + updated[loc[1]:]
+	return artifact.FileDocs{Root: root, Dir: rotatree.SpikesDir, Kind: "spike"}.Update(name, func(content string) (string, error) {
+		fm, _, _ := frontmatter.Parse(content)
+		if _, has := fm["status"]; !has {
+			return "", exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 		}
-	}
-	return true, fsio.WriteFileAtomic(path, []byte(updated))
+		if frontmatter.Str(fm, "status") == "done" {
+			return content, nil
+		}
+		updated, found := frontmatter.UpdateField(content, "status", "done")
+		if !found {
+			return "", exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
+		}
+		updated, _ = frontmatter.SetField(updated, "finished", today().Format("2006-01-02"), "status")
+		return updated, nil
+	})
 }
 
 // Show is the stored spike file.
