@@ -131,6 +131,9 @@ func TestMarkedCommentsEditDropsStateWhenMarkerRemoved(t *testing.T) {
 	if f.shown[id] != "no marker now" || len(f.state) != 0 {
 		t.Fatalf("shown=%q state=%v", f.shown[id], f.state)
 	}
+	if got := strings.Join(f.calls, ","); got != "post a,put a,edit a,drop a" {
+		t.Fatalf("calls=%s, want the edit before the drop", got)
+	}
 	if err := m.Edit(context.Background(), id, "<!-- rota:comment note -->\nagain"); err != nil {
 		t.Fatal(err)
 	}

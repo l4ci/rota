@@ -12,7 +12,7 @@ import (
 const VisibleMax = 32000
 
 // anyRe is one rota (or legacy hv) marker on a line.
-var anyRe = regexp.MustCompile(`<!-- (?:rota|hv):([^\n]*?) -->`)
+var anyRe = regexp.MustCompile(`(?:` + regexp.QuoteMeta(Prefix) + `|` + regexp.QuoteMeta(LegacyPrefix) + `)([^\n]*?) -->`)
 
 // Visible is what a rota comment shows people on a tracker that keeps the full
 // body elsewhere: the body without its markers, blank runs and trailing space
