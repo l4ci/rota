@@ -2,11 +2,11 @@ package config
 
 import (
 	"fmt"
-	"path"
 	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // LensesKey is the config key the review lenses live under.
@@ -64,7 +64,7 @@ func ParseLenses(v any) (Lenses, error) {
 				for _, g := range strs {
 					// path.Match has no "**": only a trailing /** (a directory) is
 					// supported, and any other use would silently match less.
-					if _, err := path.Match(DirGlob(g), ""); err != nil || strings.Contains(DirGlob(g), "**") {
+					if !pathglob.ValidEntry(g) {
 						return nil, fmt.Errorf("%s.paths: glob %q is not supported: use * within a segment, or a trailing /** for a directory", key, g)
 					}
 				}
