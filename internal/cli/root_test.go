@@ -13,6 +13,19 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
+func TestCtxRootKeepsNearestOnMaskedLayout(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	sub := filepath.Join(top, "svc")
+	writeFile(t, filepath.Join(top, ".rota", "repos.json"), `{"repos":[{"name":"svc","path":"svc"}]}`)
+	writeFile(t, filepath.Join(sub, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return sub, nil }
+	got, err := (&Ctx{Deps: d}).Root()
+	if err != nil || got != sub {
+		t.Fatalf("Ctx.Root = %q, %v; want nearest %q (non-masking)", got, err, sub)
+	}
+}
+
 func TestCtxCommonDirHelpers(t *testing.T) {
 	d := testDeps()
 	repo, _ := filepath.EvalSymlinks(t.TempDir())

@@ -59,7 +59,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		}
 		// Gate producers use the main checkout for shared round records.
 		recordRoot := root
-		if main, ok := c.MainCheckout(root); ok {
+		if main, ok := c.MainCheckoutOf(common); ok {
 			recordRoot = main
 		}
 		started := c.deps().Now()
