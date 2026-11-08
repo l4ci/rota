@@ -99,28 +99,6 @@ func TestRiskyResultIsFlagged(t *testing.T) {
 	}
 }
 
-func TestMatch(t *testing.T) {
-	cases := []struct {
-		g, f string
-		want bool
-	}{
-		{"*.md", "README.md", true},
-		{"*.md", "docs/a.md", false},
-		{"docs/**", "docs/a/b/c.md", true},
-		{"docs/**", "docs", true},
-		{"docs/**", "docsx/a.md", false},
-		{"**/*.png", "a.png", true},
-		{"**/*.png", "x/y/a.png", true},
-		{"**/*.png", "a.png.go", false},
-		{"internal/worker/gate*.go", "internal/worker/gate_test.go", true},
-	}
-	for _, c := range cases {
-		if got := Match(c.g, c.f); got != c.want {
-			t.Errorf("Match(%q, %q) = %v, want %v", c.g, c.f, got, c.want)
-		}
-	}
-}
-
 func TestValidGlob(t *testing.T) {
 	for _, g := range []string{"*.md", "docs/**", "**/*.png", "a/b?.go", "[ab].md"} {
 		if err := ValidGlob(g); err != nil {

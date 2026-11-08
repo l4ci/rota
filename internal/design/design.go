@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Store is where designs live. Errors are exitcode.Errors: Create is exit 4
@@ -30,7 +31,7 @@ func Add(s Store, id, title string, today func() time.Time) error {
 	if err := s.CheckID(id); err != nil {
 		return err
 	}
-	return s.Create(id, stubText(normID(id), title, today().Format("2006-01-02")))
+	return s.Create(id, stubText(normID(id), title, stamp.Date(today())))
 }
 
 // Show is the stored design.

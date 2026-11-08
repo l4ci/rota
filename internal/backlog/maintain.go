@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // This file holds the file-backend maintenance verbs: archive, Since backfill
@@ -49,7 +50,7 @@ func (f *File) Archive(days int, today time.Time) (moved int, err error) {
 		var kept []string
 		for _, line := range pystr.Splitlines(content[start:end]) {
 			if d, ok := ParseDone(line); ok {
-				t, perr := time.Parse("2006-01-02", asciiDigits(d.Date))
+				t, perr := time.Parse(stamp.DateLayout, asciiDigits(d.Date))
 				if perr != nil || t.Year() < 1 {
 					return fmt.Errorf("%w: %s", ErrBadDate, d.Date)
 				}

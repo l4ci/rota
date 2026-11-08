@@ -102,3 +102,39 @@ func TestParseISOIsTolerant(t *testing.T) {
 		}
 	}
 }
+
+func TestDateLayoutIsPinned(t *testing.T) {
+	if DateLayout != "2006-01-02" {
+		t.Errorf("DateLayout = %q: dates on disk must stay YYYY-MM-DD", DateLayout)
+	}
+}
+
+func TestDateKeepsTheLocation(t *testing.T) {
+	zone := time.FixedZone("x", 14*3600)
+	at := time.Date(2026, 10, 2, 1, 0, 0, 0, zone)
+	if got := Date(at); got != "2026-10-02" {
+		t.Errorf("Date = %q, want the date in t's own location", got)
+	}
+}
+
+func TestParseDateIsStrict(t *testing.T) {
+	for v, ok := range map[string]bool{
+		"2026-10-02":  true,
+		"2024-02-29":  true,
+		"2026-02-29":  false,
+		"2026-13-01":  false,
+		"2026-1-2":    false,
+		"2026-10-02 ": false,
+		" 2026-10-02": false,
+		"20261002":    false,
+		"":            false,
+	} {
+		got, err := ParseDate(v)
+		if (err == nil) != ok {
+			t.Errorf("ParseDate(%q) error = %v, want ok=%v", v, err, ok)
+		}
+		if ok && Date(got) != v {
+			t.Errorf("ParseDate(%q) = %v", v, got)
+		}
+	}
+}
