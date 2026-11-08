@@ -3,6 +3,7 @@ package worker
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -22,6 +23,9 @@ import (
 func LedgerRound(env Env, root string) int {
 	env = env.WithDefaults()
 	cd, err := rotastate.CommonDirVia(env.Ctx, env.Git, root)
+	if errors.Is(err, rotastate.ErrNotRepo) {
+		return 0 // no repository, no lease: nothing to warn about
+	}
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0
@@ -79,18 +83,9 @@ func (env Env) ledgerIn(m *RoundMemo) *ledger.Recorder {
 	}
 }
 
-// LedgerNote appends e to the round ledger through env's Recorder.
-func LedgerNote(env Env, root string, e ledger.Entry) { env.Ledger().Note(root, e) }
-
-// LedgerNoteIn is LedgerNote reading the round through m.
+// LedgerNoteIn appends e through env's Recorder, reading the round through m.
 func LedgerNoteIn(env Env, m *RoundMemo, root string, e ledger.Entry) {
 	env.ledgerIn(m).Note(root, e)
-}
-
-// LedgerAppendErr is LedgerNote that returns the failure instead of warning,
-// for a verb that must exit non-zero when its ledger row is not written.
-func LedgerAppendErr(env Env, root string, e ledger.Entry) error {
-	return env.Ledger().AppendErr(root, e)
 }
 
 // ledgerSlot is the slot an entry belongs to: the one it names, else the first
