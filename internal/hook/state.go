@@ -3,7 +3,6 @@ package hook
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -63,18 +62,8 @@ func StatePath(commonDir, sessionID string) (string, error) {
 
 // ReadState loads a state file. found is false for a missing file; a file
 // that does not parse is an error.
-func ReadState(path string) (st State, found bool, err error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return st, false, nil
-	}
-	if err != nil {
-		return st, false, err
-	}
-	if err := json.Unmarshal(b, &st); err != nil {
-		return State{}, false, fmt.Errorf("%s: %w", path, err)
-	}
-	return st, true, nil
+func ReadState(path string) (State, bool, error) {
+	return fsio.ReadJSON[State](path)
 }
 
 // Sessions is every readable session state file under a git common dir.

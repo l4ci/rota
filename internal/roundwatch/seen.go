@@ -21,11 +21,10 @@ func NewSeenStore(cd string) *SeenStore { return &SeenStore{path: rotastate.File
 
 // Seen returns the recorded entries; a missing or unreadable record is empty.
 func (s *SeenStore) Seen() map[string]string {
-	out := map[string]string{}
-	if b, err := os.ReadFile(s.path); err == nil {
-		_ = json.Unmarshal(b, &out)
+	if m, found, err := fsio.ReadJSON[map[string]string](s.path); err == nil && found && m != nil {
+		return m
 	}
-	return out
+	return map[string]string{}
 }
 
 // Mark merges m into the record. It never drops an entry: one that vanishes
