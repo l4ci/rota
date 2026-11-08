@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
@@ -164,7 +165,7 @@ func (s SummarySource) HighestRound() int {
 }
 
 // Fold applies source diagnostics to the selected round's scorecard.
-func (source SummarySource) Fold(audit []*jsonx.Object, round int) Summary {
+func (source SummarySource) Fold(audit []gate.Record, round int) Summary {
 	s := Fold(source.Entries, audit, round)
 	s.SkippedLedgerLines = source.skippedLines
 	if source.err != nil {

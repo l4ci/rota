@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 )
 
@@ -17,6 +18,28 @@ func readLocal(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func TestAutonomyLevelFallsBackToOff(t *testing.T) {
+	level := func(v string) any {
+		cfg, err := jsonx.Decode([]byte(`{"autonomy": {"level": ` + v + `}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	for name, tc := range map[string]struct {
+		cfg  any
+		want string
+	}{
+		"set":      {level(`"auto"`), "auto"},
+		"empty":    {level(`""`), "off"},
+		"non-text": {level(`3`), "off"},
+	} {
+		if got := AutonomyLevel(tc.cfg); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
 }
 
 func TestAutonomyLevelEnum(t *testing.T) {

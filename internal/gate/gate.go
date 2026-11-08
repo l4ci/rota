@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
@@ -99,9 +98,10 @@ func (r *Refused) Hint() string {
 // Clear lets a gated action through or refuses it. Malformed confirmation
 // pairs return ErrBadConfirm before any audit write. Without --confirm it
 // returns *Refused, whatever autonomy.level says. With a valid confirmation,
-// it appends the approval to the audit log before the caller acts. paths
-// travels into the refusal for merge-approval.
-func Clear(root string, cfg any, now time.Time, name, verb, target string, c Confirm, paths []string) error {
+// it appends the approval, stamped with autonomy (the autonomy.level in
+// force), to the audit log before the caller acts. paths travels into the
+// refusal for merge-approval.
+func Clear(root, autonomy string, now time.Time, name, verb, target string, c Confirm, paths []string) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
@@ -111,43 +111,78 @@ func Clear(root string, cfg any, now time.Time, name, verb, target string, c Con
 		}
 		return &Refused{Gate: name, Paths: paths}
 	}
-	autonomy := "off"
-	if v, err := config.Value(cfg, "autonomy.level"); err == nil {
-		if s, ok := v.(string); ok {
-			autonomy = s
-		}
-	}
-	rec := jsonx.NewObject()
-	rec.Set("ts", stamp.Format(now))
-	rec.Set("gate", name)
-	rec.Set("verb", verb)
-	rec.Set("target", target)
-	rec.Set("note", c.Note)
-	rec.Set("autonomy", autonomy)
-	if c.Escalation != "" {
-		rec.Set("escalation", c.Escalation)
-	}
-	return appendAudit(root, rec)
+	return AppendAudit(root, Record{TS: now, Gate: name, Verb: verb, Target: target, Note: c.Note,
+		Autonomy: autonomy, Escalation: c.Escalation})
 }
 
 // Autopilot appends an autopilot action to the audit log, one line per assign,
 // merge or repair. These are not human approvals: gate is "autopilot" and the
 // note says what was done.
 func Autopilot(root string, now time.Time, verb, target, note string) error {
-	rec := jsonx.NewObject()
-	rec.Set("ts", stamp.Format(now))
-	rec.Set("gate", "autopilot")
-	rec.Set("verb", verb)
-	rec.Set("target", target)
-	rec.Set("note", note)
-	return appendAudit(root, rec)
+	return AppendAudit(root, Record{TS: now, Gate: "autopilot", Verb: verb, Target: target, Note: note})
 }
 
-// ReadAudit returns the audit log's lines in order. A missing log is no lines;
-// a line that is not a JSON object is skipped.
-func ReadAudit(root string) ([]*jsonx.Object, error) {
-	var out []*jsonx.Object
-	_, err := fsio.ReadLines(filepath.Join(root, AuditFile), fsio.Lenient, func(line []byte) error {
+// Record is one line of the audit log. Autonomy and Escalation are omitted
+// from the line when empty.
+type Record struct {
+	TS                       time.Time
+	Gate, Verb, Target, Note string
+	Autonomy, Escalation     string
+}
+
+func (r Record) object() *jsonx.Object {
+	o := jsonx.NewObject()
+	o.Set("ts", stamp.Format(r.TS))
+	o.Set("gate", r.Gate)
+	o.Set("verb", r.Verb)
+	o.Set("target", r.Target)
+	o.Set("note", r.Note)
+	if r.Autonomy != "" {
+		o.Set("autonomy", r.Autonomy)
+	}
+	if r.Escalation != "" {
+		o.Set("escalation", r.Escalation)
+	}
+	return o
+}
+
+// recordOf reads the fields it knows; one that is missing or not a string is
+// empty, and an unparseable ts is the zero time.
+func recordOf(o *jsonx.Object) Record {
+	ts, _ := stamp.Parse(jsonx.Str(o, "ts"))
+	return Record{TS: ts, Gate: jsonx.Str(o, "gate"), Verb: jsonx.Str(o, "verb"), Target: jsonx.Str(o, "target"),
+		Note: jsonx.Str(o, "note"), Autonomy: jsonx.Str(o, "autonomy"), Escalation: jsonx.Str(o, "escalation")}
+}
+
+// AppendAudit writes r as one line to the audit log under its lock and syncs it.
+func AppendAudit(root string, r Record) error {
+	line, err := jsonx.MarshalCompact(r.object())
+	if err != nil {
+		return err
+	}
+	return fsio.AppendLine(filepath.Join(root, AuditFile), line, 0o644)
+}
+
+// ReadAudit returns the audit log's records in order. A missing log is no
+// records; a line that is not a JSON object is skipped.
+func ReadAudit(root string) ([]Record, error) {
+	out, err := readAudit(root, fsio.Lenient)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return out, err
+}
+
+// ReadAuditStrict is ReadAudit that also stops, with a *fsio.LineError, at a
+// line that is not a JSON object or lacks gate or ts. A missing log returns
+// the os.ErrNotExist error, so a caller can tell no log from an empty one.
+func ReadAuditStrict(root string) ([]Record, error) {
+	return readAudit(root, fsio.Strict)
+}
+
+func readAudit(root string, policy fsio.LinePolicy) ([]Record, error) {
+	var out []Record
+	_, err := fsio.ReadLines(filepath.Join(root, AuditFile), policy, func(line []byte) error {
 		v, err := jsonx.Decode(line)
 		if err != nil {
 			return err
@@ -156,22 +191,17 @@ func ReadAudit(root string) ([]*jsonx.Object, error) {
 		if !ok {
 			return errors.New("not a JSON object")
 		}
-		out = append(out, o)
+		if policy == fsio.Strict {
+			for _, k := range []string{"gate", "ts"} {
+				if v, _ := o.Get(k); v == nil {
+					return errors.New("incomplete approval record")
+				}
+			}
+		}
+		out = append(out, recordOf(o))
 		return nil
 	})
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
 	return out, err
-}
-
-// appendAudit writes one line to the audit log under its lock and syncs it.
-func appendAudit(root string, rec *jsonx.Object) error {
-	line, err := jsonx.MarshalCompact(rec)
-	if err != nil {
-		return err
-	}
-	return fsio.AppendLine(filepath.Join(root, AuditFile), line, 0o644)
 }
 
 // Merge approval modes (ship.mergeApproval).
@@ -190,27 +220,20 @@ type MergePolicy struct {
 // ErrBadMergeMode is a ship.mergeApproval value other than none, all, paths.
 var ErrBadMergeMode = errors.New("ship.mergeApproval must be none, all or paths")
 
-// LoadMergePolicy reads the merge policy from a loaded project config.
-func LoadMergePolicy(cfg any) (MergePolicy, error) {
+// NewMergePolicy builds the policy from ship.mergeApproval and
+// ship.mergeApprovalPaths. A mode other than none, all or paths is
+// ErrBadMergeMode; paths are trimmed and blank ones dropped.
+func NewMergePolicy(mode string, paths []string) (MergePolicy, error) {
 	var p MergePolicy
-	v, err := config.Value(cfg, "ship.mergeApproval")
-	if err != nil {
-		return p, err
-	}
-	mode, _ := v.(string)
 	switch mode {
 	case MergeNone, MergeAll, MergePaths:
 		p.Mode = mode
 	default:
-		return p, fmt.Errorf("%w (got %v)", ErrBadMergeMode, v)
+		return p, fmt.Errorf("%w (got %v)", ErrBadMergeMode, mode)
 	}
-	if v, err = config.Value(cfg, "ship.mergeApprovalPaths"); err != nil {
-		return p, err
-	}
-	list, _ := v.([]any)
-	for _, e := range list {
-		if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
-			p.Paths = append(p.Paths, strings.TrimSpace(s))
+	for _, s := range paths {
+		if s = strings.TrimSpace(s); s != "" {
+			p.Paths = append(p.Paths, s)
 		}
 	}
 	return p, nil

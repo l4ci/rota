@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -210,18 +209,11 @@ func ReadTelemetry(root string, checkpoint Checkpoint, maxSeconds, prs int) Tele
 			}
 		}
 	}
-	count := 0
-	missing, err = readLines(filepath.Join(root, gate.AuditFile), func(line []byte) error {
-		var o map[string]any
-		if err := json.Unmarshal(line, &o); err != nil {
-			return err
-		}
-		if o["gate"] == nil || o["ts"] == nil {
-			return fmt.Errorf("incomplete approval record")
-		}
-		count++
-		return nil
-	})
+	approvals, err := gate.ReadAuditStrict(root)
+	count := len(approvals)
+	if missing = errors.Is(err, os.ErrNotExist); missing {
+		err = nil
+	}
 	if err != nil || missing {
 		r.Unavailable = append(r.Unavailable, "gate approvals: "+evidenceError(missing, err))
 		if err != nil {
