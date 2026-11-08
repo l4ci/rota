@@ -34,6 +34,8 @@ import (
 // bodies they wrote, as on GitHub. Status changes go through the transition
 // whose target has the wanted status category, never a status name.
 type Jira struct {
+	keyClosing
+
 	rest       *REST
 	site       string
 	project    string
@@ -847,10 +849,6 @@ func (j *Jira) dropState(ctx context.Context, key IssueKey, id string, from, to 
 	}
 	return nil
 }
-
-// ClosesIssue: a PR closes a Jira issue by naming its key in the head branch
-// or the title, as Jira's own development panel links them.
-func (j *Jira) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
 
 // ---- milestones (project versions) -----------------------------------------
 
