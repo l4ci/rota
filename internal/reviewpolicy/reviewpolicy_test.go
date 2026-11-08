@@ -239,3 +239,50 @@ func TestOwnConfigTriggersSecurityLens(t *testing.T) {
 		t.Errorf("label risk:security: %v", hits)
 	}
 }
+
+// TestPathEntrySemantics pins how configured paths, declared files and support
+// globs match a changed file.
+func TestPathEntrySemantics(t *testing.T) {
+	const cfg = `{"ship":{"review":{"default":"full","lightBelow":50,"paths":{"internal/*/gate.go":"full","docs/*":"full","skills":"full","internal/*/golden/**":"full"}}}}`
+	p, err := config.ReviewPolicyOf(decode(t, cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		file string
+		want bool
+	}{
+		{"internal/cli/gate.go", true},
+		{"docs/a.md", true},
+		{"docs/a/b.md", false},
+		{"skills/x/SKILL.md", true},
+		{"internal/cli/golden", true},
+		{"other.go", false},
+	} {
+		got := Decide(p, Input{Changed: 3, Files: []string{c.file}})
+		if hit := got.Signal == SignalPath; hit != c.want {
+			t.Errorf("paths match %q = %v, want %v (%+v)", c.file, hit, c.want, got)
+		}
+	}
+	// declared entries: bare dir, ./ prefix, glob; support matches any ancestor
+	p, err = config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50,"supportPaths":["internal/*/testdata/golden/**"]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue := "## Files\n\n- ./internal/a\n- docs/*.md\n"
+	for _, c := range []struct {
+		file  string
+		drift bool
+	}{
+		{"internal/a/x/y.go", false},
+		{"docs/a.md", false},
+		{"docs/sub/a.md", true},
+		{"internal/b/x.go", true},
+		{"internal/q/testdata/golden/a/b.txt", false},
+	} {
+		got := Decide(p, Input{Changed: 3, IssueBody: issue, Files: []string{c.file}})
+		if drift := got.Signal == SignalScopeDrift; drift != c.drift {
+			t.Errorf("drift %q = %v, want %v (%+v)", c.file, drift, c.drift, got)
+		}
+	}
+}
