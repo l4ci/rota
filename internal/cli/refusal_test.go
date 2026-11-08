@@ -22,7 +22,7 @@ func legacyRecordedFail(vb *verdict.BlockedError, d *jsonx.Object) (Result, erro
 }
 
 func legacyShipVerdict(vb *verdict.BlockedError) (Result, error) {
-	d := gitObj("blockedBy", "verdict", "kind", vb.Record.Kind, "verdict", vb.Record.Verdict, "sha", vb.Record.Sha, "stale", vb.Stale, "changed", false)
+	d := jsonx.Obj("blockedBy", "verdict", "kind", vb.Record.Kind, "verdict", vb.Record.Verdict, "sha", vb.Record.Sha, "stale", vb.Stale, "changed", false)
 	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
 }
 
@@ -40,7 +40,7 @@ func legacyBlocked(by, msg, hint string, d *jsonx.Object) (Result, error) {
 }
 
 func legacyShipBlocked(by, msg string) (Result, error) {
-	return Result{Data: gitObj("blockedBy", by, "changed", false)}, Refused("%s", msg)
+	return Result{Data: jsonx.Obj("blockedBy", by, "changed", false)}, Refused("%s", msg)
 }
 
 // wire renders a result and its error the way the CLI prints them.

@@ -131,13 +131,13 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 		if saved.Note != "" {
 			text += "\n" + saved.Note
 		}
-		data := knObj("name", conn.Name, "kind", conn.Kind, "site", conn.Site, "user", conn.User, "store", saved.Store, "note", saved.Note, "changed", true)
+		data := jsonx.Obj("name", conn.Name, "kind", conn.Kind, "site", conn.Site, "user", conn.User, "store", saved.Store, "note", saved.Note, "changed", true)
 		return Result{Data: data, Text: text}, nil
 	}
 }
 
 func runConnectList(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	dir, sec, err := c.connectEnv()
@@ -160,7 +160,7 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 			store = "none"
 		}
 		override := sec.Getenv != nil && strings.TrimSpace(sec.Getenv(connections.EnvVar(cn.Name))) != ""
-		rows = append(rows, knObj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "deployment", cn.WithDefaults().Deployment, "store", store, "storeError", errMsg, "envOverride", override))
+		rows = append(rows, jsonx.Obj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "deployment", cn.WithDefaults().Deployment, "store", store, "storeError", errMsg, "envOverride", override))
 		line := fmt.Sprintf("%s\t%s\t%s\t%s\t%s", cn.Name, cn.Kind, cn.Site, cn.User, store)
 		if errMsg != "" {
 			line += ": " + errMsg
@@ -199,7 +199,7 @@ func runConnectTest(c *Ctx, args []string) (Result, error) {
 	if dg.Hint != "" {
 		text += "\n\thint: " + dg.Hint
 	}
-	res := Result{Data: knObj("name", args[0], "state", string(dg.State), "detail", dg.Detail, "hint", dg.Hint, "store", dg.Store), Text: text}
+	res := Result{Data: jsonx.Obj("name", args[0], "state", string(dg.State), "detail", dg.Detail, "hint", dg.Hint, "store", dg.Store), Text: text}
 	switch dg.State {
 	case connections.StateOK:
 		return res, nil
@@ -230,5 +230,5 @@ func runConnectRemove(c *Ctx, args []string) (Result, error) {
 	if !gone {
 		text = "noop: no connection named " + args[0]
 	}
-	return Result{Data: knObj("name", args[0], "removed", gone, "changed", gone), Text: text}, nil
+	return Result{Data: jsonx.Obj("name", args[0], "removed", gone, "changed", gone), Text: text}, nil
 }

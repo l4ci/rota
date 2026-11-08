@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 func sourceMigrateCommand() *Command {
@@ -21,7 +22,7 @@ func sourceMigrateCommand() *Command {
 func migrateSource(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -33,8 +34,8 @@ func migrateSource(fs *flag.FlagSet) RunFunc {
 			return Result{}, configFail(err, exitmap.ConfigCorrupt)
 		}
 		legacy := config.Legacy(root)
-		data := knObj("changed", m.Changed && *apply, "planned", m.Changed, "source", m.Source, "forge", m.Forge,
-			"removed", strSlice(m.Removed), "unresolved", m.Unresolved, "applied", *apply)
+		data := jsonx.Obj("changed", m.Changed && *apply, "planned", m.Changed, "source", m.Source, "forge", m.Forge,
+			"removed", jsonx.Strings(m.Removed), "unresolved", m.Unresolved, "applied", *apply)
 		switch {
 		case m.Unresolved:
 			c.Warn("issues.provider is auto and the origin remote names neither github nor gitlab: set issues.source by hand (rota config set issues.source github|gitlab), or set the origin and re-run")

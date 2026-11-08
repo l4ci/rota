@@ -117,7 +117,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	setIf(d, "session", plan.Session)
 	setIf(d, "account", plan.Account)
 	setIf(d, "configDir", plan.ConfigDir)
-	d.Set("command", strs(plan.Supervisor))
+	d.Set("command", jsonx.Strings(plan.Supervisor))
 	text := plan.Harness + " in " + plan.Host.String() + " (" + plan.Mode + "): " + strings.Join(plan.Supervisor, " ")
 	if plan.Account != "" {
 		text += " [account " + plan.Account + "]"

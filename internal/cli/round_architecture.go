@@ -25,8 +25,8 @@ func architectureData(a round.Architecture) *jsonx.Object {
 	setIf(d, "since", a.Since)
 	setIf(d, "unavailable", a.Unavailable)
 	d.Set("idle", a.Idle)
-	d.Set("pending", strs(a.Pending))
-	d.Set("areas", strs(a.Areas))
+	d.Set("pending", jsonx.Strings(a.Pending))
+	d.Set("areas", jsonx.Strings(a.Areas))
 	return d
 }
 
@@ -90,7 +90,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
 		if err != nil {
 			_, ferr := backlogFail(err)
-			d.Set("minted", strs(ids))
+			d.Set("minted", jsonx.Strings(ids))
 			d.Set("changed", len(ids) > 0)
 			return Result{Data: d}, ferr
 		}
@@ -100,14 +100,14 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			d.Set("minted", []any{})
 			d.Set("changed", false)
 			pending := round.PendingReviews(root, be)
-			d.Set("pending", strs(pending))
+			d.Set("pending", jsonx.Strings(pending))
 			text := "architecture review already in flight"
 			if len(pending) > 0 {
 				text += " (" + strings.Join(pending, ", ") + ")"
 			}
 			return Result{Data: d, Text: text}, nil
 		}
-		d.Set("minted", strs(ids))
+		d.Set("minted", jsonx.Strings(ids))
 		d.Set("changed", true)
 
 		// One review item per idle slot; the rest stay candidates.
@@ -143,7 +143,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("assigned %s to %s on %s", id, res.Agent, res.Branch))
 		}
 		d.Set("assigned", assigned)
-		d.Set("unassigned", strs(left))
+		d.Set("unassigned", jsonx.Strings(left))
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }

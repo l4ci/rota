@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -30,7 +31,7 @@ func reviewPrepare(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Data: gitObj("changed", true, "path", path, "head", head), Text: path}, nil
+	return Result{Data: jsonx.Obj("changed", true, "path", path, "head", head), Text: path}, nil
 }
 
 func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err error) {
@@ -113,7 +114,7 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	if err = c.deps().ReviewRemoveAll(root); err != nil {
 		return Result{}, Unavailable("cleanup review workspace %s: %v", path, err)
 	}
-	return Result{Data: gitObj("changed", true, "path", path, "head", marker.Head), Text: fmt.Sprintf("removed %s", path)}, nil
+	return Result{Data: jsonx.Obj("changed", true, "path", path, "head", marker.Head), Text: fmt.Sprintf("removed %s", path)}, nil
 }
 
 func reviewWorkspaceTempDir(dir string) (string, error) {

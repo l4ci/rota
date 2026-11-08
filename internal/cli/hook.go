@@ -504,7 +504,7 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		if out.Blocked {
-			d := knObj("blockedBy", blockedby.StatuslineExists, "scope", string(scope), "settingsPath", path, "changed", false)
+			d := jsonx.Obj("blockedBy", blockedby.StatuslineExists, "scope", string(scope), "settingsPath", path, "changed", false)
 			return Result{Data: d}, Refused("a statusline is already configured and would be replaced").
 				WithHint("run: rota hook install --wrap-statusline (keeps it, runs it after the dump)")
 		}
@@ -513,7 +513,7 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 		}
-		d := knObj("scope", string(scope), "settingsPath", path, "hooks", out.Hooks, "statusline", out.Statusline, "changed", out.Changed)
+		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "hooks", out.Hooks, "statusline", out.Statusline, "changed", out.Changed)
 		text := fmt.Sprintf("%s: hooks %s, statusline %s", path, strings.Join(out.Hooks, ", "), out.Statusline)
 		if !out.Changed {
 			text = path + ": already installed"
@@ -559,7 +559,7 @@ func hookUninstall(fs *flag.FlagSet) RunFunc {
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 		}
-		d := knObj("scope", string(scope), "settingsPath", path, "removed", removed, "changed", len(removed) > 0)
+		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "removed", removed, "changed", len(removed) > 0)
 		text := path + ": nothing to remove"
 		if len(removed) > 0 {
 			text = path + ": removed " + strings.Join(removed, ", ")

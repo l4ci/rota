@@ -118,7 +118,7 @@ func releaseVersion(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%s", err)
 		}
-		data := gitObj("file", file, "version", version, "kind", kind)
+		data := jsonx.Obj("file", file, "version", version, "kind", kind)
 		if bump == "" {
 			return Result{Data: data, Text: version}, nil
 		}
@@ -186,11 +186,11 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 		next, err := release.Bump(dir, path, kind, bump, false)
 		if err != nil {
 			if errors.Is(err, release.ErrNotGreater) {
-				return Result{Data: gitObj("blockedBy", blockedby.NotGreater, "changed", false)}, releaseBumpErr(err, true)
+				return Result{Data: jsonx.Obj("blockedBy", blockedby.NotGreater, "changed", false)}, releaseBumpErr(err, true)
 			}
 			return Result{}, releaseBumpErr(err, true)
 		}
-		return Result{Data: gitObj("file", path, "kind", kind, "from", from, "to", next, "changed", true), Text: next}, nil
+		return Result{Data: jsonx.Obj("file", path, "kind", kind, "from", from, "to", next, "changed", true), Text: next}, nil
 	}
 }
 
@@ -221,7 +221,7 @@ func releaseHost(c *Ctx, args []string) (Result, error) {
 		return failData(err), err
 	}
 	host := release.Host(provider, url)
-	return Result{Data: gitObj("host", host), Text: host}, nil
+	return Result{Data: jsonx.Obj("host", host), Text: host}, nil
 }
 
 var releaseRevErr = regexp.MustCompile(`unknown revision|bad revision|ambiguous argument`)
@@ -272,7 +272,7 @@ func releaseNotes(fs *flag.FlagSet) RunFunc {
 			return Result{}, Unavailable("%s", msg)
 		}
 		md := release.ToH3(release.CommitNotes(res.Stdout))
-		return Result{Data: gitObj("from", "commits", "markdown", md, "empty", pystr.Strip(md) == ""), Text: md}, nil
+		return Result{Data: jsonx.Obj("from", "commits", "markdown", md, "empty", pystr.Strip(md) == ""), Text: md}, nil
 	}
 }
 
@@ -326,7 +326,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		}
 		out, err := release.UpdateChangelog(existing, rerr == nil, version, stamp.Date(c.deps().Today()), notes)
 		if errors.Is(err, release.ErrSectionExists) {
-			return Result{Data: gitObj("blockedBy", blockedby.Exists, "changed", false)},
+			return Result{Data: jsonx.Obj("blockedBy", blockedby.Exists, "changed", false)},
 				Refused("%s already has a section for v%s", *path, version)
 		}
 		if err != nil {
@@ -335,7 +335,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		if err := fsio.WriteFileAtomic(target, []byte(out)); err != nil {
 			return Result{}, Resolution("%s: %v", *path, err)
 		}
-		return Result{Data: gitObj("path", *path, "version", version, "changed", true), Text: *path}, nil
+		return Result{Data: jsonx.Obj("path", *path, "version", version, "changed", true), Text: *path}, nil
 	}
 }
 
@@ -435,7 +435,7 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 	}
 	check, line := releaseCheckLine(c, args[0])
 	lines = append(lines, line)
-	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still, "check", check), Text: strings.Join(lines, "\n")}
+	res := Result{Data: jsonx.Obj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still, "check", check), Text: strings.Join(lines, "\n")}
 	if len(blocked) > 0 {
 		return res, Failed("%s is blocked by %d open issue(s)", args[0], len(blocked))
 	}
@@ -461,7 +461,7 @@ func releaseCheckLine(c *Ctx, id string) (any, string) {
 	r := ms.Check(body, kids, false)
 	faults := len(r.NoChange) + len(r.Unknown) + len(r.NoMigration) + len(r.BadTouches) + len(r.BadCapability)
 	uncovered := len(r.Uncovered)
-	data := jsonObj("faults", faults, "uncovered", uncovered, "ok", faults+uncovered == 0)
+	data := jsonx.Obj("faults", faults, "uncovered", uncovered, "ok", faults+uncovered == 0)
 	if faults+uncovered == 0 {
 		return data, "check: clean"
 	}
@@ -489,7 +489,7 @@ func releaseCloseMilestone(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("milestone", args[0], "release", *rel, "tag", tag, "issues", n, "changed", changed),
+		return Result{Data: jsonx.Obj("milestone", args[0], "release", *rel, "tag", tag, "issues", n, "changed", changed),
 			Text: "closed-out " + args[0] + " " + tag + ": " + strconv.Itoa(n) + " issues"}, nil
 	}
 }
@@ -542,7 +542,7 @@ func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
 		blocks = append(blocks, "### Other\n\n"+strings.Join(other, "\n"))
 	}
 	md := strings.Join(blocks, "\n\n") + "\n"
-	return Result{Data: gitObj("from", "issues", "markdown", md, "empty", pystr.Strip(md) == ""), Text: md}, nil
+	return Result{Data: jsonx.Obj("from", "issues", "markdown", md, "empty", pystr.Strip(md) == ""), Text: md}, nil
 }
 
 // issueRow is a release-gate row for an issue: `number` for a numbered issue,

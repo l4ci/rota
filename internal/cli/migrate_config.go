@@ -33,7 +33,7 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 	var keep setAnswersList
 	fs.Var(&keep, "keep", "leave this key in .rota/config.json (repeatable, or comma-separated)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -46,7 +46,7 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		}
 		m, am, mm, sm := mig.Round, mig.Accounts, mig.Merges, mig.Scope
 		planned := m.Changed() || am.Changed() || mm.Changed() || sm.Changed()
-		data := knObj("changed", planned && *apply, "planned", planned, "applied", *apply,
+		data := jsonx.Obj("changed", planned && *apply, "planned", planned, "applied", *apply,
 			"config", renameList(m.Config), "local", renameList(m.Local), "accounts", accountList(am), "merges", mergeList(mm), "scope", scopeList(sm))
 		if !planned {
 			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no per-harness account keys, no merged or renamed keys, no machine or default taste keys in .rota/config.json"}, nil
@@ -80,7 +80,7 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 func mergeList(mm config.MergesMigration) []any {
 	out := []any{}
 	for _, ch := range mm.Changes {
-		out = append(out, knObj("file", ch.File, "from", anySlice(ch.From)))
+		out = append(out, jsonx.Obj("file", ch.File, "from", jsonx.Strings(ch.From)))
 	}
 	return out
 }
@@ -88,7 +88,7 @@ func mergeList(mm config.MergesMigration) []any {
 func accountList(am config.AccountsMigration) []any {
 	out := []any{}
 	for _, ch := range am.Changes {
-		out = append(out, knObj("file", ch.File, "from", anySlice(ch.From), "entries", ch.N))
+		out = append(out, jsonx.Obj("file", ch.File, "from", jsonx.Strings(ch.From), "entries", ch.N))
 	}
 	return out
 }
@@ -109,7 +109,7 @@ func (l *setAnswersList) Set(v string) error {
 func scopeList(sm config.ScopeMigration) []any {
 	out := []any{}
 	for _, c := range sm.Changes {
-		out = append(out, knObj("key", c.Key, "action", c.Action, "reason", c.Reason, "before", c.Before, "after", c.After))
+		out = append(out, jsonx.Obj("key", c.Key, "action", c.Action, "reason", c.Reason, "before", c.Before, "after", c.After))
 	}
 	return out
 }
@@ -133,7 +133,7 @@ func scopeLine(c config.ScopeChange) string {
 func renameList(rs []config.Rename) []any {
 	out := []any{}
 	for _, r := range rs {
-		out = append(out, knObj("from", r.Old, "to", r.New))
+		out = append(out, jsonx.Obj("from", r.Old, "to", r.New))
 	}
 	return out
 }
@@ -169,7 +169,7 @@ func (p *preflight) roundKeys() (Result, error) {
 	if p.g.RoundKeys == RoundKeysRefuse {
 		d := jsonx.NewObject()
 		d.Set("blockedBy", blockedby.ConfigMigration)
-		d.Set("keys", anySlice(old))
+		d.Set("keys", jsonx.Strings(old))
 		d.Set("changed", false)
 		return Result{Data: d}, Refused("%s", msg).WithHint("run: rota migrate config --apply")
 	}

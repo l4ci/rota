@@ -151,7 +151,7 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 		d.Set("needsYou", waitRows)
 		d.Set("slots", rowList(rep.Rows))
 		d.Set("drift", len(rep.Findings))
-		d.Set("unavailable", strs(rep.Unavailable))
+		d.Set("unavailable", jsonx.Strings(rep.Unavailable))
 		if rep.Host != "" {
 			d.Set("host", rep.Host.String())
 		}
@@ -162,7 +162,7 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if holding := trainHoldingLines(c, root); len(holding) > 0 {
-			d.Set("holding", strList(holding))
+			d.Set("holding", jsonx.Strings(holding))
 			lines = append(lines, holding...)
 		}
 		trainLines := trainStatus(c, root, d)
@@ -281,7 +281,7 @@ func queuedRows(qs []round.QueuedPR) []any {
 		setIf(o, "branch", q.Branch)
 		setIf(o, "from", q.From)
 		if len(q.Bundle) > 0 {
-			o.Set("bundle", strs(q.Bundle))
+			o.Set("bundle", jsonx.Strings(q.Bundle))
 		}
 		out = append(out, o)
 	}
@@ -312,7 +312,7 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 		d.Set("drift", findingList(out.Drift))
 		d.Set("repaired", findingList(out.Repaired))
 		d.Set("clean", out.Clean())
-		d.Set("unavailable", strs(out.Report.Unavailable))
+		d.Set("unavailable", jsonx.Strings(out.Report.Unavailable))
 		d.Set("changed", len(out.Repaired) > 0)
 		esc, escLines := escalationRows(out.Report.Escalations)
 		d.Set("escalations", esc)
@@ -343,7 +343,7 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "agent", r.Agent)
 		setIf(o, "issue", r.Issue)
 		if len(r.Bundle) > 0 {
-			o.Set("bundle", strs(r.Bundle))
+			o.Set("bundle", jsonx.Strings(r.Bundle))
 		}
 		setIf(o, "bestOf", r.BestOf)
 		o.Set("branch", r.Branch)
@@ -360,8 +360,8 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "outcome", r.Outcome)
 		setIf(o, "tab", r.Tab)
 		o.Set("registered", r.Registered)
-		o.Set("drift", strs(r.Drift))
-		o.Set("escalations", strs(r.Escalations))
+		o.Set("drift", jsonx.Strings(r.Drift))
+		o.Set("escalations", jsonx.Strings(r.Escalations))
 		setIf(o, "kind", r.Kind)
 		setIf(o, "kindSource", r.KindSource)
 		setIf(o, "account", r.Account)
@@ -407,14 +407,6 @@ func setIf(o *jsonx.Object, k, v string) {
 	if v != "" {
 		o.Set(k, v)
 	}
-}
-
-func strs(l []string) []any {
-	out := make([]any, 0, len(l))
-	for _, s := range l {
-		out = append(out, s)
-	}
-	return out
 }
 
 func dash(s string) string {

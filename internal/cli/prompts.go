@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/prompts"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -37,7 +38,7 @@ func promptsList(fs *flag.FlagSet) RunFunc {
 		for _, v := range views {
 			lines = append(lines, fmt.Sprintf("%s\trevision %d\t%s", tui.Sanitize(v.Name, false), v.Revision, v.Status))
 		}
-		return Result{Data: jsonObj("sections", views), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("sections", views), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -146,7 +147,7 @@ func promptsUpgradeReport(root string) (stale []any, lines []string) {
 		if v.Status != "changed" && v.Status != "removed" {
 			continue
 		}
-		stale = append(stale, jsonObj("name", v.Name, "status", v.Status, "revision", v.Revision))
+		stale = append(stale, jsonx.Obj("name", v.Name, "status", v.Status, "revision", v.Revision))
 		name := tui.Sanitize(v.Name, false)
 		lines = append(lines, fmt.Sprintf("prompt %s: built-in default %s since revision %d; compare with: rota prompts show %s", name, v.Status, v.Revision, name))
 	}
@@ -156,7 +157,7 @@ func promptsUpgradeReport(root string) (stale []any, lines []string) {
 func promptResult(v prompts.View, changed bool) Result {
 	text := promptText(v)
 	if changed {
-		return Result{Data: jsonObj("section", v, "changed", true), Text: text + "\n\nSaved as revision " + fmt.Sprint(v.Revision) + "; activate with: rota agents write"}
+		return Result{Data: jsonx.Obj("section", v, "changed", true), Text: text + "\n\nSaved as revision " + fmt.Sprint(v.Revision) + "; activate with: rota agents write"}
 	}
 	return Result{Data: v, Text: text}
 }

@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 func externalKnowledgeMigrateCommand() *Command {
@@ -18,7 +20,7 @@ func externalKnowledgeMigrateCommand() *Command {
 func migrateExternalKnowledge(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		cl, err := externalClone(c)
@@ -32,7 +34,7 @@ func migrateExternalKnowledge(fs *flag.FlagSet) RunFunc {
 		changes, review := []any{}, []any{}
 		var lines []string
 		for _, ch := range rep.Changes {
-			changes = append(changes, knObj("topic", ch.Topic, "title", ch.Title, "seen", ch.Seen, "inferred", ch.Inferred))
+			changes = append(changes, jsonx.Obj("topic", ch.Topic, "title", ch.Title, "seen", ch.Seen, "inferred", ch.Inferred))
 			l := fmt.Sprintf("%s :: %s -> seen:%s", ch.Topic, ch.Title, ch.Seen)
 			if ch.Inferred {
 				l += " (inferred from the topic)"
@@ -41,10 +43,10 @@ func migrateExternalKnowledge(fs *flag.FlagSet) RunFunc {
 		}
 		var manual []string
 		for _, m := range rep.ManualReview {
-			review = append(review, knObj("topic", m.Topic, "title", m.Title, "text", m.Text))
+			review = append(review, jsonx.Obj("topic", m.Topic, "title", m.Title, "text", m.Text))
 			manual = append(manual, fmt.Sprintf("%s :: %s: %s", m.Topic, m.Title, m.Text))
 		}
-		data := knObj("changed", rep.Changed, "planned", len(rep.Changes) > 0, "applied", *apply, "count", len(rep.Changes),
+		data := jsonx.Obj("changed", rep.Changed, "planned", len(rep.Changes) > 0, "applied", *apply, "count", len(rep.Changes),
 			"changes", changes, "manualReview", review, "stranded", rep.Stranded)
 		if rep.Changed {
 			data.Set("write", rep.Write.Policy.Write)

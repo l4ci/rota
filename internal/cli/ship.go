@@ -237,7 +237,7 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return shipErr(err)
 	}
-	return Result{Data: gitObj("branch", t.Branch, "body", body), Text: body}, nil
+	return Result{Data: jsonx.Obj("branch", t.Branch, "body", body), Text: body}, nil
 }
 
 // shipTitles resolves an item ID to its origin line and title: through the
@@ -317,7 +317,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return shipErr(err)
 		}
-		data := gitObj("branch", branch, "url", pr.URL, "provider", pr.Provider)
+		data := jsonx.Obj("branch", branch, "url", pr.URL, "provider", pr.Provider)
 		if pr.Number != 0 {
 			data.Set("number", pr.Number)
 		}
@@ -447,13 +447,13 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		}, branch, base, msg)
 		var moved *ship.BranchMovedError
 		if errors.As(err, &moved) {
-			return Result{Text: sha, Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true,
+			return Result{Text: sha, Data: jsonx.Obj("branch", branch, "base", base, "sha", sha, "changed", true,
 				"blockedBy", blockedby.BranchMoved, "pinned", moved.Pinned, "tip", moved.Tip, "branchKept", true)}, Refused("%s", moved.Error())
 		}
 		if err != nil {
 			return shipErr(err)
 		}
-		return Result{Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true), Text: sha}, nil
+		return Result{Data: jsonx.Obj("branch", branch, "base", base, "sha", sha, "changed", true), Text: sha}, nil
 	}
 }
 
@@ -512,7 +512,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			req.Thread = func() (worker.ApprovalThread, error) {
 				return worker.ApprovalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
 			}
-			return clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonObj("pr", pr))
+			return clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonx.Obj("pr", pr))
 		}
 		merged, err := ship.MergePR(be, pr, items, approve)
 		var refused *land.MergeRefusedError
@@ -522,10 +522,10 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		case errors.As(err, &gateRefused):
 			return shipRefusal(gateRefused.Ref)
 		case errors.As(err, &refused):
-			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
+			return Result{Data: jsonx.Obj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
 				Refused("%s", err.Error())
 		case errors.As(err, &unproven):
-			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", unproven.IDs, "changesRequested", unproven.IDs, "changed", true)},
+			return Result{Data: jsonx.Obj("pr", pr, "merged", false, "unproven", unproven.IDs, "changesRequested", unproven.IDs, "changed", true)},
 				Refused("%s", err.Error())
 		case err != nil:
 			return backlogFail(err)
@@ -535,7 +535,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			closed = append(closed, r.ID)
 			lines = append(lines, "closed "+r.Ref())
 		}
-		return Result{Data: jsonObj("pr", pr, "sha", merged.SHA, "closed", closed, "changed", true),
+		return Result{Data: jsonx.Obj("pr", pr, "sha", merged.SHA, "closed", closed, "changed", true),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -587,7 +587,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		short, ids := plan.Short, plan.IDs
 
 		text := shipPlan(short, plan.Subject, base, plan.PostCount, ids, *apply)
-		data := gitObj("applied", *apply, "cycle", short, "subject", pystr.Strip(plan.Subject), "base", base,
+		data := jsonx.Obj("applied", *apply, "cycle", short, "subject", pystr.Strip(plan.Subject), "base", base,
 			"items", append([]string{}, ids...))
 		if !*apply {
 			c.Warn("preview only; pass --apply")

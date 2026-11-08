@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // The read-only set is the contract's: a tracker verb whose data line has no
@@ -118,7 +119,7 @@ func TestRegisteredReadOnlyPreservesSharedFailure(t *testing.T) {
 		t.Run(fmt.Sprintf("wrapped=%t", wrapped), func(t *testing.T) {
 			sentinel := errors.New("backend unavailable")
 			cause := &os.PathError{Op: "read", Path: "config", Err: sentinel}
-			data := jsonObj("blockedBy", "backend", "changed", false)
+			data := jsonx.Obj("blockedBy", "backend", "changed", false)
 			original := Refused("shared refusal").WithHint("try again")
 			original.Data, original.Cause = data, cause
 			before := *original
@@ -178,7 +179,7 @@ func TestRegisteredReadOnlyPassthrough(t *testing.T) {
 		{"wrapped classification", fmt.Errorf("outer: %w", coded)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := Result{Text: "answer", Data: jsonObj("changed", false)}
+			want := Result{Text: "answer", Data: jsonx.Obj("changed", false)}
 			cmds := withReadOnly([]*Command{{Name: "config", Subs: []*Command{{Name: "show", Verb: func(*flag.FlagSet) RunFunc {
 				return func(*Ctx, []string) (Result, error) { return want, tc.err }
 			}}}}})

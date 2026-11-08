@@ -116,14 +116,6 @@ func itemCommands() []*Command {
 
 // ---- shared helpers -------------------------------------------------------
 
-func jsonObj(kv ...any) *jsonx.Object {
-	o := jsonx.NewObject()
-	for i := 0; i+1 < len(kv); i += 2 {
-		o.Set(kv[i].(string), kv[i+1])
-	}
-	return o
-}
-
 // argCount checks the positional count of a verb.
 func argCount(c *Ctx, args []string, min, max int, usage string) error {
 	if len(args) < min || (max >= 0 && len(args) > max) {
@@ -226,7 +218,7 @@ func idNext(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("kind", *kind, "id", id, "changed", true), Text: id}, nil
+		return Result{Data: jsonx.Obj("kind", *kind, "id", id, "changed", true), Text: id}, nil
 	}
 }
 
@@ -284,7 +276,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return backlogFail(err)
 			}
-			data := jsonObj("id", res.ID, "type", res.Type, "kind", *kind, "changed", true)
+			data := jsonx.Obj("id", res.ID, "type", res.Type, "kind", *kind, "changed", true)
 			entry, _ := backlog.ParseOpen(strings.TrimSpace(string(raw)))
 			in := backlog.CreateInput{Kind: *kind, Tag: entry.Tag, Desc: entry.Rest}
 			if be, ok := ops.(backlog.Backend); ok {
@@ -320,7 +312,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			data := jsonObj("id", res.ID, "type", res.Type, "kind", *kind)
+			data := jsonx.Obj("id", res.ID, "type", res.Type, "kind", *kind)
 			if res.Detail != "" {
 				data.Set("detail", res.Detail)
 			}
@@ -465,7 +457,7 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 			return r, ferr
 		}
 		ids = append(ids, res.ID)
-		row := jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title)
+		row := jsonx.Obj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title)
 		if missing := createTemplateWarnings(res.ID, in); len(missing) > 0 {
 			row.Set("warnings", missing)
 			for _, warning := range missing {
@@ -474,7 +466,7 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 		}
 		out = append(out, row)
 	}
-	data := jsonObj("items", out, "changed", true)
+	data := jsonx.Obj("items", out, "changed", true)
 	if len(warnings) > 0 {
 		data.Set("warnings", warnings)
 	}
@@ -539,7 +531,7 @@ func itemFieldGet(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		v := itemFieldValue(be.Capabilities(), it, *name)
-		return Result{Data: jsonObj("id", it.ID, "type", it.Type, "field", *name, "value", v), Text: v}, nil
+		return Result{Data: jsonx.Obj("id", it.ID, "type", it.Type, "field", *name, "value", v), Text: v}, nil
 	}
 }
 
@@ -565,7 +557,7 @@ func itemFieldList(fs *flag.FlagSet) RunFunc {
 			fields.Set(n, itemFieldValue(be.Capabilities(), it, n))
 		}
 		text, _ := jsonx.MarshalCompact(fields)
-		return Result{Data: jsonObj("id", it.ID, "type", it.Type, "fields", fields), Text: string(text)}, nil
+		return Result{Data: jsonx.Obj("id", it.ID, "type", it.Type, "fields", fields), Text: string(text)}, nil
 	}
 }
 
@@ -599,7 +591,7 @@ func setItemField(be backlog.Backend, ref, name, value string) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "field", name, "value", value, "changed", changed),
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "field", name, "value", value, "changed", changed),
 			Text: fmt.Sprintf("%s %s: %s", id, name, value)}, nil
 	})
 }
@@ -643,7 +635,7 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 				if err != nil {
 					return Result{}, err
 				}
-				return Result{Data: jsonObj("id", id, "type", typ, "section", *name, "changed", changed),
+				return Result{Data: jsonx.Obj("id", id, "type", typ, "section", *name, "changed", changed),
 					Text: fmt.Sprintf("%s section %s", id, *name)}, nil
 			})
 		})
@@ -670,7 +662,7 @@ func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput, gist
 			}
 			return backlogFail(err)
 		}
-		data := jsonObj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed)
+		data := jsonx.Obj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed)
 		text := fmt.Sprintf("completed %s (%s) at %s", id, in.Reason, in.Commit)
 		if gist != "" {
 			mid, err := backlog.LogDecision(be, it, backlog.DecisionRef(id), gist)
@@ -722,7 +714,7 @@ func reopenItem(be backlog.Backend, ref string) (Result, error) {
 		if !changed {
 			text = id + " is already active"
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "changed", changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "changed", changed), Text: text}, nil
 	})
 }
 
@@ -828,7 +820,7 @@ func itemRm(fs *flag.FlagSet) RunFunc {
 		items := []any{}
 		var lines []string
 		for _, it := range res.Items {
-			o := jsonObj("id", it.ID, "type", it.Type, "todoEntry", it.TodoEntry, "crossRefs", it.CrossRefs)
+			o := jsonx.Obj("id", it.ID, "type", it.Type, "todoEntry", it.TodoEntry, "crossRefs", it.CrossRefs)
 			if it.DetailFile != "" {
 				o.Set("detailFile", it.DetailFile)
 			}
@@ -843,7 +835,7 @@ func itemRm(fs *flag.FlagSet) RunFunc {
 		if !res.Applied {
 			c.Warn("preview only; pass --apply")
 		}
-		return Result{Data: jsonObj("applied", res.Applied, "items", items, "changed", res.Applied), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("applied", res.Applied, "items", items, "changed", res.Applied), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -900,7 +892,7 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 		for _, a := range rep.Audits {
 			hits := []any{}
 			for _, h := range a.Hits {
-				o := jsonObj("level", h.Level)
+				o := jsonx.Obj("level", h.Level)
 				switch h.Level {
 				case backlog.HitPath:
 					o.Set("token", h.Token)
@@ -912,9 +904,9 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 				}
 				hits = append(hits, o)
 			}
-			out = append(out, jsonObj("title", a.Title, "hits", hits))
+			out = append(out, jsonx.Obj("title", a.Title, "hits", hits))
 		}
-		res := Result{Data: jsonObj("found", rep.Found, "titles", out), Text: rep.Text}
+		res := Result{Data: jsonx.Obj("found", rep.Found, "titles", out), Text: rep.Text}
 		if !rep.Found {
 			res.Text = "no ship evidence found"
 			return res, Failed("no ship evidence found")
@@ -965,7 +957,7 @@ func itemReady(fs *flag.FlagSet) RunFunc {
 				if reasons == nil {
 					reasons = []string{}
 				}
-				res := Result{Data: jsonObj("id", id, "type", typ, "ready", len(reasons) == 0, "reasons", reasons)}
+				res := Result{Data: jsonx.Obj("id", id, "type", typ, "ready", len(reasons) == 0, "reasons", reasons)}
 				if len(reasons) == 0 {
 					res.Text = id + " is ready"
 					return res, nil
@@ -1046,7 +1038,7 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 				if err != nil {
 					return Result{}, err
 				}
-				data := jsonObj("id", id, "type", typ, "kind", *kind)
+				data := jsonx.Obj("id", id, "type", typ, "kind", *kind)
 				if cid != "" {
 					data.Set("commentId", cid)
 				}
@@ -1082,7 +1074,7 @@ func itemCommentList(fs *flag.FlagSet) RunFunc {
 				list := []any{}
 				var lines []string
 				for _, r := range rows {
-					list = append(list, jsonObj("who", r.Who, "kind", r.Kind, "text", r.Text))
+					list = append(list, jsonx.Obj("who", r.Who, "kind", r.Kind, "text", r.Text))
 					first, rest, _ := strings.Cut(r.Text, "\n")
 					who := r.Who
 					if who == "" {
@@ -1099,7 +1091,7 @@ func itemCommentList(fs *flag.FlagSet) RunFunc {
 						}
 					}
 				}
-				return Result{Data: jsonObj("id", id, "type", typ, "comments", list), Text: strings.Join(lines, "\n")}, nil
+				return Result{Data: jsonx.Obj("id", id, "type", typ, "comments", list), Text: strings.Join(lines, "\n")}, nil
 			})
 		})
 	}

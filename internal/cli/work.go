@@ -37,7 +37,7 @@ func (w workItem) obj() *jsonx.Object {
 	if missing == nil {
 		missing = []string{}
 	}
-	return jsonObj("id", w.id, "claim", w.claim, "ready", len(missing) == 0, "missing", missing)
+	return jsonx.Obj("id", w.id, "claim", w.claim, "ready", len(missing) == 0, "missing", missing)
 }
 
 func workStart(fs *flag.FlagSet) RunFunc {
@@ -146,7 +146,7 @@ func workStart(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 			if len(user) > 0 {
-				return Result{Data: jsonObj("dirty", user, "changed", false)},
+				return Result{Data: jsonx.Obj("dirty", user, "changed", false)},
 					Failed("uncommitted changes outside tool-generated siblings (%s); stash or commit before running /rota-work", strings.Join(user, ", "))
 			}
 		}
@@ -163,7 +163,7 @@ func workStart(fs *flag.FlagSet) RunFunc {
 			return out
 		}
 		if be.Capabilities().ClaimWrites && !slices.ContainsFunc(items, func(w *workItem) bool { return w.claim != "dropped" }) {
-			d := jsonObj("branch", branch, "items", itemsOut())
+			d := jsonx.Obj("branch", branch, "items", itemsOut())
 			return blockedRefusal(d, blockedby.Claimed,
 				fmt.Sprintf("every item is claimed by another worker (%s)", strings.Join(workIDs(items), ", ")), "")
 		}
@@ -224,7 +224,7 @@ func workStart(fs *flag.FlagSet) RunFunc {
 			parts = append(parts, it.id+" ("+it.claim+")")
 		}
 		return Result{
-			Data: jsonObj("branch", branch, "base", base, "isolation", isolation, "worktree", wt,
+			Data: jsonx.Obj("branch", branch, "base", base, "isolation", isolation, "worktree", wt,
 				"items", itemsOut(), "swept", swept, "changed", changed || len(swept) > 0),
 			Text: "branch " + branch + "\nitems: " + strings.Join(parts, ", "),
 		}, nil

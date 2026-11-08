@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/release"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -99,7 +100,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		if res.ExitCode != 0 {
 			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(plan.Refs, " "), strutil.FirstLine(res.Stderr), tag, plan.SHA)
 		}
-		return Result{Data: gitObj("tag", tag, "branch", plan.Branch, "remote", "origin", "scope", plan.Scope, "changed", true), Text: plan.Text}, nil
+		return Result{Data: jsonx.Obj("tag", tag, "branch", plan.Branch, "remote", "origin", "scope", plan.Scope, "changed", true), Text: plan.Text}, nil
 	}
 }
 
@@ -139,7 +140,7 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		}
 		host := release.Host(provider, url)
 		data := func(url string, changed bool) any {
-			return gitObj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
+			return jsonx.Obj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
 		}
 		if provider == tracker.ProviderLocal {
 			c.Warn("no recognized remote; nothing published")

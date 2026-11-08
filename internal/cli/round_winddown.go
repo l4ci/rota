@@ -30,10 +30,10 @@ func slotOutcomeList(slots []round.SlotOutcome) []any {
 			d.Set("merged", *s.Merged)
 		}
 		if len(s.Dirty) > 0 {
-			d.Set("dirty", strs(s.Dirty))
+			d.Set("dirty", jsonx.Strings(s.Dirty))
 		}
 		if len(s.Unmerged) > 0 {
-			d.Set("unmerged", strs(s.Unmerged))
+			d.Set("unmerged", jsonx.Strings(s.Unmerged))
 		}
 		out = append(out, d)
 	}
@@ -118,7 +118,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		d.Set("base", res.Base)
 		d.Set("verdict", res.Verdict)
 		d.Set("slots", slotOutcomeList(res.Slots))
-		d.Set("verified", strs(res.Verified))
+		d.Set("verified", jsonx.Strings(res.Verified))
 		d.Set("verifySkipped", res.VerifySkipped)
 		d.Set("drift", res.Drift)
 		if res.Lease != nil {
