@@ -1061,7 +1061,7 @@ With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>.
 default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
 pays for the verify once instead of once per PR. A gate or train takes 2 to 3 minutes: start it
 as a background command, review the next PRs meanwhile, and read the verdict when it
-exits. `round assign` and `round transfer` refuse (`gate-running`, naming the PR the gate holds the lock for) until it exits; `round watch` returns when the lock clears, so assign freed slots then. The autopilot tick reports `deferred` instead of erroring. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
+exits. `round assign` refuses (`gate-running`, naming the PR the gate holds the lock for) only a slot whose branch or PR the gate or train holds; other slots stay assignable, because the gate verifies in its own scratch tree. A lock that names no slot or PR, and every assign on the file backend, still refuses all slots. `round transfer` refuses while any gate or train runs. `round watch` returns when the lock clears, so retry a refused verb then. The autopilot tick reports `deferred` instead of erroring. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
 checkout until it exits; the checkout guard fails the gate on a changed tracked file. It checks each member the way `gate --check-only` does,
 merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
