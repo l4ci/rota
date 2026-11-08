@@ -46,7 +46,7 @@ var gateDecls = []struct {
 	paths []string
 	apply func(*Gates)
 }{
-	// Run on a project that still holds .hv/: the migration itself and doctor
+	// Run on a project that still holds the legacy state directory: the migration itself and doctor
 	// (which reports it), the verbs that never read project state and the hooks
 	// that must not fail a Claude session.
 	{[]string{"migrate hv", "doctor", "version", "update", "skills", "hook", "statusline"}, func(g *Gates) { g.LegacyExempt = true }},
