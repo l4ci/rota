@@ -96,7 +96,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// An open escalation shows in both verbs and on its slot's row.
-	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+	if err := escalation.Section.Update(root, func([]escalation.Entry) []escalation.Entry {
 		return []escalation.Entry{{ID: "e1", Kind: "pr", Number: 3, Slot: "dana", Title: "Which option?",
 			CommentID: "1", SentAt: "2026-10-03T10:00:00Z", Status: "pending"}}
 	}); err != nil {

@@ -140,11 +140,7 @@ func reserve(env Env, root string, o SendOpts) (Entry, error) {
 		body = body[:pos+1] + deliveryReference(op) + "\n" + body[pos+1:]
 		e.Delivery = &Delivery{OperationID: op, RequestID: o.RequestID, Fingerprint: o.Fingerprint, InputHash: hash, Body: body, CreatedAt: Time(env.Now()), State: DeliveryReady, Timeout: o.Timeout}
 		list = append(list, e)
-		rows := make([]any, 0, len(list))
-		for _, row := range list {
-			rows = append(rows, row.Object())
-		}
-		doc.SetSection("escalations", rows)
+		Section.Write(doc, list)
 	})
 	if err != nil {
 		return Entry{}, &Error{Exit: exitcode.ExitFailed, Message: "escalation intent was not written: " + err.Error()}
@@ -152,7 +148,7 @@ func reserve(env Env, root string, o SendOpts) (Entry, error) {
 	return e, refusal
 }
 func saveEntry(root string, e Entry) error {
-	return Update(root, func(list []Entry) []Entry {
+	return Section.Update(root, func(list []Entry) []Entry {
 		for i := range list {
 			if list[i].ID == e.ID { // Preserve an answer stored by a concurrent check.
 				if list[i].Status == StatusAnswered {

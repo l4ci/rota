@@ -11,8 +11,8 @@ import (
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/receipt"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 )

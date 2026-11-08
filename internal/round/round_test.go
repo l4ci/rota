@@ -298,7 +298,7 @@ func TestOpenEscalationsAreReported(t *testing.T) {
 		return escalation.Entry{ID: id, Kind: "issue", Number: 56, Slot: slot, Title: "q " + id, CommentID: "1",
 			SentAt: "2026-10-03T10:00:00Z", Deadline: deadline, Notified: true, Status: status}
 	}
-	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+	if err := escalation.Section.Update(root, func([]escalation.Entry) []escalation.Entry {
 		return []escalation.Entry{
 			esc("e1", "kit", "answered", ""),
 			esc("e2", "kit", "pending", "2026-10-03T11:00:00Z"),

@@ -28,7 +28,7 @@ func TestRoundNeedsYouHumanReservations(t *testing.T) {
 	if code != 0 || len(data(t, out)["needsYou"].([]any)) != 0 {
 		t.Errorf("worker questions and cap audits belong to the orchestrator: %d %s %s", code, out, stderr)
 	}
-	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+	if err := escalation.Section.Update(root, func([]escalation.Entry) []escalation.Entry {
 		return []escalation.Entry{{ID: "human", Kind: "pr", Number: 7, Title: "Approve a scope cut?", Status: "pending", Options: []string{"Keep scope", "Cut scope"}, Recommend: 1}}
 	}); err != nil {
 		t.Fatal(err)
