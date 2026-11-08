@@ -3,7 +3,6 @@
 package testaudit
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -252,20 +251,9 @@ func evidenceError(missing bool, err error) string {
 	return "unavailable (" + err.Error() + ")"
 }
 func readLines(path string, read func([]byte) error) (bool, error) {
-	b, err := os.ReadFile(path)
+	_, err := fsio.ReadLines(path, fsio.Strict, read)
 	if errors.Is(err, os.ErrNotExist) {
 		return true, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	for i, line := range bytes.Split(b, []byte{'\n'}) {
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
-		if err := read(line); err != nil {
-			return false, fmt.Errorf("line %d: %w", i+1, err)
-		}
-	}
-	return false, nil
+	return false, err
 }
