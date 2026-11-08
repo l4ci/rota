@@ -141,7 +141,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	d := limits.Deps{
 		Root: root, Settings: set, Now: c.deps().Now, Tick: tick,
 		InGap:   func() bool { return gap != nil && gap.Load() },
-		Ledger:  func(e ledger.Entry) { worker.LedgerNote(c.deps().workerEnv(), root, e) },
+		Ledger:  func(e ledger.Entry) { c.deps().workerEnv().Ledger().Note(root, e) },
 		Move:    limitMover{c: c, root: root, holderPID: holderPID},
 		Targets: targets,
 		Capture: func(ctx context.Context, t limits.Target) string {

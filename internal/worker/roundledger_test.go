@@ -82,9 +82,9 @@ func TestLedgerRoundIsTheHeldLease(t *testing.T) {
 func TestLedgerNoteFillsSlotFromRegistry(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","account":"work"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
-	LedgerNote(env, dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12", Detail: ledger.Detail("count", 1)})
-	LedgerNote(env, dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12", Slot: "ben"})
-	LedgerNote(env, dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "99"})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12", Detail: ledger.Detail("count", 1)})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12", Slot: "ben"})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "99"})
 	es, err := ledger.Load(dir)
 	if err != nil || len(es) != 3 {
 		t.Fatalf("%v %+v", err, es)
@@ -106,9 +106,27 @@ func TestLedgerNoteReportsAWriteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	LedgerNote(Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}, dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"}) // must not panic or fail the verb
+	(Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}).Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"}) // must not panic or fail the verb
 	if !strings.Contains(out.String(), ledger.Path(dir)) || strings.Count(out.String(), "\n") != 1 {
 		t.Errorf("stderr = %q, want one line naming %s", out, ledger.Path(dir))
+	}
+}
+
+// A registry that does not parse resolves no slot, but the entry is still written.
+func TestLedgerNoteSurvivesACorruptRegistry(t *testing.T) {
+	dir := ledgerProject(t, "")
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"slots":[`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	env := Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"})
+	if err := env.Ledger().AppendErr(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(dir)
+	if len(es) != 2 || es[0].Slot != "" || es[0].Issue != "12" || es[1].Slot != "" || es[1].Issue != "12" {
+		t.Fatalf("entries %+v, want both written without a slot", es)
 	}
 }
 
@@ -201,7 +219,7 @@ func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
-	ledgerAppend(env, dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
 	if _, err := recordBounceVia(env, dir, "12", "", "h1"); err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +325,7 @@ func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
 		dir := ledgerProject(t, tc.slot)
 		env := Env{Now: func() time.Time { return ledgerNow }}
 		// The missing-field fallback.
-		LedgerNote(env, dir, ledger.Entry{Kind: ledger.KindDone, Issue: "12"})
+		env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindDone, Issue: "12"})
 		// Pane-observed completion.
 		row := PollRow{Name: "ben", State: StateDone, Evidence: "https://github.com/o/r/pull/9"}
 		if err := UpdateSlots(dir, func(s *Slot) {
@@ -316,7 +334,7 @@ func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
 				t.Fatal(err)
 			}
 			if d, ok := paneDone(prev, s, row); ok {
-				LedgerNote(env, dir, d)
+				env.Ledger().Note(dir, d)
 			}
 		}); err != nil {
 			t.Fatal(err)
@@ -330,5 +348,17 @@ func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
 				t.Errorf("%s: %s entry account %q, want %q", tc.slot, e.Kind, e.Account, tc.want)
 			}
 		}
+	}
+}
+
+// Outside a repository there is no lease to read: round 0, and no warning.
+func TestLedgerNoteOutsideARepoIsRoundZeroAndQuiet(t *testing.T) {
+	dir := t.TempDir()
+	var out bytes.Buffer
+	env := Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindCreate, Issue: "5"})
+	es, _ := ledger.Load(dir)
+	if len(es) != 1 || es[0].Round != 0 || out.Len() != 0 {
+		t.Fatalf("entries %+v stderr %q, want one round-0 entry and no warning", es, out.String())
 	}
 }

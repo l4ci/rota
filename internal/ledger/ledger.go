@@ -5,7 +5,7 @@
 // per-account totals.
 //
 // The file is per-developer runtime state (gitignored). A failed append never
-// fails the verb that wrote it: worker.LedgerNote reports it on stderr.
+// fails the verb that wrote it: Recorder.Note reports it on stderr.
 package ledger
 
 import (
