@@ -101,7 +101,7 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 		return pass(name, head+tiers)
 	}
 	herdr := ""
-	if d.roundHost() == host.Herdr {
+	if host.CapabilitiesForKind(d.roundHost()).Harness.HerdrIntegration {
 		herdr, _ = look(host.Herdr.Binary())
 	}
 	var bad, notes []string
