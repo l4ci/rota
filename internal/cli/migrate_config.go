@@ -1,15 +1,14 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitmap"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func configMigrateCommand() *Command {
@@ -20,14 +19,15 @@ func configMigrateCommand() *Command {
 // work.* moves to its round.* name in both config layers, value unchanged.
 // An old and a new name with different values refuse (exit 4) and nothing is
 // written. It is idempotent. `rota config fill` and `rota init` run the
-// same migration. Then the accounts step (#1824, migrateAccounts) folds
+// same migration. Then the accounts step (#1824, config.MigrateAccountsFiles) folds
 // round.codexAccounts and round.opencodeAccounts into one round.accounts list
 // in the global, tracked and local files. Then the merges step (#1825,
-// migrateMerges) moves the merged and renamed keys (models.orchestrator,
+// config.MigrateMergesFiles) moves the merged and renamed keys (models.orchestrator,
 // round.codexCommand, round.workerKind ...) to their new names; an old and a
 // new key with different values refuse (exit 4). Then the scope step (#1786, config.MigrateScopeFiles) moves
 // machine keys out of config.json and drops taste keys pinned at their
-// default; --keep names keys it leaves in place.
+// default; --keep names keys it leaves in place. config.Migrate runs the steps
+// in that order and plans them all before an --apply writes any.
 func migrateConfig(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
 	var keep setAnswersList
@@ -40,28 +40,11 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if *apply {
-			// A refusal must come before any step writes: plan them all first.
-			if err := migrateConfigPlan(c, root, keep); err != nil {
-				return roundMigrationFail(err)
-			}
-		}
-		m, err := config.MigrateRoundKeysFiles(root, *apply)
+		mig, err := config.Migrate(c.deps().projectsEnv(), root, *apply, keep)
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		am, err := migrateAccounts(c, root, *apply)
-		if err != nil {
-			return roundMigrationFail(err)
-		}
-		mm, err := migrateMerges(c, root, *apply)
-		if err != nil {
-			return roundMigrationFail(err)
-		}
-		sm, err := config.MigrateScopeFiles(c.deps().projectsEnv(), root, *apply, keep)
-		if err != nil {
-			return roundMigrationFail(err)
-		}
+		m, am, mm, sm := mig.Round, mig.Accounts, mig.Merges, mig.Scope
 		planned := m.Changed() || am.Changed() || mm.Changed() || sm.Changed()
 		data := knObj("changed", planned && *apply, "planned", planned, "applied", *apply,
 			"config", renameList(m.Config), "local", renameList(m.Local), "accounts", accountList(am), "merges", mergeList(mm), "scope", scopeList(sm))
@@ -92,44 +75,6 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: "changed:\n" + strings.Join(lines, "\n")}, nil
 	}
-}
-
-// migrateConfigPlan runs every refusing step as a preview, so an --apply that
-// one of them would refuse writes nothing from the others.
-func migrateConfigPlan(c *Ctx, root string, keep []string) error {
-	if _, err := config.MigrateRoundKeysFiles(root, false); err != nil {
-		return err
-	}
-	if _, err := migrateAccounts(c, root, false); err != nil {
-		return err
-	}
-	if _, err := migrateMerges(c, root, false); err != nil {
-		return err
-	}
-	_, err := config.MigrateScopeFiles(c.deps().projectsEnv(), root, false, keep)
-	return err
-}
-
-// migrateAccounts is the accounts step of `rota migrate config`: its own call
-// beside the round-key and scope steps, so a sibling step can be added next to
-// it without reshaping this one. The global config it rewrites is the rota
-// config dir's.
-func migrateAccounts(c *Ctx, root string, apply bool) (config.AccountsMigration, error) {
-	gdir, err := projects.Dir(c.deps().projectsEnv())
-	if err != nil {
-		gdir = ""
-	}
-	return config.MigrateAccountsFiles(root, gdir, apply)
-}
-
-// migrateMerges is the merges step of `rota migrate config` (#1825), a call of
-// its own beside the accounts step.
-func migrateMerges(c *Ctx, root string, apply bool) (config.MergesMigration, error) {
-	gdir, err := projects.Dir(c.deps().projectsEnv())
-	if err != nil {
-		gdir = ""
-	}
-	return config.MigrateMergesFiles(root, gdir, apply)
 }
 
 func mergeList(mm config.MergesMigration) []any {
@@ -197,81 +142,31 @@ func renameList(rs []config.Rename) []any {
 // and new names refuse (exit 4, both values listed), a malformed layer is
 // exit 70 naming the file.
 func roundMigrationFail(err error) (Result, error) {
-	var ce *config.ConflictError
-	var ae *config.AccountConflictError
-	var me *config.MergeConflictError
-	switch {
-	case errors.As(err, &me):
-		list := []any{}
-		for _, x := range me.Conflicts {
-			list = append(list, knObj("file", x.File, "old", x.Old, "new", x.New))
-		}
-		d := knObj("blockedBy", blockedby.MergeConflict, "conflicts", list, "changed", false)
-		return Result{Data: d}, Refused("%s", err.Error())
-	case errors.As(err, &ae):
-		list := []any{}
-		for _, x := range ae.Conflicts {
-			list = append(list, knObj("file", x.File, "name", x.Name, "dirs", anySlice([]string{x.A, x.B})))
-		}
-		d := knObj("blockedBy", blockedby.AccountConflict, "conflicts", list, "changed", false)
-		return Result{Data: d}, Refused("%s", err.Error())
-	case errors.As(err, &ce):
-		list := []any{}
-		for _, x := range ce.Conflicts {
-			list = append(list, knObj("file", x.File, "from", x.Old, "to", x.New, "fromValue", x.OldValue, "toValue", x.NewValue))
-		}
-		d := knObj("blockedBy", blockedby.ConfigConflict, "conflicts", list, "changed", false)
-		return Result{Data: d}, Refused("%s", err.Error())
-	case errors.Is(err, config.ErrCorrupt):
-		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+	data, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.ConfigRefusal | exitmap.ConfigCorrupt})
+	if data != nil {
+		return Result{Data: data}, out
 	}
-	return Result{}, err
+	return Result{}, out
 }
 
-// roundKeyVerbs are the verbs that read the round-only keys. With an old
-// work.* name still in the config they refuse (exit 4) rather than run on a
-// key nothing reads any more (#1097 D4). Bare rota is the orchestrator
-// launcher.
-var roundKeyVerbs = []string{"rota round", "rota worker", "rota doctor", "rota orchestrate", "rota keepalive", "rota layout", "rota limit"}
-
-// roundKeyQuiet are the verbs that neither refuse nor warn: the ones that
-// migrate or edit the config, and those that must stay silent (hooks, the
-// statusline) or never read project state. `worker prompt-check` is the Codex
-// prompt hook, which reads no config and must not block a worker's prompt.
-// `worker done|inbox|send|reply` run from a worker's own worktree, whose
-// tracked config.json can predate the rename: a refusal there would send the
-// worker to rewrite tracked config on its branch (#1163). They never read the
-// worktree's config. `worker done` does read round.accounts (for the ledger
-// headroom), but through the pool root, the main checkout that holds the slot
-// registry (returnRoot), so the old names in the worktree never reach it.
-var roundKeyQuiet = []string{"rota migrate", "rota config", "rota init", "rota update", "rota setup", "rota hook", "rota statusline", "rota version", "rota skills", "rota worker prompt-check", "rota worker done", "rota worker inbox", "rota worker send", "rota worker reply"}
-
-func pathUnder(path string, groups []string) bool {
-	for _, g := range groups {
-		if path == g || strings.HasPrefix(path, g+" ") {
-			return true
-		}
-	}
-	return false
-}
-
-// roundKeysStop refuses a round verb on a config that still names a
+// roundKeys refuses a round verb on a config that still names a
 // round-only key under work.*, and warns on every other verb. Outside a
 // project there is nothing to check.
-func roundKeysStop(c *Ctx) (Result, error) {
-	if pathUnder(c.Path, roundKeyQuiet) {
+func (p *preflight) roundKeys() (Result, error) {
+	if p.g.RoundKeys == RoundKeysQuiet {
 		return Result{}, nil
 	}
-	root, err := c.Root()
-	if err != nil {
+	root, ok := p.project()
+	if !ok {
 		return Result{}, nil
 	}
-	old := config.LegacyRoundKeys(c.deps().Config(root))
+	c := p.c
+	old := config.LegacyRoundKeys(p.config(root))
 	if len(old) == 0 {
 		return Result{}, nil
 	}
 	msg := "config still uses the old round key names " + strings.Join(old, ", ") + ", which nothing reads since they moved to round.*"
-	if c.Path == "rota" || pathUnder(c.Path, roundKeyVerbs) {
+	if p.g.RoundKeys == RoundKeysRefuse {
 		d := jsonx.NewObject()
 		d.Set("blockedBy", blockedby.ConfigMigration)
 		d.Set("keys", anySlice(old))

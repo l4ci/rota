@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"errors"
 	"flag"
+	"github.com/l4ci/rota/internal/exitmap"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -29,11 +29,8 @@ func migrateSource(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		m, err := config.MigrateSourceFile(root, c.deps().originProvider(c.Context(), root), *apply)
-		if errors.Is(err, config.ErrCorrupt) {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-		}
 		if err != nil {
-			return Result{}, err
+			return Result{}, configFail(err, exitmap.ConfigCorrupt)
 		}
 		legacy := config.Legacy(root)
 		data := knObj("changed", m.Changed && *apply, "planned", m.Changed, "source", m.Source, "forge", m.Forge,

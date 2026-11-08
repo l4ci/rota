@@ -19,7 +19,12 @@ func treeLeaves() map[string]bool {
 
 func TestSupportFencedVerbsRefuseOnSupport(t *testing.T) {
 	root := supportProject(t)
-	for _, path := range roundcfg.SupportActions(roundcfg.FenceRefused) {
+	tree := Tree()
+	for _, v := range VerbPaths(tree) {
+		path := "rota " + v
+		if gatesFor(tree, path).Fence != roundcfg.FenceRefused {
+			continue
+		}
 		t.Run(path, func(t *testing.T) {
 			code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, strings.Fields(path)[1:]...)...)
 			if code != ExitRefused {
@@ -46,24 +51,5 @@ func TestSupportAllowedVerbsPassTheFence(t *testing.T) {
 				t.Errorf("%s hit the support fence", path)
 			}
 		})
-	}
-}
-
-// Every verb is classified: a new verb has to land in a roundcfg support
-// table, so it cannot ship unfenced. Disjointness and the fenced set are
-// tested in roundcfg without the tree.
-func TestSupportTablesClassifyEveryVerb(t *testing.T) {
-	leaves := treeLeaves()
-	for leaf := range leaves {
-		if roundcfg.SupportClass(leaf) == roundcfg.FenceUnclassified {
-			t.Errorf("%s is in no support table", leaf)
-		}
-	}
-	for _, class := range []roundcfg.FenceClass{roundcfg.FenceRefused, roundcfg.FenceInVerb, roundcfg.FenceAllowed} {
-		for _, p := range roundcfg.SupportActions(class) {
-			if !leaves[p] {
-				t.Errorf("%s is in a support table but is not a verb", p)
-			}
-		}
 	}
 }

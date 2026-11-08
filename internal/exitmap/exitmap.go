@@ -38,6 +38,21 @@ const (
 	Invalid
 	// NotPorted: backlog.ErrNotPorted (exit 71).
 	NotPorted
+	// ConfigUsage: a malformed or unknown key, a bad value or a project-owned
+	// key (exit 2).
+	ConfigUsage
+	// ConfigInternal: a config file that is not a JSON object (any layer) or
+	// is unreadable (exit 70).
+	ConfigInternal
+	// ConfigCorrupt: config.ErrCorrupt, a config file that is not valid JSON
+	// (exit 70).
+	ConfigCorrupt
+	// ConfigRefusal: a migration conflict between old and new names (exit 4,
+	// with blockedBy data and the conflicts).
+	ConfigRefusal
+
+	// Config is every config class.
+	Config = ConfigUsage | ConfigInternal | ConfigCorrupt | ConfigRefusal
 
 	// NotFound is both not-found kinds.
 	NotFound = BacklogNotFound | TrackerNotFound
@@ -117,6 +132,9 @@ func (e *demotedError) As(target any) bool {
 }
 
 func translate(err error, o Options) (any, error) {
+	if d, out, ok := translateConfig(err, o); ok {
+		return d, out
+	}
 	var te *tracker.Error
 	var ex interface{ Exit() int }
 	var ref *backlog.RefusedError

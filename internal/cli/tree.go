@@ -49,6 +49,7 @@ func Tree() *Command {
 	root.Subs = append(root.Subs, agentsCommands(), doctorCommand(), orchestrateCommand(), reapCommand(), layoutCommand())
 	root.Subs = append(root.Subs, statuslineCommands(), hookCommands(), keepaliveCommands(), limitCommands())
 	applyReceipts(root)
+	applyGates(root)
 	return root
 }
 
