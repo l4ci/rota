@@ -23,7 +23,7 @@ const (
 // default: every gate applies as it does to any verb. tree_gates.go declares
 // the policies; a verb takes its group's unless it sets its own.
 type Gates struct {
-	// LegacyExempt runs on a project that still holds .hv/. Inherited.
+	// LegacyExempt runs on a project that still holds the legacy state directory. Inherited.
 	LegacyExempt bool
 	// RoundKeys is the verb's answer to an old work.* round key. The nearest
 	// non-default policy up the tree wins.
@@ -98,7 +98,7 @@ func (p *preflight) config(root string) any {
 	return p.cfg
 }
 
-// runGates is the gate sequence: the legacy .hv/ stop, the old round keys, a
+// runGates is the gate sequence: the legacy state directory stop, the old round keys, a
 // role in the tracked config, an unnamed support machine, the support fence.
 // A gate's refusal ends the sequence with its error and result.
 func runGates(c *Ctx, root *Command) (Result, error) {
