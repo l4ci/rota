@@ -62,13 +62,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if err != nil {
 		return res, err
 	}
-	var s *worker.Slot
-	for _, c := range reg.Slots() {
-		if c.HeldID() == id {
-			s = c
-			break
-		}
-	}
+	s := reg.SlotHolding(id)
 	if s == nil {
 		it, err := be.Get(id)
 		if err != nil {

@@ -342,7 +342,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := Update(root, func(stored []Entry) []Entry {
+		err := Section.Update(root, func(stored []Entry) []Entry {
 			for j := range stored {
 				a, hit := found[stored[j].ID]
 				if !hit || !IsOpen(stored[j]) {

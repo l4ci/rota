@@ -36,7 +36,7 @@ func RegisterExternal(root, name, branch, worktree, base, task, pr string) error
 				conflict = &RegisterConflict{ConflictName, x.Name()}
 			case byBranch != nil && x.Name() == byBranch.Name():
 				conflict = &RegisterConflict{ConflictBranch, x.Name()}
-			case task != "" && x.HeldID() == NormID(task):
+			case x.Holds(task):
 				conflict = &RegisterConflict{ConflictIssue, x.Name()}
 			}
 			if conflict != nil {

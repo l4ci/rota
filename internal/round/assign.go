@@ -886,7 +886,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if slot == nil {
 			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
-		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id), false); err != nil {
+		if err := checkActive(reg, set, o.Agent, slot.Holds(id), false); err != nil {
 			return run, false, err
 		}
 		if why := e.SlotLoginProblem(slot); why != "" {
@@ -906,7 +906,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		slot = picked[0]
 		// A holder resumes without the usable() gate in pickSlots: refuse it
 		// like the explicit --agent path rather than re-dispatch into a login prompt.
-		if slot.HeldID() == worker.NormID(id) {
+		if slot.Holds(id) {
 			if why := e.SlotLoginProblem(slot); why != "" {
 				return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
 			}
