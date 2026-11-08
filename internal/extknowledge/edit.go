@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // edit is a topic file open for one write: the clone is clean and current, the
@@ -71,10 +73,7 @@ func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	if hit < 0 {
 		return WriteResult{}, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, in.Topic, in.Title)
 	}
-	end := hit + 1
-	for end < len(e.lines) && e.lines[end] != "" && (e.lines[end][0] == ' ' || e.lines[end][0] == '\t') {
-		end++
-	}
+	end := bulletfmt.End(e.lines, hit)
 	rest := e.lines[end:]
 	// Removing the only line between two blank lines would leave two in a row.
 	if hit > 0 && e.lines[hit-1] == "" && len(rest) > 0 && rest[0] == "" {
@@ -131,8 +130,8 @@ func (c Clone) replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 
 // titleOrLine is the bold title of a bullet line, else the line itself.
 func titleOrLine(line string) string {
-	if m := titleRe.FindStringSubmatch(line); m != nil {
-		return m[1]
+	if title, ok := bulletfmt.Title(line); ok {
+		return title
 	}
 	return strings.TrimPrefix(line, "- ")
 }

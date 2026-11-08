@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 var (
 	stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
-	titleRe   = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 )
 
 // Slugify is the topic file name for a topic name.
@@ -126,7 +126,7 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 	if len(in.Seen) > 0 {
 		stamp += " seen:" + in.Seen.String()
 	}
-	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", in.Title, strings.TrimRight(in.Body, "\n"), stamp)
+	bullet := bulletfmt.Render(in.Title, strings.TrimRight(in.Body, "\n"), stamp)
 
 	p := &plan{}
 	if known {
@@ -134,11 +134,8 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if body == "" {
 			body = "# " + t.Name + "\n\n"
 		}
-		lower := strings.ToLower(in.Title)
-		for _, l := range bulletLines(body) {
-			if m := titleRe.FindStringSubmatch(l); m != nil && strings.ToLower(m[1]) == lower {
-				return WriteResult{Policy: pol}, nil
-			}
+		if bulletfmt.HasTitle(bulletLines(body), in.Title) {
+			return WriteResult{Policy: pol}, nil
 		}
 		if t.Split {
 			p.set(t.File, insertBulletBelowSubIndex(body, bullet))

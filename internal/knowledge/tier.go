@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
@@ -469,7 +470,7 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 			continue
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
-			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil && m[1] == title {
+			if t, ok := bulletfmt.Title(line); ok && t == title {
 				if _, err := sc.Init(topic, title, s.today()); err != nil {
 					return Entry{}, false, err
 				}
@@ -542,8 +543,8 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 			continue
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
-			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-				if _, err := sc.Init(t.Name, m[1], s.today()); err != nil {
+			if title, ok := bulletfmt.Title(line); ok {
+				if _, err := sc.Init(t.Name, title, s.today()); err != nil {
 					return nil, err
 				}
 			}

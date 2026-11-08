@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/toolver"
 	"github.com/l4ci/rota/internal/topicmatch"
 )
@@ -431,10 +432,7 @@ func (c Clone) MatchWith(words []string, want []string, project map[string]strin
 			if split && isSubIndexLine(orig[b.Line]) {
 				continue
 			}
-			end := b.Line + 1
-			for end < len(orig) && orig[end] != "" && (orig[end][0] == ' ' || orig[end][0] == '\t') {
-				end++
-			}
+			end := bulletfmt.End(orig, b.Line)
 			if !hasAll(bulletText(b, orig[b.Line:end]), ws) {
 				continue
 			}
