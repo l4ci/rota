@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
@@ -297,10 +297,7 @@ func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string,
 		lines = append(lines, fmt.Sprintf("local: set %s = %s", p.Key, v))
 	}
 	if err := config.SaveLocal(dir, vals); err != nil {
-		if errors.Is(err, fsio.ErrUnreadable) || errors.Is(err, config.ErrLocalNotObject) {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-		}
-		return Result{}, err
+		return Result{}, configFail(err, exitmap.ConfigInternal)
 	}
 	doc, line := setupDoctor(c)
 	lines = append(lines, line)
