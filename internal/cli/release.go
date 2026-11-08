@@ -20,6 +20,7 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/release"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
@@ -285,7 +286,7 @@ func releaseNotAtUmbrella(c *Ctx) error {
 	if err != nil {
 		return err
 	}
-	if rotatree.AtUmbrellaRoot(cwd, func() bool { return len(registeredRels(cwd)) > 0 }) {
+	if rotatree.AtUmbrellaRoot(cwd, func() bool { return len(repos.Rels(cwd)) > 0 }) {
 		return Usage("%s at the umbrella root needs --repo <name>", c.Path)
 	}
 	return nil

@@ -1,7 +1,6 @@
 package skills
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -159,8 +158,8 @@ func manifestPath(root string) string { return filepath.Join(root, ManifestName)
 // ReadManifest loads a root's manifest; ok is false when there is none, or it
 // does not parse (every file is then unmanaged, which keeps all of them).
 func ReadManifest(root string) (m Manifest, ok bool) {
-	b, err := os.ReadFile(manifestPath(root))
-	if err != nil || json.Unmarshal(b, &m) != nil || m.Schema != ManifestSchema {
+	m, found, err := fsio.ReadJSON[Manifest](manifestPath(root))
+	if err != nil || !found || m.Schema != ManifestSchema {
 		return Manifest{}, false
 	}
 	files := map[string]string{}

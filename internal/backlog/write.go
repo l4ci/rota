@@ -13,7 +13,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/fsio"
 	gitx "github.com/l4ci/rota/internal/git"
@@ -496,7 +495,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 				if strings.Contains(section.Body(body, "Completed"), acceptanceRecord) {
 					return nil
 				}
-				updated, _ := artifact.AppendSection(body, "Completed", "\n"+acceptanceRecord+"\n")
+				updated := section.Append(body, "Completed", "\n"+acceptanceRecord+"\n")
 				return fsio.WriteFileAtomic(detailPath, []byte(updated))
 			}); err != nil {
 				return err

@@ -108,16 +108,7 @@ func ledgerSlot(reg Registry, e ledger.Entry) *Slot {
 	if e.Slot != "" {
 		return reg.Slot(e.Slot)
 	}
-	id := NormID(e.Issue)
-	if id == "" {
-		return nil
-	}
-	for _, s := range reg.Slots() {
-		if strings.EqualFold(HeldID(s.Task(), s.Branch(), s.Name()), id) {
-			return s
-		}
-	}
-	return nil
+	return reg.SlotHolding(e.Issue)
 }
 
 // Headroom is the account's headroom percentage now, nil when no meter reads

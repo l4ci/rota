@@ -54,6 +54,14 @@ func HeldID(task, branch, name string) string {
 // HeldID is the item the slot holds ("" when none).
 func (s *Slot) HeldID() string { return HeldID(s.Task(), s.Branch(), s.Name()) }
 
+// Holds reports whether the slot holds id, compared by NormID: `#12`, `12` and
+// `b07` all name what they name. An empty id is held by nobody, not by every
+// idle slot.
+func (s *Slot) Holds(id string) bool {
+	want := NormID(id)
+	return want != "" && s.HeldID() == want
+}
+
 // Slot states that wait on the orchestrator rather than on the worker.
 var attention = map[string]bool{"blocked": true, "needs-permission": true, "limited": true, "dead": true, "unknown": true}
 

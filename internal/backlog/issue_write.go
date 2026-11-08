@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/marker"
 	ms "github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -509,7 +508,7 @@ func (b *Issues) NoteGet(ref, kind string) (string, bool, error) {
 	for _, p := range parts {
 		all.WriteString(p.rest)
 	}
-	return notechunk.Norm(all.String()), true, nil
+	return marker.Norm(all.String()), true, nil
 }
 
 // NotePut upserts the note: edits existing parts in place, adds missing ones,
@@ -531,7 +530,7 @@ func (b *Issues) NotePut(ref, kind, text string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	want := notechunk.Parts(kind, text, noteLimit(b.NoteLimit))
+	want := marker.Parts(kind, text, noteLimit(b.NoteLimit))
 	changed := false
 	for i, body := range want {
 		if i < len(existing) {
@@ -601,7 +600,7 @@ func (b *Issues) AddComment(ref, kind, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tr.AddComment(b.ctx(), n, marker.CommentHeader(kind)+notechunk.Norm(text))
+	return tr.AddComment(b.ctx(), n, marker.CommentHeader(kind)+marker.Norm(text))
 }
 
 // Comments lists the context comments oldest first, optionally only kind.

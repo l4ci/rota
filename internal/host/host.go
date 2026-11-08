@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -317,6 +318,29 @@ type Capabilities struct {
 	// TreeKillClose: closing the session must kill the agent's process tree
 	// and prove it gone, even after a positive exit poll (Orca).
 	TreeKillClose bool
+
+	// Policy below is data per Kind (policy.go), not an optional side.
+
+	// InSessionRule is non-nil for a host that only works from inside one of
+	// its own panes (herdr).
+	InSessionRule *InSessionRule
+	// LaunchKindBound: the host starts the agent by the launch binary's own
+	// kind, so a launch line for another kind is refused (herdr).
+	LaunchKindBound bool
+	// NoNominalHandle: a slot has no session until its first dispatch, so
+	// pool init records no handle (a nominal one reads as a dead session).
+	NoNominalHandle bool
+	// InPlace: an orchestrator runs in the current terminal (Core).
+	InPlace bool
+	// Harness is what a worker harness may read about the host.
+	Harness harness.HostTraits
+	// Server is the host's server process name; zero when it has none to avoid.
+	Server ServerProc
+	// Attach builds the command that starts or attaches to a named session;
+	// nil for a host with no sessions of its own.
+	Attach SessionAttach
+	// Diagnose checks the host is installed and usable (rota doctor).
+	Diagnose func(Probe) Health
 }
 
 // RuntimeScoped is implemented by hosts whose handles do not outlive the host
@@ -328,13 +352,18 @@ type RuntimeScoped interface{ RuntimeScopedHandles() bool }
 type TreeKiller interface{ TreeKillClose() bool }
 
 // CapabilitiesForKind is the capabilities of the adapter for k, read without
-// building it. Solo and unknown kinds have none.
+// building it, so it always agrees with New(k, ...).Capabilities(). Solo and
+// unknown kinds have none.
 func CapabilitiesForKind(k Kind) Capabilities {
-	if k == HerdrCore {
-		return CapabilitiesOf(&coreHost{})
-	}
-	if k == Orca {
-		return CapabilitiesOf(&orca{})
+	switch k {
+	case Herdr:
+		return (&herdr{}).Capabilities()
+	case HerdrCore:
+		return (&coreHost{}).Capabilities()
+	case Tmux:
+		return (&tmux{}).Capabilities()
+	case Orca:
+		return (&orca{}).Capabilities()
 	}
 	return Capabilities{}
 }

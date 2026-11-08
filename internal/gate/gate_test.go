@@ -3,10 +3,7 @@ package gate
 import (
 	"encoding/json"
 	"errors"
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/fsio"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -32,9 +29,6 @@ func project(t *testing.T, cfg string) string {
 	}
 	return root
 }
-
-// diskCfg is the project config read from root, as Deps.Config does.
-func diskCfg(root string) any { return config.Load(projects.OSEnv(), rotatree.Config(root)) }
 
 func auditLines(t *testing.T, root string) []map[string]any {
 	t.Helper()
@@ -91,7 +85,7 @@ func TestClearRejectsMalformedConfirmation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := project(t, "")
-			err := Clear(root, diskCfg(root), fixedNow, TagPush, "release push", "v1", tc.conf, nil)
+			err := Clear(root, "off", fixedNow, TagPush, "release push", "v1", tc.conf, nil)
 			if !errors.Is(err, ErrBadConfirm) {
 				t.Errorf("Clear returned %v, want ErrBadConfirm", err)
 			}
@@ -114,8 +108,8 @@ func TestClearAtEveryAutonomyLevel(t *testing.T) {
 			if !g.Enforced() {
 				continue
 			}
-			root := project(t, `{"autonomy": {"level": "`+level+`"}}`)
-			err := Clear(root, diskCfg(root), fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{}, nil)
+			root := project(t, "")
+			err := Clear(root, level, fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{}, nil)
 			var r *Refused
 			if !errors.As(err, &r) || r.Gate != g.Name || r.Paths == nil {
 				t.Fatalf("%s/%s: no confirm gave %v", level, g.Name, err)
@@ -123,7 +117,7 @@ func TestClearAtEveryAutonomyLevel(t *testing.T) {
 			if lines := auditLines(t, root); lines != nil {
 				t.Fatalf("%s/%s: a refusal audited %v", level, g.Name, lines)
 			}
-			if err := Clear(root, diskCfg(root), fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{Given: true, Note: `"yes" – go`}, nil); err != nil {
+			if err := Clear(root, level, fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{Given: true, Note: `"yes" – go`}, nil); err != nil {
 				t.Fatalf("%s/%s: confirmed: %v", level, g.Name, err)
 			}
 			want := map[string]any{"ts": "2026-10-03T10:00:00Z", "gate": g.Name, "verb": g.Verbs[0], "target": "v1.2.3",
@@ -138,7 +132,7 @@ func TestClearAtEveryAutonomyLevel(t *testing.T) {
 func TestClearAppends(t *testing.T) {
 	root := project(t, "")
 	for i := 0; i < 3; i++ {
-		if err := Clear(root, diskCfg(root), fixedNow, TagPush, "release push", "v1", Confirm{Given: true, Note: "ok"}, nil); err != nil {
+		if err := Clear(root, "off", fixedNow, TagPush, "release push", "v1", Confirm{Given: true, Note: "ok"}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -175,18 +169,18 @@ func TestMergePolicyCoversPinsEntrySemantics(t *testing.T) {
 }
 
 func TestMergePolicy(t *testing.T) {
-	p, err := LoadMergePolicy(diskCfg(project(t, "")))
+	p, err := NewMergePolicy("none", nil)
 	if err != nil || p.Mode != MergeNone || p.NeedsFiles() {
-		t.Fatalf("default: %+v %v", p, err)
+		t.Fatalf("none: %+v %v", p, err)
 	}
 	if ok, _ := p.Covers([]string{"a"}); ok {
 		t.Error("none covers nothing")
 	}
-	p, err = LoadMergePolicy(diskCfg(project(t, `{"ship": {"mergeApproval": "all"}}`)))
+	p, err = NewMergePolicy("all", nil)
 	if ok, hit := p.Covers(nil); err != nil || !ok || hit == nil || len(hit) != 0 {
 		t.Errorf("all: %v %v %v", ok, hit, err)
 	}
-	p, err = LoadMergePolicy(diskCfg(project(t, `{"ship": {"mergeApproval": "paths", "mergeApprovalPaths": ["rota-release", " ", 3, "*.md"]}}`)))
+	p, err = NewMergePolicy("paths", []string{"rota-release", " ", "*.md"})
 	if err != nil || !p.NeedsFiles() || !reflect.DeepEqual(p.Paths, []string{"rota-release", "*.md"}) {
 		t.Fatalf("paths: %+v %v", p, err)
 	}
@@ -196,19 +190,19 @@ func TestMergePolicy(t *testing.T) {
 	if ok, _ := p.Covers([]string{"internal/x.go"}); ok {
 		t.Error("paths: an unlisted file needs no approval")
 	}
-	for _, bad := range []string{`"sometimes"`, `true`, `""`} {
-		if _, err := LoadMergePolicy(diskCfg(project(t, `{"ship": {"mergeApproval": `+bad+`}}`))); !errors.Is(err, ErrBadMergeMode) {
-			t.Errorf("%s: %v", bad, err)
+	for _, bad := range []string{"sometimes", "true", ""} {
+		if _, err := NewMergePolicy(bad, nil); !errors.Is(err, ErrBadMergeMode) {
+			t.Errorf("%q: %v", bad, err)
 		}
 	}
 }
 
 func TestClearRecordsEscalation(t *testing.T) {
 	root := project(t, "")
-	if err := Clear(root, diskCfg(root), fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "Approve.", Escalation: "e3"}, []string{}); err != nil {
+	if err := Clear(root, "off", fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "Approve.", Escalation: "e3"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Clear(root, diskCfg(root), fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "ok"}, []string{}); err != nil {
+	if err := Clear(root, "off", fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "ok"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
 	lines := auditLines(t, root)
@@ -222,7 +216,7 @@ func TestClearRecordsEscalation(t *testing.T) {
 
 func TestClearEscalationWithoutConfirmationRefuses(t *testing.T) {
 	root := project(t, "")
-	err := Clear(root, diskCfg(root), fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Escalation: "e1"}, []string{"protected.go"})
+	err := Clear(root, "off", fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Escalation: "e1"}, []string{"protected.go"})
 	var refused *Refused
 	if !errors.As(err, &refused) {
 		t.Fatalf("Clear returned %v, want Refused", err)
@@ -260,36 +254,45 @@ func TestReadAudit(t *testing.T) {
 	if err != nil || len(got) != 2 {
 		t.Fatalf("%v, %v", got, err)
 	}
-	if jsonx.Str(got[0], "target") != "ben" || jsonx.Str(got[1], "verb") != "round tick assign" {
+	if got[0].Target != "ben" || got[1].Verb != "round tick assign" || !got[0].TS.Equal(fixedNow) {
 		t.Errorf("order or fields: %v", got)
 	}
 }
 
-// memCfg is an in-memory project config, so no .rota/config.json is read.
-func memCfg(t *testing.T, raw string) any {
-	t.Helper()
-	v, err := jsonx.Decode([]byte(raw))
+func TestAuditRecordRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	want := Record{TS: fixedNow.UTC(), Gate: MergeApproval, Verb: "ship merge", Target: "PR 7", Note: "ok", Autonomy: "auto", Escalation: "e3"}
+	if err := AppendAudit(root, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadAudit(root)
+	if err != nil || len(got) != 1 || got[0] != want {
+		t.Fatalf("%+v, %v", got, err)
+	}
+}
+
+// A damaged line is skipped by ReadAudit and stops ReadAuditStrict; a missing
+// log is no records for one and os.ErrNotExist for the other.
+func TestReadAuditPolicies(t *testing.T) {
+	root := t.TempDir()
+	if _, err := ReadAuditStrict(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing log: %v", err)
+	}
+	Autopilot(root, fixedNow, "round tick merge", "ben", "into main")
+	p := filepath.Join(root, AuditFile)
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return v
-}
-
-func TestClearReadsAutonomyFromTheInjectedConfig(t *testing.T) {
-	root := project(t, `{"autonomy": {"level": "off"}}`)
-	cfg := memCfg(t, `{"autonomy": {"level": "auto"}}`)
-	if err := Clear(root, cfg, fixedNow, TagPush, "release push", "v1", Confirm{Given: true, Note: "ok"}, nil); err != nil {
-		t.Fatal(err)
+	f.WriteString("{\"gate\":null,\"ts\":\"t\"}\n[1]\n{\"verb\":\"x\"}\n")
+	f.Close()
+	got, err := ReadAudit(root)
+	if err != nil || len(got) != 3 { // everything but the non-object line
+		t.Fatalf("lenient: %+v, %v", got, err)
 	}
-	if lines := auditLines(t, root); len(lines) != 1 || lines[0]["autonomy"] != "auto" {
-		t.Fatalf("audit %v", lines)
-	}
-}
-
-func TestLoadMergePolicyReadsTheInjectedConfig(t *testing.T) {
-	p, err := LoadMergePolicy(memCfg(t, `{"ship": {"mergeApproval": "all"}}`))
-	if err != nil || p.Mode != MergeAll {
-		t.Fatalf("%+v %v", p, err)
+	var le *fsio.LineError
+	if _, err := ReadAuditStrict(root); !errors.As(err, &le) || le.Line != 2 {
+		t.Fatalf("strict: %v", err)
 	}
 }
 

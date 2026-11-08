@@ -140,3 +140,20 @@ func TestManagedBlockRoundTrip(t *testing.T) {
 		t.Errorf("changed rewrite = %q", st)
 	}
 }
+
+func TestAppend(t *testing.T) {
+	tests := []struct {
+		name, content, sect, add, want string
+	}{
+		{"before next heading", "## A\none\n## B\ntwo\n", "A", "- x\n", "## A\none\n- x\n## B\ntwo\n"},
+		{"at EOF adds newline", "## A\none", "A", "- x\n", "## A\none\n- x\n"},
+		{"missing section appended", "intro\n\n\n", "New", "- x\n", "intro\n\n## New\n- x\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Append(tc.content, tc.sect, tc.add); got != tc.want {
+				t.Errorf("Append = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

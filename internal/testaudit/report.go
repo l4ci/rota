@@ -3,12 +3,10 @@
 package testaudit
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -211,18 +209,11 @@ func ReadTelemetry(root string, checkpoint Checkpoint, maxSeconds, prs int) Tele
 			}
 		}
 	}
-	count := 0
-	missing, err = readLines(filepath.Join(root, gate.AuditFile), func(line []byte) error {
-		var o map[string]any
-		if err := json.Unmarshal(line, &o); err != nil {
-			return err
-		}
-		if o["gate"] == nil || o["ts"] == nil {
-			return fmt.Errorf("incomplete approval record")
-		}
-		count++
-		return nil
-	})
+	approvals, err := gate.ReadAuditStrict(root)
+	count := len(approvals)
+	if missing = errors.Is(err, os.ErrNotExist); missing {
+		err = nil
+	}
 	if err != nil || missing {
 		r.Unavailable = append(r.Unavailable, "gate approvals: "+evidenceError(missing, err))
 		if err != nil {
@@ -252,20 +243,9 @@ func evidenceError(missing bool, err error) string {
 	return "unavailable (" + err.Error() + ")"
 }
 func readLines(path string, read func([]byte) error) (bool, error) {
-	b, err := os.ReadFile(path)
+	_, err := fsio.ReadLines(path, fsio.Strict, read)
 	if errors.Is(err, os.ErrNotExist) {
 		return true, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	for i, line := range bytes.Split(b, []byte{'\n'}) {
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
-		if err := read(line); err != nil {
-			return false, fmt.Errorf("line %d: %w", i+1, err)
-		}
-	}
-	return false, nil
+	return false, err
 }

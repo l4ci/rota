@@ -13,6 +13,25 @@ import (
 	"github.com/l4ci/rota/internal/host"
 )
 
+// inSessionRefusal is the refusal for a host that only works from inside one
+// of its own panes (host.Capabilities.InSessionRule), nil when h has no such
+// rule or this process is in a pane. handoff is the session-ensure wording,
+// which offers a way in; otherwise it is the dispatch wording.
+func inSessionRefusal(h host.Host, handoff bool, cwd string) *exitcode.Error {
+	rule := host.CapabilitiesForKind(h.Kind()).InSessionRule
+	if rule == nil || h.InSession() {
+		return nil
+	}
+	dispatch := "round.dispatch=" + h.Kind().String()
+	if !handoff {
+		return fail(exitcode.ExitUnavailable, dispatch+" must run from inside a "+rule.Pane+" ("+rule.Env+")")
+	}
+	err := fail(exitcode.ExitRefused, dispatch+" needs /rota-work to run inside a "+rule.Pane)
+	err.Data = BlockData{BlockedBy: blockedby.OutsideHerdr}
+	err.Hint = fmt.Sprintf("open %s, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", h.Kind(), cwd)
+	return err
+}
+
 // Attachable host session guarantee: the port of bin/hv-worker-session.
 //
 // `round.dispatch: tmux` is worth its cost for one reason: a worker that needs
@@ -92,11 +111,8 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	if h.InSession() {
 		return SessionState{Inside: true, Where: h.Where()}, nil
 	}
-	if h.Kind() == host.Herdr {
-		cwd, _ := e.Getwd()
-		err := fail(exitcode.ExitRefused, "round.dispatch=herdr needs /rota-work to run inside a herdr pane")
-		err.Data = BlockData{BlockedBy: blockedby.OutsideHerdr}
-		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)
+	cwd, _ := e.Getwd()
+	if err := inSessionRefusal(h, true, cwd); err != nil {
 		return SessionState{}, err
 	}
 	op := h.Capabilities().Operator

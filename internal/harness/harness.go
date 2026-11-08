@@ -297,6 +297,19 @@ type Account struct{ ConfigDir, Home string }
 // Noun prefixes it in a message ("the subcommand ").
 type ResumeHit struct{ Token, Noun string }
 
+// HostTraits are the facts about a round's terminal host a harness reads, so
+// it never names a host. The zero value is a host with none of them.
+type HostTraits struct {
+	// CodexHost: codex workers can run on the host.
+	CodexHost bool
+	// HerdrIntegration: the host is herdr proper, whose per-agent integrations
+	// are installed and probed.
+	HerdrIntegration bool
+	// CoreIdentity: the host reports natively over an app-associated endpoint
+	// and needs per-launch shell-tool identity configuration.
+	CoreIdentity bool
+}
+
 // PreflightOpts are what a worker harness needs to check a slot before
 // anything is marked or killed.
 type PreflightOpts struct {
@@ -304,12 +317,8 @@ type PreflightOpts struct {
 	// Launch is the launch line the slot will run; a harness probes the flags
 	// it holds.
 	Launch string
-	// Herdr is whether the round's host is herdr.
-	Herdr bool
-	// HerdrCore uses native reporting over the app-associated Core endpoint.
-	HerdrCore bool
-	// Orca permits terminal-based Codex launch without herdr integration.
-	Orca bool
+	// Host is what the round's terminal host offers a harness.
+	Host HostTraits
 	// Worktree is the slot's worktree, which a seeded home must trust.
 	Worktree string
 	// CommonDir is the git common dir, asked for only by a harness that keeps
