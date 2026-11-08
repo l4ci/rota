@@ -1,19 +1,18 @@
 package knowledge
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // The local dated bullet is "- **Title** — body <!-- YYYY-MM-DD -->", with an
 // optional commit sha beside the date ("<!-- YYYY-MM-DD sha:abc1234 -->").
 // The stamp is always the last thing on the line: Add renders it, Amend keeps
-// it final, and Query recognizes a line only by it. This file owns that
-// shape; the external format (extknowledge) has its own stamp fields.
-
-// titleRe reads the title of any titled bullet, dated or not.
-var titleRe = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
+// it final, and Query recognizes a line only by it. The title and line
+// render are shared with the external format (internal/bulletfmt); this file owns
+// the stamp, which extknowledge writes with its own fields.
 
 // bulletRe splits a dated bullet into title, body and trailing stamp.
 var bulletRe = regexp.MustCompile(`^- \*\*([^*]+)\*\* — (.*?)(\s*<!-- \d{4}-\d{2}-\d{2}( sha:[0-9a-f]{7,40})?\s*-->\s*)$`)
@@ -24,7 +23,7 @@ func renderBullet(title, body, date, sha string) string {
 	if sha != "" {
 		stamp += " sha:" + sha
 	}
-	return fmt.Sprintf("- **%s** — %s <!-- %s -->", title, body, stamp)
+	return bulletfmt.Render(title, body, stamp)
 }
 
 // parseBullet splits a bullet line (right-trimmed) into its title, body and
@@ -63,7 +62,7 @@ func bulletEnd(body string, a int) int {
 		if nl >= 0 {
 			line, next = body[e:e+nl], e+nl+1
 		}
-		if !first && (line == "" || (line[0] != ' ' && line[0] != '\t')) {
+		if !first && !bulletfmt.Continues(line) {
 			break
 		}
 		e = next

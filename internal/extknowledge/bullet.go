@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // ToolVersion is one tool a bullet was seen on, e.g. godot@4.6.
@@ -82,9 +84,9 @@ func parseBullets(file string) []bullet {
 			b.Stamp = tail
 			parseStamp(&b, strings.TrimSpace(tail))
 		}
-		if m := titleRe.FindStringSubmatch(rest); m != nil {
-			b.Title = m[1]
-			rest = strings.TrimPrefix(rest, m[0])
+		if title, ok := bulletfmt.Title(rest); ok {
+			b.Title = title
+			rest = strings.TrimPrefix(rest, "- **"+title+"**")
 			rest = strings.TrimPrefix(strings.TrimSpace(rest), "—")
 		} else {
 			rest = strings.TrimPrefix(rest, "- ")
