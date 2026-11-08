@@ -9,7 +9,6 @@
 package ledger
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -130,22 +129,7 @@ func Append(root string, e Entry) error {
 	if err != nil {
 		return err
 	}
-	p := Path(root)
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
-		if err != nil {
-			return err
-		}
-		if _, err := f.Write(append(line, '\n')); err != nil {
-			f.Close()
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			f.Close()
-			return err
-		}
-		return f.Close()
-	})
+	return fsio.AppendLine(Path(root), line, 0o644)
 }
 
 // Load reads every entry in file order. A missing file is no entries and
@@ -197,29 +181,11 @@ func LoadForSummary(root string) SummarySource { return load(root, true) }
 
 func load(root string, strict bool) SummarySource {
 	s := SummarySource{rounds: map[int]bool{}, unreadableRounds: map[int]bool{}}
-	data, err := os.ReadFile(Path(root))
-	if errors.Is(err, os.ErrNotExist) {
-		if strict {
-			s.err = errors.New("no ledger")
-		}
-		return s
-	}
-	if err != nil {
-		s.err = err
-		if strict {
-			s.err = errors.New("ledger unreadable")
-		}
-		return s
-	}
-	for _, line := range bytes.Split(data, []byte{'\n'}) {
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
+	skipped, err := fsio.ReadLines(Path(root), fsio.Lenient, func(line []byte) error {
 		v, err := jsonx.Decode(line)
 		o, ok := v.(*jsonx.Object)
 		if err != nil || !ok {
-			s.skippedLines++
-			continue
+			return errors.New("not a JSON object")
 		}
 		e := Entry{Kind: jsonx.Str(o, "kind"), Issue: jsonx.Str(o, "issue"), Slot: jsonx.Str(o, "slot"),
 			Account: jsonx.Str(o, "account"), Harness: jsonx.Str(o, "harness"), PR: jsonx.Str(o, "pr")}
@@ -236,13 +202,26 @@ func load(root string, strict bool) SummarySource {
 			valid = valid && ok
 		}
 		if strict && !valid {
-			s.skippedLines++
 			if knownRound {
 				s.unreadableRounds[e.Round] = true
 			}
-			continue
+			return errors.New("unreadable event")
 		}
 		s.Entries = append(s.Entries, e)
+		return nil
+	})
+	s.skippedLines = skipped
+	if errors.Is(err, os.ErrNotExist) {
+		if strict {
+			s.err = errors.New("no ledger")
+		}
+		return s
+	}
+	if err != nil {
+		s.err = err
+		if strict {
+			s.err = errors.New("ledger unreadable")
+		}
 	}
 	return s
 }
@@ -286,33 +265,10 @@ func Trim(root string, current, keep int) (dropped int, err error) {
 	if keep <= 0 {
 		return 0, nil
 	}
-	p := Path(root)
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		data, err := os.ReadFile(p)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		var kept bytes.Buffer
-		for _, line := range bytes.Split(data, []byte{'\n'}) {
-			if len(line) == 0 {
-				continue
-			}
-			if r, ok := lineRound(line); ok && r > 0 && r <= current-keep {
-				dropped++
-				continue
-			}
-			kept.Write(line)
-			kept.WriteByte('\n')
-		}
-		if dropped == 0 {
-			return nil
-		}
-		return fsio.WriteFileAtomic(p, kept.Bytes())
+	return fsio.RewriteLines(Path(root), func(line []byte) bool {
+		r, ok := lineRound(line)
+		return !(ok && r > 0 && r <= current-keep)
 	})
-	return dropped, err
 }
 
 // lineRound is the round of one ledger line; ok is false for a line that does

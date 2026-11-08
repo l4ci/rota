@@ -146,25 +146,23 @@ func Autopilot(root string, now time.Time, verb, target, note string) error {
 // ReadAudit returns the audit log's lines in order. A missing log is no lines;
 // a line that is not a JSON object is skipped.
 func ReadAudit(root string) ([]*jsonx.Object, error) {
-	data, err := os.ReadFile(filepath.Join(root, AuditFile))
+	var out []*jsonx.Object
+	_, err := fsio.ReadLines(filepath.Join(root, AuditFile), fsio.Lenient, func(line []byte) error {
+		v, err := jsonx.Decode(line)
+		if err != nil {
+			return err
+		}
+		o, ok := v.(*jsonx.Object)
+		if !ok {
+			return errors.New("not a JSON object")
+		}
+		out = append(out, o)
+		return nil
+	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	var out []*jsonx.Object
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if v, err := jsonx.Decode([]byte(line)); err == nil {
-			if o, ok := v.(*jsonx.Object); ok {
-				out = append(out, o)
-			}
-		}
-	}
-	return out, nil
+	return out, err
 }
 
 // appendAudit writes one line to the audit log under its lock and syncs it.
@@ -173,22 +171,7 @@ func appendAudit(root string, rec *jsonx.Object) error {
 	if err != nil {
 		return err
 	}
-	p := filepath.Join(root, AuditFile)
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
-		if err != nil {
-			return err
-		}
-		if _, err := f.Write(append(line, '\n')); err != nil {
-			f.Close()
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			f.Close()
-			return err
-		}
-		return f.Close()
-	})
+	return fsio.AppendLine(filepath.Join(root, AuditFile), line, 0o644)
 }
 
 // Merge approval modes (ship.mergeApproval).
