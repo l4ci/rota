@@ -805,11 +805,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// choose one. After a pick, return or reclaim one holder is left.
 	if b := reg.BestOf(id); b != nil {
 		var holders []string
-		for _, s := range reg.Slots() {
-			// The receiver of a transfer left half done is not a second attempt.
-			if s.HeldID() == worker.NormID(id) && s.Name() != o.To {
-				holders = append(holders, s.Name())
-			}
+		// The receiver of a transfer left half done is not a second attempt.
+		for _, s := range reg.Holders(id, worker.HolderOpts{Skip: o.To}) {
+			holders = append(holders, s.Name())
 		}
 		for _, q := range reg.PRs() {
 			if queuedIssue(q) == worker.NormID(id) {
@@ -820,10 +818,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			return nil, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
 		}
 	}
-	for _, s := range reg.Slots() {
-		if s.HeldID() != worker.NormID(id) {
-			continue
-		}
+	for _, s := range reg.Holders(id, worker.HolderOpts{}) {
 		if s.Name() == o.To {
 			run.receiver = s
 		} else if run.sender == nil {
