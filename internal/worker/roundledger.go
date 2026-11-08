@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -54,52 +53,44 @@ func (m *RoundMemo) Round(env Env, root string) int {
 	return m.n
 }
 
-// LedgerNote appends e to the round ledger, stamped with the lease's round
-// unless e names one, and with env's clock unless e carries a TS. Slot, account
-// and harness the caller left empty are read from the registry: the slot named,
-// else the one holding e.Issue. A ledger that cannot be written never fails the
-// verb, but says so on env's stderr.
-func LedgerNote(env Env, root string, e ledger.Entry) { LedgerNoteIn(env, nil, root, e) }
+// Ledger is the recorder of the round ledger: entries are stamped with the
+// lease's round unless they name one, and with env's clock unless they carry a
+// TS. Slot, account and harness the caller left empty are read from the
+// registry: the slot named, else the one holding e.Issue. A ledger that cannot
+// be written never fails the verb, but says so on env's stderr.
+func (env Env) Ledger() *ledger.Recorder { return env.ledgerIn(nil) }
+
+// ledgerIn is Ledger reading the round through m, so a verb that writes
+// several entries reads the lease once.
+func (env Env) ledgerIn(m *RoundMemo) *ledger.Recorder {
+	env = env.WithDefaults()
+	return &ledger.Recorder{
+		Round: func(root string) int { return m.Round(env, root) },
+		Resolve: func(root string, e ledger.Entry) (ledger.Stamp, bool) {
+			// Only fills missing fields: a corrupt registry must not lose the entry.
+			s := ledgerSlot(LoadRegistryTolerant(root), e)
+			if s == nil {
+				return ledger.Stamp{}, false
+			}
+			return ledger.Stamp{Slot: s.Name(), Harness: s.Kind(), Account: s.AccountFor(cmp.Or(e.Harness, s.Kind()))}, true
+		},
+		Now:  env.Now,
+		Warn: func(msg string) { fmt.Fprintln(env.Stderr, msg) },
+	}
+}
+
+// LedgerNote appends e to the round ledger through env's Recorder.
+func LedgerNote(env Env, root string, e ledger.Entry) { env.Ledger().Note(root, e) }
 
 // LedgerNoteIn is LedgerNote reading the round through m.
 func LedgerNoteIn(env Env, m *RoundMemo, root string, e ledger.Entry) {
-	if e.Round == 0 {
-		e.Round = m.Round(env, root)
-	}
-	ledgerAppend(env, root, e)
+	env.ledgerIn(m).Note(root, e)
 }
 
 // LedgerAppendErr is LedgerNote that returns the failure instead of warning,
 // for a verb that must exit non-zero when its ledger row is not written.
 func LedgerAppendErr(env Env, root string, e ledger.Entry) error {
-	env = env.WithDefaults()
-	if e.Round == 0 {
-		e.Round = (*RoundMemo)(nil).Round(env, root)
-	}
-	return ledgerAppendErr(env, root, e)
-}
-
-// ledgerAppend is LedgerNote for an entry whose round is settled.
-func ledgerAppend(env Env, root string, e ledger.Entry) {
-	env = env.WithDefaults()
-	if err := ledgerAppendErr(env, root, e); err != nil {
-		fmt.Fprintf(env.Stderr, "rota: round ledger not written (%s): %v\n", ledger.Path(root), err)
-	}
-}
-
-func ledgerAppendErr(env Env, root string, e ledger.Entry) error {
-	if e.TS.IsZero() {
-		e.TS = env.Now()
-	}
-	if e.Account == "" || e.Harness == "" || e.Slot == "" {
-		// Only fills missing fields: a corrupt registry must not lose the entry.
-		if s := ledgerSlot(LoadRegistryTolerant(root), e); s != nil {
-			e.Slot = cmp.Or(e.Slot, s.Name())
-			e.Harness = cmp.Or(e.Harness, s.Kind())
-			e.Account = cmp.Or(e.Account, s.AccountFor(e.Harness))
-		}
-	}
-	return ledger.Append(root, e)
+	return env.Ledger().AppendErr(root, e)
 }
 
 // ledgerSlot is the slot an entry belongs to: the one it names, else the first
@@ -109,38 +100,6 @@ func ledgerSlot(reg Registry, e ledger.Entry) *Slot {
 		return reg.Slot(e.Slot)
 	}
 	return reg.SlotHolding(e.Issue)
-}
-
-// Headroom is the account's headroom percentage now, nil when no meter reads
-// it (an unconfigured account, an unknown verdict): unknown is never 0.
-func (a *Accounts) Headroom(ctx context.Context, root, account string) *float64 {
-	if account == "" {
-		return nil
-	}
-	return HeadroomOf(a.Meters(ctx, root), account)
-}
-
-// HeadroomOf picks the account's headroom out of one Meters reading, so a
-// caller with several slots fetches once.
-func HeadroomOf(ms []Meter, account string) *float64 {
-	for _, m := range ms {
-		if m.Name == account {
-			return m.Headroom
-		}
-	}
-	return nil
-}
-
-// LedgerHeadroom is the headroom of an assign or done entry:
-// set only for a claude slot whose meter reads it. Codex has no meter.
-func LedgerHeadroom(ctx context.Context, a *Accounts, root, kind, account string) *float64 {
-	if a == nil || account == "" {
-		return nil
-	}
-	if !harness.ResolveAccounts(kind).UsageMeter() {
-		return nil
-	}
-	return a.Headroom(ctx, root, account)
 }
 
 // LedgerDone records a slot turning done with the account's headroom now, the
@@ -172,15 +131,16 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
 func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult) {
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped)), Round: m.Round(env, root)}
-	ledgerAppend(env, root, e)
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped))}
+	rec := env.ledgerIn(m)
+	rec.Note(root, e)
 	switch {
 	case res.Verdict == GatePass:
 		e.Kind, e.Detail = ledger.KindMerge, nil
-		ledgerAppend(env, root, e)
+		rec.Note(root, e)
 	case res.AlreadyMerged && !mergeRecorded(root, e):
 		e.Kind, e.Detail = ledger.KindMerge, ledger.Detail("by", "remote")
-		ledgerAppend(env, root, e)
+		rec.Note(root, e)
 	}
 }
 
@@ -215,7 +175,8 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 	if res.Verdict == "" {
 		return
 	}
-	ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindTrain, Round: m.Round(env, root),
+	rec := env.ledgerIn(m)
+	rec.Note(root, ledger.Entry{Kind: ledger.KindTrain,
 		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped), "requestId", requestID)})
 	for _, culprit := range res.Culprits {
 		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
@@ -228,7 +189,6 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 		targets = append(targets, res.Culprit)
 	}
 	reg := LoadRegistryTolerant(root) // best-effort ledger notes; the train already read the registry strictly
-	round := m.Round(env, root)
 	for _, t := range targets {
 		sectionCulprit := false
 		for _, c := range res.Culprits {
@@ -248,7 +208,7 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 		if res.Culprit != "" && t != res.Culprit {
 			verdict = ""
 		}
-		ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindGate, Issue: gt.Issue, Slot: gt.Name, PR: gt.PR, Round: round,
+		rec.Note(root, ledger.Entry{Kind: ledger.KindGate, Issue: gt.Issue, Slot: gt.Name, PR: gt.PR,
 			Detail: ledger.Detail("verdict", verdict, "train", true, "culprit", res.Culprit)})
 	}
 }

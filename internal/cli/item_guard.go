@@ -87,7 +87,7 @@ type recordingBackend struct {
 func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
 	res, err := r.Backend.Create(in)
 	if err == nil {
-		_ = ledger.Append(r.root, ledger.Entry{TS: r.c.deps().Now(), Kind: ledger.KindCreate, Issue: res.ID,
+		r.c.deps().workerEnv().Ledger().Note(r.root, ledger.Entry{Kind: ledger.KindCreate, Issue: res.ID,
 			Detail: ledger.Detail("title", normCreateTitle(in.Title), "target", createTarget(r.Backend, in))})
 	}
 	return res, err

@@ -670,7 +670,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	defer func() {
 		if err == nil && res.Changed {
-			if lerr := e.Worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
+			if lerr := e.Worker.Ledger().AppendErr(root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
 				Detail: ledger.Detail("from", res.From, "capReason", o.CapReason)}); lerr != nil {
 				err = fmt.Errorf("%s is transferred to %s, but the round ledger row was not written: %w", res.Issue, res.To, lerr)
 			}

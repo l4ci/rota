@@ -599,3 +599,35 @@ func (e Env) accountLimited(ctx context.Context, root string, hz harness.Account
 	}
 	return ""
 }
+
+// Headroom is the account's headroom percentage now, nil when no meter reads
+// it (an unconfigured account, an unknown verdict): unknown is never 0.
+func (a *Accounts) Headroom(ctx context.Context, root, account string) *float64 {
+	if account == "" {
+		return nil
+	}
+	return HeadroomOf(a.Meters(ctx, root), account)
+}
+
+// HeadroomOf picks the account's headroom out of one Meters reading, so a
+// caller with several slots fetches once.
+func HeadroomOf(ms []Meter, account string) *float64 {
+	for _, m := range ms {
+		if m.Name == account {
+			return m.Headroom
+		}
+	}
+	return nil
+}
+
+// LedgerHeadroom is the headroom of an assign or done entry:
+// set only for a claude slot whose meter reads it. Codex has no meter.
+func LedgerHeadroom(ctx context.Context, a *Accounts, root, kind, account string) *float64 {
+	if a == nil || account == "" {
+		return nil
+	}
+	if !harness.ResolveAccounts(kind).UsageMeter() {
+		return nil
+	}
+	return a.Headroom(ctx, root, account)
+}
