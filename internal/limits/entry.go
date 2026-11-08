@@ -86,7 +86,7 @@ func NextID(list []Entry) string {
 // Append adds the entry under the registry lock, numbering it from the list
 // as it is at that moment, and returns it with its id.
 func Append(root string, e Entry) (Entry, error) {
-	err := Update(root, func(list []Entry) []Entry {
+	err := Section.Update(root, func(list []Entry) []Entry {
 		e.ID = NextID(list)
 		return append(list, e)
 	})
@@ -95,7 +95,7 @@ func Append(root string, e Entry) (Entry, error) {
 
 // Save rewrites the entry with the same id under the registry lock.
 func Save(root string, e Entry) error {
-	return Update(root, func(list []Entry) []Entry {
+	return Section.Update(root, func(list []Entry) []Entry {
 		for i := range list {
 			if list[i].ID == e.ID {
 				list[i] = e

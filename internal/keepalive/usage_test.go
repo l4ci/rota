@@ -186,7 +186,7 @@ func TestUsageRecorderMapsActionToStatus(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got []limits.Entry
-		if err := limits.Update(root, func(l []limits.Entry) []limits.Entry { got = l; return l }); err != nil {
+		if err := limits.Section.Update(root, func(l []limits.Entry) []limits.Entry { got = l; return l }); err != nil {
 			t.Fatal(err)
 		}
 		if len(got) != 1 {
