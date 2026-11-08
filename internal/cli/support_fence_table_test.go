@@ -42,8 +42,8 @@ func TestSupportAllowedVerbsPassTheFence(t *testing.T) {
 	root := trackerProject(t, "")
 	writeLocalConfig(t, root, `{"round":{"role":"support"}}`+"\n")
 	// A sample: many allowed verbs launch agents, sleep or install into the
-	// harness. The classify test keeps the tables disjoint, so no allowed verb
-	// reaches the pre-verb fence.
+	// harness. TestFenceDeclsAreDisjoint keeps each verb in one fence class, so
+	// no allowed verb reaches the pre-verb fence.
 	for _, path := range []string{"rota knowledge query", "rota knowledge topics", "rota config show", "rota round status", "rota ship strategy", "rota release version"} {
 		t.Run(path, func(t *testing.T) {
 			_, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, strings.Fields(path)[1:]...)...)

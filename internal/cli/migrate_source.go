@@ -2,10 +2,10 @@ package cli
 
 import (
 	"flag"
-	"github.com/l4ci/rota/internal/exitmap"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitmap"
 )
 
 func sourceMigrateCommand() *Command {

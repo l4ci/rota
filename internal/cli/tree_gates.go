@@ -7,8 +7,9 @@ import (
 )
 
 // applyGates declares each verb's pre-verb gate policy on the tree. A group's
-// policy covers the verbs under it unless a verb or sub-group sets its own, so
-// a new verb inherits the policy of its group. A path missing from the tree is
+// policy covers the verbs under it unless a verb or sub-group sets its own,
+// except the fence class, which each verb declares itself: a new verb must be
+// classified, never silently allowed on a support machine. A path missing from the tree is
 // a programming error, so it panics rather than leave a policy unapplied.
 func applyGates(root *Command) {
 	// Bare rota is the orchestrator launcher: with an old work.* round key in
@@ -20,8 +21,13 @@ func applyGates(root *Command) {
 			d.apply(&gateTarget(root, p).Gates)
 		}
 	}
+	declared := map[string]bool{}
 	for class, paths := range fenceDecls {
 		for _, p := range paths {
+			if declared[p] {
+				panic("fence declaration names " + p + " twice")
+			}
+			declared[p] = true
 			gateTarget(root, p).Gates.Fence = class
 		}
 	}
@@ -70,22 +76,25 @@ var gateDecls = []struct {
 // fenceDecls is how the support fence treats each verb: a support machine
 // (round.role support) never merges and never writes tracked content that only
 // the main orchestrator commits. A support round runs on an issue backend only
-// (D3), so a verb that writes the tracker there is allowed.
+// (D3), so a verb that writes the tracker there is allowed. Every verb is
+// listed once, under its own path; a path in two classes panics.
 var fenceDecls = map[roundcfg.FenceClass][]string{
 	// Refused before they run on a support machine: merge, runs an arbitrary
 	// command, tracked .rota/ writes, tracked instruction files that main
 	// regenerates and commits, the main-only work split and release.
 	roundcfg.FenceRefused: {
-		"backlog archive", "backlog backfill", "block", "config fill", "decisions add", "decisions amend",
-		"decisions retire", "decisions supersede", "glossary import", "glossary write", "id", "init", "instructions",
-		"knowledge add", "knowledge amend", "knowledge contradiction add", "knowledge contradiction clear",
+		"worker gate", "worker train", "worker train cancel", "ship merge", "ship pr-merge", "ship undo",
+		"test lock", "review probe", "prompts save", "prompts adopt", "prompts restore", "decisions supersede",
+		"decisions retire", "decisions add", "decisions amend", "knowledge add", "knowledge amend",
 		"knowledge rename-topic", "knowledge replace", "knowledge rm", "knowledge split", "knowledge tier fold",
-		"knowledge tier set", "map index", "migrate", "milestone add", "milestone index", "milestone overview",
-		"milestone put", "milestone status", "prompts adopt", "prompts restore", "prompts save", "qa index",
-		"refactor reset", "release bump", "release changelog", "release close-milestone", "release publish",
-		"release push", "review probe", "round support disable", "round support enable", "round support offer",
-		"ship merge", "ship pr-merge", "ship undo", "spike add", "spike finish", "test lock", "worker gate",
-		"worker train",
+		"knowledge tier set", "knowledge contradiction add", "knowledge contradiction clear", "glossary write",
+		"glossary import", "map index", "qa index", "milestone add", "milestone index", "milestone overview",
+		"milestone put", "milestone status", "backlog archive", "backlog backfill", "config fill", "id next",
+		"refactor reset", "spike add", "spike finish", "init", "init umbrella", "migrate labels", "migrate config",
+		"migrate external-knowledge", "migrate hv", "migrate issues", "migrate milestone-files",
+		"migrate milestones", "migrate source", "block", "instructions init", "round support offer",
+		"round support enable", "round support disable", "release bump", "release changelog",
+		"release close-milestone", "release publish", "release push",
 	},
 	// Fenced inside the verb, which knows what it writes: config set and config
 	// edit refuse a tracked key on a support machine and allow --global and
@@ -95,29 +104,48 @@ var fenceDecls = map[roundcfg.FenceClass][]string{
 	// setup's support path writes config.local.json only, and its main path
 	// refuses the initialized clone a support machine runs in (#1774).
 	roundcfg.FenceInVerb: {
-		"agents", "config edit", "config set", "knowledge harvest", "setup",
+		"config set", "config edit", "knowledge harvest", "setup", "agents write",
 	},
 	// Run on a support machine: reads, writers of the tracker, of gitignored
 	// per-machine state, and of files outside the repo.
 	roundcfg.FenceAllowed: {
-		"backlog drift", "backlog ids", "backlog list", "backlog milestones", "backlog stale", "bugreport", "change",
-		"config check", "config save-global", "config show", "connect", "debug", "decisions check",
-		"decisions query", "decisions stats", "decisions topics", "design", "doctor", "gate", "git", "glossary read",
-		"hook", "init check", "issues", "item", "keepalive", "knowledge contradiction has",
-		"knowledge contradiction list", "knowledge hit", "knowledge query", "knowledge stats", "knowledge tier get",
-		"knowledge tier list", "knowledge topics", "labels", "layout", "limit", "map query", "map stats",
-		"milestone active", "milestone check", "milestone list", "milestone show", "orchestrate", "plan", "projects",
-		"prompts list", "prompts show", "proof", "qa query", "reap", "receipt", "refactor age", "refactor targets",
-		"release host", "release milestone-check", "release notes", "release pending", "release version", "repo",
-		"review brief", "review cleanup", "review depth", "review package", "review prepare", "review queue",
-		"review scaffolding", "review scope", "round accept", "round architecture", "round assign", "round bounce",
-		"round candidates", "round escalate", "round freeze", "round pick", "round reclaim", "round reconcile",
-		"round report", "round return", "round review-relay", "round scope", "round start", "round status",
-		"round summary", "round support return", "round tick", "round transfer", "round wait", "round watch",
-		"round wind-down", "ship body", "ship finish", "ship pr", "ship strategy", "skills", "spike list",
-		"spike show", "status", "statusline", "summary", "test flakes", "test ledger", "test run", "test-audit",
-		"tracker", "update", "verdict", "version", "work", "worker account", "worker adopt", "worker dispatch",
-		"worker done", "worker inbox", "worker poll", "worker pool", "worker prompt-check", "worker reply",
-		"worker reset", "worker send", "worker session",
+		"round support return", "prompts list", "prompts show", "backlog drift", "backlog ids", "backlog list",
+		"backlog milestones", "backlog stale", "config check", "config show", "connect list", "connect test",
+		"debug counter show", "debug counter summary", "debug session list", "debug session show", "decisions check",
+		"decisions query", "decisions stats", "decisions topics", "design list", "design show", "doctor",
+		"gate list", "git base", "git branch", "git guard clean", "git guard feature-branch", "git worktree-path",
+		"glossary read", "init check", "issues imported", "issues provider", "item comment list", "item field get",
+		"item field list", "item note show", "item show", "item template", "keepalive status", "layout",
+		"limit status", "knowledge contradiction has", "knowledge contradiction list", "knowledge query",
+		"knowledge stats", "knowledge tier get", "knowledge tier list", "knowledge topics", "map query", "map stats",
+		"milestone active", "milestone list", "milestone show", "plan check", "plan list", "plan rename-check",
+		"plan show", "plan uncertain", "plan validate-docs", "projects", "proof show", "qa query", "receipt show",
+		"refactor age", "refactor targets", "change classify", "release host", "release milestone-check",
+		"release notes", "release pending", "release version", "repo resolve", "repo umbrella", "repo which",
+		"review brief", "review depth", "review package", "review queue", "review scaffolding", "review scope",
+		"round candidates", "round status", "round summary", "round watch", "round wait", "ship body",
+		"ship strategy", "skills get", "skills links", "skills list", "skills status", "spike list", "spike show",
+		"status show", "statusline dump", "summary", "test flakes", "test ledger check", "test run", "test-audit",
+		"tracker suggest-upstream", "update", "verdict show", "version", "worker account list", "worker pool list",
+		"worker prompt-check", "worker session check", "design add", "design amend", "design put", "design rm",
+		"plan add", "plan pass", "plan put", "plan rm", "proof add", "proof record", "item claim",
+		"item comment add", "item complete", "item create", "item field set", "item note add", "item note rm",
+		"item ready", "item release", "item reopen", "item rm", "item section set", "item shipped", "item state",
+		"issues close", "issues label", "labels sync", "tracker call", "milestone check", "ship pr", "round freeze",
+		"round accept", "round architecture", "round assign", "round bounce", "round escalate check",
+		"round escalate send", "round pick", "round reclaim", "round reconcile", "round report", "round return",
+		"round review-relay", "round scope", "round start", "round tick", "round transfer", "round wind-down",
+		"worker account assign", "worker account pick", "worker adopt", "worker dispatch", "worker done",
+		"worker inbox", "worker poll", "worker pool init", "worker pool reap", "worker reply", "worker reset",
+		"worker send", "worker session ensure", "reap", "orchestrate", "keepalive run", "layout split",
+		"layout tabs", "limit watch", "knowledge hit", "bugreport add", "bugreport dismiss", "bugreport draft",
+		"bugreport duplicates", "bugreport file", "bugreport list", "verdict add", "verdict post", "verdict route",
+		"status add", "status handoff", "status rm", "ship finish", "work start", "debug counter clear",
+		"debug counter fail", "debug counter inc-cycle", "debug counter init", "debug counter pass",
+		"debug counter record-attempt", "debug reset", "debug session put", "debug session rm", "debug verdict",
+		"debug work-fix attempt", "debug work-fix pass", "debug work-fix reset", "repo add", "repo rm",
+		"review prepare", "review cleanup", "config save-global", "connect add", "connect remove",
+		"projects cleanup", "projects remove", "hook guard", "hook install", "hook prompt", "hook session-start",
+		"hook stop", "hook uninstall", "skills install", "skills uninstall", "skills update",
 	},
 }

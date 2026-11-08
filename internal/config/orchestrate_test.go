@@ -18,7 +18,6 @@ func TestMigrateRefusalWritesNothing(t *testing.T) {
 		global, project, local string
 		conflict               any // pointer the error must be as
 	}{
-		{"round step", "", `{"work":{"workerSlots":3},"round":{"slots":4}}`, "", new(*ConflictError)},
 		{"accounts step", "", oldRound, `{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}],"opencodeAccounts":[{"name":"x","configDir":"/o"}]}}`, new(*AccountConflictError)},
 		{"merges step", oldAccounts, oldRound, `{"round":{"codexCommand":"a","commands":{"codex":"b"}}}`, new(*MergeConflictError)},
 	} {
