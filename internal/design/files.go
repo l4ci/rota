@@ -110,7 +110,7 @@ func Amend(root, id, heading, mode, text string) (changed bool, err error) {
 		if mode == "replace" {
 			updated = section.Replace(content, heading, block)
 		} else {
-			updated, _ = artifact.AppendSection(content, heading, block)
+			updated = section.Append(content, heading, block)
 		}
 		if updated == content {
 			return nil

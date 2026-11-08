@@ -67,22 +67,3 @@ func TestRepos(t *testing.T) {
 		t.Errorf("Repos = %v, want only api and web", got)
 	}
 }
-
-func TestAppendSection(t *testing.T) {
-	tests := []struct {
-		name, content, sect, add, want string
-		wantOK                         bool
-	}{
-		{"before next heading", "## A\none\n## B\ntwo\n", "A", "- x\n", "## A\none\n- x\n## B\ntwo\n", true},
-		{"at EOF adds newline", "## A\none", "A", "- x\n", "## A\none\n- x\n", true},
-		{"missing section appended", "intro\n\n\n", "New", "- x\n", "intro\n\n## New\n- x\n", false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := AppendSection(tc.content, tc.sect, tc.add)
-			if got != tc.want || ok != tc.wantOK {
-				t.Errorf("AppendSection = (%q, %v), want (%q, %v)", got, ok, tc.want, tc.wantOK)
-			}
-		})
-	}
-}
