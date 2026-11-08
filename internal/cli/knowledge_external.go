@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/toolver"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -30,7 +29,7 @@ const (
 // do: the merged project config inside a rota project, the global config
 // elsewhere. ok is false when neither is reachable.
 func externalGetter(d *Deps, cwd string) (get func(key string) (any, bool), ok bool) {
-	if root, found := rotatree.Find(cwd); found {
+	if root, err := findRoot(cwd, false); err == nil {
 		cfg := d.Config(root)
 		return func(key string) (any, bool) { return config.Lookup(cfg, key) }, true
 	}
@@ -221,7 +220,7 @@ func projectTools(c *Ctx) map[string]string {
 	if err != nil {
 		return nil
 	}
-	root, _ := rotatree.Find(cwd)
+	root, _ := findRoot(cwd, false)
 	return toolver.Detect(cwd, root)
 }
 
@@ -331,7 +330,7 @@ func extSource(c *Ctx) string {
 	if err != nil {
 		return ""
 	}
-	if root, ok := rotatree.Find(cwd); ok {
+	if root, err := findRoot(cwd, false); err == nil {
 		return filepath.Base(root)
 	}
 	return filepath.Base(cwd)

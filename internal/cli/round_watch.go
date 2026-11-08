@@ -12,7 +12,6 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -59,7 +58,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if *autopilot && !set.Autopilot {
 			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
-		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		cd, err := c.CommonDir(root)
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}

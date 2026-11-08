@@ -18,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -187,15 +186,6 @@ func shipBodyArg(c *Ctx, path, what string) (string, error) {
 	return shipLine(string(raw)), nil
 }
 
-// shipRoot is the project whose .rota/ holds the config and backlog of the
-// checkout in dir.
-func shipRoot(dir string) string {
-	if root, err := rotatree.FindRoot(dir, registeredRels); err == nil {
-		return root
-	}
-	return dir
-}
-
 // shipExistingBranch resolves the checkout a branch-writing verb runs in and
 // checks the branch exists: exit 2 at an umbrella root without --repo, 3 for
 // a missing branch.
@@ -300,7 +290,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		root := shipRoot(dir)
+		root := rootOrDir(dir)
 		cfg := c.deps().Config(root)
 
 		provider, err := actorForge(c, cfg, dir)
@@ -442,7 +432,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		sha, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
 			Recover: land.RecoveryGit(c.Context(), c.deps().Git, dir),
-			Verdict: shipVerdict(c, dir, shipRoot(dir)).BlockAt,
+			Verdict: shipVerdict(c, dir, rootOrDir(dir)).BlockAt,
 			Approve: func(head string) (*exitcode.Refusal, error) {
 				files := func() ([]string, error) {
 					fl, err := ship.ChangedFiles(g, base+"..."+head)
@@ -585,7 +575,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 			return Result{}, gitErr(err)
 		}
 
-		root := shipRoot(dir)
+		root := rootOrDir(dir)
 		g := shipGitRunner{c, dir}
 		plan, err := ship.PlanUndo(g, base, cur, dirty, ship.UndoOpts{
 			Cycle: *cycle, AllowPost: *allowPost,
