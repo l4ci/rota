@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // Guards against a re-run filing the same items twice (#2644): a create whose
@@ -82,12 +83,14 @@ type recordingBackend struct {
 	backlog.Backend
 	c    *Ctx
 	root string
+	// memo reads the round lease once for a batch; nil reads it per entry.
+	memo *worker.RoundMemo
 }
 
 func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
 	res, err := r.Backend.Create(in)
 	if err == nil {
-		r.c.deps().workerEnv().Ledger().Note(r.root, ledger.Entry{Kind: ledger.KindCreate, Issue: res.ID,
+		worker.LedgerNoteIn(r.c.deps().workerEnv(), r.memo, r.root, ledger.Entry{Kind: ledger.KindCreate, Issue: res.ID,
 			Detail: ledger.Detail("title", normCreateTitle(in.Title), "target", createTarget(r.Backend, in))})
 	}
 	return res, err

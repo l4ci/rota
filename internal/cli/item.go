@@ -414,7 +414,7 @@ func itemCreateBatch(c *Ctx, root, path string, force bool) (Result, error) {
 				return Result{}, err
 			}
 		}
-		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root}, ins)
+		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root, memo: &worker.RoundMemo{}}, ins)
 		if data, ok := res.Data.(*jsonx.Object); ok {
 			warnings, _ := data.Get("warnings")
 			if warnings, ok := warnings.([]string); ok {
