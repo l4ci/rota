@@ -15,7 +15,7 @@ func fakeRecorder(round int) (*Recorder, *[]string) {
 		Round: func(string) int { return round },
 		Resolve: func(_ string, e Entry) (Stamp, bool) {
 			if e.Issue == "12" {
-				return Stamp{Slot: "ben", Harness: "claude", Account: "work"}, true
+				return Stamp{Slot: "ben", Harness: "h1", Account: "work"}, true
 			}
 			return Stamp{}, false
 		},
@@ -34,7 +34,7 @@ func TestRecorderStampsRoundClockAndSlot(t *testing.T) {
 	if err != nil || len(es) != 3 {
 		t.Fatalf("%v %+v", err, es)
 	}
-	if e := es[0]; e.Round != 7 || !e.TS.Equal(recNow) || e.Slot != "ben" || e.Harness != "claude" || e.Account != "work" {
+	if e := es[0]; e.Round != 7 || !e.TS.Equal(recNow) || e.Slot != "ben" || e.Harness != "h1" || e.Account != "work" {
 		t.Errorf("filled entry %+v", e)
 	}
 	if e := es[1]; e.Round != 3 || !e.TS.Equal(recNow.Add(time.Hour)) || e.Slot != "kit" || e.Account != "work" {
