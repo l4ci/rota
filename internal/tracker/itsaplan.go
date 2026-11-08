@@ -33,6 +33,9 @@ import (
 // /issues/archived: both return every issue with no limit, unlike the capped
 // list route. Migrate (T4 of #1100) follows.
 type Itsaplan struct {
+	noMilestones
+	keyClosing
+
 	rest    *REST
 	site    string
 	project string
@@ -72,8 +75,9 @@ func newItsaplanTracker(ctx context.Context, c *CLI, s Settings) (*Itsaplan, err
 func NewItsaplan(c connections.Connection, apiKey, project string) *Itsaplan {
 	site := strings.TrimRight(c.Site, "/")
 	return &Itsaplan{
-		site:    site,
-		project: strings.ToUpper(strings.TrimSpace(project)),
+		noMilestones: noMilestones{provider: "itsaplan"},
+		site:         site,
+		project:      strings.ToUpper(strings.TrimSpace(project)),
 		rest: &REST{Base: site, Auth: func(r *http.Request) { r.Header.Set("x-api-key", apiKey) },
 			Client: &http.Client{Timeout: RESTTimeout, CheckRedirect: sameHostRedirect}},
 		ids: map[IssueKey]int{},
@@ -420,7 +424,7 @@ func (t *Itsaplan) Comments(ctx context.Context, key IssueKey) ([]Comment, error
 // The result is ordered by number like Jira's keys, then cut to the limit.
 func (t *Itsaplan) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
-		return nil, errItsaplanNoMilestones()
+		return nil, t.noMilestonesErr()
 	}
 	m, err := t.projectMeta(ctx)
 	if err != nil {
@@ -482,27 +486,4 @@ func hasAllLabels(have, want []string) bool {
 // write and round slices.
 func errItsaplanSlice(what string) error {
 	return failed("issues.source itsaplan does not support %s yet (not implemented)", what)
-}
-
-func errItsaplanNoMilestones() error {
-	return &noMilestonesError{failed("issues.source itsaplan has no milestones")}
-}
-
-// ClosesIssue: a key-based tracker, so the key in the branch or the PR title.
-func (t *Itsaplan) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
-
-func (t *Itsaplan) Milestones(context.Context, string) ([]Milestone, error) {
-	return nil, errItsaplanNoMilestones()
-}
-func (t *Itsaplan) FindMilestone(context.Context, string) (string, bool, error) {
-	return "", false, nil
-}
-func (t *Itsaplan) CreateMilestone(context.Context, string, string) (int, error) {
-	return 0, errItsaplanNoMilestones()
-}
-func (t *Itsaplan) EditMilestone(context.Context, int, MilestoneEdit) error {
-	return errItsaplanNoMilestones()
-}
-func (t *Itsaplan) IssuesInMilestone(context.Context, string, string) ([]Issue, error) {
-	return nil, errItsaplanNoMilestones()
 }
