@@ -168,22 +168,14 @@ func migrateHvResult(r *hvmigrate.HvReport) Result {
 	return Result{Data: d, Text: b.String()}
 }
 
-// legacyStateExempt are the verbs that run on a project still holding .hv/:
-// the migration itself and doctor (which reports it), plus the verbs that
-// never read project state (version, update, skills) or run from hooks that
-// must not fail a Claude session (hook, statusline).
-var legacyStateExempt = []string{"rota migrate hv", "rota doctor", "rota version", "rota update", "rota skills", "rota hook", "rota statusline"}
-
-// legacyStateStop is the one hard stop for an un-migrated project (#236):
+// legacyState is the one hard stop for an un-migrated project (#236):
 // rota looks for .rota/ only, so with .hv/ at the nearest state directory
 // every verb but the exempt ones stops and says how to migrate.
-func legacyStateStop(c *Ctx) error {
-	path := c.Path
-	for _, e := range legacyStateExempt {
-		if path == e || strings.HasPrefix(path, e+" ") {
-			return nil
-		}
+func (p *preflight) legacyState() error {
+	if p.g.LegacyExempt {
+		return nil
 	}
+	c := p.c
 	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return nil

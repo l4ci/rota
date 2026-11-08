@@ -19,6 +19,10 @@ func TestMatchPath(t *testing.T) {
 		{"*.md", "docs/README.md", false},
 		{"internal/*/gate.go", "internal/cli/gate.go", true},
 		{"", "x", false},
+		{"docs/**", "docs/a.md", true},
+		{"docs/**", "docs/a/b.md", false}, // ** is not recursive here
+		{".", "x", false},
+		{"./", "x", false},
 		{"[", "[", true}, // equal wins over a malformed glob
 		{"[", "a", false},
 	} {

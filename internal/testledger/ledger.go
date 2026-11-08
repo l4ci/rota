@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Entry is one excused test. Expires is the last instant the exclusion holds:
@@ -98,7 +99,7 @@ func Parse(data []byte) (Ledger, error) {
 }
 
 func parseExpiry(s string) (time.Time, bool) {
-	if t, err := time.Parse("2006-01-02", s); err == nil {
+	if t, err := time.Parse(stamp.DateLayout, s); err == nil {
 		return t.Add(24*time.Hour - time.Nanosecond), true
 	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {

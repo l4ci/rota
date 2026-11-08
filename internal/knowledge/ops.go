@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
@@ -100,13 +101,10 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 	if !ok {
 		return AddResult{}, notFound("topic '%s' not found in %s", topic, target)
 	}
-	lower := strings.ToLower(title)
-	for _, line := range pystr.Splitlines(content[start:end]) {
-		if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil && strings.ToLower(m[1]) == lower {
-			// Like the old helper, a repeat still registers the title in the
-			// sidecar, so a bullet that predates tiering gets tracked.
-			return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
-		}
+	if bulletfmt.HasTitle(pystr.Splitlines(content[start:end]), title) {
+		// Like the old helper, a repeat still registers the title in the
+		// sidecar, so a bullet that predates tiering gets tracked.
+		return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 	}
 	if topic != GlossaryTopic {
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {

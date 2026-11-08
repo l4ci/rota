@@ -8,14 +8,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 var (
 	stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
-	titleRe   = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 )
 
 // Slugify is the topic file name for a topic name.
@@ -117,16 +117,16 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 	}
 	date := in.Date
 	if date == "" {
-		date = c.now().Format("2006-01-02")
+		date = stamp.Date(c.now())
 	}
-	stamp := date
+	st := date
 	if in.Source != "" {
-		stamp += " source:" + in.Source
+		st += " source:" + in.Source
 	}
 	if len(in.Seen) > 0 {
-		stamp += " seen:" + in.Seen.String()
+		st += " seen:" + in.Seen.String()
 	}
-	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", in.Title, strings.TrimRight(in.Body, "\n"), stamp)
+	bullet := bulletfmt.Render(in.Title, strings.TrimRight(in.Body, "\n"), st)
 
 	p := &plan{}
 	if known {
@@ -134,11 +134,8 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if body == "" {
 			body = "# " + t.Name + "\n\n"
 		}
-		lower := strings.ToLower(in.Title)
-		for _, l := range bulletLines(body) {
-			if m := titleRe.FindStringSubmatch(l); m != nil && strings.ToLower(m[1]) == lower {
-				return WriteResult{Policy: pol}, nil
-			}
+		if bulletfmt.HasTitle(bulletLines(body), in.Title) {
+			return WriteResult{Policy: pol}, nil
 		}
 		if t.Split {
 			p.set(t.File, insertBulletBelowSubIndex(body, bullet))
@@ -299,7 +296,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (res WriteResult, err erro
 		return WriteResult{}, fmt.Errorf("%w: amend needs text, a date or a seen list", ErrUsage)
 	}
 	if in.Date != "" {
-		if _, err := time.Parse("2006-01-02", in.Date); err != nil || !dateRe.MatchString(in.Date) {
+		if _, err := stamp.ParseDate(in.Date); err != nil {
 			return WriteResult{}, fmt.Errorf("%w: date %q is not a real YYYY-MM-DD", ErrUsage, in.Date)
 		}
 	}
@@ -333,15 +330,15 @@ func (c Clone) amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if in.Text != "" {
 		text += " " + in.Text
 	}
-	stamp := strings.TrimSpace(tail)
+	st := strings.TrimSpace(tail)
 	if in.Date != "" || in.Seen != nil {
-		if stamp == "" && in.Date == "" {
+		if st == "" && in.Date == "" {
 			return WriteResult{}, fmt.Errorf("%w: the bullet has no stamp; give --date too so it gets one", ErrUsage)
 		}
-		stamp = editStamp(stamp, in.Date, in.Seen)
+		st = editStamp(st, in.Date, in.Seen)
 	}
-	if stamp != "" {
-		text += " " + stamp
+	if st != "" {
+		text += " " + st
 	}
 	e.lines[hit] = text
 	return e.land(ctx, fmt.Sprintf("knowledge: amend %q in %s", strings.TrimSpace(in.Fragment), in.Topic))

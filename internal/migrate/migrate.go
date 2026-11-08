@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -114,7 +115,7 @@ func Run(o Options) (*Result, error) {
 		o.Warn = func(string) {}
 	}
 	if o.Today == nil {
-		o.Today = func() string { return time.Now().Format("2006-01-02") }
+		o.Today = func() string { return stamp.Date(time.Now()) }
 	}
 	backlogPath := rotatree.Backlog(o.Root)
 	text, err := fsio.ReadText(backlogPath)

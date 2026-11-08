@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/exitmap"
 
 	"github.com/l4ci/rota/internal/fsio"
 )
@@ -53,6 +54,14 @@ func Retry(format string, a ...any) *Error { return newErr(ExitRetry, "", format
 // NotImplemented: the verb is in the tree but not ported yet (exit 71).
 func NotImplemented(path string) *Error {
 	return newErr(ExitNotImplemented, "", "%s is not ported yet", path)
+}
+
+// configFail translates the config errors in the classes c into their exit
+// codes (see internal/exitmap); anything else passes through unchanged. It is
+// the one place the cli decides what a config error exits with.
+func configFail(err error, c exitmap.Class) error {
+	_, out := exitmap.Translate(err, exitmap.Options{Classes: c})
+	return out
 }
 
 // asError maps any error to an *Error: lock timeouts become retry, an unreadable state file is unavailable, and

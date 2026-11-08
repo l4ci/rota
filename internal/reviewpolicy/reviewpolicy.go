@@ -14,7 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/itembody"
-	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // Signals name which rule decided a review depth.
@@ -105,7 +105,7 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 	slices.Sort(globs)
 	for _, g := range globs {
 		for _, f := range in.Files {
-			if overlap.MatchPath(config.DirGlob(g), f) {
+			if pathglob.MatchEntry(g, f) {
 				raise(p.Paths[g], SignalPath, fmt.Sprintf("%s matches paths %s (%s)", f, g, p.Paths[g]))
 				break
 			}
@@ -141,19 +141,6 @@ func baseDecision(p config.ReviewPolicy, changed int, labels []string) Decision 
 	return Decision{p.Default, SignalDefault, "default depth"}
 }
 
-// matchSupport reports whether file sits at or under a path the glob matches,
-// so internal/*/testdata/golden/** covers internal/x/testdata/golden/a/b.txt.
-func matchSupport(glob, file string) bool {
-	glob = config.DirGlob(glob)
-	segs := strings.Split(file, "/")
-	for i := 1; i <= len(segs); i++ {
-		if ok, err := path.Match(glob, strings.Join(segs[:i], "/")); err == nil && ok {
-			return true
-		}
-	}
-	return false
-}
-
 // sitsBesideDeclared reports whether a _test.go file lives in the directory of
 // a declared file: its tests belong to the declared code. A declared directory
 // has no sibling files; its own files are covered by the declared set.
@@ -163,7 +150,6 @@ func sitsBesideDeclared(file string, allowed []string) bool {
 	}
 	dir := path.Dir(file)
 	return slices.ContainsFunc(allowed, func(a string) bool {
-		a = config.DirGlob(a)
 		// only a file entry (it has an extension) names its own directory
 		return path.Ext(a) != "" && !strings.ContainsAny(a, "*?[") && path.Dir(a) == dir
 	})
@@ -191,8 +177,8 @@ func scopeDrift(issueBody string, files, support []string) []string {
 	}
 	var out []string
 	for _, f := range files {
-		if slices.ContainsFunc(allowed, func(a string) bool { return overlap.MatchPath(config.DirGlob(a), f) }) ||
-			slices.ContainsFunc(support, func(g string) bool { return matchSupport(g, f) }) ||
+		if slices.ContainsFunc(allowed, func(a string) bool { return pathglob.MatchEntry(a, f) }) ||
+			slices.ContainsFunc(support, func(g string) bool { return pathglob.MatchUnder(g, f) }) ||
 			sitsBesideDeclared(f, allowed) {
 			continue
 		}
@@ -214,7 +200,7 @@ func MatchLenses(l config.Lenses, files, labels []string) []config.LensHit {
 	paths:
 		for _, g := range lens.Paths {
 			for _, f := range files {
-				if overlap.MatchPath(config.DirGlob(g), f) {
+				if pathglob.MatchEntry(g, f) {
 					why = "path " + f
 					break paths
 				}
