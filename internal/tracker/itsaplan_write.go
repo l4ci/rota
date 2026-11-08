@@ -106,7 +106,7 @@ func (t *Itsaplan) patch(ctx context.Context, id int, in map[string]any) error {
 
 func (t *Itsaplan) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	if milestone != "" {
-		return "", errItsaplanNoMilestones()
+		return "", t.noMilestonesErr()
 	}
 	m, err := t.projectMeta(ctx)
 	if err != nil {
@@ -155,7 +155,7 @@ func (t *Itsaplan) Create(ctx context.Context, title, body string, labels []stri
 
 func (t *Itsaplan) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	if e.Milestone != "" {
-		return errItsaplanNoMilestones()
+		return t.noMilestonesErr()
 	}
 	id, err := t.issueID(ctx, key)
 	if err != nil {

@@ -29,6 +29,9 @@ import (
 // canceled, unstarted, started), never by name. Projects and cycles are not
 // rota milestones (#586): the milestone calls fail and FindMilestone finds none.
 type Linear struct {
+	noMilestones
+	keyClosing
+
 	rest         *REST
 	team         string
 	labelEntries []labels.Entry
@@ -87,7 +90,7 @@ func NewLinear(c connections.Connection, apiKey, team string) *Linear {
 	if site == "" {
 		site = LinearAPI
 	}
-	l := &Linear{team: strings.ToUpper(strings.TrimSpace(team)), ids: map[IssueKey]string{}}
+	l := &Linear{noMilestones: noMilestones{"linear", ": Linear projects and cycles are not rota milestones"}, team: strings.ToUpper(strings.TrimSpace(team)), ids: map[IssueKey]string{}}
 	l.rest = &REST{Base: site + "/graphql", Auth: func(r *http.Request) { r.Header.Set("Authorization", apiKey) },
 		Classify: func(_, _ string, status int, raw []byte) *Error {
 			var out struct {
@@ -613,15 +616,9 @@ func (l *Linear) Get(ctx context.Context, key IssueKey, withComments bool) (Issu
 	return is, nil
 }
 
-// errLinearNoMilestones refuses a milestone on Linear: projects and cycles are not
-// rota milestones (#586).
-func errLinearNoMilestones() error {
-	return &noMilestonesError{failed("issues.source linear has no milestones: Linear projects and cycles are not rota milestones")}
-}
-
 func (l *Linear) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	if milestone != "" {
-		return "", errLinearNoMilestones()
+		return "", l.noMilestonesErr()
 	}
 	teamID, err := l.teamInfo(ctx)
 	if err != nil {
@@ -673,7 +670,7 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 
 func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	if e.Milestone != "" {
-		return errLinearNoMilestones()
+		return l.noMilestonesErr()
 	}
 	id, err := l.issueID(ctx, key)
 	if err != nil {
@@ -802,7 +799,7 @@ func (l *Linear) filter(f ListFilter) map[string]any {
 // order Linear pages in.
 func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
-		return nil, errLinearNoMilestones()
+		return nil, l.noMilestonesErr()
 	}
 	var got []linearIssue
 	err := Pages(ctx, func(cursor string) (string, error) {
@@ -901,10 +898,6 @@ func (l *Linear) AssignSelf(ctx context.Context, key IssueKey) error {
 	}
 	return l.update(ctx, id, map[string]any{"assigneeId": me.ID})
 }
-
-// ClosesIssue: a PR closes a Linear issue by naming its identifier in the
-// head branch or the title, as Linear's own integrations link them.
-func (l *Linear) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
 
 // ---- comments ----------------------------------------------------------------
 
@@ -1119,29 +1112,6 @@ func (l *Linear) dropState(ctx context.Context, key IssueKey, name string) error
 		return err
 	}
 	return succeeded("AttachmentDelete", out.AttachmentDelete.Success)
-}
-
-// ---- milestones: none -----------------------------------------------------------
-
-func (l *Linear) Milestones(context.Context, string) ([]Milestone, error) {
-	return nil, errLinearNoMilestones()
-}
-
-// FindMilestone finds none: Linear holds no rota milestones.
-func (l *Linear) FindMilestone(context.Context, string) (string, bool, error) {
-	return "", false, nil
-}
-
-func (l *Linear) CreateMilestone(context.Context, string, string) (int, error) {
-	return 0, errLinearNoMilestones()
-}
-
-func (l *Linear) EditMilestone(context.Context, int, MilestoneEdit) error {
-	return errLinearNoMilestones()
-}
-
-func (l *Linear) IssuesInMilestone(context.Context, string, string) ([]Issue, error) {
-	return nil, errLinearNoMilestones()
 }
 
 // ---- claims (plain comments) ------------------------------------------------------
