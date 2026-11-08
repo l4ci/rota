@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 )
 
@@ -30,7 +31,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	if !issue {
-		return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
+		return Result{Data: jsonx.Obj("blockedBy", blockedby.Backend, "changed", false)},
 			Failed("%s needs item criteria, which only the issue backend has (issues.source is file)", c.Path)
 	}
 	_, st, err := openPlans(c)
@@ -87,7 +88,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	unknown := []any{}
 	var lines []string
 	for _, u := range r.Unknown {
-		unknown = append(unknown, jsonObj("task", u.Task, "ids", strs(u.IDs)))
+		unknown = append(unknown, jsonx.Obj("task", u.Task, "ids", jsonx.Strings(u.IDs)))
 		lines = append(lines, fmt.Sprintf("%s serves unknown %s", u.Task, strings.Join(u.IDs, ", ")))
 	}
 	for _, id := range r.Uncovered {
@@ -105,16 +106,16 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	for _, t := range r.NoVerify {
 		lines = append(lines, t+" has no Verify step")
 	}
-	d := jsonObj("key", key, "ok", r.Ok(), "criteria", strs(ids),
-		"uncovered", strs(r.Uncovered), "orphans", strs(r.Orphans),
-		"unknown", unknown, "noVerify", strs(r.NoVerify), "warnings", strs(warns))
+	d := jsonx.Obj("key", key, "ok", r.Ok(), "criteria", jsonx.Strings(ids),
+		"uncovered", jsonx.Strings(r.Uncovered), "orphans", jsonx.Strings(r.Orphans),
+		"unknown", unknown, "noVerify", jsonx.Strings(r.NoVerify), "warnings", jsonx.Strings(warns))
 	if len(decs) > 0 || len(r.UnknownDecisions) > 0 {
 		unknownDec := []any{}
 		for _, u := range r.UnknownDecisions {
-			unknownDec = append(unknownDec, jsonObj("task", u.Task, "ids", strs(u.IDs)))
+			unknownDec = append(unknownDec, jsonx.Obj("task", u.Task, "ids", jsonx.Strings(u.IDs)))
 		}
-		d.Set("decisions", strs(decLines))
-		d.Set("uncoveredDecisions", strs(r.UncoveredDecisions))
+		d.Set("decisions", jsonx.Strings(decLines))
+		d.Set("uncoveredDecisions", jsonx.Strings(r.UncoveredDecisions))
 		d.Set("unknownDecisions", unknownDec)
 	}
 	problems := len(lines)

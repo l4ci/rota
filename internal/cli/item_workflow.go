@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 )
 
@@ -79,7 +80,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		comments := []any{}
 		var rows []string
 		for _, r := range st.Comments {
-			comments = append(comments, jsonObj("who", r.Who, "kind", r.Kind, "text", r.Text))
+			comments = append(comments, jsonx.Obj("who", r.Who, "kind", r.Kind, "text", r.Text))
 			rows = append(rows, commentRow(r)...)
 		}
 		assignees := []any{}
@@ -95,7 +96,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 			return backlogFailRead(err)
 		}
 		tryIt, tryErr := tryItData(st.Body)
-		data := jsonObj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
+		data := jsonx.Obj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
 			"state", nullIfEmpty(st.State), "claimedBy", nullIfEmpty(st.Claim), "assignees", assignees,
 			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "acceptance", acceptanceData(cover),
 			"tryIt", tryIt.steps, "tryItError", nullIfEmpty(tryErr), "comments", comments)
@@ -142,7 +143,7 @@ func tryItData(body string) (v tryItView, errText string) {
 		for _, e := range st.Expect {
 			expect = append(expect, e)
 		}
-		v.steps = append(v.steps, jsonObj("run", st.Run, "expect", expect, "line", st.Line))
+		v.steps = append(v.steps, jsonx.Obj("run", st.Run, "expect", expect, "line", st.Line))
 	}
 	return v, ""
 }
@@ -222,11 +223,11 @@ func itemClaim(fs *flag.FlagSet) RunFunc {
 		if !won {
 			// The loser posted its claim and then its release on the issue, so
 			// it did change state on the way to the refusal (contract: changed true).
-			return Result{Data: jsonObj("blockedBy", blockedby.Claimed, "changed", true)},
+			return Result{Data: jsonx.Obj("blockedBy", blockedby.Claimed, "changed", true)},
 				Refused("%s is claimed by %s", id, holder)
 		}
 		issue := be.Capabilities().ClaimWrites
-		res := Result{Data: jsonObj("id", id, "type", typ, "claimId", *as, "changed", issue)}
+		res := Result{Data: jsonx.Obj("id", id, "type", typ, "claimId", *as, "changed", issue)}
 		if issue {
 			res.Text = fmt.Sprintf("claimed %s as %s", id, *as)
 		}
@@ -255,7 +256,7 @@ func itemRelease(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		res := Result{Data: jsonObj("id", id, "type", typ, "claimId", *as, "changed", changed)}
+		res := Result{Data: jsonx.Obj("id", id, "type", typ, "claimId", *as, "changed", changed)}
 		if changed {
 			res.Text = fmt.Sprintf("released %s as %s", id, *as)
 		}
@@ -284,7 +285,7 @@ func itemState(fs *flag.FlagSet) RunFunc {
 		if *to == "none" {
 			state = nil
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "state", state, "changed", changed),
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "state", state, "changed", changed),
 			Text: fmt.Sprintf("%s state: %s", id, *to)}, nil
 	}
 }
@@ -338,7 +339,7 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "kind", *kind, "changed", changed),
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "kind", *kind, "changed", changed),
 			Text: fmt.Sprintf("wrote %s note on %s", *kind, id)}, nil
 	}
 }
@@ -360,7 +361,7 @@ func itemNoteShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFailRead(err)
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "kind", *kind, "exists", ok, "body", body), Text: body}, nil
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "kind", *kind, "exists", ok, "body", body), Text: body}, nil
 	}
 }
 
@@ -384,7 +385,7 @@ func itemNoteRm(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "kind", *kind, "changed", changed),
+		return Result{Data: jsonx.Obj("id", id, "type", typ, "kind", *kind, "changed", changed),
 			Text: fmt.Sprintf("removed %s note on %s", *kind, id)}, nil
 	}
 }

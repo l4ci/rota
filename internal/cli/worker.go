@@ -212,21 +212,13 @@ func resetData(r worker.ResetResult) *jsonx.Object {
 		d.Set("sha", r.SHA)
 	}
 	if len(r.Dirty) > 0 {
-		d.Set("dirty", strList(r.Dirty))
+		d.Set("dirty", jsonx.Strings(r.Dirty))
 	}
 	if len(r.Unmerged) > 0 {
-		d.Set("unmerged", strList(r.Unmerged))
+		d.Set("unmerged", jsonx.Strings(r.Unmerged))
 	}
 	d.Set("changed", r.Changed)
 	return d
-}
-
-func strList(in []string) []any {
-	out := make([]any, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
-	}
-	return out
 }
 
 func workerReset(fs *flag.FlagSet) RunFunc {
@@ -456,7 +448,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if err := workerEnvCtx(c, ctx).ConfirmCoreNotSubmitted(ctx, root, slot); err != nil {
 				return Result{}, err
 			}
-			return Result{Data: knObj("slot", slot, "delivery", "not-submitted", "changed", true), Text: fmt.Sprintf("%s: confirmed not submitted; retry the dispatch when ready", slot)}, nil
+			return Result{Data: jsonx.Obj("slot", slot, "delivery", "not-submitted", "changed", true), Text: fmt.Sprintf("%s: confirmed not submitted; retry the dispatch when ready", slot)}, nil
 		}
 		if *body == "" {
 			return Result{}, Usage("--body-file is required")
@@ -518,12 +510,12 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		}
 		if err != nil {
 			if res.Delivery != "" {
-				return Result{Data: knObj("slot", res.Slot, "handle", res.Handle, "address", host.HandleAddress(res.Handle), "delivery", res.Delivery)}, err
+				return Result{Data: jsonx.Obj("slot", res.Slot, "handle", res.Handle, "address", host.HandleAddress(res.Handle), "delivery", res.Delivery)}, err
 			}
 			var we *exitcode.Error
 			if errors.As(err, &we) {
 				if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && we.Exit == ExitRefused {
-					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
+					return Result{Data: jsonx.Obj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
 			return Result{}, err
@@ -733,7 +725,7 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 			var we *exitcode.Error
 			if errors.As(err, &we) {
 				if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && we.Exit == ExitRefused {
-					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
+					return Result{Data: jsonx.Obj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
 			return Result{}, err
@@ -765,13 +757,13 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	if r.PR != "" {
 		d.Set("pr", r.PR)
 	}
-	d.Set("verified", strList(r.Verified))
+	d.Set("verified", jsonx.Strings(r.Verified))
 	d.Set("verifySkipped", r.VerifySkipped)
 	// Only a gate that reached the verify has a tier; skipped is always a list.
 	if r.Tier != "" {
 		d.Set("tier", r.Tier)
 		d.Set("tierReason", r.TierReason)
-		d.Set("skipped", strList(r.Skipped))
+		d.Set("skipped", jsonx.Strings(r.Skipped))
 	}
 	if len(r.Flaky) > 0 {
 		d.Set("flaky", flakyData(r.Flaky))

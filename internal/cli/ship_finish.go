@@ -156,7 +156,7 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		sg.Set("debugCycles", sig.DebugCycles)
 		autonomy := config.String(cfg, "autonomy.level")
 
-		data := gitObj("branch", branch, "base", base, "commit", commit, "status", st, "items", items, "signals", sg,
+		data := jsonx.Obj("branch", branch, "base", base, "commit", commit, "status", st, "items", items, "signals", sg,
 			"learn", learnObj, "docs", docsObj, "release", relObj, "autonomy", autonomy, "changed", done)
 		text := fmt.Sprintf("finished %s at %s: %d items, %d files; learn %s, docs %s, release %s",
 			branch, commit, sig.Items, sig.Files, learn.Action, docs.Action, finishAction(relObj))

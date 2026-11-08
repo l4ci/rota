@@ -183,7 +183,7 @@ func withSkipped(res Result, skipped []string) Result {
 		return res
 	}
 	if o, ok := res.Data.(*jsonx.Object); ok {
-		o.Set("skipped", strs(skipped))
+		o.Set("skipped", jsonx.Strings(skipped))
 	}
 	var lines []string
 	if res.Text != "" {
@@ -237,7 +237,7 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top); len(plugin) > 0 {
 			hint = "the rota plugin is updated by Claude Code: claude plugin update rota@rota"
 		}
-		return withSkipped(withPromptsReport(c, Result{Data: knObj("roots", []any{}, "changed", false)}), skipped),
+		return withSkipped(withPromptsReport(c, Result{Data: jsonx.Obj("roots", []any{}, "changed", false)}), skipped),
 			Failed("no skills install found in scope").WithHint(hint)
 	}
 	out, err := skillsInstallResult(c, "update", res)
@@ -278,11 +278,11 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 			counts[f.Status]++
 			if f.Status == skills.Unchanged {
 				if c.JSON {
-					files = append(files, knObj("path", f.Path, "status", f.Status))
+					files = append(files, jsonx.Obj("path", f.Path, "status", f.Status))
 				}
 				continue
 			}
-			files = append(files, knObj("path", f.Path, "status", f.Status))
+			files = append(files, jsonx.Obj("path", f.Path, "status", f.Status))
 			if f.Status == skills.Edited || f.Status == skills.Unmanaged {
 				lines = append(lines, fmt.Sprintf("  %-9s %s", f.Status, f.Path))
 			}
@@ -294,7 +294,7 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 		if r.BlockedBy == skills.Edited || blockedBy == "" {
 			blockedBy = r.BlockedBy
 		}
-		rootsData = append(rootsData, knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope,
+		rootsData = append(rootsData, jsonx.Obj("root", r.Path, "agent", r.Agent, "scope", r.Scope,
 			"version", r.Version, "digest", r.Digest, "mode", r.Mode, "files", files))
 		summary := fmt.Sprintf("%s (%s, %s, %s):", r.Path, r.Agent, r.Scope, r.Mode)
 		for _, st := range []string{skills.Created, skills.Updated, skills.Replaced, skills.Removed, skills.Edited, skills.Unmanaged, skills.Unchanged} {
@@ -305,7 +305,7 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 		text = append(text, summary)
 		text = append(text, lines...)
 	}
-	data := knObj("roots", rootsData)
+	data := jsonx.Obj("roots", rootsData)
 	if len(kept) > 0 {
 		data.Set("kept", kept)
 	}
@@ -336,14 +336,14 @@ func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
 		}
 		changed = changed || r.Changed
 		keptAny = keptAny || len(r.Kept) > 0
-		rootsData = append(rootsData, knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope,
-			"removed", strs(r.Removed), "kept", strs(r.Kept)))
+		rootsData = append(rootsData, jsonx.Obj("root", r.Path, "agent", r.Agent, "scope", r.Scope,
+			"removed", jsonx.Strings(r.Removed), "kept", jsonx.Strings(r.Kept)))
 		text = append(text, fmt.Sprintf("%s (%s, %s): %d removed, %d kept", r.Path, r.Agent, r.Scope, len(r.Removed), len(r.Kept)))
 		for _, p := range r.Kept {
 			text = append(text, "  edited    "+p)
 		}
 	}
-	data := knObj("roots", rootsData, "changed", changed)
+	data := jsonx.Obj("roots", rootsData, "changed", changed)
 	out := Result{Data: data, Text: strings.Join(text, "\n")}
 	if keptAny {
 		data.Set("blockedBy", blockedby.Edited)
@@ -372,7 +372,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	rootsData := []any{}
 	text := []string{fmt.Sprintf("rota %s, skills %s (stub %s)", rep.Version, short(rep.Digest), short(rep.StubDigest))}
 	for _, r := range rep.Roots {
-		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
+		o := jsonx.Obj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
 		line := fmt.Sprintf("%s (%s, %s): ", r.Path, r.Agent, r.Scope)
 		if r.Plugin {
 			line = fmt.Sprintf("%s (%s, %s, plugin): ", r.Path, r.Agent, r.Scope)
@@ -383,7 +383,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 			o.Set("version", r.Version)
 			o.Set("digest", r.Digest)
 			o.Set("mode", r.Mode)
-			o.Set("changed", strs(r.Changed))
+			o.Set("changed", jsonx.Strings(r.Changed))
 			line += "current"
 			if !r.Current {
 				want := rep.Digest
@@ -397,8 +397,8 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 			}
 		}
 		o.Set("current", r.Current)
-		o.Set("edited", strs(r.Edited))
-		o.Set("missing", strs(r.Missing))
+		o.Set("edited", jsonx.Strings(r.Edited))
+		o.Set("missing", jsonx.Strings(r.Missing))
 		text = append(text, line)
 		for _, p := range r.Edited {
 			text = append(text, "  edited  "+p)
@@ -408,7 +408,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		}
 		rootsData = append(rootsData, o)
 	}
-	data := knObj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
+	data := jsonx.Obj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
 	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
 }
 
@@ -427,7 +427,7 @@ func withWarnings(res Result, warnings []string) Result {
 		return res
 	}
 	if o, ok := res.Data.(*jsonx.Object); ok {
-		o.Set("warnings", strs(warnings))
+		o.Set("warnings", jsonx.Strings(warnings))
 	}
 	lines := []string{res.Text}
 	for _, w := range warnings {
@@ -456,7 +456,7 @@ func skillsList(fs *flag.FlagSet) RunFunc {
 		v := version.Get().Version
 		names := set.Skills()
 		return Result{
-			Data: knObj("version", v, "digest", set.Digest(), "skills", strs(names)),
+			Data: jsonx.Obj("version", v, "digest", set.Digest(), "skills", jsonx.Strings(names)),
 			Text: fmt.Sprintf("rota %s\n%s", v, strings.Join(names, "\n")),
 		}, nil
 	}
@@ -482,7 +482,7 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 		}
 		if *refs {
 			l := set.References(name)
-			return Result{Data: knObj("name", name, "references", strs(l)), Text: strings.Join(l, "\n")}, nil
+			return Result{Data: jsonx.Obj("name", name, "references", jsonx.Strings(l)), Text: strings.Join(l, "\n")}, nil
 		}
 		file := *ref
 		if file != "" {
@@ -494,7 +494,7 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		data := knObj("name", name)
+		data := jsonx.Obj("name", name)
 		if file != "" {
 			data.Set("reference", file)
 		}
@@ -523,7 +523,7 @@ func skillsLinks(fs *flag.FlagSet) RunFunc {
 				return Result{}, Failed("%v", err)
 			}
 			links := skills.Links(b)
-			files = append(files, knObj("file", f, "links", strs(links)))
+			files = append(files, jsonx.Obj("file", f, "links", jsonx.Strings(links)))
 			for _, l := range links {
 				if len(args) == 1 {
 					lines = append(lines, l)
@@ -532,7 +532,7 @@ func skillsLinks(fs *flag.FlagSet) RunFunc {
 				}
 			}
 		}
-		return Result{Data: knObj("files", files), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("files", files), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 

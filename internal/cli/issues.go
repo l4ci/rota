@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/issues"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
@@ -122,7 +123,7 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 		if note := r.Note(); note != "" {
 			c.Warn("%s", note)
 		}
-		return Result{Data: jsonObj("provider", r.Provider), Text: r.Provider}, nil
+		return Result{Data: jsonx.Obj("provider", r.Provider), Text: r.Provider}, nil
 	}
 }
 
@@ -178,13 +179,13 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 				return failData(err), err
 			}
 			anyChanged = anyChanged || changed
-			done = append(done, jsonObj("label", name, "action", action, "changed", changed))
+			done = append(done, jsonx.Obj("label", name, "action", action, "changed", changed))
 			lines = append(lines, fmt.Sprintf("%s %s on %s", action, name, key.Ref()))
 		}
 		if len(names) == 1 {
-			return Result{Data: jsonObj("issue", issueJSON(key), "label", names[0], "action", action, "changed", anyChanged), Text: lines[0]}, nil
+			return Result{Data: jsonx.Obj("issue", issueJSON(key), "label", names[0], "action", action, "changed", anyChanged), Text: lines[0]}, nil
 		}
-		return Result{Data: jsonObj("issue", issueJSON(key), "labels", done, "changed", anyChanged), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("issue", issueJSON(key), "labels", done, "changed", anyChanged), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -229,7 +230,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		rows := []any{}
 		var lines []string
 		for _, e := range entries {
-			rows = append(rows, jsonObj("provider", e.Provider, "repo", nullStr(e.Repo), "issue", e.Issue,
+			rows = append(rows, jsonx.Obj("provider", e.Provider, "repo", nullStr(e.Repo), "issue", e.Issue,
 				"itemId", e.ItemID, "status", e.Status))
 			repo := ""
 			if e.Repo != "" {
@@ -237,7 +238,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 			}
 			lines = append(lines, fmt.Sprintf("%s %s#%d %s %s", e.Provider, repo, e.Issue, e.ItemID, e.Status))
 		}
-		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -270,7 +271,7 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 		if !changed {
 			text = key.Ref() + " already closed"
 		}
-		return Result{Data: jsonObj("issue", issueJSON(key), "commit", *commit, "changed", changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("issue", issueJSON(key), "commit", *commit, "changed", changed), Text: text}, nil
 	}
 }
 
@@ -318,9 +319,9 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 		}
 		ops := []any{}
 		for _, o := range res.Ops {
-			ops = append(ops, jsonObj("action", o.Action, "text", o.Text))
+			ops = append(ops, jsonx.Obj("action", o.Action, "text", o.Text))
 		}
-		data := jsonObj("applied", *apply, "operations", ops, "map", res.Map, "migrated", res.Migrated,
+		data := jsonx.Obj("applied", *apply, "operations", ops, "map", res.Map, "migrated", res.Migrated,
 			"total", res.Total, "changed", res.Changed)
 		return Result{Data: data, Text: strings.Join(res.Lines, "\n")}, nil
 	}
@@ -335,7 +336,7 @@ func migrateIssuesFail(res *migrate.Result, err error) (Result, error) {
 	case errors.Is(err, migrate.ErrNothingToMigrate):
 		return Result{}, Resolution("%s", strings.TrimPrefix(err.Error(), migrate.ErrNothingToMigrate.Error()+": ")+" (nothing to migrate)")
 	case errors.Is(err, migrate.ErrUmbrellaMigrate):
-		return Result{Data: jsonObj("blockedBy", blockedby.Umbrella, "changed", false)},
+		return Result{Data: jsonx.Obj("blockedBy", blockedby.Umbrella, "changed", false)},
 			Refused("%s", err.Error()).WithHint("run rota migrate issues inside each sub-repo")
 	case errors.Is(err, migrate.ErrBadMap):
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}

@@ -33,8 +33,8 @@ func gateList(c *Ctx, args []string) (Result, error) {
 		o := jsonx.NewObject()
 		o.Set("name", g.Name)
 		o.Set("enforced", g.Enforced())
-		o.Set("verbs", strList(g.Verbs))
-		o.Set("skills", strList(g.Skills))
+		o.Set("verbs", jsonx.Strings(g.Verbs))
+		o.Set("skills", jsonx.Strings(g.Skills))
 		o.Set("creates", g.Creates)
 		rows = append(rows, o)
 		by := "skill only"
@@ -43,7 +43,7 @@ func gateList(c *Ctx, args []string) (Result, error) {
 		}
 		lines = append(lines, g.Name+": "+by+" ("+g.Creates+")")
 	}
-	return Result{Data: gitObj("gates", rows), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("gates", rows), Text: strings.Join(lines, "\n")}, nil
 }
 
 // confirmFlags defines --confirm and --confirm-note on a gated verb's flag
@@ -86,7 +86,7 @@ func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, e
 		d.Set("blockedBy", blockedby.ManualGate)
 		d.Set("gate", r.Gate)
 		if name == gate.MergeApproval {
-			d.Set("paths", strList(r.Paths))
+			d.Set("paths", jsonx.Strings(r.Paths))
 		}
 		d.Set("changed", false)
 		return Result{Data: d}, Refused("%s", r.Error()).WithHint(r.Hint())

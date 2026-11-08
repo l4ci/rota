@@ -84,13 +84,13 @@ func buildBrowser(t *testing.T, v ViewFunc, data any) browser {
 }
 
 func viewDoctorData() *jsonx.Object {
-	return knObj("ok", false, "checks", objList(
-		knObj("name", "git", "status", "pass", "detail", "git 2.45"),
-		knObj("name", "gh auth", "status", "pass", "detail", "logged in as l4ci"),
-		knObj("name", "herdr hook", "status", "warn", "detail", "hook not installed", "hint", "run: rota hook install"),
-		knObj("name", "skills", "status", "fail", "detail", "3 skills older than the binary", "hint", "run: rota skills update"),
-		knObj("name", "codex", "status", "pass", "detail", "codex 0.3"),
-		knObj("name", "forge", "status", "fail", "detail", "no token for github.com", "hint", "run: gh auth login"),
+	return jsonx.Obj("ok", false, "checks", objList(
+		jsonx.Obj("name", "git", "status", "pass", "detail", "git 2.45"),
+		jsonx.Obj("name", "gh auth", "status", "pass", "detail", "logged in as l4ci"),
+		jsonx.Obj("name", "herdr hook", "status", "warn", "detail", "hook not installed", "hint", "run: rota hook install"),
+		jsonx.Obj("name", "skills", "status", "fail", "detail", "3 skills older than the binary", "hint", "run: rota skills update"),
+		jsonx.Obj("name", "codex", "status", "pass", "detail", "codex 0.3"),
+		jsonx.Obj("name", "forge", "status", "fail", "detail", "no token for github.com", "hint", "run: gh auth login"),
 	))
 }
 
@@ -126,10 +126,10 @@ func TestDoctorViewFilterAndQuit(t *testing.T) {
 }
 
 func viewAccountsData() *jsonx.Object {
-	return knObj("accounts", objList(
-		knObj("name", "work", "configDir", "/home/u/.claude-work", "verdict", "ok", "reason", "", "fiveHour", 20.0, "sevenDay", 35.0, "resetsAt", "2026-10-08T04:00:00Z", "headroom", 65.0),
-		knObj("name", "personal", "configDir", "/home/u/.claude", "verdict", "tight", "reason", "", "fiveHour", 91.0, "sevenDay", 40.0, "resetsAt", "2026-10-07T23:30:00Z", "headroom", 9.0),
-		knObj("name", "spare", "configDir", "/home/u/.claude-spare", "verdict", "unknown", "reason", "no usage reading"),
+	return jsonx.Obj("accounts", objList(
+		jsonx.Obj("name", "work", "configDir", "/home/u/.claude-work", "verdict", "ok", "reason", "", "fiveHour", 20.0, "sevenDay", 35.0, "resetsAt", "2026-10-08T04:00:00Z", "headroom", 65.0),
+		jsonx.Obj("name", "personal", "configDir", "/home/u/.claude", "verdict", "tight", "reason", "", "fiveHour", 91.0, "sevenDay", 40.0, "resetsAt", "2026-10-07T23:30:00Z", "headroom", 9.0),
+		jsonx.Obj("name", "spare", "configDir", "/home/u/.claude-spare", "verdict", "unknown", "reason", "no usage reading"),
 	))
 }
 
@@ -145,21 +145,21 @@ func TestAccountsViewGolden(t *testing.T) {
 }
 
 func TestAccountsViewEmpty(t *testing.T) {
-	b := buildBrowser(t, accountsView, knObj("accounts", []any{}))
+	b := buildBrowser(t, accountsView, jsonx.Obj("accounts", []any{}))
 	if out := tui.Strip(b.Render(vw, vh, tui.Style{})); !strings.Contains(out, "no accounts configured") {
 		t.Errorf("empty frame: %s", out)
 	}
 }
 
 func viewBacklogData() *jsonx.Object {
-	return knObj(
-		"inProgress", objList(knObj("id", "546", "type", "feature", "title", "Read-only views", "branch", "ben/546-views")),
+	return jsonx.Obj(
+		"inProgress", objList(jsonx.Obj("id", "546", "type", "feature", "title", "Read-only views", "branch", "ben/546-views")),
 		"bugs", objList(
-			knObj("id", "501", "priority", "P1", "title", "Gate hangs on a dead worktree", "related", []any{"502"}, "milestone", "m3"),
-			knObj("id", "502", "priority", "P2", "title", "Palette flickers on resize", "related", []any{}),
+			jsonx.Obj("id", "501", "priority", "P1", "title", "Gate hangs on a dead worktree", "related", []any{"502"}, "milestone", "m3"),
+			jsonx.Obj("id", "502", "priority", "P2", "title", "Palette flickers on resize", "related", []any{}),
 		),
-		"features", objList(knObj("id", "540", "size", "L", "title", "Stdlib TUI kit", "related", []any{}, "milestone", "m3")),
-		"tasks", objList(knObj("id", "550", "title", "Prune stale labels", "related", []any{})),
+		"features", objList(jsonx.Obj("id", "540", "size", "L", "title", "Stdlib TUI kit", "related", []any{}, "milestone", "m3")),
+		"tasks", objList(jsonx.Obj("id", "550", "title", "Prune stale labels", "related", []any{})),
 	)
 }
 
@@ -220,9 +220,9 @@ func TestBacklogViewSelectionChangeClosesTheReader(t *testing.T) {
 func viewTopicData(names ...string) *jsonx.Object {
 	var ts []any
 	for i, n := range names {
-		ts = append(ts, knObj("name", n, "bullets", i+2, "bytes", 400*(i+1)))
+		ts = append(ts, jsonx.Obj("name", n, "bullets", i+2, "bytes", 400*(i+1)))
 	}
-	return knObj("topics", ts)
+	return jsonx.Obj("topics", ts)
 }
 
 func TestKnowledgeViewGolden(t *testing.T) {
@@ -294,7 +294,7 @@ func TestFailedVerbWithDataStillOpensItsView(t *testing.T) {
 }
 
 func TestViewsDropControlCharactersFromRowsAndBodies(t *testing.T) {
-	data := knObj("bugs", objList(knObj("id", "9", "priority", "P1", "title", "evil \x1b[2J\x1b]0;pwn\x07title", "related", []any{})))
+	data := jsonx.Obj("bugs", objList(jsonx.Obj("id", "9", "priority", "P1", "title", "evil \x1b[2J\x1b]0;pwn\x07title", "related", []any{})))
 	b := buildBrowser(t, backlogView, data)
 	b.Load = func(string) (string, error) { return "body \x1b[31mred\x1b[0m\x00 ok", nil }
 	m, _ := viewDrive(t, b, "enter")

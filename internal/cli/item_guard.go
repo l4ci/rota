@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -58,7 +59,7 @@ func recentCreates(c *Ctx, root string) map[string]string {
 func checkCreateGuard(c *Ctx, root string, be backlog.Backend, ins []backlog.CreateInput) error {
 	if len(ins) > createBatchCap {
 		e := Refused("batch holds %d records, over the cap of %d; split it or pass --force", len(ins), createBatchCap)
-		e.Data = jsonObj("blockedBy", blockedby.BatchCap, "cap", createBatchCap, "changed", false)
+		e.Data = jsonx.Obj("blockedBy", blockedby.BatchCap, "cap", createBatchCap, "changed", false)
 		return e
 	}
 	recent := recentCreates(c, root)
@@ -73,7 +74,7 @@ func checkCreateGuard(c *Ctx, root string, be backlog.Backend, ins []backlog.Cre
 	}
 	e := Refused("already filed in the last %d minutes, nothing created: %s", int(createWindow.Minutes()), strings.Join(dups, ", "))
 	e.Hint = "if the repeat is intended, pass --force"
-	e.Data = jsonObj("blockedBy", blockedby.DuplicateCreate, "duplicates", dups, "changed", false)
+	e.Data = jsonx.Obj("blockedBy", blockedby.DuplicateCreate, "duplicates", dups, "changed", false)
 	return e
 }
 

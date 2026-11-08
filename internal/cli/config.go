@@ -56,7 +56,7 @@ func updateVerb(fs *flag.FlagSet) RunFunc {
 			env.SkillsNeedUpdate = func() bool { return skillsNeedUpdate(c) }
 		}
 		r := update.Check(env)
-		data := jsonObj("installType", r.InstallType, "installRoot", r.InstallRoot,
+		data := jsonx.Obj("installType", r.InstallType, "installRoot", r.InstallRoot,
 			"currentVersion", r.CurrentVersion, "latestVersion", r.LatestVersion,
 			"status", r.Status, "updateCommand", r.UpdateCommand)
 		text := fmt.Sprintf("rota %s (%s), latest %s: %s", orDash(r.CurrentVersion), r.InstallType, orDash(r.LatestVersion), r.Status)
@@ -113,7 +113,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("unknown config key '%s'", key)
 			}
 			rows, lines := showRows(entries)
-			return Result{Data: jsonObj("scope", "local", "entries", rows), Text: strings.Join(lines, "\n")}, nil
+			return Result{Data: jsonx.Obj("scope", "local", "entries", rows), Text: strings.Join(lines, "\n")}, nil
 		}
 		if *global || atHome(c) {
 			dir, err := globalDir(c)
@@ -128,7 +128,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 			rows, lines := showRows(entries)
-			return Result{Data: jsonObj("scope", "global", "entries", rows), Text: strings.Join(lines, "\n")}, nil
+			return Result{Data: jsonx.Obj("scope", "global", "entries", rows), Text: strings.Join(lines, "\n")}, nil
 		}
 		root, err := backlogScope(c)
 		if err != nil {
@@ -140,7 +140,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		}
 		rows, lines := showRows(entries)
 		annotateTierModels(c.deps().Config(root), entries, rows, lines)
-		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -149,7 +149,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 	rows = make([]any, 0, len(entries))
 	lines = make([]string, 0, len(entries))
 	for _, e := range entries {
-		row := jsonObj("key", e.Key, "value", e.Value, "source", e.Source)
+		row := jsonx.Obj("key", e.Key, "value", e.Value, "source", e.Source)
 		if e.HasGlobal {
 			row.Set("global", e.Global)
 		}
@@ -160,7 +160,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 			row.Set("group", sk.Group)
 			row.Set("desc", sk.Desc)
 			if len(sk.Choices) > 0 {
-				row.Set("choices", strSlice(sk.Choices))
+				row.Set("choices", jsonx.Strings(sk.Choices))
 			}
 		}
 		rows = append(rows, row)
@@ -209,10 +209,10 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 			return Result{}, configFail(err, exitmap.ConfigCorrupt|exitmap.ConfigInternal)
 		}
 		path := config.GlobalPath(dir)
-		data := jsonObj("path", path, "saved", strSlice(saved), "changed", changed)
+		data := jsonx.Obj("path", path, "saved", jsonx.Strings(saved), "changed", changed)
 		text := fmt.Sprintf("saved %d keys to %s", len(saved), path)
 		if lines := autonomyLines(am); len(lines) > 0 {
-			data.Set("autonomy", jsonObj("rewrote", true))
+			data.Set("autonomy", jsonx.Obj("rewrote", true))
 			text += "\n" + strings.Join(lines, "\n")
 		}
 		return Result{Data: data, Text: text}, nil
@@ -293,7 +293,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		default:
 			return Result{}, configFail(err, exitmap.ConfigUsage|exitmap.ConfigInternal)
 		}
-		data := jsonObj("key", args[0], "value", res.Value)
+		data := jsonx.Obj("key", args[0], "value", res.Value)
 		if res.HadPrevious {
 			data.Set("previous", res.Previous)
 		}
@@ -316,7 +316,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			text = "global: " + text + " (global config, applies to every project that does not override it)"
 		}
 		if lines := autonomyLines(res.Migration); len(lines) > 0 {
-			data.Set("autonomy", jsonObj("rewrote", true))
+			data.Set("autonomy", jsonx.Obj("rewrote", true))
 			text += "\n" + strings.Join(lines, "\n")
 		}
 		return Result{Data: data, Text: text}, nil
@@ -341,20 +341,20 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		cfg := c.deps().Config(root)
 		diag := config.Diagnose(c.deps().projectsEnv(), root, cfg)
 		status, missing := diag.Status, diag.Missing
-		data := jsonObj("status", status, "upToDate", status == config.UpToDate, "missing", anySlice(missing))
+		data := jsonx.Obj("status", status, "upToDate", status == config.UpToDate, "missing", jsonx.Strings(missing))
 		token := map[string]string{config.UpToDate: "UP_TO_DATE", config.Fresh: "FRESH", config.Corrupt: "CORRUPT"}[status]
 		if status == config.Stale {
 			token = "STALE:" + strings.Join(missing, ",")
 		}
 		removed := diag.Removed
-		data.Set("removed", anySlice(removed))
+		data.Set("removed", jsonx.Strings(removed))
 		res := Result{Data: data, Text: token}
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + removedKeysHint(removed)
 		}
 		old := diag.OldRoundKeys
 		if len(old) > 0 {
-			data.Set("unknown", anySlice(old))
+			data.Set("unknown", jsonx.Strings(old))
 			var names []string
 			for _, k := range old {
 				names = append(names, k+" (now "+config.RenamedRoundKey(k)+")")
@@ -363,17 +363,17 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		}
 		unknown := append(old, diag.Unknown...)
 		if len(unknown) > len(old) {
-			data.Set("unknown", anySlice(unknown))
+			data.Set("unknown", jsonx.Strings(unknown))
 			for _, k := range unknown[len(old):] {
 				res.Text += "\nunknown: " + k + " (not a config key; nothing reads it)"
 			}
 		}
 		if legacy := diag.Legacy; len(legacy) > 0 {
-			data.Set("legacy", anySlice(legacy))
+			data.Set("legacy", jsonx.Strings(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
 		}
 		warnings := diag.Warnings
-		data.Set("warnings", anySlice(warnings))
+		data.Set("warnings", jsonx.Strings(warnings))
 		for _, w := range warnings {
 			res.Text += "\nwarn: " + w
 		}
@@ -382,13 +382,13 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 			res.Text += "\n" + globalCorruptLine(gerr)
 		}
 		if invalid := diag.Invalid; len(invalid) > 0 {
-			data.Set("invalid", anySlice(invalid))
+			data.Set("invalid", jsonx.Strings(invalid))
 			data.Set("upToDate", false)
 			res.Text = "INVALID: " + strings.Join(invalid, "; ")
 			return res, Failed("%s", invalid[0])
 		}
 		if retired := diag.Retired; len(retired) > 0 {
-			data.Set("retired", anySlice(retired))
+			data.Set("retired", jsonx.Strings(retired))
 			res.Text = "RETIRED: " + strings.Join(retired, "; ")
 			return res, Failed("%s", retired[0])
 		}
@@ -449,13 +449,13 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			add("removed: " + strings.Join(removed, ", "))
 		}
 		rewrote := rec.Rewrote()
-		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed() || rewrote)
-		data.Set("autonomy", jsonObj("rewrote", rewrote, "autopilotWasOn", am.AutopilotWasOn))
+		data := jsonx.Obj("filled", jsonx.Strings(filled), "removed", jsonx.Strings(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed() || rewrote)
+		data.Set("autonomy", jsonx.Obj("rewrote", rewrote, "autopilotWasOn", am.AutopilotWasOn))
 		for _, line := range autonomyLines(am) {
 			add(line)
 		}
 		if rm.Changed() {
-			data.Set("renamed", jsonObj("config", renameList(rm.Config), "local", renameList(rm.Local)))
+			data.Set("renamed", jsonx.Obj("config", renameList(rm.Config), "local", renameList(rm.Local)))
 			var moved []string
 			for _, r := range append(append([]config.Rename{}, rm.Config...), rm.Local...) {
 				moved = append(moved, r.Old+" -> "+r.New)
@@ -463,7 +463,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			add("renamed: " + strings.Join(moved, ", "))
 		}
 		if sm.Changed {
-			data.Set("migrated", jsonObj("source", sm.Source, "forge", sm.Forge, "removed", anySlice(sm.Removed)))
+			data.Set("migrated", jsonx.Obj("source", sm.Source, "forge", sm.Forge, "removed", jsonx.Strings(sm.Removed)))
 			line := "migrated: " + strings.Join(sm.Removed, ", ") + " -> issues.source " + sm.Source
 			if sm.Forge != "" {
 				line += ", forge.provider " + sm.Forge
@@ -519,7 +519,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 		var masked *repos.MaskedError
 		switch {
 		case err == nil:
-			return Result{Data: jsonObj("name", r.Name, "path", r.Path), Text: r.Name}, nil
+			return Result{Data: jsonx.Obj("name", r.Name, "path", r.Path), Text: r.Name}, nil
 		case errors.Is(err, repos.ErrGitMissing):
 			return Result{}, Unavailable("git is not installed")
 		case errors.As(err, &masked):
@@ -537,7 +537,7 @@ func repoResolve(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		names := status.ParseReposCSV(strings.Join(args, ","))
 		if len(names) == 0 {
-			return Result{Data: jsonObj("repos", []any{})}, nil
+			return Result{Data: jsonx.Obj("repos", []any{})}, nil
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -558,10 +558,10 @@ func repoResolve(fs *flag.FlagSet) RunFunc {
 		rows := make([]any, 0, len(names))
 		lines := make([]string, 0, len(names))
 		for _, n := range names {
-			rows = append(rows, jsonObj("name", n, "path", path[n]))
+			rows = append(rows, jsonx.Obj("name", n, "path", path[n]))
 			lines = append(lines, n+" "+path[n])
 		}
-		return Result{Data: jsonObj("repos", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("repos", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -575,9 +575,9 @@ func repoUmbrella(fs *flag.FlagSet) RunFunc {
 			on = repos.Umbrella(root)
 		}
 		if on {
-			return Result{Data: jsonObj("umbrella", true), Text: "yes"}, nil
+			return Result{Data: jsonx.Obj("umbrella", true), Text: "yes"}, nil
 		}
-		return Result{Data: jsonObj("umbrella", false), Text: "no"}, Failed("not an umbrella project")
+		return Result{Data: jsonx.Obj("umbrella", false), Text: "no"}, Failed("not an umbrella project")
 	}
 }
 

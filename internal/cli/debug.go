@@ -80,7 +80,7 @@ func oneArg(args []string, what string) (string, error) {
 
 func noArgs(args []string) error {
 	if len(args) > 0 {
-		return Usage("takes no arguments")
+		return Usage("unexpected argument %q", args[0])
 	}
 	return nil
 }

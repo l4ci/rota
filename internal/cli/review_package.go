@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -113,7 +114,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err := fsio.WriteFileAtomic(path, []byte(b.String())); err != nil {
 			return Result{}, err
 		}
-		data := gitObj("path", path, "files", files, "bytes", b.Len(), "head", head)
+		data := jsonx.Obj("path", path, "files", files, "bytes", b.Len(), "head", head)
 		return Result{Data: data, Text: path}, nil
 	}
 }

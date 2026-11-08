@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -73,9 +74,9 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 			rows := make([]any, 0, len(changes))
 			var lines []string
 			for _, change := range changes {
-				row := knObj("kind", change.Kind, "name", change.Label.Name, "description", change.Label.Description, "color", change.Label.Color)
+				row := jsonx.Obj("kind", change.Kind, "name", change.Label.Name, "description", change.Label.Description, "color", change.Label.Color)
 				if change.Current != nil {
-					row.Set("current", knObj("name", change.Current.Name, "description", change.Current.Description, "color", change.Current.Color))
+					row.Set("current", jsonx.Obj("name", change.Current.Name, "description", change.Current.Description, "color", change.Current.Color))
 				}
 				rows = append(rows, row)
 				line := change.Kind + "\t" + change.Label.Name
@@ -92,7 +93,7 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 			} else if !*apply {
 				lines = append(lines, "dry run; use --apply to create and update known labels")
 			}
-			return Result{Data: knObj("apply", *apply, "writable", writable, "changed", changed, "changes", rows), Text: strings.Join(lines, "\n")}
+			return Result{Data: jsonx.Obj("apply", *apply, "writable", writable, "changed", changed, "changes", rows), Text: strings.Join(lines, "\n")}
 		}
 		if *apply && writable {
 			for _, change := range changes {

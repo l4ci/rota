@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/hvmigrate"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
@@ -28,7 +29,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 	verbose := fs.Bool("verbose", false, "include a diff for every rewritten file")
 	skip := fs.Bool("skip-skills", false, "leave the skill installs alone (CI, shared machines)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		cwd, _ := c.deps().Getwd()
@@ -55,7 +56,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 			var ref *hvmigrate.Refusal
 			switch {
 			case errors.As(err, &ref):
-				return Result{Data: knObj("blockedBy", ref.Blocked, "changed", false)}, Refused("%s", ref.Message)
+				return Result{Data: jsonx.Obj("blockedBy", ref.Blocked, "changed", false)}, Refused("%s", ref.Message)
 			case errors.Is(err, hvmigrate.ErrNoState):
 				return Result{}, Resolution("%s", err.Error())
 			case errors.Is(err, hvmigrate.ErrGit):
@@ -73,7 +74,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 func migrateHvResult(r *hvmigrate.HvReport) Result {
 	projects := []any{}
 	for _, p := range r.Projects {
-		o := knObj("scope", p.Scope, "dir", p.Dir, "move", p.Move, "files", strSlice(p.Files), "blocks", p.Blocks, "stamp", p.Stamp)
+		o := jsonx.Obj("scope", p.Scope, "dir", p.Dir, "move", p.Move, "files", jsonx.Strings(p.Files), "blocks", p.Blocks, "stamp", p.Stamp)
 		if p.Backup != "" {
 			o.Set("backup", p.Backup)
 		}
@@ -81,17 +82,17 @@ func migrateHvResult(r *hvmigrate.HvReport) Result {
 	}
 	skillRoots := []any{}
 	for _, s := range r.Skills {
-		skillRoots = append(skillRoots, knObj("root", s.Path, "agent", s.Agent, "scope", s.Scope,
-			"removed", s.Removed, "kept", strSlice(s.Kept), "reinstalled", s.Reinstalled))
+		skillRoots = append(skillRoots, jsonx.Obj("root", s.Path, "agent", s.Agent, "scope", s.Scope,
+			"removed", s.Removed, "kept", jsonx.Strings(s.Kept), "reinstalled", s.Reinstalled))
 	}
-	d := knObj("applied", r.Applied, "noop", r.Noop, "changed", r.Changed, "projects", projects,
-		"skillRoots", skillRoots, "settings", strSlice(r.Settings), "workerBranches", strSlice(r.WorkerBranches),
-		"manualReview", strSlice(r.ManualReview))
+	d := jsonx.Obj("applied", r.Applied, "noop", r.Noop, "changed", r.Changed, "projects", projects,
+		"skillRoots", skillRoots, "settings", jsonx.Strings(r.Settings), "workerBranches", jsonx.Strings(r.WorkerBranches),
+		"manualReview", jsonx.Strings(r.ManualReview))
 	if r.VersionStamp != "" {
 		d.Set("versionStamp", r.VersionStamp)
 	}
 	if len(r.Diffs) > 0 {
-		d.Set("diffs", strSlice(r.Diffs))
+		d.Set("diffs", jsonx.Strings(r.Diffs))
 	}
 
 	var b strings.Builder

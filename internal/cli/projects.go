@@ -26,7 +26,7 @@ func projectsCommand() *Command {
 // runProjectsCleanup deletes at once, no preview: the entries are a cache of
 // `rota init` runs and the next init puts a live non-temporary one back.
 func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	env := c.deps().projectsEnv()
@@ -43,7 +43,7 @@ func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
 			reason = "temporary"
 			line += "\t(temporary)"
 		}
-		rows = append(rows, knObj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen, "reason", reason))
+		rows = append(rows, jsonx.Obj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen, "reason", reason))
 		lines = append(lines, line)
 	}
 	if len(gone) == 0 {
@@ -68,7 +68,7 @@ func runProjectsRemove(c *Ctx, args []string) (Result, error) {
 	rows := []any{}
 	var lines []string
 	for _, p := range gone {
-		rows = append(rows, knObj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen))
+		rows = append(rows, jsonx.Obj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen))
 		lines = append(lines, fmt.Sprintf("removed\t%s\t%s", p.Name, p.Path))
 	}
 	if len(gone) == 0 {
@@ -81,7 +81,7 @@ func runProjectsRemove(c *Ctx, args []string) (Result, error) {
 }
 
 func runProjects(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	ps, err := projects.List(c.deps().projectsEnv())
@@ -91,7 +91,7 @@ func runProjects(c *Ctx, args []string) (Result, error) {
 	rows := []any{}
 	var lines []string
 	for _, p := range ps {
-		rows = append(rows, knObj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen, "missing", p.Missing))
+		rows = append(rows, jsonx.Obj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen, "missing", p.Missing))
 		line := fmt.Sprintf("%s\t%s", p.Name, p.Path)
 		if p.Missing {
 			line += "\t(missing)"

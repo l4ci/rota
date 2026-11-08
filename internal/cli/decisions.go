@@ -26,7 +26,7 @@ func decisionsCommands() *Command {
 }
 
 func decStats(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -41,7 +41,7 @@ func decStats(c *Ctx, args []string) (Result, error) {
 }
 
 func decTopics(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -67,7 +67,7 @@ func decQuery(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return knFail(err)
 	}
-	return Result{Data: knObj("text", text, "missing", strSlice(missing)), Text: text}, nil
+	return Result{Data: jsonx.Obj("text", text, "missing", jsonx.Strings(missing)), Text: text}, nil
 }
 
 // mapCommands is the `rota map` group.
@@ -99,14 +99,14 @@ func dirQuery(c *Ctx, dir, what string, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Data: knObj("text", text, "missing", strSlice(missing)), Text: text}, nil
+	return Result{Data: jsonx.Obj("text", text, "missing", jsonx.Strings(missing)), Text: text}, nil
 }
 
 func mapQuery(c *Ctx, args []string) (Result, error) { return dirQuery(c, "map", "subsystem", args) }
 func qaQuery(c *Ctx, args []string) (Result, error)  { return dirQuery(c, "qa", "target", args) }
 
 func indexVerb(c *Ctx, args []string, key string, body func(root string) string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -117,7 +117,7 @@ func indexVerb(c *Ctx, args []string, key string, body func(root string) string)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Data: knObj("key", key, "status", status, "changed", status != "unchanged"), Text: status}, nil
+	return Result{Data: jsonx.Obj("key", key, "status", status, "changed", status != "unchanged"), Text: status}, nil
 }
 
 func mapIndex(c *Ctx, args []string) (Result, error) {
@@ -130,7 +130,7 @@ func qaIndex(c *Ctx, args []string) (Result, error) {
 func mapStats(fs *flag.FlagSet) RunFunc {
 	capFlag := fs.Bool("cap", false, "also check the subsystem count against map.softcap_subsystems")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		st, _, err := knStore(c)
@@ -143,7 +143,7 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		staleLimit := mapqa.StaleCommits(c.deps().Config(st.Root))
 		var stale []string
 		for _, s := range subs {
-			row := knObj("name", s.Name, "bytes", s.Bytes, "touched", s.Touched, "entryPoints", s.EntryPoints, "brokenRefs", s.BrokenRefs)
+			row := jsonx.Obj("name", s.Name, "bytes", s.Bytes, "touched", s.Touched, "entryPoints", s.EntryPoints, "brokenRefs", s.BrokenRefs)
 			line := fmt.Sprintf("%s: %d bytes, touched %s, %d entry points, %d broken", s.Name, s.Bytes, s.Touched, s.EntryPoints, s.BrokenRefs)
 			if s.CommitsBehind != nil {
 				row.Set("commitsBehind", *s.CommitsBehind)
@@ -155,7 +155,7 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 			list = append(list, row)
 			lines = append(lines, line)
 		}
-		data := knObj("subsystems", list, "count", len(subs))
+		data := jsonx.Obj("subsystems", list, "count", len(subs))
 		text := strings.Join(lines, "\n")
 		if *capFlag {
 			limit := mapqa.SoftCap(c.deps().Config(st.Root))
@@ -187,7 +187,7 @@ func decWriteResult(topic, title string, changed bool, err error) (Result, error
 	if err != nil {
 		return knFail(err)
 	}
-	return Result{Data: knObj("topic", topic, "title", title, "changed", changed), Text: fmt.Sprintf("updated: %s :: %s", topic, title)}, nil
+	return Result{Data: jsonx.Obj("topic", topic, "title", title, "changed", changed), Text: fmt.Sprintf("updated: %s :: %s", topic, title)}, nil
 }
 
 func decAdd(fs *flag.FlagSet) RunFunc {
@@ -196,7 +196,7 @@ func decAdd(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "four-part body: a path, or - for stdin")
 	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "body-file": *bodyFile}, "topic", "title", "body-file"); err != nil {
@@ -216,7 +216,7 @@ func decAdd(fs *flag.FlagSet) RunFunc {
 }
 
 func decCheck(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -231,7 +231,7 @@ func decCheck(c *Ctx, args []string) (Result, error) {
 	for _, warning := range check.Warnings {
 		lines = append(lines, "notice: "+warning)
 	}
-	res := Result{Data: knObj("errors", strSlice(check.Errors), "warnings", strSlice(check.Warnings)), Text: strings.Join(lines, "\n")}
+	res := Result{Data: jsonx.Obj("errors", jsonx.Strings(check.Errors), "warnings", jsonx.Strings(check.Warnings)), Text: strings.Join(lines, "\n")}
 	if len(check.Errors) > 0 {
 		return res, Failed("malformed decisions")
 	}
@@ -244,7 +244,7 @@ func decAmend(fs *flag.FlagSet) RunFunc {
 	part := fs.String("part", "", "part: rule, why, forbids or permits")
 	bodyFile := fs.String("body-file", "", "replacement part: a path, or - for stdin")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "part": *part, "body-file": *bodyFile}, "topic", "title", "part", "body-file"); err != nil {
@@ -269,7 +269,7 @@ func decRetire(fs *flag.FlagSet) RunFunc {
 	reason := fs.String("reason", "", "one-line reason for lifting the boundary")
 	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "reason": *reason}, "topic", "title", "reason"); err != nil {
@@ -291,7 +291,7 @@ func decSupersede(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "replacement four-part body: a path, or - for stdin")
 	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "new-title": *newTitle, "body-file": *bodyFile}, "topic", "title", "new-title", "body-file"); err != nil {

@@ -8,6 +8,15 @@ import (
 	"github.com/l4ci/rota/internal/golden"
 )
 
+func TestStringsNilIsNonNil(t *testing.T) {
+	if got := Strings(nil); got == nil || len(got) != 0 {
+		t.Fatalf("Strings(nil) = %#v, want empty non-nil", got)
+	}
+	if got := Strings([]string{"x"}); len(got) != 1 || got[0] != "x" {
+		t.Fatalf("Strings = %#v", got)
+	}
+}
+
 // The golden is json.dumps(json.loads(file), indent=2).
 func TestRoundTripMatchesPython(t *testing.T) {
 	raw, err := os.ReadFile("testdata/mixed.json")

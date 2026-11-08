@@ -28,14 +28,6 @@ func gitCommands() *Command {
 	}}
 }
 
-func gitObj(kv ...any) *jsonx.Object {
-	o := jsonx.NewObject()
-	for i := 0; i+1 < len(kv); i += 2 {
-		o.Set(kv[i].(string), kv[i+1])
-	}
-	return o
-}
-
 // gitErr maps a failure to run git onto the exit table.
 func gitErr(err error) error {
 	if errors.Is(err, git.ErrNoGit) {
@@ -145,7 +137,7 @@ func gitBase(c *Ctx, args []string) (Result, error) {
 	if !ok {
 		return Result{}, Resolution(noBaseMsg)
 	}
-	return Result{Data: gitObj("base", base), Text: base}, nil
+	return Result{Data: jsonx.Obj("base", base), Text: base}, nil
 }
 
 func gitGuardClean(fs *flag.FlagSet) RunFunc {
@@ -176,13 +168,13 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 				return Result{}, gitErr(err)
 			}
 			if !dirty {
-				return Result{Data: gitObj("clean", true, "greenfield", false, "dirtyRepos", []string{}), Text: "clean"}, nil
+				return Result{Data: jsonx.Obj("clean", true, "greenfield", false, "dirtyRepos", []string{}), Text: "clean"}, nil
 			}
 			head, err := r.HasHead(ctx)
 			if err != nil {
 				return Result{}, gitErr(err)
 			}
-			res := Result{Data: gitObj("clean", false, "greenfield", !head, "dirtyRepos", []string{})}
+			res := Result{Data: jsonx.Obj("clean", false, "greenfield", !head, "dirtyRepos", []string{})}
 			if !head {
 				return res, Failed("uncommitted changes on a fresh repo (no commits yet); make a baseline commit before running %s", what).
 					WithHint(`git add -A && git commit -m "chore: import initial files"`)
@@ -210,9 +202,9 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if len(dirty) == 0 {
-			return Result{Data: gitObj("clean", true, "greenfield", false, "dirtyRepos", []string{}), Text: "clean"}, nil
+			return Result{Data: jsonx.Obj("clean", true, "greenfield", false, "dirtyRepos", []string{}), Text: "clean"}, nil
 		}
-		return Result{Data: gitObj("clean", false, "greenfield", false, "dirtyRepos", dirty)},
+		return Result{Data: jsonx.Obj("clean", false, "greenfield", false, "dirtyRepos", dirty)},
 			Failed("uncommitted changes in sub-repo(s) %s; stash or commit before running %s", strings.Join(dirty, ", "), what)
 	}
 }
@@ -236,7 +228,7 @@ func gitGuardFeature(c *Ctx, args []string) (Result, error) {
 		}
 	}
 	if branch == "" || branch == "HEAD" {
-		return Result{Data: gitObj("feature", false, "reason", "detached")},
+		return Result{Data: jsonx.Obj("feature", false, "reason", "detached")},
 			Failed("could not determine the current branch (detached HEAD?)")
 	}
 	base, ok, err := resolveBase(ctx, c.deps(), dir)
@@ -247,16 +239,16 @@ func gitGuardFeature(c *Ctx, args []string) (Result, error) {
 		// No base resolves: the conventional names still count as one.
 		switch branch {
 		case "main", "master", "trunk":
-			return Result{Data: gitObj("feature", false, "branch", branch, "reason", "base")},
+			return Result{Data: jsonx.Obj("feature", false, "branch", branch, "reason", "base")},
 				Failed("refusing to operate on '%s' (no base configured but the branch name matches a conventional base); check out a feature branch first", branch)
 		}
-		return Result{Data: gitObj("feature", true, "branch", branch), Text: branch}, nil
+		return Result{Data: jsonx.Obj("feature", true, "branch", branch), Text: branch}, nil
 	}
 	if branch == base {
-		return Result{Data: gitObj("feature", false, "branch", branch, "base", base, "reason", "base")},
+		return Result{Data: jsonx.Obj("feature", false, "branch", branch, "base", base, "reason", "base")},
 			Failed("refusing to operate on '%s' (project base branch); check out a feature branch first", branch)
 	}
-	return Result{Data: gitObj("feature", true, "branch", branch, "base", base), Text: branch}, nil
+	return Result{Data: jsonx.Obj("feature", true, "branch", branch, "base", base), Text: branch}, nil
 }
 
 func gitBranch(fs *flag.FlagSet) RunFunc {
@@ -300,7 +292,7 @@ func gitBranch(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if len(taken) > 0 {
-			return Result{Data: gitObj("branch", branch, "repos", names, "changed", false)},
+			return Result{Data: jsonx.Obj("branch", branch, "repos", names, "changed", false)},
 				Refused("branch '%s' already exists in: %s", branch, strings.Join(taken, ", "))
 		}
 		var created []string
@@ -325,7 +317,7 @@ func gitBranch(fs *flag.FlagSet) RunFunc {
 			}
 			created = append(created, n)
 		}
-		return Result{Data: gitObj("branch", branch, "repos", names, "changed", true),
+		return Result{Data: jsonx.Obj("branch", branch, "repos", names, "changed", true),
 			Text: "created " + branch + " in " + strings.Join(names, ", ")}, nil
 	}
 }
@@ -349,5 +341,5 @@ func gitWorktreePath(c *Ctx, args []string) (Result, error) {
 		return Result{}, Resolution("cannot resolve the umbrella: %v", err)
 	}
 	p := git.WorktreePath(root, c.Repo, args[0])
-	return Result{Data: gitObj("path", p), Text: p}, nil
+	return Result{Data: jsonx.Obj("path", p), Text: p}, nil
 }
