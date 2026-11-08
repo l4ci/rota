@@ -82,6 +82,9 @@ func TestMatchUnder(t *testing.T) {
 		{"*.md", "README.md", true},
 		{"*.md", "docs/a.md", false},
 		{"test/sections/**", "test/sections/1_a.sh", true},
+		{"docs", "docs/a.md", true},
+		{"internal/*/testdata", "internal/x/testdata/a.go", true},
+		{"internal/*/testdata", "internal/x/other/a.go", false},
 	} {
 		if got := MatchUnder(c.glob, c.file); got != c.want {
 			t.Errorf("MatchUnder(%q, %q) = %v, want %v", c.glob, c.file, got, c.want)

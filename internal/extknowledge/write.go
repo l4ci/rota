@@ -119,14 +119,14 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 	if date == "" {
 		date = stamp.Date(c.now())
 	}
-	stamp := date
+	st := date
 	if in.Source != "" {
-		stamp += " source:" + in.Source
+		st += " source:" + in.Source
 	}
 	if len(in.Seen) > 0 {
-		stamp += " seen:" + in.Seen.String()
+		st += " seen:" + in.Seen.String()
 	}
-	bullet := bulletfmt.Render(in.Title, strings.TrimRight(in.Body, "\n"), stamp)
+	bullet := bulletfmt.Render(in.Title, strings.TrimRight(in.Body, "\n"), st)
 
 	p := &plan{}
 	if known {
@@ -330,15 +330,15 @@ func (c Clone) amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if in.Text != "" {
 		text += " " + in.Text
 	}
-	stamp := strings.TrimSpace(tail)
+	st := strings.TrimSpace(tail)
 	if in.Date != "" || in.Seen != nil {
-		if stamp == "" && in.Date == "" {
+		if st == "" && in.Date == "" {
 			return WriteResult{}, fmt.Errorf("%w: the bullet has no stamp; give --date too so it gets one", ErrUsage)
 		}
-		stamp = editStamp(stamp, in.Date, in.Seen)
+		st = editStamp(st, in.Date, in.Seen)
 	}
-	if stamp != "" {
-		text += " " + stamp
+	if st != "" {
+		text += " " + st
 	}
 	e.lines[hit] = text
 	return e.land(ctx, fmt.Sprintf("knowledge: amend %q in %s", strings.TrimSpace(in.Fragment), in.Topic))
