@@ -11,6 +11,15 @@ import (
 	"github.com/l4ci/rota/internal/projects"
 )
 
+// AutonomyLevel is autonomy.level as the manual-gate audit records it: the
+// schema default when unset, and "off" for an empty or non-string value.
+func AutonomyLevel(cfg any) string {
+	if s := String(cfg, "autonomy.level"); s != "" {
+		return s
+	}
+	return "off"
+}
+
 // AutonomyLevelsSince is the release that split autonomy.level into off,
 // roundtrip and auto (#1101). Before it auto meant one hop, which is roundtrip
 // now, so `config fill` rewrites an auto in a config stamped older than this.
