@@ -27,34 +27,18 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // Clean drops any leading `./` from a footprint or configured entry. A
 // trailing `/` is kept: Paths and Dirs read it as the directory marker.
-func Clean(entry string) string {
-	for strings.HasPrefix(entry, "./") {
-		entry = strings.TrimPrefix(entry, "./")
-	}
-	if entry == "." {
-		return ""
-	}
-	return entry
-}
+func Clean(entry string) string { return pathglob.Clean(entry) }
 
 // MatchPath reports whether the repo-relative file matches a listed entry:
 // equal to it, under it as a directory, or matching it as a path.Match glob
 // against the whole path.
-func MatchPath(entry, file string) bool {
-	entry = strings.TrimSuffix(Clean(entry), "/")
-	if entry == "" {
-		return false
-	}
-	if file == entry || strings.HasPrefix(file, entry+"/") {
-		return true
-	}
-	ok, err := path.Match(entry, file)
-	return err == nil && ok
-}
+func MatchPath(entry, file string) bool { return pathglob.MatchEntryFlat(entry, file) }
 
 // Shared reports whether file matches any of the shared entries.
 func Shared(shared []string, file string) bool {

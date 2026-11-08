@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // knowledgeCommands is the `rota knowledge` group (A5, #49).
@@ -768,6 +768,6 @@ func knFail(err error) (Result, error) {
 
 // validDate is a real calendar date written YYYY-MM-DD.
 func validDate(s string) bool {
-	t, err := time.Parse("2006-01-02", s)
-	return err == nil && t.Format("2006-01-02") == s
+	_, err := stamp.ParseDate(s)
+	return err == nil
 }

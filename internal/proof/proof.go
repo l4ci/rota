@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 const sep = " · "
@@ -52,7 +53,7 @@ func Add(s Store, id string, today time.Time, o AddOpts) (row Row, changed bool,
 	if sha == "" {
 		sha = "-"
 	}
-	row = Row{today.Format("2006-01-02"), check, o.Result, sha, evidence}
+	row = Row{stamp.Date(today), check, o.Result, sha, evidence}
 	line := "- " + strings.Join([]string{row.Date, row.Check, row.Result, row.Sha, row.Evidence}, sep)
 	key := strings.SplitN(line, sep, 2)[1]
 

@@ -3,11 +3,11 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // ReviewDepth is how much review a branch gets before it ships: full runs
@@ -133,7 +133,7 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					}
 					// path.Match has no "**": only a trailing /** (a directory) is
 					// supported, and any other use would silently match less.
-					if _, err := path.Match(DirGlob(glob), ""); err != nil || strings.Contains(DirGlob(glob), "**") {
+					if !pathglob.ValidEntry(glob) {
 						return bad(`"paths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
 					}
 					p.Paths[glob] = ReviewDepth(s)
@@ -155,7 +155,7 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					if strings.TrimSpace(glob) == "" {
 						return bad(`"supportPaths" entries must be non-empty glob strings`)
 					}
-					if _, err := path.Match(DirGlob(glob), ""); err != nil || strings.Contains(DirGlob(glob), "**") {
+					if !pathglob.ValidEntry(glob) {
 						return bad(`"supportPaths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
 					}
 					p.SupportPaths = append(p.SupportPaths, glob)
@@ -207,6 +207,3 @@ func (p ReviewPolicy) EffectiveSupportPaths() []string {
 	}
 	return p.SupportPaths
 }
-
-// DirGlob turns a trailing /** into the directory prefix overlap.MatchPath understands.
-func DirGlob(g string) string { return strings.TrimSuffix(g, "/**") }

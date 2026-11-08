@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-
-	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // ValidGlob reports whether g is a glob the change policy can match: slash
@@ -37,8 +35,3 @@ func ValidGlob(g string) error {
 	}
 	return nil
 }
-
-// Match reports whether file, a repository-relative path, matches g. A
-// pattern with no slash matches at the root only (*.md is README.md, not
-// docs/a.md); a ** segment matches zero or more directories.
-func Match(g, file string) bool { return pathglob.Match(g, file) }

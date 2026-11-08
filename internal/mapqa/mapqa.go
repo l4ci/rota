@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -166,7 +167,7 @@ func Stats(root string) []Subsystem {
 		}
 		touched := ""
 		if d, ok := e.Touched(root); ok {
-			touched = d.Format("2006-01-02")
+			touched = stamp.Date(d)
 		}
 		refs := entryRe.FindAllStringSubmatch(section.Body(e.Body, "Entry points"), -1)
 		broken := 0

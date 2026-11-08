@@ -13,7 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/pathglob"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -253,7 +253,7 @@ func (p MergePolicy) Covers(changed []string) (bool, []string) {
 		hit := []string{}
 		for _, f := range changed {
 			for _, e := range p.Paths {
-				if overlap.MatchPath(e, f) {
+				if pathglob.MatchEntryFlat(e, f) {
 					hit = append(hit, f)
 					break
 				}
