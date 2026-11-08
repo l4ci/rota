@@ -68,25 +68,16 @@ func (s files) Create(r Ref, render func(unit string) string) (key string, err e
 	// One lock per milestone for every S-unit, minted or explicit, so the
 	// existence check and the minted number cannot race; an item plan locks
 	// its own key.
-	lockPath := path(s.root, milestone+"-slice")
+	lockKey := milestone + "-slice"
 	if !r.Slice {
-		lockPath = path(s.root, milestone+"-"+unit)
+		lockKey = milestone + "-" + unit
 	}
-	err = fsio.Locked(lockPath, fsio.LockTimeout, func() error {
+	return docs(s.root).Create(lockKey, func() (string, string) {
 		if unit == "" {
 			unit = fmt.Sprintf("S%02d", nextSlice(dir, milestone))
 		}
-		key = milestone + "-" + unit
-		p := path(s.root, key)
-		if _, serr := os.Stat(p); serr == nil {
-			return exitcode.Errf(exitcode.ExitRefused, ".rota/plans/%s.md already exists", key)
-		}
-		if err := os.MkdirAll(dir, 0o777); err != nil {
-			return err
-		}
-		return fsio.WriteFileAtomic(p, []byte(render(unit)))
+		return milestone + "-" + unit, render(unit)
 	})
-	return key, err
 }
 
 // nextSlice is 1 + the highest S<NN> among the milestone's plan files.

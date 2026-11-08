@@ -1,7 +1,7 @@
 // Package artifact holds what the document verbs (milestone, plan, design,
 // spike, proof, debug counter) share: the keyed-doc stores (FileDocs for
 // .rota/<dir>/<key>.md, NoteDocs for issue notes), the Notes seam to the
-// issue backend, ListDocs, AppendSection, SplitCSV and Repos. Errors are
+// issue backend, ListDocs, SplitCSV and Repos. Errors are
 // exitcode.Errors; internal/cli maps them to the exit table.
 package artifact
 
@@ -13,7 +13,6 @@ import (
 
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/section"
 )
 
 // Doc is one markdown file with parseable frontmatter.
@@ -43,23 +42,6 @@ func ListDocs(dir string) ([]Doc, error) {
 // Repos is the sub-repo registry, name to absolute path, from
 // .rota/repos.json (internal/repos).
 func Repos(root string) map[string]string { return repos.Paths(root) }
-
-// AppendSection splices addition into the body of "## <name>" just before
-// the next "## " heading (or at EOF), like hvlib_section.append_to_section:
-// the body gains a newline first if it lacks one. A missing section is
-// appended at the end as "## <name>\n<addition>". ok reports whether the
-// section existed.
-func AppendSection(content, name, addition string) (updated string, ok bool) {
-	start, end, ok := section.Find(content, name)
-	if !ok {
-		return strings.TrimRight(content, "\n") + "\n\n## " + name + "\n" + addition, false
-	}
-	body := content[start:end]
-	if !strings.HasSuffix(body, "\n") {
-		body += "\n"
-	}
-	return content[:start] + body + addition + content[end:], true
-}
 
 // Notes is the durable-note store of an issue-mode backlog: a note is kept
 // as comments on an item's issue (kind proof, design, plan, or plan:S<NN> on
