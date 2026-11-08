@@ -6,7 +6,6 @@
 package roundlease
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -161,15 +160,17 @@ func (e Env) Classify(l Lease) State {
 // Read loads the lease. A missing file is None. A file that does not parse is
 // a Stale lease with no holder: nothing can own it, so it is reclaimable.
 func (e Env) Read(commonDir string) (Lease, State, error) {
-	b, err := os.ReadFile(Path(commonDir))
-	if errors.Is(err, os.ErrNotExist) {
-		return Lease{}, None, nil
+	l, found, err := fsio.ReadJSON[Lease](Path(commonDir))
+	if errors.Is(err, fsio.ErrUnreadable) {
+		return Lease{}, Stale, nil
 	}
 	if err != nil {
 		return Lease{}, None, err
 	}
-	var l Lease
-	if json.Unmarshal(b, &l) != nil || l.PID <= 0 {
+	if !found {
+		return Lease{}, None, nil
+	}
+	if l.PID <= 0 {
 		return Lease{}, Stale, nil
 	}
 	return l, e.Classify(l), nil
