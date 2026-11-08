@@ -71,5 +71,11 @@ func (c *Ctx) MainCheckout(root string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return rotastate.MainCheckout(cd)
+	return c.MainCheckoutOf(cd)
+}
+
+// MainCheckoutOf is MainCheckout for a caller that already holds the common
+// dir, so it makes no second git lookup.
+func (c *Ctx) MainCheckoutOf(commonDir string) (string, bool) {
+	return rotastate.MainCheckout(commonDir)
 }
