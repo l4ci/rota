@@ -1,11 +1,6 @@
 package keepalive
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
-
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -58,18 +53,8 @@ func StatePath(commonDir string) string { return rotastate.File(commonDir, FileN
 
 // ReadState loads the state file. found is false for a missing file; a file
 // that does not parse is an error.
-func ReadState(path string) (st State, found bool, err error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return st, false, nil
-	}
-	if err != nil {
-		return st, false, err
-	}
-	if err := json.Unmarshal(b, &st); err != nil {
-		return State{}, false, fmt.Errorf("%s: %w", path, err)
-	}
-	return st, true, nil
+func ReadState(path string) (State, bool, error) {
+	return fsio.ReadJSON[State](path)
 }
 
 // WriteState replaces the state file under its lock.

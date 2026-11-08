@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -193,20 +194,14 @@ func TestSummaryTransferMovesTheRow(t *testing.T) {
 }
 
 func TestSummaryAudit(t *testing.T) {
-	au := func(ts time.Time, target string) *jsonx.Object {
-		o := jsonx.NewObject()
-		o.Set("ts", ts.UTC().Format(time.RFC3339))
-		o.Set("gate", "merge-approval")
-		o.Set("verb", "gate")
-		o.Set("target", target)
-		o.Set("note", "ok")
-		return o
+	au := func(ts time.Time, target string) gate.Record {
+		return gate.Record{TS: ts, Gate: "merge-approval", Verb: "gate", Target: target, Note: "ok"}
 	}
 	es := []Entry{
 		{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "ben"},
 		{TS: at(30), Kind: KindMerge, Round: 1, Issue: "12", Slot: "ben", PR: "#7"},
 	}
-	s := Fold(es, []*jsonx.Object{au(at(-60), "#3"), au(at(20), "#7"), au(at(10), "#7"), au(at(90), "#9")}, 1)
+	s := Fold(es, []gate.Record{au(at(-60), "#3"), au(at(20), "#7"), au(at(10), "#7"), au(at(90), "#9")}, 1)
 	if len(s.Audit) != 2 || s.Audit[0].Target != "#7" || !s.Audit[0].TS.Before(s.Audit[1].TS) {
 		t.Fatalf("audit = %+v (only the round's window, by target then time)", s.Audit)
 	}
