@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
@@ -123,7 +124,7 @@ _(viable / not viable / depends-on-X)_
 ## Recommended approach
 
 _(if viable, the shape of the real implementation — write only at /rota-spike done)_
-`, name, branch, repoLine, today().Format("2006-01-02"), name, question)
+`, name, branch, repoLine, stamp.Date(today()), name, question)
 	if err = os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return
 	}
@@ -152,7 +153,7 @@ func Finish(root, name string, today func() time.Time) (changed bool, err error)
 	if !found {
 		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 	}
-	date := today().Format("2006-01-02")
+	date := stamp.Date(today())
 	finished := regexp.MustCompile(`(?m)^(finished:\s*).+$`)
 	if finished.MatchString(updated) {
 		loc := finished.FindStringSubmatchIndex(updated)

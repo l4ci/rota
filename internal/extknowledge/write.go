@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/bulletfmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/topicmatch"
 )
 
@@ -117,7 +117,7 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 	}
 	date := in.Date
 	if date == "" {
-		date = c.now().Format("2006-01-02")
+		date = stamp.Date(c.now())
 	}
 	stamp := date
 	if in.Source != "" {
@@ -296,7 +296,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (res WriteResult, err erro
 		return WriteResult{}, fmt.Errorf("%w: amend needs text, a date or a seen list", ErrUsage)
 	}
 	if in.Date != "" {
-		if _, err := time.Parse("2006-01-02", in.Date); err != nil || !dateRe.MatchString(in.Date) {
+		if _, err := stamp.ParseDate(in.Date); err != nil {
 			return WriteResult{}, fmt.Errorf("%w: date %q is not a real YYYY-MM-DD", ErrUsage, in.Date)
 		}
 	}

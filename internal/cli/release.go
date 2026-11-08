@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/release"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -322,7 +323,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
 			return Result{}, Resolution("%s: %v", *path, rerr)
 		}
-		out, err := release.UpdateChangelog(existing, rerr == nil, version, c.deps().Today().Format("2006-01-02"), notes)
+		out, err := release.UpdateChangelog(existing, rerr == nil, version, stamp.Date(c.deps().Today()), notes)
 		if errors.Is(err, release.ErrSectionExists) {
 			return Result{Data: gitObj("blockedBy", blockedby.Exists, "changed", false)},
 				Refused("%s already has a section for v%s", *path, version)

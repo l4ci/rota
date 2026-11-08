@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Kinds are the values of --kind.
@@ -72,7 +73,7 @@ func Find(root, kind string, days int, today time.Time) ([]Entry, error) {
 	return nil, fmt.Errorf("%w: %s", ErrKind, kind)
 }
 
-func fmtDate(t time.Time) string { return t.Format("2006-01-02") }
+func fmtDate(t time.Time) string { return stamp.Date(t) }
 
 func findMap(root string, days int, today time.Time) ([]Entry, error) {
 	var out []Entry

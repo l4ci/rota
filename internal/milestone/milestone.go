@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Statuses are the legal milestone states, in ROTA_MILESTONE_STATUSES order.
@@ -98,7 +99,7 @@ func Day(now func() time.Time) string {
 	if now == nil {
 		now = time.Now
 	}
-	return now().Format("2006-01-02")
+	return stamp.Date(now())
 }
 
 // StubOn is the starter text of a milestone detail file (milestone_stub); the

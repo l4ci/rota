@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Umbrella is the scope name of the project-level files.
@@ -57,9 +58,9 @@ func (s Store) now() time.Time {
 // today is the YYYY-MM-DD date stamped on what Store writes.
 func (s Store) today() string {
 	if s.Today != nil {
-		return s.Today().Format("2006-01-02")
+		return stamp.Date(s.Today())
 	}
-	return s.now().Format("2006-01-02")
+	return stamp.Date(s.now())
 }
 
 // check validates a sub-repo scope against the registry.

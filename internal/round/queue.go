@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -241,7 +242,7 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 // checked first using that artifact as a recorded override reason. before logs
 // a research decision only after that check succeeds.
 func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, did, note string, before func() error) error {
-	in := backlog.CompleteInput{Date: e.Worker.Now().Format("2006-01-02"), Reason: "done", Note: note, NoProof: true, UnmetReason: did + note}
+	in := backlog.CompleteInput{Date: stamp.Date(e.Worker.Now()), Reason: "done", Note: note, NoProof: true, UnmetReason: did + note}
 	if checker, ok := be.(backlog.AcceptanceChecker); ok {
 		if err := checker.CheckAcceptance(it.ID, in); err != nil {
 			return wrap(err)
