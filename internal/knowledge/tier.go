@@ -470,7 +470,7 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 			continue
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
-			if t, ok := bulletfmt.Title(line); ok && t == title {
+			if got, ok := bulletfmt.Title(line); ok && got == title {
 				if _, err := sc.Init(topic, title, s.today()); err != nil {
 					return Entry{}, false, err
 				}

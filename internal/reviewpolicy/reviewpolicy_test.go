@@ -258,6 +258,8 @@ func TestPathEntrySemantics(t *testing.T) {
 		{"skills/x/SKILL.md", true},
 		{"internal/cli/golden", true},
 		{"other.go", false},
+		// intentional fix: a glob followed by a trailing /** now reaches files below it
+		{"internal/cli/golden/a/b.txt", true},
 	} {
 		got := Decide(p, Input{Changed: 3, Files: []string{c.file}})
 		if hit := got.Signal == SignalPath; hit != c.want {
