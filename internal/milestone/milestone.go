@@ -222,18 +222,7 @@ func Put(root, id, text string) (changed bool, err error) {
 	if got != id {
 		return false, exitcode.Errf(exitcode.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
 	}
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		old, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return notFound(id)
-		}
-		if string(old) == text {
-			return nil
-		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(text))
-	})
-	return
+	return milestoneDocs(root).Replace(id, text)
 }
 
 // h2Re matches a level-2 heading line.
