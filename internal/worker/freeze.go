@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/landfreeze"
@@ -79,7 +80,7 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 				r.SHA = sha
 				note += "; replaced unreadable record: " + readErr.Error()
 			}
-			if err := gatepolicy.Clear(root, e.Config(root), e.Now(), gatepolicy.FreezeClear, "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {
+			if err := gatepolicy.Clear(root, config.AutonomyLevel(e.Config(root)), e.Now(), gatepolicy.FreezeClear, "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {
 				return err
 			}
 			return e.clearFreeze(ctx, root, p, r, sha, o.Reason)

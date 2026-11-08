@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,6 +34,8 @@ import (
 // bodies they wrote, as on GitHub. Status changes go through the transition
 // whose target has the wanted status category, never a status name.
 type Jira struct {
+	keyClosing
+
 	rest       *REST
 	site       string
 	project    string
@@ -196,40 +197,7 @@ const (
 	// propChunk keeps one property value under Jira's 32 KB limit with room
 	// for the JSON around it; a longer body spans several properties.
 	propChunk = 30000
-	// visibleMax keeps a posted comment under Jira's 32767-character limit.
-	visibleMax = 32000
 )
-
-// reMarker is one rota (or legacy hv) marker on a line.
-var reMarker = regexp.MustCompile(`<!-- (?:rota|hv):([^\n]*?) -->`)
-
-// visible is what a rota comment shows people: the body without its
-// markers, or a short note naming the first marker when nothing else is left.
-func visible(body string) string {
-	first := reMarker.FindStringSubmatch(body)
-	text := reMarker.ReplaceAllString(body, "")
-	var lines []string
-	blank := false
-	for _, l := range strings.Split(strings.TrimSpace(text), "\n") {
-		if strings.TrimSpace(l) == "" {
-			if !blank && len(lines) > 0 {
-				lines = append(lines, "")
-			}
-			blank = true
-			continue
-		}
-		blank = false
-		lines = append(lines, strings.TrimRightFunc(l, unicode.IsSpace))
-	}
-	text = strings.Join(lines, "\n")
-	if text == "" && first != nil {
-		text = "(rota " + first[1] + ")"
-	}
-	if utf8.RuneCountInString(text) > visibleMax {
-		text = string([]rune(text)[:visibleMax]) + "\n\n…"
-	}
-	return text
-}
 
 // chunks splits s into pieces of at most propChunk bytes on rune boundaries.
 func chunks(s string) []string {
@@ -727,6 +695,7 @@ func (j *Jira) Comments(ctx context.Context, key IssueKey) ([]Comment, error) {
 // the body its property holds.
 func (j *Jira) comments(ctx context.Context, key IssueKey, props map[string]json.RawMessage) ([]Comment, error) {
 	out := []Comment{}
+	store := j.marked(key, props)
 	err := Pages(ctx, func(cursor string) (string, error) {
 		start, _ := strconv.Atoi(cursor)
 		p, err := j.path(key, fmt.Sprintf("/comment?startAt=%d&maxResults=%d&orderBy=created", start, jiraPage))
@@ -742,11 +711,7 @@ func (j *Jira) comments(ctx context.Context, key IssueKey, props map[string]json
 			return "", err
 		}
 		for _, c := range page.Comments {
-			body, ok := stateBody(props, c.ID)
-			if !ok {
-				body = j.text(c.Body)
-			}
-			out = append(out, Comment{ID: c.ID, Body: body, Author: c.Author.label(), CreatedAt: jiraTime(c.Created)})
+			out = append(out, Comment{ID: c.ID, Body: store.Body(c.ID, j.text(c.Body)), Author: c.Author.label(), CreatedAt: jiraTime(c.Created)})
 		}
 		if next := page.StartAt + len(page.Comments); len(page.Comments) > 0 && next < page.Total {
 			return strconv.Itoa(next), nil
@@ -756,54 +721,66 @@ func (j *Jira) comments(ctx context.Context, key IssueKey, props map[string]json
 	return out, err
 }
 
+// marked is Jira's storage for the markedComments rule: the full body of a
+// rota comment lives in the issue's properties. props are the issue's
+// properties a read prefers the stored body from; writes pass none.
+func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComments {
+	return markedComments{
+		post: func(ctx context.Context, shown string) (string, error) {
+			p, err := j.path(key, "/comment")
+			if err != nil {
+				return "", err
+			}
+			var c jiraComment
+			if err := j.rest.Do(ctx, "POST", p, map[string]any{"body": j.wire(shown)}, &c); err != nil {
+				return "", err
+			}
+			if c.ID == "" {
+				return "", failed("Jira returned no id for the new comment on %s", key)
+			}
+			return c.ID, nil
+		},
+		edit: func(ctx context.Context, id, shown string) error {
+			p, err := j.path(key, "/comment/"+url.PathEscape(id))
+			if err != nil {
+				return err
+			}
+			return j.rest.Do(ctx, "PUT", p, map[string]any{"body": j.wire(shown)}, nil)
+		},
+		remove: func(ctx context.Context, id string) error {
+			p, _ := j.path(key, "/comment/"+url.PathEscape(id))
+			return j.rest.Do(ctx, "DELETE", p, nil, nil)
+		},
+		put: func(ctx context.Context, id, body string, replace bool) error {
+			old := 0
+			if replace {
+				var err error
+				if old, err = j.stateParts(ctx, key, id); err != nil {
+					return err
+				}
+			}
+			return j.putState(ctx, key, id, body, old)
+		},
+		drop: func(ctx context.Context, id string) error {
+			old, err := j.stateParts(ctx, key, id)
+			if err != nil {
+				return err
+			}
+			return j.dropState(ctx, key, id, 0, old)
+		},
+		stored: func(id string) (string, bool) { return stateBody(props, id) },
+	}
+}
+
 // AddComment posts body; a body with a rota marker is posted without it and
 // kept whole in its comment's property. A property that cannot be written
 // takes the comment back down, so no half-written state is left.
 func (j *Jira) AddComment(ctx context.Context, key IssueKey, body string) (string, error) {
-	p, err := j.path(key, "/comment")
-	if err != nil {
-		return "", err
-	}
-	shown := body
-	if marker.Has(body) {
-		shown = visible(body)
-	}
-	var c jiraComment
-	if err := j.rest.Do(ctx, "POST", p, map[string]any{"body": j.wire(shown)}, &c); err != nil {
-		return "", err
-	}
-	if c.ID == "" {
-		return "", failed("Jira returned no id for the new comment on %s", key)
-	}
-	if marker.Has(body) {
-		if err := j.putState(ctx, key, c.ID, body, 0); err != nil {
-			_ = j.rest.Do(ctx, "DELETE", p+"/"+url.PathEscape(c.ID), nil, nil)
-			return "", err
-		}
-	}
-	return c.ID, nil
+	return j.marked(key, nil).Add(ctx, body)
 }
 
 func (j *Jira) EditComment(ctx context.Context, key IssueKey, commentID, body string) error {
-	p, err := j.path(key, "/comment/"+url.PathEscape(commentID))
-	if err != nil {
-		return err
-	}
-	shown := body
-	if marker.Has(body) {
-		shown = visible(body)
-	}
-	if err := j.rest.Do(ctx, "PUT", p, map[string]any{"body": j.wire(shown)}, nil); err != nil {
-		return err
-	}
-	old, err := j.stateParts(ctx, key, commentID)
-	if err != nil {
-		return err
-	}
-	if !marker.Has(body) {
-		return j.dropState(ctx, key, commentID, 0, old)
-	}
-	return j.putState(ctx, key, commentID, body, old)
+	return j.marked(key, nil).Edit(ctx, commentID, body)
 }
 
 func (j *Jira) DeleteComment(ctx context.Context, key IssueKey, commentID string) error {
@@ -872,10 +849,6 @@ func (j *Jira) dropState(ctx context.Context, key IssueKey, id string, from, to 
 	}
 	return nil
 }
-
-// ClosesIssue: a PR closes a Jira issue by naming its key in the head branch
-// or the title, as Jira's own development panel links them.
-func (j *Jira) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
 
 // ---- milestones (project versions) -----------------------------------------
 

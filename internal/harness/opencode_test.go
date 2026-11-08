@@ -197,7 +197,7 @@ func TestOpenCodePreflightWarnsOnAModelItDoesNotList(t *testing.T) {
 func TestOpenCodePreflightAccountAndHerdr(t *testing.T) {
 	o := &opencodeProbe{help: opencodeHelp, stale: true}
 	set, err := opencodePreflight(t, o, PreflightOpts{
-		Launch: "opencode", Herdr: true,
+		Launch: "opencode", Host: HostTraits{HerdrIntegration: true},
 		Accounts: []HomeAccount{{Name: "a", Home: "/cfg/a"}, {Name: "b", Home: "/cfg/b"}},
 		Load:     map[string]int{"a": 2},
 	})

@@ -6,7 +6,7 @@ refs:
   - internal/cli/labels.go
   - internal/cli/item_template.go
   - internal/itembody
-  - internal/notechunk
+  - internal/marker
 ---
 
 ## A4: backlog, capture, IDs, status

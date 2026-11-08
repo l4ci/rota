@@ -89,6 +89,10 @@ func ValidStatus(s string) bool {
 func detailPath(root, id string) string { return rotatree.Doc(root, rotatree.MilestonesDir, id) }
 func overviewPath(root string) string   { return rotatree.Milestones(root) }
 
+func milestoneDocs(root string) artifact.FileDocs {
+	return artifact.FileDocs{Root: root, Dir: rotatree.MilestonesDir, Kind: "milestone"}
+}
+
 func notFound(id string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
 }
@@ -219,18 +223,7 @@ func Put(root, id, text string) (changed bool, err error) {
 	if got != id {
 		return false, exitcode.Errf(exitcode.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
 	}
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		old, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return notFound(id)
-		}
-		if string(old) == text {
-			return nil
-		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(text))
-	})
-	return
+	return milestoneDocs(root).Replace(id, text)
 }
 
 // h2Re matches a level-2 heading line.
@@ -288,38 +281,24 @@ func setStatus(root, id, status string, closedItems func(string) ([]string, erro
 	if !ValidStatus(status) {
 		return false, exitcode.Errf(exitcode.ExitUsage, "--to must be one of: %s", strings.Join(Statuses, ", "))
 	}
-	p := detailPath(root, id)
-	if _, serr := os.Stat(p); serr != nil {
-		return false, notFound(id)
-	}
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		content, rerr := fsio.ReadText(p)
-		if rerr != nil {
-			return notFound(id)
-		}
+	return milestoneDocs(root).Update(id, func(content string) (string, error) {
 		updated, found := frontmatter.UpdateField(content, "status", status)
 		if !found {
-			return exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
+			return "", exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
 		}
-		if updated == content {
-			return nil
+		if updated == content || status != "shipped" {
+			return updated, nil
 		}
-		if status == "shipped" {
-			var closed []string
-			if closedItems != nil {
-				var err error
-				closed, err = closedItems(id)
-				if err != nil {
-					return err
-				}
+		var closed []string
+		if closedItems != nil {
+			var err error
+			if closed, err = closedItems(id); err != nil {
+				return "", err
 			}
-			summary := strings.TrimPrefix(ShippedSummary(content, closed), "## Shipped\n")
-			updated = section.Replace(updated, "Shipped", summary)
 		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(updated))
+		summary := strings.TrimPrefix(ShippedSummary(content, closed), "## Shipped\n")
+		return section.Replace(updated, "Shipped", summary), nil
 	})
-	return changed, err
 }
 
 var (

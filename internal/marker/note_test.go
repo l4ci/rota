@@ -1,4 +1,4 @@
-package notechunk_test
+package marker
 
 import (
 	"reflect"
@@ -6,15 +6,12 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"github.com/l4ci/rota/internal/marker"
-	"github.com/l4ci/rota/internal/notechunk"
 )
 
 func TestPartsNumberingLimit(t *testing.T) {
 	const limit = 80
 	text := strings.Repeat("x", 6000)
-	parts := notechunk.Parts("plan", text, limit)
+	parts := Parts("plan", text, limit)
 	maxSize, oversized := 0, 0
 	var joined strings.Builder
 	for _, part := range parts {
@@ -23,7 +20,7 @@ func TestPartsNumberingLimit(t *testing.T) {
 		if size > limit {
 			oversized++
 		}
-		note, ok := marker.ParseNote(part)
+		note, ok := ParseNote(part)
 		if !ok {
 			t.Fatalf("invalid note marker: %q", part)
 		}
@@ -57,7 +54,7 @@ func TestPartsNumberingTransitions(t *testing.T) {
 				// normalization without computing the expected body with Norm.
 				text := strings.Repeat("界é\n", tc.size/3) + "fin"
 				want := "intro\n" + text
-				parts := notechunk.Parts(kind, "intro\r\n"+text+"\n\n", 80)
+				parts := Parts(kind, "intro\r\n"+text+"\n\n", 80)
 				if len(parts) < tc.min || len(parts) > tc.max {
 					t.Fatalf("%d parts, want %d..%d", len(parts), tc.min, tc.max)
 				}
@@ -66,7 +63,7 @@ func TestPartsNumberingTransitions(t *testing.T) {
 					if size := utf8.RuneCountInString(part); size > 80 {
 						t.Fatalf("part %d/%d has %d runes, limit 80", i+1, len(parts), size)
 					}
-					note, ok := marker.ParseNote(part)
+					note, ok := ParseNote(part)
 					header := "<!-- rota:" + kind + " " + strconv.Itoa(i+1) + "/" + strconv.Itoa(len(parts)) + " -->\n"
 					if !ok || note.Kind != kind || note.Part != strconv.Itoa(i+1) || !strings.HasPrefix(part, header) {
 						t.Fatalf("invalid part %d marker: %q", i+1, part)
@@ -81,33 +78,54 @@ func TestPartsNumberingTransitions(t *testing.T) {
 	}
 }
 
+// A note split by Parts reads back through ParseNote: writer and parser agree
+// on the header, and the parts concatenate to the original text.
+func TestPartsRoundTrip(t *testing.T) {
+	text := strings.Repeat("line of the plan\n", 40) + "end"
+	parts := Parts("plan:S3", text, 120)
+	if len(parts) < 2 {
+		t.Fatalf("want a split note, got %d part(s)", len(parts))
+	}
+	var joined strings.Builder
+	for i, p := range parts {
+		n, ok := ParseNote(p)
+		if !ok || n.Kind != "plan:S3" || n.Part != strconv.Itoa(i+1) {
+			t.Fatalf("part %d: %+v ok=%v", i+1, n, ok)
+		}
+		joined.WriteString(n.Rest)
+	}
+	if joined.String() != text {
+		t.Fatal("reassembled note differs from input")
+	}
+}
+
 func TestPartsEmpty(t *testing.T) {
 	for _, text := range []string{"", "\n\r\n"} {
-		if got := notechunk.Parts("plan", text, 80); !reflect.DeepEqual(got, []string{"<!-- rota:plan -->\n"}) {
+		if got := Parts("plan", text, 80); !reflect.DeepEqual(got, []string{"<!-- rota:plan -->\n"}) {
 			t.Fatalf("%q", got)
 		}
 	}
 }
 
 func TestPartsSingleAtLimit(t *testing.T) {
-	hdr := marker.NoteHeader("plan", 1, 1)
+	hdr := NoteHeader("plan", 1, 1)
 	text := strings.Repeat("x", 20)
 	limit := utf8.RuneCountInString(hdr) + 20
-	got := notechunk.Parts("plan", text+"\n", limit)
+	got := Parts("plan", text+"\n", limit)
 	if len(got) != 1 || got[0] != hdr+text {
 		t.Fatalf("%q", got)
 	}
-	if got := notechunk.Parts("plan", text, limit-1); len(got) < 2 {
+	if got := Parts("plan", text, limit-1); len(got) < 2 {
 		t.Fatalf("one rune over the limit must split: %q", got)
 	}
 }
 
 func TestPartsSplitsOnLines(t *testing.T) {
-	limit := utf8.RuneCountInString(marker.NoteHeader("plan", 2, 2)) + 10
-	got := notechunk.Parts("plan", "aaaa\nbbbb\ncccc\ndddd", limit)
+	limit := utf8.RuneCountInString(NoteHeader("plan", 2, 2)) + 10
+	got := Parts("plan", "aaaa\nbbbb\ncccc\ndddd", limit)
 	want := []string{
-		marker.NoteHeader("plan", 1, 2) + "aaaa\nbbbb\n",
-		marker.NoteHeader("plan", 2, 2) + "cccc\ndddd",
+		NoteHeader("plan", 1, 2) + "aaaa\nbbbb\n",
+		NoteHeader("plan", 2, 2) + "cccc\ndddd",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
@@ -121,8 +139,8 @@ func TestPartsLineSeparators(t *testing.T) {
 			if sep == "\r\n" {
 				first = "aa\n"
 			}
-			limit := utf8.RuneCountInString(marker.NoteHeader("plan", 2, 2)) + 4
-			got := notechunk.Parts("plan", "aa"+sep+"bbb"+sep+"ccc", limit)
+			limit := utf8.RuneCountInString(NoteHeader("plan", 2, 2)) + 4
+			got := Parts("plan", "aa"+sep+"bbb"+sep+"ccc", limit)
 			middle := "bbb" + sep
 			if sep == "\r\n" {
 				middle = "bbb\n"
@@ -137,15 +155,15 @@ func TestPartsLineSeparators(t *testing.T) {
 
 func TestPartsCutsLongLineByRunes(t *testing.T) {
 	budget := 7
-	limit := utf8.RuneCountInString(marker.NoteHeader("plan", 2, 2)) + budget
+	limit := utf8.RuneCountInString(NoteHeader("plan", 2, 2)) + budget
 	text := strings.Repeat("é", 20)
-	got := notechunk.Parts("plan", text, limit)
+	got := Parts("plan", text, limit)
 	if len(got) != 3 {
 		t.Fatalf("%d parts: %q", len(got), got)
 	}
 	var joined string
 	for i, p := range got {
-		hdr := marker.NoteHeader("plan", i+1, 3)
+		hdr := NoteHeader("plan", i+1, 3)
 		if !strings.HasPrefix(p, hdr) || utf8.RuneCountInString(p) > limit {
 			t.Fatalf("part %d: %q", i, p)
 		}
@@ -158,8 +176,8 @@ func TestPartsCutsLongLineByRunes(t *testing.T) {
 
 func TestPartsLongLineAfterShortOne(t *testing.T) {
 	budget := 5
-	limit := utf8.RuneCountInString(marker.NoteHeader("plan", 2, 2)) + budget
-	got := notechunk.Parts("plan", "ab\n"+strings.Repeat("x", 12), limit)
+	limit := utf8.RuneCountInString(NoteHeader("plan", 2, 2)) + budget
+	got := Parts("plan", "ab\n"+strings.Repeat("x", 12), limit)
 	// the pending "ab\n" flushes before the long line is cut
 	if !strings.HasSuffix(got[0], "ab\n") || len(got) != 4 {
 		t.Fatalf("%q", got)

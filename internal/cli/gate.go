@@ -3,10 +3,12 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
@@ -64,17 +66,16 @@ func confirmFlags(fs *flag.FlagSet) func() (gate.Confirm, error) {
 // under the project root, so the caller may act. extra adds fields to the
 // failure data (worker gate's own shape).
 func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, extra *jsonx.Object) (Result, error) {
-	root := ""
-	var cfg any
+	root, autonomy := "", ""
 	if conf.Given {
 		var err error
 		if root, err = c.Root(); err != nil {
 			return Result{}, err
 		}
-		cfg = c.deps().Config(root)
+		autonomy = config.AutonomyLevel(c.deps().Config(root))
 	}
 	verb := strings.TrimPrefix(c.Path, "rota ")
-	err := gate.Clear(root, cfg, c.deps().Now(), name, verb, target, conf, paths)
+	err := gate.Clear(root, autonomy, c.deps().Now(), name, verb, target, conf, paths)
 	var r *gate.Refused
 	switch {
 	case errors.As(err, &r):
@@ -102,7 +103,17 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 	if err != nil {
 		return gate.MergePolicy{Mode: gate.MergeNone}, nil
 	}
-	p, err := gate.LoadMergePolicy(c.deps().Config(root))
+	cfg := c.deps().Config(root)
+	mode, _ := config.Value(cfg, "ship.mergeApproval")
+	var paths []string
+	list, _ := config.Value(cfg, "ship.mergeApprovalPaths")
+	items, _ := list.([]any)
+	for _, e := range items {
+		if s, ok := e.(string); ok {
+			paths = append(paths, s)
+		}
+	}
+	p, err := gate.NewMergePolicy(fmt.Sprint(mode), paths)
 	if errors.Is(err, gate.ErrBadMergeMode) {
 		return p, Usage("%v", err)
 	}

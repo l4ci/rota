@@ -164,14 +164,7 @@ func (diskOwners) Repo(dir string) string {
 // projectRoot is the project whose .rota/ holds the state of the checkout in
 // dir, dir itself when none resolves.
 func projectRoot(dir string) string {
-	registered := func(root string) []string {
-		var out []string
-		for _, r := range repos.Load(root) {
-			out = append(out, r.Rel)
-		}
-		return out
-	}
-	if root, err := rotatree.FindRoot(dir, registered); err == nil {
+	if root, err := rotatree.FindRoot(dir, repos.Rels); err == nil {
 		return root
 	}
 	return dir

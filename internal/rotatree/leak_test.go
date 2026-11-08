@@ -31,8 +31,7 @@ var messageAllowed = map[string]map[string]bool{
 	"internal/config/fill.go":            {".rota/config.json is not a valid JSON object": true},
 	"internal/config/verbs.go":           {".rota/config.json is not a JSON object": true, ".rota/config.local.json is not a JSON object": true},
 	"internal/roundcfg/support_fence.go": {".rota/config.local.json does not decode: ": true, ".rota/config.local.json cannot be read: ": true},
-	"internal/design/files.go":           {".rota/designs/%s.md already exists": true},
-	"internal/plan/files.go":             {".rota/plans/%s.md already exists": true},
+	"internal/artifact/docs.go":          {".rota/%s/%s.md already exists": true},
 	"internal/spike/spike.go":            {".rota/spikes/%s.md already exists": true},
 	"internal/initproj/init.go": {
 		".rota/counters.json is not valid JSON; fix or remove it":    true,

@@ -38,7 +38,7 @@ type herdr struct {
 
 func (h *herdr) Kind() Kind { return Herdr }
 
-func (h *herdr) Capabilities() Capabilities { return CapabilitiesOf(h) }
+func (h *herdr) Capabilities() Capabilities { return kindPolicy(Herdr, CapabilitiesOf(h)) }
 
 func (h *herdr) Require() error {
 	if _, err := h.d.LookPath("herdr"); err != nil {

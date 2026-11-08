@@ -3,11 +3,9 @@
 package flakeledger
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"time"
 
@@ -55,40 +53,30 @@ func Append(root string, e Entry) error {
 	if err != nil {
 		return err
 	}
-	p := Path(root)
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		if _, err := f.Write(append(b, '\n')); err != nil {
-			return err
-		}
-		return f.Sync()
-	})
+	return fsio.AppendLine(Path(root), b, 0o644)
 }
 
 // Load preserves os.ErrNotExist: a summary must distinguish no observations
 // from missing evidence. Malformed lines are errors, never a lower count.
 func Load(root string) ([]Entry, error) {
-	b, err := os.ReadFile(Path(root))
-	if err != nil {
-		return nil, err
-	}
 	var out []Entry
-	for i, line := range bytes.Split(b, []byte{'\n'}) {
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
+	_, err := fsio.ReadLines(Path(root), fsio.Strict, func(line []byte) error {
 		var e Entry
 		if err := json.Unmarshal(line, &e); err != nil {
-			return nil, fmt.Errorf("flake ledger line %d: %w", i+1, err)
+			return err
 		}
 		if !e.complete() {
-			return nil, fmt.Errorf("flake ledger line %d: incomplete recovery record", i+1)
+			return errors.New("incomplete recovery record")
 		}
 		out = append(out, e)
+		return nil
+	})
+	var le *fsio.LineError
+	if errors.As(err, &le) {
+		return nil, fmt.Errorf("flake ledger line %d: %w", le.Line, le.Err)
+	}
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

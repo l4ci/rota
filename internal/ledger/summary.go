@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -160,7 +161,7 @@ func (f *folder) row(e Entry) *IssueRow {
 // Fold builds the summary of one round: the ledger entries of that round
 // (round 0 is a solo round with no lease) and the audit lines that fall inside
 // the time span its entries cover.
-func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
+func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 	s := Summary{Round: round}
 	f := &folder{}
 	var first, last time.Time
@@ -275,11 +276,10 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 	s.Accounts = totals(s.Issues, func(r IssueRow) string { return r.Account })
 	s.Metrics = roundMetrics(s.Issues, entries, round)
 	for _, a := range audit {
-		ts, err := stamp.Parse(jsonx.Str(a, "ts"))
-		if err != nil || first.IsZero() || ts.Before(first) || ts.After(last) {
+		if a.TS.IsZero() || first.IsZero() || a.TS.Before(first) || a.TS.After(last) {
 			continue
 		}
-		s.Audit = append(s.Audit, AuditRow{TS: ts, Gate: jsonx.Str(a, "gate"), Verb: jsonx.Str(a, "verb"), Target: jsonx.Str(a, "target"), Note: jsonx.Str(a, "note")})
+		s.Audit = append(s.Audit, AuditRow{TS: a.TS, Gate: a.Gate, Verb: a.Verb, Target: a.Target, Note: a.Note})
 	}
 	sort.SliceStable(s.Audit, func(i, j int) bool {
 		if s.Audit[i].Target != s.Audit[j].Target {

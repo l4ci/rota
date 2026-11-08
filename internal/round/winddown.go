@@ -65,6 +65,11 @@ type WoundDown struct {
 	VerifyLog     string
 }
 
+// Over reports whether the round is finished: the base verified green and no
+// slot holds work, so the lease is released. A failed verify or a retained slot
+// keeps the round, and everything scoped to it, alive for a retry.
+func (r WoundDown) Over() bool { return r.Verdict != VerdictVerifyFailed && !r.Retained }
+
 // WindDown re-verifies the base, parks every roster slot on park/<agent> and
 // releases the lease. The order is the point: a failed verify keeps the lease,
 // so the repo is never freed while the base is red, and a slot that holds work
@@ -254,7 +259,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	}
 
 	// 3. Release the lease only when the base is green and every slot is parked.
-	if res.Verdict != VerdictVerifyFailed && !res.Retained {
+	if res.Over() {
 		res.Verdict = VerdictClean
 		if _, err := e.Lease.Release(cd, e.Lease.Discover(o.HolderPID, e.getenv())); err != nil {
 			return res, err

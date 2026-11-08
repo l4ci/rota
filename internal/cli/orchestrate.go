@@ -143,11 +143,14 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 // It is recorded before the launch: the orchestrator's `round start` follows
 // at once and keeps it. Outside herdr, or from an agent pane, nothing changes.
 func recordLaunchingPane(c *Ctx, env orchestrate.Env, root string, plan orchestrate.Plan) {
-	me := host.CurrentPane(host.Herdr, env.Getenv)
-	if me == "" || plan.Host != host.Herdr || plan.Mode != orchestrate.ModeTab {
+	if host.CapabilitiesForKind(plan.Host).Layouter == nil || plan.Mode != orchestrate.ModeTab {
 		return
 	}
-	l := env.Host(host.Herdr).Capabilities().Layouter
+	me := host.CurrentPane(plan.Host, env.Getenv)
+	if me == "" {
+		return
+	}
+	l := env.Host(plan.Host).Capabilities().Layouter
 	if l == nil {
 		return
 	}

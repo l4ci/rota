@@ -78,23 +78,12 @@ func (l Entry) Object() *jsonx.Object {
 	return o
 }
 
-// FromRegistry is the records of the limit list, in list order.
-func FromRegistry(r worker.Registry) []Entry {
-	var out []Entry
-	for _, o := range r.Objects("limits") {
-		out = append(out, entryFrom(o))
-	}
-	return out
+// Section is the registry's limit list.
+var Section = worker.ListSection[Entry]{
+	Key:    "limits",
+	Decode: entryFrom,
+	Encode: Entry.Object,
 }
 
-// Update is escalation.Update for the limit list.
-func Update(root string, mutate func(list []Entry) []Entry) error {
-	return worker.Update(root, func(d *worker.Doc) {
-		next := mutate(FromRegistry(d.Registry))
-		out := make([]any, 0, len(next))
-		for _, l := range next {
-			out = append(out, l.Object())
-		}
-		d.SetSection("limits", out)
-	})
-}
+// FromRegistry is the records of the limit list, in list order.
+func FromRegistry(r worker.Registry) []Entry { return Section.Read(r) }

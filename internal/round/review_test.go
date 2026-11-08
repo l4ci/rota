@@ -365,7 +365,7 @@ func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 	posts := 0
 	o.Escalate = func(_ context.Context, n int, slot, title, body string) error {
 		posts++
-		return escalation.Update(f.root, func(list []escalation.Entry) []escalation.Entry {
+		return escalation.Section.Update(f.root, func(list []escalation.Entry) []escalation.Entry {
 			return append(list, escalation.Entry{ID: "e1", Kind: "pr", Number: n, Slot: slot, Status: escalation.StatusPending})
 		})
 	}

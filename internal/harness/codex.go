@@ -374,11 +374,11 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	if !ok {
 		return set, refuse(Unavailable, "codex is not installed or not runnable")
 	}
-	if !o.Herdr && !o.HerdrCore && !o.Orca {
+	if !o.Host.CodexHost {
 		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr, herdr-core or orca")
 	}
 	herdr := ""
-	if o.Herdr && !o.HerdrCore {
+	if o.Host.HerdrIntegration {
 		var ok bool
 		herdr, ok = p.Look("herdr")
 		if !ok {
@@ -392,7 +392,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	}
 	set.StateDir = CodexSlotDir(cd, o.Slot)
 	set.Worktree = o.Worktree
-	set.HerdrCore = o.HerdrCore
+	set.HerdrCore = o.Host.CoreIdentity
 	if o.Worktree == "" {
 		return set, refuse(Resolution, "slot '%s' has no worktree to trust", o.Slot)
 	}

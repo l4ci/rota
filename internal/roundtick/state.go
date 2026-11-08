@@ -1,7 +1,6 @@
 package roundtick
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,12 +32,8 @@ func statePath(commonDir string) string { return rotastate.File(commonDir, State
 // empty state.
 func LoadState(commonDir string, round int) State {
 	s := State{Round: round}
-	b, err := os.ReadFile(statePath(commonDir))
-	if err != nil {
-		return s
-	}
-	var cur State
-	if json.Unmarshal(b, &cur) != nil || cur.Round != round {
+	cur, found, err := fsio.ReadJSON[State](statePath(commonDir))
+	if err != nil || !found || cur.Round != round {
 		return s
 	}
 	return cur

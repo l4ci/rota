@@ -19,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -95,7 +94,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if ph == nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot address panes"}
 	}
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+	cd, err := c.CommonDir(root)
 	if err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -164,10 +163,10 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	rig := &limitRig{Cancel: func() {}}
 
 	var feed *limits.Feed
-	if kind == host.Herdr {
+	if host.CapabilitiesForKind(kind).OutputWatcher != nil {
 		ow := h.Capabilities().OutputWatcher
 		if ow == nil {
-			return nil, &Error{Exit: ExitUnavailable, Message: "herdr cannot watch pane output"}
+			return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot watch pane output"}
 		}
 		f, err := limits.NewFeed(ctx, ow, targets, worker.LimitRegex(), tick)
 		switch {
@@ -261,7 +260,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 			return warns
 		}
 		defer rig.Cancel()
-		if cd, err := rotastate.CommonDirVia(ctx, c.deps().Git, root); err == nil {
+		if cd, err := c.CommonDirCtx(ctx, root); err == nil {
 			rec := ownWatching(c, limits.ModeSupervisor)
 			if err := limits.WriteWatching(cd, rec); err == nil {
 				defer limits.RemoveWatching(cd, rec.PID)
@@ -296,7 +295,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}
 		}
-		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		cd, err := c.CommonDir(root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -426,7 +425,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	}
 	list := limits.Load(root)
 	watching := false
-	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+	if cd, ok := c.CommonDirOK(root); ok {
 		le := c.deps().LeaseEnv()
 		if _, ok := limits.ActiveWatching(le, cd); ok {
 			watching = true

@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/receipt"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -83,7 +82,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		// re-verified; a kept lease lets it resume.
 		var cd string
 		var rnd int
-		if d, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+		if d, ok := c.CommonDirOK(root); ok {
 			if l, _, err := c.deps().LeaseEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
 				_ = roundtick.SetStopped(cd, rnd, true)
@@ -93,7 +92,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			NoVerify: *noVerify, Prune: *prune, HolderPID: *pid, Settings: set,
 		})
 		if cd != "" {
-			if err != nil || res.Retained {
+			if err != nil || !res.Over() {
 				_ = roundtick.SetStopped(cd, rnd, false)
 			} else {
 				roundtick.ClearState(cd)
@@ -106,7 +105,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !res.Retained { // the round is over: no retry can reach its receipts
+		if res.Over() { // the round is over: no retry can reach its receipts
 			if perr := receipt.Prune(root); perr != nil {
 				c.Warn("receipts not pruned: %v", perr)
 			}

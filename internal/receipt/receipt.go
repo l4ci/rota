@@ -81,18 +81,8 @@ type fileData struct {
 func path(root string) string { return filepath.Join(root, filepath.FromSlash(File)) }
 
 func load(p string) (fileData, error) {
-	var d fileData
-	b, err := os.ReadFile(p)
-	if errors.Is(err, os.ErrNotExist) {
-		return d, nil
-	}
-	if err != nil {
-		return d, err
-	}
-	if err := json.Unmarshal(b, &d); err != nil {
-		return d, fmt.Errorf("%s: %w: %v", File, fsio.ErrUnreadable, err)
-	}
-	return d, nil
+	d, _, err := fsio.ReadJSON[fileData](p)
+	return d, err
 }
 
 // Store is the receipts of one project. Now stamps each entry; tests set it.

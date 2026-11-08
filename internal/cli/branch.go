@@ -2,8 +2,6 @@ package cli
 
 import (
 	"path/filepath"
-
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // branchTarget is what a branch-reading verb (review scope, review brief,
@@ -35,7 +33,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 	if real, err := filepath.EvalSymlinks(cwd); err == nil {
 		t.CorpusRoot = real
 	}
-	if root, err := rotatree.FindRoot(cwd, registeredRels); err == nil {
+	if root, err := findRoot(cwd, true); err == nil {
 		t.CorpusRoot = root
 	}
 	if t.Dir, err = gitDir(c); err != nil {
