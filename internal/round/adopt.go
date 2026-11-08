@@ -146,7 +146,7 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		}
 		return res, err
 	}
-	e.Worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindAdopt, Issue: res.Issue, Slot: name, PR: res.PR, Detail: ledger.Detail("branch", branch)})
+	e.Worker.Ledger().Note(root, ledger.Entry{Kind: ledger.KindAdopt, Issue: res.Issue, Slot: name, PR: res.PR, Detail: ledger.Detail("branch", branch)})
 	return res, nil
 }
 

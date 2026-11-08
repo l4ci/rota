@@ -112,6 +112,24 @@ func TestLedgerNoteReportsAWriteFailure(t *testing.T) {
 	}
 }
 
+// A registry that does not parse resolves no slot, but the entry is still written.
+func TestLedgerNoteSurvivesACorruptRegistry(t *testing.T) {
+	dir := ledgerProject(t, "")
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"slots":[`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	env := Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"})
+	if err := env.Ledger().AppendErr(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(dir)
+	if len(es) != 2 || es[0].Slot != "" || es[0].Issue != "12" {
+		t.Fatalf("entries %+v, want both written without a slot", es)
+	}
+}
+
 func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","account":"work","state":"busy"}`)
 	t.Setenv("ROTA_ACCOUNT_USAGE_DIR", "")
@@ -201,7 +219,7 @@ func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
-	ledgerAppend(env, dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
 	if _, err := recordBounceVia(env, dir, "12", "", "h1"); err != nil {
 		t.Fatal(err)
 	}

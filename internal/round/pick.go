@@ -209,7 +209,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if err := store.Clear(o.ID); err != nil {
 		return res, wrap(err)
 	}
-	e.Worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPick, Issue: id, Slot: res.Winner.Slot, PR: fmt.Sprintf("#%d", want),
+	e.Worker.Ledger().Note(root, ledger.Entry{Kind: ledger.KindPick, Issue: id, Slot: res.Winner.Slot, PR: fmt.Sprintf("#%d", want),
 		Detail: ledger.Detail("loser", lv.Slot)})
 	note := fmt.Sprintf("Best-of pick: #%d (%s)", want, res.Winner.Slot)
 	if loser >= 0 {
