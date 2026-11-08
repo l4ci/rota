@@ -211,7 +211,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				return res, err
 			}
 			if !wasParked {
-				e.Worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
+				e.Worker.Ledger().Note(root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
 					Detail: ledger.Detail("merged", so.Merged)})
 			}
 			if claim != "" && issue != "" && be != nil {

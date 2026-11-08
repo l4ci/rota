@@ -819,7 +819,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			Data: worker.BlockData{BlockedBy: blockedby.Dispatch, Changed: true}, Cause: err}
 	}
 	if err == nil && !run.resuming {
-		if lerr := e.Worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
+		if lerr := e.Worker.Ledger().AppendErr(root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
 			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","), "fallbackFrom", run.fallback.from(), "fallbackWhy", run.fallback.why())}); lerr != nil {
 			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
 		}

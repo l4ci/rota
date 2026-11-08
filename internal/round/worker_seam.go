@@ -27,10 +27,9 @@ type Worker interface {
 	Accounts() *worker.Accounts
 	WithAccounts(a *worker.Accounts) Worker
 
-	// LedgerNote warns when the round ledger row is not written;
-	// LedgerAppendErr returns the failure for a verb that must exit non-zero.
-	LedgerNote(root string, e ledger.Entry)
-	LedgerAppendErr(root string, e ledger.Entry) error
+	// Ledger is the round ledger's recorder: Note warns when a row is not
+	// written, AppendErr returns the failure for a verb that must exit non-zero.
+	Ledger() *ledger.Recorder
 
 	GateConfig(root string) worker.GateConfig
 	Verify(ctx context.Context, cfg worker.GateConfig, root, dir string) (worker.VerifyResult, error)
@@ -67,12 +66,7 @@ func (w *envWorker) Getenv(key string) string   { return w.WithDefaults().Getenv
 func (w *envWorker) Home() (string, error)      { return w.WithDefaults().Home() }
 func (w *envWorker) Config(root string) any     { return w.WithDefaults().Config(root) }
 func (w *envWorker) Accounts() *worker.Accounts { return w.Env.Accounts }
-func (w *envWorker) LedgerNote(root string, e ledger.Entry) {
-	worker.LedgerNote(w.Env, root, e)
-}
-func (w *envWorker) LedgerAppendErr(root string, e ledger.Entry) error {
-	return worker.LedgerAppendErr(w.Env, root, e)
-}
+func (w *envWorker) Ledger() *ledger.Recorder   { return w.Env.Ledger() }
 func (w *envWorker) WithAccounts(a *worker.Accounts) Worker {
 	c := *w
 	c.Env.Accounts = a
