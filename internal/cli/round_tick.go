@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -88,7 +87,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 
 func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int, observe bool) (roundtick.Result, error) {
 	c.deps().freshReads()
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+	cd, err := c.CommonDir(root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}

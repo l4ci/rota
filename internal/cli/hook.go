@@ -23,8 +23,6 @@ import (
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/skills"
@@ -100,7 +98,7 @@ func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 	if cwd == "" {
 		cwd, _ = c.deps().Getwd()
 	}
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
+	cd, err := c.CommonDir(cwd)
 	if err != nil {
 		return err
 	}
@@ -149,7 +147,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	}
 	wd, _ := c.deps().Getwd()
 	cwd := hc.payload.CwdOr(wd)
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
+	cd, err := c.CommonDir(cwd)
 	if err != nil {
 		return hc, false
 	}
@@ -161,7 +159,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
 	case anySession || (needLeaseFree && hc.who.LeaseFree):
-		hc.root, _ = rotatree.Find(cwd)
+		hc.root, _ = findRoot(cwd, false)
 	}
 	if hc.root == "" {
 		return hc, false
@@ -384,8 +382,8 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 	if tool := payload.String("tool_name"); tool == "Edit" || tool == "Write" {
 		cwd := payload.CwdOr(wd)
 		file := payload.String("tool_input", "file_path")
-		root, found := rotatree.Find(cwd)
-		if !found || file == "" {
+		root, err := findRoot(cwd, false)
+		if err != nil || file == "" {
 			return Result{}, nil
 		}
 		if !filepath.IsAbs(file) {
@@ -396,7 +394,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		if err != nil || len(entries) == 0 {
 			return Result{}, nil
 		}
-		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
+		cd, err := c.CommonDir(cwd)
 		if err != nil {
 			return Result{}, nil
 		}

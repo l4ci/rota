@@ -21,7 +21,7 @@ func refreshMaintainerSnapshot(ctx context.Context, c *Ctx, root string, env rou
 	if len(warnings) > 0 {
 		return waits, warnings
 	}
-	commonDir, err := rotastate.CommonDirVia(ctx, c.deps().Git, root)
+	commonDir, err := c.CommonDirCtx(ctx, root)
 	if errors.Is(err, rotastate.ErrNotRepo) {
 		return waits, warnings // status also serves tracker-only projects
 	}

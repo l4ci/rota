@@ -19,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -116,10 +115,11 @@ func (c *Ctx) Root() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if root, ok := rotatree.Find(dir); ok {
-		return root, nil
+	root, err := findRoot(dir, false)
+	if err != nil {
+		return "", rootError(err)
 	}
-	return "", Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
+	return root, nil
 }
 
 // RepoPath resolves --repo to the sub-repo's absolute path through

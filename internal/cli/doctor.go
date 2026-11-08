@@ -21,7 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
@@ -89,7 +88,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	} else {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
-	root, _ := rotatree.Find(in.Dir)
+	root, _ := findRoot(in.Dir, false)
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
 		in.RoundHost = worker.ResolveHost("", worker.HostConfig{}, d.Getenv, d.LookPath)
