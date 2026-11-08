@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/marker"
 	ms "github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -630,7 +629,7 @@ func (b *Issues) SlicePlans(mid string) ([]SlicePlan, error) {
 			for _, p := range ps {
 				text.WriteString(p.rest)
 			}
-			out = append(out, SlicePlan{m, u, notechunk.Norm(text.String())})
+			out = append(out, SlicePlan{m, u, marker.Norm(text.String())})
 		}
 	}
 	return out, nil
