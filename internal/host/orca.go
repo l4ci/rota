@@ -30,7 +30,7 @@ type orcaTerminal struct {
 }
 
 func (o *orca) Kind() Kind                 { return Orca }
-func (o *orca) Capabilities() Capabilities { return CapabilitiesOf(o) }
+func (o *orca) Capabilities() Capabilities { return kindPolicy(Orca, CapabilitiesOf(o)) }
 
 // RuntimeScopedHandles: an Orca runtime restart orphans handles whose
 // processes survive, so list absence proves nothing.

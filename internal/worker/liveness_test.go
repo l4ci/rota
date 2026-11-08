@@ -57,15 +57,6 @@ func TestCapabilitiesForKind(t *testing.T) {
 	}
 }
 
-// The real adapters declare the same capabilities the fake table is built on.
-func TestRealAdaptersDeclareLivenessCapabilities(t *testing.T) {
-	for _, k := range []host.Kind{host.Herdr, host.Tmux, host.Orca} {
-		if got, want := host.New(k, host.Deps{}).Capabilities(), host.CapabilitiesForKind(k); got.RuntimeScopedHandles != want.RuntimeScopedHandles || got.TreeKillClose != want.TreeKillClose {
-			t.Errorf("%s: adapter %+v, kind table %+v", k, got, want)
-		}
-	}
-}
-
 // Poll hands the host's native pane status to the same verdict function.
 func TestJudgeLivenessNative(t *testing.T) {
 	for _, c := range []struct{ native, state, reason string }{

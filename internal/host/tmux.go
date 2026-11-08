@@ -29,7 +29,7 @@ type tmux struct{ d Deps }
 
 func (t *tmux) Kind() Kind { return Tmux }
 
-func (t *tmux) Capabilities() Capabilities { return CapabilitiesOf(t) }
+func (t *tmux) Capabilities() Capabilities { return kindPolicy(Tmux, CapabilitiesOf(t)) }
 
 func (t *tmux) Require() error {
 	if _, err := t.d.LookPath("tmux"); err != nil {

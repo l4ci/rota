@@ -303,7 +303,7 @@ func (o opencode) CheckLaunch(launch string) error {
 // the model list is a network call and the integration only sharpens state.
 // Both hosts work; it never writes into an OpenCode config dir.
 func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Setup, error) {
-	if po.HerdrCore {
+	if po.Host.CoreIdentity {
 		return Setup{}, coreUnsupported(OpenCode)
 	}
 	var set Setup
@@ -346,7 +346,7 @@ func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Set
 		r.BlockedBy = BlockOpencodeFlags
 		return set, r
 	}
-	if po.Herdr {
+	if po.Host.HerdrIntegration {
 		if herdr, ok := p.Look("herdr"); ok {
 			for _, f := range o.Doctor().Home(ctx, p, bin, herdr, Home{Slot: acct.Name, Dir: acct.Home}) {
 				if f.Code == IntegrationStale {

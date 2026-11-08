@@ -9,7 +9,6 @@ package doctor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -523,94 +522,31 @@ func (d *runner) jq() Check {
 func (d *runner) roundHost() host.Kind { return d.in.RoundHost }
 
 func (d *runner) host() Check {
-	switch d.roundHost() {
-	case host.HerdrCore:
-		get := d.in.Getenv
-		if get == nil {
-			get = func(string) string { return "" }
-		}
-		if get("HC_TERMINAL_ID") == "" || get("HC_TERMINAL_SOCKET") == "" {
-			return fail("host", "Herdr Core terminal identity/endpoint is missing", "open the associated Herdr App project terminal and check HC_TERMINAL_ID and HC_TERMINAL_SOCKET")
-		}
-		h := host.New(host.HerdrCore, host.Deps{Getenv: get, Dial: d.in.Dial})
-		if err := h.Require(); err != nil {
-			return fail("host", err.Error(), "open the associated Herdr App project terminal and check HC_TERMINAL_ID and HC_TERMINAL_SOCKET")
-		}
-		detail := "Herdr Core associated endpoint verified"
-		if identity := h.Capabilities().CoreIdentity; identity != nil {
-			id, version := identity.CoreIdentity()
-			detail += "; id=" + id
-			if version != "" {
-				detail += "; version=" + version
-			}
-		}
-		return pass("host", detail)
-	case host.Herdr:
-		want := host.SupportedHerdr + ".x"
-		bin, ok := d.in.Look(host.Herdr.Binary())
-		if !ok {
-			return fail("host", "herdr not found on PATH", "install herdr "+want+" (https://herdr.dev)")
-		}
-		r, ran := d.run(bin, []string{"--version"}, nil)
-		out := strings.TrimSpace(r.Stdout + " " + r.Stderr)
-		v, err := host.HerdrVersion(out)
-		if !ran || r.ExitCode != 0 || v == "" {
-			return fail("host", "herdr version unreadable", "reinstall herdr "+want+" (https://herdr.dev)")
-		}
-		if err != nil {
-			return fail("host", fmt.Sprintf("herdr %s, need %s", v, want), "install herdr "+want+" (https://herdr.dev)")
-		}
-		return pass("host", "herdr "+v)
-	case host.Orca:
-		var statusJSON string
-		h := host.New(host.Orca, host.Deps{
-			LookPath: func(name string) (string, error) {
-				bin, ok := d.in.Look(name)
-				if !ok {
-					return "", exec.ErrNotFound
-				}
-				return bin, nil
-			},
-			Run: func(ctx context.Context, name string, args []string) (host.Result, error) {
-				bin, ok := d.in.Look(name)
-				if !ok {
-					return host.Result{}, exec.ErrNotFound
-				}
-				r, err := d.in.Exec(ctx, bin, args, nil, d.in.Dir)
-				statusJSON = r.Stdout
-				return r, err
+	if diagnose := host.CapabilitiesForKind(d.roundHost()).Diagnose; diagnose != nil {
+		h := diagnose(host.Probe{
+			Getenv: d.in.Getenv,
+			Dial:   d.in.Dial,
+			Look:   d.in.Look,
+			Exec: func(_ context.Context, bin string, args []string) (host.Result, error) {
+				return d.in.Exec(d.ctx, bin, args, nil, d.in.Dir)
 			},
 		})
-		if err := h.Require(); err != nil {
-			return fail("host", err.Error(), "put orca on PATH and open the Orca app")
+		switch h.Status {
+		case host.HealthOK:
+			return pass("host", h.Detail)
+		case host.HealthWarn:
+			return Check{Name: "host", Status: Warn, Detail: h.Detail, Hint: h.Hint}
 		}
-		var status struct {
-			AutoRename bool `json:"autoRenameBranchFromWork"`
-			Settings   struct {
-				AutoRename bool `json:"autoRenameBranchFromWork"`
-			} `json:"settings"`
-		}
-		// The setting is optional status evidence, not a documented settings API.
-		// Dispatch checks the saved branch after pickup even when it is absent.
-		if json.Unmarshal([]byte(statusJSON), &status) == nil && (status.AutoRename || status.Settings.AutoRename) {
-			return Check{Name: "host", Status: Warn, Detail: "orca app running; autoRenameBranchFromWork is enabled", Hint: "disable autoRenameBranchFromWork before dispatching rota slots"}
-		}
-		return pass("host", "orca on PATH; app running")
-	case host.Tmux:
-		if _, ok := d.in.Look(host.Tmux.Binary()); !ok {
-			return fail("host", "tmux not found on PATH", "install tmux")
-		}
-		return pass("host", "tmux on PATH")
-	default:
-		if d.in.RegistrySolo {
-			return skip("host", "the recorded round is solo: workers are subagents, no terminal host needed")
-		}
-		name := d.in.Dispatch
-		if name == "" {
-			name = "subagent"
-		}
-		return skip("host", "round.dispatch is "+name+", not in herdr or tmux: solo, no terminal host needed")
+		return fail("host", h.Detail, h.Hint)
 	}
+	if d.in.RegistrySolo {
+		return skip("host", "the recorded round is solo: workers are subagents, no terminal host needed")
+	}
+	name := d.in.Dispatch
+	if name == "" {
+		name = "subagent"
+	}
+	return skip("host", "round.dispatch is "+name+", not in herdr or tmux: solo, no terminal host needed")
 }
 
 // trackerExec adapts the injected Exec and Look to the tracker's, so the
@@ -766,7 +702,7 @@ func (d *runner) accounts() Check {
 const hookHint = "herdr integration install claude"
 
 func (d *runner) hook() Check {
-	if d.roundHost() != host.Herdr {
+	if !host.CapabilitiesForKind(d.roundHost()).Harness.HerdrIntegration {
 		return skip("hook", "host is not herdr")
 	}
 	if len(d.in.Accounts) == 0 {
