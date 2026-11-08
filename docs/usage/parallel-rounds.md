@@ -1085,8 +1085,11 @@ With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/t
 
 A red train, from either tier, bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
 breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be an interaction with the members before it, not that PR alone.
-Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
-member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
+Nothing lands unless you pass `--land-green`, which lands the members before the culprit, and only a
+prefix whose own verify ran green: a prefix that went red only during diagnosis never lands.
+When the failure already names the test, `--on-fail stop` skips the bisect: the train ends after the
+red run with its evidence, names no culprit and lands nothing, so `--land-green` has no effect with
+it. A member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
 One merge approval covers the whole train. Bounces are not counted.
 
 To find the members that can go together before a train refuses, run `rota worker train <members> --base <branch> --plan`. It runs no tests and pushes nothing. It lists the member pairs that conflict, names the largest conflict-free subset in merge order, lists the rest as order-blocked with the member each conflicts with, and prints the `rota worker train ... --order ...` line that lands that subset. It exits 0 with or without conflicts.
