@@ -69,7 +69,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 	force := fs.Bool("force", false, "set up even in your home directory")
 	fs.Var(&sets, "set", "answer a question: `key=value` (repeatable)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *list {
@@ -206,7 +206,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				if err != nil {
 					return Result{}, err
 				}
-				root.Set("savedGlobal", strSlice(saved))
+				root.Set("savedGlobal", jsonx.Strings(saved))
 				lines = append(lines, fmt.Sprintf("saved %d answers as global defaults", len(saved)))
 			}
 		}
@@ -301,7 +301,7 @@ func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string,
 	}
 	doc, line := setupDoctor(c)
 	lines = append(lines, line)
-	data := jsonObj("role", roundcfg.RoleSupport, "file", rotatree.DirName+"/"+rotatree.ConfigLocalFile, "answers", out, "doctor", doc)
+	data := jsonx.Obj("role", roundcfg.RoleSupport, "file", rotatree.DirName+"/"+rotatree.ConfigLocalFile, "answers", out, "doctor", doc)
 	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 }
 
@@ -311,10 +311,10 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 	rep := doctor.Run(c.Context(), doctorInput(c.Context(), c.deps()))
 	for _, ch := range rep.Checks {
 		if ch.Status == doctor.Fail {
-			return jsonObj("ok", false, "check", ch.Name, "hint", ch.Hint), fmt.Sprintf("doctor: %s: %s", ch.Name, ch.Hint)
+			return jsonx.Obj("ok", false, "check", ch.Name, "hint", ch.Hint), fmt.Sprintf("doctor: %s: %s", ch.Name, ch.Hint)
 		}
 	}
-	return jsonObj("ok", true), "doctor: pass"
+	return jsonx.Obj("ok", true), "doctor: pass"
 }
 
 // supportSetupStop refuses the support path when the clone's tracked config
@@ -323,7 +323,7 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 func supportSetupStop(c *Ctx, dir string) (Result, error) {
 	tracked := fsio.LoadJSON(rotatree.Config(dir), jsonx.NewObject())
 	if roundcfg.SupportName(tracked) == "" {
-		d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundSupportKey, "changed", false)
+		d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundSupportKey, "changed", false)
 		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").
 			WithHint("on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again")
 	}
@@ -584,9 +584,9 @@ func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 	for _, p := range config.Prompts {
 		var chs []any
 		for _, ch := range p.Choices {
-			chs = append(chs, knObj("value", ch.Value, "description", ch.Desc))
+			chs = append(chs, jsonx.Obj("value", ch.Value, "description", ch.Desc))
 		}
-		q := knObj("key", p.Key, "title", p.Title, "default", defs[p.Key], "choices", chs)
+		q := jsonx.Obj("key", p.Key, "title", p.Title, "default", defs[p.Key], "choices", chs)
 		line := fmt.Sprintf("%s  %s  [%s]  default %s", p.Key, p.Title, choiceValues(p), defs[p.Key])
 		if p.Free {
 			q.Set("free", true)
@@ -602,7 +602,7 @@ func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 			line += fmt.Sprintf("  (only when %s=%s)", p.IfKey, p.IfValue)
 		}
 		roles := p.RoleNames()
-		q.Set("roles", strSlice(roles))
+		q.Set("roles", jsonx.Strings(roles))
 		if p.Roles == nil {
 			line += "  roles: both"
 		} else {
@@ -612,5 +612,5 @@ func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 		lines = append(lines, line)
 	}
 	lines = append(lines, "", "answer with: rota setup --set <key>=<value> (repeatable); rota setup --yes takes the suggestions, else the defaults")
-	return Result{Data: knObj("questions", qs), Text: strings.Join(lines, "\n")}
+	return Result{Data: jsonx.Obj("questions", qs), Text: strings.Join(lines, "\n")}
 }

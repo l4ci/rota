@@ -168,9 +168,9 @@ func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	}
 	rs := []any{}
 	for _, r := range recheck {
-		rs = append(rs, knObj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
+		rs = append(rs, jsonx.Obj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
 	}
-	return Result{Data: knObj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
+	return Result{Data: jsonx.Obj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
 }
 
 // warnMalformed names each index line the base wrote outside the slugs rota
@@ -209,7 +209,7 @@ func knExtMatch(c *Ctx, topics []string, match string) (Result, error) {
 	if res.N == 0 && len(res.Missing) == 0 {
 		c.Warn("no bullet matches %q", match)
 	}
-	return Result{Data: knObj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
+	return Result{Data: jsonx.Obj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
 }
 
 // projectTools is the tool versions the current project runs, read from its
@@ -267,14 +267,14 @@ func knExtTopics(c *Ctx) (Result, error) {
 	items := []any{}
 	var lines []string
 	for _, t := range ts {
-		items = append(items, knObj("name", t.Name, "slug", t.Slug, "bullets", t.Bullets, "hook", t.Hook))
+		items = append(items, jsonx.Obj("name", t.Name, "slug", t.Slug, "bullets", t.Bullets, "hook", t.Hook))
 		line := fmt.Sprintf("%s: %s", t.Name, bulletsOf(t.Bullets))
 		if t.Hook != "" {
 			line += " — " + t.Hook
 		}
 		lines = append(lines, line)
 	}
-	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("topics", items), Text: strings.Join(lines, "\n")}, nil
 }
 
 func knExtStats(c *Ctx) (Result, error) {
@@ -290,7 +290,7 @@ func knExtStats(c *Ctx) (Result, error) {
 	items := []any{}
 	var lines []string
 	for _, s := range stats {
-		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes, "hits", s.Hits)
+		item := jsonx.Obj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes, "hits", s.Hits)
 		line := fmt.Sprintf("%s: %s, %d bytes, %d hits", s.Name, bulletsOf(s.Bullets), s.Bytes, s.Hits)
 		if s.Stray {
 			item.Set("stray", true)
@@ -298,7 +298,7 @@ func knExtStats(c *Ctx) (Result, error) {
 		}
 		bullets := []any{}
 		for _, b := range s.Items {
-			bullets = append(bullets, knObj("title", b.Title, "date", b.Date, "hits", b.Hits, "lastHit", b.LastHit))
+			bullets = append(bullets, jsonx.Obj("title", b.Title, "date", b.Date, "hits", b.Hits, "lastHit", b.LastHit))
 		}
 		item.Set("items", bullets)
 		items = append(items, item)
@@ -307,7 +307,7 @@ func knExtStats(c *Ctx) (Result, error) {
 	if torn > 0 {
 		c.Warn("skipped %d unreadable line(s) in the hits log", torn)
 	}
-	return Result{Data: knObj("topics", items, "tornHits", torn), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("topics", items, "tornHits", torn), Text: strings.Join(lines, "\n")}, nil
 }
 
 // knExtHit records a use of an external bullet in the per-machine hits log.
@@ -320,7 +320,7 @@ func knExtHit(c *Ctx, topic, title string) (Result, error) {
 	if err != nil {
 		return Result{}, extErr(err)
 	}
-	return Result{Data: knObj("topic", topic, "title", title, "hits", n, "changed", true), Text: fmt.Sprintf("hit: %s :: %s (hits=%d, this machine)", topic, title, n)}, nil
+	return Result{Data: jsonx.Obj("topic", topic, "title", title, "hits", n, "changed", true), Text: fmt.Sprintf("hit: %s :: %s (hits=%d, this machine)", topic, title, n)}, nil
 }
 
 // extSource is the project tag a new external bullet carries: the name of the
@@ -375,7 +375,7 @@ func knExtSplit(c *Ctx, topic string, plan *extknowledge.SplitPlan) (Result, err
 	}
 	subs := []any{}
 	for _, s := range sr.Subtopics {
-		subs = append(subs, knObj("name", s.Name, "file", s.File, "bullets", s.Bullets))
+		subs = append(subs, jsonx.Obj("name", s.Name, "file", s.File, "bullets", s.Bullets))
 	}
 	d := extWriteData(sr.Topic, wr)
 	d.Set("subtopics", subs)
@@ -419,7 +419,7 @@ func knExtRm(c *Ctx, topic, title string) (Result, error) {
 }
 
 func extWriteData(topic string, res extknowledge.WriteResult, kv ...any) *jsonx.Object {
-	d := knObj(append([]any{"topic", topic}, kv...)...)
+	d := jsonx.Obj(append([]any{"topic", topic}, kv...)...)
 	d.Set("changed", res.Changed)
 	d.Set("write", res.Policy.Write)
 	d.Set("policyDefaulted", res.Policy.Defaulted)

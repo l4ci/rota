@@ -262,7 +262,7 @@ func doneData(r *worker.DoneResult) *jsonx.Object {
 		d.Set("head", r.Head)
 	}
 	if len(r.Missing) > 0 {
-		d.Set("missing", strList(r.Missing))
+		d.Set("missing", jsonx.Strings(r.Missing))
 	}
 	if r.NoRedUnchecked {
 		d.Set("noRedUnchecked", true)

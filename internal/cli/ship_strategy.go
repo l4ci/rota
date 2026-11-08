@@ -5,6 +5,7 @@ import (
 	"flag"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -38,9 +39,9 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 		}
 		landing, err := ship.Strategy(caps, forge, config.StringIfSet(cfg, "work.mergeStrategy"))
 		if errors.Is(err, ship.ErrTrackerNeedsLocalForge) {
-			return Result{Data: jsonObj("strategy", "", "forge", forge, "changed", false)}, Resolution(err.Error())
+			return Result{Data: jsonx.Obj("strategy", "", "forge", forge, "changed", false)}, Resolution(err.Error())
 		}
-		return Result{Data: jsonObj("strategy", landing.Strategy, "forge", forge, "reason", landing.Reason),
+		return Result{Data: jsonx.Obj("strategy", landing.Strategy, "forge", forge, "reason", landing.Reason),
 			Text: landing.Strategy + " (" + landing.Reason + ")"}, nil
 	}
 }

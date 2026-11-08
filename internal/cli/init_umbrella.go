@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // seedProject is the base seeding `rota init` does; `init umbrella` runs it
@@ -18,7 +19,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 	all := fs.Bool("all", false, "register every immediate git child")
 	list := fs.Bool("list", false, "only list the candidates; write nothing")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		reposGiven := false
@@ -35,7 +36,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, Resolution("%v", unwrapPathErr(err))
 			}
-			return Result{Data: knObj("root", root, "candidates", strSlice(l.Candidates), "isGitRepo", l.IsGitRepo),
+			return Result{Data: jsonx.Obj("root", root, "candidates", jsonx.Strings(l.Candidates), "isGitRepo", l.IsGitRepo),
 				Text: "candidates: " + listOrNone(l.Candidates)}, nil
 		}
 		if reposGiven == *all {
@@ -72,7 +73,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 				enabled = true
 			}
 		}
-		data := knObj("root", root, "created", strSlice(res.Created), "registered", strSlice(res.Registered),
+		data := jsonx.Obj("root", root, "created", jsonx.Strings(res.Created), "registered", jsonx.Strings(res.Registered),
 			"umbrellaIsGitRepo", res.IsGitRepo, "changed", res.Changed || cfg.changed() || enabled)
 		text := []string{"registered: " + listOrNone(res.Registered)}
 		cfg.report(data, &text)

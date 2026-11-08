@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 )
@@ -53,7 +54,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !issue {
-			return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
+			return Result{Data: jsonx.Obj("blockedBy", blockedby.Backend, "changed", false)},
 				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
 		}
 		be, wf, id, _, err := itemTrack(c, ref, "plan pass", backlog.FileNoteHint)
@@ -93,7 +94,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			if ok {
 				why = "the latest proof row for that sha and check is " + row.Result
 			}
-			return Result{Data: jsonObj("blockedBy", blockedby.Proof, "changed", false)},
+			return Result{Data: jsonx.Obj("blockedBy", blockedby.Proof, "changed", false)},
 				Refused("cannot mark %s met: %s (see `rota proof show %s`)", ac, why, id)
 		}
 
@@ -115,7 +116,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 		changed = changed || put
 		ref2 := fmt.Sprintf("%s:%s", sha, check)
 		return Result{
-			Data: jsonObj("key", key, "item", id, "ac", ac, "proof", ref2, "changed", changed),
+			Data: jsonx.Obj("key", key, "item", id, "ac", ac, "proof", ref2, "changed", changed),
 			Text: fmt.Sprintf("%s met (%s)", ac, ref2),
 		}, nil
 	}
@@ -152,7 +153,7 @@ func acceptanceCoverage(c *Ctx, wf backlog.ItemTracker, ref string, st *backlog.
 func acceptanceData(cover []acceptance.Status) []any {
 	out := []any{}
 	for _, s := range cover {
-		out = append(out, jsonObj("id", s.ID, "text", s.Text, "met", s.Met,
+		out = append(out, jsonx.Obj("id", s.ID, "text", s.Text, "met", s.Met,
 			"proof", nullIfEmpty(s.Proof), "flag", nullIfEmpty(s.Flag)))
 	}
 	return out

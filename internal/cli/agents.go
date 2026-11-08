@@ -86,11 +86,11 @@ func agentsReport(es []agents.Entry, mode string) (*jsonx.Object, string, bool) 
 		} else if status != agents.StatusCurrent && status != agents.StatusSkipped {
 			bad = true
 		}
-		files = append(files, jsonObj("path", e.Path, "status", status))
+		files = append(files, jsonx.Obj("path", e.Path, "status", status))
 		if status == agents.StatusSkipped {
 			status += " (main-only)"
 		}
 		lines = append(lines, status+": "+e.Path)
 	}
-	return jsonObj("files", files), strings.Join(lines, "\n"), bad
+	return jsonx.Obj("files", files), strings.Join(lines, "\n"), bad
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -181,7 +182,7 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 	}
 	commits, intents := []any{}, []any{}
 	for _, cm := range info.Commits {
-		commits = append(commits, gitObj("hash", cm.Hash, "subject", cm.Subject))
+		commits = append(commits, jsonx.Obj("hash", cm.Hash, "subject", cm.Subject))
 	}
 	for _, in := range info.Intents {
 		// The old helper emitted null for a bullet without a "Title." part.
@@ -193,9 +194,9 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 		if in.Type != "" {
 			typ = in.Type
 		}
-		intents = append(intents, gitObj("id", in.ID, "type", typ, "title", title, "entry", in.Entry))
+		intents = append(intents, jsonx.Obj("id", in.ID, "type", typ, "title", title, "entry", in.Entry))
 	}
-	data := gitObj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "commits", commits,
+	data := jsonx.Obj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "commits", commits,
 		"touchedFiles", info.Files, "referencedIds", info.IDs, "intents", intents)
 	text := fmt.Sprintf("%s vs %s: %d commits, %d files, %d items", info.Branch, info.Base, len(info.Commits), len(info.Files), len(info.IDs))
 	return Result{Data: data, Text: text}, nil
@@ -300,7 +301,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 		p(l)
 	}
 	brief := b.String()
-	return Result{Data: gitObj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "brief", brief), Text: brief}, nil
+	return Result{Data: jsonx.Obj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "brief", brief), Text: brief}, nil
 }
 
 // scaffoldRe is the old helper's pattern with Python's Unicode \b and \s: a
@@ -400,10 +401,10 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 		var lines []string
 		// Data drops the CR of a CRLF line (the shim's line splitting did); text keeps it, as the old helper did.
 		for _, f := range scaffoldScan(diff) {
-			findings = append(findings, gitObj("file", f.File, "line", f.Line, "text", strings.TrimSuffix(f.Text, "\r")))
+			findings = append(findings, jsonx.Obj("file", f.File, "line", f.Line, "text", strings.TrimSuffix(f.Text, "\r")))
 			lines = append(lines, fmt.Sprintf("%s:%d:%s", f.File, f.Line, f.Text))
 		}
-		return Result{Data: gitObj("findings", findings), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("findings", findings), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -423,9 +424,9 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 	for _, r := range rows {
 		prs := []any{}
 		for _, p := range r.PRs {
-			prs = append(prs, jsonObj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
+			prs = append(prs, jsonx.Obj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
 		}
-		row := jsonObj("id", r.ID, "type", r.Type)
+		row := jsonx.Obj("id", r.ID, "type", r.Type)
 		if r.Number > 0 {
 			row.Set("number", r.Number)
 		}
@@ -441,7 +442,7 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 		}
 		lines = append(lines, ref+" "+r.Title)
 	}
-	return Result{Data: jsonObj("items", items), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("items", items), Text: strings.Join(lines, "\n")}, nil
 }
 
 // reviewDepth is `rota review depth`: the depth ship.review picks for a branch,
@@ -465,7 +466,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		depth := res.Depth
-		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
+		data := jsonx.Obj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		if res.Tier.Tier != "" {
 			data.Set("tier", string(res.Tier.Tier))
 		}
@@ -480,7 +481,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		// Always present, so a caller reads "none" as an empty list, not a missing key.
 		lenses := make([]any, 0, len(res.Lenses))
 		for _, l := range res.Lenses {
-			lenses = append(lenses, jsonObj("name", l.Name, "why", l.Why))
+			lenses = append(lenses, jsonx.Obj("name", l.Name, "why", l.Why))
 			text += fmt.Sprintf("\nREVIEW-LENS %s — %s (%s)", t.Branch, l.Name, l.Why)
 		}
 		data.Set("lenses", lenses)

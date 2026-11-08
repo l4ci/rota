@@ -220,7 +220,7 @@ func TestProjectsCleanupExplainsRemovals(t *testing.T) {
 					line += "\t(temporary)"
 				}
 				wantLines = append(wantLines, line)
-				wantRows = append(wantRows, knObj("name", name, "path", path, "lastSeen", "2026-01-01T00:00:00Z", "reason", tc.reason))
+				wantRows = append(wantRows, jsonx.Obj("name", name, "path", path, "lastSeen", "2026-01-01T00:00:00Z", "reason", tc.reason))
 			}
 			if jsonOutput {
 				code, result, _ := initRunWith(t, d, root, "projects", "cleanup")

@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/initproj"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
 )
@@ -40,7 +41,7 @@ func repoAdd(fs *flag.FlagSet) RunFunc {
 		if changed {
 			text = "registered: " + r.Name + " " + r.Rel
 		}
-		return Result{Data: jsonObj("name", r.Name, "path", r.Path, "changed", changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("name", r.Name, "path", r.Path, "changed", changed), Text: text}, nil
 	}
 }
 
@@ -80,8 +81,8 @@ func repoRm(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		return Result{
-			Data: jsonObj("name", r.Name, "path", r.Path, "changed", true,
-				"openItems", anySlice(open), "activeStreams", anySlice(streams)),
+			Data: jsonx.Obj("name", r.Name, "path", r.Path, "changed", true,
+				"openItems", jsonx.Strings(open), "activeStreams", jsonx.Strings(streams)),
 			Text: "unregistered: " + name + " (" + filepath.ToSlash(r.Rel) + " left untouched)",
 		}, nil
 	}

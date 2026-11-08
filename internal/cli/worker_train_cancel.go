@@ -47,7 +47,7 @@ func workerTrainCancel(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, Unavailable("%v", err)
 		}
 		d.Set("pid", run.PID)
-		d.Set("targets", strList(run.Targets))
+		d.Set("targets", jsonx.Strings(run.Targets))
 		e, found, err := receipt.New(root).Show(id)
 		if err != nil {
 			return Result{Data: d}, err

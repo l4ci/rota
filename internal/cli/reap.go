@@ -128,7 +128,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		}
 		d := jsonx.NewObject()
 		d.Set("candidates", cands)
-		d.Set("reaped", strs(applied.Reaped))
+		d.Set("reaped", jsonx.Strings(applied.Reaped))
 		d.Set("failed", failed)
 		d.Set("changed", len(applied.Reaped) > 0)
 		res := Result{Data: d, Text: strings.Join(lines, "\n")}

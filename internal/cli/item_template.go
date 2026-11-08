@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 func itemTemplate(fs *flag.FlagSet) RunFunc {
@@ -30,6 +31,6 @@ func itemTemplate(fs *flag.FlagSet) RunFunc {
 			body.WriteString("## " + section.Name + "\n\n<!-- " + level + " -->\n\n")
 		}
 		markdown := strings.TrimRight(body.String(), "\n") + "\n"
-		return Result{Data: jsonObj("kind", *kind, "tag", *tag, "body", markdown), Text: strings.TrimRight(markdown, "\n")}, nil
+		return Result{Data: jsonx.Obj("kind", *kind, "tag", *tag, "body", markdown), Text: strings.TrimRight(markdown, "\n")}, nil
 	}
 }

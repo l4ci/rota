@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -51,7 +52,7 @@ func reviewProbe(c *Ctx, args []string) (result Result, err error) {
 	if runErr != nil {
 		return Result{}, Unavailable("run probe %s: %v", args[0], runErr)
 	}
-	result = Result{Data: gitObj("changed", true, "exitCode", res.ExitCode, "stdout", res.Stdout, "stderr", res.Stderr)}
+	result = Result{Data: jsonx.Obj("changed", true, "exitCode", res.ExitCode, "stdout", res.Stdout, "stderr", res.Stderr)}
 	if res.ExitCode != 0 {
 		return result, Failed("probe %s exited %d", args[0], res.ExitCode)
 	}

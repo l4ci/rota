@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -21,7 +22,7 @@ func labelsMigrateCommand() *Command {
 func migrateLabels(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		root, issue, err := modeRoot(c)
@@ -72,7 +73,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		lines := []string{}
 		changed := false
 		for _, r := range changes {
-			rows = append(rows, jsonObj("id", r.Key.String(), "changed", r.Changed))
+			rows = append(rows, jsonx.Obj("id", r.Key.String(), "changed", r.Changed))
 			if r.Changed {
 				changed = true
 				verb := "would migrate"
@@ -93,7 +94,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		if text == "" {
 			text = "nothing to migrate"
 		}
-		data := jsonObj("applied", *apply, "issues", rows, "changed", changed && *apply)
+		data := jsonx.Obj("applied", *apply, "issues", rows, "changed", changed && *apply)
 		res := Result{Data: data, Text: text}
 		if merr != nil {
 			var conflict *migrate.LabelConflictError

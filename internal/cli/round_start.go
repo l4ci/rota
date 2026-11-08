@@ -31,7 +31,7 @@ func checkList(cs []round.Check) []any {
 		o := jsonx.NewObject()
 		o.Set("name", c.Name)
 		o.Set("ok", c.OK)
-		o.Set("detail", strs(c.Detail))
+		o.Set("detail", jsonx.Strings(c.Detail))
 		out = append(out, o)
 	}
 	return out
@@ -227,7 +227,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		d.Set("base", st.Base)
 		d.Set("slots", slotList(st.Slots))
 		if st.Scope == roundcfg.ScopeSlate {
-			d.Set("slate", strs(st.Slate))
+			d.Set("slate", jsonx.Strings(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
 		notePath := handoffFile(c.deps(), root, cfg)

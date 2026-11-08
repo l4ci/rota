@@ -426,7 +426,7 @@ func trainNudgeData(ns []trainNudge) []any {
 	for _, n := range ns {
 		o := jsonx.NewObject()
 		o.Set("base", n.Base)
-		o.Set("prs", strList(n.PRs))
+		o.Set("prs", jsonx.Strings(n.PRs))
 		o.Set("command", n.Command())
 		setIf(o, "reason", n.Reason)
 		if len(n.Conflicts) > 0 {
@@ -435,7 +435,7 @@ func trainNudgeData(ns []trainNudge) []any {
 				co := jsonx.NewObject()
 				co.Set("a", c.A)
 				co.Set("b", c.B)
-				co.Set("paths", strList(c.Paths))
+				co.Set("paths", jsonx.Strings(c.Paths))
 				cs = append(cs, co)
 			}
 			o.Set("conflicts", cs)
@@ -443,7 +443,7 @@ func trainNudgeData(ns []trainNudge) []any {
 			for _, b := range n.Blocked {
 				bo := jsonx.NewObject()
 				bo.Set("pr", b.Target)
-				bo.Set("conflictsWith", strList(b.By))
+				bo.Set("conflictsWith", jsonx.Strings(b.By))
 				bs = append(bs, bo)
 			}
 			o.Set("orderBlocked", bs)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -21,7 +22,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 	mark := fs.String("mark", "", "mark the learning comment `id` harvested")
 	round := fs.Int("round", -1, "the round number; default is the lease's round, else the highest in the ledger")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		root, err := c.Root()
@@ -90,14 +91,14 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 				if r.done {
 					continue
 				}
-				list = append(list, jsonObj("issue", r.issue, "commentId", r.comment.ID, "who", r.comment.Who, "text", r.comment.Text))
+				list = append(list, jsonx.Obj("issue", r.issue, "commentId", r.comment.ID, "who", r.comment.Who, "text", r.comment.Text))
 				lines = append(lines, fmt.Sprintf("- #%s · comment %s · %s", r.issue, r.comment.ID, strings.ReplaceAll(r.comment.Text, "\n", "\n  ")))
 			}
 			text := strings.Join(lines, "\n")
 			if len(lines) == 0 {
 				text = fmt.Sprintf("no unharvested learnings on issues merged in round %d", n)
 			}
-			return Result{Data: jsonObj("round", n, "learnings", list), Text: text}, nil
+			return Result{Data: jsonx.Obj("round", n, "learnings", list), Text: text}, nil
 		})
 	}
 }
@@ -106,10 +107,10 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 // its data carries no "changed"; --mark writes, so it keeps exit 4.
 func refuseHarvest(writes bool, blockedBy string, e *Error) (Result, error) {
 	if writes {
-		return Result{Data: jsonObj("blockedBy", blockedBy, "changed", false)}, e
+		return Result{Data: jsonx.Obj("blockedBy", blockedBy, "changed", false)}, e
 	}
 	e.Exit = ExitFailed
-	return Result{Data: jsonObj("blockedBy", blockedBy)}, e
+	return Result{Data: jsonx.Obj("blockedBy", blockedBy)}, e
 }
 
 // learningsAndMarks reads the issue's comments once and splits the `learning`
@@ -153,7 +154,7 @@ func markHarvested(be backlog.Backend, rows []harvestRow, id string) (Result, er
 				return backlogFail(err)
 			}
 		}
-		return Result{Data: jsonObj("issue", r.issue, "commentId", id, "changed", !r.done), Text: fmt.Sprintf("marked comment %s on #%s harvested", id, r.issue)}, nil
+		return Result{Data: jsonx.Obj("issue", r.issue, "commentId", id, "changed", !r.done), Text: fmt.Sprintf("marked comment %s on #%s harvested", id, r.issue)}, nil
 	}
 	return Result{}, Resolution("no learning comment %s on an issue merged in this round", id)
 }

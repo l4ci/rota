@@ -23,11 +23,11 @@ func overlapList(os []round.Overlap) []any {
 		d := jsonx.NewObject()
 		d.Set("with", o.With)
 		d.Set("slot", o.Slot)
-		d.Set("paths", strs(o.Paths))
+		d.Set("paths", jsonx.Strings(o.Paths))
 		if len(o.Dirs) > 0 {
-			d.Set("dirs", strs(o.Dirs))
+			d.Set("dirs", jsonx.Strings(o.Dirs))
 		}
-		d.Set("scopes", strs(o.Scopes))
+		d.Set("scopes", jsonx.Strings(o.Scopes))
 		if o.Inferred {
 			d.Set("inferred", true)
 		}
@@ -138,7 +138,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			d.Set("overlaps", overlapList(res.Overlaps))
 		}
 		if len(res.Bundle) > 0 {
-			d.Set("bundle", strs(res.Bundle))
+			d.Set("bundle", jsonx.Strings(res.Bundle))
 			d.Set("members", memberList(res.Members))
 		}
 		setIf(d, "account", res.Account)

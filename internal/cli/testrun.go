@@ -104,9 +104,9 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		}
 		d := jsonx.NewObject()
 		d.Set("tier", tier)
-		d.Set("commands", strList(ran))
-		d.Set("verified", strList(passed))
-		d.Set("failed", strList(failed))
+		d.Set("commands", jsonx.Strings(ran))
+		d.Set("verified", jsonx.Strings(passed))
+		d.Set("failed", jsonx.Strings(failed))
 		if logPath != "" {
 			d.Set("logPath", logPath)
 		}

@@ -423,3 +423,23 @@ func Truthy(v any) bool {
 	}
 	return true
 }
+
+// Obj builds an Object from alternating string keys and values; a trailing
+// key without a value is dropped.
+func Obj(kv ...any) *Object {
+	o := NewObject()
+	for i := 0; i+1 < len(kv); i += 2 {
+		o.Set(kv[i].(string), kv[i+1])
+	}
+	return o
+}
+
+// Strings converts a []string to a []any; nil yields an empty, non-nil slice
+// so it encodes as [] rather than null.
+func Strings(l []string) []any {
+	out := make([]any, len(l))
+	for i, s := range l {
+		out[i] = s
+	}
+	return out
+}

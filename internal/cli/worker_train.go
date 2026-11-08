@@ -34,7 +34,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		ms = append(ms, o)
 	}
 	d.Set("members", ms)
-	d.Set("order", strList(r.Order))
+	d.Set("order", jsonx.Strings(r.Order))
 	if len(r.Culprits) > 0 {
 		cs := []any{}
 		for _, culprit := range r.Culprits {
@@ -53,7 +53,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		st := jsonx.NewObject()
 		st.Set("tier", r.Stop.Tier)
 		st.Set("command", r.Stop.Command)
-		st.Set("tests", strList(r.Stop.Tests))
+		st.Set("tests", jsonx.Strings(r.Stop.Tests))
 		st.Set("scratch", r.Stop.Scratch)
 		st.Set("base", r.Stop.Base)
 		ms := []any{}
@@ -68,7 +68,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		st.Set("diagnosed", false)
 		d.Set("stop", st)
 	}
-	d.Set("landed", strList(r.Landed))
+	d.Set("landed", jsonx.Strings(r.Landed))
 	d.Set("anyLanded", len(r.Landed) > 0)
 	d.Set("timing", trainTimingData(r))
 	if r.Original != nil {
@@ -81,17 +81,17 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		}
 		d.Set("diagnosticFailures", fs)
 	}
-	d.Set("verified", strList(r.Verified))
+	d.Set("verified", jsonx.Strings(r.Verified))
 	if r.Tier != "" {
 		d.Set("tier", r.Tier)
-		d.Set("skipped", strList(r.Skipped))
+		d.Set("skipped", jsonx.Strings(r.Skipped))
 	}
-	d.Set("e2eVerified", strList(r.E2EVerified))
+	d.Set("e2eVerified", jsonx.Strings(r.E2EVerified))
 	if len(r.Flaky) > 0 {
 		d.Set("flaky", flakyData(r.Flaky))
 	}
-	d.Set("cacheHits", strList(r.CacheHits))
-	d.Set("transient", strList(r.Transient))
+	d.Set("cacheHits", jsonx.Strings(r.CacheHits))
+	d.Set("transient", jsonx.Strings(r.Transient))
 	d.Set("changed", r.Changed)
 	setLedgerData(d, r.Excluded, r.Expired)
 	if r.SHA != "" {
@@ -117,10 +117,10 @@ func failureData(f worker.TrainFailure) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("tier", f.Tier)
 	o.Set("command", f.Command)
-	o.Set("tests", strList(f.Tests))
+	o.Set("tests", jsonx.Strings(f.Tests))
 	o.Set("members", f.Members)
 	o.Set("tip", f.Tip)
-	o.Set("onlyInDiagnostic", strList(f.OnlyInDiagnostic))
+	o.Set("onlyInDiagnostic", jsonx.Strings(f.OnlyInDiagnostic))
 	return o
 }
 
@@ -150,16 +150,16 @@ func planData(p *worker.TrainPlan) *jsonx.Object {
 		co := jsonx.NewObject()
 		co.Set("a", c.A)
 		co.Set("b", c.B)
-		co.Set("paths", strList(c.Paths))
+		co.Set("paths", jsonx.Strings(c.Paths))
 		cs = append(cs, co)
 	}
 	o.Set("conflicts", cs)
-	o.Set("landable", strList(p.Landable))
+	o.Set("landable", jsonx.Strings(p.Landable))
 	bs := []any{}
 	for _, b := range p.Blocked {
 		bo := jsonx.NewObject()
 		bo.Set("target", b.Target)
-		bo.Set("conflictsWith", strList(b.By))
+		bo.Set("conflictsWith", jsonx.Strings(b.By))
 		bs = append(bs, bo)
 	}
 	o.Set("orderBlocked", bs)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -39,7 +40,7 @@ func changeClassify(fs *flag.FlagSet) RunFunc {
 		for _, f := range res.Files {
 			files = append(files, f)
 		}
-		data := gitObj("branch", t.Branch, "base", t.Base, "tier", string(res.Tier), "reason", res.Reason, "files", files, "changedLines", res.Lines)
+		data := jsonx.Obj("branch", t.Branch, "base", t.Base, "tier", string(res.Tier), "reason", res.Reason, "files", files, "changedLines", res.Lines)
 		return Result{Data: data, Text: fmt.Sprintf("TIER %s — %s (%s)", t.Branch, res.Tier, res.Reason)}, nil
 	}
 }

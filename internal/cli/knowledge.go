@@ -45,15 +45,6 @@ func knowledgeCommands() *Command {
 	}}
 }
 
-// knObj builds a JSON object from alternating keys and values.
-func knObj(kv ...any) *jsonx.Object {
-	o := jsonx.NewObject()
-	for i := 0; i+1 < len(kv); i += 2 {
-		o.Set(kv[i].(string), kv[i+1])
-	}
-	return o
-}
-
 // knStore builds the knowledge store for the project, plus the scope the verb
 // acts on: --repo when given, else the sub-repo the working directory belongs
 // to, else the umbrella.
@@ -111,13 +102,6 @@ func knRequire(flags map[string]string, order ...string) error {
 	return nil
 }
 
-func knNoArgs(args []string) error {
-	if len(args) > 0 {
-		return Usage("unexpected argument %q", args[0])
-	}
-	return nil
-}
-
 func knQuery(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only bullets on this `tier` (provisional|confirmed|deprecated)")
 	incl := fs.Bool("include-deprecated", false, "also print deprecated bullets")
@@ -169,7 +153,7 @@ func knQuery(fs *flag.FlagSet) RunFunc {
 		for _, m := range missing {
 			ms = append(ms, m)
 		}
-		return Result{Data: knObj("text", text, "missing", ms), Text: text}, nil
+		return Result{Data: jsonx.Obj("text", text, "missing", ms), Text: text}, nil
 	}
 }
 
@@ -177,7 +161,7 @@ func knStatsVerb(fs *flag.FlagSet) RunFunc {
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if *ext {
-			if err := knNoArgs(args); err != nil {
+			if err := noArgs(args); err != nil {
 				return Result{}, err
 			}
 			return knExtStats(c)
@@ -187,7 +171,7 @@ func knStatsVerb(fs *flag.FlagSet) RunFunc {
 }
 
 func knStats(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -204,7 +188,7 @@ func knStats(c *Ctx, args []string) (Result, error) {
 func knTopics(fs *flag.FlagSet) RunFunc {
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *ext {
@@ -227,10 +211,10 @@ func topicsResult(stats []knowledge.Stat) Result {
 	topics := []any{}
 	var lines []string
 	for _, s := range stats {
-		topics = append(topics, knObj("name", s.Name, "bullets", s.Bullets))
+		topics = append(topics, jsonx.Obj("name", s.Name, "bullets", s.Bullets))
 		lines = append(lines, fmt.Sprintf("%s: %d bullets", s.Name, s.Bullets))
 	}
-	return Result{Data: knObj("topics", topics), Text: strings.Join(lines, "\n")}
+	return Result{Data: jsonx.Obj("topics", topics), Text: strings.Join(lines, "\n")}
 }
 
 // statsResult is the topic list of knowledge stats and decisions stats.
@@ -238,10 +222,10 @@ func statsResult(stats []knowledge.Stat) Result {
 	topics := []any{}
 	var lines []string
 	for _, s := range stats {
-		topics = append(topics, knObj("name", s.Name, "bullets", s.Bullets, "bytes", s.Bytes))
+		topics = append(topics, jsonx.Obj("name", s.Name, "bullets", s.Bullets, "bytes", s.Bytes))
 		lines = append(lines, fmt.Sprintf("%s: %d bullets, %d bytes", s.Name, s.Bullets, s.Bytes))
 	}
-	return Result{Data: knObj("topics", topics), Text: strings.Join(lines, "\n")}
+	return Result{Data: jsonx.Obj("topics", topics), Text: strings.Join(lines, "\n")}
 }
 
 func knAdd(fs *flag.FlagSet) RunFunc {
@@ -256,7 +240,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	seen := fs.String("seen", "", "with --external: `tools` the learning was seen on, tool@version separated by spaces or commas; a bare tool takes the project's version")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "body-file": *bodyFile}, "topic", "title", "body-file"); err != nil {
@@ -304,7 +288,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if !res.Changed {
 			text = fmt.Sprintf("unchanged: %s (title already present)", *topic)
 		}
-		return Result{Data: knObj("topic", *topic, "title", *title, "changed", res.Changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("topic", *topic, "title", *title, "changed", res.Changed), Text: text}, nil
 	}
 }
 
@@ -313,7 +297,7 @@ func knSplit(fs *flag.FlagSet) RunFunc {
 	planFile := fs.String("plan", "", "the split plan, JSON {\"subtopics\":[{\"name\",\"hook\",\"titles\"}]}: a `path`, or - for stdin; optional only to fold a stray file into a topic that is already split")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if !*ext {
@@ -348,7 +332,7 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 	date := fs.String("date", "", "with --external: set the bullet's stamp `date` (YYYY-MM-DD)")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "fragment": *fragment}, "topic", "fragment"); err != nil {
@@ -402,7 +386,7 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("topic", *topic, "changed", changed), Text: "amended: " + file}, nil
+		return Result{Data: jsonx.Obj("topic", *topic, "changed", changed), Text: "amended: " + file}, nil
 	}
 }
 
@@ -412,7 +396,7 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 	repl := fs.String("new", "", "the replacement `text`")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "old": *old}, "topic", "old"); err != nil {
@@ -434,7 +418,7 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("topic", *topic, "changed", r.Changed), Text: "replaced: " + r.File}, nil
+		return Result{Data: jsonx.Obj("topic", *topic, "changed", r.Changed), Text: "replaced: " + r.File}, nil
 	}
 }
 
@@ -443,7 +427,7 @@ func knRm(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "bullet `title`")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
@@ -460,7 +444,7 @@ func knRm(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("topic", *topic, "title", *title, "changed", true), Text: fmt.Sprintf("removed: %s :: %s (%s)", *topic, *title, res.File)}, nil
+		return Result{Data: jsonx.Obj("topic", *topic, "title", *title, "changed", true), Text: fmt.Sprintf("removed: %s :: %s (%s)", *topic, *title, res.File)}, nil
 	}
 }
 
@@ -469,7 +453,7 @@ func knRename(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", "the new topic name, or the topic to move into")
 	title := fs.String("title", "", "move only the bullet with this `title`")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"from": *from, "to": *to}, "from", "to"); err != nil {
@@ -483,7 +467,7 @@ func knRename(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		d := knObj("from", *from, "to", *to)
+		d := jsonx.Obj("from", *from, "to", *to)
 		if *title != "" {
 			d.Set("title", *title)
 		}
@@ -505,7 +489,7 @@ func knHit(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "bullet `title`")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
@@ -525,7 +509,7 @@ func knHit(fs *flag.FlagSet) RunFunc {
 		if res.PromotionBlocked {
 			c.Warn("skip-auto-promote: %s :: %s has pending contradiction", *topic, *title)
 		}
-		d := knObj("topic", *topic, "title", *title, "hits", res.Entry.Hits, "tier", res.Entry.Tier,
+		d := jsonx.Obj("topic", *topic, "title", *title, "hits", res.Entry.Hits, "tier", res.Entry.Tier,
 			"promoted", res.Promoted, "promotionBlocked", res.PromotionBlocked, "changed", res.Changed)
 		text := fmt.Sprintf("hit: %s :: %s (hits=%d, tier=%s)", *topic, *title, res.Entry.Hits, res.Entry.Tier)
 		return Result{Data: d, Text: text}, nil
@@ -536,7 +520,7 @@ func knTierGet(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	title := fs.String("title", "", "bullet `title`")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
@@ -550,7 +534,7 @@ func knTierGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		d := knObj("topic", *topic, "title", *title, "found", found)
+		d := jsonx.Obj("topic", *topic, "title", *title, "found", found)
 		if !found {
 			return Result{Data: d, Text: "untracked"}, nil
 		}
@@ -566,7 +550,7 @@ func knTierSet(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "bullet `title`")
 	tier := fs.String("tier", "", "the new `tier` (provisional|confirmed|deprecated)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "tier": *tier}, "topic", "title", "tier"); err != nil {
@@ -583,7 +567,7 @@ func knTierSet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		d := knObj("topic", *topic, "title", *title, "tier", *tier)
+		d := jsonx.Obj("topic", *topic, "title", *title, "tier", *tier)
 		if prev != "" {
 			d.Set("previousTier", prev)
 		}
@@ -599,7 +583,7 @@ func knTierSet(fs *flag.FlagSet) RunFunc {
 func knTierList(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only entries on this `tier` (provisional|confirmed|deprecated)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *tier != "" && !knowledge.ValidTier(*tier) {
@@ -616,16 +600,16 @@ func knTierList(fs *flag.FlagSet) RunFunc {
 		entries := []any{}
 		var lines []string
 		for _, e := range list {
-			entries = append(entries, knObj("topic", e.Topic, "title", e.Title, "tier", e.Tier, "hits", e.Hits, "lastSeen", e.LastSeen))
+			entries = append(entries, jsonx.Obj("topic", e.Topic, "title", e.Title, "tier", e.Tier, "hits", e.Hits, "lastSeen", e.LastSeen))
 			lines = append(lines, fmt.Sprintf("%s :: %s: %s (hits=%d)", e.Topic, e.Title, e.Tier, e.Hits))
 		}
-		return Result{Data: knObj("entries", entries), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("entries", entries), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
 func knTierFold(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		st, scope, err := knStore(c)
@@ -650,7 +634,7 @@ func knTierFold(fs *flag.FlagSet) RunFunc {
 		if res.Skipped > 0 {
 			text += fmt.Sprintf("; skipped %d malformed buffer line(s)", res.Skipped)
 		}
-		return Result{Data: knObj("hits", res.Hits, "changed", res.Changed, "skipped", res.Skipped), Text: text}, nil
+		return Result{Data: jsonx.Obj("hits", res.Hits, "changed", res.Changed, "skipped", res.Skipped), Text: text}, nil
 	}
 }
 
@@ -659,7 +643,7 @@ func knContraAdd(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "bullet `title`")
 	text := fs.String("text", "", "the correction `text`, one line")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "text": *text}, "topic", "title", "text"); err != nil {
@@ -673,12 +657,12 @@ func knContraAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("topic", *topic, "title", *title, "pending", n, "changed", true), Text: fmt.Sprintf("queued: %s :: %s (%d pending)", *topic, *title, n)}, nil
+		return Result{Data: jsonx.Obj("topic", *topic, "title", *title, "pending", n, "changed", true), Text: fmt.Sprintf("queued: %s :: %s (%d pending)", *topic, *title, n)}, nil
 	}
 }
 
 func knContraList(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -692,17 +676,17 @@ func knContraList(c *Ctx, args []string) (Result, error) {
 	items := []any{}
 	var lines []string
 	for _, e := range list {
-		items = append(items, knObj("topic", e.Topic, "title", e.Title, "correctionText", e.Text, "loggedAt", e.LoggedAt))
+		items = append(items, jsonx.Obj("topic", e.Topic, "title", e.Title, "correctionText", e.Text, "loggedAt", e.LoggedAt))
 		lines = append(lines, fmt.Sprintf("%s :: %s: %s", e.Topic, e.Title, e.Text))
 	}
-	return Result{Data: knObj("items", items), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("items", items), Text: strings.Join(lines, "\n")}, nil
 }
 
 func knContraClear(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "clear only this `topic` (with --title)")
 	title := fs.String("title", "", "clear only this bullet `title` (with --topic)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if (*topic == "") != (*title == "") {
@@ -721,7 +705,7 @@ func knContraClear(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("cleared", n, "changed", n > 0), Text: fmt.Sprintf("cleared %d", n)}, nil
+		return Result{Data: jsonx.Obj("cleared", n, "changed", n > 0), Text: fmt.Sprintf("cleared %d", n)}, nil
 	}
 }
 
@@ -729,7 +713,7 @@ func knContraHas(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	title := fs.String("title", "", "bullet `title`")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
@@ -743,7 +727,7 @@ func knContraHas(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		res := Result{Data: knObj("has", has), Text: fmt.Sprintf("%v", has)}
+		res := Result{Data: jsonx.Obj("has", has), Text: fmt.Sprintf("%v", has)}
 		if !has {
 			return res, Failed("%s :: %s is not in the contradiction queue", *topic, *title)
 		}
@@ -757,11 +741,11 @@ func knFail(err error) (Result, error) {
 	e := knErr(err)
 	switch {
 	case errors.Is(err, knowledge.ErrAliasCollision):
-		return Result{Data: knObj("blockedBy", blockedby.AliasCollision, "changed", false)}, e
+		return Result{Data: jsonx.Obj("blockedBy", blockedby.AliasCollision, "changed", false)}, e
 	case errors.Is(err, knowledge.ErrExists):
-		return Result{Data: knObj("blockedBy", blockedby.Exists, "changed", false)}, e
+		return Result{Data: jsonx.Obj("blockedBy", blockedby.Exists, "changed", false)}, e
 	case errors.Is(err, knowledge.ErrMultiMatch):
-		return Result{Data: knObj("blockedBy", blockedby.Ambiguous, "changed", false)}, e
+		return Result{Data: jsonx.Obj("blockedBy", blockedby.Ambiguous, "changed", false)}, e
 	}
 	return Result{}, e
 }
