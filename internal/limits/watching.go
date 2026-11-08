@@ -2,7 +2,6 @@ package limits
 
 import (
 	"encoding/json"
-	"os"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -39,9 +38,9 @@ func WatchPath(commonDir string) string { return rotastate.File(commonDir, Watch
 
 // ReadWatching loads the record; found is false when there is none or it does
 // not parse.
-func ReadWatching(commonDir string) (w Watching, found bool) {
-	b, err := os.ReadFile(WatchPath(commonDir))
-	if err != nil || json.Unmarshal(b, &w) != nil || w.PID <= 0 {
+func ReadWatching(commonDir string) (Watching, bool) {
+	w, found, err := fsio.ReadJSON[Watching](WatchPath(commonDir))
+	if err != nil || !found || w.PID <= 0 {
 		return Watching{}, false
 	}
 	return w, true
