@@ -43,6 +43,9 @@ type Command struct {
 	// UISub, on a group, names the verb that `rota <group> --ui` runs.
 	UISub string
 	Subs  []*Command
+	// Gates is how the pre-verb gates treat the verb and, unless a verb under
+	// it sets its own, the verbs under it. Declared in tree_gates.go.
+	Gates Gates
 }
 
 // ViewFunc builds the --ui screen from a verb's Result.
@@ -371,19 +374,7 @@ func runWithContext(ctx context.Context, root *Command, deps *Deps, args []strin
 		}
 	}
 	physicalCwd(c)
-	if err := legacyStateStop(c); err != nil {
-		return fail(c, stdout, err)
-	}
-	if res, err := roundKeysStop(c); err != nil {
-		return failWith(c, stdout, err, res)
-	}
-	if res, err := roleInTrackedConfigStop(c); err != nil {
-		return failWith(c, stdout, err, res)
-	}
-	if res, err := roundMachineStop(c); err != nil {
-		return failWith(c, stdout, err, res)
-	}
-	if res, err := supportRoleStop(c); err != nil {
+	if res, err := runGates(c, root); err != nil {
 		return failWith(c, stdout, err, res)
 	}
 	// An unregistered --repo is exit 3 on every repo-scoped verb, ahead of

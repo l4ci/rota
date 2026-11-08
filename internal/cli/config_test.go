@@ -380,3 +380,17 @@ func TestConfigShowScope(t *testing.T) {
 		t.Errorf("--global: %d %v", code, env)
 	}
 }
+
+// A config.local.json that is not an object is the user's file: exit 70 naming
+// it, without the "bug in rota" hint the unclassified default adds.
+func TestConfigSetLocalNotObjectIs70(t *testing.T) {
+	root := trackerProject(t, "{}\n")
+	write(t, filepath.Join(root, ".rota", "config.local.json"), "[1]\n")
+	code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "--local", "docs.path", "x")
+	if code != ExitInternal || !strings.Contains(stderr, "config.local.json is not a JSON object") {
+		t.Fatalf("code=%d %s", code, stderr)
+	}
+	if strings.Contains(stderr, "bug in rota") {
+		t.Errorf("a corrupt local config is not a rota bug: %s", stderr)
+	}
+}
