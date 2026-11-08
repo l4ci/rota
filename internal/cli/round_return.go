@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -160,11 +159,7 @@ func returnRoot(c *Ctx, slot string) (string, error) {
 	if reg.Slot(slot) != nil {
 		return root, nil
 	}
-	common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
-	if err != nil {
-		return root, nil
-	}
-	main, ok := rotastate.MainCheckout(common)
+	main, ok := c.MainCheckout(root)
 	if !ok {
 		return root, nil
 	}

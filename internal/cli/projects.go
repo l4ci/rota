@@ -7,7 +7,6 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tui"
@@ -169,7 +168,7 @@ func projectState(c *Ctx, path string, missing bool, lease roundlease.Env) (stat
 		round = fmt.Sprint(n)
 	}
 	held = "none"
-	if common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, path); err == nil {
+	if common, ok := c.CommonDirOK(path); ok {
 		if l, st, err := lease.Read(common); err == nil && st != roundlease.None {
 			switch st {
 			case roundlease.Stale:

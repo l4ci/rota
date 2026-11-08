@@ -57,6 +57,15 @@ func Load(root string) []Repo {
 	return out
 }
 
+// Rels lists the sub-repo paths as written in root's repos.json.
+func Rels(root string) []string {
+	var out []string
+	for _, r := range Load(root) {
+		out = append(out, r.Rel)
+	}
+	return out
+}
+
 // Paths is Load as name to absolute path.
 func Paths(root string) map[string]string {
 	out := map[string]string{}

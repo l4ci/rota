@@ -74,7 +74,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 // the git common dir, so the main checkout and every linked worktree lock the
 // same file. Outside a repository it falls back to the project's .rota.
 func itemNoteLockDir(c *Ctx, root string) string {
-	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+	if cd, ok := c.CommonDirOK(root); ok {
 		return rotastate.Dir(cd)
 	}
 	return rotatree.Dir(root)
