@@ -1,13 +1,12 @@
-// Package notechunk splits a note body into the numbered marker comments an
-// issue holds it in (_note_parts in bin/hvlib_backend.py). It is pure text: the
-// per-comment limit is a parameter, so the environment is read at the call edge.
-package notechunk
+// Splitting a note body into the numbered marker comments an issue holds it in
+// (_note_parts in bin/hvlib_backend.py). It is pure text: the per-comment limit
+// is a parameter, so the environment is read at the call edge.
+
+package marker
 
 import (
 	"strings"
 	"unicode/utf8"
-
-	"github.com/l4ci/rota/internal/marker"
 )
 
 // Norm is a note body with CRLF folded to LF and trailing newlines dropped.
@@ -47,7 +46,7 @@ func KeepLines(s string) []string {
 // line boundaries (a line longer than a part is cut).
 func Parts(kind, text string, limit int) []string {
 	text = Norm(text)
-	single := marker.NoteHeader(kind, 1, 1)
+	single := NoteHeader(kind, 1, 1)
 	if runes(single)+runes(text) <= limit {
 		return []string{single + text}
 	}
@@ -56,16 +55,16 @@ func Parts(kind, text string, limit int) []string {
 	total := 2
 	var chunks []string
 	for {
-		headerSize := runes(marker.NoteHeader(kind, total, total))
+		headerSize := runes(NoteHeader(kind, total, total))
 		chunks = split(text, limit-headerSize)
-		if runes(marker.NoteHeader(kind, len(chunks), len(chunks))) <= headerSize {
+		if runes(NoteHeader(kind, len(chunks), len(chunks))) <= headerSize {
 			break
 		}
 		total = len(chunks)
 	}
 	out := make([]string, len(chunks))
 	for i, c := range chunks {
-		out[i] = marker.NoteHeader(kind, i+1, len(chunks)) + c
+		out[i] = NoteHeader(kind, i+1, len(chunks)) + c
 	}
 	return out
 }

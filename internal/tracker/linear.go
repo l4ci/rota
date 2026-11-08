@@ -12,7 +12,6 @@ import (
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/labels"
-	"github.com/l4ci/rota/internal/marker"
 )
 
 // Linear is the issue tracker of issues.source linear: one team of a Linear
@@ -30,6 +29,9 @@ import (
 // canceled, unstarted, started), never by name. Projects and cycles are not
 // rota milestones (#586): the milestone calls fail and FindMilestone finds none.
 type Linear struct {
+	noMilestones
+	keyClosing
+
 	rest         *REST
 	team         string
 	labelEntries []labels.Entry
@@ -88,7 +90,7 @@ func NewLinear(c connections.Connection, apiKey, team string) *Linear {
 	if site == "" {
 		site = LinearAPI
 	}
-	l := &Linear{team: strings.ToUpper(strings.TrimSpace(team)), ids: map[IssueKey]string{}}
+	l := &Linear{noMilestones: noMilestones{"linear", ": Linear projects and cycles are not rota milestones"}, team: strings.ToUpper(strings.TrimSpace(team)), ids: map[IssueKey]string{}}
 	l.rest = &REST{Base: site + "/graphql", Auth: func(r *http.Request) { r.Header.Set("Authorization", apiKey) },
 		Classify: func(_, _ string, status int, raw []byte) *Error {
 			var out struct {
@@ -614,15 +616,9 @@ func (l *Linear) Get(ctx context.Context, key IssueKey, withComments bool) (Issu
 	return is, nil
 }
 
-// errLinearNoMilestones refuses a milestone on Linear: projects and cycles are not
-// rota milestones (#586).
-func errLinearNoMilestones() error {
-	return &noMilestonesError{failed("issues.source linear has no milestones: Linear projects and cycles are not rota milestones")}
-}
-
 func (l *Linear) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	if milestone != "" {
-		return "", errLinearNoMilestones()
+		return "", l.noMilestonesErr()
 	}
 	teamID, err := l.teamInfo(ctx)
 	if err != nil {
@@ -674,7 +670,7 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 
 func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	if e.Milestone != "" {
-		return errLinearNoMilestones()
+		return l.noMilestonesErr()
 	}
 	id, err := l.issueID(ctx, key)
 	if err != nil {
@@ -803,7 +799,7 @@ func (l *Linear) filter(f ListFilter) map[string]any {
 // order Linear pages in.
 func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
-		return nil, errLinearNoMilestones()
+		return nil, l.noMilestonesErr()
 	}
 	var got []linearIssue
 	err := Pages(ctx, func(cursor string) (string, error) {
@@ -903,10 +899,6 @@ func (l *Linear) AssignSelf(ctx context.Context, key IssueKey) error {
 	return l.update(ctx, id, map[string]any{"assigneeId": me.ID})
 }
 
-// ClosesIssue: a PR closes a Linear issue by naming its identifier in the
-// head branch or the title, as Linear's own integrations link them.
-func (l *Linear) ClosesIssue(key IssueKey, c ClosingSource) bool { return ClosesByKey(key, c) }
-
 // ---- comments ----------------------------------------------------------------
 
 type linearComment struct {
@@ -928,6 +920,12 @@ func (l *Linear) Comments(ctx context.Context, key IssueKey) ([]Comment, error) 
 // attachment holds, oldest first by the server's time, then id.
 func (l *Linear) comments(ctx context.Context, issueID string, state map[string]linearAttachment) ([]Comment, error) {
 	out := []Comment{}
+	store := markedComments{stored: func(id string) (string, bool) {
+		if a, ok := state[linearStateURL+"comment/"+id]; ok {
+			return a.Metadata.body()
+		}
+		return "", false
+	}}
 	err := Pages(ctx, func(cursor string) (string, error) {
 		var d struct {
 			Issue struct {
@@ -942,13 +940,7 @@ func (l *Linear) comments(ctx context.Context, issueID string, state map[string]
 			return "", err
 		}
 		for _, c := range d.Issue.Comments.Nodes {
-			body := c.Body
-			if a, ok := state[linearStateURL+"comment/"+c.ID]; ok {
-				if full, known := a.Metadata.body(); known {
-					body = full
-				}
-			}
-			out = append(out, Comment{ID: c.ID, Body: body, Author: c.User.label(), CreatedAt: parseTime(c.CreatedAt)})
+			out = append(out, Comment{ID: c.ID, Body: store.Body(c.ID, c.Body), Author: c.User.label(), CreatedAt: parseTime(c.CreatedAt)})
 		}
 		return d.Issue.Comments.PageInfo.next(), nil
 	})
@@ -961,6 +953,53 @@ func (l *Linear) comments(ctx context.Context, issueID string, state map[string]
 	return out, err
 }
 
+// marked is Linear's storage for the markedComments rule: the full body of a
+// rota comment lives in an attachment on the issue.
+func (l *Linear) marked(key IssueKey, issueID string) markedComments {
+	return markedComments{
+		post: func(ctx context.Context, shown string) (string, error) {
+			var d struct {
+				CommentCreate struct {
+					Success bool          `json:"success"`
+					Comment linearComment `json:"comment"`
+				} `json:"commentCreate"`
+			}
+			if err := l.mutate(ctx, "CommentCreate", `($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id } } }`,
+				map[string]any{"input": map[string]any{"issueId": issueID, "body": shown}}, &d); err != nil {
+				return "", err
+			}
+			id := d.CommentCreate.Comment.ID
+			if err := succeeded("CommentCreate", d.CommentCreate.Success && id != ""); err != nil {
+				return "", err
+			}
+			return id, nil
+		},
+		edit: func(ctx context.Context, id, shown string) error {
+			var d struct {
+				CommentUpdate struct {
+					Success bool `json:"success"`
+				} `json:"commentUpdate"`
+			}
+			if err := l.mutate(ctx, "CommentUpdate", `($id: String!, $input: CommentUpdateInput!) { commentUpdate(id: $id, input: $input) { success } }`,
+				map[string]any{"id": id, "input": map[string]any{"body": shown}}, &d); err != nil {
+				return err
+			}
+			return succeeded("CommentUpdate", d.CommentUpdate.Success)
+		},
+		remove: l.deleteComment,
+		put: func(ctx context.Context, id, body string, _ bool) error {
+			return l.putState(ctx, issueID, "comment/"+id, body)
+		},
+		drop: func(ctx context.Context, id string) error {
+			return l.dropState(ctx, key, "comment/"+id)
+		},
+		fits: stateFits,
+		rollbackFailed: func(id string, putErr, removeErr error) error {
+			return failed("%v; deleting the half-made comment %s on %s also failed (%v): delete it in Linear", putErr, id, key.Ref(), removeErr)
+		},
+	}
+}
+
 // AddComment posts body; a body with a rota marker is posted without it and
 // kept whole in its comment's attachment. An attachment that cannot be
 // written takes the comment back down, so no half-written state is left.
@@ -969,36 +1008,7 @@ func (l *Linear) AddComment(ctx context.Context, key IssueKey, body string) (str
 	if err != nil {
 		return "", err
 	}
-	shown := body
-	if marker.Has(body) {
-		if err := stateFits("a comment", body); err != nil {
-			return "", err
-		}
-		shown = visible(body)
-	}
-	var d struct {
-		CommentCreate struct {
-			Success bool          `json:"success"`
-			Comment linearComment `json:"comment"`
-		} `json:"commentCreate"`
-	}
-	if err := l.mutate(ctx, "CommentCreate", `($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id } } }`,
-		map[string]any{"input": map[string]any{"issueId": issueID, "body": shown}}, &d); err != nil {
-		return "", err
-	}
-	id := d.CommentCreate.Comment.ID
-	if err := succeeded("CommentCreate", d.CommentCreate.Success && id != ""); err != nil {
-		return "", err
-	}
-	if marker.Has(body) {
-		if err := l.putState(ctx, issueID, "comment/"+id, body); err != nil {
-			if derr := l.deleteComment(ctx, id); derr != nil {
-				return "", failed("%v; deleting the half-made comment %s on %s also failed (%v): delete it in Linear", err, id, key.Ref(), derr)
-			}
-			return "", err
-		}
-	}
-	return id, nil
+	return l.marked(key, issueID).Add(ctx, body)
 }
 
 func (l *Linear) EditComment(ctx context.Context, key IssueKey, commentID, body string) error {
@@ -1006,29 +1016,7 @@ func (l *Linear) EditComment(ctx context.Context, key IssueKey, commentID, body 
 	if err != nil {
 		return err
 	}
-	shown := body
-	if marker.Has(body) {
-		if err := stateFits("comment "+commentID, body); err != nil {
-			return err
-		}
-		shown = visible(body)
-	}
-	var d struct {
-		CommentUpdate struct {
-			Success bool `json:"success"`
-		} `json:"commentUpdate"`
-	}
-	if err := l.mutate(ctx, "CommentUpdate", `($id: String!, $input: CommentUpdateInput!) { commentUpdate(id: $id, input: $input) { success } }`,
-		map[string]any{"id": commentID, "input": map[string]any{"body": shown}}, &d); err != nil {
-		return err
-	}
-	if err := succeeded("CommentUpdate", d.CommentUpdate.Success); err != nil {
-		return err
-	}
-	if !marker.Has(body) {
-		return l.dropState(ctx, key, "comment/"+commentID)
-	}
-	return l.putState(ctx, issueID, "comment/"+commentID, body)
+	return l.marked(key, issueID).Edit(ctx, commentID, body)
 }
 
 func (l *Linear) DeleteComment(ctx context.Context, key IssueKey, commentID string) error {
@@ -1124,29 +1112,6 @@ func (l *Linear) dropState(ctx context.Context, key IssueKey, name string) error
 		return err
 	}
 	return succeeded("AttachmentDelete", out.AttachmentDelete.Success)
-}
-
-// ---- milestones: none -----------------------------------------------------------
-
-func (l *Linear) Milestones(context.Context, string) ([]Milestone, error) {
-	return nil, errLinearNoMilestones()
-}
-
-// FindMilestone finds none: Linear holds no rota milestones.
-func (l *Linear) FindMilestone(context.Context, string) (string, bool, error) {
-	return "", false, nil
-}
-
-func (l *Linear) CreateMilestone(context.Context, string, string) (int, error) {
-	return 0, errLinearNoMilestones()
-}
-
-func (l *Linear) EditMilestone(context.Context, int, MilestoneEdit) error {
-	return errLinearNoMilestones()
-}
-
-func (l *Linear) IssuesInMilestone(context.Context, string, string) ([]Issue, error) {
-	return nil, errLinearNoMilestones()
 }
 
 // ---- claims (plain comments) ------------------------------------------------------
