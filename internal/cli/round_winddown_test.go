@@ -134,6 +134,9 @@ func TestWindDownVerifyFailureKeepsTickStateAndReceipts(t *testing.T) {
 	if !strings.Contains(so.String(), "verify-failed") {
 		t.Fatalf("want a verify-failed verdict (exit %d):\n%s%s", code, so.String(), se.String())
 	}
+	if _, status, err := le.Read(cd); err != nil || status != roundlease.Live {
+		t.Errorf("a failed verify keeps the lease: status %v, err %v", status, err)
+	}
 	st := roundtick.LoadState(cd, 1)
 	if st.Held["ben"] != "12" || st.Stopped {
 		t.Errorf("tick state lost or still stopped after a failed verify: %+v", st)
