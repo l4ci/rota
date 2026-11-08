@@ -121,7 +121,7 @@ func hookPrint(v any) Result {
 type hookContext struct {
 	payload   hook.Payload
 	commonDir string
-	who       hook.Who
+	who       hookWho
 	root      string
 	cfg       any
 	set       hook.Settings
@@ -154,7 +154,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	hc.commonDir = cd
 	hc.now = c.deps().Now
 	hc.lease = c.deps().LeaseEnv()
-	hc.who = hook.Identify(hc.lease, c.deps().HolderPID(), c.deps().Getenv, cd)
+	hc.who = hookIdentify(hc.lease, c.deps().HolderPID(), c.deps().Getenv, cd)
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root

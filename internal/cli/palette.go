@@ -88,7 +88,7 @@ func layoutToggle(c *Ctx) (palette.Entry, bool) {
 		if reg.Layout() == layout.Split {
 			cur = layout.Split
 		}
-		return cur, reg.Host() == host.Herdr && hasHandle(reg)
+		return cur, host.CapabilitiesForKind(reg.Host()).Layouter != nil && hasHandle(reg)
 	}
 	if _, live := state(); !live {
 		return palette.Entry{}, false

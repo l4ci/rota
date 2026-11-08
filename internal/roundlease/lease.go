@@ -269,11 +269,15 @@ func (e Env) ClearStale(commonDir string) (Lease, bool, error) {
 	return gone, cleared, err
 }
 
-// hostServer reports whether comm is a terminal host's server: herdr, or tmux
-// (whose server and client rename themselves "tmux: server" and "tmux: client").
+// hostServer reports whether comm is a terminal host's server (host.ServerProc).
 // Every pane on it shares that ancestor, so it can never be the holder (#205).
 func hostServer(comm string) bool {
-	return comm == host.Herdr.Binary() || comm == host.Tmux.Binary() || strings.HasPrefix(comm, host.Tmux.Binary()+":")
+	for _, k := range host.PaneKinds {
+		if host.CapabilitiesForKind(k).Server.Match(comm) {
+			return true
+		}
+	}
+	return false
 }
 
 // transient are the processes between rota and the orchestrator that exit with

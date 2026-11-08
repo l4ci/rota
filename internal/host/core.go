@@ -170,7 +170,7 @@ func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) 
 	return c, t, nil
 }
 func (h *coreHost) Kind() Kind                 { return HerdrCore }
-func (h *coreHost) Capabilities() Capabilities { return CapabilitiesOf(h) }
+func (h *coreHost) Capabilities() Capabilities { return kindPolicy(HerdrCore, CapabilitiesOf(h)) }
 func (h *coreHost) RuntimeScopedHandles() bool { return true }
 func (h *coreHost) TreeKillClose() bool        { return true }
 func (h *coreHost) InSession() bool {

@@ -9,7 +9,7 @@ import (
 func coreOpts(t *testing.T) PreflightOpts {
 	t.Helper()
 	o := PreflightOpts{Slot: "dana", Launch: "codex --no-alt-screen", Worktree: t.TempDir(), CommonDir: func() (string, error) { return t.TempDir(), nil }}
-	o.HerdrCore = true
+	o.Host = HostTraits{CodexHost: true, CoreIdentity: true}
 	return o
 }
 
