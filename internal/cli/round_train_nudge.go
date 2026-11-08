@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/stamp"
@@ -313,7 +312,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
 	state := roundtick.State{}
 	if round, ok := reg.Round(); ok {
-		if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+		if cd, ok := c.CommonDirOK(root); ok {
 			state = roundtick.LoadState(cd, round)
 		}
 	}

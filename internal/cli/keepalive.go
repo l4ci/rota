@@ -22,7 +22,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -179,7 +178,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if promptSet {
 			set.Prompt = *prompt
 		}
-		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		cd, err := c.CommonDir(root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -314,7 +313,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+	cd, err := c.CommonDir(root)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}

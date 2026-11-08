@@ -31,7 +31,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		common, err := c.CommonDir(root)
 		if err != nil {
 			return Result{}, err
 		}
@@ -59,7 +59,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		}
 		// Gate producers use the main checkout for shared round records.
 		recordRoot := root
-		if main, ok := rotastate.MainCheckout(common); ok {
+		if main, ok := c.MainCheckout(root); ok {
 			recordRoot = main
 		}
 		started := c.deps().Now()
