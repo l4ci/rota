@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Store is where plans live. Errors are exitcode.Errors: Create is exit 4 when
@@ -210,7 +211,7 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Relies on
 
 - _(KNOWLEDGE <Topic>: **<title>**, or DECISIONS <title>: each entry the plan depends on; none if neither)_
-`, key, milestone, unit, unitKind, repoLine, designLine, title, today().Format("2006-01-02"))
+`, key, milestone, unit, unitKind, repoLine, designLine, title, stamp.Date(today()))
 }
 
 // Add creates a plan and returns its key and kind ("slice"|"item"). root is

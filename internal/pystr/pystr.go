@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // SpaceClass is the body of a regexp character class that matches exactly
@@ -98,7 +100,7 @@ func SplitCSV(s string) []string {
 // dates; no rota file carries one.)
 func ParseDate(s string) (time.Time, bool) {
 	s = Strip(s)
-	for _, layout := range []string{"2006-01-02", "20060102"} {
+	for _, layout := range []string{stamp.DateLayout, "20060102"} {
 		if len(s) == len(layout) {
 			if t, err := time.Parse(layout, s); err == nil && t.Year() >= 1 {
 				return t, true

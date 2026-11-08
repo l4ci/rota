@@ -142,6 +142,32 @@ func TestClearAppends(t *testing.T) {
 	}
 }
 
+// TestMergePolicyCoversPinsEntrySemantics pins how ship.mergeApprovalPaths
+// entries match: equal, under a directory, or path.Match against the whole path.
+// "**" is not a recursive wildcard there (separate decision), it acts as "*".
+func TestMergePolicyCoversPinsEntrySemantics(t *testing.T) {
+	for _, c := range []struct {
+		entry, file string
+		want        bool
+	}{
+		{"migrations", "migrations/001.sql", true},
+		{"migrations/", "migrations/a/001.sql", true},
+		{"./migrations", "migrations/001.sql", true},
+		{"migrations", "migrationsx/a.sql", false},
+		{"*.lock", "go.lock", true},
+		{"*.lock", "sub/go.lock", false},
+		{"internal/*/gate.go", "internal/cli/gate.go", true},
+		{"docs/**", "docs/a.md", true},
+		{"docs/**", "docs/a/b.md", false},
+		{"", "a", false},
+	} {
+		p := MergePolicy{Mode: MergePaths, Paths: []string{c.entry}}
+		if got, _ := p.Covers([]string{c.file}); got != c.want {
+			t.Errorf("Covers entry %q file %q = %v, want %v", c.entry, c.file, got, c.want)
+		}
+	}
+}
+
 func TestMergePolicy(t *testing.T) {
 	p, err := NewMergePolicy("none", nil)
 	if err != nil || p.Mode != MergeNone || p.NeedsFiles() {

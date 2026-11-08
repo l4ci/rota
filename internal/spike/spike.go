@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -123,7 +124,7 @@ _(viable / not viable / depends-on-X)_
 ## Recommended approach
 
 _(if viable, the shape of the real implementation — write only at /rota-spike done)_
-`, name, branch, repoLine, today().Format("2006-01-02"), name, question)
+`, name, branch, repoLine, stamp.Date(today()), name, question)
 	if err = os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return
 	}
@@ -148,7 +149,7 @@ func Finish(root, name string, today func() time.Time) (changed bool, err error)
 		if !found {
 			return "", exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 		}
-		updated, _ = frontmatter.SetField(updated, "finished", today().Format("2006-01-02"), "status")
+		updated, _ = frontmatter.SetField(updated, "finished", stamp.Date(today()), "status")
 		return updated, nil
 	})
 }

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // SplitSubtopic is one subtopic of a split plan: its short name, the hook of
@@ -78,16 +80,10 @@ func parseParts(body string, readme bool) fileParts {
 		case strings.HasPrefix(l, "- ") && readme && isSubIndexLine(l):
 			p.subIndex = append(p.subIndex, l)
 		case strings.HasPrefix(l, "- "):
-			u := []string{l}
-			for i+1 < len(lines) && lines[i+1] != "" && (lines[i+1][0] == ' ' || lines[i+1][0] == '\t') {
-				i++
-				u = append(u, lines[i])
-			}
-			var title string
-			if m := titleRe.FindStringSubmatch(l); m != nil {
-				title = m[1]
-			}
-			p.units = append(p.units, unit{title: title, text: strings.Join(u, "\n")})
+			end := bulletfmt.End(lines, i)
+			title, _ := bulletfmt.Title(l)
+			p.units = append(p.units, unit{title: title, text: strings.Join(lines[i:end], "\n")})
+			i = end - 1
 		case p.heading == "" && strings.HasPrefix(l, "# "):
 			p.heading = l
 		default:

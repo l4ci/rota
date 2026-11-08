@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Decision is one parsed entry. Part spans are retained so amendments can
@@ -67,7 +68,7 @@ var decisionMarkers = []struct{ name, prefix string }{
 var decisionDate = regexp.MustCompile(`^<!-- (\d{4}-\d{2}-\d{2}) -->$`)
 var decisionStatus = regexp.MustCompile(`^(?:Retired (\d{4}-\d{2}-\d{2})\.(?: .+)?|Superseded (\d{4}-\d{2}-\d{2}) by "[^"\r\n]+"\.)$`)
 
-func decisionValidDate(date string) bool { _, err := time.Parse("2006-01-02", date); return err == nil }
+func decisionValidDate(date string) bool { _, err := stamp.ParseDate(date); return err == nil }
 
 // ParseDecision reads a complete ### entry using the canonical four parts.
 // CheckDecisions and writers use this same definition of a valid entry.
