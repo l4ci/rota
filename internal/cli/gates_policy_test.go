@@ -8,8 +8,10 @@ import (
 )
 
 // The tables below are the path lists the gates matched before the policies
-// moved onto the command tree (#2898). They are the reference the declared
-// policies must reproduce for every verb.
+// moved onto the command tree (#2898). They are a one-time migration check
+// that the declared policies reproduce them for every verb, not a live list:
+// these frozen copies can be deleted once the move is trusted, and
+// tree_gates.go is the only place a new verb is classified.
 var (
 	oldLegacyStateExempt = []string{"rota migrate hv", "rota doctor", "rota version", "rota update", "rota skills", "rota hook", "rota statusline"}
 	oldRoundKeyVerbs     = []string{"rota round", "rota worker", "rota doctor", "rota orchestrate", "rota keepalive", "rota layout", "rota limit"}
@@ -212,8 +214,8 @@ func TestGatePoliciesMatchOldTables(t *testing.T) {
 	}
 }
 
-// Every verb declares or inherits a fence class, so a new verb cannot ship
-// unfenced.
+// Every verb declares its own fence class (it is not inherited from its
+// group), so a new verb cannot ship unfenced or allowed by default.
 func TestEveryVerbHasAFenceClass(t *testing.T) {
 	root := Tree()
 	for _, v := range VerbPaths(root) {
@@ -223,7 +225,28 @@ func TestEveryVerbHasAFenceClass(t *testing.T) {
 	}
 }
 
-// A group's policy reaches a verb added under it, and a verb's own wins.
+// A path is in one fence class only; fenceDecls is a map, so a second class
+// would otherwise win by iteration order.
+func TestFenceDeclsAreDisjoint(t *testing.T) {
+	seen := map[string]roundcfg.FenceClass{}
+	for class, paths := range fenceDecls {
+		for _, p := range paths {
+			if other, dup := seen[p]; dup {
+				t.Errorf("%s is in fence class %d and %d", p, other, class)
+			}
+			seen[p] = class
+		}
+	}
+	leaves := treeLeaves()
+	for p := range seen {
+		if !leaves["rota "+p] {
+			t.Errorf("%s is declared in a fence class but is not a verb", p)
+		}
+	}
+}
+
+// A group's policy reaches a verb added under it, and a verb's own wins; the
+// fence class is the exception and is never inherited.
 func TestGatesInheritDownTheTree(t *testing.T) {
 	root := &Command{Name: "rota", Subs: []*Command{
 		{Name: "grp", Gates: Gates{LegacyExempt: true, RoundKeys: RoundKeysRefuse, Fence: roundcfg.FenceRefused}, Subs: []*Command{
@@ -232,7 +255,7 @@ func TestGatesInheritDownTheTree(t *testing.T) {
 		}},
 	}}
 	root.Gates.RoundKeys = RoundKeysRefuse
-	if g := gatesFor(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || g.Fence != roundcfg.FenceRefused {
+	if g := gatesFor(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || g.Fence != roundcfg.FenceUnclassified {
 		t.Errorf("a = %+v", g)
 	}
 	if g := gatesFor(root, "rota grp b"); !g.LegacyExempt || g.RoundKeys != RoundKeysQuiet || g.Fence != roundcfg.FenceAllowed {

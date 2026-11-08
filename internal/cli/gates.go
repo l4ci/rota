@@ -32,8 +32,8 @@ type Gates struct {
 	TrackedRoleExempt bool
 	// RoundMachine refuses an unnamed support machine. Inherited.
 	RoundMachine bool
-	// Fence is the support-fence class. The nearest classified verb or group
-	// up the tree wins.
+	// Fence is the support-fence class. Never inherited: each verb declares
+	// its own, so a new verb cannot be allowed on a support machine by default.
 	Fence roundcfg.FenceClass
 }
 
@@ -57,9 +57,9 @@ func gatesFor(root *Command, path string) Gates {
 		if cmd.Gates.RoundKeys != RoundKeysWarn {
 			g.RoundKeys = cmd.Gates.RoundKeys
 		}
-		if cmd.Gates.Fence != roundcfg.FenceUnclassified {
-			g.Fence = cmd.Gates.Fence
-		}
+	}
+	if cmd != nil {
+		g.Fence = cmd.Gates.Fence
 	}
 	return g
 }

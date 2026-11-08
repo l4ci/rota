@@ -4,12 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitmap"
 	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
