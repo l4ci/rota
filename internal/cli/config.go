@@ -8,7 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
@@ -205,11 +205,8 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%v", err)
 		}
 		saved, changed, am, err := config.SaveGlobal(root, dir)
-		if errors.Is(err, config.ErrCorrupt) || errors.Is(err, fsio.ErrUnreadable) {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-		}
 		if err != nil {
-			return Result{}, err
+			return Result{}, configFail(err, exitmap.ConfigCorrupt|exitmap.ConfigInternal)
 		}
 		path := config.GlobalPath(dir)
 		data := jsonObj("path", path, "saved", strSlice(saved), "changed", changed)
@@ -293,12 +290,8 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			e := Refused("%s", err.Error())
 			e.Hint = "name a remote that `git remote` lists, for example origin"
 			return Result{}, e
-		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
-			return Result{}, Usage("%s", err.Error())
-		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject), errors.Is(err, fsio.ErrUnreadable):
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		default:
-			return Result{}, err
+			return Result{}, configFail(err, exitmap.ConfigUsage|exitmap.ConfigInternal)
 		}
 		data := jsonObj("key", args[0], "value", res.Value)
 		if res.HadPrevious {
@@ -345,19 +338,21 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		status, missing := config.Check(c.deps().projectsEnv(), root)
+		cfg := c.deps().Config(root)
+		diag := config.Diagnose(c.deps().projectsEnv(), root, cfg)
+		status, missing := diag.Status, diag.Missing
 		data := jsonObj("status", status, "upToDate", status == config.UpToDate, "missing", anySlice(missing))
 		token := map[string]string{config.UpToDate: "UP_TO_DATE", config.Fresh: "FRESH", config.Corrupt: "CORRUPT"}[status]
 		if status == config.Stale {
 			token = "STALE:" + strings.Join(missing, ",")
 		}
-		removed := config.Removed(root)
+		removed := diag.Removed
 		data.Set("removed", anySlice(removed))
 		res := Result{Data: data, Text: token}
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + removedKeysHint(removed)
 		}
-		old := config.LegacyRoundKeys(c.deps().Config(root))
+		old := diag.OldRoundKeys
 		if len(old) > 0 {
 			data.Set("unknown", anySlice(old))
 			var names []string
@@ -366,40 +361,37 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 			}
 			res.Text += "\nUNKNOWN: " + strings.Join(names, ", ") + " (nothing reads the old names; run: rota migrate config --apply, or rota config fill)"
 		}
-		unknown := append(old, config.Unknown(root)...)
+		unknown := append(old, diag.Unknown...)
 		if len(unknown) > len(old) {
 			data.Set("unknown", anySlice(unknown))
 			for _, k := range unknown[len(old):] {
 				res.Text += "\nunknown: " + k + " (not a config key; nothing reads it)"
 			}
 		}
-		if legacy := config.Legacy(root); len(legacy) > 0 {
+		if legacy := diag.Legacy; len(legacy) > 0 {
 			data.Set("legacy", anySlice(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
 		}
-		warnings := config.Warnings(c.deps().projectsEnv(), root)
+		warnings := diag.Warnings
 		data.Set("warnings", anySlice(warnings))
 		for _, w := range warnings {
 			res.Text += "\nwarn: " + w
 		}
-		if gerr := config.GlobalError(c.deps().projectsEnv()); gerr != nil && status == config.Stale {
+		if gerr := diag.GlobalCorrupt; gerr != nil {
 			data.Set("globalCorrupt", gerr.Error())
 			res.Text += "\n" + globalCorruptLine(gerr)
 		}
-		if status == config.UpToDate || status == config.Stale {
-			if invalid := config.TypeProblems(c.deps().projectsEnv(), root); len(invalid) > 0 {
-				data.Set("invalid", anySlice(invalid))
-				data.Set("upToDate", false)
-				res.Text = "INVALID: " + strings.Join(invalid, "; ")
-				return res, Failed("%s", invalid[0])
-			}
-			if retired := config.Retired(c.deps().projectsEnv(), root); len(retired) > 0 {
-				data.Set("retired", anySlice(retired))
-				res.Text = "RETIRED: " + strings.Join(retired, "; ")
-				return res, Failed("%s", retired[0])
-			}
+		if invalid := diag.Invalid; len(invalid) > 0 {
+			data.Set("invalid", anySlice(invalid))
+			data.Set("upToDate", false)
+			res.Text = "INVALID: " + strings.Join(invalid, "; ")
+			return res, Failed("%s", invalid[0])
 		}
-		cfg := c.deps().Config(root)
+		if retired := diag.Retired; len(retired) > 0 {
+			data.Set("retired", anySlice(retired))
+			res.Text = "RETIRED: " + strings.Join(retired, "; ")
+			return res, Failed("%s", retired[0])
+		}
 		role, roleErr := roundcfg.MachineRole(cfg)
 		if roleErr != nil {
 			return blockedRefusal(data, blockedby.Config, roleErr.Error(), "set round.role to main or support")
@@ -434,24 +426,11 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		removed := config.Removed(root)
-		var stripping []string
-		for _, key := range removed {
-			if strings.TrimSuffix(key, config.LocalMark) != "issues.labels.support" {
-				stripping = append(stripping, key)
-			}
-		}
-		removed = stripping
-		am := config.AutonomyPending(c.deps().projectsEnv(), root)
-		// Same condition as `config check`: STALE with an unreadable global.
-		var corrupt error
-		if status, _ := config.Check(c.deps().projectsEnv(), root); status == config.Stale {
-			corrupt = config.GlobalError(c.deps().projectsEnv())
-		}
-		filled, sm, rm, err := config.FillDetect(c.deps().projectsEnv(), root, c.deps().originProvider(c.Context(), root))
+		rec, err := config.Reconcile(c.deps().projectsEnv(), root, c.deps().originProvider(c.Context(), root))
 		if err != nil {
 			return roundMigrationFail(err)
 		}
+		removed, am, corrupt, filled, sm, rm := rec.Removed, rec.Autonomy, rec.GlobalCorrupt, rec.Filled, rec.Source, rec.Round
 		const upToDate = "config up to date; nothing to fill"
 		text := upToDate
 		if len(filled) > 0 {
@@ -469,7 +448,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			add("removed: " + strings.Join(removed, ", "))
 		}
-		rewrote := am.Rewrite || am.LocalRewrite || am.GlobalRewrite
+		rewrote := rec.Rewrote()
 		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed() || rewrote)
 		data.Set("autonomy", jsonObj("rewrote", rewrote, "autopilotWasOn", am.AutopilotWasOn))
 		for _, line := range autonomyLines(am) {

@@ -44,17 +44,17 @@ func (d *Deps) tolerantRoundSettings(root string) (roundcfg.Settings, bool) {
 	return set, err == nil
 }
 
-// roundMachineStop refuses an unnamed support machine before any round verb
+// roundMachine refuses an unnamed support machine before any round verb
 // can read or claim issues. Config verbs remain usable to repair the name.
-func roundMachineStop(c *Ctx) (Result, error) {
-	if !pathUnder(c.Path, []string{"rota round"}) {
+func (p *preflight) roundMachine() (Result, error) {
+	if !p.g.RoundMachine {
 		return Result{}, nil
 	}
-	root, err := c.Root()
-	if err != nil {
+	root, ok := p.project()
+	if !ok {
 		return Result{}, nil
 	}
-	cfg := c.deps().Config(root)
+	cfg := p.config(root)
 	role, err := roundcfg.MachineRole(cfg)
 	if err == nil && role == roundcfg.RoleSupport {
 		if err := roundcfg.CheckMachineName(roundcfg.SupportName(cfg), role); err != nil {

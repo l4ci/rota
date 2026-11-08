@@ -9,7 +9,7 @@ import (
 	"unicode"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -245,10 +245,7 @@ func (s globalStore) Inherit(string) error {
 }
 
 func notObjectInternal(err error) error {
-	if errors.Is(err, fsio.ErrUnreadable) || errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) || errors.Is(err, config.ErrGlobalNotObject) {
-		return &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	return err
+	return configFail(err, exitmap.ConfigInternal)
 }
 
 // ---- the screen ----------------------------------------------------------------

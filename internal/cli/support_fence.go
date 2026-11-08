@@ -20,16 +20,16 @@ func supportFileModeStop() (Result, error) {
 	return Result{Data: d}, Refused("a support round needs an issue tracker, but issues.source is file").WithHint(supportBackendHint)
 }
 
-// roleInTrackedConfigStop refuses every verb but `rota config` and `rota
+// roleInTrackedConfig refuses every verb but `rota config` and `rota
 // migrate` when the tracked project layer names round.role: the role belongs
 // to one machine, so it lives in .rota/config.local.json only. Outside a
 // project there is nothing to check.
-func roleInTrackedConfigStop(c *Ctx) (Result, error) {
-	if pathUnder(c.Path, []string{"rota config", "rota migrate"}) {
+func (p *preflight) roleInTrackedConfig() (Result, error) {
+	if p.g.TrackedRoleExempt {
 		return Result{}, nil
 	}
-	root, err := c.Root()
-	if err != nil {
+	root, ok := p.project()
+	if !ok {
 		return Result{}, nil
 	}
 	if !roundcfg.RoleInTrackedConfig(root) {
@@ -40,24 +40,29 @@ func roleInTrackedConfigStop(c *Ctx) (Result, error) {
 		WithHint("remove it from .rota/config.json, then run: rota config set round.role <value>, which writes .rota/config.local.json")
 }
 
-// supportRoleStop refuses a fenced verb when this machine's round.role is
+// supportRole refuses a fenced verb when this machine's round.role is
 // support. It reads round.role alone, so a bad unrelated round.* key cannot
 // open the fence, and a role it cannot read refuses rather than runs.
-func supportRoleStop(c *Ctx) (Result, error) {
-	if roundcfg.MayRun(roundcfg.RoleSupport, c.Path) {
+func (p *preflight) supportRole() (Result, error) {
+	if roundcfg.MayRun(roundcfg.RoleSupport, p.g.Fence) {
 		return Result{}, nil
 	}
-	root, err := c.Root()
-	if err != nil {
+	root, ok := p.project()
+	if !ok {
 		return Result{}, nil
 	}
-	return supportRefusal(c, root, c.Path)
+	return supportRefusalWith(p.c, root, p.c.Path, p.config)
 }
 
 // supportRefusal is the exit-4 refusal of what on a support machine, or of any
 // fenced verb when round.role cannot be read; nil on main.
 func supportRefusal(c *Ctx, root, what string) (Result, error) {
-	support, res, err := supportMachine(c, root, what)
+	return supportRefusalWith(c, root, what, c.deps().Config)
+}
+
+// supportRefusalWith is supportRefusal reading the config through load.
+func supportRefusalWith(c *Ctx, root, what string, load func(string) any) (Result, error) {
+	support, res, err := supportMachineWith(root, what, load)
 	if err != nil || !support {
 		return res, err
 	}
@@ -69,7 +74,12 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 // supportMachine is whether this machine's round.role is support. A role it
 // cannot read is the exit-4 refusal, so a verb never runs on a guess.
 func supportMachine(c *Ctx, root, what string) (bool, Result, error) {
-	support, rerr := roundcfg.SupportMachine(root, c.deps().Config)
+	return supportMachineWith(root, what, c.deps().Config)
+}
+
+// supportMachineWith is supportMachine reading the config through load.
+func supportMachineWith(root, what string, load func(string) any) (bool, Result, error) {
+	support, rerr := roundcfg.SupportMachine(root, load)
 	if rerr != nil {
 		d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
 		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, rerr.Why).WithHint(rerr.Hint)
