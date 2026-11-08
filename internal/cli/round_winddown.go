@@ -92,7 +92,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			NoVerify: *noVerify, Prune: *prune, HolderPID: *pid, Settings: set,
 		})
 		if cd != "" {
-			if err != nil || res.Retained {
+			if err != nil || !res.Over() {
 				_ = roundtick.SetStopped(cd, rnd, false)
 			} else {
 				roundtick.ClearState(cd)
@@ -105,7 +105,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !res.Retained { // the round is over: no retry can reach its receipts
+		if res.Over() { // the round is over: no retry can reach its receipts
 			if perr := receipt.Prune(root); perr != nil {
 				c.Warn("receipts not pruned: %v", perr)
 			}

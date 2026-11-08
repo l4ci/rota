@@ -442,7 +442,30 @@ func (r Registry) BranchHolder(branch string) (s *Slot, q *QueuedPR) {
 	return s, q
 }
 
-// HolderOpts scopes BundleHolder. Lead also matches the lead issue of a slot or
+// SlotHolding is the first slot that holds id as its task or branch issue (see
+// Slot.Holds), nil when none does.
+func (r Registry) SlotHolding(id string) *Slot {
+	for _, s := range r.Slots() {
+		if s.Holds(id) {
+			return s
+		}
+	}
+	return nil
+}
+
+// Holders is every slot that holds id, in registry order, minus o.Skip. A
+// best-of issue has several; o.Lead is not read here.
+func (r Registry) Holders(id string, o HolderOpts) []*Slot {
+	var out []*Slot
+	for _, s := range r.Slots() {
+		if s.Holds(id) && (o.Skip == "" || s.Name() != o.Skip) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// HolderOpts scopes BundleHolder and Holders. Lead also matches the lead issue of a slot or
 // queued PR, not only its members. Skip names a slot that is passed over: the
 // slot resuming its own bundle holds its members itself.
 type HolderOpts struct {

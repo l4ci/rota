@@ -63,7 +63,7 @@ func TestRoundStatusShowsCurrentTrainFill(t *testing.T) {
 	c, root, tick := fillTickFixture(t, `"light"`, true, true)
 	tick()
 	pinNow(c.Deps, "2026-10-27T09:01:00Z")
-	if err := escalation.Update(root, func(list []escalation.Entry) []escalation.Entry {
+	if err := escalation.Section.Update(root, func(list []escalation.Entry) []escalation.Entry {
 		return append(list, escalation.Entry{ID: "fill-decision", Kind: "issue", Number: 12, Title: "Keep the current design?", Status: "pending", SentAt: "2026-10-27T09:00:00Z"})
 	}); err != nil {
 		t.Fatal(err)

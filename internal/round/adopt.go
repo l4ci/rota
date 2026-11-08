@@ -83,10 +83,8 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	if s, _ := reg.BranchHolder(branch); s != nil {
 		return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
 	}
-	for _, s := range reg.Slots() {
-		if s.HeldID() == worker.NormID(res.Issue) {
-			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
-		}
+	if s := reg.SlotHolding(res.Issue); s != nil {
+		return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
 	}
 	// A fresh claim by another worker can coexist with an orchestrator's
 	// fix-forward. Refuse only positive evidence of stale or reclaimed work.

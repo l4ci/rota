@@ -167,25 +167,13 @@ func (e Entry) Derived(now time.Time) string {
 	return e.Status
 }
 
-// FromRegistry is the records of the escalation list, in list order; a missing
-// or malformed list reads as empty.
-func FromRegistry(r worker.Registry) []Entry {
-	var out []Entry
-	for _, o := range r.Objects("escalations") {
-		out = append(out, entryFrom(o))
-	}
-	return out
+// Section is the registry's escalation list.
+var Section = worker.ListSection[Entry]{
+	Key:    "escalations",
+	Decode: entryFrom,
+	Encode: Entry.Object,
 }
 
-// Update edits the escalation list under the registry lock: mutate gets the
-// list as it is and returns the new one.
-func Update(root string, mutate func(list []Entry) []Entry) error {
-	return worker.Update(root, func(d *worker.Doc) {
-		next := mutate(FromRegistry(d.Registry))
-		out := make([]any, 0, len(next))
-		for _, e := range next {
-			out = append(out, e.Object())
-		}
-		d.SetSection("escalations", out)
-	})
-}
+// FromRegistry is the records of the escalation list, in list order; a missing
+// or malformed list reads as empty.
+func FromRegistry(r worker.Registry) []Entry { return Section.Read(r) }

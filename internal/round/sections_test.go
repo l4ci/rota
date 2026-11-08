@@ -20,7 +20,7 @@ func TestSectionsConcurrentUpdatesLoseNothing(t *testing.T) {
 		wg.Add(3)
 		go func() {
 			defer wg.Done()
-			if err := escalation.Update(root, func(l []escalation.Entry) []escalation.Entry {
+			if err := escalation.Section.Update(root, func(l []escalation.Entry) []escalation.Entry {
 				return append(l, escalation.Entry{ID: fmt.Sprintf("e%d", len(l)+1), Kind: "issue", Status: escalation.StatusPending})
 			}); err != nil {
 				t.Error(err)

@@ -71,7 +71,7 @@ func TestNeedsYouSources(t *testing.T) {
 	if err := os.WriteFile(worker.RegistryPath(root), []byte(registry), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := escalation.Update(root, func([]escalation.Entry) []escalation.Entry {
+	if err := escalation.Section.Update(root, func([]escalation.Entry) []escalation.Entry {
 		return []escalation.Entry{
 			{ID: "cap", Kind: "pr", Number: 11, Title: "Audit or transfer?", Status: "pending", SentAt: "2026-10-03T09:30:00Z", Options: []string{"Audit", "Transfer"}, Recommend: 2},
 			{ID: "waiver", Kind: "pr", Number: 20, Title: "Waive Spec?", Status: "pending", SentAt: "2026-10-03T11:00:00Z", Deadline: "2026-10-03T11:01:00Z"},

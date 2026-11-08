@@ -11,8 +11,10 @@ import (
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/roundtick"
 )
 
 func TestWindDownPrintsSummary(t *testing.T) {
@@ -97,5 +99,49 @@ func TestWindDownOffersBugreports(t *testing.T) {
 		if has := strings.Contains(so.String(), "/rota-bugreport"); has != (records > 0) {
 			t.Errorf("%d records: offer present=%v\n%s", records, has, so.String())
 		}
+	}
+}
+
+// A failed verify keeps the lease, so the round is not over: the tick memory
+// and the receipts a retry replays must survive the wind-down.
+func TestWindDownVerifyFailureKeepsTickStateAndReceipts(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["exit 3"]}}`)
+	cd, err := rotastatetest.CommonDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	le := roundlease.DefaultEnv()
+	if _, _, _, err := le.Acquire(cd, dir, roundlease.Holder{PID: os.Getpid(), Start: 1}, 1); err != nil {
+		t.Fatal(err)
+	}
+	le.Alive = func(p int) bool { return p == os.Getpid() }
+	le.StartTime = func(p int) (uint64, bool) { return 1, p == os.Getpid() }
+	if err := roundtick.SaveState(cd, 1, roundtick.Result{Held: map[string]string{"ben": "12"}}); err != nil {
+		t.Fatal(err)
+	}
+	rp := filepath.Join(dir, filepath.FromSlash(receipt.File))
+	if err := os.MkdirAll(filepath.Dir(rp), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rp, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdirForTest(t, dir)
+	d := testDeps()
+	d.LeaseEnv = func() roundlease.Env { return le }
+	var so, se strings.Builder
+	code := mainWith(d, []string{"round", "wind-down", "--holder-pid", strconv.Itoa(os.Getpid())}, strings.NewReader(""), &so, &se)
+	if !strings.Contains(so.String(), "verify-failed") {
+		t.Fatalf("want a verify-failed verdict (exit %d):\n%s%s", code, so.String(), se.String())
+	}
+	if _, status, err := le.Read(cd); err != nil || status != roundlease.Live {
+		t.Errorf("a failed verify keeps the lease: status %v, err %v", status, err)
+	}
+	st := roundtick.LoadState(cd, 1)
+	if st.Held["ben"] != "12" || st.Stopped {
+		t.Errorf("tick state lost or still stopped after a failed verify: %+v", st)
+	}
+	if _, err := os.Stat(rp); err != nil {
+		t.Errorf("receipts pruned after a failed verify: %v", err)
 	}
 }
