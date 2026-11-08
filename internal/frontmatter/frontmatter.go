@@ -101,3 +101,36 @@ func UpdateField(content, field, value string) (string, bool) {
 	}
 	return content[:start] + newFM + after, true
 }
+
+// SetField sets `<field>: <value>` in the frontmatter: it replaces the first
+// such line, or inserts one after the `<after>:` line (at the end of the
+// frontmatter when after is empty or absent). It reports false, leaving
+// content untouched, when content has no frontmatter.
+func SetField(content, field, value, after string) (string, bool) {
+	if updated, ok := UpdateField(content, field, value); ok {
+		return updated, true
+	}
+	if !hasFM(content) {
+		return content, false
+	}
+	start := strings.Index(content, "\n") + 1
+	loc := fmEnd.FindStringIndex(content[start:])
+	if loc == nil {
+		return content, false
+	}
+	fmText := content[start : start+loc[0]]
+	eol := "\n"
+	if strings.Contains(fmText, "\r\n") {
+		eol = "\r\n"
+	}
+	line := field + ": " + value
+	if after != "" {
+		pat := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(after) + `:[^\r\n]*`)
+		if m := pat.FindStringIndex(fmText); m != nil {
+			at := start + m[1]
+			return content[:at] + eol + line + content[at:], true
+		}
+	}
+	at := start + loc[0] // before the closing fence
+	return content[:at] + line + eol + content[at:], true
+}
