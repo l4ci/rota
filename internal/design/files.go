@@ -1,14 +1,12 @@
 package design
 
 import (
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -37,16 +35,9 @@ func docs(root string) artifact.FileDocs {
 
 func path(root, id string) string { return docs(root).Path(id) }
 
-func notFound(id string) *exitcode.Error { return docs("").NotFound(id) }
-
 func (s files) Create(id, text string) error {
-	p := path(s.root, id)
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		if _, err := os.Stat(p); err == nil {
-			return exitcode.Errf(exitcode.ExitRefused, ".rota/designs/%s.md already exists", id)
-		}
-		return fsio.WriteFileAtomic(p, []byte(text))
-	})
+	_, err := docs(s.root).Create(id, func() (string, string) { return id, text })
+	return err
 }
 
 func (s files) Read(id string) (string, error) { return docs(s.root).Read(id) }
@@ -92,31 +83,14 @@ func Amend(root, id, heading, mode, text string) (changed bool, err error) {
 	if mode != "append" && mode != "replace" {
 		return false, exitcode.Errf(exitcode.ExitUsage, "mode must be 'append' or 'replace', got %q", mode)
 	}
-	p := path(root, id)
-	if _, serr := os.Stat(p); serr != nil {
-		return false, notFound(id)
-	}
 	block := "\n" + strings.TrimRight(text, "\n") + "\n\n"
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		content, rerr := fsio.ReadText(p)
-		if rerr != nil {
-			return notFound(id)
+	return docs(root).Update(id, func(content string) (string, error) {
+		if _, _, ok := section.Find(content, heading); !ok {
+			return "", exitcode.Errf(exitcode.ExitResolution, "section '## %s' not found in .rota/designs/%s.md", heading, id)
 		}
-		_, _, ok := section.Find(content, heading)
-		if !ok {
-			return exitcode.Errf(exitcode.ExitResolution, "section '## %s' not found in .rota/designs/%s.md", heading, id)
-		}
-		var updated string
 		if mode == "replace" {
-			updated = section.Replace(content, heading, block)
-		} else {
-			updated, _ = artifact.AppendSection(content, heading, block)
+			return section.Replace(content, heading, block), nil
 		}
-		if updated == content {
-			return nil
-		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(updated))
+		return section.Append(content, heading, block), nil
 	})
-	return
 }

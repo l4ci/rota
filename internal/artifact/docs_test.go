@@ -121,3 +121,53 @@ func TestNoteDocsOpenError(t *testing.T) {
 		t.Errorf("remove: %v", err)
 	}
 }
+
+func TestFileDocsUpdate(t *testing.T) {
+	d := FileDocs{Root: t.TempDir(), Dir: "designs", Kind: "design"}
+	more := func(old string) (string, error) { return old + "more\n", nil }
+	if _, err := d.Update("B07", more); exitOf(err) != exitcode.ExitResolution ||
+		err.Error() != "design B07 not found (.rota/designs/B07.md)" {
+		t.Fatalf("update missing: %v", err)
+	}
+	p := d.Path("B07")
+	if err := os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("a\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := d.Update("B07", more); err != nil || !changed {
+		t.Fatalf("update: %v %v", changed, err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "a\nmore\n" { // newlines normalised on read
+		t.Errorf("file = %q", b)
+	}
+	if changed, err := d.Update("B07", func(old string) (string, error) { return old, nil }); err != nil || changed {
+		t.Errorf("identity: %v %v", changed, err)
+	}
+	boom := errors.New("boom")
+	if _, err := d.Update("B07", func(string) (string, error) { return "x", boom }); err != boom {
+		t.Errorf("fn error: %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "a\nmore\n" {
+		t.Errorf("fn error wrote: %q", b)
+	}
+}
+
+func TestFileDocsCreate(t *testing.T) {
+	d := FileDocs{Root: t.TempDir(), Dir: "plans", Kind: "plan"}
+	key, err := d.Create("M01-slice", func() (string, string) { return "M01-S01", "one\n" })
+	if err != nil || key != "M01-S01" {
+		t.Fatalf("create: %q %v", key, err)
+	}
+	if b, _ := os.ReadFile(d.Path("M01-S01")); string(b) != "one\n" {
+		t.Errorf("file = %q", b)
+	}
+	key, err = d.Create("M01-S01", func() (string, string) { return "M01-S01", "two\n" })
+	if exitOf(err) != exitcode.ExitRefused || err.Error() != ".rota/plans/M01-S01.md already exists" || key != "M01-S01" {
+		t.Errorf("recreate: %q %v", key, err)
+	}
+	if b, _ := os.ReadFile(d.Path("M01-S01")); string(b) != "one\n" {
+		t.Errorf("recreate overwrote: %q", b)
+	}
+}

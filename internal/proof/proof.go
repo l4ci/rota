@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
@@ -77,7 +76,7 @@ func withRow(content, line, key string) (updated string, changed bool) {
 				return content, false
 			}
 		}
-		updated, _ = artifact.AppendSection(strings.TrimRight(content, "\n")+"\n", "Proof", line+"\n")
+		updated = section.Append(strings.TrimRight(content, "\n")+"\n", "Proof", line+"\n")
 		return updated, true
 	}
 	body := strings.TrimRight(content, "\n")

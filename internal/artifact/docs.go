@@ -30,24 +30,63 @@ func (d FileDocs) Read(key string) (string, error) {
 }
 
 // Replace overwrites an existing document; changed is false when it already
-// reads text.
+// reads text. The comparison is on the raw bytes.
 func (d FileDocs) Replace(key, text string) (changed bool, err error) {
+	return d.update(key, rawText, func(string) (string, error) { return text, nil })
+}
+
+// Update rewrites an existing document under its lock: fn gets the stored
+// text (newlines normalised, like fsio.ReadText) and returns the new text.
+// changed is false when fn returns the text it was given. An fn error aborts
+// without a write.
+func (d FileDocs) Update(key string, fn func(old string) (string, error)) (changed bool, err error) {
+	return d.update(key, fsio.ReadText, fn)
+}
+
+func rawText(p string) (string, error) {
+	b, err := os.ReadFile(p)
+	return string(b), err
+}
+
+func (d FileDocs) update(key string, read func(string) (string, error), fn func(string) (string, error)) (changed bool, err error) {
 	p := d.Path(key)
 	if _, serr := os.Stat(p); serr != nil { // no lock file or directory for a missing doc
 		return false, d.NotFound(key)
 	}
 	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		old, rerr := os.ReadFile(p)
+		old, rerr := read(p)
 		if rerr != nil {
 			return d.NotFound(key)
 		}
-		if string(old) == text {
+		text, ferr := fn(old)
+		if ferr != nil {
+			return ferr
+		}
+		if text == old {
 			return nil
 		}
 		changed = true
 		return fsio.WriteFileAtomic(p, []byte(text))
 	})
 	return
+}
+
+// Create writes a new document under the lock of lockKey's file, refusing
+// (exit 4) when it exists. build runs inside the lock and returns the key and
+// text, so a caller can mint the key (the next plan slice) race-free; lockKey
+// is the key itself or a shared one that serialises several keys. It returns
+// the key written.
+func (d FileDocs) Create(lockKey string, build func() (key, text string)) (key string, err error) {
+	err = fsio.Locked(d.Path(lockKey), fsio.LockTimeout, func() error {
+		var text string
+		key, text = build()
+		p := d.Path(key)
+		if _, serr := os.Stat(p); serr == nil {
+			return exitcode.Errf(exitcode.ExitRefused, ".rota/%s/%s.md already exists", d.Dir, key)
+		}
+		return fsio.WriteFileAtomic(p, []byte(text))
+	})
+	return key, err
 }
 
 // Remove deletes an existing document.
