@@ -20,7 +20,7 @@ func trainStatus(c *Ctx, root string, d *jsonx.Object) []string {
 		for _, r := range runs {
 			o := jsonx.NewObject()
 			o.Set("requestId", r.RequestID)
-			o.Set("targets", strList(r.Targets))
+			o.Set("targets", jsonx.Strings(r.Targets))
 			o.Set("base", r.Base)
 			o.Set("pid", r.PID)
 			o.Set("since", r.Since)

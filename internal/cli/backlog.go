@@ -50,14 +50,6 @@ func backlogCommands() []*Command {
 	}
 }
 
-func anySlice(xs []string) []any {
-	out := make([]any, len(xs))
-	for i, x := range xs {
-		out[i] = x
-	}
-	return out
-}
-
 func nullStr(s string) any {
 	if s == "" {
 		return nil
@@ -87,7 +79,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		data := jsonObj("inProgress", []any{}, "bugs", []any{}, "features", []any{}, "tasks", []any{}, "clusters", []any{})
+		data := jsonx.Obj("inProgress", []any{}, "bugs", []any{}, "features", []any{}, "tasks", []any{}, "clusters", []any{})
 		if !ok {
 			return Result{Data: data, Text: "No .rota/BACKLOG.md yet. Run rota init then /rota-capture."}, nil
 		}
@@ -107,7 +99,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 			if typ == "" {
 				typ = typeOfID[p.ID]
 			}
-			o := jsonObj("id", p.ID, "type", typ, "title", p.Title, "branch", p.Branch, "startedAt", p.StartedAt)
+			o := jsonx.Obj("id", p.ID, "type", typ, "title", p.Title, "branch", p.Branch, "startedAt", p.StartedAt)
 			if p.Repo != "" {
 				o.Set("repo", p.Repo)
 			}
@@ -118,7 +110,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 		rowsOf := func(rs []backlog.ListRow, tagName string) []any {
 			out := []any{}
 			for _, r := range rs {
-				o := jsonObj("id", r.ID)
+				o := jsonx.Obj("id", r.ID)
 				if tagName != "" {
 					o.Set(tagName, r.Tag)
 				}
@@ -176,7 +168,7 @@ func backlogIDs(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		ids := backlog.IDsByMilestone(rows, *milestone)
-		return Result{Data: jsonObj("milestone", *milestone, "ids", ids), Text: strings.Join(ids, "\n")}, nil
+		return Result{Data: jsonx.Obj("milestone", *milestone, "ids", ids), Text: strings.Join(ids, "\n")}, nil
 	}
 }
 
@@ -205,7 +197,7 @@ func backlogMilestones(fs *flag.FlagSet) RunFunc {
 		ms := backlog.MilestonesFor(rows, func(r backlog.Row) bool {
 			return wanted[r.ID] || (issues && r.IssueMatches(wanted))
 		})
-		return Result{Data: jsonObj("milestones", ms), Text: strings.Join(ms, "\n")}, nil
+		return Result{Data: jsonx.Obj("milestones", ms), Text: strings.Join(ms, "\n")}, nil
 	}
 }
 
@@ -243,16 +235,16 @@ func backlogDrift(fs *flag.FlagSet) RunFunc {
 		for _, d := range drift {
 			cs := []any{}
 			for _, cm := range d.Commits {
-				cs = append(cs, jsonObj("repo", cm.Repo, "hash", cm.Hash, "subject", cm.Subject))
+				cs = append(cs, jsonx.Obj("repo", cm.Repo, "hash", cm.Hash, "subject", cm.Subject))
 				lines = append(lines, fmt.Sprintf("%s: %s %s", d.ID, cm.Hash, cm.Subject))
 			}
-			dl = append(dl, jsonObj("id", d.ID, "type", d.Type, "commits", cs))
+			dl = append(dl, jsonx.Obj("id", d.ID, "type", d.Type, "commits", cs))
 		}
 		for _, s := range syms {
-			sl = append(sl, jsonObj("id", s.ID, "type", s.Type, "symbols", s.Symbols, "files", s.Files))
+			sl = append(sl, jsonx.Obj("id", s.ID, "type", s.Type, "symbols", s.Symbols, "files", s.Files))
 			lines = append(lines, fmt.Sprintf("%s: symbols %s in %s", s.ID, strings.Join(s.Symbols, ", "), strings.Join(s.Files, ", ")))
 		}
-		return Result{Data: jsonObj("drift", dl, "symbolDrift", sl), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("drift", dl, "symbolDrift", sl), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -277,7 +269,7 @@ func backlogBackfill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("stamped", n, "changed", n > 0), Text: fmt.Sprintf("stamped %d", n)}, nil
+		return Result{Data: jsonx.Obj("stamped", n, "changed", n > 0), Text: fmt.Sprintf("stamped %d", n)}, nil
 	}
 }
 
@@ -306,7 +298,7 @@ func backlogArchive(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("days", *days, "moved", moved, "changed", moved > 0), Text: fmt.Sprintf("archived %d", moved)}, nil
+		return Result{Data: jsonx.Obj("days", *days, "moved", moved, "changed", moved > 0), Text: fmt.Sprintf("archived %d", moved)}, nil
 	}
 }
 
@@ -347,10 +339,10 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 		list := []any{}
 		var lines []string
 		for _, e := range entries {
-			list = append(list, jsonObj("name", e.Name, "date", e.Date))
+			list = append(list, jsonx.Obj("name", e.Name, "date", e.Date))
 			lines = append(lines, e.Name+" "+e.Date)
 		}
-		return Result{Data: jsonObj("kind", *kind, "days", *days, "entries", list), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonx.Obj("kind", *kind, "days", *days, "entries", list), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -393,7 +385,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		}
 		sm := backlog.BuildSummary(root, items, !be.Capabilities().IssueIDs)
 		lines := []string{fmt.Sprintf("Backlog: %s, %s, %s", plural(sm.Bugs, "bug"), plural(sm.Features, "feature"), plural(sm.Tasks, "task"))}
-		data := jsonObj("backlog", jsonObj("bugs", sm.Bugs, "features", sm.Features, "tasks", sm.Tasks))
+		data := jsonx.Obj("backlog", jsonx.Obj("bugs", sm.Bugs, "features", sm.Features, "tasks", sm.Tasks))
 
 		active := []any{}
 		for _, e := range sm.Active {
@@ -409,7 +401,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 				repoStr = " (repo: " + e.Repo + ")"
 			}
 			lines = append(lines, fmt.Sprintf("Active: %s on %s%s%s (since %s)", ids, e.Branch, loc, repoStr, e.Since))
-			o := jsonObj("items", e.Items, "branch", e.Branch)
+			o := jsonx.Obj("items", e.Items, "branch", e.Branch)
 			if e.Worktree != "" {
 				o.Set("worktree", e.Worktree)
 			}
@@ -429,7 +421,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 				s += " (" + it.Reason + ")"
 			}
 			done = append(done, s)
-			o := jsonObj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
+			o := jsonx.Obj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
 			if it.Reason != "done" {
 				o.Set("reason", it.Reason)
 			}
@@ -443,7 +435,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		ms := []any{}
 		var msText []string
 		for _, m := range sm.Milestones {
-			ms = append(ms, jsonObj("id", m.ID, "title", m.Title))
+			ms = append(ms, jsonx.Obj("id", m.ID, "title", m.Title))
 			msText = append(msText, pystr.Strip(m.ID+" "+m.Title))
 		}
 		if len(msText) > 0 {
@@ -453,7 +445,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 
 		for _, t := range sm.Topics {
 			lines = append(lines, t.Label+": "+topicsText(t.Count, t.Shown))
-			data.Set(t.Key, jsonObj("count", t.Count, "topics", t.Shown))
+			data.Set(t.Key, jsonx.Obj("count", t.Count, "topics", t.Shown))
 		}
 		if sm.Archive > 0 {
 			s := "s"
@@ -540,9 +532,9 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 			if e.Branch != branch || !slices.Contains(scope, e.Repo) {
 				continue
 			}
-			entries = append(entries, jsonObj("repo", nullStr(e.Repo), "items", e.Items, "worktree", nullStr(e.Worktree), "startedAt", e.StartedAt))
+			entries = append(entries, jsonx.Obj("repo", nullStr(e.Repo), "items", e.Items, "worktree", nullStr(e.Worktree), "startedAt", e.StartedAt))
 		}
-		return Result{Data: jsonObj("branch", branch, "entries", entries, "changed", changed), Text: "active: " + branch}, nil
+		return Result{Data: jsonx.Obj("branch", branch, "entries", entries, "changed", changed), Text: "active: " + branch}, nil
 	}
 }
 
@@ -570,7 +562,7 @@ func statusRm(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("branch", branch, "removed", removed, "handoffRemoved", swept, "changed", removed > 0 || swept),
+		return Result{Data: jsonx.Obj("branch", branch, "removed", removed, "handoffRemoved", swept, "changed", removed > 0 || swept),
 			Text: "removed " + branch}, nil
 	}
 }
@@ -587,9 +579,9 @@ func statusShow(fs *flag.FlagSet) RunFunc {
 		branch := args[0]
 		e, ok := status.Find(root, branch, c.Repo)
 		if !ok {
-			return Result{Data: jsonObj("branch", branch, "active", false, "repo", nil, "items", []string{}, "worktree", nil)}, nil
+			return Result{Data: jsonx.Obj("branch", branch, "active", false, "repo", nil, "items", []string{}, "worktree", nil)}, nil
 		}
-		return Result{Data: jsonObj("branch", branch, "active", true, "repo", nullStr(e.Repo), "items", e.Items,
+		return Result{Data: jsonx.Obj("branch", branch, "active", true, "repo", nullStr(e.Repo), "items", e.Items,
 			"worktree", nullStr(e.Worktree), "startedAt", e.StartedAt), Text: e.Repo}, nil
 	}
 }
@@ -612,7 +604,7 @@ func statusHandoff(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
-		return Result{Data: jsonObj("branch", branch, "path", nullStr(p), "exists", exists), Text: p}, nil
+		return Result{Data: jsonx.Obj("branch", branch, "path", nullStr(p), "exists", exists), Text: p}, nil
 	}
 }
 
@@ -633,7 +625,7 @@ func refactorAge(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("features", feats, "bugs", bugs),
+		return Result{Data: jsonx.Obj("features", feats, "bugs", bugs),
 			Text: fmt.Sprintf("%s features, %s bugs since the last refactor", numText(feats), numText(bugs))}, nil
 	}
 }
@@ -657,7 +649,7 @@ func refactorReset(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		return Result{Data: jsonObj("changed", changed), Text: "refactor counters reset"}, nil
+		return Result{Data: jsonx.Obj("changed", changed), Text: "refactor counters reset"}, nil
 	}
 }
 
@@ -672,16 +664,16 @@ func refactorTargets(fs *flag.FlagSet) RunFunc {
 		}
 		registry := repos.Load(cwd)
 		if len(registry) == 0 {
-			return Result{Data: jsonObj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
+			return Result{Data: jsonx.Obj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
 		}
 		sort.Slice(registry, func(i, j int) bool { return registry[i].Name < registry[j].Name })
 		subs := []any{}
 		var lines []string
 		for _, r := range registry {
-			subs = append(subs, jsonObj("name", r.Name, "path", r.Path))
+			subs = append(subs, jsonx.Obj("name", r.Name, "path", r.Path))
 			lines = append(lines, r.Name+" "+r.Path)
 		}
-		return Result{Data: jsonObj("umbrella", jsonObj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
+		return Result{Data: jsonx.Obj("umbrella", jsonx.Obj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }

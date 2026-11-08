@@ -91,7 +91,7 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 	skillsDir := fs.String("skills-dir", "", "removed: use rota skills install --scope project --agent codex")
 	force := fs.Bool("force", false, "init even in your home directory")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *codex || *skillsDir != "" {
@@ -118,7 +118,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	}
 	var warnings []string
 	changed := res.Changed()
-	data := knObj("root", dir, "created", strSlice(res.Created))
+	data := jsonx.Obj("root", dir, "created", jsonx.Strings(res.Created))
 	var lines []string
 	for _, p := range res.Created {
 		lines = append(lines, "created: "+p)
@@ -136,7 +136,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		warnings = append(warnings, b.Warnings...)
 		entries := []any{}
 		for _, e := range b.Blocks {
-			entries = append(entries, knObj("key", e.Key, "status", e.Status, "changed", e.Changed))
+			entries = append(entries, jsonx.Obj("key", e.Key, "status", e.Status, "changed", e.Changed))
 			lines = append(lines, fmt.Sprintf("block %s: %s", e.Key, e.Status))
 		}
 		data.Set("blocks", entries)
@@ -187,7 +187,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		c.Warn("%s", w)
 	}
 	if len(warnings) > 0 {
-		data.Set("warnings", strSlice(warnings))
+		data.Set("warnings", jsonx.Strings(warnings))
 	}
 	data.Set("changed", changed)
 	if !changed {
@@ -215,7 +215,7 @@ func (r initConfigResult) changed() bool {
 }
 
 func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
-	data.Set("configFilled", strSlice(r.filled))
+	data.Set("configFilled", jsonx.Strings(r.filled))
 	data.Set("versionStamped", r.stamped)
 	if len(r.filled) > 0 {
 		*lines = append(*lines, "config filled: "+strings.Join(r.filled, ", "))
@@ -279,9 +279,9 @@ func initMilestoneIndex(c *Ctx) (bool, error) {
 func initInstructionsData(b initproj.BlocksResult) []any {
 	acts := []any{}
 	for _, a := range b.Instructions {
-		o := knObj("action", a.Action, "file", a.File)
+		o := jsonx.Obj("action", a.Action, "file", a.File)
 		if len(a.Keys) > 0 {
-			o.Set("keys", strSlice(a.Keys))
+			o.Set("keys", jsonx.Strings(a.Keys))
 		}
 		acts = append(acts, o)
 	}
@@ -289,7 +289,7 @@ func initInstructionsData(b initproj.BlocksResult) []any {
 }
 
 func initCheck(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	dir, err := initDir(c)
@@ -297,7 +297,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	res := initproj.Check(dir, c.deps().Config(dir), func() string { return versionDriftLine(c, dir) })
-	data := knObj("initialized", res.Initialized, "missing", strSlice(res.Missing))
+	data := jsonx.Obj("initialized", res.Initialized, "missing", jsonx.Strings(res.Missing))
 	if !res.Initialized {
 		return Result{Data: data}, Failed("not initialized: %s missing", strings.Join(res.Missing, ", ")).WithHint("run: rota init")
 	}

@@ -333,8 +333,8 @@ func milestoneShipAudit(c *Ctx, st ms.Store, id string) (Result, error) {
 	d := jsonx.NewObject()
 	d.Set("blockedBy", blockedby.UnfinishedMilestone)
 	d.Set("changed", false)
-	d.Set("open", strs(f.Open))
-	d.Set("unticked", strs(f.Unticked))
+	d.Set("open", jsonx.Strings(f.Open))
+	d.Set("unticked", jsonx.Strings(f.Unticked))
 	msg := fmt.Sprintf("%s is not done: %d open item(s), %d unticked criteria", id, len(f.Open), len(f.Unticked))
 	return Result{Data: d}, Refused("%s", msg).WithHint(fmt.Sprintf("run `rota milestone check %s` to see the breakdown, or pass --force to ship anyway", id))
 }
@@ -444,7 +444,7 @@ func withChildSync(c *Ctx, id string, res Result) Result {
 	}
 	d, _ := res.Data.(*jsonx.Object)
 	if d != nil {
-		d.Set("children", jsonObj("changed", sync.Changed, "count", sync.Count, "added", strs(sync.Added), "removed", strs(sync.Removed)))
+		d.Set("children", jsonx.Obj("changed", sync.Changed, "count", sync.Count, "added", jsonx.Strings(sync.Added), "removed", jsonx.Strings(sync.Removed)))
 	}
 	if sync.Changed {
 		line := fmt.Sprintf("children: list regenerated (added %s; removed %s)", refList(sync.Added), refList(sync.Removed))
@@ -528,23 +528,23 @@ func milestoneCheckResult(id string, r ms.Report) (Result, error) {
 			lines = append(lines, x+": no ## Change section")
 		}
 		for _, b := range r.BadCapability {
-			badCap = append(badCap, jsonObj("item", b.ID, "capability", b.Capability))
+			badCap = append(badCap, jsonx.Obj("item", b.ID, "capability", b.Capability))
 			lines = append(lines, fmt.Sprintf("%s: Change capability '%s' is not a capability of %s", b.ID, b.Capability, id))
 		}
 		for _, u := range r.Unknown {
-			unknown = append(unknown, jsonObj("item", u.ID, "ids", strs(u.IDs)))
+			unknown = append(unknown, jsonx.Obj("item", u.ID, "ids", jsonx.Strings(u.IDs)))
 			for _, ac := range u.IDs {
 				lines = append(lines, fmt.Sprintf("%s: cites %s, not a criterion of %s", u.ID, ac, id))
 			}
 		}
 		for _, m := range r.NoMigration {
-			noMig = append(noMig, jsonObj("item", m.ID, "fields", strs(m.Fields)))
+			noMig = append(noMig, jsonx.Obj("item", m.ID, "fields", jsonx.Strings(m.Fields)))
 			for _, f := range m.Fields {
 				lines = append(lines, fmt.Sprintf("%s: REMOVED without %s", m.ID, f))
 			}
 		}
 		for _, b := range r.BadTouches {
-			badTouch = append(badTouch, jsonObj("item", b.ID, "entries", strs(b.Entries)))
+			badTouch = append(badTouch, jsonx.Obj("item", b.ID, "entries", jsonx.Strings(b.Entries)))
 			for _, e := range b.Entries {
 				lines = append(lines, fmt.Sprintf("%s: Touches '%s' is not a capability of %s", b.ID, e, id))
 			}
@@ -560,9 +560,9 @@ func milestoneCheckResult(id string, r ms.Report) (Result, error) {
 			lines = append(lines, "ok")
 		}
 	}
-	d := jsonObj("milestone", id, "ok", r.Ok(), "strict", r.Strict, "belowThreshold", r.BelowThreshold,
-		"features", r.Features, "criteria", strs(r.Criteria), "uncovered", strs(r.Uncovered),
-		"noChange", strs(r.NoChange), "unknown", unknown, "noMigration", noMig, "badTouches", badTouch, "badCapability", badCap)
+	d := jsonx.Obj("milestone", id, "ok", r.Ok(), "strict", r.Strict, "belowThreshold", r.BelowThreshold,
+		"features", r.Features, "criteria", jsonx.Strings(r.Criteria), "uncovered", jsonx.Strings(r.Uncovered),
+		"noChange", jsonx.Strings(r.NoChange), "unknown", unknown, "noMigration", noMig, "badTouches", badTouch, "badCapability", badCap)
 	res := Result{Data: d, Text: strings.Join(lines, "\n")}
 	if r.Ok() {
 		return res, nil

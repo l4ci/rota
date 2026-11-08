@@ -64,7 +64,7 @@ func flakyData(entries []flakeledger.Entry) []any {
 	for _, f := range entries {
 		d := jsonx.NewObject()
 		d.Set("check", f.Check)
-		d.Set("tests", strList(f.Tests))
+		d.Set("tests", jsonx.Strings(f.Tests))
 		d.Set("rerunSeconds", f.Retry.WallSeconds)
 		out = append(out, d)
 	}

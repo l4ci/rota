@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 )
 
@@ -18,7 +19,7 @@ func milestonesMigrateCommand() *Command {
 func migrateMilestones(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		st, err := openMilestones(c)
@@ -33,7 +34,7 @@ func migrateMilestones(fs *flag.FlagSet) RunFunc {
 		var lines []string
 		changedAny := false
 		for _, ch := range changes {
-			rows = append(rows, jsonObj("id", ch.ID, "changed", ch.Changed))
+			rows = append(rows, jsonx.Obj("id", ch.ID, "changed", ch.Changed))
 			switch {
 			case !ch.Changed:
 				lines = append(lines, ch.ID+": up to date")
@@ -51,7 +52,7 @@ func migrateMilestones(fs *flag.FlagSet) RunFunc {
 		} else if !*apply {
 			c.Warn("preview only; pass --apply")
 		}
-		return Result{Data: jsonObj("applied", *apply, "milestones", rows, "changed", changedAny && *apply), Text: text}, nil
+		return Result{Data: jsonx.Obj("applied", *apply, "milestones", rows, "changed", changedAny && *apply), Text: text}, nil
 	}
 }
 
@@ -66,7 +67,7 @@ func milestoneFilesMigrateCommand() *Command {
 func migrateMilestoneFiles(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "move the files; without it only report them")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		root, issue, err := modeRoot(c)
@@ -97,6 +98,6 @@ func migrateMilestoneFiles(fs *flag.FlagSet) RunFunc {
 				c.Warn("both paths are tracked: commit .rota/milestones and .rota/archive/milestones")
 			}
 		}
-		return Result{Data: jsonObj("applied", *apply, "files", names, "changed", *apply && len(names) > 0), Text: text}, nil
+		return Result{Data: jsonx.Obj("applied", *apply, "files", names, "changed", *apply && len(names) > 0), Text: text}, nil
 	}
 }

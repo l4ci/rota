@@ -98,7 +98,7 @@ func brList(c *Ctx, args []string) (Result, error) {
 		rows = append(rows, brData(r, red))
 		lines = append(lines, brLine(r, red))
 	}
-	return Result{Data: gitObj("records", rows), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("records", rows), Text: strings.Join(lines, "\n")}, nil
 }
 
 // brRecord resolves the one positional id to its record.

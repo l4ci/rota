@@ -15,8 +15,8 @@ import (
 )
 
 func TestAccountsViewQuota(t *testing.T) {
-	q := knObj("kind", harness.Codex, "name", "work", "home", "/homes/work", "source", "codex-app-server", "status", "available", "reason", "", "identityStatus", "unavailable", "weekly", knObj("remainingPercent", 50.0, "usedPercent", 50.0, "resetsAt", "2026-11-10T16:07:34Z", "status", "available", "reason", ""))
-	b := buildBrowser(t, accountsView, knObj("accounts", objList(knObj("kind", harness.Codex, "name", "work", "quota", q))))
+	q := jsonx.Obj("kind", harness.Codex, "name", "work", "home", "/homes/work", "source", "codex-app-server", "status", "available", "reason", "", "identityStatus", "unavailable", "weekly", jsonx.Obj("remainingPercent", 50.0, "usedPercent", 50.0, "resetsAt", "2026-11-10T16:07:34Z", "status", "available", "reason", ""))
+	b := buildBrowser(t, accountsView, jsonx.Obj("accounts", objList(jsonx.Obj("kind", harness.Codex, "name", "work", "quota", q))))
 	if len(b.Rows) != 1 || !strings.Contains(b.Rows[0].Label, "weekly") || !strings.Contains(b.Rows[0].Preview, "2026-11-10T16:07:34Z") {
 		t.Fatalf("UI needs weekly capacity/reset: %+v", b.Rows)
 	}
@@ -109,8 +109,8 @@ func TestRoundQuotaReportingKeepsBurnUnknown(t *testing.T) {
 }
 
 func TestAccountsViewQuotaKeysIncludeKind(t *testing.T) {
-	q := knObj("kind", harness.Codex, "name", "work", "status", "unavailable", "reason", "no source")
-	b := buildBrowser(t, accountsView, knObj("accounts", objList(knObj("kind", harness.Claude, "name", "work", "verdict", "unknown"), knObj("kind", harness.Codex, "name", "work", "quota", q))))
+	q := jsonx.Obj("kind", harness.Codex, "name", "work", "status", "unavailable", "reason", "no source")
+	b := buildBrowser(t, accountsView, jsonx.Obj("accounts", objList(jsonx.Obj("kind", harness.Claude, "name", "work", "verdict", "unknown"), jsonx.Obj("kind", harness.Codex, "name", "work", "quota", q))))
 	if len(b.Rows) != 2 || b.Rows[0].Key == b.Rows[1].Key || !strings.Contains(b.Rows[1].Preview, "no source") {
 		t.Fatalf("kind/name isolation: %+v", b.Rows)
 	}

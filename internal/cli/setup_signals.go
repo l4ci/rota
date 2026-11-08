@@ -65,7 +65,7 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		if len(kinds) > 1 {
 			ev = strings.Join(kinds, ", ") + " are on PATH; first taken"
 		}
-		list, _ := jsonx.MarshalCompact(anySlice(kinds[:1]))
+		list, _ := jsonx.MarshalCompact(jsonx.Strings(kinds[:1]))
 		sigs[config.RoundHarnessesKey] = setupSignal{string(list), ev}
 	}
 	if out, ok := run("worktree", "list", "--porcelain"); ok && strings.Count(out, "worktree ") > 1 {
@@ -79,7 +79,7 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		delete(sigs, config.RoundHarnessesKey)
 		for _, kind := range harness.CoreWorkerKinds() {
 			if onPath(kind) {
-				list, _ := jsonx.MarshalCompact(anySlice([]string{kind}))
+				list, _ := jsonx.MarshalCompact(jsonx.Strings([]string{kind}))
 				sigs[config.RoundHarnessesKey] = setupSignal{string(list), kind + " is on PATH and supports native Core status reporting"}
 				break
 			}

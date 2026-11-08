@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 )
 
@@ -58,7 +59,7 @@ func roundScope(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("%v", err)
 		}
 		_, src := round.ItemScopeSource(be, it.ID)
-		d := jsonObj("id", it.ID, "scopes", strs(norm), "source", src, "changed", true)
+		d := jsonx.Obj("id", it.ID, "scopes", jsonx.Strings(norm), "source", src, "changed", true)
 		return Result{Data: d, Text: fmt.Sprintf("recorded %d inferred scope entries on %s (effective source: %s)", len(norm), it.ID, src)}, nil
 	}
 }

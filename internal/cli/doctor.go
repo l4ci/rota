@@ -59,7 +59,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 		checks = append(checks, o)
 		lines = append(lines, line)
 	}
-	data := knObj("ok", rep.OK(), "checks", checks)
+	data := jsonx.Obj("ok", rep.OK(), "checks", checks)
 	res := Result{Data: data, Text: strings.Join(lines, "\n")}
 	if !rep.OK() {
 		return res, Failed("doctor: a check failed")
@@ -223,7 +223,7 @@ func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 }
 
 func staleData(f stalebin.Finding) *jsonx.Object {
-	return knObj("commit", f.Commit, "head", f.Head, "behind", f.Behind, "rebuild", f.Rebuild)
+	return jsonx.Obj("commit", f.Commit, "head", f.Head, "behind", f.Behind, "rebuild", f.Rebuild)
 }
 
 // staleBinaryOncePerRound is the round heartbeat's copy of doctor's binary

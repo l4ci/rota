@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/issues"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
@@ -559,7 +560,7 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 // actor met: blockedBy forge, the origin in the message, the fix as the hint.
 func forgeRefusal(err error) *Error {
 	e := Refused("%s", err.Error()).WithHint(tracker.UnknownForgeHint)
-	e.Data = jsonObj("blockedBy", blockedby.Forge, "changed", false)
+	e.Data = jsonx.Obj("blockedBy", blockedby.Forge, "changed", false)
 	e.Cause = err
 	return e
 }

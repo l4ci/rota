@@ -67,7 +67,7 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 		if len(changed) > 0 {
 			text = "changed: " + strings.Join(changed, ", ")
 		}
-		return Result{Data: jsonObj("changed", anySlice(changed)), Text: text}, nil
+		return Result{Data: jsonx.Obj("changed", jsonx.Strings(changed)), Text: text}, nil
 	}
 }
 
@@ -171,7 +171,7 @@ func (s rootStore) Rows() ([]cfgRow, error) {
 		return nil, err
 	}
 	rows, _ := showRows(entries)
-	return rowsFromData(jsonObj("entries", rows))
+	return rowsFromData(jsonx.Obj("entries", rows))
 }
 
 func (s rootStore) Global() bool { return false }
@@ -215,7 +215,7 @@ func (s globalStore) Rows() ([]cfgRow, error) {
 		return nil, notObjectInternal(err)
 	}
 	rows, _ := showRows(entries)
-	return rowsFromData(jsonObj("entries", rows))
+	return rowsFromData(jsonx.Obj("entries", rows))
 }
 
 func (s globalStore) Global() bool { return true }

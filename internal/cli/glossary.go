@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/pystr"
 )
@@ -17,14 +18,6 @@ func glossaryCommands() *Command {
 		{Name: "write", Summary: "add or update one term", Repo: true, Verb: glWrite},
 		{Name: "import", Summary: "add many terms atomically", Repo: true, Verb: glImport},
 	}}
-}
-
-func strSlice(l []string) []any {
-	out := []any{}
-	for _, s := range l {
-		out = append(out, s)
-	}
-	return out
 }
 
 func glRead(fs *flag.FlagSet) RunFunc {
@@ -40,7 +33,7 @@ func glRead(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		return Result{Data: knObj("text", text, "missing", strSlice(missing)), Text: text}, nil
+		return Result{Data: jsonx.Obj("text", text, "missing", jsonx.Strings(missing)), Text: text}, nil
 	}
 }
 
@@ -75,7 +68,7 @@ func glWrite(fs *flag.FlagSet) RunFunc {
 		if !changed {
 			text = "unchanged: Glossary/" + name
 		}
-		return Result{Data: knObj("term", name, "changed", changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("term", name, "changed", changed), Text: text}, nil
 	}
 }
 
@@ -83,7 +76,7 @@ func glImport(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "the manifest: a `path`, or - for stdin")
 	touch := fs.Bool("touch", false, "stamp today's date on every imported term")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
+		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *bodyFile == "" {
@@ -102,7 +95,7 @@ func glImport(fs *flag.FlagSet) RunFunc {
 			return knFail(err)
 		}
 		text := fmt.Sprintf("imported %d term(s)", len(terms))
-		return Result{Data: knObj("imported", len(terms), "terms", strSlice(terms), "changed", changed), Text: text}, nil
+		return Result{Data: jsonx.Obj("imported", len(terms), "terms", jsonx.Strings(terms), "changed", changed), Text: text}, nil
 	}
 }
 
@@ -169,7 +162,7 @@ func blockVerb(fs *flag.FlagSet) RunFunc {
 				return knFail(err)
 			}
 		}
-		return Result{Data: knObj("key", key, "status", status, "changed", status != "unchanged"), Text: status}, nil
+		return Result{Data: jsonx.Obj("key", key, "status", status, "changed", status != "unchanged"), Text: status}, nil
 	}
 }
 
@@ -180,7 +173,7 @@ func instructionsCommands() *Command {
 }
 
 func instructionsInit(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
+	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
 	st, _, err := knStore(c)
@@ -194,9 +187,9 @@ func instructionsInit(c *Ctx, args []string) (Result, error) {
 	list := []any{}
 	var lines []string
 	for _, a := range acts {
-		o := knObj("action", a.Action, "file", a.File)
+		o := jsonx.Obj("action", a.Action, "file", a.File)
 		if len(a.Keys) > 0 {
-			o.Set("keys", strSlice(a.Keys))
+			o.Set("keys", jsonx.Strings(a.Keys))
 		}
 		list = append(list, o)
 		switch a.Action {
@@ -210,5 +203,5 @@ func instructionsInit(c *Ctx, args []string) (Result, error) {
 			lines = append(lines, fmt.Sprintf("%s: %s", a.Action, a.File))
 		}
 	}
-	return Result{Data: knObj("actions", list, "changed", len(acts) > 0), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonx.Obj("actions", list, "changed", len(acts) > 0), Text: strings.Join(lines, "\n")}, nil
 }

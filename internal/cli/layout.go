@@ -233,7 +233,7 @@ func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
 	arranged := 0
 	var skipped []string
 	for _, o := range outs {
-		row := knObj("project", o.root, "name", o.name)
+		row := jsonx.Obj("project", o.root, "name", o.name)
 		if o.skipped != "" {
 			row.Set("skipped", o.skipped)
 			rows = append(rows, row)
@@ -248,18 +248,18 @@ func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
 			row.Set("moves", o.moves)
 			row.Set("changed", o.moves > 0)
 		}
-		row.Set("orchestrator", knObj("pane", o.st.Orch.ID, "tab", o.st.Orch.Tab))
+		row.Set("orchestrator", jsonx.Obj("pane", o.st.Orch.ID, "tab", o.st.Orch.Tab))
 		if o.st.CLI != nil {
-			row.Set("cli", knObj("pane", o.st.CLI.ID, "tab", o.st.CLI.Tab))
+			row.Set("cli", jsonx.Obj("pane", o.st.CLI.ID, "tab", o.st.CLI.Tab))
 		}
 		ws := []any{}
 		for _, w := range o.st.Workers {
-			ws = append(ws, knObj("slot", w.Slot, "pane", w.Pane, "tab", w.Tab))
+			ws = append(ws, jsonx.Obj("slot", w.Slot, "pane", w.Pane, "tab", w.Tab))
 		}
 		row.Set("workers", ws)
 		fo := []any{}
 		for _, p := range o.st.Foreign {
-			fo = append(fo, knObj("pane", p.ID))
+			fo = append(fo, jsonx.Obj("pane", p.ID))
 			c.Warn("%s: pane %s in the orchestrator tab is not rota's; left where it is", o.name, p.ID)
 		}
 		row.Set("foreign", fo)

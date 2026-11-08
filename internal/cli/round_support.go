@@ -88,7 +88,7 @@ func roundSupportDisable(fs *flag.FlagSet) RunFunc {
 }
 
 func supportConfigData(name string, changed bool) *jsonx.Object {
-	return jsonObj("name", name, "file", supportConfigFile, "changed", changed)
+	return jsonx.Obj("name", name, "file", supportConfigFile, "changed", changed)
 }
 
 func roundSupportOffer(fs *flag.FlagSet) RunFunc {
@@ -132,7 +132,7 @@ func roundSupportOffer(fs *flag.FlagSet) RunFunc {
 		if len(refs) > 0 {
 			text = fmt.Sprintf("%s %s", strings.Join(refs, ", "), verb)
 		}
-		return Result{Data: jsonObj("ids", append([]string{}, changed...), "withdraw", *withdraw, "changed", len(changed) > 0), Text: text}, nil
+		return Result{Data: jsonx.Obj("ids", append([]string{}, changed...), "withdraw", *withdraw, "changed", len(changed) > 0), Text: text}, nil
 	}
 }
 
@@ -174,6 +174,6 @@ func roundSupportReturn(fs *flag.FlagSet) RunFunc {
 		if res.Changed {
 			out = "returned " + tracker.RefOf(res.ID)
 		}
-		return Result{Data: jsonObj("id", res.ID, "comment", res.Comment, "changed", res.Changed), Text: out}, nil
+		return Result{Data: jsonx.Obj("id", res.ID, "comment", res.Comment, "changed", res.Changed), Text: out}, nil
 	}
 }
