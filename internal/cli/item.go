@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -191,7 +192,7 @@ func withItem(be backlog.Backend, ref string, fn func(id, typ string) (Result, e
 	return res, err
 }
 
-func todayDate(c *Ctx) string { return c.deps().Today().Format("2006-01-02") }
+func todayDate(c *Ctx) string { return stamp.Date(c.deps().Today()) }
 
 // givenFlags is the set of flags the parser saw, by name.
 func givenFlags(fs *flag.FlagSet) map[string]bool {

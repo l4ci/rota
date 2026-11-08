@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 var (
@@ -236,7 +237,7 @@ func (f *File) AddComment(ref, kind, text string) (string, error) {
 		title = ref
 	}
 	lines := strings.Split(strings.Trim(strings.ReplaceAll(text, "\r\n", "\n"), "\n"), "\n")
-	row := "- " + f.today().Format("2006-01-02") + " · " + kind + " · " + pystr.Strip(lines[0]) + "\n"
+	row := "- " + stamp.Date(f.today()) + " · " + kind + " · " + pystr.Strip(lines[0]) + "\n"
 	for _, l := range lines[1:] {
 		if pystr.Strip(l) != "" {
 			row += "  " + l + "\n"

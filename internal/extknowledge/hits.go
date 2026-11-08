@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // hitsPath is the per-machine, per-clone log of consulted bullets. It lives in
@@ -133,7 +134,7 @@ func (c Clone) Hit(topic, title, project string) (int, error) {
 	}
 	// One O_APPEND write per hit: concurrent rota processes interleave whole
 	// lines, never characters.
-	if err := fsio.AppendJSONL(p, hitRow{Topic: t.Name, Title: title, Date: c.now().Format("2006-01-02"), Project: project}); err != nil {
+	if err := fsio.AppendJSONL(p, hitRow{Topic: t.Name, Title: title, Date: stamp.Date(c.now()), Project: project}); err != nil {
 		return 0, err
 	}
 	m, _, err := c.tally(topics)
