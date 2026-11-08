@@ -8,6 +8,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // Tier is how much checking a change needs.
@@ -121,14 +123,14 @@ var docExts = []string{".md", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
 // Markdown or image file. A script or source file under docs/ is code.
 func isDoc(f string, globs []string) bool {
 	return slices.Contains(docExts, strings.ToLower(path.Ext(f))) &&
-		slices.ContainsFunc(globs, func(g string) bool { return Match(g, f) })
+		slices.ContainsFunc(globs, func(g string) bool { return pathglob.Match(g, f) })
 }
 
 // matching is the files some glob matches (want true) or none does (false).
 func matching(files, globs []string, want bool) []string {
 	var out []string
 	for _, f := range files {
-		if slices.ContainsFunc(globs, func(g string) bool { return Match(g, f) }) == want {
+		if slices.ContainsFunc(globs, func(g string) bool { return pathglob.Match(g, f) }) == want {
 			out = append(out, f)
 		}
 	}
