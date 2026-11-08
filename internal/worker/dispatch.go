@@ -219,8 +219,8 @@ func (e Env) prepareDispatch(root string, o DispatchOpts) (*dispatchTarget, erro
 	// herdr tabs are created in the caller's own workspace. Outside herdr there
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
-	if h.Kind() == host.Herdr && !h.InSession() {
-		return nil, fail(exitcode.ExitUnavailable, "round.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
+	if err := inSessionRefusal(h, false, ""); err != nil {
+		return nil, err
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
@@ -391,9 +391,9 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	// Under herdr the launch binary decides `agent start --kind`, so it
 	// must be the kind's own: refuse before anything is killed.
-	if h.Kind() == host.Herdr {
+	if host.CapabilitiesForKind(h.Kind()).LaunchKindBound {
 		if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
-			return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
+			return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=%s starts a %s worker, but %s does not run %s: %s", h.Kind(), kind, key, kind, launch))
 		}
 	}
 	// A launch the harness cannot run safely is refused before anything is

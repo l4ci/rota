@@ -125,7 +125,8 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 		return p, &Error{Code: "unavailable", Msg: err.Error()}
 	}
 	p.Host = l.Kind
-	if l.Kind == host.HerdrCore {
+	caps := host.CapabilitiesForKind(l.Kind)
+	if caps.Harness.CoreIdentity {
 		agent, err = harness.CoreShellCommand(h.Name(), agent)
 		if err != nil {
 			return p, &Error{Code: "config", Msg: err.Error()}
@@ -133,11 +134,11 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 		p.Supervisor = append(append([]string(nil), sup...), append([]string{"--"}, agent...)...)
 	}
 	switch {
-	case l.Kind == host.Solo || l.Kind == host.HerdrCore:
+	case l.Kind == host.Solo || caps.InPlace:
 		p.Mode = ModeInPlace
 	case !l.NewSession:
 		p.Mode = ModeTab
-	case l.Kind == host.Herdr:
+	case caps.SessionStarter != nil:
 		p.Mode, p.Session = ModeHerdrSession, "rota-"+sessionName(root)
 	default:
 		p.Mode, p.Session = ModeSession, "rota-"+sessionName(root)
@@ -207,7 +208,7 @@ type Launched struct {
 func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 	// Core retains the visible project terminal and the existing keepalive
 	// lifetime. Validate its exact inherited endpoint before replacing ourselves.
-	if p.Host == host.HerdrCore {
+	if host.CapabilitiesForKind(p.Host).CoreIdentity != nil {
 		if err := e.Host(p.Host).Require(); err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: fmt.Sprintf("herdr-core endpoint %q terminal %q: %v", e.Getenv("HC_TERMINAL_SOCKET"), e.Getenv("HC_TERMINAL_ID"), err), Hint: "run rota orchestrate from the associated Herdr App project terminal"}
 		}
@@ -224,29 +225,28 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
 		}
 		return Launched{Handle: tab}, nil
-	case ModeHerdrSession:
-		st := e.Host(host.Herdr).Capabilities().SessionStarter
-		if st == nil {
-			return Launched{}, &Error{Code: "unavailable", Msg: "herdr host cannot start a session"}
+	case ModeHerdrSession, ModeSession:
+		caps := host.CapabilitiesForKind(p.Host)
+		if p.Mode == ModeHerdrSession {
+			st := e.Host(p.Host).Capabilities().SessionStarter
+			if st == nil {
+				return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot start a session"}
+			}
+			if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line}); err != nil {
+				return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
+			}
 		}
-		if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line}); err != nil {
-			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
+		if caps.Attach == nil {
+			return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot attach a session"}
 		}
-		herdr, err := e.LookPath(host.Herdr.Binary())
+		argv := caps.Attach(p.Session, p.Cwd, Label, line)
+		bin, err := e.LookPath(argv[0])
 		if err != nil {
-			return Launched{}, &Error{Code: "unavailable", Msg: "herdr is not installed"}
+			return Launched{}, &Error{Code: "unavailable", Msg: argv[0] + " is not installed"}
 		}
-		return Launched{}, e.exec(herdr, []string{host.Herdr.Binary(), "session", "attach", p.Session})
-	case ModeSession:
-		tmux, err := e.LookPath(host.Tmux.Binary())
-		if err != nil {
-			return Launched{}, &Error{Code: "unavailable", Msg: "tmux is not installed"}
-		}
-		// -A attaches when the session exists; its command is then ignored, and
-		// the keepalive lease refuses a second orchestrator if one asks for it.
-		// The shell after the command keeps a failure message on screen.
-		argv := []string{host.Tmux.Binary(), "new-session", "-A", "-s", p.Session, "-c", p.Cwd, "-n", Label, line + `; exec "${SHELL:-sh}"`}
-		return Launched{}, e.exec(tmux, argv)
+		// ModeSession's -A attaches when the session exists; its command is then
+		// ignored, and the keepalive lease refuses a second orchestrator.
+		return Launched{}, e.exec(bin, argv)
 	default:
 		return Launched{}, e.exec(p.Supervisor[0], p.Supervisor)
 	}

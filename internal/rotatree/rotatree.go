@@ -11,6 +11,10 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 )
 
+// WorktreeRoot is where slot worktrees live under a project root: inside the
+// project and gitignored, so herdr groups the workspaces under the project.
+const WorktreeRoot = ".worktrees"
+
 // DirName is the state directory at a project root.
 const DirName = ".rota"
 

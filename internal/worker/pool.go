@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // WorktreeRoot is where slot worktrees live: one root for every mode (rota-work
@@ -19,7 +20,7 @@ import (
 // `.worktrees/` to .gitignore), so herdr groups the workspaces under the
 // project. Slots created before this lived in .claude/worktrees/rota-worker/<slot>;
 // init leaves those where they are.
-const WorktreeRoot = ".worktrees"
+const WorktreeRoot = rotatree.WorktreeRoot
 
 // InitOpts are the flags of `rota worker pool init`.
 type InitOpts struct {
@@ -158,7 +159,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		handle := session + ":" + name
 		// A round slot has no session until its first dispatch, whatever the
 		// host: a nominal handle would read as a dead tab to reconcile.
-		if dispatch == host.Herdr || dispatch == host.HerdrCore || dispatch == host.Orca || len(o.Names) > 0 {
+		if host.CapabilitiesForKind(dispatch).NoNominalHandle || len(o.Names) > 0 {
 			handle = ""
 		}
 		if err := registerSlot(root, name, branch, abs, base, session, handle); err != nil {
