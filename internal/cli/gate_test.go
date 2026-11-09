@@ -507,7 +507,7 @@ func TestGateList(t *testing.T) {
 		t.Fatalf("%d %s", code, out)
 	}
 	g := env.Data.Gates[3]
-	if g.Name != gate.MergeApproval || !g.Enforced || !reflect.DeepEqual(g.Verbs, []string{"ship merge", "ship pr-merge", "worker gate"}) {
+	if g.Name != gate.MergeApproval || !g.Enforced || !reflect.DeepEqual(g.Verbs, []string{"ship merge", "ship pr-merge", "worker gate", "worker train"}) {
 		t.Errorf("%+v", g)
 	}
 	if last := env.Data.Gates[len(env.Data.Gates)-1]; last.Enforced || last.Verbs == nil {
