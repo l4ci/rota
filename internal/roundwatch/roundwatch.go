@@ -22,7 +22,6 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -282,18 +281,19 @@ func Diff(prev, cur map[string]string) []Change {
 // stored status of each escalation. A slot's own state is not here: `round
 // wait` reports it, and the orchestrator's own dispatch would otherwise wake
 // the watch it just armed.
-func LocalSnapshot(root string) map[string]string {
+func LocalSnapshot(we worker.Env, root string) map[string]string {
+	we = we.WithDefaults()
 	out := map[string]string{}
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
-	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
+	reg := we.Registry(root)
+	for _, s := range reg.Slots() {
 		if pr := s.PR(); pr != "" {
 			out[changeKeySlotPR+s.Name()] = pr
 		}
 	}
-	for _, e := range escalation.Load(root) {
+	for _, e := range escalation.FromRegistry(reg) {
 		out[changeKeyEscalat+e.ID] = e.Status
 	}
-	we := worker.Env{}.WithDefaults()
 	if held, err := we.LandLockHeld(context.Background(), root); err == nil && held {
 		out[changeKeyGate] = strutil.FirstNonEmpty(we.LandLockHolder(context.Background(), root), "held")
 	}
@@ -373,8 +373,8 @@ func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/"
 
 // Digest is the one-line round state the prompt hook shows: each active
 // slot with its issue and PR, the open escalations and whether a watch is armed.
-func Digest(ctx context.Context, run git.Runner, root string, round int, armed bool) string {
-	line := roundState(ctx, run, root, round)
+func Digest(we worker.Env, root string, round int, armed bool) string {
+	line := roundState(we, root, round)
 	if armed {
 		return line + ". Watch armed."
 	}
@@ -382,11 +382,53 @@ func Digest(ctx context.Context, run git.Runner, root string, round int, armed b
 }
 
 // ExitDigest describes the round as its watch returns and must be re-armed.
-func ExitDigest(ctx context.Context, run git.Runner, root string, round int) string {
-	return roundState(ctx, run, root, round) + ". Watch exiting; re-arm `rota round watch`."
+func ExitDigest(we worker.Env, root string, round int) string {
+	return roundState(we, root, round) + ". Watch exiting; re-arm `rota round watch`."
 }
 
-func roundState(ctx context.Context, run git.Runner, root string, round int) string {
+// activeSlot is a slot the round is still waiting on.
+type activeSlot struct {
+	slot  *worker.Slot
+	state string
+	// wake: the slot needs the orchestrator (a done slot whose PR is not merged).
+	wake bool
+}
+
+// roundView is the one walk over the registry that the digest and the Stop
+// hook both read: the slots that are not idle and the escalations still open.
+type roundView struct {
+	active []activeSlot
+	open   int
+}
+
+func viewOf(reg worker.Registry) roundView {
+	var v roundView
+	for _, s := range reg.Slots() {
+		st := strings.ToLower(s.State())
+		if worker.IsIdle(st) {
+			continue
+		}
+		v.active = append(v.active, activeSlot{slot: s, state: st, wake: worker.NeedsWake(st) && !s.PRMerged()})
+	}
+	v.open = len(escalation.Open(escalation.FromRegistry(reg)))
+	return v
+}
+
+// needsWatch: anything a watch would wake the orchestrator for, and the slots
+// already waiting on it.
+func (v roundView) needsWatch() (bool, []string) {
+	var attn []string
+	for _, a := range v.active {
+		if a.wake {
+			attn = append(attn, a.slot.Name()+" "+a.state)
+		}
+	}
+	return len(v.active) > 0 || v.open > 0, attn
+}
+
+func roundState(we worker.Env, root string, round int) string {
+	we = we.WithDefaults()
+	ctx, run := we.Ctx, we.Git
 	var parts []string
 	if frozen, err := landfreeze.Load(ctx, run, root); err != nil {
 		if !errors.Is(err, rotastate.ErrNotRepo) {
@@ -396,13 +438,11 @@ func roundState(ctx context.Context, run git.Runner, root string, round int) str
 		parts = append(parts, frozen.Line())
 	}
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
-	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-		st := strings.ToLower(s.State())
-		if worker.IsIdle(st) {
-			continue
-		}
+	v := viewOf(we.Registry(root))
+	for _, a := range v.active {
+		s, st := a.slot, a.state
 		p := s.Name() + " " + st
-		if v := worker.JudgeLiveness(worker.LivenessEvidence{State: st, Reason: s.Reason()}); v.State == worker.LivenessUnverifiable && s.Reason() != "" {
+		if lv := worker.JudgeLiveness(worker.LivenessEvidence{State: st, Reason: s.Reason()}); lv.State == worker.LivenessUnverifiable && s.Reason() != "" {
 			p += ":" + s.Reason()
 		}
 		is := s.Issue()
@@ -415,14 +455,13 @@ func roundState(ctx context.Context, run git.Runner, root string, round int) str
 		if pr := s.PR(); pr != "" {
 			p += " " + pr
 		}
-		if worker.NeedsWake(st) && !s.PRMerged() {
+		if a.wake {
 			p += " (needs you)"
 		}
 		parts = append(parts, p)
 	}
-	pending := len(escalation.LoadOpen(root))
-	if pending > 0 {
-		parts = append(parts, fmt.Sprintf("%d escalation(s) pending", pending))
+	if v.open > 0 {
+		parts = append(parts, fmt.Sprintf("%d escalation(s) pending", v.open))
 	}
 	line := "rota round"
 	if round > 0 {
@@ -440,35 +479,20 @@ func roundState(ctx context.Context, run git.Runner, root string, round int) str
 // wake the orchestrator for? A slot that is not idle, or an escalation still
 // pending. An all-idle round has nothing to wait on, so the orchestrator may
 // stop (it has candidates to assign, not events to watch).
-func NeedsWatch(root string) (bool, []string) {
-	var attn []string
-	need := false
-	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
-	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-		st := strings.ToLower(s.State())
-		if worker.IsIdle(st) {
-			continue
-		}
-		need = true
-		if worker.NeedsWake(st) && !s.PRMerged() {
-			attn = append(attn, s.Name()+" "+st)
-		}
-	}
-	if len(escalation.LoadOpen(root)) > 0 {
-		need = true
-	}
-	return need, attn
+func NeedsWatch(we worker.Env, root string) (bool, []string) {
+	return viewOf(we.WithDefaults().Registry(root)).needsWatch()
 }
 
 // StopBlock refuses an idle orchestrator with active workers and no live
 // watch: nothing would wake it when a worker finishes. Solo rounds have no
 // panes to watch. The caller has established that this is the orchestrator
 // and that this is the first stop in the turn, so a refused watch cannot loop.
-func StopBlock(env roundlease.Env, root, commonDir string) (reason string, block bool) {
-	if worker.IsSolo(root) {
+func StopBlock(we worker.Env, env roundlease.Env, root, commonDir string) (reason string, block bool) {
+	reg := we.WithDefaults().Registry(root)
+	if worker.IsSoloHost(reg.Host()) {
 		return "", false
 	}
-	need, attn := NeedsWatch(root)
+	need, attn := viewOf(reg).needsWatch()
 	if !need {
 		return "", false
 	}
