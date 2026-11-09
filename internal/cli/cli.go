@@ -388,6 +388,7 @@ func runWithContext(ctx context.Context, root *Command, deps *Deps, args []strin
 		return uiFinish(c, stdout, cmd, Result{})
 	}
 	res, err := runVerb(c, positional)
+	err = interrupted(ctx, err)
 	if err != nil {
 		recordMistake(c, asError(err))
 		if g.ui && cmd.View != nil && res.Data != nil && asError(err).Exit == ExitFailed {
@@ -480,7 +481,7 @@ func failWith(c *Ctx, stdout io.Writer, err error, res Result) int {
 			keepDispatch = jsonx.Str(d, "blockedBy") == blockedby.Dispatch
 		}
 	}
-	if e.Exit != ExitFailed && e.Exit != ExitRefused && !keepDispatch {
+	if e.Exit != ExitFailed && e.Exit != ExitRefused && e.Exit != ExitInterrupted && !keepDispatch {
 		res = Result{}
 	}
 	if !c.JSON && res.Text != "" {

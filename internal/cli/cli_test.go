@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -82,6 +83,12 @@ func testTree() *Command {
 				return Result{}, fmt.Errorf("saving: %w", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "gone away", Hint: "retry later"})
 			case "leak":
 				return Result{Data: jsonx.NewObject(), Text: "x"}, Resolution("gone")
+			case "canceled":
+				return Result{}, fmt.Errorf("gate: %w", context.Canceled)
+			case "canceled-answer":
+				o := jsonx.NewObject()
+				o.Set("changed", true)
+				return Result{Data: o}, fmt.Errorf("gate: %w", context.Canceled)
 			}
 			return Result{}, NotImplemented(c.Path)
 		})},
@@ -237,7 +244,7 @@ func TestVersionVerb(t *testing.T) {
 }
 
 func TestEveryExitCodeHasAName(t *testing.T) {
-	for _, code := range []int{ExitFailed, ExitUsage, ExitResolution, ExitRefused, ExitUnavailable, ExitRetry, ExitInternal, ExitNotImplemented} {
+	for _, code := range []int{ExitInterrupted, ExitFailed, ExitUsage, ExitResolution, ExitRefused, ExitUnavailable, ExitRetry, ExitInternal, ExitNotImplemented} {
 		if CodeName(code) == "" {
 			t.Errorf("exit %d has no error.code name", code)
 		}

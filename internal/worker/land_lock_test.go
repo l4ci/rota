@@ -1,9 +1,14 @@
 package worker
 
 import (
+	"context"
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
 func TestLandLockHeld(t *testing.T) {
@@ -67,5 +72,30 @@ func TestLandLockHolder(t *testing.T) {
 	}
 	if got := env.LandLockHolder(bg, repo); got != "" {
 		t.Errorf("holder after release = %q, want empty", got)
+	}
+}
+
+// An interrupted gate or train (its context cancelled mid-run) frees the land
+// lock and its landing-run marker, so the next run does not wait on a corpse.
+func TestInterruptedLandingRunReleasesLock(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	ctx, cancel := context.WithCancel(bg)
+	err := env.withLandingRun(ctx, repo, "slot", false, func(bool) error {
+		cancel()
+		return ctx.Err()
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if held, err := env.LandLockHeld(bg, repo); err != nil || held {
+		t.Fatalf("LandLockHeld after interrupt = %v, %v; want false, nil", held, err)
+	}
+	common, err := rotastatetest.CommonDir(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paths, _ := filepath.Glob(filepath.Join(rotastate.Dir(common), "landing-run-*.pid")); len(paths) != 0 {
+		t.Errorf("landing-run markers left behind: %v", paths)
 	}
 }

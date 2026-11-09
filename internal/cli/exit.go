@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
+
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
 
@@ -20,6 +23,7 @@ const (
 	ExitUnavailable    = exitcode.ExitUnavailable
 	ExitRetry          = exitcode.ExitRetry
 	ExitInternal       = exitcode.ExitInternal
+	ExitInterrupted    = exitcode.ExitInterrupted
 	ExitNotImplemented = exitcode.ExitNotImplemented
 )
 
@@ -79,4 +83,24 @@ func asError(err error) *Error {
 		return &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
 	return &Error{Exit: ExitInternal, Message: err.Error(), Hint: "this is a bug in rota; please report it"}
+}
+
+// signalSeen is set when a verb's signal context saw SIGINT or SIGTERM. It
+// lets interrupted tell that cancellation from one rota raised itself.
+var signalSeen atomic.Bool
+
+// interrupted turns err into the exit-130 error when err is a cancellation
+// that SIGINT or SIGTERM caused: ctx is the invocation's signal context, and
+// signalSeen covers the verb-local contexts workerContext hands out. Any other
+// context.Canceled is unclassified and stays an internal error (exit 70). A
+// verb's own *Error keeps its class.
+func interrupted(ctx context.Context, err error) error {
+	var e *Error
+	if err == nil || errors.As(err, &e) || !errors.Is(err, context.Canceled) {
+		return err
+	}
+	if ctx.Err() == nil && !signalSeen.Load() {
+		return err
+	}
+	return &Error{Exit: ExitInterrupted, Message: "interrupted"}
 }

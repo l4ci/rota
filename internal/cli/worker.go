@@ -33,8 +33,22 @@ import (
 
 // workerContext is cancelled on SIGINT and SIGTERM, so a Ctrl-C reaches the
 // git and host calls a verb has in flight instead of leaving them running.
+//
+// The signal is also remembered (signalSeen), so the dispatcher can tell this
+// cancellation from an internal one when the verb returns context.Canceled.
 func workerContext() (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigs:
+			signalSeen.Store(true)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, func() { signal.Stop(sigs); cancel() }
 }
 
 // workerEnvCtx is the worker Env bound to ctx.
@@ -898,6 +912,10 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			return verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// An interrupt keeps what the gate already knew (landed, changed).
+				return Result{Data: gateData(r)}, err
+			}
 			return Result{}, err
 		}
 		for _, n := range r.Notes {
