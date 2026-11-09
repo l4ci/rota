@@ -144,4 +144,7 @@ func TestObservingTickWorldRefusesMutations(t *testing.T) {
 	if err := w.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false); !errors.Is(err, errReadOnlyWorld) {
 		t.Errorf("FollowUp.Start: %v", err)
 	}
+	if _, err := readOnlyRelay(ctx); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("review relay: %v", err)
+	}
 }

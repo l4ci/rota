@@ -141,7 +141,8 @@ type Env struct {
 	// toward the idle budget; nil counts every registered slot.
 	Active func() []string
 	// Reconcile applies the safe repairs and returns what it repaired and the
-	// drift it leaves.
+	// drift it leaves. Over a read-only world (Observe) it repairs nothing and
+	// returns the repairs it would make as Proposed.
 	Reconcile func(ctx context.Context) (Inspection, error)
 	// Candidates are the assignable items in backlog order.
 	Candidates func(ctx context.Context) ([]round.Candidate, error)
