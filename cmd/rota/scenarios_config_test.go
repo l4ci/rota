@@ -358,7 +358,7 @@ func suiteConfig(t *testing.T) {
 	for _, body := range []string{"[1]", "null", `"s"`, "7", "true"} {
 		body := body
 		add(scn{name: "config-set/not-an-object/" + body, fx: fx{config: body}, argv: setArgv("orchestrator.model", "x"),
-			want: 70})
+			want: 5})
 	}
 	for _, key := range []string{"", ".a", "a.", "a..b", "."} {
 		key := key
