@@ -25,3 +25,11 @@ func TestViaOwnerUnknownRefIsNotFound(t *testing.T) {
 		t.Fatal("want ErrNotFound for a reference no sub-repo holds")
 	}
 }
+
+func TestViaOwner2UnknownRefIsNotFound(t *testing.T) {
+	var w Workflow = &Umbrella{}
+	won, holder, err := w.Claim("F99", "me")
+	if err == nil || won || holder != "" {
+		t.Fatalf("Claim = %v, %q, %v; want a not-found error", won, holder, err)
+	}
+}
