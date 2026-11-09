@@ -78,3 +78,10 @@ func TestIssueProvider(t *testing.T) {
 		}
 	}
 }
+
+// The zero IssueActor refuses instead of resolving from the origin.
+func TestZeroIssueActorRefuses(t *testing.T) {
+	if _, err := (IssueActor{}).Adapter(context.Background()); !IsKind(err, KindInternal) {
+		t.Errorf("err %v, want KindInternal", err)
+	}
+}
