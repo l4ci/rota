@@ -285,7 +285,7 @@ func TestWatchStoppedNoteNamesTheReason(t *testing.T) {
 		now := c.deps().Now()
 		env := roundwatch.Env{
 			Now:   func() time.Time { return now },
-			Local: func() map[string]string { return map[string]string{} },
+			Local: func() roundwatch.Snapshot { return roundwatch.Snapshot{} },
 			Wait: func(_ context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
 				now = now.Add(d)
 				return nil, nil

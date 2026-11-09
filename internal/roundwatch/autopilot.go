@@ -70,5 +70,5 @@ func RunAutopilot(ctx context.Context, env Env, o Opts, a AutopilotOpts) (Autopi
 // wakes is the autopilot's wake rule: a new attention item, or a completed
 // merge when train fill is on.
 func wakes(tr roundtick.Result, trainFill bool) bool {
-	return len(tr.New) > 0 || trainFill && slices.ContainsFunc(tr.Did, func(a roundtick.Action) bool { return a.Action == "merge" })
+	return len(tr.New) > 0 || trainFill && slices.ContainsFunc(tr.Did, func(a roundtick.Action) bool { return a.Action == roundtick.ActionMerge })
 }

@@ -103,8 +103,8 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 				}
 				return &roundwatch.SlotNews{Slot: res.Slot, State: strings.ToLower(res.State), Evidence: res.Evidence, Source: res.Source}, nil
 			},
-			Local: func() map[string]string { return roundwatch.LocalSnapshot(wenv, root) },
-			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, c, root) },
+			Local: func() roundwatch.Snapshot { return roundwatch.LocalSnapshot(wenv, root) },
+			Forge: func(ctx context.Context) roundwatch.Snapshot { return watchForge(ctx, c, root) },
 		}
 		st := roundwatch.NewSeenStore(cd)
 		env.Seen, env.Mark = st.Seen, st.Mark
@@ -130,8 +130,8 @@ func secs(f float64) time.Duration { return time.Duration(f * float64(time.Secon
 // from `round status` and looks for review input on each done slot's PR (under
 // round.reviewLoop auto it relays that input to the worker instead). A forge that cannot be reached leaves the entries out,
 // which reads as no change.
-func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
-	out := map[string]string{}
+func watchForge(ctx context.Context, c *Ctx, root string) roundwatch.Snapshot {
+	out := roundwatch.Snapshot{}
 	c.deps().freshReads()
 	env := c.deps().escalationEnv()
 	if env.Forge == nil {
@@ -235,7 +235,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 	changes := make([]any, 0, len(res.Changes))
 	for _, ch := range res.Changes {
 		o := jsonx.NewObject()
-		o.Set("key", ch.Key)
+		o.Set("key", ch.Key.String())
 		o.Set("from", ch.From)
 		o.Set("to", ch.To)
 		if id, kind, to, ok := roundwatch.SupportChange(ch); ok {
@@ -250,7 +250,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 			text = append(text, fmt.Sprintf("gate cleared (was %s): assign now", ch.From))
 			continue
 		}
-		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
+		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key.String(), dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)
 	digest := roundwatch.ExitDigest(workerEnvCtx(c, c.Context()), root, roundNumber)
