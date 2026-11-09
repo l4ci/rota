@@ -28,6 +28,10 @@ func ValidTier(t string) bool { return t == Provisional || t == Confirmed || t =
 // GlossaryTopic holds terms, which are canonical names and never tiered.
 const GlossaryTopic = "Glossary"
 
+// tiered reports whether a topic takes part in the tier lifecycle. It is the
+// one place the Glossary exemption lives; every tier operation asks it.
+func tiered(topic string) bool { return topic != GlossaryTopic }
+
 // Entry is one sidecar record, identified by its topic and title.
 type Entry struct {
 	Topic, Title string
@@ -319,7 +323,7 @@ func (s *Sidecar) List(tier string) ([]Entry, error) {
 	if s.legacy != nil {
 		for _, raw := range s.legacy.Keys() {
 			for _, owner := range legacyOwners(raw) {
-				if owner[0] != GlossaryTopic {
+				if tiered(owner[0]) {
 					if err := s.checkIdentity(owner[0], owner[1]); err != nil {
 						return nil, err
 					}
@@ -330,7 +334,7 @@ func (s *Sidecar) List(tier string) ([]Entry, error) {
 	out := []Entry{}
 	for _, k := range s.ents.Keys() {
 		topic, title, ok := decodeKey(k)
-		if !ok || topic == GlossaryTopic {
+		if !ok || !tiered(topic) {
 			continue
 		}
 		r := s.rec(k)
@@ -347,7 +351,7 @@ func (s *Sidecar) List(tier string) ([]Entry, error) {
 
 // Rekey moves one record between topics; Glossary and missing records are left alone.
 func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) (bool, error) {
-	if oldTopic == GlossaryTopic {
+	if !tiered(oldTopic) {
 		return false, nil
 	}
 	return s.move(oldTopic, oldTitle, newTopic, oldTitle)
@@ -355,7 +359,7 @@ func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) (bool, error) {
 
 // Delete removes a record; Glossary and missing records are left alone.
 func (s *Sidecar) Delete(topic, title string) (bool, error) {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return false, nil
 	}
 	if err := s.checkIdentity(topic, title); err != nil {
@@ -371,7 +375,7 @@ func (s *Sidecar) Delete(topic, title string) (bool, error) {
 
 // Retitle moves one record to a new title within its topic.
 func (s *Sidecar) Retitle(topic, oldTitle, newTitle string) (bool, error) {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return false, nil
 	}
 	return s.move(topic, oldTitle, topic, newTitle)
@@ -446,7 +450,7 @@ func Update(path string, fn func(*Sidecar) (write bool, err error)) error {
 // TierGet returns the entry for (topic, title) in scope's sidecar. Glossary
 // terms are never tracked.
 func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return Entry{}, false, nil
 	}
 	sc, err := s.effective(scope)
@@ -484,7 +488,7 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 // TierSet puts (topic, title) on tier and returns the previous tier ("" for an
 // untracked entry) and whether anything changed. Glossary is a no-op.
 func (s Store) TierSet(scope, topic, title, tier string) (previous string, changed bool, err error) {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return "", false, nil
 	}
 	p, err := s.TierPath(scope)
@@ -539,7 +543,7 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 		return sc, nil
 	}
 	for _, t := range section.Topics(content) {
-		if t.Name == GlossaryTopic {
+		if !tiered(t.Name) {
 			continue
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
