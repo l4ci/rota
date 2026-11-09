@@ -566,3 +566,52 @@ func setPace(t *testing.T, d time.Duration) {
 	BulkPace = d
 	t.Cleanup(func() { BulkPace = old })
 }
+
+// An interrupted migration resumes without redoing a step the map records:
+// the interrupted run plus its resume write exactly what one clean run does.
+func TestMigrateResumeSkipsCompletedSteps(t *testing.T) {
+	count := func(f *trackertest.MS) map[string]int {
+		n := map[string]int{}
+		for _, c := range f.Calls {
+			n[c.Method]++
+		}
+		return n
+	}
+	clean := &trackertest.MS{Fake: &trackertest.Fake{}}
+	o, _, _ := newMig(t, migProject(t, nil), true, clean)
+	if _, err := Run(o); err != nil {
+		t.Fatal(err)
+	}
+	want := count(clean)
+
+	f := &trackertest.MS{Fake: &trackertest.Fake{}}
+	o, _, _ = newMig(t, migProject(t, nil), true, f)
+	// the tracker starts refusing notes once one has landed, so the
+	// interrupted run holds finished and unfinished steps alike
+	setPace(t, time.Millisecond)
+	o.Sleep = func(time.Duration) {
+		if count(f)["add_comment"] > 0 {
+			f.Fake.Fail = map[string]error{"add_comment": &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "slow down"}}
+		}
+	}
+	if _, err := Run(o); err == nil {
+		t.Fatal("the interrupted run succeeded")
+	}
+	if count(f)["add_comment"] < 2 {
+		t.Fatal("the interrupted run did not get past its first note")
+	}
+	f.Fake.Fail = nil
+	o.Sleep = func(time.Duration) {}
+	if res, err := Run(o); err != nil || !res.Done {
+		t.Fatalf("resume: %v", err)
+	}
+	got := count(f)
+	// the interrupted run's one refused note read the thread and failed to write
+	got["add_comment"]--
+	got["comments"]--
+	for _, m := range []string{"create", "add_labels", "remove_labels", "edit", "add_comment", "comments"} {
+		if got[m] != want[m] {
+			t.Errorf("%s ran %d times across the interrupted run and its resume, a clean run runs it %d", m, got[m], want[m])
+		}
+	}
+}
