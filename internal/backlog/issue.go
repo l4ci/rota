@@ -110,9 +110,9 @@ func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false) }
 // Letter is the item type of an issue: the letter of the first type label it
 // carries, else "T" (_letter).
 func (b *Issues) Letter(is Issue) string {
-	for _, c := range []struct{ letter, role string }{{"B", "types.bug"}, {"F", "types.feature"}, {"T", "types.task"}} {
-		if slices.Contains(is.Labels, config.Label(b.Cfg, c.role)) {
-			return c.letter
+	for _, t := range Types {
+		if t.Role != "" && slices.Contains(is.Labels, config.Label(b.Cfg, t.Role)) {
+			return t.Letter
 		}
 	}
 	return "T"
