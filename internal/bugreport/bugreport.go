@@ -20,6 +20,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/remoteurl"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
@@ -288,32 +289,6 @@ const (
 	upstreamName  = "rota"
 )
 
-// splitRemote reads host, owner and name out of a remote in any URL form
-// (scp-like, ssh://, https://); a part it cannot find is "".
-func splitRemote(remote string) (host, owner, name string) {
-	r := strings.TrimSpace(remote)
-	if i := strings.Index(r, "://"); i >= 0 {
-		r = r[i+3:]
-		if j := strings.LastIndex(r[:strings.Index(r+"/", "/")], "@"); j >= 0 {
-			r = r[j+1:]
-		}
-		host, r, _ = strings.Cut(r, "/")
-	} else if i := strings.Index(r, ":"); i >= 0 {
-		host, r = r[:i], r[i+1:]
-		if j := strings.Index(host, "@"); j >= 0 {
-			host = host[j+1:]
-		}
-	}
-	host, _, _ = strings.Cut(host, ":")
-	r = strings.TrimSuffix(strings.Trim(r, "/"), ".git")
-	if i := strings.LastIndex(r, "/"); i >= 0 {
-		owner, name = r[:i], r[i+1:]
-	} else {
-		name = r
-	}
-	return host, owner, name
-}
-
 func replaceFold(s, old, with string) string {
 	if old == "" {
 		return s
@@ -377,7 +352,8 @@ func isFileLocation(h string, prev byte) bool {
 // email addresses, home-directory paths, hostnames, and the user's own repo
 // (name, owner and remote, in every URL form).
 func Redact(s string, e Env) string {
-	host, owner, name := splitRemote(e.Remote)
+	rp := remoteurl.Parse(e.Remote)
+	host, owner, name := rp.Host, rp.Owner, rp.Name
 	upstream := strings.EqualFold(owner, upstreamOwner) && strings.EqualFold(name, upstreamName)
 	if e.Remote != "" {
 		s = replaceFold(s, e.Remote, "<remote>")

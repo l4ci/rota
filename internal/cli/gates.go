@@ -35,7 +35,8 @@ type Gates struct {
 	// RoundMachine refuses an unnamed support machine. Inherited.
 	RoundMachine bool
 	// ConfigExempt runs with a project or local config that is corrupt: the
-	// verbs that edit it to repair it, and those that never load it. Inherited.
+	// verbs that repair it, refuse it on their own (init), never load it, or
+	// load it and degrade silently (hook, skills). Inherited.
 	ConfigExempt bool
 	// Fence is the support-fence class. Never inherited: each verb declares
 	// its own, so a new verb cannot be allowed on a support machine by default.

@@ -68,9 +68,12 @@ var gateDecls = []struct {
 		"worker prompt-check", "worker done", "worker inbox", "worker send", "worker reply"}, func(g *Gates) { g.RoundKeys = RoundKeysQuiet }},
 	// May run with round.role in the tracked config, which they are there to fix.
 	{[]string{"config", "migrate"}, func(g *Gates) { g.TrackedRoleExempt = true }},
-	// Run with a corrupt project or local config: the verbs that edit it to
-	// repair it (the config verbs refuse on their own terms), and those that
-	// never load it (hooks, the statusline, update checks).
+	// Run with a corrupt project or local config, each for its own reason:
+	// config and migrate edit it to repair it; init refuses a bad file on its
+	// own terms; setup, version, update and statusline never load it; hook
+	// loads it and degrades silently, since a hook must not break the session;
+	// skills reads round.accounts and runs on defaults; worker prompt-check is
+	// a Codex hook that only verifies a signature.
 	{[]string{"config", "migrate", "init", "setup", "version", "update", "skills", "hook", "statusline",
 		"worker prompt-check"}, func(g *Gates) { g.ConfigExempt = true }},
 	// Refused for an unnamed support machine before any round verb reads or

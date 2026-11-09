@@ -91,25 +91,11 @@ pass "worker done passes once the lead and every member have proof and acceptanc
 rm -rf "$TMP_BN"
 
 # ── the gate wants the PR to close every issue of the bundle ────────────────
-# Same fake gh as section 131, run with --check-only so nothing merges. The slot holds
-# #5 with members #6 and #7; the fake answers pr view and issue view for any number.
+# Same shared fake gh as section 131, run with --check-only so nothing merges. The slot holds
+# #5 with members #6 and #7, which the seeded store carries as open issues.
 TMP_BG="$(mktemp -d)"
-BGPROJ="$TMP_BG/proj"; BGBIN="$TMP_BG/bin"; mkdir -p "$BGPROJ/.rota" "$BGBIN"
-cat > "$BGBIN/gh" <<'PYEOF'
-#!/usr/bin/env python3
-import json, os, sys
-st = json.load(open(os.environ["BG_STATE"]))
-a = sys.argv[1:]
-if a[:2] == ["pr", "view"]:
-    print(json.dumps({"headRefName": "ben/5-thing", "headRefOid": st["sha"], "baseRefName": "main",
-                      "state": "OPEN", "mergeCommit": None, "body": st["body"] + "\n## Assumptions\nNone\n\n## Rulings\nNone\n"}))
-elif a[:2] == ["issue", "view"]:
-    print(json.dumps({"number": int(a[2]), "title": "t", "body": "", "state": "OPEN", "url": "",
-                      "labels": [], "assignees": [], "milestone": None}))
-else:
-    print("fake gh: unsupported: %s" % a, file=sys.stderr); sys.exit(2)
-PYEOF
-chmod +x "$BGBIN/gh"
+BGPROJ="$TMP_BG/proj"; mkdir -p "$BGPROJ/.rota"
+. "$TESTDIR/lib/forge_state.sh"
 git init -q --bare -b main "$TMP_BG/origin.git"
 (
   cd "$BGPROJ" && git init -q -b main . && git config user.email t@t && git config user.name t \
@@ -121,8 +107,8 @@ git init -q --bare -b main "$TMP_BG/origin.git"
 BGSHA="$(git -C "$BGPROJ" rev-parse ben/5-thing)"
 printf '{"issues":{"source":"github"},"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$BGPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"ben/5-thing","task":"#5","bundle":["6","7"],"pr":"https://github.com/o/r/pull/7"}]}\n' > "$BGPROJ/.rota/workers.json"
-bg_state() { printf '{"sha":"%s","body":"%s"}\n' "$BGSHA" "$1" > "$TMP_BG/state.json"; }
-bg() { ( cd "$BGPROJ" && BG_STATE="$TMP_BG/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$BGBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
+bg_state() { forge_state "$TMP_BG/db.json" "$BGSHA" "$1" "" "" 5 6 7; }
+bg() { ( cd "$BGPROJ" && FAKE_TRACKER_DB="$TMP_BG/db.json" ROTA_GATE_SHA_WAIT=0 PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 bg_state "Closes #5"
 RC=0; OUT=$(bg worker gate ben --base main --check-only) || RC=$?
