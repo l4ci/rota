@@ -96,7 +96,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 					continue
 				}
 				tier := ""
-				if topic.Name != GlossaryTopic {
+				if tiered(topic.Name) {
 					e, _, err := tiers.Get(topic.Name, title)
 					if err != nil {
 						return err

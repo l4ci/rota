@@ -1039,7 +1039,7 @@ A branch that is only behind the base is merged as is when the merge is clean, e
 changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate
 verifies the merged tree. Only a conflict sends it back as `stale`. A `stale` or `provenance-fail` refusal is not a bounce: it is
 counted nowhere and never parks the item, because the worker repairs it (merge the base, fix the PR body). Review bounces
-still count per item; at `round.maxBounces` (default 3) the item is parked `needs-human` (a pass resets the count, and `0` turns the cap off).
+still count per item (`round bounce` and the review relay only); at `round.maxBounces` (default 3) `round bounce` refuses (exit 4) and the review relay escalates on the PR. Nothing parks the item. A pass resets the count, and `0` turns the cap off.
 
 ### CI and `GITHUB_TOKEN`
 

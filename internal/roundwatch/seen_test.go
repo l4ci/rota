@@ -18,11 +18,11 @@ func TestSeenStoreStartsEmpty(t *testing.T) {
 func TestSeenStoreMarkMergesAndPersists(t *testing.T) {
 	cd := t.TempDir()
 	s := NewSeenStore(cd)
-	s.Mark(map[string]string{"support/7/pr-head": "aaa"})
-	s.Mark(map[string]string{"support/8/comment": "ann#2"})
-	s.Mark(map[string]string{"support/7/pr-head": "bbb"})
+	s.Mark(Snapshot{SupportKey("7", SupportPRHead): "aaa"})
+	s.Mark(Snapshot{SupportKey("8", SupportComment): "ann#2"})
+	s.Mark(Snapshot{SupportKey("7", SupportPRHead): "bbb"})
 	got := NewSeenStore(cd).Seen()
-	if len(got) != 2 || got["support/7/pr-head"] != "bbb" || got["support/8/comment"] != "ann#2" {
+	if len(got) != 2 || got[SupportKey("7", SupportPRHead)] != "bbb" || got[SupportKey("8", SupportComment)] != "ann#2" {
 		t.Fatalf("seen = %v", got)
 	}
 	if _, err := os.Stat(rotastate.File(cd, SeenFile)); err != nil {
@@ -44,8 +44,8 @@ func TestSeenStoreCorruptFileReadsEmpty(t *testing.T) {
 	if len(s.Seen()) != 0 {
 		t.Fatalf("corrupt read = %v", s.Seen())
 	}
-	s.Mark(map[string]string{"k": "v"})
-	if got := s.Seen(); len(got) != 1 || got["k"] != "v" {
+	s.Mark(Snapshot{GateKey: "v"})
+	if got := s.Seen(); len(got) != 1 || got[GateKey] != "v" {
 		t.Fatalf("after mark = %v", got)
 	}
 }

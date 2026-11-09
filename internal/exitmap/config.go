@@ -22,10 +22,10 @@ func translateConfig(err error, o Options) (data any, out error, ok bool) {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUsage, Message: err.Error()}, true
 	}
 	if o.Classes&ConfigCorrupt != 0 && errors.Is(err, config.ErrCorrupt) {
-		return nil, &exitcode.Error{Exit: exitcode.ExitInternal, Message: err.Error()}, true
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}, true
 	}
 	if o.Classes&ConfigInternal != 0 && configInternal(err) {
-		return nil, &exitcode.Error{Exit: exitcode.ExitInternal, Message: err.Error()}, true
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}, true
 	}
 	return nil, nil, false
 }
@@ -37,7 +37,8 @@ func configUsage(err error) bool {
 }
 
 // configInternal are a config file that is not a JSON object, or one rota
-// refuses to read as empty (exit 70, naming the file).
+// refuses to read as empty. Both are the user's file, not a rota bug (exit 5,
+// naming the file).
 func configInternal(err error) bool {
 	return errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) ||
 		errors.Is(err, config.ErrGlobalNotObject) ||

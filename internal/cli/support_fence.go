@@ -81,6 +81,9 @@ func supportMachine(c *Ctx, root, what string) (bool, Result, error) {
 // supportMachineWith is supportMachine reading the config through load.
 func supportMachineWith(root, what string, load func(string) any) (bool, Result, error) {
 	support, rerr := roundcfg.SupportMachine(root, load)
+	if rerr != nil && rerr.Corrupt {
+		return false, Result{}, &Error{Exit: ExitUnavailable, Message: rerr.Why, Hint: rerr.Hint}
+	}
 	if rerr != nil {
 		d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
 		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, rerr.Why).WithHint(rerr.Hint)

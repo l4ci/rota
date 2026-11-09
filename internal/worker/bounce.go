@@ -35,14 +35,13 @@ type BounceStore interface {
 	// no cap). slot names the slot holding the bounced PR, for the ledger row; ""
 	// falls back to the first slot holding the issue.
 	Record(m *RoundMemo, issue, slot, head string, limit int) (BounceRecord, error)
-	// Clear forgets the item's count: its PR merged, it was parked for a human
-	// or picked.
+	// Clear forgets the item's count: its PR merged, it was picked.
 	Clear(issue string) error
 }
 
 // AtCap reports whether n bounces already hold the cap. limit is
 // round.maxBounces; 0 means no cap. It is the one spelling of the rule: Record
-// refuses at it, the gate parks at it and round review relays no more at it.
+// refuses at it (so does round bounce) and round review relays no more at it.
 func AtCap(n, limit int) bool {
 	return limit > 0 && n >= limit
 }

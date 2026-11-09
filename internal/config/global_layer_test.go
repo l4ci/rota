@@ -1,11 +1,13 @@
 package config
 
 import (
+	"errors"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -181,5 +183,21 @@ func TestLoadResolvesGlobalFromInjectedEnv(t *testing.T) {
 	}
 	if err := GlobalError(env); err != nil {
 		t.Errorf("GlobalError = %v, want nil", err)
+	}
+}
+
+// #2924: save-global and set --global on a global config that is not an object
+// name that file, not .rota/config.json.
+func TestGlobalNotObjectNamesFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(GlobalPath(dir), []byte("[]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, merr := MergeGlobal(dir, map[string]any{"round.slots": 2})
+	_, serr := SetGlobal(dir, "round.slots", "2")
+	for name, err := range map[string]error{"MergeGlobal": merr, "SetGlobal": serr} {
+		if !errors.Is(err, ErrGlobalNotObject) || !strings.Contains(err.Error(), GlobalPath(dir)) {
+			t.Errorf("%s: %v, want ErrGlobalNotObject naming %s", name, err, GlobalPath(dir))
+		}
 	}
 }

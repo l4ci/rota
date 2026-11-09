@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/remoteurl"
 )
 
 // setupSignal is a value `rota setup` read from the project for one question,
@@ -103,7 +103,7 @@ func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), 
 	if !ok {
 		return setupSignal{}, false
 	}
-	host := remoteHost(raw)
+	host := remoteurl.Parse(raw).Host
 	forge, cli := "", ""
 	switch {
 	case host == "github.com":
@@ -129,18 +129,6 @@ func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), 
 
 // authProbeTimeout bounds `gh|glab auth status`, which can reach the network.
 const authProbeTimeout = 5 * time.Second
-
-// remoteHost is the host of a git remote URL (https://, ssh:// or scp-like).
-func remoteHost(raw string) string {
-	if u, err := url.Parse(raw); err == nil && u.Host != "" {
-		return strings.ToLower(u.Hostname())
-	}
-	if _, rest, ok := strings.Cut(raw, "@"); ok {
-		raw = rest
-	}
-	host, _, _ := strings.Cut(raw, ":")
-	return strings.ToLower(host)
-}
 
 // testSignals is [test.fast, test.full] read from the project's manifests: the
 // first manifest that names a test command is the fast one; the full one is a

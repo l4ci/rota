@@ -146,8 +146,8 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 	if err != nil {
 		return CreateResult{}, err
 	}
-	letter := kindLetter[in.Kind]
-	role := map[string]string{"B": "types.bug", "F": "types.feature", "T": "types.task"}[letter]
+	typ, _ := TypeByKind(in.Kind) // checkCreate validated the kind
+	letter, role := typ.Letter, typ.Role
 	labels := []string{config.Label(b.Cfg, role)}
 	if in.Tag != "" && letter == "B" {
 		labels = append(labels, config.Label(b.Cfg, "priorityPrefix")+in.Tag[1:])
