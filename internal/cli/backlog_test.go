@@ -272,6 +272,8 @@ func TestBacklogSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
 }
 
 func TestBacklogStaleTodoTextReportsUndated(t *testing.T) {
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd) // -C changes the process directory
 	cases := []struct {
 		name, backlog, want string
 	}{
