@@ -239,15 +239,15 @@ func designAmend(fs *flag.FlagSet) RunFunc {
 		if *mode != "append" && *mode != "replace" {
 			return Result{}, Usage("--mode must be append or replace")
 		}
-		if !design.ValidID(id) {
-			_, err := design.Amend("", id, *heading, *mode, "")
+		st := design.Files(root)
+		if err := st.CheckID(id); err != nil {
 			return Result{}, err
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := design.Amend(root, id, *heading, *mode, text)
+		changed, err := design.Amend(st, id, *heading, *mode, text)
 		if err != nil {
 			return Result{}, err
 		}
