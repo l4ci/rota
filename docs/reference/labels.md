@@ -8,7 +8,7 @@ Open prefixes below describe existing definitions only. Sync does not create a l
 
 `issues.labels.*` overrides the configured names and prefixes. Declare project labels in `issues.labels.extra` as a JSON object of name to description; exact registry entries retain their own metadata. Labels read through `review.crossLabels`, `review.lenses`, or `ship.review.labels` also count as known. The registry documents who applies and reads each definition and when it leaves an issue; sync never removes definitions.
 
-For a project-specific page, run `go run ./internal/labels/genref --config .rota/config.json <output.md>`. This uses the same resolved entries as sync, including custom names and project declarations.
+For a project-specific page, run `go run ./internal/labels/genref --config <project-root> <output.md>`. This uses the same resolved entries as sync, including custom names and project declarations.
 
 Colors are six-digit RGB: blue for milestones and sizes, purple for routing and review, red for defects and blocked work, orange for priorities and review changes, yellow for round decisions, green for released work, and pale blue for project labels and tasks. Existing colors change only with `--apply`.
 

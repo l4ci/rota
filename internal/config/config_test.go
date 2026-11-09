@@ -11,8 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Each testdata/<case>/ directory is a fixture: Go's Load must produce the
-// JSON that the retired Python load_config recorded for it in testdata/golden.
 // fixtureRoot lays the config files found in dir out as a project root and
 // returns that root with the files' contents by name.
 func fixtureRoot(t *testing.T, dir string) (string, map[string]string) {
@@ -33,6 +31,8 @@ func fixtureRoot(t *testing.T, dir string) (string, map[string]string) {
 	return root, files
 }
 
+// Each testdata/<case>/ directory is a fixture: Go's Load must produce the
+// JSON that the retired Python load_config recorded for it in testdata/golden.
 func TestLoadMatchesPython(t *testing.T) {
 	cases, err := os.ReadDir("testdata")
 	if err != nil {
@@ -57,17 +57,17 @@ func TestLoadMatchesPython(t *testing.T) {
 // (Config). Python's side of each is noted in a comment.
 func TestDivergentInputs(t *testing.T) {
 	t.Run("NaN and Infinity", func(t *testing.T) {
-		path, _ := fixtureRoot(t, "divergent/nan")
+		root, _ := fixtureRoot(t, "divergent/nan")
 		// Go: not valid JSON, so the file counts as absent.
-		if got, _ := jsonx.MarshalCompact(Load(cfgdir.OSEnv(), path)); string(got) != "{}" {
+		if got, _ := jsonx.MarshalCompact(Load(cfgdir.OSEnv(), root)); string(got) != "{}" {
 			t.Fatalf("Go Load = %s, want {}", got)
 		}
 		// Python: json.loads accepts NaN and Infinity.
 	})
 	t.Run("invalid UTF-8", func(t *testing.T) {
-		path, _ := fixtureRoot(t, "divergent/badutf8")
+		root, _ := fixtureRoot(t, "divergent/badutf8")
 		// Go: loads, with U+FFFD for the bad byte.
-		v, ok := Lookup(Load(cfgdir.OSEnv(), path), "round.dispatch")
+		v, ok := Lookup(Load(cfgdir.OSEnv(), root), "round.dispatch")
 		if !ok || v != "tm\uFFFDux" {
 			t.Fatalf("Go Load round.dispatch = %q", v)
 		}
