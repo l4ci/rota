@@ -37,8 +37,8 @@ func brAdd(fs *flag.FlagSet) RunFunc {
 	harness := fs.String("harness", "", "the harness you run in (claude, codex, opencode, …)")
 	model := fs.String("model", "", "the model you run on")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("unexpected argument %q", args[0])
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		if strings.TrimSpace(*summary) == "" {
 			return Result{}, Usage("--summary is required")
@@ -80,8 +80,8 @@ func brLine(r bugreport.Record, red bugreport.Env) string {
 }
 
 func brList(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("unexpected argument %q", args[0])
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	root, err := c.Root()
 	if err != nil {
