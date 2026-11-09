@@ -102,7 +102,7 @@ func NewEnv(w World, cfg Config) Env {
 		if err != nil {
 			return Inspection{}, err
 		}
-		return InspectionOf(out), nil
+		return InspectionOf(out, cfg.Observe), nil
 	}
 	e.Target = func(target string) (worker.GateTarget, error) {
 		reg, err := w.Registry()

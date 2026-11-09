@@ -14,16 +14,20 @@ type Inspection struct {
 	Unknown                   []Item
 }
 
-// InspectionOf reads a round.Outcome from either world. A read-only world
-// keeps every finding in Drift, repairable ones included: a proposed repair is
-// reported as a proposal, not also as drift the autopilot does not repair.
-func InspectionOf(out round.Outcome) Inspection {
+// InspectionOf reads a round.Outcome from either world. Only an observing pass
+// turns Proposed into proposals and drops them from Drift: a proposed repair is
+// a proposal, not also drift the autopilot does not repair. An executing pass
+// reports Repaired and the raw Drift, so a repair that failed (it sits in both
+// Proposed and Drift) stays drift.
+func InspectionOf(out round.Outcome, observe bool) Inspection {
 	var in Inspection
 	proposed := map[string]bool{}
-	for _, f := range out.Proposed {
-		f := FindingOf(f)
-		in.Proposed = append(in.Proposed, f)
-		proposed[f.String()] = true
+	if observe {
+		for _, f := range out.Proposed {
+			f := FindingOf(f)
+			in.Proposed = append(in.Proposed, f)
+			proposed[f.String()] = true
+		}
 	}
 	for _, f := range out.Repaired {
 		in.Repaired = append(in.Repaired, FindingOf(f))

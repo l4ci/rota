@@ -372,7 +372,16 @@ func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
 func (w *tickWorld) ReviewLoop(slot string) roundtick.ReviewOutcome {
 	src := reviewSources(w.c, w.root, w.set, slot)
 	src.Observe = w.observe
+	if w.observe && src.Relay != nil {
+		src.Relay = readOnlyRelay
+	}
 	return roundtick.ReviewStep(w.c.Context(), src)
+}
+
+// readOnlyRelay is the review relay of an observing world: it refuses, so the
+// guarantee holds even if a pass ignores ReviewSources.Observe.
+func readOnlyRelay(context.Context) (roundtick.RelayResult, error) {
+	return roundtick.RelayResult{}, errReadOnlyWorld
 }
 
 func (w *tickWorld) Capped(ctx context.Context) string {
