@@ -1,8 +1,10 @@
 package spike
 
 import (
+	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
@@ -19,7 +21,7 @@ func testDay() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
 
 func TestAddAndFinishStampInjectedClock(t *testing.T) {
 	root := repo(t)
-	if _, err := Add(root, root, "sse", "q", "", testDay); err != nil {
+	if _, err := Add(nil, root, root, "sse", "q", "", testDay); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(file(root, "sse"))
@@ -88,7 +90,7 @@ _(if viable, the shape of the real implementation — write only at /rota-spike 
 // Spike files are shared with older plugin versions; pin them byte for byte.
 func TestSpikeFileBytes(t *testing.T) {
 	root := repo(t)
-	if _, err := Add(root, root, "sse", "Can SSE work?", "", testDay); err != nil {
+	if _, err := Add(nil, root, root, "sse", "Can SSE work?", "", testDay); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(file(root, "sse"))
@@ -140,7 +142,7 @@ func TestListSkipsFilesWithoutFrontmatter(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "plain.md"), []byte("# no frontmatter\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.md"), []byte("---\nstatus: open\n---\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("---\nname: a\nbranch: spike/a\nrepo: web\ncreated: 2026-01-01\n---\n"), 0o644)
-	list, err := List(root, root)
+	list, err := List(nil, root, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,12 +170,12 @@ func umbrella(t *testing.T) (root, sub string) {
 func TestAddUmbrellaRepo(t *testing.T) {
 	root, sub := umbrella(t)
 	// From the umbrella root (not a git repo) with no repo: usage, naming the repos.
-	_, err := Add(root, root, "sse", "q", "", testDay)
+	_, err := Add(nil, root, root, "sse", "q", "", testDay)
 	var ae *exitcode.Error
 	if !errors.As(err, &ae) || ae.Exit != 2 || !strings.Contains(ae.Hint, "web") {
 		t.Fatalf("no --repo: %v", err)
 	}
-	branch, err := Add(root, sub, "sse", "q", "web", testDay)
+	branch, err := Add(nil, root, sub, "sse", "q", "web", testDay)
 	if err != nil || branch != "spike/sse" {
 		t.Fatalf("add: %q %v", branch, err)
 	}
@@ -184,7 +186,7 @@ func TestAddUmbrellaRepo(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(sub, ".rota")); err == nil {
 		t.Error("spike file landed in the sub-repo")
 	}
-	list, _ := List(root, root)
+	list, _ := List(nil, root, root)
 	if len(list) != 1 || !list[0].BranchExists || list[0].Repo != "web" {
 		t.Fatalf("list = %+v", list)
 	}
@@ -193,7 +195,7 @@ func TestAddUmbrellaRepo(t *testing.T) {
 func TestAddNotGit(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o777)
-	if _, err := Add(dir, dir, "x", "q", "", testDay); exitOf(err) != 5 {
+	if _, err := Add(nil, dir, dir, "x", "q", "", testDay); exitOf(err) != 5 {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -207,7 +209,7 @@ func TestAddConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := Add(root, root, "dup", "q", "", testDay)
+			_, err := Add(nil, root, root, "dup", "q", "", testDay)
 			switch {
 			case err == nil:
 				ok.Add(1)
@@ -228,7 +230,7 @@ func TestCRLFSpikeFile(t *testing.T) {
 	root := repo(t)
 	os.MkdirAll(filepath.Dir(file(root, "x")), 0o777)
 	os.WriteFile(file(root, "x"), []byte("---\r\nname: x\r\nstatus: open\r\n---\r\nbody\r\n"), 0o644)
-	list, _ := List(root, root)
+	list, _ := List(nil, root, root)
 	if len(list) != 1 || list[0].Status != "open" {
 		t.Fatalf("list = %+v", list)
 	}
@@ -238,5 +240,63 @@ func TestCRLFSpikeFile(t *testing.T) {
 	raw, _ := os.ReadFile(file(root, "x"))
 	if !strings.HasPrefix(string(raw), "---\nname: x\nstatus: done\nfinished: ") || strings.Contains(string(raw), "\r") {
 		t.Fatalf("got %q", raw)
+	}
+}
+
+// fakeGit answers each git call from handler (args joined by a space) and
+// logs the calls, so add and List run with no repository on disk.
+func fakeGit(handler func(args string) gitx.Result) (gitx.Runner, *[]string) {
+	var calls []string
+	return func(_ context.Context, _ string, args ...string) (gitx.Result, error) {
+		a := strings.Join(args, " ")
+		calls = append(calls, a)
+		return handler(a), nil
+	}, &calls
+}
+
+// A failing git branch surfaces git's own message, not "exit status N".
+func TestAddSurfacesGitError(t *testing.T) {
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	run, _ := fakeGit(func(a string) gitx.Result {
+		switch {
+		case strings.HasPrefix(a, "rev-parse --verify"):
+			return gitx.Result{ExitCode: 1}
+		case strings.HasPrefix(a, "branch "):
+			return gitx.Result{ExitCode: 128, Stderr: "fatal: cannot lock ref 'refs/heads/spike/sse'\n"}
+		}
+		return gitx.Result{}
+	})
+	_, err := Add(run, root, root, "sse", "q", "", testDay)
+	if exitOf(err) != 5 {
+		t.Fatalf("exit = %d (%v)", exitOf(err), err)
+	}
+	if !strings.Contains(err.Error(), "cannot lock ref") || strings.Contains(err.Error(), "exit status") {
+		t.Fatalf("underlying git error lost: %v", err)
+	}
+	if _, serr := os.Stat(file(root, "sse")); serr == nil {
+		t.Error("spike file written after the branch failed")
+	}
+}
+
+func TestAddAndListThroughFake(t *testing.T) {
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	run, calls := fakeGit(func(a string) gitx.Result {
+		switch {
+		case a == "rev-parse --verify spike/sse":
+			return gitx.Result{ExitCode: 1}
+		case strings.HasPrefix(a, "for-each-ref"):
+			return gitx.Result{Stdout: "spike/sse\n"}
+		}
+		return gitx.Result{}
+	})
+	if _, err := Add(run, root, root, "sse", "q", "", testDay); err != nil {
+		t.Fatal(err)
+	}
+	list, err := List(run, root, root)
+	if err != nil || len(list) != 1 || !list[0].BranchExists {
+		t.Fatalf("list = %+v %v", list, err)
+	}
+	if got := strings.Join(*calls, "|"); !strings.Contains(got, "branch spike/sse") {
+		t.Errorf("calls = %s", got)
 	}
 }
