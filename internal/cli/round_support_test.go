@@ -145,6 +145,7 @@ func supportReturnDeps(fake *trackertest.Fake) *Deps {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
+	deps.RoundEnvAccounted = func(ctx context.Context, r string) round.Env { return deps.RoundEnv(ctx, r) }
 	return deps
 }
 

@@ -76,7 +76,7 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 // Account picking is chosen where the env is built (accountedRoundEnv): no verb
 // sets the flag or Worker.Accounts on a round env itself, and the accounting
 // verbs (assign, tick, architecture, return, status's quota read) go through
-// the constructor. Only defaultRoundEnv may switch it off and only
+// the constructor. Only the constructor (newRoundEnv, buildRoundEnv) may switch it and only
 // accountedRoundEnv may call WithAccounts.
 func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
 	files, err := filepath.Glob("*.go")
@@ -93,12 +93,12 @@ func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
 			t.Fatal(err)
 		}
 		src := string(b)
-		for _, fn := range []string{"defaultRoundEnv", "accountedRoundEnv"} {
+		for _, fn := range []string{"newRoundEnv", "buildRoundEnv", "accountedRoundEnv"} {
 			src = cutFunc(t, f, src, fn)
 		}
 		for _, bad := range []string{".Worker.Accounts =", "AccountPicking =", ".WithAccounts("} {
 			if strings.Contains(src, bad) {
-				t.Errorf("%s uses %q outside defaultRoundEnv/accountedRoundEnv; use accountedRoundEnv", f, bad)
+				t.Errorf("%s uses %q outside the round env constructors; use accountedRoundEnv", f, bad)
 			}
 		}
 		if want[f] && !strings.Contains(string(b), "accountedRoundEnv(") {
