@@ -15,6 +15,7 @@
 #   pane.<win>   per-window override of pane (and tick.<win>, frozen.<win> of
 #                tick, frozen): lets several slots show different panes
 #   name         session name for display-message (default hvfake)
+#   kill_fails   kill-window leaves the window in place (a session that will not close)
 # $FAKE_TMUX_SNAPSHOT, when set, names a file of `session:window<TAB>path` lines
 # that `list-windows -a -F ...pane_current_path...` prints (the host snapshot).
 [ -n "${FAKE_TMUX:-}" ] || { echo "fake tmux: FAKE_TMUX is not set" >&2; exit 98; }
@@ -36,6 +37,7 @@ case "$1" in
       *) awk '{print $1}' "$F/windows" 2>/dev/null ;;
     esac ;;
   kill-window)
+    [ -f "$F/kill_fails" ] && exit 0
     target="$3"; name="${target#*:}"
     [ -f "$F/windows" ] && grep -v "^$name " "$F/windows" >"$F/windows.new"
     mv "$F/windows.new" "$F/windows" 2>/dev/null; exit 0 ;;

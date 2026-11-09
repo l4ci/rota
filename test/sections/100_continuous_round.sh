@@ -11,16 +11,11 @@ git init -q --bare "$CR/origin.git"
     && mkdir -p .rota && printf '# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
 ) || fail "continuous round fixture setup failed"
 CP="$CR/proj"
-# A fake gh answers `pr list` (the open-PR filter of the train nudge and the
-# watch list) with PR 7 open; any other call fails.
-mkdir -p "$CR/bin"
-cat > "$CR/bin/gh" <<'GHEOF'
-#!/bin/sh
-[ "$1 $2" = "pr list" ] && { echo '[{"number":7,"title":"t","body":"","headRefName":"b","url":"https://github.com/o/r/pull/7"}]'; exit 0; }
-echo "fake gh: unsupported: $*" >&2; exit 2
-GHEOF
-chmod +x "$CR/bin/gh"
-CRENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE PATH=$CR/bin:$PATH"
+# The shared fake gh answers `pr list` (the open-PR filter of the train nudge and the
+# watch list) from a store holding PR 7 open; any other call is rejected.
+. "$TESTDIR/lib/forge_state.sh"
+FORGE_STATE_HEAD=b forge_state "$CR/forge.json" "$(printf 'a%.0s' {1..40})" "" "" ""
+CRENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE PATH=$TESTDIR/fakes:$PATH FAKE_TRACKER_DB=$CR/forge.json"
 cr() { ( cd "$CP" && $CRENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 creg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$CP/.rota/workers.json" "$1"; }
 for n in a b c; do
