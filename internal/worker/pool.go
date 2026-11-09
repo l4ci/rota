@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -214,7 +214,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 // commonDir is the resolved git common dir of a worktree, "" when it has none.
 func (e Env) commonDir(dir string) string {
-	cd, _, err := git.CommonDirVia(context.Background(), e.Git, dir)
+	cd, err := rotastate.CommonDirVia(context.Background(), e.Git, dir)
 	if err != nil {
 		return ""
 	}
