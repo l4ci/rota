@@ -123,11 +123,9 @@ type Deps struct {
 	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
 
-	RoundEnv func(ctx context.Context, root string) round.Env
-	// RoundEnvAccounted is RoundEnv with account picking on, built once with
-	// the meters (accountedRoundEnv calls it); a test that swaps RoundEnv swaps
-	// this too.
-	RoundEnvAccounted func(ctx context.Context, root string) round.Env
+	// RoundEnv is the one builder hook: opts carry the worker env and the
+	// account option, so one swap covers plain and accounted envs.
+	RoundEnv func(ctx context.Context, root string, opts RoundOpts) round.Env
 	// RoundEnvLocal is RoundEnv without a forge, for a caller that reads only
 	// the host and worktree sources and must not build one.
 	RoundEnvLocal func(ctx context.Context, root string) round.Env
@@ -252,11 +250,12 @@ func defaultDeps() *Deps {
 		}
 		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
 	}
-	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
-	d.RoundEnvAccounted = func(ctx context.Context, root string) round.Env {
-		return buildRoundEnv(ctx, root, d, true, d.workerEnvFor(ctx), d.WorkerAccounts())
+	d.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		return buildRoundEnv(ctx, root, d, true, o.Worker, o.Accounts)
 	}
-	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }
+	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env {
+		return buildRoundEnv(ctx, root, d, false, d.workerEnv(), nil)
+	}
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
 		return defaultReapEnv(ctx, root, d)
 	}

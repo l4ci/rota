@@ -266,8 +266,8 @@ func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	re := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, r string) round.Env {
-		e := re(ctx, r)
+	deps.RoundEnv = func(ctx context.Context, r string, o RoundOpts) round.Env {
+		e := re(ctx, r, o)
 		e.HostName = host.Tmux
 		e.Snapshot = func(context.Context) ([]host.Agent, error) { return nil, nil }
 		e.Forge = branchPRForge{returnForge{fake}, tracker.PR{Number: 71, Branch: "mac-kit/32-other", URL: "https://github.com/o/r/pull/71"}}

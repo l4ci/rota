@@ -46,8 +46,7 @@ func workerAdopt(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		env := c.deps().RoundEnv(ctx, root)
-		env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
+		env := roundEnv(c, ctx, root)
 		res, err := env.Adopt(ctx, root, be, round.AdoptOpts{
 			Ref: args[0], Issue: id, Name: *name, PR: *pr, AcceptOverlap: *accept, Shared: set.SharedPaths,
 		})

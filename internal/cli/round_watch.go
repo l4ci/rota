@@ -142,7 +142,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) roundwatch.Snapshot {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	renv := c.deps().RoundEnv(ctx, root)
+	renv := roundEnv(c, ctx, root)
 	// The real combined forge exposes the issue backend. A custom round
 	// environment may supply only round.Forge (and its own Board); do not
 	// bypass that boundary by constructing a different tracker behind it.

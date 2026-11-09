@@ -36,7 +36,7 @@ func TestDefaultRoundEnvReadsThroughDeps(t *testing.T) {
 	}
 	d.LookPath = func(string) (string, error) { lookups++; return "/fake/herdr", nil }
 
-	e := defaultRoundEnv(context.Background(), root, d, false)
+	e := buildRoundEnv(context.Background(), root, d, false, d.workerEnv(), nil)
 
 	if e.Base != "trunk" || gitCalls == 0 {
 		t.Errorf("base read missed Deps.Git: base=%q calls=%d", e.Base, gitCalls)
@@ -62,7 +62,7 @@ func TestDepsRepoRunsThroughGit(t *testing.T) {
 func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"support":"mac"},"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "legacy-x"}}}`)
-	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
+	e := buildRoundEnv(context.Background(), root, defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	for role, c := range map[string]struct{ got, want string }{
 		"inProgress":  {e.Label, "wip-x"},
 		"needsHuman":  {e.NeedsHuman, "human-x"},
@@ -76,7 +76,7 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 }
 
 func TestDefaultRoundEnvDefaultLabels(t *testing.T) {
-	e := defaultRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false)
+	e := buildRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "" {
 		t.Errorf("default labels = %q, %q, %q, %q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel)
 	}
@@ -114,7 +114,7 @@ func TestDefaultRoundEnvBaseHonoursConfiguredBranch(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "--allow-empty", "-m", "init")
 	gittest.Run(t, root, "branch", "develop")
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"git": {"baseBranch": "develop"}}`)
-	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
+	e := buildRoundEnv(context.Background(), root, defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	if e.Base != "develop" {
 		t.Errorf("Base = %q, want the configured develop", e.Base)
 	}

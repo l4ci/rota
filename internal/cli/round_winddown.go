@@ -76,8 +76,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if raw, err := openBacklog(c, root, false, ""); err == nil {
 			board, _ = round.BoardOf(raw)
 		}
-		env := c.deps().RoundEnv(ctx, root)
-		env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
+		env := roundEnv(c, ctx, root)
 		// An autopilot watch must not assign or merge while the base is being
 		// re-verified; a kept lease lets it resume, a failed verify keeps it stopped.
 		var cd string

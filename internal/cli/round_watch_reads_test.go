@@ -33,7 +33,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		}
 		return []byte("[]"), nil, 0, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
-	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
+	deps.RoundEnv = func(ctx context.Context, root string, _ RoundOpts) round.Env {
 		f, err := deps.forgeAndIssues(ctx, config.Load(projects.OSEnv(), rotatree.Config(root)), root)
 		if err != nil {
 			t.Fatal(err)
