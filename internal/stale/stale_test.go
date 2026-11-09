@@ -86,6 +86,21 @@ func TestFindTodoReadsThroughTheSuppliedSource(t *testing.T) {
 	}
 }
 
+func TestFindReportCountsUndatedTodos(t *testing.T) {
+	item := func(id, captured string) backlog.Item {
+		return backlog.Item{ID: id, Fields: backlog.Fields{Captured: captured}}
+	}
+	src := fakeSource{items: []backlog.Item{item("12", "2026-01-01"), item("14", ""), item("15", "not-a-date"), item("17", "")}}
+	rep, err := FindReport(t.TempDir(), "todo", 90, date(t, "2026-10-02"), src)
+	if err != nil || rep.SkippedUndated != 3 || len(rep.Entries) != 1 {
+		t.Errorf("report = %+v %v", rep, err)
+	}
+	rep, _ = FindReport(t.TempDir(), "map", 90, date(t, "2026-10-02"), nil)
+	if rep.SkippedUndated != 0 {
+		t.Errorf("map skipped = %d", rep.SkippedUndated)
+	}
+}
+
 func TestFindKnowledgeUsesTheFileCommitDate(t *testing.T) {
 	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n\n## Beta, gamma\ny\n\n## Delta  \nz\n"})
 	far := date(t, "2999-01-01")
