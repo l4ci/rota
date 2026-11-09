@@ -340,17 +340,28 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 			}
 			todos = be
 		}
-		entries, err := stale.Find(root, *kind, *days, today, todos)
+		rep, err := stale.FindReport(root, *kind, *days, today, todos)
 		if err != nil {
 			return backlogFail(err)
 		}
 		list := []any{}
 		var lines []string
-		for _, e := range entries {
+		for _, e := range rep.Entries {
 			list = append(list, jsonx.Obj("name", e.Name, "date", e.Date))
 			lines = append(lines, e.Name+" "+e.Date)
 		}
-		return Result{Data: jsonx.Obj("kind", *kind, "days", *days, "entries", list), Text: strings.Join(lines, "\n")}, nil
+		data := jsonx.Obj("kind", *kind, "days", *days, "entries", list)
+		if *kind == "todo" {
+			data.Set("skippedUndated", rep.SkippedUndated)
+			if rep.SkippedUndated > 0 {
+				verb := "have no Captured date and were"
+				if rep.SkippedUndated == 1 {
+					verb = "has no Captured date and was"
+				}
+				lines = append(lines, fmt.Sprintf("%s %s not checked", plural(rep.SkippedUndated, "open item"), verb))
+			}
+		}
+		return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 	}
 }
 

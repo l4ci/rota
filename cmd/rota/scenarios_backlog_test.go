@@ -405,7 +405,22 @@ func suiteBacklog(t *testing.T) {
 		scn{name: "stale/repo-unregistered", goOnly: true, fx: umbFx, argv: j("backlog", "stale", "--kind", "todo", "--repo", "x"), want: 3},
 		// The todo kind follows issues.source: under a tracker config it builds the tracker, not BACKLOG.md.
 		scn{name: "stale/todo-follows-issues-config", goOnly: true, fx: withFx(todoFx, func(f *fx) { f.config = issuesConfig }), argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),
-			env: []string{"ROTA_TEST_TODAY=" + today}, want: 5},
+			env: []string{"ROTA_TEST_TODAY=" + today}, want: 5,
+			check: func(t *testing.T, e envl) {
+				t.Helper()
+				msg, _ := at(e, "error.message").(string)
+				if code, _ := at(e, "error.code").(string); code == "" || msg == "" || strings.Contains(msg, "BACKLOG.md") {
+					t.Errorf("error = %v %q: want a tracker error, not the file backend's", code, msg)
+				}
+			}},
+		scn{name: "stale/todo-reports-undated", goOnly: true, fx: todoFx, argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),
+			env: []string{"ROTA_TEST_TODAY=" + today}, want: 0,
+			check: func(t *testing.T, e envl) {
+				t.Helper()
+				if n := fmt.Sprint(at(e, "data.skippedUndated")); n != "2" {
+					t.Errorf("skippedUndated = %s, want 2 (B03 undated, B04 junk)", n)
+				}
+			}},
 		scn{name: "stale/default-today-is-real-today", goOnly: true, argv: j("backlog", "stale", "--kind", "todo", "--days", "0"), want: 0, fx: todoFx,
 			check: func(t *testing.T, e envl) {
 				if n := len(strs(at(e, "data.entries"))); n == 0 {
