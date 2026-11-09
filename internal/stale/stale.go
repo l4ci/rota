@@ -56,19 +56,27 @@ func daysBetween(a, b time.Time) int {
 	return n
 }
 
+// TodoSource lists the open backlog items of whichever backend the project
+// selected; the caller supplies it, so stale never imports cli. backlog.Backend
+// satisfies it.
+type TodoSource interface {
+	List(includeClosed bool) ([]backlog.Item, error)
+}
+
 // Find lists the entries of kind that are days or more old on today. Missing
 // files give none. Map entries are dated by their frontmatter "touched" or,
 // failing that, the last git commit of the file; the knowledge file, which has
-// no per-topic dates, lists every topic with the file's commit date; backlog
-// bullets are dated by their Captured field.
-func Find(root, kind string, days int, today time.Time) ([]Entry, error) {
+// no per-topic dates, lists every topic with the file's commit date; open
+// backlog items from todos (the caller's selected backend; nil lists none) are
+// dated by their Captured field, and an item without one is skipped.
+func Find(root, kind string, days int, today time.Time, todos TodoSource) ([]Entry, error) {
 	switch kind {
 	case "map":
 		return findMap(root, days, today)
 	case "knowledge":
 		return findKnowledge(root, days, today)
 	case "todo":
-		return findTodo(root, days, today)
+		return findTodo(days, today, todos)
 	}
 	return nil, fmt.Errorf("%w: %s", ErrKind, kind)
 }
@@ -101,9 +109,11 @@ func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 	return out, nil
 }
 
-func findTodo(root string, days int, today time.Time) ([]Entry, error) {
-	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
-	md, err := (&backlog.File{Root: root}).Markdown(0)
+func findTodo(days int, today time.Time, todos TodoSource) ([]Entry, error) {
+	if todos == nil {
+		return nil, nil
+	}
+	items, err := todos.List(false)
 	if exitmap.IsNotFound(err) {
 		return nil, nil
 	}
@@ -111,13 +121,13 @@ func findTodo(root string, days int, today time.Time) ([]Entry, error) {
 		return nil, err
 	}
 	var out []Entry
-	for _, b := range backlog.OpenBullets(md) {
-		captured := b.Fields.Get("captured")
+	for _, it := range items {
+		captured := it.Fields.Captured
 		if captured == "" {
 			continue
 		}
 		if d, ok := pystr.ParseDate(captured); ok && isStale(d, today, days) {
-			out = append(out, Entry{b.ID, fmtDate(d)})
+			out = append(out, Entry{it.ID, fmtDate(d)})
 		}
 	}
 	return out, nil

@@ -174,7 +174,6 @@
 {"name":"stale/todo-earlier-today","steps":[{"exit":0,"env":{"data":{"days":20,"entries":[{"date":"2026-01-01","name":"B01"},{"date":"2026-01-01","name":"F01"}],"kind":"todo"},"ok":true}}]}
 {"name":"stale/todo-future-captured-not-stale","steps":[{"exit":0,"env":{"data":{"days":0,"entries":[],"kind":"todo"},"ok":true}}]}
 {"name":"stale/todo-no-backlog","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"todo"},"ok":true}}]}
-{"name":"stale/todo-reads-file-under-issues-config","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-01-01","name":"B01"},{"date":"2026-01-01","name":"F01"},{"date":"2026-02-02","name":"F02"},{"date":"2026-07-04","name":"T01"}],"kind":"todo"},"ok":true}}]}
 {"name":"stale/todo-std-fixture","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"todo"},"ok":true}}]}
 {"name":"status-add/branch-with-dots-and-slashes","steps":[{"exit":0,"env":{"data":{"branch":"release/1.2.x","changed":true,"entries":[{"items":["B01"],"repo":null,"startedAt":"<TS>","worktree":null}]},"ok":true},"tree":{".rota/status.json":"8b9855464377fb95"}}]}
 {"name":"status-add/corrupt-status-file","steps":[{"exit":0,"env":{"data":{"branch":"feat/new","changed":true,"entries":[{"items":["B01"],"repo":null,"startedAt":"<TS>","worktree":null}]},"ok":true},"tree":{".rota/status.json":"9646bf506035cde4"}}]}
