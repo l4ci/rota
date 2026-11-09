@@ -335,3 +335,24 @@ func TestDraftRedactsHarnessAndModel(t *testing.T) {
 		}
 	}
 }
+
+func TestRedactScrubsHostAndOwnerInEveryRemoteForm(t *testing.T) {
+	for name, remote := range map[string]string{
+		"https":          "https://git.corp.example/acmeowner/shopthing",
+		"https .git":     "https://git.corp.example/acmeowner/shopthing.git",
+		"https port":     "https://git.corp.example:8443/acmeowner/shopthing.git",
+		"https userinfo": "https://bob:hunter2@git.corp.example/acmeowner/shopthing.git",
+		"ssh":            "ssh://git@git.corp.example/acmeowner/shopthing.git",
+		"ssh port":       "ssh://git@git.corp.example:2222/acmeowner/shopthing.git",
+		"scp":            "git@git.corp.example:acmeowner/shopthing.git",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := Redact("failed on git.corp.example for acmeowner", Env{Remote: remote})
+			for _, leak := range []string{"git.corp.example", "acmeowner"} {
+				if strings.Contains(got, leak) {
+					t.Errorf("Redact left %q in %q", leak, got)
+				}
+			}
+		})
+	}
+}

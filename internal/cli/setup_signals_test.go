@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/remoteurl"
 )
 
 // signalRepo is a git repo on main with an origin remote and a Go module.
@@ -293,7 +294,7 @@ func TestSetupIssuesSourceSignal(t *testing.T) {
 				t.Errorf("evidence %q lacks %q", ev, tc.ev)
 			}
 			if tc.want == "github" || tc.want == "gitlab" {
-				host := remoteHost(tc.remote)
+				host := remoteurl.Parse(tc.remote).Host
 				if len(ran) != 1 || !strings.HasSuffix(ran[0], "auth status --hostname "+host) {
 					t.Errorf("probe = %v, want auth status --hostname %s", ran, host)
 				}
