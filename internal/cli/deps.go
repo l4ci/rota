@@ -497,11 +497,24 @@ func (t trustedSides) CanPush(ctx context.Context, login string) (bool, error) {
 // tracker.NoIssues. The result is a worker.IssueTrust exactly when the issue
 // side is.
 func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
-	f, err := d.forge(ctx, cfg, "", dir)
+	return d.sides(ctx, cfg, dir, d.trackerOptions())
+}
+
+// uncachedForgeAndIssues is forgeAndIssues without the invocation's read
+// cache, for a reader that must see what changed since its last read.
+func (d *Deps) uncachedForgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
+	return d.sides(ctx, cfg, dir, d.trackerBase())
+}
+
+func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Option) (forgeIssues, error) {
+	f, err := tracker.NewForgeFromConfig(ctx, cfg, "", dir, opts...)
 	if err != nil {
 		return nil, err
 	}
-	it, err := d.issuesOrNone(ctx, cfg, dir)
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, opts...)
+	if errors.Is(err, tracker.ErrNoIssueTracker) {
+		it, err = tracker.NoIssues{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

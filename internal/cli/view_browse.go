@@ -214,7 +214,7 @@ func runVerbText(c *Ctx, repoScoped bool, args ...string) (string, error) {
 		args = slices.Insert(slices.Clone(args), at, "--repo", c.Repo)
 	}
 	var out, errb bytes.Buffer
-	if code := run(Tree(), c.deps(), args, strings.NewReader(""), &out, &errb); code != ExitOK {
+	if code := c.runNested(Tree(), args, strings.NewReader(""), &out, &errb, nil); code != ExitOK {
 		return "", errors.New(firstText("failed", errb.String(), out.String()))
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil

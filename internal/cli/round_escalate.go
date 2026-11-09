@@ -23,9 +23,7 @@ func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.
 		cfg := c.deps().Config(root)
 		// Delivery reconciliation must see comments accepted since an earlier read,
 		// including within a single watch pass. Do not inherit the invocation cache.
-		deps := *c.deps()
-		deps.ReadCache = nil
-		return deps.forgeAndIssues(ctx, cfg, root)
+		return c.deps().uncachedForgeAndIssues(ctx, cfg, root)
 	}
 }
 

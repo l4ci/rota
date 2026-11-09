@@ -34,7 +34,7 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		d := c.deps()
-		if c.JSON || tui.Dumb() || !d.IsTerminal(c.Stdin) || !d.IsTerminal(c.Stdout) {
+		if c.JSON || tui.Dumb() || !d.IsTerminal(c.Stdin) || !c.stdoutIsTerminal() {
 			return Result{}, Refused("config edit needs an interactive terminal").
 				WithHint("run: rota config set <key> <value>")
 		}
