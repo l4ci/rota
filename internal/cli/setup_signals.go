@@ -1,16 +1,14 @@
 package cli
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/remoteurl"
@@ -22,6 +20,8 @@ type setupSignal struct {
 	Value    string
 	Evidence string
 }
+
+func fromSignal(s initproj.Signal) setupSignal { return setupSignal{s.Value, s.Evidence} }
 
 // readSetupSignals reads the project in dir for the questions it can answer
 // (#1782). A question with no signal is absent and keeps its default. Nothing
@@ -46,13 +46,13 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 	if sig, ok := issuesSourceSignal(c, dir, run, onPath, answered["issues.source"]); ok {
 		sigs["issues.source"] = sig
 	}
-	if sig, ok := testSignals(dir); ok {
-		sigs["test.fast"] = sig[0]
-		sigs["test.full"] = sig[1]
+	if sig, ok := initproj.TestCommands(dir); ok {
+		sigs["test.fast"] = fromSignal(sig[0])
+		sigs["test.full"] = fromSignal(sig[1])
 	}
-	if setup, shared, ok := depSignals(dir); ok {
-		sigs[config.RoundEnvSetupKey] = setup
-		sigs[config.RoundSharedDirsKey] = shared
+	if setup, shared, ok := initproj.DepSignals(dir); ok {
+		sigs[config.RoundEnvSetupKey] = fromSignal(setup)
+		sigs[config.RoundSharedDirsKey] = fromSignal(shared)
 	}
 	var kinds []string
 	for _, k := range harness.Kinds() { // each kind is also its CLI's name
@@ -129,145 +129,3 @@ func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), 
 
 // authProbeTimeout bounds `gh|glab auth status`, which can reach the network.
 const authProbeTimeout = 5 * time.Second
-
-// testSignals is [test.fast, test.full] read from the project's manifests: the
-// first manifest that names a test command is the fast one; the full one is a
-// command a CI file runs, else a Makefile test target, else the fast one.
-func testSignals(dir string) ([2]setupSignal, bool) {
-	var fast setupSignal
-	for _, m := range manifestTests {
-		if cmd, ev, ok := m(dir); ok {
-			fast = setupSignal{jsonList(cmd), ev}
-			break
-		}
-	}
-	if fast.Value == "" {
-		return [2]setupSignal{}, false
-	}
-	full := fast
-	if cmd, ev, ok := ciTest(dir); ok {
-		full = setupSignal{jsonList(cmd), ev}
-	} else if ok := fileHasLine(filepath.Join(dir, "Makefile"), regexp.MustCompile(`^test:`)); ok && fast.Value != jsonList("make test") {
-		full = setupSignal{jsonList("make test"), "Makefile has a test target"}
-	}
-	return [2]setupSignal{fast, full}, true
-}
-
-func jsonList(cmd string) string {
-	b, _ := jsonx.MarshalCompact([]any{cmd})
-	return string(b)
-}
-
-// manifestTests read one manifest each, in precedence order.
-var manifestTests = []func(dir string) (cmd, evidence string, ok bool){
-	func(dir string) (string, string, bool) {
-		return "go test ./...", "go.mod", exists(dir, "go.mod")
-	},
-	func(dir string) (string, string, bool) {
-		raw, err := os.ReadFile(filepath.Join(dir, "package.json"))
-		if err != nil {
-			return "", "", false
-		}
-		v, err := jsonx.Decode(raw)
-		obj, _ := v.(*jsonx.Object)
-		if err != nil || obj == nil {
-			return "", "", false
-		}
-		scripts, _ := obj.Get("scripts")
-		if so, ok := scripts.(*jsonx.Object); ok {
-			if _, has := so.Get("test"); has {
-				return "npm test", `package.json has a "test" script`, true
-			}
-		}
-		return "", "", false
-	},
-	func(dir string) (string, string, bool) {
-		raw, err := os.ReadFile(filepath.Join(dir, "pyproject.toml"))
-		if err == nil && strings.Contains(string(raw), "pytest") {
-			return "pytest", "pyproject.toml configures pytest", true
-		}
-		return "", "", false
-	},
-	func(dir string) (string, string, bool) {
-		return "cargo test", "Cargo.toml", exists(dir, "Cargo.toml")
-	},
-	func(dir string) (string, string, bool) {
-		ok := fileHasLine(filepath.Join(dir, "Makefile"), regexp.MustCompile(`^test:`))
-		return "make test", "Makefile has a test target", ok
-	},
-}
-
-var ciTestRun = regexp.MustCompile(`^\s*-?\s*(?:run:\s*)?((?:go test|npm test|npm run test|pytest|cargo test|make test)\b.*)$`)
-
-// ciTest is the first test command a CI file runs, with file:line as evidence.
-func ciTest(dir string) (cmd, evidence string, ok bool) {
-	files, _ := filepath.Glob(filepath.Join(dir, ".github", "workflows", "*.y*ml"))
-	files = append(files, filepath.Join(dir, ".gitlab-ci.yml"))
-	for _, f := range files {
-		fh, err := os.Open(f)
-		if err != nil {
-			continue
-		}
-		sc := bufio.NewScanner(fh)
-		for n := 1; sc.Scan(); n++ {
-			if m := ciTestRun.FindStringSubmatch(sc.Text()); m != nil {
-				fh.Close()
-				rel, _ := filepath.Rel(dir, f)
-				return strings.TrimSpace(m[1]), rel + ":" + strconv.Itoa(n) + " runs it", true
-			}
-		}
-		fh.Close()
-	}
-	return "", "", false
-}
-
-func exists(dir, name string) bool {
-	_, err := os.Stat(filepath.Join(dir, name))
-	return err == nil
-}
-
-func fileHasLine(path string, re *regexp.Regexp) bool {
-	fh, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer fh.Close()
-	sc := bufio.NewScanner(fh)
-	for sc.Scan() {
-		if re.MatchString(sc.Text()) {
-			return true
-		}
-	}
-	return false
-}
-
-// depSignals is [round.envSetup, round.sharedDirs] read from the dependency
-// manifests: the first manifest that installs into a directory in the tree
-// wins. Cargo.toml gives none, on purpose: setup only suggests config keys,
-// and the cargo choice is the CARGO_TARGET_DIR environment variable, which
-// has no key. It is documented in docs/contributing/rounds.md and
-// docs/usage/configuration.md, not surfaced by setup (#1872).
-func depSignals(dir string) (setup, shared setupSignal, ok bool) {
-	if exists(dir, "package.json") {
-		cmd, ev := "npm install", "package.json"
-		switch {
-		case exists(dir, "pnpm-lock.yaml"):
-			cmd, ev = "pnpm install --frozen-lockfile", "pnpm-lock.yaml"
-		case exists(dir, "yarn.lock"):
-			cmd, ev = "yarn install --frozen-lockfile", "yarn.lock"
-		case exists(dir, "package-lock.json"):
-			cmd, ev = "npm ci", "package-lock.json"
-		}
-		b, _ := jsonx.MarshalCompact([]any{"node_modules"})
-		return setupSignal{cmd, ev}, setupSignal{string(b), ev + " installs into node_modules (a slot with another lockfile installs its own)"}, true
-	}
-	if exists(dir, "pyproject.toml") {
-		b, _ := jsonx.MarshalCompact([]any{".venv"})
-		ev := "pyproject.toml"
-		if exists(dir, "uv.lock") {
-			ev = "pyproject.toml and uv.lock"
-		}
-		return setupSignal{"uv sync", ev}, setupSignal{string(b), ev + " installs into .venv (a slot with another lockfile installs its own)"}, true
-	}
-	return setupSignal{}, setupSignal{}, false
-}

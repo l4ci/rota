@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/cfgdir"
 )
 
 func TestMigrateAccountsDoc(t *testing.T) {
@@ -74,7 +74,7 @@ func TestMigrateAccountsDocConflict(t *testing.T) {
 
 type acctRig struct {
 	root, gdir string
-	env        projects.Env
+	env        cfgdir.Env
 }
 
 func newAcctRig(t *testing.T, global, project, local string) acctRig {
