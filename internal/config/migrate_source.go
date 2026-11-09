@@ -120,7 +120,7 @@ func MigrateSourceFile(root string, detect func() string, apply bool) (SourceMig
 	var m SourceMigration
 	path := configPath(root)
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		cfg, err := readMigrateTarget(path, "config.json")
+		cfg, err := readMigrateTarget(path, "config.json", false)
 		if err != nil || cfg == nil {
 			return err
 		}
