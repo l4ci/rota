@@ -52,9 +52,3 @@ func Classify(p string, tracked func(string) bool, itemIDs []string) Kind {
 	}
 	return User
 }
-
-// IsSibling reports whether p may be swept without asking: a tool sibling or
-// the target's own artifact.
-func IsSibling(p string, tracked func(string) bool, itemIDs []string) bool {
-	return Classify(p, tracked, itemIDs) != User
-}
