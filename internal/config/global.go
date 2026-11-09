@@ -167,7 +167,7 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 
 // ErrGlobalNotObject is SetGlobal's and UnsetGlobal's answer when the global
 // config holds JSON that is not an object.
-var ErrGlobalNotObject = errors.New("the global config is not a JSON object")
+var ErrGlobalNotObject = errors.New("the global config is not a JSON object; fix or remove it, rota will not overwrite it")
 
 // globalNotObject is ErrGlobalNotObject naming the global config under dir.
 func globalNotObject(dir string) error {

@@ -423,6 +423,7 @@ func TestConfigUnreadableLayerIs5(t *testing.T) {
 				{"config", "show"},
 				{"config", "show", "docs.path"},
 				{"config", "show", "--local"},
+				{"config", "check"},
 			} {
 				t.Run(layer+" "+body+" "+strings.Join(args, " "), func(t *testing.T) {
 					t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
@@ -431,7 +432,8 @@ func TestConfigUnreadableLayerIs5(t *testing.T) {
 					write(t, path, body)
 					code, _, stderr := rotaRun(t, append([]string{"--json", "-C", root}, args...)...)
 					// set/show --local never read the project file.
-					if layer == "config.json" && slices.Contains(args, "--local") {
+					// config check reports a bad project file as its corrupt verdict (exit 1).
+					if layer == "config.json" && (slices.Contains(args, "--local") || args[1] == "check") {
 						return
 					}
 					if code != ExitUnavailable || !strings.Contains(stderr, layer) || strings.Contains(stderr, "bug in rota") {

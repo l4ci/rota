@@ -48,7 +48,7 @@ var ErrNotSchemaKey = errors.New("not a config key")
 var ErrBadValue = errors.New("invalid value")
 
 // ErrNotObject is Set's answer when config.json holds JSON that is not an object.
-var ErrNotObject = errors.New(".rota/config.json is not a JSON object")
+var ErrNotObject = errors.New(".rota/config.json is not a JSON object; fix or remove it, rota will not overwrite it")
 
 func configPath(root string) string { return rotatree.Config(root) }
 
@@ -173,7 +173,7 @@ const (
 
 // ErrLocalNotObject is SetIn's and Unset's answer when config.local.json holds
 // JSON that is not an object.
-var ErrLocalNotObject = errors.New(".rota/config.local.json is not a JSON object")
+var ErrLocalNotObject = errors.New(".rota/config.local.json is not a JSON object; fix or remove it, rota will not overwrite it")
 
 func (l Layer) path(root string) string {
 	if l == LayerLocal {
