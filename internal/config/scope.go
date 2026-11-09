@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // LayerFor is the file `config set` writes key to (#1786): config.local.json
@@ -29,7 +29,7 @@ func LayerFor(key string, project, local bool) Layer {
 // at the schema default; then each key the global config holds that the
 // schema does not know (AC-4 checks every layer; only the tracked and local
 // files fail on one, see Unknown). None fails the check.
-func Warnings(env projects.Env, root string) []string {
+func Warnings(env cfgdir.Env, root string) []string {
 	out := []string{}
 	doc := readObject(configPath(root))
 	if doc == nil {
@@ -48,7 +48,7 @@ func Warnings(env projects.Env, root string) []string {
 		}
 	}
 	// The raw file: globalLayer keeps schema keys only.
-	if dir, err := projects.Dir(env); err == nil {
+	if dir, err := cfgdir.Dir(env); err == nil {
 		if g := readObject(GlobalPath(dir)); g != nil {
 			for _, p := range leafPaths(g, "") {
 				if !knownPath(p) {

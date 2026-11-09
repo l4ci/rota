@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestMigrateRoundKeys(t *testing.T) {
@@ -107,7 +107,7 @@ func decodeFile(t *testing.T, path string) any {
 func TestMigrateRoundKeysBothLayers(t *testing.T) {
 	root := writeLayers(t, `{"work":{"isolation":"branch","workerSlots":3}}`,
 		`{"work":{"accounts":[{"name":"z","configDir":"/z"},{"name":"a","configDir":"/a"}]}}`)
-	before := Load(projects.OSEnv(), configPath(root))
+	before := Load(cfgdir.OSEnv(), configPath(root))
 	m, err := MigrateRoundKeysFiles(root, false)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestMigrateRoundKeysBothLayers(t *testing.T) {
 	if _, err := MigrateRoundKeysFiles(root, true); err != nil {
 		t.Fatal(err)
 	}
-	after := Load(projects.OSEnv(), configPath(root))
+	after := Load(cfgdir.OSEnv(), configPath(root))
 	for _, r := range []Rename{{"work.workerSlots", "round.slots"}, {"work.accounts", "round.accounts"}} {
 		ov, _ := Lookup(before, r.Old)
 		nv, ok := Lookup(after, r.New)
@@ -223,10 +223,10 @@ func TestMigrateRoundKeysMissingAndEmptyLayers(t *testing.T) {
 // (#1786).
 func TestMigrateRoundKeysFillOnEmpty(t *testing.T) {
 	root := writeLayers(t, "-", "-")
-	if _, err := Fill(projects.OSEnv(), root); err != nil {
+	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Load(projects.OSEnv(), configPath(root))
+	cfg := Load(cfgdir.OSEnv(), configPath(root))
 	for _, k := range []string{"round.slots", "round.dispatch", "round.workerCommand", "round.accounts", "round.operatorCommand"} {
 		if _, ok := Lookup(cfg, k); ok {
 			t.Errorf("fill on empty wrote the machine key %s", k)
@@ -237,10 +237,10 @@ func TestMigrateRoundKeysFillOnEmpty(t *testing.T) {
 	}
 
 	old := writeLayers(t, `{"work":{"workerSlots":7}}`, `{"work":{"accounts":[{"name":"a"}]}}`)
-	if _, err := Fill(projects.OSEnv(), old); err != nil {
+	if _, err := Fill(cfgdir.OSEnv(), old); err != nil {
 		t.Fatal(err)
 	}
-	cfg = Load(projects.OSEnv(), configPath(old))
+	cfg = Load(cfgdir.OSEnv(), configPath(old))
 	if v, _ := Lookup(cfg, "round.slots"); !sameJSON(v, json7) {
 		t.Errorf("fill lost work.workerSlots: round.slots = %v", v)
 	}
@@ -256,7 +256,7 @@ var json7 = json.Number("7")
 
 func TestLegacyRoundKeysBothLayers(t *testing.T) {
 	root := writeLayers(t, `{"work":{"workerSlots":3,"isolation":"branch"}}`, `{"work":{"accounts":[]}}`)
-	got := LegacyRoundKeys(Load(projects.OSEnv(), configPath(root)))
+	got := LegacyRoundKeys(Load(cfgdir.OSEnv(), configPath(root)))
 	if !reflect.DeepEqual(got, []string{"work.workerSlots", "work.accounts"}) {
 		t.Errorf("LegacyRoundKeys = %v", got)
 	}

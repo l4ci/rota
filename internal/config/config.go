@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // Load reads the global config, merges configPath over it, then merges
@@ -21,7 +21,7 @@ import (
 // < project < local). Nested objects merge by key; any other override value (scalar,
 // array, null, or a type mismatch) replaces the base. A missing or
 // unparseable file counts as absent; with no base the result is {}.
-func Load(env projects.Env, configPath string) any {
+func Load(env cfgdir.Env, configPath string) any {
 	merged, _ := loadLayers(env, configPath)
 	return merged
 }
@@ -51,15 +51,15 @@ func warnGlobal(msg string) {
 
 // GlobalError is why the global config is unusable: nil when it is missing or
 // valid, else the read or parse error.
-func GlobalError(env projects.Env) error {
+func GlobalError(env cfgdir.Env) error {
 	_, err := globalLayerErr(env)
 	return err
 }
 
 // globalLayerErr is the global config as a nested object of its schema keys
 // (nil when absent) and the error that made it unreadable.
-func globalLayerErr(env projects.Env) (any, error) {
-	dir, err := projects.Dir(env)
+func globalLayerErr(env cfgdir.Env) (any, error) {
+	dir, err := cfgdir.Dir(env)
 	if err != nil {
 		return nil, nil
 	}
@@ -80,7 +80,7 @@ func globalLayerErr(env projects.Env) (any, error) {
 }
 
 // globalLayer is the global layer; a corrupt file warns once and is skipped.
-func globalLayer(env projects.Env) any {
+func globalLayer(env cfgdir.Env) any {
 	obj, err := globalLayerErr(env)
 	if err != nil {
 		warnGlobal("global config skipped: " + err.Error())
@@ -91,7 +91,7 @@ func globalLayer(env projects.Env) any {
 
 // loadLayers keeps the layers alongside the runtime config so display
 // provenance uses the same reads and merge semantics as Load.
-func loadLayers(env projects.Env, configPath string) (merged any, l layers) {
+func loadLayers(env cfgdir.Env, configPath string) (merged any, l layers) {
 	l = layers{
 		global:  globalLayer(env),
 		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
