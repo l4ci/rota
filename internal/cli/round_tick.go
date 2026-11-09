@@ -27,10 +27,6 @@ import (
 // gone (wind-down released it, or another orchestrator took it).
 var errAutopilotStopped = errors.New("this process holds no round lease: the autopilot stops")
 
-// errBaseRed is why a stopped round's autopilot stays stopped: a wind-down
-// verify went red and only a green one resumes it.
-const errBaseRed = "the round's base failed the wind-down verify: the autopilot stays stopped until main is green"
-
 // isAutopilotStopped is true when the tick found no round to work for: the lease
 // is gone, or the round is stopped for wind-down.
 func isAutopilotStopped(err error) bool {
@@ -62,9 +58,12 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 			d := jsonx.NewObject()
 			d.Set("stopped", true)
 			d.Set("changed", false)
-			if errors.Is(err, roundtick.ErrStopped) {
+			if errors.Is(err, roundtick.ErrBaseRed) {
 				d.Set("autopilotStopped", true)
-				return Result{Data: d}, Refused("%s", errBaseRed).WithHint("rota round wind-down")
+				return Result{Data: d}, Refused("%v", err).WithHint("rota round wind-down")
+			}
+			if errors.Is(err, roundtick.ErrStopped) {
+				return Result{Data: d}, Refused("%v", err)
 			}
 			return Result{Data: d}, Refused("%v", err).WithHint("rota round start takes the lease again")
 		case err != nil:

@@ -83,10 +83,12 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		var cd string
 		var rnd int
 		var priorStopped bool
+		var priorReason string
 		if d, ok := c.CommonDirOK(root); ok {
 			if l, _, err := c.deps().LeaseEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
-				priorStopped = roundtick.LoadState(cd, rnd).Stopped
+				ps := roundtick.LoadState(cd, rnd)
+				priorStopped, priorReason = ps.Stopped, ps.StoppedReason
 				_ = roundtick.SetStopped(cd, rnd, true)
 			}
 		}
@@ -102,9 +104,9 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if cd != "" {
 			switch {
 			case verifyRed:
-				// stays stopped
+				_ = roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed)
 			case err != nil || (res.VerifySkipped && !res.Over()):
-				_ = roundtick.SetStopped(cd, rnd, priorStopped)
+				_ = roundtick.SetStop(cd, rnd, priorStopped, priorReason)
 			case !res.Over():
 				_ = roundtick.SetStopped(cd, rnd, false)
 			default:
