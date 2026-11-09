@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -133,76 +132,53 @@ func (m RoundMigration) Changed() bool { return len(m.Config) > 0 || len(m.Local
 // .rota/config.local.json and, when apply is set, writes the files that
 // changed, under their locks. Both files are read and planned before either
 // is written: a malformed file (ErrCorrupt naming it) or a conflict
-// (*ConflictError) writes nothing. config.local.json is written first; each
-// file migrates on its own, so a run cut short between the two writes is
-// finished by the next. A missing file, and an empty config.local.json, have
-// nothing to migrate.
+// (*ConflictError) writes nothing. Each file migrates on its own, so a run cut
+// short between the two writes is finished by the next. A missing file, and an
+// empty config.local.json, have nothing to migrate.
 func MigrateRoundKeysFiles(root string, apply bool) (RoundMigration, error) {
 	var m RoundMigration
-	path, local := configPath(root), localPath(root)
-	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		if _, err := os.Stat(local); err != nil {
-			return migrateRoundPlan(path, "", &m, apply)
-		}
-		return fsio.Locked(local, fsio.LockTimeout, func() error {
-			return migrateRoundPlan(path, local, &m, apply)
-		})
+	err := migrateLayerFiles(root, "", apply, func(files []*migrationFile) error {
+		return migrateRoundPlan(files, &m)
 	})
 	return m, err
 }
 
-// migrateRoundPlan is MigrateRoundKeysFiles with the locks held; local is ""
-// when there is no config.local.json.
-func migrateRoundPlan(path, local string, m *RoundMigration, apply bool) error {
-	cfg, err := readMigrateTarget(path, "config.json")
-	if err != nil {
-		return err
-	}
-	loc, err := readMigrateTarget(local, "config.local.json")
-	if err != nil {
-		return err
-	}
+// migrateRoundPlan plans the round-key step over the project layers, local
+// first so a conflict list reads local then project.
+func migrateRoundPlan(files []*migrationFile, m *RoundMigration) error {
 	var all []Conflict
-	var cfgOut, locOut *jsonx.Object
-	if loc != nil {
-		var c []Conflict
-		locOut, m.Local, c = MigrateRoundKeys(loc)
+	for i := len(files) - 1; i >= 0; i-- {
+		f := files[i]
+		if f.doc == nil {
+			continue
+		}
+		out, moved, c := MigrateRoundKeys(f.doc)
 		for _, x := range c {
-			x.File = "config.local.json"
+			x.File = f.name
 			all = append(all, x)
 		}
-	}
-	if cfg != nil {
-		var c []Conflict
-		cfgOut, m.Config, c = MigrateRoundKeys(cfg)
-		for _, x := range c {
-			x.File = "config.json"
-			all = append(all, x)
+		if len(moved) > 0 {
+			f.doc, f.changed = out, true
+		}
+		if f.name == "config.local.json" {
+			m.Local = moved
+		} else {
+			m.Config = moved
 		}
 	}
 	if len(all) > 0 {
 		*m = RoundMigration{}
 		return &ConflictError{Conflicts: all}
 	}
-	if !apply {
-		return nil
-	}
-	if len(m.Local) > 0 {
-		if err := fsio.WriteJSONAtomic(local, locOut); err != nil {
-			return err
-		}
-	}
-	if len(m.Config) > 0 {
-		return fsio.WriteJSONAtomic(path, cfgOut)
-	}
 	return nil
 }
 
 // readMigrateTarget reads one config layer for the migration: nil for a
-// missing file (or path ""), and for an empty or blank config.local.json, which
-// Load already treats as absent; ErrCorrupt naming the file for anything that
-// is not a JSON object; any other read error is returned wrapped, naming the file.
-func readMigrateTarget(path, name string) (*jsonx.Object, error) {
+// missing file (or path ""), and for an empty or blank file when blankOK is set
+// (config.local.json, which Load already treats as absent); ErrCorrupt naming
+// the file for anything that is not a JSON object; any other read error is
+// returned wrapped, naming the file.
+func readMigrateTarget(path, name string, blankOK bool) (*jsonx.Object, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -213,7 +189,7 @@ func readMigrateTarget(path, name string) (*jsonx.Object, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", rotatree.Rel(name), err)
 	}
-	if name == "config.local.json" && len(bytes.TrimSpace(raw)) == 0 {
+	if blankOK && len(bytes.TrimSpace(raw)) == 0 {
 		return nil, nil
 	}
 	doc, ok := decodeObject(raw)

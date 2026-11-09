@@ -71,16 +71,13 @@ func Fill(env cfgdir.Env, root string) ([]string, error) {
 func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
 	filled := []string{}
 	var sm SourceMigration
-	rm, err := MigrateRoundKeysFiles(root, true)
+	// Plan every file step before applying any, as Migrate does: a refusal in
+	// a later step must not leave the earlier ones written.
+	if _, err := fillSteps(env, root, false); err != nil {
+		return nil, sm, RoundMigration{}, err
+	}
+	rm, err := fillSteps(env, root, true)
 	if err != nil {
-		return nil, sm, rm, err
-	}
-	// The global config is the user's own file: `rota migrate config` rewrites
-	// it and says so, fill leaves it alone.
-	if _, err := MigrateAccountsFiles(root, "", true); err != nil {
-		return nil, sm, rm, err
-	}
-	if _, err := MigrateMergesFiles(root, globalConfigDir(env), true); err != nil {
 		return nil, sm, rm, err
 	}
 	path := configPath(root)
@@ -138,6 +135,21 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 		return nil, sm, rm, err
 	}
 	return filled, sm, rm, nil
+}
+
+// fillSteps runs the round-key, accounts and merges steps that fill applies
+// before its own write. The global config is the user's own file: `rota migrate
+// config` rewrites it and says so, so the accounts step leaves it alone here.
+func fillSteps(env cfgdir.Env, root string, apply bool) (RoundMigration, error) {
+	rm, err := MigrateRoundKeysFiles(root, apply)
+	if err != nil {
+		return rm, err
+	}
+	if _, err := MigrateAccountsFiles(root, "", apply); err != nil {
+		return rm, err
+	}
+	_, err = MigrateMergesFiles(root, globalConfigDir(env), apply)
+	return rm, err
 }
 
 // migrateLegacyVersion moves the LegacyVersionKeys stamps to rota.version in

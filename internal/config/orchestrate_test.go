@@ -59,3 +59,30 @@ func TestMigrateStepsRun(t *testing.T) {
 }
 
 func readFileOr0(path string) string { return string(readFileOr(path)) }
+
+// A refusal in any file step of fill writes no file, as in Migrate: the round
+// step would otherwise have renamed work.* in config.json before the later
+// step refused.
+func TestFillRefusalWritesNothing(t *testing.T) {
+	const oldRound = `{"work":{"workerSlots":3}}`
+	for _, tc := range []struct {
+		name, project, local string
+		conflict             any
+	}{
+		{"accounts step", oldRound, `{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}],"opencodeAccounts":[{"name":"x","configDir":"/o"}]}}`, new(*AccountConflictError)},
+		{"merges step", oldRound, `{"round":{"codexCommand":"a","commands":{"codex":"b"}}}`, new(*MergeConflictError)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newAcctRig(t, "", tc.project, tc.local)
+			before := []string{readFileOr0(r.cfg()), readFileOr0(r.local())}
+			_, _, _, err := FillDetect(r.env, r.root, nil)
+			if err == nil || !errors.As(err, tc.conflict) {
+				t.Fatalf("err = %v, want %T", err, tc.conflict)
+			}
+			after := []string{readFileOr0(r.cfg()), readFileOr0(r.local())}
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("files changed on refusal:\nbefore %q\nafter  %q", before, after)
+			}
+		})
+	}
+}

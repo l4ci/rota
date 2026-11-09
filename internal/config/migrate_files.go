@@ -12,15 +12,17 @@ import (
 type migrationFile struct {
 	name, path string
 	global     bool // unusable global config is skipped, as it is by Load
+	blankOK    bool // an empty file reads as absent, as Load treats config.local.json
 	doc        *jsonx.Object
 	changed    bool
 }
 
-// migrateLayerFiles owns the accounts and key-merge steps' file lifecycle.
+// migrateLayerFiles owns the file lifecycle of the round-key, accounts and
+// key-merge steps.
 // Hold existing files' locks in layer order, read all layers before planning,
 // then apply changed documents only after the planner has accepted every layer.
 func migrateLayerFiles(root, globalDir string, apply bool, plan func([]*migrationFile) error) error {
-	files := []*migrationFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root)}}
+	files := []*migrationFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root), blankOK: true}}
 	if globalDir != "" {
 		files = append([]*migrationFile{{name: "global config.json", path: GlobalPath(globalDir), global: true}}, files...)
 	}
@@ -62,5 +64,5 @@ func readMigrationTarget(f *migrationFile) (*jsonx.Object, error) {
 	if f.global {
 		return readObject(f.path), nil
 	}
-	return readMigrateTarget(f.path, f.name)
+	return readMigrateTarget(f.path, f.name, f.blankOK)
 }

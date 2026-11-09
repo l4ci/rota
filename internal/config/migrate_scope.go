@@ -55,11 +55,11 @@ func MigrateScopeFiles(env cfgdir.Env, root string, apply bool, keep []string) (
 }
 
 func migrateScopePlan(env cfgdir.Env, path, local string, keep []string, m *ScopeMigration, apply bool) error {
-	cfg, err := readMigrateTarget(path, "config.json")
+	cfg, err := readMigrateTarget(path, "config.json", false)
 	if err != nil || cfg == nil {
 		return err
 	}
-	loc, err := readMigrateTarget(local, "config.local.json")
+	loc, err := readMigrateTarget(local, "config.local.json", true)
 	if err != nil {
 		return err
 	}
