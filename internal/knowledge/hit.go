@@ -34,7 +34,7 @@ func (s Store) PromoteThreshold() int {
 // tracked sidecar; the result is what the sidecar reads once the buffer is
 // folded (`rota knowledge tier fold`).
 func (s Store) Hit(scope, topic, title string) (HitResult, error) {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return HitResult{Entry: Entry{Topic: topic, Title: title, Tier: Provisional}}, nil
 	}
 	hp, err := s.HitsPath(scope)

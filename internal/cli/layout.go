@@ -108,7 +108,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				st, ok = layout.Find(panes, root, layout.Label, cli, workers)
 			} else {
 				var err error
-				a, err = worker.ArrangeRound(ctx, h, caps, worker.ParseHostConfig(c.deps().Config(root)), root, mode, cli, reg)
+				a, err = worker.ArrangeRound(ctx, caps, worker.ParseHostConfig(c.deps().Config(root)), root, mode, cli, reg)
 				st, ok = a.State, a.Found
 				if err != nil {
 					var cfgErr worker.ConfigError
