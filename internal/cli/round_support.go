@@ -64,8 +64,8 @@ func roundSupportEnable(fs *flag.FlagSet) RunFunc {
 
 func roundSupportDisable(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) != 0 {
-			return Result{}, Usage("round support disable takes no arguments")
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		root, issue, err := modeRoot(c)
 		if err != nil {

@@ -409,8 +409,8 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 }
 
 func reviewQueue(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("usage: rota review queue")
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	be, err := openIssueBackend(c, "", false)
 	if err != nil {
