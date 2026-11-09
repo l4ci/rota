@@ -42,10 +42,10 @@ const (
 	// key (exit 2).
 	ConfigUsage
 	// ConfigInternal: a config file that is not a JSON object (any layer) or
-	// is unreadable (exit 70).
+	// is unreadable (exit 5).
 	ConfigInternal
 	// ConfigCorrupt: config.ErrCorrupt, a config file that is not valid JSON
-	// (exit 70).
+	// (exit 5).
 	ConfigCorrupt
 	// ConfigRefusal: a migration conflict between old and new names (exit 4,
 	// with blockedBy data and the conflicts).

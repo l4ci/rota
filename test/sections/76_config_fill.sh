@@ -33,10 +33,10 @@ OUT=$( cd "$CF" && hvj config fill ) || vfail
 [ "$(echo "$OUT" | jget data.filled)" = "[]" ] || fail "second fill should fill nothing: $OUT"
 [ "$(cat "$CF/.rota/config.json")" = "$BEFORE" ] || fail "second fill rewrote config.json"
 
-# A corrupt file is refused (70) and left as it was.
+# A corrupt file is refused (5) and left as it was.
 printf '{oops\n' > "$CF/.rota/config.json"
 RC=0; ( cd "$CF" && hvj config fill >/dev/null 2>&1 ) || RC=$?
-[ "$RC" = "70" ] || fail "fill on a corrupt config should exit 70, got $RC"
+[ "$RC" = "5" ] || fail "fill on a corrupt config should exit 5, got $RC"
 [ "$(cat "$CF/.rota/config.json")" = "{oops" ] || fail "fill touched a corrupt config"
 pass "config fill keeps present keys, is idempotent and refuses a corrupt file"
 

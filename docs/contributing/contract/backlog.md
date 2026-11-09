@@ -411,6 +411,6 @@ note: (#27) with `--apply`, once every item exists, a mid-round `.rota/workers.j
 rota migrate source [--apply]
 repo: none
 data: {"applied": bool, "planned": bool, "changed": bool, "source": string, "forge": string, "removed": [string], "unresolved": bool}
-exit: 70 when the config is corrupt
+exit: 5 when the config is corrupt
 old: none (new in #797)
 note: replaces the legacy `backlog.backend` and `issues.provider` with `issues.source` and `forge.provider`. `backlog.backend: file` becomes `issues.source: file`; `backlog.backend: issues` plus `issues.provider` becomes `issues.source: <provider>`, `auto` read from the `origin` remote; an explicit provider the origin would miss also becomes `forge.provider`. Both legacy keys are removed. Without `--apply` it only reports (`planned` true, `changed` false). `unresolved` is true when the provider is `auto` and the origin names neither github nor gitlab: the keys stay and the message says to set `issues.source` by hand. A second run changes nothing.
