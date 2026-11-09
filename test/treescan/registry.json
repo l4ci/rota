@@ -285,6 +285,7 @@
     "./internal/initproj/TestInitSeedsRoundRoster": "Walks temporary bootstrap projects to compare generated files with fixtures.",
     "./internal/knowledge/TestAmendKeepsStampFinalForQuery": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestDecisionLegacyMetadataOrders": "Reads planted knowledge or instruction Markdown in temporary projects.",
+    "./internal/knowledge/TestEveryTierOperationSkipsGlossary": "Reads planted knowledge Markdown and the tier sidecar in a temporary project.",
     "./internal/knowledge/TestRemove": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestRenameTopicMovesEveryBulletUnderConcurrency": "Globs temporary knowledge files to check that concurrent updates leave no scratch files.",
     "./internal/knowledge/TestTierAmbiguousLegacyRefusesOnlyNeededKeys": "Reads temporary knowledge files and asserts a docs anchor in diagnostics; never reads repository docs.",
