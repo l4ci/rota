@@ -67,7 +67,7 @@ With `--json`, stdout carries exactly one JSON document followed by a newline, o
 - A mutating verb reports `"changed": true|false` in `data`. An idempotent no-op is a success (`ok: true`, exit 0, `changed: false`).
 - If the arguments themselves don't parse, the usage error comes as an envelope when any token before `--` is exactly `--json`. This is the one place a value token counts, because no parse exists yet.
 - `warnings` is present only when non-empty. Each warning also goes to stderr.
-- A failure carries `data` beside `error` on exit 1 and exit 4. The narrow exception is `round assign` after an unacknowledged dispatch (#1800): exit 5 carries `blockedBy: "dispatch"`, the slot and changed state, since the claim and marks may remain. On exit 1, `data` is the verb's answer, so a check verb's result never has to travel inside `error.message`. On exit 4, `data` says what blocked the change and what the verb did change anyway. The verb contract defines the failure `data` per verb. Other exits 2, 3, 5, 6, 70 and 71 mean the verb could not produce a result, so they send `error` alone.
+- A failure carries `data` beside `error` on exit 1 and exit 4. The narrow exception is `round assign` after an unacknowledged dispatch (#1800): exit 5 carries `blockedBy: "dispatch"`, the slot and changed state, since the claim and marks may remain. On exit 1, `data` is the verb's answer, so a check verb's result never has to travel inside `error.message`. On exit 4, `data` says what blocked the change and what the verb did change anyway. The verb contract defines the failure `data` per verb. Exit 130 also carries `data` when the verb had an answer (an interrupted `worker gate` keeps `changed`). Other exits 2, 3, 5, 6, 70 and 71 mean the verb could not produce a result, so they send `error` alone.
 - `error.code` is the name from the exit-code table, `error.exit` is the process exit code, and `hint` is optional.
 - Field names are camelCase, matching `config.json` (`mergeStrategy`, `loopStartedAt`). Dates are `YYYY-MM-DD` and timestamps are RFC 3339 in UTC. Item IDs are strings (`"B07"`, or `"12"` in issue mode), so the two backends share one shape.
 - Shapes change only additively within a major version. Removing or retyping a field is a breaking change.
@@ -97,6 +97,7 @@ The first line is `rota <group> <verb>: <message>`, with `warning:` before the m
 | 6 | `retry` | A transient condition that a later retry can clear: a rate limit, or a lock held past its timeout. |
 | 70 | `internal` | A bug in `rota`: unexpected state or an unhandled error. Report it. |
 | 71 | `not_implemented` | The verb is in the tree but not ported yet. Only exists until A9. |
+| 130 | `interrupted` | SIGINT or SIGTERM cancelled the verb (Ctrl-C, or a harness killing a background command). Not a rota bug: no report hint, nothing recorded in the bug-report log. The verb still returns what it already knew (`data.changed`, landed members), and a `context.Canceled` that no signal caused stays 70. |
 
 Use 1 when the verb exists to answer a question, and 4 when the verb exists to change something and declines to. A read-only verb never exits 4. When its precondition fails (the branch is the base branch, the requested version is not newer), the answer is no and the exit is 1.
 

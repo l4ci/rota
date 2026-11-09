@@ -18,6 +18,7 @@ const (
 	ExitUnavailable    = 5
 	ExitRetry          = 6
 	ExitInternal       = 70
+	ExitInterrupted    = 130
 	ExitNotImplemented = 71
 )
 
@@ -29,6 +30,7 @@ var codeNames = map[int]string{
 	ExitUnavailable:    "unavailable",
 	ExitRetry:          "retry",
 	ExitInternal:       "internal",
+	ExitInterrupted:    "interrupted",
 	ExitNotImplemented: "not_implemented",
 }
 
