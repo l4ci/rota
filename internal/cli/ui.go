@@ -21,7 +21,7 @@ func uiRefuse(c *Ctx, cmd *Command) error {
 		return Usage("--ui and --json do not mix").WithHint(hint)
 	case cmd.View == nil:
 		return Usage("no --ui view for this verb").WithHint(hint)
-	case !c.deps().IsTerminal(c.Stdin) || !c.deps().IsTerminal(c.Stdout) || tui.Dumb():
+	case !c.deps().IsTerminal(c.Stdin) || !c.stdoutIsTerminal() || tui.Dumb():
 		return errNeedsTerminal(c)
 	}
 	return nil
@@ -36,7 +36,11 @@ func errNeedsTerminal(c *Ctx) error {
 func uiFinish(c *Ctx, stdout io.Writer, cmd *Command, res Result) int {
 	m, err := cmd.View(c, res)
 	if err == nil {
-		err = c.deps().RunView(c, m)
+		if c.viewSink != nil {
+			err = c.viewSink(m)
+		} else {
+			err = c.deps().RunView(c, m)
+		}
 	}
 	if err != nil {
 		return fail(c, stdout, err)

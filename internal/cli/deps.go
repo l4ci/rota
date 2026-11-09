@@ -442,6 +442,11 @@ func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracke
 	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
 
+// forgeWith is forge under the given options instead of trackerOptions.
+func forgeWith(ctx context.Context, cfg any, provider, dir string, opts []tracker.Option) (tracker.Forge, error) {
+	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, opts...)
+}
+
 // issueTracker is the one place a verb builds its issue tracker: issues.source
 // from cfg (file is tracker.ErrNoIssueTracker), with the same TrackerOptions.
 func (d *Deps) issueTracker(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
@@ -452,7 +457,12 @@ func (d *Deps) issueTracker(ctx context.Context, cfg any, dir string) (tracker.I
 // tracker.NoIssues, for a verb that reads issues when there are any and works
 // without. Any other failure is returned.
 func (d *Deps) issuesOrNone(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
-	it, err := d.issueTracker(ctx, cfg, dir)
+	return issuesOrNoneWith(ctx, cfg, dir, d.trackerOptions())
+}
+
+// issuesOrNoneWith is issuesOrNone under the given options.
+func issuesOrNoneWith(ctx context.Context, cfg any, dir string, opts []tracker.Option) (tracker.IssueTracker, error) {
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, opts...)
 	if errors.Is(err, tracker.ErrNoIssueTracker) {
 		return tracker.NoIssues{}, nil
 	}
@@ -497,11 +507,21 @@ func (t trustedSides) CanPush(ctx context.Context, login string) (bool, error) {
 // tracker.NoIssues. The result is a worker.IssueTrust exactly when the issue
 // side is.
 func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
-	f, err := d.forge(ctx, cfg, "", dir)
+	return d.sides(ctx, cfg, dir, d.trackerOptions())
+}
+
+// uncachedForgeAndIssues is forgeAndIssues without the invocation's read
+// cache, for a reader that must see what changed since its last read.
+func (d *Deps) uncachedForgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
+	return d.sides(ctx, cfg, dir, d.trackerBase())
+}
+
+func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Option) (forgeIssues, error) {
+	f, err := forgeWith(ctx, cfg, "", dir, opts)
 	if err != nil {
 		return nil, err
 	}
-	it, err := d.issuesOrNone(ctx, cfg, dir)
+	it, err := issuesOrNoneWith(ctx, cfg, dir, opts)
 	if err != nil {
 		return nil, err
 	}
