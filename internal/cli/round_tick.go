@@ -58,6 +58,13 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 			d := jsonx.NewObject()
 			d.Set("stopped", true)
 			d.Set("changed", false)
+			if errors.Is(err, roundtick.ErrBaseRed) {
+				d.Set("autopilotStopped", true)
+				return Result{Data: d}, Refused("%v", err).WithHint("rota round wind-down")
+			}
+			if errors.Is(err, roundtick.ErrStopped) {
+				return Result{Data: d}, Refused("%v", err)
+			}
 			return Result{Data: d}, Refused("%v", err).WithHint("rota round start takes the lease again")
 		case err != nil:
 			return Result{}, err

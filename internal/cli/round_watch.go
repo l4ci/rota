@@ -306,9 +306,13 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 // watch armed.
 func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundwatch.Opts, set roundcfg.Settings, root, cd string, lenv roundlease.Env, base string, pid int, poll time.Duration) (Result, error) {
 	c.ctx = ctx
+	stoppedErr := error(nil)
 	res, err := roundwatch.RunAutopilot(ctx, env, opts, roundwatch.AutopilotOpts{
-		Tick:      func() (roundtick.Result, error) { return autopilotTick(c, root, set, base, pid) },
-		Stopped:   func(err error) bool { return isAutopilotStopped(err) },
+		Tick: func() (roundtick.Result, error) { return autopilotTick(c, root, set, base, pid) },
+		Stopped: func(err error) bool {
+			stoppedErr = err
+			return isAutopilotStopped(err)
+		},
 		TrainFill: set.TrainFill.Enabled(),
 		Poll:      poll,
 	})
@@ -317,6 +321,8 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 	}
 	note := ""
 	switch {
+	case res.Reason == roundwatch.ReasonStopped && errors.Is(stoppedErr, roundtick.ErrStopped):
+		note = stoppedErr.Error()
 	case res.Reason == roundwatch.ReasonStopped:
 		note = "no round lease: the round wound down or the lease was lost"
 	case res.TickErr != nil:
