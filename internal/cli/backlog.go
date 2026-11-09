@@ -354,9 +354,9 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 		if *kind == "todo" {
 			data.Set("skippedUndated", rep.SkippedUndated)
 			if rep.SkippedUndated > 0 {
-				verb := "have no Captured date and were"
+				verb := "have no usable Captured date and were"
 				if rep.SkippedUndated == 1 {
-					verb = "has no Captured date and was"
+					verb = "has no usable Captured date and was"
 				}
 				lines = append(lines, fmt.Sprintf("%s %s not checked", plural(rep.SkippedUndated, "open item"), verb))
 			}
