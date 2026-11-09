@@ -50,10 +50,12 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // would miss it. detect names the provider of the origin remote ("" when it
 // cannot tell); FillDetect reports what the migration did.
 //
-// Before any of that it moves the round-only work.* keys to round.* in both
-// config.json and config.local.json (MigrateRoundKeysFiles), so a required
-// round key is never filled beside its old name. A conflict between an old
-// and a new name is a *ConflictError and nothing is written.
+// Before any of that it runs the round-key, accounts and merges file steps
+// (fillSteps): the work.* keys move to round.* in both config.json and
+// config.local.json, so a required round key is never filled beside its old
+// name. Every one of those steps is planned before any is applied, so a
+// refusal in any of them (a *ConflictError, *AccountConflictError or
+// *MergeConflictError) writes nothing.
 //
 // Last it runs the autonomy migration (#1101, AutonomyPending reports it): in a
 // config stamped before AutonomyLevelsSince, autonomy.level auto becomes

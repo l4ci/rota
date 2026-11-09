@@ -3,7 +3,6 @@ package config
 import (
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -118,17 +117,17 @@ func MigrateSource(cfg *jsonx.Object, detect func() string) (*jsonx.Object, Sour
 // object is ErrCorrupt. Unlike Fill it touches nothing but the source keys.
 func MigrateSourceFile(root string, detect func() string, apply bool) (SourceMigration, error) {
 	var m SourceMigration
-	path := configPath(root)
-	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		cfg, err := readMigrateTarget(path, "config.json", false)
-		if err != nil || cfg == nil {
-			return err
-		}
-		cfg, m = MigrateSource(cfg, detect)
-		if !apply || !m.Changed {
+	files := layerFiles(root, "", false)[:1]
+	err := migrateLayerFiles(files, apply, func(files []*migrationFile) error {
+		if files[0].doc == nil {
 			return nil
 		}
-		return fsio.WriteJSONAtomic(path, cfg)
+		cfg, sm := MigrateSource(files[0].doc, detect)
+		m = sm
+		if m.Changed {
+			files[0].doc, files[0].changed = cfg, true
+		}
+		return nil
 	})
 	return m, err
 }

@@ -151,12 +151,12 @@ func accountConflicts(own []Account) []AccountConflict {
 // MigrateAccountsFiles runs the accounts step on the global config under
 // globalDir ("" for none), root's .rota/config.json and its
 // .rota/config.local.json. With apply it writes the files that changed, under
-// their locks, lowest layer first. All three are read and planned before any is written:
+// their locks, highest layer first. All three are read and planned before any is written:
 // a malformed file or a conflict (*AccountConflictError) writes nothing. A
 // missing file has nothing to migrate.
 func MigrateAccountsFiles(root, globalDir string, apply bool) (AccountsMigration, error) {
 	var m AccountsMigration
-	err := migrateLayerFiles(root, globalDir, apply, func(files []*migrationFile) error {
+	err := migrateLayerFiles(layerFiles(root, globalDir, false), apply, func(files []*migrationFile) error {
 		return migrateAccountsPlan(files, &m)
 	})
 	return m, err
@@ -168,7 +168,7 @@ func migrateAccountsPlan(files []*migrationFile, m *AccountsMigration) error {
 		if f.doc == nil {
 			continue
 		}
-		if !f.global {
+		if f.layer != layerGlobal {
 			// The renamed view, as the scope step plans on.
 			f.doc, _, _ = MigrateRoundKeys(f.doc)
 		}

@@ -137,7 +137,7 @@ func (m RoundMigration) Changed() bool { return len(m.Config) > 0 || len(m.Local
 // empty config.local.json, have nothing to migrate.
 func MigrateRoundKeysFiles(root string, apply bool) (RoundMigration, error) {
 	var m RoundMigration
-	err := migrateLayerFiles(root, "", apply, func(files []*migrationFile) error {
+	err := migrateLayerFiles(layerFiles(root, "", false), apply, func(files []*migrationFile) error {
 		return migrateRoundPlan(files, &m)
 	})
 	return m, err
@@ -160,7 +160,7 @@ func migrateRoundPlan(files []*migrationFile, m *RoundMigration) error {
 		if len(moved) > 0 {
 			f.doc, f.changed = out, true
 		}
-		if f.name == "config.local.json" {
+		if f.layer == layerLocal {
 			m.Local = moved
 		} else {
 			m.Config = moved
