@@ -324,7 +324,7 @@ stranger's `learning` comment never reaches `KNOWLEDGE.md`; a forge that cannot 
 Knowledge hits from support machines are not harvested.
 
 Set `round.support` between rounds: flipping it mid-round switches the bounce store and bounce
-counts are not carried over. At the bounce cap the item parks `needs-human` and no review-bounce
+counts are not carried over. At the bounce cap the bounce is refused and no review-bounce
 is posted.
 
 ### The round trip between the machines
