@@ -10,7 +10,7 @@ import (
 )
 
 func sourceMigrateCommand() *Command {
-	return &Command{Name: "source", Summary: "replace backlog.backend and issues.provider with issues.source and forge.provider (preview unless --apply)", Verb: migrateSource}
+	return &Command{Name: "source", Fence: fenceRefused, Summary: "replace backlog.backend and issues.provider with issues.source and forge.provider (preview unless --apply)", Verb: migrateSource}
 }
 
 // migrateSource is `rota migrate source` (#797). backlog.backend file becomes

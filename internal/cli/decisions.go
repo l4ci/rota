@@ -14,14 +14,14 @@ import (
 // decisionsCommands is the `rota decisions` group (A5, #49).
 func decisionsCommands() *Command {
 	return &Command{Name: "decisions", Summary: "read and write .rota/DECISIONS.md", Subs: []*Command{
-		{Name: "check", Summary: "validate decision entry shape", Verb: noFlags(decCheck)},
-		{Name: "amend", Summary: "replace one part of an active decision", Verb: decAmend},
-		{Name: "retire", Summary: "retire an active decision", Verb: decRetire},
-		{Name: "supersede", Summary: "replace an active decision", Verb: decSupersede},
-		{Name: "add", Summary: "add a canonical decision entry", Verb: decAdd},
-		{Name: "query", Summary: "print topic sections", Verb: noFlags(decQuery)},
-		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: noFlags(decTopics)},
-		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(decStats), View: decisionsView},
+		{Name: "check", Fence: fenceAllowed, Summary: "validate decision entry shape", Verb: noFlags(decCheck)},
+		{Name: "amend", Fence: fenceRefused, Summary: "replace one part of an active decision", Verb: decAmend},
+		{Name: "retire", Fence: fenceRefused, Summary: "retire an active decision", Verb: decRetire},
+		{Name: "supersede", Fence: fenceRefused, Summary: "replace an active decision", Verb: decSupersede},
+		{Name: "add", Fence: fenceRefused, Summary: "add a canonical decision entry", Verb: decAdd},
+		{Name: "query", Fence: fenceAllowed, Summary: "print topic sections", Verb: noFlags(decQuery)},
+		{Name: "topics", Fence: fenceAllowed, Summary: "list topic headings with bullet counts", Verb: noFlags(decTopics)},
+		{Name: "stats", Fence: fenceAllowed, Summary: "bullet count and size per topic", Verb: noFlags(decStats), View: decisionsView},
 	}}
 }
 
@@ -73,17 +73,17 @@ func decQuery(c *Ctx, args []string) (Result, error) {
 // mapCommands is the `rota map` group.
 func mapCommands() *Command {
 	return &Command{Name: "map", Summary: "subsystem map in .rota/map", Subs: []*Command{
-		{Name: "query", Summary: "print subsystem files", Verb: noFlags(mapQuery)},
-		{Name: "index", Summary: "regenerate the map block", Verb: noFlags(mapIndex)},
-		{Name: "stats", Summary: "size and broken-reference counts", Verb: mapStats},
+		{Name: "query", Fence: fenceAllowed, Summary: "print subsystem files", Verb: noFlags(mapQuery)},
+		{Name: "index", Fence: fenceRefused, Summary: "regenerate the map block", Verb: noFlags(mapIndex)},
+		{Name: "stats", Fence: fenceAllowed, Summary: "size and broken-reference counts", Verb: mapStats},
 	}}
 }
 
 // qaCommands is the `rota qa` group.
 func qaCommands() *Command {
 	return &Command{Name: "qa", Summary: "QA strategies in .rota/qa", Subs: []*Command{
-		{Name: "query", Summary: "print QA target files", Verb: noFlags(qaQuery)},
-		{Name: "index", Summary: "regenerate the QA block", Verb: noFlags(qaIndex)},
+		{Name: "query", Fence: fenceAllowed, Summary: "print QA target files", Verb: noFlags(qaQuery)},
+		{Name: "index", Fence: fenceRefused, Summary: "regenerate the QA block", Verb: noFlags(qaIndex)},
 	}}
 }
 

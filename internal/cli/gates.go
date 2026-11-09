@@ -38,8 +38,8 @@ type Gates struct {
 	// verbs that repair it, refuse it on their own (init), never load it, or
 	// load it and degrade silently (hook, skills). Inherited.
 	ConfigExempt bool
-	// Fence is the support-fence class. Never inherited: each verb declares
-	// its own, so a new verb cannot be allowed on a support machine by default.
+	// Fence is the verb's own Command.Fence, copied here for the fence gate.
+	// Never inherited.
 	Fence roundcfg.FenceClass
 }
 
@@ -49,7 +49,9 @@ type Gates struct {
 func gatesFor(root *Command, path string) Gates {
 	words := strings.Fields(path)
 	if len(words) <= 1 {
-		return root.Gates
+		g := root.Gates
+		g.Fence = root.Fence
+		return g
 	}
 	var g Gates
 	cmd := root
@@ -66,7 +68,7 @@ func gatesFor(root *Command, path string) Gates {
 		}
 	}
 	if cmd != nil {
-		g.Fence = cmd.Gates.Fence
+		g.Fence = cmd.Fence
 	}
 	return g
 }
@@ -141,3 +143,10 @@ func runGates(c *Ctx, root *Command) (Result, error) {
 	}
 	return Result{}, nil
 }
+
+// The support-fence classes, short for the verb literals that declare one.
+const (
+	fenceRefused = roundcfg.FenceRefused
+	fenceInVerb  = roundcfg.FenceInVerb
+	fenceAllowed = roundcfg.FenceAllowed
+)
