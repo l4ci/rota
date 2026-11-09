@@ -30,7 +30,6 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/reap"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -198,7 +197,7 @@ func defaultDeps() *Deps {
 		RecordMistakes:   true,
 	}
 	d.TrainPlan = planTrainNudge
-	d.Config = func(root string) any { return config.Load(d.projectsEnv(), rotatree.Config(root)) }
+	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)

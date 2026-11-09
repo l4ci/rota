@@ -12,9 +12,9 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-const (
-	legacyDir = ".hv"
-)
+// DirName is the legacy state folder that .rota/ replaced; this is its one
+// definition.
+const DirName = ".hv"
 
 // LegacyState walks up from start (a physical path). It returns the nearest
 // directory that holds .hv/ and no .rota/ next to it, when no .rota/ is found
@@ -24,7 +24,7 @@ func LegacyState(start string) (dir string, legacy bool) {
 		if rotatree.Exists(d) {
 			return true
 		}
-		if fsio.IsDir(filepath.Join(d, legacyDir)) {
+		if fsio.IsDir(filepath.Join(d, DirName)) {
 			dir, legacy = d, true
 			return true
 		}
@@ -36,7 +36,7 @@ func LegacyState(start string) (dir string, legacy bool) {
 // FindState is the nearest directory holding .hv/ or .rota/.
 func FindState(start string) (dir string, ok bool) {
 	rotatree.Ascend(start, func(d string) bool {
-		if rotatree.Exists(d) || fsio.IsDir(filepath.Join(d, legacyDir)) {
+		if rotatree.Exists(d) || fsio.IsDir(filepath.Join(d, DirName)) {
 			dir, ok = d, true
 		}
 		return ok

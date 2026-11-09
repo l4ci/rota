@@ -76,7 +76,7 @@ func TestGlobalIsALayerUnderProjectAndLocal(t *testing.T) {
 		if e.Value != c.want || e.Source != c.src {
 			t.Errorf("%s = %v (%s), want %v (%s)", c.key, e.Value, e.Source, c.want, c.src)
 		}
-		if v, _ := Lookup(Load(env, configPath(root)), c.key); v != c.want {
+		if v, _ := Lookup(Load(env, root), c.key); v != c.want {
 			t.Errorf("Load %s = %v, want %v", c.key, v, c.want)
 		}
 	}
@@ -85,7 +85,7 @@ func TestGlobalIsALayerUnderProjectAndLocal(t *testing.T) {
 func TestGlobalNeverSuppliesProjectOwnedKeys(t *testing.T) {
 	root, env := layerRig(t, `{"git":{"baseBranch":"trunk"},"umbrella":{"enabled":true},"rota":{"version":"9.9.9"}}`, `{}`, "")
 	for _, k := range []string{"git.baseBranch", "umbrella.enabled", VersionKey} {
-		if v, ok := Lookup(Load(env, configPath(root)), k); ok {
+		if v, ok := Lookup(Load(env, root), k); ok {
 			t.Errorf("%s read from global: %v", k, v)
 		}
 	}
@@ -174,7 +174,7 @@ func TestLoadResolvesGlobalFromInjectedEnv(t *testing.T) {
 	}
 	root := t.TempDir()
 	env := dirEnv(t, gdir)
-	if v, _ := Value(Load(env, configPath(root)), "work.isolation"); v != "worktree" {
+	if v, _ := Value(Load(env, root), "work.isolation"); v != "worktree" {
 		t.Errorf("Load work.isolation = %v, want worktree from the injected global dir", v)
 	}
 	rows, err := Show(env, root, "work.isolation", true)

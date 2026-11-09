@@ -37,7 +37,7 @@ func setupRun(t *testing.T, dir, stdin string, tty bool, args ...string) (int, s
 
 func cfgValue(t *testing.T, dir, key string) any {
 	t.Helper()
-	v, err := config.Value(config.Load(cfgdir.OSEnv(), filepath.Join(dir, ".rota", "config.json")), key)
+	v, err := config.Value(config.Load(cfgdir.OSEnv(), dir), key)
 	if err != nil {
 		t.Fatal(err)
 	}

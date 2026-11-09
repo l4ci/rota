@@ -124,7 +124,7 @@ func TestShowMatchesRuntime(t *testing.T) {
 				tc.local = encode(local)
 			}
 			root := project(t, tc.project, tc.local)
-			cfg := Load(cfgdir.OSEnv(), configPath(root))
+			cfg := Load(cfgdir.OSEnv(), root)
 			rows, err := Show(cfgdir.OSEnv(), root, "", false)
 			if err != nil || len(rows) != len(Keys) {
 				t.Fatalf("Show: %d rows, %v", len(rows), err)
@@ -232,7 +232,7 @@ func TestSetCreatesAndReplacesParents(t *testing.T) {
 	if _, err := Set(root, "issues.labels.types.bug", "x"); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(Load(cfgdir.OSEnv(), filepath.Join(root, ".rota", "config.json")).(*jsonx.Object).Keys(), []string{"issues"}) {
+	if !reflect.DeepEqual(Load(cfgdir.OSEnv(), root).(*jsonx.Object).Keys(), []string{"issues"}) {
 		t.Error("no nested object")
 	}
 }

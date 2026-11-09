@@ -26,7 +26,7 @@ func TestFillKeepsSupportLabelKey(t *testing.T) {
 	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	v, ok := Lookup(Load(cfgdir.OSEnv(), filepath.Join(root, ".rota/config.json")), "issues.labels.support")
+	v, ok := Lookup(Load(cfgdir.OSEnv(), root), "issues.labels.support")
 	if !ok || v != "remote" {
 		t.Fatalf("old label = %v, %v", v, ok)
 	}

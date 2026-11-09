@@ -321,7 +321,7 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 // does not name the support machine (main runs `round support enable`
 // first) or the project has no tracker.
 func supportSetupStop(c *Ctx, dir string) (Result, error) {
-	tracked := fsio.LoadJSON(rotatree.Config(dir), jsonx.NewObject())
+	tracked := config.Project(dir)
 	if roundcfg.SupportName(tracked) == "" {
 		d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundSupportKey, "changed", false)
 		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").

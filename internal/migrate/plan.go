@@ -130,8 +130,8 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 				}
 			}
 		}
-		it.design = readOpt(filepath.Join(rota, "designs", e.ID+".md"))
-		plans, _ := os.ReadDir(filepath.Join(rota, "plans"))
+		it.design = readOpt(filepath.Join(rota, rotatree.DesignsDir, e.ID+".md"))
+		plans, _ := os.ReadDir(filepath.Join(rota, rotatree.PlansDir))
 		var names []string
 		for _, p := range plans {
 			names = append(names, p.Name())
@@ -140,7 +140,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		planRe := regexp.MustCompile(`\A` + milestone.TokenPattern + `-` + regexp.QuoteMeta(e.ID) + `\.md\z`)
 		for _, n := range names {
 			if planRe.MatchString(n) {
-				it.plan = readOpt(filepath.Join(rota, "plans", n))
+				it.plan = readOpt(filepath.Join(rota, rotatree.PlansDir, n))
 				break
 			}
 		}
@@ -197,7 +197,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 // their slice plans.
 func planMilestones(root string) []*migMilestone {
 	rota := rotatree.Dir(root)
-	entries, _ := os.ReadDir(filepath.Join(rota, "milestones"))
+	entries, _ := os.ReadDir(filepath.Join(rota, rotatree.MilestonesDir))
 	var names []string
 	for _, e := range entries {
 		n := e.Name()
@@ -209,7 +209,7 @@ func planMilestones(root string) []*migMilestone {
 	var out []*migMilestone
 	for _, name := range names {
 		text := ""
-		if t := readOpt(filepath.Join(rota, "milestones", name)); t != nil {
+		if t := readOpt(filepath.Join(rota, rotatree.MilestonesDir, name)); t != nil {
 			text = *t
 		}
 		fm, _, body := frontmatter.Parse(text)
@@ -240,7 +240,7 @@ func planMilestones(root string) []*migMilestone {
 		case []string:
 			ms.depends = milestone.IDs(strings.Join(d, ", "))
 		}
-		plans, _ := os.ReadDir(filepath.Join(rota, "plans"))
+		plans, _ := os.ReadDir(filepath.Join(rota, rotatree.PlansDir))
 		var pn []string
 		for _, p := range plans {
 			pn = append(pn, p.Name())
@@ -249,7 +249,7 @@ func planMilestones(root string) []*migMilestone {
 		sliceRe := regexp.MustCompile(`\A` + regexp.QuoteMeta(mid) + `-(S\p{Nd}+)\.md\z`)
 		for _, n := range pn {
 			if sm := sliceRe.FindStringSubmatch(n); sm != nil {
-				t := readOpt(filepath.Join(rota, "plans", n))
+				t := readOpt(filepath.Join(rota, rotatree.PlansDir, n))
 				txt := ""
 				if t != nil {
 					txt = *t
