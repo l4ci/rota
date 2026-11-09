@@ -140,7 +140,7 @@ func renameList(rs []config.Rename) []any {
 
 // roundMigrationFail maps the round-key migration's errors: disagreeing old
 // and new names refuse (exit 4, both values listed), a malformed layer is
-// exit 70 naming the file.
+// exit 5 naming the file.
 func roundMigrationFail(err error) (Result, error) {
 	data, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.ConfigRefusal | exitmap.ConfigCorrupt})
 	if data != nil {

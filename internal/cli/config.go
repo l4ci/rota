@@ -350,6 +350,9 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if err := config.CheckLayer(root, config.LayerLocal); err != nil {
+			return Result{}, configFail(err, exitmap.ConfigInternal)
+		}
 		cfg := c.deps().Config(root)
 		diag := config.Diagnose(c.deps().projectsEnv(), root, cfg)
 		status, missing := diag.Status, diag.Missing
