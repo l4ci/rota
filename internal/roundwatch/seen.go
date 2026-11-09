@@ -20,16 +20,16 @@ type SeenStore struct{ path string }
 func NewSeenStore(cd string) *SeenStore { return &SeenStore{path: rotastate.File(cd, SeenFile)} }
 
 // Seen returns the recorded entries; a missing or unreadable record is empty.
-func (s *SeenStore) Seen() map[string]string {
-	if m, found, err := fsio.ReadJSON[map[string]string](s.path); err == nil && found && m != nil {
+func (s *SeenStore) Seen() Snapshot {
+	if m, found, err := fsio.ReadJSON[Snapshot](s.path); err == nil && found && m != nil {
 		return m
 	}
-	return map[string]string{}
+	return Snapshot{}
 }
 
 // Mark merges m into the record. It never drops an entry: one that vanishes
 // for a poll and comes back unchanged is not news.
-func (s *SeenStore) Mark(m map[string]string) {
+func (s *SeenStore) Mark(m Snapshot) {
 	cur := s.Seen()
 	for k, v := range m {
 		cur[k] = v
