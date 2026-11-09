@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"slices"
@@ -222,7 +221,7 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(fallbackCfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(f.root)))
+	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), f.root))
 	if err != nil {
 		t.Fatal(err)
 	}

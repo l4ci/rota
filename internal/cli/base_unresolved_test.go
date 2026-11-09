@@ -36,7 +36,7 @@ func TestHandoffFileUnresolvedBaseHasNoPath(t *testing.T) {
 		os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 		cfgPath := filepath.Join(dir, ".rota", "config.json")
 		os.WriteFile(cfgPath, []byte(cfg), 0o644)
-		if got := handoffFile(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), cfgPath)); got != "" {
+		if got := handoffFile(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), dir)); got != "" {
 			t.Errorf("%s: handoffFile = %q; want empty, not a main.md fallback", name, got)
 		}
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/tracker"
@@ -34,7 +33,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		return []byte("[]"), nil, 0, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	deps.RoundEnv = func(ctx context.Context, root string, _ RoundOpts) round.Env {
-		f, err := deps.forgeAndIssues(ctx, config.Load(cfgdir.OSEnv(), rotatree.Config(root)), root)
+		f, err := deps.forgeAndIssues(ctx, config.Load(cfgdir.OSEnv(), root), root)
 		if err != nil {
 			t.Fatal(err)
 		}

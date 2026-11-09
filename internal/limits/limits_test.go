@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -529,7 +530,7 @@ func TestDataFromRateLimits(t *testing.T) {
 func jsonNum(n int64) string { b, _ := json.Marshal(n); return string(b) }
 
 func TestLoadSettings(t *testing.T) {
-	cfg := config.Load(cfgdir.OSEnv(), filepath.Join(t.TempDir(), "missing.json"))
+	cfg := config.Load(cfgdir.OSEnv(), t.TempDir())
 	s, err := LoadSettings(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -538,19 +539,20 @@ func TestLoadSettings(t *testing.T) {
 		s.Prompt != "The usage limit has reset. Continue where you left off." || s.EscalateIssue != "" {
 		t.Fatalf("defaults %+v", s)
 	}
-	dir := t.TempDir()
 	for key, val := range map[string]string{
 		"mode": `"wait"`, "resumePrompt": `"  "`,
 	} {
-		p := filepath.Join(dir, key+".json")
-		os.WriteFile(p, []byte(`{"limits":{"`+key+`":`+val+`}}`), 0o666)
-		if _, err := LoadSettings(config.Load(cfgdir.OSEnv(), p)); err == nil || !strings.Contains(err.Error(), "limits."+key) {
+		root := t.TempDir()
+		os.MkdirAll(rotatree.Dir(root), 0o755)
+		os.WriteFile(rotatree.Config(root), []byte(`{"limits":{"`+key+`":`+val+`}}`), 0o666)
+		if _, err := LoadSettings(config.Load(cfgdir.OSEnv(), root)); err == nil || !strings.Contains(err.Error(), "limits."+key) {
 			t.Errorf("%s=%s: %v", key, val, err)
 		}
 	}
-	p := filepath.Join(dir, "ok.json")
-	os.WriteFile(p, []byte(`{"limits":{"mode":"sleep"},"orchestrator":{"escalateIssue":9}}`), 0o666)
-	s, err = LoadSettings(config.Load(cfgdir.OSEnv(), p))
+	ok := t.TempDir()
+	os.MkdirAll(rotatree.Dir(ok), 0o755)
+	os.WriteFile(rotatree.Config(ok), []byte(`{"limits":{"mode":"sleep"},"orchestrator":{"escalateIssue":9}}`), 0o666)
+	s, err = LoadSettings(config.Load(cfgdir.OSEnv(), ok))
 	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 3 || s.EscalateIssue != "9" {
 		t.Fatalf("%+v %v", s, err)
 	}

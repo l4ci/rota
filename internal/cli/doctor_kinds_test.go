@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func TestDoctorCodexReadinessResolvedHost(t *testing.T) {
@@ -74,12 +75,15 @@ func TestDoctorCodexReadinessResolvedHost(t *testing.T) {
 // Doctor checks a codex account's login in the expanded home, the same path a
 // dispatch launches with (#1757).
 func TestDoctorKindsExpandsAccountHomes(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "config.json")
-	doc := `{"round":{"accounts":[{"kind":"codex","name":"c","dir":"~/.codex"}]}}`
-	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+	root := t.TempDir()
+	if err := os.MkdirAll(rotatree.Dir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	k := doctorKinds(config.Load(cfgdir.OSEnv(), p), "/home/u")[harness.Codex]
+	doc := `{"round":{"accounts":[{"kind":"codex","name":"c","dir":"~/.codex"}]}}`
+	if err := os.WriteFile(rotatree.Config(root), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	k := doctorKinds(config.Load(cfgdir.OSEnv(), root), "/home/u")[harness.Codex]
 	if len(k.Homes) != 1 || k.Homes[0].Dir != "/home/u/.codex" {
 		t.Errorf("homes = %+v", k.Homes)
 	}
