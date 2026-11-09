@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -67,23 +68,47 @@ func TestArmOneAtATime(t *testing.T) {
 }
 
 func TestDiff(t *testing.T) {
-	got := Diff(map[string]string{"a": "1", "b": "2", "c": "3"}, map[string]string{"a": "1", "b": "9", "d": "4"})
-	var keys []string
-	for _, c := range got {
-		keys = append(keys, c.Key+":"+c.From+">"+c.To)
+	ben, dana := Key{Kind: KindSlotPR, ID: "ben"}, Key{Kind: KindSlotPR, ID: "dana"}
+	got := Diff(
+		Snapshot{PRStateKey("ben"): "OPEN", ben: "u1", dana: "u2"},
+		Snapshot{PRStateKey("ben"): "merged", ben: "u1", SupportKey("7", SupportComment): "ann#1"},
+	)
+	want := []Change{
+		{Key: dana, From: "u2"},
+		{Key: PRStateKey("ben"), From: "OPEN", To: "merged"},
+		{Key: SupportKey("7", SupportComment), To: "ann#1"},
 	}
-	if strings.Join(keys, ",") != "b:2>9,c:3>,d:>4" {
-		t.Fatalf("%v", keys)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("diff = %+v, want %+v", got, want)
 	}
-	if len(Diff(map[string]string{"a": "1"}, map[string]string{"a": "1"})) != 0 {
+	if len(Diff(Snapshot{ben: "u1"}, Snapshot{ben: "u1"})) != 0 {
 		t.Fatal("equal snapshots must not differ")
+	}
+}
+
+// The text form keeps the seen file readable across versions; every kind
+// round-trips through it.
+func TestKeyTextRoundTrips(t *testing.T) {
+	for _, k := range []Key{
+		{Kind: KindSlotPR, ID: "ben"}, PRStateKey("ben"), {Kind: KindEscalation, ID: "e1"},
+		EscalationStatusKey("e1"), ReviewKey("nia"), GateKey, SupportKey("7", SupportPRHead),
+	} {
+		b, _ := k.MarshalText()
+		var back Key
+		if err := back.UnmarshalText(b); err != nil || back != k {
+			t.Errorf("%+v -> %q -> %+v (%v)", k, b, back, err)
+		}
+	}
+	var bad Key
+	if bad.UnmarshalText([]byte("nonsense/x")) == nil {
+		t.Error("an unknown key must not parse")
 	}
 }
 
 // fakeClock advances only when the watch waits or sleeps.
 type fakeClock struct{ now time.Time }
 
-func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, forge func() map[string]string) Env {
+func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, forge func() Snapshot) Env {
 	return Env{
 		Now:   func() time.Time { return f.now },
 		Sleep: func(_ context.Context, d time.Duration) { f.now = f.now.Add(d) },
@@ -95,11 +120,11 @@ func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, fo
 			return n, err
 		},
 		Local: local,
-		Forge: func(context.Context) map[string]string { return forge() },
+		Forge: func(context.Context) Snapshot { return forge() },
 	}
 }
 
-func empty() map[string]string { return map[string]string{} }
+func empty() Snapshot { return Snapshot{} }
 
 func TestRunHeartbeat(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
@@ -128,11 +153,11 @@ func TestRunSlotNews(t *testing.T) {
 
 func TestRunNothingToWatchStillSeesForge(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
-	forge := func() map[string]string {
+	forge := func() Snapshot {
 		if fc.now.Sub(time.Unix(0, 0)) >= 60*time.Second {
-			return map[string]string{EscalationStatusKey("E1"): "answered"}
+			return Snapshot{EscalationStatusKey("E1"): "answered"}
 		}
-		return map[string]string{EscalationStatusKey("E1"): "pending"}
+		return Snapshot{EscalationStatusKey("E1"): "pending"}
 	}
 	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, ErrNothingToWatch }, empty, forge)
 	res, err := Run(context.Background(), env, Opts{Heartbeat: time.Hour, Poll: 30 * time.Second, ForgeEvery: 60 * time.Second})
@@ -145,7 +170,7 @@ func TestRunNothingToWatchStillSeesForge(t *testing.T) {
 // their absence from a local-only tick is not a change.
 func TestRunForgeEntriesNotChangedBetweenTicks(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
-	forge := func() map[string]string { return map[string]string{PRStateKey("ben"): "OPEN"} }
+	forge := func() Snapshot { return Snapshot{PRStateKey("ben"): "OPEN"} }
 	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, forge)
 	res, err := Run(context.Background(), env, Opts{Heartbeat: 90 * time.Second, Poll: 30 * time.Second, ForgeEvery: time.Hour})
 	if err != nil || res.Reason != ReasonHeartbeat {
@@ -275,7 +300,7 @@ func TestRunNothingToWatchHoldsUntilHeartbeat(t *testing.T) {
 }
 
 func TestCarryKeepsReviewEntries(t *testing.T) {
-	base := map[string]string{ReviewKey("nia"): "1 from rev", PRStateKey("nia"): "open", "pr/nia": "u"}
+	base := Snapshot{ReviewKey("nia"): "1 from rev", PRStateKey("nia"): "open", Key{Kind: KindSlotPR, ID: "nia"}: "u"}
 	got := carry(base)
 	if got[ReviewKey("nia")] != "1 from rev" || got[PRStateKey("nia")] != "open" || len(got) != 2 {
 		t.Fatalf("a tick that skips the forge must not read review input as gone: %v", got)
@@ -309,7 +334,7 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := rotastate.File(cd, "land")
-	var during, after map[string]string
+	var during, after Snapshot
 	err = fsio.Locked(path, 0, func() error {
 		if err := os.WriteFile(path+worker.LandHolderSuffix, []byte("#1900"), 0o644); err != nil {
 			return err
@@ -336,7 +361,7 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 
 // A lock taken while the watch runs is not news; its release is.
 func TestRunWakesOnGateReleaseOnly(t *testing.T) {
-	snaps := []map[string]string{
+	snaps := []Snapshot{
 		{},
 		{GateKey: "#1900"},
 		{GateKey: "ben"},
@@ -344,8 +369,8 @@ func TestRunWakesOnGateReleaseOnly(t *testing.T) {
 	}
 	i := 0
 	env := Env{
-		Local: func() map[string]string { s := snaps[min(i, len(snaps)-1)]; return s },
-		Forge: func(context.Context) map[string]string { return nil },
+		Local: func() Snapshot { s := snaps[min(i, len(snaps)-1)]; return s },
+		Forge: func(context.Context) Snapshot { return nil },
 		Wait: func(context.Context, time.Duration) (*SlotNews, error) {
 			i++
 			return nil, nil
@@ -370,7 +395,7 @@ func TestRunWakesOnGateReleaseOnly(t *testing.T) {
 func TestLocalSnapshotReadsThroughEnv(t *testing.T) {
 	we := fakeEnv(`{"slots":[{"name":"ben","state":"busy","pr":"https://x/pull/7"},{"name":"dana","state":"idle"}],"escalations":[{"id":"e1","status":"pending"}]}`)
 	got := LocalSnapshot(we, noRoot)
-	want := map[string]string{changeKeySlotPR + "ben": "https://x/pull/7", changeKeyEscalat + "e1": "pending"}
+	want := Snapshot{{Kind: KindSlotPR, ID: "ben"}: "https://x/pull/7", {Kind: KindEscalation, ID: "e1"}: "pending"}
 	if len(got) != len(want) {
 		t.Fatalf("snapshot = %v, want %v", got, want)
 	}

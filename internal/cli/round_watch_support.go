@@ -33,8 +33,8 @@ import (
 //     branch-head (the branch's sha).
 //
 // A read that fails leaves its entries out, which the watch reads as no news.
-func supportSnapshot(ctx context.Context, env round.Env, root string) map[string]string {
-	out := map[string]string{}
+func supportSnapshot(ctx context.Context, env round.Env, root string) roundwatch.Snapshot {
+	out := roundwatch.Snapshot{}
 	if env.Round.Support == "" || env.Forge == nil {
 		return out
 	}

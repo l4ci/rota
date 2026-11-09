@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -101,12 +100,12 @@ func (f *swForge) comment(n int, id, author, body string) {
 	is.Comments = append(is.Comments, tracker.Comment{ID: id, Author: author, Body: body})
 }
 
-func swWatch(t *testing.T, f *swForge, role string, workers string) func() map[string]string {
+func swWatch(t *testing.T, f *swForge, role string, workers string) func() roundwatch.Snapshot {
 	t.Helper()
 	return swWatchGit(t, f, role, workers, git.Exec)
 }
 
-func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Runner) func() map[string]string {
+func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Runner) func() roundwatch.Snapshot {
 	t.Helper()
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
@@ -119,13 +118,13 @@ func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Run
 			Round: roundcfg.Settings{Support: "mac", Role: role}}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
-	return func() map[string]string { return watchForge(context.Background(), c, root) }
+	return func() roundwatch.Snapshot { return watchForge(context.Background(), c, root) }
 }
 
-func supportKeys(m map[string]string) map[string]string {
-	out := map[string]string{}
+func supportKeys(m roundwatch.Snapshot) roundwatch.Snapshot {
+	out := roundwatch.Snapshot{}
 	for k, v := range m {
-		if strings.HasPrefix(k, "support/") {
+		if k.Kind == roundwatch.KindSupport {
 			out[k] = v
 		}
 	}
@@ -147,7 +146,7 @@ func TestWatchWakesOnSupportPRHead(t *testing.T) {
 	second := supportKeys(pass())
 	var got []string
 	for _, ch := range roundwatch.Diff(first, second) {
-		got = append(got, ch.Key+"|"+ch.From+"|"+ch.To)
+		got = append(got, ch.Key.String()+"|"+ch.From+"|"+ch.To)
 	}
 	if want := []string{"support/7/pr-head|aaa111|bbb222"}; !slices.Equal(got, want) {
 		t.Fatalf("changes = %q, want %q", got, want)
@@ -230,7 +229,7 @@ func TestWatchSupportBranchTimeout(t *testing.T) {
 	}
 	pass := swWatchGit(t, f, roundcfg.RoleMain, "", runGit)
 	seen := supportKeys(pass())
-	const key = "support/mac-ben~7-export/branch-head"
+	key := roundwatch.SupportKey(roundwatch.SupportBranchID("mac-ben/7-export"), roundwatch.SupportBranchHead)
 	if seen[key] != "aaa111" || len(seen) != 1 {
 		t.Fatalf("successful snapshot = %v", seen)
 	}
@@ -244,9 +243,9 @@ func TestWatchSupportBranchTimeout(t *testing.T) {
 	now := time.Unix(0, 0)
 	watchEnv := roundwatch.Env{
 		Now:   func() time.Time { return now },
-		Local: func() map[string]string { return map[string]string{} },
-		Forge: func(context.Context) map[string]string { return timedOut },
-		Seen:  func() map[string]string { return seen },
+		Local: func() roundwatch.Snapshot { return roundwatch.Snapshot{} },
+		Forge: func(context.Context) roundwatch.Snapshot { return timedOut },
+		Seen:  func() roundwatch.Snapshot { return seen },
 		Wait: func(_ context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
 			now = now.Add(d)
 			return nil, nil
@@ -262,7 +261,7 @@ func TestWatchSupportBranchTimeout(t *testing.T) {
 	if recovered[key] != "bbb222" || len(recovered) != 1 {
 		t.Fatalf("recovered snapshot = %v", recovered)
 	}
-	watchEnv.Forge = func(context.Context) map[string]string { return recovered }
+	watchEnv.Forge = func(context.Context) roundwatch.Snapshot { return recovered }
 	news, err := roundwatch.Run(context.Background(), watchEnv, opts)
 	want := []roundwatch.Change{{Key: key, From: "aaa111", To: "bbb222"}}
 	if err != nil || news.Reason != roundwatch.ReasonChange || !slices.Equal(news.Changes, want) {
@@ -408,7 +407,7 @@ func TestWatchSupportMachineWakesOnConflict(t *testing.T) {
 	f.heads[5] = "ccc333"
 	var got []string
 	for _, ch := range roundwatch.Diff(third, supportKeys(pass())) {
-		got = append(got, ch.Key+"|"+ch.From+"|"+ch.To)
+		got = append(got, ch.Key.String()+"|"+ch.From+"|"+ch.To)
 	}
 	if want := []string{"support/31/conflict|aaa111|ccc333"}; !slices.Equal(got, want) {
 		t.Fatalf("new head on a conflicting PR: %q, want %q", got, want)
