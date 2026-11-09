@@ -16,7 +16,7 @@ import (
 )
 
 func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
-	why, _ := reviewReadiness(c, root, slot, base)
+	why, _ := (&tickWorld{c: c, root: root}).ReviewReadiness(slot, base)
 	return why
 }
 

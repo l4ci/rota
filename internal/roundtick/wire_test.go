@@ -26,6 +26,10 @@ type fakeWorld struct {
 	waiting []ReadyPR
 	waits   int
 	gated   []string
+	// repairs is what a read-only Reconcile reports as eligible.
+	repairs []round.Finding
+	// changed counts the calls that would change the world.
+	assigns, audits int
 }
 
 func (w *fakeWorld) reg() worker.Registry {
@@ -41,7 +45,7 @@ func (w *fakeWorld) Forge(context.Context) (PRViewer, error)             { retur
 func (w *fakeWorld) PRView(context.Context, int) (tracker.PRInfo, error) { return w.info, nil }
 func (w *fakeWorld) Waiting() []ReadyPR                                  { w.waits++; return w.waiting }
 func (w *fakeWorld) Reconcile(context.Context) (round.Outcome, error) {
-	return round.Outcome{}, nil
+	return round.Outcome{Proposed: w.repairs}, nil
 }
 func (w *fakeWorld) Root() string { return w.root }
 func (w *fakeWorld) Landing(_ context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
@@ -59,15 +63,20 @@ func (w *fakeWorld) Candidates(context.Context) ([]round.Candidate, error) {
 	return nil, nil
 }
 func (w *fakeWorld) Assign(context.Context, string) (round.Assigned, error) {
+	w.assigns++
 	return round.Assigned{}, nil
 }
 func (w *fakeWorld) Review() Reviewer { return nil }
-func (w *fakeWorld) Audit(Action)     {}
+func (w *fakeWorld) Audit(Action)     { w.audits++ }
 func (w *fakeWorld) Say(string)       {}
 func (w *fakeWorld) Warn(string)      {}
 func (w *fakeWorld) Now() time.Time   { return time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC) }
 
 func tickWorld(t *testing.T, w *fakeWorld) (Result, []string) {
+	return tickWorldWith(t, w, Config{})
+}
+
+func tickWorldWith(t *testing.T, w *fakeWorld, cfg Config) (Result, []string) {
 	t.Helper()
 	w.root = gittest.NewRepo(t, "main")
 	path := rotatree.Workers(w.root)
@@ -78,11 +87,9 @@ func tickWorld(t *testing.T, w *fakeWorld) (Result, []string) {
 	if err := os.WriteFile(path, []byte(reg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{
-		Settings:      roundcfg.Settings{TrainFill: roundcfg.TrainFill{Max: 4}},
-		MergeApproval: gate.MergeNone,
-		Base:          "main",
-	}
+	cfg.Settings = roundcfg.Settings{TrainFill: roundcfg.TrainFill{Max: 4}}
+	cfg.MergeApproval = gate.MergeNone
+	cfg.Base = "main"
 	r, err := Run(context.Background(), NewEnv(w, cfg))
 	if err != nil {
 		t.Fatal(err)
@@ -122,5 +129,29 @@ func TestWaitingReadOncePerTick(t *testing.T) {
 	tickWorld(t, w)
 	if w.waits != 1 {
 		t.Fatalf("waiting read %d times, want 1", w.waits)
+	}
+}
+
+// The same pass serves tick and observe: with Config.Observe the world's reads
+// feed proposals through the same Env fields, and nothing that changes the
+// world (landing, assigning, auditing) is called.
+func TestObserveRunsThePassWithoutMutating(t *testing.T) {
+	w := &fakeWorld{
+		info:    tracker.PRInfo{State: "CLOSED", Base: "main"}, // goes straight to the gate
+		repairs: []round.Finding{{Kind: "slot-stuck", Slot: "ben"}},
+	}
+	r, gated := tickWorldWith(t, w, Config{Observe: true})
+	if !r.Observed {
+		t.Fatalf("not an observation: %+v", r)
+	}
+	var got []string
+	for _, p := range r.Proposed {
+		got = append(got, p.Action.Action)
+	}
+	if !reflect.DeepEqual(got, []string{"reconcile", "gate"}) {
+		t.Fatalf("proposed %v, want the world's repair then the landing", got)
+	}
+	if len(gated) != 0 || w.assigns != 0 || w.audits != 0 || len(r.Did) != 0 {
+		t.Fatalf("observation changed the world: gated %v assigns %d audits %d did %+v", gated, w.assigns, w.audits, r.Did)
 	}
 }
