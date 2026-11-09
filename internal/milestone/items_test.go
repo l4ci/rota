@@ -22,6 +22,11 @@ func itemsProject(t *testing.T) string {
 	return root
 }
 
+// syncItems drives SyncItemsWith with a fixed list.
+func syncItems(root, id string, items []ItemRef) (bool, error) {
+	return SyncItemsWith(root, id, func() ([]ItemRef, error) { return items, nil })
+}
+
 func TestSyncItems(t *testing.T) {
 	items := []ItemRef{
 		{ID: "F01", Title: "First [x]", Detail: ".rota/features/F01.md"},
@@ -29,7 +34,7 @@ func TestSyncItems(t *testing.T) {
 	}
 	t.Run("adds a linked list and is idempotent", func(t *testing.T) {
 		root := itemsProject(t)
-		changed, err := SyncItems(root, "M01", items)
+		changed, err := syncItems(root, "M01", items)
 		if err != nil || !changed {
 			t.Fatalf("changed=%v err=%v", changed, err)
 		}
@@ -37,21 +42,21 @@ func TestSyncItems(t *testing.T) {
 		if !strings.Contains(got, "## Items\n") || !strings.Contains(got, "- [[F01] First \\[x\\]](../features/F01.md)\n") || !strings.Contains(got, "- [B02] Second\n") {
 			t.Fatalf("section missing:\n%s", got)
 		}
-		if changed, err = SyncItems(root, "M01", items); err != nil || changed {
+		if changed, err = syncItems(root, "M01", items); err != nil || changed {
 			t.Fatalf("second run changed=%v err=%v", changed, err)
 		}
 	})
 	t.Run("keeps text outside the section", func(t *testing.T) {
 		root := itemsProject(t)
 		p := detailPath(root, "M01")
-		if _, err := SyncItems(root, "M01", items); err != nil {
+		if _, err := syncItems(root, "M01", items); err != nil {
 			t.Fatal(err)
 		}
 		withTail := read(t, p) + "\n## After\n\nhand-written\n"
 		if err := os.WriteFile(p, []byte(withTail), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := SyncItems(root, "M01", items[:1]); err != nil {
+		if _, err := syncItems(root, "M01", items[:1]); err != nil {
 			t.Fatal(err)
 		}
 		got := read(t, p)
@@ -62,14 +67,14 @@ func TestSyncItems(t *testing.T) {
 	t.Run("no items and no section writes nothing", func(t *testing.T) {
 		root := itemsProject(t)
 		before := read(t, detailPath(root, "M01"))
-		if changed, err := SyncItems(root, "M01", nil); err != nil || changed || read(t, detailPath(root, "M01")) != before {
+		if changed, err := syncItems(root, "M01", nil); err != nil || changed || read(t, detailPath(root, "M01")) != before {
 			t.Fatalf("changed=%v err=%v", changed, err)
 		}
 	})
 	t.Run("emptied list keeps the section", func(t *testing.T) {
 		root := itemsProject(t)
-		SyncItems(root, "M01", items)
-		if changed, err := SyncItems(root, "M01", nil); err != nil || !changed {
+		syncItems(root, "M01", items)
+		if changed, err := syncItems(root, "M01", nil); err != nil || !changed {
 			t.Fatalf("changed=%v err=%v", changed, err)
 		}
 		if got := read(t, detailPath(root, "M01")); !strings.Contains(got, "## Items") || strings.Contains(got, "F01") {
@@ -77,7 +82,7 @@ func TestSyncItems(t *testing.T) {
 		}
 	})
 	t.Run("unknown milestone", func(t *testing.T) {
-		if _, err := SyncItems(t.TempDir(), "M09", items); exitOf(err) != 3 {
+		if _, err := syncItems(t.TempDir(), "M09", items); exitOf(err) != 3 {
 			t.Fatalf("err = %v", err)
 		}
 	})

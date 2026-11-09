@@ -50,16 +50,12 @@ func itemsBody(items []ItemRef) string {
 	return b.String()
 }
 
-// SyncItems rewrites the Items section of milestone id's detail file from
-// items, leaving the rest of the file alone. A milestone with no items and no
-// section is not touched. changed is false when the section already matches.
-func SyncItems(root, id string, items []ItemRef) (changed bool, err error) {
-	return SyncItemsWith(root, id, func() ([]ItemRef, error) { return items, nil })
-}
-
-// SyncItemsWith is SyncItems with the items read by items. It runs inside the
-// milestone file's lock, so the list it returns cannot go stale before the
-// write; items may take other locks, and must take them after this one.
+// SyncItemsWith rewrites the Items section of milestone id's detail file from
+// the list items returns, leaving the rest of the file alone. A milestone with
+// no items and no section is not touched. changed is false when the section
+// already matches. It runs inside the milestone file's lock, so the list
+// cannot go stale before the write; items may take other locks, and must take
+// them after this one.
 func SyncItemsWith(root, id string, items func() ([]ItemRef, error)) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
