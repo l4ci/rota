@@ -966,3 +966,55 @@ func (r rawMilestone) norm(number int) Milestone {
 	}
 	return m
 }
+
+// IssueActor is the one decision of which tracker serves an upstream issue
+// write (label, close): Source names it, Adapter builds it.
+type IssueActor struct {
+	// Source is jira, linear or itsaplan (issues.source's own tracker), or
+	// github or gitlab (the forge the issues live on).
+	Source string
+	s      Settings
+	dir    string
+	opts   []Option
+}
+
+// ResolveIssueActor decides the tracker for issues.source in dir. jira,
+// linear and itsaplan name their own tracker; github and gitlab name the
+// forge outright; any other source takes dir's forge as ForgeActor resolves
+// it. A local forge is ErrNoIssueActor.
+func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Option) (IssueActor, error) {
+	switch s.Source {
+	case config.SourceJira, config.SourceLinear, config.SourceItsaplan:
+		return IssueActor{Source: s.Source, s: s, dir: dir, opts: opts}, nil
+	}
+	r, err := IssueProvider(ctx, s, ForgeActor, dir, opts...)
+	if err != nil {
+		return IssueActor{}, err
+	}
+	if r.Provider == ProviderLocal {
+		return IssueActor{}, ErrNoIssueActor
+	}
+	return IssueActor{Source: r.Provider, s: s, dir: dir, opts: opts}, nil
+}
+
+// IssueProvider is the forge provider of the issues in dir: an issues.source
+// of github or gitlab names it outright, any other takes dir's forge as kind
+// resolves it, which can be the local forge.
+func IssueProvider(ctx context.Context, s Settings, kind ForgeKind, dir string, opts ...Option) (Resolution, error) {
+	if s.Source == config.SourceGitHub || s.Source == config.SourceGitLab {
+		return Resolution{Provider: s.Source, How: HowConfig}, nil
+	}
+	return newCLI(s, dir, opts...).resolveForge(ctx, kind, "", s.Provider)
+}
+
+// Adapter builds the tracker ResolveIssueActor chose.
+func (a IssueActor) Adapter(ctx context.Context) (IssueTracker, error) {
+	switch a.Source {
+	case config.SourceJira, config.SourceLinear, config.SourceItsaplan:
+		return NewIssueTracker(ctx, a.s, a.Source, a.dir, a.opts...)
+	}
+	return New(ctx, a.s, a.Source, a.dir, a.opts...)
+}
+
+// ErrNoIssueActor: issues.source names no tracker and the forge is local.
+var ErrNoIssueActor = errors.New("no issue tracker")
