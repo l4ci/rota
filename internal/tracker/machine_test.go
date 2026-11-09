@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // The default connection lookup reads the env it is given, never the
@@ -19,7 +19,7 @@ func TestMachineConnReadsTheInjectedEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	vars := map[string]string{"ROTA_CONFIG_DIR": dir, "XDG_DATA_HOME": t.TempDir(), connections.EnvVar("work"): "lin_api_injected"}
-	env := projects.Env{Getenv: func(k string) string { return vars[k] }, Home: func() (string, error) { return t.TempDir(), nil }}
+	env := cfgdir.Env{Getenv: func(k string) string { return vars[k] }, Home: func() (string, error) { return t.TempDir(), nil }}
 	cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"linear","connection":"work","linear":{"team":"ENG"}}}`))
 	if err != nil {
 		t.Fatal(err)

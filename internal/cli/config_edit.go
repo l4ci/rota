@@ -8,10 +8,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -162,7 +162,7 @@ type configStore interface {
 // rootStore is the store on a project's .rota/.
 type rootStore struct {
 	root string
-	env  projects.Env // locates the global config a Reset may fall back to
+	env  cfgdir.Env // locates the global config a Reset may fall back to
 }
 
 func (s rootStore) Rows() ([]cfgRow, error) {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 	}
 	var cfg any
 	if *cfgFile != "" {
-		cfg = config.Load(projects.OSEnv(), *cfgFile)
+		cfg = config.Load(cfgdir.OSEnv(), *cfgFile)
 	}
 	entries, err := config.ResolvedLabels(cfg)
 	if err != nil {

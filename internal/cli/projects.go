@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -101,7 +102,7 @@ func runProjects(c *Ctx, args []string) (Result, error) {
 	if len(ps) == 0 {
 		lines = append(lines, "no projects registered: run rota init in a project")
 	}
-	dir, _ := projects.StateDir(c.deps().projectsEnv())
+	dir, _ := cfgdir.StateDir(c.deps().projectsEnv())
 	data := jsonx.NewObject()
 	data.Set("dir", dir)
 	data.Set("projects", rows)

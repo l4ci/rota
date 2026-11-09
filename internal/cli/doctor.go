@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/agents"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
@@ -20,7 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
@@ -75,10 +75,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}}
 	in.Dir, _ = d.Getwd()
 	in.Home, _ = d.UserHomeDir()
-	if dir, src, warn, err := projects.Resolve(d.projectsEnv()); err == nil {
+	if dir, src, warn, err := cfgdir.Resolve(d.projectsEnv()); err == nil {
 		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
 	}
-	in.StateDir, _ = projects.StateDir(d.projectsEnv())
+	in.StateDir, _ = cfgdir.StateDir(d.projectsEnv())
 	in.ExternalKnowledge = doctorExternalKnowledge(ctx, d, in.Dir, in.Home)
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
 		in.StaleBinary = &f

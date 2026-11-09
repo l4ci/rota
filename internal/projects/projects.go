@@ -31,28 +31,9 @@ type Project struct {
 	Missing              bool
 }
 
-// Env is the process environment the dir lookups read; its definition lives
-// in cfgdir so settings code can take it without importing this registry.
-type Env = cfgdir.Env
-
-// Aliases for callers that predate cfgdir.
-const (
-	SourceOverride = cfgdir.SourceOverride
-	SourceXDG      = cfgdir.SourceXDG
-	SourceDefault  = cfgdir.SourceDefault
-)
-
-var (
-	OSEnv    = cfgdir.OSEnv
-	Resolve  = cfgdir.Resolve
-	Dir      = cfgdir.Dir
-	DataDir  = cfgdir.DataDir
-	StateDir = cfgdir.StateDir
-)
-
 // Temporary reports whether root is in temporary storage, resolving symlinks
 // on both sides and matching whole path components (not just a string prefix).
-func Temporary(env Env, root string) bool {
+func Temporary(env cfgdir.Env, root string) bool {
 	dirs := []string{env.Getenv("TMPDIR"), "/tmp", "/var/folders", "/private/var/folders"}
 	if env.TempDirs != nil {
 		dirs = env.TempDirs()
@@ -74,13 +55,13 @@ const registryName = "projects.json"
 
 // file is the registry path. The first call after an upgrade moves a registry
 // left in the config dir (migrate).
-func file(env Env) (string, error) {
-	d, err := StateDir(env)
+func file(env cfgdir.Env) (string, error) {
+	d, err := cfgdir.StateDir(env)
 	if err != nil {
 		return "", err
 	}
 	path := filepath.Join(d, registryName)
-	if old, err := Dir(env); err == nil {
+	if old, err := cfgdir.Dir(env); err == nil {
 		migrate(filepath.Join(old, registryName), path)
 	}
 	return path, nil
@@ -113,7 +94,7 @@ func migrate(old, path string) {
 // Register adds root to the registry, or refreshes its lastSeen when it is
 // already there. It is keyed by realpath, so a symlinked checkout does not
 // register twice. added says whether the entry is new.
-func Register(env Env, root string, now time.Time) (added bool, err error) {
+func Register(env cfgdir.Env, root string, now time.Time) (added bool, err error) {
 	path, err := file(env)
 	if err != nil {
 		return false, err
@@ -148,7 +129,7 @@ func Register(env Env, root string, now time.Time) (added bool, err error) {
 
 // List returns the registered projects sorted by name then path, with Missing
 // set for a path that is gone. An absent or unreadable registry is empty.
-func List(env Env) ([]Project, error) {
+func List(env cfgdir.Env) ([]Project, error) {
 	path, err := file(env)
 	if err != nil {
 		return nil, err
@@ -189,7 +170,7 @@ func List(env Env) ([]Project, error) {
 // Cleanup drops every entry in temporary storage, gone or no longer holding .rota/,
 // under the registry lock, and returns what it removed (in registry order). An
 // absent registry removes nothing and is not created.
-func Cleanup(env Env) ([]Project, error) {
+func Cleanup(env cfgdir.Env) ([]Project, error) {
 	path, err := file(env)
 	if err != nil {
 		return nil, err
@@ -239,7 +220,7 @@ func Cleanup(env Env) ([]Project, error) {
 // matched as given (made absolute) or by realpath, so a symlinked path or a
 // directory that is already gone still finds its entry. removed is false when
 // nothing matched. An absent registry removes nothing and is not created.
-func Remove(env Env, dir string) ([]Project, error) {
+func Remove(env cfgdir.Env, dir string) ([]Project, error) {
 	path, err := file(env)
 	if err != nil {
 		return nil, err

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -242,7 +242,7 @@ func fakeLease(host string, alive ...int) roundlease.Env {
 }
 
 func startOpts(scope string, pid int, items ...string) StartOpts {
-	set, _ := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(os.TempDir()))) // defaults: no config there
+	set, _ := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(os.TempDir()))) // defaults: no config there
 	// Dispatch tmux: these tests drive tab mode through a fake host.
 	return StartOpts{Scope: scope, Items: items, HolderPID: pid, Settings: set, DefaultNum: 2, Dispatch: "tmux"}
 }

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/fsio"
@@ -30,7 +31,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -938,7 +938,7 @@ func (e Env) WithDefaults() Env {
 // machineOption points a default-built tracker at this machine's connections,
 // as cli's trackerBase does for the production Env.
 func machineOption() tracker.Option {
-	return tracker.WithMachine(projects.OSEnv(), func() connections.Store {
+	return tracker.WithMachine(cfgdir.OSEnv(), func() connections.Store {
 		return connections.OSKeychain(proc.Run, runtime.GOOS)
 	})
 }
