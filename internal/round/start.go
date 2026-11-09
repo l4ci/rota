@@ -226,11 +226,3 @@ func normaliseSlate(items []string) []string {
 	}
 	return out
 }
-
-func strs2any(l []string) []any {
-	out := make([]any, 0, len(l))
-	for _, s := range l {
-		out = append(out, s)
-	}
-	return out
-}

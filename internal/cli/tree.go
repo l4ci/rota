@@ -61,8 +61,8 @@ func noFlags(run RunFunc) func(*flag.FlagSet) RunFunc {
 func versionVerb(fs *flag.FlagSet) RunFunc {
 	drift := fs.Bool("drift", false, "compare the version stamped in .rota/config.json with this binary")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("version takes no arguments")
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		if *drift {
 			return runVersionDrift(c)

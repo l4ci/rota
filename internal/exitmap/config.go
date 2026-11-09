@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // translateConfig maps the config error families in o.Classes. ok is false
@@ -54,21 +55,21 @@ func configRefusal(err error) (any, error, bool) {
 	case errors.As(err, &me):
 		list := []any{}
 		for _, x := range me.Conflicts {
-			list = append(list, jsonObj("file", x.File, "old", x.Old, "new", x.New))
+			list = append(list, jsonx.Obj("file", x.File, "old", x.Old, "new", x.New))
 		}
-		d = jsonObj("blockedBy", blockedby.MergeConflict, "conflicts", list, "changed", false)
+		d = jsonx.Obj("blockedBy", blockedby.MergeConflict, "conflicts", list, "changed", false)
 	case errors.As(err, &ae):
 		list := []any{}
 		for _, x := range ae.Conflicts {
-			list = append(list, jsonObj("file", x.File, "name", x.Name, "dirs", []any{x.A, x.B}))
+			list = append(list, jsonx.Obj("file", x.File, "name", x.Name, "dirs", []any{x.A, x.B}))
 		}
-		d = jsonObj("blockedBy", blockedby.AccountConflict, "conflicts", list, "changed", false)
+		d = jsonx.Obj("blockedBy", blockedby.AccountConflict, "conflicts", list, "changed", false)
 	case errors.As(err, &ce):
 		list := []any{}
 		for _, x := range ce.Conflicts {
-			list = append(list, jsonObj("file", x.File, "from", x.Old, "to", x.New, "fromValue", x.OldValue, "toValue", x.NewValue))
+			list = append(list, jsonx.Obj("file", x.File, "from", x.Old, "to", x.New, "fromValue", x.OldValue, "toValue", x.NewValue))
 		}
-		d = jsonObj("blockedBy", blockedby.ConfigConflict, "conflicts", list, "changed", false)
+		d = jsonx.Obj("blockedBy", blockedby.ConfigConflict, "conflicts", list, "changed", false)
 	default:
 		return nil, nil, false
 	}
