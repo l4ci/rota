@@ -50,6 +50,8 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	}
 
 	docsSegment := "docs"
+	// The tracked layer alone, on purpose: the docs home is what the project
+	// commits, not a per-machine or global override.
 	if cfg, ok := config.Project(root).(*jsonx.Object); ok {
 		if dv, ok := cfg.Get("docs"); ok {
 			if d, ok := dv.(*jsonx.Object); ok {

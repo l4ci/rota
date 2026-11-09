@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func main() {
@@ -20,6 +21,10 @@ func main() {
 	}
 	var cfg any
 	if *cfgFile != "" {
+		if !rotatree.Exists(*cfgFile) {
+			fmt.Fprintf(os.Stderr, "genref: --config %q is not a project root: it holds no %s/\n", *cfgFile, rotatree.DirName)
+			os.Exit(2)
+		}
 		cfg = config.Load(cfgdir.OSEnv(), *cfgFile)
 	}
 	entries, err := config.ResolvedLabels(cfg)
