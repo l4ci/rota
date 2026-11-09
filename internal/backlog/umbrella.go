@@ -454,15 +454,13 @@ func (u *Umbrella) AddComment(ref, kind, text string) (string, error) {
 }
 
 // Claim takes the item for claimID.
-func (u *Umbrella) Claim(ref, claimID string) (ok bool, owner string, err error) {
-	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { ok, owner, e = s.Claim(plain, claimID); return })
-	return
+func (u *Umbrella) Claim(ref, claimID string) (won bool, holder string, err error) {
+	return viaOwner2(u, ref, func(s *Issues, plain string) (bool, string, error) { return s.Claim(plain, claimID) })
 }
 
 // ClaimShared takes the item for claimID among the first holders claims.
-func (u *Umbrella) ClaimShared(ref, claimID string, holders int) (ok bool, owner string, err error) {
-	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { ok, owner, e = s.ClaimShared(plain, claimID, holders); return })
-	return
+func (u *Umbrella) ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error) {
+	return viaOwner2(u, ref, func(s *Issues, plain string) (bool, string, error) { return s.ClaimShared(plain, claimID, holders) })
 }
 
 // Release gives the item back.
@@ -477,20 +475,12 @@ func (u *Umbrella) ReleaseByHand(ref, claimID string) (bool, error) {
 
 // ClaimComments lists the owning tracker's comments on the item.
 func (u *Umbrella) ClaimComments(key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error) {
-	err = u.onOwner(key.Ref(), func(s *Issues, plain string) (e error) {
-		comments, ok, e = s.ClaimComments(key)
-		return
-	})
-	return
+	return viaOwner2(u, key.Ref(), func(s *Issues, _ string) ([]tracker.Comment, bool, error) { return s.ClaimComments(key) })
 }
 
 // ClaimLabelDrift reads the owning tracker's derived claim labels.
 func (u *Umbrella) ClaimLabelDrift(ref string) (add, remove []string, err error) {
-	err = u.onOwner(ref, func(s *Issues, plain string) (e error) {
-		add, remove, e = s.ClaimLabelDrift(plain)
-		return
-	})
-	return
+	return viaOwner2(u, ref, func(s *Issues, plain string) ([]string, []string, error) { return s.ClaimLabelDrift(plain) })
 }
 
 // SyncClaimLabels repairs only the owning tracker's visible claim labels.
@@ -517,8 +507,7 @@ func (u *Umbrella) Status(ref string) (*Status, error) {
 
 // NoteGet returns the item's durable note of a kind.
 func (u *Umbrella) NoteGet(ref, kind string) (text string, ok bool, err error) {
-	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { text, ok, e = s.NoteGet(plain, kind); return })
-	return
+	return viaOwner2(u, ref, func(s *Issues, plain string) (string, bool, error) { return s.NoteGet(plain, kind) })
 }
 
 // NotePut writes the item's durable note.

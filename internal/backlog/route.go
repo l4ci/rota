@@ -30,6 +30,17 @@ func viaOwner[T any](u *Umbrella, ref string, call func(s *Issues, plain string)
 	return out, err
 }
 
+// viaOwner2 is viaOwner for a verb that returns two values.
+func viaOwner2[A, B any](u *Umbrella, ref string, call func(s *Issues, plain string) (A, B, error)) (A, B, error) {
+	var a A
+	var b B
+	err := u.onOwner(ref, func(s *Issues, plain string) (err error) {
+		a, b, err = call(s, plain)
+		return err
+	})
+	return a, b, err
+}
+
 // viaRepo is the per-repo twin: call runs on the --repo sub-repo (perRepo).
 func viaRepo[T any](u *Umbrella, call func(name string, s *Issues) (T, error)) (T, error) {
 	name, s, err := u.perRepo()
