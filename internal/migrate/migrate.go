@@ -436,6 +436,28 @@ func (m *migrator) stepDone(old, step string) error {
 	return m.save()
 }
 
+// step runs one resumable phase step for old: nothing when the map already
+// records it, else desc is announced (and fn run on --apply), the step is
+// persisted after fn succeeds, and a preview marks it in memory so later
+// phases see it as done.
+func (m *migrator) step(old, name, desc string, fn func() error) error {
+	if m.hasStep(old, name) {
+		return nil
+	}
+	if err := m.op(desc, func() error {
+		if err := fn(); err != nil {
+			return err
+		}
+		return m.stepDone(old, name)
+	}); err != nil {
+		return err
+	}
+	if !m.apply {
+		m.addStep(old, name)
+	}
+	return nil
+}
+
 // newIDs is the old ID to new ID mapping of the migrated items.
 func (m *migrator) newIDs() map[string]string {
 	out := map[string]string{}
@@ -552,19 +574,13 @@ func (m *migrator) run() (bool, error) {
 		if m.noMS[mid] {
 			continue
 		}
-		if ms.status != "planned" && !m.hasStep(mid, "status") {
+		if ms.status != "planned" {
 			ms := ms
-			err := m.op(fmt.Sprintf("set milestone %s status %s", mid, ms.status), func() error {
-				if err := m.milestoneStatus(mid, ms.status); err != nil {
-					return err
-				}
-				return m.stepDone(mid, "status")
+			err := m.step(mid, "status", fmt.Sprintf("set milestone %s status %s", mid, ms.status), func() error {
+				return m.milestoneStatus(mid, ms.status)
 			})
 			if err != nil {
 				return false, err
-			}
-			if !m.apply {
-				m.addStep(mid, "status")
 			}
 		}
 	}
@@ -656,29 +672,24 @@ func (m *migrator) run() (bool, error) {
 			kind string
 			text *string
 		}{{"proof", it.proof}, {"design", it.design}, {"plan", it.plan}} {
-			if n.text == nil || pystr.Strip(*n.text) == "" || m.hasStep(old, n.kind) {
+			if n.text == nil || pystr.Strip(*n.text) == "" {
 				continue
 			}
-			body := *n.text
-			if n.kind != "proof" {
-				body = m.rewrite(body, false)
-			}
-			kind := n.kind
-			err := m.op(fmt.Sprintf("note %s on %s", kind, old), func() error {
+			n := n
+			err := m.step(old, n.kind, fmt.Sprintf("note %s on %s", n.kind, old), func() error {
+				body := *n.text
+				if n.kind != "proof" {
+					body = m.rewrite(body, false)
+				}
 				be, err := m.backend()
 				if err != nil {
 					return err
 				}
-				if _, err := be.NotePut(nid, kind, body); err != nil {
-					return err
-				}
-				return m.stepDone(old, kind)
+				_, err = be.NotePut(nid, n.kind, body)
+				return err
 			})
 			if err != nil {
 				return false, err
-			}
-			if !m.apply {
-				m.addStep(old, kind)
 			}
 		}
 		rel := it.fields["Related"]
@@ -700,21 +711,16 @@ func (m *migrator) run() (bool, error) {
 					shown = append(shown, t+" → "+to)
 				}
 				newRel := newRel
-				err := m.op(fmt.Sprintf("rewrite Related on %s: %s", old, strings.Join(shown, ", ")), func() error {
+				err := m.step(old, "related", fmt.Sprintf("rewrite Related on %s: %s", old, strings.Join(shown, ", ")), func() error {
 					be, err := m.backend()
 					if err != nil {
 						return err
 					}
-					if _, err := be.SetField(nid, "related", newRel); err != nil {
-						return err
-					}
-					return m.stepDone(old, "related")
+					_, err = be.SetField(nid, "related", newRel)
+					return err
 				})
 				if err != nil {
 					return false, err
-				}
-				if !m.apply {
-					m.addStep(old, "related")
 				}
 			} else if m.apply {
 				if err := m.stepDone(old, "related"); err != nil {
@@ -728,27 +734,18 @@ func (m *migrator) run() (bool, error) {
 		if m.noMS[mid] {
 			continue
 		}
-		if !m.hasStep(mid, "body") {
-			err := m.op(fmt.Sprintf("set plan body of milestone %s", mid), func() error {
-				if err := m.putMilestone(mid, ms); err != nil {
-					return err
-				}
-				return m.stepDone(mid, "body")
-			})
-			if err != nil {
-				return false, err
-			}
-			if !m.apply {
-				m.addStep(mid, "body")
-			}
+		if err := m.step(mid, "body", fmt.Sprintf("set plan body of milestone %s", mid), func() error {
+			return m.putMilestone(mid, ms)
+		}); err != nil {
+			return false, err
 		}
 		for _, s := range ms.slices {
 			step := "plan:" + s.unit
-			if pystr.Strip(s.text) == "" || m.hasStep(mid, step) {
+			if pystr.Strip(s.text) == "" {
 				continue
 			}
 			s := s
-			err := m.op(fmt.Sprintf("note %s on %s", step, mid), func() error {
+			err := m.step(mid, step, fmt.Sprintf("note %s on %s", step, mid), func() error {
 				be, err := m.backend()
 				if err != nil {
 					return err
@@ -757,16 +754,11 @@ func (m *migrator) run() (bool, error) {
 				if err != nil {
 					return err
 				}
-				if _, err := be.NotePut(is.Key.String(), step, m.rewrite(s.text, true)); err != nil {
-					return err
-				}
-				return m.stepDone(mid, step)
+				_, err = be.NotePut(is.Key.String(), step, m.rewrite(s.text, true))
+				return err
 			})
 			if err != nil {
 				return false, err
-			}
-			if !m.apply {
-				m.addStep(mid, step)
 			}
 		}
 	}

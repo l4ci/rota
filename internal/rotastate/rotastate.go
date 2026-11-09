@@ -58,3 +58,16 @@ func MainCheckout(commonDir string) (string, bool) {
 	}
 	return filepath.Dir(commonDir), true
 }
+
+// MainCheckoutVia is the main work tree of the repository that holds dir, for
+// a main checkout, a linked worktree or a symlinked path alike. ok is false for
+// a bare repository; err is ErrNotRepo outside a repository, or wraps whatever
+// made git fail (git.ErrNoGit when git is missing).
+func MainCheckoutVia(ctx context.Context, run git.Runner, dir string) (string, bool, error) {
+	cd, err := CommonDirVia(ctx, run, dir)
+	if err != nil {
+		return "", false, err
+	}
+	main, ok := MainCheckout(cd)
+	return main, ok, nil
+}
