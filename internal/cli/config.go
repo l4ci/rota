@@ -125,6 +125,10 @@ func configShow(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("unknown config key '%s'", key)
 			}
 			if err != nil {
+				// A corrupt global is the user's file (exit 5); anything else stays internal.
+				if out := configFail(err, exitmap.ConfigCorrupt|exitmap.ConfigInternal); out != err {
+					return Result{}, out
+				}
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 			rows, lines := showRows(entries)

@@ -72,6 +72,12 @@ func SaveGlobal(root, dir string) ([]string, bool, AutonomyMigration, error) {
 	return saved, changed, am, nil
 }
 
+// globalCorrupt is ErrCorrupt for the global config, named by its full path.
+type globalCorrupt struct{ path string }
+
+func (e globalCorrupt) Error() string        { return e.path + " is not a valid JSON object" }
+func (e globalCorrupt) Is(target error) bool { return target == ErrCorrupt }
+
 // LoadGlobal is the global config's values by dotted schema key. A missing
 // file is no values and no error; a file that is not a JSON object is an error
 // (ErrCorrupt), for the caller to warn about. Keys outside the schema, the
@@ -86,7 +92,7 @@ func LoadGlobal(dir string) (map[string]any, error) {
 	}
 	cfg, ok := decodeObject(raw)
 	if !ok {
-		return nil, fmt.Errorf("%s is not a valid JSON object", GlobalPath(dir))
+		return nil, globalCorrupt{GlobalPath(dir)}
 	}
 	vals := map[string]any{}
 	for _, k := range Keys {

@@ -172,9 +172,9 @@ func TestConfigNeedsProjectAndRegisteredRepo(t *testing.T) {
 	}
 }
 
-func TestConfigSetNotObjectIs70(t *testing.T) {
+func TestConfigSetNotObjectIs5(t *testing.T) {
 	root := trackerProject(t, "[1]\n")
-	if code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "docs.path", "x"); code != ExitInternal || !strings.Contains(stderr, "not a JSON object") {
+	if code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "docs.path", "x"); code != ExitUnavailable || !strings.Contains(stderr, "not a JSON object") {
 		t.Errorf("code=%d %s", code, stderr)
 	}
 }
@@ -202,7 +202,7 @@ func TestA9ConfigFill(t *testing.T) {
 		t.Errorf("no .rota: %d", code)
 	}
 	bad := trackerProject(t, "{oops\n")
-	if code, _, stderr := rotaRun(t, "--json", "-C", bad, "config", "fill"); code != ExitInternal || !strings.Contains(stderr, "not a valid JSON object") {
+	if code, _, stderr := rotaRun(t, "--json", "-C", bad, "config", "fill"); code != ExitUnavailable || !strings.Contains(stderr, "not a valid JSON object") {
 		t.Errorf("corrupt: %d %s", code, stderr)
 	}
 }
@@ -381,16 +381,31 @@ func TestConfigShowScope(t *testing.T) {
 	}
 }
 
-// A config.local.json that is not an object is the user's file: exit 70 naming
+// A config.local.json that is not an object is the user's file: exit 5 naming
 // it, without the "bug in rota" hint the unclassified default adds.
-func TestConfigSetLocalNotObjectIs70(t *testing.T) {
+func TestConfigSetLocalNotObjectIs5(t *testing.T) {
 	root := trackerProject(t, "{}\n")
 	write(t, filepath.Join(root, ".rota", "config.local.json"), "[1]\n")
 	code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "--local", "docs.path", "x")
-	if code != ExitInternal || !strings.Contains(stderr, "config.local.json is not a JSON object") {
+	if code != ExitUnavailable || !strings.Contains(stderr, "config.local.json is not a JSON object") {
 		t.Fatalf("code=%d %s", code, stderr)
 	}
 	if strings.Contains(stderr, "bug in rota") {
 		t.Errorf("a corrupt local config is not a rota bug: %s", stderr)
+	}
+}
+
+// A global config that is not an object is the user's file too: exit 5 naming it.
+func TestConfigSetGlobalNotObjectIs5(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", dir)
+	write(t, filepath.Join(dir, "config.json"), "[1]\n")
+	root := trackerProject(t, "{}\n")
+	code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "--global", "round.slots", "2")
+	if code != ExitUnavailable || !strings.Contains(stderr, "global config is not a JSON object") {
+		t.Fatalf("code=%d %s", code, stderr)
+	}
+	if strings.Contains(stderr, "bug in rota") {
+		t.Errorf("a corrupt global config is not a rota bug: %s", stderr)
 	}
 }

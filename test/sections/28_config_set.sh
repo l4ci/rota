@@ -90,10 +90,10 @@ assert d['learn']['verify'] is True, d
   hvj config set autonomy.level auto >/dev/null || { echo "FAIL: missing file"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'autonomy':{'level':'auto'},'rota':{'version':'0.21.0'}}" || { echo "FAIL: missing file content (an autonomy.level set also stamps rota.version, #1488)"; exit 1; }
 
-  # --- A config that is not a JSON object is an internal error (70), file untouched ---
+  # --- A config that is not a JSON object is refused (5), file untouched ---
   echo '[1]' > .rota/config.json
   rc=0; "$ROTA_BIN" config set autonomy.level auto >/dev/null 2>&1 || rc=$?
-  [ "$rc" = 70 ] || { echo "FAIL: non-object config should exit 70, got $rc"; exit 1; }
+  [ "$rc" = 5 ] || { echo "FAIL: non-object config should exit 5, got $rc"; exit 1; }
   [ "$(cat .rota/config.json)" = "[1]" ] || { echo "FAIL: non-object config was rewritten"; exit 1; }
 ) || fail "config set assertions"
 trap 'rm -rf "$TMP"' EXIT
