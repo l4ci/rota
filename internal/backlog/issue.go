@@ -371,8 +371,6 @@ func (b *Issues) closedLines() ([]string, error) {
 	return out, nil
 }
 
-var sectionForLetter = map[string]string{"B": "Bugs", "F": "Features", "T": "Tasks"}
-
 // Markdown renders the backlog as BACKLOG.md-shaped text: the open issues by
 // type, then the newest closedLimit closed ones as Done lines (all when
 // closedLimit is negative, none when 0). The usual caller passes 20.
@@ -402,7 +400,7 @@ func renderBacklog(sections map[string][]string, done []string) string {
 	out := []string{"# Backlog", ""}
 	for _, l := range ItemLetters {
 		bullets := sections[string(l)]
-		out = append(out, "## "+sectionForLetter[string(l)], "")
+		out = append(out, "## "+sectionOfLetter(string(l)), "")
 		out = append(out, bullets...)
 		if len(bullets) > 0 {
 			out = append(out, "")
