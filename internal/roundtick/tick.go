@@ -93,9 +93,12 @@ type Env struct {
 	Stopped bool
 	// StoppedReason is State.StoppedReason: StopVerifyFailed picks ErrBaseRed.
 	StoppedReason string
-	// Observe supplies read-only replacements for adapters that may mutate.
-	// A non-nil value selects observation; missing probes are reported unknown.
-	Observe *ObservationSources
+	// Observe runs the same pass over a read-only world: Reconcile,
+	// ReviewLoop, AwaitingReview and Review.Facts inspect without writing, and
+	// every action is proposed instead of taken. The adapters that execute
+	// (RunGate, RunTrain, Assign, Review.Mint, FollowUp.Start, Audit) are
+	// never called.
+	Observe bool
 	// BaseOverride wins over a recorded target base; Base is the fallback
 	// when the target has none or its registry lookup fails.
 	Base, BaseOverride string
@@ -138,8 +141,9 @@ type Env struct {
 	// toward the idle budget; nil counts every registered slot.
 	Active func() []string
 	// Reconcile applies the safe repairs and returns what it repaired and the
-	// drift it leaves.
-	Reconcile func(ctx context.Context) (repaired, drift []Finding, err error)
+	// drift it leaves. Over a read-only world (Observe) it repairs nothing and
+	// returns the repairs it would make as Proposed.
+	Reconcile func(ctx context.Context) (Inspection, error)
 	// Candidates are the assignable items in backlog order.
 	Candidates func(ctx context.Context) ([]round.Candidate, error)
 	// Assign hands an item to the first idle slot and returns the slot names
@@ -278,7 +282,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		}
 		return Result{}, ErrStopped
 	}
-	r := Result{Observed: e.Observe != nil, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
+	r := Result{Observed: e.Observe, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
 	if r.FailedHeads == nil {
 		r.FailedHeads = map[string]FailedHead{}
 	}
@@ -293,26 +297,17 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		}
 	}
 
-	var repaired, drift []Finding
-	var err error
-	if e.Observe != nil {
-		if e.Observe.Reconcile == nil {
-			r.Unknown = append(r.Unknown, Item{Kind: "reconcile", Target: "round", Why: "repair inspection is unavailable"})
-		} else {
-			var inspection Inspection
-			inspection, err = e.Observe.Reconcile(ctx)
-			drift = inspection.Drift
-			r.Unknown = append(r.Unknown, inspection.Unknown...)
-			for _, f := range inspection.Proposed {
-				r.propose(Action{Action: "reconcile", Target: f.String(), Detail: "safe repair selected", Drift: f.Kind}, "repair prerequisites and result")
-			}
-		}
-	} else {
-		repaired, drift, err = e.Reconcile(ctx)
-	}
+	inspection, err := e.Reconcile(ctx)
 	if err != nil {
 		return r, err
 	}
+	if e.Observe {
+		r.Unknown = append(r.Unknown, inspection.Unknown...)
+	}
+	for _, f := range inspection.Proposed {
+		r.propose(Action{Action: "reconcile", Target: f.String(), Detail: "safe repair selected", Drift: f.Kind}, "repair prerequisites and result")
+	}
+	repaired, drift := inspection.Repaired, inspection.Drift
 	for _, f := range repaired {
 		e.audit(&r, Action{Action: "reconcile", Target: f.String(), Detail: "repaired", Drift: f.Kind})
 	}
@@ -331,15 +326,8 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			}
 			r.NeedsYou = append(r.NeedsYou, Item{Kind: s.State, Target: s.Name, Why: why})
 		case worker.IsDone(s.State) && s.PR != "":
-			reviewLoop := e.ReviewLoop
-			if e.Observe != nil {
-				reviewLoop = e.Observe.ReviewLoop
-				if reviewLoop == nil && e.ReviewLoop != nil {
-					r.Unknown = append(r.Unknown, Item{Kind: "review", Target: s.Name, Why: "review input inspection is unavailable"})
-				}
-			}
-			if reviewLoop != nil {
-				out := reviewLoop(ctx, s)
+			if e.ReviewLoop != nil {
+				out := e.ReviewLoop(ctx, s)
 				if out.Unknown != "" {
 					r.Unknown = append(r.Unknown, Item{Kind: "review", Target: s.Name, Why: out.Unknown})
 				}
@@ -360,16 +348,10 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				}
 			}
 			if e.AwaitingReview != nil {
-				awaiting := e.AwaitingReview
-				if e.Observe != nil {
-					awaiting = e.Observe.AwaitingReview
-					if awaiting == nil {
-						r.Unknown = append(r.Unknown, Item{Kind: "awaiting-review", Target: s.Name, Why: "review readiness inspection is unavailable; landing not proposed"})
-						continue
-					}
+				if e.Observe {
 					r.Unknown = append(r.Unknown, Item{Kind: "awaiting-review", Target: s.Name, Why: "review verdicts read from local records and last-fetched refs; execution fetches and recovers PR verdict reports"})
 				}
-				if why := awaiting(ctx, s, e.targetBase(s.Name)); why != "" {
+				if why := e.AwaitingReview(ctx, s, e.targetBase(s.Name)); why != "" {
 					r.NeedsYou = append(r.NeedsYou, Item{Kind: "awaiting-review", Target: s.Name, Why: why})
 					continue
 				}
@@ -424,7 +406,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			r.New = append(r.New, it)
 		}
 	}
-	if e.Observe != nil {
+	if e.Observe {
 		r.Held, r.FailedHeads, r.Reported, r.Filling = maps.Clone(e.Held), maps.Clone(e.FailedHeads), maps.Clone(e.Reported), maps.Clone(e.Filling)
 		r.New = nil
 		if len(r.Proposed) > 0 {
@@ -659,29 +641,18 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 // review mints the due architecture reviews. A failed mint is the
 // orchestrator's to look at, not a reason to stop the tick's other steps.
 func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
-	var facts func(context.Context) (round.Architecture, bool, error)
-	if e.Observe != nil {
-		facts = e.Observe.ReviewFacts
-		if facts == nil {
-			if e.Review != nil {
-				r.Unknown = append(r.Unknown, Item{Kind: "architecture-review", Target: "round", Why: "architecture facts inspection is unavailable"})
-			}
-			return nil, nil
-		}
-	} else if e.Review != nil {
-		facts = e.Review.Facts
-	} else {
+	if e.Review == nil {
 		return nil, nil
 	}
-	a, ready, err := facts(ctx)
+	a, ready, err := e.Review.Facts(ctx)
 	var ids []string
 	if err == nil {
-		if a.Count < 0 && e.Observe != nil {
+		if a.Count < 0 && e.Observe {
 			r.Unknown = append(r.Unknown, Item{Kind: "architecture-review", Target: "round", Why: a.Unavailable})
 		}
 		if a = round.DecideReview(a, ready); a.Due {
 			r.propose(Action{Action: "mint", Target: strings.Join(a.Areas, ","), Detail: "architecture review: " + a.Trigger}, "item creation and minted IDs")
-			if e.Observe != nil {
+			if e.Observe {
 				r.Unknown = append(r.Unknown, Item{Kind: "assign", Target: "minted reviews", Why: "new review IDs and priority assignments depend on successful minting"})
 			} else {
 				ids, err = e.Review.Mint(ctx, a)
@@ -729,7 +700,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 	}
 	for _, c := range cands {
 		if !c.Ready() || slices.Contains(minted, c.ID) {
-			if e.Observe != nil && !c.Ready() {
+			if e.Observe && !c.Ready() {
 				r.NeedsYou = append(r.NeedsYou, Item{Kind: "candidate-hold", Target: c.ID, Why: "candidate is not ready: " + candidateHold(c)})
 			}
 			continue
@@ -746,7 +717,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 			break
 		}
 		r.propose(Action{Action: "assign", Target: id, Detail: "ready candidate; active idle slot available"}, "claim, slot selection, branch creation and dispatch preflight")
-		if e.Observe != nil {
+		if e.Observe {
 			n--
 			continue
 		}
