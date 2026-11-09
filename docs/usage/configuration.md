@@ -640,7 +640,7 @@ It is never part of the round merge gate: `rota worker gate` and the round merge
 
 ## ship.mergeApproval and ship.mergeApprovalPaths
 
-Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr-merge`, `rota worker gate`) read it, so it binds `/rota-ship`, `/rota-review --queue` and the `/rota-work` gate step at every `autonomy.level`. In a round, `rota worker gate` enforces it; see [parallel rounds](parallel-rounds.md).
+Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr-merge`, `rota worker gate`, `rota worker train`) read it, so it binds `/rota-ship`, `/rota-review --queue` and the `/rota-work` gate step at every `autonomy.level`. In a round, `rota worker gate` and `rota worker train` enforce it; see [parallel rounds](parallel-rounds.md).
 
 | `ship.mergeApproval` | Behavior |
 |-------|----------|
