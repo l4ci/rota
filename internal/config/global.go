@@ -151,7 +151,7 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 	err := updateGlobal(dir, stamp, func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
-			return nil, ErrNotObject
+			return nil, globalNotObject(dir)
 		}
 		saved = saved[:0]
 		for _, k := range Keys {
@@ -168,6 +168,11 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 // ErrGlobalNotObject is SetGlobal's and UnsetGlobal's answer when the global
 // config holds JSON that is not an object.
 var ErrGlobalNotObject = errors.New("the global config is not a JSON object")
+
+// globalNotObject is ErrGlobalNotObject naming the global config under dir.
+func globalNotObject(dir string) error {
+	return fmt.Errorf("%w: %s", ErrGlobalNotObject, GlobalPath(dir))
+}
 
 // ErrProjectOwned is SetGlobal's answer for a key a project owns (see notGlobal).
 var ErrProjectOwned = errors.New("project-owned key, not a global one")
@@ -207,7 +212,7 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return SetResult{}, err
 	}
-	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw,
+	return setAt(GlobalPath(dir), globalNotObject(dir), key, raw,
 		func(path string, def any, mutate func(any) (any, error)) error {
 			return updateGlobal(dir, key == "autonomy.level", mutate)
 		})
@@ -216,7 +221,7 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 // UnsetGlobal removes key from the global config under dir, so projects fall
 // back to the schema default. It reports whether the key was there.
 func UnsetGlobal(dir, key string) (bool, error) {
-	return unsetAt(GlobalPath(dir), ErrGlobalNotObject, key, true)
+	return unsetAt(GlobalPath(dir), globalNotObject(dir), key, true)
 }
 
 // GlobalSupplies is whether the global config under the rota config dir sets

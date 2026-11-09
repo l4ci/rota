@@ -42,7 +42,13 @@ func MayRun(role string, class FenceClass) bool {
 
 // RoleError is a round.role this machine cannot read: Why says what failed
 // and Hint how to fix it. A verb never runs on a guess, so the caller refuses.
-type RoleError struct{ Why, Hint string }
+type RoleError struct {
+	Why, Hint string
+	// Corrupt marks a config.local.json that exists but does not parse or is
+	// not an object: the user's file, which the caller reports as unavailable
+	// (exit 5) rather than a refusal.
+	Corrupt bool
+}
 
 func (e *RoleError) Error() string { return e.Why }
 
@@ -52,15 +58,19 @@ func (e *RoleError) Error() string { return e.Why }
 // and open the fence. load then returns the merged config for MachineRole.
 func SupportMachine(root string, load func(root string) any) (bool, *RoleError) {
 	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {
-		if _, err := jsonx.Decode(raw); err != nil {
-			return false, &RoleError{".rota/config.local.json does not decode: " + err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine"}
+		doc, err := jsonx.Decode(raw)
+		if err != nil {
+			return false, &RoleError{".rota/config.local.json does not decode: " + err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
+		}
+		if _, ok := doc.(*jsonx.Object); !ok {
+			return false, &RoleError{".rota/config.local.json is not a JSON object", "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return false, &RoleError{".rota/config.local.json cannot be read: " + err.Error(), "make .rota/config.local.json readable"}
+		return false, &RoleError{".rota/config.local.json cannot be read: " + err.Error(), "make .rota/config.local.json readable", false}
 	}
 	role, err := MachineRole(load(root))
 	if err != nil {
-		return false, &RoleError{err.Error(), "set round.role to main or support: rota config set round.role main"}
+		return false, &RoleError{err.Error(), "set round.role to main or support: rota config set round.role main", false}
 	}
 	return role == RoleSupport, nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -402,10 +403,45 @@ func TestConfigSetGlobalNotObjectIs5(t *testing.T) {
 	write(t, filepath.Join(dir, "config.json"), "[1]\n")
 	root := trackerProject(t, "{}\n")
 	code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "--global", "round.slots", "2")
-	if code != ExitUnavailable || !strings.Contains(stderr, "global config is not a JSON object") {
+	if code != ExitUnavailable || !strings.Contains(stderr, "global config is not a JSON object") || !strings.Contains(stderr, filepath.Join(dir, "config.json")) {
 		t.Fatalf("code=%d %s", code, stderr)
 	}
 	if strings.Contains(stderr, "bug in rota") {
 		t.Errorf("a corrupt global config is not a rota bug: %s", stderr)
+	}
+}
+
+// #2924 AC-1: a project or local config that does not parse, or is not an
+// object, exits 5 naming the file from the verbs that read or write it, and a
+// writer leaves the file as it found it.
+func TestConfigUnreadableLayerIs5(t *testing.T) {
+	for _, layer := range []string{"config.json", "config.local.json"} {
+		for _, body := range []string{"{oops", "[]"} {
+			for _, args := range [][]string{
+				{"config", "set", "docs.path", "x"},
+				{"config", "set", "--local", "docs.path", "x"},
+				{"config", "show"},
+				{"config", "show", "docs.path"},
+				{"config", "show", "--local"},
+			} {
+				t.Run(layer+" "+body+" "+strings.Join(args, " "), func(t *testing.T) {
+					t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
+					root := trackerProject(t, "{}\n")
+					path := filepath.Join(root, ".rota", layer)
+					write(t, path, body)
+					code, _, stderr := rotaRun(t, append([]string{"--json", "-C", root}, args...)...)
+					// set/show --local never read the project file.
+					if layer == "config.json" && slices.Contains(args, "--local") {
+						return
+					}
+					if code != ExitUnavailable || !strings.Contains(stderr, layer) || strings.Contains(stderr, "bug in rota") {
+						t.Fatalf("code=%d, want 5 naming %s: %s", code, layer, stderr)
+					}
+					if got, _ := os.ReadFile(path); string(got) != body {
+						t.Errorf("file was rewritten: %q", got)
+					}
+				})
+			}
+		}
 	}
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+- **A corrupt or non-object config file exits 5, not 70.** A `.rota/config.json`, `.rota/config.local.json` or global config that does not parse, or holds JSON other than an object, is the user's file: the verbs that read it exit 5 naming the file, with no "bug in rota" hint. `config set` now refuses such a file instead of overwriting it, and merged `config show` exits 5 for a bad project or local file (a bad global one is still skipped with a warning) (#2924).
+
 ## v0.32.0 — 2026-11-07
 
 Train cancel and stop-on-fail, autopilot preview and human follow-ups, a test audit and versioned team prompt overrides.
