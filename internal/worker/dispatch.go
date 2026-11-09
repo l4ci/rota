@@ -724,7 +724,7 @@ func arrangeNew(ctx context.Context, h host.Host, root string, cfg HostConfig) s
 	if l == nil || reg.Layout() != layout.Split {
 		return ""
 	}
-	a, err := ArrangeRound(ctx, l, h.Capabilities(), cfg, root, layout.Split, reg.CLIPane(), reg)
+	a, err := ArrangeRound(ctx, h.Capabilities(), cfg, root, layout.Split, reg.CLIPane(), reg)
 	if err == nil {
 		err = a.RecordErr
 	}
@@ -782,13 +782,21 @@ func (e ConfigError) Unwrap() error { return e.Err }
 // round.herdrGroupSlots fails before any pane moves. The workspaces are
 // recorded even after a failed move, since slots that moved before the
 // failure must not keep stale ids.
-func ArrangeRound(ctx context.Context, l host.Layouter, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry) (Arranged, error) {
+func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry) (Arranged, error) {
+	l := caps.Layouter
+	if l == nil {
+		return Arranged{}, fmt.Errorf("host cannot arrange panes")
+	}
 	group, err := GroupSlots(cfg, caps)
 	if err != nil {
 		return Arranged{}, ConfigError{err}
 	}
+	var linked host.LinkedLayouter
+	if group {
+		linked = caps.LinkedLayouter
+	}
 	a := Arranged{Grouped: group}
-	a.State, a.Result, a.Found, err = layout.Arrange(ctx, l, root, mode, cli, LiveWorkers(ctx, l, reg), group)
+	a.State, a.Result, a.Found, err = layout.Arrange(ctx, l, linked, root, mode, cli, LiveWorkers(ctx, l, reg))
 	if group && a.Found {
 		a.RecordErr = RecordWorkspaces(ctx, l, root, cli)
 	}
