@@ -37,8 +37,8 @@ func setLedgerData(d *jsonx.Object, excluded, expired []testledger.Entry) {
 // testLedgerCheck is `rota test ledger check`: the gate's own reading of
 // .rota/test-ledger.json, without running anything.
 func testLedgerCheck(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("unexpected argument %q", args[0])
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	root, err := c.Root()
 	if err != nil {

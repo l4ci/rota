@@ -598,8 +598,8 @@ func workerPromptCheck(fs *flag.FlagSet) RunFunc {
 		if asked {
 			return Result{}, Usage("blocked: prompt-check does not take --json: stdout belongs to Codex")
 		}
-		if len(args) > 0 {
-			return Result{}, Usage("blocked: prompt-check takes no arguments")
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		if *keyPath == "" {
 			return Result{}, Usage("blocked: --key is required")
