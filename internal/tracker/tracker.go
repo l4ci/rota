@@ -559,6 +559,33 @@ func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts .
 	return a, nil
 }
 
+// ownTrackers is the one list of issues.source values that name a tracker of
+// their own (not a forge); each builds it from issues.connection. A builder
+// never returns a nil pointer inside a non-nil IssueTracker.
+var ownTrackers = map[string]func(context.Context, *CLI, Settings) (IssueTracker, error){
+	config.SourceJira: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
+		t, err := newJiraTracker(ctx, c, s)
+		if err != nil {
+			return nil, err
+		}
+		return t, nil
+	},
+	config.SourceLinear: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
+		t, err := newLinearTracker(ctx, c, s)
+		if err != nil {
+			return nil, err
+		}
+		return t, nil
+	},
+	config.SourceItsaplan: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
+		t, err := newItsaplanTracker(ctx, c, s)
+		if err != nil {
+			return nil, err
+		}
+		return t, nil
+	},
+}
+
 // NewIssueTracker returns the issue tracker for source ("" falls back to
 // s.Source). file is ErrNoIssueTracker; jira and linear are the HTTP adapters
 // of issues.connection; github and gitlab build their adapter whatever the
@@ -571,27 +598,12 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		source = s.Source
 	}
 	provider := source
+	if build, ok := ownTrackers[source]; ok {
+		return build(ctx, newCLI(s, dir, opts...), s)
+	}
 	switch source {
 	case config.SourceFile, "":
 		return nil, ErrNoIssueTracker
-	case config.SourceJira:
-		j, err := newJiraTracker(ctx, newCLI(s, dir, opts...), s)
-		if err != nil {
-			return nil, err // never a nil *Jira inside a non-nil IssueTracker
-		}
-		return j, nil
-	case config.SourceLinear:
-		l, err := newLinearTracker(ctx, newCLI(s, dir, opts...), s)
-		if err != nil {
-			return nil, err // never a nil *Linear inside a non-nil IssueTracker
-		}
-		return l, nil
-	case config.SourceItsaplan:
-		t, err := newItsaplanTracker(ctx, newCLI(s, dir, opts...), s)
-		if err != nil {
-			return nil, err // never a nil *Itsaplan inside a non-nil IssueTracker
-		}
-		return t, nil
 	case config.SourceIssues:
 		provider = config.ForgeAuto
 	case config.SourceForge:
@@ -630,15 +642,6 @@ func dirLabel(dir string) string {
 		return "the working directory"
 	}
 	return dir
-}
-
-// NewFromConfig is New with the settings read from cfg (SettingsFromConfig),
-// the recipe every verb that holds a loaded config repeats.
-func NewFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
-	if err := ValidateConfig(cfg); err != nil {
-		return nil, err
-	}
-	return New(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
 }
 
 // NewIssueTrackerFromConfig is NewIssueTracker with the settings read from cfg.
@@ -968,24 +971,25 @@ func (r rawMilestone) norm(number int) Milestone {
 }
 
 // IssueActor is the one decision of which tracker serves an upstream issue
-// write (label, close): Source names it, Adapter builds it.
+// write (label, close): Source names it, Adapter builds it. The zero value
+// is no decision and builds nothing.
 type IssueActor struct {
 	// Source is jira, linear or itsaplan (issues.source's own tracker), or
 	// github or gitlab (the forge the issues live on).
 	Source string
-	s      Settings
-	dir    string
-	opts   []Option
+	build  func(context.Context) (IssueTracker, error)
 }
 
-// ResolveIssueActor decides the tracker for issues.source in dir. jira,
-// linear and itsaplan name their own tracker; github and gitlab name the
-// forge outright; any other source takes dir's forge as ForgeActor resolves
-// it. A local forge is ErrNoIssueActor.
+// ResolveIssueActor decides the tracker for issues.source in dir: a source in
+// ownTrackers names its own tracker, github and gitlab name the forge
+// outright, any other source takes dir's forge as ForgeActor resolves it. A
+// local forge is ErrNoIssueActor. The adapter kind is recorded here, not
+// re-derived from Source.
 func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Option) (IssueActor, error) {
-	switch s.Source {
-	case config.SourceJira, config.SourceLinear, config.SourceItsaplan:
-		return IssueActor{Source: s.Source, s: s, dir: dir, opts: opts}, nil
+	if build, ok := ownTrackers[s.Source]; ok {
+		return IssueActor{Source: s.Source, build: func(ctx context.Context) (IssueTracker, error) {
+			return build(ctx, newCLI(s, dir, opts...), s)
+		}}, nil
 	}
 	r, err := IssueProvider(ctx, s, ForgeActor, dir, opts...)
 	if err != nil {
@@ -994,7 +998,9 @@ func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Opti
 	if r.Provider == ProviderLocal {
 		return IssueActor{}, ErrNoIssueActor
 	}
-	return IssueActor{Source: r.Provider, s: s, dir: dir, opts: opts}, nil
+	return IssueActor{Source: r.Provider, build: func(ctx context.Context) (IssueTracker, error) {
+		return New(ctx, s, r.Provider, dir, opts...)
+	}}, nil
 }
 
 // IssueProvider is the forge provider of the issues in dir: an issues.source
@@ -1007,13 +1013,13 @@ func IssueProvider(ctx context.Context, s Settings, kind ForgeKind, dir string, 
 	return newCLI(s, dir, opts...).resolveForge(ctx, kind, "", s.Provider)
 }
 
-// Adapter builds the tracker ResolveIssueActor chose.
+// Adapter builds the tracker ResolveIssueActor chose; the zero IssueActor
+// refuses rather than resolving from the working directory.
 func (a IssueActor) Adapter(ctx context.Context) (IssueTracker, error) {
-	switch a.Source {
-	case config.SourceJira, config.SourceLinear, config.SourceItsaplan:
-		return NewIssueTracker(ctx, a.s, a.Source, a.dir, a.opts...)
+	if a.build == nil {
+		return nil, internal("IssueActor has no resolved tracker")
 	}
-	return New(ctx, a.s, a.Source, a.dir, a.opts...)
+	return a.build(ctx)
 }
 
 // ErrNoIssueActor: issues.source names no tracker and the forge is local.

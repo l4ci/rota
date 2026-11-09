@@ -473,3 +473,40 @@ func TestNewEnvParsesSettingsOnce(t *testing.T) {
 		t.Errorf("second read re-parsed: %+v %v", s, err)
 	}
 }
+
+// An explicit issues.source of github or gitlab wins over an origin naming the
+// other forge, for label and close alike.
+func TestSourceWinsOverOrigin(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct{ source, origin, cli string }{
+		{"gitlab", gh, "glab"},
+		{"github", gl, "gh"},
+	} {
+		f := &forge{origin: c.origin, reply: map[string]reply{
+			"issue view": {out: `{"labels": [{"name": "x"}], "state": "open"}`},
+			"api":        {out: `{"labels": [{"name": "x"}], "state": "open"}`},
+			"label list": {out: `[{"name": "x"}]`},
+		}}
+		env := f.env(t)
+		cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"` + c.source + `"}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		env.Config = cfg
+		if _, err := Label(ctx, env, "", tracker.NumKey(3), "x", true, false); err != nil {
+			t.Fatalf("%s label: %v", c.source, err)
+		}
+		dir, sha := gitProject(t)
+		if _, err := Close(ctx, env, dir, tracker.NumKey(3), sha, ""); err != nil {
+			t.Fatalf("%s close: %v", c.source, err)
+		}
+		for _, call := range f.calls {
+			if !strings.HasPrefix(call, c.cli+" ") {
+				t.Errorf("source %s origin %s: ran %q, want only %s", c.source, c.origin, call, c.cli)
+			}
+		}
+		if len(f.calls) == 0 {
+			t.Errorf("source %s: no forge call", c.source)
+		}
+	}
+}
