@@ -68,11 +68,9 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 	} else {
 		reg := LoadRegistryTolerant(root)
 		if !reg.Exists {
-			if common, err := rotastate.CommonDirVia(ctx, o.Git, root); err == nil {
-				if main, ok := rotastate.MainCheckout(common); ok && main != root {
-					root = main
-					reg = LoadRegistryTolerant(root)
-				}
+			if main, ok, err := rotastate.MainCheckoutVia(ctx, o.Git, root); err == nil && ok && main != root {
+				root = main
+				reg = LoadRegistryTolerant(root)
 			}
 		}
 		if key, ok := BranchIssue(o.Branch); ok {

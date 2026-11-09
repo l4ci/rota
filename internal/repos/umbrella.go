@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -102,14 +103,14 @@ func within(path, dir string) bool {
 // through git's common dir. The registry is the one of the umbrella that
 // FindUmbrella resolves from cwd.
 func Which(cwd string) (Repo, error) {
-	common, ok, err := git.CommonDirVia(context.Background(), git.Exec, cwd)
+	sub, ok, err := rotastate.MainCheckoutVia(context.Background(), git.Exec, cwd)
 	if errors.Is(err, git.ErrNoGit) {
 		return Repo{}, ErrGitMissing
 	}
 	if err != nil || !ok {
 		return Repo{}, ErrNotGit
 	}
-	sub := Realpath(filepath.Dir(common))
+	sub = Realpath(sub)
 	umb, err := FindUmbrella(cwd)
 	if err != nil {
 		return Repo{}, err
