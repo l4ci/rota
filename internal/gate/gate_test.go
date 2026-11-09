@@ -144,7 +144,7 @@ func TestClearAppends(t *testing.T) {
 
 // TestMergePolicyCoversPinsEntrySemantics pins how ship.mergeApprovalPaths
 // entries match: equal, under a directory, or path.Match against the whole path.
-// "**" is not a recursive wildcard there (separate decision), it acts as "*".
+// "**" as a whole segment matches any number of directories.
 func TestMergePolicyCoversPinsEntrySemantics(t *testing.T) {
 	for _, c := range []struct {
 		entry, file string
@@ -158,7 +158,10 @@ func TestMergePolicyCoversPinsEntrySemantics(t *testing.T) {
 		{"*.lock", "sub/go.lock", false},
 		{"internal/*/gate.go", "internal/cli/gate.go", true},
 		{"docs/**", "docs/a.md", true},
-		{"docs/**", "docs/a/b.md", false},
+		{"docs/**", "docs/a/b.md", true},
+		{"migrations/**", "migrations/v2/a.sql", true},
+		{"**/gate.go", "internal/cli/gate.go", true},
+		{"migrations/**", "other/a.sql", false},
 		{"", "a", false},
 	} {
 		p := MergePolicy{Mode: MergePaths, Paths: []string{c.entry}}

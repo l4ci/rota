@@ -205,7 +205,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `ship.qa` | taste (tracked) | bool | `false` |  | Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR. |
 | `ship.uat` | taste (tracked) | bool | `false` |  | Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate. |
 | `ship.mergeApproval` | project (tracked) | enum | `"none"` | `none`, `all`, `paths` | Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level. |
-| `ship.mergeApprovalPaths` | project (tracked) | list | `[]` |  | Repo-relative paths or globs that need human approval when ship.mergeApproval is paths. |
+| `ship.mergeApprovalPaths` | project (tracked) | list | `[]` |  | Repo-relative paths or globs that need human approval when ship.mergeApproval is paths. ** matches any number of directories. |
 
 ### qa
 
