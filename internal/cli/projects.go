@@ -17,9 +17,9 @@ import (
 // `rota init` fills. Listing is read-only; `cleanup` prunes stale entries. Both
 // run without a project root.
 func projectsCommand() *Command {
-	return &Command{Name: "projects", Summary: "list the rota projects registered on this machine", Verb: noFlags(runProjects), Subs: []*Command{
-		{Name: "cleanup", Summary: "drop temporary projects and entries whose directory is gone or no longer holds .rota/", Verb: noFlags(runProjectsCleanup)},
-		{Name: "remove", Summary: "drop one registry entry by directory; the directory itself stays", Verb: noFlags(runProjectsRemove)},
+	return &Command{Name: "projects", Fence: fenceAllowed, Summary: "list the rota projects registered on this machine", Verb: noFlags(runProjects), Subs: []*Command{
+		{Name: "cleanup", Fence: fenceAllowed, Summary: "drop temporary projects and entries whose directory is gone or no longer holds .rota/", Verb: noFlags(runProjectsCleanup)},
+		{Name: "remove", Fence: fenceAllowed, Summary: "drop one registry entry by directory; the directory itself stays", Verb: noFlags(runProjectsRemove)},
 	}, View: projectsView}
 }
 

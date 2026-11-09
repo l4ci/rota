@@ -27,10 +27,10 @@ import (
 func issuesCommands() []*Command {
 	return []*Command{
 		{Name: "issues", Summary: "upstream issues on GitHub or GitLab", Subs: []*Command{
-			{Name: "label", Summary: "add or remove a label on an upstream issue", Repo: true, Verb: issuesLabel},
-			{Name: "imported", Summary: "backlog items that point at upstream issues", Verb: issuesImported},
-			{Name: "close", Summary: "close an upstream issue naming the shipping commit", Repo: true, Verb: issuesClose},
-			{Name: "provider", Summary: "github, gitlab or unknown for the origin remote", Repo: true, Verb: issuesProvider},
+			{Name: "label", Fence: fenceAllowed, Summary: "add or remove a label on an upstream issue", Repo: true, Verb: issuesLabel},
+			{Name: "imported", Fence: fenceAllowed, Summary: "backlog items that point at upstream issues", Verb: issuesImported},
+			{Name: "close", Fence: fenceAllowed, Summary: "close an upstream issue naming the shipping commit", Repo: true, Verb: issuesClose},
+			{Name: "provider", Fence: fenceAllowed, Summary: "github, gitlab or unknown for the origin remote", Repo: true, Verb: issuesProvider},
 		}},
 	}
 }

@@ -14,9 +14,9 @@ import (
 // glossaryCommands is the `rota glossary` group (A5, #49).
 func glossaryCommands() *Command {
 	return &Command{Name: "glossary", Summary: "terms in the ## Glossary of KNOWLEDGE.md", Subs: []*Command{
-		{Name: "read", Summary: "print term entries", Repo: true, Verb: glRead},
-		{Name: "write", Summary: "add or update one term", Repo: true, Verb: glWrite},
-		{Name: "import", Summary: "add many terms atomically", Repo: true, Verb: glImport},
+		{Name: "read", Fence: fenceAllowed, Summary: "print term entries", Repo: true, Verb: glRead},
+		{Name: "write", Fence: fenceRefused, Summary: "add or update one term", Repo: true, Verb: glWrite},
+		{Name: "import", Fence: fenceRefused, Summary: "add many terms atomically", Repo: true, Verb: glImport},
 	}}
 }
 
@@ -103,7 +103,7 @@ var blockKeyRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // blockCommand is `rota block <key>` and `rota block skills`.
 func blockCommand() *Command {
-	return &Command{Name: "block", Summary: "regenerate a managed block in the instructions file", Repo: true, Verb: blockVerb}
+	return &Command{Name: "block", Fence: fenceRefused, Summary: "regenerate a managed block in the instructions file", Repo: true, Verb: blockVerb}
 }
 
 func blockVerb(fs *flag.FlagSet) RunFunc {
@@ -168,7 +168,7 @@ func blockVerb(fs *flag.FlagSet) RunFunc {
 
 func instructionsCommands() *Command {
 	return &Command{Name: "instructions", Summary: "project instructions files", Subs: []*Command{
-		{Name: "init", Summary: "make AGENTS.md the instructions file, CLAUDE.md its importer", Verb: noFlags(instructionsInit)},
+		{Name: "init", Fence: fenceRefused, Summary: "make AGENTS.md the instructions file, CLAUDE.md its importer", Verb: noFlags(instructionsInit)},
 	}}
 }
 

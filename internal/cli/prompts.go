@@ -13,11 +13,11 @@ import (
 
 func promptsCommands() *Command {
 	return &Command{Name: "prompts", Summary: "version team reporting overrides", Subs: []*Command{
-		{Name: "list", Summary: "list reporting sections and upstream status", Verb: promptsList},
-		{Name: "show", Summary: "inspect effective content, baselines and revision history: rota prompts show <section>", Verb: promptsShow},
-		{Name: "save", Summary: "save a reporting override against an expected revision: rota prompts save <section> --expect <n> --body-file <path|->", Verb: promptsSave},
-		{Name: "adopt", Summary: "follow the current built-in default, keeping the history: rota prompts adopt <section> --expect <n>", Verb: promptsAdopt},
-		{Name: "restore", Summary: "restore an earlier revision as a new one: rota prompts restore <section> --expect <n> --revision <r>", Verb: promptsRestore},
+		{Name: "list", Fence: fenceAllowed, Summary: "list reporting sections and upstream status", Verb: promptsList},
+		{Name: "show", Fence: fenceAllowed, Summary: "inspect effective content, baselines and revision history: rota prompts show <section>", Verb: promptsShow},
+		{Name: "save", Fence: fenceRefused, Summary: "save a reporting override against an expected revision: rota prompts save <section> --expect <n> --body-file <path|->", Verb: promptsSave},
+		{Name: "adopt", Fence: fenceRefused, Summary: "follow the current built-in default, keeping the history: rota prompts adopt <section> --expect <n>", Verb: promptsAdopt},
+		{Name: "restore", Fence: fenceRefused, Summary: "restore an earlier revision as a new one: rota prompts restore <section> --expect <n> --revision <r>", Verb: promptsRestore},
 	}}
 }
 

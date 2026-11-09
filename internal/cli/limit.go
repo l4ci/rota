@@ -32,8 +32,8 @@ import (
 
 func limitCommands() *Command {
 	return &Command{Name: "limit", Summary: "usage limits: sleep until the reset or switch accounts", Subs: []*Command{
-		{Name: "watch", Summary: "watch the orchestrator and the slots for a usage limit and handle it", Verb: limitWatch},
-		{Name: "status", Summary: "show the usage-limit log", Verb: noFlags(limitStatus)},
+		{Name: "watch", Fence: fenceAllowed, Summary: "watch the orchestrator and the slots for a usage limit and handle it", Verb: limitWatch},
+		{Name: "status", Fence: fenceAllowed, Summary: "show the usage-limit log", Verb: noFlags(limitStatus)},
 	}}
 }
 
