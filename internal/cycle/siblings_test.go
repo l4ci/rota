@@ -2,7 +2,7 @@ package cycle
 
 import "testing"
 
-func TestIsSibling(t *testing.T) {
+func TestClassify(t *testing.T) {
 	tracked := func(p string) bool { return p == "Foo.gd" || p == "src/main.go" || p == "App.swift" }
 	for _, c := range []struct {
 		path string
@@ -31,14 +31,11 @@ func TestIsSibling(t *testing.T) {
 		if got := Classify(c.path, tracked, []string{"B07"}); got != c.want {
 			t.Errorf("Classify(%q) = %v, want %v", c.path, got, c.want)
 		}
-		if got := IsSibling(c.path, tracked, []string{"B07"}); got != (c.want != User) {
-			t.Errorf("IsSibling(%q) = %v", c.path, got)
-		}
 	}
 }
 
-func TestIsSiblingNilTracked(t *testing.T) {
-	if IsSibling("Foo.gd.import", nil, nil) {
-		t.Fatal("nothing is tracked: not a sibling")
+func TestClassifyNilTracked(t *testing.T) {
+	if got := Classify("Foo.gd.import", nil, nil); got != User {
+		t.Fatalf("nothing is tracked: Classify = %v, want User", got)
 	}
 }
