@@ -207,16 +207,13 @@ func TestSupportConfigSetTrackedKeyRefused(t *testing.T) {
 }
 
 // A config.local.json that does not decode must not read as role main: the
-// fence refuses instead of opening.
+// fence stops instead of opening, with exit 5 for the user's file (#2924).
 func TestSupportFenceRefusesMalformedLocalConfig(t *testing.T) {
 	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
 	writeLocalConfig(t, root, `{"round":{"role":"support"`+"\n")
 	code, env, _ := rotaRun(t, "--json", "-C", root, "worker", "gate", "ben")
-	if code != ExitRefused {
-		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
-	}
-	if got := envObj(env, "data")["blockedBy"]; got != "config" {
-		t.Errorf("blockedBy = %v", got)
+	if code != ExitUnavailable {
+		t.Fatalf("exit %d, want %d: %v", code, ExitUnavailable, env)
 	}
 	msg, _ := envObj(env, "error")["message"].(string)
 	if !strings.Contains(msg, "config.local.json") {
