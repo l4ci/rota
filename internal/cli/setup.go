@@ -10,12 +10,12 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
@@ -439,7 +439,7 @@ func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs m
 		defs[p.Key] = p.DefaultChoice()
 	}
 	globals := map[string]string{}
-	gdir, err := projects.Dir(c.deps().projectsEnv())
+	gdir, err := cfgdir.Dir(c.deps().projectsEnv())
 	var vals map[string]any
 	if err == nil {
 		vals, err = config.LoadGlobal(gdir)
@@ -507,8 +507,8 @@ func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs m
 
 // loadGlobalValues is the global config's values. ok is false when the dir or
 // file cannot be read or parsed; a missing file is ok with no values.
-func loadGlobalValues(env projects.Env) (vals map[string]any, ok bool) {
-	dir, err := projects.Dir(env)
+func loadGlobalValues(env cfgdir.Env) (vals map[string]any, ok bool) {
+	dir, err := cfgdir.Dir(env)
 	if err != nil {
 		return nil, false
 	}
@@ -536,12 +536,12 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 	return out
 }
 
-func saveGlobalAnswers(env projects.Env, cands []config.Prompt, answers map[string]string) ([]string, error) {
+func saveGlobalAnswers(env cfgdir.Env, cands []config.Prompt, answers map[string]string) ([]string, error) {
 	vals := map[string]any{}
 	for _, p := range cands {
 		vals[p.Key] = config.Coerce(answers[p.Key])
 	}
-	dir, err := projects.Dir(env)
+	dir, err := cfgdir.Dir(env)
 	if err != nil {
 		return nil, Resolution("%v", err)
 	}

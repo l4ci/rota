@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // cfgOf is the parsed project config for a JSON document.
@@ -19,7 +19,7 @@ func cfgOf(t *testing.T, doc string) any {
 			t.Fatal(err)
 		}
 	}
-	return config.Load(projects.OSEnv(), p)
+	return config.Load(cfgdir.OSEnv(), p)
 }
 
 func fixture(t *testing.T, name string) string {

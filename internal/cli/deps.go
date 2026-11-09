@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
@@ -27,7 +28,6 @@ import (
 	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -301,8 +301,8 @@ func (d *Deps) Repo(dir string) git.Repo {
 
 // projectsEnv is the environment the global dir lookups read: Deps.Getenv and
 // Deps.UserHomeDir, so nothing under internal/projects reads the process.
-func (d *Deps) projectsEnv() projects.Env {
-	return projects.Env{Getenv: d.Getenv, Home: d.UserHomeDir, TempDirs: d.TempDirs}
+func (d *Deps) projectsEnv() cfgdir.Env {
+	return cfgdir.Env{Getenv: d.Getenv, Home: d.UserHomeDir, TempDirs: d.TempDirs}
 }
 
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the

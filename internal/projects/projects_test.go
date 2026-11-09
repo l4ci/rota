@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/repos"
 )
 
 // isolate returns a temp root and an Env whose config and state dirs live
 // under it; HOME is a dir of its own, so nothing reads the real one.
-func isolate(t *testing.T) (string, Env) {
+func isolate(t *testing.T) (string, cfgdir.Env) {
 	t.Helper()
 	x := t.TempDir()
 	return x, fakeEnv(map[string]string{
@@ -251,8 +252,8 @@ func TestMigrationKeepsTheStateRegistryWhenBothExist(t *testing.T) {
 	}
 }
 
-func fakeEnv(vars map[string]string, home string) Env {
-	return Env{
+func fakeEnv(vars map[string]string, home string) cfgdir.Env {
+	return cfgdir.Env{
 		Getenv: func(k string) string { return vars[k] },
 		Home: func() (string, error) {
 			if home == "" {
