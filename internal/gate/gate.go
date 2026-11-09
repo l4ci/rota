@@ -253,7 +253,7 @@ func (p MergePolicy) Covers(changed []string) (bool, []string) {
 		hit := []string{}
 		for _, f := range changed {
 			for _, e := range p.Paths {
-				if pathglob.MatchEntryFlat(e, f) {
+				if pathglob.MatchEntry(e, f) {
 					hit = append(hit, f)
 					break
 				}
