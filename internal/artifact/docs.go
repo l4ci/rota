@@ -118,6 +118,27 @@ type NoteDocs struct {
 	Open func(key string) (slot NoteSlot, what string, err error)
 }
 
+// CreateNote stores text in an empty slot, refusing (exit 4) when it holds
+// one. kind and what name the note in the error.
+func CreateNote(kind string, slot NoteSlot, what, text string) error {
+	if _, ok, err := slot.Get(); err != nil {
+		return err
+	} else if ok {
+		return exitcode.Errf(exitcode.ExitRefused, "%s note for %s already exists", kind, what)
+	}
+	_, err := slot.Put(text)
+	return err
+}
+
+// Create stores a new note under key, refusing (exit 4) when it exists.
+func (d NoteDocs) Create(key, text string) error {
+	slot, what, err := d.Open(key)
+	if err != nil {
+		return err
+	}
+	return CreateNote(d.Kind, slot, what, text)
+}
+
 // Read adds the newline the old helper printed after a note.
 func (d NoteDocs) Read(key string) (string, error) {
 	slot, what, err := d.Open(key)
