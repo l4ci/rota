@@ -102,7 +102,11 @@ func ScanImported(root, forRepo string) []Imported {
 	}
 	scanFile("BACKLOG.md", "open", true)
 	scanFile("ARCHIVE.md", "archived", false)
-	for _, sub := range []string{"bugs", "features", "tasks"} {
+	for _, ty := range Types {
+		sub := ty.Kind
+		if sub == "" {
+			continue
+		}
 		entries, err := os.ReadDir(filepath.Join(rota, sub))
 		if err != nil {
 			continue

@@ -663,7 +663,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 	f.syncMilestonesIf(tagged)
 	// Mirror Complete's bump in reverse; tasks and refactor commits carry no
 	// count, and a hash git cannot resolve is skipped.
-	if dirName != "tasks" {
+	if t, _ := TypeByKind(dirName); t.Countable {
 		if subj, ok := f.git("log", "-1", "--format=%s", doneHash); ok && !refactorSubject.MatchString(subj) {
 			if err := f.bumpSinceRefactor(dirName, -1); err != nil {
 				return true, err
