@@ -4,6 +4,7 @@ package spike
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	gitx "github.com/l4ci/rota/internal/git"
@@ -36,13 +37,17 @@ func checkName(name string) error {
 
 func file(root, name string) string { return rotatree.Doc(root, rotatree.SpikesDir, name) }
 
-func git(dir string, args ...string) error {
-	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
+// git runs args in dir through run (gitx.Exec when nil).
+func git(run gitx.Runner, dir string, args ...string) error {
+	res, err := gitx.Repo{Dir: dir, Runner: run}.Run(context.Background(), args...)
 	if err != nil {
 		return err
 	}
 	if res.ExitCode != 0 {
-		return fmt.Errorf("exit status %d", res.ExitCode)
+		if msg := strings.TrimSpace(res.Stderr); msg != "" {
+			return errors.New(msg)
+		}
+		return fmt.Errorf("git %s: exit status %d", strings.Join(args, " "), res.ExitCode)
 	}
 	return nil
 }
@@ -50,14 +55,14 @@ func git(dir string, args ...string) error {
 // Add (under the spike file's lock) creates branch spike/<name> in gitDir (the sub-repo named by repo, or
 // the working repository) and .rota/spikes/<name>.md under root. The spike
 // file check runs first, so an existing file leaves no branch behind.
-func Add(root, gitDir, name, question, repo string, today func() time.Time) (branch string, err error) {
+func Add(run gitx.Runner, root, gitDir, name, question, repo string, today func() time.Time) (branch string, err error) {
 	if err = checkName(name); err != nil {
 		return
 	}
 	path := file(root, name)
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		var aerr error
-		branch, aerr = add(root, gitDir, path, name, question, repo, today)
+		branch, aerr = add(run, root, gitDir, path, name, question, repo, today)
 		return aerr
 	})
 	if err != nil {
@@ -68,12 +73,12 @@ func Add(root, gitDir, name, question, repo string, today func() time.Time) (bra
 
 // add is Add's body; the caller holds the spike file's lock, so the
 // existence checks and the writes cannot interleave with another add.
-func add(root, gitDir, path, name, question, repo string, today func() time.Time) (branch string, err error) {
+func add(run gitx.Runner, root, gitDir, path, name, question, repo string, today func() time.Time) (branch string, err error) {
 	branch = "spike/" + name
 	if _, serr := os.Stat(path); serr == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, ".rota/spikes/%s.md already exists", name)
 	}
-	if git(gitDir, "rev-parse", "--git-dir") != nil {
+	if git(run, gitDir, "rev-parse", "--git-dir") != nil {
 		regs := artifact.Repos(root)
 		if repo == "" && len(regs) > 0 {
 			names := make([]string, 0, len(regs))
@@ -86,10 +91,10 @@ func add(root, gitDir, path, name, question, repo string, today func() time.Time
 		}
 		return "", exitcode.Errf(exitcode.ExitUnavailable, "%s is not a git repository", gitDir)
 	}
-	if git(gitDir, "rev-parse", "--verify", branch) == nil {
+	if git(run, gitDir, "rev-parse", "--verify", branch) == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, "branch %s already exists", branch)
 	}
-	if err = git(gitDir, "branch", branch); err != nil {
+	if err = git(run, gitDir, "branch", branch); err != nil {
 		return "", exitcode.Errf(exitcode.ExitUnavailable, "git branch %s failed: %v", branch, err)
 	}
 	repoLine := ""
@@ -172,8 +177,8 @@ type Entry struct {
 	BranchExists                        bool
 }
 
-func spikeBranches(dir string) map[string]bool {
-	refs, ok, err := gitx.Repo{Dir: dir}.ForEachRef(context.Background(), "refs/heads/spike/")
+func spikeBranches(run gitx.Runner, dir string) map[string]bool {
+	refs, ok, err := gitx.Repo{Dir: dir, Runner: run}.ForEachRef(context.Background(), "refs/heads/spike/")
 	set := map[string]bool{}
 	if err != nil || !ok {
 		return set
@@ -187,7 +192,7 @@ func spikeBranches(dir string) map[string]bool {
 // List reads .rota/spikes/*.md in name order. Files without frontmatter are
 // skipped. branchExists is checked in the spike's own sub-repo, or in dir
 // (the working directory) for a spike with no repo.
-func List(root, dir string) ([]Entry, error) {
+func List(run gitx.Runner, root, dir string) ([]Entry, error) {
 	files := fsio.GlobDir(rotatree.File(root, rotatree.SpikesDir), "*.md")
 	sort.Strings(files)
 	var regs map[string]string
@@ -198,13 +203,13 @@ func List(root, dir string) ([]Entry, error) {
 		}
 		var s map[string]bool
 		if repo == "" {
-			s = spikeBranches(dir)
+			s = spikeBranches(run, dir)
 		} else {
 			if regs == nil {
 				regs = artifact.Repos(root)
 			}
 			if p, ok := regs[repo]; ok {
-				s = spikeBranches(p)
+				s = spikeBranches(run, p)
 			} else {
 				s = map[string]bool{}
 			}
