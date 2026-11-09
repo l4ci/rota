@@ -1,6 +1,8 @@
 package design
 
 import (
+	"strings"
+
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -44,3 +46,18 @@ func (s notes) Read(id string) (string, error) { return s.docs().Read(id) }
 func (s notes) Replace(id, text string) (bool, error) { return s.docs().Replace(id, text) }
 
 func (s notes) Remove(id string) error { return s.docs().Remove(id) }
+
+// Update reads the note, applies fn and writes the result back. The tracker
+// offers no lock over a note, so a concurrent edit between the read and the
+// write is last-writer-wins, as with Replace.
+func (s notes) Update(id string, fn func(string) (string, error)) (bool, error) {
+	old, err := s.Read(id)
+	if err != nil {
+		return false, err
+	}
+	text, err := fn(strings.TrimSuffix(old, "\n"))
+	if err != nil {
+		return false, err
+	}
+	return s.Replace(id, text)
+}
