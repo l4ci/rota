@@ -63,7 +63,7 @@ func SupportMachine(root string, load func(root string) any) (bool, *RoleError) 
 			return false, &RoleError{".rota/config.local.json does not decode: " + err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
 		}
 		if _, ok := doc.(*jsonx.Object); !ok {
-			return false, &RoleError{".rota/config.local.json is not a JSON object", "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
+			return false, &RoleError{rotatree.Rel(rotatree.ConfigLocalFile) + " is not a JSON object", "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return false, &RoleError{".rota/config.local.json cannot be read: " + err.Error(), "make .rota/config.local.json readable", false}
