@@ -19,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastatetest"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -86,7 +85,7 @@ func TestLimitsLoopCommonDirUsesWatcherContext(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	loop := limitsLoop(&Ctx{Deps: d}, root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)), limits.Settings{}, os.Getpid(), nil)
+	loop := limitsLoop(&Ctx{Deps: d}, root, config.Load(cfgdir.OSEnv(), root), limits.Settings{}, os.Getpid(), nil)
 	loop(ctx)
 	if len(lookups) < 2 {
 		t.Fatalf("common-dir lookups = %d, want watcher setup and watching record", len(lookups))
@@ -337,7 +336,7 @@ func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	}
 	deps, _ := limDeps()
 	c := &Ctx{Deps: deps}
-	rig, err := buildLimits(context.Background(), c, dir, config.Load(cfgdir.OSEnv(), rotatree.Config(dir)), limits.Settings{}, os.Getpid(), time.Second, nil, func(string, ...any) {})
+	rig, err := buildLimits(context.Background(), c, dir, config.Load(cfgdir.OSEnv(), dir), limits.Settings{}, os.Getpid(), time.Second, nil, func(string, ...any) {})
 	if err != nil {
 		t.Fatal(err)
 	}

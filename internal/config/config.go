@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -14,20 +13,29 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Load reads the global config, merges configPath over it, then merges
-// config.local.json from the same directory over that (schema default < global
-// < project < local). Nested objects merge by key; any other override value (scalar,
+// Load reads the global config, merges the project's config.json over it, then
+// merges its config.local.json over that (schema default < global < project <
+// local); both layers are found from root through rotatree. Nested objects merge by key; any other override value (scalar,
 // array, null, or a type mismatch) replaces the base. A missing or
 // unparseable file counts as absent; with no base the result is {}.
-func Load(env cfgdir.Env, configPath string) any {
-	merged, _ := loadLayers(env, configPath)
+func Load(env cfgdir.Env, root string) any {
+	merged, _ := loadLayers(env, root)
 	return merged
 }
 
+// Project is the tracked project layer of root alone: config.json with no
+// global or local overlay, {} when it is missing or unparseable. Callers that
+// need what the project itself commits (a key that must live in the tracked
+// file) read it here; every other reader takes the merged config from Load.
+func Project(root string) any {
+	return fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject())
+}
+
 // layers are the config layers as read: global is the machine-wide layer
-// (nil when absent), project is configPath's own content, local the overlay.
+// (nil when absent), project is config.json's own content, local the overlay.
 type layers struct{ global, project, local any }
 
 // WarnWriter receives the corrupt-global warning; tests swap it to see it.
@@ -91,11 +99,11 @@ func globalLayer(env cfgdir.Env) any {
 
 // loadLayers keeps the layers alongside the runtime config so display
 // provenance uses the same reads and merge semantics as Load.
-func loadLayers(env cfgdir.Env, configPath string) (merged any, l layers) {
+func loadLayers(env cfgdir.Env, root string) (merged any, l layers) {
 	l = layers{
 		global:  globalLayer(env),
-		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
-		local:   fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil),
+		project: Project(root),
+		local:   fsio.LoadJSON(rotatree.ConfigLocal(root), nil),
 	}
 	return mergeLayers(&l), l
 }

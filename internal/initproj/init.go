@@ -45,7 +45,7 @@ func (r Result) Changed() bool {
 	return len(r.Created) > 0 || r.Migrated
 }
 
-var seedDirs = []string{"bugs", "features", "tasks", "milestones", "plans", "spikes", "map"}
+var seedDirs = []string{"bugs", "features", "tasks", rotatree.MilestonesDir, rotatree.PlansDir, "spikes", "map"}
 
 // seedFiles is the one declaration of what Init seeds under .rota/. Required
 // files are the ones `rota init check` demands (CoreFiles); the rest are
@@ -62,7 +62,7 @@ var seedFiles = []struct {
 	{"config.json", "", true}, // text is drawn per project: see configSeed
 	{"status.json", statusSeed, true},
 	{"MAP.md", mapSeed, false},
-	{"repos.json", reposSeed, false},
+	{rotatree.ReposFile, reposSeed, false},
 }
 
 // Init seeds .rota/ under root. It never overwrites an existing file, and a

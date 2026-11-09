@@ -6,7 +6,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
@@ -45,7 +44,7 @@ func TestMain(m *testing.M) {
 func noEnv(string) string { return "" }
 
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
-func diskConfig(root string) any { return config.Load(cfgdir.OSEnv(), rotatree.Config(root)) }
+func diskConfig(root string) any { return config.Load(cfgdir.OSEnv(), root) }
 
 // wk adapts w as an Env.Worker, defaulting its Git to the real runner the way
 // the tests' Env literals do.

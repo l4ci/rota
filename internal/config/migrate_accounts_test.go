@@ -129,7 +129,7 @@ func TestFillMigratesAccountsBeforeStripping(t *testing.T) {
 	if _, err := Fill(r.env, r.root); err != nil {
 		t.Fatal(err)
 	}
-	got := Accounts(Load(r.env, filepath.Join(r.root, ".rota", "config.json")))
+	got := Accounts(Load(r.env, r.root))
 	if want := []Account{{KindCodex, "c", "/c"}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("accounts after fill = %v, want %v", got, want)
 	}
@@ -178,7 +178,7 @@ func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
 			if got := fileAccounts(filepath.Join(r.root, ".rota", "config.local.json")); !reflect.DeepEqual(got, localWant) {
 				t.Errorf("config.local.json accounts = %v, want %v", got, localWant)
 			}
-			if got := Accounts(Load(r.env, cfgPath)); !reflect.DeepEqual(got, want) {
+			if got := Accounts(Load(r.env, r.root)); !reflect.DeepEqual(got, want) {
 				t.Errorf("effective accounts = %v, want %v", got, want)
 			}
 		})

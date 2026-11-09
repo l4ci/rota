@@ -333,7 +333,7 @@ func TestFillMigratesSourceKeys(t *testing.T) {
 	if _, sm, _, err := FillDetect(cfgdir.OSEnv(), root, func() string { return "" }); err != nil || !sm.Unresolved {
 		t.Fatalf("no origin: %+v %v", sm, err)
 	}
-	if got, _ := IssueSource(Load(cfgdir.OSEnv(), configPath(root))); got != SourceIssues {
+	if got, _ := IssueSource(Load(cfgdir.OSEnv(), root)); got != SourceIssues {
 		t.Errorf("unmigrated source = %q, want %q", got, SourceIssues)
 	}
 	if _, sm, _, err := FillDetect(cfgdir.OSEnv(), root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
@@ -349,7 +349,7 @@ func TestFillMigratesSourceKeys(t *testing.T) {
 	if read(t, root) != before {
 		t.Error("second run rewrote the file")
 	}
-	if got, _ := IssueSource(Load(cfgdir.OSEnv(), configPath(root))); got != SourceGitLab {
+	if got, _ := IssueSource(Load(cfgdir.OSEnv(), root)); got != SourceGitLab {
 		t.Errorf("migrated source = %q", got)
 	}
 }

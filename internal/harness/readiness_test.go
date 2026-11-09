@@ -8,18 +8,22 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // cfgOf is the parsed project config for a JSON document.
 func cfgOf(t *testing.T, doc string) any {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "config.json")
+	root := t.TempDir()
 	if doc != "" {
-		if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+		if err := os.MkdirAll(rotatree.Dir(root), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(rotatree.Config(root), []byte(doc), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return config.Load(cfgdir.OSEnv(), p)
+	return config.Load(cfgdir.OSEnv(), root)
 }
 
 func fixture(t *testing.T, name string) string {

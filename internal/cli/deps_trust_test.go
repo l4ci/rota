@@ -7,7 +7,6 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -23,7 +22,7 @@ func TestForgeAndIssuesPassesTheTrustCheckThrough(t *testing.T) {
 		deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
 			return []byte("[]"), nil, 0, nil
 		}, func(n string) (string, error) { return "/fake/" + n, nil })}
-		f, err := deps.forgeAndIssues(context.Background(), config.Load(cfgdir.OSEnv(), rotatree.Config(root)), root)
+		f, err := deps.forgeAndIssues(context.Background(), config.Load(cfgdir.OSEnv(), root), root)
 		if err != nil {
 			t.Fatalf("%s: %v", source, err)
 		}

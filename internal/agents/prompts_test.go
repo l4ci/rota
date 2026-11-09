@@ -9,12 +9,11 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/prompts"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func TestPromptsExplicitActivation(t *testing.T) {
 	root := project(t, "")
-	cfg := config.Load(cfgdir.OSEnv(), rotatree.Config(root))
+	cfg := config.Load(cfgdir.OSEnv(), root)
 	original, err := Write(root, cfg)
 	if err != nil {
 		t.Fatal(err)
