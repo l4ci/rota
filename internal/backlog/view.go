@@ -29,8 +29,6 @@ type Row struct {
 	Fields  Fields
 }
 
-var sectionOfType = map[string]string{"B": "Bugs", "F": "Features", "T": "Tasks"}
-
 // issueRows is Rows for the tracker backends: the open issues of be, each
 // naming its sub-repo when umbrella.
 func issueRows(be Backend, umbrella bool) ([]Row, error) {
@@ -41,7 +39,7 @@ func issueRows(be Backend, umbrella bool) ([]Row, error) {
 	var rows []Row
 	for _, it := range items {
 		r := Row{ID: it.ID, Key: it.Key(), Number: it.Number, Type: it.Type, Tag: it.Tag,
-			Title: it.Title, Section: sectionOfType[it.Type], Raw: it.Line, Fields: it.Fields}
+			Title: it.Title, Section: sectionOfLetter(it.Type), Raw: it.Line, Fields: it.Fields}
 		if umbrella {
 			r.Repo = it.Fields.Get("repos")
 		}
