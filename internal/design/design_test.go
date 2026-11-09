@@ -144,7 +144,7 @@ func TestAmendMatchesOldHelper(t *testing.T) {
 		{"Design", "replace", "replaced body", "B07.amend-replace.md"},
 	}
 	for _, s := range steps {
-		if changed, err := Amend(root, "B07", s.heading, s.mode, s.text); err != nil || !changed {
+		if changed, err := Amend(Files(root), "B07", s.heading, s.mode, s.text); err != nil || !changed {
 			t.Fatalf("Amend(%s): %v %v", s.heading, changed, err)
 		}
 		if s.golden == "" {
@@ -167,21 +167,21 @@ func golden(t *testing.T, name string) string {
 
 func TestAmendExits(t *testing.T) {
 	root := project(t)
-	if _, err := Amend(root, "B07", "Goal", "append", "x"); exitOf(err) != 3 {
+	if _, err := Amend(Files(root), "B07", "Goal", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing design: %v", err)
 	}
 	Add(Files(root), "B07", "t", testDay)
-	if _, err := Amend(root, "B07", "No such", "append", "x"); exitOf(err) != 3 {
+	if _, err := Amend(Files(root), "B07", "No such", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing section: %v", err)
 	}
-	if _, err := Amend(root, "B07", "Goal", "prepend", "x"); exitOf(err) != 2 {
+	if _, err := Amend(Files(root), "B07", "Goal", "prepend", "x"); exitOf(err) != 2 {
 		t.Errorf("bad mode: %v", err)
 	}
-	if _, err := Amend(root, "S01", "Goal", "append", "x"); exitOf(err) != 2 {
+	if _, err := Amend(Files(root), "S01", "Goal", "append", "x"); exitOf(err) != 2 {
 		t.Errorf("bad id: %v", err)
 	}
-	Amend(root, "B07", "Goal", "replace", "same")
-	if changed, _ := Amend(root, "B07", "Goal", "replace", "same\n\n"); changed {
+	Amend(Files(root), "B07", "Goal", "replace", "same")
+	if changed, _ := Amend(Files(root), "B07", "Goal", "replace", "same\n\n"); changed {
 		t.Error("amend with identical result reported changed")
 	}
 }

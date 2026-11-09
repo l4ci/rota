@@ -1,14 +1,11 @@
 package design
 
 import (
-	"strings"
-
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/section"
 )
 
 // ValidID reports whether id is a file-mode design ID.
@@ -46,6 +43,10 @@ func (s files) Replace(id, text string) (bool, error) { return docs(s.root).Repl
 
 func (s files) Remove(id string) error { return docs(s.root).Remove(id) }
 
+func (s files) Update(id string, fn func(string) (string, error)) (bool, error) {
+	return docs(s.root).Update(id, fn)
+}
+
 // Entry is one row of List.
 type Entry struct{ ID, Title, Status, Created string }
 
@@ -69,28 +70,4 @@ func List(root string) ([]Entry, error) {
 		out = append(out, e)
 	}
 	return out, nil
-}
-
-// Amend replaces or appends to the body of "## <heading>" in a design, as
-// hv-design-amend did: trailing newlines of text are dropped and the block
-// is "\n<text>\n\n". mode is "append" or "replace". A missing design or
-// heading is exit 3. changed is false when the file would not change. Amend
-// is file-only: issue-mode designs are edited whole with Put.
-func Amend(root, id, heading, mode, text string) (changed bool, err error) {
-	if err = (files{root}).CheckID(id); err != nil {
-		return
-	}
-	if mode != "append" && mode != "replace" {
-		return false, exitcode.Errf(exitcode.ExitUsage, "mode must be 'append' or 'replace', got %q", mode)
-	}
-	block := "\n" + strings.TrimRight(text, "\n") + "\n\n"
-	return docs(root).Update(id, func(content string) (string, error) {
-		if _, _, ok := section.Find(content, heading); !ok {
-			return "", exitcode.Errf(exitcode.ExitResolution, "section '## %s' not found in .rota/designs/%s.md", heading, id)
-		}
-		if mode == "replace" {
-			return section.Replace(content, heading, block), nil
-		}
-		return section.Append(content, heading, block), nil
-	})
 }

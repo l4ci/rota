@@ -6,10 +6,12 @@ package design
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stamp"
 )
 
@@ -24,6 +26,9 @@ type Store interface {
 	Read(id string) (string, error)
 	Replace(id, text string) (changed bool, err error)
 	Remove(id string) error
+	// Update rewrites an existing design from its stored text; changed is
+	// false when fn returns the text it was given. fn's error aborts the write.
+	Update(id string, fn func(old string) (string, error)) (changed bool, err error)
 }
 
 // Add creates the design stub, dated by today; an existing design is exit 4.
@@ -98,4 +103,27 @@ _(unresolved questions to answer before /rota-plan or during execution)_
 
 _(named assumptions made implicit by the chosen design)_
 `
+}
+
+// Amend replaces or appends to the body of "## <heading>" in a design: trailing
+// newlines of text are dropped and the block is "\n<text>\n\n". mode is
+// "append" or "replace". A missing design or heading is exit 3. changed is
+// false when the design would not change.
+func Amend(s Store, id, heading, mode, text string) (changed bool, err error) {
+	if err = s.CheckID(id); err != nil {
+		return
+	}
+	if mode != "append" && mode != "replace" {
+		return false, exitcode.Errf(exitcode.ExitUsage, "mode must be 'append' or 'replace', got %q", mode)
+	}
+	block := "\n" + strings.TrimRight(text, "\n") + "\n\n"
+	return s.Update(id, func(content string) (string, error) {
+		if _, _, ok := section.Find(content, heading); !ok {
+			return "", exitcode.Errf(exitcode.ExitResolution, "section '## %s' not found in design %s", heading, normID(id))
+		}
+		if mode == "replace" {
+			return section.Replace(content, heading, block), nil
+		}
+		return section.Append(content, heading, block), nil
+	})
 }

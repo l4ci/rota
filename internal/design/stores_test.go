@@ -153,3 +153,36 @@ func TestCheckIDErrorNamesBackendForm(t *testing.T) {
 		t.Errorf("notes error: %v", err)
 	}
 }
+
+// Amend works over either store: same section edit, same exits, same changed flag.
+func TestStoresShareAmend(t *testing.T) {
+	for name, s := range stores(t) {
+		t.Run(name, func(t *testing.T) {
+			st, id := s.st, s.id
+			if _, err := Amend(st, id, "Goal", "append", "x"); exitOf(err) != 3 {
+				t.Errorf("amend before add: %v, want exit 3", err)
+			}
+			if err := Add(st, id, "Title", testDay); err != nil {
+				t.Fatal(err)
+			}
+			if changed, err := Amend(st, id, "Goal", "replace", "new goal"); err != nil || !changed {
+				t.Fatalf("amend: changed=%v err=%v", changed, err)
+			}
+			if body, _ := Show(st, id); !strings.Contains(body, "new goal") {
+				t.Errorf("amend not stored:\n%s", body)
+			}
+			if changed, _ := Amend(st, id, "Goal", "replace", "new goal\n\n"); changed {
+				t.Error("identical amend reported changed")
+			}
+			if _, err := Amend(st, id, "No such", "append", "x"); exitOf(err) != 3 {
+				t.Errorf("missing section: %v, want exit 3", err)
+			}
+			if _, err := Amend(st, id, "Goal", "prepend", "x"); exitOf(err) != 2 {
+				t.Errorf("bad mode: %v, want exit 2", err)
+			}
+			if _, err := Amend(st, "S01", "Goal", "append", "x"); exitOf(err) != 2 {
+				t.Errorf("bad id: %v, want exit 2", err)
+			}
+		})
+	}
+}
