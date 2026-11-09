@@ -30,16 +30,16 @@ import (
 // releaseCommands is the `rota release` group (#52).
 func releaseCommands() *Command {
 	return &Command{Name: "release", Summary: "version, notes, changelog and release nudge", Subs: []*Command{
-		{Name: "version", Summary: "print the version file, and the next version with --level or --to", Repo: true, Verb: releaseVersion},
-		{Name: "bump", Summary: "write the next version into the version file", Repo: true, Verb: releaseBump},
-		{Name: "host", Summary: "print the hosting kind of origin", Repo: true, Verb: noFlags(releaseHost)},
-		{Name: "notes", Summary: "release notes from commits", Repo: true, Verb: releaseNotes},
-		{Name: "changelog", Summary: "add a release section to the changelog", Repo: true, Verb: releaseChangelog},
-		{Name: "pending", Summary: "how much has landed since the last release tag", Repo: true, Verb: noFlags(releasePending)},
-		{Name: "milestone-check", Summary: "list the open issues that block a milestone release", Repo: true, Verb: noFlags(releaseMilestoneCheck)},
-		{Name: "close-milestone", Summary: "close out a released milestone", Repo: true, Verb: releaseCloseMilestone},
-		{Name: "push", Summary: "push the release tag and branch to origin (manual gate)", Repo: true, Verb: releasePush},
-		{Name: "publish", Summary: "create the GitHub or GitLab release (manual gate)", Repo: true, Verb: releasePublish},
+		{Name: "version", Fence: fenceAllowed, Summary: "print the version file, and the next version with --level or --to", Repo: true, Verb: releaseVersion},
+		{Name: "bump", Fence: fenceRefused, Summary: "write the next version into the version file", Repo: true, Verb: releaseBump},
+		{Name: "host", Fence: fenceAllowed, Summary: "print the hosting kind of origin", Repo: true, Verb: noFlags(releaseHost)},
+		{Name: "notes", Fence: fenceAllowed, Summary: "release notes from commits", Repo: true, Verb: releaseNotes},
+		{Name: "changelog", Fence: fenceRefused, Summary: "add a release section to the changelog", Repo: true, Verb: releaseChangelog},
+		{Name: "pending", Fence: fenceAllowed, Summary: "how much has landed since the last release tag", Repo: true, Verb: noFlags(releasePending)},
+		{Name: "milestone-check", Fence: fenceAllowed, Summary: "list the open issues that block a milestone release", Repo: true, Verb: noFlags(releaseMilestoneCheck)},
+		{Name: "close-milestone", Fence: fenceRefused, Summary: "close out a released milestone", Repo: true, Verb: releaseCloseMilestone},
+		{Name: "push", Fence: fenceRefused, Summary: "push the release tag and branch to origin (manual gate)", Repo: true, Verb: releasePush},
+		{Name: "publish", Fence: fenceRefused, Summary: "create the GitHub or GitLab release (manual gate)", Repo: true, Verb: releasePublish},
 	}}
 }
 

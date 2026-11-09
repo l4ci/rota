@@ -23,15 +23,15 @@ import (
 // reviewCommands is the `rota review` group (#52).
 func reviewCommands() *Command {
 	return &Command{Name: "review", Summary: "scope a review, package its diff, build the second-opinion brief, scan for scaffolding", Subs: []*Command{
-		{Name: "scope", Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
-		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
-		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
-		{Name: "prepare", Summary: "prepare a disposable reviewer workspace at a pinned commit", Repo: true, Verb: noFlags(reviewPrepare)},
-		{Name: "cleanup", Summary: "remove only a prepared reviewer workspace", Verb: noFlags(reviewCleanup)},
-		{Name: "probe", Summary: "run a reviewer probe with disposable HOME and config roots", Verb: noFlags(reviewProbe)},
-		{Name: "package", Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
-		{Name: "depth", Summary: "review depth (full, light, none) ship.review picks for a branch, and why", Repo: true, Verb: reviewDepth},
-		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
+		{Name: "scope", Fence: fenceAllowed, Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
+		{Name: "brief", Fence: fenceAllowed, Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
+		{Name: "scaffolding", Fence: fenceAllowed, Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
+		{Name: "prepare", Fence: fenceAllowed, Summary: "prepare a disposable reviewer workspace at a pinned commit", Repo: true, Verb: noFlags(reviewPrepare)},
+		{Name: "cleanup", Fence: fenceAllowed, Summary: "remove only a prepared reviewer workspace", Verb: noFlags(reviewCleanup)},
+		{Name: "probe", Fence: fenceRefused, Summary: "run a reviewer probe with disposable HOME and config roots", Verb: noFlags(reviewProbe)},
+		{Name: "package", Fence: fenceAllowed, Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
+		{Name: "depth", Fence: fenceAllowed, Summary: "review depth (full, light, none) ship.review picks for a branch, and why", Repo: true, Verb: reviewDepth},
+		{Name: "queue", Fence: fenceAllowed, Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
 	}}
 }
 

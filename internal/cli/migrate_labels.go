@@ -17,7 +17,7 @@ import (
 )
 
 func labelsMigrateCommand() *Command {
-	return &Command{Name: "labels", Summary: "replace the retired support label with a machine pin (preview unless --apply)", Verb: migrateLabels}
+	return &Command{Name: "labels", Fence: fenceRefused, Summary: "replace the retired support label with a machine pin (preview unless --apply)", Verb: migrateLabels}
 }
 func migrateLabels(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")

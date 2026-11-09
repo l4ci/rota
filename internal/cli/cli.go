@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"io"
 	"os"
 	"os/signal"
@@ -42,8 +43,13 @@ type Command struct {
 	// UISub, on a group, names the verb that `rota <group> --ui` runs.
 	UISub string
 	Subs  []*Command
+	// Fence is the support-fence class of a verb: what a support machine
+	// (round.role support) may do with it. Declared where the verb is
+	// registered and never inherited. Left unset the verb is refused on a
+	// support machine, so a new verb fails safe.
+	Fence roundcfg.FenceClass
 	// Gates is how the pre-verb gates treat the verb and, unless a verb under
-	// it sets its own, the verbs under it. Declared in tree_gates.go.
+	// it sets its own, the verbs under it. Declared in tree_gates.go; the fence class is the Fence field.
 	Gates Gates
 }
 

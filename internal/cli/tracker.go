@@ -17,8 +17,8 @@ import (
 // trackerCommands is the `rota tracker` group (#52).
 func trackerCommands() *Command {
 	return &Command{Name: "tracker", Summary: "gh/glab passthrough and upstream issues", Subs: []*Command{
-		{Name: "call", Summary: "run gh or glab with list limits and rate-limit handling", Repo: true, Verb: trCall},
-		{Name: "suggest-upstream", Summary: "file a rota issue from a learning", Verb: trSuggest},
+		{Name: "call", Fence: fenceAllowed, Summary: "run gh or glab with list limits and rate-limit handling", Repo: true, Verb: trCall},
+		{Name: "suggest-upstream", Fence: fenceAllowed, Summary: "file a rota issue from a learning", Verb: trSuggest},
 	}}
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 func configMigrateCommand() *Command {
-	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, fold the codex and opencode account keys into round.accounts, merge and rename the keys #1825 folded together (models.*, the *Command keys, round.workerKind, issues.label), and move machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
+	return &Command{Name: "config", Fence: fenceRefused, Summary: "move the round-only work.* keys to round.*, fold the codex and opencode account keys into round.accounts, merge and rename the keys #1825 folded together (models.*, the *Command keys, round.workerKind, issues.label), and move machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
 }
 
 // migrateConfig is `rota migrate config` (#1097): every round-only key under

@@ -9,7 +9,7 @@ import (
 )
 
 func externalKnowledgeMigrateCommand() *Command {
-	return &Command{Name: "external-knowledge", Summary: "move trailing (seen on …) suffixes of external knowledge bullets into seen: stamps (preview unless --apply)", Verb: migrateExternalKnowledge}
+	return &Command{Name: "external-knowledge", Fence: fenceRefused, Summary: "move trailing (seen on …) suffixes of external knowledge bullets into seen: stamps (preview unless --apply)", Verb: migrateExternalKnowledge}
 }
 
 // migrateExternalKnowledge is `rota migrate external-knowledge` (#2110): every

@@ -20,9 +20,9 @@ import (
 func proofCommands() []*Command {
 	return []*Command{
 		{Name: "proof", Summary: "verification proof rows on items", Subs: []*Command{
-			{Name: "add", Summary: "append a proof row", Verb: proofAdd},
-			{Name: "record", Summary: "run a command and record it as a proof row", Verb: proofRecord},
-			{Name: "show", Summary: "list an item's proof rows", Verb: proofShow},
+			{Name: "add", Fence: fenceAllowed, Summary: "append a proof row", Verb: proofAdd},
+			{Name: "record", Fence: fenceAllowed, Summary: "run a command and record it as a proof row", Verb: proofRecord},
+			{Name: "show", Fence: fenceAllowed, Summary: "list an item's proof rows", Verb: proofShow},
 		}},
 	}
 }

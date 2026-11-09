@@ -13,7 +13,7 @@ import (
 
 func labelsCommands() *Command {
 	return &Command{Name: "labels", Summary: "compare tracker labels with the registry", Subs: []*Command{
-		{Name: "sync", Summary: "report label drift; --apply creates and updates known labels", Repo: true, Verb: labelsSync},
+		{Name: "sync", Fence: fenceAllowed, Summary: "report label drift; --apply creates and updates known labels", Repo: true, Verb: labelsSync},
 	}}
 }
 
