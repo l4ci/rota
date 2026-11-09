@@ -17,7 +17,7 @@ func TestMayRun(t *testing.T) {
 		{FenceRefused, true, false},
 		{FenceInVerb, true, true},
 		{FenceAllowed, true, true},
-		{FenceUnclassified, true, true},
+		{FenceUnclassified, true, false},
 	} {
 		if got := MayRun(RoleMain, tc.class); got != tc.main {
 			t.Errorf("main, class %d: %v", tc.class, got)

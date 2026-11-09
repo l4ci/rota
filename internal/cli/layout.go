@@ -23,9 +23,9 @@ import (
 // panes of the herdr it is inside.
 
 func layoutCommand() *Command {
-	return &Command{Name: "layout", Summary: "show how each round's herdr panes are arranged: split or tabs", Verb: layoutVerb(""), Subs: []*Command{
-		{Name: "split", Summary: "fold the live workers into the orchestrator's tab as one grid (wide screen)", Verb: layoutVerb(layout.Split)},
-		{Name: "tabs", Summary: "give every worker a tab of its own again (narrow screen)", Verb: layoutVerb(layout.Tabs)},
+	return &Command{Name: "layout", Fence: fenceAllowed, Summary: "show how each round's herdr panes are arranged: split or tabs", Verb: layoutVerb(""), Subs: []*Command{
+		{Name: "split", Fence: fenceAllowed, Summary: "fold the live workers into the orchestrator's tab as one grid (wide screen)", Verb: layoutVerb(layout.Split)},
+		{Name: "tabs", Fence: fenceAllowed, Summary: "give every worker a tab of its own again (narrow screen)", Verb: layoutVerb(layout.Tabs)},
 	}}
 }
 

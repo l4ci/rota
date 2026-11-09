@@ -21,9 +21,9 @@ import (
 // before a project root exists.
 
 func initCommands() *Command {
-	return &Command{Name: "init", Summary: "seed .rota/ in this directory", Verb: initVerb, Subs: []*Command{
-		{Name: "check", Summary: "is .rota/ initialized here", Verb: noFlags(initCheck)},
-		{Name: "umbrella", Summary: "register the git repos below this directory as an umbrella", Verb: initUmbrella},
+	return &Command{Name: "init", Fence: fenceRefused, Summary: "seed .rota/ in this directory", Verb: initVerb, Subs: []*Command{
+		{Name: "check", Fence: fenceAllowed, Summary: "is .rota/ initialized here", Verb: noFlags(initCheck)},
+		{Name: "umbrella", Fence: fenceRefused, Summary: "register the git repos below this directory as an umbrella", Verb: initUmbrella},
 	}}
 }
 

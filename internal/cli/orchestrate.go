@@ -19,7 +19,7 @@ import (
 // of bare `rota`, and the seams tests replace.
 
 func orchestrateCommand() *Command {
-	return &Command{Name: "orchestrate", Summary: "launch the orchestrator: an agent under keepalive that starts /rota-orchestrate", Verb: orchestrateVerb}
+	return &Command{Name: "orchestrate", Fence: fenceAllowed, Summary: "launch the orchestrator: an agent under keepalive that starts /rota-orchestrate", Verb: orchestrateVerb}
 }
 
 // defaultOrchestrateEnv is what the launcher touches outside its own memory.

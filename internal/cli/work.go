@@ -21,7 +21,7 @@ import (
 // workCommands is the `rota work` group: the bookkeeping around /rota-work.
 func workCommands() *Command {
 	return &Command{Name: "work", Summary: "cycle bookkeeping for /rota-work", Subs: []*Command{
-		{Name: "start", Summary: "guard the tree, create and register the branch, claim the items", Repo: true, Verb: workStart},
+		{Name: "start", Fence: fenceAllowed, Summary: "guard the tree, create and register the branch, claim the items", Repo: true, Verb: workStart},
 	}}
 }
 
