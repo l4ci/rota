@@ -9,10 +9,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // connectCommand is `rota connect` (#799): machine-wide tracker connections
@@ -173,7 +173,7 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 	if len(cs) == 0 {
 		lines = append(lines, "no connections: run rota connect add <name> --kind jira|linear|itsaplan --site <url> --token-stdin")
 	}
-	secretsDir, err := projects.DataDir(c.deps().projectsEnv())
+	secretsDir, err := cfgdir.DataDir(c.deps().projectsEnv())
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}

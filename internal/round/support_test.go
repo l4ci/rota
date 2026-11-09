@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -197,7 +197,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 	gittest.Run(t, f.root, "fetch", "-q", "origin")
 	writeFile(t, filepath.Join(f.root, ".rota", "config.json"), cfg)
 	writeFile(t, filepath.Join(f.root, ".rota", "config.local.json"), `{"round":{"role":"support"}}`)
-	set, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(f.root)))
+	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}

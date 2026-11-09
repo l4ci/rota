@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/status"
@@ -82,7 +82,7 @@ func globalDir(c *Ctx) (string, error) {
 	if c.Repo != "" {
 		return "", Usage("--repo cannot be combined with the global config")
 	}
-	dir, err := projects.Dir(c.deps().projectsEnv())
+	dir, err := cfgdir.Dir(c.deps().projectsEnv())
 	if err != nil {
 		return "", Resolution("%v", err)
 	}
@@ -212,7 +212,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		dir, err := projects.Dir(c.deps().projectsEnv())
+		dir, err := cfgdir.Dir(c.deps().projectsEnv())
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}

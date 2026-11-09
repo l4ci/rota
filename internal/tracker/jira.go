@@ -16,9 +16,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/marker"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // Jira is the issue tracker of issues.source jira, over the REST API of a
@@ -61,7 +61,7 @@ func WithConnections(r ConnResolver) Option {
 // WithMachine points the default connection lookup at env and the keychain of
 // the machine `rota connect` writes to. Without it (or WithConnections) a
 // connection cannot be resolved.
-func WithMachine(env projects.Env, keychain func() connections.Store) Option {
+func WithMachine(env cfgdir.Env, keychain func() connections.Store) Option {
 	return func(c *CLI) { c.Env, c.Keychain = env, keychain }
 }
 

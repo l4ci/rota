@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/cfgdir"
 )
 
 type stubKeychain struct{ Store }
 
 func TestMachineKeychainIsOptional(t *testing.T) {
 	vars := map[string]string{"ROTA_CONFIG_DIR": t.TempDir(), "XDG_DATA_HOME": t.TempDir()}
-	env := projects.Env{Getenv: func(k string) string { return vars[k] }, Home: func() (string, error) { return t.TempDir(), nil }}
+	env := cfgdir.Env{Getenv: func(k string) string { return vars[k] }, Home: func() (string, error) { return t.TempDir(), nil }}
 	for name, kc := range map[string]func() Store{
 		"no func":   nil,
 		"nil store": func() Store { return nil },

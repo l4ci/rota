@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/toolver"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -33,7 +33,7 @@ func externalGetter(d *Deps, cwd string) (get func(key string) (any, bool), ok b
 		cfg := d.Config(root)
 		return func(key string) (any, bool) { return config.Lookup(cfg, key) }, true
 	}
-	if dir, err := projects.Dir(d.projectsEnv()); err == nil {
+	if dir, err := cfgdir.Dir(d.projectsEnv()); err == nil {
 		vals, _ := config.LoadGlobal(dir)
 		return func(key string) (any, bool) { v, ok := vals[key]; return v, ok }, true
 	}
@@ -104,7 +104,7 @@ func externalClone(c *Ctx) (extknowledge.Clone, error) {
 	}
 	home, _ := d.UserHomeDir()
 	path = config.ExpandDir(path, home)
-	state, _ := projects.StateDir(d.projectsEnv())
+	state, _ := cfgdir.StateDir(d.projectsEnv())
 	return extknowledge.Clone{Dir: path, Env: extknowledge.Env{
 		Git: d.Git, Now: d.Now, StateDir: state, TTL: time.Duration(ttl) * time.Minute,
 		NewForge: func(ctx context.Context, dir string) (extknowledge.PROpener, error) {

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestDoctorCodexReadinessResolvedHost(t *testing.T) {
@@ -79,7 +79,7 @@ func TestDoctorKindsExpandsAccountHomes(t *testing.T) {
 	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	k := doctorKinds(config.Load(projects.OSEnv(), p), "/home/u")[harness.Codex]
+	k := doctorKinds(config.Load(cfgdir.OSEnv(), p), "/home/u")[harness.Codex]
 	if len(k.Homes) != 1 || k.Homes[0].Dir != "/home/u/.codex" {
 		t.Errorf("homes = %+v", k.Homes)
 	}
