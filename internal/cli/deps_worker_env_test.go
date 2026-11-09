@@ -32,7 +32,7 @@ func TestBareDepsWorkerEnvFillsEverySeam(t *testing.T) {
 func TestProductionDepsWorkerEnvSeamOwnership(t *testing.T) {
 	withDefaultsOwned := map[string]bool{
 		"Ctx": true, "Sleep": true, "Stderr": true, "Shell": true,
-		"ShellEnv": true, "Run": true, "Executable": true, "GateInput": true,
+		"ShellEnv": true, "Run": true, "Executable": true, "GateInput": true, "Registry": true,
 	}
 	v := reflect.ValueOf(defaultDeps().workerEnv())
 	for i := 0; i < v.NumField(); i++ {

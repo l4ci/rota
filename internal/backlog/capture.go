@@ -13,11 +13,6 @@ import (
 // validation, the --raw-file bullet and the Depends on splice are file-ID
 // grammar, so they live here and the verbs only read flags and files.
 
-// ItemKinds are the kinds `item create` captures.
-var ItemKinds = []string{"bugs", "features", "tasks"}
-
-var itemSections = map[string]string{"bugs": "## Bugs", "features": "## Features", "tasks": "## Tasks"}
-
 var (
 	rawBulletID  = regexp.MustCompile(`\*\*\[(` + IDPattern(1) + `)\]`)
 	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + IDPattern(FileIDDigits) + `)$`)
@@ -56,7 +51,7 @@ type CaptureRequest struct {
 }
 
 // ValidKind reports whether kind is one `item create` accepts.
-func ValidKind(kind string) bool { return slices.Contains(ItemKinds, kind) }
+func ValidKind(kind string) bool { _, ok := TypeByKind(kind); return ok }
 
 // placeholderTitles are titles that pass for a title and say nothing.
 var placeholderTitles = []string{"x", "tbd", "todo", "title", "untitled"}
@@ -128,7 +123,7 @@ func AppendRaw(ops FileOps, kind string, raw []byte) (CreateResult, error) {
 	if m == nil {
 		return CreateResult{}, errf(ErrInvalid, "--raw-file bullet needs a **[ID]")
 	}
-	if err := ops.Append(itemSections[kind], entry); err != nil {
+	if err := ops.Append("## "+sectionForDir(kind), entry); err != nil {
 		return CreateResult{}, err
 	}
 	typ, _ := TypeByKind(kind)

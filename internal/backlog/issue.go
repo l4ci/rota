@@ -110,9 +110,9 @@ func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false) }
 // Letter is the item type of an issue: the letter of the first type label it
 // carries, else "T" (_letter).
 func (b *Issues) Letter(is Issue) string {
-	for _, c := range []struct{ letter, role string }{{"B", "types.bug"}, {"F", "types.feature"}, {"T", "types.task"}} {
-		if slices.Contains(is.Labels, config.Label(b.Cfg, c.role)) {
-			return c.letter
+	for _, t := range Types {
+		if t.Role != "" && slices.Contains(is.Labels, config.Label(b.Cfg, t.Role)) {
+			return t.Letter
 		}
 	}
 	return "T"
@@ -371,8 +371,6 @@ func (b *Issues) closedLines() ([]string, error) {
 	return out, nil
 }
 
-var sectionForLetter = map[string]string{"B": "Bugs", "F": "Features", "T": "Tasks"}
-
 // Markdown renders the backlog as BACKLOG.md-shaped text: the open issues by
 // type, then the newest closedLimit closed ones as Done lines (all when
 // closedLimit is negative, none when 0). The usual caller passes 20.
@@ -402,7 +400,7 @@ func renderBacklog(sections map[string][]string, done []string) string {
 	out := []string{"# Backlog", ""}
 	for _, l := range ItemLetters {
 		bullets := sections[string(l)]
-		out = append(out, "## "+sectionForLetter[string(l)], "")
+		out = append(out, "## "+sectionOfLetter(string(l)), "")
 		out = append(out, bullets...)
 		if len(bullets) > 0 {
 			out = append(out, "")
