@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -325,4 +326,19 @@ func (tr *overlappingClaimTracker) AddComment(ctx context.Context, key tracker.I
 		run()
 	}
 	return tr.fakeTracker.AddComment(ctx, key, body)
+}
+
+func TestClosedIssueLabelsKeepsNonWorkflowLabels(t *testing.T) {
+	workflow := labels.ClosedDrop(nil)
+	closed := tracker.Issue{State: "closed", Labels: []string{"needs-review", "needs-human", "in-progress", "claimed:a@main", "type:bug", "p1", "harness:codex"}}
+	got := closedIssueLabels(closed, workflow)
+	want := []string{"needs-review", "needs-human", "in-progress", "claimed:a@main"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("closed drop = %v, want %v", got, want)
+	}
+	open := closed
+	open.State = "open"
+	if got := closedIssueLabels(open, workflow); got != nil {
+		t.Fatalf("open issue drop = %v, want none", got)
+	}
 }

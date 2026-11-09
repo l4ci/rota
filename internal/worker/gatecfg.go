@@ -37,6 +37,9 @@ type GateConfig struct {
 	Tracker tracker.Settings
 	// InProgressLabel is issues.labels.inProgress.
 	InProgressLabel string
+	// ClosedLabels is the workflow-state set a landed PR clears from its closed
+	// issue (labels.ClosedDrop: in-progress, needs-review, needs-human).
+	ClosedLabels []string
 	// Support is round.support and SupportLabel the derived machine pin: an issue
 	// carrying the label under a set Support belongs to the support machine,
 	// and its relays travel as issue comments (#1827).
@@ -99,6 +102,7 @@ func ParseGateConfig(cfg any) GateConfig {
 		Small:           commandList(cfg, "test.small"),
 		Tracker:         tracker.SettingsFromConfig(cfg),
 		InProgressLabel: rs.Labels.InProgress,
+		ClosedLabels:    config.ClosedIssueLabels(cfg),
 		SharedPaths:     rs.SharedPaths,
 		Support:         roundcfg.SupportName(cfg),
 		SupportLabel:    roundcfg.MachineLabel(roundcfg.SupportName(cfg)),

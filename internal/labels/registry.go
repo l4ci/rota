@@ -115,6 +115,30 @@ func definitions() []definition {
 	}
 }
 
+// ClosedDrop is the workflow-state labels a closed issue must not keep, by
+// resolved name. The claim family is separate: it is an open prefix, so callers
+// match it with ClaimPrefix. get has Resolve's contract.
+func ClosedDrop(get func(string) string) []string {
+	var out []string
+	for _, d := range definitions() {
+		if d.Group != "state" || !closedDrop[d.Name] {
+			continue
+		}
+		name := d.Name
+		if get != nil && d.ConfigKey != "" {
+			name = get(d.ConfigKey)
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// closedDrop names the state labels that mean "a round is working this": the
+// ones a landed PR or a reconcile sweep clears from the closed issue.
+var closedDrop = map[string]bool{InProgress: true, NeedsReview: true, NeedsHuman: true}
+
 // Resolve applies string settings. A nil getter selects canonical defaults;
 // a non-nil getter must supply defaults for absent keys, as config.Value does.
 // Empty fixed names disable that label, preserving config.Label semantics.

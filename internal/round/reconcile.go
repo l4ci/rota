@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -107,6 +108,7 @@ func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("closed claim-label sweep skipped: %v", err))
 		return
 	}
+	workflow := e.closedLabels()
 	seen := map[string]bool{}
 	for _, finding := range rep.Findings {
 		if finding.Kind == LabelStale {
@@ -118,14 +120,14 @@ func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 		if is.State != "closed" || seen[is.Key.String()] {
 			continue
 		}
-		if backlog.HasClaimLabel(is.Labels) {
+		if backlog.HasClaimLabel(is.Labels) || slices.ContainsFunc(is.Labels, func(l string) bool { return slices.Contains(workflow, l) }) {
 			keys = append(keys, is.Key)
 			seen[is.Key.String()] = true
 		}
 	}
 	tracker.SortKeys(keys)
 	for _, key := range keys {
-		rep.add(Finding{Kind: LabelStale, Issue: key.String(), Detail: fmt.Sprintf("%s is closed and still has claimed: labels", key.Ref()), Repair: "remove claim labels"})
+		rep.add(Finding{Kind: LabelStale, Issue: key.String(), Detail: fmt.Sprintf("%s is closed and still has workflow or claimed: labels", key.Ref()), Repair: "remove workflow and claim labels"})
 	}
 }
 
@@ -222,10 +224,26 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		if !ok {
 			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
-		_, err := backlog.CleanupClosedIssueLabels(ctx, e.Forge, n, e.Label)
+		_, err := backlog.CleanupClosedIssueLabels(ctx, e.Forge, n, e.closedLabels())
 		return err
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
+}
+
+// closedLabels is the workflow-state set a closed issue must drop, resolved from
+// the env's label fields through the label registry.
+func (e Env) closedLabels() []string {
+	return labels.ClosedDrop(func(key string) string {
+		switch key {
+		case "issues.labels.inProgress":
+			return e.Label
+		case "issues.labels.needsReview":
+			return e.NeedsReview
+		case "issues.labels.needsHuman":
+			return e.NeedsHuman
+		}
+		return ""
+	})
 }
 
 // parkMerged frees a slot that still holds a branch whose PR is merged, as
