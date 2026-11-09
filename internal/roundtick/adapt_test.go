@@ -31,12 +31,13 @@ func TestQueuedRefsSkipsRecordsWithoutAPR(t *testing.T) {
 	}
 }
 
-func TestReconcileFindingsKeepTheKindTyped(t *testing.T) {
+func TestInspectionOfKeepsTheKindTyped(t *testing.T) {
 	out := round.Outcome{
 		Repaired: []round.Finding{{Kind: "dead-tab", Slot: "ben"}},
 		Drift:    []round.Finding{{Kind: "pr-missing", Issue: "42"}},
 	}
-	rep, drift := ReconcileFindings(out)
+	in := InspectionOf(out, false)
+	rep, drift := in.Repaired, in.Drift
 	if !slices.Equal(rep, []Finding{{Kind: "dead-tab", Key: "ben"}}) || !slices.Equal(drift, []Finding{{Kind: "pr-missing", Key: out.Drift[0].Key()}}) {
 		t.Fatalf("repaired=%v drift=%v", rep, drift)
 	}
@@ -50,5 +51,20 @@ func TestAssignedAgentsListsBothBestOfSlots(t *testing.T) {
 	two := AssignedAgents(round.Assigned{Agent: "x", BestOf: []round.Assigned{{Agent: "ben"}, {Agent: "nia"}}})
 	if !slices.Equal(one, []string{"kit"}) || !slices.Equal(two, []string{"ben", "nia"}) {
 		t.Fatalf("one=%v two=%v", one, two)
+	}
+}
+
+// A repair that failed sits in both Proposed and Drift; an executing tick must
+// keep it as drift, and only an observing one folds it into a proposal.
+func TestInspectionOfKeepsAFailedRepairAsDriftWhenExecuting(t *testing.T) {
+	f := round.Finding{Kind: "dead-tab", Slot: "ben"}
+	out := round.Outcome{Proposed: []round.Finding{f}, Drift: []round.Finding{f}}
+	exec := InspectionOf(out, false)
+	if len(exec.Drift) != 1 || len(exec.Proposed) != 0 {
+		t.Fatalf("executing: drift=%v proposed=%v", exec.Drift, exec.Proposed)
+	}
+	obs := InspectionOf(out, true)
+	if len(obs.Drift) != 0 || len(obs.Proposed) != 1 {
+		t.Fatalf("observing: drift=%v proposed=%v", obs.Drift, obs.Proposed)
 	}
 }
