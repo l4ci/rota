@@ -409,8 +409,8 @@ func suiteBacklog(t *testing.T) {
 			check: func(t *testing.T, e envl) {
 				t.Helper()
 				msg, _ := at(e, "error.message").(string)
-				if code, _ := at(e, "error.code").(string); code == "" || msg == "" || strings.Contains(msg, "BACKLOG.md") {
-					t.Errorf("error = %v %q: want a tracker error, not the file backend's", code, msg)
+				if code, _ := at(e, "error.code").(string); code != "unavailable" || !strings.Contains(msg, "cannot determine the issue tracker provider") {
+					t.Errorf("error = %v %q: want unavailable from the tracker path", code, msg)
 				}
 			}},
 		scn{name: "stale/todo-reports-undated", goOnly: true, fx: todoFx, argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),

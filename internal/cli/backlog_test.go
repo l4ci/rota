@@ -270,3 +270,32 @@ func TestBacklogSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
 		t.Errorf("text output: %s", out.String())
 	}
 }
+
+func TestBacklogStaleTodoTextReportsUndated(t *testing.T) {
+	cases := []struct {
+		name, backlog, want string
+	}{
+		{"none", "## Bugs\n- **[B01] [P1] a.** x Captured: 2026-01-01\n", ""},
+		{"one", "## Bugs\n- **[B01] [P1] a.** x Captured: 2026-01-01\n- **[B02] [P1] b.** y\n", "1 open item has no usable Captured date and was not checked"},
+		{"two", "## Bugs\n- **[B02] [P1] b.** y\n- **[B03] [P1] c.** z Captured: junk\n", "2 open items have no usable Captured date and were not checked"},
+	}
+	for _, c := range cases {
+		root := trackerProject(t, "")
+		d := testDeps()
+		pinDay(d, "2999-01-01")
+		os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte(c.backlog), 0o644)
+		var out, errb bytes.Buffer
+		if code := mainWith(d, []string{"-C", root, "backlog", "stale", "--kind", "todo", "--days", "90"}, strings.NewReader(""), &out, &errb); code != 0 {
+			t.Fatalf("%s: exit %d: %s", c.name, code, errb.String())
+		}
+		got := ""
+		for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+			if strings.Contains(l, "Captured date") {
+				got = l
+			}
+		}
+		if got != c.want {
+			t.Errorf("%s: line = %q, want %q\nstdout: %s", c.name, got, c.want, out.String())
+		}
+	}
+}
