@@ -113,7 +113,7 @@ func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Run
 		write(t, filepath.Join(root, ".rota", "workers.json"), workers)
 	}
 	deps := testDeps()
-	deps.RoundEnv = func(context.Context, string) round.Env {
+	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: g, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel,
 			Round: roundcfg.Settings{Support: "mac", Role: role}}
 	}
@@ -357,7 +357,7 @@ func TestWatchSupportOffWithoutRoundSupport(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues":{"source":"github"}}`)
 	deps := testDeps()
-	deps.RoundEnv = func(context.Context, string) round.Env {
+	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}

@@ -50,7 +50,7 @@ func TestDefaultRoundEnvConfiguredBaseMissing(t *testing.T) {
 	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"gone"}}`), 0o644)
-	e := defaultRoundEnv(context.Background(), dir, defaultDeps(), false)
+	e := buildRoundEnv(context.Background(), dir, defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	if e.Base == "main" {
 		t.Errorf("Base = %q; want no silent main fallback", e.Base)
 	}

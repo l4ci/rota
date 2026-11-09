@@ -37,7 +37,7 @@ func architectureFor(c *Ctx, root string, set roundcfg.Settings) (round.Architec
 	if err != nil {
 		return round.Architecture{}, err
 	}
-	env := c.deps().RoundEnv(ctx, root)
+	env := roundEnv(c, ctx, root)
 	cands, err := env.RoundCandidates(ctx, root, be, set, "")
 	if err != nil {
 		return round.Architecture{}, err

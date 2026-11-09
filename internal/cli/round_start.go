@@ -176,7 +176,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		cfg := c.deps().Config(root)
-		env := c.deps().RoundEnv(ctx, root)
+		env := roundEnv(c, ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
 			Settings: set, DefaultNum: set.Slots, Dispatch: config.Dispatch(cfg),
@@ -202,7 +202,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		// Start has just recorded the round's host (C8): rebuild the env so the
 		// drift count asks that host, not the guess made before it existed.
-		env = c.deps().RoundEnv(ctx, root)
+		env = roundEnv(c, ctx, root)
 		be, err := openBacklog(c, root, false, "")
 		if err != nil {
 			return backlogFail(err)
@@ -310,7 +310,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		env := c.deps().RoundEnv(ctx, root)
+		env := roundEnv(c, ctx, root)
 		cands, err := env.RoundCandidates(ctx, root, be, set, *scope)
 		warnCandidateMigrations(c, cands)
 		if err != nil {

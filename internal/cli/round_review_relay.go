@@ -38,7 +38,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 		c.ctx = ctx
 		// One load: Env.Round is the verb's settings. The env's own load maps a
 		// bad key to usage; this verb's contract says resolution (exit 3).
-		base := c.deps().RoundEnv(ctx, root)
+		base := roundEnv(c, ctx, root)
 		if base.RoundErr != nil {
 			return Result{}, &Error{Exit: ExitResolution, Message: base.RoundErr.Error()}
 		}
@@ -47,7 +47,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		res, err := reviewEnvFrom(c, ctx, base, o).ReviewRelay(ctx, root, o)
+		res, err := reviewEnvFrom(base, o).ReviewRelay(ctx, root, o)
 		if res.PointerErr != "" {
 			c.Warn("pointer comment not posted: %s", res.PointerErr)
 		}
@@ -97,12 +97,11 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 // reviewEnv is the env ReviewRelay runs in: the round env with the meter reader
 // but no account picking, and the backlog a fresh transfer moves the claim on.
 func reviewEnv(c *Ctx, ctx context.Context, root string, o round.ReviewOpts) round.Env {
-	return reviewEnvFrom(c, ctx, c.deps().RoundEnv(ctx, root), o)
+	return reviewEnvFrom(roundEnv(c, ctx, root), o)
 }
 
 // reviewEnvFrom is reviewEnv over a round env the caller already built.
-func reviewEnvFrom(c *Ctx, ctx context.Context, env round.Env, o round.ReviewOpts) round.Env {
-	env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
+func reviewEnvFrom(env round.Env, o round.ReviewOpts) round.Env {
 	if o.Board != nil {
 		env.Board = o.Board
 	}

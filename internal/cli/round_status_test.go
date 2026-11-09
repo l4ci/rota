@@ -28,13 +28,13 @@ func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, filepath.Join(root, ".worktrees", name), "HEAD")
 	}
 	d := testDeps()
-	d.RoundEnv = func(context.Context, string) round.Env {
+	d.RoundEnv = func(_ context.Context, _ string, o RoundOpts) round.Env {
 		e := round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", ForgeErr: "fake: no forge"}
 		if agents != nil {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
 			e.HostName = "herdr"
 		}
-		return e
+		return withRoundOpts(e, o)
 	}
 	return root, d
 }
@@ -42,11 +42,11 @@ func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 func TestRoundStatusAndReconcile(t *testing.T) {
 	root, deps := roundFixture(t, []host.Agent{})
 	// Re-point the fake at the real worktree path now that root is known.
-	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
+	deps.RoundEnv = func(_ context.Context, _ string, o RoundOpts) round.Env {
+		return withRoundOpts(round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
 			Snapshot: func(context.Context) ([]host.Agent, error) {
 				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"}}, nil
-			}}
+			}}, o)
 	}
 	code, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
 	if code != 0 {
@@ -356,4 +356,11 @@ func TestRoundStatusShowsNoLoginSlot(t *testing.T) {
 	if !strings.Contains(out, "account work (claude)") {
 		t.Errorf("the table lacks the account and its kind:\n%s", out)
 	}
+}
+
+// withRoundOpts applies the verb's RoundOpts to a fake env, as the real
+// builder does: the worker env it runs on and the account option.
+func withRoundOpts(e round.Env, o RoundOpts) round.Env {
+	e.Worker = round.FromWorkerEnv(o.Worker)
+	return e.WithAccounts(o.Accounts)
 }
