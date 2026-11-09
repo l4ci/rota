@@ -31,6 +31,16 @@ func ExtraLabels(v any) (map[string]string, error) {
 	return out, nil
 }
 
+// ClosedIssueLabels is the resolved workflow-state label set a closed issue
+// must drop (labels.ClosedDrop under the project's issues.labels settings).
+func ClosedIssueLabels(cfg any) []string {
+	return labels.ClosedDrop(func(key string) string {
+		s, _ := Value(cfg, key)
+		str, _ := s.(string)
+		return str
+	})
+}
+
 // LabelDefinitions resolves the labels available for tracker creation without
 // validating unrelated review policies.
 func LabelDefinitions(cfg any) ([]labels.Entry, error) {

@@ -225,12 +225,13 @@ func checkClaim(ctx context.Context, in claimInput) stepOutcome {
 // issues a merged PR closed.
 type releaseInput struct {
 	Slot   string
-	Label  string // issues.labels.inProgress
+	Labels []string // labels.ClosedDrop: the workflow-state set
 	Keys   []tracker.IssueKey
 	Issues Issues
 }
 
-// releaseClaimLabels drops in-progress and claimed:<agent>@<machine> labels
+// releaseClaimLabels drops the workflow-state labels (in-progress, needs-review,
+// needs-human) and claimed:<agent>@<machine> labels
 // from every issue the merged PR closed. The forge closes them but leaves the
 // label, so the label would stop meaning "being worked on". An issue still open
 // (the PR landed on a branch other than the default, or the forge has not
@@ -238,7 +239,7 @@ type releaseInput struct {
 // failure is a note, and `rota round reconcile --apply` clears whatever this
 // missed.
 func releaseClaimLabels(ctx context.Context, in releaseInput) (notes []string) {
-	if in.Label == "" {
+	if len(in.Labels) == 0 {
 		return nil
 	}
 	for _, key := range in.Keys {
@@ -252,15 +253,12 @@ func releaseClaimLabels(ctx context.Context, in releaseInput) (notes []string) {
 // releaseClaimLabel asks backlog to release a closed issue's workflow labels.
 // A failed write leaves a diagnostic; the merge has already landed.
 func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKey) string {
-	if in.Label == "" {
-		return ""
-	}
-	drop, err := backlog.CleanupClosedIssueLabels(ctx, in.Issues, key, in.Label)
+	drop, err := backlog.CleanupClosedIssueLabels(ctx, in.Issues, key, in.Labels)
 	if err == nil {
 		return ""
 	}
 	if len(drop) == 0 {
-		return fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", in.Slot, key.Ref(), in.Label, err)
+		return fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", in.Slot, key.Ref(), strings.Join(in.Labels, ", "), err)
 	}
 	return fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", in.Slot, strings.Join(drop, ", "), key.Ref(), err)
 }
@@ -330,7 +328,7 @@ func (g *gateOperation) apply(out stepOutcome) (bool, error) {
 // closes: the numbers its body closes, plus a key-based tracker's issue named
 // in the branch or title instead of a keyword.
 func (g *gateOperation) releaseClaimLabels(src tracker.ClosingSource) {
-	if g.label == "" || g.issues == nil {
+	if len(g.closedLabels) == 0 || g.issues == nil {
 		return
 	}
 	var keys []tracker.IssueKey
@@ -342,7 +340,7 @@ func (g *gateOperation) releaseClaimLabels(src tracker.ClosingSource) {
 			keys = append(keys, key)
 		}
 	}
-	g.res.Notes = append(g.res.Notes, releaseClaimLabels(g.ctx, releaseInput{Slot: g.o.Slot, Label: g.label, Keys: keys, Issues: g.issues})...)
+	g.res.Notes = append(g.res.Notes, releaseClaimLabels(g.ctx, releaseInput{Slot: g.o.Slot, Labels: g.closedLabels, Keys: keys, Issues: g.issues})...)
 }
 
 // bundleKeys is the lead issue of the target followed by its bundle members,

@@ -72,9 +72,6 @@ type State struct {
 	// CLI is the pane that launched the round, nil when unknown or gone.
 	CLI     *host.LayoutPane
 	Workers []Placed
-	// Group is round.herdrGroupSlots: `tabs` puts each slot back in a linked
-	// workspace of its own instead of a tab of the orchestrator's.
-	Group bool
 	// Foreign are the other panes of the orchestrator's tab: a shell the
 	// person opened. They are never moved.
 	Foreign []host.LayoutPane
@@ -339,11 +336,12 @@ func name(ctx context.Context, h host.Layouter, st State, tab string) error {
 }
 
 // ToTabs gives every worker in the split's tab a tab of its own, in slot
-// order so they land in the tab bar in that order. With st.Group each goes
-// back to a linked workspace of its own (see toWorkspace). A CLI sharing the tab keeps
+// order so they land in the tab bar in that order. With a non-nil linked each
+// goes back to a linked workspace of its own (see toWorkspace); nil keeps them
+// plain tabs. A CLI sharing the tab keeps
 // it; the orchestrator goes out to a tab named Label, and when the
 // orchestrator's tab was the split's it gets that name back.
-func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
+func ToTabs(ctx context.Context, h host.Layouter, linked host.LinkedLayouter, st State) (Result, error) {
 	res := Result{Before: st.Layout()}
 	res.After = res.Before
 	tab := st.Tab()
@@ -352,10 +350,8 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 			continue
 		}
 		var err error
-		// st.Group is true only for a host that can group (caps.CanGroup), so the
-		// assertion is a cast; a plain Layouter still gets a tab.
-		if lh, ok := h.(host.LinkedLayouter); ok && st.Group && w.Path != "" {
-			err = toWorkspace(ctx, lh, w)
+		if linked != nil && w.Path != "" {
+			err = toWorkspace(ctx, linked, w)
 			if errors.Is(err, host.ErrUnsupported) {
 				// This herdr cannot link: the slot stays a plain tab.
 				res.Unlinked = append(res.Unlinked, w.Slot)
@@ -457,10 +453,10 @@ func (r Result) Describe() string {
 
 // Arrange puts root's live workers into mode: the arrangement `rota layout`
 // makes and a round keeps for the workers it spawns later. ok is false when
-// the orchestrator's pane is not among the panes. group is whether a slot
+// the orchestrator's pane is not among the panes. linked is non-nil when a slot
 // lives in a linked workspace of its own (round.herdrGroupSlots on a host that
 // can group), which `tabs` restores.
-func Arrange(ctx context.Context, h host.Layouter, root, mode, cli string, workers []Worker, group bool) (st State, res Result, ok bool, err error) {
+func Arrange(ctx context.Context, h host.Layouter, linked host.LinkedLayouter, root, mode, cli string, workers []Worker) (st State, res Result, ok bool, err error) {
 	panes, err := h.LayoutPanes(ctx)
 	if err != nil {
 		return State{}, Result{}, false, err
@@ -469,11 +465,10 @@ func Arrange(ctx context.Context, h host.Layouter, root, mode, cli string, worke
 	if !ok {
 		return State{}, Result{}, false, nil
 	}
-	st.Group = group
 	if mode == Split {
 		res, err = ToSplit(ctx, h, st)
 	} else {
-		res, err = ToTabs(ctx, h, st)
+		res, err = ToTabs(ctx, h, linked, st)
 	}
 	return st, res, true, err
 }
