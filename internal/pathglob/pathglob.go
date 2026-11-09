@@ -7,9 +7,7 @@
 //     change tier policy).
 //   - MatchEntry: a configured entry that is equal to the file, a directory the
 //     file lies under, or a Match glob (review paths, scope-drift declarations,
-//     lens paths).
-//   - MatchEntryFlat: MatchEntry where ** is not recursive but an ordinary
-//     path.Match segment, the documented ship.mergeApprovalPaths dialect.
+//     lens paths, ship.mergeApprovalPaths).
 //   - MatchUnder: a Match glob that may name any ancestor directory of the
 //     file (scope-drift support paths).
 //
@@ -36,24 +34,12 @@ func Clean(entry string) string {
 // MatchEntry reports whether file matches a configured entry: equal to it,
 // under it as a directory, or matching it as a Match glob. A leading `./` and a
 // trailing `/` on the entry are ignored; an empty entry matches nothing.
-func MatchEntry(entry, file string) bool { return matchEntry(entry, file, Match) }
-
-// MatchEntryFlat is MatchEntry with ** read as a plain path.Match segment (it
-// matches one directory level, not many). ship.mergeApprovalPaths keeps this
-// dialect until a recursive ** there is decided separately.
-func MatchEntryFlat(entry, file string) bool {
-	return matchEntry(entry, file, func(pattern, file string) bool {
-		ok, err := path.Match(pattern, file)
-		return err == nil && ok
-	})
-}
-
-func matchEntry(entry, file string, glob func(pattern, file string) bool) bool {
+func MatchEntry(entry, file string) bool {
 	entry = strings.TrimSuffix(Clean(entry), "/")
 	if entry == "" {
 		return false
 	}
-	return file == entry || strings.HasPrefix(file, entry+"/") || glob(entry, file)
+	return file == entry || strings.HasPrefix(file, entry+"/") || Match(entry, file)
 }
 
 // MatchUnder reports whether file, or any directory above it, matches the glob,

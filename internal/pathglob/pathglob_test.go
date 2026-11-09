@@ -52,25 +52,6 @@ func TestMatchEntry(t *testing.T) {
 	}
 }
 
-func TestMatchEntryFlat(t *testing.T) {
-	for _, c := range []struct {
-		entry, file string
-		want        bool
-	}{
-		{"rota-release/", "rota-release/SKILL.md", true},
-		{"*.md", "docs/README.md", false},
-		{"docs/**", "docs/a.md", true},
-		{"docs/**", "docs/a/b.md", false}, // ** is one level here, not recursive
-		{"[", "[", true},
-		{"[", "a", false},
-		{"", "x", false},
-	} {
-		if got := MatchEntryFlat(c.entry, c.file); got != c.want {
-			t.Errorf("MatchEntryFlat(%q, %q) = %v, want %v", c.entry, c.file, got, c.want)
-		}
-	}
-}
-
 func TestMatchUnder(t *testing.T) {
 	for _, c := range []struct {
 		glob, file string
