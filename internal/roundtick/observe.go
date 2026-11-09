@@ -7,21 +7,41 @@ import (
 	"github.com/l4ci/rota/internal/round"
 )
 
-// ObservationSources separates read-only inspection from mutation adapters.
-// Missing probes are unknown, never permission to call an execution adapter.
-type ObservationSources struct {
-	Reconcile   func(context.Context) (Inspection, error)
-	ReviewLoop  func(context.Context, Slot) ReviewOutcome
-	ReviewFacts func(context.Context) (round.Architecture, bool, error)
-	// AwaitingReview is Env.AwaitingReview without writes: it judges the
-	// last-fetched refs and the local verdicts only.
-	AwaitingReview func(context.Context, Slot, string) string
+// Inspection is one reconcile step. Execution fills Repaired; observation
+// fills Proposed, which describes repair attempts without claiming success.
+type Inspection struct {
+	Repaired, Proposed, Drift []Finding
+	Unknown                   []Item
 }
 
-// Inspection describes repair attempts without claiming their success.
-type Inspection struct {
-	Proposed, Drift []Finding
-	Unknown         []Item
+// InspectionOf reads a round.Outcome from either world. A read-only world
+// keeps every finding in Drift, repairable ones included: a proposed repair is
+// reported as a proposal, not also as drift the autopilot does not repair.
+func InspectionOf(out round.Outcome) Inspection {
+	var in Inspection
+	proposed := map[string]bool{}
+	for _, f := range out.Proposed {
+		f := FindingOf(f)
+		in.Proposed = append(in.Proposed, f)
+		proposed[f.String()] = true
+	}
+	for _, f := range out.Repaired {
+		in.Repaired = append(in.Repaired, FindingOf(f))
+	}
+	for _, f := range out.Drift {
+		if f := FindingOf(f); !proposed[f.String()] {
+			in.Drift = append(in.Drift, f)
+		}
+	}
+	if out.Report != nil {
+		for _, source := range out.Report.Unavailable {
+			in.Unknown = append(in.Unknown, Item{Kind: "source", Target: source, Why: "reconciliation source unavailable; dependent repairs are not verified"})
+		}
+		for _, warning := range out.Report.Warnings {
+			in.Unknown = append(in.Unknown, Item{Kind: "reconcile", Target: "round", Why: warning})
+		}
+	}
+	return in
 }
 
 // Proposal describes an attempted action, never an approval or landing proof.
@@ -48,7 +68,7 @@ func (e Env) land(ctx context.Context, r *Result, targets []string, base string)
 		action = "train"
 	}
 	r.propose(Action{Action: action, Target: strings.Join(targets, ","), Detail: "eligible to attempt landing into " + base}, "current state, reviews, manual gates, verification and merge result")
-	if e.Observe != nil {
+	if e.Observe {
 		return nil
 	}
 	if len(targets) == 1 {
