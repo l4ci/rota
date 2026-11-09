@@ -27,6 +27,7 @@
       "TestNoRawMachineReadsOutsideDeps",
       "TestNoWorkerEnvCtxAssignAfterConstruction",
       "TestReadOnlySetMatchesContract",
+      "TestRegistryListsEveryGateClearingVerb",
       "TestTreeImplementsEveryContractVerb"
     ],
     "./internal/config": [
