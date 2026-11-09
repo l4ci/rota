@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/roundwatch"
 )
 
 func TestWindDownPrintsSummary(t *testing.T) {
@@ -158,7 +159,7 @@ func TestWindDownVerifyFailureKeepsTickStateAndReceipts(t *testing.T) {
 // process and a tick state holding ben's merge for 12.
 func startedRound(t *testing.T, testFull string) (dir, cd string, rnd int) {
 	t.Helper()
-	dir = workerProject(t, `{"git":{"baseBranch":"main"},"round":{"slots":1,"roster":["ben"]},"test":{"full":[`+testFull+`]}}`)
+	dir = workerProject(t, `{"git":{"baseBranch":"main"},"autonomy":{"level":"auto"},"round":{"slots":1,"roster":["ben"]},"test":{"full":[`+testFull+`]}}`)
 	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
 	if code, out, errOut := rotaStdin(t, dir, "", "round", "start", "--holder-pid", strconv.Itoa(os.Getpid()), "--base", "main", "--slots", "1"); code != 0 {
 		t.Fatalf("round start: %d %s %s", code, out, errOut)
@@ -187,6 +188,10 @@ func windDown(t *testing.T, dir string, args ...string) (int, string, string) {
 func TestWindDownRetainedWorkResumesAutopilot(t *testing.T) {
 	dir, cd, rnd := startedRound(t, `"true"`)
 	os.WriteFile(filepath.Join(dir, ".worktrees", "ben", "wip.txt"), []byte("x"), 0o644)
+	// A prior red-verify stop is cleared by a green verify, even with work held.
+	if err := roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed); err != nil {
+		t.Fatal(err)
+	}
 	code, out, errOut := windDown(t, dir)
 	if code != 4 {
 		t.Fatalf("want exit 4 (holds work), got %d\n%s%s", code, out, errOut)
@@ -214,8 +219,8 @@ func TestWindDownVerifyFailedThenErrorStaysStopped(t *testing.T) {
 	if code == 0 || strings.Contains(out, "verdict") {
 		t.Fatalf("want an error exit before any result (exit %d)\n%s%s", code, out, errOut)
 	}
-	if !roundtick.LoadState(cd, rnd).Stopped {
-		t.Errorf("a red verify then an error must stay stopped\n%s%s", out, errOut)
+	if st := roundtick.LoadState(cd, rnd); !st.Stopped || st.StoppedReason != roundtick.StopVerifyFailed {
+		t.Errorf("a red verify then an error must stay stopped with its reason: %+v\n%s%s", st, out, errOut)
 	}
 	if !strings.Contains(errOut, "autopilot stays stopped") {
 		t.Errorf("error path lacks the stays-stopped line:\n%s", errOut)
@@ -226,7 +231,7 @@ func TestWindDownVerifyFailedThenErrorStaysStopped(t *testing.T) {
 // found: main may still be red from an earlier call.
 func TestWindDownPreVerifyErrorRestoresStopped(t *testing.T) {
 	dir, cd, rnd := startedRound(t, `"true"`)
-	if err := roundtick.SetStopped(cd, rnd, true); err != nil {
+	if err := roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed); err != nil {
 		t.Fatal(err)
 	}
 	// A base that is not checked out is refused before the verify runs.
@@ -235,21 +240,74 @@ func TestWindDownPreVerifyErrorRestoresStopped(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("want a refusal, got 0\n%s%s", out, errOut)
 	}
-	if !roundtick.LoadState(cd, rnd).Stopped {
-		t.Errorf("a pre-verify error must restore the prior stopped state\n%s%s", out, errOut)
+	if st := roundtick.LoadState(cd, rnd); !st.Stopped || st.StoppedReason != roundtick.StopVerifyFailed {
+		t.Errorf("a pre-verify error must restore the prior stop and its reason: %+v\n%s%s", st, out, errOut)
 	}
 }
 
-// A tick on a stopped round says why (a red wind-down verify), not that the
-// lease is gone.
-func TestTickWhileStoppedNamesTheRedBase(t *testing.T) {
+// After a red verify the tick says the base failed; a plain wind-down stop
+// (still running) says only that wind-down has the round.
+func TestTickStoppedMessagesNameTheReason(t *testing.T) {
 	dir, cd, rnd := startedRound(t, `"true"`)
+	tick := func() string {
+		code, out, errOut := rotaStdin(t, dir, "", "round", "tick", "--holder-pid", strconv.Itoa(os.Getpid()))
+		if code == 0 {
+			t.Fatalf("a stopped tick must refuse\n%s%s", out, errOut)
+		}
+		return out + errOut
+	}
+	if err := roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed); err != nil {
+		t.Fatal(err)
+	}
+	if got := tick(); !strings.Contains(got, "failed the wind-down verify") || !strings.Contains(got, "rota round wind-down") || strings.Contains(got, "lease") {
+		t.Errorf("red-base tick message wrong:\n%s", got)
+	}
 	if err := roundtick.SetStopped(cd, rnd, true); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := rotaStdin(t, dir, "", "round", "tick", "--observe", "--holder-pid", strconv.Itoa(os.Getpid()))
-	all := out + errOut
-	if code == 0 || !strings.Contains(all, "failed the wind-down verify") || !strings.Contains(all, "rota round wind-down") || strings.Contains(all, "round start takes the lease") {
-		t.Errorf("exit %d\n%s", code, all)
+	if got := tick(); !strings.Contains(got, "stopped by `rota round wind-down`") || strings.Contains(got, "failed the wind-down verify") || strings.Contains(got, "round start takes the lease") {
+		t.Errorf("plain-stop tick message wrong:\n%s", got)
+	}
+}
+
+// The autopilot watch ends the same way and names the same reason in its note.
+func TestWatchStoppedNoteNamesTheReason(t *testing.T) {
+	c, root, _ := fillTickFixture(t, `"light"`, true, true)
+	cd, err := rotastatetest.CommonDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := c.deps().roundSettings(root, roundConfigRequired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	watch := func() string {
+		now := c.deps().Now()
+		env := roundwatch.Env{
+			Now:   func() time.Time { return now },
+			Local: func() map[string]string { return map[string]string{} },
+			Wait: func(_ context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
+				now = now.Add(d)
+				return nil, nil
+			},
+			Sleep: func(_ context.Context, d time.Duration) { now = now.Add(d) },
+		}
+		res, err := autopilotWatch(c, context.Background(), env, roundwatch.Opts{Heartbeat: 2 * time.Minute, Poll: time.Minute}, set, root, cd, c.deps().LeaseEnv(), "", scopePID, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Text
+	}
+	if err := roundtick.SetStop(cd, 1, true, roundtick.StopVerifyFailed); err != nil {
+		t.Fatal(err)
+	}
+	if got := watch(); !strings.Contains(got, "autopilot\tstopped\t") || !strings.Contains(got, "failed the wind-down verify") || strings.Contains(got, "lease") {
+		t.Errorf("red-base watch note wrong:\n%s", got)
+	}
+	if err := roundtick.SetStopped(cd, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := watch(); !strings.Contains(got, "stopped by `rota round wind-down`") || strings.Contains(got, "failed the wind-down verify") {
+		t.Errorf("plain-stop watch note wrong:\n%s", got)
 	}
 }

@@ -27,7 +27,14 @@ import (
 )
 
 // ErrStopped says the round is winding down: Run assigns and merges nothing.
-var ErrStopped = errors.New("the round is stopped (wind-down): the autopilot stops")
+var ErrStopped = errors.New("the round is stopped by `rota round wind-down`; the autopilot resumes when wind-down finishes or a wind-down verifies the base green")
+
+// StopVerifyFailed is the stop reason of a red wind-down verify.
+const StopVerifyFailed = "verify-failed"
+
+// ErrBaseRed is ErrStopped after a wind-down verify went red: only a wind-down
+// that verifies the base green resumes the autopilot.
+var ErrBaseRed = fmt.Errorf("%w: the base failed the wind-down verify; fix the base, then re-run `rota round wind-down`", ErrStopped)
 
 // DefaultCap is round.autopilotCap: the most assigns, and the most merges, one
 // tick does.
@@ -84,6 +91,8 @@ type Env struct {
 	// Stopped is the round's wind-down flag (State.Stopped): Run refuses before
 	// it reconciles, merges or assigns.
 	Stopped bool
+	// StoppedReason is State.StoppedReason: StopVerifyFailed picks ErrBaseRed.
+	StoppedReason string
 	// Observe supplies read-only replacements for adapters that may mutate.
 	// A non-nil value selects observation; missing probes are reported unknown.
 	Observe *ObservationSources
@@ -260,6 +269,9 @@ func (e Env) audit(r *Result, a Action) {
 // gated base (rota-orchestrate, section 6), not from before the merge.
 func Run(ctx context.Context, e Env) (Result, error) {
 	if e.Stopped {
+		if e.StoppedReason == StopVerifyFailed {
+			return Result{}, ErrBaseRed
+		}
 		return Result{}, ErrStopped
 	}
 	r := Result{Observed: e.Observe != nil, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}

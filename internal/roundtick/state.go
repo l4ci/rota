@@ -18,10 +18,13 @@ const StateFile = "round-autopilot.json"
 type State struct {
 	Round int `json:"round"`
 	// Stopped is set while the round winds down: no tick assigns or merges.
-	Stopped     bool                  `json:"stopped,omitempty"`
-	Held        map[string]string     `json:"held,omitempty"`
-	Reported    []string              `json:"reported,omitempty"`
-	FailedHeads map[string]FailedHead `json:"failedHeads,omitempty"`
+	Stopped bool `json:"stopped,omitempty"`
+	// StoppedReason is StopVerifyFailed when a wind-down verify went red: the
+	// stop then outlives that call, until a wind-down verifies green.
+	StoppedReason string                `json:"stoppedReason,omitempty"`
+	Held          map[string]string     `json:"held,omitempty"`
+	Reported      []string              `json:"reported,omitempty"`
+	FailedHeads   map[string]FailedHead `json:"failedHeads,omitempty"`
 	// Filling stores base/count/maximum keys, never rendered elapsed time.
 	Filling map[string]string `json:"filling,omitempty"`
 }
@@ -42,6 +45,7 @@ func LoadState(commonDir string, round int) State {
 // Apply loads the state into an env.
 func (s State) Apply(e *Env) {
 	e.Stopped = s.Stopped
+	e.StoppedReason = s.StoppedReason
 	e.Held = s.Held
 	e.FailedHeads = s.FailedHeads
 	e.Filling = s.Filling
@@ -82,7 +86,16 @@ func SaveState(commonDir string, round int, r Result) error {
 // before it re-verifies, keeps it stopped after a red verify, and otherwise
 // restores or resumes it when the lease is kept.
 func SetStopped(commonDir string, round int, stopped bool) error {
-	return update(commonDir, round, func(s *State) { s.Stopped = stopped })
+	return SetStop(commonDir, round, stopped, "")
+}
+
+// SetStop is SetStopped with the reason the stop is kept (StopVerifyFailed or
+// empty); a resume passes no reason.
+func SetStop(commonDir string, round int, stopped bool, reason string) error {
+	if !stopped {
+		reason = ""
+	}
+	return update(commonDir, round, func(s *State) { s.Stopped, s.StoppedReason = stopped, reason })
 }
 
 // ClearState removes the state when the round is over.
