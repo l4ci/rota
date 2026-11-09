@@ -48,8 +48,6 @@ func docs(root string) artifact.FileDocs {
 	return artifact.FileDocs{Root: root, Dir: rotatree.PlansDir, Kind: "plan"}
 }
 
-func path(root, key string) string { return docs(root).Path(key) }
-
 // DesignRef is the path of the design file, which must exist.
 func (s files) DesignRef(_ bool, design string) (string, error) {
 	if !backlog.ValidID(design, backlog.FileIDDigits) {
