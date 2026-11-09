@@ -108,6 +108,9 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
+			if err := config.CheckLayer(root, config.LayerLocal); err != nil {
+				return Result{}, configFail(err, exitmap.ConfigInternal)
+			}
 			entries, err := config.ShowLocal(root, key, len(args) == 1)
 			if err != nil {
 				return Result{}, Resolution("unknown config key '%s'", key)
@@ -125,6 +128,10 @@ func configShow(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("unknown config key '%s'", key)
 			}
 			if err != nil {
+				// A corrupt global is the user's file (exit 5); anything else stays internal.
+				if out := configFail(err, exitmap.ConfigCorrupt|exitmap.ConfigInternal); out != err {
+					return Result{}, out
+				}
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 			rows, lines := showRows(entries)
@@ -133,6 +140,11 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
+		}
+		for _, layer := range []config.Layer{config.LayerProject, config.LayerLocal} {
+			if err := config.CheckLayer(root, layer); err != nil {
+				return Result{}, configFail(err, exitmap.ConfigInternal)
+			}
 		}
 		entries, err := config.Show(c.deps().projectsEnv(), root, key, len(args) == 1)
 		if err != nil {
@@ -337,6 +349,9 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
+		}
+		if err := config.CheckLayer(root, config.LayerLocal); err != nil {
+			return Result{}, configFail(err, exitmap.ConfigInternal)
 		}
 		cfg := c.deps().Config(root)
 		diag := config.Diagnose(c.deps().projectsEnv(), root, cfg)

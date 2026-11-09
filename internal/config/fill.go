@@ -13,7 +13,7 @@ import (
 
 // ErrCorrupt is Fill's answer when config.json is not a valid JSON object,
 // the state Check reports as Corrupt.
-var ErrCorrupt = errors.New(".rota/config.json is not a valid JSON object")
+var ErrCorrupt = errors.New(".rota/config.json is not a valid JSON object; fix or remove it, rota will not overwrite it")
 
 // decodeObject is Check's reading of config.json: invalid UTF-8, invalid JSON
 // or JSON that is not an object is corrupt.
