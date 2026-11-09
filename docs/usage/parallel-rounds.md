@@ -1399,7 +1399,7 @@ closed (and `--json` adds it as `summary`). With no ledger it prints nothing ext
 Run it from the orchestrator that holds the lease, with the base checked out and clean in
 the project root. It re-verifies the base (`test.full`), then parks every
 roster slot on `park/<agent>` and releases the claims, then releases the lease. A red base
-(`verify-failed`, exit 1) keeps the lease. A slot with uncommitted changes or commits not on
+(`verify-failed`, exit 1) keeps the lease and leaves the autopilot stopped, so it cannot assign or merge onto a red base: fix the base, then run wind-down again (a green verify ends the round). A slot with uncommitted changes or commits not on
 the base is reported as `retained` and left alone (`holds-work`, exit 4) and the lease is kept; the other slots are
 parked anyway, so fix the slot and run it again. It deletes no branch and clears no label: the
 `drift` count says what `rota round reconcile` and `rota reap` still have to do. After a round, run

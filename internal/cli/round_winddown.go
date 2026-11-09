@@ -79,7 +79,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		env := c.deps().RoundEnv(ctx, root)
 		env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
 		// An autopilot watch must not assign or merge while the base is being
-		// re-verified; a kept lease lets it resume.
+		// re-verified; a kept lease lets it resume, a failed verify keeps it stopped.
 		var cd string
 		var rnd int
 		if d, ok := c.CommonDirOK(root); ok {
@@ -92,9 +92,14 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			NoVerify: *noVerify, Prune: *prune, HolderPID: *pid, Settings: set,
 		})
 		if cd != "" {
-			if err != nil || !res.Over() {
+			// A failed verify leaves the autopilot stopped: it must not assign
+			// or merge onto a red base. Other kept-lease outcomes resume it.
+			switch {
+			case err == nil && res.Verdict == round.VerdictVerifyFailed:
+				// stays stopped
+			case err != nil || !res.Over():
 				_ = roundtick.SetStopped(cd, rnd, false)
-			} else {
+			default:
 				roundtick.ClearState(cd)
 			}
 		}
@@ -144,6 +149,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			if res.VerifyLog != "" {
 				c.Warn("verify output (tail):\n%s", res.VerifyLog)
 			}
+			out.Text += "\nautopilot\tstays stopped; fix the base, then run `rota round wind-down` again (plain `rota round watch` still works)"
 			return out, Failed("the base does not pass verification; the lease is kept")
 		case round.VerdictHoldsWork:
 			return out, Refused("a slot still holds work; the others are parked and the lease is kept")
