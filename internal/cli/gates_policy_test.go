@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"bytes"
+	"flag"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
@@ -176,7 +180,7 @@ func TestGatePoliciesMatchOldTables(t *testing.T) {
 		paths = append(paths, "rota "+v)
 	}
 	for _, path := range paths {
-		g := gatesFor(root, path)
+		g := gatesAt(root, path)
 		if want := oldPathUnder(path, oldLegacyStateExempt); g.LegacyExempt != want {
 			t.Errorf("%s: LegacyExempt = %v, want %v", path, g.LegacyExempt, want)
 		}
@@ -224,14 +228,53 @@ func TestGatesInheritDownTheTree(t *testing.T) {
 		}},
 	}}
 	root.Gates.RoundKeys = RoundKeysRefuse
-	if g := gatesFor(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || g.Fence != roundcfg.FenceUnclassified {
+	if g := gatesAt(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || g.Fence != roundcfg.FenceUnclassified {
 		t.Errorf("a = %+v", g)
 	}
-	if g := gatesFor(root, "rota grp b"); !g.LegacyExempt || g.RoundKeys != RoundKeysQuiet || g.Fence != roundcfg.FenceAllowed {
+	if g := gatesAt(root, "rota grp b"); !g.LegacyExempt || g.RoundKeys != RoundKeysQuiet || g.Fence != roundcfg.FenceAllowed {
 		t.Errorf("b = %+v", g)
 	}
 	// The root's own policy is for bare rota alone.
-	if g := gatesFor(root, "rota"); g.RoundKeys != RoundKeysRefuse || g.LegacyExempt {
+	if g := gatesAt(root, "rota"); g.RoundKeys != RoundKeysRefuse || g.LegacyExempt {
 		t.Errorf("root = %+v", g)
+	}
+}
+
+// gatesAt is the gate policy of the verb at path, found the way the dispatcher
+// finds it: the nodes from the root down.
+func gatesAt(root *Command, path string) Gates {
+	chain := []*Command{root}
+	for _, w := range strings.Fields(path)[1:] {
+		chain = append(chain, chain[len(chain)-1].sub(w))
+	}
+	return gatesFor(chain)
+}
+
+// The dispatcher hands the nodes it resolved to the gate lookup, so a verb that
+// is renamed keeps the policy declared on it, the exit-5 dispatch exception
+// included: no verb path is compared anywhere.
+func TestGatesFollowTheNodeNotItsName(t *testing.T) {
+	assign := &Command{Name: "assign", Verb: func(*flag.FlagSet) RunFunc {
+		return func(*Ctx, []string) (Result, error) {
+			d := jsonx.NewObject()
+			d.Set("blockedBy", blockedby.Dispatch)
+			return Result{Data: d}, &Error{Exit: ExitUnavailable, Message: "dispatch failed"}
+		}
+	}, Fence: fenceAllowed, Gates: Gates{KeepDispatch: true}}
+	root := &Command{Name: "rota", Subs: []*Command{{Name: "round", Subs: []*Command{assign}}}}
+	for _, name := range []string{"assign", "renamed"} {
+		assign.Name = name
+		var out, errb bytes.Buffer
+		code := run(root, testDeps(), []string{"--json", "round", name}, strings.NewReader(""), &out, &errb)
+		if code != ExitUnavailable || !strings.Contains(out.String(), `"blockedBy"`) {
+			t.Errorf("%s: exit %d, stdout %q: dispatch data not kept", name, code, out.String())
+		}
+	}
+	// A verb that does not declare it loses its data on exit 5.
+	assign.Gates = Gates{}
+	var out, errb bytes.Buffer
+	run(root, testDeps(), []string{"--json", "round", "renamed"}, strings.NewReader(""), &out, &errb)
+	if strings.Contains(out.String(), `"blockedBy"`) {
+		t.Errorf("undeclared verb kept dispatch data: %q", out.String())
 	}
 }

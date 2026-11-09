@@ -104,6 +104,8 @@ type Ctx struct {
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
 	dashAt int
+	// keepDispatch is the resolved verb's Gates.KeepDispatch.
+	keepDispatch bool
 	// verbArgs is what followed the verb words, global flags removed: what
 	// the bug log records.
 	verbArgs []string
@@ -328,6 +330,7 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 	pre := newFlagSet("rota")
 	g.register(pre, true, false)
 	cmd := root
+	chain := []*Command{root}
 	i := 0
 	// The root has a verb of its own (bare rota), yet global flags still come
 	// before the command word.
@@ -348,15 +351,18 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 				return fail(c, stdout, Usage("unknown command %q", tok).WithHint("run: "+c.Path+" --help"))
 			}
 			cmd = sub
+			chain = append(chain, cmd)
 			c.Path += " " + cmd.Name
 		}
 	}
 	if g.ui && cmd.Verb == nil && cmd.UISub != "" {
 		cmd = cmd.sub(cmd.UISub)
+		chain = append(chain, cmd)
 		c.Path += " " + cmd.Name
 	}
 	if g.version && cmd == root {
 		cmd = root.sub("version")
+		chain = []*Command{root, cmd}
 		c.Path = "rota version"
 	}
 
@@ -415,7 +421,9 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 		}
 	}
 	physicalCwd(c)
-	if res, err := runGates(c, root); err != nil {
+	gates := gatesFor(chain)
+	c.keepDispatch = gates.KeepDispatch
+	if res, err := runGates(c, gates); err != nil {
 		return failWith(c, stdout, err, res)
 	}
 	// An unregistered --repo is exit 3 on every repo-scoped verb, ahead of
@@ -517,7 +525,7 @@ func fail(c *Ctx, stdout io.Writer, err error) int { return failWith(c, stdout, 
 func failWith(c *Ctx, stdout io.Writer, err error, res Result) int {
 	e := asError(err)
 	keepDispatch := false
-	if e.Exit == ExitUnavailable && c.Path == "rota round assign" {
+	if e.Exit == ExitUnavailable && c.keepDispatch {
 		if d, ok := res.Data.(*jsonx.Object); ok {
 			keepDispatch = jsonx.Str(d, "blockedBy") == blockedby.Dispatch
 		}

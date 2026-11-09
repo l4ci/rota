@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"strings"
-
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -41,24 +39,23 @@ type Gates struct {
 	// Fence is the verb's own Command.Fence, copied here for the fence gate.
 	// Never inherited.
 	Fence roundcfg.FenceClass
+	// KeepDispatch keeps the verb's result data on an exit-5 dispatch failure
+	// (blockedBy dispatch): it changed state and must name the unsent slot.
+	// Never inherited.
+	KeepDispatch bool
 }
 
-// gatesFor is the gate policy of the verb at path ("rota group verb"): the
-// policies on the way down from the root, a verb's own over its group's. The
-// root's policy is for bare rota alone.
-func gatesFor(root *Command, path string) Gates {
-	words := strings.Fields(path)
-	if len(words) <= 1 {
-		g := root.Gates
-		g.Fence = root.Fence
+// gatesFor is the gate policy of the verb the dispatcher resolved: chain runs
+// from the root down to it. The policies on the way down count, a verb's own
+// over its group's. The root's policy is for bare rota alone.
+func gatesFor(chain []*Command) Gates {
+	if len(chain) == 1 {
+		g := chain[0].Gates
+		g.Fence = chain[0].Fence
 		return g
 	}
 	var g Gates
-	cmd := root
-	for _, w := range words[1:] {
-		if cmd = cmd.sub(w); cmd == nil {
-			break
-		}
+	for _, cmd := range chain[1:] {
 		g.LegacyExempt = g.LegacyExempt || cmd.Gates.LegacyExempt
 		g.TrackedRoleExempt = g.TrackedRoleExempt || cmd.Gates.TrackedRoleExempt
 		g.RoundMachine = g.RoundMachine || cmd.Gates.RoundMachine
@@ -67,9 +64,9 @@ func gatesFor(root *Command, path string) Gates {
 			g.RoundKeys = cmd.Gates.RoundKeys
 		}
 	}
-	if cmd != nil {
-		g.Fence = cmd.Fence
-	}
+	last := chain[len(chain)-1]
+	g.Fence = last.Fence
+	g.KeepDispatch = last.Gates.KeepDispatch
 	return g
 }
 
@@ -131,8 +128,8 @@ func (p *preflight) config(root string) any {
 // runGates is the gate sequence: the legacy state directory stop, a corrupt config, the old round keys, a
 // role in the tracked config, an unnamed support machine, the support fence.
 // A gate's refusal ends the sequence with its error and result.
-func runGates(c *Ctx, root *Command) (Result, error) {
-	p := &preflight{c: c, g: gatesFor(root, c.Path)}
+func runGates(c *Ctx, g Gates) (Result, error) {
+	p := &preflight{c: c, g: g}
 	if err := p.legacyState(); err != nil {
 		return Result{}, err
 	}

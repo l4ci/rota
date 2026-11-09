@@ -314,7 +314,7 @@ func TestUnclassifiedVerbRefusedOnSupport(t *testing.T) {
 	gate := func(dir, path string) error {
 		c := &Ctx{Path: path, Deps: testDeps()}
 		c.Deps.Getwd = func() (string, error) { return dir, nil }
-		_, err := runGates(c, tree)
+		_, err := runGates(c, gatesAt(tree, path))
 		return err
 	}
 	if err := gate(support, "rota grp new"); err == nil {
