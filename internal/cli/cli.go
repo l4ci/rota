@@ -80,7 +80,15 @@ type Ctx struct {
 	Stderr io.Writer
 	Deps   *Deps // what the verbs reach outside the process; nil means the real ones
 
-	ctx      context.Context // set by run: cancelled on SIGINT and SIGTERM
+	ctx context.Context // set by run: cancelled on SIGINT and SIGTERM
+
+	// viewSink, when set, takes the --ui screen a verb built instead of
+	// Deps.RunView; the palette hosts the model itself.
+	viewSink func(tui.Model) error
+	// termOut, when set, is the writer the terminal checks judge in place of
+	// Stdout: a nested run writing to a capture buffer stands in for the
+	// terminal its host already proved.
+	termOut  io.Writer
 	warnings []string
 
 	// reviewSkipNoted is set once `round watch` has said its review poll is
@@ -99,6 +107,15 @@ type Ctx struct {
 	// verbArgs is what followed the verb words, global flags removed: what
 	// the bug log records.
 	verbArgs []string
+}
+
+// stdoutIsTerminal is whether the invocation's output reaches a terminal.
+func (c *Ctx) stdoutIsTerminal() bool {
+	w := c.Stdout
+	if c.termOut != nil {
+		w = c.termOut
+	}
+	return c.deps().IsTerminal(w)
 }
 
 // Context is the verb's context. run cancels it on SIGINT and SIGTERM, so a
@@ -270,16 +287,34 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	return runWithContext(sigCtx, root, deps, args, stdin, stdout, stderr)
 }
 
+// runNested runs one more verb inside the invocation c belongs to: the caller's
+// context, the caller's Deps and read cache.
+func (c *Ctx) runNested(root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer, setup func(*Ctx)) int {
+	return execute(c.Context(), root, c.deps(), args, stdin, stdout, stderr, setup)
+}
+
 // runWithContext borrows the caller's lifetime for views hosted by the palette.
-func runWithContext(ctx context.Context, root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
-	// Until the arguments parse, an error answers in JSON if any token
-	// before "--" is exactly --json.
+// It starts a top-level invocation, so it alone gives the run a fresh read
+// cache; a nested run goes through (*Ctx).runNested and shares the outer one.
+func runWithContext(ctx context.Context, root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if deps != nil && deps.ReadCache != nil {
 		// One invocation's reads are shared; the next starts from the forge.
 		deps.ReadCache = tracker.NewReadCache()
 	}
+	return execute(ctx, root, deps, args, stdin, stdout, stderr, nil)
+}
+
+// execute runs one command line. setup, when set, adjusts the invocation's Ctx
+// before the line is parsed (a nested view run redirects its screen and its
+// terminal check there).
+func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer, setup func(*Ctx)) (code int) {
+	// Until the arguments parse, an error answers in JSON if any token
+	// before "--" is exactly --json.
 	c := &Ctx{Path: "rota", Stdin: stdin, Stdout: stdout, Stderr: stderr, Deps: deps, JSON: containsJSON(args), dashAt: -1}
 	c.ctx = ctx
+	if setup != nil {
+		setup(c)
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			e := asError(fmt.Errorf("panic: %v", r))

@@ -28,7 +28,7 @@ import (
 // names a screen, the entry follows the verb's own Command.View.
 func paletteVerb(c *Ctx, root *Command, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
 	e := palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
-		run(Tree(), c.deps(), verb, c.Stdin, c.Stdout, c.Stderr)
+		c.runNested(Tree(), verb, c.Stdin, c.Stdout, c.Stderr, nil)
 		return nil
 	}}
 	if cmd := findVerb(root, verb); cmd != nil && cmd.View != nil {
@@ -54,19 +54,13 @@ func findVerb(root *Command, verb []string) *Command {
 // borrow the palette host's context after this builder returns.
 func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 	var m tui.Model
-	d := *c.deps()
-	d.RunView = func(_ *Ctx, built tui.Model) error { m = built; return nil }
 	var out, errb bytes.Buffer
 	// The capture buffer stands in for the palette's own terminal, which the
 	// palette proved before it opened: the --ui gate judges that, not the buffer.
-	isTerminal := c.deps().IsTerminal
-	d.IsTerminal = func(w any) bool {
-		if w == &out {
-			w = c.Stdout
-		}
-		return isTerminal(w)
-	}
-	runWithContext(c.Context(), root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
+	c.runNested(root, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb, func(n *Ctx) {
+		n.viewSink = func(built tui.Model) error { m = built; return nil }
+		n.termOut = c.Stdout
+	})
 	if m == nil {
 		return nil, errors.New(firstText("no view", errb.String(), out.String()))
 	}
@@ -111,7 +105,7 @@ func layoutToggle(c *Ctx) (palette.Entry, bool) {
 		},
 		Run: func() error {
 			cur, _ := state()
-			run(Tree(), c.deps(), []string{"layout", other(cur), "--project", root}, c.Stdin, c.Stdout, c.Stderr)
+			c.runNested(Tree(), []string{"layout", other(cur), "--project", root}, c.Stdin, c.Stdout, c.Stderr, nil)
 			return nil
 		},
 	}, true
