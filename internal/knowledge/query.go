@@ -59,7 +59,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 				continue
 			}
 			tier := ""
-			if name != GlossaryTopic {
+			if tiered(name) {
 				e, _, err := tiers.Get(name, title)
 				if err != nil {
 					return nil, err
