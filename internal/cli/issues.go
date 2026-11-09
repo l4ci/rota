@@ -57,7 +57,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.Env{Config: c.deps().Config(root), Opts: c.deps().trackerBase(), Forge: c.deps().IssuesForge}
+	env = issues.NewEnv(c.deps().Config(root), c.deps().trackerBase(), c.deps().IssuesForge)
 	return
 }
 
@@ -213,7 +213,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.Env{Config: c.deps().Config(root), Opts: c.deps().trackerBase(), Forge: c.deps().IssuesForge}
+			env := issues.NewEnv(c.deps().Config(root), c.deps().trackerBase(), c.deps().IssuesForge)
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {
