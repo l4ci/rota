@@ -21,13 +21,13 @@ import (
 
 func skillsCommands() *Command {
 	return &Command{Name: "skills", Summary: "install the embedded skills for Claude Code and Codex", Subs: []*Command{
-		{Name: "install", Summary: "write the skills into the agent skill directories", Verb: skillsVerb(skillsInstall, skills.User, true, true)},
-		{Name: "update", Summary: "refresh the skill directories that already have a manifest", Verb: skillsVerb(skillsUpdate, "", true, true)},
-		{Name: "uninstall", Summary: "remove what rota installed", Verb: skillsVerb(skillsUninstall, skills.User, true, false)},
-		{Name: "status", Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false, false)},
-		{Name: "list", Summary: "name the skills embedded in this binary", Verb: skillsList},
-		{Name: "get", Summary: "print an embedded skill or one of its references", Verb: skillsGet},
-		{Name: "links", Summary: "print the relative links of markdown files", Verb: skillsLinks},
+		{Name: "install", Fence: fenceAllowed, Summary: "write the skills into the agent skill directories", Verb: skillsVerb(skillsInstall, skills.User, true, true)},
+		{Name: "update", Fence: fenceAllowed, Summary: "refresh the skill directories that already have a manifest", Verb: skillsVerb(skillsUpdate, "", true, true)},
+		{Name: "uninstall", Fence: fenceAllowed, Summary: "remove what rota installed", Verb: skillsVerb(skillsUninstall, skills.User, true, false)},
+		{Name: "status", Fence: fenceAllowed, Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false, false)},
+		{Name: "list", Fence: fenceAllowed, Summary: "name the skills embedded in this binary", Verb: skillsList},
+		{Name: "get", Fence: fenceAllowed, Summary: "print an embedded skill or one of its references", Verb: skillsGet},
+		{Name: "links", Fence: fenceAllowed, Summary: "print the relative links of markdown files", Verb: skillsLinks},
 	}}
 }
 

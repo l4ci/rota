@@ -21,12 +21,12 @@ import (
 // rota's own mistakes and the gated filing of them on the rota repo.
 func bugreportCommands() *Command {
 	return &Command{Name: "bugreport", Summary: "record rota's own mistakes and file them upstream", Subs: []*Command{
-		{Name: "add", Summary: "record a mistake rota made (a wrong refusal, a skill step that contradicts a verb)", Verb: brAdd},
-		{Name: "list", Summary: "list the recorded mistakes still open", Verb: noFlags(brList)},
-		{Name: "draft", Summary: "print the redacted report for a record", Verb: brDraft},
-		{Name: "duplicates", Summary: "search open issues on the rota repo for a record's duplicate", Verb: noFlags(brDuplicates)},
-		{Name: "file", Summary: "file a record on the rota repo, or comment on a duplicate (manual gate)", Verb: brFile},
-		{Name: "dismiss", Summary: "drop a record without filing it", Verb: noFlags(brDismiss)},
+		{Name: "add", Fence: fenceAllowed, Summary: "record a mistake rota made (a wrong refusal, a skill step that contradicts a verb)", Verb: brAdd},
+		{Name: "list", Fence: fenceAllowed, Summary: "list the recorded mistakes still open", Verb: noFlags(brList)},
+		{Name: "draft", Fence: fenceAllowed, Summary: "print the redacted report for a record", Verb: brDraft},
+		{Name: "duplicates", Fence: fenceAllowed, Summary: "search open issues on the rota repo for a record's duplicate", Verb: noFlags(brDuplicates)},
+		{Name: "file", Fence: fenceAllowed, Summary: "file a record on the rota repo, or comment on a duplicate (manual gate)", Verb: brFile},
+		{Name: "dismiss", Fence: fenceAllowed, Summary: "drop a record without filing it", Verb: noFlags(brDismiss)},
 	}}
 }
 

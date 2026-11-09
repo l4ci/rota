@@ -15,7 +15,7 @@ import (
 // changeCommands is the `rota change` group (#2348).
 func changeCommands() *Command {
 	return &Command{Name: "change", Summary: "size a branch's change: the tier the gate and review depth work to", Subs: []*Command{
-		{Name: "classify", Summary: "tier (docs, small, full) of a branch's diff against the base, and the files that decided it", Repo: true, Verb: changeClassify},
+		{Name: "classify", Fence: fenceAllowed, Summary: "tier (docs, small, full) of a branch's diff against the base, and the files that decided it", Repo: true, Verb: changeClassify},
 	}}
 }
 

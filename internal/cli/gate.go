@@ -19,7 +19,7 @@ import (
 // gateCommands is the `rota gate` group (B1, #54).
 func gateCommands() *Command {
 	return &Command{Name: "gate", Summary: "the manual-gate registry", Subs: []*Command{
-		{Name: "list", Summary: "list every manual gate and the verbs that enforce it", Verb: noFlags(gateList)},
+		{Name: "list", Fence: fenceAllowed, Summary: "list every manual gate and the verbs that enforce it", Verb: noFlags(gateList)},
 	}}
 }
 

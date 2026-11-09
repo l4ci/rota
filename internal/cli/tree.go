@@ -16,8 +16,9 @@ func Tree() *Command {
 		Name:    "rota",
 		Summary: "rota command line",
 		Verb:    bareRota,
+		Fence:   fenceAllowed,
 		Subs: []*Command{
-			{Name: "version", Summary: "print the rota version", Verb: versionVerb},
+			{Name: "version", Fence: fenceAllowed, Summary: "print the rota version", Verb: versionVerb},
 			knowledgeCommands(),
 			glossaryCommands(),
 			blockCommand(),
