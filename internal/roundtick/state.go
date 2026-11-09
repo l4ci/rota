@@ -79,7 +79,8 @@ func SaveState(commonDir string, round int, r Result) error {
 }
 
 // SetStopped stops or resumes the autopilot of a round: wind-down stops it
-// before it re-verifies, and resumes it if the lease is kept.
+// before it re-verifies, keeps it stopped after a red verify, and otherwise
+// restores or resumes it when the lease is kept.
 func SetStopped(commonDir string, round int, stopped bool) error {
 	return update(commonDir, round, func(s *State) { s.Stopped = stopped })
 }
