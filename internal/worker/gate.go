@@ -750,7 +750,7 @@ func (runner gate) stepReleaseExternal(result GateResult, target GateTarget) (st
 func (runner gate) stepForge(result GateResult, target GateTarget) (gateForgeResult, GateResult, bool, error) {
 	g := runner.operation(result, target, gateForgeResult{})
 	finish := func(done bool, err error) (gateForgeResult, GateResult, bool, error) {
-		return gateForgeResult{provider: g.provider, forge: g.forge, issues: g.issues, local: g.local, cliName: g.cliName, label: g.label}, *g.res, done, err
+		return gateForgeResult{provider: g.provider, forge: g.forge, issues: g.issues, local: g.local, cliName: g.cliName, closedLabels: g.closedLabels}, *g.res, done, err
 	}
 
 	if err := g.in.cfg.RemoteErr; err != nil {
@@ -768,7 +768,7 @@ func (runner gate) stepForge(result GateResult, target GateTarget) (gateForgeRes
 		return finish(true, nil)
 	}
 	g.cliName = tracker.CLIName(g.provider)
-	g.label = g.in.cfg.InProgressLabel
+	g.closedLabels = g.in.cfg.ClosedLabels
 	if g.provider == tracker.ProviderLocal {
 		// No forge: no PR to look for, read or merge. The gate merges directly.
 		g.local = true
@@ -2003,11 +2003,12 @@ type gate struct {
 // gateForgeResult is the forge connection opened by stepForge. It has no
 // target, refs, verifier or result fields that later steps could secretly set.
 type gateForgeResult struct {
-	provider       string
-	forge          Forge
-	issues         Issues
-	local          bool
-	cliName, label string
+	provider     string
+	forge        Forge
+	issues       Issues
+	local        bool
+	cliName      string
+	closedLabels []string
 }
 
 type gateSlotHeadResult struct {
@@ -2037,7 +2038,8 @@ type gateOperation struct {
 	forge                      Forge
 	issues                     Issues
 	local                      bool
-	cliName, label             string
+	cliName                    string
+	closedLabels               []string
 	sectionBody                *string
 	viewed                     *tracker.PRInfo
 	remote                     bool
@@ -2062,7 +2064,7 @@ func (g gate) operation(result GateResult, target GateTarget, forged gateForgeRe
 	return gateOperation{gate: g, res: &result, target: target,
 		branch: target.Branch, pr: target.PR, prNum: prNumText(target.PR),
 		provider: forged.provider, forge: forged.forge, issues: forged.issues,
-		local: forged.local, cliName: forged.cliName, label: forged.label}
+		local: forged.local, cliName: forged.cliName, closedLabels: forged.closedLabels}
 }
 
 // verdict records a non-success verdict.

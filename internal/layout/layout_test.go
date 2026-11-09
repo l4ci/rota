@@ -209,7 +209,7 @@ func TestTabsWithCLIEjectsTheOrchestratorAndWorkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.log = nil
-	res, err := ToTabs(bg, f, state(t, f, panes, ws, "c"))
+	res, err := ToTabs(bg, f, nil, state(t, f, panes, ws, "c"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestTabsWithCLIEjectsTheOrchestratorAndWorkers(t *testing.T) {
 func TestTabsRenamesASplitTabBack(t *testing.T) {
 	f, panes, ws := round(1)
 	panes[0].TabLabel = SplitLabel
-	if _, err := ToTabs(bg, f, state(t, f, panes, ws, "")); err != nil {
+	if _, err := ToTabs(bg, f, nil, state(t, f, panes, ws, "")); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"rename tab T orchestrator"}; !reflect.DeepEqual(f.log, want) {
@@ -294,7 +294,7 @@ func TestTabsGivesEachWorkerItsOwnTabInSlotOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.log = nil
-	res, err := ToTabs(bg, f, state(t, f, panes, ws, ""))
+	res, err := ToTabs(bg, f, nil, state(t, f, panes, ws, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestTabsGivesEachWorkerItsOwnTabInSlotOrder(t *testing.T) {
 	}
 	// Tabs on tabs does nothing.
 	f.log = nil
-	if res, err := ToTabs(bg, f, st); err != nil || res.Moves != 0 || len(f.log) != 0 {
+	if res, err := ToTabs(bg, f, nil, st); err != nil || res.Moves != 0 || len(f.log) != 0 {
 		t.Errorf("second tabs: %+v %v %v", res, err, f.log)
 	}
 }
@@ -389,7 +389,7 @@ func TestForeignPaneStaysAndIsListed(t *testing.T) {
 	if _, err := ToSplit(bg, f, st); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ToTabs(bg, f, state(t, f, panes, ws, "")); err != nil {
+	if _, err := ToTabs(bg, f, nil, state(t, f, panes, ws, "")); err != nil {
 		t.Fatal(err)
 	}
 	for _, l := range f.log {
@@ -487,7 +487,7 @@ func (f *linkFake) CloseTab(_ context.Context, tab string) error {
 // grouped is a split round: the orchestrator and n workers share tab T of
 // workspace W, each worker with its worktree.
 func grouped(n int) State {
-	st := State{Group: true, Orch: host.LayoutPane{ID: "p0", Tab: "T", Workspace: "W", TabLabel: SplitLabel}}
+	st := State{Orch: host.LayoutPane{ID: "p0", Tab: "T", Workspace: "W", TabLabel: SplitLabel}}
 	for i := 1; i <= n; i++ {
 		slot := fmt.Sprintf("s%d", i)
 		st.Workers = append(st.Workers, Placed{Slot: slot, Pane: fmt.Sprintf("p%d", i), Tab: "T", Workspace: "W", Path: "/p/.worktrees/" + slot})
@@ -499,7 +499,7 @@ func grouped(n int) State {
 // in and closes the stray root tab. An already open workspace has none.
 func TestToTabsGroupedReturnsEachSlotToItsOwnWorkspace(t *testing.T) {
 	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}, open: map[string]bool{"s2": true}}
-	res, err := ToTabs(bg, f, grouped(2))
+	res, err := ToTabs(bg, f, f, grouped(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,9 +523,7 @@ func TestToTabsGroupedReturnsEachSlotToItsOwnWorkspace(t *testing.T) {
 // herdr that could link.
 func TestToTabsUngroupedKeepsPlainTabs(t *testing.T) {
 	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}
-	st := grouped(1)
-	st.Group = false
-	if _, err := ToTabs(bg, f, st); err != nil {
+	if _, err := ToTabs(bg, f, nil, grouped(1)); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"pane move p1 --new-tab --label s1 --no-focus", "rename tab T orchestrator"}
@@ -540,11 +538,11 @@ func TestToTabsGroupedFallsBackToATab(t *testing.T) {
 	st := grouped(1)
 	st.Workers[0].Path = ""
 	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}
-	if _, err := ToTabs(bg, f, st); err != nil {
+	if _, err := ToTabs(bg, f, f, st); err != nil {
 		t.Fatal(err)
 	}
 	g := &fakeHerdr{tab: map[string]string{}}
-	if _, err := ToTabs(bg, g, grouped(1)); err != nil {
+	if _, err := ToTabs(bg, g, nil, grouped(1)); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"pane move p1 --new-tab --label s1 --no-focus", "rename tab T orchestrator"}
@@ -685,7 +683,7 @@ func TestToTabsGroupedClosesTheRootTabWhenTheMoveFails(t *testing.T) {
 	st := grouped(2)
 	f := newMoveFake(st)
 	f.fail = "s1"
-	if _, err := ToTabs(bg, f, st); err == nil {
+	if _, err := ToTabs(bg, f, f, st); err == nil {
 		t.Fatal("want the move error")
 	}
 	want := []string{
@@ -703,7 +701,7 @@ func TestToTabsGroupedFallsBackWhenHerdrCannotLink(t *testing.T) {
 	st := grouped(2)
 	f := newMoveFake(st)
 	f.unsupported = "s1"
-	res, err := ToTabs(bg, f, st)
+	res, err := ToTabs(bg, f, f, st)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -741,7 +739,7 @@ func TestArrangeTabsOnAGroupedRoundKeepsLinkedWorkspaces(t *testing.T) {
 		ws = append(ws, Worker{Slot: w.Slot, Pane: w.Pane, Path: w.Path})
 	}
 	f := &panesFake{linkFake: &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}, panes: panes}
-	_, res, ok, err := Arrange(bg, f, root, Tabs, "", ws, true)
+	_, res, ok, err := Arrange(bg, f, f, root, Tabs, "", ws)
 	if err != nil || !ok {
 		t.Fatalf("ok=%v err=%v", ok, err)
 	}

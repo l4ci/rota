@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -141,11 +143,38 @@ func TestCheckClosesBreaksOnAnUnreadableIssue(t *testing.T) {
 }
 
 func TestReleaseClaimLabelsNotesAnUnreadableIssue(t *testing.T) {
-	notes := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Label: "in-progress", Keys: keys(5), Issues: &seamIssues{getErr: errors.New("gone")}})
+	notes := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Labels: []string{"in-progress"}, Keys: keys(5), Issues: &seamIssues{getErr: errors.New("gone")}})
 	if len(notes) != 1 || !strings.Contains(notes[0], "LABEL-KEPT") {
 		t.Fatalf("notes = %q, want one LABEL-KEPT", notes)
 	}
 	if got := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Keys: keys(5), Issues: &seamIssues{}}); got != nil {
 		t.Errorf("no label configured must release nothing: %q", got)
 	}
+}
+
+func TestReleaseClaimLabelsDropsEveryWorkflowLabelOfAClosedIssue(t *testing.T) {
+	all := []string{"in-progress", "needs-review", "needs-human", "claimed:ben@main", "type:bug", "p1"}
+	for _, label := range all[:4] {
+		t.Run(label, func(t *testing.T) {
+			iss := &seamIssues{labels: map[int][]string{5: {label, "type:bug"}}, closed: map[int]bool{5: true}}
+			notes := releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Labels: labels.ClosedDrop(nil), Keys: keys(5), Issues: iss})
+			if len(notes) != 0 || !slices.Equal(iss.removed[5], []string{label}) {
+				t.Fatalf("removed = %v, notes = %q; want only %s", iss.removed[5], notes, label)
+			}
+		})
+	}
+	t.Run("all at once", func(t *testing.T) {
+		iss := &seamIssues{labels: map[int][]string{5: all}, closed: map[int]bool{5: true}}
+		releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Labels: labels.ClosedDrop(nil), Keys: keys(5), Issues: iss})
+		if !slices.Equal(iss.removed[5], all[:4]) {
+			t.Fatalf("removed = %v", iss.removed[5])
+		}
+	})
+	t.Run("open issue keeps its labels", func(t *testing.T) {
+		iss := &seamIssues{labels: map[int][]string{5: all}}
+		releaseClaimLabels(context.Background(), releaseInput{Slot: "w1", Labels: labels.ClosedDrop(nil), Keys: keys(5), Issues: iss})
+		if len(iss.removed[5]) != 0 {
+			t.Fatalf("open issue lost %v", iss.removed[5])
+		}
+	})
 }
