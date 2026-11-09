@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -222,7 +222,7 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(fallbackCfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	set, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(f.root)))
+	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}

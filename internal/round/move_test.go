@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -101,7 +101,7 @@ func newMoveFx(t *testing.T) *moveFx {
 		n, _ := strconv.Atoi(it.ID)
 		it.Number = n
 	}
-	f.set, _ = roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(os.TempDir())))
+	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(os.TempDir())))
 	f.env.Round, f.env.HolderPID = f.set, 100
 
 	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {

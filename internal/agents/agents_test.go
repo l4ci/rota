@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -28,7 +28,7 @@ func project(t *testing.T, cfg string) string {
 // load is the spec of the project config cfg, read as the cli does.
 func load(t *testing.T, root string) (Spec, error) {
 	t.Helper()
-	return FromConfig(config.Load(projects.OSEnv(), rotatree.Config(root)))
+	return FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
 }
 
 func render(t *testing.T, cfg string) map[string]string {
@@ -96,7 +96,7 @@ func TestCodexRefusesEffortItCannotExpress(t *testing.T) {
 
 func TestWriteIdempotentAndCheck(t *testing.T) {
 	root := project(t, "")
-	es, err := Write(root, config.Load(projects.OSEnv(), rotatree.Config(root)))
+	es, err := Write(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 			t.Fatalf("first write: %s %s", e.Path, e.Status)
 		}
 	}
-	es, err = Write(root, config.Load(projects.OSEnv(), rotatree.Config(root)))
+	es, err = Write(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,12 +114,12 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 			t.Fatalf("second write: %s %s", e.Path, e.Status)
 		}
 	}
-	if p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
+	if p := ProblemsOnly(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
 		t.Fatalf("problems after write: %v", p)
 	}
 	// Config change makes the files drift; Compare writes nothing.
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"roles":{"explorer":{"effort":"low"}}}`), 0o644)
-	p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil)
+	p := ProblemsOnly(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)), nil)
 	if len(p) != 1 || !strings.Contains(p[0], "rota-explorer.md: drift") {
 		t.Fatalf("problems: %v", p)
 	}
@@ -127,10 +127,10 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 	if strings.Contains(string(b), "effort") {
 		t.Fatal("Compare wrote")
 	}
-	if _, err := Write(root, config.Load(projects.OSEnv(), rotatree.Config(root))); err != nil {
+	if _, err := Write(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root))); err != nil {
 		t.Fatal(err)
 	}
-	if p := ProblemsOnly(root, config.Load(projects.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
+	if p := ProblemsOnly(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)), nil); len(p) != 0 {
 		t.Fatalf("problems after rewrite: %v", p)
 	}
 }
@@ -140,7 +140,7 @@ func TestWriteRefusesForeignFile(t *testing.T) {
 	foreign := filepath.Join(root, ".claude/agents/rota-reasoner.md")
 	os.MkdirAll(filepath.Dir(foreign), 0o755)
 	os.WriteFile(foreign, []byte("mine\n"), 0o644)
-	_, err := Write(root, config.Load(projects.OSEnv(), rotatree.Config(root)))
+	_, err := Write(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
 	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "rota-reasoner.md") {
 		t.Fatalf("got %v", err)
 	}
@@ -167,7 +167,7 @@ func TestWriteRefusesSymlinkedDir(t *testing.T) {
 	root := project(t, "")
 	outside := t.TempDir()
 	os.Symlink(outside, filepath.Join(root, ".claude"))
-	_, err := Write(root, config.Load(projects.OSEnv(), rotatree.Config(root)))
+	_, err := Write(root, config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
 	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("got %v", err)
 	}
@@ -200,7 +200,7 @@ func TestFromConfigNeedsNoOnDiskConfig(t *testing.T) {
 func TestProblemsOnlyListsKeptPaths(t *testing.T) {
 	cfg := `{"round":{"tiers":{"codex":{"light":"gpt-lo","standard":"gpt-mid","heavy":"gpt-hi"}}}}`
 	root := project(t, cfg)
-	c := config.Load(projects.OSEnv(), rotatree.Config(root))
+	c := config.Load(cfgdir.OSEnv(), rotatree.Config(root))
 	all := ProblemsOnly(root, c, nil)
 	if len(all) != 6 {
 		t.Fatalf("unrestricted problems: %v", all)

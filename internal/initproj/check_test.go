@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // checkDir runs Check against the config on disk under dir.
 func checkDir(dir string, drift func() string) CheckResult {
-	return Check(dir, config.Load(projects.OSEnv(), rotatree.Config(dir)), drift)
+	return Check(dir, config.Load(cfgdir.OSEnv(), rotatree.Config(dir)), drift)
 }
 
 func TestCheck(t *testing.T) {

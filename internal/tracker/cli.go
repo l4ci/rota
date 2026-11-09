@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/remoteurl"
 )
 
@@ -56,7 +56,7 @@ type CLI struct {
 	// machine's `rota connect` connections.
 	Conn ConnResolver
 	// Env and Keychain are the machine the default lookup reads (WithMachine).
-	Env      projects.Env
+	Env      cfgdir.Env
 	Keychain func() connections.Store
 }
 

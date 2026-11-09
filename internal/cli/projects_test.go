@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
@@ -72,7 +73,7 @@ func TestInitRegistersProjectIdempotently(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
 		t.Fatal(err)
 	}
-	if ps, _ := projects.List(projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir}); len(ps) != 1 {
+	if ps, _ := projects.List(cfgdir.Env{Getenv: os.Getenv, Home: os.UserHomeDir}); len(ps) != 1 {
 		t.Fatalf("%+v", ps)
 	}
 }
@@ -152,7 +153,7 @@ func TestProjectsCleanupDropsGoneAndNoLongerRota(t *testing.T) {
 	if l, _ := rows.([]any); len(l) != 2 {
 		t.Fatalf("removed %v", rows)
 	}
-	ps, _ := projects.List(projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir})
+	ps, _ := projects.List(cfgdir.Env{Getenv: os.Getenv, Home: os.UserHomeDir})
 	if len(ps) != 1 || ps[0].Path != repos.Realpath(live) {
 		t.Fatalf("kept %+v", ps)
 	}
@@ -267,7 +268,7 @@ func TestProjectsRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(a, ".rota")); err != nil {
 		t.Errorf("the project itself must stay: %v", err)
 	}
-	if ps, _ := projects.List(projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir}); len(ps) != 1 || ps[0].Path != repos.Realpath(b) {
+	if ps, _ := projects.List(cfgdir.Env{Getenv: os.Getenv, Home: os.UserHomeDir}); len(ps) != 1 || ps[0].Path != repos.Realpath(b) {
 		t.Fatalf("kept %+v", ps)
 	}
 }
