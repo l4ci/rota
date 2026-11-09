@@ -12,17 +12,16 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/issues"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
@@ -576,18 +575,21 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 	}
 	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", s.Provider, dir, tracker.GitExec(c.deps().Git))
 	if err != nil {
-		return "", forgeRefusal(err)
+		return "", trackerRefusal(err)
 	}
 	return r.Provider, nil
 }
 
-// forgeRefusal is the exit-4 refusal of err, a tracker.UnknownForgeError an
-// actor met: blockedBy forge, the origin in the message, the fix as the hint.
-func forgeRefusal(err error) *Error {
-	e := Refused("%s", err.Error()).WithHint(tracker.UnknownForgeHint)
-	e.Data = jsonx.Obj("blockedBy", blockedby.Forge, "changed", false)
-	e.Cause = err
-	return e
+// trackerRefusal is err translated under the tracker class, its failure data
+// (blockedBy forge for an origin naming no forge) lifted onto the error where
+// failData reads it.
+func trackerRefusal(err error) error {
+	data, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Tracker})
+	var e *Error
+	if errors.As(out, &e) {
+		e.Data = data
+	}
+	return out
 }
 
 // failData is the Result carrying the failure data err holds, if any.

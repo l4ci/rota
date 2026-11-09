@@ -58,6 +58,9 @@ func TestTranslateTable(t *testing.T) {
 		{"backlog tracker unavailable", trk(tracker.KindUnavailable), backlogOpts, 5, ""},
 		{"backlog exiter", exiter{9}, backlogOpts, 9, ""},
 		{"backlog unclassified passes", errors.New("boom"), backlogOpts, 0, ""},
+		{"unreadable state file is unavailable", fmt.Errorf("w: %w", fsio.ErrUnreadable), Options{Classes: Unreadable}, 5, ""},
+		{"unreadable outside its class passes", fsio.ErrUnreadable, backlogOpts, 0, ""},
+		{"lock timeout is retry", fmt.Errorf("w: %w", fsio.ErrLockTimeout), Options{Classes: Lock | Unreadable}, 6, ""},
 		{"backlog lock timeout passes", fsio.ErrLockTimeout, backlogOpts, 0, ""},
 
 		{"read-only keeps not found", backlog.ErrNotFound, readOpts, 3, ""},
