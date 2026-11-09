@@ -30,8 +30,8 @@ func TestAdoptWarnsWhenOpenPRLookupFails(t *testing.T) {
 		t.Run(strconv.FormatBool(asJSON), func(t *testing.T) {
 			dir, deps := adoptProject(t)
 			base := deps.RoundEnv
-			deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-				e := base(ctx, root)
+			deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+				e := base(ctx, root, o)
 				e.Forge = adoptLookupForge{err: errors.New("forge connection refused")}
 				return e
 			}

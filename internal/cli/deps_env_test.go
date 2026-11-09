@@ -56,7 +56,7 @@ func TestFakeGitReachesWorkerAndRoundEnv(t *testing.T) {
 func TestRoundEnvAccountsAndGit(t *testing.T) {
 	d := testDeps()
 	root := t.TempDir()
-	env := d.RoundEnv(context.Background(), root)
+	env := d.roundEnv(context.Background(), root)
 	if env.Worker.Accounts() != nil || env.AccountPicking {
 		t.Error("RoundEnv: account picking must stay off")
 	}
@@ -66,7 +66,7 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 	}
 	// The verbs that build RoundEnv plus workerEnvCtx (adopt, review relay,
 	// winddown) get the meter reader but never pick.
-	plain := d.RoundEnv(context.Background(), root)
+	plain := d.roundEnv(context.Background(), root)
 	plain.Worker = round.FromWorkerEnv(workerEnvCtx(c, context.Background()))
 	if plain.AccountPicking {
 		t.Error("RoundEnv + workerEnvCtx: account picking must stay off")
@@ -76,8 +76,8 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 // Account picking is chosen where the env is built (accountedRoundEnv): no verb
 // sets the flag or Worker.Accounts on a round env itself, and the accounting
 // verbs (assign, tick, architecture, return, status's quota read) go through
-// the constructor. Only defaultRoundEnv may switch it off and only
-// accountedRoundEnv may call WithAccounts.
+// the constructor. Only the constructors (newRoundEnv, buildRoundEnv) may switch it or call WithAccounts;
+// accountedRoundEnv only passes the meters in RoundOpts.
 func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
@@ -93,12 +93,12 @@ func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
 			t.Fatal(err)
 		}
 		src := string(b)
-		for _, fn := range []string{"defaultRoundEnv", "accountedRoundEnv"} {
+		for _, fn := range []string{"newRoundEnv", "buildRoundEnv", "accountedRoundEnv"} {
 			src = cutFunc(t, f, src, fn)
 		}
 		for _, bad := range []string{".Worker.Accounts =", "AccountPicking =", ".WithAccounts("} {
 			if strings.Contains(src, bad) {
-				t.Errorf("%s uses %q outside defaultRoundEnv/accountedRoundEnv; use accountedRoundEnv", f, bad)
+				t.Errorf("%s uses %q outside the round env constructors; use accountedRoundEnv", f, bad)
 			}
 		}
 		if want[f] && !strings.Contains(string(b), "accountedRoundEnv(") {
@@ -173,7 +173,7 @@ func TestCredentialReadsUseDepsClock(t *testing.T) {
 		"credentials":   d.credentials(),
 		"round env":     d.baseRoundEnv().Login,
 		"worker accts":  d.WorkerAccounts().Login,
-		"gate-free env": d.RoundEnv(context.Background(), t.TempDir()).Login,
+		"gate-free env": d.roundEnv(context.Background(), t.TempDir()).Login,
 	} {
 		if c.Now == nil || !c.Now().Equal(want) {
 			t.Errorf("%s: Now does not read Deps.Now", name)

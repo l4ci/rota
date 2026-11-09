@@ -19,8 +19,8 @@ func TestRoundNeedsYouHumanReservations(t *testing.T) {
 	root, deps := roundFixture(t, nil)
 	write(t, worker.RegistryPath(root), `{"slots":[{"name":"question","task":"12","state":"blocked","event":{"kind":"question","body":"Which helper name?"}},{"name":"cap","task":"13","state":"done","pr":"#7"}],"prs":[{"issue":"14","pr":"#8"}],"bounces":{"13":3,"14":3}}`)
 	original := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		env := original(ctx, root)
+	deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		env := original(ctx, root, o)
 		env.Round.MaxBounces = 3
 		return env
 	}
@@ -87,8 +87,8 @@ func TestWatchMaintainerWarningsOnlyOnChange(t *testing.T) {
 	}
 	state := "outage-one"
 	original := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		e := original(ctx, root)
+	deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		e := original(ctx, root, o)
 		e.NeedsHuman, e.ForgeErr = "needs-human", state
 		e.Worker = round.FromWorkerEnv(worker.Env{Config: func(string) any { return cfg }})
 		return e

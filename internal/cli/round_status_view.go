@@ -107,7 +107,7 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 	cc.ctx = ctx
 	c = &cc
 	c.deps().freshReads()
-	env := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+	env := withBoard(c, root, roundEnv(c, ctx, root))
 	rep, err := env.Status(ctx, root)
 	if err != nil {
 		return roundSnap{}, err

@@ -141,7 +141,7 @@ func TestRoundSupportEnableRefusedOnSupport(t *testing.T) {
 func supportReturnDeps(fake *trackertest.Fake) *Deps {
 	deps := testDeps()
 	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
-	deps.RoundEnv = func(context.Context, string) round.Env {
+	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
@@ -200,8 +200,8 @@ func TestRoundSupportReturnRefusals(t *testing.T) {
 	main := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
 	deps := supportReturnDeps(fake)
 	mainEnv := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, r string) round.Env {
-		e := mainEnv(ctx, r)
+	deps.RoundEnv = func(ctx context.Context, r string, o RoundOpts) round.Env {
+		e := mainEnv(ctx, r, o)
 		e.Round.Role = roundcfg.RoleMain
 		return e
 	}

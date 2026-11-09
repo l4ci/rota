@@ -64,7 +64,7 @@ func assignNudgeFor(c *Ctx, root, slot string) *assignNudge {
 	if err != nil {
 		return nil
 	}
-	cands, err := c.deps().RoundEnv(c.Context(), root).RoundCandidates(c.Context(), root, be, set, "")
+	cands, err := roundEnv(c, c.Context(), root).RoundCandidates(c.Context(), root, be, set, "")
 	if err != nil {
 		return nil
 	}
@@ -86,7 +86,7 @@ func freeSlotAssignment(c *Ctx, root string) *assignNudge {
 	if len(reg.Slots()) == 0 {
 		return nil
 	}
-	env := c.deps().RoundEnv(c.Context(), root)
+	env := roundEnv(c, c.Context(), root)
 	// Avoid reading the tracker when every slot is busy.
 	slot, ok := env.FreeSlot(c.Context(), reg, set)
 	if !ok {

@@ -123,7 +123,9 @@ type Deps struct {
 	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
 
-	RoundEnv func(ctx context.Context, root string) round.Env
+	// RoundEnv is the one builder hook: opts carry the worker env and the
+	// account option, so one swap covers plain and accounted envs.
+	RoundEnv func(ctx context.Context, root string, opts RoundOpts) round.Env
 	// RoundEnvLocal is RoundEnv without a forge, for a caller that reads only
 	// the host and worktree sources and must not build one.
 	RoundEnvLocal func(ctx context.Context, root string) round.Env
@@ -182,7 +184,6 @@ func defaultDeps() *Deps {
 		DiskUsage:        statDisk,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
-		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		Host:             func(kind host.Kind) host.Host { return host.New(kind, host.Deps{}) },
 		InstalledVersion: installedVersion,
 		Environ:          os.Environ,
@@ -201,6 +202,13 @@ func defaultDeps() *Deps {
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
+	// The lease reads the same clock as the worker env, so pinning Deps.Now
+	// pins its StartedAt; d.Now is read at call time, so a later swap counts.
+	d.LeaseEnv = func() roundlease.Env {
+		e := roundlease.DefaultEnv()
+		e.Now = func() time.Time { return d.Now() }
+		return e
+	}
 	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
 	// smoke test cannot reach the update package any other way.
 	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")
@@ -242,8 +250,12 @@ func defaultDeps() *Deps {
 		}
 		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
 	}
-	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
-	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }
+	d.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		return buildRoundEnv(ctx, root, d, true, o.Worker, o.Accounts)
+	}
+	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env {
+		return buildRoundEnv(ctx, root, d, false, d.workerEnv(), nil)
+	}
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
 		return defaultReapEnv(ctx, root, d)
 	}
@@ -395,12 +407,6 @@ func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 		}
 	}
 	return e
-}
-
-// baseRoundEnv is the round.Env every round verb starts from: the one Git, the
-// lease and the worker env, all read off Deps so a swapped fake reaches them.
-func (d *Deps) baseRoundEnv() round.Env {
-	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(d.workerEnv()), Login: d.credentials()}
 }
 
 // escalationEnv is the EscalationEnv hook with its host filled from Host.
