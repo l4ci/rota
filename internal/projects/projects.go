@@ -10,15 +10,13 @@
 package projects
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
@@ -33,23 +31,24 @@ type Project struct {
 	Missing              bool
 }
 
-// Where a resolved config dir came from.
+// Env is the process environment the dir lookups read; its definition lives
+// in cfgdir so settings code can take it without importing this registry.
+type Env = cfgdir.Env
+
+// Aliases for callers that predate cfgdir.
 const (
-	SourceOverride = "override" // ROTA_CONFIG_DIR
-	SourceXDG      = "xdg"      // XDG_CONFIG_HOME
-	SourceDefault  = "default"  // ~/.config/rota
+	SourceOverride = cfgdir.SourceOverride
+	SourceXDG      = cfgdir.SourceXDG
+	SourceDefault  = cfgdir.SourceDefault
 )
 
-// Env is the process environment the dir lookups read: Getenv the variable
-// reader, Home the home-dir reader and TempDirs the OS temp roots. The cli supplies them from Deps; the
-// package reads neither the process env nor the home itself.
-type Env struct {
-	Getenv func(string) string
-	Home   func() (string, error)
-	// TempDirs supplies the OS temporary directories. Nil uses TMPDIR and
-	// the standard Unix/macOS locations; tests can supply their own OS roots.
-	TempDirs func() []string
-}
+var (
+	OSEnv    = cfgdir.OSEnv
+	Resolve  = cfgdir.Resolve
+	Dir      = cfgdir.Dir
+	DataDir  = cfgdir.DataDir
+	StateDir = cfgdir.StateDir
+)
 
 // Temporary reports whether root is in temporary storage, resolving symlinks
 // on both sides and matching whole path components (not just a string prefix).
@@ -69,71 +68,6 @@ func Temporary(env Env, root string) bool {
 		}
 	}
 	return false
-}
-
-// OSEnv is the process environment and home dir: the edge for code that has
-// no Deps to take an Env from.
-func OSEnv() Env { return Env{Getenv: os.Getenv, Home: os.UserHomeDir} }
-
-// Resolve finds the global rota config dir and says why: $ROTA_CONFIG_DIR when
-// that is an absolute path, else $XDG_CONFIG_HOME/rota when that is an
-// absolute path (the XDG spec ignores a relative one), else ~/.config/rota.
-// warning is non-empty when a relative ROTA_CONFIG_DIR was ignored.
-func Resolve(env Env) (dir, source, warning string, err error) {
-	if o := env.Getenv("ROTA_CONFIG_DIR"); o != "" {
-		if filepath.IsAbs(o) {
-			return filepath.Clean(o), SourceOverride, "", nil
-		}
-		warning = "ROTA_CONFIG_DIR=" + o + " is not an absolute path, ignored"
-	}
-	if x := env.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(x) {
-		return filepath.Join(x, "rota"), SourceXDG, warning, nil
-	}
-	home, err := env.Home()
-	if err != nil {
-		return "", "", warning, errors.New("no global config dir: none of ROTA_CONFIG_DIR, XDG_CONFIG_HOME or HOME is set")
-	}
-	return filepath.Join(home, ".config", "rota"), SourceDefault, warning, nil
-}
-
-var warnOnce sync.Once
-
-// Dir is the global rota config dir (see Resolve). A relative ROTA_CONFIG_DIR
-// is ignored with one warning on stderr per process.
-func Dir(env Env) (string, error) {
-	dir, _, warning, err := Resolve(env)
-	if warning != "" {
-		warnOnce.Do(func() { fmt.Fprintln(os.Stderr, "rota: warning: "+warning) })
-	}
-	return dir, err
-}
-
-// DataDir is the global rota data dir: $XDG_DATA_HOME/rota when that is an
-// absolute path, else ~/.local/share/rota. It holds what must not travel with
-// a synced config dir, such as the token fallback file.
-func DataDir(env Env) (string, error) {
-	if x := env.Getenv("XDG_DATA_HOME"); filepath.IsAbs(x) {
-		return filepath.Join(x, "rota"), nil
-	}
-	home, err := env.Home()
-	if err != nil {
-		return "", errors.New("no global data dir: neither XDG_DATA_HOME nor HOME is set")
-	}
-	return filepath.Join(home, ".local", "share", "rota"), nil
-}
-
-// StateDir is the rota state dir, where machine-rewritten files live (the
-// project registry and its lock): $XDG_STATE_HOME/rota when that is an
-// absolute path, else ~/.local/state/rota.
-func StateDir(env Env) (string, error) {
-	if x := env.Getenv("XDG_STATE_HOME"); filepath.IsAbs(x) {
-		return filepath.Join(x, "rota"), nil
-	}
-	home, err := env.Home()
-	if err != nil {
-		return "", errors.New("no state dir: neither XDG_STATE_HOME nor HOME is set")
-	}
-	return filepath.Join(home, ".local", "state", "rota"), nil
 }
 
 const registryName = "projects.json"

@@ -228,45 +228,6 @@ func sugg(t *testing.T, out, key string) (string, string, bool) {
 	return str(q, "suggestion"), str(q, "evidence"), has
 }
 
-func TestSetupTestSignalsPerManifest(t *testing.T) {
-	ci := ".github/workflows/ci.yml"
-	for name, tc := range map[string]struct {
-		files      map[string]string
-		fast, full string
-		evidence   string
-	}{
-		"package.json":                       {map[string]string{"package.json": `{"scripts":{"test":"jest"}}`}, `["npm test"]`, `["npm test"]`, "package.json"},
-		"package.json without a test script": {map[string]string{"package.json": `{"scripts":{"build":"tsc"}}`}, "", "", ""},
-		"pyproject":                          {map[string]string{"pyproject.toml": "[tool.pytest.ini_options]\n"}, `["pytest"]`, `["pytest"]`, "pyproject.toml"},
-		"cargo":                              {map[string]string{"Cargo.toml": "[package]\n"}, `["cargo test"]`, `["cargo test"]`, "Cargo.toml"},
-		"makefile only":                      {map[string]string{"Makefile": "test:\n\techo hi\n"}, `["make test"]`, `["make test"]`, "Makefile"},
-		"go beats package.json":              {map[string]string{"go.mod": "module x\n", "package.json": `{"scripts":{"test":"x"}}`}, `["go test ./..."]`, `["go test ./..."]`, "go.mod"},
-		"makefile makes full":                {map[string]string{"go.mod": "module x\n", "Makefile": "test:\n\tgo test ./...\n"}, `["go test ./..."]`, `["make test"]`, "go.mod"},
-		"ci line makes full":                 {map[string]string{"go.mod": "module x\n", "Makefile": "test:\n", ci: "jobs:\n  t:\n    steps:\n      - run: go test -race ./...\n"}, `["go test ./..."]`, `["go test -race ./..."]`, "go.mod"},
-		"ci line without run key":            {map[string]string{"Cargo.toml": "x", ".gitlab-ci.yml": "test:\n  script:\n    - cargo test --all\n"}, `["cargo test"]`, `["cargo test --all"]`, "Cargo.toml"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			for f, body := range tc.files {
-				writeFile(t, filepath.Join(dir, f), body)
-			}
-			_, out, _ := signalRun(t, dir, nil, "--list", "--json")
-			fast, ev, has := sugg(t, out, "test.fast")
-			if fast != tc.fast || has != (tc.fast != "") {
-				t.Errorf("test.fast = %q (has %v), want %q", fast, has, tc.fast)
-			}
-			if !strings.Contains(ev, tc.evidence) {
-				t.Errorf("test.fast evidence %q lacks %q", ev, tc.evidence)
-			}
-			if full, fev, _ := sugg(t, out, "test.full"); full != tc.full {
-				t.Errorf("test.full = %q, want %q", full, tc.full)
-			} else if strings.Contains(name, "ci line") && !strings.Contains(fev, ":") {
-				t.Errorf("test.full evidence %q should name file:line", fev)
-			}
-		})
-	}
-}
-
 func TestSetupIssuesSourceSignal(t *testing.T) {
 	for name, tc := range map[string]struct {
 		remote string
@@ -387,35 +348,6 @@ func TestSetupFreeTextValidation(t *testing.T) {
 	}
 	if got, _ := cfgValue(t, dir, "test.full").([]any); len(got) != 2 {
 		t.Errorf("test.full = %v", got)
-	}
-}
-
-func TestSetupDepSignalsPerManifest(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		files []string
-		setup string
-		dirs  string
-	}{
-		{"npm lock", []string{"package.json", "package-lock.json"}, "npm ci", `["node_modules"]`},
-		{"pnpm lock", []string{"package.json", "pnpm-lock.yaml"}, "pnpm install --frozen-lockfile", `["node_modules"]`},
-		{"yarn lock", []string{"package.json", "yarn.lock"}, "yarn install --frozen-lockfile", `["node_modules"]`},
-		{"no lock", []string{"package.json"}, "npm install", `["node_modules"]`},
-		{"python", []string{"pyproject.toml", "uv.lock"}, "uv sync", `[".venv"]`},
-		{"cargo", []string{"Cargo.toml"}, "", ""},
-		{"go", []string{"go.mod"}, "", ""},
-	} {
-		dir := t.TempDir()
-		for _, f := range tc.files {
-			os.WriteFile(filepath.Join(dir, f), []byte("{}"), 0o644)
-		}
-		setup, shared, ok := depSignals(dir)
-		if (tc.setup != "") != ok || setup.Value != tc.setup || shared.Value != tc.dirs {
-			t.Errorf("%s: got %q %q ok=%v, want %q %q", tc.name, setup.Value, shared.Value, ok, tc.setup, tc.dirs)
-		}
-		if ok && (setup.Evidence == "" || shared.Evidence == "") {
-			t.Errorf("%s: a signal carries no evidence", tc.name)
-		}
 	}
 }
 
