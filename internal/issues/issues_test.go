@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/tracker/itsaplantest"
 	"github.com/l4ci/rota/internal/tracker/jiratest"
 	"github.com/l4ci/rota/internal/tracker/lineartest"
 )
@@ -149,41 +150,6 @@ func TestLabelGitLab(t *testing.T) {
 	f = &forge{origin: gh, reply: map[string]reply{"api -X POST": {code: 1, err: "HTTP 500: server error"}, "api -X DELETE": {code: 1, err: "HTTP 500: server error"}}}
 	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(99), "x", false, false); !tracker.IsKind(err, tracker.KindFailed) {
 		t.Errorf("forge error: %v", err)
-	}
-}
-
-// TestProviderIsSourceThenForge pins the one rule issues adds to the
-// resolver: an issues.source of github or gitlab names the tracker outright,
-// whatever the forge; any other source is the forge, as the kind resolves it.
-func TestProviderIsSourceThenForge(t *testing.T) {
-	ctx := context.Background()
-	for _, c := range []struct {
-		origin, key, cfg string
-		kind             tracker.ForgeKind
-		want             string
-	}{
-		{gh, "issues", "gitlab", tracker.ForgeActor, "gitlab"},
-		{"", "issues", "github", tracker.ForgeActor, "github"},
-		{gh, "issues", "file", tracker.ForgeActor, "github"},
-		{"", "issues", "jira", tracker.ForgeActor, "local"},
-		{gh, "forge", "gitlab", tracker.ForgeActor, "gitlab"}, // forge.provider beats the origin, as everywhere
-		{"https://example.org/r.git", "forge", "auto", tracker.ForgeReader, "github"},
-		{"https://example.org/r.git", "forge", "auto", tracker.ForgeActor, ""},
-	} {
-		f := &forge{origin: c.origin}
-		env := f.env(t)
-		obj := jsonx.NewObject()
-		if c.key == "forge" {
-			obj.Set("provider", c.cfg)
-		} else {
-			obj.Set("source", c.cfg)
-		}
-		root := jsonx.NewObject()
-		root.Set(c.key, obj)
-		env.Config = root
-		if r, err := Provider(ctx, env, c.kind, ""); r.Provider != c.want || (err != nil) != (c.want == "") {
-			t.Errorf("origin %q %s %q kind %d: %+v, %v; want %q", c.origin, c.key, c.cfg, c.kind, r, err, c.want)
-		}
 	}
 }
 
@@ -457,5 +423,53 @@ func TestLabelCloseOnLinearSource(t *testing.T) {
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("a forge CLI ran: %q", f.calls)
+	}
+}
+
+// With issues.source itsaplan, label and close act on the itsaplan issue
+// through issues.connection, whatever the origin remote is.
+func TestLabelCloseOnItsaplanSource(t *testing.T) {
+	ctx := context.Background()
+	s := itsaplantest.New(t, itsaplantest.Options{})
+	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: connections.KindItsaplan, Site: s.URL}, s.Key(), nil
+	})
+	f := &forge{origin: gh}
+	env := f.env(t)
+	cfg, err := jsonx.Decode([]byte(`{"issues": {"source": "itsaplan", "connection": "plan", "itsaplan": {"project": "MKT"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Config = cfg
+	env.Opts = append(env.Opts, conn)
+	key := tracker.IssueKey(s.Add(itsaplantest.Issue{Title: "Widen"}))
+	if changed, err := Label(ctx, env, "", key, "ready", true, true); err != nil || !changed {
+		t.Fatalf("label: %v %v", changed, err)
+	}
+	if got := s.Labels(string(key)); !slices.Contains(got, "ready") {
+		t.Fatalf("labels %v", got)
+	}
+	dir, sha := gitProject(t)
+	if changed, err := Close(ctx, env, dir, key, sha, ""); err != nil || !changed {
+		t.Fatalf("close: %v %v", changed, err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a forge CLI ran: %q", f.calls)
+	}
+}
+
+// NewEnv reads the settings once: a later change to Config is not re-parsed.
+func TestNewEnvParsesSettingsOnce(t *testing.T) {
+	cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"gitlab"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := NewEnv(cfg, nil, nil)
+	if s, err := env.settings(); err != nil || s.Source != "gitlab" {
+		t.Fatalf("first read: %+v %v", s, err)
+	}
+	env.Config = nil
+	if s, err := env.settings(); err != nil || s.Source != "gitlab" {
+		t.Errorf("second read re-parsed: %+v %v", s, err)
 	}
 }

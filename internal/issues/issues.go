@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
@@ -36,6 +36,31 @@ type Env struct {
 	// Forge, when set, replaces the adapter built from the provider; tests
 	// use it to stand in a key-based tracker.
 	Forge func(ctx context.Context, provider, dir string) (Forge, error)
+
+	// parsed is the settings read once per Env (NewEnv); a literal Env has none
+	// and each call reads them once.
+	parsed *parsedSettings
+}
+
+type parsedSettings struct {
+	once sync.Once
+	s    tracker.Settings
+	err  error
+}
+
+// NewEnv is an Env whose settings are read from cfg once, however many calls
+// it serves.
+func NewEnv(cfg any, opts []tracker.Option, forge func(ctx context.Context, provider, dir string) (Forge, error)) Env {
+	return Env{Config: cfg, Opts: opts, Forge: forge, parsed: &parsedSettings{}}
+}
+
+// settings is the validated settings of Config.
+func (e Env) settings() (tracker.Settings, error) {
+	if e.parsed == nil {
+		return tracker.ReadSettings(e.Config)
+	}
+	e.parsed.once.Do(func() { e.parsed.s, e.parsed.err = tracker.ReadSettings(e.Config) })
+	return e.parsed.s, e.parsed.err
 }
 
 // Forge is the part of tracker.Adapter the verbs call.
@@ -52,27 +77,15 @@ type Forge interface {
 // takes dir's forge as kind resolves it (tracker.ResolveProvider), which can be
 // the local forge.
 func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) (tracker.Resolution, error) {
-	s, err := tracker.ReadSettings(env.Config)
+	s, err := env.settings()
 	if err != nil {
 		return tracker.Resolution{}, err
 	}
-	if s.Source == "github" || s.Source == "gitlab" {
-		return tracker.Resolution{Provider: s.Source, How: tracker.HowConfig}, nil
-	}
-	return tracker.ResolveProvider(ctx, kind, "", s.Provider, dir, execOf(env))
+	return tracker.IssueProvider(ctx, s, kind, dir, env.Opts...)
 }
 
 func noProvider(verb string) error {
 	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, and the forge is local: no origin remote, or forge.provider local)", ErrNoProvider, verb)
-}
-
-// execOf is the executor the env's options install, or nil for the real one.
-func execOf(env Env) tracker.Exec {
-	c := &tracker.CLI{}
-	for _, o := range env.Opts {
-		o(c)
-	}
-	return c.Exec
 }
 
 // adapter is the forge adapter for provider, whose CLI runs in dir.
@@ -80,30 +93,31 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 	if e.Forge != nil {
 		return e.Forge(ctx, provider, dir)
 	}
-	return tracker.NewFromConfig(ctx, e.Config, provider, dir, e.Opts...)
-}
-
-// tracker is what label and close act on: issues.source's own tracker when it
-// is not a forge (jira, linear, itsaplan), else the forge adapter of the resolved provider.
-func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
-	s, err := tracker.ReadSettings(e.Config)
+	s, err := e.settings()
 	if err != nil {
 		return nil, err
 	}
-	if s.Source == config.SourceJira || s.Source == config.SourceLinear || s.Source == config.SourceItsaplan {
-		if e.Forge != nil {
-			return e.Forge(ctx, s.Source, dir)
-		}
-		return tracker.NewIssueTracker(ctx, s, "", dir, e.Opts...)
-	}
-	r, err := Provider(ctx, e, tracker.ForgeActor, dir)
+	return tracker.New(ctx, s, provider, dir, e.Opts...)
+}
+
+// tracker is what label and close act on. tracker.ResolveIssueActor owns the
+// issues.source decision; this only turns its refusals into this verb's.
+func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
+	s, err := e.settings()
 	if err != nil {
+		return nil, err
+	}
+	a, err := tracker.ResolveIssueActor(ctx, s, dir, e.Opts...)
+	switch {
+	case errors.Is(err, tracker.ErrNoIssueActor):
+		return nil, noProvider(verb)
+	case err != nil:
 		return nil, fmt.Errorf("cannot %s: %w", verb, err) // the origin names no forge
 	}
-	if r.Provider == tracker.ProviderLocal {
-		return nil, noProvider(verb)
+	if e.Forge != nil {
+		return e.Forge(ctx, a.Source, dir)
 	}
-	return e.adapter(ctx, r.Provider, dir)
+	return a.Adapter(ctx)
 }
 
 // ---- label ----------------------------------------------------------------
