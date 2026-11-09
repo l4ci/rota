@@ -684,7 +684,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	tracker.SortKeys(stale)
 	for _, n := range stale {
-		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s or claimed: labels", n.Ref(), e.Label), Repair: "remove claim labels"})
+		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s or claimed: labels", n.Ref(), e.Label), Repair: "remove workflow and claim labels"})
 	}
 	if labelsOK {
 		var orphans []tracker.IssueKey
