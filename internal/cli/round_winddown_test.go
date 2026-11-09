@@ -67,6 +67,10 @@ func TestWindDownPrintsWarningsOnError(t *testing.T) {
 	if !strings.Contains(se.String(), "rota knowledge tier fold") {
 		t.Errorf("buffered-hits warning dropped on error (exit %d):\n%s", code, se.String())
 	}
+	// An error outcome resumes the autopilot (only a failed verify keeps it stopped).
+	if roundtick.LoadState(cd, 1).Stopped {
+		t.Error("an errored wind-down left the autopilot stopped")
+	}
 }
 
 // The offer is one non-blocking line, printed only when open bug records exist.
@@ -138,8 +142,11 @@ func TestWindDownVerifyFailureKeepsTickStateAndReceipts(t *testing.T) {
 		t.Errorf("a failed verify keeps the lease: status %v, err %v", status, err)
 	}
 	st := roundtick.LoadState(cd, 1)
-	if st.Held["ben"] != "12" || st.Stopped {
-		t.Errorf("tick state lost or still stopped after a failed verify: %+v", st)
+	if st.Held["ben"] != "12" || !st.Stopped {
+		t.Errorf("tick state lost or not stopped after a failed verify: %+v", st)
+	}
+	if !strings.Contains(so.String(), "autopilot\tstays stopped") {
+		t.Errorf("output lacks the autopilot-stopped line:\n%s", so.String())
 	}
 	if _, err := os.Stat(rp); err != nil {
 		t.Errorf("receipts pruned after a failed verify: %v", err)
