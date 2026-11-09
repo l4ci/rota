@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/fsio"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -267,18 +268,27 @@ func TestSetRefusals(t *testing.T) {
 	}
 }
 
-func TestSetCorruptOrEmptyFileCountsAsEmpty(t *testing.T) {
-	for _, body := range []string{"{oops", ""} {
-		root := project(t, body, "")
-		if body == "" {
-			os.WriteFile(filepath.Join(root, ".rota", "config.json"), nil, 0o644)
-		}
-		if _, err := Set(root, "docs.path", "x"); err != nil {
-			t.Fatal(err)
-		}
-		if got := read(t, root); got != "{\n  \"docs\": {\n    \"path\": \"x\"\n  }\n}\n" {
-			t.Errorf("%q: %s", body, got)
-		}
+func TestSetEmptyFileCountsAsEmpty(t *testing.T) {
+	root := project(t, "", "")
+	os.WriteFile(filepath.Join(root, ".rota", "config.json"), nil, 0o644)
+	if _, err := Set(root, "docs.path", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, root); got != "{\n  \"docs\": {\n    \"path\": \"x\"\n  }\n}\n" {
+		t.Errorf("%s", got)
+	}
+}
+
+// #2924: a file that does not parse is the user's: Set refuses it as
+// fsio.ErrUnreadable, names it and leaves it as it was.
+func TestSetUnparseableFileIsRefused(t *testing.T) {
+	root := project(t, "{oops", "")
+	_, err := Set(root, "docs.path", "x")
+	if !errors.Is(err, fsio.ErrUnreadable) || !strings.Contains(err.Error(), "config.json") {
+		t.Fatalf("err = %v, want ErrUnreadable naming config.json", err)
+	}
+	if got := read(t, root); got != "{oops" {
+		t.Errorf("file rewritten: %q", got)
 	}
 }
 

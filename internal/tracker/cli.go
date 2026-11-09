@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/remoteurl"
 )
 
 // Exec starts name with args in dir and returns its output and exit code.
@@ -228,16 +229,14 @@ const ProviderUnknown = "unknown"
 // or auto with no origin. It names no CLI and has no PRs.
 const ProviderLocal = "local"
 
-// reHost takes the hostname out of an SSH shorthand, SSH or HTTPS remote URL.
-var reHost = regexp.MustCompile(`(?i)^(https?://|ssh://)?(git@)?([^:/\n]+)[:/].*`)
-
 // RemoteHost is the lowercased hostname of a remote URL ("" for an empty one).
+// A local path names no host; it comes back lowercased whole, so a mirror path
+// still classifies by the words in it (ProviderFromURL).
 func RemoteHost(url string) string {
-	host := url
-	if m := reHost.FindStringSubmatch(url); m != nil {
-		host = m[3]
+	if h := remoteurl.Parse(url).Host; h != "" {
+		return h
 	}
-	return strings.ToLower(host)
+	return strings.ToLower(url)
 }
 
 // GitExec is r as an Exec, for a caller whose origin read goes through its own

@@ -94,16 +94,112 @@ func Arm(env roundlease.Env, commonDir string, pid int, heartbeat time.Duration)
 
 // Reasons a watch returns.
 const (
-	ReasonSlot       = "slot"        // a slot needs attention (the `round wait` verdict)
-	ReasonChange     = "change"      // a PR or an escalation changed
-	ReasonHeartbeat  = "heartbeat"   // nothing happened for the heartbeat interval
-	ReasonInterrupt  = "interrupt"   // the context ended
-	changeKeySlotPR  = "pr/"         // snapshot key prefixes
-	changeKeyEscalat = "escalation/" //
-	changeKeyReview  = "review/"     //
-	changeKeyGate    = "gate/land"   //
-	changeKeySupport = "support/"    //
+	ReasonSlot      = "slot"      // a slot needs attention (the `round wait` verdict)
+	ReasonChange    = "change"    // a PR or an escalation changed
+	ReasonHeartbeat = "heartbeat" // nothing happened for the heartbeat interval
+	ReasonInterrupt = "interrupt" // the context ended
 )
+
+// EntryKind says what a snapshot entry is about.
+type EntryKind string
+
+// The snapshot entry kinds. The forge-owned ones are those carry keeps.
+const (
+	KindSlotPR           EntryKind = "pr"                // a slot's PR url (registry)
+	KindPRState          EntryKind = "pr-state"          // a slot's PR state (forge)
+	KindEscalation       EntryKind = "escalation"        // an escalation's stored status (registry)
+	KindEscalationStatus EntryKind = "escalation-status" // an escalation's forge-checked status
+	KindReview           EntryKind = "review"            // review input waiting on a done slot's PR
+	KindGate             EntryKind = "gate"              // the land lock, present while held
+	KindSupport          EntryKind = "support"           // a support entry, Sub is its Support* kind
+)
+
+// kindPrefix is the text form of each kind, longest first where one is a
+// prefix of another. It is the only place the old prefix grammar survives.
+var kindPrefix = []struct {
+	kind   EntryKind
+	prefix string
+}{
+	{KindPRState, "pr/state/"},
+	{KindSlotPR, "pr/"},
+	{KindEscalationStatus, "escalation/status/"},
+	{KindEscalation, "escalation/"},
+	{KindReview, "review/"},
+	{KindSupport, "support/"},
+}
+
+// Key identifies one snapshot entry: its kind, the slot, escalation or issue
+// it concerns, and for a support entry the support kind. It is comparable, so
+// a Snapshot keys on it directly.
+type Key struct {
+	Kind EntryKind
+	ID   string
+	Sub  string
+}
+
+// GateKey is the snapshot key of the land lock: present while a gate or train
+// holds it, its value the holder. Its disappearing is the "gate cleared" change
+// that tells an orchestrator whose assign was refused to assign now.
+var GateKey = Key{Kind: KindGate}
+
+// String is the display and wire form (`pr/ben`, `support/7/comment`).
+func (k Key) String() string {
+	if k.Kind == KindGate {
+		return "gate/land"
+	}
+	for _, p := range kindPrefix {
+		if p.kind != k.Kind {
+			continue
+		}
+		if k.Kind == KindSupport {
+			return p.prefix + k.ID + "/" + k.Sub
+		}
+		return p.prefix + k.ID
+	}
+	return string(k.Kind) + "/" + k.ID
+}
+
+// forgeOwned is a kind only the forge can speak to: a tick that skips the
+// forge carries these over instead of reading their absence as a change.
+func (k Key) forgeOwned() bool {
+	switch k.Kind {
+	case KindPRState, KindEscalationStatus, KindReview, KindSupport:
+		return true
+	}
+	return false
+}
+
+// MarshalText and UnmarshalText keep the seen file readable under its old
+// string keys.
+func (k Key) MarshalText() ([]byte, error) { return []byte(k.String()), nil }
+
+func (k *Key) UnmarshalText(b []byte) error {
+	s := string(b)
+	if s == "gate/land" {
+		*k = GateKey
+		return nil
+	}
+	for _, p := range kindPrefix {
+		rest, ok := strings.CutPrefix(s, p.prefix)
+		if !ok {
+			continue
+		}
+		if p.kind == KindSupport {
+			id, sub, found := strings.Cut(rest, "/")
+			if !found {
+				return fmt.Errorf("support key %q has no kind", s)
+			}
+			*k = Key{Kind: p.kind, ID: id, Sub: sub}
+			return nil
+		}
+		*k = Key{Kind: p.kind, ID: rest}
+		return nil
+	}
+	return fmt.Errorf("unknown snapshot key %q", s)
+}
+
+// Snapshot is what the watch compares between polls.
+type Snapshot map[Key]string
 
 // SlotNews is what the slot wait found.
 type SlotNews struct {
@@ -112,7 +208,8 @@ type SlotNews struct {
 
 // Change is one entry of the snapshot that moved.
 type Change struct {
-	Key, From, To string
+	Key      Key
+	From, To string
 }
 
 // Result is what a watch returns.
@@ -136,18 +233,18 @@ type Env struct {
 	// error means d passed quietly.
 	Wait func(ctx context.Context, d time.Duration) (*SlotNews, error)
 	// Local is the cheap snapshot (the registry), taken every tick.
-	Local func() map[string]string
+	Local func() Snapshot
 	// Forge refreshes what only the forge can say (escalation answers, PR
 	// states) and returns its snapshot entries. It runs every ForgeEvery.
-	Forge func(ctx context.Context) map[string]string
+	Forge func(ctx context.Context) Snapshot
 	// Seen is what the orchestrator last saw of the support entries, and Mark
 	// records the ones a returned watch just reported. The support entries'
 	// baseline is Seen, not the first poll: a support PR or comment that is
 	// already there when the watch starts and was never reported is news (the
 	// 2026-10 report: a start-time baseline swallowed two open support PRs).
 	// Both nil: the first poll is the baseline, as for every other entry.
-	Seen func() map[string]string
-	Mark func(map[string]string)
+	Seen func() Snapshot
+	Mark func(Snapshot)
 }
 
 // Opts are the intervals of a watch.
@@ -201,8 +298,8 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 		}
 		// A lock taken or handed on mid-watch is no news: fold it into the
 		// baseline so only its release wakes the watch.
-		if v, ok := cur[changeKeyGate]; ok {
-			base[changeKeyGate] = v
+		if v, ok := cur[GateKey]; ok {
+			base[GateKey] = v
 		}
 		if ch := supportNews(Diff(base, cur), env.Seen != nil); len(ch) > 0 {
 			if env.Mark != nil {
@@ -222,7 +319,7 @@ func supportNews(ch []Change, seen bool) []Change {
 	}
 	out := ch[:0:0]
 	for _, c := range ch {
-		if _, _, _, ok := SupportChange(c); ok && c.To == "" {
+		if c.Key.Kind == KindSupport && c.To == "" {
 			continue
 		}
 		out = append(out, c)
@@ -232,18 +329,18 @@ func supportNews(ch []Change, seen bool) []Change {
 
 // carry keeps the forge-owned entries of the baseline, so a tick that did not
 // ask the forge does not read their absence as a change.
-func carry(base map[string]string) map[string]string {
-	out := map[string]string{}
+func carry(base Snapshot) Snapshot {
+	out := Snapshot{}
 	for k, v := range base {
-		if strings.HasPrefix(k, changeKeySlotPR+"state/") || strings.HasPrefix(k, changeKeyEscalat+"status/") || strings.HasPrefix(k, changeKeyReview) || strings.HasPrefix(k, changeKeySupport) {
+		if k.forgeOwned() {
 			out[k] = v
 		}
 	}
 	return out
 }
 
-func merge(a, b map[string]string) map[string]string {
-	out := map[string]string{}
+func merge(a, b Snapshot) Snapshot {
+	out := Snapshot{}
 	for k, v := range a {
 		out[k] = v
 	}
@@ -261,7 +358,7 @@ func minDur(a, b time.Duration) time.Duration {
 }
 
 // Diff lists the keys whose value differs between two snapshots, sorted.
-func Diff(prev, cur map[string]string) []Change {
+func Diff(prev, cur Snapshot) []Change {
 	var out []Change
 	for k, v := range cur {
 		if p, ok := prev[k]; !ok || p != v {
@@ -273,7 +370,7 @@ func Diff(prev, cur map[string]string) []Change {
 			out = append(out, Change{Key: k, From: p})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	sort.Slice(out, func(i, j int) bool { return out[i].Key.String() < out[j].Key.String() })
 	return out
 }
 
@@ -281,37 +378,32 @@ func Diff(prev, cur map[string]string) []Change {
 // stored status of each escalation. A slot's own state is not here: `round
 // wait` reports it, and the orchestrator's own dispatch would otherwise wake
 // the watch it just armed.
-func LocalSnapshot(we worker.Env, root string) map[string]string {
+func LocalSnapshot(we worker.Env, root string) Snapshot {
 	we = we.WithDefaults()
-	out := map[string]string{}
+	out := Snapshot{}
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
 	reg := we.Registry(root)
 	for _, s := range reg.Slots() {
 		if pr := s.PR(); pr != "" {
-			out[changeKeySlotPR+s.Name()] = pr
+			out[Key{Kind: KindSlotPR, ID: s.Name()}] = pr
 		}
 	}
 	for _, e := range escalation.FromRegistry(reg) {
-		out[changeKeyEscalat+e.ID] = e.Status
+		out[Key{Kind: KindEscalation, ID: e.ID}] = e.Status
 	}
 	if held, err := we.LandLockHeld(context.Background(), root); err == nil && held {
-		out[changeKeyGate] = strutil.FirstNonEmpty(we.LandLockHolder(context.Background(), root), "held")
+		out[GateKey] = strutil.FirstNonEmpty(we.LandLockHolder(context.Background(), root), "held")
 	}
 	return out
 }
 
-// GateKey is the snapshot key of the land lock: present while a gate or train
-// holds it, its value the holder. Its disappearing is the "gate cleared" change
-// that tells an orchestrator whose assign was refused to assign now.
-const GateKey = changeKeyGate
-
 // PRStateKey is the snapshot key of a slot's PR state, which only the forge knows.
-func PRStateKey(slot string) string { return changeKeySlotPR + "state/" + slot }
+func PRStateKey(slot string) Key { return Key{Kind: KindPRState, ID: slot} }
 
 // ReviewKey is the snapshot key of the review input waiting on a done slot's
 // PR; its value says how much and from whom. It moves when a new batch arrives
 // and when the batch is consumed.
-func ReviewKey(slot string) string { return changeKeyReview + slot }
+func ReviewKey(slot string) Key { return Key{Kind: KindReview, ID: slot} }
 
 // Support entry kinds (#1827): the PR head of an offered or adopted issue, a
 // PR that exists for a support issue, and the newest comment the other
@@ -333,21 +425,17 @@ const (
 func SupportBranchID(branch string) string { return strings.ReplaceAll(branch, "/", "~") }
 
 // SupportKey is the snapshot key of one support entry of issue id.
-func SupportKey(id, kind string) string { return changeKeySupport + id + "/" + kind }
+func SupportKey(id, kind string) Key { return Key{Kind: KindSupport, ID: id, Sub: kind} }
 
 // SupportChange reads a support entry back out of a change: the issue, the
 // kind and the text for the change line. A comment's value is
 // `<author>#<comment id>` and reads as the author. ok is false for any other
 // key.
 func SupportChange(ch Change) (id, kind, to string, ok bool) {
-	rest, found := strings.CutPrefix(ch.Key, changeKeySupport)
-	if !found {
+	if ch.Key.Kind != KindSupport {
 		return "", "", "", false
 	}
-	id, kind, found = strings.Cut(rest, "/")
-	if !found {
-		return "", "", "", false
-	}
+	id, kind = ch.Key.ID, ch.Key.Sub
 	to = ch.To
 	if kind == SupportComment {
 		to, _, _ = strings.Cut(to, "#")
@@ -358,10 +446,10 @@ func SupportChange(ch Change) (id, kind, to string, ok bool) {
 	return id, kind, to, true
 }
 
-func supportOnly(m map[string]string) map[string]string {
-	out := map[string]string{}
+func supportOnly(m Snapshot) Snapshot {
+	out := Snapshot{}
 	for k, v := range m {
-		if strings.HasPrefix(k, changeKeySupport) {
+		if k.Kind == KindSupport {
 			out[k] = v
 		}
 	}
@@ -369,7 +457,7 @@ func supportOnly(m map[string]string) map[string]string {
 }
 
 // EscalationStatusKey is the snapshot key of the forge-checked escalation status.
-func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/" + id }
+func EscalationStatusKey(id string) Key { return Key{Kind: KindEscalationStatus, ID: id} }
 
 // Digest is the one-line round state the prompt hook shows: each active
 // slot with its issue and PR, the open escalations and whether a watch is armed.

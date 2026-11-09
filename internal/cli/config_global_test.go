@@ -314,8 +314,8 @@ func TestGlobalWritesRefuseATruncatedGlobal(t *testing.T) {
 	if raw, _ := os.ReadFile(path); string(raw) != truncated {
 		t.Errorf("Reset changed the truncated global:\n%s", raw)
 	}
-	if code, _, _ := runMainWith(testDeps(), "-C", proj, "config", "show", "--global"); code != 70 {
-		t.Errorf("show --global on a truncated global exit %d, want 70", code)
+	if code, _, _ := runMainWith(testDeps(), "-C", proj, "config", "show", "--global"); code != ExitUnavailable {
+		t.Errorf("show --global on a truncated global exit %d, want %d", code, ExitUnavailable)
 	}
 }
 
