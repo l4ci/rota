@@ -80,7 +80,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		defer func() { ts.Finish(ok) }()
 		wenv := workerEnvCtx(c, ctx)
 		env := roundwatch.Env{
-			Now: lenv.Now,
+			Now: time.Now, // the loop runs on wall time; ROTA_TEST_NOW pins only the lease stamp
 			Sleep: func(ctx context.Context, d time.Duration) {
 				select {
 				case <-ctx.Done():

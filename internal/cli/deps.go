@@ -124,6 +124,10 @@ type Deps struct {
 	MigrateSleep   func(d time.Duration)
 
 	RoundEnv func(ctx context.Context, root string) round.Env
+	// RoundEnvAccounted is RoundEnv with account picking on, built once with
+	// the meters (accountedRoundEnv calls it); a test that swaps RoundEnv swaps
+	// this too.
+	RoundEnvAccounted func(ctx context.Context, root string) round.Env
 	// RoundEnvLocal is RoundEnv without a forge, for a caller that reads only
 	// the host and worktree sources and must not build one.
 	RoundEnvLocal func(ctx context.Context, root string) round.Env
@@ -182,7 +186,6 @@ func defaultDeps() *Deps {
 		DiskUsage:        statDisk,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
-		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		Host:             func(kind host.Kind) host.Host { return host.New(kind, host.Deps{}) },
 		InstalledVersion: installedVersion,
 		Environ:          os.Environ,
@@ -250,6 +253,9 @@ func defaultDeps() *Deps {
 		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
 	}
 	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
+	d.RoundEnvAccounted = func(ctx context.Context, root string) round.Env {
+		return buildRoundEnv(ctx, root, d, true, d.workerEnvFor(ctx), d.WorkerAccounts())
+	}
 	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
 		return defaultReapEnv(ctx, root, d)
@@ -402,12 +408,6 @@ func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 		}
 	}
 	return e
-}
-
-// baseRoundEnv is the round.Env every round verb starts from: the one Git, the
-// lease and the worker env, all read off Deps so a swapped fake reaches them.
-func (d *Deps) baseRoundEnv() round.Env {
-	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(d.workerEnv()), Login: d.credentials()}
 }
 
 // escalationEnv is the EscalationEnv hook with its host filled from Host.
