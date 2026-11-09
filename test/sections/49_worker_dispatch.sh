@@ -418,20 +418,7 @@ pass "worker gate reports verifySkipped rather than a pass it cannot back"
 # ── (c1) provenance check ───────────────────────────────────────────────────
 # The PR body comes from a fake `gh`; the relay log is written straight into the
 # registry, the way worker dispatch --relay does. Slot w3 is fresh against main.
-FAKEBIN="$TMP_WD/fakebin"; mkdir -p "$FAKEBIN"
-cat > "$FAKEBIN/gh" <<'SH'
-#!/usr/bin/env bash
-if [ "$1 $2" = "pr view" ]; then
-  # PRView reads head, state and body from this one reply.
-  python3 - "$FAKE_PR_HEAD" "$FAKE_PR_SHA" "$FAKE_PR_BODY" <<'PY'
-import json, sys
-head, sha, body = sys.argv[1:4]
-print(json.dumps({"headRefName": head, "headRefOid": sha, "baseRefName": "main", "state": "OPEN",
-                  "mergeCommit": None, "body": open(body).read()}))
-PY
-fi
-SH
-chmod +x "$FAKEBIN/gh"
+. "$TESTDIR/lib/forge_state.sh"
 # A recorded PR needs an origin (the gate refuses a local merge of a PR), and the
 # fake gh must report the pushed branch as the PR head.
 git init -q --bare -b main "$TMP_WD/.rota/origin.git"
@@ -458,9 +445,9 @@ PYEOF
 }
 prov() {  # prov <body> -> "<exit code>:<verdict>" of the check
   # Keep required decision headings present so these cases test Approvals.
-  printf '%s\n\n## Assumptions\n\nNone\n\n## Rulings\n\nNone\n' "$1" > "$TMP_WD/pr_body.md"
+  FORGE_STATE_HEAD="$FAKE_PR_HEAD" forge_state "$TMP_WD/forge.json" "$FAKE_PR_SHA" "${1//$'\n'/\\n}" "" ""
   local rc=0
-  ( cd "$TMP_WD" && PATH="$FAKEBIN:$PATH" FAKE_PR_BODY="$TMP_WD/pr_body.md" FAKE_PR_HEAD="$FAKE_PR_HEAD" FAKE_PR_SHA="$FAKE_PR_SHA" \
+  ( cd "$TMP_WD" && PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$TMP_WD/forge.json" \
       "$ROTA_BIN" --json worker gate w3 --base main --check-only ) >"$TMP_WD/prov.out" 2>"$TMP_WD/prov.err" || rc=$?
   echo "$rc:$(jget data.verdict <"$TMP_WD/prov.out" || true)"
 }
@@ -555,31 +542,27 @@ pass "worker verbs helpers exit 2 on usage errors"
 
 # ── review loop verbs (#577) ────────────────────────────────────────────────
 # `worker reply` posts through the tracker with a marker; `round review-relay`
-# reads the PR's review input from the forge. A canned gh stands in for the
-# forge: one reviewer comment on PR 9, and a record of every POST. The relay
+# reads the PR's review input from the forge. The shared fake gh stands in for the
+# forge: a store holding PR 9 with one reviewer comment; a POST lands in that store. The relay
 # itself (dispatch, bounce count) is covered by the round package tests; here
 # the verbs' refusals and the forge round-trip, through the real binary.
 TMP_RV="$(mktemp -d)"
-mkdir -p "$TMP_RV/.rota" "$TMP_RV/bin"
+mkdir -p "$TMP_RV/.rota"
 ( cd "$TMP_RV" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
   && printf '{"forge":{"provider":"github"}}\n' > .rota/config.json ) || fail "review-loop fixture setup failed"
-cat > "$TMP_RV/bin/gh" <<'SH'
-#!/usr/bin/env bash
-case "$*" in
-  *"-X POST"*) printf '%s\n' "$*" >> "$RV_POSTS"; echo '{"id":77}' ;;
-  *issues/comments/77*) echo '{"id":77,"html_url":"https://github.com/o/r/pull/9#issuecomment-77"}' ;;
-  *issues/9/comments*) echo '[{"id":1,"body":"please rename x","user":{"login":"rev"},"created_at":"2026-10-08T10:00:00Z"}]' ;;
-  *pulls/9/*) echo '[]' ;;
-  *) echo "unexpected gh call: $*" >&2; exit 2 ;;
-esac
-SH
-chmod +x "$TMP_RV/bin/gh"
+python3 - "$TMP_RV/forge.json" <<'PYEOF' || fail "review-loop forge store setup failed"
+import json, sys
+json.dump({"next_issue": 100, "next_milestone": 1, "next_comment": 77, "next_mr": 1, "labels": [], "milestones": [], "issues": [],
+           "prs": [{"number": 9, "title": "t", "body": "", "head": "nia/577-x", "base": "main", "state": "open", "sha": "a" * 40,
+                    "thread_comments": [{"id": 1, "body": "please rename x", "author": "rev", "created_at": "2026-10-08T10:00:00Z"}]}]},
+          open(sys.argv[1], "w"))
+PYEOF
 printf '{"slots":[{"name":"nia","task":"577","branch":"nia/577-x","state":"done","pr":"https://github.com/o/r/pull/9","relays":[]},{"name":"ben","task":"578","branch":"ben/578-y","state":"busy","pr":"https://github.com/o/r/pull/9","relays":[]}]}\n' > "$TMP_RV/.rota/workers.json"
-rv() { ( cd "$TMP_RV" && PATH="$TMP_RV/bin:$PATH" RV_POSTS="$TMP_RV/posts" "$ROTA_BIN" "$@" ); }
+rv() { ( cd "$TMP_RV" && PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$TMP_RV/forge.json" "$ROTA_BIN" "$@" ); }
 printf 'Fixed in abc1234: renamed x.\n' > "$TMP_RV/reply.md"
 OUT="$(rv --json worker reply nia --body-file "$TMP_RV/reply.md")" || fail "worker reply failed: $OUT"
-[ "$(jget data.url <<<"$OUT")" = "https://github.com/o/r/pull/9#issuecomment-77" ] || fail "worker reply should print the comment url: $OUT"
-grep -q 'rota:worker-reply nia' "$TMP_RV/posts" || fail "the reply must carry the worker-reply marker: $(cat "$TMP_RV/posts")"
+[ "$(jget data.url <<<"$OUT")" = "https://github.com/fake/repo/issues/9#issuecomment-77" ] || fail "worker reply should print the comment url: $OUT"
+grep -q 'rota:worker-reply nia' "$TMP_RV/forge.json" || fail "the reply must carry the worker-reply marker: $(cat "$TMP_RV/forge.json")"
 RC=0; rv worker reply nia >/dev/null 2>&1 || RC=$?
 [ "$RC" = "2" ] || fail "worker reply without --body-file: expected exit 2, got $RC"
 RC=0; rv round review-relay zed >/dev/null 2>&1 || RC=$?

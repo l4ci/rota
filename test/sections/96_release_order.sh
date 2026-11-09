@@ -1,5 +1,6 @@
 echo "release order: tag first, one release finished from the workflow's draft, branch last (F4, #74)"
-# Real rota, a local bare origin that reads as github, and a scripted gh: it logs
+# One-off stub kept (#2826): the shared fake gh has no `release view`, and this probe
+# scripts one draft-release state per call. Real rota, a local bare origin that reads as github, and a scripted gh: it logs
 # its argv and answers `release view` from the state in $RO/state.
 RO="$(mktemp -d)"
 trap 'rm -rf "${RO:?}"' EXIT
