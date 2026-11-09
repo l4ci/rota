@@ -103,7 +103,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 				}
 				return &roundwatch.SlotNews{Slot: res.Slot, State: strings.ToLower(res.State), Evidence: res.Evidence, Source: res.Source}, nil
 			},
-			Local: func() map[string]string { return roundwatch.LocalSnapshot(root) },
+			Local: func() map[string]string { return roundwatch.LocalSnapshot(wenv, root) },
 			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, c, root) },
 		}
 		st := roundwatch.NewSeenStore(cd)
@@ -253,7 +253,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)
-	digest := roundwatch.ExitDigest(c.Context(), c.deps().Git, root, roundNumber)
+	digest := roundwatch.ExitDigest(workerEnvCtx(c, c.Context()), root, roundNumber)
 	d.Set("digest", digest)
 	if tick != nil {
 		// Status and explicit ticks keep the full drift list. The watch

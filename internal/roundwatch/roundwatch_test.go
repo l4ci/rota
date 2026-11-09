@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -164,18 +163,18 @@ func TestRunInterrupt(t *testing.T) {
 	}
 }
 
-func writeRegistry(t *testing.T, root, body string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(body), 0o666); err != nil {
-		t.Fatal(err)
+// fakeEnv is a worker.Env whose registry is the given JSON text and whose git
+// says it is outside any repo: the seam under test, with nothing on disk.
+func fakeEnv(registry string) worker.Env {
+	return worker.Env{
+		Registry: func(string) worker.Registry { return worker.ParseRegistry(registry) },
+		Git:      func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil },
 	}
 }
 
+const noRoot = "/nonexistent/rota-root"
+
 func TestNeedsWatchAndDigest(t *testing.T) {
-	root := t.TempDir()
 	for _, tc := range []struct {
 		state  string
 		active bool
@@ -187,12 +186,12 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 		{"IdLe", false},
 	} {
 		t.Run(fmt.Sprintf("state=%q", tc.state), func(t *testing.T) {
-			writeRegistry(t, root, fmt.Sprintf(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":%q,"task":"31"}]}`, tc.state))
-			need, attn := NeedsWatch(root)
+			we := fakeEnv(fmt.Sprintf(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":%q,"task":"31"}]}`, tc.state))
+			need, attn := NeedsWatch(we, noRoot)
 			if need != tc.active || len(attn) != 0 {
 				t.Errorf("NeedsWatch = %v %v, want %v and no attention", need, attn, tc.active)
 			}
-			d := Digest(context.Background(), git.Exec, root, 2, false)
+			d := Digest(we, noRoot, 2, false)
 			if strings.Contains(d, "dana") != tc.active || strings.Contains(d, "#31") != tc.active || strings.Contains(d, "ben") {
 				t.Errorf("digest slot visibility: %q", d)
 			}
@@ -201,24 +200,23 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 			}
 		})
 	}
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"done","pr":"https://x/pull/7"}]}`)
-	need, attn := NeedsWatch(root)
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"done","pr":"https://x/pull/7"}]}`)
+	need, attn := NeedsWatch(we, noRoot)
 	if !need || len(attn) != 1 || attn[0] != "ben done" {
 		t.Fatalf("%v %v", need, attn)
 	}
-	if d := Digest(context.Background(), git.Exec, root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
+	if d := Digest(we, noRoot, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
 		t.Fatalf("digest %q", d)
 	}
 }
 
 func TestExitDigest(t *testing.T) {
-	root := t.TempDir()
-	if got, want := ExitDigest(context.Background(), git.Exec, root, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
+	if got, want := ExitDigest(fakeEnv(""), noRoot, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
 		t.Errorf("empty round exit digest = %q, want %q", got, want)
 	}
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
 	want := "rota round 2: dana done #31 https://x/pull/7 (needs you); 1 escalation(s) pending. Watch exiting; re-arm `rota round watch`."
-	if got := ExitDigest(context.Background(), git.Exec, root, 2); got != want {
+	if got := ExitDigest(we, noRoot, 2); got != want {
 		t.Errorf("active round exit digest = %q, want %q", got, want)
 	}
 }
@@ -238,10 +236,7 @@ func TestStopBlock(t *testing.T) {
 		{name: "solo", registry: `{"host":"solo","slots":[{"name":"ben","state":"busy"}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, cd := t.TempDir(), t.TempDir()
-			if tc.registry != "" {
-				writeRegistry(t, root, tc.registry)
-			}
+			cd := t.TempDir()
 			now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 			alive := map[int]bool{10: true}
 			env := testEnv(&now, alive)
@@ -253,7 +248,7 @@ func TestStopBlock(t *testing.T) {
 				defer release()
 				alive[10] = tc.alive
 			}
-			reason, block := StopBlock(env, root, cd)
+			reason, block := StopBlock(fakeEnv(tc.registry), env, noRoot, cd)
 			if block != tc.block {
 				t.Fatalf("block=%v, reason=%q", block, reason)
 			}
@@ -288,21 +283,19 @@ func TestCarryKeepsReviewEntries(t *testing.T) {
 }
 
 func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
-	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
-	if got := Digest(context.Background(), git.Exec, root, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
+	if got := Digest(we, noRoot, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
 		t.Errorf("digest = %q", got)
 	}
 }
 
 // #1843: a done slot whose PR merged is not news for the orchestrator.
 func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
-	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
-	if d := Digest(context.Background(), git.Exec, root, 1, true); strings.Contains(d, "needs you") {
+	we := fakeEnv(`{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
+	if d := Digest(we, noRoot, 1, true); strings.Contains(d, "needs you") {
 		t.Fatalf("digest %q", d)
 	}
-	if _, attn := NeedsWatch(root); len(attn) != 0 {
+	if _, attn := NeedsWatch(we, noRoot); len(attn) != 0 {
 		t.Fatalf("attn %v", attn)
 	}
 }
@@ -322,13 +315,13 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 			return err
 		}
 		defer os.Remove(path + worker.LandHolderSuffix)
-		during = LocalSnapshot(repo)
+		during = LocalSnapshot(worker.Env{}, repo)
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	after = LocalSnapshot(repo)
+	after = LocalSnapshot(worker.Env{}, repo)
 	if during[GateKey] != "#1900" {
 		t.Errorf("snapshot under the lock = %v, want %s=#1900", during, GateKey)
 	}
@@ -369,5 +362,21 @@ func TestRunWakesOnGateReleaseOnly(t *testing.T) {
 	}
 	if len(res.Changes) != 1 || res.Changes[0].Key != GateKey || res.Changes[0].From != "ben" || res.Changes[0].To != "" {
 		t.Errorf("changes = %+v, want %s ben -> gone", res.Changes, GateKey)
+	}
+}
+
+// The snapshot reads slot PRs and escalation statuses through the caller's Env,
+// not the registry file under root.
+func TestLocalSnapshotReadsThroughEnv(t *testing.T) {
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"busy","pr":"https://x/pull/7"},{"name":"dana","state":"idle"}],"escalations":[{"id":"e1","status":"pending"}]}`)
+	got := LocalSnapshot(we, noRoot)
+	want := map[string]string{changeKeySlotPR + "ben": "https://x/pull/7", changeKeyEscalat + "e1": "pending"}
+	if len(got) != len(want) {
+		t.Fatalf("snapshot = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("snapshot[%s] = %q, want %q (all: %v)", k, got[k], v, got)
+		}
 	}
 }

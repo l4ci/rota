@@ -246,7 +246,7 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 	}
 	// A second stop in the same turn passes, so a refused watch cannot loop.
 	if !active {
-		if reason, block := roundwatch.StopBlock(hc.lease, hc.root, hc.commonDir); block {
+		if reason, block := roundwatch.StopBlock(workerEnvCtx(c, c.Context()), hc.lease, hc.root, hc.commonDir); block {
 			return hookPrint(hook.StopOutput(reason)), nil
 		}
 	}
@@ -319,10 +319,10 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	if worker.IsSolo(hc.root) && !activeFreeze && waitLine == "" {
 		return Result{}, nil
 	}
-	if need, _ := roundwatch.NeedsWatch(hc.root); !need && !activeFreeze && waitLine == "" {
+	if need, _ := roundwatch.NeedsWatch(workerEnvCtx(c, c.Context()), hc.root); !need && !activeFreeze && waitLine == "" {
 		return Result{}, nil
 	}
-	digest := roundwatch.Digest(c.Context(), c.deps().Git, hc.root, hc.who.Lease.Round, armed)
+	digest := roundwatch.Digest(workerEnvCtx(c, c.Context()), hc.root, hc.who.Lease.Round, armed)
 	if waitLine != "" {
 		digest += " " + waitLine + "."
 	}
