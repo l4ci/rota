@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -62,7 +62,7 @@ func validateType(key string, value any) error {
 // TypeProblems reports non-null values with a different JSON shape from their
 // schema key, including values hidden by a higher layer. Null means unset.
 // It only diagnoses stored values; it never rewrites them.
-func TypeProblems(env projects.Env, root string) []string {
+func TypeProblems(env cfgdir.Env, root string) []string {
 	out := []string{}
 	for _, layer := range []struct {
 		name string
