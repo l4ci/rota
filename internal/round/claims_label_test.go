@@ -247,3 +247,42 @@ func (c closedUnfilteredFails) List(ctx context.Context, f tracker.ListFilter) (
 }
 
 func (claimLabelRemote) PRSetBase(context.Context, int, string) error { return nil }
+
+// A closed issue holding only needs-review is drift the sweep finds, and
+// --apply removes it; an open issue with the same label is left alone.
+func TestReconcileSweepsClosedWorkflowLabels(t *testing.T) {
+	root := newRepo(t, nil)
+	fake := &trackertest.Fake{Issues: []tracker.Issue{
+		{Key: tracker.NumKey(1), Title: "done", State: "closed", Labels: []string{"needs-review", "type:bug"}},
+		{Key: tracker.NumKey(2), Title: "parked", State: "closed", Labels: []string{"needs-human"}},
+		{Key: tracker.NumKey(3), Title: "live", State: "open", Labels: []string{"needs-review"}},
+	}}
+	e := env([]host.Agent{}, claimLabelRemote{fake})
+	e.Label, e.NeedsReview, e.NeedsHuman = "in-progress", "needs-review", "needs-human"
+	e.SweepClosedClaims = true
+	out, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stale []string
+	for _, f := range out.Drift {
+		if f.Kind == LabelStale {
+			stale = append(stale, f.Issue)
+		}
+	}
+	if !slices.Equal(stale, []string{"1", "2"}) {
+		t.Fatalf("label-stale = %v, want [1 2]", stale)
+	}
+	if _, err := e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.Issues[0].Labels; !slices.Equal(got, []string{"type:bug"}) {
+		t.Errorf("closed #1 labels = %v, want [type:bug]", got)
+	}
+	if got := fake.Issues[1].Labels; len(got) != 0 {
+		t.Errorf("closed #2 labels = %v, want none", got)
+	}
+	if got := fake.Issues[2].Labels; !slices.Equal(got, []string{"needs-review"}) {
+		t.Errorf("open #3 labels = %v, want unchanged", got)
+	}
+}

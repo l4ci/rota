@@ -2,6 +2,7 @@ package labels
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -128,5 +129,24 @@ func TestMilestoneMergeLabelRegistry(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("milestone prefix lifecycle is not registered")
+	}
+}
+
+func TestClosedDropResolvesFromTheRegistry(t *testing.T) {
+	want := []string{InProgress, NeedsReview, NeedsHuman}
+	if got := ClosedDrop(nil); !slices.Equal(got, want) {
+		t.Fatalf("ClosedDrop(nil) = %v, want %v", got, want)
+	}
+	renamed := ClosedDrop(func(key string) string {
+		if key == "issues.labels.needsReview" {
+			return "in-review"
+		}
+		if key == "issues.labels.needsHuman" {
+			return ""
+		}
+		return InProgress
+	})
+	if !slices.Equal(renamed, []string{InProgress, "in-review"}) {
+		t.Fatalf("renamed/disabled = %v", renamed)
 	}
 }
