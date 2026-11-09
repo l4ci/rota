@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
@@ -11,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func seedFreeze(t *testing.T, root, base string) string {
@@ -32,7 +32,7 @@ func TestRoundFreezeStatusRepairAndAuditedClear(t *testing.T) {
 	if code != 0 || data(t, out)["freeze"] == nil {
 		t.Fatalf("status must show freeze: %d %s", code, out)
 	}
-	if line := roundwatch.Digest(context.Background(), git.Exec, root, 40, true); !strings.Contains(line, "FROZEN") {
+	if line := roundwatch.Digest(worker.Env{Git: git.Exec}, root, 40, true); !strings.Contains(line, "FROZEN") {
 		t.Fatalf("prompt digest must show freeze: %s", line)
 	}
 	code, out, _ = rotaInWith(t, deps, root, "--json", "round", "freeze", "--repair-issue", "99")
@@ -126,7 +126,7 @@ func TestRoundFreezeUnreadableRecovery(t *testing.T) {
 			if code != 0 || !strings.Contains(out+stderr, "freeze") || !strings.Contains(out+stderr, "unreadable") {
 				t.Errorf("status must warn and remain available: %d %s %s", code, out, stderr)
 			}
-			if line := roundwatch.Digest(context.Background(), git.Exec, root, 40, true); !strings.Contains(line, "freeze unreadable") {
+			if line := roundwatch.Digest(worker.Env{Git: git.Exec}, root, 40, true); !strings.Contains(line, "freeze unreadable") {
 				t.Errorf("digest must warn about unreadable freeze: %s", line)
 			}
 			code, out, _ = rotaInWith(t, deps, root, "--json", "round", "freeze", "--clear", "--reason", "recover damaged freeze")
