@@ -26,6 +26,9 @@ const (
 	TrackerNotFound
 	// Lock: fsio.ErrLockTimeout, a busy lock (exit 6).
 	Lock
+	// Unreadable: fsio.ErrUnreadable, a state file rota refuses to read as
+	// empty, the user's file and not a rota bug (exit 5).
+	Unreadable
 	// Tracker: any tracker.Error, by its kind (Kind.Exit), and a
 	// tracker.UnknownForgeError (exit 4, blockedBy forge).
 	Tracker
@@ -166,6 +169,8 @@ func translate(err error, o Options) (any, error) {
 		return nil, &exitcode.Error{Exit: exitcode.ExitNotImplemented, Message: err.Error()}
 	case has(Lock) && errors.Is(err, fsio.ErrLockTimeout):
 		return nil, &exitcode.Error{Exit: exitcode.ExitRetry, Message: err.Error()}
+	case has(Unreadable) && errors.Is(err, fsio.ErrUnreadable):
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
 	}
 	if o.Default == 0 {
 		return nil, err

@@ -70,7 +70,7 @@ func issuesErr(err error) error {
 	case errors.Is(err, issues.ErrCommitNotFound):
 		return Resolution("%s", strings.TrimPrefix(err.Error(), issues.ErrCommitNotFound.Error()+": "))
 	case errors.Is(err, tracker.ErrUnknownForge):
-		return forgeRefusal(err)
+		return trackerRefusal(err)
 	case errors.Is(err, issues.ErrNoProvider):
 		return Resolution("%s", strings.TrimPrefix(err.Error(), issues.ErrNoProvider.Error()+": "))
 	case errors.As(err, &te):
