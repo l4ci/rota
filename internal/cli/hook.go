@@ -316,16 +316,14 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 		interval = time.Duration(marker.Heartbeat) * time.Second
 	}
 	waitLine := roundwatch.MaintainerSnapshotLine(hc.commonDir, c.deps().Now(), interval)
-	if worker.IsSolo(hc.root) && !activeFreeze && waitLine == "" {
+	needsWatch, _ := roundwatch.NeedsWatch(workerEnvCtx(c, c.Context()), hc.root)
+	dec := hook.DecidePromptDigest(hook.PromptDigestIn{
+		Solo: worker.IsSolo(hc.root), NeedsWatch: needsWatch, Frozen: activeFreeze, WaitLine: waitLine,
+	})
+	if dec.Silent {
 		return Result{}, nil
 	}
-	if need, _ := roundwatch.NeedsWatch(workerEnvCtx(c, c.Context()), hc.root); !need && !activeFreeze && waitLine == "" {
-		return Result{}, nil
-	}
-	digest := roundwatch.Digest(workerEnvCtx(c, c.Context()), hc.root, hc.who.Lease.Round, armed)
-	if waitLine != "" {
-		digest += " " + waitLine + "."
-	}
+	digest := roundwatch.Digest(workerEnvCtx(c, c.Context()), hc.root, hc.who.Lease.Round, armed) + dec.Suffix
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":     "UserPromptSubmit",
 		"additionalContext": digest,
