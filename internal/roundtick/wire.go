@@ -97,13 +97,12 @@ func NewEnv(w World, cfg Config) Env {
 		return active
 	}
 	e.Queued = func() []string { return QueuedRefs(w.TolerantRegistry().PRs()) }
-	e.Reconcile = func(ctx context.Context) ([]Finding, []Finding, error) {
+	e.Reconcile = func(ctx context.Context) (Inspection, error) {
 		out, err := w.Reconcile(ctx)
 		if err != nil {
-			return nil, nil, err
+			return Inspection{}, err
 		}
-		repaired, drift := ReconcileFindings(out)
-		return repaired, drift, nil
+		return InspectionOf(out, cfg.Observe), nil
 	}
 	e.Target = func(target string) (worker.GateTarget, error) {
 		reg, err := w.Registry()
@@ -158,9 +157,7 @@ func NewEnv(w World, cfg Config) Env {
 	e.Say = w.Say
 	e.OpenItems = func(context.Context) int { return w.OpenItems() }
 	e.Candidates = w.Candidates
-	if !cfg.Observe {
-		e.Review = w.Review()
-	}
+	e.Review = w.Review()
 	// The follow-up list is a read; observation never calls its Start.
 	e.FollowUp = w.FollowUp()
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
@@ -172,19 +169,7 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit
-	if cfg.Observe {
-		e.Observe = &ObservationSources{}
-		if observer, ok := w.(ObservationWorld); ok {
-			e.Observe.Reconcile = observer.InspectReconcile
-			e.Observe.ReviewLoop = func(_ context.Context, s Slot) ReviewOutcome { return observer.InspectReviewLoop(s.Name) }
-			e.Observe.ReviewFacts = observer.InspectReviewFacts
-			e.Observe.AwaitingReview = func(_ context.Context, sl Slot, base string) string {
-				why, now := observer.InspectReviewReadiness(sl.Name, base)
-				k.bypass[sl.Name] = now
-				return why
-			}
-		}
-	}
+	e.Observe = cfg.Observe
 	return e
 }
 
@@ -241,13 +226,4 @@ func (k *wiring) head(ctx context.Context, target string) (string, error) {
 		return "", fmt.Errorf("PR %s has no head SHA", t.PR)
 	}
 	return fmt.Sprintf("%d:%s", n, info.HeadSHA), nil
-}
-
-// ObservationWorld supplies only inspection methods. Execution's World methods
-// remain wired but Run never invokes its mutation adapters in observation mode.
-type ObservationWorld interface {
-	InspectReconcile(context.Context) (Inspection, error)
-	InspectReviewLoop(string) ReviewOutcome
-	InspectReviewFacts(context.Context) (round.Architecture, bool, error)
-	InspectReviewReadiness(slot, base string) (string, bool)
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,9 +12,11 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundtick"
 )
 
@@ -120,5 +124,27 @@ func TestRoundTickObserveLeavesHeldWorktreeIndexAlone(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("observation rewrote the held worktree's index")
+	}
+}
+
+// The no-mutation guarantee is structural: an observing world refuses every
+// call that would change state, whatever the tick asks of it.
+func TestObservingTickWorldRefusesMutations(t *testing.T) {
+	w := &tickWorld{observe: true}
+	ctx := context.Background()
+	if _, _, err := w.Landing(ctx, postgate.Request{}); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("Landing: %v", err)
+	}
+	if _, err := w.Assign(ctx, "#1"); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("Assign: %v", err)
+	}
+	if _, err := w.Review().Mint(ctx, round.Architecture{}); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("Mint: %v", err)
+	}
+	if err := w.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("FollowUp.Start: %v", err)
+	}
+	if _, err := readOnlyRelay(ctx); !errors.Is(err, errReadOnlyWorld) {
+		t.Errorf("review relay: %v", err)
 	}
 }

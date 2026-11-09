@@ -51,18 +51,6 @@ func (f Finding) String() string { return string(f.Kind) + " " + f.Key }
 // FindingOf maps a reconcile finding to the tick's typed one.
 func FindingOf(f round.Finding) Finding { return Finding{Kind: DriftKind(f.Kind), Key: f.Key()} }
 
-// ReconcileFindings maps a reconcile outcome to what it repaired and the drift
-// it left.
-func ReconcileFindings(out round.Outcome) (repaired, drift []Finding) {
-	for _, f := range out.Repaired {
-		repaired = append(repaired, FindingOf(f))
-	}
-	for _, f := range out.Drift {
-		drift = append(drift, FindingOf(f))
-	}
-	return repaired, drift
-}
-
 // AssignedAgents names the slots an assign took: two for a best-of:2 issue.
 func AssignedAgents(res round.Assigned) []string {
 	if len(res.BestOf) == 2 {
