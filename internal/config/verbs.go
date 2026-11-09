@@ -81,7 +81,7 @@ func IsSchemaKey(name string) bool {
 // outside the schema is accepted when the merged config holds it, so a
 // hand-edited key stays readable; the old helper rejected it.
 func Show(env cfgdir.Env, root string, key string, one bool) ([]Entry, error) {
-	merged, l := loadLayers(env, configPath(root))
+	merged, l := loadLayers(env, root)
 	source := func(key string) string {
 		if _, ok := walk(l.local, key); ok {
 			return "local"
@@ -636,7 +636,7 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 // an account dir that is neither absolute nor ~-prefixed.
 func Retired(env cfgdir.Env, root string) []string {
 	out := []string{}
-	if v, _ := Value(Load(env, configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
+	if v, _ := Value(Load(env, root), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
 		b, _ := jsonx.MarshalCompact(v)
 		msg := "autonomy.level " + string(b) + " is not a level: set it to off, roundtrip or auto"
 		if v == "loop" {
@@ -644,18 +644,18 @@ func Retired(env cfgdir.Env, root string) []string {
 		}
 		out = append(out, msg)
 	}
-	if v, _ := Value(Load(env, configPath(root)), ReviewKey); v != nil {
+	if v, _ := Value(Load(env, root), ReviewKey); v != nil {
 		if _, err := ParseReviewPolicy(v); err != nil {
 			out = append(out, err.Error())
 		}
 	}
-	if v, _ := Value(Load(env, configPath(root)), LensesKey); v != nil {
+	if v, _ := Value(Load(env, root), LensesKey); v != nil {
 		if _, err := ParseLenses(v); err != nil {
 			out = append(out, err.Error())
 		}
 	}
-	out = append(out, changeProblems(Load(env, configPath(root)))...)
-	out = append(out, AccountDirProblems(Load(env, configPath(root)))...)
+	out = append(out, changeProblems(Load(env, root))...)
+	out = append(out, AccountDirProblems(Load(env, root))...)
 	return out
 }
 

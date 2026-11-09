@@ -12,10 +12,10 @@ import (
 )
 
 func main() {
-	cfgFile := flag.String("config", "", "project config to resolve (default: registry defaults)")
+	cfgFile := flag.String("config", "", "project root whose .rota/config.json to resolve (default: registry defaults)")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: genref [--config config.json] <output file or ->")
+		fmt.Fprintln(os.Stderr, "usage: genref [--config project-root] <output file or ->")
 		os.Exit(2)
 	}
 	var cfg any

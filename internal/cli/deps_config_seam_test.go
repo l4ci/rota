@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Runtime config reads stay in internal/config and cli/deps.go; every
@@ -74,4 +73,4 @@ func TestShipStrategyReadsInMemoryConfig(t *testing.T) {
 }
 
 // diskConfig reads the .rota/config.json a test wrote, as the real Deps.Config does.
-func diskConfig(root string) any { return config.Load(cfgdir.OSEnv(), rotatree.Config(root)) }
+func diskConfig(root string) any { return config.Load(cfgdir.OSEnv(), root) }

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -49,7 +50,7 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	}
 
 	docsSegment := "docs"
-	if cfg, ok := fsio.LoadJSON(rotatree.Config(root), nil).(*jsonx.Object); ok {
+	if cfg, ok := config.Project(root).(*jsonx.Object); ok {
 		if dv, ok := cfg.Get("docs"); ok {
 			if d, ok := dv.(*jsonx.Object); ok {
 				if pv, ok := d.Get("path"); ok {

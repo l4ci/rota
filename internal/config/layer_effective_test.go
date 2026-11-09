@@ -161,7 +161,7 @@ func TestEmptyAccountListFallsBackToGlobal(t *testing.T) {
 		if list, _ := e.Value.([]any); len(list) != 1 {
 			t.Errorf("%s empty in %s: value = %v, want the global list", key, layer, e.Value)
 		}
-		if v, _ := Lookup(Load(env, configPath(root)), key); !reflect.DeepEqual(v, e.Value) {
+		if v, _ := Lookup(Load(env, root), key); !reflect.DeepEqual(v, e.Value) {
 			t.Errorf("%s empty in %s: Load = %v, show = %v", key, layer, v, e.Value)
 		}
 	}
@@ -176,7 +176,7 @@ func TestAccountsMergeByKind(t *testing.T) {
 		`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/c1"}]}}`,
 		`{"round":{"accounts":[{"kind":"opencode","name":"o1","dir":"/o1"}]}}`)
 	want := []Account{{KindClaude, "a1", "/a1"}, {KindCodex, "c1", "/c1"}, {KindOpencode, "o1", "/o1"}}
-	if got := Accounts(Load(env, configPath(root))); !reflect.DeepEqual(got, want) {
+	if got := Accounts(Load(env, root)); !reflect.DeepEqual(got, want) {
 		t.Errorf("effective accounts = %v, want %v", got, want)
 	}
 	e := showOne(t, env, root, "round.accounts")

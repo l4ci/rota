@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -74,7 +73,7 @@ func roundSupportDisable(fs *flag.FlagSet) RunFunc {
 		if !issue {
 			return supportFileModeStop()
 		}
-		name := roundcfg.SupportName(fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject()))
+		name := roundcfg.SupportName(config.Project(root))
 		removed, err := config.Unset(root, config.RoundSupportKey, config.LayerProject)
 		if err != nil {
 			return Result{}, err

@@ -529,7 +529,7 @@ func TestDataFromRateLimits(t *testing.T) {
 func jsonNum(n int64) string { b, _ := json.Marshal(n); return string(b) }
 
 func TestLoadSettings(t *testing.T) {
-	cfg := config.Load(cfgdir.OSEnv(), filepath.Join(t.TempDir(), "missing.json"))
+	cfg := config.Load(cfgdir.OSEnv(), t.TempDir())
 	s, err := LoadSettings(cfg)
 	if err != nil {
 		t.Fatal(err)

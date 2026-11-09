@@ -55,7 +55,7 @@ func Check(root string, cfg any, drift func() string) CheckResult {
 	// (DECISIONS.md, "Persistence-trio scoping under umbrella mode"). A flag
 	// with no registered repos is a warning, never a failure.
 	if jsonx.Truthy(umbrellaFlag(cfg)) && !repos.Umbrella(root) {
-		if _, err := os.Stat(filepath.Join(rota, "repos.json")); err != nil {
+		if _, err := os.Stat(rotatree.Repos(root)); err != nil {
 			res.Warnings = append(res.Warnings, "umbrella.enabled=true but .rota/repos.json missing — run `rota init umbrella` from the umbrella root to register, or set umbrella.enabled=false")
 		} else {
 			res.Warnings = append(res.Warnings, "umbrella.enabled=true but no sub-repos in .rota/repos.json — run `rota init umbrella` from the umbrella root to register, or set umbrella.enabled=false")

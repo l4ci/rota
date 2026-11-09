@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
-	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"slices"
@@ -119,7 +118,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	fb.add("14", "No criteria", "M01", false, "")
 	fb.ready = map[string][]string{"14": {"no acceptance criteria in the issue body", "no design or plan note"}}
 	f.be = fb
-	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(os.TempDir())))
+	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir()))
 	f.env.Round, f.env.HolderPID = f.set, 100
 	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
@@ -601,14 +600,14 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(f.root)))
+	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), f.root))
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.set, f.env.Round = set, set
 	// The round recorded its host at start, before this config; the registry
 	// wins, so a config that names a host re-records it, as a new round would.
-	if dv, _ := config.Lookup(config.Load(cfgdir.OSEnv(), filepath.Join(f.root, ".rota", "config.json")), "round.dispatch"); dv == "herdr" || dv == "tmux" {
+	if dv, _ := config.Lookup(config.Load(cfgdir.OSEnv(), f.root), "round.dispatch"); dv == "herdr" || dv == "tmux" {
 		d := dv.(string)
 		if err := worker.Update(f.root, func(doc *worker.Doc) { doc.SetHost(host.KindOf(d)) }); err != nil {
 			t.Fatal(err)

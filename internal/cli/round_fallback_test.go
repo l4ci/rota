@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,7 +86,7 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"round":{"dispatch":"herdr","harnesses":["claude","codex"],"accounts":[{"name":"a","configDir":"/nowhere"}],"roster":["ben"]}}`)
-	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), rotatree.Config(root)))
+	set, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), root))
 	if err != nil {
 		t.Fatal(err)
 	}

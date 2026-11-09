@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -82,7 +81,7 @@ func SupportMachine(root string, load func(root string) any) (bool, *RoleError) 
 // RoleInTrackedConfig is whether the tracked project layer names round.role:
 // the role belongs to one machine, so it lives in .rota/config.local.json only.
 func RoleInTrackedConfig(root string) bool {
-	project := fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject())
+	project := config.Project(root)
 	_, ok := config.Lookup(project, config.RoundRoleKey)
 	return ok
 }

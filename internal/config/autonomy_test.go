@@ -74,8 +74,8 @@ func TestFillRewritesAutoOnce(t *testing.T) {
 		if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		cfg := Load(cfgdir.OSEnv(), configPath(root))
-		if v, _ := Value(Load(cfgdir.OSEnv(), configPath(root)), "autonomy.level"); v != "roundtrip" {
+		cfg := Load(cfgdir.OSEnv(), root)
+		if v, _ := Value(Load(cfgdir.OSEnv(), root), "autonomy.level"); v != "roundtrip" {
 			t.Errorf("%s: level %v after fill", name, v)
 		}
 		if !strings.Contains(read(t, root), `"roundtrip"`) || !strings.Contains(readLocal(t, root), `"roundtrip"`) {
@@ -115,7 +115,7 @@ func TestFillRewritesAutoOnce(t *testing.T) {
 	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	if s := StampedVersion(Load(cfgdir.OSEnv(), configPath(root))); s != "0.20.0" {
+	if s := StampedVersion(Load(cfgdir.OSEnv(), root)); s != "0.20.0" {
 		t.Errorf("stamp raised without a rewrite: %q", s)
 	}
 }
@@ -181,7 +181,7 @@ func TestFillRewritesGlobalAutoOnce(t *testing.T) {
 	if _, err := Fill(env, root); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := Value(Load(env, configPath(root)), "autonomy.level"); v != "roundtrip" {
+	if v, _ := Value(Load(env, root), "autonomy.level"); v != "roundtrip" {
 		t.Errorf("level %v after fill", v)
 	}
 	if strings.Contains(read(t, root), `"autonomy"`) {
@@ -196,7 +196,7 @@ func TestFillRewritesGlobalAutoOnce(t *testing.T) {
 	if _, err := Fill(env, root); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := Value(Load(env, configPath(root)), "autonomy.level"); v != "auto" {
+	if v, _ := Value(Load(env, root), "autonomy.level"); v != "auto" {
 		t.Errorf("deliberate global auto rewritten: %v", v)
 	}
 	// An unreadable global is left alone and fill still works.
@@ -280,10 +280,10 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := Value(Load(cfgdir.OSEnv(), configPath(root)), "autonomy.level"); v != "auto" {
+	if v, _ := Value(Load(cfgdir.OSEnv(), root), "autonomy.level"); v != "auto" {
 		t.Errorf("deliberate auto rewritten: %v", v)
 	}
-	if s := StampedVersion(Load(cfgdir.OSEnv(), configPath(root))); s != AutonomyLevelsSince {
+	if s := StampedVersion(Load(cfgdir.OSEnv(), root)); s != AutonomyLevelsSince {
 		t.Errorf("stamp %q", s)
 	}
 	// A local set stamps config.json too, and an old local auto is migrated
@@ -310,7 +310,7 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 	if _, err := Set(root, "autonomy.level", "bogus"); err == nil {
 		t.Fatal("bogus accepted")
 	}
-	if !strings.Contains(readLocal(t, root), `"auto"`) || StampedVersion(Load(cfgdir.OSEnv(), configPath(root))) != "0.20.0" {
+	if !strings.Contains(readLocal(t, root), `"auto"`) || StampedVersion(Load(cfgdir.OSEnv(), root)) != "0.20.0" {
 		t.Errorf("a refused set migrated:\n%s\n%s", read(t, root), readLocal(t, root))
 	}
 }
