@@ -68,4 +68,7 @@ var gateDecls = []struct {
 	// Refused for an unnamed support machine before any round verb reads or
 	// claims issues; config verbs stay usable to repair the name.
 	{[]string{"round"}, func(g *Gates) { g.RoundMachine = true }},
+	// round assign changes state before it dispatches: an exit-5 dispatch
+	// failure keeps its result so the slot it could not reach is named.
+	{[]string{"round assign"}, func(g *Gates) { g.KeepDispatch = true }},
 }
