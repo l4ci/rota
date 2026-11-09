@@ -1,0 +1,103 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
+)
+
+// The one place a round.Env is built from Deps: baseRoundEnv (deps.go) is the
+// start, defaultRoundEnv fills it for the status-style verbs, accountedRoundEnv
+// opts into account picking and withBoard adds the claim side. Every clock in
+// the env (worker, lease) reads Deps.Now.
+
+// defaultRoundEnv wires the real git, host and forge. The host is herdr when
+// the round recorded (C8); with none it is herdr when round.dispatch says so or
+// the process runs inside herdr (rounds are started by hand with `herdr
+// worktree create`, whatever the config says), else tmux.
+// Account picking stays off: it is opt-in (accountedRoundEnv), so start, status
+// and the other verbs never take that path by accident.
+// A host or forge that cannot be built or reached is left nil: the verbs
+// report it as unavailable instead of failing. withForge false builds no
+// forge at all (Forge and ForgeErr stay empty), for a caller that reads only
+// the local sources and would not wait on the network.
+func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
+	cfg := d.Config(root)
+	e := d.baseRoundEnv()
+	e.Worker, e.AccountPicking = e.Worker.WithAccounts(nil), false
+	e.Base = "main"
+	configured, _ := config.Lookup(cfg, "git.baseBranch")
+	baseCfg, _ := configured.(string)
+	if b, ok, err := d.Repo(root).Base(ctx, baseCfg); err == nil && ok {
+		e.Base = b
+	} else if err == nil && baseCfg != "" {
+		// A set but missing base is not replaced by main: the verbs refuse.
+		e.Base = ""
+		e.BaseErr = fmt.Sprintf("git.baseBranch %q does not resolve to a branch (fix or unset it in .rota/config.json)", baseCfg)
+	}
+	// A round started by hand (`herdr worktree create`) has no recorded host and
+	// resolves from the environment like every other verb.
+	hostKind := d.resolvePaneHost(root, cfg)
+	if hostKind == host.Solo {
+		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
+	} else {
+		h := d.Host(hostKind)
+		if err := h.Require(); err != nil {
+			e.HostErr = err.Error()
+		} else if s := h.Capabilities().Snapshotter; s != nil {
+			e.Snapshot, e.HostName = s.Snapshot, h.Kind()
+			e.Capture = h.Capture
+			if tf := h.Capabilities().TabFollower; tf != nil {
+				e.FollowTab = tf.FollowTab
+			}
+		}
+	}
+	labels := roundcfg.Lenient(cfg).Labels
+	e.NeedsHuman, e.Label, e.SupportLabel, e.NeedsReview = labels.NeedsHuman, labels.InProgress, roundcfg.MachineLabel(roundcfg.SupportName(cfg)), labels.NeedsReview
+	e.Round, e.RoundErr = d.roundSettings(root, roundConfigUsage)
+	if !withForge {
+		return e
+	}
+	f, err := d.forgeAndIssues(ctx, cfg, root)
+	if err != nil {
+		e.ForgeErr = err.Error()
+	} else {
+		e.Forge = f
+	}
+	return e
+}
+
+// accountedRoundEnv is RoundEnv with account picking on, for a verb that reads
+// quota or picks an account: the one place a verb opts in, chosen when the env
+// is built. The worker env comes from the one constructor (Deps.workerEnv), so
+// Git, host and clock match baseRoundEnv.
+func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
+	env := c.deps().RoundEnv(ctx, root)
+	env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
+	return env.WithAccounts(c.deps().WorkerAccounts())
+}
+
+// withBoard gives the env the backlog's claim side, which claim-mismatch drift
+// reads. File mode has no claims, and a backlog that cannot be opened is a
+// warning: the other drift kinds still report.
+func withBoard(c *Ctx, root string, env round.Env) round.Env {
+	if env.Board != nil {
+		return env
+	}
+	if caps, _, err := backendMode(c.deps(), root); err != nil || !caps.IssueIDs {
+		return env
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		c.Warn("claim check skipped: %v", err)
+		return env
+	}
+	if b, ok := round.BoardOf(be); ok {
+		env.Board = b
+	}
+	return env
+}
