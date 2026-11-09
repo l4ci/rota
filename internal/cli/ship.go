@@ -28,13 +28,13 @@ import (
 // internal/ship; the verbs here parse flags, wire the ports and render.
 func shipCommands() *Command {
 	return &Command{Name: "ship", Summary: "PR bodies, pull requests, merges and undo", Subs: []*Command{
-		{Name: "body", Summary: "build a PR body from a branch's commits", Repo: true, Verb: noFlags(shipBody)},
-		{Name: "pr", Summary: "push a branch and open a PR or MR", Repo: true, Verb: shipPR},
-		{Name: "merge", Summary: "merge a branch into the base branch with --no-ff", Repo: true, Verb: shipMerge},
-		{Name: "strategy", Summary: "how the branch lands: direct, pr, or unset (a local forge is always direct)", Repo: true, Verb: shipStrategy},
-		{Name: "finish", Summary: "end-of-cycle bookkeeping: status, items and the post-cycle gates", Repo: true, Verb: shipFinish},
-		{Name: "pr-merge", Summary: "merge a PR in issue mode", Repo: true, Verb: shipPRMerge},
-		{Name: "undo", Summary: "roll back the last cycle merge on the base branch", Repo: true, Verb: shipUndo},
+		{Name: "body", Fence: fenceAllowed, Summary: "build a PR body from a branch's commits", Repo: true, Verb: noFlags(shipBody)},
+		{Name: "pr", Fence: fenceAllowed, Summary: "push a branch and open a PR or MR", Repo: true, Verb: shipPR},
+		{Name: "merge", Fence: fenceRefused, Summary: "merge a branch into the base branch with --no-ff", Repo: true, Verb: shipMerge},
+		{Name: "strategy", Fence: fenceAllowed, Summary: "how the branch lands: direct, pr, or unset (a local forge is always direct)", Repo: true, Verb: shipStrategy},
+		{Name: "finish", Fence: fenceAllowed, Summary: "end-of-cycle bookkeeping: status, items and the post-cycle gates", Repo: true, Verb: shipFinish},
+		{Name: "pr-merge", Fence: fenceRefused, Summary: "merge a PR in issue mode", Repo: true, Verb: shipPRMerge},
+		{Name: "undo", Fence: fenceRefused, Summary: "roll back the last cycle merge on the base branch", Repo: true, Verb: shipUndo},
 	}}
 }
 

@@ -23,27 +23,27 @@ func debugCommands() []*Command {
 	return []*Command{
 		{Name: "debug", Summary: "Iron Law fix-attempt counter", Subs: []*Command{
 			{Name: "counter", Summary: "per-branch debug session counter", Subs: []*Command{
-				{Name: "init", Summary: "start the counter for a bug", Repo: true, Verb: noFlags(runCounterInit)},
-				{Name: "record-attempt", Summary: "record a pending fix attempt", Repo: true, Verb: counterRecordAttempt},
-				{Name: "fail", Summary: "mark the last attempt failed", Verb: noFlags(runCounterFail)},
-				{Name: "pass", Summary: "mark the last attempt passed", Verb: noFlags(runCounterPass)},
-				{Name: "show", Summary: "print the counter state", Verb: noFlags(runCounterShow)},
-				{Name: "summary", Summary: "Iron Law halt note", Verb: noFlags(runCounterSummary)},
-				{Name: "clear", Summary: "delete the counter", Verb: noFlags(runCounterClear)},
-				{Name: "inc-cycle", Summary: "count a hypothesis cycle", Verb: noFlags(runCounterIncCycle)},
+				{Name: "init", Fence: fenceAllowed, Summary: "start the counter for a bug", Repo: true, Verb: noFlags(runCounterInit)},
+				{Name: "record-attempt", Fence: fenceAllowed, Summary: "record a pending fix attempt", Repo: true, Verb: counterRecordAttempt},
+				{Name: "fail", Fence: fenceAllowed, Summary: "mark the last attempt failed", Verb: noFlags(runCounterFail)},
+				{Name: "pass", Fence: fenceAllowed, Summary: "mark the last attempt passed", Verb: noFlags(runCounterPass)},
+				{Name: "show", Fence: fenceAllowed, Summary: "print the counter state", Verb: noFlags(runCounterShow)},
+				{Name: "summary", Fence: fenceAllowed, Summary: "Iron Law halt note", Verb: noFlags(runCounterSummary)},
+				{Name: "clear", Fence: fenceAllowed, Summary: "delete the counter", Verb: noFlags(runCounterClear)},
+				{Name: "inc-cycle", Fence: fenceAllowed, Summary: "count a hypothesis cycle", Verb: noFlags(runCounterIncCycle)},
 			}},
 			{Name: "session", Summary: "per-developer /rota-debug session notes", Subs: []*Command{
-				{Name: "put", Summary: "write a session file, replacing any earlier one", Verb: debugSessionPut},
-				{Name: "show", Summary: "print a session file", Verb: noFlags(runDebugSessionShow)},
-				{Name: "list", Summary: "list open sessions", Verb: noFlags(runDebugSessionList)},
-				{Name: "rm", Summary: "delete a session file", Verb: noFlags(runDebugSessionRm)},
+				{Name: "put", Fence: fenceAllowed, Summary: "write a session file, replacing any earlier one", Verb: debugSessionPut},
+				{Name: "show", Fence: fenceAllowed, Summary: "print a session file", Verb: noFlags(runDebugSessionShow)},
+				{Name: "list", Fence: fenceAllowed, Summary: "list open sessions", Verb: noFlags(runDebugSessionList)},
+				{Name: "rm", Fence: fenceAllowed, Summary: "delete a session file", Verb: noFlags(runDebugSessionRm)},
 			}},
-			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Repo: true, Verb: debugVerdict},
-			{Name: "reset", Summary: "start an item's failed-fix count again", Repo: true, Verb: debugReset},
+			{Name: "verdict", Fence: fenceAllowed, Summary: "record whether a fix held and route on the item's failed-fix count", Repo: true, Verb: debugVerdict},
+			{Name: "reset", Fence: fenceAllowed, Summary: "start an item's failed-fix count again", Repo: true, Verb: debugReset},
 			{Name: "work-fix", Summary: "cap /rota-work Step 7 fix attempts per item", Subs: []*Command{
-				{Name: "attempt", Summary: "record a fix attempt; exit 4 on the fourth", Repo: true, Verb: workFixAttempt},
-				{Name: "pass", Summary: "a verify PASSed: start the attempt count again", Repo: true, Verb: workFixPass},
-				{Name: "reset", Summary: "start an item's attempt count again", Repo: true, Verb: workFixReset},
+				{Name: "attempt", Fence: fenceAllowed, Summary: "record a fix attempt; exit 4 on the fourth", Repo: true, Verb: workFixAttempt},
+				{Name: "pass", Fence: fenceAllowed, Summary: "a verify PASSed: start the attempt count again", Repo: true, Verb: workFixPass},
+				{Name: "reset", Fence: fenceAllowed, Summary: "start an item's attempt count again", Repo: true, Verb: workFixReset},
 			}},
 		}},
 	}
@@ -52,10 +52,10 @@ func debugCommands() []*Command {
 func spikeCommands() []*Command {
 	return []*Command{
 		{Name: "spike", Summary: "throwaway feasibility spikes", Subs: []*Command{
-			{Name: "add", Summary: "create spike/<name> and its file", Repo: true, Verb: spikeAdd},
-			{Name: "finish", Summary: "mark a spike done", Verb: noFlags(runSpikeFinish)},
-			{Name: "list", Summary: "list spikes", Verb: noFlags(runSpikeList)},
-			{Name: "show", Summary: "print a spike file", Verb: noFlags(runSpikeShow)},
+			{Name: "add", Fence: fenceRefused, Summary: "create spike/<name> and its file", Repo: true, Verb: spikeAdd},
+			{Name: "finish", Fence: fenceRefused, Summary: "mark a spike done", Verb: noFlags(runSpikeFinish)},
+			{Name: "list", Fence: fenceAllowed, Summary: "list spikes", Verb: noFlags(runSpikeList)},
+			{Name: "show", Fence: fenceAllowed, Summary: "print a spike file", Verb: noFlags(runSpikeShow)},
 		}},
 	}
 }

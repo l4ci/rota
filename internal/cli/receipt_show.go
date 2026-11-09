@@ -11,7 +11,7 @@ import (
 // receiptCommands is the `rota receipt` group (#959).
 func receiptCommands() *Command {
 	return &Command{Name: "receipt", Summary: "inspect the request-id receipts of the round verbs", Subs: []*Command{
-		{Name: "show", Summary: "report whether a request id's call applied", Verb: noFlags(runReceiptShow)},
+		{Name: "show", Fence: fenceAllowed, Summary: "report whether a request id's call applied", Verb: noFlags(runReceiptShow)},
 	}}
 }
 

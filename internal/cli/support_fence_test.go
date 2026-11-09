@@ -298,3 +298,32 @@ func TestRoundStartSupportSurfacesStoreError(t *testing.T) {
 		t.Fatalf("exit %d: %v %s", code, env, stderr)
 	}
 }
+
+// A verb registered without a fence class is refused on a support machine
+// (fail closed) and runs on main: the gate walks the tree, so the class a verb
+// declares on its Command is all it needs.
+func TestUnclassifiedVerbRefusedOnSupport(t *testing.T) {
+	tree := &Command{Name: "rota", Subs: []*Command{
+		{Name: "grp", Subs: []*Command{
+			{Name: "new", Verb: noFlags(nil)},
+			{Name: "ok", Fence: fenceAllowed, Verb: noFlags(nil)},
+		}},
+	}}
+	support := supportProject(t)
+	main := trackerProject(t, `{"issues":{"source":"github"}}`+"\n")
+	gate := func(dir, path string) error {
+		c := &Ctx{Path: path, Deps: testDeps()}
+		c.Deps.Getwd = func() (string, error) { return dir, nil }
+		_, err := runGates(c, tree)
+		return err
+	}
+	if err := gate(support, "rota grp new"); err == nil {
+		t.Error("unclassified verb ran on a support machine")
+	}
+	if err := gate(support, "rota grp ok"); err != nil {
+		t.Errorf("classified verb refused on support: %v", err)
+	}
+	if err := gate(main, "rota grp new"); err != nil {
+		t.Errorf("unclassified verb refused on main: %v", err)
+	}
+}

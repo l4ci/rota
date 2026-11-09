@@ -19,10 +19,10 @@ import (
 // support and refuses main inside the verb.
 func roundSupport() *Command {
 	return &Command{Name: "support", Summary: "split work with the support machine (round.support)", Subs: []*Command{
-		{Name: "offer", Summary: "pin issues to the support machine; --withdraw removes the pin", Verb: roundSupportOffer},
-		{Name: "return", Summary: "release a pinned support issue, with a reason (support machine)", Verb: roundSupportReturn},
-		{Name: "enable", Summary: "name the support machine in the tracked config (round.support)", Verb: roundSupportEnable},
-		{Name: "disable", Summary: "remove round.support from the tracked config", Verb: roundSupportDisable},
+		{Name: "offer", Fence: fenceRefused, Summary: "pin issues to the support machine; --withdraw removes the pin", Verb: roundSupportOffer},
+		{Name: "return", Fence: fenceAllowed, Summary: "release a pinned support issue, with a reason (support machine)", Verb: roundSupportReturn},
+		{Name: "enable", Fence: fenceRefused, Summary: "name the support machine in the tracked config (round.support)", Verb: roundSupportEnable},
+		{Name: "disable", Fence: fenceRefused, Summary: "remove round.support from the tracked config", Verb: roundSupportDisable},
 	}}
 }
 

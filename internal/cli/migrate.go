@@ -12,7 +12,7 @@ func migrateCommands() *Command {
 		milestonesMigrateCommand(),
 		milestoneFilesMigrateCommand(),
 		externalKnowledgeMigrateCommand(),
-		{Name: "issues", Summary: "move the file backlog onto the issue tracker (preview unless --apply)", Verb: migrateIssues},
+		{Name: "issues", Fence: fenceRefused, Summary: "move the file backlog onto the issue tracker (preview unless --apply)", Verb: migrateIssues},
 	}}
 }
 

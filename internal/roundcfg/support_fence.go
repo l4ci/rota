@@ -22,7 +22,8 @@ import (
 type FenceClass int
 
 const (
-	// FenceUnclassified is a verb no declaration classifies.
+	// FenceUnclassified is a verb that declares no class. A support machine
+	// refuses it: a verb added without a class fails safe.
 	FenceUnclassified FenceClass = iota
 	// FenceRefused verbs are refused before they run on a support machine.
 	FenceRefused
@@ -34,10 +35,13 @@ const (
 
 // MayRun is whether a machine with round.role role may run a verb of class
 // before the verb starts. Main may run everything. A support machine is
-// refused the FenceRefused verbs; FenceInVerb ones pass here and refuse inside
-// the verb.
+// refused the FenceRefused verbs and any unclassified one; FenceInVerb ones
+// pass here and refuse inside the verb.
 func MayRun(role string, class FenceClass) bool {
-	return role != RoleSupport || class != FenceRefused
+	if role != RoleSupport {
+		return true
+	}
+	return class == FenceInVerb || class == FenceAllowed
 }
 
 // RoleError is a round.role this machine cannot read: Why says what failed
