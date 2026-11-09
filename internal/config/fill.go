@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // ErrCorrupt is Fill's answer when config.json is not a valid JSON object,
@@ -60,7 +60,7 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // roundtrip in config.json and config.local.json and the stamp is raised, an
 // auto in a global config older than its own stamp becomes roundtrip too, and
 // round.autopilot is deleted from both project files.
-func Fill(env projects.Env, root string) ([]string, error) {
+func Fill(env cfgdir.Env, root string) ([]string, error) {
 	filled, _, _, err := FillDetect(env, root, nil)
 	return filled, err
 }
@@ -68,7 +68,7 @@ func Fill(env projects.Env, root string) ([]string, error) {
 // FillDetect is Fill with the origin detection MigrateSource needs for an
 // issues.provider of auto, and a report of the source and round-key
 // migrations. A nil detect leaves such a config on its legacy keys.
-func FillDetect(env projects.Env, root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
+func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
 	filled := []string{}
 	var sm SourceMigration
 	rm, err := MigrateRoundKeysFiles(root, true)

@@ -10,10 +10,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/labels"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -80,7 +80,7 @@ func IsSchemaKey(name string) bool {
 // parent. The source names the supplying layer (local, project or global), or "default" on fallback. A key
 // outside the schema is accepted when the merged config holds it, so a
 // hand-edited key stays readable; the old helper rejected it.
-func Show(env projects.Env, root string, key string, one bool) ([]Entry, error) {
+func Show(env cfgdir.Env, root string, key string, one bool) ([]Entry, error) {
 	merged, l := loadLayers(env, configPath(root))
 	source := func(key string) string {
 		if _, ok := walk(l.local, key); ok {
@@ -306,7 +306,7 @@ func setAt(path string, notObject error, key, raw string, update func(string, an
 // Reset drops key's local override, then makes the project value the default: a
 // required key is written with its default unless the global config under env
 // supplies it, any other key is removed from the project layer.
-func Reset(root string, env projects.Env, key string) error {
+func Reset(root string, env cfgdir.Env, key string) error {
 	if _, err := Unset(root, key, LayerLocal); err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ const (
 // required schema keys. Missing lists, in schema order, the required keys that
 // are absent or null, then LegacyVerifyKey when it still holds commands that
 // test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
-func Check(env projects.Env, root string) (status string, missing []string) {
+func Check(env cfgdir.Env, root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
 	if errors.Is(err, os.ErrNotExist) {
@@ -634,7 +634,7 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 // loop autonomy (#70), and anything else is no level. It also holds a
 // malformed ship.review policy, which would otherwise read as the default, and
 // an account dir that is neither absolute nor ~-prefixed.
-func Retired(env projects.Env, root string) []string {
+func Retired(env cfgdir.Env, root string) []string {
 	out := []string{}
 	if v, _ := Value(Load(env, configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
 		b, _ := jsonx.MarshalCompact(v)
