@@ -68,7 +68,7 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 
 - **A registry-derived guard cannot find what the registry lacks** — A literal check built only from registry entries misses a family that is absent from the registry, as `on-milestone/<id>` was in #2136. Back it with independent detection at the parsers and in skill label arguments. <!-- 2026-10-27 sha:27346ef -->
 
-- **Classify every new verb in the support fence** — A new `rota` verb must be listed in `internal/roundcfg/support_fence.go` (allowed, in-verb or refused) or `TestSupportTablesClassifyEveryVerb` fails the fast tier. Verbs that write only gitignored state go in the allowed table. <!-- 2026-10-27 sha:27346ef -->
+- **Classify every new verb in the support fence** — A new `rota` verb must be listed in `fenceDecls` in `internal/cli/tree_gates.go` (allowed, in-verb or refused), each verb on its own since groups pass nothing down, or `TestEveryVerbHasAFenceClass` fails the fast tier. Verbs that write only gitignored state go in the allowed table. <!-- 2026-10-27 sha:27346ef -->
 
 - **hvmigrate.splitLines is not a pystr copy** — hvmigrate.splitLines (internal/hvmigrate/common.go) keeps the \n terminators for diffing and must not be swapped for pystr.Splitlines. Local SplitCSV copies differed from pystr.SplitCSV only on U+001C to U+001F (TrimSpace vs Python strip). <!-- 2026-10-30 sha:53b418a5 -->
 ## Architecture: Skill authoring
