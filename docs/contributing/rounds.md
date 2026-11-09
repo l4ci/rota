@@ -296,8 +296,8 @@ tracker claim decides which machine takes an issue; neither machine reserves its
 the other. After winning a claim, support pins the issue so main can track it through the queue,
 watch and provenance checks; a pre-dispatch failure removes only that assignment's new pin.
 Use `machine:main` to keep an issue on main. A support machine never merges and
-never writes tracked `.rota/` content; those verbs exit 4 `blockedBy: role` (each verb's class is declared in
-`internal/cli/tree_gates.go`).
+never writes tracked `.rota/` content; those verbs exit 4 `blockedBy: role`. Each verb declares its class in the
+`Fence` field of its `Command`; a verb with no class is refused on support.
 
 Setting one up takes two steps and no hand edits:
 
