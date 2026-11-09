@@ -201,6 +201,13 @@ func defaultDeps() *Deps {
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
+	// The lease reads the same clock as the worker env, so pinning Deps.Now
+	// pins its StartedAt; d.Now is read at call time, so a later swap counts.
+	d.LeaseEnv = func() roundlease.Env {
+		e := roundlease.DefaultEnv()
+		e.Now = func() time.Time { return d.Now() }
+		return e
+	}
 	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
 	// smoke test cannot reach the update package any other way.
 	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")

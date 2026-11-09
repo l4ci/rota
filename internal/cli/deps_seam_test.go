@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
@@ -116,5 +117,19 @@ func TestDefaultRoundEnvBaseHonoursConfiguredBranch(t *testing.T) {
 	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
 	if e.Base != "develop" {
 		t.Errorf("Base = %q, want the configured develop", e.Base)
+	}
+}
+
+// Deps.Now is the one clock: pinning it pins the round lease's StartedAt too,
+// not just the worker env.
+func TestDepsNowPinsLeaseClock(t *testing.T) {
+	d := defaultDeps()
+	pinned := time.Date(2031, 2, 3, 4, 5, 6, 0, time.UTC)
+	d.Now = func() time.Time { return pinned }
+	if got := d.LeaseEnv().Now(); !got.Equal(pinned) {
+		t.Errorf("LeaseEnv().Now() = %v, want pinned %v", got, pinned)
+	}
+	if got := d.baseRoundEnv().Lease.Now(); !got.Equal(pinned) {
+		t.Errorf("baseRoundEnv().Lease.Now() = %v, want pinned %v", got, pinned)
 	}
 }
