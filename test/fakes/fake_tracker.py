@@ -604,7 +604,10 @@ def gh_api(db, args):
         emit([{"name": n} for n in i["labels"]])
     elif re.match(r"^issues/\d+/comments$", rest) and method == "GET":
         i = thread(db, rest.split("/")[1])
-        emit([{"id": c["id"], "body": c["body"], "user": {"login": c["author"]}} for c in i["comments"]])
+        emit([dict({"id": c["id"], "body": c["body"], "user": {"login": c["author"]}},
+                   **({"created_at": c["created_at"]} if "created_at" in c else {})) for c in i["comments"]])
+    elif re.match(r"^pulls/\d+/(comments|reviews)$", rest) and method == "GET":
+        emit([])  # no inline review comments or review bodies; PR-thread comments are issue comments
     elif re.match(r"^issues/\d+/comments$", rest) and method == "POST":
         c = add_comment(db, thread(db, rest.split("/")[1]), fields.get("body", ""))
         save(db)

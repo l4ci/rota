@@ -4,7 +4,8 @@ trap 'rm -rf "$HI_TMP"' EXIT
 (
   cd "$HI_TMP"
   mkdir -p .rota stub-bin
-  # Stub `gh` to a script that always fails so the verb takes the unavailable path,
+  # One-off stub kept (#2826): the shared fake gh cannot be told to fail every call, and an
+  # unconditional exit 7 is the whole point. Stub `gh` to a script that always fails so the verb takes the unavailable path,
   # even on a host where the real gh is installed and authed.
   cat > stub-bin/gh <<'EOS'
 #!/bin/sh
@@ -26,6 +27,7 @@ trap 'rm -rf "$HI2_TMP"' EXIT
 (
   cd "$HI2_TMP"
   mkdir -p .rota stub-bin
+  # One-off stub kept (#2826): same always-failing gh as above.
   cat > stub-bin/gh <<'EOS'
 #!/bin/sh
 exit 7

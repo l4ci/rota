@@ -24,7 +24,7 @@ mkdir -p "$FK/bin" "$FK/herdr" "$FK/doctor"
 # ── fakes ───────────────────────────────────────────────────────────────────
 # herdr: test/fakes/herdr. `api snapshot` prints $FK/herdr/snapshot.json.
 cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"
-# gh: pr view|merge go to the one-PR forge fake (real git underneath), the rest
+# gh: not a stub (#2826). This shim only routes between two shared fakes. pr view|merge go to the one-PR forge fake (real git underneath), the rest
 # (issue and PR threads, pr create) to the tracker fake.
 cat > "$FK/bin/gh" <<SH
 #!/usr/bin/env bash
