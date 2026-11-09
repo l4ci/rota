@@ -1,7 +1,3 @@
-// Package worker is the Go port of the /rota-work worker helpers
-// (bin/hv-worker-pool, -reset, -account, -dispatch, -poll, -gate, -session).
-// The registry is .rota/workers.json at the project root; its files stay
-// byte-identical to what the old helpers write.
 package worker
 
 import (

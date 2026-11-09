@@ -403,8 +403,24 @@ func suiteBacklog(t *testing.T) {
 		scn{name: "stale/bad-today-env", goOnly: true, argv: j("backlog", "stale", "--kind", "todo"), env: []string{"ROTA_TEST_TODAY=tomorrow"}, want: 2},
 		scn{name: "stale/no-hv", goOnly: true, fx: fx{noHV: true}, argv: j("backlog", "stale", "--kind", "todo"), want: 3},
 		scn{name: "stale/repo-unregistered", goOnly: true, fx: umbFx, argv: j("backlog", "stale", "--kind", "todo", "--repo", "x"), want: 3},
-		scn{name: "stale/todo-reads-file-under-issues-config", fx: withFx(todoFx, func(f *fx) { f.config = issuesConfig }), argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),
-			env: []string{"ROTA_TEST_TODAY=" + today}, want: 0},
+		// The todo kind follows issues.source: under a tracker config it builds the tracker, not BACKLOG.md.
+		scn{name: "stale/todo-follows-issues-config", goOnly: true, fx: withFx(todoFx, func(f *fx) { f.config = issuesConfig }), argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),
+			env: []string{"ROTA_TEST_TODAY=" + today}, want: 5,
+			check: func(t *testing.T, e envl) {
+				t.Helper()
+				msg, _ := at(e, "error.message").(string)
+				if code, _ := at(e, "error.code").(string); code != "unavailable" || !strings.Contains(msg, "cannot determine the issue tracker provider") {
+					t.Errorf("error = %v %q: want unavailable from the tracker path", code, msg)
+				}
+			}},
+		scn{name: "stale/todo-reports-undated", goOnly: true, fx: todoFx, argv: j("backlog", "stale", "--kind", "todo", "--days", "90"),
+			env: []string{"ROTA_TEST_TODAY=" + today}, want: 0,
+			check: func(t *testing.T, e envl) {
+				t.Helper()
+				if n := fmt.Sprint(at(e, "data.skippedUndated")); n != "2" {
+					t.Errorf("skippedUndated = %s, want 2 (B03 undated, B04 junk)", n)
+				}
+			}},
 		scn{name: "stale/default-today-is-real-today", goOnly: true, argv: j("backlog", "stale", "--kind", "todo", "--days", "0"), want: 0, fx: todoFx,
 			check: func(t *testing.T, e envl) {
 				if n := len(strs(at(e, "data.entries"))); n == 0 {

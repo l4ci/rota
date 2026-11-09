@@ -13,34 +13,22 @@ type spy struct{ calls []string }
 
 func (s *spy) hit(name string) { s.calls = append(s.calls, name) }
 
-// observed wires f for observation: every mutation adapter is a spy, and the
-// read-only probes return the same facts the execution adapters would act on.
+// observed wires f for observation: the reads answer as they do in execution
+// (through the same Env fields) and every adapter that executes is a spy.
 func observed(f *fake, s *spy, review *round.Architecture) Env {
 	e := f.env()
-	e.Reconcile = func(context.Context) ([]Finding, []Finding, error) { s.hit("reconcile"); return nil, nil, nil }
+	e.Observe = true
+	e.Reconcile = func(context.Context) (Inspection, error) {
+		return Inspection{Proposed: f.repaired, Drift: f.drift}, nil
+	}
 	e.RunGate = func(context.Context, string, string) GateRun { s.hit("gate"); return GateRun{} }
 	e.RunTrain = func(context.Context, []string, string) TrainRun { s.hit("train"); return TrainRun{} }
 	e.Assign = func(context.Context, string) ([]string, error) { s.hit("assign"); return nil, nil }
 	e.Audit = func(Action) { s.hit("audit") }
 	e.Say = func(string) { s.hit("say") }
-	e.ReviewLoop = func(context.Context, Slot) ReviewOutcome { s.hit("review-loop"); return ReviewOutcome{} }
-	e.AwaitingReview = func(context.Context, Slot, string) string { s.hit("awaiting-review"); return "" }
-	e.Review = fakeReview{mint: func() ([]string, error) { s.hit("mint"); return nil, nil }}
-	e.Observe = &ObservationSources{
-		Reconcile: func(context.Context) (Inspection, error) {
-			return Inspection{Proposed: f.repaired, Drift: f.drift}, nil
-		},
-		ReviewLoop: func(context.Context, Slot) ReviewOutcome { return ReviewOutcome{} },
-		AwaitingReview: func(_ context.Context, sl Slot, _ string) string {
-			if f.awaiting == nil {
-				return ""
-			}
-			return f.awaiting(sl)
-		},
-	}
+	e.ReviewLoop = func(context.Context, Slot) ReviewOutcome { return ReviewOutcome{} }
 	if review != nil {
-		a := *review
-		e.Observe.ReviewFacts = func(context.Context) (round.Architecture, bool, error) { return a, false, nil }
+		e.Review = fakeReview{facts: review, mint: func() ([]string, error) { s.hit("mint"); return nil, nil }}
 	}
 	return e
 }
