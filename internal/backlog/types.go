@@ -22,15 +22,17 @@ type Type struct {
 	Kind      string // detail directory and counters.json key, "bugs" ("" for S)
 	Countable bool   // C flag: counted in counters.json since_refactor
 	Plannable bool   // P flag: can carry a milestone plan key
+	Tags      string // allowed capture tags, space-separated ("P0 P1 P2 P3"; "" for none)
+	Role      string // issue-label role key, "types.bug" ("" for S)
 }
 
 // Types is the registry in bin/hv-types.sh order: B, F, T and the plan-key
 // only S (Slice). A test keeps it in step with that file.
 var Types = []Type{
-	{"B", "Bugs", "bugs", true, true},
-	{"F", "Features", "features", true, true},
-	{"T", "Tasks", "tasks", false, true},
-	{"S", "", "", false, true},
+	{"B", "Bugs", "bugs", true, true, "P0 P1 P2 P3", "types.bug"},
+	{"F", "Features", "features", true, true, "Major Minor Cosmetic", "types.feature"},
+	{"T", "Tasks", "tasks", false, true, "", "types.task"},
+	{"S", "", "", false, true, "", ""},
 }
 
 // ItemLetters are the letters of the types that appear as bullets in the open
@@ -62,4 +64,18 @@ func TypeByKind(kind string) (Type, bool) {
 		}
 	}
 	return Type{}, false
+}
+
+// typeLetter is the letter of the type whose detail directory is kind, "" when
+// none matches.
+func typeLetter(kind string) string {
+	t, _ := TypeByKind(kind)
+	return t.Letter
+}
+
+// sectionOfLetter is the open-section heading of a type letter, "" when none
+// matches.
+func sectionOfLetter(letter string) string {
+	t, _ := TypeByLetter(letter)
+	return t.Section
 }

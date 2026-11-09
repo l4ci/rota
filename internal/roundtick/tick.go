@@ -192,6 +192,10 @@ type FailedHead struct {
 	Why  string `json:"why"`
 }
 
+// ActionMerge is the Action of a PR the tick landed; the watch wakes on it
+// under train fill.
+const ActionMerge = "merge"
+
 // Action is something the tick did.
 type Action struct {
 	Action, Target, Detail string
@@ -497,7 +501,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		case m.Verdict == worker.GateRunning:
 			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
-			e.audit(r, Action{Action: "merge", Target: m.Target, Detail: m.Detail})
+			e.audit(r, Action{Action: ActionMerge, Target: m.Target, Detail: m.Detail})
 		case m.Verdict == "":
 			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: m.Target, Why: strutil.FirstNonEmpty(m.Detail, "the gate did not pass")})
 		default:

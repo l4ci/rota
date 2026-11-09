@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
 	"os"
-	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -68,23 +68,47 @@ func TestArmOneAtATime(t *testing.T) {
 }
 
 func TestDiff(t *testing.T) {
-	got := Diff(map[string]string{"a": "1", "b": "2", "c": "3"}, map[string]string{"a": "1", "b": "9", "d": "4"})
-	var keys []string
-	for _, c := range got {
-		keys = append(keys, c.Key+":"+c.From+">"+c.To)
+	ben, dana := Key{Kind: KindSlotPR, ID: "ben"}, Key{Kind: KindSlotPR, ID: "dana"}
+	got := Diff(
+		Snapshot{PRStateKey("ben"): "OPEN", ben: "u1", dana: "u2"},
+		Snapshot{PRStateKey("ben"): "merged", ben: "u1", SupportKey("7", SupportComment): "ann#1"},
+	)
+	want := []Change{
+		{Key: dana, From: "u2"},
+		{Key: PRStateKey("ben"), From: "OPEN", To: "merged"},
+		{Key: SupportKey("7", SupportComment), To: "ann#1"},
 	}
-	if strings.Join(keys, ",") != "b:2>9,c:3>,d:>4" {
-		t.Fatalf("%v", keys)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("diff = %+v, want %+v", got, want)
 	}
-	if len(Diff(map[string]string{"a": "1"}, map[string]string{"a": "1"})) != 0 {
+	if len(Diff(Snapshot{ben: "u1"}, Snapshot{ben: "u1"})) != 0 {
 		t.Fatal("equal snapshots must not differ")
+	}
+}
+
+// The text form keeps the seen file readable across versions; every kind
+// round-trips through it.
+func TestKeyTextRoundTrips(t *testing.T) {
+	for _, k := range []Key{
+		{Kind: KindSlotPR, ID: "ben"}, PRStateKey("ben"), {Kind: KindEscalation, ID: "e1"},
+		EscalationStatusKey("e1"), ReviewKey("nia"), GateKey, SupportKey("7", SupportPRHead),
+	} {
+		b, _ := k.MarshalText()
+		var back Key
+		if err := back.UnmarshalText(b); err != nil || back != k {
+			t.Errorf("%+v -> %q -> %+v (%v)", k, b, back, err)
+		}
+	}
+	var bad Key
+	if bad.UnmarshalText([]byte("nonsense/x")) == nil {
+		t.Error("an unknown key must not parse")
 	}
 }
 
 // fakeClock advances only when the watch waits or sleeps.
 type fakeClock struct{ now time.Time }
 
-func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, forge func() map[string]string) Env {
+func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, forge func() Snapshot) Env {
 	return Env{
 		Now:   func() time.Time { return f.now },
 		Sleep: func(_ context.Context, d time.Duration) { f.now = f.now.Add(d) },
@@ -96,11 +120,11 @@ func (f *fakeClock) env(wait func(d time.Duration) (*SlotNews, error), local, fo
 			return n, err
 		},
 		Local: local,
-		Forge: func(context.Context) map[string]string { return forge() },
+		Forge: func(context.Context) Snapshot { return forge() },
 	}
 }
 
-func empty() map[string]string { return map[string]string{} }
+func empty() Snapshot { return Snapshot{} }
 
 func TestRunHeartbeat(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
@@ -129,11 +153,11 @@ func TestRunSlotNews(t *testing.T) {
 
 func TestRunNothingToWatchStillSeesForge(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
-	forge := func() map[string]string {
+	forge := func() Snapshot {
 		if fc.now.Sub(time.Unix(0, 0)) >= 60*time.Second {
-			return map[string]string{EscalationStatusKey("E1"): "answered"}
+			return Snapshot{EscalationStatusKey("E1"): "answered"}
 		}
-		return map[string]string{EscalationStatusKey("E1"): "pending"}
+		return Snapshot{EscalationStatusKey("E1"): "pending"}
 	}
 	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, ErrNothingToWatch }, empty, forge)
 	res, err := Run(context.Background(), env, Opts{Heartbeat: time.Hour, Poll: 30 * time.Second, ForgeEvery: 60 * time.Second})
@@ -146,7 +170,7 @@ func TestRunNothingToWatchStillSeesForge(t *testing.T) {
 // their absence from a local-only tick is not a change.
 func TestRunForgeEntriesNotChangedBetweenTicks(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
-	forge := func() map[string]string { return map[string]string{PRStateKey("ben"): "OPEN"} }
+	forge := func() Snapshot { return Snapshot{PRStateKey("ben"): "OPEN"} }
 	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, forge)
 	res, err := Run(context.Background(), env, Opts{Heartbeat: 90 * time.Second, Poll: 30 * time.Second, ForgeEvery: time.Hour})
 	if err != nil || res.Reason != ReasonHeartbeat {
@@ -164,18 +188,18 @@ func TestRunInterrupt(t *testing.T) {
 	}
 }
 
-func writeRegistry(t *testing.T, root, body string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(body), 0o666); err != nil {
-		t.Fatal(err)
+// fakeEnv is a worker.Env whose registry is the given JSON text and whose git
+// says it is outside any repo: the seam under test, with nothing on disk.
+func fakeEnv(registry string) worker.Env {
+	return worker.Env{
+		Registry: func(string) worker.Registry { return worker.ParseRegistry(registry) },
+		Git:      func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil },
 	}
 }
 
+const noRoot = "/nonexistent/rota-root"
+
 func TestNeedsWatchAndDigest(t *testing.T) {
-	root := t.TempDir()
 	for _, tc := range []struct {
 		state  string
 		active bool
@@ -187,12 +211,12 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 		{"IdLe", false},
 	} {
 		t.Run(fmt.Sprintf("state=%q", tc.state), func(t *testing.T) {
-			writeRegistry(t, root, fmt.Sprintf(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":%q,"task":"31"}]}`, tc.state))
-			need, attn := NeedsWatch(root)
+			we := fakeEnv(fmt.Sprintf(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":%q,"task":"31"}]}`, tc.state))
+			need, attn := NeedsWatch(we, noRoot)
 			if need != tc.active || len(attn) != 0 {
 				t.Errorf("NeedsWatch = %v %v, want %v and no attention", need, attn, tc.active)
 			}
-			d := Digest(context.Background(), git.Exec, root, 2, false)
+			d := Digest(we, noRoot, 2, false)
 			if strings.Contains(d, "dana") != tc.active || strings.Contains(d, "#31") != tc.active || strings.Contains(d, "ben") {
 				t.Errorf("digest slot visibility: %q", d)
 			}
@@ -201,24 +225,23 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 			}
 		})
 	}
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"done","pr":"https://x/pull/7"}]}`)
-	need, attn := NeedsWatch(root)
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"done","pr":"https://x/pull/7"}]}`)
+	need, attn := NeedsWatch(we, noRoot)
 	if !need || len(attn) != 1 || attn[0] != "ben done" {
 		t.Fatalf("%v %v", need, attn)
 	}
-	if d := Digest(context.Background(), git.Exec, root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
+	if d := Digest(we, noRoot, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
 		t.Fatalf("digest %q", d)
 	}
 }
 
 func TestExitDigest(t *testing.T) {
-	root := t.TempDir()
-	if got, want := ExitDigest(context.Background(), git.Exec, root, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
+	if got, want := ExitDigest(fakeEnv(""), noRoot, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
 		t.Errorf("empty round exit digest = %q, want %q", got, want)
 	}
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
 	want := "rota round 2: dana done #31 https://x/pull/7 (needs you); 1 escalation(s) pending. Watch exiting; re-arm `rota round watch`."
-	if got := ExitDigest(context.Background(), git.Exec, root, 2); got != want {
+	if got := ExitDigest(we, noRoot, 2); got != want {
 		t.Errorf("active round exit digest = %q, want %q", got, want)
 	}
 }
@@ -238,10 +261,7 @@ func TestStopBlock(t *testing.T) {
 		{name: "solo", registry: `{"host":"solo","slots":[{"name":"ben","state":"busy"}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, cd := t.TempDir(), t.TempDir()
-			if tc.registry != "" {
-				writeRegistry(t, root, tc.registry)
-			}
+			cd := t.TempDir()
 			now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 			alive := map[int]bool{10: true}
 			env := testEnv(&now, alive)
@@ -253,7 +273,7 @@ func TestStopBlock(t *testing.T) {
 				defer release()
 				alive[10] = tc.alive
 			}
-			reason, block := StopBlock(env, root, cd)
+			reason, block := StopBlock(fakeEnv(tc.registry), env, noRoot, cd)
 			if block != tc.block {
 				t.Fatalf("block=%v, reason=%q", block, reason)
 			}
@@ -280,7 +300,7 @@ func TestRunNothingToWatchHoldsUntilHeartbeat(t *testing.T) {
 }
 
 func TestCarryKeepsReviewEntries(t *testing.T) {
-	base := map[string]string{ReviewKey("nia"): "1 from rev", PRStateKey("nia"): "open", "pr/nia": "u"}
+	base := Snapshot{ReviewKey("nia"): "1 from rev", PRStateKey("nia"): "open", Key{Kind: KindSlotPR, ID: "nia"}: "u"}
 	got := carry(base)
 	if got[ReviewKey("nia")] != "1 from rev" || got[PRStateKey("nia")] != "open" || len(got) != 2 {
 		t.Fatalf("a tick that skips the forge must not read review input as gone: %v", got)
@@ -288,21 +308,19 @@ func TestCarryKeepsReviewEntries(t *testing.T) {
 }
 
 func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
-	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
-	if got := Digest(context.Background(), git.Exec, root, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
+	if got := Digest(we, noRoot, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
 		t.Errorf("digest = %q", got)
 	}
 }
 
 // #1843: a done slot whose PR merged is not news for the orchestrator.
 func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
-	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
-	if d := Digest(context.Background(), git.Exec, root, 1, true); strings.Contains(d, "needs you") {
+	we := fakeEnv(`{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
+	if d := Digest(we, noRoot, 1, true); strings.Contains(d, "needs you") {
 		t.Fatalf("digest %q", d)
 	}
-	if _, attn := NeedsWatch(root); len(attn) != 0 {
+	if _, attn := NeedsWatch(we, noRoot); len(attn) != 0 {
 		t.Fatalf("attn %v", attn)
 	}
 }
@@ -316,19 +334,19 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := rotastate.File(cd, "land")
-	var during, after map[string]string
+	var during, after Snapshot
 	err = fsio.Locked(path, 0, func() error {
 		if err := os.WriteFile(path+worker.LandHolderSuffix, []byte("#1900"), 0o644); err != nil {
 			return err
 		}
 		defer os.Remove(path + worker.LandHolderSuffix)
-		during = LocalSnapshot(repo)
+		during = LocalSnapshot(worker.Env{}, repo)
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	after = LocalSnapshot(repo)
+	after = LocalSnapshot(worker.Env{}, repo)
 	if during[GateKey] != "#1900" {
 		t.Errorf("snapshot under the lock = %v, want %s=#1900", during, GateKey)
 	}
@@ -343,7 +361,7 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 
 // A lock taken while the watch runs is not news; its release is.
 func TestRunWakesOnGateReleaseOnly(t *testing.T) {
-	snaps := []map[string]string{
+	snaps := []Snapshot{
 		{},
 		{GateKey: "#1900"},
 		{GateKey: "ben"},
@@ -351,8 +369,8 @@ func TestRunWakesOnGateReleaseOnly(t *testing.T) {
 	}
 	i := 0
 	env := Env{
-		Local: func() map[string]string { s := snaps[min(i, len(snaps)-1)]; return s },
-		Forge: func(context.Context) map[string]string { return nil },
+		Local: func() Snapshot { s := snaps[min(i, len(snaps)-1)]; return s },
+		Forge: func(context.Context) Snapshot { return nil },
 		Wait: func(context.Context, time.Duration) (*SlotNews, error) {
 			i++
 			return nil, nil
@@ -369,5 +387,21 @@ func TestRunWakesOnGateReleaseOnly(t *testing.T) {
 	}
 	if len(res.Changes) != 1 || res.Changes[0].Key != GateKey || res.Changes[0].From != "ben" || res.Changes[0].To != "" {
 		t.Errorf("changes = %+v, want %s ben -> gone", res.Changes, GateKey)
+	}
+}
+
+// The snapshot reads slot PRs and escalation statuses through the caller's Env,
+// not the registry file under root.
+func TestLocalSnapshotReadsThroughEnv(t *testing.T) {
+	we := fakeEnv(`{"slots":[{"name":"ben","state":"busy","pr":"https://x/pull/7"},{"name":"dana","state":"idle"}],"escalations":[{"id":"e1","status":"pending"}]}`)
+	got := LocalSnapshot(we, noRoot)
+	want := Snapshot{{Kind: KindSlotPR, ID: "ben"}: "https://x/pull/7", {Kind: KindEscalation, ID: "e1"}: "pending"}
+	if len(got) != len(want) {
+		t.Fatalf("snapshot = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("snapshot[%s] = %q, want %q (all: %v)", k, got[k], v, got)
+		}
 	}
 }

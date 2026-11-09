@@ -86,6 +86,17 @@ func LoadRegistryTolerant(root string) Registry {
 	return Registry{doc: slotsDefault()}
 }
 
+// ParseRegistry reads a registry from its JSON text, tolerant like
+// LoadRegistryTolerant: text that is not a JSON object reads as no slots. It is
+// the in-memory twin of the disk read, for an Env.Registry that has no file.
+func ParseRegistry(raw string) Registry {
+	v, err := jsonx.Decode([]byte(raw))
+	if o, ok := v.(*jsonx.Object); err == nil && ok {
+		return Registry{doc: o, Exists: true}
+	}
+	return Registry{doc: slotsDefault()}
+}
+
 // CheckRegistry is nil when the registry is missing or a JSON object, and an
 // error when it exists but cannot be read or parsed.
 func CheckRegistry(root string) error {
@@ -830,6 +841,10 @@ type Env struct {
 	// GateInput loads what the gate and the train verify with: config, verify
 	// and e2e commands, test ledger. Defaults to reading root's .rota.
 	GateInput func(root string) (gateInput, error)
+	// Registry reads the slot registry for the passive readers (the watch
+	// snapshot, the digest, the stop hook); nil means LoadRegistryTolerant.
+	// Tests hand it an in-memory registry (ParseRegistry).
+	Registry func(root string) Registry
 }
 
 // WithDefaults is the one defaulting mechanism of Env: every nil seam gets its
@@ -917,6 +932,9 @@ func (e Env) WithDefaults() Env {
 	}
 	if e.GateInput == nil {
 		e.GateInput = e.loadGateInput
+	}
+	if e.Registry == nil {
+		e.Registry = LoadRegistryTolerant
 	}
 	return e
 }

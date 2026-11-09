@@ -79,12 +79,6 @@ var CommentKinds = []string{"question", "answer", "decision", "feedback", "scope
 var CreateFields = []string{"Related", "Milestone", "Repos", "Subsystem", "Captured"}
 
 var (
-	kindTags = map[string][]string{
-		"bugs":     {"P0", "P1", "P2", "P3"},
-		"features": {"Major", "Minor", "Cosmetic"},
-		"tasks":    nil,
-	}
-	kindLetter = map[string]string{"bugs": "B", "features": "F", "tasks": "T"}
 	// A refactor commit does not count toward refactor pressure.
 	refactorSubject = regexp.MustCompile(`\Arefactor(\(.+?\))?!?:`)
 )
@@ -132,11 +126,11 @@ func detailDir(id string) string {
 	return t.Kind
 }
 
+// sectionForDir is the open-section heading of a detail directory, "Unknown"
+// for a directory the registry does not list.
 func sectionForDir(dir string) string {
-	for _, t := range Types {
-		if t.Kind != "" && t.Kind == dir {
-			return t.Section
-		}
+	if t, ok := TypeByKind(dir); ok {
+		return t.Section
 	}
 	return "Unknown"
 }
@@ -197,14 +191,14 @@ func (f *File) Append(sec, line string) error {
 // checkCreate is _check_create: the cleaned title and fields, or ErrInvalid.
 // ValidTag reports whether tag is allowed for kind, including an omitted tag.
 func ValidTag(kind, tag string) bool {
-	tags, ok := kindTags[kind]
+	t, ok := TypeByKind(kind)
 	if !ok {
 		return false
 	}
 	if tag == "" {
 		return true
 	}
-	for _, allowed := range tags {
+	for _, allowed := range strings.Fields(t.Tags) {
 		if tag == allowed {
 			return true
 		}
@@ -213,7 +207,8 @@ func ValidTag(kind, tag string) bool {
 }
 
 func checkCreate(in CreateInput) (title string, fields []Field, err error) {
-	if _, ok := kindLetter[in.Kind]; !ok {
+	typ, ok := TypeByKind(in.Kind)
+	if !ok {
 		return "", nil, errf(ErrInvalid, "unknown kind '%s' (expected bugs|features|tasks)", in.Kind)
 	}
 	title = oneLine(in.Title)
@@ -222,10 +217,10 @@ func checkCreate(in CreateInput) (title string, fields []Field, err error) {
 	}
 	if in.Tag != "" {
 		if !ValidTag(in.Kind, in.Tag) {
-			if len(kindTags[in.Kind]) == 0 {
+			if typ.Tags == "" {
 				return "", nil, errf(ErrInvalid, "invalid tag '%s' for %s (tasks take no tag)", in.Tag, in.Kind)
 			}
-			return "", nil, errf(ErrInvalid, "invalid tag '%s' for %s (expected %s)", in.Tag, in.Kind, strings.Join(kindTags[in.Kind], "/"))
+			return "", nil, errf(ErrInvalid, "invalid tag '%s' for %s (expected %s)", in.Tag, in.Kind, strings.ReplaceAll(typ.Tags, " ", "/"))
 		}
 	}
 	idx := map[string]int{}
@@ -286,7 +281,7 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 	if d := pystr.Strip(in.Desc); d != "" {
 		parts = append(parts, d)
 	}
-	res := CreateResult{ID: id, Type: kindLetter[in.Kind]}
+	res := CreateResult{ID: id, Type: typeLetter(in.Kind)}
 	rel := rotatree.Rel(in.Kind, id+".md")
 	if in.HasBody {
 		parts = append(parts, "Detail: `"+rel+"`")
@@ -294,7 +289,7 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 	for _, fv := range fields {
 		parts = append(parts, fv.Name+": "+fv.Value)
 	}
-	if err := f.Append(sectionName(in.Kind), strings.Join(parts, " ")); err != nil {
+	if err := f.Append(sectionForDir(in.Kind), strings.Join(parts, " ")); err != nil {
 		return CreateResult{}, err
 	}
 	if in.HasBody {
@@ -367,8 +362,6 @@ func (f *File) SetHarness(ref, kind string) (bool, error) {
 	})
 	return changed, err
 }
-
-func sectionName(kind string) string { return sectionForDir(kind) }
 
 // SetField sets, replaces or clears a trailing field on the open bullet of
 // ref (FileBackend.set_field). An item that exists but is completed or
@@ -670,7 +663,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 	f.syncMilestonesIf(tagged)
 	// Mirror Complete's bump in reverse; tasks and refactor commits carry no
 	// count, and a hash git cannot resolve is skipped.
-	if dirName != "tasks" {
+	if t, _ := TypeByKind(dirName); t.Countable {
 		if subj, ok := f.git("log", "-1", "--format=%s", doneHash); ok && !refactorSubject.MatchString(subj) {
 			if err := f.bumpSinceRefactor(dirName, -1); err != nil {
 				return true, err
