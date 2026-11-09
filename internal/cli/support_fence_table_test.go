@@ -22,7 +22,7 @@ func TestSupportFencedVerbsRefuseOnSupport(t *testing.T) {
 	tree := Tree()
 	for _, v := range VerbPaths(tree) {
 		path := "rota " + v
-		if gatesFor(tree, path).Fence != roundcfg.FenceRefused {
+		if gatesAt(tree, path).Fence != roundcfg.FenceRefused {
 			continue
 		}
 		t.Run(path, func(t *testing.T) {
