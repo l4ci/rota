@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/rotastate"
 	"slices"
 	"sort"
 	"strings"
@@ -335,11 +335,11 @@ func (u *Umbrella) Detail(ref string) (string, bool, error) {
 // CwdSubRepo is _cwd_repo: the registered sub-repo that cwd is inside (a
 // Layout B worktree counts, through git's common dir), "" when none.
 func CwdSubRepo(cwd string, list []repos.Repo) string {
-	common, ok, err := gitx.CommonDirVia(context.Background(), gitx.Exec, cwd)
+	main, ok, err := rotastate.MainCheckoutVia(context.Background(), gitx.Exec, cwd)
 	if err != nil || !ok {
 		return ""
 	}
-	root := repos.Realpath(filepath.Dir(common))
+	root := repos.Realpath(main)
 	for _, r := range list {
 		if r.Path == root {
 			return r.Name

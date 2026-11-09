@@ -68,10 +68,8 @@ type Record struct {
 // and the main checkout's wind-down and Stop hook see a worker's records. A
 // project that is not a git repo keeps it under its own root.
 func Path(ctx context.Context, run git.Runner, root string) string {
-	if cd, err := rotastate.CommonDirVia(ctx, run, root); err == nil && filepath.Base(cd) == ".git" {
-		if main := filepath.Dir(cd); fsio.IsDir(rotatree.Dir(main)) {
-			return rotatree.File(main, File)
-		}
+	if main, ok, err := rotastate.MainCheckoutVia(ctx, run, root); err == nil && ok && fsio.IsDir(rotatree.Dir(main)) {
+		return rotatree.File(main, File)
 	}
 	return rotatree.File(root, File)
 }

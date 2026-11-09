@@ -2,9 +2,9 @@ package knowledge
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // DefaultScope is the scope a verb without --repo acts on: the sub-repo that
@@ -15,13 +15,9 @@ func (s Store) DefaultScope(cwd string) string {
 	if len(s.Repos) == 0 {
 		return Umbrella
 	}
-	common, ok, err := git.CommonDirVia(context.Background(), git.Exec, cwd)
+	top, ok, err := rotastate.MainCheckoutVia(context.Background(), git.Exec, cwd)
 	if err != nil || !ok {
 		return Umbrella
-	}
-	top := filepath.Dir(common)
-	if real, err := filepath.EvalSymlinks(top); err == nil {
-		top = real
 	}
 	for name, p := range s.Repos {
 		if p == top {
