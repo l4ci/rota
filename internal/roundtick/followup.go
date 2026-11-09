@@ -80,7 +80,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 		}
 		detail += ", asked by " + strutil.FirstNonEmpty(f.Who, "a person") + " on " + f.PR
 		r.propose(Action{Action: "followup", Target: f.Issue, Detail: detail}, "bounce cap, claim, overlap, account preflight and dispatch")
-		if e.Observe != nil {
+		if e.Observe {
 			started++
 			taken = append(taken, slot)
 			continue

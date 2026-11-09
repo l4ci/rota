@@ -31,12 +31,13 @@ func TestQueuedRefsSkipsRecordsWithoutAPR(t *testing.T) {
 	}
 }
 
-func TestReconcileFindingsKeepTheKindTyped(t *testing.T) {
+func TestInspectionOfKeepsTheKindTyped(t *testing.T) {
 	out := round.Outcome{
 		Repaired: []round.Finding{{Kind: "dead-tab", Slot: "ben"}},
 		Drift:    []round.Finding{{Kind: "pr-missing", Issue: "42"}},
 	}
-	rep, drift := ReconcileFindings(out)
+	in := InspectionOf(out)
+	rep, drift := in.Repaired, in.Drift
 	if !slices.Equal(rep, []Finding{{Kind: "dead-tab", Key: "ben"}}) || !slices.Equal(drift, []Finding{{Kind: "pr-missing", Key: out.Drift[0].Key()}}) {
 		t.Fatalf("repaired=%v drift=%v", rep, drift)
 	}
