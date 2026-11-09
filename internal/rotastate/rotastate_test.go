@@ -31,9 +31,6 @@ func TestCommonDirResolvesSymlinksAndLinkedWorktrees(t *testing.T) {
 			t.Errorf("%s: CommonDirVia = %q, %v; want %q", name, got, err, want)
 		}
 	}
-	if main, ok := MainCheckout(want); !ok || main != real {
-		t.Errorf("MainCheckout = %q, %v; want %q", main, ok, real)
-	}
 }
 
 func TestCommonDirOutsideRepo(t *testing.T) {
@@ -54,7 +51,33 @@ func TestLayout(t *testing.T) {
 			t.Errorf("got %s, want %s", got, want)
 		}
 	}
-	if _, ok := MainCheckout("/r.git"); ok {
-		t.Error("a bare repository has no main checkout")
+}
+
+func TestMainCheckoutViaNormalBareAndLinkedWorktree(t *testing.T) {
+	repo := gittest.NewRepo(t, "main")
+	real, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	gittest.Run(t, repo, "worktree", "add", "-q", wt, "-b", "other")
+	bare := filepath.Join(t.TempDir(), "r.git")
+	gittest.Run(t, repo, "clone", "-q", "--bare", repo, bare)
+
+	for name, dir := range map[string]string{"normal": repo, "symlinked": link, "linked worktree": wt} {
+		got, ok, err := MainCheckoutVia(context.Background(), git.Exec, dir)
+		if err != nil || !ok || got != real {
+			t.Errorf("%s: MainCheckoutVia = %q, %v, %v; want %q", name, got, ok, err, real)
+		}
+	}
+	if got, ok, err := MainCheckoutVia(context.Background(), git.Exec, bare); err != nil || ok {
+		t.Errorf("bare: MainCheckoutVia = %q, %v, %v; want no main checkout, no error", got, ok, err)
+	}
+	if _, _, err := MainCheckoutVia(context.Background(), git.Exec, t.TempDir()); err == nil {
+		t.Error("outside a repository: want an error")
 	}
 }

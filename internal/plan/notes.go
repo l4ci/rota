@@ -102,12 +102,7 @@ func (s notes) Create(r Ref, render func(unit string) string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if _, ok, err := n.NoteGet(unit, "plan"); err != nil {
-			return "", err
-		} else if ok {
-			return "", exitcode.Errf(exitcode.ExitRefused, "plan note for %s already exists", unit)
-		}
-		_, err = n.NotePut(unit, "plan", render(unit))
+		err = artifact.CreateNote("plan", artifact.ItemNote{Notes: n, Ref: unit, Kind: "plan"}, unit, render(unit))
 		return milestone + "-" + unit, err
 	}
 	sl, err := s.slices()
@@ -128,12 +123,7 @@ func (s notes) Create(r Ref, render func(unit string) string) (string, error) {
 		unit = fmt.Sprintf("S%02d", next+1)
 	}
 	key := milestone + "-" + unit
-	if _, ok, err := sl.SliceGet(milestone, unit); err != nil {
-		return "", err
-	} else if ok {
-		return "", exitcode.Errf(exitcode.ExitRefused, "plan note for %s already exists", key)
-	}
-	_, err = sl.SlicePut(milestone, unit, render(unit))
+	err = artifact.CreateNote("plan", sliceNote{sl, milestone, unit}, key, render(unit))
 	return key, err
 }
 

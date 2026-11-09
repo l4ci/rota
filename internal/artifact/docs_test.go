@@ -108,6 +108,21 @@ func TestNoteDocsVerbs(t *testing.T) {
 	}
 }
 
+func TestNoteDocsCreate(t *testing.T) {
+	slot := &fakeSlot{}
+	d := NoteDocs{Kind: "design", Open: func(key string) (NoteSlot, string, error) { return slot, key, nil }}
+	if err := d.Create("7", "first"); err != nil || slot.text != "first" {
+		t.Fatalf("create: %v text=%q", err, slot.text)
+	}
+	err := d.Create("7", "second")
+	if exitOf(err) != exitcode.ExitRefused || err == nil || err.Error() != "design note for 7 already exists" {
+		t.Errorf("second create: %v", err)
+	}
+	if slot.text != "first" {
+		t.Errorf("second create overwrote: %q", slot.text)
+	}
+}
+
 func TestNoteDocsOpenError(t *testing.T) {
 	boom := exitcode.Errf(exitcode.ExitResolution, "unknown item")
 	d := NoteDocs{Kind: "plan", Open: func(string) (NoteSlot, string, error) { return nil, "", boom }}
@@ -119,6 +134,9 @@ func TestNoteDocsOpenError(t *testing.T) {
 	}
 	if err := d.Remove("9"); err != boom {
 		t.Errorf("remove: %v", err)
+	}
+	if err := d.Create("9", "x"); err != boom {
+		t.Errorf("create: %v", err)
 	}
 }
 
