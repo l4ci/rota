@@ -108,6 +108,9 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
+			if err := config.CheckLayer(root, config.LayerLocal); err != nil {
+				return Result{}, configFail(err, exitmap.ConfigInternal)
+			}
 			entries, err := config.ShowLocal(root, key, len(args) == 1)
 			if err != nil {
 				return Result{}, Resolution("unknown config key '%s'", key)
@@ -137,6 +140,11 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
+		}
+		for _, layer := range []config.Layer{config.LayerProject, config.LayerLocal} {
+			if err := config.CheckLayer(root, layer); err != nil {
+				return Result{}, configFail(err, exitmap.ConfigInternal)
+			}
 		}
 		entries, err := config.Show(c.deps().projectsEnv(), root, key, len(args) == 1)
 		if err != nil {

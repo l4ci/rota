@@ -208,8 +208,9 @@ func Validate(key, raw string) error {
 // Set writes value (JSON when it parses, else the raw string) at the dotted
 // key of .rota/config.json and never touches config.local.json. The key must be
 // in the schema. Intermediate objects are created, or replaced when a scalar
-// is in the way. A missing or unparseable file counts as {}; a file holding
-// any other JSON than an object is ErrNotObject. The file is rewritten as
+// is in the way. A missing file counts as {}; a file that does not parse is
+// fsio.ErrUnreadable and one holding any other JSON than an object is
+// ErrNotObject; both are left untouched. The file is rewritten as
 // json.dumps(indent=2) whether or not the value changed, as the old helper did.
 func Set(root, key, raw string) (SetResult, error) {
 	return SetIn(root, key, raw, LayerProject)
@@ -222,8 +223,51 @@ func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
 		return SetResult{}, err
 	}
 	return autonomySet(root, key, func() (SetResult, error) {
-		return setAt(layer.path(root), layer.notObject(), key, raw, fsio.UpdateJSON)
+		return setAt(layer.path(root), layer.notObject(), key, raw, updateLayer)
 	})
+}
+
+// isBlank is whether the file at path exists and holds only whitespace: a
+// touched file, which reads as {} where a file that does not parse is refused.
+func isBlank(path string) bool {
+	raw, err := os.ReadFile(path)
+	return err == nil && len(bytes.TrimSpace(raw)) == 0
+}
+
+// updateLayer is fsio.UpdateJSONStrict, except that a blank file starts from
+// {} as a missing one does.
+func updateLayer(path string, def any, mutate func(any) (any, error)) error {
+	if isBlank(path) {
+		return fsio.UpdateJSON(path, def, mutate)
+	}
+	return fsio.UpdateJSONStrict(path, def, mutate)
+}
+
+// CheckLayer is nil when the layer's file is missing or holds a JSON object,
+// else the user's file refused as it is: fsio.ErrUnreadable for one that cannot
+// be read or does not parse, the layer's not-object error for any other JSON.
+// Every error names the file. A reader that would otherwise skip the layer and
+// carry on with defaults calls it first.
+func CheckLayer(root string, layer Layer) error {
+	path := layer.path(root)
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, path, err)
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil
+	}
+	doc, err := jsonx.Decode(raw)
+	if err != nil {
+		return fmt.Errorf("%w: %s does not parse (%v); fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, path, err)
+	}
+	if asObject(doc) == nil {
+		return layer.notObject()
+	}
+	return nil
 }
 
 // setAt is SetIn on the config file at path; notObject is the error for a file
