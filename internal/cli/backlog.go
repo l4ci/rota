@@ -332,7 +332,15 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
-		entries, err := stale.Find(root, *kind, *days, today)
+		var todos stale.TodoSource
+		if *kind == "todo" {
+			be, err := openBacklog(c, root, false, "")
+			if err != nil {
+				return backlogFail(err)
+			}
+			todos = be
+		}
+		entries, err := stale.Find(root, *kind, *days, today, todos)
 		if err != nil {
 			return backlogFail(err)
 		}
