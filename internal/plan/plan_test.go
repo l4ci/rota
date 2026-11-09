@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -79,7 +80,7 @@ func TestAddMatchesOldHelper(t *testing.T) {
 		if err != nil || key != s.key || kind != s.knd {
 			t.Fatalf("Add(%+v) = %q %q %v", s.o, key, kind, err)
 		}
-		got, _ := os.ReadFile(path(root, key))
+		got, _ := Show(Files(root), key)
 		if g := created.ReplaceAllString(string(got), "created: DATE"); g != golden(t, key+".md") {
 			t.Errorf("%s differs from golden:\n%s", key, g)
 		}
@@ -185,7 +186,7 @@ func TestListShowPutRm(t *testing.T) {
 	root := project(t)
 	Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "One"}, testDay)
 	Add(root, Files(root), AddOpts{Key: "M02-B07", Title: "Two", Repos: "web,api"}, testDay)
-	os.WriteFile(path(root, "M01-S99"), []byte("# no frontmatter\n"), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M01-S99"), []byte("# no frontmatter\n"), 0o644)
 	all, _ := List(Files(root), "")
 	if len(all) != 2 || all[0].Key != "M01-S01" || all[0].UnitKind != "slice" || !reflect.DeepEqual(all[0].Repos, []string{}) ||
 		all[1].Key != "M02-B07" || all[1].UnitKind != "item" || !reflect.DeepEqual(all[1].Repos, []string{"web", "api"}) {
@@ -222,7 +223,7 @@ func TestListShowPutRm(t *testing.T) {
 func TestValidateDocsMatchesOldHelper(t *testing.T) {
 	root := project(t)
 	os.MkdirAll(filepath.Join(root, ".rota/plans"), 0o777)
-	os.WriteFile(path(root, "M03-B01"), []byte(golden(t, "validate-docs.plan.md")), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M03-B01"), []byte(golden(t, "validate-docs.plan.md")), 0o644)
 	ms, text, err := ValidateDocs(root, "M03-B01")
 	if err != nil {
 		t.Fatal(err)
@@ -237,7 +238,7 @@ func TestValidateDocsMatchesOldHelper(t *testing.T) {
 	for _, d := range []string{"web/docs", "api/docs"} {
 		os.MkdirAll(filepath.Join(root, d), 0o777)
 	}
-	os.WriteFile(path(root, "M03-B02"), []byte("---\nkey: M03-B02\nrepo: web\n---\n## Tasks\n- Files: docs/x.md, src/y.go\n"), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M03-B02"), []byte("---\nkey: M03-B02\nrepo: web\n---\n## Tasks\n- Files: docs/x.md, src/y.go\n"), 0o644)
 	if ms, text, err := ValidateDocs(root, "M03-B02"); err != nil || len(ms) != 0 || text != "" {
 		t.Errorf("clean plan: %v %q %v", ms, text, err)
 	}
@@ -252,7 +253,7 @@ func TestValidateDocsExits(t *testing.T) {
 	if _, _, err := ValidateDocs(root, "nope"); exitOf(err) != 2 {
 		t.Errorf("malformed: %v", err)
 	}
-	os.WriteFile(path(root, "M01-B01"), []byte("no frontmatter\n"), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M01-B01"), []byte("no frontmatter\n"), 0o644)
 	if _, _, err := ValidateDocs(root, "M01-B01"); exitOf(err) != 70 {
 		t.Errorf("no frontmatter: %v", err)
 	}
@@ -262,7 +263,7 @@ func TestValidateDocsCustomSegmentAndCRLF(t *testing.T) {
 	root := project(t)
 	os.MkdirAll(filepath.Join(root, ".rota/plans"), 0o777)
 	os.WriteFile(filepath.Join(root, ".rota/config.json"), []byte(`{"docs": {"path": "/handbook/"}}`), 0o644)
-	os.WriteFile(path(root, "M01-B01"), []byte("---\r\nkey: M01-B01\r\n---\r\n## Tasks\r\n- Files: handbook/a.md, docs/b.md\r\n"), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M01-B01"), []byte("---\r\nkey: M01-B01\r\n---\r\n## Tasks\r\n- Files: handbook/a.md, docs/b.md\r\n"), 0o644)
 	ms, _, err := ValidateDocs(root, "M01-B01")
 	if err != nil || len(ms) != 1 || ms[0].Path != "handbook/a.md" {
 		t.Fatalf("got %+v %v", ms, err)
@@ -326,7 +327,7 @@ func TestExplicitAndMintedSliceRace(t *testing.T) {
 		if okMint.Load() != 1 || len(files) != want {
 			t.Fatalf("round %d: explicit ok=%d mint=%v files=%v", round, okExplicit.Load(), mintedKey.Load(), files)
 		}
-		if got, _ := os.ReadFile(path(root, "M01-S02")); okExplicit.Load() == 1 &&
+		if got, _ := Show(Files(root), "M01-S02"); okExplicit.Load() == 1 &&
 			!strings.Contains(string(got), "title: explicit") && mintedKey.Load() == "M01-S02" {
 			t.Fatalf("round %d: minted plan overwrote the explicit one", round)
 		}
@@ -418,7 +419,7 @@ func TestStubHasReliesOnHeading(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, _ := os.ReadFile(path(root, key))
+		got, _ := Show(Files(root), key)
 		if n := strings.Count(string(got), "\n## Relies on\n"); n != 1 {
 			t.Errorf("%s has %d `## Relies on` headings, want 1:\n%s", key, n, got)
 		}
