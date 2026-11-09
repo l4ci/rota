@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
@@ -32,6 +34,10 @@ type Gates struct {
 	TrackedRoleExempt bool
 	// RoundMachine refuses an unnamed support machine. Inherited.
 	RoundMachine bool
+	// ConfigExempt runs with a project or local config that is corrupt: the
+	// verbs that repair it, refuse it on their own (init), never load it, or
+	// load it and degrade silently (hook, skills). Inherited.
+	ConfigExempt bool
 	// Fence is the support-fence class. Never inherited: each verb declares
 	// its own, so a new verb cannot be allowed on a support machine by default.
 	Fence roundcfg.FenceClass
@@ -54,6 +60,7 @@ func gatesFor(root *Command, path string) Gates {
 		g.LegacyExempt = g.LegacyExempt || cmd.Gates.LegacyExempt
 		g.TrackedRoleExempt = g.TrackedRoleExempt || cmd.Gates.TrackedRoleExempt
 		g.RoundMachine = g.RoundMachine || cmd.Gates.RoundMachine
+		g.ConfigExempt = g.ConfigExempt || cmd.Gates.ConfigExempt
 		if cmd.Gates.RoundKeys != RoundKeysWarn {
 			g.RoundKeys = cmd.Gates.RoundKeys
 		}
@@ -79,6 +86,27 @@ type preflight struct {
 	cfg     any
 }
 
+// corruptConfig refuses (exit 5, naming the file) a project or local config
+// that exists but does not parse or is not a JSON object: the merged load would
+// otherwise skip it and run on defaults, dropping every configured key. A blank
+// file reads as {}. Outside a project there is nothing to check; the global
+// layer keeps its warn-and-skip.
+func (p *preflight) corruptConfig() (Result, error) {
+	if p.g.ConfigExempt {
+		return Result{}, nil
+	}
+	root, ok := p.project()
+	if !ok {
+		return Result{}, nil
+	}
+	for _, layer := range []config.Layer{config.LayerProject, config.LayerLocal} {
+		if err := config.CheckLayer(root, layer); err != nil {
+			return Result{}, configFail(err, exitmap.ConfigInternal)
+		}
+	}
+	return Result{}, nil
+}
+
 // project is the project root, false outside one: a gate with nothing to
 // check there passes.
 func (p *preflight) project() (string, bool) {
@@ -98,7 +126,7 @@ func (p *preflight) config(root string) any {
 	return p.cfg
 }
 
-// runGates is the gate sequence: the legacy state directory stop, the old round keys, a
+// runGates is the gate sequence: the legacy state directory stop, a corrupt config, the old round keys, a
 // role in the tracked config, an unnamed support machine, the support fence.
 // A gate's refusal ends the sequence with its error and result.
 func runGates(c *Ctx, root *Command) (Result, error) {
@@ -106,7 +134,7 @@ func runGates(c *Ctx, root *Command) (Result, error) {
 	if err := p.legacyState(); err != nil {
 		return Result{}, err
 	}
-	for _, gate := range []func() (Result, error){p.roundKeys, p.roleInTrackedConfig, p.roundMachine, p.supportRole} {
+	for _, gate := range []func() (Result, error){p.corruptConfig, p.roundKeys, p.roleInTrackedConfig, p.roundMachine, p.supportRole} {
 		if res, err := gate(); err != nil {
 			return res, err
 		}

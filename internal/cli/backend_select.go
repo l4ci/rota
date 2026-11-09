@@ -17,7 +17,7 @@ import (
 // they need (any backend, file-only, issue-only) and get the refusal policy,
 // the warn wiring and the capability lookup from here.
 //
-// Documented exception: file-mode-only stores in stale, plan and proof build
+// Documented exception: file-mode-only stores in plan and proof build
 // backlog.File{Root:} themselves; they are file stores by definition and
 // cannot import cli.
 
