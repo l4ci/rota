@@ -41,7 +41,7 @@ func (terminalReapOps) StopProcess(context.Context, int) error {
 }
 
 func reapCommand() *Command {
-	return &Command{Name: "reap", Summary: "list (and with --apply remove) what a round left behind that nothing live owns", Verb: reapVerb}
+	return &Command{Name: "reap", Fence: fenceAllowed, Summary: "list (and with --apply remove) what a round left behind that nothing live owns", Verb: reapVerb}
 }
 
 func reapVerb(fs *flag.FlagSet) RunFunc {

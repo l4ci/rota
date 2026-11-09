@@ -18,13 +18,13 @@ import (
 // gitCommands is the `rota git` group (#52).
 func gitCommands() *Command {
 	return &Command{Name: "git", Summary: "base branch, guards, branches and worktree paths", Subs: []*Command{
-		{Name: "base", Summary: "print the resolved base branch", Repo: true, Verb: noFlags(gitBase)},
+		{Name: "base", Fence: fenceAllowed, Summary: "print the resolved base branch", Repo: true, Verb: noFlags(gitBase)},
 		{Name: "guard", Summary: "refuse unsafe git states", Subs: []*Command{
-			{Name: "clean", Summary: "fail when the working tree is dirty", Repo: true, Verb: gitGuardClean},
-			{Name: "feature-branch", Summary: "fail on the base branch or a detached HEAD", Repo: true, Verb: noFlags(gitGuardFeature)},
+			{Name: "clean", Fence: fenceAllowed, Summary: "fail when the working tree is dirty", Repo: true, Verb: gitGuardClean},
+			{Name: "feature-branch", Fence: fenceAllowed, Summary: "fail on the base branch or a detached HEAD", Repo: true, Verb: noFlags(gitGuardFeature)},
 		}},
-		{Name: "branch", Summary: "create one branch in several sub-repos, or in none", Verb: gitBranch},
-		{Name: "worktree-path", Summary: "print the umbrella worktree path of a sub-repo branch", Repo: true, Verb: noFlags(gitWorktreePath)},
+		{Name: "branch", Fence: fenceAllowed, Summary: "create one branch in several sub-repos, or in none", Verb: gitBranch},
+		{Name: "worktree-path", Fence: fenceAllowed, Summary: "print the umbrella worktree path of a sub-repo branch", Repo: true, Verb: noFlags(gitWorktreePath)},
 	}}
 }
 

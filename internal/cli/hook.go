@@ -35,18 +35,18 @@ import (
 
 func statuslineCommands() *Command {
 	return &Command{Name: "statusline", Summary: "statusline command that records session state for the orchestrator hooks", Subs: []*Command{
-		{Name: "dump", Summary: "record the session state from stdin, then run --then with the same input", Verb: statuslineDump},
+		{Name: "dump", Fence: fenceAllowed, Summary: "record the session state from stdin, then run --then with the same input", Verb: statuslineDump},
 	}}
 }
 
 func hookCommands() *Command {
 	return &Command{Name: "hook", Summary: "Claude Code hooks that hand the orchestrator off before its context runs out", Subs: []*Command{
-		{Name: "stop", Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
-		{Name: "prompt", Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
-		{Name: "guard", Summary: "PreToolUse hook: recall path-scoped context before Edit/Write; deny destructive git for workers", Verb: noFlags(hookGuard)},
-		{Name: "session-start", Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
-		{Name: "install", Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
-		{Name: "uninstall", Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
+		{Name: "stop", Fence: fenceAllowed, Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
+		{Name: "prompt", Fence: fenceAllowed, Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
+		{Name: "guard", Fence: fenceAllowed, Summary: "PreToolUse hook: recall path-scoped context before Edit/Write; deny destructive git for workers", Verb: noFlags(hookGuard)},
+		{Name: "session-start", Fence: fenceAllowed, Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
+		{Name: "install", Fence: fenceAllowed, Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
+		{Name: "uninstall", Fence: fenceAllowed, Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
 	}}
 }
 

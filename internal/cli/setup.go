@@ -28,7 +28,7 @@ import (
 // the defaults, --set key=value answers one.
 
 func setupCommand() *Command {
-	return &Command{Name: "setup", Summary: "init this directory, asking for the main config choices", Verb: setupVerb}
+	return &Command{Name: "setup", Fence: fenceInVerb, Summary: "init this directory, asking for the main config choices", Verb: setupVerb}
 }
 
 // defaultSetupIsTTY is whether in is an interactive terminal (no pipe, file or /dev/null). Deps.SetupIsTTY lets tests
