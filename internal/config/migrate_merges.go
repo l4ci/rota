@@ -152,7 +152,7 @@ func deletePath(doc *jsonx.Object, segs []string) {
 // file has nothing to migrate.
 func MigrateMergesFiles(root, globalDir string, apply bool) (MergesMigration, error) {
 	var m MergesMigration
-	err := migrateLayerFiles(root, globalDir, apply, func(files []*migrationFile) error {
+	err := migrateLayerFiles(layerFiles(root, globalDir, false), apply, func(files []*migrationFile) error {
 		return migrateMergesPlan(files, &m)
 	})
 	return m, err
@@ -166,7 +166,7 @@ func migrateMergesPlan(files []*migrationFile, m *MergesMigration) error {
 			continue
 		}
 		view := f.doc
-		if !f.global {
+		if f.layer != layerGlobal {
 			// The renamed view, as the accounts step plans on.
 			view, _, _ = MigrateRoundKeys(f.doc)
 		}

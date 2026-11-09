@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/cfgdir"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -45,23 +44,16 @@ func (m ScopeMigration) Changed() bool { return len(m.Changes) > 0 }
 // renames old work.* names lists what --apply, which renames first, does.
 func MigrateScopeFiles(env cfgdir.Env, root string, apply bool, keep []string) (ScopeMigration, error) {
 	var m ScopeMigration
-	path, local := configPath(root), localPath(root)
-	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		return fsio.Locked(local, fsio.LockTimeout, func() error {
-			return migrateScopePlan(env, path, local, keep, &m, apply)
-		})
+	err := migrateLayerFiles(layerFiles(root, "", true), apply, func(files []*migrationFile) error {
+		return migrateScopePlan(env, files[0], files[1], keep, &m)
 	})
 	return m, err
 }
 
-func migrateScopePlan(env cfgdir.Env, path, local string, keep []string, m *ScopeMigration, apply bool) error {
-	cfg, err := readMigrateTarget(path, "config.json", false)
-	if err != nil || cfg == nil {
-		return err
-	}
-	loc, err := readMigrateTarget(local, "config.local.json", true)
-	if err != nil {
-		return err
+func migrateScopePlan(env cfgdir.Env, project, localFile *migrationFile, keep []string, m *ScopeMigration) error {
+	cfg, loc := project.doc, localFile.doc
+	if cfg == nil {
+		return nil
 	}
 	// The view the earlier steps leave: the work.* rename and the merges step.
 	// Under apply they already ran, so this is a no-op; in a preview it makes
@@ -132,7 +124,7 @@ func migrateScopePlan(env cfgdir.Env, path, local string, keep []string, m *Scop
 		}
 		m.Changes = append(m.Changes, c)
 	}
-	if !apply || !m.Changed() {
+	if !m.Changed() {
 		return nil
 	}
 	if moves {
@@ -145,14 +137,13 @@ func migrateScopePlan(env cfgdir.Env, path, local string, keep []string, m *Scop
 				putIn(out, strings.Split(c.Key, "."), c.After)
 			}
 		}
-		if err := fsio.WriteJSONAtomic(local, out); err != nil {
-			return err
-		}
+		localFile.doc, localFile.changed = out, true
 	}
 	for _, c := range m.Changes {
 		deleteIn(cfg, strings.Split(c.Key, "."))
 	}
-	return fsio.WriteJSONAtomic(path, cfg)
+	project.doc, project.changed = cfg, true
+	return nil
 }
 
 // keptKey reports whether keep names the key or an object key above it, so
