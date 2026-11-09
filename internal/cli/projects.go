@@ -122,7 +122,7 @@ func projectsView(c *Ctx, res Result) (tui.Model, error) {
 		return projectRows(c, res.Data, lease), nil
 	}
 	run := func(args ...string) error {
-		if code := run(Tree(), c.deps(), args, c.Stdin, c.Stdout, c.Stderr); code != ExitOK {
+		if code := c.runNested(Tree(), args, c.Stdin, c.Stdout, c.Stderr, nil); code != ExitOK {
 			return fmt.Errorf("rota %s exited %d", strings.Join(args, " "), code)
 		}
 		return nil
