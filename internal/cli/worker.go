@@ -36,10 +36,14 @@ import (
 //
 // The signal is also remembered (signalSeen), so the dispatcher can tell this
 // cancellation from an internal one when the verb returns context.Canceled.
+// signalNotify is os/signal's Notify; tests swap it to deliver a signal
+// without signalling the real process group.
+var signalNotify = signal.Notify
+
 func workerContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	signalNotify(sigs, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-sigs:
@@ -912,11 +916,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			return verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				// An interrupt keeps what the gate already knew (landed, changed).
-				return Result{Data: gateData(r)}, err
-			}
-			return Result{}, err
+			return gateErrResult(r, err)
 		}
 		for _, n := range r.Notes {
 			fmt.Fprintln(c.Stderr, n)
@@ -946,4 +946,13 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		e.Hint = r.Hint
 		return res, e
 	}
+}
+
+// gateErrResult is a failed gate's answer. A cancelled gate keeps what it
+// already knew (changed, verdict) so an interrupt still reports it.
+func gateErrResult(r worker.GateResult, err error) (Result, error) {
+	if errors.Is(err, context.Canceled) {
+		return Result{Data: gateData(r)}, err
+	}
+	return Result{}, err
 }

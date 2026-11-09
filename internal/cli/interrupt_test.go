@@ -3,11 +3,16 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func runCancelled(t *testing.T, ctx context.Context, dir string, args ...string) (int, string, string) {
@@ -56,5 +61,43 @@ func TestInterruptedVerbKeepsItsAnswer(t *testing.T) {
 	code, so, _ := runCancelled(t, ctx, dir, "--json", "fail", "canceled-answer")
 	if code != 130 || !strings.Contains(so, `"changed": true`) {
 		t.Fatalf("exit %d, stdout %q; want 130 with data", code, so)
+	}
+}
+
+// The path behind the reported bug: a verb-local signal context (workerContext)
+// sees the signal, the verb returns context.Canceled, and the invocation
+// context itself is untouched.
+func TestWorkerContextSignalMarksInterrupt(t *testing.T) {
+	var ch chan<- os.Signal
+	old := signalNotify
+	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) { ch = c }
+	t.Cleanup(func() { signalNotify = old; signalSeen.Store(false) })
+	signalSeen.Store(false)
+
+	ctx, stop := workerContext()
+	defer stop()
+	if err := interrupted(context.Background(), context.Canceled); asError(err).Exit != ExitInternal {
+		t.Fatalf("before any signal: %v", err)
+	}
+	ch <- os.Interrupt
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("workerContext did not cancel on the signal")
+	}
+	if e := asError(interrupted(context.Background(), context.Canceled)); e.Exit != ExitInterrupted {
+		t.Fatalf("after signal: exit %d, want 130", e.Exit)
+	}
+}
+
+// A cancelled gate keeps its data; any other failure drops it.
+func TestGateErrResultKeepsDataOnCancel(t *testing.T) {
+	r := worker.GateResult{Slot: "s", Changed: true}
+	res, err := gateErrResult(r, fmt.Errorf("gate: %w", context.Canceled))
+	if err == nil || res.Data == nil {
+		t.Fatalf("cancelled: res %+v err %v; want data kept", res, err)
+	}
+	if res, _ := gateErrResult(r, errors.New("boom")); res.Data != nil {
+		t.Errorf("other error kept data: %+v", res)
 	}
 }
