@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // AutonomyLevel is autonomy.level as the manual-gate audit records it: the
@@ -41,7 +41,7 @@ type AutonomyMigration struct {
 
 // AutonomyPending reports the migration Fill would run on root. An unreadable
 // file contributes nothing.
-func AutonomyPending(env projects.Env, root string) AutonomyMigration {
+func AutonomyPending(env cfgdir.Env, root string) AutonomyMigration {
 	cfg, local := readObject(configPath(root)), readObject(localPath(root))
 	stale := autonomyStale(cfg)
 	localAP := false
@@ -191,8 +191,8 @@ func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 }
 
 // globalConfigDir is the rota config dir, or "" when it cannot be resolved.
-func globalConfigDir(env projects.Env) string {
-	dir, err := projects.Dir(env)
+func globalConfigDir(env cfgdir.Env) string {
+	dir, err := cfgdir.Dir(env)
 	if err != nil {
 		return ""
 	}
@@ -241,7 +241,7 @@ func stampGlobal(dir string) error {
 // in the global config.json becomes roundtrip, and the stamp is written either
 // way, so a later deliberate global auto survives. A missing or unreadable
 // global is left alone and stays unstamped.
-func migrateAutonomyGlobal(env projects.Env) (bool, error) {
+func migrateAutonomyGlobal(env cfgdir.Env) (bool, error) {
 	dir := globalConfigDir(env)
 	if dir == "" {
 		return false, nil
