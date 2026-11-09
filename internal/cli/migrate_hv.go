@@ -19,7 +19,7 @@ import (
 )
 
 func hvMigrateCommand() *Command {
-	return &Command{Name: "hv", Summary: "move a project from .hv/ and the hv names to .rota/ and rota (preview unless --apply)", Verb: migrateHv}
+	return &Command{Name: "hv", Fence: fenceRefused, Summary: "move a project from .hv/ and the hv names to .rota/ and rota (preview unless --apply)", Verb: migrateHv}
 }
 
 // migrateHv is `rota migrate hv` (#236). It runs without .rota/: the project it

@@ -63,31 +63,31 @@ func workerEnvCtx(c *Ctx, ctx context.Context) worker.Env {
 func workerCommands() *Command {
 	return &Command{Name: "worker", Summary: "/rota-work worker slots, hosts and accounts", Subs: []*Command{
 		{Name: "pool", Summary: "slot registry, worktrees and branches", Subs: []*Command{
-			{Name: "init", Summary: "create the slots' worktrees and register them", Verb: poolInit},
-			{Name: "list", Summary: "list the registered slots", Verb: noFlags(runPoolList)},
-			{Name: "reap", Summary: "remove slots, their worktrees and branches", Verb: poolReap},
+			{Name: "init", Fence: fenceAllowed, Summary: "create the slots' worktrees and register them", Verb: poolInit},
+			{Name: "list", Fence: fenceAllowed, Summary: "list the registered slots", Verb: noFlags(runPoolList)},
+			{Name: "reap", Fence: fenceAllowed, Summary: "remove slots, their worktrees and branches", Verb: poolReap},
 		}},
-		{Name: "adopt", Summary: "register a branch or worktree another tool started as a hostless slot", Verb: workerAdopt},
-		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
-		{Name: "inbox", Summary: "list the slot's durable inbox; --ack marks mail read, --handled/--returned resolve a request", Verb: workerInbox},
-		{Name: "reply", Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
-		{Name: "send", Summary: "record a typed event for the slot: blocked, question or heartbeat", Verb: workerSend},
-		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
-		{Name: "poll", Summary: "classify slot states from their panes", Verb: workerPoll},
+		{Name: "adopt", Fence: fenceAllowed, Summary: "register a branch or worktree another tool started as a hostless slot", Verb: workerAdopt},
+		{Name: "dispatch", Fence: fenceAllowed, Summary: "send a brief into a slot's session", Verb: workerDispatch},
+		{Name: "inbox", Fence: fenceAllowed, Summary: "list the slot's durable inbox; --ack marks mail read, --handled/--returned resolve a request", Verb: workerInbox},
+		{Name: "reply", Fence: fenceAllowed, Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
+		{Name: "send", Fence: fenceAllowed, Summary: "record a typed event for the slot: blocked, question or heartbeat", Verb: workerSend},
+		{Name: "prompt-check", Fence: fenceAllowed, Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
+		{Name: "poll", Fence: fenceAllowed, Summary: "classify slot states from their panes", Verb: workerPoll},
 		{Name: "session", Summary: "attachable host session guarantee", Subs: []*Command{
-			{Name: "check", Summary: "inside a managed host session? (exit 1 when outside)", Verb: sessionCheck},
-			{Name: "ensure", Summary: "hand the orchestrator off into a host session", Verb: sessionEnsure},
+			{Name: "check", Fence: fenceAllowed, Summary: "inside a managed host session? (exit 1 when outside)", Verb: sessionCheck},
+			{Name: "ensure", Fence: fenceAllowed, Summary: "hand the orchestrator off into a host session", Verb: sessionEnsure},
 		}},
-		{Name: "done", Summary: "refuse a finished slot without a test.fast proof row at HEAD, else mark it done", Verb: workerDone},
-		{Name: "gate", Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
-		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain, Subs: []*Command{
-			{Name: "cancel", Summary: "cancel the running train that holds a request id", Verb: workerTrainCancel},
+		{Name: "done", Fence: fenceAllowed, Summary: "refuse a finished slot without a test.fast proof row at HEAD, else mark it done", Verb: workerDone},
+		{Name: "gate", Fence: fenceRefused, Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
+		{Name: "train", Fence: fenceRefused, Summary: "verify several PRs merged together once, then land them", Verb: workerTrain, Subs: []*Command{
+			{Name: "cancel", Fence: fenceRefused, Summary: "cancel the running train that holds a request id", Verb: workerTrainCancel},
 		}},
-		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
+		{Name: "reset", Fence: fenceAllowed, Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
-			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},
-			{Name: "pick", Summary: "name the account with the most headroom", Verb: accountPick},
-			{Name: "assign", Summary: "put an account's config dir on a slot", Verb: accountAssign},
+			{Name: "list", Fence: fenceAllowed, Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},
+			{Name: "pick", Fence: fenceAllowed, Summary: "name the account with the most headroom", Verb: accountPick},
+			{Name: "assign", Fence: fenceAllowed, Summary: "put an account's config dir on a slot", Verb: accountAssign},
 		}},
 	}}
 }

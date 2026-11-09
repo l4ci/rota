@@ -18,7 +18,7 @@ import (
 )
 
 func testAuditCommand() *Command {
-	return &Command{Name: "test-audit", Summary: "report recorded test costs and test placement without running suites", Verb: testAudit}
+	return &Command{Name: "test-audit", Fence: fenceAllowed, Summary: "report recorded test costs and test placement without running suites", Verb: testAudit}
 }
 
 func testAudit(fs *flag.FlagSet) RunFunc {

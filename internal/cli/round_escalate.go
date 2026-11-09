@@ -42,8 +42,8 @@ func fromEscalation(err error) (Result, error) {
 // roundEscalate is the `rota round escalate` group.
 func roundEscalate() *Command {
 	return &Command{Name: "escalate", Summary: "ask the human on an issue or PR thread", Subs: []*Command{
-		{Name: "send", Summary: "post a question on a thread and notify", Verb: roundEscalateSend},
-		{Name: "check", Summary: "look for the human's answers", Verb: roundEscalateCheck},
+		{Name: "send", Fence: fenceAllowed, Summary: "post a question on a thread and notify", Verb: roundEscalateSend},
+		{Name: "check", Fence: fenceAllowed, Summary: "look for the human's answers", Verb: roundEscalateCheck},
 	}}
 }
 

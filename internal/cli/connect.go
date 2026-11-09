@@ -20,10 +20,10 @@ import (
 // one (issues.connection). None of these verbs needs a project root.
 func connectCommand() *Command {
 	return &Command{Name: "connect", Summary: "manage machine-wide tracker connections (Jira, Linear, It's a Plan) and their secrets", Subs: []*Command{
-		{Name: "add", Summary: "add or replace a named connection and store its token", Verb: connectAddVerb},
-		{Name: "list", Summary: "list connections and which store holds each secret; never the secret", Verb: noFlags(runConnectList)},
-		{Name: "test", Summary: "make one authenticated read through a connection", Verb: noFlags(runConnectTest)},
-		{Name: "remove", Summary: "remove a connection and its stored secret", Verb: noFlags(runConnectRemove)},
+		{Name: "add", Fence: fenceAllowed, Summary: "add or replace a named connection and store its token", Verb: connectAddVerb},
+		{Name: "list", Fence: fenceAllowed, Summary: "list connections and which store holds each secret; never the secret", Verb: noFlags(runConnectList)},
+		{Name: "test", Fence: fenceAllowed, Summary: "make one authenticated read through a connection", Verb: noFlags(runConnectTest)},
+		{Name: "remove", Fence: fenceAllowed, Summary: "remove a connection and its stored secret", Verb: noFlags(runConnectRemove)},
 	}}
 }
 

@@ -32,8 +32,8 @@ import (
 
 func keepaliveCommands() *Command {
 	return &Command{Name: "keepalive", Summary: "restart the orchestrator in its pane when it exits with a fresh handoff", Subs: []*Command{
-		{Name: "run", Summary: "run a command as a supervisor: rota keepalive run [flags] -- <command> [<arg>...]", Verb: keepaliveRun},
-		{Name: "status", Summary: "show the supervisor state and the round lease", Verb: noFlags(keepaliveStatus)},
+		{Name: "run", Fence: fenceAllowed, Summary: "run a command as a supervisor: rota keepalive run [flags] -- <command> [<arg>...]", Verb: keepaliveRun},
+		{Name: "status", Fence: fenceAllowed, Summary: "show the supervisor state and the round lease", Verb: noFlags(keepaliveStatus)},
 	}}
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 func milestonesMigrateCommand() *Command {
-	return &Command{Name: "milestones", Summary: "rename ## Acceptance criteria to ## Acceptance with checkboxes on every milestone body (preview unless --apply)", Verb: migrateMilestones}
+	return &Command{Name: "milestones", Fence: fenceRefused, Summary: "rename ## Acceptance criteria to ## Acceptance with checkboxes on every milestone body (preview unless --apply)", Verb: migrateMilestones}
 }
 
 // migrateMilestones is `rota migrate milestones`: it runs every milestone
@@ -57,7 +57,7 @@ func migrateMilestones(fs *flag.FlagSet) RunFunc {
 }
 
 func milestoneFilesMigrateCommand() *Command {
-	return &Command{Name: "milestone-files", Summary: "archive .rota/milestones files left over from file mode (tracker only; preview unless --apply)", Verb: migrateMilestoneFiles}
+	return &Command{Name: "milestone-files", Fence: fenceRefused, Summary: "archive .rota/milestones files left over from file mode (tracker only; preview unless --apply)", Verb: migrateMilestoneFiles}
 }
 
 // migrateMilestoneFiles is `rota migrate milestone-files`: with milestones on

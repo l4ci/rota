@@ -75,15 +75,15 @@ func openStore(c *Ctx) (ms.Store, error) {
 func milestoneCommands() []*Command {
 	return []*Command{
 		{Name: "milestone", Summary: "vision milestones", Subs: []*Command{
-			{Name: "add", Summary: "mint a milestone", Verb: milestoneAdd},
-			{Name: "list", Summary: "list milestones", Verb: noFlags(runMilestoneList)},
-			{Name: "show", Summary: "print a milestone", Verb: noFlags(runMilestoneShow)},
-			{Name: "put", Summary: "replace a milestone's text", Verb: milestonePut},
-			{Name: "overview", Summary: "replace the MILESTONES.md overview text", Verb: milestoneOverview},
-			{Name: "status", Summary: "change a milestone's status", Verb: milestoneStatus},
-			{Name: "active", Summary: "IDs of active milestones", Verb: noFlags(runMilestoneActive)},
-			{Name: "check", Summary: "every criterion has a feature issue, every feature a ## Change on a listed capability", Verb: milestoneCheck},
-			{Name: "index", Summary: "regenerate the overview and vision block", Verb: noFlags(runMilestoneIndex)},
+			{Name: "add", Fence: fenceRefused, Summary: "mint a milestone", Verb: milestoneAdd},
+			{Name: "list", Fence: fenceAllowed, Summary: "list milestones", Verb: noFlags(runMilestoneList)},
+			{Name: "show", Fence: fenceAllowed, Summary: "print a milestone", Verb: noFlags(runMilestoneShow)},
+			{Name: "put", Fence: fenceRefused, Summary: "replace a milestone's text", Verb: milestonePut},
+			{Name: "overview", Fence: fenceRefused, Summary: "replace the MILESTONES.md overview text", Verb: milestoneOverview},
+			{Name: "status", Fence: fenceRefused, Summary: "change a milestone's status", Verb: milestoneStatus},
+			{Name: "active", Fence: fenceAllowed, Summary: "IDs of active milestones", Verb: noFlags(runMilestoneActive)},
+			{Name: "check", Fence: fenceAllowed, Summary: "every criterion has a feature issue, every feature a ## Change on a listed capability", Verb: milestoneCheck},
+			{Name: "index", Fence: fenceRefused, Summary: "regenerate the overview and vision block", Verb: noFlags(runMilestoneIndex)},
 		}},
 	}
 }
