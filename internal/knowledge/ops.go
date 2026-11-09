@@ -106,7 +106,7 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 		// sidecar, so a bullet that predates tiering gets tracked.
 		return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 	}
-	if topic != GlossaryTopic {
+	if tiered(topic) {
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {
 			return AddResult{}, err
 		}
@@ -124,7 +124,7 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 }
 
 func (s Store) initTierUnlessGlossary(scope, topic, title string) error {
-	if topic == GlossaryTopic {
+	if !tiered(topic) {
 		return nil
 	}
 	return s.initTier(scope, topic, title)
