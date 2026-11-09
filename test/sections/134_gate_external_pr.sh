@@ -1,24 +1,10 @@
 echo "worker gate: a PR no slot or review record owns is gated by number (#463)"
-# A fake gh answers `pr view` and `issue view` from a small state file; the gate
+# The shared fake gh (test/fakes/gh) answers `pr view` and `issue view` from a seeded store; the gate
 # runs --check-only, which is also what a train member goes through, so nothing merges.
 
 TMP_EX="$(mktemp -d)"
-EXPROJ="$TMP_EX/proj"; EXBIN="$TMP_EX/bin"; mkdir -p "$EXPROJ/.rota" "$EXBIN"
-cat > "$EXBIN/gh" <<'PYEOF'
-#!/usr/bin/env python3
-import json, os, sys
-st = json.load(open(os.environ["EX_STATE"]))
-a = sys.argv[1:]
-if a[:2] == ["pr", "view"]:
-    print(json.dumps({"headRefName": "ben/5-thing", "headRefOid": st["sha"], "baseRefName": "main",
-                      "state": "OPEN", "mergeCommit": None, "body": st["body"] + "\n## Assumptions\nNone\n\n## Rulings\nNone\n"}))
-elif a[:2] == ["issue", "view"]:
-    print(json.dumps({"number": 5, "title": "t", "body": "", "state": "OPEN", "url": "",
-                      "labels": [{"name": n} for n in st["labels"]], "assignees": [], "milestone": None}))
-else:
-    print("fake gh: unsupported: %s" % a, file=sys.stderr); sys.exit(2)
-PYEOF
-chmod +x "$EXBIN/gh"
+EXPROJ="$TMP_EX/proj"; mkdir -p "$EXPROJ/.rota"
+. "$TESTDIR/lib/forge_state.sh"
 EXORIGIN="$TMP_EX/origin.git"
 git init -q --bare -b main "$EXORIGIN"
 (
@@ -31,8 +17,8 @@ git init -q --bare -b main "$EXORIGIN"
 EXSHA="$(git -C "$EXPROJ" rev-parse ben/5-thing)"
 printf '{"forge":{"provider":"github"},"issues":{"source":"github"},"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$EXPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"park/ben"}]}\n' > "$EXPROJ/.rota/workers.json"
-ex_state() { printf '{"sha":"%s","body":"%s","labels":[%s]}\n' "$EXSHA" "$1" "$2" > "$TMP_EX/state.json"; }
-ex() { ( cd "$EXPROJ" && EX_STATE="$TMP_EX/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$EXBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
+ex_state() { forge_state "$TMP_EX/db.json" "$EXSHA" "$1" "$2" "" 5; }
+ex() { ( cd "$EXPROJ" && FAKE_TRACKER_DB="$TMP_EX/db.json" ROTA_GATE_SHA_WAIT=0 PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 
 ex_state "Closes #5" ""

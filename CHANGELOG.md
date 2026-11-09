@@ -4,7 +4,7 @@
 
 ### Upgrade notes
 
-- **A corrupt or non-object config file exits 5, not 70.** A `.rota/config.json`, `.rota/config.local.json` or global config that does not parse, or holds JSON other than an object, is the user's file: the verbs that read it exit 5 naming the file, with no "bug in rota" hint. `config set` now refuses such a file instead of overwriting it, and merged `config show` exits 5 for a bad project or local file (a bad global one is still skipped with a warning). `config check` reports a bad local file as `corrupt`. The support fence no longer refuses a bad `config.local.json` with exit 4 `blockedBy: "config"`: it exits 5 with no `blockedBy`, so scripts must read the exit code (#2924).
+- **A corrupt or non-object config file exits 5, not 70.** A `.rota/config.json`, `.rota/config.local.json` or global config that does not parse, or holds JSON other than an object, is the user's file: the verbs that read it exit 5 naming the file, with no "bug in rota" hint. `config set` now refuses such a file instead of overwriting it, and merged `config show` exits 5 for a bad project or local file (a bad global one is still skipped with a warning). `config check` exits 5 naming a bad local file. The support fence no longer refuses a bad `config.local.json` with exit 4 `blockedBy: "config"`: it exits 5 with no `blockedBy`, so scripts must read the exit code (#2924).
 
 ## v0.32.0 — 2026-11-07
 
