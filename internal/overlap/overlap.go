@@ -37,8 +37,20 @@ func Clean(entry string) string { return pathglob.Clean(entry) }
 
 // MatchPath reports whether the repo-relative file matches a listed entry:
 // equal to it, under it as a directory, or matching it as a path.Match glob
-// against the whole path.
-func MatchPath(entry, file string) bool { return pathglob.MatchEntryFlat(entry, file) }
+// against the whole path. ** is an ordinary path.Match segment here (one
+// level, not recursive); sharedPaths exempts files from clashes, so widening
+// it would hide overlaps.
+func MatchPath(entry, file string) bool {
+	entry = strings.TrimSuffix(Clean(entry), "/")
+	if entry == "" {
+		return false
+	}
+	if file == entry || strings.HasPrefix(file, entry+"/") {
+		return true
+	}
+	ok, err := path.Match(entry, file)
+	return err == nil && ok
+}
 
 // Shared reports whether file matches any of the shared entries.
 func Shared(shared []string, file string) bool {
