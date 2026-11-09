@@ -340,6 +340,7 @@
     "./internal/worker/TestDispatchHostTraffic": "Executes fake host scripts and reads temporary project traffic, briefs and golden fixtures; does not enforce repository source invariants.",
     "./internal/worker/TestGateBehaviourHomeGoneAfterAFailedStep": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestGateBehaviourHomeLeftBehindIsAWarning": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
+    "./internal/worker/TestInterruptedLandingRunReleasesLock": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestLandingAbandonedIntentDoesNotWedgeRuns": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestLandingNoWaitRefusesUnmarkedLandLock": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
     "./internal/worker/TestLandingQueuedManualRunDefersNoWaitGateAndTrain": "Enumerates temporary worker, landing, behaviour, or verification fixture directories.",
