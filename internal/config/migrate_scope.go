@@ -3,9 +3,9 @@ package config
 import (
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // The scope step of `rota migrate config` (#1786): keys that belong outside the
@@ -43,7 +43,7 @@ func (m ScopeMigration) Changed() bool { return len(m.Changes) > 0 }
 // ErrCorrupt naming it, and nothing is written. The step plans on the files as
 // the round-key rename (MigrateRoundKeys) leaves them, so a preview that also
 // renames old work.* names lists what --apply, which renames first, does.
-func MigrateScopeFiles(env projects.Env, root string, apply bool, keep []string) (ScopeMigration, error) {
+func MigrateScopeFiles(env cfgdir.Env, root string, apply bool, keep []string) (ScopeMigration, error) {
 	var m ScopeMigration
 	path, local := configPath(root), localPath(root)
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
@@ -54,7 +54,7 @@ func MigrateScopeFiles(env projects.Env, root string, apply bool, keep []string)
 	return m, err
 }
 
-func migrateScopePlan(env projects.Env, path, local string, keep []string, m *ScopeMigration, apply bool) error {
+func migrateScopePlan(env cfgdir.Env, path, local string, keep []string, m *ScopeMigration, apply bool) error {
 	cfg, err := readMigrateTarget(path, "config.json")
 	if err != nil || cfg == nil {
 		return err
