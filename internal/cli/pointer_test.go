@@ -18,8 +18,8 @@ import (
 func supportBounceDeps(fk *bounceFakes, fake *trackertest.Fake) *Deps {
 	deps := supportReturnDeps(fake)
 	re := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, r string) round.Env {
-		e := re(ctx, r)
+	deps.RoundEnv = func(ctx context.Context, r string, o RoundOpts) round.Env {
+		e := re(ctx, r, o)
 		e.Round = roundcfg.Settings{Support: "mac", Role: roundcfg.RoleMain}
 		return e
 	}

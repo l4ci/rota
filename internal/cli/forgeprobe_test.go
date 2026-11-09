@@ -29,7 +29,7 @@ func TestRoundEnvFactoriesBuildAForgeOnlyWhenAsked(t *testing.T) {
 		t.Errorf("RoundEnvLocal: %d forge build(s), Forge %v, ForgeErr %q", *builds, e.Forge, e.ForgeErr)
 	}
 
-	e = d.RoundEnv(context.Background(), root)
+	e = d.roundEnv(context.Background(), root)
 	if *builds != 1 {
 		t.Fatalf("RoundEnv built %d forge(s), want 1 (the probe is blind otherwise)", *builds)
 	}

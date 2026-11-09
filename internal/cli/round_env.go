@@ -31,7 +31,7 @@ func newRoundEnv(d *Deps, w worker.Env, accounts *worker.Accounts) round.Env {
 	return e.WithAccounts(accounts)
 }
 
-// defaultRoundEnv wires the real git, host and forge. The host is herdr when
+// buildRoundEnv wires the real git, host and forge. The host is herdr when
 // the round recorded (C8); with none it is herdr when round.dispatch says so or
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
@@ -41,11 +41,7 @@ func newRoundEnv(d *Deps, w worker.Env, accounts *worker.Accounts) round.Env {
 // report it as unavailable instead of failing. withForge false builds no
 // forge at all (Forge and ForgeErr stay empty), for a caller that reads only
 // the local sources and would not wait on the network.
-func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
-	return buildRoundEnv(ctx, root, d, withForge, d.workerEnv(), nil)
-}
-
-// buildRoundEnv is the one constructor: w is the worker env the verb runs on
+// It is the one constructor: w is the worker env the verb runs on
 // and accounts the meters to pick from (nil keeps picking off).
 func buildRoundEnv(ctx context.Context, root string, d *Deps, withForge bool, w worker.Env, accounts *worker.Accounts) round.Env {
 	cfg := d.Config(root)
@@ -92,12 +88,30 @@ func buildRoundEnv(ctx context.Context, root string, d *Deps, withForge bool, w 
 	return e
 }
 
-// accountedRoundEnv is RoundEnv with account picking on, for a verb that reads
+// RoundOpts is what a verb chooses when its round env is built: the worker env
+// it runs on and, to opt into account picking, the meters to pick from (nil
+// leaves picking off).
+type RoundOpts struct {
+	Worker   worker.Env
+	Accounts *worker.Accounts
+}
+
+// roundEnv is the plain env on the hook's own worker env: picking off.
+func (d *Deps) roundEnv(ctx context.Context, root string) round.Env {
+	return d.RoundEnv(ctx, root, RoundOpts{Worker: d.workerEnv()})
+}
+
+// roundEnv is the plain env on the invocation-bound worker env (workerEnvCtx).
+func roundEnv(c *Ctx, ctx context.Context, root string) round.Env {
+	return c.deps().RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx)})
+}
+
+// accountedRoundEnv is roundEnv with account picking on, for a verb that reads
 // quota or picks an account: the one place a verb opts in, chosen when the env
-// is built. The worker env is the invocation-bound one (workerEnvFor), so Git,
-// host and clock match RoundEnv.
+// is built.
 func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
-	return c.deps().RoundEnvAccounted(ctx, root)
+	d := c.deps()
+	return d.RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx), Accounts: d.WorkerAccounts()})
 }
 
 // withBoard gives the env the backlog's claim side, which claim-mismatch drift

@@ -24,7 +24,7 @@ func staleStatusDeps(t *testing.T) (string, *Deps) {
 	fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "Abandoned", State: "open", Labels: []string{"type:task", "claimed:mac-ben@mac"}, Comments: []tracker.Comment{{Body: "<!-- rota:claim mac-ben@3 -->\nClaimed by mac-ben@3", CreatedAt: now.Add(-26 * time.Hour)}}}}}
 	d := testDeps()
 	d.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
-	d.RoundEnv = func(context.Context, string) round.Env {
+	d.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
 		return round.Env{Forge: returnForge{fake}, Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 	}
 	return root, d
@@ -74,8 +74,8 @@ func TestRoundStatusViewNamesRemoteStaleClaim(t *testing.T) {
 func TestRoundStatusOmitsEmptyStaleClaims(t *testing.T) {
 	root, d := staleStatusDeps(t)
 	original := d.RoundEnv
-	d.RoundEnv = func(ctx context.Context, root string) round.Env {
-		env := original(ctx, root)
+	d.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		env := original(ctx, root, o)
 		env.Round.ClaimStaleMinutes = 0
 		return env
 	}

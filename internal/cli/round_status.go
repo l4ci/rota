@@ -33,7 +33,7 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		renv := withBoard(c, root, roundEnv(c, ctx, root))
 		readWaits := func() ([]any, []string) {
 			waits, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
 			for _, warning := range warnings {
@@ -211,7 +211,7 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		renv := withBoard(c, root, roundEnv(c, ctx, root))
 		renv.SweepClosedClaims = true
 		out, err := renv.Reconcile(ctx, root, *apply)
 		if err != nil {

@@ -14,8 +14,8 @@ func TestRoundNeedsYou(t *testing.T) {
 	root, deps := roundFixture(t, nil)
 	pinNow(deps, "2026-10-03T12:00:00Z")
 	original := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		env := original(ctx, root)
+	deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		env := original(ctx, root, o)
 		env.Round.MaxBounces = 3
 		return env
 	}
@@ -81,8 +81,8 @@ func TestRoundNeedsYou(t *testing.T) {
 		write(t, worker.RegistryPath(root), `{"prs":[{"issue":"12","pr":"#7"}],"bounces":{"12":3}}`)
 		original := deps.RoundEnv
 		t.Cleanup(func() { deps.RoundEnv = original })
-		deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-			env := original(ctx, root)
+		deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+			env := original(ctx, root, o)
 			env.Forge = digestClosedPR{}
 			return env
 		}
@@ -126,11 +126,11 @@ func TestHookPromptNeedsYouCount(t *testing.T) {
 	pinDir(t, root, func(d *Deps) {
 		pinNow(d, "2026-10-03T12:04:00Z")
 		original := d.RoundEnv
-		d.RoundEnv = func(ctx context.Context, root string) round.Env {
+		d.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
 			if forbidRefresh {
 				t.Fatal("prompt must not build a forge or refresh the digest")
 			}
-			return original(ctx, root)
+			return original(ctx, root, o)
 		}
 	})
 	if out := promptOut(t, root); !strings.Contains(out, "1 waits on you, as of 4m ago") {

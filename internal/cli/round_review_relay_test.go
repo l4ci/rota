@@ -260,8 +260,8 @@ func TestRoundReviewRelayTakesSettingsFromRoundEnv(t *testing.T) {
 	doneSlot(t, dir)
 	deps := useReviewForge(&reviewForge{})
 	base := deps.RoundEnv
-	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		e := base(ctx, root)
+	deps.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
+		e := base(ctx, root, o)
 		e.Round.MaxBounces = 7
 		return e
 	}
