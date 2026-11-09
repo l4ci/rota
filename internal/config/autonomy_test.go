@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 func readLocal(t *testing.T, root string) string {
@@ -47,7 +47,7 @@ func TestAutonomyLevelEnum(t *testing.T) {
 		if _, err := Set(project(t, "", ""), "autonomy.level", good); err != nil {
 			t.Errorf("set %q: %v", good, err)
 		}
-		if got := Retired(projects.OSEnv(), project(t, `{"autonomy": {"level": "`+good+`"}}`, "")); len(got) != 0 {
+		if got := Retired(cfgdir.OSEnv(), project(t, `{"autonomy": {"level": "`+good+`"}}`, "")); len(got) != 0 {
 			t.Errorf("check %q: %v", good, got)
 		}
 	}
@@ -56,7 +56,7 @@ func TestAutonomyLevelEnum(t *testing.T) {
 		if !errors.Is(err, ErrBadValue) || !strings.Contains(err.Error(), "off, roundtrip, auto") {
 			t.Errorf("set %q: err = %v, want ErrBadValue naming the levels", bad, err)
 		}
-		got := Retired(projects.OSEnv(), project(t, `{"autonomy": {"level": "`+bad+`"}}`, ""))
+		got := Retired(cfgdir.OSEnv(), project(t, `{"autonomy": {"level": "`+bad+`"}}`, ""))
 		if len(got) != 1 || !strings.Contains(got[0], `autonomy.level "`+bad+`"`) || !strings.Contains(got[0], "roundtrip") {
 			t.Errorf("check %q: %v", bad, got)
 		}
@@ -68,14 +68,14 @@ func TestAutonomyLevelEnum(t *testing.T) {
 func TestFillRewritesAutoOnce(t *testing.T) {
 	for name, stamp := range map[string]string{"old": `"rota": {"version": "0.20.0"}, `, "older": `"rota": {"version": "0.19.3"}, `, "empty": ``, "garbage": `"rota": {"version": "dev"}, `, "legacy": `"hv": {"version": "4.2.0"}, `} {
 		root := project(t, `{`+stamp+`"autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "auto"}}`)
-		if p := AutonomyPending(projects.OSEnv(), root); !p.Rewrite || !p.LocalRewrite {
+		if p := AutonomyPending(cfgdir.OSEnv(), root); !p.Rewrite || !p.LocalRewrite {
 			t.Errorf("%s: pending %+v, want both files rewritten", name, p)
 		}
-		if _, err := Fill(projects.OSEnv(), root); err != nil {
+		if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		cfg := Load(projects.OSEnv(), configPath(root))
-		if v, _ := Value(Load(projects.OSEnv(), configPath(root)), "autonomy.level"); v != "roundtrip" {
+		cfg := Load(cfgdir.OSEnv(), configPath(root))
+		if v, _ := Value(Load(cfgdir.OSEnv(), configPath(root)), "autonomy.level"); v != "roundtrip" {
 			t.Errorf("%s: level %v after fill", name, v)
 		}
 		if !strings.Contains(read(t, root), `"roundtrip"`) || !strings.Contains(readLocal(t, root), `"roundtrip"`) {
@@ -88,10 +88,10 @@ func TestFillRewritesAutoOnce(t *testing.T) {
 		if _, err := Set(root, "autonomy.level", "auto"); err != nil {
 			t.Fatal(err)
 		}
-		if p := AutonomyPending(projects.OSEnv(), root); p.Rewrite {
+		if p := AutonomyPending(cfgdir.OSEnv(), root); p.Rewrite {
 			t.Errorf("%s: second pending %+v", name, p)
 		}
-		if _, err := Fill(projects.OSEnv(), root); err != nil {
+		if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(read(t, root), `"auto"`) {
@@ -100,10 +100,10 @@ func TestFillRewritesAutoOnce(t *testing.T) {
 	}
 	for _, stamp := range []string{AutonomyLevelsSince, "0.22.1", "1.0.0"} {
 		root := project(t, `{"rota": {"version": "`+stamp+`"}, "autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "auto"}}`)
-		if p := AutonomyPending(projects.OSEnv(), root); p.Rewrite || p.LocalRewrite {
+		if p := AutonomyPending(cfgdir.OSEnv(), root); p.Rewrite || p.LocalRewrite {
 			t.Errorf("%s: pending %+v", stamp, p)
 		}
-		if _, err := Fill(projects.OSEnv(), root); err != nil {
+		if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(read(t, root), `"auto"`) || !strings.Contains(readLocal(t, root), `"auto"`) {
@@ -112,10 +112,10 @@ func TestFillRewritesAutoOnce(t *testing.T) {
 	}
 	// An old stamp with no auto anywhere: nothing to rewrite, stamp untouched.
 	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "off"}}`, "")
-	if _, err := Fill(projects.OSEnv(), root); err != nil {
+	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	if s := StampedVersion(Load(projects.OSEnv(), configPath(root))); s != "0.20.0" {
+	if s := StampedVersion(Load(cfgdir.OSEnv(), configPath(root))); s != "0.20.0" {
 		t.Errorf("stamp raised without a rewrite: %q", s)
 	}
 }
@@ -135,10 +135,10 @@ func TestFillRemovesAutopilot(t *testing.T) {
 		if want := strings.Contains(tc.cfg, "autopilot"); slicesContain(Removed(root), "round.autopilot") != want {
 			t.Errorf("%s / %s: check names round.autopilot = %v, want %v: %v", tc.cfg, tc.local, !want, want, Removed(root))
 		}
-		if p := AutonomyPending(projects.OSEnv(), root); p.AutopilotWasOn != tc.wasOn {
+		if p := AutonomyPending(cfgdir.OSEnv(), root); p.AutopilotWasOn != tc.wasOn {
 			t.Errorf("%s / %s: pending %+v, want AutopilotWasOn %v", tc.cfg, tc.local, p, tc.wasOn)
 		}
-		if _, err := Fill(projects.OSEnv(), root); err != nil {
+		if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 			t.Fatal(err)
 		}
 		if strings.Contains(read(t, root), `"autopilot"`) {
@@ -277,13 +277,13 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 	if _, err := Set(root, "autonomy.level", "auto"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Fill(projects.OSEnv(), root); err != nil {
+	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := Value(Load(projects.OSEnv(), configPath(root)), "autonomy.level"); v != "auto" {
+	if v, _ := Value(Load(cfgdir.OSEnv(), configPath(root)), "autonomy.level"); v != "auto" {
 		t.Errorf("deliberate auto rewritten: %v", v)
 	}
-	if s := StampedVersion(Load(projects.OSEnv(), configPath(root))); s != AutonomyLevelsSince {
+	if s := StampedVersion(Load(cfgdir.OSEnv(), configPath(root))); s != AutonomyLevelsSince {
 		t.Errorf("stamp %q", s)
 	}
 	// A local set stamps config.json too, and an old local auto is migrated
@@ -299,7 +299,7 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 	if _, err := SetIn(root, "autonomy.level", "auto", LayerLocal); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Fill(projects.OSEnv(), root); err != nil {
+	if _, err := Fill(cfgdir.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(readLocal(t, root), `"auto"`) {
@@ -310,7 +310,7 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 	if _, err := Set(root, "autonomy.level", "bogus"); err == nil {
 		t.Fatal("bogus accepted")
 	}
-	if !strings.Contains(readLocal(t, root), `"auto"`) || StampedVersion(Load(projects.OSEnv(), configPath(root))) != "0.20.0" {
+	if !strings.Contains(readLocal(t, root), `"auto"`) || StampedVersion(Load(cfgdir.OSEnv(), configPath(root))) != "0.20.0" {
 		t.Errorf("a refused set migrated:\n%s\n%s", read(t, root), readLocal(t, root))
 	}
 }

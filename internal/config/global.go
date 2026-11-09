@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 )
 
 // The global config is a machine-wide config.json in the rota config dir,
@@ -226,8 +226,8 @@ func UnsetGlobal(dir, key string) (bool, error) {
 
 // GlobalSupplies is whether the global config under the rota config dir sets
 // key, so a project can drop its own value and inherit it. env locates the dir.
-func GlobalSupplies(env projects.Env, key string) bool {
-	dir, err := projects.Dir(env)
+func GlobalSupplies(env cfgdir.Env, key string) bool {
+	dir, err := cfgdir.Dir(env)
 	if err != nil {
 		return false
 	}

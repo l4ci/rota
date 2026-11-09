@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/cfgdir"
 )
 
 // Migration is every step of `rota migrate config`, in the order they run.
@@ -23,7 +23,7 @@ func (m Migration) Changed() bool {
 // apply writes, otherwise it only reports. An apply plans every step first, so
 // a refusal in any one of them leaves every file untouched. keep names the
 // keys the scope step leaves in config.json.
-func Migrate(env projects.Env, root string, apply bool, keep []string) (Migration, error) {
+func Migrate(env cfgdir.Env, root string, apply bool, keep []string) (Migration, error) {
 	if apply {
 		if _, err := migrateSteps(env, root, false, keep); err != nil {
 			return Migration{}, err
@@ -32,7 +32,7 @@ func Migrate(env projects.Env, root string, apply bool, keep []string) (Migratio
 	return migrateSteps(env, root, apply, keep)
 }
 
-func migrateSteps(env projects.Env, root string, apply bool, keep []string) (Migration, error) {
+func migrateSteps(env cfgdir.Env, root string, apply bool, keep []string) (Migration, error) {
 	var m Migration
 	var err error
 	gdir := globalConfigDir(env)
@@ -74,7 +74,7 @@ func (r Reconciliation) Rewrote() bool {
 
 // Reconcile is the one fill that `rota config fill` and `rota init` share:
 // it reads what Fill is about to change, then runs FillDetect.
-func Reconcile(env projects.Env, root string, detect func() string) (Reconciliation, error) {
+func Reconcile(env cfgdir.Env, root string, detect func() string) (Reconciliation, error) {
 	var r Reconciliation
 	for _, key := range Removed(root) {
 		if strings.TrimSuffix(key, LocalMark) != "issues.labels.support" {
@@ -112,7 +112,7 @@ type Diagnosis struct {
 
 // Diagnose reads everything `config check` reports. cfg is the effective
 // config, the one the caller loaded.
-func Diagnose(env projects.Env, root string, cfg any) Diagnosis {
+func Diagnose(env cfgdir.Env, root string, cfg any) Diagnosis {
 	var d Diagnosis
 	d.Status, d.Missing = Check(env, root)
 	d.Removed = Removed(root)

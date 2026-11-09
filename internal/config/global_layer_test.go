@@ -2,9 +2,9 @@ package config
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +13,9 @@ import (
 
 // dirEnv is an Env whose global config dir is gdir, so a test reaches the
 // global layer through the seam instead of the process environment.
-func dirEnv(t *testing.T, gdir string) projects.Env {
+func dirEnv(t *testing.T, gdir string) cfgdir.Env {
 	t.Helper()
-	return projects.Env{
+	return cfgdir.Env{
 		Getenv: func(k string) string {
 			if k == "ROTA_CONFIG_DIR" {
 				return gdir
@@ -26,7 +26,7 @@ func dirEnv(t *testing.T, gdir string) projects.Env {
 	}
 }
 
-func layerRig(t *testing.T, global, project, local string) (root string, env projects.Env) {
+func layerRig(t *testing.T, global, project, local string) (root string, env cfgdir.Env) {
 	t.Helper()
 	gdir := t.TempDir()
 	env = dirEnv(t, gdir)
@@ -48,7 +48,7 @@ func layerRig(t *testing.T, global, project, local string) (root string, env pro
 	return root, env
 }
 
-func showOne(t *testing.T, env projects.Env, root, key string) Entry {
+func showOne(t *testing.T, env cfgdir.Env, root, key string) Entry {
 	t.Helper()
 	rows, err := Show(env, root, key, true)
 	if err != nil || len(rows) != 1 {
@@ -100,7 +100,7 @@ func TestGlobalChangeReachesEveryProject(t *testing.T) {
 	if err := os.WriteFile(configPath(b), []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gdir, _ := projects.Dir(env)
+	gdir, _ := cfgdir.Dir(env)
 	if err := os.WriteFile(GlobalPath(gdir), []byte(`{"work":{"isolation":"branch"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
