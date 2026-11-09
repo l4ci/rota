@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -28,13 +29,22 @@ import (
 // names a screen, the entry follows the verb's own Command.View.
 func paletteVerb(c *Ctx, root *Command, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
 	e := palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
-		c.runNested(Tree(), verb, c.Stdin, c.Stdout, c.Stderr, nil)
+		paletteRun(c, root, verb, c.Stdin, c.Stdout, c.Stderr, nil)
 		return nil
 	}}
 	if cmd := findVerb(root, verb); cmd != nil && cmd.View != nil {
 		e.View = func() (tui.Model, error) { return paletteView(c, root, verb) }
 	}
 	return e
+}
+
+// paletteRun runs one palette entry as a nested verb. Each entry starts from
+// the forge, as a typed command would: the palette outlives the reads of an
+// earlier entry. The cache object stays the outer invocation's, so reads inside
+// one screen (browse loads, projects actions) keep sharing it.
+func paletteRun(c *Ctx, root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer, setup func(*Ctx)) int {
+	c.deps().freshReads()
+	return c.runNested(root, args, stdin, stdout, stderr, setup)
 }
 
 // findVerb is the command at a verb path, nil when there is none.
@@ -57,7 +67,7 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 	var out, errb bytes.Buffer
 	// The capture buffer stands in for the palette's own terminal, which the
 	// palette proved before it opened: the --ui gate judges that, not the buffer.
-	c.runNested(root, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb, func(n *Ctx) {
+	paletteRun(c, root, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb, func(n *Ctx) {
 		n.viewSink = func(built tui.Model) error { m = built; return nil }
 		n.termOut = c.Stdout
 	})
@@ -105,7 +115,7 @@ func layoutToggle(c *Ctx) (palette.Entry, bool) {
 		},
 		Run: func() error {
 			cur, _ := state()
-			c.runNested(Tree(), []string{"layout", other(cur), "--project", root}, c.Stdin, c.Stdout, c.Stderr, nil)
+			paletteRun(c, Tree(), []string{"layout", other(cur), "--project", root}, c.Stdin, c.Stdout, c.Stderr, nil)
 			return nil
 		},
 	}, true
