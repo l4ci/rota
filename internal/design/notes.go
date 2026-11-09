@@ -37,20 +37,7 @@ func (s notes) docs() artifact.NoteDocs {
 	}}
 }
 
-func (s notes) Create(id, text string) error {
-	id = normID(id)
-	n, err := s.open()
-	if err != nil {
-		return err
-	}
-	if _, ok, err := n.NoteGet(id, "design"); err != nil {
-		return err
-	} else if ok {
-		return exitcode.Errf(exitcode.ExitRefused, "design note for %s already exists", id)
-	}
-	_, err = n.NotePut(id, "design", text)
-	return err
-}
+func (s notes) Create(id, text string) error { return s.docs().Create(id, text) }
 
 func (s notes) Read(id string) (string, error) { return s.docs().Read(id) }
 
