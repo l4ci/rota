@@ -119,8 +119,8 @@ type PushTrust interface {
 }
 
 // MarkerTrust answers whether a comment's author may post rota's bounce
-// markers: anyone who can comment could otherwise reset the cap or force a
-// park. Write access keeps the machines' shared login and drops strangers. A
+// markers: anyone who can comment could otherwise reset the cap or reach it
+// early. Write access keeps the machines' shared login and drops strangers. A
 // source that cannot say trusts nobody. Answers are kept for the life of the
 // value, so one pass asks the forge once per login.
 type MarkerTrust struct {
