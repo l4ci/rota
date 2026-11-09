@@ -252,7 +252,7 @@ func TestFollowUpObserveProposesOnly(t *testing.T) {
 	x := &fu{list: []FollowUp{{Issue: "#7", PR: "#70", Who: "alice"}}}
 	e := f.env()
 	e.Active = func() []string { return []string{"ben", "dana"} }
-	e.Observe = &ObservationSources{}
+	e.Observe = true
 	x.wire(f, &e)
 	r, err := Run(context.Background(), e)
 	if err != nil {

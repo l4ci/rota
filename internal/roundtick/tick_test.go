@@ -45,8 +45,8 @@ func (f *fake) env() Env {
 		MergeApproval: gate.MergeNone,
 		Slots:         func() []Slot { return f.slots },
 		Queued:        func() []string { return f.queued },
-		Reconcile: func(context.Context) ([]Finding, []Finding, error) {
-			return f.repaired, f.drift, nil
+		Reconcile: func(context.Context) (Inspection, error) {
+			return Inspection{Repaired: f.repaired, Drift: f.drift}, nil
 		},
 		Base: "main",
 		Target: func(t string) (worker.GateTarget, error) {
