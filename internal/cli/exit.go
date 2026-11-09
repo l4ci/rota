@@ -8,8 +8,6 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
-
-	"github.com/l4ci/rota/internal/fsio"
 )
 
 // Exit codes and the error type live in internal/exitcode so artifact and
@@ -68,19 +66,17 @@ func configFail(err error, c exitmap.Class) error {
 	return out
 }
 
-// asError maps any error to an *Error: lock timeouts become retry, an unreadable state file is unavailable, and
-// anything unclassified is an internal error.
+// asError maps any error to an *Error: lock timeouts become retry, an unreadable state file is unavailable
+// (both through exitmap), and anything unclassified is an internal error.
 func asError(err error) *Error {
 	var e *Error
 	if errors.As(err, &e) {
 		return e
 	}
-	if errors.Is(err, fsio.ErrLockTimeout) {
-		return &Error{Exit: ExitRetry, Message: err.Error()}
-	}
-	if errors.Is(err, fsio.ErrUnreadable) {
-		// A state file rota refuses to read as empty: the user's file, not a rota bug.
-		return &Error{Exit: ExitUnavailable, Message: err.Error()}
+	if _, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Lock | exitmap.Unreadable}); out != nil {
+		if errors.As(out, &e) {
+			return e
+		}
 	}
 	return &Error{Exit: ExitInternal, Message: err.Error(), Hint: "this is a bug in rota; please report it"}
 }
