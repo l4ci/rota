@@ -222,26 +222,6 @@ func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 	return out
 }
 
-func staleData(f stalebin.Finding) *jsonx.Object {
-	return jsonx.Obj("commit", f.Commit, "head", f.Head, "behind", f.Behind, "rebuild", f.Rebuild)
-}
-
-// staleBinaryOncePerRound is the round heartbeat's copy of doctor's binary
-// warning. The once-per-round rule and its marker belong to round
-// (round.ClaimStaleWarning); a marker error comes back as err beside the finding.
-func staleBinaryOncePerRound(c *Ctx, cd string, n int) (f stalebin.Finding, ok bool, err error) {
-	dir, err := c.deps().Getwd()
-	if err != nil {
-		return stalebin.Finding{}, false, err
-	}
-	f, ok = staleBinary(c.Context(), c.deps().Git, dir)
-	if !ok {
-		return stalebin.Finding{}, false, nil
-	}
-	first, err := round.ClaimStaleWarning(cd, n)
-	return f, first, err
-}
-
 // doctorSlotBlocks lists the live slots (a session or a task) that hold a
 // port block, each with the width it was allocated with.
 func doctorSlotBlocks(root string) []doctor.SlotBlock {
