@@ -14,17 +14,7 @@ mkdir -p "$FK/bin"
 
 cp "$TESTDIR/fakes/herdr" "$FK/bin/herdr"  # the shared fake; no tab is open until `tab create`
 : >"$FK/closed"
-cat > "$FK/bin/tmux" <<'SH'
-#!/usr/bin/env bash
-F="$FAKE_TMUX"
-printf '%s\n' "$*" >>"$F/log"
-case "$1" in
-  list-windows) [ -f "$F/window" ] && echo "w1 $(cat "$F/pid")" || true ;;
-  kill-window)  [ -f "$F/kill_fails" ] || rm -f "$F/window" ;;
-  has-session)  exit 0 ;;
-esac
-exit 0
-SH
+cp "$TESTDIR/fakes/tmux" "$FK/bin/tmux"  # the shared fake; windows are `<name> <pid>` lines, kill_fails keeps one alive
 chmod +x "$FK/bin/herdr" "$FK/bin/tmux"
 
 mkdir -p "$TMP_RG/repo/.rota"
@@ -121,12 +111,11 @@ p = sys.argv[1]; d = json.load(open(p))
 d["slots"][0]["handle"] = "rota:w1"; json.dump(d, open(p, "w"))
 PY
 sleep 300 & SLEEPER=$!
-echo "$SLEEPER" > "$FK/pid"
-touch "$FK/window" "$FK/kill_fails"; : >"$FK/log"
+touch "$FK/session" "$FK/kill_fails"; echo "w1 $SLEEPER" > "$FK/windows"; : >"$FK/log"
 RC=0; OUT="$(rgt hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T4 2>/dev/null)" || RC=$?
 [ "$RC" = "5" ] || fail "tmux: a window that will not die must exit 5, got $RC: $OUT"
 if grep '^new-window' "$FK/log" >/dev/null; then fail "tmux: must not spawn a second window"; fi
-rm -f "$FK/kill_fails"; touch "$FK/window"
+rm -f "$FK/kill_fails"; echo "w1 $SLEEPER" > "$FK/windows"
 RC=0; OUT="$(rgt hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T4 2>/dev/null)" || RC=$?
 [ "$RC" = "5" ] || fail "tmux: a surviving pane process must exit 5 even when the window is gone, got $RC: $OUT"
 case "$(jget error.message <<<"$OUT")" in *"$SLEEPER"*) ;; *) fail "tmux: refusal must name the surviving pid $SLEEPER, got: $OUT" ;; esac

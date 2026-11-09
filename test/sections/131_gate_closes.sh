@@ -1,27 +1,10 @@
 echo "worker gate/train: a PR whose body does not close the slot's issue is refused with exit 4 (#466)"
-# A fake gh answers `pr view` and `issue view` from a small state file; the gate
+# The shared fake gh (test/fakes/gh) answers `pr view` and `issue view` from a seeded store; the gate
 # runs --check-only, which is also what a train member goes through, so nothing merges.
 
 TMP_CL="$(mktemp -d)"
-CLPROJ="$TMP_CL/proj"; CLBIN="$TMP_CL/bin"; mkdir -p "$CLPROJ/.rota" "$CLBIN"
-cat > "$CLBIN/gh" <<'PYEOF'
-#!/usr/bin/env python3
-import json, os, sys
-st = json.load(open(os.environ["CL_STATE"]))
-a = sys.argv[1:]
-if a[:2] == ["pr", "view"]:
-    print(json.dumps({"headRefName": "ben/5-thing", "headRefOid": st["sha"], "baseRefName": "main",
-                      "state": "OPEN", "mergeCommit": None, "body": st["body"] + "\n## Assumptions\nNone\n\n## Rulings\nNone\n"}))
-elif a[:2] == ["issue", "view"]:
-    print(json.dumps({"number": 5, "title": "t", "body": "", "state": "OPEN", "url": "",
-                      "labels": [{"name": n} for n in st["labels"]], "assignees": [], "milestone": None}))
-elif a[:2] == ["api", "graphql"]:
-    print(json.dumps({"data": {"repository": {"pullRequest": {"closingIssuesReferences": {
-        "nodes": [{"number": n} for n in st.get("closing", [])]}}}}}))
-else:
-    print("fake gh: unsupported: %s" % a, file=sys.stderr); sys.exit(2)
-PYEOF
-chmod +x "$CLBIN/gh"
+CLPROJ="$TMP_CL/proj"; mkdir -p "$CLPROJ/.rota"
+. "$TESTDIR/lib/forge_state.sh"
 CLORIGIN="$TMP_CL/origin.git"
 git init -q --bare -b main "$CLORIGIN"
 (
@@ -34,8 +17,8 @@ git init -q --bare -b main "$CLORIGIN"
 CLSHA="$(git -C "$CLPROJ" rev-parse ben/5-thing)"
 printf '{"issues":{"source":"github"},"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$CLPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"ben/5-thing","task":"#5","pr":"https://github.com/o/r/pull/7"}]}\n' > "$CLPROJ/.rota/workers.json"
-cl_state() { printf '{"sha":"%s","body":"%s","labels":[%s],"closing":[%s]}\n' "$CLSHA" "$1" "$2" "${3:-}" > "$TMP_CL/state.json"; }
-cl() { ( cd "$CLPROJ" && CL_STATE="$TMP_CL/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$CLBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
+cl_state() { forge_state "$TMP_CL/db.json" "$CLSHA" "$1" "$2" "${3:-}" 5; }
+cl() { ( cd "$CLPROJ" && FAKE_TRACKER_DB="$TMP_CL/db.json" ROTA_GATE_SHA_WAIT=0 PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 cl_state "Adds the thing." ""
 RC=0; OUT=$(cl worker gate ben --base main --check-only) || RC=$?
