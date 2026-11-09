@@ -96,9 +96,10 @@ type Settings struct {
 	StallMinutes           int
 	ClaimStaleMinutes      int
 	ClaimStaleMinutesMajor int
-	// MaxBounces is round.maxBounces: how often `rota worker gate` may send one
-	// item's PR back to its worker before parking the item as needs-human; 0
-	// turns the cap off.
+	// MaxBounces is round.maxBounces: how often `rota round bounce` and the review
+	// relay may send one item's PR back to its worker; at the cap the bounce is
+	// refused and the relay escalates on the PR. The gate never counts or parks.
+	// 0 turns the cap off.
 	MaxBounces int
 	// FreshAt is round.freshAt: the bounce at which `round review-relay`
 	// transfers the branch to a fresh slot instead of resuming the worker; 0
