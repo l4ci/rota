@@ -101,8 +101,8 @@ func releaseVersion(fs *flag.FlagSet) RunFunc {
 	level := fs.String("level", "", "bump level `patch|minor|major` to preview")
 	to := fs.String("to", "", "explicit version `X.Y.Z` to preview")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("unexpected argument %q", args[0])
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		dir, err := releaseDir(c)
 		if err != nil {
@@ -140,8 +140,8 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 	file := fs.String("file", "", "version file (default: detected)")
 	kindFlag := fs.String("kind", "", "file kind: plugin-json|package-json|pyproject|cargo|plain")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("unexpected argument %q", args[0])
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		dir, err := releaseDir(c)
 		if err != nil {
@@ -204,8 +204,8 @@ func releaseHas(list []string, s string) bool {
 }
 
 func releaseHost(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("unexpected argument %q", args[0])
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	dir, err := releaseDir(c)
 	if err != nil {
@@ -348,8 +348,8 @@ func releaseInDir(dir, p string) string {
 }
 
 func releasePending(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("unexpected argument %q", args[0])
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	dir, err := releaseDir(c)
 	if err != nil {

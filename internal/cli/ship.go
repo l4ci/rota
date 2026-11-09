@@ -549,8 +549,8 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 	allowPost := fs.Bool("allow-post-merge", false, "discard commits made after the cycle merge")
 	apply := fs.Bool("apply", false, "reset the base branch and restore the items")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("unexpected argument %q", args[0])
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		dir, err := gitDir(c)
 		if err != nil {

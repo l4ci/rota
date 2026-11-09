@@ -24,8 +24,8 @@ func gateCommands() *Command {
 }
 
 func gateList(c *Ctx, args []string) (Result, error) {
-	if len(args) > 0 {
-		return Result{}, Usage("unexpected argument %q", args[0])
+	if err := noArgs(args); err != nil {
+		return Result{}, err
 	}
 	rows := []any{}
 	var lines []string

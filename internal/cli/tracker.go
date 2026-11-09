@@ -89,8 +89,8 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 	upstream := fs.String("upstream-repo", "", "owner/repo (default $ROTA_UPSTREAM_REPO, else l4ci/rota)")
 	confirm := confirmFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 0 {
-			return Result{}, Usage("unexpected argument %q", args[0])
+		if err := noArgs(args); err != nil {
+			return Result{}, err
 		}
 		conf, err := confirm()
 		if err != nil {
