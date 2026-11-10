@@ -75,7 +75,7 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		switch state {
 		case "prepared", "unknown", "submitted":
 			res.Handle, res.Delivery = t.handle, jsonx.Str(p, "state")
-			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; before using rota worker dispatch "+o.Slot+" --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed")
+			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; to give the issue to another slot without waiting, run rota round transfer <id> --to <free slot> (slot "+o.Slot+" stays blocked until the delivery is confirmed); before using rota worker dispatch "+o.Slot+" --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed")
 		}
 		return false, res, nil
 	}
