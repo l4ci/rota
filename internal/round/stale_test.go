@@ -31,6 +31,29 @@ func TestCandidatesStaleClaimListed(t *testing.T) {
 	}
 }
 
+func TestCandidatesStaleClaimDetailIsUTC(t *testing.T) {
+	root := newRepo(t, nil)
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	last := now.Add(-5 * time.Hour).In(time.FixedZone("x", 2*3600))
+	be := &fakeRemote{claims: map[string]string{"7": "mac-ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"mac-ben@3": last}}}
+	be.add("7", "Abandoned task", "", false, "")
+	be.items["7"].Labels = []string{"claimed:mac-ben@mac"}
+	e := Env{Git: func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if args[0] == "ls-remote" {
+			return git.Result{}, nil
+		}
+		return git.Exec(ctx, dir, args...)
+	}, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}}
+	cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeOpen})
+	if err != nil || len(cs) != 1 || len(cs[0].Checks) == 0 {
+		t.Fatalf("candidates %+v, %v", cs, err)
+	}
+	got := cs[0].Checks[len(cs[0].Checks)-1].Detail[0]
+	if want := "claim mac-ben@3 has had no branch or PR activity since 2026-10-25T07:00:00Z"; got != want {
+		t.Fatalf("detail = %q, want %q", got, want)
+	}
+}
+
 func TestStaleClaimsActivity(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {

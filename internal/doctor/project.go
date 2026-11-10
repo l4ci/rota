@@ -3,9 +3,9 @@ package doctor
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/initproj"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -59,7 +59,7 @@ func (d *runner) labels() (Check, bool) {
 func (d *runner) staleClaims() []Check {
 	var checks []Check
 	for _, claim := range d.in.StaleClaims {
-		checks = append(checks, Check{Name: "stale claims", Status: Warn, Detail: fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339)), Hint: fmt.Sprintf("ask the maintainer before reclaiming with rota round assign %s --reclaim-stale %s", claim.Issue, claim.Holder)})
+		checks = append(checks, Check{Name: "stale claims", Status: Warn, Detail: fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), stamp.Format(claim.Last)), Hint: fmt.Sprintf("ask the maintainer before reclaiming with rota round assign %s --reclaim-stale %s", claim.Issue, claim.Holder)})
 	}
 	if len(d.in.StaleClaimWarnings) > 0 {
 		checks = append(checks, Check{Name: "stale claims", Status: Warn, Detail: "stale-claim scan incomplete: " + strings.Join(d.in.StaleClaimWarnings, "; "), Hint: "retry rota doctor when the tracker and forge are reachable"})
