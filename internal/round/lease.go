@@ -53,11 +53,11 @@ func (e Env) leaseFinding(ctx context.Context, root string, rep *Report) {
 
 // heldLease reports whether pid is the orchestrator the Env's lease names,
 // keyed off the repo at root.
-func (e Env) heldLease(ctx context.Context, root string, pid int) (roundlease.Lease, bool, error) {
+func (e Env) heldLease(ctx context.Context, root string) (roundlease.Lease, bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
 		return roundlease.Lease{}, false, err
 	}
-	l, _, held, err := e.Lease.Holds(cd, pid, e.getenv())
+	l, _, held, err := e.Lease.Holds(cd, e.HolderPID, e.getenv())
 	return l, held, err
 }

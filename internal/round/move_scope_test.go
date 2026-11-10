@@ -12,7 +12,7 @@ import (
 func TestTransferScopeOverlapBlock(t *testing.T) {
 	setup := func() *moveFx {
 		f := newMoveFx(t)
-		o := startOpts(roundcfg.ScopeMilestone, 100)
+		o := startOpts(roundcfg.ScopeMilestone)
 		o.Slots = 3
 		if _, err := f.env.Start(bg, f.root, o); err != nil {
 			t.Fatal(err)
@@ -45,7 +45,7 @@ func TestTransferScopeOverlapBlock(t *testing.T) {
 // A held land lock refuses Transfer before it moves a branch.
 func TestTransferRefusedWhileGateHoldsLandLock(t *testing.T) {
 	f := newMoveFx(t)
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 3
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)

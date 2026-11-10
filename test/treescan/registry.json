@@ -26,6 +26,7 @@
       "TestConfigLoadsStayOnDeps",
       "TestLayoutTestsPinTheirProjectWithC",
       "TestNoRawMachineReadsOutsideDeps",
+      "TestNoVerbSetsEnvHolderPIDByHand",
       "TestNoWorkerEnvCtxAssignAfterConstruction",
       "TestReadOnlySetMatchesContract",
       "TestRegistryListsEveryGateClearingVerb",

@@ -36,8 +36,7 @@ func isAutopilotStopped(err error) bool {
 func roundTick(fs *flag.FlagSet) RunFunc {
 	observe := fs.Bool("observe", false, "report proposed autopilot actions without executing them")
 	base := fs.String("base", "", "the cycle branch PRs merge into (default each PR's recorded base)")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid for the lease, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid for the lease, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
@@ -52,7 +51,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		if !set.Autopilot && !*observe {
 			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
-		r, err := runAutopilotTick(c, root, set, *base, *pid, *observe)
+		r, err := runAutopilotTick(c, root, set, *base, c.holderPID, *observe)
 		switch {
 		case isAutopilotStopped(err):
 			d := jsonx.NewObject()
@@ -83,7 +82,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 			text += strings.Join(lines, "\n")
 		}
 		return Result{Data: d, Text: text}, nil
-	}
+	})
 }
 
 // autopilotTick runs one tick for the lease holder. The lease is checked on
@@ -110,8 +109,8 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 		return roundtick.Result{}, err
 	}
 	ctx := c.Context()
+	c.holderPID = pid
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
-	renv.HolderPID = pid
 	state := roundtick.LoadState(cd, lease.Round)
 
 	be, err := openBacklog(c, root, false, "")

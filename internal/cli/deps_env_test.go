@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -338,6 +339,51 @@ func TestNoWorkerEnvCtxAssignAfterConstruction(t *testing.T) {
 				}
 				return true
 			})
+		}
+	}
+}
+
+// --holder-pid reaches the Env through holderPIDFlag and the env constructors
+// alone: registering the flag binds it, and every verb that takes it builds
+// its env with roundEnv, accountedRoundEnv or moveEnv.
+func TestHolderPIDFlagReachesTheEnv(t *testing.T) {
+	d := testDeps()
+	root := t.TempDir()
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	var got round.Env
+	run := holderPIDFlag(fs, "pid", func(c *Ctx, _ []string) (Result, error) {
+		got = accountedRoundEnv(c, context.Background(), root)
+		return Result{}, nil
+	})
+	if err := fs.Parse([]string{"--holder-pid", "4242"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(&Ctx{Deps: d}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderPID != 4242 {
+		t.Errorf("accountedRoundEnv HolderPID = %d, want the flag's 4242", got.HolderPID)
+	}
+	if env := roundEnv(&Ctx{Deps: d}, context.Background(), root); env.HolderPID != 0 {
+		t.Errorf("an unbound Ctx must leave ancestry discovery on, got %d", env.HolderPID)
+	}
+}
+
+func TestNoVerbSetsEnvHolderPIDByHand(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "round_env.go" || f == "limit.go" {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), ".HolderPID =") {
+			t.Errorf("%s sets Env.HolderPID by hand; take --holder-pid through holderPIDFlag", f)
 		}
 	}
 }
