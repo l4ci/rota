@@ -91,6 +91,8 @@ HV_SCOPE=(
   ':(exclude)internal/cli/glossary_test.go'
   ':(exclude)internal/cli/testdata/golden/TestInstructionsInitMatchGolden__*'
   ':(exclude)test/sections/02_knowledge.sh'
+  # Legacy /hv-decide preamble fixture: a decisions write must leave the header byte-identical (#3021).
+  ':(exclude)internal/knowledge/decisions_preamble_test.go'
   # Legacy /hv-work and .hv/ text that `knowledge replace` rewrites, and an hv-skills milestone line.
   ':(exclude)test/sections/99_knowledge_replace.sh'
   ':(exclude)test/sections/13_helpers.sh'
