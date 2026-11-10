@@ -62,10 +62,8 @@ func ParseLenses(v any) (Lenses, error) {
 					return nil, fmt.Errorf("%s.paths must be a list of globs", key)
 				}
 				for _, g := range strs {
-					// path.Match has no "**": only a trailing /** (a directory) is
-					// supported, and any other use would silently match less.
-					if !pathglob.ValidEntry(g) {
-						return nil, fmt.Errorf("%s.paths: glob %q is not supported: use * within a segment, or a trailing /** for a directory", key, g)
+					if err := pathglob.Valid(g); err != nil {
+						return nil, fmt.Errorf("%s.paths: %v", key, err)
 					}
 				}
 				l.Paths = strs

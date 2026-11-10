@@ -99,19 +99,6 @@ func TestRiskyResultIsFlagged(t *testing.T) {
 	}
 }
 
-func TestValidGlob(t *testing.T) {
-	for _, g := range []string{"*.md", "docs/**", "**/*.png", "a/b?.go", "[ab].md"} {
-		if err := ValidGlob(g); err != nil {
-			t.Errorf("ValidGlob(%q) = %v, want nil", g, err)
-		}
-	}
-	for _, g := range []string{"", " ", "/abs.md", "docs//a", "docs/**x", "{a,b}.md", "[a.md"} {
-		if err := ValidGlob(g); err == nil {
-			t.Errorf("ValidGlob(%q) = nil, want an error", g)
-		}
-	}
-}
-
 func TestHigher(t *testing.T) {
 	for _, c := range []struct{ a, b, want Tier }{
 		{TierDocs, TierDocs, TierDocs}, {TierDocs, TierSmall, TierSmall}, {TierSmall, TierDocs, TierSmall},

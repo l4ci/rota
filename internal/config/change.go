@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/l4ci/rota/internal/change"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // The change.* keys: how `rota change classify`, the merge gate and the review
@@ -39,7 +40,7 @@ func ChangePolicyOf(cfg any) (change.Policy, error) {
 	return p, nil
 }
 
-// changeGlobs reads one list key of globs, each checked by change.ValidGlob.
+// changeGlobs reads one list key of globs, each checked by pathglob.Valid.
 func changeGlobs(cfg any, key string) ([]string, error) {
 	v, _ := Value(cfg, key)
 	return parseChangeGlobs(key, v)
@@ -59,7 +60,7 @@ func parseChangeGlobs(key string, v any) ([]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("%s entries must be glob strings (got %v)", key, e)
 		}
-		if err := change.ValidGlob(g); err != nil {
+		if err := pathglob.Valid(g); err != nil {
 			return nil, fmt.Errorf("%s: %v", key, err)
 		}
 		out = append(out, g)
