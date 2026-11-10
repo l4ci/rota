@@ -320,6 +320,26 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	}
 }
 
+// A reaped roster slot is gone, not busy: the refusal says so and names pool init.
+func TestAssignNoFreeSlotNamesUnprovisionedRosterSlots(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.ws.Reap(f.root, []string{"ben", "dana"}, false); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.assign("12", "", nil)
+	if blockedBy(t, err) != BlockNoFreeSlot {
+		t.Fatalf("want no free slot: %v", err)
+	}
+	for _, want := range []string{"not provisioned", "ben, dana", "rota worker pool init --base"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message lacks %q: %v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "busy") && !strings.Contains(err.Error(), "others are busy") {
+		t.Errorf("reaped slots read as busy: %v", err)
+	}
+}
+
 // A second assign whose plan saw the slot idle, run after a first one filled
 // it, is refused instead of overwriting the first's binding (#2070).
 func TestAssignRacingOnOneSlotRefusesTheLaterWriter(t *testing.T) {

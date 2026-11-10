@@ -901,6 +901,15 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			if len(skipped) > 0 {
 				return run, false, blocked(BlockNoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
 			}
+			var missing []string
+			for _, n := range set.Roster {
+				if reg.Slot(n) == nil {
+					missing = append(missing, n)
+				}
+			}
+			if len(missing) > 0 {
+				return run, false, blocked(BlockNoFreeSlot, "roster slot(s) not provisioned: %s (a reaped slot is gone): run rota worker pool init --base <base>, or rota round start; the others are busy", strings.Join(missing, ", "))
+			}
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]

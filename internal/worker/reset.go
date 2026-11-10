@@ -140,16 +140,16 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	}
 	if dirty != "" {
 		res.Dirty = strings.Split(dirty, "\n")
-		return refuse(fmt.Sprintf("REFUSED %s — uncommitted changes in %s: commit or discard them (or rota worker pool reap %s) before reusing the slot; re-dispatch %s to continue it in place.\n%s",
-			slot, worktree, slot, cont, indent(res.Dirty)))
+		return refuse(fmt.Sprintf("REFUSED %s — uncommitted changes in %s: commit or discard them before reusing the slot (or rota worker pool reap %s, which removes the slot, its worktree and its branch; rota worker pool init --base %s must follow before it takes another task); re-dispatch %s to continue it in place.\n%s",
+			slot, worktree, slot, base, cont, indent(res.Dirty)))
 	}
 	if len(unmerged) > 0 {
 		for _, sha := range unmerged {
 			line, _ := e.git(worktree, "log", "-1", "--abbrev=7", "--format=%h %s", sha)
 			res.Unmerged = append(res.Unmerged, line)
 		}
-		return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s: gate and merge them (rota worker gate), or rota worker pool reap %s, before giving the slot another task; re-dispatch %s to continue it in place.\n%s",
-			slot, len(unmerged), base, slot, cont, indent(res.Unmerged)))
+		return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s: gate and merge them (rota worker gate) before giving the slot another task, or rota worker pool reap %s, which removes the slot, its worktree and its branch (rota worker pool init --base %s must follow before it takes another task); re-dispatch %s to continue it in place.\n%s",
+			slot, len(unmerged), base, slot, base, cont, indent(res.Unmerged)))
 	}
 	res.Clean = true
 	if checkOnly {
