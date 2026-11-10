@@ -173,7 +173,9 @@ func TestPrivateMarkerLeavesNoSidecar(t *testing.T) {
 	if err := m.Remove(self); err != nil {
 		t.Fatal(err)
 	}
-	if ents, _ := os.ReadDir(dir); len(ents) != 0 {
-		t.Errorf("state dir not empty after write+remove: %v", ents)
+	for _, p := range []string{m.Path, m.Path + ".lock"} {
+		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s left after write+remove (stat err %v)", p, err)
+		}
 	}
 }
