@@ -28,6 +28,7 @@ func skillsCommands() *Command {
 		{Name: "list", Fence: fenceAllowed, Summary: "name the skills embedded in this binary", Verb: skillsList},
 		{Name: "get", Fence: fenceAllowed, Summary: "print an embedded skill or one of its references", Verb: skillsGet},
 		{Name: "links", Fence: fenceAllowed, Summary: "print the relative links of markdown files", Verb: skillsLinks},
+		{Name: "layout", Fence: fenceAllowed, Summary: "list files under a skills source tree that the supported layout rejects", Verb: skillsLayout},
 	}}
 }
 
@@ -533,6 +534,23 @@ func skillsLinks(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		return Result{Data: jsonx.Obj("files", files), Text: strings.Join(lines, "\n")}, nil
+	}
+}
+
+// skillsLayout lists the files under each rota-*/ folder of a skills source
+// tree that skills.SupportedFile rejects, one per line. The listing is data,
+// not a failure: test/validate-skills.py and scripts/codex-plugin.sh share this
+// one definition and refuse on a non-empty list themselves.
+func skillsLayout(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) != 1 {
+			return Result{}, Usage("usage: rota skills layout <skills-dir>")
+		}
+		bad, err := skills.LayoutViolations(os.DirFS(args[0]))
+		if err != nil {
+			return Result{}, Failed("%v", err)
+		}
+		return Result{Data: jsonx.Obj("violations", jsonx.Strings(bad)), Text: strings.Join(bad, "\n")}, nil
 	}
 }
 
