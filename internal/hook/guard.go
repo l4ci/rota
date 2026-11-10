@@ -166,8 +166,11 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	prog := filepath.Base(words[0])
 	rest := words[1:]
 	switch {
-	case prog == "cd" || prog == "pushd":
+	case prog == "cd":
 		g.cd(rest)
+		return nil
+	case prog == "pushd":
+		g.pushd(rest)
 		return nil
 	case prog == "popd":
 		g.cwd = "" // the stack is not tracked
@@ -255,6 +258,25 @@ func shellScript(args []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// pushd: -n leaves the directory alone; no argument or +N/-N rotates the
+// stack, which is not tracked, so the directory becomes unknown.
+func (g *guard) pushd(args []string) {
+	var dir string
+	for _, a := range args {
+		switch {
+		case a == "-n":
+			return
+		case a == "--":
+		case len(a) > 1 && (a[0] == '+' || a[0] == '-') && strings.Trim(a[1:], "0123456789") == "":
+			g.cwd = ""
+			return
+		case dir == "":
+			dir = a
+		}
+	}
+	g.cwd = resolveDir(g.cwd, dir)
 }
 
 func (g *guard) cd(args []string) {
