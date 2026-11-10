@@ -38,9 +38,11 @@ func keepaliveCommands() *Command {
 }
 
 // procChild is a process run through proc.Runner in the background: proc
-// reports its pid on start, Signal sends to it, Wait collects how it ended.
+// hands over the started process, Signal sends to it, Wait collects how it
+// ended. Signalling the *os.Process, not a pid, means a signal arriving after
+// proc reaped the child gets os.ErrProcessDone instead of a reused pid.
 type procChild struct {
-	pid  int
+	proc *os.Process
 	done chan procExit
 }
 
@@ -50,14 +52,10 @@ type procExit struct {
 }
 
 func (c *procChild) Signal(s os.Signal) error {
-	if c.pid == 0 {
+	if c.proc == nil {
 		return os.ErrProcessDone
 	}
-	p, err := os.FindProcess(c.pid)
-	if err != nil {
-		return err
-	}
-	return p.Signal(s)
+	return c.proc.Signal(s)
 }
 
 func (c *procChild) Wait() (keepalive.Exit, error) {
@@ -108,17 +106,17 @@ func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (kee
 		if f, ok := c.Stdin.(*os.File); ok {
 			stdio.In = f
 		}
-		started := make(chan int, 1)
+		started := make(chan *os.Process, 1)
 		child := &procChild{done: make(chan procExit, 1)}
 		go func() {
 			r, err := c.deps().Proc(context.Background(), proc.Cmd{
 				Name: argv[0], Args: argv[1:], Environ: env, Timeout: proc.NoTimeout,
-				Stdio: stdio, OnStart: func(pid int) { started <- pid },
+				Stdio: stdio, OnStart: func(p *os.Process) { started <- p },
 			})
 			child.done <- procExit{r, err}
 			close(started)
 		}()
-		pid, ok := <-started
+		p, ok := <-started
 		if !ok { // the run ended without reporting a pid: it never started, or a fake ran it
 			x := <-child.done
 			if x.err != nil {
@@ -127,7 +125,7 @@ func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (kee
 			child.done <- x
 			return child, nil
 		}
-		child.pid = pid
+		child.proc = p
 		return child, nil
 	}
 }
