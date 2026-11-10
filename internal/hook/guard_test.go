@@ -50,6 +50,18 @@ func inWork(dir string) bool { return dir == gWork || strings.HasPrefix(dir, gWo
 
 func TestGuardDenies(t *testing.T) {
 	for _, line := range []string{
+		"git push origin HEAD:main",
+		"git -C /repo push origin @",
+		"git push origin main",
+		"git push origin master",
+		"git push origin HEAD:refs/heads/main",
+		"git push -u origin " + gBranch + ":main",
+		"git -C /repo push origin HEAD",
+		"gh api -X PUT repos/o/r/pulls/1/merge",
+		"gh api --method PUT repos/o/r/pulls/1/merge",
+		"gh api repos/o/r/pulls/1/merge -f merge_method=squash",
+		"gh api -XPUT repos/o/r/pulls/1/merge",
+		"gh api -X PUT /repos/o/r/pulls/1/merge/",
 		"git push --force origin main",
 		"git push -f origin main",
 		"git push origin +main",
@@ -147,6 +159,11 @@ func TestGuardDenies(t *testing.T) {
 
 func TestGuardAllows(t *testing.T) {
 	for _, line := range []string{
+		"gh api repos/o/r/pulls/1/merge",
+		"gh api -X GET repos/o/r/pulls/1/merge",
+		"gh api -X PUT repos/o/r/issues/1/labels",
+		"git push origin HEAD:" + gBranch,
+		"git push origin " + gBranch + ":" + gBranch,
 		"git push origin HEAD",
 		"ls &>/dev/null",
 		"go test ./... &>/tmp/x",
@@ -263,5 +280,16 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 				t.Fatalf("parseScript(%q) did not return", line)
 			}
 		})
+	}
+}
+
+func TestGuardDeniesPushToConfiguredBase(t *testing.T) {
+	env := guardEnv()
+	env.Base = "develop"
+	if got := Guard("git push origin HEAD:develop", env); got == "" {
+		t.Fatal("push to the configured base passed")
+	}
+	if got := Guard("git push origin HEAD:develop", guardEnv()); got != "" {
+		t.Fatalf("without Base, develop is an ordinary branch: %q", got)
 	}
 }
