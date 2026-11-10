@@ -3,22 +3,23 @@ package round
 import (
 	"context"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // Candidate is an item a round could assign, with its readiness.
@@ -193,7 +194,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			c.BlockedBy = StaleClaimKind
 			c.StaleHolder = st.Holder
 			c.LastActivity = st.Last
-			c.Checks = append(c.Checks, Check{Name: StaleClaimKind, Detail: []string{fmt.Sprintf("claim %s has had no branch or PR activity since %s", st.Holder, st.Last.Format(time.RFC3339))}})
+			c.Checks = append(c.Checks, Check{Name: StaleClaimKind, Detail: []string{fmt.Sprintf("claim %s has had no branch or PR activity since %s", st.Holder, stamp.Format(st.Last))}})
 		}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
