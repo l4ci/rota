@@ -20,6 +20,9 @@ type GuardEnv struct {
 	Branch   func(dir string) (string, error)
 	Toplevel func(dir string) (string, error)
 	Upstream func(dir string) (string, error)
+	// Base is the project base branch ("" when unknown); main and master are
+	// always treated as base branches.
+	Base string
 }
 
 const maxGuardDepth = 8
@@ -339,6 +342,50 @@ func (g *guard) gh(args []string) {
 	if len(pos) == 2 && pos[0] == "pr" && pos[1] == "merge" {
 		g.deny("workers never merge: gh pr merge is the orchestrator's seat")
 	}
+	if len(pos) >= 1 && pos[0] == "api" {
+		g.ghAPI(args)
+	}
+}
+
+// ghAPI denies a write-method gh api call whose endpoint ends in /merge (the
+// REST route behind gh pr merge). gh api defaults to GET, or POST once a body
+// field is given.
+func (g *guard) ghAPI(args []string) {
+	method, endpoint, fields := "", "", false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-X" || a == "--method":
+			if i+1 < len(args) {
+				method = strings.ToUpper(args[i+1])
+				i++
+			}
+		case strings.HasPrefix(a, "--method="):
+			method = strings.ToUpper(strings.TrimPrefix(a, "--method="))
+		case strings.HasPrefix(a, "-X") && len(a) > 2:
+			method = strings.ToUpper(a[2:])
+		case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input":
+			fields = true
+			i++
+		case a == "-R" || a == "--repo" || a == "--hostname" || a == "-H" || a == "--header" || a == "-q" || a == "--jq" || a == "-t" || a == "--template" || a == "--cache":
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			if a != "api" && endpoint == "" {
+				endpoint = a
+			}
+		}
+	}
+	if method == "" && fields {
+		method = "POST"
+	}
+	if method == "" || method == "GET" || method == "HEAD" {
+		return
+	}
+	path, _, _ := strings.Cut(endpoint, "?")
+	if strings.HasSuffix(strings.TrimRight(path, "/"), "/merge") {
+		g.deny("workers never merge: gh api %s %s is the orchestrator's seat", method, path)
+	}
 }
 
 // gitCall is one git invocation after its global options.
@@ -532,14 +579,21 @@ func (g *guard) push(c gitCall) error {
 		}
 		return g.forceUpstream(c)
 	}
-	needBranch := false
+	needBranch := force
 	for _, spec := range pos {
 		if strings.HasPrefix(spec, ":") {
 			g.deny("git push %s deletes a remote ref: not for workers", spec)
 			return nil
 		}
-		if force || strings.HasPrefix(spec, "+") {
+		if strings.HasPrefix(spec, "+") || pushesHead(spec) {
 			needBranch = true
+		}
+	}
+	// A plain push to a base-branch name needs no branch lookup: deny it now.
+	for _, spec := range pos {
+		if dst := pushDst(spec); !force && !strings.HasPrefix(spec, "+") && !pushesHead(spec) && g.isBase(dst) {
+			g.deny("git push to %s: workers never land code on the base branch; open a PR", dst)
+			return nil
 		}
 	}
 	if !needBranch {
@@ -551,24 +605,44 @@ func (g *guard) push(c gitCall) error {
 	}
 	for _, spec := range pos {
 		forced := force || strings.HasPrefix(spec, "+")
-		if !forced {
-			continue
-		}
-		spec = strings.TrimPrefix(spec, "+")
-		src, dst, hasDst := strings.Cut(spec, ":")
-		if !hasDst {
-			dst = src
-		}
-		dst = strings.TrimPrefix(dst, "refs/heads/")
-		if dst == "HEAD" || (src == "HEAD" && !hasDst) {
+		dst := pushDst(spec)
+		if pushesHead(spec) {
 			dst = cur
 		}
-		if dst == "main" || dst == "master" || dst != own {
+		if forced && (g.isBase(dst) || dst != own) {
 			g.deny("force-push to %s: a worker may force only its own branch (%s)", dst, own)
+			return nil
+		}
+		if g.isBase(dst) {
+			g.deny("git push to %s: workers never land code on the base branch; open a PR", dst)
 			return nil
 		}
 	}
 	return nil
+}
+
+// pushDst is the destination branch name of one push refspec.
+func pushDst(spec string) string {
+	spec = strings.TrimPrefix(spec, "+")
+	src, dst, hasDst := strings.Cut(spec, ":")
+	if !hasDst {
+		dst = src
+	}
+	return strings.TrimPrefix(dst, "refs/heads/")
+}
+
+// pushesHead reports a refspec whose destination is the current branch: HEAD
+// itself, or a bare `HEAD` source with no destination.
+func pushesHead(spec string) bool {
+	spec = strings.TrimPrefix(spec, "+")
+	src, dst, hasDst := strings.Cut(spec, ":")
+	return dst == "HEAD" || dst == "@" || ((src == "HEAD" || src == "@") && !hasDst)
+}
+
+// isBase reports a branch workers must never push to: main, master, or the
+// project base the caller passed in GuardEnv.Base.
+func (g *guard) isBase(name string) bool {
+	return name == "main" || name == "master" || (g.env.Base != "" && name == g.env.Base)
 }
 
 // branches returns the branch checked out at dir and the worker's own branch,
