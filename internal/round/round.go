@@ -650,6 +650,18 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				}
 			}
 		}
+		if forgeOK && parked && r.PRState == "" {
+			// A parked slot (the transfer to the human parks it) still records
+			// its PR: read its state so the watch can mark a merged one.
+			if n, ok := worker.PRRefNumber(r.PR); ok {
+				if st, err := e.Forge.PRState(ctx, n); err != nil {
+					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
+					v.prErr = true
+				} else {
+					r.PRState = st
+				}
+			}
+		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
 			if n, ok := tracker.ParseKey(r.Issue); ok && !labelled[n] && !e.issueClosed(ctx, rep, n) {
 				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds %s, which lacks %s", n.Ref(), e.Label), Repair: "add " + e.Label})
