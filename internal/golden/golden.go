@@ -177,3 +177,16 @@ func show(v any) string {
 	raw, _ := json.Marshal(v)
 	return string(raw)
 }
+
+// Read returns the text file testdata/golden/<name> in the test's package, for
+// tests that compare generated text with a recorded copy. It fails the test
+// when the file is missing. Unlike Check, the file has no inputs or outputs
+// wrapper and -update-golden does not touch it.
+func Read(t testing.TB, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "golden", name))
+	if err != nil {
+		t.Fatalf("no golden %s: %v", name, err)
+	}
+	return string(b)
+}
