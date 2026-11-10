@@ -43,14 +43,20 @@ func CanonicalizeItems(root string, targets func(string) []string) error {
 				s.Items[id] = histories[0]
 				continue
 			}
-			// A legacy reset only cleared its own spelling. Put the cleared
-			// prefixes first, then each still-active tail, rather than allowing
-			// a reset from one alias to erase another alias's failed attempts.
+			// A legacy reset only cleared its own spelling. Put everything that
+			// is not an active failure first, then each still-active failure,
+			// rather than allowing a reset from one alias to erase another
+			// alias's failed attempts.
 			var cleared, active []Record
 			for _, list := range histories {
-				at := debugCounter.start(list)
-				cleared = append(cleared, list[:at]...)
-				active = append(active, list[at:]...)
+				live := activeFailures(list)
+				for i, r := range list {
+					if live[i] {
+						active = append(active, r)
+					} else {
+						cleared = append(cleared, r)
+					}
+				}
 			}
 			s.Items[id] = append(cleared, active...)
 		}
@@ -66,14 +72,25 @@ func appendItem(list []Record, r Record) []Record {
 	if cut <= 0 {
 		return list
 	}
-	debugStart, workStart := debugCounter.start(list), workCounter.start(list)
+	live := activeFailures(list)
 	for i := 0; i < cut; i++ {
-		r := list[i]
-		if (i >= debugStart && debugCounter.failed(r)) ||
-			(i >= workStart && workCounter.failed(r)) {
+		if live[i] {
 			cut = i
 			break
 		}
 	}
 	return list[cut:]
+}
+
+// activeFailures marks the records that still count: a failed attempt of a
+// counter at or after that counter's latest reset. CanonicalizeItems and
+// appendItem share it, so both agree on what is active.
+func activeFailures(list []Record) []bool {
+	debugStart, workStart := debugCounter.start(list), workCounter.start(list)
+	live := make([]bool, len(list))
+	for i, r := range list {
+		live[i] = (i >= debugStart && debugCounter.failed(r)) ||
+			(i >= workStart && workCounter.failed(r))
+	}
+	return live
 }
