@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/status"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -45,43 +44,31 @@ type Owners interface {
 // status as cycle work are refused. Never remove the caller's cwd, even when
 // it is a subdirectory or symlink.
 func ClearWorktree(g Git, branch string, at Checkout) error {
-	res, err := g.Run("worktree", "list", "--porcelain")
+	list, err := outAs(g, "worktree list", "worktree", "list", "--porcelain")
 	if err != nil {
 		return err
 	}
-	if res.ExitCode != 0 {
-		return &GitError{Msg: "git worktree list: " + strutil.FirstLine(res.Stderr)}
-	}
-	wt := linkedWorktree(res.Stdout, branch)
+	wt := linkedWorktree(list, branch)
 	if wt == "" {
 		return nil
 	}
 	if worker.PathContains(wt, at.Cwd) {
 		return &Refusal{By: blockedby.Worktree, Msg: "worktree contains the current directory: " + wt, Hint: "run ship merge from outside this worktree"}
 	}
-	if err := checkOwnership(res.Stdout, at, branch, wt); err != nil {
+	if err := checkOwnership(list, at, branch, wt); err != nil {
 		return err
 	}
 	// Include ignored files: git worktree remove otherwise silently deletes
 	// ignored scratch files. Never use --force, including after this check.
-	dirty, err := g.Run("-C", wt, "status", "--porcelain", "--untracked-files=all", "--ignored")
+	dirty, err := outAs(g, "status "+wt, "-C", wt, "status", "--porcelain", "--untracked-files=all", "--ignored")
 	if err != nil {
 		return err
 	}
-	if dirty.ExitCode != 0 {
-		return &GitError{Msg: "git status " + wt + ": " + strutil.FirstLine(dirty.Stderr)}
-	}
-	if strings.TrimSpace(dirty.Stdout) != "" {
+	if strings.TrimSpace(dirty) != "" {
 		return &Refusal{By: blockedby.Worktree, Msg: "worktree has uncommitted or ignored files: " + wt, Hint: "preserve the files before retrying ship merge"}
 	}
-	rm, err := g.Run("worktree", "remove", wt)
-	if err != nil {
-		return err
-	}
-	if rm.ExitCode != 0 {
-		return &GitError{Msg: "git worktree remove " + wt + ": " + strutil.FirstLine(rm.Stderr)}
-	}
-	return nil
+	_, err = outAs(g, "worktree remove "+wt, "worktree", "remove", wt)
+	return err
 }
 
 // checkOwnership recognizes /rota-work's status registration. A branch match
