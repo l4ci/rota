@@ -98,19 +98,9 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		return Result{Train: run}
 	}
 	// A verification failure may name the culprit without a populated gate
-	// result. Resolve its head once for both durable reporting and bounce dedup.
+	// result. Resolve it once: reports and the bounce notice both read it.
 	if r.Culprit != "" {
-		g := trainCulprit(issues, r)
-		target := targets[r.Culprit]
-		if g.TargetSlot == "" {
-			g.TargetSlot = target.Name
-		}
-		if g.Branch == "" {
-			g.Branch = target.Branch
-		}
-		if g.PR == "" {
-			g.PR = target.PR
-		}
+		g := trainCulprit(issues, targets, r)
 		if g.SHA == "" && g.Branch != "" {
 			g, _, _ = e.resolveHead(ctx, root, g)
 		}
@@ -121,7 +111,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		run.Warnings = append(run.Warnings, e.report(ctx, root, g)...)
 	}
 	if !run.Refused && err == nil {
-		run.Book = Train(WorkerBook{e.Worker}, o.Round, root, issues, r)
+		run.Book = Train(WorkerBook{e.Worker}, o.Round, root, issues, targets, r)
 	}
 	return Result{Train: run}
 }
@@ -162,15 +152,17 @@ func trainReports(issues map[string]string, r worker.TrainResult) []worker.GateR
 		out = append(out, worker.GateResult{Branch: m.Branch, PR: m.PR, Issue: issues[m.Target], SHA: r.SHA, Verdict: worker.GatePass, Verified: checks, VerifySkipped: len(checks) == 0})
 	}
 	if r.Culprit != "" && !seen[r.Culprit] {
-		g := trainCulprit(issues, r)
-		out = append(out, g)
+		out = append(out, r.CulpritGate)
 	}
 	return out
 }
 
-// trainCulprit reconstructs the primary culprit even when the worker stopped
-// before a member gate ran (verification and pre-merge refusals).
-func trainCulprit(issues map[string]string, r worker.TrainResult) worker.GateResult {
+// trainCulprit is the one place the primary culprit's gate result is built,
+// even when the worker stopped before a member gate ran (verification and
+// pre-merge refusals). Identity comes from r.CulpritGate, then the culprit's
+// member, then the registry target. It keeps what r.CulpritGate already holds
+// (a resolved SHA), so a second call returns the same value.
+func trainCulprit(issues map[string]string, targets map[string]worker.GateTarget, r worker.TrainResult) worker.GateResult {
 	g := r.CulpritGate
 	if g.Branch == "" {
 		for _, m := range r.Members {
@@ -179,6 +171,16 @@ func trainCulprit(issues map[string]string, r worker.TrainResult) worker.GateRes
 				break
 			}
 		}
+	}
+	target := targets[r.Culprit]
+	if g.TargetSlot == "" {
+		g.TargetSlot = target.Name
+	}
+	if g.Branch == "" {
+		g.Branch = target.Branch
+	}
+	if g.PR == "" {
+		g.PR = target.PR
 	}
 	g.Issue = issues[r.Culprit]
 	g.Verdict, g.Err, g.Hint = r.Verdict, r.Err, r.Hint
