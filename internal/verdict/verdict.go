@@ -411,6 +411,12 @@ func BranchKey(repo, branch string) string {
 	return repo + ":" + branch
 }
 
+// Branch is the records of branch under the store's key for repo (the sub-repo
+// name in an umbrella, else ""): the one place a reader picks the key.
+func (s Store) Branch(repo, branch string) []Record {
+	return s.Branches[BranchKey(repo, branch)]
+}
+
 // Load reads the store for a reader; a missing or corrupt file is an empty
 // store. Writers use loadStrict so they never replace what they cannot parse.
 func Load(root string) Store {
@@ -649,14 +655,9 @@ func AtHead(rec Record, head string) bool {
 // Recorded lists the review kinds (ReviewSpec, ReviewQuality) with a verdict
 // recorded for branch at head. A record on another commit is stale and does
 // not count, as /rota-review treats it.
-func Recorded(root, branch, head string) []string {
-	return RecordedIn(Load(root).Branches[BranchKey("", branch)], head)
-}
-
-// RecordedIn is Recorded over a branch's records already in hand.
-func RecordedIn(records []Record, head string) []string {
+func Recorded(list []Record, head string) []string {
 	var kinds []string
-	for _, r := range CoreReviewsAtHead(records, head) {
+	for _, r := range CoreReviewsAtHead(list, head) {
 		kinds = append(kinds, r.Kind)
 	}
 	return kinds
@@ -664,15 +665,15 @@ func RecordedIn(records []Record, head string) []string {
 
 // CrossAt is the branch's newest review-cross record when it was recorded at
 // head; a record on another commit is stale and does not count.
-func CrossAt(root, branch, head string) (Record, bool) {
-	r, ok := Latest(ForHead(Load(root).Branches[BranchKey("", branch)], head), ReviewCross)
+func CrossAt(list []Record, head string) (Record, bool) {
+	r, ok := Latest(ForHead(list, head), ReviewCross)
 	return r, ok && AtHead(r, head)
 }
 
 // LensAt is the branch's newest record of the lens kind when it was recorded at
 // head; a record on another commit is stale and does not count.
-func LensAt(root, branch, kind, head string) (Record, bool) {
-	r, ok := Latest(ForHead(Load(root).Branches[BranchKey("", branch)], head), kind)
+func LensAt(list []Record, kind, head string) (Record, bool) {
+	r, ok := Latest(ForHead(list, head), kind)
 	return r, ok && AtHead(r, head)
 }
 
@@ -698,8 +699,7 @@ func CrossFail(list []Record) (Record, bool) {
 // LastReviewSet lists the review kinds recorded at the commit of the branch's
 // newest review verdict, whatever head that was: the review set the branch last
 // had, which a later push has made stale. It is nil when no review was recorded.
-func LastReviewSet(root, branch string) []string {
-	list := Load(root).Branches[BranchKey("", branch)]
+func LastReviewSet(list []Record) []string {
 	var newest Record
 	for i := len(list) - 1; i >= 0; i-- {
 		if k := list[i].Kind; k == ReviewSpec || k == ReviewQuality {
@@ -710,7 +710,7 @@ func LastReviewSet(root, branch string) []string {
 	if newest.Sha == "" {
 		return nil
 	}
-	return Recorded(root, branch, newest.Sha)
+	return Recorded(list, newest.Sha)
 }
 
 // EffectiveReview is a branch's review verdict: the latest review-quality
