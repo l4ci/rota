@@ -176,7 +176,12 @@ func TestCurrentPaneByKind(t *testing.T) {
 		{"tmux", "tmux", both, "%3"},
 		{"neither", "herdr", none, ""},
 		{"neither tmux", "tmux", none, ""},
-		{"solo falls back to tmux", Solo, both, "%3"},
+		{"solo has no pane env", Solo, both, ""},
+		{"unknown kind has no pane env", "bogus", both, ""},
+		{"core reads HC_TERMINAL_ID", HerdrCore, func(k string) string {
+			return map[string]string{"HC_TERMINAL_ID": "t1", "TMUX_PANE": "%3", "HERDR_PANE_ID": "w1:p3"}[k]
+		}, "t1"},
+		{"core never reads TMUX_PANE", HerdrCore, both, ""},
 	} {
 		if got := CurrentPane(tc.kind, tc.env); got != tc.want {
 			t.Errorf("%s: CurrentPane(%q) = %q, want %q", tc.name, tc.kind, got, tc.want)
