@@ -64,15 +64,15 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/minisign.key"
   # Codex drops symlinks when it caches a plugin, so the Codex tree is built
-  # here, not committed: scripts/codex-plugin.sh copies each skill's
-  # references in for real, and the result replaces the `codex` branch that
+  # here, not committed: scripts/codex-plugin.sh copies the files
+  # `rota skills files` lists (each skill's own and the references it cites) in for real, and the result replaces the `codex` branch that
   # .agents/plugins/marketplace.json installs from.
   codex-plugin:
     needs: goreleaser
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      # codex-plugin.sh builds ./cmd/rota to run `rota skills layout`.
+      # codex-plugin.sh builds ./cmd/rota to run `rota skills layout` and `rota skills files`.
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

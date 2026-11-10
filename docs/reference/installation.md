@@ -128,7 +128,7 @@ codex plugin marketplace add l4ci/rota
 codex plugin add rota@rota
 ```
 
-Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`, with the repo's marketplace file and a tree built by `scripts/codex-plugin.sh`: 16 skills, 33 reference files each, no symlinks. 14 show up for implicit invocation; `rota-decide` and `rota-release` are manual-only (`$rota-decide`). The plugin carries no `rota-install` skill and no session hook; install the `rota` binary with Homebrew or the install script. Pick one way per machine: a plugin plus `rota skills install` lists every skill twice.
+Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`, with the repo's marketplace file and a tree built by `scripts/codex-plugin.sh`: 16 skills, each with only the references it cites, no symlinks. 14 show up for implicit invocation; `rota-decide` and `rota-release` are manual-only (`$rota-decide`). The plugin carries no `rota-install` skill and no session hook; install the `rota` binary with Homebrew or the install script. Pick one way per machine: a plugin plus `rota skills install` lists every skill twice.
 
 Copilot CLI was not installed on the test machine and is untested.
 

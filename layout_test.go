@@ -238,6 +238,63 @@ func TestCodexTreeMatchesLoadClosure(t *testing.T) {
 	}
 	real := runLayout(t, ".")
 	if got, want := strings.Join(real.codex, " "), strings.Join(real.binary, " "); got != want {
-		t.Errorf("real tree: Codex ships %d files, Load ships %d", len(real.codex), len(real.binary))
+		t.Errorf("real tree: Codex and Load differ: %v", symDiff(real.codex, real.binary))
+	}
+}
+
+// symDiff names the paths in exactly one of two sorted lists.
+func symDiff(a, b []string) []string {
+	in := func(l []string) map[string]bool {
+		m := map[string]bool{}
+		for _, p := range l {
+			m[p] = true
+		}
+		return m
+	}
+	ma, mb := in(a), in(b)
+	var d []string
+	for p := range ma {
+		if !mb[p] {
+			d = append(d, "+codex:"+p)
+		}
+	}
+	for p := range mb {
+		if !ma[p] {
+			d = append(d, "+load:"+p)
+		}
+	}
+	sort.Strings(d)
+	return d
+}
+
+// A rota binary whose `skills files` fails must fail the build, not publish a
+// bundle holding only the manifest.
+func TestCodexPluginFailingListingFails(t *testing.T) {
+	root := layoutFixture(t)
+	stub := filepath.Join(t.TempDir(), "rota")
+	put(t, filepath.Dir(stub), "rota", "#!/bin/sh\n[ \"$2\" = files ] && exit 1\nexit 0\n")
+	if err := os.Chmod(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", filepath.Join(root, "scripts/codex-plugin.sh"), t.TempDir())
+	cmd.Env = append(rotaEnv(t), "ROTA_BIN="+stub)
+	if b, err := cmd.CombinedOutput(); err == nil {
+		t.Errorf("script exited 0 with a failing listing: %s", b)
+	}
+}
+
+// A symlinked skill file is refused, not followed to a file outside skills/.
+func TestSkillLayoutSymlinkedFileRejected(t *testing.T) {
+	root := layoutFixture(t)
+	put(t, root, "outside.md", "secret\n")
+	if err := os.Symlink("../../outside.md", filepath.Join(root, "skills/rota-a/leak.md")); err != nil {
+		t.Fatal(err)
+	}
+	v := runLayout(t, root)
+	if !strings.Contains(v.validator, "skills/rota-a/leak.md: unsupported skill content") {
+		t.Errorf("validator accepted a symlinked file: %q", v.validator)
+	}
+	if v.codexErr == "" {
+		t.Errorf("Codex builder shipped a symlinked file: %v", v.codex)
 	}
 }
