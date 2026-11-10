@@ -64,9 +64,9 @@ func (o *orca) Require() error {
 	}
 	return nil
 }
-func (o *orca) InSession() bool { return o.d.Getenv("ORCA_TERMINAL_HANDLE") != "" }
+func (o *orca) InSession() bool { return o.d.Getenv(envOrcaPane) != "" }
 func (o *orca) Where() string {
-	if h := o.d.Getenv("ORCA_TERMINAL_HANDLE"); h != "" {
+	if h := o.d.Getenv(envOrcaPane); h != "" {
 		return h
 	}
 	return "?"

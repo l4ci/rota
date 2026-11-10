@@ -153,7 +153,7 @@ func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) 
 	if e != nil {
 		return nil, coreTerminal{}, e
 	}
-	id := h.d.Getenv("HC_TERMINAL_ID")
+	id := h.d.Getenv(envCoreTerm)
 	var t coreTerminal
 	if id == "" || strings.Contains(id, "/") {
 		c.Close()
@@ -174,10 +174,10 @@ func (h *coreHost) Capabilities() Capabilities { return kindPolicy(HerdrCore, Ca
 func (h *coreHost) RuntimeScopedHandles() bool { return true }
 func (h *coreHost) TreeKillClose() bool        { return true }
 func (h *coreHost) InSession() bool {
-	return h.d.Getenv("HC_TERMINAL_ID") != "" && h.d.Getenv("HC_TERMINAL_SOCKET") != ""
+	return h.d.Getenv(envCoreTerm) != "" && h.d.Getenv("HC_TERMINAL_SOCKET") != ""
 }
 func (h *coreHost) Where() string {
-	return h.d.Getenv("HC_TERMINAL_SOCKET") + " / " + h.d.Getenv("HC_TERMINAL_ID")
+	return h.d.Getenv("HC_TERMINAL_SOCKET") + " / " + h.d.Getenv(envCoreTerm)
 }
 func (h *coreHost) CoreIdentity() (string, string) {
 	h.mu.Lock()

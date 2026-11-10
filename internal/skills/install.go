@@ -71,20 +71,16 @@ func ClaudeDir(getenv func(string) string, home string) string {
 
 // InstalledRoots lists the skill roots rota may have installed into, most
 // specific first: the project's Claude then Codex roots (when top, the project
-// root, is set), then the user's Claude root (ClaudeDir) and Codex root. A root
-// whose base is unknown is left out. HOME comes from getenv.
-func InstalledRoots(getenv func(string) string, top string) []string {
-	home := getenv("HOME")
-	var dirs []string
-	if d := ClaudeDir(getenv, home); d != "" {
-		dirs = []string{d}
-	}
+// root, is set), then the user's Claude roots (one per claudeDirs entry, the
+// same list the install verbs use) and Codex root. A root whose base is
+// unknown is left out.
+func InstalledRoots(home string, claudeDirs []string, top string) []string {
 	var out []string
 	for _, c := range []struct{ scope, agent string }{{Project, ""}, {User, Claude}, {User, Codex}} {
 		if c.scope == Project && top == "" {
 			continue
 		}
-		rs, err := Roots(c.scope, c.agent, home, dirs, top)
+		rs, err := Roots(c.scope, c.agent, home, claudeDirs, top)
 		if err != nil {
 			continue
 		}
