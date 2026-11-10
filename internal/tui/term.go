@@ -1,22 +1,31 @@
 package tui
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // stty runs stty against f, the controlling terminal; stty has no portable
 // "-F" flag, but every flavor acts on its own standard input.
 func stty(f *os.File, args ...string) (string, error) {
-	cmd := exec.Command("stty", args...)
-	cmd.Stdin = f
-	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
+	var out bytes.Buffer
+	r, err := runProc(context.Background(), proc.Cmd{Name: "stty", Args: args, Stdio: &proc.Stdio{In: f, Out: &out}})
+	if err == nil && r.ExitCode != 0 {
+		err = fmt.Errorf("stty: exit status %d", r.ExitCode)
+	}
+	return strings.TrimSpace(out.String()), err
 }
+
+// runProc is how the terminal helpers run stty; a test swaps it.
+var runProc proc.Runner = proc.Run
 
 // sttyRaw puts f in key-at-a-time mode (no line buffering, no echo, and Ctrl-C
 // arrives as a byte) and returns the function that puts it back. Output
