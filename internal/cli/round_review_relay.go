@@ -70,8 +70,9 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 		return round.ReviewOpts{}, err
 	}
 	if s := reg.Slot(slot); s != nil {
-		o.Verdict = failVerdict(root, s.Branch())
-		o.OpenFindings = openFindings(root, s.Branch())
+		list := branchVerdicts(c, root, s.Branch())
+		o.Verdict = failVerdict(list)
+		o.OpenFindings = openFindings(list)
 	}
 	if set.FreshAt > 0 || set.Support != "" {
 		// The backlog is only opened when a fresh transfer can happen or the
@@ -121,11 +122,16 @@ func findingLine(f verdict.Finding) string {
 	return line
 }
 
+// branchVerdicts loads the store once and returns branch's records under the
+// sub-repo key the gate reads them by.
+func branchVerdicts(c *Ctx, root, branch string) []verdict.Record {
+	return verdict.Load(root).Branch(shipVerdict(c, root, root).Repo, branch)
+}
+
 // failRecords are branch's FAIL verdicts a relay carries: the effective review
 // the cross-harness review (#1612) and each lens review (#2064), each when it
 // is FAIL.
-func failRecords(root, branch string) []verdict.Record {
-	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
+func failRecords(list []verdict.Record) []verdict.Record {
 	var out []verdict.Record
 	if r, ok := verdict.EffectiveFail(list); ok {
 		out = append(out, r)
@@ -139,9 +145,9 @@ func failRecords(root, branch string) []verdict.Record {
 // openFindings are the findings of branch's FAIL reviews: after a re-review
 // those are the NOT ADDRESSED ones plus any the fix introduced
 // (skills/rota-review/re-review.md). Nil when there are none.
-func openFindings(root, branch string) []string {
+func openFindings(list []verdict.Record) []string {
 	var out []string
-	for _, r := range failRecords(root, branch) {
+	for _, r := range failRecords(list) {
 		for _, f := range r.Findings {
 			out = append(out, findingLine(f))
 		}
@@ -151,10 +157,10 @@ func openFindings(root, branch string) []string {
 
 // failVerdict is branch's FAIL reviews as relay input, stamped with the newest
 // one's time; nil when there is none.
-func failVerdict(root, branch string) *worker.ReviewVerdict {
+func failVerdict(list []verdict.Record) *worker.ReviewVerdict {
 	var sb strings.Builder
 	var at time.Time
-	for i, r := range failRecords(root, branch) {
+	for i, r := range failRecords(list) {
 		t, err := stamp.Parse(r.RecordedAt)
 		if err != nil {
 			return nil

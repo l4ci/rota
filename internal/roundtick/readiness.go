@@ -64,7 +64,7 @@ func ReadinessOf(in ReadinessInput) Readiness {
 		ready := !blocked
 		return Readiness{Ready: ready, Since: in.DoneAt, Immediate: ready && in.DoneAt.IsZero()}
 	}
-	ready := len(verdict.RecordedIn(in.Records, in.Head)) > 0 && !blocked
+	ready := len(verdict.Recorded(in.Records, in.Head)) > 0 && !blocked
 	return Readiness{Ready: ready, Since: reviewReadySince(in.Records, in.Head)}
 }
 

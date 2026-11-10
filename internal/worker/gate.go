@@ -1312,12 +1312,13 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 			return finish(g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code)))
 		}
 	}
-	have := verdict.Recorded(g.root, g.branch, strings.TrimSpace(head))
+	list := verdict.Load(g.root).Branch(g.o.VerdictRepo, g.branch)
+	have := verdict.Recorded(list, strings.TrimSpace(head))
 	missing := verdict.MissingReviews(depth, res.HasSpec, have)
 	// A depth of none reviews nothing, so it asks for no cross review either.
 	crossMissing := ""
 	if NeedsCross(res, depth) {
-		if r, ok := verdict.CrossAt(g.root, g.branch, strings.TrimSpace(head)); !ok || r.Harness != res.Cross {
+		if r, ok := verdict.CrossAt(list, strings.TrimSpace(head)); !ok || r.Harness != res.Cross {
 			crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
 		}
 	}
@@ -1325,7 +1326,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	var lensMissing []string
 	for _, l := range res.Lenses {
 		kind := verdict.LensKind(l.Name)
-		if _, ok := verdict.LensAt(g.root, g.branch, kind, strings.TrimSpace(head)); !ok {
+		if _, ok := verdict.LensAt(list, kind, strings.TrimSpace(head)); !ok {
 			lensMissing = append(lensMissing, fmt.Sprintf("%s verdict (%s)", kind, l.Why))
 		}
 	}

@@ -341,12 +341,13 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 		return ""
 	}
 	hasSpec := res.HasSpec
-	missing := verdict.MissingReviews(res.Depth, hasSpec, verdict.Recorded(t.root, t.branch, head))
+	list := verdict.Load(t.root).Branches[t.key]
+	missing := verdict.MissingReviews(res.Depth, hasSpec, verdict.Recorded(list, head))
 	if len(missing) == 0 {
 		return ""
 	}
 	return fmt.Sprintf("review depth %s -> %s (%s): still needs %s at head, or the gate refuses review-missing",
-		verdict.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
+		verdict.CoveredDepth(verdict.LastReviewSet(list), hasSpec), res.Depth, why, strings.Join(missing, " and "))
 }
 
 func verdictShow(c *Ctx, args []string) (Result, error) {

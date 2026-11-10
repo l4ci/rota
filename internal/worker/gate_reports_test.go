@@ -61,6 +61,44 @@ func TestGateRecoversPRVerdicts(t *testing.T) {
 	}
 }
 
+// In an umbrella the store is keyed "<repo>:<branch>": the reports the gate
+// recovers must land under that key, where BlockGate and the review-depth
+// check read them.
+func TestGateRecoversPRVerdictsUnderUmbrellaKey(t *testing.T) {
+	for _, tc := range []struct {
+		name, v string
+		want    string
+	}{
+		{"FAIL blocks", verdict.Fail, GateVerdictBlocked},
+		{"PASS satisfies depth", verdict.Pass, GateFresh},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t, "7")
+			w.setConfig(`{"ship":{"review":"full"},"test":{"full":["true"]}}`)
+			head := w.forgeWord("sha")
+			var notes []tracker.Comment
+			for _, kind := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
+				notes = append(notes, tracker.Comment{Author: "reviewer", Body: verdict.RenderReport(verdict.Record{Kind: kind, Verdict: tc.v, Sha: head}, nil)})
+			}
+			e := w.env(false)
+			e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
+				return &verdictReportForge{fakeForge: &fakeForge{w: w, provider: provider}, notes: notes}, nil
+			}
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true, VerdictRepo: "sub"})
+			if res.Verdict != tc.want {
+				t.Fatalf("want %s: %+v err=%v", tc.want, res, err)
+			}
+			if tc.v == verdict.Fail && err == nil {
+				t.Fatal("FAIL not returned")
+			}
+			store := verdict.Load(w.dir)
+			if len(store.Branches[verdict.BranchKey("sub", "w1")]) != 2 || len(store.Branches) != 1 {
+				t.Fatalf("recovered reports must be the two records under the sub-repo key only: %v", store.Branches)
+			}
+		})
+	}
+}
+
 // Observe is the preview's readiness probe: it never fetches and never writes
 // the verdict store, so a PASS that lives only as a PR report is not recovered
 // (execution recovers it), and the remote refs are judged as last fetched.
@@ -96,5 +134,37 @@ func TestGateObserveReadsWithoutFetchOrRecovery(t *testing.T) {
 	}
 	if res.Verdict != GateReviewMissing {
 		t.Fatalf("local verdicts only: want %s, got %+v", GateReviewMissing, res)
+	}
+}
+
+// One recovered FAIL must reach every reader the umbrella key feeds: the gate
+// refuses on it, and the bounce count and the review relay read the same list
+// (noBlockingFindings reads BounceReviewsAtHead, failVerdict reads EffectiveFail).
+func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"ship":{"review":"full"},"test":{"full":["true"]}}`)
+	head := w.forgeWord("sha")
+	var notes []tracker.Comment
+	for _, kind := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
+		notes = append(notes, tracker.Comment{Author: "reviewer", Body: verdict.RenderReport(verdict.Record{Kind: kind, Verdict: verdict.Fail, Sha: head}, nil)})
+	}
+	e := w.env(false)
+	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
+		return &verdictReportForge{fakeForge: &fakeForge{w: w, provider: provider}, notes: notes}, nil
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true, VerdictRepo: "sub"})
+	if res.Verdict != GateVerdictBlocked || err == nil {
+		t.Fatalf("gate must refuse on the recovered FAIL: %+v err=%v", res, err)
+	}
+	store := verdict.Load(w.dir)
+	list := store.Branch("sub", "w1")
+	if got := verdict.BounceReviewsAtHead(list, head); len(got) == 0 || !got[0].Failing() {
+		t.Fatalf("bounce reader sees no failing review at head: %+v", got)
+	}
+	if _, ok := verdict.EffectiveFail(list); !ok {
+		t.Fatal("relay reader sees no effective FAIL")
+	}
+	if len(store.Branch("", "w1")) != 0 {
+		t.Fatal("the plain key must stay empty in an umbrella")
 	}
 }

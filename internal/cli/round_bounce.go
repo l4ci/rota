@@ -66,7 +66,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		var posted bool
 		var pr string
 		res, err := worker.Bounce(store, nil, issue, *slot, *head, set.MaxBounces, func(worker.BounceRecord) (err error) {
-			posted, pr, err = postSupportBounce(env, root, issue, *slot, *head)
+			posted, pr, err = postSupportBounce(c, env, root, issue, *slot, *head)
 			return err
 		})
 		if err != nil {
@@ -132,8 +132,7 @@ func bundleHolder(root, issue string) (slot, lead string) {
 // holding the issue. Without a branch, a head, or a review verdict at that head
 // the bounce is not a verdict-driven one and counts as before. A FAIL record,
 // or one with an item FAIL, always counts as blocking, findings or not. The
-// store is read under the plain branch key, so an umbrella root (keys
-// "<repo>:<branch>") finds no record and fails open: the bounce counts.
+// store is read under the sub-repo key, as the gate reads it.
 func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
@@ -156,7 +155,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		}
 		head = strings.TrimSpace(out)
 	}
-	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
+	list := branchVerdicts(c, root, branch)
 	judged := false
 	for _, r := range verdict.BounceReviewsAtHead(list, head) {
 		if r.Failing() {
@@ -189,7 +188,7 @@ func checkedBounceStore(env worker.Env, root, slot string) (worker.BounceStore, 
 // built it (#1598 AC-8), with the open findings of the branch's review verdict
 // as the reason. The PR is the named slot's, else the one of the slot or the
 // queued record holding the issue; any other PR posts nothing.
-func postSupportBounce(env worker.Env, root, issue, slot, head string) (posted bool, pr string, err error) {
+func postSupportBounce(c *Ctx, env worker.Env, root, issue, slot, head string) (posted bool, pr string, err error) {
 	reg := worker.LoadRegistryTolerant(root)
 	var branch string
 	for _, s := range reg.Slots() {
@@ -202,7 +201,7 @@ func postSupportBounce(env worker.Env, root, issue, slot, head string) (posted b
 		branch, pr = q.Branch, q.PR
 	}
 	why := "The orchestrator sent the PR back after review: read the review on this PR."
-	if fs := openFindings(root, branch); len(fs) > 0 {
+	if fs := openFindings(branchVerdicts(c, root, branch)); len(fs) > 0 {
 		why = "Open findings:\n- " + strings.Join(fs, "\n- ")
 	}
 	posted, err = env.PostReviewBounce(root, branch, pr, head, why)

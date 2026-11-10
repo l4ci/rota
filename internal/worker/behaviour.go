@@ -378,7 +378,7 @@ func (g *gateOperation) recordBehaviour(steps []itembody.TryStep, results []beha
 	}
 	rec := verdict.NewRecord(verdict.Behaviour, v, strutil.ShortSHA(g.verified), verdict.Body{Summary: summary}, g.e.Now())
 	rec.Branch, rec.Transcript = g.branch, path
-	if _, err := verdict.AddBranch(g.root, verdict.BranchKey("", g.branch), rec); err != nil {
+	if _, err := verdict.AddBranch(g.root, verdict.BranchKey(g.o.VerdictRepo, g.branch), rec); err != nil {
 		g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("BEHAVIOUR-VERDICT %s — cannot record the behaviour verdict: %v", g.o.Slot, err))
 	}
 }

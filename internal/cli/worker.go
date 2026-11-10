@@ -596,7 +596,7 @@ func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot string, through 
 	if err != nil {
 		return err
 	}
-	b, err := worker.PendingReviewBefore(ctx, fg, s, failVerdict(root, s.Branch()), c.deps().Now(), through.Truncate(time.Second))
+	b, err := worker.PendingReviewBefore(ctx, fg, s, failVerdict(branchVerdicts(c, root, s.Branch())), c.deps().Now(), through.Truncate(time.Second))
 	if err != nil || b.Empty() {
 		return err
 	}
