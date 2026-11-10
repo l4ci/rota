@@ -1,9 +1,7 @@
 package limits
 
 import (
-	"encoding/json"
-
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -39,32 +37,28 @@ func WatchPath(commonDir string) string { return rotastate.File(commonDir, Watch
 // ReadWatching loads the record; found is false when there is none or it does
 // not parse.
 func ReadWatching(commonDir string) (Watching, bool) {
-	w, found, err := fsio.ReadJSON[Watching](WatchPath(commonDir))
-	if err != nil || !found || w.PID <= 0 {
-		return Watching{}, false
-	}
-	return w, true
+	return watchMarker(commonDir).Read()
+}
+
+// OwnerPID implements pidlive.Record.
+func (w Watching) OwnerPID() int { return w.PID }
+
+func watchMarker(commonDir string) pidlive.Marker[Watching] {
+	return pidlive.Marker[Watching]{Path: WatchPath(commonDir), Codec: pidlive.JSON[Watching]()}
 }
 
 // ActiveWatching is the record of a watcher that is still running: the same
 // liveness rule as the other watcher markers, so a reused pid is not one.
 func ActiveWatching(env roundlease.Env, commonDir string) (Watching, bool) {
-	w, ok := ReadWatching(commonDir)
-	if !ok || !env.Running(w.Host, w.PID, w.Start) {
-		return Watching{}, false
-	}
-	return w, true
+	return watchMarker(commonDir).ReadLive(func(w Watching) bool { return env.Running(w.Host, w.PID, w.Start) })
 }
 
 // WriteWatching records the running watcher.
 func WriteWatching(commonDir string, w Watching) error {
-	return fsio.WriteMarker(WatchPath(commonDir), w, nil)
+	return watchMarker(commonDir).Write(w, nil)
 }
 
 // RemoveWatching deletes the record when it is still this process's.
 func RemoveWatching(commonDir string, pid int) {
-	_ = fsio.RemoveMarker(WatchPath(commonDir), func(b []byte) bool {
-		var w Watching
-		return json.Unmarshal(b, &w) == nil && w.PID == pid
-	})
+	_ = watchMarker(commonDir).Remove(pid)
 }

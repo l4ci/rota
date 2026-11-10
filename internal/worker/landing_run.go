@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -34,15 +35,7 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 				continue
 			}
 			p := filepath.Join(rotastate.Dir(common), ent.Name())
-			b, err := os.ReadFile(p)
-			if errors.Is(err, os.ErrNotExist) { // its owner just finished
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			pid, start := parseGateMarker(string(b))
-			if pid != 0 && markerLive(e.procs(), pid, start) {
+			if _, live := landingMarker(p).ReadLive(func(s pidlive.Stamp) bool { return s.Live(e.procs()) }); live {
 				if noWait {
 					return errLandingBusy
 				}
@@ -55,17 +48,21 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 			return err
 		}
 		path = f.Name()
-		_, err = f.WriteString(gateMarker(e.procs(), os.Getpid()))
-		if cerr := f.Close(); err == nil {
-			err = cerr
+		if err := f.Close(); err != nil {
+			return err
 		}
-		return err
+		return landingMarker(path).Write(pidlive.StampOf(e.procs(), os.Getpid()), nil)
 	})
 	if path != "" {
-		defer os.Remove(path)
+		defer landingMarker(path).Remove(os.Getpid())
 	}
 	if err != nil {
 		return err
 	}
 	return e.withLandLockMode(ctx, root, holder, noWait, fn)
+}
+
+// landingMarker is the pid-owned marker of one pending landing run.
+func landingMarker(path string) pidlive.Marker[pidlive.Stamp] {
+	return pidlive.Marker[pidlive.Stamp]{Path: path, Codec: pidlive.Text()}
 }
