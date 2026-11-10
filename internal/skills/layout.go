@@ -26,7 +26,7 @@ func SupportedFile(rel string) bool {
 }
 
 // LayoutViolations lists the files under each rota-*/ folder of a source tree
-// that SupportedFile rejects, as "<skill>/<path>". The skill's references link
+// that SupportedFile rejects, plus any symlinked rota-* folder itself, as "<skill>/<path>". The skill's references link
 // (a symlink in the source tree) is not skill-local content and is skipped.
 func LayoutViolations(fsys fs.FS) ([]string, error) {
 	var bad []string
@@ -35,6 +35,12 @@ func LayoutViolations(fsys fs.FS) ([]string, error) {
 			return err
 		}
 		skill, rel, ok := strings.Cut(p, "/")
+		// WalkDir does not follow a symlinked skill folder, but the Codex
+		// builder's glob does and would ship its target; reject the link.
+		if !ok && strings.HasPrefix(skill, "rota-") && d.Type()&fs.ModeSymlink != 0 {
+			bad = append(bad, p)
+			return nil
+		}
 		if !ok || d.IsDir() || !strings.HasPrefix(skill, "rota-") {
 			return nil
 		}

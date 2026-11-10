@@ -273,8 +273,12 @@ def check_layout(skills_dir, issues):
     # The binary embeds only the supported layout, so a nested file would work
     # from a source checkout or the Codex plugin yet never reach rota skills get.
     # `rota skills layout` owns the rule (skills.SupportedFile); the validator asks.
-    out = subprocess.run([rota_bin(), "skills", "layout", str(skills_dir)],
-                         capture_output=True, text=True, check=True).stdout
+    r = subprocess.run([rota_bin(), "skills", "layout", str(skills_dir)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        issues.append(f"{Path(skills_dir).as_posix()}: `rota skills layout` failed (exit {r.returncode}): {r.stderr.strip()}")
+        return
+    out = r.stdout
     for rel in out.splitlines():
         issues.append(f"{Path(skills_dir).as_posix()}/{rel}: unsupported skill content; skills ship flat markdown and agents/*.yaml only (the binary does not package it)")
 

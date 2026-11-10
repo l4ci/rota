@@ -28,12 +28,23 @@ var rotaBin = sync.OnceValues(func() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	layoutCleanup = append(layoutCleanup, dir)
 	bin := filepath.Join(dir, "rota")
 	if out, err := exec.Command("go", "build", "-o", bin, "./cmd/rota").CombinedOutput(); err != nil {
 		return "", fmt.Errorf("go build: %v\n%s", err, out)
 	}
 	return bin, nil
 })
+
+var layoutCleanup []string
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	for _, d := range layoutCleanup {
+		os.RemoveAll(d)
+	}
+	os.Exit(code)
+}
 
 func rotaEnv(t *testing.T) []string {
 	t.Helper()
@@ -156,6 +167,25 @@ func TestSkillLayoutNestedContentRejected(t *testing.T) {
 		if p == nested {
 			t.Errorf("binary ships %s: the layout owner and Load disagree", p)
 		}
+	}
+}
+
+// A symlinked skill folder is followed by the Codex builder's glob but not by
+// a directory walk, so it would ship files from outside skills/. The owner
+// rejects the link itself.
+func TestSkillLayoutSymlinkedSkillRejected(t *testing.T) {
+	root := layoutFixture(t)
+	put(t, root, "ext/notes.txt", "outside\n")
+	put(t, root, "ext/sub/deep.md", "deep\n")
+	if err := os.Symlink("../ext", filepath.Join(root, "skills/rota-b")); err != nil {
+		t.Fatal(err)
+	}
+	v := runLayout(t, root)
+	if !strings.Contains(v.validator, "skills/rota-b: unsupported skill content") {
+		t.Errorf("validator accepted a symlinked skill folder: %q", v.validator)
+	}
+	if v.codexErr == "" {
+		t.Errorf("Codex builder shipped a symlinked skill folder: %v", v.codex)
 	}
 }
 

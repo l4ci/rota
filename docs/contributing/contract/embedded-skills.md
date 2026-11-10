@@ -83,6 +83,13 @@ data: `{"name": string, "text": string}` where `text` starts with the line `Base
 exit: 2 on an unknown skill or reference (`hint` lists the known names) or when both flags are given
 note: read-only, reads the binary's embedded set (no second copy), so the text matches the verbs and flags the binary accepts. Text mode prints the file with its trailing newline trimmed (the printer adds one back). `--references` lists the skill-local files linked by `SKILL.md` and the installed shared references, using paths relative to the skill directory (`reviewer-briefs.md`, `references/test-quality.md`). Every listed name is accepted by `--reference`. Bare shared names remain accepted as legacy aliases unless a linked local file has that name; use the `references/` prefix to select the shared file in that case. Unlisted files and paths outside the skill are rejected. Link footers resolve local files from the skill directory and shared references from the shared cache copy.
 
+### rota skills layout
+rota skills layout <skills-dir>
+repo: none
+data: {"violations": []string}
+exit: 1 when the directory cannot be read; 2 without one
+note: read-only. Lists what a source `skills/` tree holds under each `rota-*/` folder that the supported layout (`skills.SupportedFile`: `SKILL.md`, flat sibling markdown, `agents/*.yaml`) rejects, as `<skill>/<path>`, plus any `rota-*` entry that is itself a symlink (the Codex builder's glob would follow it and ship its target). The skill's `references` link is skipped. `test/validate-skills.py` and `scripts/codex-plugin.sh` both ask it instead of keeping a second rule. Text mode prints one violation per line.
+
 ### rota skills links
 rota skills links <file>...
 repo: none
