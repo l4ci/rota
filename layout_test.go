@@ -1,22 +1,48 @@
 package rota_test
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	rota "github.com/l4ci/rota"
 	"github.com/l4ci/rota/internal/skills"
 )
 
-// The supported skill-file layout is owned by skills.SupportedFile. The
-// binary (embed.go + Load), the validator and the Codex builder each select
-// files their own way, in Go, Python and shell; these fixtures pin all of them
-// to the owner's verdict, so a file one of them would drop or reject fails here.
+// The supported skill-file layout is owned by skills.SupportedFile. The binary
+// (embed.go + Load) selects files by it directly; the validator and the Codex
+// builder ask `rota skills layout`, which is backed by the same rule. These
+// fixtures cross that one seam with a good and a bad tree and check that every
+// packaging path ships or rejects the same files.
+
+// rotaBin builds the binary once; the validator and the Codex builder take it
+// through ROTA_BIN instead of each building their own.
+var rotaBin = sync.OnceValues(func() (string, error) {
+	dir, err := os.MkdirTemp("", "layout-rota-")
+	if err != nil {
+		return "", err
+	}
+	bin := filepath.Join(dir, "rota")
+	if out, err := exec.Command("go", "build", "-o", bin, "./cmd/rota").CombinedOutput(); err != nil {
+		return "", fmt.Errorf("go build: %v\n%s", err, out)
+	}
+	return bin, nil
+})
+
+func rotaEnv(t *testing.T) []string {
+	t.Helper()
+	bin, err := rotaBin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(os.Environ(), "ROTA_BIN="+bin)
+}
 
 func put(t *testing.T, root, rel, body string) {
 	t.Helper()
@@ -53,34 +79,34 @@ func layoutFixture(t *testing.T) string {
 // layoutVerdicts runs every packaging path over a source tree and returns what
 // each shipped (sorted "<skill>/<path>" lists) or the error text of a rejection.
 type layoutVerdicts struct {
-	violations []string
-	binary     []string
-	codex      []string
-	validator  string // stderr, empty when accepted
-	codexErr   string
+	binary    []string
+	codex     []string
+	validator string // stderr, empty when accepted
+	codexErr  string
 }
 
 func runLayout(t *testing.T, root string) layoutVerdicts {
 	t.Helper()
 	var v layoutVerdicts
 	skillsFS := os.DirFS(filepath.Join(root, "skills"))
-	var err error
-	if v.violations, err = skills.LayoutViolations(skillsFS); err != nil {
-		t.Fatal(err)
-	}
 	set, err := skills.Load(skillsFS)
 	if err != nil {
 		t.Fatal(err)
 	}
 	v.binary = set.Paths()
 
-	out, err := exec.Command("python3", "test/validate-skills.py", "--layout", filepath.Join(root, "skills")).CombinedOutput()
+	env := rotaEnv(t)
+	cmd := exec.Command("python3", "test/validate-skills.py", "--layout", filepath.Join(root, "skills"))
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		v.validator = string(out)
 	}
 
 	dst := t.TempDir()
-	out, err = exec.Command("bash", filepath.Join(root, "scripts/codex-plugin.sh"), dst).CombinedOutput()
+	cmd = exec.Command("bash", filepath.Join(root, "scripts/codex-plugin.sh"), dst)
+	cmd.Env = env
+	out, err = cmd.CombinedOutput()
 	if err != nil {
 		v.codexErr = string(out)
 		return v
@@ -102,8 +128,8 @@ func runLayout(t *testing.T, root string) layoutVerdicts {
 
 func TestSkillLayoutSupportedContentShips(t *testing.T) {
 	v := runLayout(t, layoutFixture(t))
-	if len(v.violations) != 0 || v.validator != "" || v.codexErr != "" {
-		t.Fatalf("supported layout rejected: violations %v validator %q codex %q", v.violations, v.validator, v.codexErr)
+	if v.validator != "" || v.codexErr != "" {
+		t.Fatalf("supported layout rejected: validator %q codex %q", v.validator, v.codexErr)
 	}
 	want := "rota-a/SKILL.md rota-a/agents/openai.yaml rota-a/references/shared.md rota-a/topic.md"
 	if got := strings.Join(v.binary, " "); got != want {
@@ -120,9 +146,6 @@ func TestSkillLayoutNestedContentRejected(t *testing.T) {
 	put(t, root, "skills/rota-a/sub/deep.md", "deep\n")
 	v := runLayout(t, root)
 	const nested = "rota-a/sub/deep.md"
-	if len(v.violations) != 1 || v.violations[0] != nested {
-		t.Errorf("owner violations %v, want [%s]", v.violations, nested)
-	}
 	if !strings.Contains(v.validator, "skills/rota-a/sub/deep.md: unsupported skill content") {
 		t.Errorf("validator did not name the nested file: %q", v.validator)
 	}
@@ -140,12 +163,11 @@ func TestSkillLayoutNestedContentRejected(t *testing.T) {
 // the embedded FS (embed.go's patterns) and the Codex build.
 func TestSkillLayoutRealTree(t *testing.T) {
 	skillsFS := os.DirFS("skills")
-	if bad, err := skills.LayoutViolations(skillsFS); err != nil || len(bad) != 0 {
-		t.Fatalf("unsupported skill content %v (err %v)", bad, err)
-	}
 	dst := t.TempDir()
-	if b, err := exec.Command("bash", "scripts/codex-plugin.sh", dst).CombinedOutput(); err != nil {
-		t.Fatalf("codex-plugin.sh: %v\n%s", err, b)
+	cmd := exec.Command("bash", "scripts/codex-plugin.sh", dst)
+	cmd.Env = rotaEnv(t)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("codex-plugin.sh rejected the real tree: %v\n%s", err, b)
 	}
 	n := 0
 	fs.WalkDir(skillsFS, ".", func(p string, d fs.DirEntry, err error) error {

@@ -10,8 +10,9 @@ import (
 // part of the supported skill layout: SKILL.md and flat sibling markdown, plus
 // agents/*.yaml (Codex's invocation policy). This is the one owner of that
 // layout. Load selects by it, embed.go's patterns must cover it, and
-// test/validate-skills.py and scripts/codex-plugin.sh mirror it; the seam test
-// in layout_test.go at the module root pins all four to the same verdicts.
+// `rota skills layout` (LayoutViolations) serves it to test/validate-skills.py
+// and scripts/codex-plugin.sh; the seam test in layout_test.go at the module
+// root pins the packaging paths to the same verdicts.
 // The shared references are not skill-local: they are copied in as real files.
 func SupportedFile(rel string) bool {
 	dir, name := path.Split(rel)

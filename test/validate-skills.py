@@ -269,32 +269,14 @@ def check_flag_consistency(skill_files, issues):
                                   "(manual-only; tell the user to type it instead)")
 
 
-def supported_skill_file(rel):
-    # Mirrors internal/skills.SupportedFile, the owner of the skill-file layout:
-    # flat markdown plus agents/*.yaml. layout_test.go pins both to the same verdicts.
-    parts = rel.split("/")
-    if len(parts) == 1:
-        return rel.endswith(".md")
-    return len(parts) == 2 and parts[0] == "agents" and rel.endswith(".yaml")
-
-
 def check_layout(skills_dir, issues):
     # The binary embeds only the supported layout, so a nested file would work
     # from a source checkout or the Codex plugin yet never reach rota skills get.
-    def files(d):
-        for f in sorted(d.iterdir()):
-            if f.is_dir() and not f.is_symlink():
-                yield from files(f)
-            else:
-                yield f
-
-    for skill in sorted(Path(skills_dir).glob("rota-*")):
-        for f in files(skill):
-            rel = f.relative_to(skill).as_posix()
-            if rel == "references" and f.is_symlink():
-                continue
-            if not supported_skill_file(rel):
-                issues.append(f"{f.as_posix()}: unsupported skill content; skills ship flat markdown and agents/*.yaml only (the binary does not package it)")
+    # `rota skills layout` owns the rule (skills.SupportedFile); the validator asks.
+    out = subprocess.run([rota_bin(), "skills", "layout", str(skills_dir)],
+                         capture_output=True, text=True, check=True).stdout
+    for rel in out.splitlines():
+        issues.append(f"{Path(skills_dir).as_posix()}/{rel}: unsupported skill content; skills ship flat markdown and agents/*.yaml only (the binary does not package it)")
 
 
 _ROTA = None
