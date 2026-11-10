@@ -365,7 +365,7 @@ func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate
 func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: w.observe, ItemBody: lazyItemBody(w.c, w.root)})
+	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: w.observe, VerdictRepo: shipVerdict(w.c, w.root, w.root).Repo, ItemBody: lazyItemBody(w.c, w.root)})
 	return roundtick.ReviewReadinessOf(r, err, slot)
 }
 
