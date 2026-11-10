@@ -105,7 +105,7 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 	slices.Sort(globs)
 	for _, g := range globs {
 		for _, f := range in.Files {
-			if pathglob.MatchEntry(g, f) {
+			if pathglob.MatchEntry(pathglob.Recursive, g, f) {
 				raise(p.Paths[g], SignalPath, fmt.Sprintf("%s matches paths %s (%s)", f, g, p.Paths[g]))
 				break
 			}
@@ -177,7 +177,7 @@ func scopeDrift(issueBody string, files, support []string) []string {
 	}
 	var out []string
 	for _, f := range files {
-		if slices.ContainsFunc(allowed, func(a string) bool { return pathglob.MatchEntry(a, f) }) ||
+		if slices.ContainsFunc(allowed, func(a string) bool { return pathglob.MatchEntry(pathglob.Recursive, a, f) }) ||
 			slices.ContainsFunc(support, func(g string) bool { return pathglob.MatchUnder(g, f) }) ||
 			sitsBesideDeclared(f, allowed) {
 			continue
@@ -200,7 +200,7 @@ func MatchLenses(l config.Lenses, files, labels []string) []config.LensHit {
 	paths:
 		for _, g := range lens.Paths {
 			for _, f := range files {
-				if pathglob.MatchEntry(g, f) {
+				if pathglob.MatchEntry(pathglob.Recursive, g, f) {
 					why = "path " + f
 					break paths
 				}

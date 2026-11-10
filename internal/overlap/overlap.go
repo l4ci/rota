@@ -16,8 +16,8 @@
 // `*.md` as a pattern.
 //
 // Every entry goes through Clean first: leading `./` (repeated) is dropped,
-// in MatchPath, Paths, Dirs and round.Footprint alike. One rule differs on
-// purpose. MatchPath takes a configured entry (config, sharedPaths), where a
+// in Shared, Paths, Dirs and round.Footprint alike. One rule differs on
+// purpose. Shared takes a configured entry (round.sharedPaths), where a
 // slashless entry is also a directory, so a trailing `/` is optional. Paths
 // and Dirs take item footprints, where only a trailing `/` marks a directory
 // and a slashless entry is a file.
@@ -35,27 +35,12 @@ import (
 // trailing `/` is kept: Paths and Dirs read it as the directory marker.
 func Clean(entry string) string { return pathglob.Clean(entry) }
 
-// MatchPath reports whether the repo-relative file matches a listed entry:
-// equal to it, under it as a directory, or matching it as a path.Match glob
-// against the whole path. ** is an ordinary path.Match segment here (one
-// level, not recursive); sharedPaths exempts files from clashes, so widening
-// it would hide overlaps.
-func MatchPath(entry, file string) bool {
-	entry = strings.TrimSuffix(Clean(entry), "/")
-	if entry == "" {
-		return false
-	}
-	if file == entry || strings.HasPrefix(file, entry+"/") {
-		return true
-	}
-	ok, err := path.Match(entry, file)
-	return err == nil && ok
-}
-
-// Shared reports whether file matches any of the shared entries.
+// Shared reports whether file matches any of the shared entries, by the
+// pathglob entry rules with the SingleLevel flavour: ** is one level, because
+// sharedPaths exempts files from clashes and widening it would hide overlaps.
 func Shared(shared []string, file string) bool {
 	for _, g := range shared {
-		if MatchPath(g, file) {
+		if pathglob.MatchEntry(pathglob.SingleLevel, g, file) {
 			return true
 		}
 	}
