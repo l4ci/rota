@@ -35,12 +35,9 @@ func SaveMaintainerSnapshot(commonDir string, now time.Time, count int) error {
 // MaintainerSnapshotLine omits anything it cannot establish as a fresh count.
 // A snapshot in the future is invalid rather than clamped to look current.
 func MaintainerSnapshotLine(commonDir string, now time.Time, interval time.Duration) string {
-	b, err := os.ReadFile(rotastate.File(commonDir, "maintainer-digest.json"))
-	if err != nil {
-		return ""
-	}
-	var snapshot maintainerSnapshot
-	if json.Unmarshal(b, &snapshot) != nil || snapshot.Count <= 0 || snapshot.RecordedAt.IsZero() {
+	snapshot, found, err := fsio.ReadJSON[maintainerSnapshot](rotastate.File(commonDir, "maintainer-digest.json"))
+	// Missing and unreadable both omit the line: the digest is a courtesy.
+	if err != nil || !found || snapshot.Count <= 0 || snapshot.RecordedAt.IsZero() {
 		return ""
 	}
 	age := now.Sub(snapshot.RecordedAt)
