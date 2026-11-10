@@ -78,6 +78,7 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", base+"^{commit}"); base == "" || code != 0 {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' base '%s' does not exist", slot, base))
 	}
+	plainBase := base
 	if from == "" {
 		base, err = e.resetBase(root, slot, base)
 		if err != nil {
@@ -140,16 +141,16 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	}
 	if dirty != "" {
 		res.Dirty = strings.Split(dirty, "\n")
-		return refuse(fmt.Sprintf("REFUSED %s — uncommitted changes in %s: commit or discard them before reusing the slot (or rota worker pool reap %s, which removes the slot, its worktree and its branch; rota worker pool init --base %s must follow before it takes another task); re-dispatch %s to continue it in place.\n%s",
-			slot, worktree, slot, base, cont, indent(res.Dirty)))
+		return refuse(fmt.Sprintf("REFUSED %s — uncommitted changes in %s: commit or discard them before reusing the slot (or rota worker pool reap %s: %s); re-dispatch %s to continue it in place.\n%s",
+			slot, worktree, slot, reapNote(reg, plainBase), cont, indent(res.Dirty)))
 	}
 	if len(unmerged) > 0 {
 		for _, sha := range unmerged {
 			line, _ := e.git(worktree, "log", "-1", "--abbrev=7", "--format=%h %s", sha)
 			res.Unmerged = append(res.Unmerged, line)
 		}
-		return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s: gate and merge them (rota worker gate) before giving the slot another task, or rota worker pool reap %s, which removes the slot, its worktree and its branch (rota worker pool init --base %s must follow before it takes another task); re-dispatch %s to continue it in place.\n%s",
-			slot, len(unmerged), base, slot, base, cont, indent(res.Unmerged)))
+		return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s: gate and merge them (rota worker gate) before giving the slot another task, or rota worker pool reap %s: %s; re-dispatch %s to continue it in place.\n%s",
+			slot, len(unmerged), base, slot, reapNote(reg, plainBase), cont, indent(res.Unmerged)))
 	}
 	res.Clean = true
 	if checkOnly {
@@ -213,6 +214,18 @@ func (e Env) resetBase(root, slot, base string) (string, error) {
 	default:
 		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with %s before resetting slot '%s'", base, remote, slot))
 	}
+}
+
+// reapNote says what `pool reap` costs a slot and how to get one back. A
+// round's slots are re-provisioned by `round start`; `pool init` creates the
+// pool's w1..wN, never a reaped roster name, so it is named only outside a
+// round. base is the plain branch name, without a remote prefix.
+func reapNote(reg Registry, base string) string {
+	const gone = "it removes the slot, its worktree and its branch"
+	if reg.SlotCount() > 0 {
+		return gone + "; rota round start re-provisions the slot before it takes another task"
+	}
+	return gone + "; rota worker pool init --slots <n> --base " + base + " creates slots again before one takes another task"
 }
 
 func indent(lines []string) string {

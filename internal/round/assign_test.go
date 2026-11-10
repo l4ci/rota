@@ -317,6 +317,8 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
 	if _, err := f.assign("15", "", nil); blockedBy(t, err) != BlockNoFreeSlot {
 		t.Errorf("both slots busy: %v", err)
+	} else if _, err := f.assign("15", "", nil); strings.Contains(err.Error(), "not provisioned") {
+		t.Errorf("an all-busy round is not unprovisioned: %v", err)
 	}
 }
 
@@ -330,13 +332,35 @@ func TestAssignNoFreeSlotNamesUnprovisionedRosterSlots(t *testing.T) {
 	if blockedBy(t, err) != BlockNoFreeSlot {
 		t.Fatalf("want no free slot: %v", err)
 	}
-	for _, want := range []string{"not provisioned", "ben, dana", "rota worker pool init --base"} {
+	for _, want := range []string{"not provisioned", "ben, dana", "rota round start"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("message lacks %q: %v", want, err)
 		}
 	}
-	if strings.Contains(err.Error(), "busy") && !strings.Contains(err.Error(), "others are busy") {
-		t.Errorf("reaped slots read as busy: %v", err)
+	for _, bad := range []string{"busy", "<base>", "pool init"} {
+		if strings.Contains(err.Error(), bad) {
+			t.Errorf("message contains %q: %v", bad, err)
+		}
+	}
+}
+
+// With one active slot reaped and the other busy, both facts are stated.
+func TestAssignNoFreeSlotMixesUnprovisionedAndBusy(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.ws.Reap(f.root, []string{"dana"}, false); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.assign("13", "", func(o *AssignOpts) { o.AcceptOverlap = true })
+	if blockedBy(t, err) != BlockNoFreeSlot {
+		t.Fatalf("want no free slot: %v", err)
+	}
+	for _, want := range []string{"not provisioned", "dana", "the other slots are busy"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message lacks %q: %v", want, err)
+		}
 	}
 }
 
