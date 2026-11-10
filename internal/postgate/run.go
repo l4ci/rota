@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/gatereport"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -127,7 +128,7 @@ func (e Env) report(ctx context.Context, root string, r worker.GateResult) []str
 	if r.SHA == "" {
 		return []string{fmt.Sprintf("gate report pending: cannot resolve sha for %s", r.Branch)}
 	}
-	if err := e.Report(ctx, root, Report{Gate: r, Ref: ref, Body: RenderReport(r)}); err != nil {
+	if err := e.Report(ctx, root, Report{Gate: r, Ref: ref, Body: gatereport.RenderReport(r)}); err != nil {
 		return []string{fmt.Sprintf("gate report pending: %s", err)}
 	}
 	return nil

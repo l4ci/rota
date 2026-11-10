@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -159,7 +160,7 @@ func PendingReviewBefore(ctx context.Context, f ReviewForge, s *Slot, v *ReviewV
 // consumed one.
 func parseCursor(c string) (time.Time, []string) {
 	ts, keys, _ := strings.Cut(c, "#")
-	t, _ := time.Parse(time.RFC3339Nano, ts)
+	t := stamp.ParseNano(ts)
 	if keys == "" {
 		return t, nil
 	}
@@ -167,7 +168,7 @@ func parseCursor(c string) (time.Time, []string) {
 }
 
 func formatCursor(newest time.Time, keys []string) string {
-	c := newest.UTC().Format(time.RFC3339Nano)
+	c := stamp.FormatNano(newest)
 	if len(keys) > 0 {
 		c += "#" + strings.Join(keys, ",")
 	}

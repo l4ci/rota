@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -624,8 +625,10 @@ func reviewState(s string) string {
 
 // parseTime reads a forge timestamp; zero when it is empty or unreadable.
 func parseTime(s string) time.Time {
-	t, _ := time.Parse(time.RFC3339, s)
-	return t
+	if t := stamp.ParseISO(s); t != nil {
+		return *t
+	}
+	return time.Time{}
 }
 
 func (g *GitHub) AddComment(ctx context.Context, key IssueKey, body string) (string, error) {

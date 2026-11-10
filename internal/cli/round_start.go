@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -19,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -52,7 +52,7 @@ func candidateList(cs []round.Candidate) []any {
 		setIf(o, "autoHold", c.AutoHold)
 		if c.StaleHolder != "" {
 			o.Set("staleHolder", c.StaleHolder)
-			o.Set("lastActivity", c.LastActivity.Format(time.RFC3339))
+			o.Set("lastActivity", stamp.Format(c.LastActivity))
 		}
 		o.Set("ready", c.Ready())
 		o.Set("scopeSource", c.ScopeSource)

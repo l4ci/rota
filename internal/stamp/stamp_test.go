@@ -138,3 +138,18 @@ func TestParseDateIsStrict(t *testing.T) {
 		}
 	}
 }
+
+func TestNanoKeepsSubsecondsInUTC(t *testing.T) {
+	zone := time.FixedZone("x", 2*3600)
+	at := time.Date(2026, 10, 2, 14, 5, 9, 123456789, zone)
+	s := FormatNano(at)
+	if s != "2026-10-02T12:05:09.123456789Z" {
+		t.Fatalf("FormatNano = %q", s)
+	}
+	if got := ParseNano(s); !got.Equal(at) {
+		t.Errorf("ParseNano = %v, want %v", got, at)
+	}
+	if !ParseNano("junk").IsZero() {
+		t.Error("ParseNano(junk) is not the zero time")
+	}
+}
