@@ -8,6 +8,7 @@
       "TestPluginSessionStartHook",
       "TestRoundWorkerLearningAligned",
       "TestSkillLayoutNestedContentRejected",
+      "TestSkillLayoutSymlinkedSkillRejected",
       "TestSkillLayoutRealTree",
       "TestSkillLayoutSupportedContentShips",
       "TestSkillsCiteAutonomyReference",
