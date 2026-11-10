@@ -28,11 +28,22 @@ mkdir -p "$dst/skills"
 cp -R "$root/plugins/rota/.codex-plugin" "$dst/.codex-plugin"
 # Ship what the binary's Load ships for each skill (its own files plus the
 # references it reaches), as real files: `rota skills files` is the one list.
+# Capture first: a process substitution would hide a failing producer from
+# set -e and publish an empty bundle.
+files=$("$rota" skills files "$root/skills")
+if [ -z "$files" ]; then
+  echo "codex-plugin: \`rota skills files\` listed nothing" >&2
+  exit 1
+fi
 while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  mkdir -p "$dst/skills/$(dirname "$f")"
   case "$f" in
-    */references/*) cp "$root/skills/references/${f##*/}" "$dst/skills/$f" ;;
-    *) cp "$root/skills/$f" "$dst/skills/$f" ;;
+    */references/*) src=$root/skills/references/${f##*/} ;;
+    *) src=$root/skills/$f ;;
   esac
-done < <("$rota" skills files "$root/skills")
+  if [ -L "$src" ]; then
+    echo "codex-plugin: refusing symlinked skill file ${src#"$root"/}" >&2
+    exit 1
+  fi
+  mkdir -p "$dst/skills/$(dirname "$f")"
+  cp "$src" "$dst/skills/$f"
+done <<<"$files"

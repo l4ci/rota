@@ -47,7 +47,9 @@ func LayoutViolations(fsys fs.FS) ([]string, error) {
 		if rel == "references" && d.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
-		if !SupportedFile(rel) {
+		// A symlinked file would be followed by Load and the Codex copy and
+		// ship its target from outside the skill folder.
+		if !SupportedFile(rel) || d.Type()&fs.ModeSymlink != 0 {
 			bad = append(bad, p)
 		}
 		return nil
