@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -110,7 +111,7 @@ func TestRunStdioReportsSignalAfterCancel(t *testing.T) {
 	started := make(chan int, 1)
 	go func() { <-started; cancel() }()
 	r, err := Run(ctx, Cmd{Name: "sh", Args: []string{"-c", "sleep 30"}, Grace: 10 * time.Second, Stdio: &Stdio{},
-		Timeout: NoTimeout, OnStart: func(pid int) { started <- pid }})
+		Timeout: NoTimeout, OnStart: func(p *os.Process) { started <- p.Pid }})
 	if !errors.Is(err, context.Canceled) || r.Signal != int(syscall.SIGTERM) {
 		t.Fatalf("result %+v err %v", r, err)
 	}
@@ -118,11 +119,17 @@ func TestRunStdioReportsSignalAfterCancel(t *testing.T) {
 
 func TestRunDetachReturnsBeforeChildEnds(t *testing.T) {
 	start := time.Now()
-	r, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "sleep 2"}, Detach: true, Timeout: 50 * time.Millisecond})
+	var pid int
+	r, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "sleep 2"}, Detach: true, Timeout: 50 * time.Millisecond,
+		OnStart: func(p *os.Process) { pid = p.Pid }})
 	if err != nil || r != (Result{}) || time.Since(start) > time.Second {
 		t.Fatalf("result %+v err %v after %v", r, err, time.Since(start))
 	}
 	time.Sleep(200 * time.Millisecond) // past Timeout: the child must still be alive
+	if pid <= 0 || syscall.Kill(pid, 0) != nil {
+		t.Fatalf("detached child %d did not outlive Timeout", pid)
+	}
+	syscall.Kill(pid, syscall.SIGKILL)
 }
 
 func TestRunDetachStartFailure(t *testing.T) {
@@ -134,7 +141,7 @@ func TestRunDetachStartFailure(t *testing.T) {
 
 func TestRunOnStartGetsPid(t *testing.T) {
 	pid := 0
-	Run(context.Background(), Cmd{Name: "true", OnStart: func(p int) { pid = p }})
+	Run(context.Background(), Cmd{Name: "true", OnStart: func(p *os.Process) { pid = p.Pid }})
 	if pid <= 0 {
 		t.Fatalf("pid %d", pid)
 	}

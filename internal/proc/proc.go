@@ -84,10 +84,13 @@ type Cmd struct {
 	// child. Its stdio is the null device unless Stdio is set.
 	Detach bool
 	// Grace, when > 0, ends the command on cancel with SIGTERM and kills it
-	// only after Grace; the default is an immediate kill.
+	// only after Grace; the default is an immediate kill. With Group, the
+	// group kill wins: Grace then only sets how long the pipes are drained.
 	Grace time.Duration
-	// OnStart, when set, is called with the pid once the command has started.
-	OnStart func(pid int)
+	// OnStart, when set, is called with the started process once the command
+	// has begun. Signal through it, not a bare pid: once the run has reaped the
+	// child, the handle refuses (os.ErrProcessDone) where a pid could be reused.
+	OnStart func(p *os.Process)
 }
 
 // Runner runs one command. A command that ran and exited non-zero is a Result
@@ -180,12 +183,12 @@ func exitStatus(ee *exec.ExitError) (code, signal int) {
 }
 
 // start starts cmd and reports its pid to onStart.
-func start(cmd *exec.Cmd, onStart func(pid int)) error {
+func start(cmd *exec.Cmd, onStart func(p *os.Process)) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	if onStart != nil {
-		onStart(cmd.Process.Pid)
+		onStart(cmd.Process)
 	}
 	return nil
 }

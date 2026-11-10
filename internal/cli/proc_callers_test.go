@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"syscall"
@@ -18,7 +19,7 @@ func recordProc(res proc.Result, err error) (*[]proc.Cmd, proc.Runner) {
 	return &got, func(_ context.Context, c proc.Cmd) (proc.Result, error) {
 		got = append(got, c)
 		if c.OnStart != nil {
-			c.OnStart(4242)
+			c.OnStart(&os.Process{Pid: 4242})
 		}
 		return res, err
 	}
