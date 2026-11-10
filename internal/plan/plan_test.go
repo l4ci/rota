@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -40,14 +41,6 @@ func exitOf(err error) int {
 
 var created = regexp.MustCompile(`(?m)^created: \d{4}-\d{2}-\d{2}$`)
 
-func golden(t *testing.T, name string) string {
-	b, err := os.ReadFile(filepath.Join("testdata", "golden", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
 // project is the scenario the goldens were recorded on: repos web, api, web-docs.
 func project(t *testing.T) string {
 	root, _ := filepath.EvalSymlinks(t.TempDir())
@@ -81,7 +74,7 @@ func TestAddMatchesOldHelper(t *testing.T) {
 			t.Fatalf("Add(%+v) = %q %q %v", s.o, key, kind, err)
 		}
 		got, _ := Show(Files(root), key)
-		if g := created.ReplaceAllString(string(got), "created: DATE"); g != golden(t, key+".md") {
+		if g := created.ReplaceAllString(string(got), "created: DATE"); g != golden.Read(t, key+".md") {
 			t.Errorf("%s differs from golden:\n%s", key, g)
 		}
 	}
@@ -223,12 +216,12 @@ func TestListShowPutRm(t *testing.T) {
 func TestValidateDocsMatchesOldHelper(t *testing.T) {
 	root := project(t)
 	os.MkdirAll(filepath.Join(root, ".rota/plans"), 0o777)
-	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M03-B01"), []byte(golden(t, "validate-docs.plan.md")), 0o644)
+	os.WriteFile(rotatree.Doc(root, rotatree.PlansDir, "M03-B01"), []byte(golden.Read(t, "validate-docs.plan.md")), 0o644)
 	ms, text, err := ValidateDocs(root, "M03-B01")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.ReplaceAll(text, root, "ROOT"); got != golden(t, "validate-docs.out") {
+	if got := strings.ReplaceAll(text, root, "ROOT"); got != golden.Read(t, "validate-docs.out") {
 		t.Errorf("text differs from golden:\n%s", got)
 	}
 	if len(ms) != 9 || ms[0].TargetRepo != "web" || ms[0].Suggestion == "" || ms[2].Issue != "sub-repo 'ghost' is not registered in .rota/repos.json" {
