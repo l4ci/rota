@@ -103,7 +103,7 @@ func TestTrainLandsMembersAndNotifiesTheCulprit(t *testing.T) {
 			{Target: "noissue", Landed: true},
 		},
 	}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"good": "1", "kit": "2"}, r)
+	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"good": "1", "kit": "2"}, nil, r)
 	if len(fails) != 0 {
 		t.Fatalf("failures %+v", fails)
 	}
@@ -118,8 +118,21 @@ func TestTrainLandsMembersAndNotifiesTheCulprit(t *testing.T) {
 func TestTrainReportsFailuresPerTarget(t *testing.T) {
 	b := &fakeBook{failOn: "start"}
 	r := worker.TrainResult{Members: []worker.TrainMember{{Target: "a", Landed: true}, {Target: "b", Landed: true}}}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"a": "1", "b": "2"}, r)
+	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"a": "1", "b": "2"}, nil, r)
 	if len(fails) != 2 || fails[0].Target != "a" || fails[1].Target != "b" {
 		t.Errorf("failures %+v", fails)
+	}
+}
+
+func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
+	b := &fakeBook{}
+	r := worker.TrainResult{Verdict: worker.GateStale, Culprit: "kit"}
+	targets := map[string]worker.GateTarget{"kit": {Name: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"}}
+	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"kit": "2"}, targets, r)
+	if len(fails) != 0 {
+		t.Fatalf("failures %+v", fails)
+	}
+	if len(b.posts) != 1 || b.posts[0].branch != "mac-kit/2-x" || b.posts[0].pr != "https://github.com/o/r/pull/9" {
+		t.Errorf("posts %+v, want one for the registry's branch and PR", b.posts)
 	}
 }

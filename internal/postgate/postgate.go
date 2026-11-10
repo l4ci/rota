@@ -75,9 +75,11 @@ func Gate(book Book, root, issue string, r worker.GateResult) error {
 
 // Train does the same bookkeeping after a merge train, for every member it
 // names. issues maps a train target to its item; a target with none (a slot
-// without one) is skipped. A landed member ends its item's clocks and count. A
+// without one) is skipped. targets supplies the culprit's branch and PR when
+// the result carries neither (a failure before any member gate ran), so Train
+// notifies the right PR without Run having patched the result first. A landed member ends its item's clocks and count. A
 // culprit whose verdict notifies is told on its PR.
-func Train(book Book, round *worker.RoundMemo, root string, issues map[string]string, r worker.TrainResult) []Failure {
+func Train(book Book, round *worker.RoundMemo, root string, issues map[string]string, targets map[string]worker.GateTarget, r worker.TrainResult) []Failure {
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
@@ -87,7 +89,7 @@ func Train(book Book, round *worker.RoundMemo, root string, issues map[string]st
 		}
 	}
 	if issue := issues[r.Culprit]; issue != "" && worker.ClassifyVerdict(r.Verdict).Notify {
-		g := trainCulprit(issues, r)
+		g := trainCulprit(issues, targets, r)
 		g.Slot, g.Round = r.Culprit, round
 		if err := notify(book, root, g); err != nil {
 			fails = append(fails, Failure{r.Culprit, err})
