@@ -259,6 +259,9 @@ func TestLandingAbandonedIntentDoesNotWedgeRuns(t *testing.T) {
 				if paths := landingMarkers(t, common); len(paths) != 0 {
 					t.Errorf("abandoned or completed intent remains: %v", paths)
 				}
+				if locks, _ := filepath.Glob(filepath.Join(rotastate.Dir(common), "landing-run-*.lock")); len(locks) != 0 {
+					t.Errorf("landing marker left lock sidecars: %v", locks)
+				}
 			})
 		}
 	}
@@ -273,7 +276,7 @@ func TestLandingReadOnlyGateAndTrainBypassIntentAndLock(t *testing.T) {
 	}
 	landingHoldLock(t, e, w.dir)
 	marker := filepath.Join(rotastate.Dir(common), "landing-run-live.pid")
-	if err := os.WriteFile(marker, []byte(gateMarker(pidlive.Real{}, os.Getpid())), 0o644); err != nil {
+	if err := os.WriteFile(marker, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, preview := range []struct {

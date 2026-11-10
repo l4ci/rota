@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -85,31 +84,25 @@ func (e Env) claimTrainRun(ctx context.Context, root string, o TrainOpts) (relea
 	}
 	me := os.Getpid()
 	run := TrainRun{PID: me, RequestID: o.RequestID, Targets: slices.Clone(o.Targets), Base: o.Base, Since: stamp.Format(e.Now())}
-	if _, st, ok := e.procs().Stat(me); ok {
-		run.Start = st
-	}
-	path := trainRunFile(common, o.RequestID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	run.Start = pidlive.StampOf(e.procs(), me).Start
+	file := trainMarker(trainRunFile(common, o.RequestID))
+	if err := file.Write(run, nil); err != nil {
 		return nil, err
 	}
-	if err := fsio.WriteJSONAtomic(path, run); err != nil {
-		return nil, err
-	}
-	return func() { os.Remove(path) }, nil
+	return func() { _ = file.Remove(me) }, nil
 }
 
 // readTrainRun reads one marker; ok is false when it is missing, unreadable
 // or names a process that is no longer the one that wrote it.
 func (e Env) readTrainRun(path string) (TrainRun, bool) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return TrainRun{}, false
-	}
-	var run TrainRun
-	if json.Unmarshal(b, &run) != nil || run.PID <= 0 || !markerLive(e.procs(), run.PID, run.Start) {
-		return TrainRun{}, false
-	}
-	return run, true
+	return trainMarker(path).ReadLive(func(r TrainRun) bool { return pidlive.Running(e.procs(), r.PID, r.Start) })
+}
+
+// OwnerPID implements pidlive.Record.
+func (r TrainRun) OwnerPID() int { return r.PID }
+
+func trainMarker(path string) pidlive.Marker[TrainRun] {
+	return pidlive.Marker[TrainRun]{Path: path, Codec: pidlive.JSON[TrainRun](), Private: true}
 }
 
 // FindTrainRun is the live train holding request id, ok false when none does.
@@ -165,7 +158,7 @@ func (e Env) CancelTrain(ctx context.Context, root, id string, wait time.Duratio
 		return run, fmt.Errorf("signal train pid %d: %w", run.PID, err)
 	}
 	deadline := e.Now().Add(wait)
-	for markerLive(e.procs(), run.PID, run.Start) {
+	for pidlive.Running(e.procs(), run.PID, run.Start) {
 		if !e.Now().Before(deadline) {
 			return run, fmt.Errorf("train pid %d did not stop within %s; it may still be cleaning up", run.PID, wait)
 		}
