@@ -65,14 +65,10 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	}
 	// The commit the gates judge is the commit that lands: a push to the
 	// branch after this point cannot ride in.
-	pin, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
+	head, err := outAs(p.Git, "rev-parse "+branch, "rev-parse", "--verify", "-q", branch+"^{commit}")
 	if err != nil {
 		return "", err
 	}
-	if pin.ExitCode != 0 {
-		return "", &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(pin.Stderr)}
-	}
-	head := line(pin.Stdout)
 	if err := p.Verdict(branch, head); err != nil {
 		return "", err
 	}
@@ -84,12 +80,8 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if err := ClearWorktree(p.Git, branch, p.Checkout); err != nil {
 		return "", err
 	}
-	co, err := p.Git.Run("checkout", "-q", base)
-	if err != nil {
+	if _, err := outAs(p.Git, "checkout "+base, "checkout", "-q", base); err != nil {
 		return "", err
-	}
-	if co.ExitCode != 0 {
-		return "", &GitError{Msg: "git checkout " + base + ": " + strutil.FirstLine(co.Stderr)}
 	}
 	recover := p.Recover
 	if recover == nil {
@@ -129,22 +121,15 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 		return "", postMerge("", err)
 	}
 	mergedSHA := line(sha.Stdout)
-	tip, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
+	current, err := outAs(p.Git, "rev-parse "+branch, "rev-parse", "--verify", "-q", branch+"^{commit}")
 	if err != nil {
 		return mergedSHA, postMerge(mergedSHA, err)
 	}
-	if tip.ExitCode != 0 {
-		return mergedSHA, postMerge(mergedSHA, &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(tip.Stderr)})
-	}
-	if current := line(tip.Stdout); current != head {
+	if current != head {
 		return mergedSHA, &BranchMovedError{Branch: branch, Base: base, Pinned: head, Tip: current, MergeSHA: mergedSHA}
 	}
-	del, err := p.Git.Run("branch", "-d", branch)
-	if err != nil {
+	if _, err := outAs(p.Git, "branch -d "+branch, "branch", "-d", branch); err != nil {
 		return mergedSHA, postMerge(mergedSHA, err)
-	}
-	if del.ExitCode != 0 {
-		return mergedSHA, postMerge(mergedSHA, &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)})
 	}
 	return mergedSHA, nil
 }
