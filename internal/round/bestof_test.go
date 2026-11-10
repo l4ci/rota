@@ -440,3 +440,23 @@ func TestTransferToHumanReleasesAClosedIssue(t *testing.T) {
 		t.Errorf("a closed issue still cannot move to a slot: %v", err)
 	}
 }
+
+// A recorded claim id that no longer matches the issue's open claim must not
+// leave the sender's claim behind when the issue goes to the human.
+func TestTransferToHumanReleasesEveryOpenClaimOfTheSender(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.assign("12", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.Slot("ben").SetClaimID("ben@stale")
+	})
+	f.be.claims["12"] = "ben@0"
+	f.be.more = map[string][]string{"12": {"ben@main"}}
+	if _, err := f.transfer("12", HumanTarget, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.held("12"); len(got) != 0 {
+		t.Errorf("every open claim of the sender is released: %v", got)
+	}
+}
