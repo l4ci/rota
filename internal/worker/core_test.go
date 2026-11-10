@@ -119,6 +119,12 @@ func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery") || !strings.Contains(err.Error(), "the maintainer must confirm after reading the original terminal screen") {
 		t.Fatalf("unconfirmed task must require the maintainer's screen confirmation: %v", err)
 	}
+	// #3001: the refusal also names the maintainer-free way forward.
+	for _, want := range []string{"rota round transfer <id> --to <free slot>", "stays blocked until the delivery is confirmed"} {
+		if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("refusal must contain %q: %v", want, err)
+		}
+	}
 	h.sendErr = nil // the host can now prove the task was picked up
 	if _, err := e.Dispatch(bg, dir, relay); err != nil {
 		t.Fatalf("relay after a proven pickup: %v", err)

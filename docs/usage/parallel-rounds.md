@@ -219,6 +219,17 @@ unknown delivery without sending input:
 rota worker dispatch ben --confirm-not-submitted
 ```
 
+The orchestrator does not run that itself. To keep a round moving while the
+maintainer has not answered, give the issue to another slot:
+
+```bash
+rota round transfer <id> --to <free slot>
+```
+
+Transfer parks the stuck slot and leaves its unknown delivery in place, so that
+slot stays blocked until the delivery is confirmed. The refusal message names both
+paths.
+
 Then retry the original dispatch or send the next relay. Confirmation keeps the
 terminal and signing key and retracts the uncertain relay's provisional log entry,
 so retrying it keeps its sequence. It refuses accepted or queued input, positive
