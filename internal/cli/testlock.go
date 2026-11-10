@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -59,20 +58,19 @@ func testLock(fs *flag.FlagSet) RunFunc {
 		defer stop()
 		code := 0
 		err = withTestLock(c, ctx, root, gc, "test lock", func() error {
-			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-			cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr
-			cmd.Env = append(os.Environ(), testLockHeldEnv+"=1")
-			// An interrupt ends the child the way a terminal would, so its own
-			// traps clean up; the wait ends the process if it ignores that.
-			cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
-			cmd.WaitDelay = 30 * time.Second
-			runErr := cmd.Run()
-			var ee *exec.ExitError
-			if errors.As(runErr, &ee) {
-				code = ee.ExitCode()
-				if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-					code = 128 + int(ws.Signal()) // a signalled child, as a shell reports it
-				}
+			// An interrupt ends the child the way a terminal would (SIGTERM), so
+			// its own traps clean up; Grace ends the process if it ignores that.
+			r, runErr := c.deps().Proc(ctx, proc.Cmd{
+				Name: args[0], Args: args[1:], Env: []string{testLockHeldEnv + "=1"},
+				Timeout: proc.NoTimeout, Grace: 30 * time.Second,
+				Stdio: &proc.Stdio{In: c.Stdin, Out: c.Stdout, Err: c.Stderr},
+			})
+			if r.Signal != 0 {
+				code = 128 + r.Signal // a signalled child, as a shell reports it
+				return nil
+			}
+			if runErr == nil || ctx.Err() != nil && errors.Is(runErr, ctx.Err()) {
+				code = r.ExitCode
 				return nil
 			}
 			if runErr != nil {

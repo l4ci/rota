@@ -3,6 +3,9 @@
 // start time, command name, working directory and descendants. Host, roundlease,
 // doctor and worker read the process table only through a Source, so a test
 // replaces it with a recorded table instead of the real ps and /proc.
+//
+// It also owns the pid-owned marker file (Marker): write as owner, read what
+// is live, remove only if still the caller's.
 package pidlive
 
 import (
