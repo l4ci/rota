@@ -96,11 +96,23 @@ func (s *Set) Stubbed() (*Set, error) {
 }
 
 func stub(skill string, full []byte) ([]byte, error) {
-	rest, ok := strings.CutPrefix(string(full), "---\n")
-	fm, _, ok2 := strings.Cut(rest, "\n---\n")
-	if !ok || !ok2 {
+	// The fence rule is scripts/fmlite.py's: a first line of "---" and the next
+	// line of "---", each ignoring trailing whitespace, so CRLF files and a
+	// closing fence at end of file are front matter too.
+	lines := strings.Split(string(full), "\n")
+	end := -1
+	if strings.TrimRight(lines[0], " \t\r") == "---" {
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimRight(lines[i], " \t\r") == "---" {
+				end = i
+				break
+			}
+		}
+	}
+	if end < 0 {
 		return nil, fmt.Errorf("skills: %s/SKILL.md has no frontmatter to keep in a stub", skill)
 	}
+	fm := strings.Join(lines[1:end], "\n")
 	head := "---\n" + fm + "\n---\n\n"
 	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Its first line names the base directory that holds the skill's files; relative links in the text resolve against it, and the footer lists their absolute paths. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill)), nil
 }

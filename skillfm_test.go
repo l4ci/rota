@@ -162,15 +162,34 @@ func TestValidatorLintsPluginSkills(t *testing.T) {
 
 // One fixture table, test/fixtures/frontmatter/<case>.md with <case>.json, that
 // every SKILL.md front-matter reader must agree on. The JSON is the expected
-// top-level fields as strings, or {"error": true} when a reader must reject the
-// file ("structural" when even the Go stub, which keeps the block as opaque
-// bytes, must reject it: a missing or unclosed fence).
+// top-level fields, or {"error": true, "message": <substring>} when a reader
+// must reject the file ("structural" when even the Go stub, which keeps the
+// block as opaque bytes, must reject it: a missing or unclosed fence). The Go
+// leg stubs each accepted fixture and reads the stub back through the validator,
+// so the stub must keep the front matter the other readers see.
 func TestFrontMatterFixtureTable(t *testing.T) {
 	cases, err := filepath.Glob("test/fixtures/frontmatter/*.md")
 	if err != nil || len(cases) == 0 {
 		t.Fatalf("no fixtures: %v", err)
 	}
-	abs, _ := filepath.Abs("test/validate-skills.py")
+	abs, err := filepath.Abs("test/validate-skills.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := func(path string) (map[string]any, string, error) {
+		cmd := exec.Command("python3", abs, "--fields", path)
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, stderr.String(), err
+		}
+		var got map[string]any
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatalf("%s: %v: %s", path, err, out)
+		}
+		return got, "", nil
+	}
 	for _, md := range cases {
 		name := strings.TrimSuffix(filepath.Base(md), ".md")
 		raw, err := os.ReadFile(md)
@@ -181,31 +200,36 @@ func TestFrontMatterFixtureTable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var want struct {
+		var flags struct {
 			Error      bool
 			Structural bool
+			Message    string
 		}
-		_ = json.Unmarshal(wantRaw, &want)
-		var fields map[string]string
-		if !want.Error {
-			if err := json.Unmarshal(wantRaw, &fields); err != nil {
+		if err := json.Unmarshal(wantRaw, &flags); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var want map[string]any
+		if !flags.Error {
+			if err := json.Unmarshal(wantRaw, &want); err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
 		}
 		t.Run(name+"/validator", func(t *testing.T) {
-			out, err := exec.Command("python3", abs, "--fields", md).Output()
-			if want.Error {
+			got, msg, err := fields(md)
+			if flags.Error {
 				if err == nil {
-					t.Fatalf("validator accepted %s: %s", name, out)
+					t.Fatalf("validator accepted %s: %v", name, got)
+				}
+				if !strings.Contains(msg, flags.Message) {
+					t.Errorf("validator said %q, want it to contain %q", msg, flags.Message)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("validator rejected %s: %v", name, err)
+				t.Fatalf("validator rejected %s: %v: %s", name, err, msg)
 			}
-			var got map[string]string
-			if err := json.Unmarshal(out, &got); err != nil || !reflect.DeepEqual(got, fields) {
-				t.Errorf("validator read %v (%v), want %v", got, err, fields)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("validator read %v, want %v", got, want)
 			}
 		})
 		t.Run(name+"/go-stub", func(t *testing.T) {
@@ -213,12 +237,30 @@ func TestFrontMatterFixtureTable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = set.Stubbed()
-			if want.Structural && err == nil {
-				t.Error("Go stub accepted a file with no closed front matter fence")
+			st, err := set.Stubbed()
+			if flags.Structural {
+				if err == nil {
+					t.Error("Go stub accepted a file with no closed front matter fence")
+				}
+				return
 			}
-			if !want.Structural && err != nil {
-				t.Errorf("Go stub rejected %s: %v", name, err)
+			if err != nil {
+				t.Fatalf("Go stub rejected %s: %v", name, err)
+			}
+			stub, _ := st.File("rota-x/SKILL.md")
+			path := filepath.Join(t.TempDir(), "SKILL.md")
+			if err := os.WriteFile(path, stub, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			got, msg, err := fields(path)
+			if flags.Error {
+				if err == nil || !strings.Contains(msg, flags.Message) {
+					t.Errorf("stubbed %s: validator %v %q, want rejection with %q", name, err, msg, flags.Message)
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("stubbed %s reads %v (%v), want %v", name, got, err, want)
 			}
 		})
 	}
