@@ -179,13 +179,26 @@ func (a Assigned) Ready() bool {
 	return a.Readiness.Ready()
 }
 
+// skillInstalls is where rota may have installed skills for the user: HOME and
+// every Claude config dir the install verbs write to (worker.SkillClaudeDirs).
+type skillInstalls struct {
+	home       string
+	claudeDirs []string
+}
+
+// skillInstalls resolves the installs for the project at root.
+func (e Env) skillInstalls(root string) skillInstalls {
+	home, dirs, _ := worker.SkillClaudeDirs(e.getenv(), e.Worker.Home, e.Worker.Config(root))
+	return skillInstalls{home, dirs}
+}
+
 // briefPath is the standing worker contract the pointer names: round.brief,
 // else the project's source-checkout copy, else the first installed skills
 // root's (the skills package owns both layouts). With round.brief unset and
 // none of those present, the copy in the skills cache under cache (the tree
 // this binary extracts, made when missing); "" skips it.
-func briefPath(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, bool) {
-	p, _, ok := resolveBrief(root, set, getenv, cache)
+func briefPath(root string, set roundcfg.Settings, inst skillInstalls, cache string) (string, bool) {
+	p, _, ok := resolveBrief(root, set, inst, cache)
 	return p, ok
 }
 
@@ -194,7 +207,7 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 // tree it named) falls back to the current cache copy, and the warning names
 // the stale value and the path used. A missing round.brief elsewhere stays a
 // miss.
-func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, string, bool) {
+func resolveBrief(root string, set roundcfg.Settings, inst skillInstalls, cache string) (string, string, bool) {
 	configured := ""
 	if set.Brief != "" {
 		configured = set.Brief
@@ -205,7 +218,7 @@ func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string
 			return configured, "", true
 		}
 	} else {
-		for _, c := range []string{skills.CheckoutBrief(root), skills.InstalledBrief(getenv, root)} {
+		for _, c := range []string{skills.CheckoutBrief(root), skills.InstalledBrief(inst.home, inst.claudeDirs, root)} {
 			if c != "" {
 				return c, "", true
 			}
@@ -1093,7 +1106,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// 5. The brief exists before anything is marked.
 	cacheDir := skills.CacheDir(e.getenv())
-	brief, briefWarn, ok := resolveBrief(root, set, e.getenv(), cacheDir)
+	brief, briefWarn, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
 	if !ok {
 		return run, false, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}
