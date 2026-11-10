@@ -284,6 +284,7 @@
     "./internal/initproj/TestInitMatchesBootstrapGolden": "Walks temporary bootstrap projects to compare generated files with fixtures.",
     "./internal/initproj/TestInitRefusesACorruptCounters": "Walks temporary bootstrap projects to compare generated files with fixtures.",
     "./internal/initproj/TestInitSeedsRoundRoster": "Walks temporary bootstrap projects to compare generated files with fixtures.",
+    "./internal/knowledge/TestAddDecisionLeavesPreambleByteIdentical": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestAmendKeepsStampFinalForQuery": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestDecisionLegacyMetadataOrders": "Reads planted knowledge or instruction Markdown in temporary projects.",
     "./internal/knowledge/TestEveryTierOperationSkipsGlossary": "Reads planted knowledge Markdown and the tier sidecar in a temporary project.",
