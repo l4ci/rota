@@ -218,3 +218,26 @@ func TestSkillLayoutRealTree(t *testing.T) {
 		t.Fatal("no supported skill files found, the check proves nothing")
 	}
 }
+
+// The Codex build and Load agree on what each skill ships: the built tree holds
+// exactly Load's files, so a reference no skill reaches stays out of the bundle.
+func TestCodexTreeMatchesLoadClosure(t *testing.T) {
+	root := layoutFixture(t)
+	put(t, root, "skills/references/unused.md", "no skill cites this\n")
+	v := runLayout(t, root)
+	if v.codexErr != "" {
+		t.Fatalf("codex build: %s", v.codexErr)
+	}
+	if got, want := strings.Join(v.codex, " "), strings.Join(v.binary, " "); got != want {
+		t.Errorf("Codex tree ships %s, Load ships %s", got, want)
+	}
+	for _, p := range v.codex {
+		if strings.HasSuffix(p, "unused.md") {
+			t.Errorf("Codex tree ships uncited reference %s", p)
+		}
+	}
+	real := runLayout(t, ".")
+	if got, want := strings.Join(real.codex, " "), strings.Join(real.binary, " "); got != want {
+		t.Errorf("real tree: Codex ships %d files, Load ships %d", len(real.codex), len(real.binary))
+	}
+}
