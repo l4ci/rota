@@ -50,6 +50,18 @@ func inWork(dir string) bool { return dir == gWork || strings.HasPrefix(dir, gWo
 
 func TestGuardDenies(t *testing.T) {
 	for _, line := range []string{
+		"git push origin HEAD:main",
+		"git -C /repo push origin @",
+		"git push origin main",
+		"git push origin master",
+		"git push origin HEAD:refs/heads/main",
+		"git push -u origin " + gBranch + ":main",
+		"git -C /repo push origin HEAD",
+		"gh api -X PUT repos/o/r/pulls/1/merge",
+		"gh api --method PUT repos/o/r/pulls/1/merge",
+		"gh api repos/o/r/pulls/1/merge -f merge_method=squash",
+		"gh api -XPUT repos/o/r/pulls/1/merge",
+		"gh api -X PUT /repos/o/r/pulls/1/merge/",
 		"git push --force origin main",
 		"git push -f origin main",
 		"git push origin +main",
@@ -83,6 +95,21 @@ func TestGuardDenies(t *testing.T) {
 		"git -C /repo reset --hard",
 		"git -C /elsewhere reset --hard origin/main",
 		"cd /elsewhere && git reset --hard",
+		"env -C /repo git reset --hard",
+		"env --chdir=/repo git reset --hard",
+		"sudo -D /repo git reset --hard",
+		"pushd /repo && git reset --hard",
+		"popd; git reset --hard",
+		"pushd +1 && git reset --hard",
+		"pushd && git reset --hard",
+		"pushd -P /repo && git reset --hard",
+		"pushd -- /repo && git reset --hard",
+		"pushd /repo -n && git reset --hard",
+		"pushd -n /repo /x && git reset --hard",
+		"GIT_DIR=/repo/.git GIT_WORK_TREE=/repo git reset --hard",
+		"env GIT_DIR=/repo/.git git reset --hard",
+		"env GIT_WORK_TREE=/repo git reset --hard",
+		"(cd /repo); git reset --hard", // stays denied: groups are flattened, see Guard
 		"git --work-tree=/x reset --hard",
 		"git branch -D x",
 		"git branch -d -f x",
@@ -132,6 +159,11 @@ func TestGuardDenies(t *testing.T) {
 
 func TestGuardAllows(t *testing.T) {
 	for _, line := range []string{
+		"gh api repos/o/r/pulls/1/merge",
+		"gh api -X GET repos/o/r/pulls/1/merge",
+		"gh api -X PUT repos/o/r/issues/1/labels",
+		"git push origin HEAD:" + gBranch,
+		"git push origin " + gBranch + ":" + gBranch,
 		"git push origin HEAD",
 		"ls &>/dev/null",
 		"go test ./... &>/tmp/x",
@@ -145,6 +177,12 @@ func TestGuardAllows(t *testing.T) {
 		"git -C " + gWork + " push origin " + gBranch,
 		"git reset --hard origin/main",
 		"git -C " + gWork + "/sub reset --hard origin/main",
+		"env -C " + gWork + "/sub git reset --hard",
+		"sudo -D " + gWork + " git reset --hard",
+		"pushd " + gWork + "/sub && git reset --hard",
+		"GIT_WORK_TREE=" + gWork + " git reset --hard",
+		"pushd -n /repo && git reset --hard",
+		"pushd -- " + gWork + "/sub && git reset --hard",
 		"cd " + gWork + "/sub && git reset --hard",
 		"git reset --soft HEAD~1",
 		"git add path/to/file.go",
@@ -242,5 +280,16 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 				t.Fatalf("parseScript(%q) did not return", line)
 			}
 		})
+	}
+}
+
+func TestGuardDeniesPushToConfiguredBase(t *testing.T) {
+	env := guardEnv()
+	env.Base = "develop"
+	if got := Guard("git push origin HEAD:develop", env); got == "" {
+		t.Fatal("push to the configured base passed")
+	}
+	if got := Guard("git push origin HEAD:develop", guardEnv()); got != "" {
+		t.Fatalf("without Base, develop is an ordinary branch: %q", got)
 	}
 }
