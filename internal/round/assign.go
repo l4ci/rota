@@ -901,6 +901,20 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			if len(skipped) > 0 {
 				return run, false, blocked(BlockNoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
 			}
+			active, _ := Members(reg, set)
+			var missing []string
+			for _, n := range active {
+				if reg.Slot(n) == nil {
+					missing = append(missing, n)
+				}
+			}
+			if len(missing) > 0 {
+				msg := "round slot(s) not provisioned (a reaped slot is gone): " + strings.Join(missing, ", ") + "; run rota round start"
+				if len(missing) < len(active) {
+					msg += "; the other slots are busy"
+				}
+				return run, false, blocked(BlockNoFreeSlot, "%s", msg)
+			}
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]
