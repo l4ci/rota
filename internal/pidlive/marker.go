@@ -2,6 +2,7 @@ package pidlive
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,9 +90,15 @@ func Text() Codec[Stamp] {
 // Marker is one pid-owned marker file: the record of a running process, kept
 // so another process can tell it is there. It owns the whole lifecycle: write
 // as owner, read what is live, remove only if still the caller's.
+//
+// A shared marker (one name many processes contend for) is written and removed
+// under its lock. Private marks a name only one run ever uses (a per-run temp
+// name or request id): nothing contends, so it takes no lock and leaves no
+// <path>.lock sidecar behind. Claim needs the lock and so a shared marker.
 type Marker[T Record] struct {
-	Path  string
-	Codec Codec[T]
+	Path    string
+	Codec   Codec[T]
+	Private bool
 }
 
 // Read loads the record; ok is false when the file is missing, does not
@@ -130,6 +137,9 @@ func (m Marker[T]) Write(v T, guard func() error) error {
 	if err := os.MkdirAll(filepath.Dir(m.Path), 0o777); err != nil {
 		return err
 	}
+	if m.Private && guard == nil {
+		return fsio.WriteFileAtomic(m.Path, b)
+	}
 	return fsio.Locked(m.Path, fsio.LockTimeout, func() error {
 		if guard != nil {
 			if err := guard(); err != nil {
@@ -163,8 +173,19 @@ var errHeld = fmt.Errorf("marker held by another process")
 // Remove deletes the marker when it is still pid's, so a successor that
 // replaced a dead owner's record keeps its own. A missing file is not an error.
 func (m Marker[T]) Remove(pid int) error {
-	return fsio.RemoveMarker(m.Path, func(b []byte) bool {
+	owned := func(b []byte) bool {
 		v, ok := m.Codec.Decode(b)
 		return ok && v.OwnerPID() == pid
-	})
+	}
+	if m.Private {
+		b, err := os.ReadFile(m.Path)
+		if err != nil || !owned(b) {
+			return nil
+		}
+		if err := os.Remove(m.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return fsio.RemoveMarker(m.Path, owned)
 }

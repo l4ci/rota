@@ -35,6 +35,9 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 				continue
 			}
 			p := filepath.Join(rotastate.Dir(common), ent.Name())
+			if _, err := os.Stat(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 			if _, live := landingMarker(p).ReadLive(func(s pidlive.Stamp) bool { return s.Live(e.procs()) }); live {
 				if noWait {
 					return errLandingBusy
@@ -51,7 +54,12 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 		if err := f.Close(); err != nil {
 			return err
 		}
-		return landingMarker(path).Write(pidlive.StampOf(e.procs(), os.Getpid()), nil)
+		if err := landingMarker(path).Write(pidlive.StampOf(e.procs(), os.Getpid()), nil); err != nil {
+			os.Remove(path)
+			path = ""
+			return err
+		}
+		return nil
 	})
 	if path != "" {
 		defer landingMarker(path).Remove(os.Getpid())
@@ -64,5 +72,5 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 
 // landingMarker is the pid-owned marker of one pending landing run.
 func landingMarker(path string) pidlive.Marker[pidlive.Stamp] {
-	return pidlive.Marker[pidlive.Stamp]{Path: path, Codec: pidlive.Text()}
+	return pidlive.Marker[pidlive.Stamp]{Path: path, Codec: pidlive.Text(), Private: true}
 }
