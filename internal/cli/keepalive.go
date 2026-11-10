@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -37,22 +37,37 @@ func keepaliveCommands() *Command {
 	}}
 }
 
-// osChild is a started process.
-type osChild struct{ cmd *exec.Cmd }
+// procChild is a process run through proc.Runner in the background: proc
+// hands over the started process, Signal sends to it, Wait collects how it
+// ended. Signalling the *os.Process, not a pid, means a signal arriving after
+// proc reaped the child gets os.ErrProcessDone instead of a reused pid.
+type procChild struct {
+	proc *os.Process
+	done chan procExit
+}
 
-func (c *osChild) Signal(s os.Signal) error { return c.cmd.Process.Signal(s) }
+type procExit struct {
+	res proc.Result
+	err error
+}
 
-func (c *osChild) Wait() (keepalive.Exit, error) {
-	err := c.cmd.Wait()
-	var ee *exec.ExitError
-	if err != nil && !errors.As(err, &ee) {
-		return keepalive.Exit{}, err
+func (c *procChild) Signal(s os.Signal) error {
+	if c.proc == nil {
+		return os.ErrProcessDone
 	}
-	ps := c.cmd.ProcessState
-	if ws, ok := ps.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-		return keepalive.Exit{Code: 128 + int(ws.Signal()), Signal: signalName(ws.Signal())}, nil
+	return c.proc.Signal(s)
+}
+
+func (c *procChild) Wait() (keepalive.Exit, error) {
+	x := <-c.done
+	if x.err != nil {
+		return keepalive.Exit{}, x.err
 	}
-	return keepalive.Exit{Code: ps.ExitCode()}, nil
+	if x.res.Signal != 0 {
+		sig := syscall.Signal(x.res.Signal)
+		return keepalive.Exit{Code: 128 + x.res.Signal, Signal: signalName(sig)}, nil
+	}
+	return keepalive.Exit{Code: x.res.ExitCode}, nil
 }
 
 func signalName(s syscall.Signal) string {
@@ -80,23 +95,38 @@ func signalName(s syscall.Signal) string {
 // A configDir, when set, is the child's CLAUDE_CONFIG_DIR from the first start.
 func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (keepalive.Child, error) {
 	return func(argv, extraEnv []string) (keepalive.Child, error) {
-		// Raw exec on purpose: the child owns the terminal for its whole life
-		// (inherited stdio, own process group), which proc.Run's buffered
-		// capture cannot express.
-		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Env = c.deps().Environ()
+		// Inherited stdio and no timeout on purpose: the child owns the
+		// terminal for its whole life, in the supervisor's own process group.
+		env := append([]string{}, c.deps().Environ()...)
 		if configDir != "" {
-			cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+configDir)
+			env = append(env, "CLAUDE_CONFIG_DIR="+configDir)
 		}
-		cmd.Env = append(cmd.Env, extraEnv...)
+		env = append(env, extraEnv...)
+		stdio := &proc.Stdio{Out: c.Stdout, Err: c.Stderr}
 		if f, ok := c.Stdin.(*os.File); ok {
-			cmd.Stdin = f
+			stdio.In = f
 		}
-		cmd.Stdout, cmd.Stderr = c.Stdout, c.Stderr
-		if err := cmd.Start(); err != nil {
-			return nil, err
+		started := make(chan *os.Process, 1)
+		child := &procChild{done: make(chan procExit, 1)}
+		go func() {
+			r, err := c.deps().Proc(context.Background(), proc.Cmd{
+				Name: argv[0], Args: argv[1:], Environ: env, Timeout: proc.NoTimeout,
+				Stdio: stdio, OnStart: func(p *os.Process) { started <- p },
+			})
+			child.done <- procExit{r, err}
+			close(started)
+		}()
+		p, ok := <-started
+		if !ok { // the run ended without reporting a pid: it never started, or a fake ran it
+			x := <-child.done
+			if x.err != nil {
+				return nil, x.err
+			}
+			child.done <- x
+			return child, nil
 		}
-		return &osChild{cmd: cmd}, nil
+		child.proc = p
+		return child, nil
 	}
 }
 

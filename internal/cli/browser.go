@@ -1,31 +1,33 @@
 package cli
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"runtime"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tui"
 )
 
 // openBrowser is the real Deps.OpenURL: it hands an http(s) URL to the
 // desktop's opener and does not wait for it. It never goes through a shell.
 func openBrowser(url string) error {
+	return openBrowserWith(proc.Run, runtime.GOOS, url)
+}
+
+// openBrowserWith starts the opener for goos detached: its exit status says
+// nothing useful, so proc reaps it and reports only a failure to start.
+func openBrowserWith(run proc.Runner, goos, url string) error {
 	if !tui.SafeURL(url) {
 		return fmt.Errorf("refusing to open %q: not a plain http(s) URL", url)
 	}
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
+	c := proc.Cmd{Name: "xdg-open", Args: []string{url}, Detach: true}
+	switch goos {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		c = proc.Cmd{Name: "open", Args: []string{url}, Detach: true}
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+		c = proc.Cmd{Name: "rundll32", Args: []string{"url.dll,FileProtocolHandler", url}, Detach: true}
 	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go cmd.Wait() // reap the opener; its exit status says nothing useful
-	return nil
+	_, err := run(context.Background(), c)
+	return err
 }
