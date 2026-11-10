@@ -3,7 +3,13 @@
 // rune-safe clip, a short commit SHA, the first non-empty string and a default for an empty one.
 package strutil
 
-import "github.com/l4ci/rota/internal/pystr"
+import (
+	"slices"
+	"strings"
+	"unicode"
+
+	"github.com/l4ci/rota/internal/pystr"
+)
 
 // shaLen is how many characters of a commit SHA the messages show.
 const shaLen = 7
@@ -55,4 +61,35 @@ func OrDefault(v, d string) string {
 		return d
 	}
 	return v
+}
+
+// isControl is the one rule for untrusted display text: control runes (escape
+// sequences, backspace, bell, DEL, C1) and format runes (zero-width, bidi,
+// soft hyphen, tag characters), which hide or reorder what a reader sees.
+func isControl(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
+
+// HasControl reports whether s holds a control or format rune.
+func HasControl(s string) bool { return strings.ContainsFunc(s, isControl) }
+
+// StripControls drops the control and format runes of s except those in keep.
+func StripControls(s string, keep ...rune) string {
+	return strings.Map(func(r rune) rune {
+		if isControl(r) && !slices.Contains(keep, r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// Display strips control and format runes from untrusted text and bounds it to
+// limit runes, ending a cut text in an ellipsis.
+func Display(s string, limit int) string {
+	r := []rune(StripControls(s))
+	if limit <= 0 {
+		return ""
+	}
+	if len(r) > limit {
+		r = append(r[:limit-1], '…')
+	}
+	return string(r)
 }
