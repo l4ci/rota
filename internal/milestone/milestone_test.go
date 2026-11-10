@@ -3,6 +3,7 @@ package milestone
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/pystr"
 	"os"
 	"path/filepath"
@@ -46,14 +47,6 @@ func setStat(root, id, status string) (bool, error) {
 
 var created = regexp.MustCompile(`(?m)^created: \d{4}-\d{2}-\d{2}$`)
 
-func golden(t *testing.T, name string) string {
-	b, err := os.ReadFile(filepath.Join("testdata", "golden", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
 func read(t *testing.T, p string) string {
 	b, err := os.ReadFile(p)
 	if err != nil {
@@ -89,7 +82,7 @@ func project(t *testing.T) string {
 func snap(t *testing.T, root, stage string) {
 	t.Helper()
 	for _, f := range []struct{ file, name string }{{"CLAUDE.md", "CLAUDE.md"}, {".rota/MILESTONES.md", "MILESTONES.md"}} {
-		if got := read(t, filepath.Join(root, f.file)); got != golden(t, stage+"."+f.name) {
+		if got := read(t, filepath.Join(root, f.file)); got != golden.Read(t, stage+"."+f.name) {
 			t.Errorf("%s %s differs from golden:\n%s", stage, f.name, got)
 		}
 	}
@@ -123,7 +116,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 	}
 	snap(t, root, "s2")
 	for _, id := range []string{"M01", "M02", "M03"} {
-		if got := created.ReplaceAllString(read(t, filepath.Join(root, ".rota/milestones", id+".md")), "created: DATE"); got != golden(t, id+".md") {
+		if got := created.ReplaceAllString(read(t, filepath.Join(root, ".rota/milestones", id+".md")), "created: DATE"); got != golden.Read(t, id+".md") {
 			t.Errorf("%s differs from golden:\n%s", id, got)
 		}
 	}
@@ -135,7 +128,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 	if !reflect.DeepEqual(list, want) {
 		t.Errorf("list = %+v", list)
 	}
-	if ids, _ := Active(root); !reflect.DeepEqual(ids, strings.Fields(golden(t, "active.txt"))) {
+	if ids, _ := Active(root); !reflect.DeepEqual(ids, strings.Fields(golden.Read(t, "active.txt"))) {
 		t.Errorf("active = %v", ids)
 	}
 	setStat(root, "M02", "shipped")

@@ -938,7 +938,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if !toHuman {
 		cacheDir := skills.CacheDir(e.getenv())
 		var briefWarn string
-		if run.brief, briefWarn, ok = resolveBrief(root, set, e.getenv(), cacheDir); !ok {
+		if run.brief, briefWarn, ok = resolveBrief(root, set, e.skillInstalls(root), cacheDir); !ok {
 			return nil, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
 		}
 		if briefWarn != "" {

@@ -22,10 +22,10 @@ func installAt(t *testing.T, root, mode string) {
 // references, so it yields "" for the caller to fall back to the cache.
 func TestInstalledBrief(t *testing.T) {
 	top, home := t.TempDir(), t.TempDir()
-	env := fakeEnv(map[string]string{"HOME": home})
+	dirs := []string{filepath.Join(home, ".claude")}
 	rel := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
 
-	if p := InstalledBrief(env, top); p != "" {
+	if p := InstalledBrief(home, dirs, top); p != "" {
 		t.Fatalf("nothing installed: %q", p)
 	}
 	userRoot := filepath.Join(home, ".claude", "skills")
@@ -35,25 +35,25 @@ func TestInstalledBrief(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(userRoot, rel), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if p := InstalledBrief(env, top); p != "" {
+	if p := InstalledBrief(home, dirs, top); p != "" {
 		t.Errorf("a root without a manifest counts as installed: %q", p)
 	}
 	installAt(t, userRoot, ModeFull)
-	if p := InstalledBrief(env, top); p != filepath.Join(userRoot, rel) {
+	if p := InstalledBrief(home, dirs, top); p != filepath.Join(userRoot, rel) {
 		t.Errorf("full user root: %q", p)
 	}
 	codex := filepath.Join(home, ".agents", "skills")
 	installAt(t, codex, ModeFull)
-	if p := InstalledBrief(env, top); p != filepath.Join(userRoot, rel) {
+	if p := InstalledBrief(home, dirs, top); p != filepath.Join(userRoot, rel) {
 		t.Errorf("Claude before Codex: %q", p)
 	}
 	proj := filepath.Join(top, ".claude", "skills")
 	installAt(t, proj, ModeFull)
-	if p := InstalledBrief(env, top); p != filepath.Join(proj, rel) {
+	if p := InstalledBrief(home, dirs, top); p != filepath.Join(proj, rel) {
 		t.Errorf("project before user: %q", p)
 	}
 	installAt(t, proj, ModeStub)
-	if p := InstalledBrief(env, top); p != "" {
+	if p := InstalledBrief(home, dirs, top); p != "" {
 		t.Errorf("stub root must yield no brief, got %q", p)
 	}
 }
@@ -63,7 +63,7 @@ func TestInstalledBriefCodexOnly(t *testing.T) {
 	root := filepath.Join(top, ".agents", "skills")
 	installAt(t, root, ModeFull)
 	want := filepath.Join(root, "rota-orchestrate", "references", "worker-contract.md")
-	if p := InstalledBrief(fakeEnv(map[string]string{"HOME": home}), top); p != want {
+	if p := InstalledBrief(home, []string{filepath.Join(home, ".claude")}, top); p != want {
 		t.Errorf("project codex root: %q", p)
 	}
 }
@@ -96,5 +96,18 @@ func TestCachedBrief(t *testing.T) {
 	}
 	if p2 := CachedBrief("t", cache); p2 != p {
 		t.Errorf("second lookup moved: %q vs %q", p2, p)
+	}
+}
+
+// An install made only into a round.accounts config dir is found: the brief
+// is served from the same root list the install verbs write to.
+func TestInstalledBriefAccountOnly(t *testing.T) {
+	top, home, acct := t.TempDir(), t.TempDir(), t.TempDir()
+	dirs := []string{filepath.Join(home, ".claude"), acct}
+	root := filepath.Join(acct, "skills")
+	installAt(t, root, ModeFull)
+	want := filepath.Join(root, "rota-orchestrate", "references", "worker-contract.md")
+	if p := InstalledBrief(home, dirs, top); p != want {
+		t.Errorf("account-only install: got %q want %q", p, want)
 	}
 }

@@ -70,6 +70,31 @@ type Health struct {
 // session of the host running line in cwd. argv[0] is the binary.
 type SessionAttach func(session, cwd, label, line string) []string
 
+// The env var each host injects to name the pane a process runs in. This is
+// the one place those names live; adapters and CurrentPane read them here.
+const (
+	envHerdrPane = "HERDR_PANE_ID"
+	envTmuxPane  = "TMUX_PANE"
+	envOrcaPane  = "ORCA_TERMINAL_HANDLE"
+	envCoreTerm  = "HC_TERMINAL_ID"
+)
+
+// paneEnv is the env var naming the current pane under k, "" for Solo and
+// unknown kinds (no pane to name).
+func paneEnv(k Kind) string {
+	switch k {
+	case Herdr:
+		return envHerdrPane
+	case HerdrCore:
+		return envCoreTerm
+	case Tmux:
+		return envTmuxPane
+	case Orca:
+		return envOrcaPane
+	}
+	return ""
+}
+
 // kindPolicy overlays k's policy on c: the fields no optional interface
 // carries. Solo and unknown kinds have none.
 func kindPolicy(k Kind, c Capabilities) Capabilities {
