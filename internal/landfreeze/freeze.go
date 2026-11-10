@@ -13,12 +13,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -154,15 +154,15 @@ func (r *Record) Line() string {
 	repair := "none designated"
 	var fields []string
 	if r.RepairIssue != "" {
-		fields = append(fields, "issue="+display(r.RepairIssue, 100))
+		fields = append(fields, "issue="+strutil.Display(r.RepairIssue, 100))
 	}
 	if r.RepairPR != "" {
-		fields = append(fields, "PR="+display(r.RepairPR, 160))
+		fields = append(fields, "PR="+strutil.Display(r.RepairPR, 160))
 	}
 	if len(fields) > 0 {
 		repair = strings.Join(fields, " ")
 	}
-	return fmt.Sprintf("FROZEN %s at %s: %s; repair: %s (rota round freeze)", display(r.Base, 160), display(r.SHA, 64), display(strings.Join(r.Checks, ", "), 320), repair)
+	return fmt.Sprintf("FROZEN %s at %s: %s; repair: %s (rota round freeze)", strutil.Display(r.Base, 160), strutil.Display(r.SHA, 64), strutil.Display(strings.Join(r.Checks, ", "), 320), repair)
 }
 
 func validSHA(s string) bool {
@@ -171,10 +171,6 @@ func validSHA(s string) bool {
 	}
 	_, err := hex.DecodeString(s)
 	return err == nil
-}
-
-func hasControl(s string) bool {
-	return strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
 }
 
 func positiveID(s string) bool {
@@ -194,11 +190,11 @@ func positiveID(s string) bool {
 // and positive numbers or URLs for PRs. Issue whitespace is never normalized.
 func ValidateRepair(issue, pr string) error {
 	id := strings.TrimPrefix(issue, "#")
-	if issue != "" && (hasControl(issue) || (!positiveID(id) && !backlog.ValidID(id, backlog.FileIDDigits))) {
+	if issue != "" && (strutil.HasControl(issue) || (!positiveID(id) && !backlog.ValidID(id, backlog.FileIDDigits))) {
 		return fmt.Errorf("--repair-issue requires a positive issue number or backlog item ID")
 	}
 	if pr != "" {
-		if hasControl(pr) {
+		if strutil.HasControl(pr) {
 			return fmt.Errorf("--repair-pr requires a positive PR number or PR URL")
 		}
 		if prID(pr) == "" {
@@ -208,25 +204,9 @@ func ValidateRepair(issue, pr string) error {
 	return nil
 }
 
-// display strips control and formatting characters and bounds untrusted text.
-func display(s string, limit int) string {
-	out := make([]rune, 0, limit)
-	for _, r := range s {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			continue
-		}
-		if len(out) == limit {
-			out[limit-1] = '…'
-			break
-		}
-		out = append(out, r)
-	}
-	return string(out)
-}
-
 // ClearHint is the audited escape hatch for an unreadable freeze record.
 const ClearHint = "rota round freeze --clear --reason '<why it is safe to clear>'"
 
 func UnreadableLine(err error) string {
-	return "landing freeze unreadable: " + display(err.Error(), 600) + "; recover with " + ClearHint
+	return "landing freeze unreadable: " + strutil.Display(err.Error(), 600) + "; recover with " + ClearHint
 }

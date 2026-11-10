@@ -79,3 +79,70 @@ func TestOrDefault(t *testing.T) {
 		}
 	}
 }
+
+const (
+	esc  = "\x1b[31m"
+	bidi = "‮⁦"
+	zw   = "a​b­c"
+)
+
+func TestHasControl(t *testing.T) {
+	for in, want := range map[string]bool{
+		"":            false,
+		"plain":       false,
+		"é 日本":        false,
+		"a\x00b":      true,
+		"a\x7fb":      true,
+		"a\u0085b":    true,
+		"a\nb":        true,
+		"a\tb":        true,
+		"a" + bidi:    true,
+		"a​b":         true,
+		"a\U000e0001": true,
+	} {
+		if got := HasControl(in); got != want {
+			t.Errorf("HasControl(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestStripControls(t *testing.T) {
+	for _, c := range []struct {
+		name, in string
+		keep     []rune
+		want     string
+	}{
+		{"control", "a\x00b\x7fc\u0085d", nil, "abcd"},
+		{"escape", "x" + esc + "y", nil, "x[31my"},
+		{"bidi", "a" + bidi + "b", nil, "ab"},
+		{"zero width and soft hyphen", zw, nil, "abc"},
+		{"newline tab dropped by default", "a\nb\tc", nil, "abc"},
+		{"newline tab kept", "a\nb\tc\x00", []rune{'\n', '\t'}, "a\nb\tc"},
+		{"keep only newline", "a\nb\tc", []rune{'\n'}, "a\nbc"},
+		{"keep does not rescue other controls", "a\rb\n", []rune{'\n'}, "ab\n"},
+		{"plain unchanged", "é 日本", nil, "é 日本"},
+	} {
+		if got := StripControls(c.in, c.keep...); got != c.want {
+			t.Errorf("%s: StripControls(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}
+
+func TestDisplay(t *testing.T) {
+	for _, c := range []struct {
+		name, in string
+		limit    int
+		want     string
+	}{
+		{"strips control and format", "a\x1bb" + bidi + "c​d", 10, "abcd"},
+		{"newline stripped", "a\nb", 10, "ab"},
+		{"fits exactly", "abcde", 5, "abcde"},
+		{"cut ends in ellipsis", "abcdef", 5, "abcd…"},
+		{"cut counts runes", "日本語日本語", 3, "日本…"},
+		{"stripped text is what is bounded", "a​b​c", 3, "abc"},
+	} {
+		if got := Display(c.in, c.limit); got != c.want {
+			t.Errorf("%s: Display(%q, %d) = %q, want %q", c.name, c.in, c.limit, got, c.want)
+		}
+	}
+}
