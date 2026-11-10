@@ -80,6 +80,11 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 	if res.Clean || res.Changed || len(res.Dirty) != 1 || res.Dirty[0] != "?? untracked.txt" || len(res.Unmerged) != 0 {
 		t.Errorf("%+v", res)
 	}
+	for _, want := range []string{"removes the slot, its worktree and its branch", "rota worker pool init --base main"} {
+		if !strings.Contains(we.Message, want) {
+			t.Errorf("dirty refusal lacks %q: %s", want, we.Message)
+		}
+	}
 	if rd, _ := we.Data.(ResetResult); rd.Dirty == nil {
 		t.Errorf("failure data missing: %#v", we.Data)
 	}
@@ -98,6 +103,11 @@ func TestResetRefusesUnmergedCommits(t *testing.T) {
 	we, ok := err.(*exitcode.Error)
 	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — 1 commit(s) not on main") {
 		t.Fatalf("err = %v", err)
+	}
+	for _, want := range []string{"removes the slot, its worktree and its branch", "rota worker pool init --base main"} {
+		if !strings.Contains(we.Message, want) {
+			t.Errorf("unmerged refusal lacks %q: %s", want, we.Message)
+		}
 	}
 	if len(res.Unmerged) != 1 || !strings.HasSuffix(res.Unmerged[0], " add work.txt") || len(res.Dirty) != 0 {
 		t.Errorf("%+v", res)
