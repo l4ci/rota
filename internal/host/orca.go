@@ -220,25 +220,7 @@ func orcaReady(p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
-	for _, syntax := range harness.InputSyntaxes() {
-		if syntax.ReadyModel == nil {
-			continue
-		}
-		model := syntax.ReadyModel.FindStringSubmatch(p)
-		prompt := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(syntax.Composer) + `(?:[ \t]|$)`).MatchString(p)
-		if len(model) > 0 || prompt {
-			return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && prompt
-		}
-	}
-	if !strings.Contains(p, harness.DefaultInputSyntax().Composer) {
-		return false
-	}
-	for _, pattern := range bootPatterns {
-		if pattern.MatchString(p) {
-			return true
-		}
-	}
-	return false
+	return bootReady(p, true)
 }
 func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string, error) {
 	v, e := o.decodeOrca(h)
