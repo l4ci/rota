@@ -1,4 +1,4 @@
-package postgate
+package gatereport
 
 import (
 	"strings"

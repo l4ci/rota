@@ -30,6 +30,13 @@ var mentionsGit = regexp.MustCompile(`(^|[^A-Za-z0-9_-])(git|gh)([^A-Za-z0-9_-]|
 // reason it may not (#702). It is a guardrail against a mistaken agent, not a
 // security boundary: a script that calls git is not seen.
 //
+// The effective directory follows cd, pushd/popd, `git -C`, and the chdir
+// options of env (-C) and sudo (-D); GIT_DIR and GIT_WORK_TREE (inline or via
+// env) redirect the git call they prefix. A cd inside ( ... ) is not scoped:
+// `(cd /repo); git reset --hard` stays denied, though the second command runs
+// in the slot's worktree. That false deny is the safe direction, and the parser
+// flattens groups, so scoping them is not worth a second parser.
+//
 // It fails closed only when the line mentions git or gh and cannot be parsed or
 // the repo state it needs cannot be read; any other parse failure passes.
 func Guard(command string, env GuardEnv) string {
@@ -73,7 +80,7 @@ func (g *guard) script(s string, depth int) error {
 		}
 	}
 	for _, w := range p.cmds {
-		if err := g.command(w, depth); err != nil {
+		if err := g.command(w, depth, scope{}); err != nil {
 			return err
 		}
 		if g.reason != "" {
@@ -93,29 +100,64 @@ var shellKeywords = map[string]bool{
 
 // wrappers run their argument as a command. The set is the options that take a
 // value and the count of leading positionals (timeout's duration).
+//
+// chdir is the option that changes the wrapped command's directory ("" when
+// there is none): env -C, sudo -D (sudo -C is closefrom, not a directory).
 var wrappers = map[string]struct {
 	withArg map[string]bool
 	pos     int
+	chdir   string
 }{
-	"sudo":    {map[string]bool{"-u": true, "-g": true, "-C": true, "-h": true, "-p": true, "-r": true, "-t": true, "-U": true, "-D": true, "-R": true, "-T": true}, 0},
-	"doas":    {map[string]bool{"-u": true, "-C": true}, 0},
-	"env":     {map[string]bool{"-u": true, "-C": true, "-S": true}, 0},
-	"nohup":   {nil, 0},
-	"command": {nil, 0},
-	"builtin": {nil, 0},
-	"exec":    {map[string]bool{"-a": true}, 0},
-	"nice":    {map[string]bool{"-n": true}, 0},
-	"ionice":  {map[string]bool{"-c": true, "-n": true, "-p": true}, 0},
-	"setsid":  {nil, 0},
-	"stdbuf":  {map[string]bool{"-i": true, "-o": true, "-e": true}, 0},
-	"timeout": {map[string]bool{"-s": true, "-k": true}, 1},
-	"xargs":   {map[string]bool{"-n": true, "-I": true, "-P": true, "-d": true, "-L": true, "-E": true, "-s": true, "-a": true}, 0},
+	"sudo":    {map[string]bool{"-u": true, "-g": true, "-C": true, "-h": true, "-p": true, "-r": true, "-t": true, "-U": true, "-D": true, "-R": true, "-T": true}, 0, "-D"},
+	"doas":    {map[string]bool{"-u": true, "-C": true}, 0, ""},
+	"env":     {map[string]bool{"-u": true, "-C": true, "-S": true}, 0, "-C"},
+	"nohup":   {nil, 0, ""},
+	"command": {nil, 0, ""},
+	"builtin": {nil, 0, ""},
+	"exec":    {map[string]bool{"-a": true}, 0, ""},
+	"nice":    {map[string]bool{"-n": true}, 0, ""},
+	"ionice":  {map[string]bool{"-c": true, "-n": true, "-p": true}, 0, ""},
+	"setsid":  {nil, 0, ""},
+	"stdbuf":  {map[string]bool{"-i": true, "-o": true, "-e": true}, 0, ""},
+	"timeout": {map[string]bool{"-s": true, "-k": true}, 1, ""},
+	"xargs":   {map[string]bool{"-n": true, "-I": true, "-P": true, "-d": true, "-L": true, "-E": true, "-s": true, "-a": true}, 0, ""},
+}
+
+// scope is what a prefix of one command changes for the command it wraps:
+// a directory (env -C, sudo -D) and the GIT_DIR / GIT_WORK_TREE variables.
+type scope struct {
+	dir              string // meaningful when chdir is set; "" then means unknown
+	chdir            bool
+	gitDir, workTree string
+}
+
+// assign records an inline NAME=value that redirects git.
+func (s *scope) assign(a string) {
+	k, v, _ := strings.Cut(a, "=")
+	switch k {
+	case "GIT_DIR":
+		s.gitDir = v
+	case "GIT_WORK_TREE":
+		s.workTree = v
+	}
+}
+
+// setDir applies a chdir option's value on top of base, the directory the
+// wrapped command would otherwise start in.
+func (s *scope) setDir(base, d string) {
+	if s.chdir {
+		base = s.dir
+	}
+	s.chdir, s.dir = true, resolveDir(base, d)
 }
 
 var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
 
-func (g *guard) command(words []string, depth int) error {
+func (g *guard) command(words []string, depth int, sc scope) error {
 	for len(words) > 0 && (envAssign.MatchString(words[0]) || shellKeywords[words[0]]) {
+		if envAssign.MatchString(words[0]) {
+			sc.assign(words[0])
+		}
 		words = words[1:]
 	}
 	if len(words) == 0 {
@@ -127,6 +169,12 @@ func (g *guard) command(words []string, depth int) error {
 	case prog == "cd":
 		g.cd(rest)
 		return nil
+	case prog == "pushd":
+		g.pushd(rest)
+		return nil
+	case prog == "popd":
+		g.cwd = "" // the stack is not tracked
+		return nil
 	case prog == "eval":
 		return g.script(strings.Join(rest, " "), depth+1)
 	case shells[prog]:
@@ -135,20 +183,21 @@ func (g *guard) command(words []string, depth int) error {
 		}
 		return nil
 	case prog == "git":
-		return g.git(rest)
+		return g.git(rest, sc)
 	case prog == "gh":
 		g.gh(rest)
 		return nil
 	}
 	if w, ok := wrappers[prog]; ok {
-		return g.command(skipWrapped(rest, w.withArg, w.pos), depth+1)
+		return g.command(g.skipWrapped(rest, w.withArg, w.pos, w.chdir, &sc), depth+1, sc)
 	}
 	return nil
 }
 
 // skipWrapped drops a wrapper's own options (and assignments, for env) so the
 // wrapped command is left.
-func skipWrapped(args []string, withArg map[string]bool, pos int) []string {
+// A chdir option and NAME=value assignments are recorded in sc.
+func (g *guard) skipWrapped(args []string, withArg map[string]bool, pos int, chdir string, sc *scope) []string {
 	i := 0
 	for i < len(args) {
 		a := args[i]
@@ -156,6 +205,16 @@ func skipWrapped(args []string, withArg map[string]bool, pos int) []string {
 		case a == "--":
 			i++
 			return args[i:]
+		case chdir != "" && (a == chdir || a == "--chdir"):
+			if i+1 < len(args) {
+				sc.setDir(g.cwd, args[i+1])
+			} else {
+				sc.chdir, sc.dir = true, ""
+			}
+			i += 2
+		case chdir != "" && strings.HasPrefix(a, "--chdir="):
+			sc.setDir(g.cwd, strings.TrimPrefix(a, "--chdir="))
+			i++
 		case withArg[a]:
 			i += 2
 		case strings.HasPrefix(a, "-") && len(a) > 1:
@@ -165,6 +224,7 @@ func skipWrapped(args []string, withArg map[string]bool, pos int) []string {
 			i++
 		default:
 			if envAssign.MatchString(a) {
+				sc.assign(a)
 				i++
 				continue
 			}
@@ -200,6 +260,40 @@ func shellScript(args []string) (string, bool) {
 	return "", false
 }
 
+// pushd: options come before the directory and end at `--`. -n leaves the
+// directory alone. Anything the guard does not model (no argument, +N/-N stack
+// rotation, other options, extra words) makes the directory unknown, which
+// fails closed.
+func (g *guard) pushd(args []string) {
+	noChdir := false
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			i++
+			break
+		}
+		if a == "-n" {
+			noChdir = true
+			continue
+		}
+		if len(a) > 1 && (a[0] == '-' || a[0] == '+') {
+			g.cwd = ""
+			return
+		}
+		break
+	}
+	rest := args[i:]
+	switch {
+	case noChdir && len(rest) <= 1:
+		return
+	case len(rest) != 1:
+		g.cwd = ""
+	default:
+		g.cwd = resolveDir(g.cwd, rest[0])
+	}
+}
+
 func (g *guard) cd(args []string) {
 	var dir string
 	for _, a := range args {
@@ -208,11 +302,16 @@ func (g *guard) cd(args []string) {
 			break
 		}
 	}
+	g.cwd = resolveDir(g.cwd, dir)
+}
+
+// resolveDir is base moved to dir, or "" when dir is not a literal path
+// (`cd -`, `$VAR`, `~`) or base is unknown.
+func resolveDir(base, dir string) string {
 	if dir == "" || dir == "-" || strings.ContainsAny(dir, "$~") {
-		g.cwd = ""
-		return
+		return ""
 	}
-	g.cwd = joinDir(g.cwd, dir)
+	return joinDir(base, dir)
 }
 
 func joinDir(base, dir string) string {
@@ -252,8 +351,12 @@ type gitCall struct {
 	dirUnknown bool
 }
 
-func (g *guard) git(args []string) error {
-	c := gitCall{dir: g.cwd, dirUnknown: g.cwd == ""}
+func (g *guard) git(args []string, sc scope) error {
+	c := gitCall{dir: g.cwd, gitDir: sc.gitDir, workTree: sc.workTree}
+	if sc.chdir {
+		c.dir = sc.dir
+	}
+	c.dirUnknown = c.dir == ""
 	i := 0
 loop:
 	for i < len(args) {

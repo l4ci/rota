@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -201,10 +202,11 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 		if res.ExitCode != 0 {
 			return time.Time{}, fmt.Errorf("cannot date %s", branch)
 		}
-		at, err := time.Parse(time.RFC3339, strings.TrimSpace(res.Stdout))
-		if err != nil {
-			return time.Time{}, err
+		parsed := stamp.ParseISO(strings.TrimSpace(res.Stdout))
+		if parsed == nil {
+			return time.Time{}, fmt.Errorf("cannot read the commit date of %s: %q", branch, strings.TrimSpace(res.Stdout))
 		}
+		at := *parsed
 		if at.After(now) {
 			at = now
 		}
