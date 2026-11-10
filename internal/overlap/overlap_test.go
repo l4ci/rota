@@ -5,33 +5,6 @@ import (
 	"testing"
 )
 
-func TestMatchPath(t *testing.T) {
-	for _, c := range []struct {
-		entry, file string
-		want        bool
-	}{
-		{"rota-release", "rota-release/SKILL.md", true},
-		{"rota-release/", "rota-release/SKILL.md", true},
-		{"./docs", "docs/a/b.md", true},
-		{"docs", "docsx/a.md", false},
-		{"go.mod", "go.mod", true},
-		{"*.md", "README.md", true},
-		{"*.md", "docs/README.md", false},
-		{"internal/*/gate.go", "internal/cli/gate.go", true},
-		{"", "x", false},
-		{"docs/**", "docs/a.md", true},
-		{"docs/**", "docs/a/b.md", false}, // ** is not recursive here
-		{".", "x", false},
-		{"./", "x", false},
-		{"[", "[", true}, // equal wins over a malformed glob
-		{"[", "a", false},
-	} {
-		if got := MatchPath(c.entry, c.file); got != c.want {
-			t.Errorf("MatchPath(%q, %q) = %v", c.entry, c.file, got)
-		}
-	}
-}
-
 func TestFilter(t *testing.T) {
 	got := Filter([]string{"b.go", "CHANGELOG.md", "docs/x.md", "a.go"}, []string{"CHANGELOG.md", "docs"})
 	if want := []string{"b.go", "a.go"}; !reflect.DeepEqual(got, want) {

@@ -6,8 +6,9 @@
 //     whole segment for any number of directories (knowledge path scopes, the
 //     change tier policy).
 //   - MatchEntry: a configured entry that is equal to the file, a directory the
-//     file lies under, or a Match glob (review paths, scope-drift declarations,
-//     lens paths, ship.mergeApprovalPaths).
+//     file lies under, or a glob whose flavour the caller names: Recursive
+//     (review paths, scope-drift declarations, lens paths,
+//     ship.mergeApprovalPaths) or SingleLevel (round.sharedPaths).
 //   - MatchUnder: a Match glob that may name any ancestor directory of the
 //     file (scope-drift support paths).
 //
@@ -31,15 +32,37 @@ func Clean(entry string) string {
 	return entry
 }
 
+// Flavour names how the glob arm of MatchEntry reads `**`.
+type Flavour int
+
+const (
+	// Recursive reads `**` as a whole segment matching any number of
+	// directories (Match). ship.mergeApprovalPaths, review paths, lens paths
+	// and scope-drift declarations use it.
+	Recursive Flavour = iota
+	// SingleLevel hands the entry to path.Match against the whole path, so
+	// `**` is an ordinary segment wildcard like `*` and never crosses a `/`.
+	// round.sharedPaths uses it: widening it would hide overlaps.
+	SingleLevel
+)
+
 // MatchEntry reports whether file matches a configured entry: equal to it,
-// under it as a directory, or matching it as a Match glob. A leading `./` and a
-// trailing `/` on the entry are ignored; an empty entry matches nothing.
-func MatchEntry(entry, file string) bool {
+// under it as a directory, or matching it as a glob of the given flavour. A
+// leading `./` and a trailing `/` on the entry are ignored; an empty entry
+// matches nothing. A malformed single-level glob matches nothing.
+func MatchEntry(f Flavour, entry, file string) bool {
 	entry = strings.TrimSuffix(Clean(entry), "/")
 	if entry == "" {
 		return false
 	}
-	return file == entry || strings.HasPrefix(file, entry+"/") || Match(entry, file)
+	if file == entry || strings.HasPrefix(file, entry+"/") {
+		return true
+	}
+	if f == SingleLevel {
+		ok, err := path.Match(entry, file)
+		return err == nil && ok
+	}
+	return Match(entry, file)
 }
 
 // MatchUnder reports whether file, or any directory above it, matches the glob,
