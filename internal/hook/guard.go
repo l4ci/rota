@@ -636,7 +636,7 @@ func pushDst(spec string) string {
 func pushesHead(spec string) bool {
 	spec = strings.TrimPrefix(spec, "+")
 	src, dst, hasDst := strings.Cut(spec, ":")
-	return dst == "HEAD" || (src == "HEAD" && !hasDst)
+	return dst == "HEAD" || dst == "@" || ((src == "HEAD" || src == "@") && !hasDst)
 }
 
 // isBase reports a branch workers must never push to: main, master, or the

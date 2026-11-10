@@ -51,6 +51,7 @@ func inWork(dir string) bool { return dir == gWork || strings.HasPrefix(dir, gWo
 func TestGuardDenies(t *testing.T) {
 	for _, line := range []string{
 		"git push origin HEAD:main",
+		"git -C /repo push origin @",
 		"git push origin main",
 		"git push origin master",
 		"git push origin HEAD:refs/heads/main",
