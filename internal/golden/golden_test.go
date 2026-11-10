@@ -218,3 +218,44 @@ func TestCheckUpdateRewritesOutputsOnly(t *testing.T) {
 		t.Errorf("record changed despite failure: %q", raw)
 	}
 }
+
+// inScratch runs the test in an empty temp dir holding testdata/golden.
+func inScratch(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "testdata", "golden"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prev, err := os.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		defer prev.Close()
+		if err := prev.Chdir(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestReadReturnsFileText(t *testing.T) {
+	inScratch(t)
+	if err := os.WriteFile(filepath.Join("testdata", "golden", "plain.txt"), []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := Read(t, "plain.txt"); got != "a\nb\n" {
+		t.Errorf("Read = %q, want the file text", got)
+	}
+}
+
+func TestReadMissingFails(t *testing.T) {
+	inScratch(t)
+	f := &fakeTB{name: "TestReadMissingFails"}
+	f.run(func() { Read(f, "nope.txt") })
+	if !strings.Contains(f.fatal, "nope.txt") {
+		t.Errorf("fatal = %q, want it to name the missing file", f.fatal)
+	}
+}

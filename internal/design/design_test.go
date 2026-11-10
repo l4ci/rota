@@ -3,6 +3,7 @@ package design
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/golden"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -151,18 +152,10 @@ func TestAmendMatchesOldHelper(t *testing.T) {
 			continue
 		}
 		got, _ := os.ReadFile(path(root, "B07"))
-		if g := created.ReplaceAllString(string(got), "created: DATE"); g != golden(t, s.golden) {
+		if g := created.ReplaceAllString(string(got), "created: DATE"); g != golden.Read(t, s.golden) {
 			t.Errorf("%s differs from golden:\n%s", s.golden, g)
 		}
 	}
-}
-
-func golden(t *testing.T, name string) string {
-	b, err := os.ReadFile(filepath.Join("testdata", "golden", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
 }
 
 func TestAmendExits(t *testing.T) {

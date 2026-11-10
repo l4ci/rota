@@ -98,3 +98,29 @@ func TestAutopilotWaitsForEveryReviewAtHead(t *testing.T) {
 	add(verdict.ReviewQuality, head)
 	check(false)
 }
+
+// In an umbrella the reviews sit under "<repo>:<branch>": the tick's readiness
+// gate must read that key, or it waits forever for reviews the gate already has.
+func TestAutopilotReadinessReadsTheSubRepoKey(t *testing.T) {
+	const branch = "ben/2175-x"
+	dir := nudgeProject(t, []string{branch}, nil)
+	write(t, filepath.Join(dir, ".rota", "config.json"), `{"ship":{"review":"full"}}`)
+	addRegistryRows(t, dir, map[string][]map[string]any{
+		"slots": {{"name": "ben", "state": "done", "branch": branch, "task": "2175"}},
+	})
+	deps := testDeps()
+	c := &Ctx{Repo: "sub", Deps: deps, ctx: context.Background(), Stderr: io.Discard}
+	res, err := deps.Git(c.Context(), dir, "rev-parse", branch)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("head: %+v %v", res, err)
+	}
+	head := strings.TrimSpace(res.Stdout)
+	for _, kind := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
+		if _, err := verdict.AddBranch(dir, verdict.BranchKey("sub", branch), verdict.NewRecord(kind, verdict.Pass, head, verdict.Body{}, time.Now())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if why := reviewVerdictsMissing(c, dir, "ben", "main"); why != "" {
+		t.Fatalf("readiness ignored the sub-repo key: %s", why)
+	}
+}

@@ -365,10 +365,10 @@ func TestRelayCarriesACrossFail(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := openFindings(root, "nia/6-x"); len(got) != 1 || got[0] != "[major] exit code changed (a.go:3)" {
+	if got := openFindings(verdict.Load(root).Branches["nia/6-x"]); len(got) != 1 || got[0] != "[major] exit code changed (a.go:3)" {
 		t.Errorf("open findings: %v", got)
 	}
-	v := failVerdict(root, "nia/6-x")
+	v := failVerdict(verdict.Load(root).Branches["nia/6-x"])
 	if v == nil || !strings.Contains(v.Text, "review-cross FAIL at abc1234 (codex gpt-5.5)") || !strings.Contains(v.Text, "exit code changed") {
 		t.Fatalf("relay: %+v", v)
 	}
@@ -409,10 +409,10 @@ func TestRelayCarriesALensFail(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := openFindings(root, "nia/6-x"); len(got) != 1 || got[0] != "[major] argument injection (run.go:9)" {
+	if got := openFindings(verdict.Load(root).Branches["nia/6-x"]); len(got) != 1 || got[0] != "[major] argument injection (run.go:9)" {
 		t.Errorf("open findings: %v", got)
 	}
-	if v := failVerdict(root, "nia/6-x"); v == nil || !strings.Contains(v.Text, "review-security FAIL at abc1234") {
+	if v := failVerdict(verdict.Load(root).Branches["nia/6-x"]); v == nil || !strings.Contains(v.Text, "review-security FAIL at abc1234") {
 		t.Fatalf("relay: %+v", v)
 	}
 }
