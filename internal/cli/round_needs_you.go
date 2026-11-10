@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -58,10 +58,5 @@ func maintainerRows(waits []round.MaintainerWait, now time.Time) ([]any, []strin
 }
 
 func maintainerText(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, tui.Sanitize(s, false))
+	return strutil.StripControls(tui.Sanitize(s, false))
 }
