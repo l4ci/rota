@@ -91,11 +91,21 @@ def plain_scalar_hazards(text):
 
 def check_spec_frontmatter(path, text, issues):
     path = Path(path)
+    rel = path.as_posix()
+    # Raw-text hazard check first: fmlite rejects every value it flags, and the
+    # author's advice (a folded block or quotes) must not depend on the parse.
+    if text.startswith("---"):
+        for key in plain_scalar_hazards(text):
+            issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
+                          f"use a folded block (>-) or quote it")
     try:
         fm = spec_fields(text, path)
     except FmError:
         return  # check_frontmatter reports it
-    rel = path.as_posix()
+    nonscalar = [k for k in ("name", "description", "compatibility") if not isinstance(fm.get(k, ""), str)]
+    if nonscalar:
+        issues.append(f"{rel}: frontmatter {', '.join(nonscalar)} must be a string, not a mapping or list")
+        return
     name, desc = fm.get("name", ""), fm.get("description", "")
     if name and name != path.parent.name:
         issues.append(f"{rel}: frontmatter name '{name}' must equal the directory '{path.parent.name}'")
@@ -109,9 +119,6 @@ def check_spec_frontmatter(path, text, issues):
     if SECOND_PERSON.search(re.sub(r'"[^"]*"', "", desc)):
         issues.append(f"{rel}: description must be in the third person: say 'the user', not 'you' or 'I', "
                       f"outside quoted trigger phrases")
-    for key in plain_scalar_hazards(text):
-        issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
-                      f"use a folded block (>-) or quote it")
     if len(fm.get("compatibility", "")) > 500:
         issues.append(f"{rel}: compatibility is over 500 chars")
     extra = sorted(set(fm) - SPEC_KEYS - CLAUDE_KEYS)
