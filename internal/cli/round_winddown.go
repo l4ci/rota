@@ -57,8 +57,7 @@ func windDownSummary(root string, rnd int) (obj *jsonx.Object, text string, ok b
 func roundWindDown(fs *flag.FlagSet) RunFunc {
 	noVerify := fs.Bool("no-verify", false, "skip the re-verify of the base")
 	prune := fs.Bool("prune", false, "also delete the worktree and branch of a released adopted slot")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
@@ -77,7 +76,6 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			board, _ = round.BoardOf(raw)
 		}
 		env := roundEnv(c, ctx, root)
-		env.HolderPID = *pid
 		// An autopilot watch must not assign or merge while the base is being
 		// re-verified; a kept lease lets it resume, a failed verify keeps it stopped.
 		var cd string
@@ -172,5 +170,5 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			return out, Refused("a slot still holds work; the others are parked and the lease is kept")
 		}
 		return out, nil
-	}
+	})
 }
