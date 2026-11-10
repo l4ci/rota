@@ -96,8 +96,9 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		env.HolderPID = *pid
 		res, err := env.Return(c.Context(), root, be, round.ReturnOpts{
-			Slot: args[0], Reason: *reason, Note: text, InSlot: inSlot(c, root, args[0]), HolderPID: *pid,
+			Slot: args[0], Reason: *reason, Note: text, InSlot: inSlot(c, root, args[0]),
 		})
 		if err != nil {
 			return moveFailure(err, res.Changed)

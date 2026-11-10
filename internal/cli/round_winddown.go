@@ -77,6 +77,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			board, _ = round.BoardOf(raw)
 		}
 		env := roundEnv(c, ctx, root)
+		env.HolderPID = *pid
 		// An autopilot watch must not assign or merge while the base is being
 		// re-verified; a kept lease lets it resume, a failed verify keeps it stopped.
 		var cd string
@@ -92,7 +93,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		res, err := env.WindDown(ctx, root, board, round.WindDownOpts{
-			NoVerify: *noVerify, Prune: *prune, HolderPID: *pid, Settings: set,
+			NoVerify: *noVerify, Prune: *prune, Settings: set,
 		})
 		// The autopilot stays stopped from a red verify until a wind-down
 		// verifies green. A failed verify stops it whatever else went wrong; a

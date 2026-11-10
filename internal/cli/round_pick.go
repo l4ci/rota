@@ -35,11 +35,12 @@ func roundPick(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		env.HolderPID = *pid
 		id, _, err := resolveItem(be, args[0])
 		if err != nil {
 			return backlogFail(err)
 		}
-		res, err := env.Pick(c.Context(), root, be, round.PickOpts{ID: id, PR: *pr, Reason: text, HolderPID: *pid})
+		res, err := env.Pick(c.Context(), root, be, round.PickOpts{ID: id, PR: *pr, Reason: text})
 		if err != nil {
 			return moveFailure(err, res.Changed)
 		}
