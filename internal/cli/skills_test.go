@@ -560,3 +560,43 @@ func TestSkillsLinks(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillsLayoutListsUnsupportedFiles(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	for rel, body := range map[string]string{
+		"rota-a/SKILL.md":           "a\n",
+		"rota-a/topic.md":           "t\n",
+		"rota-a/agents/openai.yaml": "p: 1\n",
+		"rota-a/sub/deep.md":        "deep\n",
+		"rota-a/notes.txt":          "n\n",
+		"references/shared.md":      "s\n",
+	} {
+		p := filepath.Join(work, "skills", filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink("../references", filepath.Join(work, "skills/rota-a/references")); err != nil {
+		t.Fatal(err)
+	}
+	code, env, errOut := skillsRun(t, home, work, "skills", "layout", "skills")
+	if code != 0 {
+		t.Fatalf("layout %d %s", code, errOut)
+	}
+	got := fmt.Sprint(skData(env)["violations"])
+	if got != "[rota-a/notes.txt rota-a/sub/deep.md]" {
+		t.Errorf("violations = %s", got)
+	}
+	os.RemoveAll(filepath.Join(work, "skills/rota-a/sub"))
+	os.Remove(filepath.Join(work, "skills/rota-a/notes.txt"))
+	_, env, _ = skillsRun(t, home, work, "skills", "layout", "skills")
+	if got := fmt.Sprint(skData(env)["violations"]); got != "[]" {
+		t.Errorf("clean tree violations = %s", got)
+	}
+	if code, _, _ = skillsRun(t, home, work, "skills", "layout"); code == 0 {
+		t.Error("layout without a dir exited 0")
+	}
+}

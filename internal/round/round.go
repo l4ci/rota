@@ -149,8 +149,9 @@ type Env struct {
 	// become zero values.
 	Round    roundcfg.Settings
 	RoundErr error
-	// HolderPID names the lease holder for the item-timeout park; 0 discovers
-	// it from the process, as the other verbs do.
+	// HolderPID names the lease holder for every verb that checks or takes the
+	// lease; 0 discovers it from the process ancestry. The one place the pid
+	// lives: no verb opts struct carries its own.
 	HolderPID int
 	// NeedsHuman is issues.labels.needsHuman, the label of an issue handed to the
 	// human (C10); config.Label supplies its default.

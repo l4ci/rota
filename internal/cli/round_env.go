@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"flag"
 	"fmt"
 
 	"github.com/l4ci/rota/internal/config"
@@ -103,7 +104,27 @@ func (d *Deps) roundEnv(ctx context.Context, root string) round.Env {
 
 // roundEnv is the plain env on the invocation-bound worker env (workerEnvCtx).
 func roundEnv(c *Ctx, ctx context.Context, root string) round.Env {
-	return c.deps().RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx)})
+	return c.withHolder(c.deps().RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx)}))
+}
+
+// holderPIDFlag registers --holder-pid on fs and binds its value to the Ctx
+// before run: registering the flag and carrying it into the Env are one step,
+// so a verb that takes the flag cannot forget to pass it on.
+func holderPIDFlag(fs *flag.FlagSet, usage string, run RunFunc) RunFunc {
+	pid := fs.Int("holder-pid", 0, usage)
+	return func(c *Ctx, args []string) (Result, error) {
+		c.holderPID = *pid
+		return run(c, args)
+	}
+}
+
+// withHolder puts the bound --holder-pid on env. Unbound (0) leaves the env's
+// own value, so verbs without the flag keep ancestry discovery.
+func (c *Ctx) withHolder(env round.Env) round.Env {
+	if c.holderPID != 0 {
+		env.HolderPID = c.holderPID
+	}
+	return env
 }
 
 // accountedRoundEnv is roundEnv with account picking on, for a verb that reads
@@ -111,7 +132,7 @@ func roundEnv(c *Ctx, ctx context.Context, root string) round.Env {
 // is built.
 func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
 	d := c.deps()
-	return d.RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx), Accounts: d.WorkerAccounts()})
+	return c.withHolder(d.RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx), Accounts: d.WorkerAccounts()}))
 }
 
 // withBoard gives the env the backlog's claim side, which claim-mismatch drift

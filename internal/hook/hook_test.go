@@ -65,14 +65,63 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 	if st.HandoffBlocks != 2 || !st.HandoffFailed || *st.ContextPct != 20 || st.RateLimits != nil {
 		t.Fatalf("counters lost or stale fields kept: %+v", st)
 	}
-	// An old session is swept by another session's dump; a fresh one stays.
-	Dump(cd, mustPayload(t, []byte(`{"session_id":"old"}`)), t0.Add(-48*time.Hour))
-	Dump(cd, mustPayload(t, []byte(`{"session_id":"s2"}`)), t0.Add(2*time.Minute))
-	if _, err := os.Stat(filepath.Join(cd, "rota", "session", "old.json")); !os.IsNotExist(err) {
-		t.Fatalf("old state should be swept: %v", err)
+	// A session whose file went untouched past StateTTL is swept by another
+	// session's dump; a fresh one stays.
+	dir := filepath.Join(cd, "rota", "session")
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"old"}`)), t0)
+	old := filepath.Join(dir, "old.json")
+	os.WriteFile(old+".lock", nil, 0o644)
+	stale := t0.Add(-48 * time.Hour)
+	os.Chtimes(old, stale, stale)
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"s2"}`)), t0.Add(sweepEvery+time.Minute))
+	for _, f := range []string{old, old + ".lock"} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Fatalf("%s should be swept: %v", f, err)
+		}
 	}
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("fresh state swept: %v", err)
+	}
+}
+
+// The sweep ranks files by mtime and never decodes them: a garbage file with a
+// fresh mtime survives, and a stale updatedAt inside a fresh file is ignored.
+func TestSweepUsesMtimeNotContent(t *testing.T) {
+	cd := t.TempDir()
+	dir := filepath.Join(cd, "rota", "session")
+	os.MkdirAll(dir, 0o777)
+	fresh := filepath.Join(dir, "fresh.json")
+	os.WriteFile(fresh, []byte(`{"sessionId":"fresh","updatedAt":"2000-01-01T00:00:00Z"}`), 0o644)
+	os.Chtimes(fresh, t0, t0)
+	junk := filepath.Join(dir, "junk.json")
+	os.WriteFile(junk, []byte("not json"), 0o644)
+	os.Chtimes(junk, t0, t0)
+	if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), t0); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{fresh, junk} {
+		if _, err := os.Stat(f); err != nil {
+			t.Fatalf("%s swept by content, not mtime: %v", f, err)
+		}
+	}
+}
+
+// A sweep that ran recently is not repeated, so a normal refresh only stats.
+func TestSweepRunsWhenDue(t *testing.T) {
+	cd := t.TempDir()
+	dir := filepath.Join(cd, "rota", "session")
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), t0)
+	old := filepath.Join(dir, "old.json")
+	os.WriteFile(old, []byte("{}"), 0o644)
+	stale := t0.Add(-48 * time.Hour)
+	os.Chtimes(old, stale, stale)
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), t0.Add(time.Minute))
+	if _, err := os.Stat(old); err != nil {
+		t.Fatalf("sweep ran before it was due: %v", err)
+	}
+	Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), t0.Add(sweepEvery+time.Minute))
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("due sweep did not remove stale file: %v", err)
 	}
 }
 

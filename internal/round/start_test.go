@@ -240,16 +240,16 @@ func fakeLease(host string, alive ...int) roundlease.Env {
 	}
 }
 
-func startOpts(scope string, pid int, items ...string) StartOpts {
+func startOpts(scope string, items ...string) StartOpts {
 	set, _ := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir())) // defaults: no config there
 	// Dispatch tmux: these tests drive tab mode through a fake host.
-	return StartOpts{Scope: scope, Items: items, HolderPID: pid, Settings: set, DefaultNum: 2, Dispatch: "tmux"}
+	return StartOpts{Scope: scope, Items: items, Settings: set, DefaultNum: 2, Dispatch: "tmux"}
 }
 
 func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100, 200)}
-	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100))
+	st, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,13 +273,13 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 	}
 
 	// The same holder again renews: same round, nothing re-provisioned.
-	again, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100))
+	again, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone))
 	if err != nil || again.Round != 1 || again.Outcome != roundlease.Renewed || again.Changed {
 		t.Fatalf("restart must be idempotent: %v %+v", err, again)
 	}
 	// A second orchestrator, even from another worktree of the repo, is refused.
 	wt := filepath.Join(root, ".worktrees", "ben")
-	_, err = e.Start(bg, wt, startOpts(roundcfg.ScopeMilestone, 200))
+	_, err = e.holder(200).Start(bg, wt, startOpts(roundcfg.ScopeMilestone))
 	var we *exitcode.Error
 	if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("second holder must be refused: %v", err)
@@ -288,9 +288,9 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 		t.Fatalf("refusal must name the holder: %+v", we.Data)
 	}
 	// Growing the pool keeps the round.
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 3
-	grown, err := e.Start(bg, root, o)
+	grown, err := e.holder(100).Start(bg, root, o)
 	if err != nil || len(grown.Slots) != 3 || grown.Round != 1 {
 		t.Fatalf("grow: %v %+v", err, grown)
 	}
@@ -299,7 +299,7 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	root := newRepo(t, nil)
 	first := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
-	if _, err := first.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := first.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout("split"); d.SetCLIPane("pc") }); err != nil {
@@ -327,7 +327,7 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 		t.Errorf("reconcile --apply must not clear the lease: %+v", out.Repaired)
 	}
 
-	got, err := second.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 300))
+	got, err := second.holder(300).Start(bg, root, startOpts(roundcfg.ScopeMilestone))
 	if err != nil || got.Outcome != roundlease.Reclaimed || got.Round != 2 || got.Reclaimed.PID != 100 || len(got.Warnings) == 0 {
 		t.Fatalf("reclaim: %v %+v", err, got)
 	}
@@ -342,7 +342,7 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 func TestClearStaleLeaseLeavesLiveOnes(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
-	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if _, cleared, _ := e.ClearStaleLease(bg, root); cleared {
@@ -359,11 +359,11 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	for name, o := range map[string]StartOpts{
-		"slate without items":    startOpts(roundcfg.ScopeSlate, 100),
-		"items without slate":    startOpts(roundcfg.ScopeMilestone, 100, "12"),
-		"more slots than roster": func() StartOpts { o := startOpts(roundcfg.ScopeMilestone, 100); o.Slots = 9; return o }(),
+		"slate without items":    startOpts(roundcfg.ScopeSlate),
+		"items without slate":    startOpts(roundcfg.ScopeMilestone, "12"),
+		"more slots than roster": func() StartOpts { o := startOpts(roundcfg.ScopeMilestone); o.Slots = 9; return o }(),
 	} {
-		_, err := e.Start(bg, root, o)
+		_, err := e.holder(100).Start(bg, root, o)
 		var we *exitcode.Error
 		if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 			t.Errorf("%s: want a usage error, got %v", name, err)
@@ -372,7 +372,7 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 	if _, st, _ := e.ReadLease(bg, root); st != roundlease.None {
 		t.Errorf("a refused start must not take the lease: %v", st)
 	}
-	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeSlate, 100, "#12", "13", "12"))
+	st, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeSlate, "#12", "13", "12"))
 	if err != nil || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
 		t.Fatalf("%v %+v", err, st)
 	}
@@ -380,7 +380,7 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 	if scope != "slate" || !reflect.DeepEqual(slate, []string{"12", "13"}) {
 		t.Errorf("recorded %q %v", scope, slate)
 	}
-	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if scope, slate := SlateOf(root); scope != "milestone" || slate != nil {
@@ -392,32 +392,32 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	// --items without --scope is a slate.
-	st, err := e.Start(bg, root, startOpts("", 100, "12", "13"))
+	st, err := e.holder(100).Start(bg, root, startOpts("", "12", "13"))
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
 		t.Fatalf("items alone make a slate: %v %+v", err, st)
 	}
 	// A new round without --scope or --items takes the round.scope default.
 	fresh := newRepo(t, nil)
-	opts := startOpts("", 100)
+	opts := startOpts("")
 	opts.Settings.Scope = roundcfg.ScopeOpen
-	if st, err := e.Start(bg, fresh, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
+	if st, err := e.holder(100).Start(bg, fresh, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
 		t.Fatalf("config default: %v %+v", err, st)
 	}
 	// A renewal with nothing recorded takes the round.scope default.
 	renew := newRepo(t, nil)
-	if _, err := e.Start(bg, renew, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := e.holder(100).Start(bg, renew, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Update(renew, func(doc *worker.Doc) { doc.SetScope("") }); err != nil {
 		t.Fatal(err)
 	}
-	opts = startOpts("", 100)
+	opts = startOpts("")
 	opts.Settings.Scope = roundcfg.ScopeOpen
-	if st, err := e.Start(bg, renew, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
+	if st, err := e.holder(100).Start(bg, renew, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
 		t.Fatalf("renew plus default: %v %+v", err, st)
 	}
 	// A renewal without --scope keeps scope and slate.
-	st, err = e.Start(bg, root, startOpts("", 100))
+	st, err = e.holder(100).Start(bg, root, startOpts(""))
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
 		t.Fatalf("renew must keep the slate: %v %+v", err, st)
 	}
@@ -425,18 +425,18 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 		t.Errorf("recorded %q %v", scope, slate)
 	}
 	// --scope slate --items replaces the slate while holding the lease.
-	if st, err = e.Start(bg, root, startOpts(roundcfg.ScopeSlate, 100, "14")); err != nil || !reflect.DeepEqual(st.Slate, []string{"14"}) {
+	if st, err = e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeSlate, "14")); err != nil || !reflect.DeepEqual(st.Slate, []string{"14"}) {
 		t.Fatalf("new slate: %v %+v", err, st)
 	}
 	// An explicit --scope changes it.
-	if st, err = e.Start(bg, root, startOpts(roundcfg.ScopeOpen, 100)); err != nil || st.Scope != roundcfg.ScopeOpen {
+	if st, err = e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeOpen)); err != nil || st.Scope != roundcfg.ScopeOpen {
 		t.Fatalf("explicit scope: %v %+v", err, st)
 	}
 	if scope, slate := SlateOf(root); scope != "open" || slate != nil {
 		t.Errorf("recorded %q %v", scope, slate)
 	}
 	// A renewal now keeps open.
-	if st, err = e.Start(bg, root, startOpts("", 100)); err != nil || st.Scope != roundcfg.ScopeOpen {
+	if st, err = e.holder(100).Start(bg, root, startOpts("")); err != nil || st.Scope != roundcfg.ScopeOpen {
 		t.Fatalf("renew keeps open: %v %+v", err, st)
 	}
 }
@@ -444,9 +444,9 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 func TestStartFreshWithoutScopeUsesConfig(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
-	o := startOpts("", 100)
+	o := startOpts("")
 	o.Settings.Scope = roundcfg.ScopeNext
-	st, err := e.Start(bg, root, o)
+	st, err := e.holder(100).Start(bg, root, o)
 	if err != nil || st.Scope != roundcfg.ScopeNext {
 		t.Fatalf("fresh round uses round.scope: %v %+v", err, st)
 	}
@@ -454,7 +454,7 @@ func TestStartFreshWithoutScopeUsesConfig(t *testing.T) {
 	root = newRepo(t, nil)
 	o.Settings.Scope = roundcfg.ScopeSlate
 	var we *exitcode.Error
-	if _, err := e.Start(bg, root, o); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
+	if _, err := e.holder(100).Start(bg, root, o); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Fatalf("want usage error: %v", err)
 	}
 }
@@ -472,7 +472,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	}
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: le}
 	// Its child runs `round start` with ROTA_ROUND_HOLDER_PID, no --holder-pid.
-	o := startOpts(roundcfg.ScopeMilestone, 0)
+	o := startOpts(roundcfg.ScopeMilestone)
 	withGetenv(&e, func(k string) string {
 		if k == roundlease.HolderPIDEnv {
 			return "100"
@@ -495,7 +495,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 		t.Fatalf("renewal under the supervisor must keep the round: %v %+v", err, again)
 	}
 	// A hand-run start from another process is refused.
-	_, err = e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 200))
+	_, err = e.holder(200).Start(bg, root, startOpts(roundcfg.ScopeMilestone))
 	var we *exitcode.Error
 	if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("a non-descendant must be refused: %v", err)
@@ -565,10 +565,10 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Settings.LedgerKeep = 2
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
-	if _, err := e.Start(bg, root, o); err != nil { // takes round 1 of the registry: nothing is old yet
+	if _, err := e.holder(100).Start(bg, root, o); err != nil { // takes round 1 of the registry: nothing is old yet
 		t.Fatal(err)
 	}
 	es, _ := ledger.Load(root)
@@ -579,7 +579,7 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 		t.Fatal(err)
 	}
 	e = Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 300)} // pid 100 is gone: round 4
-	if st, err := e.Start(bg, root, o); err != nil || st.Round != 4 {
+	if st, err := e.holder(100).Start(bg, root, o); err != nil || st.Round != 4 {
 		t.Fatalf("%v %+v", err, st)
 	}
 	es, _ = ledger.Load(root)
@@ -596,7 +596,7 @@ func TestStartWarnsWhenAncestryUnreadable(t *testing.T) {
 	le.Parent = func() int { return 300 }
 	le.Proc = func(int) (int, string, bool) { return 0, "", false }
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: le}
-	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 0))
+	st, err := e.holder(0).Start(bg, root, startOpts(roundcfg.ScopeMilestone))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -618,7 +618,7 @@ func TestStartPoolInitUsesConfiguredWorkerEnv(t *testing.T) {
 		return git.Exec(ctx, dir, args...)
 	}
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Config: diskConfig, Git: spy, Getenv: noEnv}), Lease: fakeLease("h", 100)}
-	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := e.holder(100).Start(bg, root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if calls == 0 {
@@ -638,3 +638,6 @@ func TestResolveScope(t *testing.T) {
 		}
 	}
 }
+
+// holder is the env with its lease holder pid set: the one place a verb reads it.
+func (e Env) holder(pid int) Env { e.HolderPID = pid; return e }
