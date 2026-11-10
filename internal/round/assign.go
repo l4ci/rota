@@ -701,7 +701,7 @@ func (o AssignOpts) checkAgent(roster []string) error {
 
 // requireLease refuses unless this process holds the round's lease.
 func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error {
-	_, held, err := e.heldLease(ctx, root, e.HolderPID)
+	_, held, err := e.heldLease(ctx, root)
 	if err != nil {
 		return err
 	}

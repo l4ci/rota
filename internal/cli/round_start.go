@@ -150,8 +150,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 	slots := fs.Int("slots", 0, "roster slots the round uses, the first N names (default round.slots); slots past N that hold work drain")
 	base := fs.String("base", "", "base branch (default git.baseBranch, else the current branch)")
 	consume := fs.Bool("consume-handoff", false, "after reporting the orchestrator handoff note, archive it to <note>.consumed")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid for the lease, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid for the lease, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
@@ -178,7 +177,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		cfg := c.deps().Config(root)
 		env := roundEnv(c, ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
-			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
+			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base,
 			Settings: set, DefaultNum: set.Slots, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {
@@ -284,7 +283,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, "architecture\t"+archLine)
 		}
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
-	}
+	})
 }
 
 func roundCandidates(fs *flag.FlagSet) RunFunc {

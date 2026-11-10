@@ -30,7 +30,6 @@ const (
 // PickOpts are the flags of `rota round pick`.
 type PickOpts struct {
 	ID, PR, Reason string
-	HolderPID      int
 }
 
 // PickAttempt is one best-of attempt as pick found it.
@@ -70,7 +69,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if reason == "" {
 		return res, usage("--reason-file is empty: say why")
 	}
-	ok, err := e.holdsLease(ctx, root, o.HolderPID)
+	ok, err := e.holdsLease(ctx, root)
 	if err != nil {
 		return res, wrap(err)
 	}

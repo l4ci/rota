@@ -32,8 +32,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 	lines := fs.Int("lines", 60, "pane lines to classify")
 	autopilot := fs.Bool("autopilot", false, "run a round tick on every wake and wake the orchestrator only for something new (needs autonomy.level auto)")
 	base := fs.String("base", "", "with --autopilot: the cycle branch PRs merge into (default each PR's recorded base)")
-	pid := fs.Int("holder-pid", 0, "with --autopilot: orchestrator pid for the lease, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "with --autopilot: orchestrator pid for the lease, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
@@ -117,10 +116,10 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			ok = ctx.Err() == nil
 			return watchResult(c, root, cd, lenv, res, nil, ""), nil
 		}
-		res, err := autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, *pid, secs(*poll))
+		res, err := autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, c.holderPID, secs(*poll))
 		ok = err == nil && ctx.Err() == nil
 		return res, err
-	}
+	})
 }
 
 func secs(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }

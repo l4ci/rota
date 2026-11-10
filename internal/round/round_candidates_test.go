@@ -42,7 +42,7 @@ func TestRoundCandidatesScopeFallback(t *testing.T) {
 	}
 
 	// A recorded slate beats the config scope.
-	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeSlate, 100, "12")); err != nil {
+	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeSlate, "12")); err != nil {
 		t.Fatal(err)
 	}
 	set := roundcfg.Settings{Scope: roundcfg.ScopeMilestone}

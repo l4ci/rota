@@ -47,3 +47,16 @@ func TestMaintainerSnapshotFreshness(t *testing.T) {
 		}
 	}
 }
+
+func TestMaintainerSnapshotLineCorruptFileIsOmitted(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(rotastate.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rotastate.File(dir, "maintainer-digest.json"), []byte("{oops"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := MaintainerSnapshotLine(dir, time.Now(), time.Hour); got != "" {
+		t.Fatalf("line = %q, want empty", got)
+	}
+}

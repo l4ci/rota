@@ -19,6 +19,9 @@ import (
 // StateTTL is how long an untouched session state file lives.
 const StateTTL = 24 * time.Hour
 
+// sweepEvery is the least time between two sweeps of the session directory.
+const sweepEvery = 10 * time.Minute
+
 // lockWait bounds the state lock: a statusline must never hang.
 const lockWait = 2 * time.Second
 
@@ -164,7 +167,7 @@ func num(v any) (float64, bool) {
 
 // Dump records one statusline refresh: it parses payload, merges it into the
 // session's state file (the Stop hook's counters survive) and sweeps state
-// files untouched for StateTTL. An error means nothing useful was written.
+// files untouched for StateTTL (by mtime, at most every sweepEvery). An error means nothing useful was written.
 func Dump(commonDir string, payload Payload, now time.Time) error {
 	id := payload.SessionID
 	path, err := StatePath(commonDir, id)
@@ -195,9 +198,27 @@ func Dump(commonDir string, payload Payload, now time.Time) error {
 	return err
 }
 
-// sweep removes state files whose updatedAt is more than StateTTL old, with
-// their lock files. Errors are ignored: it is housekeeping.
+// sweepMarker is the file whose mtime records the last sweep. It does not end
+// in .json, so the session readers never see it.
+const sweepMarker = ".sweep"
+
+// sweep removes state files whose mtime is more than StateTTL old, with their
+// lock files. Every refresh and Stop write rewrites the state, so the mtime
+// tracks the last touch and no file is decoded. It runs at most once per
+// sweepEvery: a normal refresh pays one stat. Errors are ignored: it is
+// housekeeping.
 func sweep(dir, keepID string, now time.Time) {
+	marker := filepath.Join(dir, sweepMarker)
+	if fi, err := os.Stat(marker); err == nil {
+		if age := now.Sub(fi.ModTime()); age >= 0 && age < sweepEvery {
+			return
+		}
+	}
+	// Claim the slot before scanning so a crash cannot make every refresh rescan.
+	if os.WriteFile(marker, nil, 0o666) != nil {
+		return
+	}
+	os.Chtimes(marker, now, now)
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -207,21 +228,12 @@ func sweep(dir, keepID string, now time.Time) {
 		if !strings.HasSuffix(name, ".json") || name == keepID+".json" {
 			continue
 		}
-		p := filepath.Join(dir, name)
-		st, found, err := ReadState(p)
-		var at time.Time
-		if err == nil && found {
-			at, err = stamp.Parse(st.UpdatedAt)
+		fi, err := e.Info()
+		if err != nil {
+			continue
 		}
-		if err != nil || at.IsZero() {
-			fi, serr := os.Stat(p)
-			if serr != nil {
-				continue
-			}
-			at = fi.ModTime()
-		}
-		if now.Sub(at) > StateTTL {
-			fsio.RemoveWithLock(p)
+		if now.Sub(fi.ModTime()) > StateTTL {
+			fsio.RemoveWithLock(filepath.Join(dir, name))
 		}
 	}
 }

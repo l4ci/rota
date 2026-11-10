@@ -54,8 +54,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	acceptCross := fs.Bool("accept-cross-milestone", false, "assign an issue that depends on, or shares a touch with, another active milestone")
 	bundle := fs.String("bundle", "", "member issues handed to the same slot beside the lead, comma-separated: one branch, one PR that closes them all (at most round.bundleMax)")
 	acceptBatch := fs.Bool("accept-batch", false, "assign past a full round.batch for this one call")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round assign takes one item ID")
 		}
@@ -87,7 +86,6 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		env := accountedRoundEnv(c, ctx, root)
-		env.HolderPID = *pid
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, SettledAnswers: settledAnswers, DecisionTopics: pystr.SplitCSV(*decisionTopics), Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
 			ReclaimStale: *reclaimStale, CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptCrossMilestone: *acceptCross, AcceptBatch: *acceptBatch,
@@ -196,7 +194,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			text += fmt.Sprintf("\nfallback\t%s -> %s: %s", fb.From, fb.To, fb.Why)
 		}
 		return Result{Data: d, Text: text}, nil
-	}
+	})
 }
 
 // bestOfAttempts is the `bestOf` list of the JSON: one object per attempt.

@@ -120,7 +120,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	f.be = fb
 	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir()))
 	f.env.Round, f.env.HolderPID = f.set, 100
-	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -1549,13 +1549,13 @@ func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 // A draining slot takes nothing new, so status does not read its credentials (#1337).
 func TestStatusSkipsLoginCheckForDrainingSlot(t *testing.T) {
 	f := newAssignFixture(t)
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 3
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)
 	}
 	holdTask(t, f.root, "nia", "41")
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"nia", "dana"} {

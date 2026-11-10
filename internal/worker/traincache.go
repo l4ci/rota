@@ -1,8 +1,6 @@
 package worker
 
 import (
-	"encoding/json"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -43,8 +41,10 @@ type trainCache struct {
 
 func loadTrainCache(root string) *trainCache {
 	c := &trainCache{path: rotatree.TrainCache(root)}
-	if b, err := os.ReadFile(c.path); err == nil {
-		json.Unmarshal(b, &c.f) // a corrupt cache is an empty one
+	// A missing or corrupt cache is an empty one: a verdict cache only saves
+	// work, so an unreadable file is dropped, never an error.
+	if f, found, _ := fsio.ReadJSON[trainCacheFile](c.path); found {
+		c.f = f
 	}
 	if c.f.Verdicts == nil {
 		c.f.Verdicts = map[string]trainCacheVerdict{}

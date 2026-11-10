@@ -178,3 +178,17 @@ func TestFrozenReadsThroughRunner(t *testing.T) {
 		t.Fatal("outside a repo there is no freeze")
 	}
 }
+
+func TestReadCorruptFreezeIsAnError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "freeze.json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Read(path)
+	if err == nil || r != nil || !strings.Contains(err.Error(), "invalid landing freeze") || !strings.Contains(err.Error(), path) {
+		t.Fatalf("Read = %v, %v; want invalid landing freeze error naming the path", r, err)
+	}
+	if r, err := Read(filepath.Join(t.TempDir(), "absent.json")); r != nil || err != nil {
+		t.Fatalf("missing freeze = %v, %v; want nil, nil", r, err)
+	}
+}

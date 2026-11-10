@@ -46,7 +46,7 @@ func TestStartRecordsTheResolvedHostAndKeepsItForTheRound(t *testing.T) {
 		t.Fatalf("recorded host = %q, want tmux", got)
 	}
 	// A repeat start of the same round keeps it, whatever resolves now.
-	o := startOpts("milestone", 100)
+	o := startOpts("milestone")
 	o.Dispatch = ""
 	st, err := f.env.Start(bg, f.root, o)
 	if err != nil {
