@@ -107,7 +107,7 @@ func TestMarkerClaim(t *testing.T) {
 	}
 }
 
-func TestMarkerClaimGuardErrorPropagates(t *testing.T) {
+func TestMarkerWriteGuardErrorAborts(t *testing.T) {
 	m := jsonMarker(t)
 	if err := m.Write(rec{PID: self}, func() error { return errors.New("no") }); err == nil {
 		t.Fatal("guard error swallowed")
@@ -152,5 +152,28 @@ func TestStampLive(t *testing.T) {
 		if got := (Stamp{PID: self, Start: c.start}).Live(c.table); got != c.want {
 			t.Errorf("%s: Live = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestPrivateMarkerLeavesNoSidecar(t *testing.T) {
+	dir := t.TempDir()
+	m := Marker[rec]{Path: filepath.Join(dir, "run-1.json"), Codec: JSON[rec](), Private: true}
+	if err := m.Write(rec{PID: self}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.Read(); !ok {
+		t.Fatal("private marker did not read back")
+	}
+	if err := m.Remove(self + 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.Read(); !ok {
+		t.Error("Remove deleted a marker that is not the caller's")
+	}
+	if err := m.Remove(self); err != nil {
+		t.Fatal(err)
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 0 {
+		t.Errorf("state dir not empty after write+remove: %v", ents)
 	}
 }

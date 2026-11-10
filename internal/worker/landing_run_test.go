@@ -259,6 +259,9 @@ func TestLandingAbandonedIntentDoesNotWedgeRuns(t *testing.T) {
 				if paths := landingMarkers(t, common); len(paths) != 0 {
 					t.Errorf("abandoned or completed intent remains: %v", paths)
 				}
+				if locks, _ := filepath.Glob(filepath.Join(rotastate.Dir(common), "landing-run-*.lock")); len(locks) != 0 {
+					t.Errorf("landing marker left lock sidecars: %v", locks)
+				}
 			})
 		}
 	}

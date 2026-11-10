@@ -102,7 +102,7 @@ func (e Env) readTrainRun(path string) (TrainRun, bool) {
 func (r TrainRun) OwnerPID() int { return r.PID }
 
 func trainMarker(path string) pidlive.Marker[TrainRun] {
-	return pidlive.Marker[TrainRun]{Path: path, Codec: pidlive.JSON[TrainRun]()}
+	return pidlive.Marker[TrainRun]{Path: path, Codec: pidlive.JSON[TrainRun](), Private: true}
 }
 
 // FindTrainRun is the live train holding request id, ok false when none does.
