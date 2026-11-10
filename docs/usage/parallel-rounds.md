@@ -219,17 +219,6 @@ unknown delivery without sending input:
 rota worker dispatch ben --confirm-not-submitted
 ```
 
-The orchestrator does not run that itself. To keep a round moving while the
-maintainer has not answered, give the issue to another slot:
-
-```bash
-rota round transfer <id> --to <free slot>
-```
-
-Transfer parks the stuck slot and leaves its unknown delivery in place, so that
-slot stays blocked until the delivery is confirmed. The refusal message names both
-paths.
-
 Then retry the original dispatch or send the next relay. Confirmation keeps the
 terminal and signing key and retracts the uncertain relay's provisional log entry,
 so retrying it keeps its sequence. It refuses accepted or queued input, positive
@@ -245,6 +234,17 @@ The saved delivery records that confirmation was made by hand and when.
 Use this flag alone, without a body file
 or other dispatch flags. Definite Core rejections, including `invalid_params`,
 report not submitted and allow a normal retry without confirmation.
+
+The orchestrator does not run that itself. To keep a round moving while the
+maintainer has not answered, give the issue to another slot:
+
+```bash
+rota round transfer <id> --to <free slot>
+```
+
+Transfer parks the stuck slot and leaves its unknown delivery in place, so that
+slot stays blocked until the delivery is confirmed. The refusal message names both
+paths.
 
 These client receipts do not promise formal exactly-once delivery
 against arbitrary concurrent human edits. Ownership records and delivery receipts

@@ -83,7 +83,7 @@ func TestAssignDispatchRefusalNamesTransferForAnUnknownCoreDelivery(t *testing.T
 	if se := stageOf(t, err); se.Stage != "dispatch" {
 		t.Fatalf("want stage dispatch: %+v", se)
 	}
-	for _, want := range []string{"unresolved delivery", "rota round transfer <id> --to <free slot>", "stays blocked until the delivery is confirmed", "--confirm-not-submitted", "the maintainer must confirm after reading the original terminal screen"} {
+	for _, want := range []string{"unresolved delivery", "rota round transfer 12 --to <free slot>", "stays blocked until the delivery is confirmed", "--confirm-not-submitted", "the maintainer must confirm after reading the original terminal screen"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("assign error lacks %q: %v", want, err)
 		}
