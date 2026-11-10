@@ -639,7 +639,12 @@ Neither applies to a solo round, which has no panes to watch.
 which every worker tab has and the orchestrator and your own sessions do not, and does nothing without
 it. For a worker it refuses (exit 2, one-line reason) the commands the worker contract forbids:
 
-- `gh pr merge`
+- `gh pr merge`, and `gh api` with a write method (`-X PUT`, `--method`, or a `-f`/`-F` body) on a
+  path ending in `/merge`
+- a push to the base branch (`main`, `master`, or the base the caller passes in `GuardEnv.Base`), plain
+  or forced, including `HEAD:main` and a bare `git push origin main`; the hook does not read the
+  project base from config yet, so only `main` and `master` are covered in practice. A bare `git push`
+  that resolves to such an upstream is not inspected
 - a force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) to any branch but the worker's own,
   `git push --delete`, `:ref` and `--mirror`; pushing the current branch, with or without
   `--force-with-lease`, is fine
@@ -658,7 +663,7 @@ not read the untracked `.claude/settings.local.json`. `install` warns when the g
 `rota doctor` fails its `guard-hook` check.
 
 Limits: this is a guardrail against a mistaken agent, not a security boundary. A script or `python -c`
-that calls git, or a binary that shells out, is not seen, and `gh api …/merge` is not blocked. Codex
+that calls git, or a binary that shells out, is not seen. Codex
 workers have no guard (`doctor` warns when Codex tiers are set); a Codex guard is a separate piece of work.
 
 ## Layout
