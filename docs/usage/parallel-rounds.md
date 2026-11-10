@@ -235,6 +235,17 @@ Use this flag alone, without a body file
 or other dispatch flags. Definite Core rejections, including `invalid_params`,
 report not submitted and allow a normal retry without confirmation.
 
+The orchestrator does not run that itself. To keep a round moving while the
+maintainer has not answered, give the issue to another slot:
+
+```bash
+rota round transfer <id> --to <free slot>
+```
+
+Transfer parks the stuck slot and leaves its unknown delivery in place, so that
+slot stays blocked until the delivery is confirmed. The refusal message names both
+paths.
+
 These client receipts do not promise formal exactly-once delivery
 against arbitrary concurrent human edits. Ownership records and delivery receipts
 live under `$XDG_STATE_HOME/rota/herdr-core` (default
