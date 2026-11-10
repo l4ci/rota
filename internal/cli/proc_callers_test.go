@@ -89,7 +89,7 @@ func TestKeepaliveSpawnRunsThroughProc(t *testing.T) {
 	d := testDeps()
 	d.Proc = run
 	c := &Ctx{Deps: d, Stdout: io.Discard, Stderr: io.Discard}
-	child, err := keepaliveSpawn(c, "/cfg")(([]string{"claude", "--x"}), []string{"K=V"})
+	child, err := keepaliveSpawn(c, "/cfg")(([]string{"agentbin", "--x"}), []string{"K=V"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestKeepaliveSpawnRunsThroughProc(t *testing.T) {
 		t.Fatalf("exit %+v err %v", exit, err)
 	}
 	pc := (*got)[0]
-	if pc.Name != "claude" || pc.Timeout != proc.NoTimeout || pc.Group || pc.Stdio == nil ||
+	if pc.Name != "agentbin" || pc.Timeout != proc.NoTimeout || pc.Group || pc.Stdio == nil ||
 		!slices.Contains(pc.Environ, "CLAUDE_CONFIG_DIR=/cfg") || !slices.Contains(pc.Environ, "K=V") {
 		t.Fatalf("cmd %+v", pc)
 	}
