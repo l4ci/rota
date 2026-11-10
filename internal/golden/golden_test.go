@@ -219,8 +219,30 @@ func TestCheckUpdateRewritesOutputsOnly(t *testing.T) {
 	}
 }
 
+// inScratch runs the test in an empty temp dir holding testdata/golden.
+func inScratch(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "testdata", "golden"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prev, err := os.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		defer prev.Close()
+		if err := prev.Chdir(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestReadReturnsFileText(t *testing.T) {
-	isolate(t, false)
+	inScratch(t)
 	if err := os.WriteFile(filepath.Join("testdata", "golden", "plain.txt"), []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +252,7 @@ func TestReadReturnsFileText(t *testing.T) {
 }
 
 func TestReadMissingFails(t *testing.T) {
-	isolate(t, false)
+	inScratch(t)
 	f := &fakeTB{name: "TestReadMissingFails"}
 	f.run(func() { Read(f, "nope.txt") })
 	if !strings.Contains(f.fatal, "nope.txt") {
