@@ -260,23 +260,38 @@ func shellScript(args []string) (string, bool) {
 	return "", false
 }
 
-// pushd: -n leaves the directory alone; no argument or +N/-N rotates the
-// stack, which is not tracked, so the directory becomes unknown.
+// pushd: options come before the directory and end at `--`. -n leaves the
+// directory alone. Anything the guard does not model (no argument, +N/-N stack
+// rotation, other options, extra words) makes the directory unknown, which
+// fails closed.
 func (g *guard) pushd(args []string) {
-	var dir string
-	for _, a := range args {
-		switch {
-		case a == "-n":
-			return
-		case a == "--":
-		case len(a) > 1 && (a[0] == '+' || a[0] == '-') && strings.Trim(a[1:], "0123456789") == "":
+	noChdir := false
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			i++
+			break
+		}
+		if a == "-n" {
+			noChdir = true
+			continue
+		}
+		if len(a) > 1 && (a[0] == '-' || a[0] == '+') {
 			g.cwd = ""
 			return
-		case dir == "":
-			dir = a
 		}
+		break
 	}
-	g.cwd = resolveDir(g.cwd, dir)
+	rest := args[i:]
+	switch {
+	case noChdir && len(rest) <= 1:
+		return
+	case len(rest) != 1:
+		g.cwd = ""
+	default:
+		g.cwd = resolveDir(g.cwd, rest[0])
+	}
 }
 
 func (g *guard) cd(args []string) {
