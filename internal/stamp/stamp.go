@@ -70,3 +70,14 @@ func ParseISO(v string) *time.Time {
 	}
 	return nil
 }
+
+// FormatNano is t as a UTC RFC 3339 value that keeps its fractional seconds.
+// Only a cursor needs it: it must compare equal to the instant it was cut from,
+// which Format's second precision would round down.
+func FormatNano(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// ParseNano reads a FormatNano value; the zero time when it is not one.
+func ParseNano(v string) time.Time {
+	t, _ := time.Parse(time.RFC3339Nano, v)
+	return t
+}
