@@ -375,12 +375,7 @@ func authorToken(a string) string {
 // emoji ZWJ and subdivision-flag sequences render split and Persian/Indic
 // shaping hints are lost: acceptable for pane text.
 func stripControls(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r)) {
-			return -1
-		}
-		return r
-	}, s)
+	return strutil.StripControls(s, '\n', '\t')
 }
 
 // CapHint is the next step at the bounce cap: audit the acceptance criteria
