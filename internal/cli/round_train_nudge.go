@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/stamp"
-	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -345,7 +344,7 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 		return roundtick.ReadinessOf(roundtick.ReadinessInput{
 			Head: strings.TrimSpace(r.Stdout), PR: pr, Names: []string{target}, State: state,
 			BounceHead: bounceHead(issue), ReviewOff: reviewOff, DoneAt: doneAt,
-			Records: vc.Store.Branches[verdict.BranchKey("", branch)],
+			Records: vc.Store.Branch(vc.Repo, branch),
 		})
 	}
 	var out []waitingPR
