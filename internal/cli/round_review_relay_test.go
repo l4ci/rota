@@ -204,15 +204,11 @@ func TestWatchForgeSurfacesABadRoundConfig(t *testing.T) {
 }
 
 func TestFailVerdictReadsAFailReview(t *testing.T) {
-	dir := workerProject(t, ghCfg)
-	if failVerdict(dir, "nia/577-x") != nil {
+	if failVerdict(nil) != nil {
 		t.Fatal("a verdict from nowhere")
 	}
 	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad", Findings: []verdict.Finding{{Severity: "major", Title: "no test", File: "a.go", Line: 3}}}, testNow)
-	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
-		t.Fatal(err)
-	}
-	v := failVerdict(dir, "nia/577-x")
+	v := failVerdict([]verdict.Record{rec})
 	if v == nil || !strings.Contains(v.Text, verdict.ReviewSpec+" FAIL at abcdef1: bad") || !strings.Contains(v.Text, "[major] no test (a.go:3)") {
 		t.Fatalf("%+v", v)
 	}
@@ -222,18 +218,15 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 // not an effective FAIL: the relay input reads EffectiveFail, so it relays
 // nothing. Swapping the two predicates at either call site fails this test.
 func TestRelayInputIgnoresConcernsWithABlocker(t *testing.T) {
-	dir := workerProject(t, ghCfg)
 	rec := verdict.NewRecord(verdict.ReviewQuality, verdict.Concerns, "abcdef1234", verdict.Body{Summary: "meh", Findings: []verdict.Finding{{Severity: "major", Title: "real"}}}, testNow)
 	if !rec.Failing() {
 		t.Fatal("fixture must be Failing, or the test proves nothing")
 	}
-	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
-		t.Fatal(err)
-	}
-	if v := failVerdict(dir, "nia/577-x"); v != nil {
+	list := []verdict.Record{rec}
+	if v := failVerdict(list); v != nil {
 		t.Errorf("failVerdict relayed a CONCERNS verdict: %+v", v)
 	}
-	if got := openFindings(dir, "nia/577-x"); got != nil {
+	if got := openFindings(list); got != nil {
 		t.Errorf("openFindings listed a CONCERNS verdict: %v", got)
 	}
 }
@@ -241,13 +234,9 @@ func TestRelayInputIgnoresConcernsWithABlocker(t *testing.T) {
 // A FAIL verdict whose timestamp does not parse cannot be ordered against the
 // review cursor, so it is not relayed.
 func TestFailVerdictIgnoresAnUnparseableTimestamp(t *testing.T) {
-	dir := workerProject(t, ghCfg)
 	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad"}, testNow)
 	rec.RecordedAt = "yesterday"
-	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
-		t.Fatal(err)
-	}
-	if v := failVerdict(dir, "nia/577-x"); v != nil {
+	if v := failVerdict([]verdict.Record{rec}); v != nil {
 		t.Fatalf("%+v", v)
 	}
 }
@@ -444,5 +433,23 @@ func TestWorkerDispatchReviewThroughForgeFailureWarnsAndExits0(t *testing.T) {
 	}
 	if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got != "" {
 		t.Errorf("cursor moved to %q", got)
+	}
+}
+
+// In an umbrella the store is keyed "<repo>:<branch>": the relay, bounce and
+// train readers must read the list the gate reads, not the plain-branch one.
+func TestBranchVerdictsReadsTheSubRepoKey(t *testing.T) {
+	dir := workerProject(t, ghCfg)
+	c := &Ctx{Repo: "sub", Deps: testDeps()}
+	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad"}, testNow)
+	if _, err := verdict.AddBranch(dir, verdict.BranchKey("sub", "nia/577-x"), rec); err != nil {
+		t.Fatal(err)
+	}
+	list := branchVerdicts(c, dir, "nia/577-x")
+	if v := failVerdict(list); v == nil {
+		t.Fatal("relay missed the umbrella-keyed FAIL")
+	}
+	if got := branchVerdicts(&Ctx{Deps: testDeps()}, dir, "nia/577-x"); len(got) != 0 {
+		t.Fatalf("plain key must not see the sub-repo record: %v", got)
 	}
 }

@@ -35,7 +35,7 @@ func (runner gate) stepVerdictReports(result GateResult, target GateTarget, forg
 		head, _ = g.git(g.root, "rev-parse", g.headRef)
 		head = strings.TrimSpace(head)
 	}
-	if err := verdict.RecoverPR(g.ctx, g.root, verdict.BranchKey("", g.branch), head, pr, source); err != nil {
+	if err := verdict.RecoverPR(g.ctx, g.root, verdict.BranchKey(g.o.VerdictRepo, g.branch), head, pr, source); err != nil {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("VERDICT-REPORT-UNKNOWN %s — %v; using local verdicts", g.branch, err))
 	}
 	return finish(false, nil)
