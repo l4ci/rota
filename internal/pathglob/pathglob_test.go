@@ -62,8 +62,8 @@ func TestMatchEntry(t *testing.T) {
 		{R, "[", "a", false},
 		{S, "[", "a", false},
 		// the flavours differ on **
-		{R, "docs/**", "docs/a/b.md", true}, // mergeApprovalPaths: recursive
-		{S, "docs/**", "docs/a/b.md", false},     // sharedPaths: one level
+		{R, "docs/**", "docs/a/b.md", true},  // mergeApprovalPaths: recursive
+		{S, "docs/**", "docs/a/b.md", false}, // sharedPaths: one level
 		{R, "internal/**/x.go", "internal/a/b/x.go", true},
 		{S, "internal/**/x.go", "internal/a/b/x.go", false}, // sharedPaths: one level
 		{S, "internal/**/x.go", "internal/a/x.go", true},
