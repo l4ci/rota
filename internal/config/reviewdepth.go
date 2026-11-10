@@ -131,10 +131,8 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					if strings.TrimSpace(glob) == "" || !ReviewDepth(s).valid() {
 						return bad(`"paths" entry %q must map a glob to full, light or none`, glob)
 					}
-					// path.Match has no "**": only a trailing /** (a directory) is
-					// supported, and any other use would silently match less.
-					if !pathglob.ValidEntry(glob) {
-						return bad(`"paths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
+					if err := pathglob.Valid(glob); err != nil {
+						return bad(`"paths": %v`, err)
 					}
 					p.Paths[glob] = ReviewDepth(s)
 				}
@@ -155,8 +153,8 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					if strings.TrimSpace(glob) == "" {
 						return bad(`"supportPaths" entries must be non-empty glob strings`)
 					}
-					if !pathglob.ValidEntry(glob) {
-						return bad(`"supportPaths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
+					if err := pathglob.Valid(glob); err != nil {
+						return bad(`"supportPaths": %v`, err)
 					}
 					p.SupportPaths = append(p.SupportPaths, glob)
 				}

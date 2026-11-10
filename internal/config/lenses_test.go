@@ -18,8 +18,9 @@ func TestParseLenses(t *testing.T) {
 		{"entry not an object", `{"review":{"lenses":{"perf":"x"}}}`, "review.lenses.perf must be an object"},
 		{"paths not a list", `{"review":{"lenses":{"perf":{"paths":"a"}}}}`, "review.lenses.perf.paths must be a list of globs"},
 		{"labels not strings", `{"review":{"lenses":{"perf":{"labels":[1]}}}}`, "review.lenses.perf.labels must be a list of strings"},
-		{"malformed glob", `{"review":{"lenses":{"ux":{"paths":["internal/[cli"]}}}}`, `review.lenses.ux.paths: glob "internal/[cli" is not supported`},
-		{"double star mid glob", `{"review":{"lenses":{"ux":{"paths":["a/**/b"]}}}}`, `review.lenses.ux.paths: glob "a/**/b" is not supported`},
+		{"malformed glob", `{"review":{"lenses":{"ux":{"paths":["internal/[cli"]}}}}`, `review.lenses.ux.paths: glob "internal/[cli" is malformed`},
+		{"double star mid glob", `{"review":{"lenses":{"ux":{"paths":["a/**/b"]}}}}`, ""}, // accepted: pathglob.Valid is the one dialect (Match reads a mid-path **)
+		{"braces glob", `{"review":{"lenses":{"ux":{"paths":["a/{b,c}"]}}}}`, `review.lenses.ux.paths: glob "a/{b,c}" uses braces`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := LensesOf(decode(t, c.cfg))
