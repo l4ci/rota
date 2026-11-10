@@ -81,7 +81,7 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 	d := Deps{Getenv: getenv, LookPath: lookPath}
 	d.fill()
 	if coreContext(d) || dispatch == HerdrCore {
-		if d.Getenv("HC_TERMINAL_ID") == "" || d.Getenv("HC_TERMINAL_SOCKET") == "" {
+		if d.Getenv(envCoreTerm) == "" || d.Getenv("HC_TERMINAL_SOCKET") == "" {
 			return Launch{}, fmt.Errorf("herdr-core needs HC_TERMINAL_ID and HC_TERMINAL_SOCKET from an app project terminal; refusing disconnected runtime")
 		}
 		if dispatch != "" && dispatch != HerdrCore && dispatch != "subagent" {
@@ -116,5 +116,5 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 // Partial Core markers still select Core so an unavailable endpoint cannot
 // silently launch a disconnected legacy runtime.
 func coreContext(d Deps) bool {
-	return d.Getenv("HC_TERMINAL_ID") != "" || d.Getenv("HC_TERMINAL_SOCKET") != ""
+	return d.Getenv(envCoreTerm) != "" || d.Getenv("HC_TERMINAL_SOCKET") != ""
 }
