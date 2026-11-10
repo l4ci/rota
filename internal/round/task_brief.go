@@ -63,7 +63,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 		return "", o, err
 	}
 	cacheDir := skills.CacheDir(e.getenv())
-	contract, _, ok := resolveBrief(root, set, e.getenv(), cacheDir)
+	contract, _, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
 	if !ok {
 		return "", o, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}

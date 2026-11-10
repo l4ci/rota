@@ -30,22 +30,17 @@ func TestClaudeDirInjectedEnv(t *testing.T) {
 
 func TestInstalledRootsOrder(t *testing.T) {
 	j := filepath.Join
-	full := InstalledRoots(fakeEnv(map[string]string{"HOME": "/h", "CLAUDE_CONFIG_DIR": "/cfg"}), "/p")
-	want := []string{j("/p", ".claude", "skills"), j("/p", ".agents", "skills"), j("/cfg", "skills"), j("/h", ".agents", "skills")}
+	full := InstalledRoots("/h", []string{"/cfg", "/acct"}, "/p")
+	want := []string{j("/p", ".claude", "skills"), j("/p", ".agents", "skills"), j("/cfg", "skills"), j("/acct", "skills"), j("/h", ".agents", "skills")}
 	if !reflect.DeepEqual(full, want) {
-		t.Errorf("env set: %v want %v", full, want)
+		t.Errorf("accounts: %v want %v", full, want)
 	}
-	unset := InstalledRoots(fakeEnv(map[string]string{"HOME": "/h"}), "/p")
-	want = []string{j("/p", ".claude", "skills"), j("/p", ".agents", "skills"), j("/h", ".claude", "skills"), j("/h", ".agents", "skills")}
-	if !reflect.DeepEqual(unset, want) {
-		t.Errorf("env unset: %v want %v", unset, want)
-	}
-	noHome := InstalledRoots(fakeEnv(nil), "")
+	noHome := InstalledRoots("", nil, "")
 	if len(noHome) != 0 {
 		t.Errorf("home unset: %v want none", noHome)
 	}
-	onlyEnv := InstalledRoots(fakeEnv(map[string]string{"CLAUDE_CONFIG_DIR": "/cfg"}), "")
+	onlyEnv := InstalledRoots("", []string{"/cfg"}, "")
 	if !reflect.DeepEqual(onlyEnv, []string{j("/cfg", "skills")}) {
-		t.Errorf("home unset, env set: %v", onlyEnv)
+		t.Errorf("home unset, dir set: %v", onlyEnv)
 	}
 }
