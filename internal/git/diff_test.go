@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 func branchWithChanges(t *testing.T) string {
@@ -85,7 +85,7 @@ func TestChangedPathsExactNames(t *testing.T) {
 		for _, entry := range []string{" lead.txt", "trail.txt ", "sp ace/", "café.*"} {
 			hit := false
 			for _, p := range got {
-				hit = hit || overlap.MatchPath(entry, p)
+				hit = hit || pathglob.MatchEntry(pathglob.SingleLevel, entry, p)
 			}
 			if !hit {
 				t.Errorf("core.quotePath=%s: entry %q matches none of %q", quote, entry, got)
