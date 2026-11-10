@@ -103,19 +103,20 @@ func TestMatchUnder(t *testing.T) {
 // TestValid pins the one dialect every glob config key shares. A key that
 // used to refuse the ** forms (review paths, supportPaths, lens paths) now
 // accepts them, since Match already honours them; a key that accepted a
-// leading /, braces or an empty segment (a trailing / included) now refuses,
-// since Match never matched those the way the author meant.
+// leading /, braces or an empty segment now refuses, since Match never
+// matched those the way the author meant. A single trailing / stays valid: it
+// is the directory marker MatchEntry trims before prefix-matching.
 func TestValid(t *testing.T) {
 	for _, g := range []string{
 		"*.md", "docs/**", "**/*.png", "a/b?.go", "[ab].md",
-		"docs/**/x.md", "**/x", "a/**/b", "docs/**/**", "internal/*/x",
+		"docs/**/x.md", "**/x", "a/**/b", "docs/**/**", "internal/*/x", "docs/",
 	} {
 		if err := Valid(g); err != nil {
 			t.Errorf("Valid(%q) = %v, want nil", g, err)
 		}
 	}
 	for _, g := range []string{
-		"", " ", "/abs.md", "docs//a", "docs/", "docs/**x", "{a,b}.md", "[a.md", "[",
+		"", " ", "/abs.md", "docs//a", "docs//", "/", "docs/**x", "{a,b}.md", "[a.md", "[",
 	} {
 		if err := Valid(g); err == nil {
 			t.Errorf("Valid(%q) = nil, want an error", g)

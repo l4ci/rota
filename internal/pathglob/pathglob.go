@@ -103,7 +103,8 @@ func MatchSegments(pattern, file []string) bool {
 // Valid reports whether glob is one every configured glob key accepts: slash
 // separated segments, each a path.Match pattern, or ** as a whole segment for
 // any number of directories (leading, mid-path or trailing, as Match reads
-// it). No leading slash, no empty segment, no braces.
+// it). No leading slash, no empty segment, no braces. One trailing / is the
+// directory marker (docs/) and is allowed, as MatchEntry trims it.
 func Valid(glob string) error {
 	if strings.TrimSpace(glob) == "" {
 		return fmt.Errorf("glob must not be empty")
@@ -114,7 +115,7 @@ func Valid(glob string) error {
 	if strings.ContainsAny(glob, "{}") {
 		return fmt.Errorf("glob %q uses braces, which are not supported: list each pattern on its own", glob)
 	}
-	for _, seg := range strings.Split(glob, "/") {
+	for _, seg := range strings.Split(strings.TrimSuffix(glob, "/"), "/") {
 		if seg == "" {
 			return fmt.Errorf("glob %q has an empty path segment", glob)
 		}
