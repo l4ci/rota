@@ -652,3 +652,34 @@ func TestBlockingAnyHead(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalizeItemsKeepsWorkFixFailuresAcrossAliasReset(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	// "b" sorts last and ends in a work-fix reset; "a" holds two active failed
+	// work-fix attempts. The reset of one spelling must not clear the other's.
+	if _, err := AddItem(root, "b", rec(WorkFix, Fail, "1")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddItem(root, "b", rec(WorkFixReset, Pass, "2")); err != nil {
+		t.Fatal(err)
+	}
+	for _, sha := range []string{"3", "4"} {
+		if _, err := AddItem(root, "a", rec(WorkFix, Fail, sha)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := CanonicalizeItems(root, func(string) []string { return []string{"c"} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := Load(root).Items["c"]
+	if n := len(list); n != 4 {
+		t.Fatalf("kept %d records, want 4", n)
+	}
+	if got := WorkFixAttempts(list); got != 2 {
+		t.Errorf("work-fix attempts %d, want 2", got)
+	}
+}
