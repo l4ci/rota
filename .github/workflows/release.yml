@@ -72,6 +72,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # codex-plugin.sh builds ./cmd/rota to run `rota skills layout`.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
       - name: Publish the codex branch
         run: |
           bash scripts/codex-plugin.sh "$RUNNER_TEMP/codex"
