@@ -18,8 +18,8 @@ func CheckoutBrief(top string) string {
 // counts only when rota installed it (a manifest) and it carries the file: a
 // stub install drops references, so it yields "" and the caller falls back to
 // the cache.
-func InstalledBrief(getenv func(string) string, top string) string {
-	for _, r := range InstalledRoots(getenv, top) {
+func InstalledBrief(home string, claudeDirs []string, top string) string {
+	for _, r := range InstalledRoots(home, claudeDirs, top) {
 		if !HasManifest(r) {
 			continue
 		}

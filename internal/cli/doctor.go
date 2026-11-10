@@ -175,7 +175,7 @@ func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *
 	if err != nil {
 		return nil
 	}
-	dirs, _ := skillsClaudeDirs(d, getenv, home, root)
+	_, dirs, _ := skillsClaudeDirs(d, getenv, func() (string, error) { return home, nil }, root)
 	roots, err := skills.Roots("", "all", home, dirs, top)
 	if err != nil {
 		return nil

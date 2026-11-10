@@ -35,7 +35,7 @@ func TestBriefPathOrder(t *testing.T) {
 		return ""
 	}
 	writeAt(t, filepath.Join(home, "plugin", "references", "worker-contract.md"), "plugin")
-	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); ok {
+	if p, ok := briefPath(root, roundcfg.Settings{}, installs(env("HOME")), ""); ok {
 		t.Fatalf("CLAUDE_PLUGIN_ROOT still read: %s", p)
 	}
 	checkout := skills.CheckoutBrief(root)
@@ -43,14 +43,14 @@ func TestBriefPathOrder(t *testing.T) {
 		t.Fatalf("empty root has a checkout brief: %q", checkout)
 	}
 	writeAt(t, filepath.Join(root, "skills", "references", "worker-contract.md"), "checkout")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != skills.CheckoutBrief(root) {
+	if p, _ := briefPath(root, roundcfg.Settings{}, installs(env("HOME")), ""); p != skills.CheckoutBrief(root) {
 		t.Errorf("source checkout: %q", p)
 	}
 	writeAt(t, filepath.Join(root, "mine.md"), "own")
-	if p, _ := briefPath(root, roundcfg.Settings{Brief: "mine.md"}, env, ""); p != filepath.Join(root, "mine.md") {
+	if p, _ := briefPath(root, roundcfg.Settings{Brief: "mine.md"}, installs(env("HOME")), ""); p != filepath.Join(root, "mine.md") {
 		t.Errorf("round.brief first: %q", p)
 	}
-	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, env, ""); ok {
+	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, installs(env("HOME")), ""); ok {
 		t.Error("round.brief set but missing must not fall back")
 	}
 }
@@ -73,7 +73,7 @@ func TestBriefPathStubRootUsesCache(t *testing.T) {
 	if _, err := set.Install([]skills.Root{{Path: stubRoot}}, skills.Options{Version: "t", Mode: skills.ModeStub}); err != nil {
 		t.Fatal(err)
 	}
-	p, ok := briefPath(root, roundcfg.Settings{}, env, cache)
+	p, ok := briefPath(root, roundcfg.Settings{}, installs(env("HOME")), cache)
 	if !ok || !strings.HasPrefix(p, cache) {
 		t.Fatalf("stub root must fall back to the cache: %q %v", p, ok)
 	}
@@ -90,17 +90,17 @@ func TestBriefPathFallsBackToTheSkillsCache(t *testing.T) {
 		}
 		return ""
 	}
-	p, ok := briefPath(root, roundcfg.Settings{}, env, cache)
+	p, ok := briefPath(root, roundcfg.Settings{}, installs(env("HOME")), cache)
 	if !ok || !strings.HasPrefix(p, cache) || filepath.Base(p) != "worker-contract.md" {
 		t.Fatalf("no cache fallback: %q %v", p, ok)
 	}
 	if b, err := os.ReadFile(p); err != nil || !strings.Contains(string(b), "Worker contract") {
 		t.Errorf("cached contract unreadable: %v", err)
 	}
-	if p2, _ := briefPath(root, roundcfg.Settings{}, env, cache); p2 != p {
+	if p2, _ := briefPath(root, roundcfg.Settings{}, installs(env("HOME")), cache); p2 != p {
 		t.Errorf("second lookup moved: %q vs %q", p2, p)
 	}
-	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, env, cache); ok {
+	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, installs(env("HOME")), cache); ok {
 		t.Error("a missing round.brief fell back to the cache")
 	}
 }
@@ -117,7 +117,7 @@ func TestBriefPathStaleCacheBrief(t *testing.T) {
 		return ""
 	}
 	stale := filepath.Join(cache, "0.26.0", "references", "worker-contract.md")
-	p, warn, ok := resolveBrief(root, roundcfg.Settings{Brief: stale}, env, cache)
+	p, warn, ok := resolveBrief(root, roundcfg.Settings{Brief: stale}, installs(env("HOME")), cache)
 	if !ok || !strings.HasPrefix(p, cache) || p == stale || filepath.Base(p) != "worker-contract.md" {
 		t.Fatalf("no stale-cache fallback: %q %v", p, ok)
 	}
@@ -126,7 +126,7 @@ func TestBriefPathStaleCacheBrief(t *testing.T) {
 	}
 
 	outside := filepath.Join(t.TempDir(), "gone.md")
-	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: outside}, env, cache)
+	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: outside}, installs(env("HOME")), cache)
 	if ok || warn != "" {
 		t.Errorf("outside the cache root must stay a miss: %q %q %v", p, warn, ok)
 	}
@@ -136,8 +136,12 @@ func TestBriefPathStaleCacheBrief(t *testing.T) {
 
 	good := filepath.Join(cache, "0.27.0", "references", "worker-contract.md")
 	writeAt(t, good, "mine")
-	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: good}, env, cache)
+	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: good}, installs(env("HOME")), cache)
 	if !ok || p != good || warn != "" {
 		t.Errorf("an existing round.brief must win silently: %q %q %v", p, warn, ok)
 	}
+}
+
+func installs(home string) skillInstalls {
+	return skillInstalls{home: home, claudeDirs: []string{filepath.Join(home, ".claude")}}
 }

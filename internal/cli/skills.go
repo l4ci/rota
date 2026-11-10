@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/skills"
@@ -113,19 +112,24 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 	return set, roots, skipped, nil
 }
 
-// skillsDirs is the home and the Claude config dirs (see skillsClaudeDirs) a
-// verb works on.
+// skillsDirs is the home and the Claude config dirs (see
+// worker.SkillClaudeDirs) a verb works on.
 func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string) {
-	home = c.deps().Getenv("HOME")
-	if home == "" {
-		home, _ = c.deps().UserHomeDir()
-	}
 	root := ""
 	if !a.currentAccount {
 		root, _ = c.Root()
 	}
-	claudeDirs, skipped = skillsClaudeDirs(c.deps(), c.deps().Getenv, home, root)
-	return home, claudeDirs, skipped
+	return skillsClaudeDirs(c.deps(), c.deps().Getenv, c.deps().UserHomeDir, root)
+}
+
+// skillsClaudeDirs resolves worker.SkillClaudeDirs against the project at
+// root's config ("" for none).
+func skillsClaudeDirs(d *Deps, getenv func(string) string, userHome func() (string, error), root string) (home string, dirs, skipped []string) {
+	var cfg any
+	if root != "" {
+		cfg = d.Config(root)
+	}
+	return worker.SkillClaudeDirs(getenv, userHome, cfg)
 }
 
 // skillsPluginRoots are the installed rota plugin roots of the Claude config
@@ -143,39 +147,6 @@ func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, a
 		}
 	}
 	return out, errs
-}
-
-// skillsClaudeDirs is the Claude config dirs user-scope skills go to: the
-// current one (CLAUDE_CONFIG_DIR, else ~/.claude), then each round.accounts
-// configDir of the project at root ("" for none), de-duplicated with
-// worker.SameConfigDir. An account dir that does not exist is returned in
-// skipped, never created.
-func skillsClaudeDirs(d *Deps, getenv func(string) string, home, root string) (dirs, skipped []string) {
-	if cur := skills.ClaudeDir(getenv, home); cur != "" {
-		dirs = append(dirs, cur)
-	}
-	if root == "" {
-		return dirs, nil
-	}
-	for _, ac := range config.AccountsOf(d.Config(root), config.KindClaude) {
-		if ac.Dir == "" {
-			continue
-		}
-		dir := worker.ExpandConfigDirIn(ac.Dir, home)
-		dup := false
-		for _, d := range append(append([]string{}, dirs...), skipped...) {
-			dup = dup || worker.SameConfigDirIn(d, dir, home)
-		}
-		if dup {
-			continue
-		}
-		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-			skipped = append(skipped, dir)
-			continue
-		}
-		dirs = append(dirs, dir)
-	}
-	return dirs, skipped
 }
 
 // withSkipped reports the configured account dirs that were left out.
