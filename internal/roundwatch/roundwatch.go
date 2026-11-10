@@ -12,17 +12,15 @@ package roundwatch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/landfreeze"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/stamp"
@@ -49,15 +47,14 @@ func MarkerPath(commonDir string) string { return rotastate.File(commonDir, Mark
 // Armed reports the live watch of the repo, if any. A marker whose process is
 // gone, or on another host, is not armed: nothing can be checked about it.
 func Armed(env roundlease.Env, commonDir string) (Marker, bool) {
-	b, err := os.ReadFile(MarkerPath(commonDir))
-	if err != nil {
-		return Marker{}, false
-	}
-	var m Marker
-	if json.Unmarshal(b, &m) != nil || !env.Running(m.Host, m.PID, m.Start) {
-		return Marker{}, false
-	}
-	return m, true
+	return markerFile(commonDir).ReadLive(func(m Marker) bool { return env.Running(m.Host, m.PID, m.Start) })
+}
+
+// OwnerPID implements pidlive.Record.
+func (m Marker) OwnerPID() int { return m.PID }
+
+func markerFile(commonDir string) pidlive.Marker[Marker] {
+	return pidlive.Marker[Marker]{Path: MarkerPath(commonDir), Codec: pidlive.JSON[Marker]()}
 }
 
 // ArmedError is returned by Arm when another watch is live.
@@ -71,25 +68,19 @@ func (e *ArmedError) Error() string {
 // removes it. Another live watch is an *ArmedError and nothing is written: one
 // watch at a time keeps every wake-up a single event.
 func Arm(env roundlease.Env, commonDir string, pid int, heartbeat time.Duration) (release func(), err error) {
-	path := MarkerPath(commonDir)
+	file := markerFile(commonDir)
 	m := Marker{PID: pid, StartedAt: stamp.Format(env.Now()), Heartbeat: int(heartbeat.Seconds())}
 	m.Host, m.Start = env.Identity(pid)
-	err = fsio.WriteMarker(path, m, func() error {
-		if cur, ok := Armed(env, commonDir); ok && cur.PID != pid {
-			return &ArmedError{Marker: cur}
-		}
-		return nil
-	})
+	live := func(m Marker) bool { return env.Running(m.Host, m.PID, m.Start) }
+	cur, held, err := file.Claim(m, live)
 	if err != nil {
 		return nil, err
 	}
-	return func() {
-		// Only our own marker: a successor may have replaced a dead one.
-		_ = fsio.RemoveMarker(path, func(b []byte) bool {
-			var cur Marker
-			return json.Unmarshal(b, &cur) == nil && cur.PID == pid
-		})
-	}, nil
+	if held {
+		return nil, &ArmedError{Marker: cur}
+	}
+	// Only our own marker: a successor may have replaced a dead one.
+	return func() { _ = file.Remove(pid) }, nil
 }
 
 // Reasons a watch returns.
