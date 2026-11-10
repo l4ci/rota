@@ -29,6 +29,7 @@ func skillsCommands() *Command {
 		{Name: "get", Fence: fenceAllowed, Summary: "print an embedded skill or one of its references", Verb: skillsGet},
 		{Name: "links", Fence: fenceAllowed, Summary: "print the relative links of markdown files", Verb: skillsLinks},
 		{Name: "layout", Fence: fenceAllowed, Summary: "list files under a skills source tree that the supported layout rejects", Verb: skillsLayout},
+		{Name: "files", Fence: fenceAllowed, Summary: "list the files Load ships for each skill of a source tree", Verb: skillsFiles},
 	}}
 }
 
@@ -551,6 +552,24 @@ func skillsLayout(fs *flag.FlagSet) RunFunc {
 			return Result{}, Failed("%v", err)
 		}
 		return Result{Data: jsonx.Obj("violations", jsonx.Strings(bad)), Text: strings.Join(bad, "\n")}, nil
+	}
+}
+
+// skillsFiles lists what skills.Load ships from a skills source tree, one
+// "<skill>/<path>" per line: each skill's own files plus the references it
+// reaches. scripts/codex-plugin.sh copies exactly this list, so the Codex
+// bundle and the Claude install cannot disagree on a skill's reference set.
+func skillsFiles(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) != 1 {
+			return Result{}, Usage("usage: rota skills files <skills-dir>")
+		}
+		set, err := skills.Load(os.DirFS(args[0]))
+		if err != nil {
+			return Result{}, Failed("%v", err)
+		}
+		files := set.Paths()
+		return Result{Data: jsonx.Obj("files", jsonx.Strings(files)), Text: strings.Join(files, "\n")}, nil
 	}
 }
 

@@ -4,6 +4,7 @@
       "TestAutonomyReferenceLevelsAndStops",
       "TestCodexPluginManifest",
       "TestCodexPluginTree",
+      "TestCodexTreeMatchesLoadClosure",
       "TestPluginManifest",
       "TestPluginSessionStartHook",
       "TestRoundWorkerLearningAligned",

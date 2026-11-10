@@ -600,3 +600,35 @@ func TestSkillsLayoutListsUnsupportedFiles(t *testing.T) {
 		t.Error("layout without a dir exited 0")
 	}
 }
+
+// `rota skills files` prints what Load ships for each skill: the codex-plugin
+// build copies exactly this list, so a reference no skill cites stays out.
+func TestSkillsFilesListsLoadClosure(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	for rel, body := range map[string]string{
+		"rota-a/SKILL.md":           "see references/shared.md\n",
+		"rota-a/topic.md":           "t\n",
+		"rota-a/agents/openai.yaml": "p: 1\n",
+		"references/shared.md":      "s\n",
+		"references/unused.md":      "u\n",
+	} {
+		p := filepath.Join(work, "skills", filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, env, errOut := skillsRun(t, home, work, "skills", "files", "skills")
+	if code != 0 {
+		t.Fatalf("files %d %s", code, errOut)
+	}
+	want := "[rota-a/SKILL.md rota-a/agents/openai.yaml rota-a/references/shared.md rota-a/topic.md]"
+	if got := fmt.Sprint(skData(env)["files"]); got != want {
+		t.Errorf("files = %s, want %s", got, want)
+	}
+	if code, _, _ = skillsRun(t, home, work, "skills", "files"); code == 0 {
+		t.Error("files without a dir exited 0")
+	}
+}
