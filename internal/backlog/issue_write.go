@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"sort"
@@ -713,10 +714,12 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 	if err != nil {
 		return false, "", err
 	}
+	posted := false // this call posted the claim, so a later failure gives it back
 	if !slices.Contains(held[:min(holders, len(held))], claimID) {
 		if err := b.putClaim(n, claimID); err != nil {
 			return false, "", err
 		}
+		posted = true
 		if held, err = b.heldClaims(n); err != nil {
 			return false, "", err
 		}
@@ -732,11 +735,11 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 	}
 	wrote, err := b.applyState(is, "inProgress")
 	if err != nil {
-		return false, "", err
+		return false, "", b.undoPostedClaim(ref, claimID, posted, err)
 	}
 	if wrote || len(is.Assignees) == 0 {
 		if err := tr.AssignSelf(b.ctx(), n); err != nil {
-			return false, "", err
+			return false, "", b.undoPostedClaim(ref, claimID, posted, err)
 		}
 	}
 	if label, ok := ClaimLabel(b.Cfg, claimID); ok && !slices.Contains(is.Labels, label) {
@@ -745,6 +748,25 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 		}
 	}
 	return true, claimID, nil
+}
+
+// undoPostedClaim is the error path of ClaimShared after the claim comment is
+// out: it releases the claim (and with it the in-progress and claimed:* labels)
+// when this call posted it, so a failed claim leaves nothing for the next
+// assign to trip over. A claim that was already open stays. When the release
+// fails too, the returned error names what is left and the command that clears it.
+func (b *Issues) undoPostedClaim(ref, claimID string, posted bool, cause error) error {
+	if !posted {
+		return cause
+	}
+	if _, rerr := b.release(ref, claimID, false); rerr != nil {
+		left := "claim " + claimID + " and the " + config.Label(b.Cfg, "inProgress") + " label"
+		if label, ok := ClaimLabel(b.Cfg, claimID); ok {
+			left += " and " + label
+		}
+		return fmt.Errorf("%w (rollback failed: %v; left behind: %s; release with `rota item release %s --as %s`)", cause, rerr, left, ref, claimID)
+	}
+	return cause
 }
 
 // heldClaims is the open claims, earliest first: a tracker.ClaimStore's own
