@@ -774,7 +774,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		staleClaims, warnings := e.staleClaims(ctx, root, e.Board, claimedItems, snapshot)
 		rep.Warnings = append(rep.Warnings, warnings...)
 		for _, claim := range staleClaims {
-			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339))
+			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), stamp.Format(claim.Last))
 			detail += fmt.Sprintf(" (%s > %s)", e.now().Sub(claim.Last).Truncate(time.Minute), claim.Threshold)
 			rep.add(Finding{Kind: StaleClaimKind, Issue: claim.Issue, Detail: detail})
 		}
