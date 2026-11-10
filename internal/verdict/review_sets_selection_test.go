@@ -105,11 +105,8 @@ func TestReviewSetSelection(t *testing.T) {
 				}
 			}
 			wantKinds := recordKinds(tc.core)
-			if got := Recorded(root, "feature", tc.head); !slices.Equal(got, wantKinds) {
+			if got := Recorded(list, tc.head); !slices.Equal(got, wantKinds) {
 				t.Errorf("Recorded = %v, want %v", got, wantKinds)
-			}
-			if got := RecordedIn(list, tc.head); !slices.Equal(got, wantKinds) {
-				t.Errorf("RecordedIn = %v, want %v", got, wantKinds)
 			}
 			if !reflect.DeepEqual(list, before) {
 				t.Fatal("query mutated the stored history")
