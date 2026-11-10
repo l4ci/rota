@@ -6,11 +6,9 @@ package landfreeze
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -51,16 +49,15 @@ func Path(ctx context.Context, run git.Runner, root string) (string, error) {
 }
 
 func Read(path string) (*Record, error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+	r, found, err := fsio.ReadJSON[Record](path)
+	if errors.Is(err, fsio.ErrUnreadable) {
+		return nil, fmt.Errorf("invalid landing freeze: %w", err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read landing freeze %s: %w", path, err)
 	}
-	var r Record
-	if err := json.Unmarshal(b, &r); err != nil {
-		return nil, fmt.Errorf("invalid landing freeze %s: %w", path, err)
+	if !found {
+		return nil, nil
 	}
 	if r.Base == "" || r.SHA == "" {
 		return nil, fmt.Errorf("invalid landing freeze %s: missing base or SHA", path)
