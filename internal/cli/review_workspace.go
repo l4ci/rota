@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -105,9 +106,8 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return Result{}, Refused("missing review workspace ownership record: %s", path)
 	}
-	b, err := os.ReadFile(filepath.Join(root, reviewWorkspaceMarker))
-	var marker reviewWorkspace
-	if err != nil || json.Unmarshal(b, &marker) != nil || marker.Path != path || marker.Head == "" {
+	marker, found, err := fsio.ReadJSON[reviewWorkspace](filepath.Join(root, reviewWorkspaceMarker))
+	if err != nil || !found || marker.Path != path || marker.Head == "" {
 		return Result{}, Refused("invalid review workspace ownership record: %s", path)
 	}
 	// RemoveAll removes symlinks themselves; it never follows links in the tree.
