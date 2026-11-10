@@ -19,7 +19,6 @@ type StartOpts struct {
 	Items      []string // the slate, for scope slate
 	Slots      int      // 0 means DefaultNum (round.slots)
 	Base       string
-	HolderPID  int
 	Settings   roundcfg.Settings
 	DefaultNum int // slots when Slots is 0
 	// Dispatch is round.dispatch and LookPath the PATH probe; together with
@@ -99,7 +98,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		return res, err
 	}
 	le := e.Lease
-	holder := le.Discover(o.HolderPID, e.getenv())
+	holder := le.Discover(e.HolderPID, e.getenv())
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return res, err

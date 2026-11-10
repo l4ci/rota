@@ -36,8 +36,7 @@ const (
 
 // WindDownOpts are the flags of `rota round wind-down`.
 type WindDownOpts struct {
-	NoVerify  bool
-	HolderPID int
+	NoVerify bool
 	// Prune also removes the worktree and branch of a released adopted slot.
 	Prune    bool
 	Settings roundcfg.Settings
@@ -84,7 +83,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	if err != nil {
 		return res, err
 	}
-	lease, _, held, err := e.Lease.Holds(cd, o.HolderPID, e.getenv())
+	lease, _, held, err := e.Lease.Holds(cd, e.HolderPID, e.getenv())
 	if err != nil {
 		return res, err
 	}
@@ -261,7 +260,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	// 3. Release the lease only when the base is green and every slot is parked.
 	if res.Over() {
 		res.Verdict = VerdictClean
-		if _, err := e.Lease.Release(cd, e.Lease.Discover(o.HolderPID, e.getenv())); err != nil {
+		if _, err := e.Lease.Release(cd, e.Lease.Discover(e.HolderPID, e.getenv())); err != nil {
 			return res, err
 		}
 		// The round is over, so its host goes with the lease: the worker verbs

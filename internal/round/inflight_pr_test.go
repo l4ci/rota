@@ -199,7 +199,7 @@ func TestAssignComparesOpenPRFiles(t *testing.T) {
 
 func TestTransferComparesOpenPRFiles(t *testing.T) {
 	f := newMoveFx(t)
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 3
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)

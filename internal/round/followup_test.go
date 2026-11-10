@@ -256,7 +256,7 @@ func TestTransferReserveSlot(t *testing.T) {
 }
 
 func startOptsWith(set roundcfg.Settings) StartOpts {
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Settings = set
 	return o
 }

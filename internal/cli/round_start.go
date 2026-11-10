@@ -177,8 +177,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		ctx := c.Context()
 		cfg := c.deps().Config(root)
 		env := roundEnv(c, ctx, root)
+		env.HolderPID = *pid
 		st, err := env.Start(ctx, root, round.StartOpts{
-			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
+			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base,
 			Settings: set, DefaultNum: set.Slots, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {

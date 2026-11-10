@@ -19,7 +19,7 @@ import (
 )
 
 func (f *assignFixture) windDown(mod func(*WindDownOpts)) (WoundDown, error) {
-	o := WindDownOpts{HolderPID: 100, Settings: f.set}
+	o := WindDownOpts{Settings: f.set}
 	if mod != nil {
 		mod(&o)
 	}
@@ -176,7 +176,7 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 func TestWindDownNeedsTheLeaseAndTheBase(t *testing.T) {
 	f := newAssignFixture(t)
 	var we *exitcode.Error
-	if _, err := f.windDown(func(o *WindDownOpts) { o.HolderPID = 999 }); !errors.As(err, &we) || we.Exit != exitcode.ExitResolution {
+	if _, err := f.env.holder(999).WindDown(bg, f.root, f.be, WindDownOpts{Settings: f.set}); !errors.As(err, &we) || we.Exit != exitcode.ExitResolution {
 		t.Fatalf("a process without the lease: %v", err)
 	}
 	f.verifyWith(t, `["true"]`)
@@ -259,7 +259,7 @@ func TestWindDownVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	res, err := f.env.WindDown(ctx, f.root, f.be, WindDownOpts{HolderPID: 100, Settings: f.set})
+	res, err := f.env.WindDown(ctx, f.root, f.be, WindDownOpts{Settings: f.set})
 	if time.Since(start) > 10*time.Second {
 		t.Fatalf("a cancelled wind-down verify hung for %v", time.Since(start))
 	}

@@ -76,7 +76,7 @@ func (f *pickFx) hold(t *testing.T, slot, state, pr string) {
 }
 
 func (f *pickFx) pick(pr, reason string) (Picked, error) {
-	return f.env.Pick(bg, f.root, f.be, PickOpts{ID: "12", PR: pr, Reason: reason, HolderPID: 100})
+	return f.env.Pick(bg, f.root, f.be, PickOpts{ID: "12", PR: pr, Reason: reason})
 }
 
 func (f *pickFx) bothHavePRs(t *testing.T) {
@@ -191,9 +191,9 @@ func TestPickRefusals(t *testing.T) {
 	if _, err = f.pick("#7", "  \n"); err == nil || errors.As(err, new(*BlockedError)) {
 		t.Errorf("an empty reason is a usage error: %v", err)
 	}
-	_, err = f.env.Pick(bg, f.root, f.be, PickOpts{ID: "13", PR: "#7", Reason: "x", HolderPID: 100})
+	_, err = f.env.Pick(bg, f.root, f.be, PickOpts{ID: "13", PR: "#7", Reason: "x"})
 	wantBlocked(t, err, BlockNotBestOf)
-	_, err = f.env.Pick(bg, f.root, f.be, PickOpts{ID: "12", PR: "#7", Reason: "x", HolderPID: 999})
+	_, err = f.env.holder(999).Pick(bg, f.root, f.be, PickOpts{ID: "12", PR: "#7", Reason: "x"})
 	wantBlocked(t, err, BlockNoRound)
 	if len(f.forge.closed) != 0 || snap() != before {
 		t.Errorf("a refusal changes nothing: closed %v, %s", f.forge.closed, snap())

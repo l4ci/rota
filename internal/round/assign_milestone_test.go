@@ -53,7 +53,7 @@ func TestAssignRoutesAnActiveMilestoneIssueToItsBranch(t *testing.T) {
 func TestAssignKeepsTheBaseForUntaggedAndPlannedMilestoneIssues(t *testing.T) {
 	f, _ := milestoneFixture(t)
 	milestoneDoc(t, f.root, "M02", "planned")
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen)); err != nil {
 		t.Fatal(err)
 	}
 	f.be.add("15", "Untagged issue for the base", "", false, "## Acceptance\n- [ ] ok\n\nedits a.go")
@@ -194,7 +194,7 @@ func doneWithPR(t *testing.T, f *assignFixture, branch string, n int) {
 func TestReconcileIgnoresAMilestoneGoingActiveUnderAnUnchangedTag(t *testing.T) {
 	f, _ := milestoneFixture(t)
 	milestoneDoc(t, f.root, "M02", "planned")
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen)); err != nil {
 		t.Fatal(err)
 	}
 	f.be.add("16", "Planned milestone issue", "M02", false, "## Acceptance\n- [ ] ok\n\nedits b.go")

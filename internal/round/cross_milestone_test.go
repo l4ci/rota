@@ -118,7 +118,7 @@ func TestCrossMilestoneChecksUntaggedDependencies(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			f := crossFixture(t)
 			f.be.items["12"].Fields.Milestone = ""
-			if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen, 100)); err != nil {
+			if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen)); err != nil {
 				t.Fatal(err)
 			}
 			f.be.details["12"] = "## Acceptance\n- [ ] ok\n\n## Depends on\n- #20"
@@ -232,7 +232,7 @@ func TestCrossMilestoneSkipsUnneededAssignReads(t *testing.T) {
 	f.be.items["12"].Fields.Milestone = ""
 	f.be.add("20", "On main", "M02", true, "")
 	f.be.details["12"] = "## Acceptance\n- [ ] ok\n\n## Depends on\n- #20"
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen)); err != nil {
 		t.Fatal(err)
 	}
 	store := &crossReadStore{err: errors.New("milestones must not be read")}

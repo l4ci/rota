@@ -28,8 +28,9 @@ func roundReclaim(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		env.HolderPID = *pid
 		res, err := env.Reclaim(c.Context(), root, be, round.ReclaimOpts{
-			Slot: args[0], Force: *force, Note: text, HolderPID: *pid,
+			Slot: args[0], Force: *force, Note: text,
 		})
 		if err != nil {
 			return moveFailure(err, res.Changed)
