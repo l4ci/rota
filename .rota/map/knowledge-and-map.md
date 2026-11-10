@@ -1,7 +1,7 @@
 ---
 subsystem: knowledge-and-map
 summary: project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
-touched: 2026-11-09
+touched: 2026-11-10
 last_mapped_commit: a5ed8bdf14da0c12adfae97aaa7718668d37e726
 ---
 
@@ -9,7 +9,7 @@ last_mapped_commit: a5ed8bdf14da0c12adfae97aaa7718668d37e726
 
 Reads and writes the tracked `.rota/` text stores that hold durable project memory: topic bullets in `KNOWLEDGE.md`, decisions, the glossary, `.rota/map/` and `.rota/qa/` files, plus the shared external knowledge repo. `topicmatch` holds the three rules that map a requested topic name to stored topics. `stale` lists entries gone stale across the backlog, knowledge and map. `frontmatter` is the one parser of the flat `---` header those files use.
 
-Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, bulletfmt, pathglob), config-and-setup (config, rotatree, toolver). Also imports backlog-items (`section`, `backlog`) and cli-dispatch (`exitmap`, from `stale`). Used by cli-dispatch, config-and-setup (initproj, migrate) and doctor-and-reap (doctor).
+Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, bulletfmt, pathglob), config-and-setup (config, rotatree, rotastate, toolver). Also imports backlog-items (`section`, `backlog`) and cli-dispatch (`exitmap`, from `stale`). Used by cli-dispatch, config-and-setup (initproj, migrate) and doctor-and-reap (doctor).
 
 ## Entry points
 - internal/knowledge/scope.go:30 — `Store`: locates the knowledge files of one project (root plus sub-repo map)
@@ -19,7 +19,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - internal/extknowledge/read.go:185 — `Clone.Query`: read external topics; write side is `Clone.Add` at write.go:91
 - internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :55, `WriteIndex` :77, `Slugify` :14
 - internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :161
-- internal/stale/stale.go:64 — `Find`: stale entries by kind (`map`, `knowledge`, `todo`)
+- internal/stale/stale.go:89 — `Find`: stale entries by kind (`map`, `knowledge`, `todo`); `FindReport` also counts skipped todo items
 - internal/frontmatter/frontmatter.go:23 — `Parse`: frontmatter map, list keys and body; `SetField` at :109
 
 ## Key files / dirs
@@ -27,7 +27,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - `internal/extknowledge/` — external repo (`README.md`, `topics/<slug>.md`, `rota-knowledge.json`): `read.go`, `write.go`, `edit.go` (Remove, Replace), `split.go`, `fresh.go`, `hits.go` (per-machine log in the state dir), `state.go`, `stats.go`, `lifecycle.go`, `migrate.go`, `bullet.go`, `extknowledge.go`
 - `internal/topicmatch/` — `topicmatch.go`: heading, read-index and write-index matching; used by knowledge/resolve.go and extknowledge read/write
 - `internal/mapqa/` — `mapqa.go`: per-name reads, managed index blocks (`MapIndexBlock`, `QAIndexBlock`, `WriteIndex`), size stats and stale/cap notes
-- `internal/stale/` — `stale.go`: `Kinds`, `Find`
+- `internal/stale/` — `stale.go`: `Kinds`, `Find`, `FindReport`, `TodoSource`
 - `internal/frontmatter/` — `frontmatter.go`: `Parse`, `Str`, `UpdateField`, `SetField`
 
 ## Stack
@@ -48,4 +48,4 @@ Go 1.22, standard library; markdown and JSON files on disk. `extknowledge` shell
 
 ## Concerns
 - `knowledge` and `extknowledge` both implement topic query, add and hit with different storage; changes to bullet format touch both (shared rendering now in `bulletfmt`).
-- `stale.Find` kind `todo` reads the file backlog (`backlog.File{Root}.Markdown`), the frozen `.rota/BACKLOG.md`, not the issue tracker.
+- `stale.Find` kind `todo` lists open items through the caller-supplied `TodoSource` (stale.go:67; any `backlog.Backend` satisfies it), so staleness follows the backend the project selected, issue tracker included; a nil source lists none. Items without a usable Captured date are skipped, and `FindReport` counts them in `SkippedUndated`.
