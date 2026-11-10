@@ -11,8 +11,7 @@ import (
 func roundReclaim(fs *flag.FlagSet) RunFunc {
 	force := fs.Bool("force", false, "reclaim a healthy slot too (kills its pane)")
 	note := fs.String("note-file", "", "what is done and what is next (- for stdin)")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round reclaim takes one slot name")
 		}
@@ -28,7 +27,6 @@ func roundReclaim(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env.HolderPID = *pid
 		res, err := env.Reclaim(c.Context(), root, be, round.ReclaimOpts{
 			Slot: args[0], Force: *force, Note: text,
 		})
@@ -53,5 +51,5 @@ func roundReclaim(fs *flag.FlagSet) RunFunc {
 			text = fmt.Sprintf("reclaimed %s from %s (%s); branch %s kept", res.Issue, res.Slot, res.Health, res.Branch)
 		}
 		return Result{Data: d, Text: text}, nil
-	}
+	})
 }

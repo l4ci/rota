@@ -76,8 +76,7 @@ func moveFailure(err error, changed bool) (Result, error) {
 func roundReturn(fs *flag.FlagSet) RunFunc {
 	reason := fs.String("reason", "", "why the issue goes back (posted verbatim on it)")
 	note := fs.String("note-file", "", "what is done and what is next (- for stdin)")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round return takes one slot name")
 		}
@@ -96,7 +95,6 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env.HolderPID = *pid
 		res, err := env.Return(c.Context(), root, be, round.ReturnOpts{
 			Slot: args[0], Reason: *reason, Note: text, InSlot: inSlot(c, root, args[0]),
 		})
@@ -116,7 +114,7 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 		setIf(d, "commentId", res.CommentID)
 		d.Set("changed", res.Changed)
 		return Result{Data: d, Text: fmt.Sprintf("returned %s from %s (branch %s kept)", res.Issue, res.Slot, res.Branch)}, nil
-	}
+	})
 }
 
 // inSlot: the working directory is inside the slot's worktree, which makes the

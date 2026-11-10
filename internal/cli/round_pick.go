@@ -12,8 +12,7 @@ import (
 func roundPick(fs *flag.FlagSet) RunFunc {
 	pr := fs.String("pr", "", "the attempt's PR that may merge (number, #number or URL)")
 	reason := fs.String("reason-file", "", "why this attempt won; posted on the closed PR (- for stdin)")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round pick takes one item ID")
 		}
@@ -35,7 +34,6 @@ func roundPick(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env.HolderPID = *pid
 		id, _, err := resolveItem(be, args[0])
 		if err != nil {
 			return backlogFail(err)
@@ -58,7 +56,7 @@ func roundPick(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		return Result{Data: pickData(res), Text: out}, nil
-	}
+	})
 }
 
 func pickData(res round.Picked) *jsonx.Object {
