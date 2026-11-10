@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/landfreeze"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -70,13 +70,17 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
 		}
 		if *then != "" {
-			// Raw exec on purpose: the statusline runs on every redraw and
-			// proc.Run's buffering and 5s WaitDelay would stall it when the
-			// wrapped script backgrounds a job.
-			cmd := exec.CommandContext(c.Context(), "sh", "-c", *then)
-			cmd.Stdin = bytes.NewReader(input)
-			cmd.Stdout, cmd.Stderr = c.Stdout, c.Stderr
-			if err := cmd.Run(); err != nil && debug {
+			// Inherited stdio and no timeout on purpose: the statusline runs on
+			// every redraw, so proc must not buffer its output or wait out a
+			// background job the wrapped script left behind.
+			r, err := c.deps().Proc(c.Context(), proc.Cmd{
+				Name: "sh", Args: []string{"-c", *then}, Timeout: proc.NoTimeout,
+				Stdio: &proc.Stdio{In: bytes.NewReader(input), Out: c.Stdout, Err: c.Stderr},
+			})
+			if err == nil && r.ExitCode != 0 {
+				err = fmt.Errorf("exit status %d", r.ExitCode)
+			}
+			if err != nil && debug {
 				fmt.Fprintf(c.Stderr, "rota statusline dump: --then: %v\n", err)
 			}
 		}
