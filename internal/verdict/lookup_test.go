@@ -136,7 +136,7 @@ func TestRecoveredCacheDefersToLocalBranch(t *testing.T) {
 	if r, ok := Blocking(list); !ok || r.Kind != ReviewQuality || r.Verdict != Fail {
 		t.Fatalf("cached PASS masked local FAIL: %+v %v", r, ok)
 	}
-	if kinds := Recorded(root, "feature", head); len(kinds) != 1 || kinds[0] != ReviewQuality {
+	if kinds := Recorded(list, head); len(kinds) != 1 || kinds[0] != ReviewQuality {
 		t.Fatalf("cached record supplemented authoritative local review: %v", kinds)
 	}
 }

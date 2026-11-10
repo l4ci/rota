@@ -59,7 +59,7 @@ func (v Check) Head(branch string) string {
 // BlockAt uses the known PR head when the branch is absent or stale locally.
 // An empty head keeps Block's existing local-ref behavior.
 func (v Check) BlockAt(branch, head string) error {
-	list := v.Store.Branches[BranchKey(v.Repo, branch)]
+	list := v.Store.Branch(v.Repo, branch)
 	// Keep local records' old stale semantics, but bind recovered reports to
 	// the supplied PR head (or the branch tip on the ordinary ship path).
 	r, ok := Blocking(list)
@@ -94,7 +94,7 @@ func (v Check) BlockGate(branch, head string) error {
 	if err := v.BlockAt(branch, head); err != nil {
 		return err
 	}
-	r, ok := BlockingAtHead(ForHead(v.Store.Branches[BranchKey(v.Repo, branch)], head), strings.TrimSpace(head))
+	r, ok := BlockingAtHead(ForHead(v.Store.Branch(v.Repo, branch), head), strings.TrimSpace(head))
 	if !ok {
 		return nil
 	}
