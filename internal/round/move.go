@@ -1029,7 +1029,10 @@ func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o Tra
 			return wrap(tolerate("handoff comment", err))
 		}},
 		{name: "release the old claim", skip: moved, do: func() error {
-			_, err := releaseClaims(be, id, from, run.oldClaim, false)
+			// To the human nothing re-claims the issue, so a claim the registry
+			// forgot would stay open: sweep every open claim of the sender. To a
+			// slot the receiver's own claim follows, so the recorded one is enough.
+			_, err := releaseClaims(be, id, from, run.oldClaim, run.toHuman)
 			return wrap(tolerate("claim release", err))
 		}},
 	}
@@ -1086,7 +1089,7 @@ func (e Env) transferBundleIssueSteps(ctx context.Context, root string, be Board
 			return wrap(tolerate("handoff comment", err))
 		}},
 		{name: "release the claim", do: func() error {
-			_, err := releaseClaims(be, id, from, claim, false)
+			_, err := releaseClaims(be, id, from, claim, true)
 			return wrap(tolerate("claim release", err))
 		}},
 		{name: "reset the state", do: func() error {
