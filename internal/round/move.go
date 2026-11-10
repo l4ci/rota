@@ -76,8 +76,8 @@ func registryRound(root string) int {
 }
 
 // holdsLease: this process is the orchestrator the lease names.
-func (e Env) holdsLease(ctx context.Context, root string, pid int) (bool, error) {
-	_, held, err := e.heldLease(ctx, root, pid)
+func (e Env) holdsLease(ctx context.Context, root string) (bool, error) {
+	_, held, err := e.heldLease(ctx, root)
 	return held, err
 }
 
@@ -312,8 +312,7 @@ type ReturnOpts struct {
 	Note         string // the text of --note-file
 	// InSlot: the caller's working directory is inside the slot's worktree, so
 	// the caller is the slot's own worker. Otherwise it must hold the lease.
-	InSlot    bool
-	HolderPID int
+	InSlot bool
 }
 
 // Returned is what Return did.
@@ -347,7 +346,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	}
 	res.Slot = o.Slot
 	if !o.InSlot {
-		ok, err := e.holdsLease(ctx, root, o.HolderPID)
+		ok, err := e.holdsLease(ctx, root)
 		if err != nil {
 			return res, wrap(err)
 		}
@@ -466,10 +465,9 @@ func (e Env) absence(s *worker.Slot) worker.Liveness {
 
 // ReclaimOpts are the flags of `rota round reclaim`.
 type ReclaimOpts struct {
-	Slot      string
-	Force     bool
-	Note      string
-	HolderPID int
+	Slot  string
+	Force bool
+	Note  string
 }
 
 // Reclaimed is what Reclaim did.
@@ -517,7 +515,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if err := fenceExternal(s, "reclaim", "move a worktree"); err != nil {
 		return res, err
 	}
-	ok, err := e.holdsLease(ctx, root, o.HolderPID)
+	ok, err := e.holdsLease(ctx, root)
 	if err != nil {
 		return res, wrap(err)
 	}
@@ -767,7 +765,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
-	ok, err := e.holdsLease(ctx, root, e.HolderPID)
+	ok, err := e.holdsLease(ctx, root)
 	if err != nil {
 		return nil, wrap(err)
 	}

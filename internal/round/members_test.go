@@ -16,7 +16,7 @@ var fiveRoster = []string{"ben", "dana", "nia", "kit", "sam"}
 // startN starts (or renews) the round with n slots over the five-name roster.
 func startN(t *testing.T, e Env, root string, n int) Started {
 	t.Helper()
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Settings.Roster = fiveRoster
 	o.Slots = n
 	st, err := e.Start(bg, root, o)
@@ -118,13 +118,13 @@ func TestDrainedSlotLeavesRoundAfterMerge(t *testing.T) {
 // never hands it new work, with or without --agent.
 func TestAssignSkipsDrainingSlot(t *testing.T) {
 	f := newAssignFixture(t) // started with two slots: ben, dana
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 4 // ben, dana, nia, kit: kit stays idle past the count
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)
 	}
 	holdTask(t, f.root, "nia", "41") // nia drains, kit is parked outside the round
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	holdTask(t, f.root, "ben", "51")

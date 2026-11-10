@@ -47,8 +47,7 @@ func architectureFor(c *Ctx, root string, set roundcfg.Settings) (round.Architec
 
 func roundArchitecture(fs *flag.FlagSet) RunFunc {
 	check := fs.Bool("check", false, "report the counter and whether a review is due; mint nothing")
-	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
-	return func(c *Ctx, args []string) (Result, error) {
+	return holderPIDFlag(fs, "orchestrator pid, when its ancestry cannot be read", func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
@@ -86,7 +85,6 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 		}
 		env := accountedRoundEnv(c, ctx, root)
-		env.HolderPID = *pid
 		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
 		if err != nil {
 			_, ferr := backlogFail(err)
@@ -145,5 +143,5 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		d.Set("assigned", assigned)
 		d.Set("unassigned", jsonx.Strings(left))
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
-	}
+	})
 }

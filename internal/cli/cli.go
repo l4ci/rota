@@ -91,6 +91,11 @@ type Ctx struct {
 	termOut  io.Writer
 	warnings []string
 
+	// holderPID is the --holder-pid value of the running verb, bound by
+	// holderPIDFlag; roundEnv and accountedRoundEnv put it on every Env they
+	// build, so no verb sets Env.HolderPID by hand.
+	holderPID int
+
 	// reviewSkipNoted is set once `round watch` has said its review poll is
 	// skipped (the round config does not load), so the note is not repeated.
 	reviewSkipNoted bool

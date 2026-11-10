@@ -202,7 +202,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 	}
 	f.set = set
 	f.env.Round = set
-	if _, err := f.env.Start(bg, f.root, StartOpts{Scope: roundcfg.ScopeMilestone, HolderPID: 100, Settings: set, DefaultNum: 2, Dispatch: "tmux"}); err != nil {
+	if _, err := f.env.Start(bg, f.root, StartOpts{Scope: roundcfg.ScopeMilestone, Settings: set, DefaultNum: 2, Dispatch: "tmux"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"12", "13"} {

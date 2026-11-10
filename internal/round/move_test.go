@@ -103,7 +103,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir()))
 	f.env.Round, f.env.HolderPID = f.set, 100
 
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.assign("12", "ben"); err != nil {
@@ -146,11 +146,16 @@ func (f *moveFx) transfer(id, to string, mod func(*TransferOpts)) (Transferred, 
 }
 
 func (f *moveFx) reclaim(slot string, mod func(*ReclaimOpts)) (Reclaimed, error) {
-	o := ReclaimOpts{Slot: slot, HolderPID: 100}
+	o := ReclaimOpts{Slot: slot}
 	if mod != nil {
 		mod(&o)
 	}
 	return f.env.Reclaim(bg, f.root, f.be, o)
+}
+
+// reclaimAs runs the reclaim as another process than the lease holder.
+func (f *moveFx) reclaimAs(pid int, slot string) (Reclaimed, error) {
+	return f.env.holder(pid).Reclaim(bg, f.root, f.be, ReclaimOpts{Slot: slot})
 }
 
 // agents makes the host show a live agent in each named slot.
@@ -644,7 +649,8 @@ func TestReturnRefusals(t *testing.T) {
 	if _, err := f.ret("dana", "x", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("a slot holding no issue: %v", err)
 	}
-	_, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot, o.HolderPID = false, 999 })
+	f.env.HolderPID = 999
+	_, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot = false })
 	if blockedBy(t, err) != BlockNotYourSlot {
 		t.Errorf("neither the slot's worker nor the lease holder: %v", err)
 	}
@@ -652,7 +658,8 @@ func TestReturnRefusals(t *testing.T) {
 		t.Error("a refusal changes nothing")
 	}
 	// The orchestrator may return too.
-	if _, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot, o.HolderPID = false, 100 }); err != nil {
+	f.env.HolderPID = 100
+	if _, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot = false }); err != nil {
 		t.Errorf("the lease holder: %v", err)
 	}
 }
@@ -795,7 +802,7 @@ func TestTransferRefusals(t *testing.T) {
 
 func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 	f := newMoveFx(t)
-	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o := startOpts(roundcfg.ScopeMilestone)
 	o.Slots = 3
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)
@@ -1027,7 +1034,7 @@ func TestReclaimRefusals(t *testing.T) {
 	if _, err := f.reclaim("zed", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
-	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
+	if _, err := f.reclaimAs(999, "ben"); blockedBy(t, err) != BlockNoRound {
 		t.Errorf("no lease: %v", err)
 	}
 	// No host to ask: a forced reclaim cannot prove the pane gone.
