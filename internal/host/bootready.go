@@ -24,10 +24,14 @@ type modelRule struct {
 var (
 	bootRulesOnce sync.Once
 	bootRulesVal  bootRules
+	// bootRuleLoads counts how often the patterns were compiled; the poll
+	// path must leave it at one.
+	bootRuleLoads int
 )
 
 func loadBootRules() *bootRules {
 	bootRulesOnce.Do(func() {
+		bootRuleLoads++
 		r := &bootRulesVal
 		for _, syntax := range harness.InputSyntaxes() {
 			for _, pattern := range syntax.BootPatterns {
@@ -66,6 +70,14 @@ func bootReady(text string, requireInput bool) bool {
 		if !strings.Contains(text, r.composer) {
 			return false
 		}
+		// The strict fallback accepts the host's own banners only, as
+		// Orca always did, not a harness's looser BootPatterns.
+		for _, re := range bootPatterns {
+			if re.MatchString(text) {
+				return true
+			}
+		}
+		return false
 	}
 	for _, re := range r.evidence {
 		if re.MatchString(text) {

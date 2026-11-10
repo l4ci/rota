@@ -24,6 +24,7 @@ func TestBootReady(t *testing.T) {
 		loose, strict bool
 	}{
 		{"claude booted", fixture(t, "claude-booted-2.1.289.txt"), true, true},
+		{"codex booted fixture (no model row)", fixture(t, "codex-booted-0.159.2.txt"), true, false},
 		{"opencode booted", fixture(t, "opencode-booted-1.17.9.txt"), true, false},
 		{"codex loaded", "model: gpt-5.3-codex\n› Ask Codex to do anything", true, true},
 		{"codex loading", "model: loading\n› Ask Codex to do anything", true, false},
@@ -42,11 +43,26 @@ func TestBootReady(t *testing.T) {
 	}
 }
 
-// The poll path must not compile a regexp per call.
-func TestBootReadyDoesNotCompile(t *testing.T) {
+// The poll path must reuse the cached patterns, not compile per call.
+func TestBootReadyCompilesOnce(t *testing.T) {
 	text := fixture(t, "claude-booted-2.1.289.txt")
-	bootReady(text, true) // warm the cache
-	if n := testing.AllocsPerRun(50, func() { bootReady(text, false); bootReady(text, true) }); n > 4 {
-		t.Fatalf("%v allocs per call pair; patterns are being compiled on the poll path", n)
+	first := loadBootRules()
+	for i := 0; i < 5; i++ {
+		bootReady(text, false)
+		bootReady(text, true)
+	}
+	if loadBootRules() != first {
+		t.Fatal("rules were rebuilt between calls")
+	}
+	if bootRuleLoads != 1 {
+		t.Fatalf("patterns compiled %d times, want 1", bootRuleLoads)
+	}
+}
+
+// Strict mode must not widen to a harness BootPattern alone: the Codex
+// placeholder without a model row and prompt is not ready for Orca.
+func TestBootReadyStrictIgnoresHarnessBootPatterns(t *testing.T) {
+	if bootReady("Ask Codex to do anything", true) {
+		t.Fatal("placeholder alone must not be strict-ready")
 	}
 }
