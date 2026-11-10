@@ -5,8 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/l4ci/rota/internal/skills"
 )
@@ -155,5 +157,69 @@ func TestValidatorLintsPluginSkills(t *testing.T) {
 		if err == nil || !strings.Contains(out, "plugin/skills/rota-install/SKILL.md") {
 			t.Errorf("%s: validator did not flag the plugin skill: %v\n%s", name, err, out)
 		}
+	}
+}
+
+// One fixture table, test/fixtures/frontmatter/<case>.md with <case>.json, that
+// every SKILL.md front-matter reader must agree on. The JSON is the expected
+// top-level fields as strings, or {"error": true} when a reader must reject the
+// file ("structural" when even the Go stub, which keeps the block as opaque
+// bytes, must reject it: a missing or unclosed fence).
+func TestFrontMatterFixtureTable(t *testing.T) {
+	cases, err := filepath.Glob("test/fixtures/frontmatter/*.md")
+	if err != nil || len(cases) == 0 {
+		t.Fatalf("no fixtures: %v", err)
+	}
+	abs, _ := filepath.Abs("test/validate-skills.py")
+	for _, md := range cases {
+		name := strings.TrimSuffix(filepath.Base(md), ".md")
+		raw, err := os.ReadFile(md)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantRaw, err := os.ReadFile(strings.TrimSuffix(md, ".md") + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want struct {
+			Error      bool
+			Structural bool
+		}
+		_ = json.Unmarshal(wantRaw, &want)
+		var fields map[string]string
+		if !want.Error {
+			if err := json.Unmarshal(wantRaw, &fields); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		}
+		t.Run(name+"/validator", func(t *testing.T) {
+			out, err := exec.Command("python3", abs, "--fields", md).Output()
+			if want.Error {
+				if err == nil {
+					t.Fatalf("validator accepted %s: %s", name, out)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validator rejected %s: %v", name, err)
+			}
+			var got map[string]string
+			if err := json.Unmarshal(out, &got); err != nil || !reflect.DeepEqual(got, fields) {
+				t.Errorf("validator read %v (%v), want %v", got, err, fields)
+			}
+		})
+		t.Run(name+"/go-stub", func(t *testing.T) {
+			set, err := skills.Load(fstest.MapFS{"rota-x/SKILL.md": {Data: raw}, "references/x.md": {Data: []byte("x\n")}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = set.Stubbed()
+			if want.Structural && err == nil {
+				t.Error("Go stub accepted a file with no closed front matter fence")
+			}
+			if !want.Structural && err != nil {
+				t.Errorf("Go stub rejected %s: %v", name, err)
+			}
+		})
 	}
 }
