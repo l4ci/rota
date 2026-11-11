@@ -92,14 +92,26 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 		return Result{}, Usage("usage: rota review cleanup <workspace>")
 	}
 	path := filepath.Clean(args[0])
-	root := filepath.Dir(path)
+	if !filepath.IsAbs(path) || filepath.Base(path) != "tree" {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
 	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
 	if err != nil {
 		return Result{}, Unavailable("resolve temporary directory: %v", err)
 	}
-	canonical, err := filepath.EvalSymlinks(root)
-	if err != nil || !filepath.IsAbs(path) || canonical != root || filepath.Dir(root) != temp ||
-		!strings.HasPrefix(filepath.Base(root), reviewWorkspacePrefix) || filepath.Base(path) != "tree" {
+	// Resolve only the workspace's parent: a symlinked ancestor (macOS /var ->
+	// /private/var) is fine, a symlinked workspace dir is not.
+	wsDir := filepath.Dir(path)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(wsDir))
+	if err != nil || parent != temp || !strings.HasPrefix(filepath.Base(wsDir), reviewWorkspacePrefix) {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
+	root := filepath.Join(parent, filepath.Base(wsDir))
+	if canonical, err := filepath.EvalSymlinks(root); err != nil || canonical != root {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
+	path = filepath.Join(root, "tree")
+	if ti, err := os.Lstat(path); err != nil || !ti.IsDir() {
 		return Result{}, Refused("not a prepared review workspace: %s", path)
 	}
 	info, err := os.Lstat(filepath.Join(root, reviewWorkspaceMarker))
@@ -110,7 +122,7 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	if err != nil || !found || marker.Path != path || marker.Head == "" {
 		return Result{}, Refused("invalid review workspace ownership record: %s", path)
 	}
-	// RemoveAll removes symlinks themselves; it never follows links in the tree.
+	// RemoveAll removes symlinks inside the tree themselves; it never follows them.
 	if err = c.deps().ReviewRemoveAll(root); err != nil {
 		return Result{}, Unavailable("cleanup review workspace %s: %v", path, err)
 	}
