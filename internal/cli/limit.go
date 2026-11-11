@@ -152,7 +152,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return limits.MeterReading(ctx, src, account)
 		},
 		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
-			return limits.PickAccount(ctx, src, root, kind, exclude, c.deps().Now())
+			return limits.PickAccount(ctx, src, limits.Load(root), kind, exclude, c.deps().Now())
 		},
 		Send: func(ctx context.Context, t limits.Target, prompt string) error {
 			return ph.SendPane(ctx, t.Pane, prompt)
