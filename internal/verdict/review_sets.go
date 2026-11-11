@@ -25,10 +25,9 @@ func ReadinessReviewsAtHead(records []Record, head string) []Record {
 
 // BounceReviewsAtHead returns the reviews that judge whether a bounce has
 // findings to relay: core reviews, cross-harness review and lenses. Second
-// opinion is excluded. This reads the stored history as supplied by the caller,
-// preserving bounce judging's existing treatment of recovered reports.
+// opinion is excluded. Recovered reports obey ForHead, as they do at the gate.
 func BounceReviewsAtHead(records []Record, head string) []Record {
-	return latestAtHead(records, bounceReviewKinds, head)
+	return latestAtHead(ForHead(records, head), bounceReviewKinds, head)
 }
 
 // LatestBranchRecords returns one latest record per branch kind in display

@@ -215,7 +215,7 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 }
 
 // A CONCERNS verdict with a blocking finding is Failing (it may be bounced) but
-// not an effective FAIL: the relay input reads EffectiveFail, so it relays
+// not an effective FAIL: the relay input reads the narrow FailingRecords, so it relays
 // nothing. Swapping the two predicates at either call site fails this test.
 func TestRelayInputIgnoresConcernsWithABlocker(t *testing.T) {
 	rec := verdict.NewRecord(verdict.ReviewQuality, verdict.Concerns, "abcdef1234", verdict.Body{Summary: "meh", Findings: []verdict.Finding{{Severity: "major", Title: "real"}}}, testNow)
