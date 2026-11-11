@@ -85,32 +85,29 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 	})
 }
 
-// autopilotTick runs one tick for the lease holder. The lease is checked on
+// runAutopilotTick runs one tick for the lease holder. The lease is checked on
 // every tick: wind-down or a takeover ends the autopilot cleanly.
-func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
-	return runAutopilotTick(c, root, set, baseOverride, pid, false)
-}
-
 func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int, observe bool) (roundtick.Result, error) {
 	c.deps().freshReads()
-	cd, err := c.CommonDir(root)
-	if err != nil {
-		return roundtick.Result{}, Resolution("%v", err)
-	}
-	lease, _, held, err := c.deps().LeaseEnv().Holds(cd, pid, c.deps().Getenv)
+	ctx := c.Context()
+	c.holderPID = pid
+	renv := accountedRoundEnv(c, ctx, root)
+	lease, held, err := renv.HeldLease(ctx, root)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
 	if !held {
 		return roundtick.Result{}, errAutopilotStopped
 	}
+	cd, err := c.CommonDir(root)
+	if err != nil {
+		return roundtick.Result{}, Resolution("%v", err)
+	}
 	policy, err := mergePolicy(c)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
-	ctx := c.Context()
-	c.holderPID = pid
-	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
+	renv = withBoard(c, root, renv)
 	state := roundtick.LoadState(cd, lease.Round)
 
 	be, err := openBacklog(c, root, false, "")
@@ -424,7 +421,6 @@ func (w *tickWorld) Review() roundtick.Reviewer {
 // FollowUp wires the follow-up step (#2580) to the forge and the transfer
 // verb. A round with no queued PR asks the forge nothing.
 func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
-	read := map[string]round.FollowUp{}
 	return roundtick.FollowUpSources{
 		Auto:    w.set.ReviewLoop == roundcfg.ReviewLoopAuto,
 		Size:    w.set.FollowupReserve,
@@ -443,8 +439,7 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 			}
 			var out []roundtick.FollowUp
 			for _, u := range list {
-				read[u.Issue] = u
-				out = append(out, roundtick.FollowUp{Issue: u.Issue, PR: u.PR, Who: strings.Join(u.Humans, ", ")})
+				out = append(out, roundtick.FollowUp{Issue: u.Issue, PR: u.PR, Who: strings.Join(u.Humans, ", "), Item: u})
 			}
 			return out, err
 		},
@@ -452,11 +447,7 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 			if w.observe {
 				return errReadOnlyWorld
 			}
-			u, ok := read[f.Issue]
-			if !ok {
-				return fmt.Errorf("follow-up %s was not read this tick", f.Issue)
-			}
-			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: u, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
+			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f.Item, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
 			for _, warn := range res.Warnings {
 				w.c.Warn("%s", warn)
 			}
