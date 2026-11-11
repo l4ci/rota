@@ -289,12 +289,8 @@ func (d itsaplanIssue) fieldValue(id int) (string, bool) {
 func (t *Itsaplan) norm(m *itsaplanMeta, d itsaplanIssue) Issue {
 	body := d.Description
 	if f := m.field(); f != nil {
-		if block, ok := d.fieldValue(f.ID); ok && strings.TrimSpace(block) != "" {
-			body = strings.TrimRight(body, "\n")
-			if body != "" {
-				body += "\n\n"
-			}
-			body += block
+		if block, ok := d.fieldValue(f.ID); ok {
+			body = joinBody(body, block)
 		}
 	}
 	key := strutil.FirstNonEmpty(d.Identifier, t.project+"-"+strconv.Itoa(d.SequenceNumber))
