@@ -176,6 +176,15 @@ func TestWorkerAccountVerbs(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "alpha        claude   free      5h=90%   7d=10%") {
 		t.Errorf("list text: %q", out)
 	}
+	// assign would take beta (more headroom): the list says so, on that row only.
+	if rows[0].(map[string]any)["picked"] != nil || rows[1].(map[string]any)["picked"] != true {
+		t.Errorf("list must mark the account assign picks: %v", rows)
+	}
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "beta") != strings.Contains(l, "assign picks this") {
+			t.Errorf("pick note on the wrong row: %q", l)
+		}
+	}
 
 	code, out, _ = rotaIn(t, dir, "worker", "account", "pick", "--json")
 	if d = data(t, out); code != 0 || d["found"] != true || d["account"] != "beta" {
