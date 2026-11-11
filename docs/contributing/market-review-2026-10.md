@@ -6,6 +6,8 @@ Refresh this page before the next `/rota-vision` pass instead of re-running the 
 
 Refreshed 2026-10-27: gstack added as a competitor (see *gstack crew*), the competitor table updated, and new entrants listed under *New entrants*.
 
+Added 2026-11-11: sandcastle (see *Sandcastle, checked 2026-11-11*).
+
 ## Summary
 
 rota's core bets are the ones the market asks for. Rate-limit-aware account switching was the most upvoted request on gastown on 10-08 (by 10-27 three others had passed it), GitLab support is the top request on vibe-kanban, and a durable knowledge layer is what beads and paperclip users want most. The test-gated merge matches the most repeated diagnosis of the month: generation is cheap, verification is the bottleneck.
@@ -89,6 +91,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08 and refreshed 2026-1
 | [Paradev](https://github.com/ParadevAI/Paradev) (was superset) | IDE for 100+ parallel agents | 15.6k [15.0k] | Linux (+16), name workspace or branch at creation (+15), Windows (+14), offline and no sign-in (+11) | v2.0, cloud workspaces, paid tier, sign-in push; local-first users object |
 | [claude-squad](https://github.com/smtg-ai/claude-squad) | TUI for parallel agents in worktrees | 8.7k [8.6k] | worktree setup hook with ports (+8), multi-repo (+6) | no release since August |
 | [Backlog.md](https://github.com/MrLesk/Backlog.md) | Markdown board in git | 7.2k [7.0k] | search closed tasks (+5), decision-create flags (+3), cross-repo view (+3, new) | v1.54 archive keeps IDs and dependencies; keeps unknown frontmatter |
+| [sandcastle](https://github.com/mattpocock/sandcastle) | TypeScript library: `run()` starts Claude Code, Codex, Pi, OpenCode, Copilot or Cursor in a sandbox (bwrap, Seatbelt, Docker, Podman, five clouds) on a worktree branch and merges the commits back; see *Sandcastle* below | 9.0k (new, 11-11) | low counts (+1 at most): web dashboard, Mistral Vibe CLI | v0.14.0 (11-02), 142 open issues |
 | Conductor | Mac app, Claude/Codex in worktrees | closed | no public tracker | 0.92 remote control from iOS, "actions", routines; Codex usage-limit request to an admin |
 
 Among the tracked competitors in this table, only gstack shipped a test-gated merge train between 10-08 and 10-27, and none shipped quota-based account switching or a knowledge layer like rota's. Small new entrants do gate merges (SVRF, claude-code-merge-queue; see *New entrants*). This is from release notes and top issues, not an exhaustive search. Paperclip is the one moving into rota's metrics and review gaps.
@@ -129,6 +132,23 @@ What rota took from it, filed 2026-10-27:
 | Captain DIGEST with a "Needs you" section, ages and default replies | maintainer asks spread over several verbs | #2174 |
 
 Not taken: a destructive-command and edit-boundary hook (rota's `rota hook guard`, #702, already guards workers), model overlays, the multi-host generator, telemetry, gbrain, and the design, browser and iOS skills. Ideas noted but not filed: provenance markers on `/rota-pause` items, a Taste class for decisions made in auto mode, per-question "never ask", a security review using `/cso`'s rubric. Nothing was run; the queue, receipt and pre-gate logic was read from docs and help text, not from the TypeScript.
+
+## Sandcastle, checked 2026-11-11
+
+A read of mattpocock/sandcastle at its 2026-11-11 head (v0.14.0, MIT, TypeScript, 9.0k stars, created 2026-03). It is a library, not a tool: you write a `main.ts` that calls `run()` with an agent provider, a sandbox provider and a branch strategy (`head`, `merge-to-head` or a named `branch`), and get back commits, per-iteration usage and the captured agent session. `sandcastle init` scaffolds a prompt and one of five templates; the largest, `parallel-planner-with-review`, loops plan (an agent emits a `<plan>` of unblocked issues, checked against a Zod schema), implement plus review per issue in parallel sandboxes, then one agent merges every branch into the current one.
+
+What it lacks that rota has: no PR or forge flow, no test gate in code (the merge is an agent following `merge-prompt.md`), no rules a binary enforces, no overlap check, health model, quota accounts or knowledge layer. Its own open #1628 (a branch from an earlier cycle reaches the merger unreviewed) is the class of bug a binary gate exists to stop. What it has that rota does not: real process isolation (bwrap, Seatbelt, containers, cloud VMs) and six agent harnesses.
+
+What rota took from it, filed 2026-11-11 (the identity leak is #3133):
+
+| sandcastle mechanism | rota gap | Issue |
+|---|---|---|
+| Host-side git calls pin repo-owned keys that run programs (`core.fsmonitor`, `core.hooksPath`, `core.pager`, `diff.external`, `gpg.program` and others) through `GIT_CONFIG_*`, keeping only system, global and command-line values (`src/hostGitConfig.ts`); `.git/config` and `.git/hooks` are mounted read-only into the sandbox | linked worktrees share `.git/config`, so a worker or test writing repo config changes git for the orchestrator, the gate and every slot. This has happened here: from 2026-10-20 to 2026-11-11 the main checkout carried `user.name=t`, `user.email=t@t`, and about 2,000 commits on `main` are authored `t <t@t>`. A `rota doctor` check for repo-scope config drift is the cheap half; pinning in `internal/git` must keep the LFS hooks | #3134 |
+| Structured output: the agent prints JSON in a named tag, checked against a schema; on failure the same session is resumed with a short error so it re-emits without redoing the work (`maxRetries`) | check whether malformed reviewer verdicts and worker reports are re-asked in the same session or re-run; #819 covers the typed channel, not the retry | #3135 |
+| `fork()` continues a captured session under a new id, so one parent that has read the code fans out to several children | each review lens re-reads the diff and context; forking a neutral read-only parent could cut that spend without sharing a verdict. Needs a spike: anchoring risk is the open question | #3136 |
+| Session capture per iteration, Claude subagent transcripts included, with token usage and context-window size | the round ledger has no token data (#574); a worker's transcript is gone once its pane closes, which hurts `/rota-bugreport` | #3137 |
+
+Not taken: sandboxing workers (rota workers need `gh`, network and the host's harness login, and Claude Code and Codex ship their own sandboxes), the completion signal and hang timeout (rota workers are interactive sessions, not processes that exit), `` !`command` `` prompt expansion (skills already have it), the template-and-library model, and the cloud providers. Nothing was run; this is from the guide pages, two templates and `hostGitConfig.ts`.
 
 ## New entrants, September to October 2026
 
