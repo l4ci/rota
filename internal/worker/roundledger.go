@@ -164,8 +164,9 @@ func mergeRecorded(root string, e ledger.Entry) bool {
 // trainLedger records one train outcome, then its verdict for every member it gated that did
 // not get a landing gate of its own: the culprit that failed its check, and
 // members that passed theirs but did not land. Landed members, and the member
-// whose landing gate failed, were recorded by that gate. Only the culprit
-// carries the train's verdict; the others name it as the culprit.
+// whose landing gate failed, were recorded by that gate. Only the culprit, or
+// the members of an interaction, carry the train's verdict; the others name the
+// culprit.
 func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult, gated map[string]bool) {
 	if res.Verdict == "" {
 		return
@@ -200,7 +201,7 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 			continue
 		}
 		verdict := res.Verdict
-		if res.Culprit != "" && t != res.Culprit {
+		if res.Culprit != "" && t != res.Culprit || len(res.Interaction) > 0 && !slices.Contains(res.Interaction, t) {
 			verdict = ""
 		}
 		rec.Note(root, ledger.Entry{Kind: ledger.KindGate, Issue: gt.Issue, Slot: gt.Name, PR: gt.PR,
