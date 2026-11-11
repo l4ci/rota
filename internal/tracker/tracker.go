@@ -542,14 +542,19 @@ func New(ctx context.Context, s Settings, provider, dir string, opts ...Option) 
 	if err != nil {
 		return nil, err
 	}
-	return adapterFor(c, s), nil
+	return adapterFor(c, s)
 }
 
-func adapterFor(c *CLI, s Settings) Adapter {
-	if c.Provider == "github" {
-		return &GitHub{base: base{cli: c, closing: closingGH, labelEntries: s.Labels}}
+// adapterFor builds the forge adapter c.Provider names. A provider no forge
+// claims is refused, never handed to GitLab.
+func adapterFor(c *CLI, s Settings) (Adapter, error) {
+	switch c.Provider {
+	case "github":
+		return &GitHub{base: base{cli: c, closing: closingGH, labelEntries: s.Labels}}, nil
+	case "gitlab":
+		return &GitLab{base: base{cli: c, closing: closingGL, labelEntries: s.Labels}, NotPlannedLabel: s.NotPlannedLabel}, nil
 	}
-	return &GitLab{base: base{cli: c, closing: closingGL, labelEntries: s.Labels}, NotPlannedLabel: s.NotPlannedLabel}
+	return nil, Unavailable("unknown forge provider %q", c.Provider)
 }
 
 // NewForge returns the forge for forgeProvider ("" or "auto" falls back to
@@ -561,33 +566,6 @@ func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts .
 		return nil, err
 	}
 	return a, nil
-}
-
-// ownTrackers is the one list of issues.source values that name a tracker of
-// their own (not a forge); each builds it from issues.connection. A builder
-// never returns a nil pointer inside a non-nil IssueTracker.
-var ownTrackers = map[string]func(context.Context, *CLI, Settings) (IssueTracker, error){
-	config.SourceJira: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newJiraTracker(ctx, c, s)
-		if err != nil {
-			return nil, err
-		}
-		return t, nil
-	},
-	config.SourceLinear: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newLinearTracker(ctx, c, s)
-		if err != nil {
-			return nil, err
-		}
-		return t, nil
-	},
-	config.SourceItsaplan: func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newItsaplanTracker(ctx, c, s)
-		if err != nil {
-			return nil, err
-		}
-		return t, nil
-	},
 }
 
 // NewIssueTracker returns the issue tracker for source ("" falls back to
@@ -602,8 +580,8 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		source = s.Source
 	}
 	provider := source
-	if build, ok := ownTrackers[source]; ok {
-		return build(ctx, newCLI(s, dir, opts...), s)
+	if k, ok := ownKindFor(source); ok {
+		return k.build(ctx, newCLI(s, dir, opts...), s)
 	}
 	switch source {
 	case config.SourceFile, "":
@@ -624,10 +602,14 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 			return nil, Unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
 		}
 		c.Provider = r.Provider
-		if r.How == HowAssumed {
-			return assumedForge{IssueTracker: adapterFor(c, s), r: r}, nil
+		a, err := adapterFor(c, s)
+		if err != nil {
+			return nil, err
 		}
-		return adapterFor(c, s), nil
+		if r.How == HowAssumed {
+			return assumedForge{IssueTracker: a, r: r}, nil
+		}
+		return a, nil
 	case config.SourceGitHub, config.SourceGitLab:
 	default:
 		return nil, Unavailable("unknown issues.source %q", source)
@@ -638,7 +620,7 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		return nil, err
 	}
 	c.Provider = p
-	return adapterFor(c, s), nil
+	return adapterFor(c, s)
 }
 
 func dirLabel(dir string) string {
@@ -985,14 +967,14 @@ type IssueActor struct {
 }
 
 // ResolveIssueActor decides the tracker for issues.source in dir: a source in
-// ownTrackers names its own tracker, github and gitlab name the forge
+// ownKinds names its own tracker, github and gitlab name the forge
 // outright, any other source takes dir's forge as ForgeActor resolves it. A
 // local forge is ErrNoIssueActor. The adapter kind is recorded here, not
 // re-derived from Source.
 func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Option) (IssueActor, error) {
-	if build, ok := ownTrackers[s.Source]; ok {
+	if k, ok := ownKindFor(s.Source); ok {
 		return IssueActor{Source: s.Source, build: func(ctx context.Context) (IssueTracker, error) {
-			return build(ctx, newCLI(s, dir, opts...), s)
+			return k.build(ctx, newCLI(s, dir, opts...), s)
 		}}, nil
 	}
 	r, err := IssueProvider(ctx, s, ForgeActor, dir, opts...)
