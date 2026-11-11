@@ -24,21 +24,11 @@ import (
 // leaves a transcript under .rota/qa-runs/, a behaviour verdict at the PR head
 // and, with a PR on a forge, a comment carrying the transcript.
 
-// IssueTrust is the part of an issue tracker that says who wrote an issue
-// body and whether they may push: the behaviour run only executes steps a
-// collaborator wrote (#899 decision). Only the GitHub tracker implements it.
-// IssueAuthorship returns the body with the authors, so the steps that run are
-// the text that was vouched for.
-type IssueTrust interface {
-	IssueAuthorship(ctx context.Context, key tracker.IssueKey) (tracker.Authorship, error)
-	CanPush(ctx context.Context, login string) (bool, error)
-}
-
 // TryItSource is where an item's Try it steps come from and who may vouch for them.
 type TryItSource struct {
-	Source string     // issues.source; "" or "file" is the file source
-	Issue  string     // the item id
-	Trust  IssueTrust // nil when the issue side has no trust check
+	Source string             // issues.source; "" or "file" is the file source
+	Issue  string             // the item id
+	Trust  tracker.IssueTrust // nil when the issue side has no trust check
 	// FileBody reads the item body of the file source (the base checkout, so
 	// it got there through a commit someone with push access landed).
 	FileBody func() (body string, found bool, err error)
@@ -173,7 +163,7 @@ func (g *gateOperation) behaviourRun(dir string) (bool, error) {
 		// gate reads no origin refs.
 		return skip(fmt.Sprintf("the gate reads no origin refs (no PR), so it reads no forge for %s's Try it steps", ref))
 	}
-	trust, _ := g.issues.(IssueTrust)
+	trust, _ := g.issues.(tracker.IssueTrust)
 	body, why, err := TrustedTryIt(g.ctx, TryItSource{
 		Source: src, Issue: issue, Trust: trust,
 		FileBody: func() (string, bool, error) { return o.ItemBody(issue) },

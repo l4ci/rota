@@ -97,3 +97,16 @@ func TestPostReportIgnoresForeignMarkers(t *testing.T) {
 		}
 	}
 }
+
+// noIdentityForge hides reportForge's AuthenticatedUser, as a forge without an
+// identity seam does.
+type noIdentityForge struct{ Forge }
+
+func TestPostReportWithoutIdentityFailsClosed(t *testing.T) {
+	const key = "<!-- rota:report qa sha=abcdef1 -->"
+	f := noIdentityForge{&reportForge{notes: []Comment{{ID: "x", Body: key + "\nold\n", Author: "someone"}}}}
+	err := PostReport(context.Background(), f, 7, key+"\nPASS\n")
+	if !errors.Is(err, ErrNoReportAuthor) || err.Error() != "tracker cannot resolve the authenticated report author" {
+		t.Fatalf("err = %v, want the unchanged refusal", err)
+	}
+}
