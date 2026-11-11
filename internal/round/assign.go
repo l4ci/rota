@@ -811,9 +811,12 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// 6. A support branch starts from the main the main machine last pushed.
 	from := ""
-	msBase, warn, err := e.milestoneBase(ctx, root, be, it)
-	if err != nil {
-		return run, false, err
+	// An interaction item is fixed on its integration branch, ahead of any milestone.
+	msBase, warn := integrationBase(root, it), ""
+	if msBase == "" {
+		if msBase, warn, err = e.milestoneBase(ctx, root, be, it); err != nil {
+			return run, false, err
+		}
 	}
 	if warn != "" {
 		res.Warnings = append(res.Warnings, warn)

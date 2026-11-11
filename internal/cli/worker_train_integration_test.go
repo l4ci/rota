@@ -1,8 +1,13 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestWorkerTrainIntegrationFlag(t *testing.T) {
@@ -25,5 +30,47 @@ func TestWorkerTrainIntegrationFlag(t *testing.T) {
 				t.Fatalf("exit %d, want 2 with %q:\n%s%s", code, c.want, out, errOut)
 			}
 		})
+	}
+}
+
+func TestWorkerTrainIntegrationFilesItem(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
+		Members: []worker.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6", Pending: true, Conflicts: []string{"work.txt"}}}}
+	if err := worker.RecordIntegration(dir, it); err != nil {
+		t.Fatal(err)
+	}
+	be := &backlog.File{Root: dir}
+	r := worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it,
+		Err: "TRAIN-INTERACTION 8, 7 — w2 does not merge onto integration/r55-a"}
+	id, filed, err := fileInteractionItem(be, dir, r)
+	if err != nil || !filed || id == "" {
+		t.Fatalf("first interaction: %q %v %v", id, filed, err)
+	}
+	item, err := be.Get(id)
+	if err != nil || item == nil {
+		t.Fatalf("item %s: %v", id, err)
+	}
+	if rel := item.Fields.Related; !strings.Contains(rel, "#5") || !strings.Contains(rel, "#6") {
+		t.Errorf("item not linked to the member issues: %q", rel)
+	}
+	body, _, _ := be.Detail(id)
+	for _, want := range []string{"integration/r55-a", "work.txt", "--integration a"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q:\n%s", want, body)
+		}
+	}
+	reg, _ := worker.LoadRegistry(dir)
+	if rec, ok := reg.IntegrationForItem(id); !ok || rec.Branch != it.Branch {
+		t.Fatalf("item not recorded on the branch: %+v %v", rec, ok)
+	}
+	// The same interaction again reuses the open item.
+	again, filed, err := fileInteractionItem(be, dir, r)
+	if err != nil || filed || again != id {
+		t.Fatalf("rerun filed again: %q %v %v", again, filed, err)
+	}
+	if rec, _ := reg.IntegrationByBranch(it.Branch); len(rec.Items) != 1 {
+		t.Fatalf("item recorded twice: %v", rec.Items)
 	}
 }

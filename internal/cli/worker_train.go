@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"slices"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
@@ -359,6 +361,25 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		for _, f := range run.Book {
 			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
+		}
+		if r.Verdict == worker.GateInteraction && r.Integration != nil {
+			if _, ferr := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+				id, filed, err := fileInteractionItem(be, root, r)
+				if err != nil {
+					return Result{}, err
+				}
+				verb := "reused"
+				if filed {
+					verb = "filed"
+				}
+				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM %s — %s for %s; assign it to a slot: its branch is cut from %s\n", id, verb, strings.Join(r.Interaction, ", "), r.Integration.Branch)
+				if !slices.Contains(r.Integration.Items, id) {
+					r.Integration.Items = append(r.Integration.Items, id)
+				}
+				return Result{}, nil
+			}); ferr != nil {
+				fmt.Fprintln(c.Stderr, "INTERACTION-ITEM not filed — "+ferr.Error())
+			}
 		}
 		res := Result{Data: trainData(r)}
 		if r.Plan != nil {
