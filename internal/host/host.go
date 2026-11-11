@@ -1,6 +1,5 @@
 // Package host drives the terminal host that runs /rota-work worker sessions:
-// tmux windows, legacy herdr tabs, Core terminals or Orca terminals. It ports the bin/hv-host-*.sh
-// helpers and adds the opt-in Orca adapter.
+// tmux windows, legacy herdr tabs, Core terminals or Orca terminals. Orca is the opt-in adapter.
 //
 // SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents.
 // Nothing here execs a binary directly:
@@ -439,8 +438,13 @@ type Host interface {
 	Kill(ctx context.Context, slot, handle string) error
 }
 
-// New returns the selected terminal adapter. Unknown kinds and Solo retain
-// the historical tmux fallback.
+// ErrUnknownKind is what the Host New returns for Solo or an unrecognized kind
+// answers with: those kinds have no terminal to drive.
+var ErrUnknownKind = errors.New("no terminal host for this kind")
+
+// New returns the selected terminal adapter. Solo and unknown kinds get a Host
+// that refuses every operation with ErrUnknownKind, so a caller bug fails at
+// its cause instead of driving tmux.
 func New(kind Kind, d Deps) Host {
 	d.fill()
 	if kind == HerdrCore {
@@ -452,8 +456,30 @@ func New(kind Kind, d Deps) Host {
 	if kind == Herdr {
 		return &herdr{d: d, noted: new(atomic.Bool)}
 	}
-	return &tmux{d: d}
+	if kind == Tmux {
+		return &tmux{d: d}
+	}
+	return refused{kind: kind}
 }
+
+// refused is the Host for Solo and unknown kinds: it drives nothing and every
+// operation that can fail says why.
+type refused struct{ kind Kind }
+
+func (r refused) err() error { return fmt.Errorf("%w: %q", ErrUnknownKind, string(r.kind)) }
+
+func (r refused) Kind() Kind                 { return r.kind }
+func (r refused) Capabilities() Capabilities { return Capabilities{} }
+func (r refused) Require() error             { return r.err() }
+func (r refused) InSession() bool            { return false }
+func (r refused) Where() string              { return "" }
+func (r refused) Spawn(context.Context, SpawnOpts) (string, error) {
+	return "", r.err()
+}
+func (r refused) Send(context.Context, string, string, string) error  { return r.err() }
+func (r refused) Capture(context.Context, string, string, int) string { return "" }
+func (r refused) Status(context.Context, string, string) string       { return "" }
+func (r refused) Kill(context.Context, string, string) error          { return r.err() }
 
 // presence is what a host query says about a target. Only presentGone proves
 // cleanup; presentUnknown (transport, execution or unreadable-response
