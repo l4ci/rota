@@ -18,16 +18,18 @@ func interactionTitle(it worker.Integration, members []string) string {
 // fileInteractionItem files the item a worker slot fixes an integration
 // branch's interaction or conflict through, linked to the member issues, and
 // records it on the branch. A rerun that hits the same members reuses the open
-// item rather than filing another.
+// item rather than filing another. Only an item rota recorded on the branch
+// is reused: one matched by title alone could be anyone's, and the record
+// decides which slot is cut from the branch and whose review it defers.
 func fileInteractionItem(be backlog.Backend, root string, r worker.TrainResult) (id string, filed bool, err error) {
 	it := *r.Integration
 	title := interactionTitle(it, r.Interaction)
-	items, err := be.List(false)
-	if err != nil {
-		return "", false, err
-	}
-	for _, x := range items {
-		if !x.Closed && x.Title == title {
+	for _, rid := range it.Items {
+		x, err := be.Get(rid)
+		if err != nil {
+			return "", false, err
+		}
+		if x != nil && !x.Closed && x.Title == title {
 			id = x.ID
 			break
 		}

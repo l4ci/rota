@@ -65,12 +65,38 @@ func TestWorkerTrainIntegrationFilesItem(t *testing.T) {
 	if rec, ok := reg.IntegrationForItem(id); !ok || rec.Branch != it.Branch {
 		t.Fatalf("item not recorded on the branch: %+v %v", rec, ok)
 	}
-	// The same interaction again reuses the open item.
+	// The same interaction again reuses the open item rota recorded.
+	reg, _ = worker.LoadRegistry(dir)
+	rec, _ := reg.IntegrationByBranch(it.Branch)
+	r.Integration = &rec
 	again, filed, err := fileInteractionItem(be, dir, r)
 	if err != nil || filed || again != id {
 		t.Fatalf("rerun filed again: %q %v %v", again, filed, err)
 	}
+	reg, _ = worker.LoadRegistry(dir)
 	if rec, _ := reg.IntegrationByBranch(it.Branch); len(rec.Items) != 1 {
 		t.Fatalf("item recorded twice: %v", rec.Items)
+	}
+}
+
+// An open item that only shares the title was not filed by rota for this
+// branch: it is never adopted as the interaction item.
+func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
+		Members: []worker.IntegrationMember{{Target: "7", Issue: "5"}, {Target: "8", Issue: "6"}}}
+	if err := worker.RecordIntegration(dir, it); err != nil {
+		t.Fatal(err)
+	}
+	be := &backlog.File{Root: dir}
+	twin, err := be.Create(backlog.CreateInput{Kind: "bugs", Tag: "P1", Title: interactionTitle(it, []string{"8", "7"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it, Err: "TRAIN-INTERACTION"}
+	id, filed, err := fileInteractionItem(be, dir, r)
+	if err != nil || !filed || id == twin.ID {
+		t.Fatalf("adopted the title twin %s: %q %v %v", twin.ID, id, filed, err)
 	}
 }
