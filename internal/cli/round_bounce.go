@@ -156,14 +156,10 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		head = strings.TrimSpace(out)
 	}
 	list := branchVerdicts(c, root, branch)
-	judged := false
-	for _, r := range verdict.BounceReviewsAtHead(list, head) {
-		if r.Failing() {
-			return nil
-		}
-		judged = true
+	if len(verdict.FailingRecords(list, verdict.FailScope{Head: head, AtHead: true, Wide: true})) > 0 {
+		return nil
 	}
-	if !judged {
+	if len(verdict.BounceReviewsAtHead(list, head)) == 0 {
 		return nil
 	}
 	return &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s has no blocking finding in its current review verdicts: a bounce would relay only nits", issue),

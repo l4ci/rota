@@ -307,7 +307,7 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 	c.ctx = ctx
 	stoppedErr := error(nil)
 	res, err := roundwatch.RunAutopilot(ctx, env, opts, roundwatch.AutopilotOpts{
-		Tick: func() (roundtick.Result, error) { return autopilotTick(c, root, set, base, pid) },
+		Tick: func() (roundtick.Result, error) { return runAutopilotTick(c, root, set, base, pid, false) },
 		Stopped: func(err error) bool {
 			stoppedErr = err
 			return isAutopilotStopped(err)

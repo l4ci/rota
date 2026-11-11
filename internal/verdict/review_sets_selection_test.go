@@ -78,8 +78,8 @@ func TestReviewSetSelection(t *testing.T) {
 		{name: "full record short head", records: []Record{full}, head: "bbb", core: []Record{full}, bounce: []Record{full}, all: []Record{full}},
 		{name: "newest same head wins", records: []Record{local, newer}, head: "bbbbbbb", core: []Record{newer}, bounce: []Record{newer}, all: []Record{newer}},
 		{name: "latest selected before head check", records: []Record{local, stale}, head: "bbbbbbb", all: []Record{stale}},
-		{name: "stale recovered report filtered only for coverage and readiness", records: []Record{local, staleReport}, head: "bbbbbbb", core: []Record{local}, all: []Record{staleReport}},
-		{name: "local head overrides reports across kinds", records: []Record{local, report}, head: "bbbbbbb", core: []Record{local}, bounce: []Record{local, report}, all: []Record{local, report}},
+		{name: "stale recovered report filtered for coverage, bounce and readiness", records: []Record{local, staleReport}, head: "bbbbbbb", core: []Record{local}, bounce: []Record{local}, all: []Record{staleReport}},
+		{name: "local head overrides reports across kinds", records: []Record{local, report}, head: "bbbbbbb", core: []Record{local}, bounce: []Record{local}, all: []Record{local, report}},
 		{name: "current report without local head", records: []Record{stale, report}, head: "bbbbbbb", core: []Record{report}, bounce: []Record{report}, all: []Record{stale, report}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

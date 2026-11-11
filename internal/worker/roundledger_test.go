@@ -362,3 +362,22 @@ func TestLedgerNoteOutsideARepoIsRoundZeroAndQuiet(t *testing.T) {
 		t.Fatalf("entries %+v stderr %q, want one round-0 entry and no warning", es, out.String())
 	}
 }
+
+// An interaction stamps its verdict on the members it names, not on a
+// bystander that did not land (#3095).
+func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
+	res := TrainResult{Verdict: GateInteraction, Interaction: []string{"b1", "b3"},
+		Members: []TrainMember{{Target: "b1"}, {Target: "b2"}, {Target: "b3"}}}
+	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
+	verdicts := map[string]string{}
+	es, _ := ledger.Load(dir)
+	for _, e := range es {
+		if e.Kind == ledger.KindGate {
+			verdicts[e.Slot] = e.DetailStr("verdict")
+		}
+	}
+	if len(verdicts) != 3 || verdicts["b1"] != GateInteraction || verdicts["b3"] != GateInteraction || verdicts["b2"] != "" {
+		t.Fatalf("verdicts %v, want interaction on b1 and b3 only", verdicts)
+	}
+}

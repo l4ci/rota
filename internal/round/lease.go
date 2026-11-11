@@ -51,9 +51,9 @@ func (e Env) leaseFinding(ctx context.Context, root string, rep *Report) {
 	rep.add(Finding{Kind: LeaseStale, Detail: "the round lease is held by " + who + ", which is gone; `rota round start` reclaims it, `rota reap` clears it"})
 }
 
-// heldLease reports whether pid is the orchestrator the Env's lease names,
+// HeldLease reports whether pid is the orchestrator the Env's lease names,
 // keyed off the repo at root.
-func (e Env) heldLease(ctx context.Context, root string) (roundlease.Lease, bool, error) {
+func (e Env) HeldLease(ctx context.Context, root string) (roundlease.Lease, bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
 		return roundlease.Lease{}, false, err
