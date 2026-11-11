@@ -38,20 +38,6 @@ func TestCodexPluginTree(t *testing.T) {
 	if !got[".codex-plugin/plugin.json"] {
 		t.Error("manifest missing from the built tree")
 	}
-	// Every shared reference reaches every skill (the skill's own files: layout_test.go).
-	dirs, _ := filepath.Glob("skills/rota-*")
-	refs, _ := filepath.Glob("skills/references/*.md")
-	if len(dirs) == 0 || len(refs) == 0 {
-		t.Fatal("no skills or references")
-	}
-	for _, d := range dirs {
-		name := filepath.Base(d)
-		for _, r := range refs {
-			if rel := name + "/references/" + filepath.Base(r); !got["skills/"+rel] {
-				t.Errorf("skills/%s missing from the Codex tree", rel)
-			}
-		}
-	}
 	// Every references/ path a skill file names resolves in the built copy.
 	link := regexp.MustCompile(`references/[A-Za-z0-9_.-]+\.md`)
 	for rel := range got {

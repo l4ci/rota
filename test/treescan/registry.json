@@ -4,6 +4,8 @@
       "TestAutonomyReferenceLevelsAndStops",
       "TestCodexPluginManifest",
       "TestCodexPluginTree",
+      "TestCodexTreeMatchesLoadClosure",
+      "TestCodexPluginFailingListingFails",
       "TestPluginManifest",
       "TestPluginSessionStartHook",
       "TestRoundWorkerLearningAligned",
@@ -11,6 +13,7 @@
       "TestSkillLayoutSymlinkedSkillRejected",
       "TestSkillLayoutRealTree",
       "TestSkillLayoutSupportedContentShips",
+      "TestSkillLayoutSymlinkedFileRejected",
       "TestSkillsCiteAutonomyReference",
       "TestSkillsHarnessNeutral"
     ],
