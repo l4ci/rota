@@ -17,7 +17,7 @@ import (
 func TestIdleSlotMatchesKindAndAccountAndSkipsHeldAndExternal(t *testing.T) {
 	root := t.TempDir()
 	writeRegistry(t, root,
-		slot(root, "ext", "park/ext", func(o *jsonx.Object) { o.Set("kind", worker.KindExternal) }),
+		slot(root, "ext", "park/ext", func(o *jsonx.Object) { o.Set("provenance", worker.ProvenanceExternal) }),
 		slot(root, "ben", "ben/5-x", nil),
 		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("kind", harness.Codex); o.Set("codexAccount", "work") }),
 		slot(root, "dana", "park/dana", func(o *jsonx.Object) { o.Set("account", "b") }),
@@ -47,7 +47,7 @@ func TestIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	f := newMoveFx(t)
 	if err := worker.Update(f.root, func(d *worker.Doc) {
 		reg := worker.LoadRegistryTolerant(f.root)
-		ext := slot(f.root, "zed", "park/zed", func(o *jsonx.Object) { o.Set("kind", worker.KindExternal) })
+		ext := slot(f.root, "zed", "park/zed", func(o *jsonx.Object) { o.Set("provenance", worker.ProvenanceExternal) })
 		d.SetSlots(append(reg.Slots(), ext))
 		d.SetSlotCount(3)
 	}); err != nil {

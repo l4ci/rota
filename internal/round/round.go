@@ -913,7 +913,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 			r.Evidence = strutil.FirstNonEmpty(ev.Body, r.Evidence)
 		}
 		r.Outcome, _ = s.Outcome()
-		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
+		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.Kind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		kind, acct := SlotAccount(s)
 		r.Account, r.AccountKind = acct, cmp.Or(kind, config.KindClaude)
 		if r.Issue != "" {

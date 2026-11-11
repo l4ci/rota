@@ -71,7 +71,7 @@ func TestReconcileUnregisteredBranch(t *testing.T) {
 func TestReconcileUnregisteredHeldBranchIsNotDrift(t *testing.T) {
 	root, e, _ := unregFixture(t, "codex/612-thing")
 	writeRegistry(t, root, slot(root, "ext-1", "codex/612-thing", func(o *jsonx.Object) {
-		o.Set("kind", worker.KindExternal)
+		o.Set("provenance", worker.ProvenanceExternal)
 		o.Set("task", "612")
 		o.Set("handle", "")
 	}))

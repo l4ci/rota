@@ -68,7 +68,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 		return "", o, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}
 	if o.Kind == "" {
-		o.Kind = s.HarnessKind()
+		o.Kind = s.Kind()
 	}
 	if o.Model == "" {
 		o.Model = resolveModel(s.Model(), pick.Model, set.Model(o.Kind, s.Tier()))

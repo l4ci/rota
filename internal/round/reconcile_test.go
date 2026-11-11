@@ -23,7 +23,7 @@ func extFixture(t *testing.T, pr string, prs ...tracker.PR) (string, Env, *fakeR
 	root := newRepo(t, map[string]string{"ext-1": "codex/12-thing", "ben": "park/ben"}, "ext-1")
 	writeRegistry(t, root,
 		slot(root, "ext-1", "codex/12-thing", func(o *jsonx.Object) {
-			o.Set("kind", worker.KindExternal)
+			o.Set("provenance", worker.ProvenanceExternal)
 			o.Set("task", "12")
 			o.Set("handle", "")
 			if pr != "" {
