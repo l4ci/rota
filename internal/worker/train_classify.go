@@ -12,22 +12,33 @@ import (
 	"github.com/l4ci/rota/internal/testledger"
 )
 
+// redClass is what classifyRed found out about a red prefix. The zero value
+// keeps its last member the culprit.
+type redClass struct {
+	// interaction holds the indexes of the members whose merge together makes
+	// the red, ascending.
+	interaction []int
+	// unreproduced: the member passes alone and the failing tests passed on a
+	// rerun of the red prefix too, so the red is a flake and nobody is blamed.
+	unreproduced bool
+}
+
 // classifyRed decides whether the red prefix of k members that bisect found is
-// the fault of its last member or an interaction (#3095). It reruns only the
-// failing tests of failed, first on the base plus member k alone, then on the
-// base plus each earlier member and member k. It answers the indexes of the
-// members whose merge together makes the red, ascending; nil keeps member k
-// the culprit: it is red alone, or the reruns could not tell.
+// the fault of its last member, an interaction or a red no rerun reproduces
+// (#3095). It reruns only the failing tests of failed, first on the base plus
+// member k alone, then on the base plus each earlier member and member k, then
+// on the red prefix itself. Member k stays the culprit when it is red alone, or
+// when it was not checked alone (the first member, a CI train, a member that
+// does not merge without the ones before it).
 //
-// The in-tree retry already caught flakes, so a rerun is not retried. A red
-// that no rerun reproduces at all keeps today's culprit, with a note.
-func (t *trainRun) classifyRed(p trainPlan, res *TrainResult, k int, failed VerifyResult) ([]int, error) {
+// The in-tree retry already caught flakes, so a rerun is not retried.
+func (t *trainRun) classifyRed(p trainPlan, res *TrainResult, k int, failed VerifyResult) (redClass, error) {
 	if k <= 1 { // the first member alone is the red prefix bisect ran
-		return nil, nil
+		return redClass{}, nil
 	}
 	if p.onCI {
 		res.Notes = append(res.Notes, "TRAIN-UNCLASSIFIED — test.fullWhere is ci and the alone-runs run only locally; the culprit is the first member whose prefix is red, not checked alone")
-		return nil, nil
+		return redClass{}, nil
 	}
 	e, ctx, scratch := t.e, t.ctx, p.scratch
 	cmds := rerunCommands(failed, p.verifyCfg().rerunTemplate)
@@ -65,38 +76,51 @@ func (t *trainRun) classifyRed(p trainPlan, res *TrainResult, k int, failed Veri
 		if err == nil && !merged {
 			res.Notes = append(res.Notes, fmt.Sprintf("TRAIN-UNCLASSIFIED %s — does not merge on the base without the members before it, so it was not checked alone", res.Members[last].Target))
 		}
-		return nil, err
+		return redClass{}, err
 	}
 	for j := 0; j < last; j++ {
 		red, merged, err := rerun(j, last)
 		if err != nil {
-			return nil, err
+			return redClass{}, err
 		}
 		if merged && red {
-			return []int{j, last}, nil
+			return redClass{interaction: []int{j, last}}, nil
 		}
 	}
 	// No pair is red: the red needs three or more members, or does not
 	// reproduce. With one earlier member the pair was the red prefix itself.
 	if last > 1 {
 		if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k]); code != 0 {
-			return nil, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[k])
+			return redClass{}, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[k])
 		}
 		t.phase("classify: base + %d member(s), %d command(s)", k, len(cmds))
 		red, err := t.rerunIn(scratch, cmds)
 		if err != nil {
-			return nil, err
+			return redClass{}, err
 		}
 		if red {
 			all := make([]int, k)
 			for i := range all {
 				all[i] = i
 			}
-			return all, nil
+			return redClass{interaction: all}, nil
 		}
 	}
-	res.Notes = append(res.Notes, fmt.Sprintf("TRAIN-UNCLASSIFIED %s — passes alone, but the failing tests did not fail again on a rerun of the red prefix; named culprit as before", res.Members[last].Target))
-	return nil, nil
+	for _, c := range failed.Failed {
+		res.Notes = append(res.Notes, unreproducedNote(c, logSection(failed.Log, c)))
+	}
+	return redClass{unreproduced: true}, nil
+}
+
+// unreproducedNote names a failed command's tests the way a FLAKY note does,
+// for a red that passed on every rerun.
+func unreproducedNote(cmd, out string) string {
+	tests, _ := testledger.FailingTests(out)
+	named := strings.Join(tests, ", ")
+	if named == "" {
+		named = "(none named)"
+	}
+	return fmt.Sprintf("FLAKY %s — tests: %s; red on the train and its in-tree retry, green on every rerun (alone and the red prefix); no member blamed", cmd, named)
 }
 
 // rerunIn runs cmds in dir and reports whether any failed. A cancel is an

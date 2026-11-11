@@ -459,11 +459,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 		if held {
 			r.Held[t] = why
-			detail := why
-			if e.Head != nil {
-				detail += heldHeadHint
-			}
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: t, Why: detail})
+			r.NeedsYou = append(r.NeedsYou, heldItem(t, why, e.Head != nil))
 			continue
 		}
 		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) && (e.FillBypass == nil || !e.FillBypass(t)) {
@@ -497,20 +493,26 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 					r.FailedHeads[m.Target] = FailedHead{Head: head, Why: why}
 				}
 			}
-			if e.Head != nil && failedHeadVerdict(m.Verdict) {
-				why += heldHeadHint
-			}
-			kind := "gate-failed"
-			if m.Verdict == worker.GateInteraction {
-				kind = "train-interaction" // the orchestrator's to fix, not a bounce
-			}
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: kind, Target: m.Target, Why: why})
+			r.NeedsYou = append(r.NeedsYou, heldItem(m.Target, why, e.Head != nil && failedHeadVerdict(m.Verdict)))
 		}
 	}
 	return nil
 }
 
 const heldHeadHint = "; held at PR head; push a new head to retry"
+
+// heldItem reports a target the gate or train refused; why starts with the
+// verdict. An interaction is the orchestrator's to fix, not a bounce: its why
+// already says what to do, so it carries no push-a-new-head hint.
+func heldItem(target, why string, atHead bool) Item {
+	if v, _, _ := strings.Cut(why, ":"); v == worker.GateInteraction {
+		return Item{Kind: "train-interaction", Target: target, Why: why}
+	}
+	if atHead {
+		why += heldHeadHint
+	}
+	return Item{Kind: "gate-failed", Target: target, Why: why}
+}
 
 // failedHeadVerdict identifies results that judged the head's content. A CI
 // failure and a failed train verification both use GateVerifyFailed; merge
@@ -636,6 +638,9 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 			m.Skip = true // another member broke the train: retried without it
 		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):
 			m.Skip = true // a bystander of an interaction: retried without it
+		case len(tr.Interaction) > 0:
+			m.Verdict, m.Hold = v, worker.ClassifyVerdict(v).Hold
+			m.Detail = "fix on one of: " + strings.Join(tr.Interaction, ", ") + "; bounce neither"
 		default:
 			m.Verdict, m.Hold, m.Detail = v, worker.ClassifyVerdict(v).Hold, tr.Detail
 		}

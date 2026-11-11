@@ -692,8 +692,9 @@ func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
 
 func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
-	// b2 fails the first time it is verified in a tree, then passes: a flaky test
-	cmd := fmt.Sprintf("test ! -f b2.txt || test -f %[1]s || { touch %[1]s; exit 1; }", seen)
+	// b2 fails the first two times it is verified in a tree (the train and its
+	// alone-run, so it is blamed), then passes: a flaky test
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
@@ -718,7 +719,7 @@ func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 // culprit must not forgive it: no TRANSIENT note, and the culprit record stays.
 func TestTrainNoVerifyDoesNotForgiveCulprit(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
-	cmd := fmt.Sprintf("test ! -f b2.txt || test -f %[1]s || { touch %[1]s; exit 1; }", seen)
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
@@ -1606,5 +1607,39 @@ func TestTrainFlakeSkipsAloneRun(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(log); len(b) != 0 {
 		t.Errorf("an alone-run started on a flake: %q", b)
+	}
+}
+
+// A red that survives the in-tree retry but passes on the member alone and on
+// a rerun of the red prefix does not reproduce: a flake. Nobody is blamed and
+// the note names the tests (#3095).
+func TestTrainUnreproducedRedBlamesNobody(t *testing.T) {
+	n := filepath.Join(t.TempDir(), "n")
+	// with b2 merged, the first two runs (the train and its in-tree retry) fail
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %s; %s; }",
+		n, n, goFail("TestRare", "ex.com/p"))
+	w := trainWorld(t, "", "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`, cmd, ": {packages} {tests}; "+cmd))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateVerifyFailed || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 {
+		t.Fatalf("want a red train with nobody blamed, got verdict %q culprit %q interaction %q landed %q", res.Verdict, res.Culprit, res.Interaction, res.Landed)
+	}
+	for _, m := range res.Members {
+		if m.Culprit {
+			t.Errorf("no member is culprit: %+v", res.Members)
+		}
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("an unreproduced red blames nobody in the train cache: %+v", c.f.Culprits)
+	}
+	if !strings.HasPrefix(res.Err, "TRAIN-FAIL unreproduced") {
+		t.Errorf("message: %s", res.Err)
+	}
+	notes := strings.Join(res.Notes, "\n")
+	if !strings.Contains(notes, "TestRare") || strings.Contains(notes, "TRAIN-UNCLASSIFIED") {
+		t.Errorf("notes %q: want the failing test named, no UNCLASSIFIED", notes)
 	}
 }
