@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/proc"
@@ -261,7 +261,7 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 func stopHandoff(hc hookContext, sid string, active bool) (hook.SessionDecision, bool) {
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
-		in.Supervised, in.HoldUntil = keepalive.SupervisedHold(hc.lease, hc.commonDir, hc.now())
+		in.Supervised, in.HoldUntil = keepstate.SupervisedHold(hc.lease, hc.commonDir, hc.now())
 	}
 	return hook.ApplySession(hook.SessionIn{Action: hook.StopHandoff, CommonDir: hc.commonDir, SessionID: sid,
 		Settings: hc.set, HandoffPath: hc.handoff, Stop: in, Now: hc.now})
