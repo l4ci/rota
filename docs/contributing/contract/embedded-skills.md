@@ -88,7 +88,7 @@ rota skills layout <skills-dir>
 repo: none
 data: {"violations": []string}
 exit: 1 when the directory cannot be read; 2 without one
-note: read-only. Lists what a source `skills/` tree holds under each `rota-*/` folder that the supported layout (`skills.SupportedFile`: `SKILL.md`, flat sibling markdown, `agents/*.yaml`) rejects, as `<skill>/<path>`, plus any `rota-*` entry that is itself a symlink (the Codex builder's glob would follow it and ship its target). The skill's `references` link is skipped. `test/validate-skills.py` and `scripts/codex-plugin.sh` both ask it instead of keeping a second rule. Text mode prints one violation per line.
+note: read-only. Lists what a source `skills/` tree holds under each `rota-*/` folder that the supported layout (`skills.SupportedFile`: `SKILL.md`, flat sibling markdown, `agents/*.yaml`) rejects, as `<skill>/<path>`, including any symlinked file (`Load` and the Codex copy would follow it out of the skill folder), plus any `rota-*` entry that is itself a symlink (the Codex builder's glob would follow it and ship its target). The skill's `references` link is skipped. `test/validate-skills.py` and `scripts/codex-plugin.sh` both ask it instead of keeping a second rule. Text mode prints one violation per line.
 
 ### rota skills files
 rota skills files <skills-dir>
@@ -122,7 +122,7 @@ note: read-only. `version`, `digest` and `stubDigest` at the top are the binary'
 
 - **`rota init`**: `--codex` and `--skills-dir` are removed. Either flag exits 2 with the hint `run: rota skills install --scope project --agent codex`. `internal/initproj/codex.go` and its `codex` data go. `.agents/skills/rota-*` lines that earlier inits wrote to `.gitignore` are left alone.
 - **`rota doctor`**: the `rota` check (binary against `.claude-plugin/plugin.json`) becomes a `skills` check in the same position. It reads the manifests in both scopes. With no manifest anywhere it is `skip` with the hint `run: rota skills install` (the repo's opt-in doctor rule: skip until installed, fail only on a broken install; orchestrator, round 5). It fails when an installed root's digest differs from the binary's (`skills 4.5.0, rota 5.0.0`, hint `run: rota skills update`), when an installed root has missing or edited files.
-- **`rota round assign`**: the brief lookup drops `CLAUDE_PLUGIN_ROOT`. The order becomes `round.brief`, then `<project>/skills/references/worker-contract.md` (a source checkout), then `rota-orchestrate/references/worker-contract.md` under the first installed Claude root (project, then user). Exit 4 `brief missing` is unchanged.
+- **`rota round assign`**: the brief lookup drops `CLAUDE_PLUGIN_ROOT`. The order becomes `round.brief`, then `<project>/skills/references/worker-contract.md` (a source checkout), then `rota-orchestrate/references/worker-contract.md` under the first installed Claude root (project, then each user Claude config dir: the current one, then every `round.accounts` Claude `dir` that exists, the same list `skills install` uses). Exit 4 `brief missing` is unchanged.
 
 ### Removed
 
