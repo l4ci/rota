@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Codex plugin tree into <out>/plugins/rota: the committed manifest
-# plus every skill with the shared references/ copied in as real files. Codex
+# plus every skill with the references it reaches copied in as real files. Codex
 # drops symlinks when it caches a plugin (#676), so the skills/*/references
 # links cannot ship as they are. release.yml publishes the result to the
 # `codex` branch, which .agents/plugins/marketplace.json installs from.
@@ -26,15 +26,24 @@ fi
 rm -rf "$dst"
 mkdir -p "$dst/skills"
 cp -R "$root/plugins/rota/.codex-plugin" "$dst/.codex-plugin"
-for d in "$root"/skills/rota-*/; do
-  name=$(basename "$d")
-  mkdir -p "$dst/skills/$name"
-  # -L would follow references; copy it explicitly instead. The supported
-  # layout is checked above by `rota skills layout`, so everything found here ships.
-  (cd "$d" && find . -type f ! -type l -print0 | while IFS= read -r -d '' f; do
-    mkdir -p "$dst/skills/$name/$(dirname "$f")"
-    cp "$f" "$dst/skills/$name/$f"
-  done)
-  mkdir -p "$dst/skills/$name/references"
-  cp "$root"/skills/references/*.md "$dst/skills/$name/references/"
-done
+# Ship what the binary's Load ships for each skill (its own files plus the
+# references it reaches), as real files: `rota skills files` is the one list.
+# Capture first: a process substitution would hide a failing producer from
+# set -e and publish an empty bundle.
+files=$("$rota" skills files "$root/skills")
+if [ -z "$files" ]; then
+  echo "codex-plugin: \`rota skills files\` listed nothing" >&2
+  exit 1
+fi
+while IFS= read -r f; do
+  case "$f" in
+    */references/*) src=$root/skills/references/${f##*/} ;;
+    *) src=$root/skills/$f ;;
+  esac
+  if [ -L "$src" ]; then
+    echo "codex-plugin: refusing symlinked skill file ${src#"$root"/}" >&2
+    exit 1
+  fi
+  mkdir -p "$dst/skills/$(dirname "$f")"
+  cp "$src" "$dst/skills/$f"
+done <<<"$files"
