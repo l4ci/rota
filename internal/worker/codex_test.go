@@ -100,7 +100,7 @@ func codexProject(t *testing.T) (dir, home string) {
 func TestCodexPreflightDefaultHome(t *testing.T) {
 	dir, slotDir := codexProject(t)
 	rig := &codexRig{loggedIn: true}
-	set, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+	set, err := preflightKind(rig.env(tmuxFake()), dir, harness.Codex, "w1", "")
 	if err != nil || set.Home != "" || set.Account != "" || set.StateDir != slotDir || len(set.Warnings) != 0 {
 		t.Fatalf("%+v %v", set, err)
 	}
@@ -129,7 +129,7 @@ func TestCodexPreflightDefaultHome(t *testing.T) {
 func TestCodexPreflightSkipsAnInstalledIntegration(t *testing.T) {
 	dir, _ := codexProject(t)
 	rig := &codexRig{loggedIn: true, installed: true}
-	if _, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", ""); err != nil {
+	if _, err := preflightKind(rig.env(tmuxFake()), dir, harness.Codex, "w1", ""); err != nil {
 		t.Fatal(err)
 	}
 	if rig.ran("herdr integration install") != 0 {
@@ -149,7 +149,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 	e.Config = memConfig(t, codexAcctCfg)
 	pick := func(slot string) harness.Setup {
 		t.Helper()
-		set, err := e.Preflight(bg, dir, harness.Codex, slot, "")
+		set, err := preflightKind(e, dir, harness.Codex, slot, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +185,7 @@ func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
 	rig := &codexRig{installed: true}
 	e := rig.env(tmuxFake())
 	e.Config = memConfig(t, codexAcctCfg)
-	_, err := e.Preflight(bg, dir, harness.Codex, "w1", "")
+	_, err := preflightKind(e, dir, harness.Codex, "w1", "")
 	we, _ := err.(*exitcode.Error)
 	if we == nil || we.Exit != exitcode.ExitUnavailable || we.Hint != "CODEX_HOME=/h/a codex login" || !strings.Contains(we.Message, "account 'a'") {
 		t.Fatalf("%v", err)
@@ -215,7 +215,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			dir, _ := codexProject(t)
-			set, err := c.rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "m")
+			set, err := preflightKind(c.rig.env(tmuxFake()), dir, harness.Codex, "w1", "m")
 			if c.exit == 0 {
 				if err != nil || len(set.Warnings) != 0 {
 					t.Fatalf("%+v %v", set, err)
@@ -246,7 +246,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
-	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+	_, err := preflightKind(rig.env(tmuxFake()), dir, harness.Codex, "w1", "")
 	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "codex workers need round.dispatch=herdr") {
 		t.Fatalf("%v", err)
 	}
@@ -380,7 +380,7 @@ func TestDispatchCodexCustomCommandProbesItsFlags(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := newProject(t, `{"round":{"dispatch":"herdr","commands":{"codex":"`+c.cmd+`"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-			_, err := (&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+			_, err := preflightKind((&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()), dir, harness.Codex, "w1", "")
 			if c.by == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -534,5 +534,34 @@ func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git", "rota", "codex", "w1", harness.PromptKeyFile)); err != nil {
 		t.Errorf("the prompt key lives in the slot state dir: %v", err)
+	}
+}
+
+// preflightKind derives the launch plan for kind and preflights the slot, as a
+// caller does: one derivation, handed to Preflight.
+func preflightKind(e Env, dir, kind, slot, model string) (harness.Setup, error) {
+	lp, err := e.PlanLaunch(dir, kind, model)
+	if err != nil {
+		return harness.Setup{}, err
+	}
+	return e.Preflight(bg, dir, slot, lp)
+}
+
+// Preflight checks the plan's line as handed over: a line the plan carries is
+// the one probed, not one rebuilt from the config.
+func TestPreflightUsesThePlanLine(t *testing.T) {
+	dir, _ := codexProject(t)
+	e := (&codexRig{noFlag: "--bogus-flag", loggedIn: true}).env(tmuxFake())
+	lp, err := e.PlanLaunch(dir, harness.Codex, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Preflight(bg, dir, "w1", lp); err != nil {
+		t.Fatalf("the configured line holds no flag the probe lacks: %v", err)
+	}
+	lp.Line += " --bogus-flag"
+	_, err = e.Preflight(bg, dir, "w1", lp)
+	if we, _ := err.(*exitcode.Error); we == nil || !strings.Contains(we.Message, "--bogus-flag") {
+		t.Fatalf("Preflight must probe the plan's line, got %v", err)
 	}
 }
