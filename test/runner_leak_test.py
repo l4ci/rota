@@ -19,6 +19,7 @@ class RunnerLeakTest(unittest.TestCase):
         (self.repo / "test/sections").mkdir(parents=True)
         shutil.copy(source / "runner.sh", self.repo / "test/runner.sh")
         shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
+        shutil.copy(source / "gate-partition.py", self.repo / "test/gate-partition.py")
         shutil.copy(source / "lib.sh", self.repo / "test/lib.sh")
         shutil.copy(source / "lint-sections.py", self.repo / "test/lint-sections.py")
         shutil.copytree(source / "lib", self.repo / "test/lib")
