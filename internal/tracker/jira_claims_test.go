@@ -88,3 +88,21 @@ func TestJiraClaimRetryKeepsServerOrder(t *testing.T) {
 		t.Fatalf("Claims = %v, %v; want b@1 first", got, err)
 	}
 }
+
+// Jira labels are free text, so no label is ever unknown: autoCreate=false
+// still adds a label never seen before, as the IssueTracker.AddLabels doc says.
+func TestJiraAddLabelsIgnoresAutoCreate(t *testing.T) {
+	ctx := context.Background()
+	j, _ := fakeJira(t, jiratest.Options{})
+	key, err := j.Create(ctx, "labelled", "body", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := j.AddLabels(ctx, key, []string{"brand-new"}, false); err != nil {
+		t.Fatalf("AddLabels(autoCreate=false) = %v, want nil", err)
+	}
+	is, err := j.Get(ctx, key, false)
+	if err != nil || !slices.Contains(is.Labels, "brand-new") {
+		t.Fatalf("labels = %v, %v; want brand-new", is.Labels, err)
+	}
+}

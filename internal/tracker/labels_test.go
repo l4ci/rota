@@ -281,7 +281,7 @@ func TestAssumedForgeLabelsReadOnly(t *testing.T) {
 	if err := manager.UpsertLabel(context.Background(), Label{Name: "new"}); !errors.Is(err, ErrUnknownForge) || len(s.calls) != 1 {
 		t.Fatalf("assumed forge metadata write crossed fence: %v, %q", err, s.calls)
 	}
-	if _, err := (assumedForge{IssueTracker: NoIssues{}}).ListLabels(context.Background()); err == nil {
+	if _, err := (assumedForge{IssueTracker: NewNoIssues()}).ListLabels(context.Background()); err == nil {
 		t.Fatal("unsupported label listing must fail")
 	}
 }
