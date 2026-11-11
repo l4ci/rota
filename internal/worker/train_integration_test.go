@@ -105,7 +105,9 @@ func TestTrainIntegrationNeedsPRs(t *testing.T) {
 // clashW2 makes PR #8 also add work.txt, differently from #7.
 func clashW2(t *testing.T, w *world) {
 	t.Helper()
-	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("other\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	gittest.Run(t, w.worker, "add", "work.txt")
 	gittest.Run(t, w.worker, "commit", "-q", "-m", "clash")
 	gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
@@ -133,7 +135,9 @@ func TestTrainIntegrationConflictPushesPrefix(t *testing.T) {
 	gittest.Run(t, w.worker, "fetch", "-q", "origin", branch)
 	gittest.Run(t, w.worker, "checkout", "-q", "-b", "fix", "FETCH_HEAD")
 	exec.Command("git", "-C", w.worker, "merge", "-q", "--no-ff", "w2", "-m", "resolve").Run()
-	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\nother\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\nother\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	gittest.Run(t, w.worker, "add", "work.txt")
 	gittest.Run(t, w.worker, "commit", "-q", "--no-edit")
 	gittest.Run(t, w.worker, "push", "-q", "origin", "fix:"+branch)

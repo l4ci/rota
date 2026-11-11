@@ -26,6 +26,13 @@ func integrationPR(t *testing.T, w *world) string {
 	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
 		t.Fatal(err)
 	}
+	// PR #9 carries the body rota writes, with no test sections added to it.
+	reg, err := LoadRegistry(w.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, _ := reg.IntegrationByBranch(intBranch)
+	w.forge("body#9", IntegrationPRBody(rec))
 	return w.pointPR9()
 }
 
@@ -44,7 +51,9 @@ func (w *world) pushFix(file string) string {
 	w.t.Helper()
 	gittest.Run(w.t, w.worker, "fetch", "-q", "origin", intBranch)
 	gittest.Run(w.t, w.worker, "checkout", "-q", "-B", "fix", "FETCH_HEAD")
-	os.WriteFile(filepath.Join(w.worker, file), []byte("fix\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(w.worker, file), []byte("fix\n"), 0o644); err != nil {
+		w.t.Fatal(err)
+	}
 	gittest.Run(w.t, w.worker, "add", file)
 	gittest.Run(w.t, w.worker, "commit", "-q", "-m", "fix "+file)
 	gittest.Run(w.t, w.worker, "push", "-q", "origin", "fix:"+intBranch)
@@ -213,7 +222,9 @@ func TestTrainIntegrationRemergesMovedMember(t *testing.T) {
 // trainWrite2 commits file in dir and returns the new head.
 func trainWrite2(t *testing.T, dir, file string) string {
 	t.Helper()
-	os.WriteFile(filepath.Join(dir, file), []byte(file+"\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(file+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	gittest.Run(t, dir, "add", file)
 	gittest.Run(t, dir, "commit", "-q", "-m", "add "+file)
 	return strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "HEAD"))

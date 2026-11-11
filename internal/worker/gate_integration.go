@@ -14,55 +14,106 @@ import (
 
 // integrationLanding is the open integration branch whose PR o targets; nil
 // for any other gate. It is matched by the recorded PR, never by a branch
-// name, so a PR whose branch only looks like one gets no integration rule.
-func (e Env) integrationLanding(root string, o GateOpts) *Integration {
+// name, so a PR whose branch only looks like one gets no integration rule. An
+// unreadable registry is an error: the gate cannot tell whether the integration
+// rules apply, so it must not land as if they did not.
+func (e Env) integrationLanding(root string, o GateOpts) (*Integration, error) {
 	if o.CheckOnly || o.LandVerified {
-		return nil
+		return nil, nil
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	ref := o.Slot
 	if gt, err := reg.GateTargetAny(o.Slot); err == nil && gt.PR != "" {
 		ref = gt.PR
 	}
 	if rec, ok := reg.IntegrationByPR(ref); ok && !rec.Landed {
-		return &rec
+		return &rec, nil
+	}
+	return nil, nil
+}
+
+// landIntegration gates an integration PR under its integration lock and the
+// land lock. It reads the record again there, so a train that finished while
+// this gate waited is seen, then runs the preflight and the gate. A PR the
+// forge already merged (a retry after a local step failed) still gets the
+// member bookkeeping, which nothing else would run.
+func (e Env) landIntegration(ctx context.Context, root string, o GateOpts, branch string, res *GateResult) error {
+	broke := func(msg string) error {
+		*res = GateResult{Slot: o.Slot, Base: o.Base, Branch: branch, Verdict: GateCheckBroke, Err: checkBrokeMessage(o.Slot, msg)}
+		return nil
+	}
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return broke("cannot read the integration record of " + branch + ": " + err.Error())
+	}
+	rec, ok := reg.IntegrationByBranch(branch)
+	if !ok {
+		return broke("the integration record of " + branch + " is gone")
+	}
+	o.HoldsLandLock = true
+	if rec.Landed {
+		r, err := e.gate(ctx, root, o)
+		*res = r
+		return err
+	}
+	refused, notes := e.integrationPreflight(ctx, root, &o, rec)
+	if refused != nil {
+		*res = *refused
+		return nil
+	}
+	r, err := e.gate(ctx, root, o)
+	*res = r
+	if err != nil {
+		return err
+	}
+	res.Notes = append(notes, res.Notes...)
+	if res.Verdict == GatePass || res.Verdict == GateAlreadyMerged {
+		return integrationLanded(root, rec, res)
 	}
 	return nil
 }
 
 // integrationPreflight runs before the gate of an integration PR, under its
-// integration lock: a pending member or one whose head moved since its merge
-// refuses the landing, and a tip the train verified on the base as it is now
-// lands without a second verify (LandVerified). Any other tip runs the gate's
+// integration lock and the land lock: a pending member, one whose head moved
+// since its merge or whose branch is gone refuses the landing, and a tip the
+// train verified on the base as it is now lands without a second verify
+// (LandVerified, bound to that tip and base). Any other tip runs the gate's
 // own verify, which merges the current base into it first.
 func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts, rec Integration) (*GateResult, []string) {
-	in, err := e.GateInput(root)
-	if err != nil {
-		return nil, nil
-	}
-	rem := in.cfg.RemoteName()
-	if _, code := e.runGit(ctx, root, "fetch", "-q", rem); code != 0 {
-		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — git fetch %s failed; verifying the tip again", rec.Branch, rem)}
-	}
 	rerun := fmt.Sprintf("re-run `rota worker train %s --integration %s --base %s`", strings.Join(memberTargetsOf(rec), " "), rec.Name, rec.Base)
-	refuse := func(msg, hint string) *GateResult {
-		return &GateResult{Slot: o.Slot, Base: o.Base, Branch: rec.Branch, PR: rec.PR, Verdict: GateStale,
+	refuse := func(verdict, msg, hint string) *GateResult {
+		return &GateResult{Slot: o.Slot, Base: o.Base, Branch: rec.Branch, PR: rec.PR, Verdict: verdict,
 			Err: fmt.Sprintf("INTEGRATION %s refused — %s; nothing landed", rec.Branch, msg), Hint: hint}
 	}
+	// The record alone decides a pending member: no remote is needed for it.
 	for _, m := range rec.Members {
 		if m.Pending {
-			return refuse(fmt.Sprintf("member %s does not merge yet (conflict in %s)", m.Target, strings.Join(m.Conflicts, ", ")),
+			return refuse(GateStale, fmt.Sprintf("member %s does not merge yet (conflict in %s)", m.Target, strings.Join(m.Conflicts, ", ")),
 				"resolve it through the interaction item on "+rec.Branch+", then "+rerun), nil
 		}
+	}
+	in, err := e.GateInput(root)
+	if err != nil {
+		return refuse(GateCheckBroke, "cannot read the gate input: "+err.Error(), "fix the project config, then gate the PR again"), nil
+	}
+	rem := in.cfg.RemoteName()
+	if out, code := e.runGit(ctx, root, "fetch", "-q", "--prune", rem); code != 0 { // prune: a deleted member branch must not read as unmoved
+		return refuse(GateCheckBroke, fmt.Sprintf("git fetch %s failed: %s", rem, strings.TrimSpace(out)), "gate the PR again once the remote answers"), nil
+	}
+	for _, m := range rec.Members {
 		if m.Branch == "" {
 			continue
 		}
 		cur, code := e.git(root, "rev-parse", "--verify", "--quiet", rem+"/"+m.Branch)
-		if code == 0 && cur != m.Head {
-			return refuse(fmt.Sprintf("member %s moved from %s to %s since it was merged", m.Target, strutil.ShortSHA(m.Head), strutil.ShortSHA(cur)),
+		if code != 0 {
+			return refuse(GateStale, fmt.Sprintf("member %s's branch %s is gone from %s, so it cannot be told whether it moved", m.Target, m.Branch, rem),
+				"push the branch back at "+strutil.ShortSHA(m.Head)+", or drop the member and "+rerun), nil
+		}
+		if cur != m.Head {
+			return refuse(GateStale, fmt.Sprintf("member %s moved from %s to %s since it was merged", m.Target, strutil.ShortSHA(m.Head), strutil.ShortSHA(cur)),
 				rerun+": it merges the new head, which needs a fresh review first"), nil
 		}
 	}
@@ -76,7 +127,7 @@ func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts,
 	case base != rec.VerifiedBase:
 		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — %s moved from %s to %s since the verify; merging it and verifying again", rec.Branch, rec.Base, strutil.ShortSHA(rec.VerifiedBase), strutil.ShortSHA(base))}
 	}
-	o.LandVerified, o.LandVerifiedTip = true, tip
+	o.LandVerified, o.LandVerifiedTip, o.LandVerifiedBase = true, tip, base
 	return nil, []string{fmt.Sprintf("INTEGRATION-VERIFIED %s — the train verified tip %s on %s %s; no second verify", rec.Branch, strutil.ShortSHA(tip), rec.Base, strutil.ShortSHA(base))}
 }
 
@@ -173,7 +224,7 @@ func (e Env) integrationReviewed(root string, rec Integration, list []verdict.Re
 			return true, fmt.Sprintf("INTEGRATION-REVIEW %s — %d fix commit(s) reviewed at %s", rec.Branch, len(fixes), strutil.ShortSHA(s)), nil
 		}
 	}
-	return false, fmt.Sprintf("%d fix commit(s) after rota's merges (%s) have no review covering them", len(fixes), strutil.ShortSHA(fixes[0])), nil
+	return false, fmt.Sprintf("%d fix commit(s) after rota's merges (%s) have no passing review covering them", len(fixes), strutil.ShortSHA(fixes[0])), nil
 }
 
 // stepIntegrationBase refuses to land an interaction item's fix anywhere but
@@ -185,7 +236,9 @@ func (runner gate) stepIntegrationBase(result GateResult, target GateTarget) (st
 	}
 	reg, err := LoadRegistry(runner.root)
 	if err != nil {
-		return struct{}{}, result, false, nil
+		result.Verdict = GateCheckBroke
+		result.Err = checkBrokeMessage(runner.o.Slot, "cannot read the integration records: "+err.Error())
+		return struct{}{}, result, true, nil
 	}
 	rec, ok := reg.IntegrationForItem(target.Issue)
 	if !ok || runner.o.Base == rec.Branch {

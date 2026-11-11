@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Integration is one integration branch of a round (`integrations` in the
@@ -70,17 +71,37 @@ func (it Integration) Member(target string) (IntegrationMember, bool) {
 // IsRotaMerge reports whether sha is a merge rota made on the branch.
 func (it Integration) IsRotaMerge(sha string) bool { return slices.Contains(it.RotaMerges, sha) }
 
-// RecordIntegration writes it under its branch, replacing the earlier record.
+// RecordIntegration writes it under its branch, replacing the earlier record
+// but for what the CLI adds after a train released the integration lock: the
+// PR and the interaction items stored since it was read are kept.
 func RecordIntegration(root string, it Integration) error {
-	v, err := integrationValue(it)
-	if err != nil {
-		return err
-	}
-	return Update(root, func(d *Doc) {
+	var ferr error
+	err := Update(root, func(d *Doc) {
 		m := integrationsOf(d.doc)
+		if raw, ok := m.Get(it.Branch); ok {
+			if old, err := decodeIntegration(raw); err == nil {
+				if it.PR == "" {
+					it.PR = old.PR
+				}
+				for _, id := range old.Items {
+					if !slices.Contains(it.Items, id) {
+						it.Items = append(it.Items, id)
+					}
+				}
+			}
+		}
+		v, err := integrationValue(it)
+		if err != nil {
+			ferr = err
+			return
+		}
 		m.Set(it.Branch, v)
 		d.doc.Set("integrations", m)
 	})
+	if err != nil {
+		return err
+	}
+	return ferr
 }
 
 // UpdateIntegration changes the record of branch under the registry lock; it
@@ -181,4 +202,24 @@ func decodeIntegration(raw any) (Integration, error) {
 	}
 	err = json.Unmarshal(b, &it)
 	return it, err
+}
+
+// IntegrationPRBody is the body of the PR that lands an integration branch:
+// its members, the required decision sections, and one Closes line per member
+// issue, so landing the one PR ends them all.
+func IntegrationPRBody(it Integration) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Integration branch `%s` of round %d: lands these reviewed PRs on `%s` together.\n\n", it.Branch, it.Round, it.Base)
+	for _, m := range it.Members {
+		fmt.Fprintf(&b, "- %s (%s)\n", m.PR, strutil.ShortSHA(m.Head))
+	}
+	b.WriteString("\nLand it with `rota worker gate`, never the merge button: the gate checks the fix commits' review and skips a second verify only when the base has not moved.\n\n")
+	b.WriteString("## Assumptions\n\nNone of its own: each member PR and each interaction fix PR into the branch states its own.\n\n")
+	fmt.Fprintf(&b, "## Rulings\n\nNone of its own: rota merged the members `--no-ff` and merged `%s` in; every other first-parent commit on the branch is a fix, reviewed before this PR lands.\n\n", it.Base)
+	for _, m := range it.Members {
+		if m.Issue != "" {
+			fmt.Fprintf(&b, "Closes #%s\n", strings.TrimPrefix(m.Issue, "#"))
+		}
+	}
+	return b.String()
 }
