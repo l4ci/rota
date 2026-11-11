@@ -1315,7 +1315,12 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 			return finish(g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code)))
 		}
 	}
-	list := verdict.Load(g.root).Branch(g.o.VerdictRepo, g.branch)
+	store, err := verdict.LoadStrict(g.root)
+	if err != nil {
+		g.res.Verdict = GateVerdictBlocked
+		return finish(true, err)
+	}
+	list := store.Branch(g.o.VerdictRepo, g.branch)
 	have := verdict.Recorded(list, strings.TrimSpace(head))
 	missing := verdict.MissingReviews(depth, res.HasSpec, have)
 	// A depth of none reviews nothing, so it asks for no cross review either.
@@ -1369,7 +1374,8 @@ func (runner gate) stepVerdict(result GateResult, branch, headRef string) (struc
 	}
 	head, _ := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
 	// Loaded here, after the gate recovered the PR's reports into the store.
-	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: verdict.Load(g.root), Repo: g.o.VerdictRepo}
+	store, storeErr := verdict.LoadStrict(g.root)
+	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: store, StoreErr: storeErr, Repo: g.o.VerdictRepo}
 	if err := check.BlockGate(g.branch, head); err != nil {
 		g.res.Verdict = GateVerdictBlocked
 		return finish(true, err)
