@@ -179,6 +179,10 @@ type GateOpts struct {
 	// reports its own) and does not refuse a branch behind the base only
 	// because an earlier train member landed.
 	LandVerified bool
+	// LandVerifiedTip binds an integration PR's LandVerified to the tip its
+	// train verified (#3096): a head pinned anywhere else refuses the merge,
+	// since the skipped verify never saw it.
+	LandVerifiedTip string
 	// HoldsLandLock says the caller already holds the repository's land lock
 	// (the train does, through its landing steps), so the gate does not retake
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
@@ -1363,8 +1367,23 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	}
 	if isInt {
 		list := verdict.Load(g.root).Branch(g.o.VerdictRepo, g.branch)
+		// A commit covers the fixes only with every review the depth asks for:
+		// the core kinds, the cross-harness review and each triggered lens.
 		covered := func(sha string) bool {
-			return len(verdict.MissingReviews(depth, res.HasSpec, verdict.Recorded(list, sha))) == 0
+			if len(verdict.MissingReviews(depth, res.HasSpec, verdict.Recorded(list, sha))) > 0 {
+				return false
+			}
+			if NeedsCross(res, depth) {
+				if r, ok := verdict.CrossAt(list, sha); !ok || r.Harness != res.Cross {
+					return false
+				}
+			}
+			for _, l := range res.Lenses {
+				if _, ok := verdict.LensAt(list, verdict.LensKind(l.Name), sha); !ok {
+					return false
+				}
+			}
+			return true
 		}
 		ok, note, err := g.e.integrationReviewed(g.root, intRec, list, intHead, covered)
 		if err != nil {
@@ -1663,6 +1682,11 @@ func (runner gate) stepMerge(result GateResult, target GateTarget, forged gateFo
 		return g.landed, *g.res, done, err
 	}
 
+	if tip := g.o.LandVerifiedTip; tip != "" && strings.TrimSpace(verified) != tip {
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — the PR head %s is not the tip %s its train verified; nothing landed", g.o.Slot, strutil.ShortSHA(verified), strutil.ShortSHA(tip)),
+			"re-run the integration train, then gate the PR again")
+		return finish(true, nil)
+	}
 	if g.remote {
 		if g.mergeRemote() {
 			return finish(true, nil)
