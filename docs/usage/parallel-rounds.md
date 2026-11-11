@@ -56,6 +56,14 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
    `rota worker account list` then shows each Claude account with its usage verdict, plus Codex current account quota reports for configured homes, or the caller-current ambient home when none are configured. Codex weekly capacity is display-only; it does not affect account selection. See [Codex weekly capacity](codex-workers.md#read-current-weekly-capacity).
 
+   Claude usage comes from the OAuth usage endpoint, read through the cache Claude Code's status line writes
+   (`/tmp/claude/statusline-usage[-<8 hex of sha256(config dir)>].json`, shared with the herdr `limits` mod).
+   A cache under 5 minutes old is read without a request. A fetch that fails writes `<cache>.backoff` (the
+   `Retry-After` wait, else 300 seconds) and no request goes out for that account until it passes. The verdict
+   says why a reading is missing: `rate limited (retry in Ns)`, `login expired` (401/403) or `usage endpoint
+   returned <code>`. `rota worker account list` marks the account `assign` would take (`<- assign picks this`,
+   `"picked": true` in JSON): the one with the most headroom, an unreadable meter only when no account has one.
+
 4. **Issues a worker can pick up.** A candidate needs acceptance criteria or a design or plan note,
    closed dependencies and no file overlap with work in flight (see [Picking issues](#picking-issues)).
 5. **Subagent definitions.** `rota init` runs `rota agents write`, which writes

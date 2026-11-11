@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
@@ -33,7 +35,9 @@ import (
 // per-config-dir question. Three sources, tried in order, each degrading
 // honestly rather than guessing:
 //  1. The OAuth usage endpoint, authenticated with the account's own
-//     credentials. Works with NO session running, which is what makes
+//     credentials, behind the status-line cache Claude Code and the herdr
+//     limits mod share (5 minutes) and a backoff after a failed request.
+//     Works with NO session running, which is what makes
 //     pre-dispatch balancing possible.
 //  2. A fixture payload (ROTA_ACCOUNT_USAGE_DIR) for offline tests.
 //  3. `unknown`, which callers treat as "rotate", never as "free" and never
@@ -77,6 +81,30 @@ type Accounts struct {
 	HTTP *http.Client
 	// Login reads each account's credentials; the zero value reads files only.
 	Login Credentials
+	// CacheDir holds the usage cache Claude Code's status line and the herdr
+	// limits mod share; "" means /tmp/claude.
+	CacheDir string
+}
+
+// usageCacheDir is the directory of the shared usage cache.
+const usageCacheDir = "/tmp/claude"
+
+// usageCachePath is the status-line usage cache of the account whose config
+// dir is configDir: statusline-usage.json for ~/.claude, else the file
+// suffixed with the first 8 hex chars of sha256(dir), the name Claude Code
+// and the herdr mod both use.
+func (a *Accounts) usageCachePath(configDir string) string {
+	dir := a.CacheDir
+	if dir == "" {
+		dir = usageCacheDir
+	}
+	d := a.expand(configDir)
+	suffix := ""
+	if d != a.expand("") {
+		sum := sha256.Sum256([]byte(d))
+		suffix = "-" + hex.EncodeToString(sum[:])[:8]
+	}
+	return filepath.Join(dir, "statusline-usage"+suffix+".json")
 }
 
 func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
@@ -248,6 +276,28 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 		}
 		return o, ""
 	}
+	return a.fetchUsage(ctx, configDir)
+}
+
+// usageMaxAge is how long the shared usage cache counts as fresh.
+const usageMaxAge = 5 * time.Minute
+
+// defaultBackoff is the wait after a failed request without a Retry-After.
+const defaultBackoff = 300 * time.Second
+
+// fetchUsage reads the usage of the account behind configDir. A cache under
+// five minutes old answers without a request; a backoff left by a failed
+// request (ours or the herdr mod's) holds further requests until it passes.
+func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Object, string) {
+	cache := a.usageCachePath(configDir)
+	if st, err := os.Stat(cache); err == nil && a.now().Sub(st.ModTime()) < usageMaxAge {
+		if o := readUsageFile(cache); o != nil {
+			return o, ""
+		}
+	}
+	if left := a.backoffLeft(cache + ".backoff"); left > 0 {
+		return nil, rateLimited(left)
+	}
 	token, why := a.token(configDir)
 	if token == "" {
 		return nil, why
@@ -269,20 +319,74 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		wait := defaultBackoff
+		if s, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); err == nil && s > 0 {
+			wait = time.Duration(s) * time.Second
+		}
+		_ = os.MkdirAll(filepath.Dir(cache), 0o755)
+		_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
+		switch resp.StatusCode {
+		case http.StatusTooManyRequests:
+			return nil, rateLimited(wait)
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return nil, "login expired"
+		}
+		return nil, fmt.Sprintf("usage endpoint returned %d", resp.StatusCode)
+	}
 	v, err := jsonx.Decode(b)
-	if err != nil {
+	o, _ := v.(*jsonx.Object)
+	if err != nil || o == nil {
 		return nil, "usage endpoint unreachable"
 	}
-	o, ok := v.(*jsonx.Object)
-	if _, has := func() (any, bool) {
-		if o == nil {
-			return nil, false
-		}
-		return o.Get("five_hour")
-	}(); !ok || !has {
+	if _, has := o.Get("five_hour"); !has {
 		return nil, "unexpected payload"
 	}
+	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
+	if fsio.WriteFileAtomic(cache, append(bytes.TrimSpace(b), '\n')) == nil {
+		_ = os.Remove(cache + ".backoff")
+	}
 	return o, ""
+}
+
+func rateLimited(d time.Duration) string {
+	return fmt.Sprintf("rate limited (retry in %ds)", int((d+time.Second-1)/time.Second))
+}
+
+// backoffLeft is how much of the wait recorded in path remains: the file holds
+// the wait in seconds and its mtime is when the wait began.
+func (a *Accounts) backoffLeft(path string) time.Duration {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	wait := defaultBackoff
+	if b, err := os.ReadFile(path); err == nil {
+		if s, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && s > 0 {
+			wait = time.Duration(s) * time.Second
+		}
+	}
+	left := wait - a.now().Sub(st.ModTime())
+	if left < 0 {
+		return 0
+	}
+	return left
+}
+
+func readUsageFile(path string) *jsonx.Object {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	v, err := jsonx.Decode(b)
+	o, _ := v.(*jsonx.Object)
+	if err != nil || o == nil {
+		return nil
+	}
+	if _, has := o.Get("five_hour"); !has {
+		return nil
+	}
+	return o
 }
 
 // Credentials reads an account's login. GOOS and Run are the platform seams:
@@ -430,8 +534,15 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 	for i, n := range exclude {
 		names[i] = strings.TrimSpace(n)
 	}
-	m, ok, _ := SelectAccount(a.Meters(ctx, root), AccountSelection{
-		Exclude: names,
+	return a.PickFrom(a.Meters(ctx, root), names)
+}
+
+// PickFrom is Pick over one Meters reading, so a caller that already holds the
+// meters (account list) names the account assign would take without reading
+// them again.
+func (a *Accounts) PickFrom(meters []Meter, exclude []string) (name string, ok bool) {
+	m, ok, _ := SelectAccount(meters, AccountSelection{
+		Exclude: exclude,
 		LoginProblem: func(m Meter) string {
 			return a.login().Problem(a.expand(m.ConfigDir))
 		},
