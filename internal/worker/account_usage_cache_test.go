@@ -174,3 +174,27 @@ func TestPickPrefersReadableMeterOverRateLimitedFirst(t *testing.T) {
 		t.Errorf("Pick = %q; want work", got)
 	}
 }
+
+func TestUsageWaitsAreCappedAtOneHour(t *testing.T) {
+	acc, cfg, _, _ := usageRig(t, func(*http.Request) (*http.Response, error) {
+		return resp(429, `{}`, map[string]string{"Retry-After": "999999"}), nil
+	})
+	if _, why := acc.defaultFetch(context.Background(), "a", cfg); why != "rate limited (retry in 3600s)" {
+		t.Errorf("Retry-After not capped: %q", why)
+	}
+	// A backoff file someone planted with a huge wait is capped the same way.
+	os.WriteFile(acc.usageCachePath(cfg)+".backoff", []byte("99999999\n"), 0o644)
+	if _, why := acc.defaultFetch(context.Background(), "a", cfg); why != "rate limited (retry in 3600s)" {
+		t.Errorf("backoff file not capped: %q", why)
+	}
+}
+
+func TestUsageIgnoresFilesOwnedByAnotherUser(t *testing.T) {
+	acc, cfg, _, calls := usageRig(t, func(*http.Request) (*http.Response, error) { return resp(200, okBody, nil), nil })
+	acc.ownedByMe = func(os.FileInfo) bool { return false }
+	os.WriteFile(acc.usageCachePath(cfg), []byte(okBody), 0o644)
+	os.WriteFile(acc.usageCachePath(cfg)+".backoff", []byte("120\n"), 0o644)
+	if p, _ := acc.defaultFetch(context.Background(), "a", cfg); p == nil || *calls != 1 {
+		t.Errorf("foreign-owned cache or backoff was trusted: payload=%v calls=%d", p, *calls)
+	}
+}

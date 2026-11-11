@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
@@ -84,6 +85,18 @@ type Accounts struct {
 	// CacheDir holds the usage cache Claude Code's status line and the herdr
 	// limits mod share; "" means /tmp/claude.
 	CacheDir string
+	// ownedByMe reports whether a file belongs to the current user; nil means
+	// the real check. /tmp/claude is shared and world-writable, so a cache or
+	// backoff another user planted is never trusted.
+	ownedByMe func(os.FileInfo) bool
+}
+
+func (a *Accounts) mine(st os.FileInfo) bool {
+	if a.ownedByMe != nil {
+		return a.ownedByMe(st)
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	return ok && int(sys.Uid) == os.Getuid()
 }
 
 // usageCacheDir is the directory of the shared usage cache.
@@ -282,15 +295,32 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 // usageMaxAge is how long the shared usage cache counts as fresh.
 const usageMaxAge = 5 * time.Minute
 
-// defaultBackoff is the wait after a failed request without a Retry-After.
-const defaultBackoff = 300 * time.Second
+// defaultBackoff is the wait after a failed request without a Retry-After;
+// maxBackoff caps any wait, whether a header or a file gave it.
+const (
+	defaultBackoff = 300 * time.Second
+	maxBackoff     = time.Hour
+)
+
+// backoffOf reads a wait in seconds: the default for anything unusable, never
+// more than maxBackoff.
+func backoffOf(s string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n <= 0 {
+		return defaultBackoff
+	}
+	if n > int(maxBackoff/time.Second) {
+		return maxBackoff
+	}
+	return time.Duration(n) * time.Second
+}
 
 // fetchUsage reads the usage of the account behind configDir. A cache under
 // five minutes old answers without a request; a backoff left by a failed
 // request (ours or the herdr mod's) holds further requests until it passes.
 func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Object, string) {
 	cache := a.usageCachePath(configDir)
-	if st, err := os.Stat(cache); err == nil && a.now().Sub(st.ModTime()) < usageMaxAge {
+	if st, err := os.Stat(cache); err == nil && a.mine(st) && a.now().Sub(st.ModTime()) < usageMaxAge {
 		if o := readUsageFile(cache); o != nil {
 			return o, ""
 		}
@@ -320,10 +350,7 @@ func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Obj
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		wait := defaultBackoff
-		if s, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); err == nil && s > 0 {
-			wait = time.Duration(s) * time.Second
-		}
+		wait := backoffOf(resp.Header.Get("Retry-After"))
 		_ = os.MkdirAll(filepath.Dir(cache), 0o755)
 		_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
 		switch resp.StatusCode {
@@ -357,15 +384,11 @@ func rateLimited(d time.Duration) string {
 // the wait in seconds and its mtime is when the wait began.
 func (a *Accounts) backoffLeft(path string) time.Duration {
 	st, err := os.Stat(path)
-	if err != nil {
+	if err != nil || !a.mine(st) {
 		return 0
 	}
-	wait := defaultBackoff
-	if b, err := os.ReadFile(path); err == nil {
-		if s, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && s > 0 {
-			wait = time.Duration(s) * time.Second
-		}
-	}
+	b, _ := os.ReadFile(path)
+	wait := backoffOf(string(b))
 	left := wait - a.now().Sub(st.ModTime())
 	if left < 0 {
 		return 0
