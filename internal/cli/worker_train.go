@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"slices"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"slices"
 	"strings"
 	"time"
 
