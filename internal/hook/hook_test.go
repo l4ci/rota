@@ -2,6 +2,7 @@ package hook
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/keepstate"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -138,13 +139,13 @@ func TestDumpRejectsBadInput(t *testing.T) {
 }
 
 func TestShouldInject(t *testing.T) {
-	ho := Handoff{Exists: true, ModTime: t0.Add(-time.Minute)}
+	ho := keepstate.Handoff{Exists: true, ModTime: t0.Add(-time.Minute)}
 	max := 15 * time.Minute
 	for _, c := range []struct {
 		name       string
 		source     string
 		orch, free bool
-		ho         Handoff
+		ho         keepstate.Handoff
 		body       string
 		want       bool
 	}{
@@ -152,11 +153,11 @@ func TestShouldInject(t *testing.T) {
 		{"orchestrator clear", "clear", true, false, ho, "x", true},
 		{"resume keeps", "resume", true, false, ho, "x", false},
 		{"compact keeps", "compact", true, false, ho, "x", false},
-		{"no file", "startup", true, false, Handoff{}, "", false},
+		{"no file", "startup", true, false, keepstate.Handoff{}, "", false},
 		{"other holder", "startup", false, false, ho, HandoffMarker, false},
 		{"no lease, marked, fresh", "startup", false, true, ho, HandoffMarker + "\n", true},
 		{"no lease, unmarked", "startup", false, true, ho, "# pause", false},
-		{"no lease, marked, old", "startup", false, true, Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, HandoffMarker, false},
+		{"no lease, marked, old", "startup", false, true, keepstate.Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, HandoffMarker, false},
 	} {
 		if got := ShouldInject(c.source, c.orch, c.free, Note{Handoff: c.ho, Body: c.body}, max, t0); got != c.want {
 			t.Errorf("%s: got %v", c.name, got)

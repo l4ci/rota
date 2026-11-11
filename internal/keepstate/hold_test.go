@@ -1,4 +1,4 @@
-package keepalive
+package keepstate
 
 import (
 	"testing"

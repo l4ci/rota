@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"github.com/l4ci/rota/internal/keepstate"
 	"testing"
 	"time"
 
@@ -21,9 +22,9 @@ func TestStopDecidersHandoffBlock(t *testing.T) {
 		return s
 	}
 	blockedAt := stamp.Format(now.Add(-time.Minute))
-	fresh := Handoff{Exists: true, ModTime: now.Add(-10 * time.Second)}
-	old := Handoff{Exists: true, ModTime: now.Add(-time.Hour)}
-	newerOld := Handoff{Exists: true, ModTime: now.Add(-30 * time.Second)} // newer than blockedAt
+	fresh := keepstate.Handoff{Exists: true, ModTime: now.Add(-10 * time.Second)}
+	old := keepstate.Handoff{Exists: true, ModTime: now.Add(-time.Hour)}
+	newerOld := keepstate.Handoff{Exists: true, ModTime: now.Add(-30 * time.Second)} // newer than blockedAt
 	set2 := set
 	set2.HandoffMaxAge = 5 // newerOld is newer than the block but no longer fresh
 
@@ -35,14 +36,14 @@ func TestStopDecidersHandoffBlock(t *testing.T) {
 		name   string
 		active bool // StopHookActive (DecideStop only)
 		state  State
-		ho     Handoff
+		ho     keepstate.Handoff
 		set    Settings
 		stop   want
 		guard  want
 	}{
-		{"no handoff blocks and counts per rule", false, st(nil), Handoff{},
+		{"no handoff blocks and counts per rule", false, st(nil), keepstate.Handoff{},
 			set, want{true, true, false, 0}, want{true, true, false, 1}},
-		{"re-entered stop counts in both", true, st(nil), Handoff{},
+		{"re-entered stop counts in both", true, st(nil), keepstate.Handoff{},
 			set, want{true, true, false, 1}, want{true, true, false, 1}},
 		{"fresh handoff passes", false, st(nil), fresh,
 			set, want{}, want{}},
@@ -55,13 +56,13 @@ func TestStopDecidersHandoffBlock(t *testing.T) {
 			st(func(s *State) { s.BlockedAt = blockedAt }), newerOld,
 			set2, want{}, want{true, true, false, 1}},
 		{"cap reached latches failed", true,
-			st(func(s *State) { s.HandoffBlocks = 2 }), Handoff{},
+			st(func(s *State) { s.HandoffBlocks = 2 }), keepstate.Handoff{},
 			set, want{false, true, true, 2}, want{false, true, true, 2}},
 		{"first stop at cap: Stop never counts, guard latches", false,
-			st(func(s *State) { s.HandoffBlocks = 2 }), Handoff{},
+			st(func(s *State) { s.HandoffBlocks = 2 }), keepstate.Handoff{},
 			set, want{true, true, false, 2}, want{false, true, true, 2}},
 		{"already failed is left alone", true,
-			st(func(s *State) { s.HandoffFailed = true; s.HandoffBlocks = 2 }), Handoff{},
+			st(func(s *State) { s.HandoffFailed = true; s.HandoffBlocks = 2 }), keepstate.Handoff{},
 			set, want{false, false, true, 2}, want{false, false, true, 2}},
 	}
 	check := func(t *testing.T, who string, d StopDecision, w want) {

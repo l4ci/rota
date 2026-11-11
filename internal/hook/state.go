@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -49,7 +50,7 @@ type State struct {
 	GuardWarned bool `json:"guardWarned,omitempty"`
 
 	// UsageHandoff is set when the last Stop block was for usage (D4).
-	UsageHandoff *UsageHandoff `json:"usageHandoff,omitempty"`
+	UsageHandoff *keepstate.UsageHandoff `json:"usageHandoff,omitempty"`
 }
 
 var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
