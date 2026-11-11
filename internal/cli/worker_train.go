@@ -49,6 +49,9 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	if r.Culprit != "" {
 		d.Set("culprit", r.Culprit)
 	}
+	if len(r.Interaction) > 0 {
+		d.Set("interaction", jsonx.Strings(r.Interaction))
+	}
 	if r.Stop != nil {
 		st := jsonx.NewObject()
 		st.Set("tier", r.Stop.Tier)

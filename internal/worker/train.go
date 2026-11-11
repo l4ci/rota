@@ -41,9 +41,12 @@ import (
 //     landing the base and every head must still be what the scratch tree was
 //     built from; otherwise nothing lands.
 //  6. On a fail of either tier BISECT: verify growing prefixes of the train to find the first
-//     member whose addition breaks the tree and name it. That is the member to
-//     send back; it can be an interaction with the members before it, not only
-//     the member alone. With LandGreen the verified prefix before it lands.
+//     member whose addition breaks the tree. Then CLASSIFY it by rerunning only
+//     the failing tests on the base plus that member alone (#3095): red alone
+//     makes it the culprit to send back. Green alone reruns it with each earlier
+//     member, then the red prefix: a red pair or prefix is an interaction (no
+//     culprit, the members named); no red at all is a flake (no culprit, the
+//     tests named in a note). With LandGreen the verified prefix before it lands.
 
 // GateBaseMoved: the base or a member's head moved while the train verified, so
 // the verified tree is no longer what would land. Nothing landed.
@@ -117,6 +120,7 @@ func (r TrainResult) owned() TrainResult {
 	r.Skipped = slices.Clone(r.Skipped)
 	r.Members = slices.Clone(r.Members)
 	r.Culprits = slices.Clone(r.Culprits)
+	r.Interaction = slices.Clone(r.Interaction)
 	r.Verified = slices.Clone(r.Verified)
 	r.Flaky = slices.Clone(r.Flaky)
 	r.E2EVerified = slices.Clone(r.E2EVerified)
@@ -154,6 +158,9 @@ type TrainResult struct {
 	Skipped []string
 	Members []TrainMember
 	Culprit string
+	// Interaction names the members whose merge together makes a red test that
+	// passes on each of them alone (verdict interaction); empty otherwise.
+	Interaction []string
 	// Culprits lists members excluded for missing PR sections or review verdicts.
 	Culprits []TrainCulprit
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
@@ -1124,7 +1131,8 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
 		}
-		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
+		classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed) }
+		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, classify, failed, o.LandGreen)
 		if ctx.Err() == nil {
 			blame(key)
 		}
@@ -1411,8 +1419,11 @@ func (t *trainRun) stopTrain(res *TrainResult, p trainPlan, tier, baseSHA string
 // failed is the failed full-train run; the caller hands its log over. It
 // assumes the base is green: a red base is reported as such. passing is how
 // many leading members may still land (all but the culprit under LandGreen);
-// stop is true when the train must end here with res as the answer.
-func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier string, verify func(int) (VerifyResult, error), failed VerifyResult, landGreen bool) (passing int, stop bool, err error) {
+// stop is true when the train must end here with res as the answer. classify
+// then reruns the red alone (classifyRed): a red that passes on its member
+// alone names the members that make it together, an interaction, or does not
+// reproduce at all, a flake; either way it blames none of them.
+func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier string, verify func(int) (VerifyResult, error), classify func(k int, failed VerifyResult) (redClass, error), failed VerifyResult, landGreen bool) (passing int, stop bool, err error) {
 	broke := func(msg string) (int, bool, error) {
 		*res, _ = e.trainBroke(*res, msg)
 		return 0, true, nil
@@ -1474,12 +1485,34 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 			return 0, true, nil
 		}
 	}
-	c := res.Members[hi-1]
-	res.Members[hi-1].Culprit = true
-	res.Culprit, res.Verdict = c.Target, GateVerifyFailed
-	res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails %s once %s (%s) is merged; the first %d member(s) pass\n%s",
-		c.Target, tier, c.Target, c.Branch, green, failed.detail())
-	res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
+	class, err := classify(hi, failed)
+	if err != nil {
+		return 0, true, err
+	}
+	switch {
+	case class.unreproduced:
+		c := res.Members[hi-1]
+		res.Verdict = GateVerifyFailed
+		res.Err = fmt.Sprintf("TRAIN-FAIL unreproduced — the train fails %s once %s (%s) is merged, but %s passes alone and the failing tests passed on a rerun of the red prefix; a flake, no culprit, the first %d member(s) pass\n%s",
+			tier, c.Target, c.Branch, c.Target, green, failed.detail())
+		res.Hint = "nobody is blamed: re-run the train; if the same tests fail again, look at them (see the FLAKY notes)"
+	case len(class.interaction) > 0:
+		for _, i := range class.interaction {
+			res.Interaction = append(res.Interaction, res.Members[i].Target)
+		}
+		names := strings.Join(res.Interaction, ", ")
+		res.Verdict = GateInteraction
+		res.Err = fmt.Sprintf("TRAIN-INTERACTION %s — the train fails %s with %s merged together, though %s passes alone (base plus that member); no culprit, the first %d member(s) pass\n%s",
+			names, tier, names, res.Members[hi-1].Target, green, failed.detail())
+		res.Hint = fmt.Sprintf("hold %s and fix the interaction on one of them, then re-run the train; bounce neither", names)
+	default:
+		c := res.Members[hi-1]
+		res.Members[hi-1].Culprit = true
+		res.Culprit, res.Verdict = c.Target, GateVerifyFailed
+		res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails %s once %s (%s) is merged; the first %d member(s) pass\n%s",
+			c.Target, tier, c.Target, c.Branch, green, failed.detail())
+		res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
+	}
 	if only := diagnosticOnly(res); len(only) > 0 {
 		res.Err += fmt.Sprintf("\nDIAGNOSTIC-ONLY %s failed in a diagnostic prefix run but not in the original run; it is not confirmed as the cause of the original failure (no passing-alone check ran) and did not pick the culprit", strings.Join(only, ", "))
 	}

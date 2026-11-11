@@ -35,6 +35,8 @@ type trainOutcome struct {
 	// Excluded are members the pre-filter dropped (a missing PR section):
 	// the train passed without them and they did not merge.
 	Excluded []worker.TrainCulprit
+	// Interaction names the members that are red only together (#3095).
+	Interaction []string
 }
 
 func (e Env) targetBase(target string) string {
@@ -88,7 +90,7 @@ func (e Env) trainTargets(ctx context.Context, targets []string, base string) tr
 	if run.Err != nil && !run.Refused {
 		return out // died on an error: nothing of the result is reported
 	}
-	out.Culprit = r.Culprit
+	out.Culprit, out.Interaction = r.Culprit, r.Interaction
 	for _, m := range r.Members {
 		if m.Landed {
 			out.Landed = append(out.Landed, m.Target)

@@ -25,7 +25,7 @@ import (
 // every culprit is cleared; the members that landed before it stay landed.
 func cancelledTrain(res TrainResult) TrainResult {
 	res = res.owned()
-	res.Verdict, res.Culprit, res.Culprits, res.CulpritGate = GateCancelled, "", nil, GateResult{}
+	res.Verdict, res.Culprit, res.Culprits, res.CulpritGate, res.Interaction = GateCancelled, "", nil, GateResult{}, nil
 	for i := range res.Members {
 		res.Members[i].Culprit = false
 	}
