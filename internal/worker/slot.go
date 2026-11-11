@@ -92,9 +92,14 @@ func (s *Slot) State() string { return jsonx.Str(s.o, "state") }
 // digest shows it before falling back to HeldID.
 func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
 
-func (s *Slot) Task() string       { return jsonx.Str(s.o, "task") }
-func (s *Slot) ClaimID() string    { return jsonx.Str(s.o, "claimId") }
-func (s *Slot) Kind() string       { return jsonx.Str(s.o, "kind") }
+func (s *Slot) Task() string    { return jsonx.Str(s.o, "task") }
+func (s *Slot) ClaimID() string { return jsonx.Str(s.o, "claimId") }
+func (s *Slot) Kind() string {
+	if k := jsonx.Str(s.o, "kind"); k != legacyKindExternal {
+		return k
+	}
+	return "" // a registry written before provenance had its own field
+}
 func (s *Slot) KindSource() string { return jsonx.Str(s.o, "kindSource") }
 func (s *Slot) Tier() string       { return jsonx.Str(s.o, "tier") }
 func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
@@ -272,30 +277,28 @@ func (s *Slot) PaneHandle() string {
 	return s.Window()
 }
 
-// HarnessKind is the harness the slot last ran ("" for none, and for an
-// adopted slot, whose kind field names no harness).
-func (s *Slot) HarnessKind() string {
-	if s.IsExternal() {
-		return ""
-	}
-	return s.Kind()
-}
-
-// KindExternal is the slot kind of work another tool started and rota adopted
+// ProvenanceExternal marks work another tool started and rota adopted
 // (`rota worker adopt`): the slot has no host session, so nothing dispatches
-// into it or reads its pane.
-const KindExternal = "external"
+// into it or reads its pane. The kind field stays a harness kind.
+const ProvenanceExternal = "external"
+
+// legacyKindExternal is how adoption was recorded in the kind field before
+// provenance had its own; such a registry still loads as an adopted slot.
+const legacyKindExternal = "external"
 
 // IsExternal reports whether the slot was adopted rather than driven by rota.
 // It is the one predicate every fence reads; a nil slot is not external.
-func (s *Slot) IsExternal() bool { return s != nil && s.Kind() == KindExternal }
+func (s *Slot) IsExternal() bool {
+	return s != nil && (jsonx.Str(s.o, "provenance") == ProvenanceExternal || jsonx.Str(s.o, "kind") == legacyKindExternal)
+}
 
 // MarkExternal makes the slot an adopted one holding task, with pr when known.
 func (s *Slot) MarkExternal(task, pr string) {
 	if NormID(s.Task()) != NormID(task) {
 		s.endInboxAssignment()
 	}
-	s.o.Set("kind", KindExternal)
+	s.o.Delete("kind")
+	s.o.Set("provenance", ProvenanceExternal)
 	s.o.Set("task", task)
 	s.SetPR(pr)
 }
