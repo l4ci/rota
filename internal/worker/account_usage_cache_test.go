@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -274,5 +275,34 @@ func TestWindowRejectsOutOfRangeUtilization(t *testing.T) {
 		if got, _ := window(v.(*jsonx.Object), k); got == nil {
 			t.Errorf("%s boundary value rejected", k)
 		}
+	}
+}
+
+func TestUsageFifoAtCacheOrBackoffPathReturnsPromptly(t *testing.T) {
+	for _, suffix := range []string{"", ".backoff"} {
+		t.Run("fifo"+suffix, func(t *testing.T) {
+			acc, cfg, _, calls := usageRig(t, func(*http.Request) (*http.Response, error) { return resp(200, okBody, nil), nil })
+			fifo := acc.usageCachePath(cfg) + suffix
+			if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan struct{})
+			go func() {
+				acc.defaultFetch(context.Background(), "a", cfg)
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				// Release the blocked open so the goroutine ends, then fail.
+				if f, err := os.OpenFile(fifo, os.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
+					f.Close()
+				}
+				t.Fatal("fetch blocked on a FIFO")
+			}
+			if *calls != 1 {
+				t.Errorf("requests = %d, want 1 (FIFO unreadable)", *calls)
+			}
+		})
 	}
 }

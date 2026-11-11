@@ -305,7 +305,7 @@ const (
 )
 
 // backoffOf reads a wait in seconds as written: the default for anything
-// unusable. It does not cap; waitLeft does.
+// unusable. It does not cap; backoffLeft does.
 func backoffOf(s string) time.Duration {
 	n, err := strconv.Atoi(strings.TrimSpace(s))
 	if err != nil || n <= 0 || n > math.MaxInt32 {
@@ -322,7 +322,7 @@ const reasonSkew = 2 * time.Second
 // mtime, both taken from the one open file. A file that is not a regular file
 // of the current user reads as absent: /tmp/claude is shared and world-writable.
 func (a *Accounts) openOwned(path string) ([]byte, time.Time, bool) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, time.Time{}, false
 	}
