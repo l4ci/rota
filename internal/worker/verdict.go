@@ -43,6 +43,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateNotMerged:          {Hold: true},
 	GateNotOnBase:          {Hold: true},
 	GateVerifyFailed:       {Hold: true},
+	GateInteraction:        {Hold: true},
 	GateMergedRemotely:     {Hold: true},
 	GateMergeFailed:        {Hold: true},
 	GateCheckBroke:         {Hold: true},

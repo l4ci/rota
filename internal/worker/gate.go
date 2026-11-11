@@ -84,6 +84,9 @@ const (
 	GateNotMerged      = "not-merged"
 	GateNotOnBase      = "not-on-base"
 	GateVerifyFailed   = "verify-failed"
+	// GateInteraction: a train's red test passes on each member alone but
+	// fails with them merged together (#3095). No member is the culprit.
+	GateInteraction = "interaction"
 	// GateVacuousTests refuses tests independent of the non-test change.
 	GateVacuousTests   = "vacuous-tests"
 	GateMergedRemotely = "merged-remotely"

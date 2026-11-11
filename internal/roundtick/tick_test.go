@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -790,4 +791,52 @@ func TestDriftKindSurvivesTheSeam(t *testing.T) {
 	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Drift != round.BranchNoPR || r.NeedsYou[0].Target != round.BranchNoPR+" kit" {
 		t.Fatalf("needsYou %+v", r.NeedsYou)
 	}
+}
+
+// An interaction is the orchestrator's: both members are held at their heads
+// and reported as train-interaction, never as a bounce; the bystander is
+// retried (#3095).
+func TestTickTrainInteraction(t *testing.T) {
+	f := &fake{slots: []Slot{
+		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
+		{Name: "c", State: "done", PR: "#3"}}}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"a", "c"},
+			Members: []worker.TrainMember{{Target: "a"}, {Target: "b"}, {Target: "c"}}, Err: "TRAIN-INTERACTION a, c — red together"}}
+	}
+	e := f.env()
+	e.Head = func(_ context.Context, target string) (string, error) { return target + ":head", nil }
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "interaction: fix on one of: a, c; bounce neither"
+	check := func(r Result, when string) {
+		t.Helper()
+		var kinds []string
+		for _, n := range r.NeedsYou {
+			kinds = append(kinds, n.Kind+":"+n.Target)
+			if n.Why != want {
+				t.Errorf("%s: %s why %q, want %q", when, n.Target, n.Why, want)
+			}
+		}
+		if strings.Join(kinds, ",") != "train-interaction:a,train-interaction:c" {
+			t.Fatalf("%s: needsYou %v, want a and c as train-interaction", when, kinds)
+		}
+	}
+	check(r, "first tick")
+	if r.Held["a"] == "" || r.Held["c"] == "" || r.Held["b"] != "" || r.FailedHeads["a"].Head != "a:head" {
+		t.Fatalf("held %v failedHeads %v: a and c are held at their heads, b is retried", r.Held, r.FailedHeads)
+	}
+	// The next tick reads the hold, not a new train, and says the same.
+	e.Held, e.FailedHeads = r.Held, r.FailedHeads
+	f.trainOut = func(ts []string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass, Members: []worker.TrainMember{{Target: ts[0], Landed: true}}}}
+	}
+	r2, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.NeedsYou = slices.DeleteFunc(r2.NeedsYou, func(n Item) bool { return n.Target == "b" })
+	check(r2, "held tick")
 }
