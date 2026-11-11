@@ -740,3 +740,23 @@ func TestDispatchSweepsLeftoverShellPanesBeforeKill(t *testing.T) {
 func (s *sweepHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(s) }
 
 func (r *resubHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }
+
+// With no round recorded and a bare environment, a pane verb drives tmux, as
+// it did when host.New fell back to it; it must not reach the refusing host.
+func TestPaneVerbsReadBareEnvAsTmux(t *testing.T) {
+	root := newProject(t, `{}`)
+	var kinds []host.Kind
+	e := envWith(tmuxFake())
+	e.NewHost = func(k host.Kind) host.Host {
+		kinds = append(kinds, k)
+		return host.New(k, host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "", os.ErrNotExist }})
+	}
+	e.Getenv = func(string) string { return "" }
+	e.LookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	if st := e.SessionCheck(context.Background(), root); st.Inside {
+		t.Fatalf("SessionCheck inside = true in a bare env")
+	}
+	if len(kinds) != 1 || kinds[0] != host.Tmux {
+		t.Fatalf("SessionCheck asked for hosts %v, want [tmux]", kinds)
+	}
+}

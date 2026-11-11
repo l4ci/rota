@@ -1,4 +1,8 @@
-package keepalive
+// Package keepstate holds the records the keepalive supervisor and the Stop
+// hook share: the keepalive state file, the handoff file stat and the usage
+// handoff marker. It imports neither, so each reads the other's state without
+// a cycle.
+package keepstate
 
 import (
 	"github.com/l4ci/rota/internal/fsio"

@@ -12,7 +12,6 @@ import (
 )
 
 func TestCodexQuotaReportDoesNotChangeAccountPick(t *testing.T) {
-	r := newRig(t)
 	ctx := context.Background()
 	src := &fakeSource{logins: []string{"work", "other"}, picked: "meter-must-not-run", pickOK: true}
 	reporter, ok := harness.LookupQuotaReporter(harness.Codex)
@@ -28,7 +27,7 @@ func TestCodexQuotaReportDoesNotChangeAccountPick(t *testing.T) {
 	if snapshot.Status != "available" || snapshot.Weekly == nil || *snapshot.Weekly.RemainingPercent != 0 {
 		t.Fatalf("expected exhausted report, got %+v", snapshot)
 	}
-	got, ok := PickAccount(ctx, src, r.root, harness.Codex, "", t0)
+	got, ok := PickAccount(ctx, src, nil, harness.Codex, "", t0)
 	if !ok || got != "work" || src.exclude != nil {
 		t.Fatalf("a 100%% quota report must not cause meter selection/cooldown: pick=%q ok=%v meter-exclude=%v", got, ok, src.exclude)
 	}

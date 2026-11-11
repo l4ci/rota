@@ -3,6 +3,7 @@ package keepalive
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -54,7 +54,7 @@ func (r *rig) write(sha string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.now = r.now.Add(time.Second)
-	r.handoff = HandoffRead{Handoff: hook.Handoff{Exists: true, ModTime: r.now}, SHA: sha}
+	r.handoff = HandoffRead{Handoff: keepstate.Handoff{Exists: true, ModTime: r.now}, SHA: sha}
 }
 
 func (r *rig) clear() { r.handoff = HandoffRead{} }
@@ -124,9 +124,9 @@ func (r *rig) opts() Options {
 		MaxRestarts: 10, Breaker: 3, Backoff: 5 * time.Second, Prompt: "go on", EscalateIssue: "7"}
 }
 
-func (r *rig) state() State {
+func (r *rig) state() keepstate.State {
 	r.t.Helper()
-	st, found, err := ReadState(StatePath(r.dir))
+	st, found, err := keepstate.ReadState(keepstate.StatePath(r.dir))
 	if err != nil || !found {
 		r.t.Fatalf("state: %v %v", found, err)
 	}
@@ -169,7 +169,7 @@ func TestRestartsOnFreshHandoffWithPromptLastOnRestartsOnly(t *testing.T) {
 		t.Errorf("child env: %v", r.envs[0])
 	}
 	st := r.state()
-	if st.Status != StatusStopped || st.StopReason != StopNoHandoff || st.Restarts != 1 || st.PID != 10 {
+	if st.Status != keepstate.StatusStopped || st.StopReason != StopNoHandoff || st.Restarts != 1 || st.PID != 10 {
 		t.Errorf("state: %+v", st)
 	}
 	if r.lease(env) != roundlease.None {
@@ -207,7 +207,7 @@ func TestNoHandoffOrStaleHandoffDoesNotRestart(t *testing.T) {
 	for name, setup := range map[string]func(r *rig){
 		"none": func(r *rig) {},
 		"too old": func(r *rig) {
-			r.handoff = HandoffRead{Handoff: hook.Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, SHA: "a"}
+			r.handoff = HandoffRead{Handoff: keepstate.Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, SHA: "a"}
 		},
 		"consumed": func(r *rig) { r.clear() },
 	} {
@@ -234,7 +234,7 @@ func TestLeaseHeldByAnotherRefusesAndStartsNothing(t *testing.T) {
 	if !errors.As(err, &held) || held.Lease.PID != 20 || len(r.starts) != 0 {
 		t.Fatalf("%v starts=%d", err, len(r.starts))
 	}
-	if _, found, _ := ReadState(StatePath(r.dir)); found {
+	if _, found, _ := keepstate.ReadState(keepstate.StatePath(r.dir)); found {
 		t.Errorf("a refused run must not write the state file")
 	}
 	if cur, _, _ := env.Lease.Read(r.dir); cur.PID != 20 {
