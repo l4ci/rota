@@ -4,12 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -17,16 +14,9 @@ import (
 // recovery rebuilds the assignment before appending the operator's notes.
 func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.DispatchOpts) (worker.DispatchOpts, func(), error) {
 	cleanup := func() {}
-	if o.Relay || o.Task == "" {
-		return o, cleanup, nil
-	}
-	reg, err := worker.LoadRegistry(root)
-	if err != nil {
+	assigned, err := round.RecoveryAssigned(root, o)
+	if err != nil || !assigned {
 		return o, cleanup, err
-	}
-	s := reg.Slot(o.Slot)
-	if s == nil || s.Task() != worker.NormID(o.Task) || s.ClaimID() == "" {
-		return o, cleanup, nil
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
@@ -36,24 +26,23 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 	if !ok {
 		return o, cleanup, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
-	set, err := roundcfg.FromConfig(c.deps().Config(root))
-	if err != nil {
-		return o, cleanup, Usage("%s", err)
-	}
-	env := roundEnv(c, ctx, root)
-	text, rebuilt, err := env.RebuildTaskBrief(ctx, root, board, o, set)
-	if err != nil {
-		var b *round.BlockedError
-		if errors.As(err, &b) {
-			return o, cleanup, Refused("%s", b.Msg)
-		}
-		return o, cleanup, err
-	}
 	notes, err := os.ReadFile(o.BodyFile)
 	if err != nil {
 		return o, cleanup, Resolution("body file not found: %s", o.BodyFile)
 	}
-	path, cleanup, err := fsio.WriteTemp(c.deps().Getenv("TMPDIR"), "rota-rebuilt-brief-", []byte(text+"\nNotes appended for recovery:\n\n"+string(notes)))
+	text, rebuilt, err := roundEnv(c, ctx, root).RecoveryBrief(ctx, root, board, c.deps().Config(root), o, string(notes))
+	if err != nil {
+		var b *round.BlockedError
+		var ce *round.ConfigError
+		switch {
+		case errors.As(err, &b):
+			return o, cleanup, Refused("%s", b.Msg)
+		case errors.As(err, &ce):
+			return o, cleanup, Usage("%s", ce)
+		}
+		return o, cleanup, err
+	}
+	path, cleanup, err := fsio.WriteTemp(c.deps().Getenv("TMPDIR"), "rota-rebuilt-brief-", []byte(text))
 	if err != nil {
 		return o, cleanup, err
 	}
@@ -66,30 +55,19 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 // support machine's local relay log, so the issue thread is where it looks.
 // Main keeps its local log only. The brief is already sent; a failed post is
 // returned for the caller to warn about.
-func postSupportRelay(c *Ctx, root, slot, bodyFile string, round int) error {
-	cfg := c.deps().Config(root)
-	if roundcfg.SupportName(cfg) == "" {
-		return nil
-	}
-	if role, err := roundcfg.MachineRole(cfg); err != nil || role != roundcfg.RoleSupport {
-		return nil
-	}
-	reg, err := worker.LoadRegistry(root)
+func postSupportRelay(c *Ctx, root, slot, bodyFile string, n int) error {
+	text, err := os.ReadFile(bodyFile)
 	if err != nil {
 		return err
 	}
-	s := reg.Slot(slot)
-	if s == nil || s.HeldID() == "" {
-		return nil
-	}
-	text, err := os.ReadFile(bodyFile)
-	if err != nil {
+	issue, body, post, err := round.SupportRelay(root, c.deps().Config(root), slot, n, string(text))
+	if err != nil || !post {
 		return err
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		return err
 	}
-	_, err = be.AddComment(s.HeldID(), "relay", marker.RelayLine(round)+"\n"+strings.TrimSpace(string(text)))
+	_, err = be.AddComment(issue, "relay", body)
 	return err
 }
