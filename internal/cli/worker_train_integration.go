@@ -139,3 +139,24 @@ func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, e
 	}
 	return openIntegrationPR(c.Context(), shipForge{cl}, root, it)
 }
+
+// parkIntegrationMembers frees the slots that held the member PRs of the
+// integration PR that just landed, so the round needs no reconcile --apply.
+func parkIntegrationMembers(c *Ctx, root, pr string) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return
+	}
+	rec, ok := reg.IntegrationByPR(pr)
+	if !ok {
+		return
+	}
+	ctx := c.Context()
+	parked, err := roundEnv(c, ctx, root).ParkIntegrationMembers(ctx, root, rec)
+	for _, s := range parked {
+		fmt.Fprintf(c.Stderr, "PARKED %s — its PR landed with %s\n", s, rec.Branch)
+	}
+	if err != nil {
+		fmt.Fprintln(c.Stderr, "PARK-KEPT — "+err.Error()+"; run rota round reconcile --apply")
+	}
+}
