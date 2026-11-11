@@ -14,7 +14,7 @@ func TestDispatchRefusesExternal(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := LoadRegistryTolerant(dir).Slot("ext-1")
-	if !s.IsExternal() || s.Handle() != "" || s.Task() != "12" || s.Kind() != KindExternal {
+	if !s.IsExternal() || s.Handle() != "" || s.Task() != "12" || s.Kind() != "" {
 		t.Fatalf("slot: %v", s.Raw())
 	}
 	for _, relay := range []bool{false, true} {
@@ -60,17 +60,6 @@ func TestPollSkipsExternal(t *testing.T) {
 	res, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "ext-1", Lines: 60})
 	if err != nil || len(res.Slots) != 0 {
 		t.Errorf("named external: %+v %v", res, err)
-	}
-}
-
-func TestHarnessKindHidesExternal(t *testing.T) {
-	dir := newProject(t, `{}`)
-	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
-		t.Fatal(err)
-	}
-	if s := LoadRegistryTolerant(dir).Slot("ext-1"); s.HarnessKind() != "" || !s.IsExternal() {
-		t.Errorf("kind %q", s.HarnessKind())
 	}
 }
 
@@ -127,5 +116,20 @@ func TestRegisterExternalConflictsAcrossIDSpellings(t *testing.T) {
 		if !errors.As(err, &c) || c.Kind != ConflictIssue || c.Slot != "ext-1" {
 			t.Errorf("RegisterExternal(task %q) = %v, want an issue conflict with ext-1", task, err)
 		}
+	}
+}
+
+// An adopted slot keeps its provenance apart from its harness kind, and a
+// registry written when adoption lived in the kind field still loads.
+func TestAdoptedSlotKindStaysHarnessOnly(t *testing.T) {
+	s := NewSlot("ext-1", "codex/12-x", "/wt", "main", "")
+	s.MarkExternal("12", "")
+	if !s.IsExternal() || s.Kind() != "" {
+		t.Errorf("adopted: external=%v kind=%q", s.IsExternal(), s.Kind())
+	}
+	legacy := NewSlot("ext-2", "codex/13-x", "/wt", "main", "")
+	legacy.Raw().Set("kind", "external")
+	if !legacy.IsExternal() || legacy.Kind() != "" {
+		t.Errorf("legacy: external=%v kind=%q", legacy.IsExternal(), legacy.Kind())
 	}
 }

@@ -634,6 +634,8 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 			m.Landed, m.Detail = true, "train into "+base
 		case v == "base-moved":
 			m.Skip = true // nothing landed; the base moved under the train
+		case tr.Unreproduced:
+			m.Skip = true // a flake blames nobody: the next tick retrains
 		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
 			m.Skip = true // another member broke the train: retried without it
 		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):

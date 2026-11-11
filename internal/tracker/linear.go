@@ -505,12 +505,8 @@ func (d linearIssue) state() map[string]linearAttachment {
 func (l *Linear) norm(d linearIssue) Issue {
 	body := d.Description
 	if f, ok := d.state()[linearStateURL+"fields"]; ok {
-		if block, known := f.Metadata.body(); known && block != "" {
-			body = strings.TrimRight(body, "\n")
-			if body != "" {
-				body += "\n\n"
-			}
-			body += block
+		if block, known := f.Metadata.body(); known {
+			body = joinBody(body, block)
 		}
 	}
 	is := Issue{Key: IssueKey(d.Identifier), Title: d.Title, Body: body, Labels: []string{}, State: "open",

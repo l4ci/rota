@@ -325,7 +325,7 @@ func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 		return s
 	}
 	slots := []*worker.Slot{
-		mk("ext", "park/ext", func(o *jsonx.Object) { o.Set("kind", worker.KindExternal) }),
+		mk("ext", "park/ext", func(o *jsonx.Object) { o.Set("provenance", worker.ProvenanceExternal) }),
 		mk("busy", "park/busy", func(o *jsonx.Object) { o.Set("state", "busy") }),
 		mk("held", "held/5-x", nil),
 		mk("out", "park/out", nil), // idle, but not on the roster

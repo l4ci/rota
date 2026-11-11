@@ -319,7 +319,7 @@ func gateSlot(s *Slot) GateTarget {
 	if s.IsExternal() {
 		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), ClaimID: s.ClaimID(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), ClaimID: s.ClaimID(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.HarnessKind()}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), ClaimID: s.ClaimID(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.Kind()}
 }
 
 // Relays is the relay log the gate checks the PR body's approvals against.

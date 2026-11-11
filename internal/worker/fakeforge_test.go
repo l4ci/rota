@@ -337,5 +337,4 @@ func (f *fakeForge) CanPush(_ context.Context, login string) (bool, error) {
 	return !slices.Contains(strings.Split(f.w.forgeWord("readers"), ","), login), nil
 }
 
-var _ IssueTrust = (*fakeForge)(nil)
-var _ IssueTrust = (*tracker.GitHub)(nil)
+var _ tracker.IssueTrust = (*fakeForge)(nil)
