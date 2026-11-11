@@ -54,9 +54,6 @@ func newRig(t *testing.T, kind string) *hostRig {
 	if kind == "herdr" {
 		cfg = `{"round":{"dispatch":"herdr","herdrGroupSlots":false}}`
 	}
-	if kind == "tmux" {
-		cfg = `{"round":{"dispatch":"tmux","herdrGroupSlots":false}}`
-	}
 	r := &hostRig{kind: kind, herdrDir: t.TempDir(), tmuxDir: t.TempDir(), root: newProject(t, cfg)}
 	os.WriteFile(filepath.Join(r.tmuxDir, "pane"), []byte("? for shortcuts\n"), 0o644)
 	r.hostEnv = map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}
