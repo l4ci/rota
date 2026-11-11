@@ -233,23 +233,24 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Escalate: escalateFunc(ctx, c, root),
 			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
 		}
-		gap := keepaliveGap(set.SwitchOnUsage)
-		env.Gap = gap
 		opts := keepalive.Options{
 			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffPath,
 			HandoffMaxAge: set.HandoffMaxAge, MaxRestarts: set.MaxRestarts, Breaker: set.Breaker,
 			Backoff: set.Backoff, Prompt: set.Prompt, FirstPrompt: *first, EscalateIssue: set.EscalateIssue,
 		}
+		var gap *atomic.Bool
 		if set.SwitchOnUsage {
-			opts.SwitchOnUsage, opts.UsageThreshold, opts.HoldFallback = true, set.UsageThreshold, set.HoldFallback
-			opts.ConfigDir = c.deps().Getenv("CLAUDE_CONFIG_DIR")
+			gap = new(atomic.Bool)
+			dir := c.deps().Getenv("CLAUDE_CONFIG_DIR")
 			if *configDir != "" {
-				opts.ConfigDir = *configDir
+				dir = *configDir
 			}
-			opts.Account = c.deps().WorkerAccounts().AccountOf(root, opts.ConfigDir)
-			env.UsageMarker = hook.UsageMarker(cd, root)
-			env.Choose = usageChoose(ctx, c, root)
-			env.Record = keepalive.UsageRecorder(root, c.deps().Now)
+			opts.Switch = &keepalive.Switch{
+				Threshold: set.UsageThreshold, HoldFallback: set.HoldFallback,
+				ConfigDir: dir, Account: c.deps().WorkerAccounts().AccountOf(root, dir),
+				Marker: hook.UsageMarker(cd, root), Choose: usageChoose(ctx, c, root),
+				Record: keepalive.UsageRecorder(root, c.deps().Now), Gap: gap,
+			}
 		}
 		if !*noLimits {
 			lset, err := limits.LoadSettings(cfg)
@@ -295,15 +296,6 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
-}
-
-// keepaliveGap is the flag the supervisor sets between children, nil unless
-// the switch is on: with it off, D3's loop must not see a gap at all.
-func keepaliveGap(switchOnUsage bool) *atomic.Bool {
-	if !switchOnUsage {
-		return nil
-	}
-	return new(atomic.Bool)
 }
 
 // usageChoose asks the account meters where an orchestrator at its threshold

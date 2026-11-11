@@ -22,12 +22,12 @@ func usageRig(t *testing.T, choice Choice, resets string) (*rig, Env, Options, *
 	var recs []Decision
 	var gaps []bool
 	gap := new(atomic.Bool)
-	env.Gap = gap
-	env.UsageMarker = func(since time.Time) (keepstate.UsageHandoff, bool) {
+	sw := &Switch{Threshold: 90, HoldFallback: 30 * time.Minute, ConfigDir: "/cfg/a", Account: "a", Gap: gap}
+	sw.Marker = func(since time.Time) (keepstate.UsageHandoff, bool) {
 		return keepstate.UsageHandoff{Window: limits.WindowFiveHour, UsedPct: 93, ResetsAt: resets, At: since.Format(time.RFC3339)}, true
 	}
-	env.Choose = func(dir string, thr int) Choice { return choice }
-	env.Record = func(d Decision) error { recs = append(recs, d); return nil }
+	sw.Choose = func(dir string, thr int) Choice { return choice }
+	sw.Record = func(d Decision) error { recs = append(recs, d); return nil }
 	inner := env.Spawn
 	env.Spawn = func(argv, extra []string) (Child, error) {
 		gaps = append(gaps, gap.Load())
@@ -35,8 +35,7 @@ func usageRig(t *testing.T, choice Choice, resets string) (*rig, Env, Options, *
 	}
 	o := r.opts()
 	o.MaxRestarts = 1
-	o.SwitchOnUsage, o.UsageThreshold, o.HoldFallback = true, 90, 30*time.Minute
-	o.ConfigDir, o.Account = "/cfg/a", "a"
+	o.Switch = sw
 	return r, env, o, &recs, gap, &gaps
 }
 
@@ -121,13 +120,22 @@ func TestUsageHoldFallbackAndPastReset(t *testing.T) {
 
 func TestNoUsageMarkerOrSwitchOffRestartsAsBefore(t *testing.T) {
 	r, env, o, recs, _, _ := usageRig(t, Choice{To: &Target{Name: "b", ConfigDir: "/cfg/b"}}, "")
-	env.UsageMarker = func(time.Time) (keepstate.UsageHandoff, bool) { return keepstate.UsageHandoff{}, false }
+	o.Switch.Marker = func(time.Time) (keepstate.UsageHandoff, bool) { return keepstate.UsageHandoff{}, false }
 	if res, err := Run(env, o); err != nil || res.Switches != 0 || len(*recs) != 0 || len(r.starts) != 2 {
 		t.Fatalf("context handoff: %+v %v recs=%d", res, err, len(*recs))
 	}
 	r, env, o, recs, _, _ = usageRig(t, Choice{To: &Target{Name: "b", ConfigDir: "/cfg/b"}}, "")
-	o.SwitchOnUsage = false
+	o.Switch = nil
 	if res, err := Run(env, o); err != nil || res.Switches != 0 || len(*recs) != 0 || hasEnv(r.envs[1], "CLAUDE_CONFIG_DIR=/cfg/b") {
 		t.Fatalf("switch off: %+v %v", res, err)
+	}
+}
+
+// A Switch without a Gap still switches: the gap flag is optional, the rest is not.
+func TestSwitchWithoutGapStillSwitches(t *testing.T) {
+	r, env, o, _, _, _ := usageRig(t, Choice{To: &Target{Name: "b", ConfigDir: "/cfg/b"}}, "")
+	o.Switch.Gap = nil
+	if res, err := Run(env, o); err != nil || res.Switches != 1 || !hasEnv(r.envs[1], "CLAUDE_CONFIG_DIR=/cfg/b") {
+		t.Fatalf("%+v %v", res, err)
 	}
 }
