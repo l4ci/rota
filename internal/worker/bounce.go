@@ -109,14 +109,8 @@ func Bounce(store BounceStore, m *RoundMemo, issue, slot, head string, limit int
 }
 
 // ErrNoPushTrust is BounceStore's refusal when the issue tracker cannot say who
-// has write access (a forge without PushTrust, GitLab today).
+// has write access (a forge without tracker.PushTrust, GitLab today).
 var ErrNoPushTrust = errors.New("round.support keeps bounces on the issue, and this issue tracker cannot say who has write access to trust them")
-
-// PushTrust says whether a login holds write access on the repository
-// (tracker.GitHub.CanPush).
-type PushTrust interface {
-	CanPush(ctx context.Context, login string) (bool, error)
-}
 
 // MarkerTrust answers whether a comment's author may post rota's bounce
 // markers: anyone who can comment could otherwise reset the cap or reach it
@@ -125,13 +119,13 @@ type PushTrust interface {
 // value, so one pass asks the forge once per login.
 type MarkerTrust struct {
 	ctx   context.Context
-	trust PushTrust
+	trust tracker.PushTrust
 	known map[string]bool
 }
 
-// NewMarkerTrust takes the trust check from src when it implements PushTrust.
+// NewMarkerTrust takes the trust check from src when it implements tracker.PushTrust.
 func NewMarkerTrust(ctx context.Context, src any) *MarkerTrust {
-	t, _ := src.(PushTrust)
+	t, _ := src.(tracker.PushTrust)
 	return &MarkerTrust{ctx: ctx, trust: t, known: map[string]bool{}}
 }
 
@@ -192,7 +186,7 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := it.(PushTrust); !ok {
+	if _, ok := it.(tracker.PushTrust); !ok {
 		return nil, ErrNoPushTrust
 	}
 	return issueBounces{e: e, root: root, it: it}, nil
@@ -214,7 +208,7 @@ func (e Env) WriterTrust(root string) (*MarkerTrust, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := it.(PushTrust); !ok {
+	if _, ok := it.(tracker.PushTrust); !ok {
 		return nil, ErrNoPushTrust
 	}
 	return NewMarkerTrust(e.Ctx, it), nil

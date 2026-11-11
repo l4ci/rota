@@ -489,7 +489,7 @@ type forgeIssues interface {
 // Embedding hides the issue side's own methods; these two hand them through.
 type trustedSides struct {
 	bothSides
-	trust worker.IssueTrust
+	trust tracker.IssueTrust
 }
 
 func (t trustedSides) IssueAuthorship(ctx context.Context, key tracker.IssueKey) (tracker.Authorship, error) {
@@ -502,7 +502,7 @@ func (t trustedSides) CanPush(ctx context.Context, login string) (bool, error) {
 
 // forgeAndIssues builds both seams for a consumer that needs them. A forge
 // failure (a local forge included) fails it; the file source's issue side is
-// tracker.NoIssues. The result is a worker.IssueTrust exactly when the issue
+// tracker.NoIssues. The result is a tracker.IssueTrust exactly when the issue
 // side is.
 func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
 	return d.sides(ctx, cfg, dir, d.trackerOptions())
@@ -524,7 +524,7 @@ func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Op
 		return nil, err
 	}
 	both := bothSides{f, it}
-	if t, ok := it.(worker.IssueTrust); ok {
+	if t, ok := it.(tracker.IssueTrust); ok {
 		return trustedSides{both, t}, nil
 	}
 	return both, nil
