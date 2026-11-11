@@ -387,7 +387,19 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			return res, nil
 		}
 		if r.OK() && r.Integration != nil {
-			res.Text = fmt.Sprintf("pass: integrated %d member(s) into %s (%s), verified; nothing landed on %s\n%s", len(r.Members), r.Integration.Branch, r.SHA, r.Base, trainSummary(r))
+			url, perr := openIntegrationPRVia(c, root, *r.Integration)
+			if perr != nil {
+				// The branch is verified and recorded; only the PR is missing.
+				fmt.Fprintln(c.Stderr, "INTEGRATION-PR not opened — "+perr.Error())
+			} else {
+				r.Integration.PR = url
+				res.Data = trainData(r)
+			}
+			res.Text = fmt.Sprintf("pass: integrated %d member(s) into %s (%s), verified; nothing landed on %s", len(r.Members), r.Integration.Branch, r.SHA, r.Base)
+			if url != "" {
+				res.Text += fmt.Sprintf("\nPR %s lands it: rota worker gate %s --base %s", url, url, r.Base)
+			}
+			res.Text += "\n" + trainSummary(r)
 			return res, nil
 		}
 		if r.OK() {
