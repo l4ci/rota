@@ -64,7 +64,8 @@ type Failure struct {
 // A landed integration PR (#3096) ends every member issue it carried, as a
 // train ends each member it landed.
 func Gate(book Book, root, issue string, r worker.GateResult) error {
-	if r.OK() && len(r.IntegrationMembers) > 0 {
+	// already-merged is a retry after the forge merged it but a later step failed.
+	if (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
 		for _, m := range r.IntegrationMembers {
 			if err := landed(book, root, m); err != nil {
 				return err

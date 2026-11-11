@@ -4,12 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/exitcode"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -372,13 +372,13 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				if filed {
 					verb = "filed"
 				}
-				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM %s — %s for %s; assign it to a slot: its branch is cut from %s\n", id, verb, strings.Join(r.Interaction, ", "), r.Integration.Branch)
+				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM %s — %s for %s; next: rota round assign %s (its branch is cut from %s)\n", id, verb, strings.Join(r.Interaction, ", "), id, r.Integration.Branch)
 				if !slices.Contains(r.Integration.Items, id) {
 					r.Integration.Items = append(r.Integration.Items, id)
 				}
 				return Result{}, nil
 			}); ferr != nil {
-				fmt.Fprintln(c.Stderr, "INTERACTION-ITEM not filed — "+ferr.Error())
+				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM not filed — %s; next: fix that, then rerun %s to file it\n", ferr.Error(), integrationRerun(*r.Integration, args, *base))
 			}
 		}
 		res := Result{Data: trainData(r)}
@@ -390,7 +390,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			url, perr := openIntegrationPRVia(c, root, *r.Integration)
 			if perr != nil {
 				// The branch is verified and recorded; only the PR is missing.
-				fmt.Fprintln(c.Stderr, "INTEGRATION-PR not opened — "+perr.Error())
+				fmt.Fprintf(c.Stderr, "INTEGRATION-PR not opened — %s; next: rerun %s, which opens it (merged members are skipped)\n", perr.Error(), integrationRerun(*r.Integration, args, *base))
 			} else {
 				r.Integration.PR = url
 				res.Data = trainData(r)

@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).

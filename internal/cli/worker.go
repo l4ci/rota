@@ -939,7 +939,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
 			}
 		}
-		if !*check && r.OK() && len(r.IntegrationMembers) > 0 {
+		if !*check && (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 { // landed now, or before a retry (#3096)
 			parkIntegrationMembers(c, root, r.PR)
 		}
 		if r.Verdict == worker.GateAlreadyMerged {
