@@ -68,7 +68,7 @@ func TestUsageHandoffSwitchesAccount(t *testing.T) {
 	if st.Account != "b" || st.Switches != 1 || st.SwitchHold != nil {
 		t.Errorf("state: %+v", st)
 	}
-	if len(*recs) != 1 || (*recs)[0].Action != ActionSwitch || (*recs)[0].From != "a" || (*recs)[0].To != "b" {
+	if len(*recs) != 1 || (*recs)[0].Action != limits.ActionSwitch || (*recs)[0].From != "a" || (*recs)[0].To != "b" {
 		t.Errorf("records: %+v", *recs)
 	}
 	// The gap opens when a child exits and closes once the next one is started.
@@ -99,7 +99,7 @@ func TestUsageHandoffWithNoAccountRestartsAndHolds(t *testing.T) {
 		t.Errorf("state: %+v", st)
 	}
 	d := (*recs)[0]
-	if d.Action != ActionRestart || d.HoldUntil != resets || d.From != "a" {
+	if d.Action != limits.ActionRestart || d.HoldUntil != resets || d.From != "a" {
 		t.Errorf("record: %+v", d)
 	}
 }
@@ -170,32 +170,5 @@ func TestUsageMarkerPicksNewestForRootAfterSince(t *testing.T) {
 	}
 	if _, ok := UsageMarker(cd, root)(base.Add(10 * time.Minute)); ok {
 		t.Fatal("marker found though every handoff is before since")
-	}
-}
-
-func TestUsageRecorderMapsActionToStatus(t *testing.T) {
-	for _, tc := range []struct{ action, status string }{
-		{ActionSwitch, limits.StatusSwitched},
-		{ActionRestart, limits.StatusResumed},
-	} {
-		root := t.TempDir()
-		now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-		d := Decision{Action: tc.action, From: "a", Note: "n",
-			Marker: hook.UsageHandoff{Window: hook.WindowFiveHour, At: "2026-10-20T11:00:00Z", ResetsAt: "2026-10-20T13:00:00Z"}}
-		if err := UsageRecorder(root, func() time.Time { return now })(d); err != nil {
-			t.Fatal(err)
-		}
-		var got []limits.Entry
-		if err := limits.Section.Update(root, func(l []limits.Entry) []limits.Entry { got = l; return l }); err != nil {
-			t.Fatal(err)
-		}
-		if len(got) != 1 {
-			t.Fatalf("%s: %d entries", tc.action, len(got))
-		}
-		e := got[0]
-		if e.Status != tc.status || e.Action != tc.action || e.Account != "a" || e.Window != hook.WindowFiveHour ||
-			e.DetectedAt != d.Marker.At || e.ResolvedAt != "2026-10-20T12:00:00Z" || e.Note != "n" {
-			t.Errorf("%s: entry = %+v", tc.action, e)
-		}
 	}
 }
