@@ -462,7 +462,7 @@ func (d *Deps) issuesOrNone(ctx context.Context, cfg any, dir string) (tracker.I
 func issuesOrNoneWith(ctx context.Context, cfg any, dir string, opts []tracker.Option) (tracker.IssueTracker, error) {
 	it, err := tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, opts...)
 	if errors.Is(err, tracker.ErrNoIssueTracker) {
-		return tracker.NoIssues{}, nil
+		return tracker.NewNoIssues(), nil
 	}
 	return it, err
 }

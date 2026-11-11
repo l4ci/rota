@@ -21,6 +21,9 @@ func TestNoMilestonesAdapters(t *testing.T) {
 			l, s := fakeLinear(t, lineartest.Options{})
 			return l, s.Requests
 		}},
+		{"file", "issues.source file has no milestones: the backlog lives in BACKLOG.md", func(*testing.T) (IssueTracker, func() []string) {
+			return NewNoIssues(), func() []string { return nil }
+		}},
 		{"itsaplan", "issues.source itsaplan has no milestones", func(t *testing.T) (IssueTracker, func() []string) {
 			it, s := fakeItsaplan(t, itsaplantest.Options{})
 			return it, s.Requests
@@ -29,17 +32,21 @@ func TestNoMilestonesAdapters(t *testing.T) {
 		t.Run(adapter.name, func(t *testing.T) {
 			a, requests := adapter.new(t)
 			for _, call := range []struct {
-				name string
-				run  func() error
+				name   string
+				run    func() error
+				remote bool // refused by the adapter itself, not the shared milestone half
 			}{
-				{"Create", func() error { _, err := a.Create(ctx, "title", "", nil, "M01"); return err }},
-				{"Edit", func() error { return a.Edit(ctx, "key", IssueEdit{Milestone: "M01"}) }},
-				{"List", func() error { _, err := a.List(ctx, ListFilter{Milestone: "M01"}); return err }},
-				{"Milestones", func() error { _, err := a.Milestones(ctx, "open"); return err }},
-				{"CreateMilestone", func() error { _, err := a.CreateMilestone(ctx, "M01", ""); return err }},
-				{"EditMilestone", func() error { return a.EditMilestone(ctx, 1, MilestoneEdit{}) }},
-				{"IssuesInMilestone", func() error { _, err := a.IssuesInMilestone(ctx, "M01", "open"); return err }},
+				{"Create", func() error { _, err := a.Create(ctx, "title", "", nil, "M01"); return err }, true},
+				{"Edit", func() error { return a.Edit(ctx, "key", IssueEdit{Milestone: "M01"}) }, true},
+				{"List", func() error { _, err := a.List(ctx, ListFilter{Milestone: "M01"}); return err }, true},
+				{"Milestones", func() error { _, err := a.Milestones(ctx, "open"); return err }, false},
+				{"CreateMilestone", func() error { _, err := a.CreateMilestone(ctx, "M01", ""); return err }, false},
+				{"EditMilestone", func() error { return a.EditMilestone(ctx, 1, MilestoneEdit{}) }, false},
+				{"IssuesInMilestone", func() error { _, err := a.IssuesInMilestone(ctx, "M01", "open"); return err }, false},
 			} {
+				if call.remote && adapter.name == "file" {
+					continue
+				}
 				t.Run(call.name, func(t *testing.T) {
 					err := call.run()
 					if !IsNoMilestones(err) {
