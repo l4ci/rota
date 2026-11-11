@@ -111,6 +111,9 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 		return Result{}, Refused("not a prepared review workspace: %s", path)
 	}
 	path = filepath.Join(root, "tree")
+	if ti, err := os.Lstat(path); err != nil || !ti.IsDir() {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
 	info, err := os.Lstat(filepath.Join(root, reviewWorkspaceMarker))
 	if err != nil || !info.Mode().IsRegular() {
 		return Result{}, Refused("missing review workspace ownership record: %s", path)
@@ -119,7 +122,7 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	if err != nil || !found || marker.Path != path || marker.Head == "" {
 		return Result{}, Refused("invalid review workspace ownership record: %s", path)
 	}
-	// RemoveAll removes symlinks themselves; it never follows links in the tree.
+	// RemoveAll removes symlinks inside the tree themselves; it never follows them.
 	if err = c.deps().ReviewRemoveAll(root); err != nil {
 		return Result{}, Unavailable("cleanup review workspace %s: %v", path, err)
 	}
