@@ -22,7 +22,7 @@ func TestAutopilotTickDeduplicatesMigrationWarnings(t *testing.T) {
 	const second = "3 still carries retired label site:support: run rota migrate labels --apply before assigning it"
 	tick := func(want []string) {
 		t.Helper()
-		if _, err := autopilotTick(c, f.root, set, "", scopePID); err != nil {
+		if _, err := runAutopilotTick(c, f.root, set, "", scopePID, false); err != nil {
 			t.Fatal(err)
 		}
 		if !slices.Equal(c.warnings, want) {

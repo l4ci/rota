@@ -459,11 +459,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 		if held {
 			r.Held[t] = why
-			detail := why
-			if e.Head != nil {
-				detail += heldHeadHint
-			}
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: t, Why: detail})
+			r.NeedsYou = append(r.NeedsYou, heldItem(t, why, e.Head != nil))
 			continue
 		}
 		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) && (e.FillBypass == nil || !e.FillBypass(t)) {
@@ -497,10 +493,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 					r.FailedHeads[m.Target] = FailedHead{Head: head, Why: why}
 				}
 			}
-			if e.Head != nil && failedHeadVerdict(m.Verdict) {
-				why += heldHeadHint
-			}
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: m.Target, Why: why})
+			r.NeedsYou = append(r.NeedsYou, heldItem(m.Target, why, e.Head != nil && failedHeadVerdict(m.Verdict)))
 		}
 	}
 	return nil
@@ -508,13 +501,26 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 
 const heldHeadHint = "; held at PR head; push a new head to retry"
 
+// heldItem reports a target the gate or train refused; why starts with the
+// verdict. An interaction is the orchestrator's to fix, not a bounce: its why
+// already says what to do, so it carries no push-a-new-head hint.
+func heldItem(target, why string, atHead bool) Item {
+	if v, _, _ := strings.Cut(why, ":"); v == worker.GateInteraction {
+		return Item{Kind: "train-interaction", Target: target, Why: why}
+	}
+	if atHead {
+		why += heldHeadHint
+	}
+	return Item{Kind: "gate-failed", Target: target, Why: why}
+}
+
 // failedHeadVerdict identifies results that judged the head's content. A CI
 // failure and a failed train verification both use GateVerifyFailed; merge
-// conflicts use GateStale. Refusals and infrastructure errors can clear without
+// conflicts use GateStale; members red only together use GateInteraction. Refusals and infrastructure errors can clear without
 // a push, so they are reported for this tick and retried on the next one.
 func failedHeadVerdict(v string) bool {
 	switch v {
-	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests:
+	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests, worker.GateInteraction:
 		return true
 	default:
 		return false
@@ -628,8 +634,15 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 			m.Landed, m.Detail = true, "train into "+base
 		case v == "base-moved":
 			m.Skip = true // nothing landed; the base moved under the train
+		case tr.Unreproduced:
+			m.Skip = true // a flake blames nobody: the next tick retrains
 		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
 			m.Skip = true // another member broke the train: retried without it
+		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):
+			m.Skip = true // a bystander of an interaction: retried without it
+		case len(tr.Interaction) > 0:
+			m.Verdict, m.Hold = v, worker.ClassifyVerdict(v).Hold
+			m.Detail = "fix on one of: " + strings.Join(tr.Interaction, ", ") + "; bounce neither"
 		default:
 			m.Verdict, m.Hold, m.Detail = v, worker.ClassifyVerdict(v).Hold, tr.Detail
 		}

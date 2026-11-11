@@ -94,7 +94,7 @@ func TestLimitWatchGuardReadsInjectedEnv(t *testing.T) {
 // the check, and the pane lookup went through the injected Getenv.
 func TestAutopilotTickLeaseCheckReadsInjectedEnv(t *testing.T) {
 	c, root, _, keys := heldLeaseDeps(t)
-	_, err := autopilotTick(c, root, roundcfg.Settings{}, "", 4242)
+	_, err := runAutopilotTick(c, root, roundcfg.Settings{}, "", 4242, false)
 	if err == errAutopilotStopped {
 		t.Fatalf("holder 4242 holds the lease, tick reported stopped")
 	}

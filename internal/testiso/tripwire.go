@@ -24,10 +24,13 @@ func scrubHostEnv() {
 type Tripwire struct {
 	Dir string // holds the fake binaries and a tmp/ dir
 	Hit string // file the fakes append their calls to
+
+	restore []func() // undo the env changes NewTripwire made, in reverse order
 }
 
 // NewTripwire writes fake bins into a fresh temp dir named after prefix,
-// prepends it to PATH and roots TMPDIR under it. Close removes the dir.
+// prepends it to PATH and roots TMPDIR under it. Close removes the dir and
+// restores PATH and TMPDIR to their prior values (unset stays unset).
 func NewTripwire(prefix string, bins ...string) (*Tripwire, error) {
 	dir, err := os.MkdirTemp("", prefix)
 	if err != nil {
@@ -41,13 +44,26 @@ func NewTripwire(prefix string, bins ...string) (*Tripwire, error) {
 			return nil, err
 		}
 	}
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// Child processes (fake forge and host scripts mktemp) root their temp
 	// dirs here, removed by Close (#110).
 	if tmp := filepath.Join(dir, "tmp"); os.Mkdir(tmp, 0o755) == nil {
-		os.Setenv("TMPDIR", tmp)
+		t.setenv("TMPDIR", tmp)
 	}
 	return t, nil
+}
+
+// setenv sets key and records how to put it back.
+func (t *Tripwire) setenv(key, val string) {
+	prev, had := os.LookupEnv(key)
+	os.Setenv(key, val)
+	t.restore = append(t.restore, func() {
+		if had {
+			os.Setenv(key, prev)
+		} else {
+			os.Unsetenv(key)
+		}
+	})
 }
 
 // Check returns the logged calls, empty when no fake was reached.
@@ -59,5 +75,11 @@ func (t *Tripwire) Check() string {
 	return string(b)
 }
 
-// Close removes the tripwire dir.
-func (t *Tripwire) Close() { os.RemoveAll(t.Dir) }
+// Close restores the env and removes the tripwire dir.
+func (t *Tripwire) Close() {
+	for i := len(t.restore) - 1; i >= 0; i-- {
+		t.restore[i]()
+	}
+	t.restore = nil
+	os.RemoveAll(t.Dir)
+}

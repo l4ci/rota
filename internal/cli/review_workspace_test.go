@@ -173,8 +173,8 @@ func TestReviewWorkspaceCleanupScope(t *testing.T) {
 		t.Fatalf("prepare: %s", o.stdout)
 	}
 	path := envelope(t, o.stdout)["data"].(map[string]any)["path"].(string)
-	// An agent may replace the tree with a symlink. Cleanup removes the link,
-	// not its target, and also leaves a separately prepared workspace alone.
+	// An agent may replace the tree with a symlink. Cleanup refuses it, leaves
+	// the target alone, and also leaves a separately prepared workspace alone.
 	other := trRunWith(t, d, repo, "", "review", "prepare", "HEAD", "--json")
 	if other.code != 0 {
 		t.Fatalf("second prepare: %s", other.stdout)
@@ -187,13 +187,89 @@ func TestReviewWorkspaceCleanupScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	o = trRunWith(t, d, repo, "", "review", "cleanup", path, "--json")
-	if o.code != 0 {
-		t.Fatalf("cleanup: %s", o.stdout)
+	if o.code != 4 {
+		t.Fatalf("symlinked tree accepted: %s", o.stdout)
 	}
 	if got, err := os.ReadFile(filepath.Join(repo, "keep")); err != nil || string(got) != "live" {
 		t.Fatalf("live target changed: %q %v", got, err)
 	}
 	if _, err := os.Stat(otherPath); err != nil {
 		t.Fatalf("other workspace removed: %v", err)
+	}
+}
+
+func TestReviewWorkspaceCleanupSymlinkedAncestor(t *testing.T) {
+	temp := t.TempDir()
+	link := filepath.Join(t.TempDir(), "var")
+	if err := os.Symlink(temp, link); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps()
+	d.TempDir = func() string { return temp }
+	repo := newRepo(t, t.TempDir(), "repo", "main")
+	prepare := func() string {
+		o := trRunWith(t, d, repo, "", "review", "prepare", "HEAD", "--json")
+		if o.code != 0 {
+			t.Fatalf("prepare: %s", o.stdout)
+		}
+		return envelope(t, o.stdout)["data"].(map[string]any)["path"].(string)
+	}
+	path := prepare()
+	via := filepath.Join(link, filepath.Base(filepath.Dir(path)), "tree")
+	o := trRunWith(t, d, repo, "", "review", "cleanup", via, "--json")
+	if o.code != 0 {
+		t.Fatalf("cleanup via symlinked ancestor: %s", o.stdout)
+	}
+	if got := envelope(t, o.stdout)["data"].(map[string]any)["path"]; got != path {
+		t.Fatalf("reported %v, want canonical %s", got, path)
+	}
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Fatalf("workspace not removed: %v", err)
+	}
+
+	// A symlinked rota-review-* dir stays refused, even through a symlinked ancestor.
+	path = prepare()
+	root := filepath.Dir(path)
+	moved := filepath.Join(t.TempDir(), "real")
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, root); err != nil {
+		t.Fatal(err)
+	}
+	via = filepath.Join(link, filepath.Base(root), "tree")
+	if o = trRunWith(t, d, repo, "", "review", "cleanup", via, "--json"); o.code != 4 {
+		t.Fatalf("symlinked workspace dir accepted: %s", o.stdout)
+	}
+	if _, err := os.Stat(moved); err != nil {
+		t.Fatalf("target removed: %v", err)
+	}
+}
+
+func TestReviewWorkspaceCleanupSymlinkedTree(t *testing.T) {
+	temp := t.TempDir()
+	d := testDeps()
+	d.TempDir = func() string { return temp }
+	repo := newRepo(t, t.TempDir(), "repo", "main")
+	write(t, filepath.Join(repo, "keep"), "live")
+	o := trRunWith(t, d, repo, "", "review", "prepare", "HEAD", "--json")
+	if o.code != 0 {
+		t.Fatalf("prepare: %s", o.stdout)
+	}
+	path := envelope(t, o.stdout)["data"].(map[string]any)["path"].(string)
+	if err := os.RemoveAll(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(repo, path); err != nil {
+		t.Fatal(err)
+	}
+	if o = trRunWith(t, d, repo, "", "review", "cleanup", path, "--json"); o.code != 4 {
+		t.Fatalf("symlinked tree accepted: %s", o.stdout)
+	}
+	if _, err := os.Lstat(filepath.Dir(path)); err != nil {
+		t.Fatalf("workspace removed: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(repo, "keep")); err != nil || string(got) != "live" {
+		t.Fatalf("live target changed: %q %v", got, err)
 	}
 }
