@@ -24,6 +24,7 @@ func TestWorkerTrainIntegrationFlag(t *testing.T) {
 		{"with --on-fail stop", []string{"--on-fail", "stop"}, "--integration cannot be combined"},
 		{"slots without PRs", nil, "every member needs an open PR"},
 		{"a name that is no ref component", []string{"--integration", "a/b"}, "not a valid branch name"},
+		{"a name with a dot", []string{"--integration", "x.lock"}, "not a valid branch name"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			args := append([]string{"worker", "train", "w1", "w2", "--base", "main", "--integration", "a", "--no-assign-check"}, c.args...)

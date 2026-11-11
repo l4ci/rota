@@ -24,8 +24,10 @@ import (
 // record. One PR from the branch lands everything later, through the gate.
 
 // integrationNameRe is the name part of an integration branch: one ref
-// component, so the branch stays integration/r<round>-<name>.
-var integrationNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+// component of letters, digits, - and _, so the branch stays
+// integration/r<round>-<name>. With no dot it can be neither ".." nor end in
+// git's lock suffix.
+var integrationNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // integrationOpts refuses the train options an integration train has no
 // meaning for: it lands nothing, so it has no green prefix to land and no
@@ -34,7 +36,7 @@ func integrationOpts(o TrainOpts) error {
 	if o.Integration == "" {
 		return nil
 	}
-	if !integrationNameRe.MatchString(o.Integration) || strings.Contains(o.Integration, "..") || strings.HasSuffix(o.Integration, ".lock") {
+	if !integrationNameRe.MatchString(o.Integration) {
 		return fail(exitcode.ExitUsage, fmt.Sprintf("--integration %q is not a valid branch name component", o.Integration))
 	}
 	for flag, set := range map[string]bool{"--land-green": o.LandGreen, "--on-fail stop": o.OnFail == OnFailStop, "--plan": o.Plan} {
