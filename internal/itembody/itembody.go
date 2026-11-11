@@ -130,12 +130,25 @@ func appendBullets(body []byte, heading string, items []string) []byte {
 // SetSection replaces the content of the "## name" section of text, or appends
 // the section when text has none. The heading may be of any level and any
 // case; a replaced heading keeps its spelling, a new one is written as
-// "## Name". The section runs to the next heading of the same or a higher level. Everything
+// "## Name". The acceptance section is the exception: it is found by
+// AcceptanceHeadRe, the grammar readiness reads, and its heading is rewritten
+// to AcceptanceHeading so the criteria numbering finds it. The section runs to the next heading of the same or a higher level. Everything
 // outside it is untouched. content is trimmed of surrounding newlines.
 func SetSection(text, name, content string) string {
 	content = strings.Trim(content, "\n")
+	acceptance := strings.EqualFold(name, "acceptance")
 	head := regexp.MustCompile(`(?mi)^#{1,6}[ \t]+` + regexp.QuoteMeta(name) + `[ \t]*$`)
+	if acceptance {
+		head = AcceptanceHeadRe
+	}
 	loc := head.FindStringIndex(text)
+	if loc != nil && acceptance {
+		if i := strings.IndexByte(text[loc[1]:], '\n'); i >= 0 {
+			loc[1] += i
+		} else {
+			loc[1] = len(text)
+		}
+	}
 	if loc == nil {
 		r, n := utf8.DecodeRuneInString(name)
 		title := string(unicode.ToUpper(r)) + name[n:]
@@ -152,7 +165,11 @@ func SetSection(text, name, content string) string {
 	if n := regexp.MustCompile(`(?m)^#{1,` + strconv.Itoa(level) + `}[ \t]`).FindStringIndex(text[loc[1]:]); n != nil {
 		end = loc[1] + n[0]
 	}
-	sec := text[:loc[1]] + "\n\n" + content + "\n"
+	heading := text[:loc[1]]
+	if acceptance {
+		heading = text[:loc[0]] + AcceptanceHeading
+	}
+	sec := heading + "\n\n" + content + "\n"
 	if end < len(text) {
 		sec += "\n"
 	}
