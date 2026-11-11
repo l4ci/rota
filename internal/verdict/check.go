@@ -94,7 +94,7 @@ func (v Check) BlockGate(branch, head string) error {
 	if err := v.BlockAt(branch, head); err != nil {
 		return err
 	}
-	r, ok := BlockingAtHead(ForHead(v.Store.Branch(v.Repo, branch), head), strings.TrimSpace(head))
+	r, ok := BlockingAtHead(v.Store.Branch(v.Repo, branch), strings.TrimSpace(head))
 	if !ok {
 		return nil
 	}

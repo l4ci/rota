@@ -720,3 +720,28 @@ func TestGapHidesOrchestratorDataAndPane(t *testing.T) {
 		t.Fatalf("want one entry once the child is back, got %+v", es)
 	}
 }
+
+func TestRecordUsageMapsActionToStatus(t *testing.T) {
+	for _, tc := range []struct{ action, status string }{
+		{ActionSwitch, StatusSwitched},
+		{ActionRestart, StatusResumed},
+	} {
+		root := t.TempDir()
+		now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+		d := UsageDecision{Action: tc.action, From: "a", Note: "n", Window: WindowFiveHour,
+			DetectedAt: "2026-10-20T11:00:00Z", ResetsAt: "2026-10-20T13:00:00Z"}
+		if _, err := RecordUsage(root, now, d); err != nil {
+			t.Fatal(err)
+		}
+		got := Load(root)
+		if len(got) != 1 {
+			t.Fatalf("%s: %d entries", tc.action, len(got))
+		}
+		e := got[0]
+		if e.Status != tc.status || e.Action != tc.action || e.Account != "a" || e.Window != WindowFiveHour ||
+			e.DetectedAt != d.DetectedAt || e.ResetsAt != d.ResetsAt || e.Session != Orchestrator ||
+			e.Source != SourceData || e.ResolvedAt != "2026-10-20T12:00:00Z" || e.Note != "n" {
+			t.Errorf("%s: entry = %+v", tc.action, e)
+		}
+	}
+}

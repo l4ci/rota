@@ -10,12 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 )
 
-// Actions of a usage Decision, the `action` of its limits entry.
-const (
-	ActionSwitch  = "switch"
-	ActionRestart = "restart"
-)
-
 // Target is the account a usage handoff moves the orchestrator to.
 type Target struct {
 	Name, ConfigDir string
@@ -58,7 +52,7 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 		st.Account = ch.To.Name
 		st.Switches++
 		st.SwitchHold = nil
-		d.Action, d.To = ActionSwitch, ch.To.Name
+		d.Action, d.To = limits.ActionSwitch, ch.To.Name
 		d.Note = fmt.Sprintf("switched to %s (%g%% headroom): %s", ch.To.Name, ch.To.Headroom, figure)
 	} else {
 		until := now.Add(o.HoldFallback)
@@ -67,7 +61,7 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 				until = t
 			}
 		}
-		d.Action = ActionRestart
+		d.Action = limits.ActionRestart
 		d.Note = "no usable account, restarted on the same account: " + figure
 		if len(ch.Others) > 0 {
 			d.Note += " (" + strings.Join(ch.Others, "; ") + ")"
@@ -107,20 +101,13 @@ func UsageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandof
 	}
 }
 
-// UsageRecorder writes a usage decision to the limits log in
-// .rota/workers.json: a switch is "switched", a same-account restart
-// "resumed".
+// UsageRecorder writes a usage decision to the limits log; limits owns the
+// action-to-status mapping.
 func UsageRecorder(root string, now func() time.Time) func(Decision) error {
 	return func(d Decision) error {
-		status := limits.StatusSwitched
-		if d.Action == ActionRestart {
-			status = limits.StatusResumed
-		}
-		t := limits.Time(now())
-		_, err := limits.Append(root, limits.Entry{
-			Session: limits.Orchestrator, Window: d.Marker.Window, Source: limits.SourceData,
-			DetectedAt: d.Marker.At, ResetsAt: d.Marker.ResetsAt, Action: d.Action,
-			Account: d.From, Status: status, ResolvedAt: t, Note: d.Note,
+		_, err := limits.RecordUsage(root, now(), limits.UsageDecision{
+			Action: d.Action, Window: d.Marker.Window, DetectedAt: d.Marker.At,
+			ResetsAt: d.Marker.ResetsAt, From: d.From, Note: d.Note,
 		})
 		return err
 	}

@@ -77,7 +77,7 @@ func registryRound(root string) int {
 
 // holdsLease: this process is the orchestrator the lease names.
 func (e Env) holdsLease(ctx context.Context, root string) (bool, error) {
-	_, held, err := e.heldLease(ctx, root)
+	_, held, err := e.HeldLease(ctx, root)
 	return held, err
 }
 
