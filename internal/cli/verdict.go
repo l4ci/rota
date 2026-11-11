@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/debugctr"
+	"github.com/l4ci/rota/internal/followup"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
@@ -286,7 +287,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			var added int
 			_, err = withBackend(c, fileRoot, false, "", func(be backlog.Backend) (Result, error) {
 				var ferr error
-				if id, added, ferr = verdict.FileFollowUps(be, fileRoot, deferred, strings.TrimSpace(*pr), *kind, *v); ferr != nil {
+				if id, added, ferr = followup.FileFollowUps(be, fileRoot, deferred, strings.TrimSpace(*pr), *kind, *v); ferr != nil {
 					return backlogFail(ferr)
 				}
 				return Result{}, nil
