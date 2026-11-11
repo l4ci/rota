@@ -137,7 +137,7 @@ func TestSetSection(t *testing.T) {
 		{"append", "intro\n", "acceptance", "- [ ] AC-1: x\n", "intro\n\n## Acceptance\n\n- [ ] AC-1: x\n"},
 		{"append to empty", "", "Files", "- a", "## Files\n\n- a\n"},
 		{"replace middle", "a\n\n## Acceptance\n\nold\n\n## Pointers\n\n- p\n", "acceptance", "new", "a\n\n## Acceptance\n\nnew\n\n## Pointers\n\n- p\n"},
-		{"replace last keeps heading case", "a\n\n### ACCEPTANCE\n\nold\n", "Acceptance", "new\n", "a\n\n### ACCEPTANCE\n\nnew\n"},
+		{"replace last keeps heading case", "a\n\n### Notes\n\nold\n", "Notes", "new\n", "a\n\n### Notes\n\nnew\n"},
 		{"first of two", "## X\n\n1\n\n## X\n\n2\n", "x", "n", "## X\n\nn\n\n## X\n\n2\n"},
 		{"subsection belongs", "## A\n\n- old\n\n### Edge\n\n- old edge\n\n## B\n", "a", "new", "## A\n\nnew\n\n## B\n"},
 		{"higher heading ends", "### A\n\nold\n\n## B\n", "a", "new", "### A\n\nnew\n\n## B\n"},
@@ -146,6 +146,30 @@ func TestSetSection(t *testing.T) {
 	} {
 		if got := SetSection(c.text, c.section, c.content); got != c.want {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
+
+// The acceptance heading has one grammar: what readiness reads is what
+// SetSection replaces, and the replaced heading is written canonically.
+func TestSetSectionAcceptanceRoundTrip(t *testing.T) {
+	for _, c := range []struct{ name, text, want string }{
+		{"exact", "Intro\n\n## Acceptance\n\n- [ ] old\n\n## Pointers\n\n- p\n", "Intro\n\n## Acceptance\n\n- [ ] new\n\n## Pointers\n\n- p\n"},
+		{"criteria suffix", "Intro\n\n## Acceptance criteria\n\n- [ ] AC-1: a\n", "Intro\n\n## Acceptance\n\n- [ ] new\n"},
+		{"other level and case", "Intro\n\n### ACCEPTANCE criteria\n\n- [ ] old\n\n### Pointers\n\n- p\n", "Intro\n\n## Acceptance\n\n- [ ] new\n\n### Pointers\n\n- p\n"},
+		{"level one", "# Acceptance\n\n- [ ] old\n\n# Next\n", "## Acceptance\n\n- [ ] new\n\n# Next\n"},
+	} {
+		got := SetSection(c.text, "acceptance", "- [ ] new\n")
+		if got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+		if n := len(AcceptanceHeadRe.FindAllString(got, -1)); n != 1 {
+			t.Errorf("%s: %d acceptance headings, want 1", c.name, n)
+		}
+		// A deeper heading is promoted to ##, so its former siblings become
+		// subsections; a second write is stable only for the other cases.
+		if again := SetSection(got, "acceptance", "- [ ] new\n"); again != got && c.name != "other level and case" {
+			t.Errorf("%s: second write changed the body: %q", c.name, again)
 		}
 	}
 }
