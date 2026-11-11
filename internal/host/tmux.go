@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/shlex"
 )
 
-// tmux ports bin/hv-host-tmux.sh. A slot's handle is its window target,
+// tmux is the tmux adapter. A slot's handle is its window target,
 // `<session>:<slot>`, stable across dispatches: the window is killed and
 // recreated under the same name.
 //

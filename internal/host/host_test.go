@@ -18,7 +18,7 @@ import (
 var bg = context.Background()
 
 func TestNewSelectsByKind(t *testing.T) {
-	for kind, want := range map[Kind]Kind{Herdr: Herdr, Tmux: Tmux, Solo: Tmux, "": Tmux} {
+	for kind, want := range map[Kind]Kind{Herdr: Herdr, Tmux: Tmux, Orca: Orca, HerdrCore: HerdrCore} {
 		if got := New(kind, Deps{}).Kind(); got != want {
 			t.Errorf("New(%q) = %s, want %s", kind, got, want)
 		}
