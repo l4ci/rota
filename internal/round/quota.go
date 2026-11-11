@@ -72,7 +72,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 // limits the watcher logged.
 func (e Env) loggedPool(root string, h harness.Accounts) (p pool, configured bool) {
 	logins := h.Accounts(harness.ConfigFor(e.Worker.Config(root), h.Kind())).Entries
-	cooling := limits.Cooling(root, h.Kind(), e.now())
+	cooling := limits.Cooling(limits.Load(root), h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
 			p.resets = append(p.resets, at)

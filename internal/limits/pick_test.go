@@ -25,25 +25,21 @@ func (f *fakeSource) Pick(_ context.Context, exclude []string) (string, bool) {
 }
 
 func TestPickAccountMeteredHarnessAsksTheMeterPick(t *testing.T) {
-	r := newRig(t)
 	src := &fakeSource{picked: "b", pickOK: true, logins: []string{"x"}}
-	got, ok := PickAccount(context.Background(), src, r.root, "", "a", t0)
+	got, ok := PickAccount(context.Background(), src, nil, "", "a", t0)
 	if !ok || got != "b" || len(src.exclude) != 1 || src.exclude[0] != "a" {
 		t.Fatalf("pick %q %v exclude %v", got, ok, src.exclude)
 	}
 }
 
 func TestPickAccountLoggedHarnessUsesLoginsAndCooling(t *testing.T) {
-	r := newRig(t)
 	src := &fakeSource{logins: []string{"c1", "cooling", "c2"}, picked: "never", pickOK: true}
-	if _, err := Append(r.root, Entry{Session: "ben", Kind: harness.Codex, Account: "cooling", Status: StatusWaiting, ResetsAt: Time(t0.Add(time.Hour))}); err != nil {
-		t.Fatal(err)
-	}
-	got, ok := PickAccount(context.Background(), src, r.root, harness.Codex, "c1", t0)
+	entries := []Entry{{Session: "ben", Kind: harness.Codex, Account: "cooling", Status: StatusWaiting, ResetsAt: Time(t0.Add(time.Hour))}}
+	got, ok := PickAccount(context.Background(), src, entries, harness.Codex, "c1", t0)
 	if !ok || got != "c2" || src.exclude != nil {
 		t.Fatalf("pick %q %v exclude %v", got, ok, src.exclude)
 	}
-	if got, ok := PickAccount(context.Background(), src, r.root, harness.Codex, "c2", t0); !ok || got != "c1" {
+	if got, ok := PickAccount(context.Background(), src, entries, harness.Codex, "c2", t0); !ok || got != "c1" {
 		t.Fatalf("pick %q %v", got, ok)
 	}
 }
