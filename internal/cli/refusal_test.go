@@ -2,8 +2,11 @@ package cli
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -93,5 +96,29 @@ func TestRefusalEnvelopeMatchesLegacyShape(t *testing.T) {
 		if want, got := wire(t, lr, le), wire(t, nr, ne); want != got {
 			t.Errorf("%s:\n legacy %s\n now    %s", c.name, want, got)
 		}
+	}
+}
+
+// An unreadable verdict store reaches the gate's refusal as a plain exit-4
+// error, not a recorded FAIL; the envelope must still carry blockedBy verdict.
+func TestRecordedFailRefusalKeepsEnvelopeForCorruptStore(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(verdict.Path(root)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verdict.Path(root), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, storeErr := verdict.LoadStrict(root)
+	res, err := recordedFailRefusal(storeErr, jsonx.NewObject())
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused || ee.Hint == "" {
+		t.Fatalf("want an exit-4 refusal with a hint, got %v", err)
+	}
+	if got, _ := res.Data.(*jsonx.Object).Get("blockedBy"); got != "verdict" {
+		t.Fatalf("blockedBy = %v, want verdict", got)
+	}
+	if _, err := recordedFailRefusal(errors.New("boom"), jsonx.NewObject()); err == nil || errors.As(err, &ee) && ee.Exit == exitcode.ExitRefused {
+		t.Fatalf("a non-refusal error must pass through untouched: %v", err)
 	}
 }

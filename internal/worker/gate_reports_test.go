@@ -2,10 +2,13 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 
@@ -166,5 +169,39 @@ func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
 	}
 	if len(store.Branch("", "w1")) != 0 {
 		t.Fatal("the plain key must stay empty in an umbrella")
+	}
+}
+
+// A corrupt verdict store must refuse the gate, not read as "no failing verdict".
+func TestGateRefusesCorruptVerdictStore(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	if err := os.MkdirAll(filepath.Dir(verdict.Path(w.dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verdict.Path(w.dir), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
+	var ee *exitcode.Error
+	if res.Verdict != GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused || !strings.Contains(err.Error(), "verdict store") {
+		t.Fatalf("a corrupt store must refuse the gate with exit 4: %+v err=%v", res, err)
+	}
+}
+
+// With the verdict step skipped, the review-depth check still refuses a corrupt store.
+func TestGateReviewDepthRefusesCorruptVerdictStore(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	if err := os.MkdirAll(filepath.Dir(verdict.Path(w.dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verdict.Path(w.dir), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true, NoVerdict: true})
+	var ee *exitcode.Error
+	if res.Verdict != GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused {
+		t.Fatalf("a corrupt store must refuse the review-depth check: %+v err=%v", res, err)
 	}
 }
