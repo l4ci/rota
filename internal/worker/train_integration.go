@@ -47,6 +47,27 @@ func integrationOpts(o TrainOpts) error {
 	return nil
 }
 
+// refuseIntegrationPRs refuses a train with an integration PR among its
+// members: a train lands its members without the integration preflight and
+// lock (moved members, the verified-tip binding, the member bookkeeping), so
+// that PR lands through `rota worker gate` alone.
+func refuseIntegrationPRs(root string, targets []string) error {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	for _, tg := range targets {
+		ref := tg
+		if gt, err := reg.GateTargetAny(tg); err == nil && gt.PR != "" {
+			ref = gt.PR
+		}
+		if rec, ok := reg.IntegrationByPR(ref); ok && !rec.Landed {
+			return fail(exitcode.ExitUsage, fmt.Sprintf("%s is the PR of integration branch %s: land it with `rota worker gate %s`, not in a train", tg, rec.Branch, tg))
+		}
+	}
+	return nil
+}
+
 // withIntegrationLock serializes the trains of one integration branch. It is
 // not the land lock: an integration train moves no base, so a long verify of
 // it never holds up another landing.
@@ -158,10 +179,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		return true, err
 	}
 	for i, m := range res.Members {
-		im := IntegrationMember{Target: m.Target, PR: m.PR, Branch: m.Branch, Head: p.heads[i]}
-		if gt, err := reg.GateTargetAny(m.Target); err == nil {
-			im.Issue = gt.Issue
-		}
+		im := IntegrationMember{Target: m.Target, PR: m.PR, Branch: m.Branch, Head: p.heads[i], Issue: memberIssue(reg, m)}
 		if j := memberIndex(it.Members, m.Target); j >= 0 {
 			it.Members[j] = im
 		} else {
@@ -188,6 +206,18 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	return false, nil
 }
 
+// memberIssue is the item a member PR closes: the one its check gate
+// resolved (an external PR's comes from its branch name), else its slot's.
+func memberIssue(reg Registry, m TrainMember) string {
+	if m.issue != "" {
+		return m.issue
+	}
+	if gt, err := reg.GateTargetAny(m.Target); err == nil {
+		return gt.Issue
+	}
+	return ""
+}
+
 func memberIndex(ms []IntegrationMember, target string) int {
 	for i, m := range ms {
 		if m.Target == target {
@@ -205,7 +235,11 @@ func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix train
 		return res, nil
 	}
 	branch := p.integration.Branch
-	if err := UpdateIntegration(t.root, branch, func(it *Integration) {
+	// Only a verify that ran records the tip: a --no-verify run (or one with
+	// an empty test.full) checked nothing, so the gate must verify it itself.
+	if len(res.Verified) == 0 {
+		res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATION-UNVERIFIED %s — no test.full command ran; landing verifies the tip", branch))
+	} else if err := UpdateIntegration(t.root, branch, func(it *Integration) {
 		it.VerifiedTip, it.VerifiedBase = p.intTip, p.baseSHA
 	}); err != nil {
 		return res, err
@@ -249,11 +283,11 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 		return done, err
 	}
 	im := IntegrationMember{Target: pending.Target, PR: pending.PR, Branch: pending.Branch, Head: pendingHead, Pending: true, Conflicts: paths}
-	if reg, err := LoadRegistry(t.root); err == nil {
-		if gt, err := reg.GateTargetAny(pending.Target); err == nil {
-			im.Issue = gt.Issue
-		}
+	reg, err := LoadRegistry(t.root)
+	if err != nil {
+		return true, err
 	}
+	im.Issue = memberIssue(reg, pending)
 	if j := memberIndex(it.Members, im.Target); j >= 0 {
 		it.Members[j] = im
 	} else {
@@ -268,8 +302,17 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 	res.Verdict, res.Culprit = GateInteraction, ""
 	res.Err = fmt.Sprintf("TRAIN-INTERACTION %s — %s does not merge onto %s: conflict in %s; the members before it are pushed, nothing is verified or landed",
 		strings.Join(res.Interaction, ", "), pending.Branch, it.Branch, strings.Join(paths, ", "))
-	res.Hint = fmt.Sprintf("a worker merges %s into %s and resolves the conflict there, then re-run the train; bounce neither", pending.Branch, it.Branch)
+	res.Hint = t.integrationInteractionHint(*it, res.Interaction)
 	return true, nil
+}
+
+// integrationInteractionHint says where an integration branch's interaction
+// or conflict is fixed: on the branch, through the interaction item the CLI
+// files, never on a member branch, whose review would no longer hold.
+func (t *trainRun) integrationInteractionHint(it Integration, members []string) string {
+	return fmt.Sprintf("bounce neither of %s and change no member branch: the fix goes on %s through the interaction item this train files (INTERACTION-ITEM); "+
+		"assign it with `rota round assign <item>` (its slot is cut from %s and its PR targets it), land that PR with `rota worker gate <slot> --base %s`, then re-run `rota worker train %s --integration %s --base %s`",
+		strings.Join(members, ", "), it.Branch, it.Branch, it.Branch, strings.Join(t.o.Targets, " "), it.Name, it.Base)
 }
 
 // touching names the merged members whose change touches one of paths, the

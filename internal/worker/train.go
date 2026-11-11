@@ -147,6 +147,10 @@ type TrainMember struct {
 	Tier    string // the change tier its check-only gate put it in
 	Landed  bool
 	Culprit bool
+	// checked is the head its check-only gate reviewed; an integration train
+	// merges it, never a head pushed after the check. issue is the item that
+	// gate resolved, also for an external PR no slot holds.
+	checked, issue string
 }
 
 // TrainResult is the train's answer. Verdict is pass, or the verdict of the
@@ -281,6 +285,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		o.Round = &RoundMemo{}
 	}
 	if err := integrationOpts(o); err != nil {
+		return TrainResult{}, err
+	}
+	if err := refuseIntegrationPRs(root, o.Targets); err != nil {
 		return TrainResult{}, err
 	}
 	var res TrainResult
@@ -470,7 +477,11 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res, err := land(planned.Value, behaved.Result, prefix)
 		return struct{}{}, res, true, err
 	})
-	return landed.Result, landed.Err
+	res := landed.Result
+	if it := planned.Value.integration; it != nil && res.Verdict == GateInteraction {
+		res.Hint = t.integrationInteractionHint(*it, res.Interaction)
+	}
+	return res, landed.Err
 }
 
 // trainBrokeResult preserves the public CHECK-BROKE answer without receiver state.
@@ -612,7 +623,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return p.trainPlan, p.res, true, nil
 		}
-		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier})
+		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier, checked: gr.CheckedHead, issue: gr.Issue})
 		p.remote = p.remote || gr.PR != ""
 	}
 	if err := filterSectionOrder(*res, &o, merged); err != nil {
@@ -755,6 +766,13 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		if p.heads[i], code = e.git(root, "rev-parse", headRef(m)); code != 0 {
 			done, err := trainBrokeResult(res, fmt.Sprintf("git rev-parse %s exited %d", headRef(m), code))
 			return p.trainPlan, p.res, done, err
+		}
+		// An integration branch trusts rota's member merges without a review of
+		// their own, so it merges the head the member's review was checked at:
+		// one pushed since is merged by a rerun, after its own review.
+		if p.integration != nil && m.checked != "" && p.heads[i] != m.checked {
+			res.Notes = append(res.Notes, fmt.Sprintf("PINNED %s — %s moved to %s after its check; merging the checked %s", m.Target, m.Branch, strutil.ShortSHA(p.heads[i]), strutil.ShortSHA(m.checked)))
+			p.heads[i] = m.checked
 		}
 	}
 	p = t.pickTier(p)

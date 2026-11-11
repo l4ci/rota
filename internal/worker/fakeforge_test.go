@@ -66,6 +66,10 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	if h := w.forgeWord(fmt.Sprintf("head#%d", pr)); h != "" {
 		info.Head, info.HeadSHA = h, w.forgeWord(fmt.Sprintf("sha#%d", pr))
 	}
+	// "body#9" is that PR's own body, exact (the integration PR rota writes).
+	if b := w.forgeWord(fmt.Sprintf("body#%d", pr)); b != "" {
+		info.Body = b
+	}
 	if w.mode == "ff" {
 		info.MergeSHA = "" // a fast-forward merge has no merge commit
 	}
