@@ -443,7 +443,7 @@ func TestBehaviourKind(t *testing.T) {
 	}
 }
 
-func TestFailingVersusEffectiveFail(t *testing.T) {
+func TestFailingVersusNarrowFailing(t *testing.T) {
 	blocker := []Finding{{Severity: "major", Title: "t"}}
 	nit := []Finding{{Severity: "minor", Title: "t"}}
 	cases := []struct {
@@ -462,16 +462,16 @@ func TestFailingVersusEffectiveFail(t *testing.T) {
 		if got := c.r.Failing(); got != c.failing {
 			t.Errorf("%s: Failing = %v, want %v", c.name, got, c.failing)
 		}
-		if _, got := EffectiveFail([]Record{c.r}); got != c.effectFails {
-			t.Errorf("%s: EffectiveFail = %v, want %v", c.name, got, c.effectFails)
+		if got := len(FailingRecords([]Record{c.r}, FailScope{})) > 0; got != c.effectFails {
+			t.Errorf("%s: narrow FailingRecords = %v, want %v", c.name, got, c.effectFails)
 		}
 	}
 	// the combined verdict of a quality record decides, not its own Verdict
 	q := Record{Kind: ReviewQuality, Verdict: Pass, Combined: Fail}
-	if r, ok := EffectiveFail([]Record{q}); !ok || r.Verdict != Fail {
+	if r, ok := firstFailing([]Record{q}, FailScope{}); !ok || r.Verdict != Fail {
 		t.Errorf("combined FAIL: %+v %v", r, ok)
 	}
-	if _, ok := EffectiveFail(nil); ok {
+	if _, ok := firstFailing(nil, FailScope{}); ok {
 		t.Error("no records must not fail")
 	}
 }

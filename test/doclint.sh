@@ -19,9 +19,7 @@ SK='SKILL''.md'
 # validate-skills.py reads relative links through `rota skills links`, so every
 # run of it below needs a binary; build one here.
 if [ -z "${ROTA_BIN:-}" ]; then
-  ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
-  (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
-    -o "$TMP/rota" ./cmd/rota) || fail "go build ./cmd/rota failed"
+  build_rota "$TMP/rota" || fail "go build ./cmd/rota failed"
   ROTA_BIN="$TMP/rota"
 fi
 export ROTA_BIN
@@ -36,8 +34,8 @@ pass "skills and references pass the doclint"
 OUT="$(python3 "$REPO/scripts/skills-docs.py" --check 2>&1)" || fail "skill lists are stale or the skill pages are invalid: $OUT"
 pass "skill lists are generated from docs/skills"
 
-SG="$TMP/skillsgen"; mkdir -p "$SG"
-cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/README.md" "$SG/"
+SG="$TMP/skillsgen"
+fixture_copy "$SG" docs skills scripts README.md
 sed -i 's/^summary: Build the next item.*/summary: Build something else entirely./' "$SG/docs/skills/rota-work.md"
 RC=0; OUT="$(python3 "$SG/scripts/skills-docs.py" --check --root "$SG" 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "docs/skills/README.md" <<<"$OUT" \
@@ -48,8 +46,8 @@ pass "skills-docs --check fails when a skill page changes without regenerating"
 SS="$TMP/site"; mkdir -p "$SS"
 # CI keeps LFS media as pointers. General docs checks use a source-only copy;
 # site_sync_test.py supplies tiny MP4s for the published-episode checks below.
-SSR="$TMP/siterepo"; mkdir -p "$SSR"
-cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSR/"
+SSR="$TMP/siterepo"
+fixture_copy "$SSR" docs skills scripts llms.txt
 OUT="$(python3 "$SSR/scripts/site-sync.py" "$SS" 2>&1)" || fail "site-sync fails on the repo (llms.txt links to no page?): $OUT"
 if grep -qF "page unreachable" <<<"$OUT"; then fail "docs navigation leaves unreachable pages: $OUT"; fi
 cmp -s "$REPO/llms.txt" "$SS/rota/llms.txt" \
@@ -70,8 +68,8 @@ grep -qF "page unreachable from docs navigation: /rota/docs/orphan-fixture/" <<<
 pass "site-sync accepts reference catalogs and still reports orphan pages"
 
 # ── site-sync reports a bad lane with skills-docs' message, not a traceback (#2422) ──
-SSL="$TMP/sitelane"; mkdir -p "$SSL" "$TMP/sitelane-out"
-cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSL/"
+SSL="$TMP/sitelane"; mkdir -p "$TMP/sitelane-out"
+fixture_copy "$SSL" docs skills scripts llms.txt
 sed -i 's/^lane: .*/lane: nowhere/' "$SSL/docs/skills/rota-work.md"
 RC=0; OUT="$(python3 "$SSL/scripts/site-sync.py" "$TMP/sitelane-out" 2>&1)" || RC=$?
 [ "$RC" != 0 ] && grep -qF "docs/skills/rota-work.md: lane 'nowhere' is not one of" <<<"$OUT" && ! grep -qF "Traceback" <<<"$OUT" \
@@ -79,8 +77,8 @@ RC=0; OUT="$(python3 "$SSL/scripts/site-sync.py" "$TMP/sitelane-out" 2>&1)" || R
 pass "site-sync exits with skills-docs' lane message on a bad lane"
 
 # ── site-sync reports a page missing a required key with the validator's message (#2823) ──
-SSK="$TMP/sitekey"; mkdir -p "$SSK" "$TMP/sitekey-out"
-cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/llms.txt" "$SSK/"
+SSK="$TMP/sitekey"; mkdir -p "$TMP/sitekey-out"
+fixture_copy "$SSK" docs skills scripts llms.txt
 sed -i '/^order: /d' "$SSK/docs/skills/rota-work.md"
 RC=0; OUT="$(python3 "$SSK/scripts/site-sync.py" "$TMP/sitekey-out" 2>&1)" || RC=$?
 [ "$RC" != 0 ] && grep -qF "docs/skills/rota-work.md: missing required key 'order'" <<<"$OUT" && ! grep -qF "Traceback" <<<"$OUT" \
@@ -92,13 +90,15 @@ OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video cata
 pass "site-sync generates published episodes and refreshes their media links"
 OUT="$(python3 "$TESTDIR/video_catalog_test.py" 2>&1)" || fail "video_catalog: $OUT"
 pass "video_catalog reads 32/64-bit mvhd and rejects a missing duration"
+OUT="$(python3 "$TESTDIR/validate_skills_test.py" 2>&1)" || fail "validate_skills import: $OUT"
+pass "validate-skills imports without running and exposes its checks"
 
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even
 # with "ask the user" or "never" nearby and in a shared reference file; a line that
 # tells the user to type it passes.
-CL="$TMP/chain"; mkdir -p "$CL"
-cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$CL/"
+CL="$TMP/chain"
+fixture_copy "$CL" skills docs README.md CHANGELOG.md
 printf 'Ask the user, then invoke `rota-decide` and never skip it.\n' > "$CL/skills/references/chain.md"
 RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$CL" 2>&1)" || RC=$?
 [ "$RC" = 1 ] && grep -qF "skills/references/chain.md:1: chains into flagged skill rota-decide" <<<"$OUT" \
@@ -111,8 +111,8 @@ pass "the chain lint fails a line that runs a flagged skill, in shared reference
 # A link inside a fence is not a link (#2417): the validator takes link detection
 # from `rota skills links`, so a fenced `](x.md)` neither satisfies "every sibling is
 # linked" nor counts as a broken sibling link.
-FL="$TMP/fence"; mkdir -p "$FL"
-cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$FL/"
+FL="$TMP/fence"
+fixture_copy "$FL" skills docs README.md CHANGELOG.md
 printf 'Extracted detail for the fence fixture.\n' > "$FL/skills/rota-work/fence-only.md"
 printf '\n```\n[fenced](fence-only.md) [gone](gone.md)\n```\n' >> "$FL/skills/rota-work/$SK"
 RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$FL" --no-prose 2>&1)" || RC=$?
@@ -138,8 +138,8 @@ pass "eval runner rejects failed calls and invalid routes without aborting the b
 # ── the prose lint can fail ─────────────────────────────────────────────────
 # Drop a pinned phrase from a copy of the real skills and the validator names
 # the file; a deleted target file is reported, not skipped.
-PL="$TMP/prose"; mkdir -p "$PL"
-cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
+PL="$TMP/prose"
+fixture_copy "$PL" skills docs README.md CHANGELOG.md
 OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$PL" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
 sed -i 's/rota status handoff/rota status hand-off/' "$PL/skills/rota-work/no-argument-mode.md"
 RC=0; OUT="$(python3 "$TESTDIR/validate-skills.py" --root "$PL" 2>&1)" || RC=$?
@@ -154,7 +154,7 @@ pass "the prose lint names a skill that lost a pinned phrase and a missing targe
 # ── a decoy under .worktrees/ is invisible to validate-skills (#79) ─────────
 VS="$TMP/vs"
 mkdir -p "$VS"
-cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$VS/"
+fixture_copy "$VS" skills docs README.md CHANGELOG.md
 mkdir -p "$VS/test" "$VS/scripts"; cp "$TESTDIR/validate-skills.py" "$VS/test/"; cp "$REPO/scripts/fmlite.py" "$VS/scripts/"
 BASE_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills fixture does not pass on its own: $BASE_OUT"
 # A decoy skill that would fail every check, and a duplicate of a real one.
