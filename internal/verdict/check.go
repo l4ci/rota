@@ -36,6 +36,8 @@ type Check struct {
 	Git   Runner
 	Store Store
 	Repo  string // sub-repo name in an umbrella, else ""
+	// StoreErr is the LoadStrict error for Store; set, every check refuses.
+	StoreErr error
 }
 
 // Block returns a *BlockedError when a recorded FAIL blocks branch, nil
@@ -59,6 +61,9 @@ func (v Check) Head(branch string) string {
 // BlockAt uses the known PR head when the branch is absent or stale locally.
 // An empty head keeps Block's existing local-ref behavior.
 func (v Check) BlockAt(branch, head string) error {
+	if v.StoreErr != nil {
+		return v.StoreErr
+	}
 	list := v.Store.Branch(v.Repo, branch)
 	// Keep local records' old stale semantics, but bind recovered reports to
 	// the supplied PR head (or the branch tip on the ordinary ship path).

@@ -683,3 +683,34 @@ func TestCanonicalizeItemsKeepsWorkFixFailuresAcrossAliasReset(t *testing.T) {
 		t.Errorf("work-fix attempts %d, want 2", got)
 	}
 }
+
+// A corrupt store must fail the merge-blocking check closed; a missing one
+// stays an empty store the check passes.
+func TestCheckRefusesCorruptStoreAndPassesMissing(t *testing.T) {
+	root := t.TempDir()
+	store, err := LoadStrict(root)
+	if err != nil || len(store.Branches) != 0 {
+		t.Fatalf("a missing store must read as empty: %v %v", store, err)
+	}
+	if err := (Check{Store: store, StoreErr: err}).BlockGate("b", "abc1234"); err != nil {
+		t.Fatalf("a missing store must not block: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(Path(root)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(root), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err = LoadStrict(root)
+	if err == nil {
+		t.Fatal("a corrupt store must be an error")
+	}
+	c := Check{Store: store, StoreErr: err}
+	for name, got := range map[string]error{"Block": c.Block("b"), "BlockAt": c.BlockAt("b", "abc1234"), "BlockGate": c.BlockGate("b", "abc1234")} {
+		var ee *exitcode.Error
+		if !errors.As(got, &ee) || ee.Exit != exitcode.ExitRefused || !strings.Contains(got.Error(), "verdict store") {
+			t.Errorf("%s: want an exit-4 verdict store refusal, got %v", name, got)
+		}
+	}
+}

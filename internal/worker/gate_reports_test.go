@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -166,5 +167,21 @@ func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
 	}
 	if len(store.Branch("", "w1")) != 0 {
 		t.Fatal("the plain key must stay empty in an umbrella")
+	}
+}
+
+// A corrupt verdict store must refuse the gate, not read as "no failing verdict".
+func TestGateRefusesCorruptVerdictStore(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	if err := os.MkdirAll(filepath.Dir(verdict.Path(w.dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verdict.Path(w.dir), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
+	if res.Verdict != GateVerdictBlocked || err == nil || !strings.Contains(err.Error(), "verdict store") {
+		t.Fatalf("a corrupt store must refuse the gate: %+v err=%v", res, err)
 	}
 }
