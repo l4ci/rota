@@ -90,6 +90,7 @@
   },
   "fixtures": {
     "./TestFoldedFrontMatterReadersAgree": "Tests front-matter readers and site generation against a mutated temporary copy; not a cross-tree source guard.",
+    "./TestFrontMatterFixtureTable": "Runs the validator and Go stub over the shared front-matter fixture table; a reader-agreement check, not a cross-tree source guard.",
     "./TestValidatorLintsPluginSkills": "Tests validator behavior by mutating copied skills in a temporary project; the real skills validator runs separately for skill changes and at the gate.",
     "./cmd/rota/TestConfigSetStoresNaNAsString": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
     "./cmd/rota/TestDFakesFirst": "Walks copied command-harness fixture projects through a helper or scenario callback; does not enumerate repository sources.",
