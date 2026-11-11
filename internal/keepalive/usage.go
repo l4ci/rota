@@ -34,11 +34,11 @@ type Decision struct {
 
 // decideUsage applies a usage handoff before a restart: it names the account
 // the next child runs under (curDir, st.Account) and records the decision.
-func decideUsage(env Env, o Options, st *keepstate.State, curDir *string, m keepstate.UsageHandoff, warn func(string)) {
+func decideUsage(env Env, sw *Switch, st *keepstate.State, curDir *string, m keepstate.UsageHandoff, warn func(string)) {
 	now := env.Now()
-	ch := env.Choose(*curDir, o.UsageThreshold)
+	ch := sw.Choose(*curDir, sw.Threshold)
 	d := Decision{Marker: m, From: st.Account}
-	figure := fmt.Sprintf("%g%% of %s, threshold %d%%", m.UsedPct, m.Window, o.UsageThreshold)
+	figure := fmt.Sprintf("%g%% of %s, threshold %d%%", m.UsedPct, m.Window, sw.Threshold)
 	if ch.To != nil {
 		*curDir = ch.To.ConfigDir
 		st.Account = ch.To.Name
@@ -47,7 +47,7 @@ func decideUsage(env Env, o Options, st *keepstate.State, curDir *string, m keep
 		d.Action, d.To = limits.ActionSwitch, ch.To.Name
 		d.Note = fmt.Sprintf("switched to %s (%g%% headroom): %s", ch.To.Name, ch.To.Headroom, figure)
 	} else {
-		until := now.Add(o.HoldFallback)
+		until := now.Add(sw.HoldFallback)
 		if m.ResetsAt != "" {
 			if t, err := stamp.Parse(m.ResetsAt); err == nil {
 				until = t
@@ -67,8 +67,8 @@ func decideUsage(env Env, o Options, st *keepstate.State, curDir *string, m keep
 			d.Note += "; the reset has passed, no hold"
 		}
 	}
-	if env.Record != nil {
-		if err := env.Record(d); err != nil {
+	if sw.Record != nil {
+		if err := sw.Record(d); err != nil {
 			warn("limits not recorded: " + err.Error())
 		}
 	}
