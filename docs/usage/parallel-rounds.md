@@ -56,6 +56,20 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
    `rota worker account list` then shows each Claude account with its usage verdict, plus Codex current account quota reports for configured homes, or the caller-current ambient home when none are configured. Codex weekly capacity is display-only; it does not affect account selection. See [Codex weekly capacity](codex-workers.md#read-current-weekly-capacity).
 
+   Claude usage comes from the OAuth usage endpoint, read through the cache Claude Code's status line writes
+   (`/tmp/claude/statusline-usage[-<8 hex of sha256(config dir)>].json`, shared with the herdr `limits` mod).
+   A cache under 5 minutes old is read without a request; files that are symlinks or not yours are ignored.
+   Any failed request (an HTTP error, a transport error, a body that is not usage JSON) writes `<cache>.backoff`
+   holding the `Retry-After` as the server gave it, else 300 seconds. A wait over one hour is capped at
+   one hour when read, never when written. No request goes out for that account until it passes. rota also
+   writes `<cache>.reason` (the mod ignores it) so a held backoff keeps saying what went wrong; a backoff
+   rota did not write reads `backing off after a failed request (retry in Ns)`. The verdict says why a
+   reading is missing: `rate limited (retry in Ns)`, `login expired` (401/403), `usage endpoint returned
+   <code>` or `usage endpoint unreachable`. A utilization outside 0..100 reads as unknown, not headroom.
+   `rota worker account list` marks the account `assign` would take (`<- assign picks this`,
+   `"picked": true` in JSON): the one with the most headroom among accounts that are not cooling and have no
+   login problem. An unreadable meter is picked only when no account has a readable one.
+
 4. **Issues a worker can pick up.** A candidate needs acceptance criteria or a design or plan note,
    closed dependencies and no file overlap with work in flight (see [Picking issues](#picking-issues)).
 5. **Subagent definitions.** `rota init` runs `rota agents write`, which writes

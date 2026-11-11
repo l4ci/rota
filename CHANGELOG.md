@@ -1,12 +1,44 @@
 # Changelog
 
-## Unreleased
+## v0.33.0 — 2026-11-11
+
+Train red classification, fail-closed config and verdict reads, and a tighter worker guard.
 
 ### Upgrade notes
 
-- **A corrupt or non-object config file exits 5, not 70.** A `.rota/config.json`, `.rota/config.local.json` or global config that does not parse, or holds JSON other than an object, is the user's file: the verbs that read it exit 5 naming the file, with no "bug in rota" hint. `config set` now refuses such a file instead of overwriting it, and merged `config show` exits 5 for a bad project or local file (a bad global one is still skipped with a warning). `config check` exits 5 naming a bad local file. The support fence no longer refuses a bad `config.local.json` with exit 4 `blockedBy: "config"`: it exits 5 with no `blockedBy`, so scripts must read the exit code (#2924).
-- **A verb cancelled by SIGINT or SIGTERM exits 130 `interrupted`, not 70.** Ctrl-C, or a harness killing a background command, no longer prints the "bug in rota" hint or writes to the bug-report log. An interrupted `worker gate` keeps its `data` (`changed`, verdict). An interrupted `worker train` still reports its own `cancelled` verdict with exit 1 (#2926).
-- **Every verb refuses a corrupt project or local config.** A `.rota/config.json` or `.rota/config.local.json` that does not parse, or holds JSON other than an object, now makes every verb but `config`, `migrate`, `init`, `setup`, `version`, `update`, `skills`, `hook`, `statusline` and `worker prompt-check` exit 5 naming the file. They used to read it as missing, run on defaults and exit 0, so `issues.source` and every other key was lost silently. A blank file still reads as `{}`; a corrupt global config is still skipped with a warning (#2935).
+- **A corrupt or non-object config file exits 5, not 70.** A `.rota/config.json`, `.rota/config.local.json` or global config that does not parse, or holds JSON other than an object, is the user's file: the verbs that read it exit 5 naming the file, with no "bug in rota" hint. `config set` refuses such a file instead of overwriting it, and merged `config show` exits 5 for a bad project or local file (a bad global one is still skipped with a warning). `config check` exits 5 for a bad local file and still exits 1 for a bad project file. The support fence no longer refuses a bad `config.local.json` with exit 4 `blockedBy: "config"`: it exits 5 with no `blockedBy`, so scripts must read the exit code (#2924).
+- **Every verb refuses a corrupt project or local config.** Such a file used to read as missing, so verbs ran on defaults and exited 0, silently losing `issues.source` and every other key. Now every verb but `config`, `migrate`, `init`, `setup`, `version`, `update`, `skills`, `hook`, `statusline` and `worker prompt-check` exits 5 naming the file. A blank file still reads as `{}` (#2935).
+- **A verb cancelled by SIGINT or SIGTERM exits 130 `interrupted`, not 70.** Ctrl-C, or a harness killing a background command, no longer prints the "bug in rota" hint or writes to the bug-report log. An interrupted `worker gate` keeps its `data`; an interrupted `worker train` still reports `cancelled` with exit 1 (#2926).
+- **The merge gate and `ship` refuse an unreadable verdict store.** A corrupt `.rota/verdicts.json` used to read as empty, so the gate saw no failing verdict. It now refuses with exit 4; a missing file is still empty (#3034).
+- **`ship.mergeApprovalPaths` `**` matches at any depth.** `migrations/**` now also covers `migrations/v2/a.sql`, so merges that skipped approval before may now ask for it. Every glob config key shares one validity rule, and a trailing `/` entry such as `docs/` is accepted (#2918).
+- **Adopted worker slots are written as `provenance: "external"`, not `kind: "external"`.** Old records still load, but an older rota cannot read adoption records this version writes, so finish or reassign adopted slots before a downgrade.
+
+### New
+
+- **Train reds are classified.** Before naming a culprit, a local `worker train` reruns the failing tests (the failed command when it cannot pick tests) on the base plus that member, then on each earlier member paired with it. A CI train (`test.fullWhere: ci`) skips this and notes `TRAIN-UNCLASSIFIED`. A red that needs two members is verdict `interaction`: no culprit, no PR notice, no cache blame, and the needs-you line says to fix it on one member. A red no rerun reproduces is a flake: it names the tests, blames nobody, and the tick retrains every member. JSON adds `interaction[]` to train output and the needs-you kind `train-interaction` (#3095, #3113).
+- `rota skills layout` lists files under a skills tree that the supported layout rejects, and `rota skills files` lists the files a skills tree ships (`data.files`). `validate-skills.py` and the Codex plugin build call `skills layout`, and both refuse symlinked skill folders and files.
+
+### Fixed
+
+- **Worker guard.** It follows `env -C`, `sudo -D`, `pushd` and `GIT_DIR`, and fails closed on `pushd` options it does not model. It now denies a worker's plain push to the base branch and `gh api …/merge`.
+- **Round claims and labels.** A failed assign rolls back the claim it posted (#2997). `round transfer --to human` releases every open claim and its labels (#2999). Gate and train cleanup of a closed issue removes `needs-review` and `needs-human` (#2882). A parked done slot whose PR merged stops waking the watch (#3000).
+- An armed autopilot stays stopped after a failed wind-down verify until a green one, and wind-down keeps tick state and receipts when verify fails. Wind-down and tick output add `autopilotStopped` (#2901, #2919).
+- `backlog stale --kind todo` reads the selected tracker and reports items it could not date under `skippedUndated`.
+- `host.New` refuses Solo and unknown kinds instead of falling back to tmux; herdr-core pane lookup reads `HC_TERMINAL_ID` (#3040, #3042).
+- `rota review cleanup` accepts a workspace under a symlinked ancestor such as macOS `/var`, and still refuses a symlinked workspace (#3090).
+- Decisions writes no longer rewrite legacy `/hv-` names in the preamble (#3021).
+- The installed worker brief is served from every `round.accounts` skills dir, not only the default one.
+- The statusline sweeps other sessions' state at most every ten minutes, by mtime.
+- Docs no longer say the gate counts bounces and parks at the cap (#2861).
+
+### Internal
+
+- Most other commits are refactors from the latest architecture reviews: one owner each for config layers, remote URL parsing, timestamps, globs, retry, boot readiness and the host-session env scrub; `round.Env` built once; split `herdr.go`, `orca.go`, `doctor.go` and the worker registry by job; tracker adapters share field and comment codecs.
+
+## Stats
+204 commits, 751 files changed, +19108 −10242 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.32.0...v0.33.0
 
 ## v0.32.0 — 2026-11-07
 

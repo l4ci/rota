@@ -316,10 +316,14 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 	ctx, stop := workerContext()
 	defer stop()
 	rows := c.deps().WorkerAccounts().Meters(ctx, root)
+	picked, _ := c.deps().WorkerAccounts().PickFrom(rows, nil)
 	list := make([]any, 0, len(rows))
 	var lines []string
 	for _, m := range rows {
 		o := accountObject(m)
+		if m.Name == picked {
+			o.Set("picked", true)
+		}
 		list = append(list, o)
 		pct := func(v *float64) string {
 			if v == nil {
@@ -330,6 +334,9 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 		note := m.Reason
 		if note == "" && m.ResetsAt != nil {
 			note = stamp.ISO(*m.ResetsAt)
+		}
+		if m.Name == picked {
+			note = strings.TrimSpace(note + " <- assign picks this")
 		}
 		lines = append(lines, fmt.Sprintf("%-12s %-8s %-9s 5h=%-5s 7d=%-5s %s", m.Name, config.KindClaude, m.Verdict, pct(m.FiveHour), pct(m.SevenDay), note))
 	}

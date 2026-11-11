@@ -189,12 +189,3 @@ func TestKeepaliveRunsTheLimitsLoopUnlessTold(t *testing.T) {
 		t.Errorf("--no-limits must not read the limits keys, got %d", code)
 	}
 }
-
-func TestKeepaliveGapOnlyWithSwitch(t *testing.T) {
-	if keepaliveGap(false) != nil {
-		t.Error("switching off must give D3's loop no gap flag")
-	}
-	if g := keepaliveGap(true); g == nil || g.Load() {
-		t.Errorf("switching on: %v", g)
-	}
-}

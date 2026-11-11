@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,10 +17,12 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
@@ -33,7 +36,9 @@ import (
 // per-config-dir question. Three sources, tried in order, each degrading
 // honestly rather than guessing:
 //  1. The OAuth usage endpoint, authenticated with the account's own
-//     credentials. Works with NO session running, which is what makes
+//     credentials, behind the status-line cache Claude Code and the herdr
+//     limits mod share (5 minutes) and a backoff after a failed request.
+//     Works with NO session running, which is what makes
 //     pre-dispatch balancing possible.
 //  2. A fixture payload (ROTA_ACCOUNT_USAGE_DIR) for offline tests.
 //  3. `unknown`, which callers treat as "rotate", never as "free" and never
@@ -77,6 +82,42 @@ type Accounts struct {
 	HTTP *http.Client
 	// Login reads each account's credentials; the zero value reads files only.
 	Login Credentials
+	// CacheDir holds the usage cache Claude Code's status line and the herdr
+	// limits mod share; "" means /tmp/claude.
+	CacheDir string
+	// ownedByMe reports whether a file belongs to the current user; nil means
+	// the real check. /tmp/claude is shared and world-writable, so a cache or
+	// backoff another user planted is never trusted.
+	ownedByMe func(os.FileInfo) bool
+}
+
+func (a *Accounts) mine(st os.FileInfo) bool {
+	if a.ownedByMe != nil {
+		return a.ownedByMe(st)
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	return ok && int(sys.Uid) == os.Getuid()
+}
+
+// usageCacheDir is the directory of the shared usage cache.
+const usageCacheDir = "/tmp/claude"
+
+// usageCachePath is the status-line usage cache of the account whose config
+// dir is configDir: statusline-usage.json for ~/.claude, else the file
+// suffixed with the first 8 hex chars of sha256(dir), the name Claude Code
+// and the herdr mod both use.
+func (a *Accounts) usageCachePath(configDir string) string {
+	dir := a.CacheDir
+	if dir == "" {
+		dir = usageCacheDir
+	}
+	d := a.expand(configDir)
+	suffix := ""
+	if d != a.expand("") {
+		sum := sha256.Sum256([]byte(d))
+		suffix = "-" + hex.EncodeToString(sum[:])[:8]
+	}
+	return filepath.Join(dir, "statusline-usage"+suffix+".json")
 }
 
 func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
@@ -216,7 +257,8 @@ func window(p *jsonx.Object, key string) (*float64, *time.Time) {
 	var util *float64
 	if u, ok := w.Get("utilization"); ok {
 		if n, ok := u.(json.Number); ok {
-			if f, err := n.Float64(); err == nil {
+			// Outside 0..100 is a bad cache, not headroom: leave it unknown.
+			if f, err := n.Float64(); err == nil && f >= 0 && f <= 100 {
 				util = &f
 			}
 		}
@@ -248,6 +290,67 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 		}
 		return o, ""
 	}
+	return a.fetchUsage(ctx, configDir)
+}
+
+// usageMaxAge is how long the shared usage cache counts as fresh.
+const usageMaxAge = 5 * time.Minute
+
+// defaultBackoff is the wait after a failed request without a Retry-After;
+// maxBackoff caps a wait when it is read, never when it is written, so the
+// file keeps what the server said.
+const (
+	defaultBackoff = 300 * time.Second
+	maxBackoff     = time.Hour
+)
+
+// backoffOf reads a wait in seconds as written: the default for anything
+// unusable. It does not cap; backoffLeft does.
+func backoffOf(s string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n <= 0 || n > math.MaxInt32 {
+		return defaultBackoff
+	}
+	return time.Duration(n) * time.Second
+}
+
+// reasonSkew is how far apart our backoff and its .reason sidecar may be
+// written; a backoff rewritten later (by the herdr mod) orphans the reason.
+const reasonSkew = 2 * time.Second
+
+// openOwned opens path without following a symlink and returns its bytes and
+// mtime, both taken from the one open file. A file that is not a regular file
+// of the current user reads as absent: /tmp/claude is shared and world-writable.
+func (a *Accounts) openOwned(path string) ([]byte, time.Time, bool) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() || !a.mine(st) {
+		return nil, time.Time{}, false
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	return b, st.ModTime(), true
+}
+
+// fetchUsage reads the usage of the account behind configDir. A cache under
+// five minutes old answers without a request; a backoff left by a failed
+// request (ours or the herdr mod's) holds further requests until it passes.
+func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Object, string) {
+	cache := a.usageCachePath(configDir)
+	if b, mt, ok := a.openOwned(cache); ok && a.now().Sub(mt) < usageMaxAge {
+		if o := parseUsage(b); o != nil {
+			return o, ""
+		}
+	}
+	if left, why := a.backoffLeft(cache); left > 0 {
+		return nil, why
+	}
 	token, why := a.token(configDir)
 	if token == "" {
 		return nil, why
@@ -265,24 +368,95 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "usage endpoint unreachable"
+		return a.failed(cache, "", reasonUnreachable)
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
-	v, err := jsonx.Decode(b)
-	if err != nil {
-		return nil, "usage endpoint unreachable"
-	}
-	o, ok := v.(*jsonx.Object)
-	if _, has := func() (any, bool) {
-		if o == nil {
-			return nil, false
+	if resp.StatusCode != http.StatusOK {
+		retryAfter := resp.Header.Get("Retry-After")
+		switch resp.StatusCode {
+		case http.StatusTooManyRequests:
+			return a.failed(cache, retryAfter, reasonRateLimited)
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return a.failed(cache, retryAfter, "login expired")
 		}
-		return o.Get("five_hour")
-	}(); !ok || !has {
-		return nil, "unexpected payload"
+		return a.failed(cache, retryAfter, fmt.Sprintf("usage endpoint returned %d", resp.StatusCode))
+	}
+	o := parseUsage(b)
+	if o == nil {
+		v, err := jsonx.Decode(b)
+		if _, isObj := v.(*jsonx.Object); err != nil || !isObj {
+			return a.failed(cache, "", reasonUnreachable)
+		}
+		return a.failed(cache, "", "unexpected payload")
+	}
+	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
+	if fsio.WriteFileAtomic(cache, append(bytes.TrimSpace(b), '\n')) == nil {
+		_ = os.Remove(cache + ".backoff")
+		_ = os.Remove(cache + ".reason")
 	}
 	return o, ""
+}
+
+// reasonRateLimited and reasonUnreachable are stored reasons whose text is
+// rebuilt on read: the first with the time left, the second as its message.
+const (
+	reasonRateLimited = "rate limited"
+	reasonUnreachable = "usage endpoint unreachable"
+)
+
+// failed records a failed request the way the herdr mod does: a backoff file
+// holding the Retry-After as given, else 300 seconds. The reason goes in a
+// sidecar the mod ignores, so a held backoff can still say what went wrong.
+// It returns the message for this call.
+func (a *Accounts) failed(cache, retryAfter, reason string) (*jsonx.Object, string) {
+	wait := backoffOf(retryAfter)
+	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
+	_ = fsio.WriteFileAtomic(cache+".reason", []byte(reason+"\n"))
+	_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
+	return nil, heldMessage(reason, min(wait, maxBackoff))
+}
+
+func heldMessage(reason string, left time.Duration) string {
+	if reason == reasonRateLimited {
+		return fmt.Sprintf("rate limited (retry in %ds)", int((left+time.Second-1)/time.Second))
+	}
+	return reason
+}
+
+// backoffLeft is how much of the wait recorded beside cache remains (the
+// backoff file holds the wait in seconds, capped at an hour, and its mtime is
+// when the wait began) and why. The reason is the one rota recorded; a
+// backoff rota did not write gets a neutral message.
+func (a *Accounts) backoffLeft(cache string) (time.Duration, string) {
+	b, mt, ok := a.openOwned(cache + ".backoff")
+	if !ok {
+		return 0, ""
+	}
+	left := min(backoffOf(string(b)), maxBackoff) - a.now().Sub(mt)
+	if left <= 0 {
+		return 0, ""
+	}
+	if rb, rmt, ok := a.openOwned(cache + ".reason"); ok {
+		if d := rmt.Sub(mt); d > -reasonSkew && d < reasonSkew {
+			if reason := strings.TrimSpace(string(rb)); reason != "" {
+				return left, heldMessage(reason, left)
+			}
+		}
+	}
+	return left, fmt.Sprintf("backing off after a failed request (retry in %ds)", int((left+time.Second-1)/time.Second))
+}
+
+func parseUsage(b []byte) *jsonx.Object {
+	v, err := jsonx.Decode(b)
+	o, _ := v.(*jsonx.Object)
+	if err != nil || o == nil {
+		return nil
+	}
+	if _, has := o.Get("five_hour"); !has {
+		return nil
+	}
+	return o
 }
 
 // Credentials reads an account's login. GOOS and Run are the platform seams:
@@ -430,8 +604,15 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 	for i, n := range exclude {
 		names[i] = strings.TrimSpace(n)
 	}
-	m, ok, _ := SelectAccount(a.Meters(ctx, root), AccountSelection{
-		Exclude: names,
+	return a.PickFrom(a.Meters(ctx, root), names)
+}
+
+// PickFrom is Pick over one Meters reading, so a caller that already holds the
+// meters (account list) names the account assign would take without reading
+// them again.
+func (a *Accounts) PickFrom(meters []Meter, exclude []string) (name string, ok bool) {
+	m, ok, _ := SelectAccount(meters, AccountSelection{
+		Exclude: exclude,
 		LoginProblem: func(m Meter) string {
 			return a.login().Problem(a.expand(m.ConfigDir))
 		},
