@@ -109,6 +109,10 @@ type TrainOpts struct {
 	// ItemBody is GateOpts.ItemBody for every member's behaviour run (#915);
 	// nil leaves the run out.
 	ItemBody func(issue string) (body string, found bool, err error)
+	// Integration names the integration branch of the round
+	// (integration/r<round>-<name>): the members merge into it, it is pushed
+	// and verified, and nothing lands on Base. "" is a plain train.
+	Integration string
 	// RequestID is the receipt id of this call. When set, the train writes a
 	// live marker under it (see TrainRun) so `rota worker train cancel` can
 	// find and stop it; "" writes none.
@@ -195,6 +199,9 @@ type TrainResult struct {
 	Stop *TrainStop
 	// Log is the verify log a cancelled train kept on disk; "" otherwise.
 	Log string
+	// Integration is the integration branch's record after the run; nil for a
+	// plain train.
+	Integration *Integration
 	// VerifyTime is the time spent verifying the whole train; DiagnoseTime the
 	// time spent on prefix runs that look for the culprit (#2753).
 	VerifyTime, DiagnoseTime time.Duration
@@ -273,6 +280,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
 	}
+	if err := integrationOpts(o); err != nil {
+		return TrainResult{}, err
+	}
 	var res TrainResult
 	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
 		return e.train(ctx, root, o, nil, nil)
@@ -286,7 +296,15 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			defer release()
 		}
 	}
-	err := e.withLandingRun(ctx, root, strings.Join(o.Targets, ", "), o.NoWait, func(bool) (err error) {
+	lock := func(fn func(bool) error) error {
+		return e.withLandingRun(ctx, root, strings.Join(o.Targets, ", "), o.NoWait, fn)
+	}
+	if o.Integration != "" { // it moves no base, so it does not take the land lock
+		lock = func(fn func(bool) error) error {
+			return e.withIntegrationLock(ctx, root, o.Integration, func() error { return fn(false) })
+		}
+	}
+	err := lock(func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
@@ -342,6 +360,10 @@ type trainPlan struct {
 	tips    []string // tips[i] has the first i members merged
 	scratch string
 	cleanup func()
+	// integration is the integration branch's record (nil for a plain train)
+	// and intTip the tip pushed to it: the members plus the base merge.
+	integration *Integration
+	intTip      string
 }
 
 // phase reports the stage the train is in on o.Say, one PHASE line per change
@@ -441,7 +463,11 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		return t.behaviourStage(planned.Value, checked.Result, verified.Value)
 	})
 	landed := runLandingStage(behaved, func(prefix trainVerified) (struct{}, TrainResult, bool, error) {
-		res, err := t.land(planned.Value, behaved.Result, prefix)
+		land := t.land
+		if planned.Value.integration != nil {
+			land = t.integrationLand
+		}
+		res, err := land(planned.Value, behaved.Result, prefix)
 		return struct{}{}, res, true, err
 	})
 	return landed.Result, landed.Err
@@ -514,6 +540,11 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		seen[key] = true
 		if gt.PR != "" {
 			withPR++
+		}
+	}
+	if o.Integration != "" {
+		if p.integration, err = integrationPlan(reg, o, withPR, len(o.Targets)); err != nil {
+			return p.trainPlan, p.res, true, err
 		}
 	}
 	if withPR != 0 && withPR != len(o.Targets) {
@@ -707,9 +738,9 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	}
 
 	// 3. Merge in order in a scratch worktree.
-	if o.SyncBase != "" && p.remote {
+	if (o.SyncBase != "" || p.integration != nil) && p.remote {
 		if _, code := e.git(root, "fetch", p.rem(), "-q"); code != 0 {
-			done, err := trainBrokeResult(res, "git fetch "+p.rem()+" failed before syncing "+o.SyncBase)
+			done, err := trainBrokeResult(res, "git fetch "+p.rem()+" failed before merging the members")
 			return p.trainPlan, p.res, done, err
 		}
 	}
@@ -729,7 +760,15 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	p = t.pickTier(p)
 	res = &p.res
 	t.cache.retainBase(baseSHA)
-	scratch, cleanup, err := e.scratchTree(ctx, root, baseSHA, "rota-train-")
+	start := baseSHA
+	if p.integration != nil {
+		var done bool
+		if start, done, err = t.integrationStart(&p); done || err != nil {
+			return p.trainPlan, p.res, true, err
+		}
+		t.skipIntegrated(&p, start)
+	}
+	scratch, cleanup, err := e.scratchTree(ctx, root, start, "rota-train-")
 	if err != nil {
 		done, err := trainBrokeResult(res, err.Error())
 		return p.trainPlan, p.res, done, err
@@ -747,7 +786,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		done, err := trainBrokeResult(res, brokeMsg)
 		return p.trainPlan, p.res, done, err
 	}
-	if merr != nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
+	if merr != nil && p.integration == nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
 		// A shared-path member conflicts with the ones before it. Git's pairwise
 		// conflicts do not depend on merge order, so no other order is tried.
 		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
@@ -767,6 +806,10 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			ConflictHint: fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base),
 		})
 		return p.trainPlan, p.res, true, nil
+	}
+	if p.integration != nil {
+		done, err := t.assembleIntegration(&p)
+		return p.trainPlan, p.res, done, err
 	}
 	return p.trainPlan, p.res, false, nil
 }
@@ -1061,6 +1104,9 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 	cached := func(tier string, run func() (VerifyResult, error)) func(int) (VerifyResult, error) {
 		return func(k int) (VerifyResult, error) {
 			key := trainKey(tier, baseSHA, heads[:k])
+			if p.integration != nil { // the start is the branch's tip, the last tip carries the base merge
+				key = trainKey(tier, p.tipOf(k), nil)
+			}
 			if v, ok := cache.get(key); ok {
 				res.CacheHits = append(res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
 				return VerifyResult{Cached: true, Verified: v.Verified}, nil
