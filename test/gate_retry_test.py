@@ -328,6 +328,21 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertIn("TestUnderLoad", records[0]["firstOutput"])
         self.assertIn("ok example/pkg", records[0]["retryOutput"])
 
+    def test_partition_deals_every_section_once_heaviest_first(self):
+        for name, weight in (("01_a.sh", 1), ("02_b.sh", 9), ("03_c.sh", 1)):
+            (self.repo / "test/sections" / name).touch()
+        (self.repo / "test/shard-weights.txt").write_text("# weights\n02_b.sh 9\n")
+        logs = self.root / "parts"
+        logs.mkdir()
+        out = subprocess.run(["python3", str(self.repo / "test/gate-partition.py"),
+                              str(self.repo), "2", "0", str(logs)],
+                             capture_output=True, text=True, check=True)
+        self.assertEqual(out.stdout.strip(), "2")
+        shards = [(logs / f"shard{i}.list").read_text().split() for i in (1, 2)]
+        self.assertEqual(sorted(sum(shards, [])), sorted(
+            f"test/sections/{n}" for n in ("01_a.sh", "01_stub.sh", "02_b.sh", "03_c.sh")))
+        self.assertEqual(shards[0], ["test/sections/02_b.sh"])
+
     def test_flaky_smoke_retries_once_after_all_initial_checks(self):
         result, calls = self.run_gate("smoke-shard1")
         self.assertEqual(result.returncode, 0, result.stdout)
