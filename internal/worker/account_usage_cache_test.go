@@ -15,6 +15,8 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
+const usageGetFailure = "usage endpoint unreachable"
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -126,7 +128,7 @@ func TestUsageReadsBackoffFromHerdrMod(t *testing.T) {
 	bo := acc.usageCachePath(cfg) + ".backoff"
 	os.WriteFile(bo, []byte("120\n"), 0o644)
 	p, why := acc.defaultFetch(context.Background(), "a", cfg)
-	if p != nil || *calls != 0 || !strings.HasPrefix(why, "rate limited") {
+	if p != nil || *calls != 0 || !strings.HasPrefix(why, "backing off after a failed request (retry in ") {
 		t.Errorf("payload=%v calls=%d why=%q", p, *calls, why)
 	}
 	// An elapsed backoff no longer holds.
@@ -196,5 +198,81 @@ func TestUsageIgnoresFilesOwnedByAnotherUser(t *testing.T) {
 	os.WriteFile(acc.usageCachePath(cfg)+".backoff", []byte("120\n"), 0o644)
 	if p, _ := acc.defaultFetch(context.Background(), "a", cfg); p == nil || *calls != 1 {
 		t.Errorf("foreign-owned cache or backoff was trusted: payload=%v calls=%d", p, *calls)
+	}
+}
+
+func TestUsageBackoffKeepsTheRealReason(t *testing.T) {
+	acc, cfg, _, calls := usageRig(t, func(*http.Request) (*http.Response, error) { return resp(401, `{}`, nil), nil })
+	if _, why := acc.defaultFetch(context.Background(), "a", cfg); why != "login expired" {
+		t.Fatalf("first why = %q", why)
+	}
+	if _, why := acc.defaultFetch(context.Background(), "a", cfg); why != "login expired" || *calls != 1 {
+		t.Errorf("held why = %q calls=%d, want login expired with no request", why, *calls)
+	}
+}
+
+func TestUsageEveryFailedRequestWritesBackoff(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		h    func(*http.Request) (*http.Response, error)
+		want string
+	}{
+		{"transport", func(*http.Request) (*http.Response, error) { return nil, io.ErrUnexpectedEOF }, usageGetFailure},
+		{"not json", func(*http.Request) (*http.Response, error) { return resp(200, `<html>`, nil), nil }, usageGetFailure},
+		{"no five_hour", func(*http.Request) (*http.Response, error) { return resp(200, `{"x":1}`, nil), nil }, "unexpected payload"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			acc, cfg, _, calls := usageRig(t, tc.h)
+			acc.defaultFetch(context.Background(), "a", cfg)
+			b, err := os.ReadFile(acc.usageCachePath(cfg) + ".backoff")
+			if err != nil || strings.TrimSpace(string(b)) != "300" {
+				t.Fatalf("backoff = %q, %v", b, err)
+			}
+			if _, why := acc.defaultFetch(context.Background(), "a", cfg); *calls != 1 || why != tc.want {
+				t.Errorf("held: calls=%d why=%q, want %q", *calls, why, tc.want)
+			}
+		})
+	}
+}
+
+func TestUsageRetryAfterStoredAsGiven(t *testing.T) {
+	acc, cfg, _, _ := usageRig(t, func(*http.Request) (*http.Response, error) {
+		return resp(429, `{}`, map[string]string{"Retry-After": "7200"}), nil
+	})
+	acc.defaultFetch(context.Background(), "a", cfg)
+	b, _ := os.ReadFile(acc.usageCachePath(cfg) + ".backoff")
+	if strings.TrimSpace(string(b)) != "7200" {
+		t.Errorf("stored wait = %q, want 7200", b)
+	}
+}
+
+func TestUsageSymlinkedFilesAreNotFollowed(t *testing.T) {
+	acc, cfg, _, calls := usageRig(t, func(*http.Request) (*http.Response, error) { return resp(200, okBody, nil), nil })
+	target := filepath.Join(t.TempDir(), "t")
+	os.WriteFile(target, []byte(okBody), 0o644)
+	cache := acc.usageCachePath(cfg)
+	if err := os.Symlink(target, cache); err != nil {
+		t.Fatal(err)
+	}
+	bo := t.TempDir() + "/b"
+	os.WriteFile(bo, []byte("120\n"), 0o644)
+	os.Symlink(bo, cache+".backoff")
+	if p, _ := acc.defaultFetch(context.Background(), "a", cfg); p == nil || *calls != 1 {
+		t.Errorf("symlinked cache or backoff was followed: payload=%v calls=%d", p, *calls)
+	}
+}
+
+func TestWindowRejectsOutOfRangeUtilization(t *testing.T) {
+	for _, u := range []string{"150", "-1", "100.5"} {
+		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":` + u + `}}`))
+		if got, _ := window(v.(*jsonx.Object), "five_hour"); got != nil {
+			t.Errorf("utilization %s read as %v, want unknown", u, *got)
+		}
+	}
+	v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":0},"seven_day":{"utilization":100}}`))
+	for _, k := range []string{"five_hour", "seven_day"} {
+		if got, _ := window(v.(*jsonx.Object), k); got == nil {
+			t.Errorf("%s boundary value rejected", k)
+		}
 	}
 }

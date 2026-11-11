@@ -257,7 +257,8 @@ func window(p *jsonx.Object, key string) (*float64, *time.Time) {
 	var util *float64
 	if u, ok := w.Get("utilization"); ok {
 		if n, ok := u.(json.Number); ok {
-			if f, err := n.Float64(); err == nil {
+			// Outside 0..100 is a bad cache, not headroom: leave it unknown.
+			if f, err := n.Float64(); err == nil && f >= 0 && f <= 100 {
 				util = &f
 			}
 		}
@@ -296,23 +297,45 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 const usageMaxAge = 5 * time.Minute
 
 // defaultBackoff is the wait after a failed request without a Retry-After;
-// maxBackoff caps any wait, whether a header or a file gave it.
+// maxBackoff caps a wait when it is read, never when it is written, so the
+// file keeps what the server said.
 const (
 	defaultBackoff = 300 * time.Second
 	maxBackoff     = time.Hour
 )
 
-// backoffOf reads a wait in seconds: the default for anything unusable, never
-// more than maxBackoff.
+// backoffOf reads a wait in seconds as written: the default for anything
+// unusable. It does not cap; waitLeft does.
 func backoffOf(s string) time.Duration {
 	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil || n <= 0 {
+	if err != nil || n <= 0 || n > math.MaxInt32 {
 		return defaultBackoff
 	}
-	if n > int(maxBackoff/time.Second) {
-		return maxBackoff
-	}
 	return time.Duration(n) * time.Second
+}
+
+// reasonSkew is how far apart our backoff and its .reason sidecar may be
+// written; a backoff rewritten later (by the herdr mod) orphans the reason.
+const reasonSkew = 2 * time.Second
+
+// openOwned opens path without following a symlink and returns its bytes and
+// mtime, both taken from the one open file. A file that is not a regular file
+// of the current user reads as absent: /tmp/claude is shared and world-writable.
+func (a *Accounts) openOwned(path string) ([]byte, time.Time, bool) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() || !a.mine(st) {
+		return nil, time.Time{}, false
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	return b, st.ModTime(), true
 }
 
 // fetchUsage reads the usage of the account behind configDir. A cache under
@@ -320,13 +343,13 @@ func backoffOf(s string) time.Duration {
 // request (ours or the herdr mod's) holds further requests until it passes.
 func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Object, string) {
 	cache := a.usageCachePath(configDir)
-	if st, err := os.Stat(cache); err == nil && a.mine(st) && a.now().Sub(st.ModTime()) < usageMaxAge {
-		if o := readUsageFile(cache); o != nil {
+	if b, mt, ok := a.openOwned(cache); ok && a.now().Sub(mt) < usageMaxAge {
+		if o := parseUsage(b); o != nil {
 			return o, ""
 		}
 	}
-	if left := a.backoffLeft(cache + ".backoff"); left > 0 {
-		return nil, rateLimited(left)
+	if left, why := a.backoffLeft(cache); left > 0 {
+		return nil, why
 	}
 	token, why := a.token(configDir)
 	if token == "" {
@@ -345,62 +368,86 @@ func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Obj
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "usage endpoint unreachable"
+		return a.failed(cache, "", reasonUnreachable)
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		wait := backoffOf(resp.Header.Get("Retry-After"))
-		_ = os.MkdirAll(filepath.Dir(cache), 0o755)
-		_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
+		retryAfter := resp.Header.Get("Retry-After")
 		switch resp.StatusCode {
 		case http.StatusTooManyRequests:
-			return nil, rateLimited(wait)
+			return a.failed(cache, retryAfter, reasonRateLimited)
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return nil, "login expired"
+			return a.failed(cache, retryAfter, "login expired")
 		}
-		return nil, fmt.Sprintf("usage endpoint returned %d", resp.StatusCode)
+		return a.failed(cache, retryAfter, fmt.Sprintf("usage endpoint returned %d", resp.StatusCode))
 	}
-	v, err := jsonx.Decode(b)
-	o, _ := v.(*jsonx.Object)
-	if err != nil || o == nil {
-		return nil, "usage endpoint unreachable"
-	}
-	if _, has := o.Get("five_hour"); !has {
-		return nil, "unexpected payload"
+	o := parseUsage(b)
+	if o == nil {
+		v, err := jsonx.Decode(b)
+		if _, isObj := v.(*jsonx.Object); err != nil || !isObj {
+			return a.failed(cache, "", reasonUnreachable)
+		}
+		return a.failed(cache, "", "unexpected payload")
 	}
 	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
 	if fsio.WriteFileAtomic(cache, append(bytes.TrimSpace(b), '\n')) == nil {
 		_ = os.Remove(cache + ".backoff")
+		_ = os.Remove(cache + ".reason")
 	}
 	return o, ""
 }
 
-func rateLimited(d time.Duration) string {
-	return fmt.Sprintf("rate limited (retry in %ds)", int((d+time.Second-1)/time.Second))
+// reasonRateLimited and reasonUnreachable are stored reasons whose text is
+// rebuilt on read: the first with the time left, the second as its message.
+const (
+	reasonRateLimited = "rate limited"
+	reasonUnreachable = "usage endpoint unreachable"
+)
+
+// failed records a failed request the way the herdr mod does: a backoff file
+// holding the Retry-After as given, else 300 seconds. The reason goes in a
+// sidecar the mod ignores, so a held backoff can still say what went wrong.
+// It returns the message for this call.
+func (a *Accounts) failed(cache, retryAfter, reason string) (*jsonx.Object, string) {
+	wait := backoffOf(retryAfter)
+	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
+	_ = fsio.WriteFileAtomic(cache+".reason", []byte(reason+"\n"))
+	_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
+	return nil, heldMessage(reason, min(wait, maxBackoff))
 }
 
-// backoffLeft is how much of the wait recorded in path remains: the file holds
-// the wait in seconds and its mtime is when the wait began.
-func (a *Accounts) backoffLeft(path string) time.Duration {
-	st, err := os.Stat(path)
-	if err != nil || !a.mine(st) {
-		return 0
+func heldMessage(reason string, left time.Duration) string {
+	if reason == reasonRateLimited {
+		return fmt.Sprintf("rate limited (retry in %ds)", int((left+time.Second-1)/time.Second))
 	}
-	b, _ := os.ReadFile(path)
-	wait := backoffOf(string(b))
-	left := wait - a.now().Sub(st.ModTime())
-	if left < 0 {
-		return 0
-	}
-	return left
+	return reason
 }
 
-func readUsageFile(path string) *jsonx.Object {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil
+// backoffLeft is how much of the wait recorded beside cache remains (the
+// backoff file holds the wait in seconds, capped at an hour, and its mtime is
+// when the wait began) and why. The reason is the one rota recorded; a
+// backoff rota did not write gets a neutral message.
+func (a *Accounts) backoffLeft(cache string) (time.Duration, string) {
+	b, mt, ok := a.openOwned(cache + ".backoff")
+	if !ok {
+		return 0, ""
 	}
+	left := min(backoffOf(string(b)), maxBackoff) - a.now().Sub(mt)
+	if left <= 0 {
+		return 0, ""
+	}
+	if rb, rmt, ok := a.openOwned(cache + ".reason"); ok {
+		if d := rmt.Sub(mt); d > -reasonSkew && d < reasonSkew {
+			if reason := strings.TrimSpace(string(rb)); reason != "" {
+				return left, heldMessage(reason, left)
+			}
+		}
+	}
+	return left, fmt.Sprintf("backing off after a failed request (retry in %ds)", int((left+time.Second-1)/time.Second))
+}
+
+func parseUsage(b []byte) *jsonx.Object {
 	v, err := jsonx.Decode(b)
 	o, _ := v.(*jsonx.Object)
 	if err != nil || o == nil {
