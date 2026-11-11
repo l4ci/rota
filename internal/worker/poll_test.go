@@ -410,7 +410,7 @@ func TestPollDefaultKindReadsClaudePaneVocabulary(t *testing.T) {
 			if _, err := UpdateSlot(dir, "w2", func(s *Slot) { s.Raw().Set("kind", harness.Claude) }); err != nil {
 				t.Fatal(err)
 			}
-			if kind := LoadRegistryTolerant(dir).Slot("w1").HarnessKind(); kind != "" {
+			if kind := LoadRegistryTolerant(dir).Slot("w1").Kind(); kind != "" {
 				t.Fatalf("default slot kind = %q, want unset", kind)
 			}
 			f.panes["w1"] = []string{tc.pane, tc.pane}

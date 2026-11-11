@@ -188,7 +188,7 @@ func TestReviewBatchAcceptsReviewBounce(t *testing.T) {
 	}
 	// Main's adopted slot holds the same PR with no worker behind it.
 	ext := reviewSlot()
-	ext.Raw().Set("kind", KindExternal)
+	ext.Raw().Set("provenance", ProvenanceExternal)
 	if b, err := PendingReview(context.Background(), f, ext, nil, testNow); err != nil || !b.Empty() {
 		t.Errorf("main's own bounce is review input on its adopted slot: %+v %v", b.Items, err)
 	}
