@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/keepstate"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -175,12 +175,12 @@ func TestLimitWatchRefusals(t *testing.T) {
 	if _, _, _, err := env.Acquire(cd, dir, self, 0); err != nil {
 		t.Fatal(err)
 	}
-	keepalive.WriteState(keepalive.StatePath(cd), keepalive.State{PID: os.Getpid(), Status: keepalive.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
+	keepstate.WriteState(keepstate.StatePath(cd), keepstate.State{PID: os.Getpid(), Status: keepstate.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
 	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "supervised" {
 		t.Fatalf("supervised: %d %s", code, out)
 	}
 	// the supervisor is gone: the holder may watch, once
-	keepalive.WriteState(keepalive.StatePath(cd), keepalive.State{PID: 1 << 30, Status: keepalive.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
+	keepstate.WriteState(keepstate.StatePath(cd), keepstate.State{PID: 1 << 30, Status: keepstate.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
 	limits.WriteWatching(cd, limits.Watching{PID: 1, StartedAt: "x", Mode: limits.ModeWatch})
 	deps.HolderPID = func() int { return os.Getpid() }
 	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "watching" {

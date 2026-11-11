@@ -2,6 +2,7 @@ package hook
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"time"
 
 	"github.com/l4ci/rota/internal/stamp"
@@ -69,7 +70,7 @@ func mergeGuardWarned(cur, decided State) State {
 // crossing. A fresh handoff note written since the last block means the session
 // obeyed, so the stop passes. Past the cap the stop passes, so a session that
 // cannot pause is never held.
-func DecideGuardStop(st State, set Settings, ho Handoff, now time.Time) StopDecision {
+func DecideGuardStop(st State, set Settings, ho keepstate.Handoff, now time.Time) StopDecision {
 	d := StopDecision{State: st}
 	pct, ok := guardReading(st, set, now)
 	if !ok {
