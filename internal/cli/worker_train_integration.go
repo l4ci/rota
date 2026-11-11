@@ -8,7 +8,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/ship"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -93,37 +92,47 @@ func memberTargets(it worker.Integration) []string {
 	return out
 }
 
-// integrationPRBody lists the members and closes each member issue: landing
-// the one PR ends them all.
-func integrationPRBody(it worker.Integration) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Integration branch `%s` of round %d: lands these reviewed PRs on `%s` together.\n\n", it.Branch, it.Round, it.Base)
-	for _, m := range it.Members {
-		fmt.Fprintf(&b, "- %s (%s)\n", m.PR, strutil.ShortSHA(m.Head))
-	}
-	b.WriteString("\nLand it with `rota worker gate`, never the merge button: the gate checks the fix commits' review and skips a second verify only when the base has not moved.\n\n")
-	for _, m := range it.Members {
-		if m.Issue != "" {
-			fmt.Fprintf(&b, "Closes #%s\n", strings.TrimPrefix(m.Issue, "#"))
-		}
-	}
-	return b.String()
+// prBodySetter is a forge that can rewrite a PR's body (GitHub, GitLab).
+type prBodySetter interface {
+	PRSetBody(ctx context.Context, pr int, body string) error
 }
 
 // openIntegrationPR opens the one PR from a verified integration branch to
-// its base and records it. A branch that has a PR keeps it: the PR follows
-// the branch, so a rerun after a fix opens nothing.
+// its base and records it. A branch that has a PR keeps it (the PR follows
+// the branch), but its body is written again, so a member a rerun added gets
+// its Closes line.
 func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it worker.Integration) (string, error) {
+	body := worker.IntegrationPRBody(it)
 	if it.PR != "" {
+		n, ok := worker.PRRefNumber(it.PR)
+		if !ok {
+			return it.PR, fmt.Errorf("integration PR %q has no number", it.PR)
+		}
+		if s, ok := f.(prBodySetter); ok {
+			if err := s.PRSetBody(ctx, n, body); err != nil {
+				return it.PR, fmt.Errorf("updating the body of %s: %w", it.PR, err)
+			}
+		}
 		return it.PR, nil
 	}
 	url, err := f.PRCreate(ctx, tracker.PRSpec{Head: it.Branch, Base: it.Base,
-		Title: fmt.Sprintf("Integrate %s: %s", it.Branch, strings.Join(memberTargets(it), ", ")), Body: integrationPRBody(it)})
+		Title: fmt.Sprintf("Integrate %s: %s", it.Branch, strings.Join(memberTargets(it), ", ")), Body: body})
 	if err != nil {
 		return "", err
 	}
 	url = strings.TrimSpace(url)
 	return url, worker.UpdateIntegration(root, it.Branch, func(rec *worker.Integration) { rec.PR = url })
+}
+
+// PRSetBody passes a body rewrite to a forge that can make one; on any other
+// it changes nothing.
+func (f shipForge) PRSetBody(ctx context.Context, pr int, body string) error {
+	if s, ok := f.Forge.(prBodySetter); ok {
+		if err := s.PRSetBody(ctx, pr, body); err != nil {
+			return trackerErr(err)
+		}
+	}
+	return nil
 }
 
 // openIntegrationPRVia opens the PR through the project's forge.
@@ -145,6 +154,7 @@ func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, e
 func parkIntegrationMembers(c *Ctx, root, pr string) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
+		fmt.Fprintln(c.Stderr, "PARK-KEPT — cannot read the registry: "+err.Error()+"; run rota round reconcile --apply")
 		return
 	}
 	rec, ok := reg.IntegrationByPR(pr)
@@ -159,4 +169,9 @@ func parkIntegrationMembers(c *Ctx, root, pr string) {
 	if err != nil {
 		fmt.Fprintln(c.Stderr, "PARK-KEPT — "+err.Error()+"; run rota round reconcile --apply")
 	}
+}
+
+// integrationRerun is the train command that runs an integration again.
+func integrationRerun(it worker.Integration, targets []string, base string) string {
+	return fmt.Sprintf("`rota worker train %s --integration %s --base %s`", strings.Join(targets, " "), it.Name, base)
 }

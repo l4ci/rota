@@ -859,6 +859,12 @@ func (g *GitHub) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error 
 	return err
 }
 
+// PRSetBody replaces the body of PR pr.
+func (g *GitHub) PRSetBody(ctx context.Context, pr int, body string) error {
+	_, err := g.run(ctx, []string{"pr", "edit", strconv.Itoa(pr), "--body-file", "-"}, body)
+	return err
+}
+
 func (g *GitHub) PRSetBase(ctx context.Context, pr int, base string) error {
 	_, err := g.run(ctx, []string{"pr", "edit", strconv.Itoa(pr), "--base", base}, "")
 	return err

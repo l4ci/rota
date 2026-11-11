@@ -38,7 +38,9 @@ func TestWorkerTrainIntegrationFlag(t *testing.T) {
 
 func TestWorkerTrainIntegrationFilesItem(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["true"]}}`)
-	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
 		Members: []worker.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6", Pending: true, Conflicts: []string{"work.txt"}}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
@@ -86,7 +88,9 @@ func TestWorkerTrainIntegrationFilesItem(t *testing.T) {
 // branch: it is never adopted as the interaction item.
 func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["true"]}}`)
-	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
 		Members: []worker.IntegrationMember{{Target: "7", Issue: "5"}, {Target: "8", Issue: "6"}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
@@ -104,13 +108,23 @@ func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 	}
 }
 
-type prSpy struct{ specs []tracker.PRSpec }
+type prSpy struct {
+	specs  []tracker.PRSpec
+	bodies map[int]string
+}
 
 func (*prSpy) Provider() string  { return "github" }
 func (*prSpy) PRNeedsBase() bool { return true }
 func (p *prSpy) PRCreate(_ context.Context, s tracker.PRSpec) (string, error) {
 	p.specs = append(p.specs, s)
 	return "https://github.com/o/r/pull/9\n", nil
+}
+func (p *prSpy) PRSetBody(_ context.Context, pr int, body string) error {
+	if p.bodies == nil {
+		p.bodies = map[int]string{}
+	}
+	p.bodies[pr] = body
+	return nil
 }
 
 func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
@@ -134,8 +148,16 @@ func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
 	if !ok || rec.Branch != it.Branch {
 		t.Fatalf("PR not recorded: %+v %v", rec, ok)
 	}
-	// A rerun after a fix keeps the PR: it follows the branch.
+	if !strings.Contains(s.Body, "## Assumptions") || !strings.Contains(s.Body, "## Rulings") {
+		t.Fatalf("the gate refuses a body without the decision sections: %s", s.Body)
+	}
+	// A rerun keeps the PR (it follows the branch) but writes the body again,
+	// so a member the rerun added gets its Closes line.
+	rec.Members = append(rec.Members, worker.IntegrationMember{Target: "10", PR: "https://github.com/o/r/pull/10", Issue: "12"})
 	if again, err := openIntegrationPR(context.Background(), spy, dir, rec); err != nil || again != url || len(spy.specs) != 1 {
 		t.Fatalf("rerun opened another PR: %q %v %d", again, err, len(spy.specs))
+	}
+	if !strings.Contains(spy.bodies[9], "Closes #12\n") || !strings.Contains(spy.bodies[9], "Closes #5\n") {
+		t.Fatalf("rerun body: %q", spy.bodies[9])
 	}
 }

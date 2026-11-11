@@ -147,6 +147,11 @@ func TestGateIntegrationLandsMembers(t *testing.T) {
 	if want := append(landedCalls("5"), landedCalls("6")...); !reflect.DeepEqual(b.calls, want) {
 		t.Errorf("calls %v, want %v", b.calls, want)
 	}
+	// A retry after the forge merged it ends them too.
+	b = &fakeBook{}
+	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateAlreadyMerged, IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
+		t.Fatalf("already-merged retry: %v %v", err, b.calls)
+	}
 	// A refused integration landing ends nothing.
 	b = &fakeBook{}
 	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateStale, IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 {
