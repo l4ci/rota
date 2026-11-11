@@ -29,6 +29,28 @@ func b3ShipPRWith(t *testing.T, deps *Deps, work string) (trOut, map[string]any)
 	return o, envelope(t, o.stdout)
 }
 
+// A corrupt verdict store refuses ship pr; it must not read as no verdicts.
+func TestShipPRRefusedByCorruptVerdictStore(t *testing.T) {
+	shipDeterministic(t)
+	work := shipFixture(t, "")
+	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
+	f := shipPRForge("https://github.com/fake/repo/pull/1")
+	deps := useForge(t, f)
+	if err := os.MkdirAll(filepath.Dir(verdict.Path(work)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verdict.Path(work), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o, _ := b3ShipPRWith(t, deps, work)
+	if o.code != 4 || !strings.Contains(o.stdout+o.stderr, "verdict store") {
+		t.Fatalf("exit %d, want 4 naming the verdict store: %s%s", o.code, o.stdout, o.stderr)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a refused ship called the forge: %q", f.calls)
+	}
+}
+
 func TestShipPRRefusedByVerdict(t *testing.T) {
 	shipDeterministic(t)
 	work := shipFixture(t, "")
