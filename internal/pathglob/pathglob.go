@@ -16,6 +16,7 @@
 package pathglob
 
 import (
+	"fmt"
 	"path"
 	"strings"
 )
@@ -77,14 +78,6 @@ func MatchUnder(pattern, file string) bool {
 	return false
 }
 
-// ValidEntry reports whether a configured glob is one the review path rules
-// accept: path.Match syntax, with ** allowed only as a trailing /** segment.
-func ValidEntry(glob string) bool {
-	g := strings.TrimSuffix(glob, "/**")
-	_, err := path.Match(g, "")
-	return err == nil && !strings.Contains(g, "**")
-}
-
 // Match reports whether file matches the glob pattern. A pattern with no slash
 // matches at the root only (*.md is README.md, not docs/a.md); a ** segment
 // matches zero or more directories.
@@ -105,4 +98,36 @@ func MatchSegments(pattern, file []string) bool {
 	}
 	ok, _ := path.Match(pattern[0], file[0])
 	return ok && MatchSegments(pattern[1:], file[1:])
+}
+
+// Valid reports whether glob is one every configured glob key accepts: slash
+// separated segments, each a path.Match pattern, or ** as a whole segment for
+// any number of directories (leading, mid-path or trailing, as Match reads
+// it). No leading slash, no empty segment, no braces. One trailing / is the
+// directory marker (docs/) and is allowed, as MatchEntry trims it.
+func Valid(glob string) error {
+	if strings.TrimSpace(glob) == "" {
+		return fmt.Errorf("glob must not be empty")
+	}
+	if strings.HasPrefix(glob, "/") {
+		return fmt.Errorf("glob %q must be relative to the repository root, with no leading /", glob)
+	}
+	if strings.ContainsAny(glob, "{}") {
+		return fmt.Errorf("glob %q uses braces, which are not supported: list each pattern on its own", glob)
+	}
+	for _, seg := range strings.Split(strings.TrimSuffix(glob, "/"), "/") {
+		if seg == "" {
+			return fmt.Errorf("glob %q has an empty path segment", glob)
+		}
+		if seg == "**" {
+			continue
+		}
+		if strings.Contains(seg, "**") {
+			return fmt.Errorf("glob %q puts ** inside a segment: ** must be a whole segment, as in docs/**", glob)
+		}
+		if _, err := path.Match(seg, ""); err != nil {
+			return fmt.Errorf("glob %q is malformed: %v", glob, err)
+		}
+	}
+	return nil
 }
