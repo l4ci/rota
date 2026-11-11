@@ -1366,7 +1366,12 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		return finish(false, nil)
 	}
 	if isInt {
-		list := verdict.Load(g.root).Branch(g.o.VerdictRepo, g.branch)
+		store, err := verdict.LoadStrict(g.root)
+		if err != nil {
+			g.res.Verdict = GateVerdictBlocked
+			return finish(true, err)
+		}
+		list := store.Branch(g.o.VerdictRepo, g.branch)
 		// A commit covers the fixes only with every review the depth asks for:
 		// the core kinds, the cross-harness review and each triggered lens.
 		covered := func(sha string) bool {
