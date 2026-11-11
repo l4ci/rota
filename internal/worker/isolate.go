@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/hostenv"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -13,8 +14,8 @@ import (
 // from cold. Same list as isolate_env in test/lib/isolate.sh.
 var goCacheVars = []string{"GOCACHE", "GOMODCACHE", "GOPATH", "GOENV"}
 
-// IsolatedEnviron is environ with host and ssh identity removed (HERDR_*,
-// TMUX*, SSH_AUTH_SOCK, SSH_AGENT_PID) and HOME and the XDG dirs pinned under
+// IsolatedEnviron is environ with host and ssh identity removed (the hostenv
+// prefixes, SSH_AUTH_SOCK, SSH_AGENT_PID) and HOME and the XDG dirs pinned under
 // root, created on the way. Go's caches are resolved from environ first and
 // pinned, so they survive the HOME change. It is test.isolate (#388): the
 // shape of test/lib/isolate.sh for projects that run `rota test run`.
@@ -40,7 +41,7 @@ func IsolatedEnviron(environ []string, root string) ([]string, error) {
 	var out []string
 	for _, kv := range environ {
 		k, _, _ := strings.Cut(kv, "=")
-		if drop[k] || strings.HasPrefix(k, "HERDR_") || strings.HasPrefix(k, "TMUX") {
+		if drop[k] || hostenv.Is(k) {
 			continue
 		}
 		out = append(out, kv)
