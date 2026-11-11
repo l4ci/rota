@@ -92,6 +92,8 @@ OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video cata
 pass "site-sync generates published episodes and refreshes their media links"
 OUT="$(python3 "$TESTDIR/video_catalog_test.py" 2>&1)" || fail "video_catalog: $OUT"
 pass "video_catalog reads 32/64-bit mvhd and rejects a missing duration"
+OUT="$(python3 "$TESTDIR/validate_skills_test.py" 2>&1)" || fail "validate_skills import: $OUT"
+pass "validate-skills imports without running and exposes its checks"
 
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even
