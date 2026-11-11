@@ -5,8 +5,14 @@ import "context"
 // NoIssues is the issue tracker of issues.source file: the issues live in
 // BACKLOG.md, so reads find nothing and writes are refused with
 // ErrNoIssueTracker. A caller that works with or without a tracker holds it
-// instead of a nil.
-type NoIssues struct{}
+// instead of a nil. Its milestone half is the shared noMilestones one, so
+// "this tracker has none" is the same IsNoMilestones refusal as on Linear.
+type NoIssues struct{ noMilestones }
+
+// NewNoIssues is the absent-tracker adapter of issues.source file.
+func NewNoIssues() NoIssues {
+	return NoIssues{noMilestones{provider: "file", detail: ": the backlog lives in BACKLOG.md"}}
+}
 
 var _ IssueTracker = NoIssues{}
 
@@ -37,13 +43,4 @@ func (NoIssues) DeleteComment(context.Context, IssueKey, string) error { return 
 func (NoIssues) CommentURL(context.Context, IssueKey, string) (string, error) {
 	return "", ErrNoIssueTracker
 }
-func (NoIssues) FindMilestone(context.Context, string) (string, bool, error) { return "", false, nil }
-func (NoIssues) ClosesIssue(IssueKey, ClosingSource) bool                    { return false }
-func (NoIssues) Milestones(context.Context, string) ([]Milestone, error)     { return nil, nil }
-func (NoIssues) CreateMilestone(context.Context, string, string) (int, error) {
-	return 0, ErrNoIssueTracker
-}
-func (NoIssues) EditMilestone(context.Context, int, MilestoneEdit) error { return ErrNoIssueTracker }
-func (NoIssues) IssuesInMilestone(context.Context, string, string) ([]Issue, error) {
-	return nil, nil
-}
+func (NoIssues) ClosesIssue(IssueKey, ClosingSource) bool { return false }
