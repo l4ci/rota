@@ -12,8 +12,14 @@ const (
 	Optional    = "optional"
 )
 
-// AcceptanceHeadRe is also the heading grammar of the criteria readiness check.
+// AcceptanceHeadRe is the one grammar of the acceptance heading: readiness
+// reads it, SetSection finds the section by it. It matches any heading that
+// contains "acceptance".
 var AcceptanceHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+.*acceptance`)
+
+// AcceptanceHeading is the canonical form SetSection writes; acceptance.Number
+// numbers only a section under this heading.
+const AcceptanceHeading = "## Acceptance"
 
 // TemplateSection is one section in the per-kind item template.
 type TemplateSection struct {
