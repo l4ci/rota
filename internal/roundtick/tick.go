@@ -500,7 +500,11 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			if e.Head != nil && failedHeadVerdict(m.Verdict) {
 				why += heldHeadHint
 			}
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: m.Target, Why: why})
+			kind := "gate-failed"
+			if m.Verdict == worker.GateInteraction {
+				kind = "train-interaction" // the orchestrator's to fix, not a bounce
+			}
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: kind, Target: m.Target, Why: why})
 		}
 	}
 	return nil
@@ -510,11 +514,11 @@ const heldHeadHint = "; held at PR head; push a new head to retry"
 
 // failedHeadVerdict identifies results that judged the head's content. A CI
 // failure and a failed train verification both use GateVerifyFailed; merge
-// conflicts use GateStale. Refusals and infrastructure errors can clear without
+// conflicts use GateStale; members red only together use GateInteraction. Refusals and infrastructure errors can clear without
 // a push, so they are reported for this tick and retried on the next one.
 func failedHeadVerdict(v string) bool {
 	switch v {
-	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests:
+	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests, worker.GateInteraction:
 		return true
 	default:
 		return false
@@ -630,6 +634,8 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 			m.Skip = true // nothing landed; the base moved under the train
 		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
 			m.Skip = true // another member broke the train: retried without it
+		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):
+			m.Skip = true // a bystander of an interaction: retried without it
 		default:
 			m.Verdict, m.Hold, m.Detail = v, worker.ClassifyVerdict(v).Hold, tr.Detail
 		}
