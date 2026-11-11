@@ -101,3 +101,67 @@ func TestTrainIntegrationNeedsPRs(t *testing.T) {
 		t.Fatalf("a slot without a PR: %v", err)
 	}
 }
+
+// clashW2 makes PR #8 also add work.txt, differently from #7.
+func clashW2(t *testing.T, w *world) {
+	t.Helper()
+	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("other\n"), 0o644)
+	gittest.Run(t, w.worker, "add", "work.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "clash")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
+	w.forge("sha#8", strings.TrimSpace(gittest.Run(t, w.worker, "rev-parse", "HEAD")))
+}
+
+func TestTrainIntegrationConflictPushesPrefix(t *testing.T) {
+	w := integrationWorld(t)
+	clashW2(t, w)
+	const branch = "integration/r55-a"
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Order: []string{"7", "8"}, Integration: "a"})
+	if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "8,7" {
+		t.Fatalf("a conflicting member is an interaction, not a culprit: %+v %v", res, err)
+	}
+	if n := len(strings.Fields(w.remoteLog("--merges", "--first-parent", "--format=%H", branch))); n != 1 {
+		t.Fatalf("want the member before the conflict pushed, got %d merge(s)", n)
+	}
+	reg, _ := LoadRegistry(w.dir)
+	rec, _ := reg.IntegrationByBranch(branch)
+	m, ok := rec.Member("8")
+	if !ok || !m.Pending || strings.Join(m.Conflicts, ",") != "work.txt" || rec.VerifiedTip != "" {
+		t.Fatalf("pending member not recorded: %+v", rec)
+	}
+	// A worker resolves the conflict on the integration branch, not on w2.
+	gittest.Run(t, w.worker, "fetch", "-q", "origin", branch)
+	gittest.Run(t, w.worker, "checkout", "-q", "-b", "fix", "FETCH_HEAD")
+	exec.Command("git", "-C", w.worker, "merge", "-q", "--no-ff", "w2", "-m", "resolve").Run()
+	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\nother\n"), 0o644)
+	gittest.Run(t, w.worker, "add", "work.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "--no-edit")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "fix:"+branch)
+	res, err = w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("rerun after the resolution: %+v %v", res, err)
+	}
+	reg, _ = LoadRegistry(w.dir)
+	rec, _ = reg.IntegrationByBranch(branch)
+	if m, _ := rec.Member("8"); m.Pending || rec.VerifiedTip == "" {
+		t.Fatalf("the resolved member is still pending: %+v", rec)
+	}
+}
+
+func TestTrainIntegrationInteractionKeepsBranch(t *testing.T) {
+	w := integrationWorld(t)
+	// Each member passes alone; the two together fail.
+	w.setConfig(`{"test":{"full":["! test -f work.txt || ! test -f work2.txt"]}}`)
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
+	if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || len(res.Landed) != 0 {
+		t.Fatalf("interaction: %+v %v", res, err)
+	}
+	const branch = "integration/r55-a"
+	if n := len(strings.Fields(w.remoteLog("--merges", "--first-parent", "--format=%H", branch))); n != 2 {
+		t.Fatalf("the red tip stays pushed to fix on, got %d merge(s)", n)
+	}
+	reg, _ := LoadRegistry(w.dir)
+	if rec, _ := reg.IntegrationByBranch(branch); rec.VerifiedTip != "" || rec.Assembled == "" {
+		t.Fatalf("a red tip is not verified: %+v", rec)
+	}
+}

@@ -30,6 +30,9 @@ func (e Env) findBaseDrift(ctx context.Context, root string, rep *Report, reg wo
 		if err != nil || it == nil || it.Closed {
 			continue
 		}
+		if integrationBase(root, it) != "" { // an interaction fix stays on its integration branch
+			continue
+		}
 		// Drift is the issue's milestone tag changing since assign routed the
 		// slot: a milestone going active under an unchanged tag is not (a slot
 		// assigned while it was planned keeps its base). A slot assigned before

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -165,6 +166,11 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 			it.Members = append(it.Members, im)
 		}
 	}
+	for j, m := range it.Members {
+		if _, code := e.git(t.root, "merge-base", "--is-ancestor", m.Head, tip); m.Pending && code == 0 {
+			it.Members[j].Pending, it.Members[j].Conflicts = false, nil
+		}
+	}
 	it.Assembled = tip
 	it.RotaMerges = append(it.RotaMerges, merges...)
 	it.VerifiedTip, it.VerifiedBase = "", ""
@@ -223,4 +229,62 @@ func (p trainPlan) tipOf(k int) string {
 		return p.tips[k]
 	}
 	return ""
+}
+
+// integrationConflict handles a member that does not merge onto the branch:
+// it is no culprit. The members before it are pushed as usual, the member is
+// recorded as pending with the paths, and the train answers interaction, so
+// the CLI files the item a worker resolves on the branch. Nothing is verified.
+func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []string) (bool, error) {
+	res, it := &p.res, p.integration
+	pending := res.Members[failed]
+	pendingHead := p.heads[failed]
+	res.Members, p.heads, p.tips = res.Members[:failed], p.heads[:failed], p.tips[:failed+1]
+	if done, err := t.assembleIntegration(p); done || err != nil {
+		return done, err
+	}
+	im := IntegrationMember{Target: pending.Target, PR: pending.PR, Head: pendingHead, Pending: true, Conflicts: paths}
+	if reg, err := LoadRegistry(t.root); err == nil {
+		if gt, err := reg.GateTargetAny(pending.Target); err == nil {
+			im.Issue = gt.Issue
+		}
+	}
+	if j := memberIndex(it.Members, im.Target); j >= 0 {
+		it.Members[j] = im
+	} else {
+		it.Members = append(it.Members, im)
+	}
+	if err := RecordIntegration(t.root, *it); err != nil {
+		return true, err
+	}
+	rec := *it
+	res.Integration = &rec
+	res.Interaction = append([]string{pending.Target}, t.touching(p, it.Members, pending.Target, paths)...)
+	res.Verdict, res.Culprit = GateInteraction, ""
+	res.Err = fmt.Sprintf("TRAIN-INTERACTION %s — %s does not merge onto %s: conflict in %s; the members before it are pushed, nothing is verified or landed",
+		strings.Join(res.Interaction, ", "), pending.Branch, it.Branch, strings.Join(paths, ", "))
+	res.Hint = fmt.Sprintf("a worker merges %s into %s and resolves the conflict there, then re-run the train; bounce neither", pending.Branch, it.Branch)
+	return true, nil
+}
+
+// touching names the merged members whose change touches one of paths, the
+// members a conflicting member collides with.
+func (t *trainRun) touching(p *trainPlanning, ms []IntegrationMember, except string, paths []string) []string {
+	var out []string
+	for _, m := range ms {
+		if m.Target == except || m.Pending {
+			continue
+		}
+		names, code := t.e.git(t.root, "diff", "--name-only", p.baseSHA+"..."+m.Head)
+		if code != 0 {
+			continue
+		}
+		for _, f := range strings.Split(names, "\n") {
+			if slices.Contains(paths, strings.TrimSpace(f)) {
+				out = append(out, m.Target)
+				break
+			}
+		}
+	}
+	return out
 }

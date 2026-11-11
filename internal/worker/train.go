@@ -795,6 +795,11 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
 		return p.trainPlan, p.res, true, nil
 	}
+	var ce *land.ConflictError
+	if merr != nil && p.integration != nil && errors.As(merr, &ce) {
+		done, err := t.integrationConflict(&p, failed, conflictPaths(ce.Out))
+		return p.trainPlan, p.res, done, err
+	}
 	if merr != nil {
 		m := res.Members[failed]
 		res.Culprit = m.Target

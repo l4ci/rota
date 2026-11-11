@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -41,6 +42,10 @@ type IntegrationMember struct {
 	PR     string `json:"pr"`
 	Issue  string `json:"issue,omitempty"`
 	Head   string `json:"head"`
+	// Pending is a member whose merge conflicted: an interaction item resolves
+	// it on the branch, and Conflicts are the paths git named.
+	Pending   bool     `json:"pending,omitempty"`
+	Conflicts []string `json:"conflicts,omitempty"`
 }
 
 // IntegrationBranch names the integration branch of a round.
@@ -132,7 +137,10 @@ func (r Registry) IntegrationByPR(pr string) (Integration, bool) {
 
 // IntegrationForItem is the open integration an interaction item was filed for.
 func (r Registry) IntegrationForItem(id string) (Integration, bool) {
-	return r.findIntegration(func(it Integration) bool { return !it.Landed && slices.Contains(it.Items, id) })
+	id = strings.TrimPrefix(id, "#")
+	return r.findIntegration(func(it Integration) bool {
+		return !it.Landed && slices.ContainsFunc(it.Items, func(x string) bool { return strings.TrimPrefix(x, "#") == id })
+	})
 }
 
 func (r Registry) findIntegration(match func(Integration) bool) (Integration, bool) {
