@@ -683,3 +683,15 @@ func TestCanonicalizeItemsKeepsWorkFixFailuresAcrossAliasReset(t *testing.T) {
 		t.Errorf("work-fix attempts %d, want 2", got)
 	}
 }
+
+// A missing store stays an empty store the merge-blocking check passes; the
+// corrupt-store refusal is pinned at the gate and ship seams.
+func TestCheckPassesMissingStore(t *testing.T) {
+	store, err := LoadStrict(t.TempDir())
+	if err != nil || len(store.Branches) != 0 {
+		t.Fatalf("a missing store must read as empty: %v %v", store, err)
+	}
+	if err := (Check{Store: store, StoreErr: err}).BlockGate("b", "abc1234"); err != nil {
+		t.Fatalf("a missing store must not block: %v", err)
+	}
+}

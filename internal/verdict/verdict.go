@@ -417,8 +417,9 @@ func (s Store) Branch(repo, branch string) []Record {
 	return s.Branches[BranchKey(repo, branch)]
 }
 
-// Load reads the store for a reader; a missing or corrupt file is an empty
-// store. Writers use loadStrict so they never replace what they cannot parse.
+// Load reads the store for a display reader; a missing or corrupt file is an
+// empty store. Writers and merge decisions use LoadStrict so they never
+// replace or pass over what they cannot parse.
 func Load(root string) Store {
 	s, err := loadStrict(root)
 	if err != nil {
@@ -430,6 +431,12 @@ func Load(root string) Store {
 func emptyStore() Store {
 	return Store{Branches: map[string][]Record{}, Items: map[string][]Record{}}
 }
+
+// LoadStrict reads the store for a decision, not a display: only a missing
+// file is empty, an unreadable or unparseable one is an exit-4 refusal. The
+// merge gate and ship checks feed it to Check.StoreErr so a corrupt store
+// cannot read as "no failing verdict".
+func LoadStrict(root string) (Store, error) { return loadStrict(root) }
 
 // loadStrict reads the store, treating only a missing file as empty. An
 // unreadable or unparseable file is an error, so a read-modify-write refuses
@@ -463,7 +470,7 @@ func loadStrict(root string) (Store, error) {
 // storeRefusal is the exit-4 refusal a writer returns over a store it cannot
 // read, so a corrupt file is the user's to repair, not a rota bug.
 func storeRefusal(root, why string, cause error) error {
-	e := exitcode.Errf(exitcode.ExitRefused, "verdict store %s is %s, not overwriting: %v", Path(root), why, cause)
+	e := exitcode.Errf(exitcode.ExitRefused, "verdict store %s is %s, refusing to act on it: %v", Path(root), why, cause)
 	e.Cause = cause
 	return e.WithHint("repair the file or move it aside; moving it aside drops the recorded verdicts")
 }

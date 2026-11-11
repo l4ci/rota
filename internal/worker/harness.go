@@ -91,15 +91,36 @@ func CommonDir(ctx context.Context, run git.Runner, root string) (string, error)
 	return cd, nil
 }
 
-// Preflight is the harness's check of a slot before anything is marked or
-// killed, shared by `worker dispatch` and `round assign`. A harness with
-// nothing to check passes.
-func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (harness.Setup, error) {
+// LaunchPlan is a kind's harness with the launch line derived for it once, and
+// what the line resumes. A caller derives it with PlanLaunch and hands it to
+// Preflight and to its own checks, so no step rebuilds the line from a kind.
+type LaunchPlan struct {
+	H    harness.Launcher
+	Line string
+	Hit  harness.ResumeHit
+}
+
+// PlanLaunch resolves kind's harness and derives its launch line for a chosen
+// model, with the problem that makes it unusable as the verbs report it.
+func (e Env) PlanLaunch(root, kind, model string) (LaunchPlan, error) {
 	e = e.WithDefaults()
 	h, err := LaunchHarness(kind)
 	if err != nil {
-		return harness.Setup{}, err
+		return LaunchPlan{}, err
 	}
+	line, hit, err := e.launchLine(root, h, model)
+	if err != nil {
+		return LaunchPlan{}, err
+	}
+	return LaunchPlan{H: h, Line: line, Hit: hit}, nil
+}
+
+// Preflight is the harness's check of a slot before anything is marked or
+// killed, shared by `worker dispatch` and `round assign`. A harness with
+// nothing to check passes. It checks the plan's launch line as given.
+func (e Env) Preflight(ctx context.Context, root, slot string, lp LaunchPlan) (harness.Setup, error) {
+	e = e.WithDefaults()
+	h := lp.H
 	wt, current := "", ""
 	reg, err := LoadRegistry(root)
 	if err != nil {
@@ -122,12 +143,8 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 			}
 		}
 	}
-	launch, _, err := e.launchLine(root, h, model)
-	if err != nil {
-		return harness.Setup{}, err
-	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
-		Slot: slot, Launch: launch, Host: host.CapabilitiesForKind(e.hostKind(root)).Harness, Worktree: wt,
+		Slot: slot, Launch: lp.Line, Host: host.CapabilitiesForKind(e.hostKind(root)).Harness, Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
 		Accounts:  accts, Account: current, Load: load,
 	})
