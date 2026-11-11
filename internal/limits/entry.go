@@ -104,3 +104,30 @@ func Save(root string, e Entry) error {
 		return list
 	})
 }
+
+// UsageDecision is the orchestrator's usage handoff outcome as keepalive
+// reports it: what it did (ActionSwitch or ActionRestart) and the handoff
+// marker's facts.
+type UsageDecision struct {
+	Action     string
+	Window     string
+	DetectedAt string
+	ResetsAt   string
+	From       string
+	Note       string
+}
+
+// RecordUsage writes a usage decision to the limits log: a switch is
+// StatusSwitched, a same-account restart StatusResumed. It returns the stored
+// entry with its id.
+func RecordUsage(root string, now time.Time, d UsageDecision) (Entry, error) {
+	status := StatusSwitched
+	if d.Action == ActionRestart {
+		status = StatusResumed
+	}
+	return Append(root, Entry{
+		Session: Orchestrator, Window: d.Window, Source: SourceData,
+		DetectedAt: d.DetectedAt, ResetsAt: d.ResetsAt, Action: d.Action,
+		Account: d.From, Status: status, ResolvedAt: Time(now), Note: d.Note,
+	})
+}
