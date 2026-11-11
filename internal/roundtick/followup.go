@@ -15,8 +15,12 @@ import (
 
 // FollowUp is a queued PR a person asked to continue: its worker moved on and
 // review input from a human writer waits on it (round.FollowUps). Who names
-// the people, for the report.
-type FollowUp struct{ Issue, PR, Who string }
+// the people, for the report. Item is the listed follow-up itself, which Start
+// receives so it needs no state shared with List.
+type FollowUp struct {
+	Issue, PR, Who string
+	Item           round.FollowUp
+}
 
 // FollowUpSources are the seams of the follow-up step (#2580). A nil List
 // means the round has none.
