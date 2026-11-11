@@ -79,7 +79,7 @@ func fillTickFixture(t *testing.T, review string, reviewed, clocked bool) (*Ctx,
 	c := &Ctx{Deps: f.deps, ctx: context.Background(), Stderr: io.Discard, Path: "rota round tick"}
 	return c, f.root, func() roundtick.Result {
 		t.Helper()
-		r, err := autopilotTick(c, f.root, set, "", scopePID)
+		r, err := runAutopilotTick(c, f.root, set, "", scopePID, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestAutopilotTrainFillRejectsQueuedMissingReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := autopilotTick(c, root, set, "", scopePID)
+	result, err := runAutopilotTick(c, root, set, "", scopePID, false)
 	if err != nil {
 		t.Fatal(err)
 	}

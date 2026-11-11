@@ -130,7 +130,7 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		r, err := autopilotTick(c, f.root, set, "", scopePID)
+		r, err := runAutopilotTick(c, f.root, set, "", scopePID, false)
 		done <- outcome{r, err}
 	}()
 	var tick roundtick.Result
