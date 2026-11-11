@@ -25,7 +25,7 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 		"SweepSlot":       func() { e.SweepSlot(ctx, dir, "w1") },
 		"SessionCheck":    func() { e.SessionCheck(ctx, dir) },
 		"SessionEnsure":   func() { e.SessionEnsure(ctx, dir, SessionOpts{}) },
-		"Preflight":       func() { e.Preflight(ctx, dir, "claude", "w1", "") },
+		"Preflight":       func() { lp, _ := e.PlanLaunch(dir, "claude", ""); e.Preflight(ctx, dir, "w1", lp) },
 		"Reset":           func() { e.Reset(dir, "w1", "t", true) },
 		"ResetTo":         func() { e.ResetTo(dir, "w1", "t", "b", true) },
 		"ClearLabel":      func() { e.ClearLabel(ctx, dir, "w1") },
