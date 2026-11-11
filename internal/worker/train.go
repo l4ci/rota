@@ -161,6 +161,9 @@ type TrainResult struct {
 	// Interaction names the members whose merge together makes a red test that
 	// passes on each of them alone (verdict interaction); empty otherwise.
 	Interaction []string
+	// Unreproduced is true when the red did not reproduce on any member alone,
+	// any pair or a rerun of the red prefix: a flake that blames no member.
+	Unreproduced bool
 	// Culprits lists members excluded for missing PR sections or review verdicts.
 	Culprits []TrainCulprit
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
@@ -1492,7 +1495,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 	switch {
 	case class.unreproduced:
 		c := res.Members[hi-1]
-		res.Verdict = GateVerifyFailed
+		res.Verdict, res.Unreproduced = GateVerifyFailed, true
 		res.Err = fmt.Sprintf("TRAIN-FAIL unreproduced — the train fails %s once %s (%s) is merged, but %s passes alone and the failing tests passed on a rerun of the red prefix; a flake, no culprit, the first %d member(s) pass\n%s",
 			tier, c.Target, c.Branch, c.Target, green, failed.detail())
 		res.Hint = "nobody is blamed: re-run the train; if the same tests fail again, look at them (see the FLAKY notes)"

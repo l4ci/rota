@@ -18,7 +18,6 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
-	"github.com/l4ci/rota/internal/marker"
 )
 
 // Jira is the issue tracker of issues.source jira, over the REST API of a
@@ -252,29 +251,14 @@ func stateBody(props map[string]json.RawMessage, id string) (string, bool) {
 	return b.String(), true
 }
 
-type fieldsProp struct {
-	Block string `json:"block"`
-}
-
-// splitBody is the description and the fields-block property of a body.
-func splitBody(body string) (string, fieldsProp) {
-	text, lines, ok := marker.SplitFields(strings.ReplaceAll(body, "\r\n", "\n"))
-	if !ok {
-		return body, fieldsProp{}
-	}
-	return text, fieldsProp{Block: marker.FieldsOpen + "\n" + lines + "\n-->"}
-}
-
-// joinBody puts the stored fields block back after the description.
-func joinBody(text string, props map[string]json.RawMessage) string {
+// joinProps puts the fields block stored in the issue's properties back after
+// the description.
+func joinProps(text string, props map[string]json.RawMessage) string {
 	var f fieldsProp
-	if raw, ok := props[propFields]; !ok || json.Unmarshal(raw, &f) != nil || f.Block == "" {
+	if raw, ok := props[propFields]; !ok || json.Unmarshal(raw, &f) != nil {
 		return text
 	}
-	if text == "" {
-		return f.Block
-	}
-	return text + "\n\n" + f.Block
+	return joinBody(text, f.Block)
 }
 
 type jiraProperty struct {
@@ -309,7 +293,7 @@ type jiraIssue struct {
 
 func (j *Jira) norm(d jiraIssue) Issue {
 	f := d.Fields
-	is := Issue{Key: IssueKey(d.Key), Title: f.Summary, Body: joinBody(j.text(f.Description), d.Properties),
+	is := Issue{Key: IssueKey(d.Key), Title: f.Summary, Body: joinProps(j.text(f.Description), d.Properties),
 		Labels: append([]string{}, f.Labels...), State: "open", URL: j.site + "/browse/" + d.Key,
 		Assignees: []string{}, Author: f.Reporter.label()}
 	if len(f.FixVersions) > 0 {

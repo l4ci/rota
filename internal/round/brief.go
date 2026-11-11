@@ -179,9 +179,9 @@ func (e Env) tryItBrief(ctx context.Context, root string, be backlog.Backend, id
 	// The source is the one the gate reads (issues.source of the config), not a
 	// guess from the backend: the gate decides on it.
 	src := e.Worker.GateConfig(root).Tracker.Source
-	var trust worker.IssueTrust
+	var trust tracker.IssueTrust
 	if e.Forge != nil {
-		trust, _ = e.Forge.(worker.IssueTrust)
+		trust, _ = e.Forge.(tracker.IssueTrust)
 	}
 	body, skip, err := worker.TrustedTryIt(ctx, worker.TryItSource{
 		Source: src, Issue: id, Trust: trust,

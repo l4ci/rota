@@ -104,41 +104,8 @@ launch() { # launch <name> <cmd...>: run in the background, log to $LOGS/<name>.
   PIDS+=($!); NAMES+=("$name")
 }
 
-# Deal the sections to shards greedily, heaviest first, by the measured
-# seconds in test/shard-weights.txt (unlisted sections count 1). --random
-# ignores the weights and deals a shuffle round-robin. Either way a shard runs
-# its sections in serial order: only which shard owns a section changes.
-partition() {
-  python3 - "$REPO" "$SHARDS" "$RANDOM_PART" "$LOGS" <<'PY'
-import os, random, sys
-repo, n, rnd, logs = sys.argv[1], int(sys.argv[2]), sys.argv[3] == "1", sys.argv[4]
-secs = sorted(os.path.join("test/sections", f) for f in os.listdir(os.path.join(repo, "test/sections")) if f.endswith(".sh"))
-w = {}
-try:
-    for line in open(os.path.join(repo, "test/shard-weights.txt")):
-        p = line.split()
-        if len(p) == 2 and not line.startswith("#"):
-            w[p[0]] = float(p[1])
-except OSError:
-    pass
-n = max(1, min(n, len(secs)))
-shards = [[] for _ in range(n)]
-if rnd:
-    random.shuffle(secs)
-    for i, s in enumerate(secs):
-        shards[i % n].append(s)
-    shards = [sorted(sh) for sh in shards]  # shards keep serial order inside; only the split is random
-else:
-    load = [0.0] * n
-    for s in sorted(secs, key=lambda s: -w.get(os.path.basename(s), 1.0)):
-        i = load.index(min(load))
-        shards[i].append(s); load[i] += w.get(os.path.basename(s), 1.0)
-    shards = [sorted(sh) for sh in shards]
-for i, sh in enumerate(shards):
-    open(os.path.join(logs, "shard%d.list" % (i + 1)), "w").write("\n".join(sh) + "\n")
-print(n)
-PY
-}
+# Deal the sections to shards (test/gate-partition.py): weighted, or shuffled under --random.
+partition() { python3 "$REPO/test/gate-partition.py" "$REPO" "$SHARDS" "$RANDOM_PART" "$LOGS"; }
 
 # A recovery is valid only at the original clean checkout, matching the
 # verifier's same-tree policy. Never excuse a check that repaired its inputs.
@@ -149,6 +116,32 @@ retry_tree_unchanged() {
   [ "$RETRY_CLEAN" = 1 ] &&
     [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" = "$RETRY_HEAD" ] &&
     [ -z "$(git -C "$REPO" status --porcelain)" ]
+}
+
+# The one retry policy, shared by the Go and smoke reruns (a change to the
+# unchanged-tree rule or the recovery report lands here once):
+#   retry_once <check> <first-log> <retry-log> <require-line> <rerun-cmd...>
+# Reruns the command from the repo root, timed into <retry-log>.time. Recovery needs
+# exit 0, an unchanged tree and, when <require-line> is not empty, that line in the
+# retry log. Returns 0 recovered (FLAKY recorded), 1 stays red (message printed),
+# 2 tree changed, so nothing was rerun.
+retry_once() {
+  local check="$1" first_log="$2" retry_log="$3" require="$4" retry_rc=0
+  shift 4
+  retry_tree_unchanged || return 2
+  { time { (cd "$REPO" && "$@") >"$retry_log" 2>&1; }; } 2>"$retry_log.time" || retry_rc=$?
+  if [ "$retry_rc" = 0 ] && retry_tree_unchanged &&
+     { [ -z "$require" ] || grep -q "$require" "$retry_log"; }; then
+    if python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log" "$retry_log.time"; then
+      echo "FLAKY $check (failed once, passed isolated retry)"
+      return 0
+    fi
+    echo "FAIL $check (could not report recovery)"
+    return 1
+  fi
+  echo "FAIL $check isolated retry (exit $retry_rc)"
+  tail -n 25 "$retry_log" | sed 's/^/     /'
+  return 1
 }
 
 # Keep the JSON side channel for package selection, while ordinary failure
@@ -205,29 +198,17 @@ for idx in "${!PIDS[@]}"; do
     module="$(awk '$1 == "module" {print $2}' "$REPO/go.mod")"
     while IFS= read -r pkg; do
       pkg_idx=$((pkg_idx + 1))
-      retry_log="$LOGS/go-retry$pkg_idx.log"
-      if ! retry_tree_unchanged; then
+      first_log="$LOGS/go-first$pkg_idx.log"
+      if ! python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.json" "$pkg" >"$first_log"; then
+        echo "FAIL go:${pkg#"$module"/} (could not report recovery)"
         go_failed=1
-        break
+        continue
       fi
-      retry_rc=0
-      { time { (cd "$REPO" && go test -race -timeout 30m -count=1 "$pkg") >"$retry_log" 2>&1; }; } \
-        2>"$retry_log.time" || retry_rc=$?
-      check="go:${pkg#"$module"/}"
-      if [ "$retry_rc" = 0 ] && retry_tree_unchanged; then
-        first_log="$LOGS/go-first$pkg_idx.log"
-        if python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.json" "$pkg" >"$first_log" &&
-           python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log" "$retry_log.time"; then
-          echo "FLAKY $check (failed once, passed isolated retry)"
-        else
-          echo "FAIL $check (could not report recovery)"
-          go_failed=1
-        fi
-      else
-        echo "FAIL $check isolated retry (exit $retry_rc)"
-        tail -n 25 "$retry_log" | sed 's/^/     /'
-        go_failed=1
-      fi
+      retry_once "go:${pkg#"$module"/}" "$first_log" "$LOGS/go-retry$pkg_idx.log" "" \
+        go test -race -timeout 30m -count=1 "$pkg"
+      retry_rc=$?
+      [ "$retry_rc" = 0 ] || go_failed=1
+      [ "$retry_rc" != 2 ] || break  # tree changed: stop retrying
     done <"$LOGS/go-failed.list"
     [ "$go_failed" = 0 ] && continue
   fi
@@ -239,22 +220,11 @@ for idx in "${!PIDS[@]}"; do
     fi
     if [ "$SMOKE_ONLY" = 0 ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
        python3 "$REPO/test/gate-smoke.py" "$LOGS/$name.log"; then
-      retry_rc=0
       shard="${name#smoke-shard}"
-      { time { (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
-        SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh) \
-        >"$LOGS/$name.retry.log" 2>&1; }; } 2>"$LOGS/$name.retry.log.time" || retry_rc=$?
-      if [ "$retry_rc" = 0 ] && retry_tree_unchanged && grep -q 'All smoke tests passed.' "$LOGS/$name.retry.log"; then
-        if python3 "$REPO/test/gate-flake.py" "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" "$LOGS/$name.retry.log.time"; then
-          echo "FLAKY $name (failed once, passed isolated retry)"
-        else
-          echo "FAIL $name (could not report recovery)"
-          fail=1
-        fi
+      if retry_once "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" 'All smoke tests passed\.' \
+         env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh; then
         continue
       fi
-      echo "FAIL $name isolated retry (exit $retry_rc)"
-      tail -n 25 "$LOGS/$name.retry.log" | sed 's/^/     /'
     fi
     ;;
   esac

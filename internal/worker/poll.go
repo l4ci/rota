@@ -550,7 +550,7 @@ type pollTarget struct {
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(), unsent: s.Unsent(),
+	return pollTarget{name: s.Name(), kind: s.Kind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(), unsent: s.Unsent(),
 		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relayEvSeq: s.RelayEventSeq(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }

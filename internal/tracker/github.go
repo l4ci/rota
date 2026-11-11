@@ -1000,18 +1000,6 @@ func ghCheckState(status, conclusion string) string {
 	return CheckFailure
 }
 
-// Authorship is who wrote an issue body and the body they wrote, read in one
-// call so the trust check judges the text that is then used.
-type Authorship struct {
-	// Author and Editor are logins; "" for a deleted account, and for Editor an
-	// issue never edited.
-	Author, Editor string
-	// Edited says the body was edited at all, so an edit by a deleted account
-	// (no Editor) is not mistaken for none.
-	Edited bool
-	Body   string
-}
-
 // IssueAuthorship names the author and last editor of an issue's body and
 // returns that body.
 func (g *GitHub) IssueAuthorship(ctx context.Context, key IssueKey) (Authorship, error) {
