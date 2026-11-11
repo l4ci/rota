@@ -73,8 +73,8 @@ func TestTransferWorkerPickPrecedence(t *testing.T) {
 				t.Fatalf("transfer: %+v, %v", res, err)
 			}
 			s := f.slot("dana")
-			if s.HarnessKind() != tc.wantKind || s.Model() != tc.wantModel || s.KindSource() != tc.wantSource {
-				t.Fatalf("receiver: kind %q from %q model %q; want %q from %q model %q", s.HarnessKind(), s.KindSource(), s.Model(), tc.wantKind, tc.wantSource, tc.wantModel)
+			if s.Kind() != tc.wantKind || s.Model() != tc.wantModel || s.KindSource() != tc.wantSource {
+				t.Fatalf("receiver: kind %q from %q model %q; want %q from %q model %q", s.Kind(), s.KindSource(), s.Model(), tc.wantKind, tc.wantSource, tc.wantModel)
 			}
 			if !strings.HasPrefix(f.host.launch, tc.wantKind+" ") {
 				t.Fatalf("wrong harness launched: %s", f.host.launch)
