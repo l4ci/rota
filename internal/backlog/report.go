@@ -99,7 +99,11 @@ func (b *Issues) postReport(ref, key, markdown string) error {
 		line, _, _ := strings.Cut(c.Body, "\n")
 		if line == key {
 			if author == "" {
-				author, err = tracker.ReportAuthor(b.ctx(), tr)
+				id, ok := tr.(tracker.Identity)
+				if !ok {
+					return tracker.ErrNoReportAuthor
+				}
+				author, err = tracker.ReportAuthor(b.ctx(), id)
 				if err != nil {
 					return err
 				}

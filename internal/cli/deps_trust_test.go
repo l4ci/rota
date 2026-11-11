@@ -8,11 +8,10 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // The round brief asks its Forge whether an issue's author may push (#899): a
-// GitHub issue side must come through forgeAndIssues as a worker.IssueTrust, a
+// GitHub issue side must come through forgeAndIssues as a tracker.IssueTrust, a
 // file source's must not.
 func TestForgeAndIssuesPassesTheTrustCheckThrough(t *testing.T) {
 	for source, want := range map[string]bool{"github": true, "file": false} {
@@ -26,7 +25,7 @@ func TestForgeAndIssuesPassesTheTrustCheckThrough(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", source, err)
 		}
-		if _, ok := f.(worker.IssueTrust); ok != want {
+		if _, ok := f.(tracker.IssueTrust); ok != want {
 			t.Errorf("%s source: IssueTrust = %v, want %v", source, ok, want)
 		}
 	}

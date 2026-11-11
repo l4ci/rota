@@ -57,9 +57,7 @@ type ReportSource interface {
 // write access. GitHub implements it; GitLab does not, so there only the
 // authenticated user's reports are trusted. A lookup error leaves that author
 // untrusted without discarding other authors' reports.
-type AuthorTrust interface {
-	CanPush(ctx context.Context, login string) (bool, error)
-}
+type AuthorTrust = tracker.PushTrust
 
 // RecoverPR reads trusted PR reports only when no local record exists at head.
 // Local verdicts are authoritative for the whole branch, not just their kind.

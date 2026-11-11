@@ -216,7 +216,7 @@ func (e Env) reviewItem(ctx context.Context, root string, be Board, name, id, di
 	}
 	if !minted {
 		why := "it has no rota review-minted comment from a user with write access"
-		if _, ok := any(e.Forge).(worker.PushTrust); !ok {
+		if _, ok := any(e.Forge).(tracker.PushTrust); !ok {
 			why = "write access cannot be checked here (no forge permission check), so no review-minted comment can be trusted"
 		}
 		return it, blocked(BlockReviewNotMinted, "%s", busyMsg(name, id, did+", but it was not minted by main: "+why))

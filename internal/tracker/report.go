@@ -13,15 +13,13 @@ type MRNoteEditor interface {
 	EditMRNote(ctx context.Context, pr int, commentID, body string) error
 }
 
+// ErrNoReportAuthor is the refusal of a tracker that is not an Identity.
+var ErrNoReportAuthor = fmt.Errorf("tracker cannot resolve the authenticated report author")
+
 // ReportAuthor resolves the authenticated comment author. A marker is never
-// proof of ownership; adapters without an identity seam must fail closed.
-func ReportAuthor(ctx context.Context, adapter any) (string, error) {
-	identity, ok := adapter.(interface {
-		AuthenticatedUser(context.Context) (string, error)
-	})
-	if !ok {
-		return "", fmt.Errorf("tracker cannot resolve the authenticated report author")
-	}
+// proof of ownership; adapters without an identity seam must fail closed
+// (callers assert Identity and answer ErrNoReportAuthor).
+func ReportAuthor(ctx context.Context, identity Identity) (string, error) {
 	author, err := identity.AuthenticatedUser(ctx)
 	if err != nil {
 		return "", err
@@ -61,7 +59,11 @@ func PostReport(ctx context.Context, forge Forge, pr int, markdown string) error
 			continue
 		}
 		if author == "" {
-			author, err = ReportAuthor(ctx, forge)
+			id, ok := forge.(Identity)
+			if !ok {
+				return ErrNoReportAuthor
+			}
+			author, err = ReportAuthor(ctx, id)
 			if err != nil {
 				return err
 			}
