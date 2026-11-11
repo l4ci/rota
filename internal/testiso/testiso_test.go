@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/hostenv"
 )
 
 func TestScrubHostEnvDropsByPrefix(t *testing.T) {
@@ -14,7 +16,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 	t.Setenv("ROTA_KEEP_ME", "x")
 	scrubHostEnv()
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") || strings.HasPrefix(kv, "ORCA_") {
+		if hostenv.IsKV(kv) {
 			t.Errorf("host variable survived the scrub: %s", kv)
 		}
 	}
@@ -26,7 +28,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 // A HERDR_ variable must not outlive package init, whatever the host sets.
 func TestNoHostVarAfterInit(t *testing.T) {
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "TMUX") || strings.HasPrefix(kv, "HC_") || strings.HasPrefix(kv, "ORCA_") {
+		if hostenv.IsKV(kv) {
 			t.Errorf("host variable survived package init: %s", kv)
 		}
 	}
