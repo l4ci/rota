@@ -235,7 +235,7 @@ type GateResult struct {
 	// IntegrationMembers are the member issues of an integration PR that
 	// landed (#3096): the post-gate bookkeeping ends each one.
 	IntegrationMembers []string
-	Slot string
+	Slot               string
 	// TargetSlot is the pool slot the gate target resolved to, "" when it
 	// resolved to none (an external PR, a queued record whose slot moved on).
 	// Slot echoes the argument, which may be a PR number.
