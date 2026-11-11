@@ -11,6 +11,7 @@ package keepalive
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -48,7 +48,7 @@ type Child interface {
 // HandoffRead is what the filesystem says about the handoff file, with the
 // SHA-256 of its content (empty when it does not exist).
 type HandoffRead struct {
-	hook.Handoff
+	keepstate.Handoff
 	SHA string
 }
 
@@ -80,7 +80,7 @@ type Env struct {
 	// account to move to; Record writes the decision to the limits log. Gap is
 	// true while no child runs, so the embedded loop leaves the orchestrator's
 	// pane and session alone.
-	UsageMarker func(since time.Time) (hook.UsageHandoff, bool)
+	UsageMarker func(since time.Time) (keepstate.UsageHandoff, bool)
 	Choose      func(currentDir string, threshold int) Choice
 	Record      func(Decision) error
 	Gap         *atomic.Bool
@@ -221,16 +221,16 @@ func Run(env Env, o Options) (Result, error) {
 		res.Warnings = append(res.Warnings, "reclaimed stale lease held by "+who)
 	}
 
-	statePath := StatePath(o.CommonDir)
+	statePath := keepstate.StatePath(o.CommonDir)
 	start := env.Now()
-	st := State{PID: env.Holder.PID, Host: env.Lease.Host, Start: env.Holder.Start, StartedAt: ts(start), Command: append([]string{}, o.Command...),
-		Status: StatusRunning, RunStartedAt: ts(start), Account: o.Account}
+	st := keepstate.State{PID: env.Holder.PID, Host: env.Lease.Host, Start: env.Holder.Start, StartedAt: ts(start), Command: append([]string{}, o.Command...),
+		Status: keepstate.StatusRunning, RunStartedAt: ts(start), Account: o.Account}
 	if h := env.Handoff(); h.Exists {
 		st.LastHandoffSha = h.SHA // the handoff the first run begins with
 	}
 	stateWarned := false
 	save := func() {
-		if err := WriteState(statePath, st); err != nil && !stateWarned {
+		if err := keepstate.WriteState(statePath, st); err != nil && !stateWarned {
 			stateWarned = true
 			res.Warnings = append(res.Warnings, "state file not written: "+err.Error())
 		}
@@ -280,7 +280,7 @@ func Run(env Env, o Options) (Result, error) {
 			res.Escalation = escalate(env, o, st, reason, statePath, &res)
 			st.Escalation = res.Escalation
 		}
-		st.Status, st.StopReason = StatusStopped, reason
+		st.Status, st.StopReason = keepstate.StatusStopped, reason
 		save()
 		if _, err := env.Lease.Release(o.CommonDir, env.Holder); err != nil {
 			res.Warnings = append(res.Warnings, "lease not released: "+err.Error())
@@ -321,7 +321,7 @@ func Run(env Env, o Options) (Result, error) {
 			return finish(StopSpawnFailed, &SpawnError{Err: werr})
 		}
 		res.LastExit = exit
-		st.LastExit = &LastExit{Code: exit.Code, Signal: exit.Signal, At: ts(env.Now())}
+		st.LastExit = &keepstate.LastExit{Code: exit.Code, Signal: exit.Signal, At: ts(env.Now())}
 		save()
 
 		if s.wasInterrupted() {
@@ -360,7 +360,7 @@ func ts(t time.Time) string { return stamp.Format(t) }
 
 // escalate raises the breaker's notification and returns the escalation id,
 // "" when none was recorded. Failures are warnings: the stop stands.
-func escalate(env Env, o Options, st State, reason, statePath string, res *Result) string {
+func escalate(env Env, o Options, st keepstate.State, reason, statePath string, res *Result) string {
 	title := "Orchestrator keepalive stopped: " + reason
 	body := escalationBody(env, o, st, reason, statePath)
 	if o.EscalateIssue == "" {
@@ -383,7 +383,7 @@ func escalate(env Env, o Options, st State, reason, statePath string, res *Resul
 	return id
 }
 
-func escalationBody(env Env, o Options, st State, reason, statePath string) string {
+func escalationBody(env Env, o Options, st keepstate.State, reason, statePath string) string {
 	last := "none"
 	if st.LastExit != nil {
 		last = fmt.Sprintf("code %d", st.LastExit.Code)
