@@ -2,25 +2,21 @@ package host
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
+	"github.com/l4ci/rota/internal/shlex"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Orca uses native handles for identity; titles are mutable display text.
 // Decode only direct records and explicit terminal/terminals/receipt wrappers.
 // Read's direct screen and status's running fields await a raw live sample.
 type orca struct{ d Deps }
+
 type orcaHandle struct{ ID, Title, Cwd, PIDFile, Branch string }
+
 type orcaTerminal struct {
 	ID     string `json:"handle"`
 	Title  string `json:"title"`
@@ -29,7 +25,8 @@ type orcaTerminal struct {
 	Branch string `json:"branch"`
 }
 
-func (o *orca) Kind() Kind                 { return Orca }
+func (o *orca) Kind() Kind { return Orca }
+
 func (o *orca) Capabilities() Capabilities { return kindPolicy(Orca, CapabilitiesOf(o)) }
 
 // RuntimeScopedHandles: an Orca runtime restart orphans handles whose
@@ -38,6 +35,7 @@ func (o *orca) RuntimeScopedHandles() bool { return true }
 
 // TreeKillClose: Orca owns terminals whose agent can outlive the handle.
 func (o *orca) TreeKillClose() bool { return true }
+
 func (o *orca) call(ctx context.Context, args ...string) (string, error) {
 	r, e := o.d.Run(ctx, "orca", args)
 	if e != nil {
@@ -48,6 +46,7 @@ func (o *orca) call(ctx context.Context, args ...string) (string, error) {
 	}
 	return r.Stdout, nil
 }
+
 func (o *orca) Require() error {
 	if _, e := o.d.LookPath("orca"); e != nil {
 		return fmt.Errorf("orca is not installed")
@@ -64,62 +63,16 @@ func (o *orca) Require() error {
 	}
 	return nil
 }
+
 func (o *orca) InSession() bool { return o.d.Getenv(envOrcaPane) != "" }
+
 func (o *orca) Where() string {
 	if h := o.d.Getenv(envOrcaPane); h != "" {
 		return h
 	}
 	return "?"
 }
-func encodeOrca(h orcaHandle) string {
-	b, _ := json.Marshal(h)
-	return "orca:" + base64.RawURLEncoding.EncodeToString(b)
-}
-func (o *orca) decodeOrca(s string) (orcaHandle, error) {
-	var h orcaHandle
-	b, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(s, "orca:"))
-	if !strings.HasPrefix(s, "orca:") || e != nil || json.Unmarshal(b, &h) != nil || h.Cwd == "" || h.PIDFile == "" {
-		return h, fmt.Errorf("unverifiable Orca handle")
-	}
-	dir, err := o.orcaStateDir(h.Cwd)
-	match, _ := filepath.Match("agent-*.pid", filepath.Base(h.PIDFile))
-	if err != nil || !filepath.IsAbs(h.PIDFile) || filepath.Clean(filepath.Dir(h.PIDFile)) != filepath.Clean(dir) || !match {
-		return h, fmt.Errorf("unverifiable Orca handle: PID proof must be an agent-*.pid file in the worktree's rota-orca directory")
-	}
-	return h, nil
-}
-func (o *orca) orcaStateDir(cwd string) (string, error) {
-	git := filepath.Join(cwd, ".git")
-	info, e := o.d.FS.Stat(git)
-	if e != nil {
-		return "", e
-	}
-	if !info.IsDir() {
-		b, e := o.d.FS.ReadFile(git)
-		if e != nil {
-			return "", e
-		}
-		s := strings.TrimSpace(strings.TrimPrefix(string(b), "gitdir: "))
-		if !strings.HasPrefix(string(b), "gitdir: ") {
-			return "", fmt.Errorf("invalid worktree git metadata")
-		}
-		if !filepath.IsAbs(s) {
-			s = filepath.Join(cwd, s)
-		}
-		git = s
-	}
-	return filepath.Join(git, "rota-orca"), nil
-}
-func (o *orca) orcaPIDFile(cwd string) (string, error) {
-	dir, e := o.orcaStateDir(cwd)
-	if e != nil {
-		return "", e
-	}
-	if e := o.d.FS.MkdirAll(dir, 0700); e != nil {
-		return "", e
-	}
-	return o.d.FS.CreateTemp(dir, "agent-*.pid")
-}
+
 func (o *orca) create(ctx context.Context, cwd, title, launch string, env []string) (string, error) {
 	var pre []string
 	for _, entry := range env {
@@ -178,6 +131,7 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	_, _ = o.processes(h, orcaBootEvidence)
 	return encoded, nil
 }
+
 func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	h, e := o.create(ctx, s.Cwd, s.Session+":"+s.Slot, s.Launch, s.Env)
 	if e != nil {
@@ -216,12 +170,14 @@ func orcaDialog(p string) (Dialog, bool) {
 	}
 	return ReadDialog(p)
 }
+
 func orcaReady(p string) bool {
 	if _, ok := orcaDialog(p); ok {
 		return false
 	}
 	return bootReady(p, true)
 }
+
 func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string, error) {
 	v, e := o.decodeOrca(h)
 	if e != nil {
@@ -229,6 +185,7 @@ func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string,
 	}
 	return o.readPane(ctx, &v, lines)
 }
+
 func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, error) {
 	if v.PIDFile != "" {
 		// Keep observed descendants while the agent is alive, before a crash
@@ -272,268 +229,13 @@ func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, 
 	}
 	return p, nil
 }
+
 func (o *orca) Capture(ctx context.Context, s, h string, n int) string {
 	p, _ := o.ReadPane(ctx, s, h, n)
 	return p
 }
+
 func (o *orca) Status(context.Context, string, string) string { return "" }
-func (o *orca) Send(ctx context.Context, slot, handle, file string) error {
-	text, err := o.d.readBrief(file)
-	if err != nil {
-		return err
-	}
-	return classifySend(o.send(ctx, handle, text))
-}
-
-const orcaBriefLimit = 120 * 1024
-
-func orcaCheckSize(text string) error {
-	if len(text) > orcaBriefLimit {
-		return fmt.Errorf("Orca brief is %d UTF-8 bytes; limit is %d bytes; shorten the brief before resending", len(text), orcaBriefLimit)
-	}
-	return nil
-}
-func (o *orca) send(ctx context.Context, handle, text string) error {
-	if err := orcaCheckSize(text); err != nil {
-		return err
-	}
-	h, err := o.decodeOrca(handle)
-	if err != nil {
-		return err
-	}
-	if h.Branch == "" {
-		return fmt.Errorf("cannot submit Orca prompt: saved worktree branch is missing")
-	}
-	before, err := o.readPane(ctx, &h, 0)
-	handle = encodeOrca(h)
-	if err != nil {
-		return err
-	}
-	// Orca has no validated key-only transport. Refuse every dialog without
-	// changing its selection or pasting text into it.
-	if dialog, ok := orcaDialog(before); ok {
-		return &DialogError{First: dialog.First}
-	}
-	readErr := error(nil)
-	latest := before
-	read := func() string {
-		p, e := o.readPane(ctx, &h, 0)
-		if e != nil {
-			readErr = e
-		}
-		latest = p
-		return stripDim(p)
-	}
-	if waitNoDraft(&o.d, read, "") != "" {
-		return ErrDraftOnPrompt
-	}
-	if readErr != nil {
-		return readErr
-	}
-	if dialog, ok := orcaDialog(latest); ok {
-		return &DialogError{First: dialog.First}
-	}
-	before = latest
-	handle = encodeOrca(h)
-	if !orcaReady(before) && !o.inputReady(h, before) {
-		return fmt.Errorf("orca input is not ready; wait for the agent prompt in the Orca terminal, then retry")
-	}
-	raw, err := o.call(ctx, "terminal", "send", "--terminal", h.ID, "--text", text, "--enter", "--wait-submit", "20", "--json")
-	if err != nil {
-		return err
-	}
-	started, err := orcaTurnStarted(raw)
-	if err != nil {
-		return err
-	}
-	if started {
-		return o.verifyBranch(ctx, h)
-	}
-	return confirmPickup(&o.d, Orca, func(time.Duration) (bool, error) {
-		after, e := o.ReadPane(ctx, "", handle, 0)
-		if e != nil {
-			return false, e
-		}
-		if after == before || humanDraft(stripDim(after), "") != "" {
-			return false, nil
-		}
-		above := after
-		if n := strings.LastIndexAny(after, promptMarkers); n >= 0 {
-			above = after[:n]
-		}
-		// Draft-only changes are not submission. Require new output above the
-		// composer containing explicit turn/busy evidence. An echo alone
-		// proves input acceptance, not the turn-start required by dispatch.
-		oldAbove := before
-		if n := strings.LastIndexAny(before, promptMarkers); n >= 0 {
-			oldAbove = before[:n]
-		}
-		if above == oldAbove {
-			return false, nil
-		}
-		if orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove) && !orcaBusy.MatchString(text) {
-			return true, o.verifyBranch(ctx, h)
-		}
-		return false, nil
-	}, nil)
-}
-
-var orcaBusy = regexp.MustCompile(`(?im)^[ \t]*(?:[•●✶✻✽✢*][ \t]*)?[^\r\n]*\besc to interrupt\b[^\r\n]*$`)
-
-func (o *orca) Kill(ctx context.Context, slot, handle string) error {
-	if handle == "" {
-		return nil
-	}
-	h, e := o.decodeOrca(handle)
-	if e != nil {
-		return e
-	}
-	if h.ID == "" {
-		return fmt.Errorf("unverifiable Orca close: native handle missing")
-	}
-	evidence, e := o.processes(h, orcaRefreshEvidence)
-	if e != nil {
-		return e
-	}
-	ts, e := o.terminals(ctx)
-	if e != nil {
-		return e
-	}
-	matches := []orcaTerminal{}
-	for _, t := range ts {
-		if t.ID == h.ID {
-			matches = append(matches, t)
-		}
-	}
-	if len(matches) > 1 {
-		return fmt.Errorf("unverifiable Orca close: duplicate native handle")
-	}
-	// A runtime restart can remove the native handle without a prior close.
-	// Absence is not process proof: the retained tree must still be all gone.
-	// Round reclaim owns the --force guard for an unverifiable stale handle.
-	probe := evidence.aliveDeps(o.d)
-	out, e := runKill(killSteps{
-		deps: &probe, pids: evidence.pids(),
-		close: func() error {
-			if len(matches) == 1 {
-				_, err := o.call(ctx, "terminal", "close", "--terminal", h.ID, "--json")
-				return err
-			}
-			return nil
-		},
-		gone: func() presence {
-			ts, e := o.terminals(ctx)
-			if e != nil {
-				return presentYes
-			}
-			for _, t := range ts {
-				if t.ID == h.ID && !t.Exited {
-					return presentYes
-				}
-			}
-			return presentGone
-		},
-	})
-	if e != nil {
-		return e
-	}
-	if !out.ok {
-		var unknown []int
-		for _, pid := range out.alive {
-			for _, p := range evidence {
-				if p.PID == pid && p.Start == 0 {
-					unknown = append(unknown, pid)
-					break
-				}
-			}
-		}
-		detail := ""
-		if len(unknown) > 0 {
-			detail = fmt.Sprintf("; no recorded start time (legacy or unreadable at observation):%s; inspect these processes before retrying cleanup", pidList(unknown))
-		}
-		return fmt.Errorf("orca close unproven; surviving processes:%s%s", pidList(out.alive), detail)
-	}
-	o.d.FS.Remove(h.PIDFile + ".json")
-	return nil
-}
-
-type orcaEvidenceMode int
-
-const (
-	orcaReadEvidence orcaEvidenceMode = iota
-	orcaRefreshEvidence
-	orcaBootEvidence // only a newly created terminal may establish its root
-)
-
-// processes retains observations from boot, polling and cleanup. Serialize
-// updates so a polling process cannot discard descendants saved by cleanup.
-func (o *orca) processes(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
-	var evidence processEvidence
-	err := o.d.FS.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
-		var err error
-		evidence, err = o.processesLocked(h, mode)
-		return err
-	})
-	return evidence, err
-}
-
-// orcaProcessRecord distinguishes a proved empty modern tree from an invalid
-// empty legacy list. Ownership metadata remains in Orca's separate identity file.
-type orcaProcessRecord struct {
-	Version   int              `json:"version"`
-	Processes *processEvidence `json:"processes"`
-}
-
-func (o *orca) processesLocked(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
-	raw, e := o.d.FS.ReadFile(h.PIDFile)
-	if e != nil {
-		return nil, fmt.Errorf("missing Orca PID proof: %w", e)
-	}
-	pid, e := strconv.Atoi(strings.TrimSpace(string(raw)))
-	if e != nil || pid <= 0 {
-		return nil, fmt.Errorf("missing Orca PID proof")
-	}
-	var evidence processEvidence
-	treeFile := h.PIDFile + ".tree"
-	if raw, e := o.d.FS.ReadFile(treeFile); e == nil {
-		if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
-			var record orcaProcessRecord
-			if json.Unmarshal(raw, &record) != nil || record.Version != 1 || record.Processes == nil {
-				return nil, fmt.Errorf("unreadable Orca tree proof")
-			}
-			evidence = *record.Processes
-		} else {
-			stored, legacy, err := decodeProcessEvidence(raw)
-			if err != nil || len(stored)+len(legacy) == 0 {
-				return nil, fmt.Errorf("unreadable Orca tree proof")
-			}
-			// Old Orca numbers remain unknown, conservative blockers. Never
-			// upgrade them from, or expand the tree of, today's process table.
-			evidence = append(stored, unknownProcesses(legacy)...)
-		}
-		for _, p := range evidence {
-			if p.PID <= 0 {
-				return nil, fmt.Errorf("invalid Orca tree proof")
-			}
-		}
-	} else if !os.IsNotExist(e) {
-		return nil, e
-	} else if mode != orcaBootEvidence || !o.d.Alive(pid) {
-		return nil, fmt.Errorf("missing Orca retained process-tree proof; inspect the slot processes before retrying cleanup")
-	} else {
-		// First observation of the newly launched worker, before its root
-		// exits. Subsequent refreshes require the retained incarnation.
-		evidence = observeProcesses(o.d, append([]int{pid}, o.d.Tree(pid)...))
-	}
-	if mode != orcaReadEvidence {
-		evidence = evidence.refresh(o.d)
-		raw, _ := json.Marshal(orcaProcessRecord{Version: 1, Processes: &evidence})
-		if e := o.d.FS.WriteFileAtomic(treeFile, raw); e != nil {
-			return nil, e
-		}
-	}
-	return evidence, nil
-}
 
 func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {
 	raw, e := o.call(ctx, "terminal", "list", "--json")
@@ -564,6 +266,7 @@ func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {
 	}
 	return ts, nil
 }
+
 func (o *orca) resolve(ctx context.Context, h orcaHandle) (orcaHandle, error) {
 	ts, e := o.terminals(ctx)
 	if e != nil {
@@ -613,6 +316,7 @@ func (o *orca) recorded(t orcaTerminal) (string, orcaHandle, bool) {
 	h, e := o.decodeOrca(candidates[0])
 	return candidates[0], h, e == nil
 }
+
 func (o *orca) Snapshot(ctx context.Context) ([]Agent, error) {
 	ts, e := o.terminals(ctx)
 	if e != nil {
@@ -632,21 +336,6 @@ func (o *orca) Snapshot(ctx context.Context) ([]Agent, error) {
 	return out, nil
 }
 
-// Only rota-owned, retained process evidence can prove a terminal agentless;
-// connected/writable/orphaned and absent runtime handles cannot.
-func (o *orca) processesGone(h orcaHandle) bool {
-	evidence, err := o.processes(h, orcaReadEvidence)
-	if err != nil {
-		return false
-	}
-	probe := evidence.aliveDeps(o.d)
-	for _, pid := range evidence.pids() {
-		if probe.Alive(pid) {
-			return false
-		}
-	}
-	return true
-}
 func (o *orca) Tabs(ctx context.Context) ([]Tab, error) {
 	ts, e := o.terminals(ctx)
 	if e != nil {
@@ -660,10 +349,13 @@ func (o *orca) Tabs(ctx context.Context) ([]Tab, error) {
 	}
 	return out, nil
 }
+
 func (o *orca) CloseTab(ctx context.Context, id string) error { return o.Kill(ctx, "", id) }
+
 func (o *orca) OpenTab(ctx context.Context, t TabOpts) (string, error) {
 	return o.create(ctx, t.Cwd, t.Label, t.Command, nil)
 }
+
 func (o *orca) PaneOf(ctx context.Context, slot, handle string) string {
 	h, e := o.decodeOrca(handle)
 	if e != nil {
@@ -674,6 +366,7 @@ func (o *orca) PaneOf(ctx context.Context, slot, handle string) string {
 	}
 	return h.ID
 }
+
 func (o *orca) CapturePane(ctx context.Context, pane string, lines int) string {
 	if pane == "" {
 		return ""
@@ -691,100 +384,7 @@ func (o *orca) CapturePane(ctx context.Context, pane string, lines int) string {
 	p, _ := o.readPane(ctx, &orcaHandle{ID: pane}, lines)
 	return p
 }
-func (o *orca) SendPane(ctx context.Context, pane, text string) error {
-	if pane == "" {
-		return fmt.Errorf("no Orca pane to send to")
-	}
-	if e := orcaCheckSize(text); e != nil {
-		return e
-	}
-	if strings.HasPrefix(pane, "orca:") {
-		h, e := o.decodeOrca(pane)
-		if e != nil {
-			return e
-		}
-		pane = h.ID
-	}
-	if pane == "" {
-		return fmt.Errorf("no native Orca pane handle")
-	}
-	_, e := o.call(ctx, "terminal", "send", "--terminal", pane, "--text", text, "--enter", "--json")
-	return e
-}
 
-// Once the startup banner scrolls away, a persisted successful boot and the
-// still-live exec PID identify this as the same agent rather than a bare shell.
-func (o *orca) inputReady(h orcaHandle, p string) bool {
-	if _, ok := orcaDialog(p); ok {
-		return false
-	}
-	for _, syntax := range harness.InputSyntaxes() {
-		if syntax.ReadyModel != nil {
-			if m := syntax.ReadyModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
-				return false
-			}
-		}
-	}
-	if _, e := o.d.FS.Stat(h.PIDFile + ".ready"); e != nil {
-		return false
-	}
-	b, e := o.d.FS.ReadFile(h.PIDFile)
-	if e != nil {
-		return false
-	}
-	pid, e := strconv.Atoi(strings.TrimSpace(string(b)))
-	if e != nil || pid <= 0 || !o.d.Alive(pid) {
-		return false
-	}
-	return strings.ContainsAny(p, promptMarkers) || orcaBusy.MatchString(p)
-}
-
-func decodeOrcaTerminal(raw string) (orcaTerminal, error) {
-	var t orcaTerminal
-	if e := json.Unmarshal([]byte(raw), &t); e != nil {
-		return t, fmt.Errorf("orca create returned malformed JSON: %w", e)
-	}
-	if t.ID == "" {
-		var r struct {
-			Terminal orcaTerminal `json:"terminal"`
-		}
-		if json.Unmarshal([]byte(raw), &r) == nil {
-			t = r.Terminal
-		}
-	}
-	if t.ID == "" {
-		return t, fmt.Errorf("orca create returned unsupported terminal JSON")
-	}
-	return t, nil
-}
-func orcaTurnStarted(raw string) (bool, error) {
-	type receipt struct {
-		Stages      []string `json:"stages"`
-		Provider    string   `json:"provider"`
-		Observation string   `json:"observation"`
-	}
-	var r receipt
-	if e := json.Unmarshal([]byte(raw), &r); e != nil {
-		return false, fmt.Errorf("orca send returned malformed JSON; pickup unconfirmed: %w", e)
-	}
-	if r.Stages == nil {
-		var w struct {
-			Receipt *receipt `json:"receipt"`
-		}
-		if json.Unmarshal([]byte(raw), &w) == nil && w.Receipt != nil {
-			r = *w.Receipt
-		}
-	}
-	if r.Observation != "" && r.Observation != "supported" {
-		return false, nil
-	}
-	for _, stage := range r.Stages {
-		if stage == "turn_started" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
 func (o *orca) gitBranch(ctx context.Context, cwd string) (string, error) {
 	r, e := o.d.Run(ctx, "git", []string{"-C", cwd, "symbolic-ref", "--quiet", "--short", "HEAD"})
 	branch := strings.TrimSpace(r.Stdout)
@@ -793,6 +393,7 @@ func (o *orca) gitBranch(ctx context.Context, cwd string) (string, error) {
 	}
 	return branch, nil
 }
+
 func (o *orca) verifyBranch(ctx context.Context, h orcaHandle) error {
 	ts, e := o.terminals(ctx)
 	if e != nil {
