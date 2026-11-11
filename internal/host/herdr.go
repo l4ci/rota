@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// herdr ports bin/hv-host-herdr.sh. A herdr slot is a TAB in the current
+// herdr is the legacy herdr adapter. A herdr slot is a TAB in the current
 // workspace whose root pane runs Claude Code in the slot's worktree. The
 // handle is the tab id (`w1:t7`). Tab ids are never reused, so the handle
 // changes on every dispatch and the caller must persist it. The agent's name
