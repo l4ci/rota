@@ -22,14 +22,14 @@ import (
 // flags, host, login) is refused here. dispatch runs the same preflight again.
 // A refusal carrying block data comes back as a BlockedError.
 func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string) (warnings []string, err error) {
-	hz, err := worker.LaunchHarness(kind)
+	lp, err := e.Worker.PlanLaunch(root, kind, model)
 	if err != nil {
 		return nil, err
 	}
-	if why := hz.SoloRefusal(); why != "" && worker.IsSolo(root) {
+	if why := lp.H.SoloRefusal(); why != "" && worker.IsSolo(root) {
 		return nil, usage("%s", why)
 	}
-	setup, err := e.Worker.Preflight(ctx, root, kind, slot, model)
+	setup, err := e.Worker.Preflight(ctx, root, slot, lp)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {

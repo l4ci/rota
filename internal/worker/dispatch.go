@@ -372,19 +372,16 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	if kind == "" {
 		kind = t.slot.Kind()
 	}
-	hz, err := LaunchHarness(kind)
+	lp, err := e.PlanLaunch(root, kind, o.Model)
 	if err != nil {
 		return res, err
 	}
+	hz, launch, hit := lp.H, lp.Line, lp.Hit
 	kind = hz.Kind()
 	accounts := harness.ResolveAccounts(kind)
 	prompt := harness.ResolvePrompt(kind)
 	res.Kind = kind
 	key := hz.CommandKey()
-	launch, hit, err := e.launchLine(root, hz, o.Model)
-	if err != nil {
-		return res, err
-	}
 	if hit.Token != "" {
 		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
 		e.Data = BlockData{BlockedBy: blockedby.ResumeFlag}
@@ -404,7 +401,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	// The slot's account, launch flags and login are checked before the old
 	// session is killed or anything is marked.
-	setup, err := e.Preflight(ctx, root, kind, o.Slot, o.Model)
+	setup, err := e.Preflight(ctx, root, o.Slot, lp)
 	if err != nil {
 		return res, err
 	}
