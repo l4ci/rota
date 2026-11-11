@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -87,4 +91,51 @@ func memberTargets(it worker.Integration) []string {
 		out = append(out, m.Target)
 	}
 	return out
+}
+
+// integrationPRBody lists the members and closes each member issue: landing
+// the one PR ends them all.
+func integrationPRBody(it worker.Integration) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Integration branch `%s` of round %d: lands these reviewed PRs on `%s` together.\n\n", it.Branch, it.Round, it.Base)
+	for _, m := range it.Members {
+		fmt.Fprintf(&b, "- %s (%s)\n", m.PR, strutil.ShortSHA(m.Head))
+	}
+	b.WriteString("\nLand it with `rota worker gate`, never the merge button: the gate checks the fix commits' review and skips a second verify only when the base has not moved.\n\n")
+	for _, m := range it.Members {
+		if m.Issue != "" {
+			fmt.Fprintf(&b, "Closes #%s\n", strings.TrimPrefix(m.Issue, "#"))
+		}
+	}
+	return b.String()
+}
+
+// openIntegrationPR opens the one PR from a verified integration branch to
+// its base and records it. A branch that has a PR keeps it: the PR follows
+// the branch, so a rerun after a fix opens nothing.
+func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it worker.Integration) (string, error) {
+	if it.PR != "" {
+		return it.PR, nil
+	}
+	url, err := f.PRCreate(ctx, tracker.PRSpec{Head: it.Branch, Base: it.Base,
+		Title: fmt.Sprintf("Integrate %s: %s", it.Branch, strings.Join(memberTargets(it), ", ")), Body: integrationPRBody(it)})
+	if err != nil {
+		return "", err
+	}
+	url = strings.TrimSpace(url)
+	return url, worker.UpdateIntegration(root, it.Branch, func(rec *worker.Integration) { rec.PR = url })
+}
+
+// openIntegrationPRVia opens the PR through the project's forge.
+func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, error) {
+	cfg := c.deps().Config(root)
+	provider, err := actorForge(c, cfg, root)
+	if err != nil {
+		return "", err
+	}
+	cl, err := c.deps().forge(c.Context(), cfg, provider, root)
+	if err != nil {
+		return "", trackerErr(err)
+	}
+	return openIntegrationPR(c.Context(), shipForge{cl}, root, it)
 }

@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -98,5 +100,41 @@ func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 	id, filed, err := fileInteractionItem(be, dir, r)
 	if err != nil || !filed || id == twin.ID {
 		t.Fatalf("adopted the title twin %s: %q %v %v", twin.ID, id, filed, err)
+	}
+}
+
+type prSpy struct{ specs []tracker.PRSpec }
+
+func (*prSpy) Provider() string  { return "github" }
+func (*prSpy) PRNeedsBase() bool { return true }
+func (p *prSpy) PRCreate(_ context.Context, s tracker.PRSpec) (string, error) {
+	p.specs = append(p.specs, s)
+	return "https://github.com/o/r/pull/9\n", nil
+}
+
+func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["true"]}}`)
+	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", VerifiedTip: "abc",
+		Members: []worker.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "#6"}}}
+	if err := worker.RecordIntegration(dir, it); err != nil {
+		t.Fatal(err)
+	}
+	spy := &prSpy{}
+	url, err := openIntegrationPR(context.Background(), spy, dir, it)
+	if err != nil || url != "https://github.com/o/r/pull/9" || len(spy.specs) != 1 {
+		t.Fatalf("open: %q %v %+v", url, err, spy.specs)
+	}
+	s := spy.specs[0]
+	if s.Head != it.Branch || s.Base != "main" || !strings.Contains(s.Body, "Closes #5\n") || !strings.Contains(s.Body, "Closes #6\n") {
+		t.Fatalf("PR spec: %+v", s)
+	}
+	reg, _ := worker.LoadRegistry(dir)
+	rec, ok := reg.IntegrationByPR("9")
+	if !ok || rec.Branch != it.Branch {
+		t.Fatalf("PR not recorded: %+v %v", rec, ok)
+	}
+	// A rerun after a fix keeps the PR: it follows the branch.
+	if again, err := openIntegrationPR(context.Background(), spy, dir, rec); err != nil || again != url || len(spy.specs) != 1 {
+		t.Fatalf("rerun opened another PR: %q %v %d", again, err, len(spy.specs))
 	}
 }
