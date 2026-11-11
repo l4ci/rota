@@ -82,3 +82,42 @@ func TestRetargetKeepsIntegrationBase(t *testing.T) {
 		t.Errorf("slot base = %q", b)
 	}
 }
+
+// A landed integration PR parks the member slots, so reconcile finds no
+// merged PR still held.
+func TestReconcileCleanAfterIntegrationLanding(t *testing.T) {
+	f, _ := milestoneFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	const url = "https://github.com/o/r/pull/7"
+	if err := editSlot(f.root, "ben", func(s *worker.Slot) error {
+		s.SetPR(url)
+		return s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.be.states = map[int]string{7: "merged"}
+	f.env.Forge = f.be.asForge()
+	f.env.Board = f.be
+	if out, err := f.env.Reconcile(bg, f.root, false); err != nil || countKind(out.Drift, PRStale) != 1 {
+		t.Fatalf("baseline: a merged PR held by a slot is drift: %+v %v", out.Drift, err)
+	}
+	rec := worker.Integration{Name: "a", Branch: "integration/r1-a", Round: 1, Base: "main", Landed: true,
+		Members: []worker.IntegrationMember{{Target: "ben", PR: url, Issue: "12"}}}
+	if err := worker.RecordIntegration(f.root, rec); err != nil {
+		t.Fatal(err)
+	}
+	parked, err := f.env.ParkIntegrationMembers(bg, f.root, rec)
+	if err != nil || len(parked) != 1 || parked[0] != "ben" {
+		t.Fatalf("parked %v: %v", parked, err)
+	}
+	f.be.items["12"].Closed = true // its Closes line closed it
+	out, err := f.env.Reconcile(bg, f.root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Clean() {
+		t.Fatalf("reconcile after the landing is not clean: drift %+v", out.Drift)
+	}
+}
