@@ -142,7 +142,7 @@ repo: none
 data: {"changed": bool, "path": string, "head": string}
 exit: 4 when the path is not an owned prepared workspace; 5 when removal fails
 old: none (new verb)
-note: accepts only the absolute `path` returned by preparation under the current temporary directory, with a matching ownership record outside the extracted tree. Removes that workspace's private temporary parent and no other workspace; symlinks inside it are removed without following their targets. Missing, malformed or symlinked ownership records and symlinked parent paths refuse. A cleanup failure is surfaced, never retried against a broader path. Call after reviewer success, failure or cancellation, with the same temporary-directory environment as preparation.
+note: accepts only the absolute `path` returned by preparation under the current temporary directory (reached directly or through a symlinked ancestor such as macOS `/var` -> `/private/var`, resolved before comparison and reported canonical), with a matching ownership record outside the extracted tree. Removes that workspace's private temporary parent and no other workspace; symlinks inside it are removed without following their targets. Missing, malformed or symlinked ownership records and a symlinked workspace directory or `tree` refuse. A cleanup failure is surfaced, never retried against a broader path. Call after reviewer success, failure or cancellation, with the same temporary-directory environment as preparation.
 
 ### rota review probe
 rota review probe -- <command> [<arg>...]
