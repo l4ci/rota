@@ -644,12 +644,17 @@ func Latest(list []Record, kind string) (Record, bool) {
 	return Record{}, false
 }
 
-// AtHead reports whether rec was recorded at head. Records hold a short sha and
-// head may be short or full, so either may be the prefix of the other. A record
-// with no sha, or an unknown head, is never at head.
+// SameHead reports whether two commit ids name the same commit. Ids may be
+// short or full, so either may be the prefix of the other. An empty id never
+// matches.
+func SameHead(a, b string) bool {
+	return a != "" && b != "" && (strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
+}
+
+// AtHead reports whether rec was recorded at head. A record with no sha, or an
+// unknown head, is never at head.
 func AtHead(rec Record, head string) bool {
-	return rec.Sha != "" && head != "" &&
-		(strings.HasPrefix(head, rec.Sha) || strings.HasPrefix(rec.Sha, head))
+	return SameHead(rec.Sha, head)
 }
 
 // Recorded lists the review kinds (ReviewSpec, ReviewQuality) with a verdict
@@ -732,14 +737,6 @@ func EffectiveReview(list []Record) (Record, bool) {
 	return Record{}, false
 }
 
-// EffectiveFail is the branch's effective review when its verdict is FAIL.
-// It is the relay rule: a review the worker is told about, and a ship blocker,
-// only when the effective verdict itself is FAIL. Failing is wider.
-func EffectiveFail(list []Record) (Record, bool) {
-	r, ok := EffectiveReview(list)
-	return r, ok && r.Verdict == Fail
-}
-
 // ItemFailed reports a per-item FAIL in r, a spec failure carried by items[]
 // alone, which the findings do not show.
 func (r Record) ItemFailed() bool {
@@ -753,33 +750,71 @@ func (r Record) ItemFailed() bool {
 
 // Failing reports whether r gives a bounce something to relay: a FAIL
 // verdict, a blocking finding or a failed item. It is the bounce rule, wider
-// than EffectiveFail on purpose: a CONCERNS review can still carry a blocking
+// than the narrow FailingRecords on purpose: a CONCERNS review can still carry a blocking
 // finding or a failed item, and a bounce relays those, while a relay or ship
 // block follows the effective verdict alone.
 func (r Record) Failing() bool {
 	return r.Verdict == Fail || HasBlocking(r.Findings) || r.ItemFailed()
 }
 
-// Blocking is the record that blocks a ship (B3): the effective review
-// verdict when it is FAIL, else the latest review-cross record when it is
-// FAIL, else a lens review's latest record when it is FAIL, else the latest
-// second-opinion record when it is FAIL, whatever runner produced it. A stale
-// record still blocks; only a newer record of the same kind clears it.
-// CONCERNS and QA never block.
-func Blocking(list []Record) (Record, bool) {
-	if r, ok := EffectiveFail(list); ok {
-		return r, true
+// FailScope selects which records FailingRecords judges.
+type FailScope struct {
+	// Head, when AtHead is set, limits the set to records at Head. Recovered
+	// reports then obey ForHead, the rule the gate applies.
+	Head   string
+	AtHead bool
+	// Wide counts Failing records (a blocking finding or a failed item, even
+	// under CONCERNS) as the bounce rule does; narrow counts a FAIL verdict only.
+	Wide bool
+	// SecondOpinion adds the second-opinion record, whatever runner made it.
+	SecondOpinion bool
+}
+
+// FailingRecords is the one rule for which records fail a branch, in blocking
+// order: the review (spec, quality), cross, then each lens, then second opinion
+// when asked. Across heads the review is the effective one (EffectiveReview)
+// and a stale record still counts, so only a newer record of the same kind
+// clears it. At a head each of spec and quality is its own latest record at that
+// head. CONCERNS and QA never fail unless Wide finds a blocking finding. Blocking,
+// BlockingAtHead, BlockingAnyHead, the relay and the bounce derive from it.
+func FailingRecords(list []Record, s FailScope) []Record {
+	var cands []Record
+	if s.AtHead {
+		kinds := bounceReviewKinds
+		if s.SecondOpinion {
+			kinds = readinessReviewKinds
+		}
+		cands = latestAtHead(ForHead(list, s.Head), kinds, s.Head)
+	} else {
+		if r, ok := EffectiveReview(list); ok {
+			cands = append(cands, r)
+		}
+		kinds := bounceReviewKinds[len(coreReviewKinds):]
+		if s.SecondOpinion {
+			kinds = readinessReviewKinds[len(coreReviewKinds):]
+		}
+		cands = append(cands, latestRecords(list, kinds)...)
 	}
-	if r, ok := CrossFail(list); ok {
-		return r, true
-	}
-	if fails := LensFails(list); len(fails) > 0 {
+	return slices.DeleteFunc(cands, func(r Record) bool {
+		if s.Wide {
+			return !r.Failing()
+		}
+		return r.Verdict != Fail
+	})
+}
+
+func firstFailing(list []Record, s FailScope) (Record, bool) {
+	if fails := FailingRecords(list, s); len(fails) > 0 {
 		return fails[0], true
 	}
-	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail {
-		return r, true
-	}
 	return Record{}, false
+}
+
+// Blocking is the record that blocks a ship (B3): the first of the effective
+// review, cross, lens and second-opinion records whose verdict is FAIL,
+// whatever head or runner. CONCERNS and QA never block.
+func Blocking(list []Record) (Record, bool) {
+	return firstFailing(list, FailScope{SecondOpinion: true})
 }
 
 // BlockingAtHead is the first review record (spec, quality, cross, then the
@@ -788,29 +823,16 @@ func Blocking(list []Record) (Record, bool) {
 // bounce would relay is not merged. Unlike Blocking it ignores a record at
 // another commit, and a CONCERNS review can trip it. Ship does not use it.
 func BlockingAtHead(list []Record, head string) (Record, bool) {
-	for _, kind := range append([]string{ReviewSpec, ReviewQuality, ReviewCross}, LensKinds...) {
-		if r, ok := Latest(list, kind); ok && AtHead(r, head) && r.Failing() {
-			return r, true
-		}
-	}
-	return Record{}, false
+	return firstFailing(list, FailScope{Head: head, AtHead: true, Wide: true})
 }
 
 // BlockingAnyHead is the bounce rule without head scoping, the set a nudged
-// merge train keeps out: Blocking, else the latest cross or lens review that
-// is Failing, else the effective review when Failing. A record at another
-// commit still counts, and a CONCERNS review with a blocking finding trips it.
+// merge train keeps out: Blocking, else any review, cross or lens record that
+// is Failing. A record at another commit still counts, and a CONCERNS review
+// with a blocking finding trips it.
 func BlockingAnyHead(list []Record) (Record, bool) {
 	if r, ok := Blocking(list); ok {
 		return r, true
 	}
-	for _, kind := range append([]string{ReviewCross}, LensKinds...) {
-		if r, ok := Latest(list, kind); ok && r.Failing() {
-			return r, true
-		}
-	}
-	if r, ok := EffectiveReview(list); ok && r.Failing() {
-		return r, true
-	}
-	return Record{}, false
+	return firstFailing(list, FailScope{Wide: true})
 }

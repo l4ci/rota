@@ -128,18 +128,10 @@ func branchVerdicts(c *Ctx, root, branch string) []verdict.Record {
 	return verdict.Load(root).Branch(shipVerdict(c, root, root).Repo, branch)
 }
 
-// failRecords are branch's FAIL verdicts a relay carries: the effective review
-// the cross-harness review (#1612) and each lens review (#2064), each when it
-// is FAIL.
+// failRecords are branch's FAIL verdicts a relay carries: the effective review,
+// the cross-harness review (#1612) and each lens review (#2064).
 func failRecords(list []verdict.Record) []verdict.Record {
-	var out []verdict.Record
-	if r, ok := verdict.EffectiveFail(list); ok {
-		out = append(out, r)
-	}
-	if r, ok := verdict.CrossFail(list); ok {
-		out = append(out, r)
-	}
-	return append(out, verdict.LensFails(list)...)
+	return verdict.FailingRecords(list, verdict.FailScope{})
 }
 
 // openFindings are the findings of branch's FAIL reviews: after a re-review
