@@ -37,6 +37,26 @@ vfail() {
   fail "verb exited $rc at ${file##*/}:$first-$line: $text"
 }
 
+# build_rota <out> builds the rota binary the shell suites share (runner.sh and
+# doclint.sh), stamped with the VERSION file so version-drift checks see a
+# matching install, and with -tags rotatest so the tracker retry pauses and
+# bulk-migrate pacing read their zeroing env. One definition keeps doclint and
+# smoke on the same binary. Needs $REPO.
+build_rota() {
+  local v
+  v="$(tr -d '[:space:]' < "$REPO/VERSION")"
+  (cd "$REPO" && go build -tags rotatest -ldflags "-X github.com/l4ci/rota/internal/version.Version=$v" -o "$1" ./cmd/rota)
+}
+
+# fixture_copy <dest> <path>... makes <dest> and copies each repo-relative
+# <path> into it, so a lint case can mutate a throwaway tree and assert the
+# lint fails. Needs $REPO.
+fixture_copy() {
+  local dest="$1" p; shift
+  mkdir -p "$dest"
+  for p in "$@"; do cp -R "$REPO/$p" "$dest/"; done
+}
+
 # Black-box helpers (#46). Callers check the exit code themselves:
 #   rc=0; out=$(hvj item show B01) || rc=$?
 # hvj runs `"$ROTA_BIN" --json "$@"`, prints the envelope and returns the verb's
