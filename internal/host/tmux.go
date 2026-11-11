@@ -88,21 +88,7 @@ var bootPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`OpenCode \d+\.\d+`),                 // OpenCode version line
 }
 
-func looksBooted(p string) bool {
-	for _, syntax := range harness.InputSyntaxes() {
-		for _, pattern := range syntax.BootPatterns {
-			if regexp.MustCompile(pattern).MatchString(p) {
-				return true
-			}
-		}
-	}
-	for _, re := range bootPatterns {
-		if re.MatchString(p) {
-			return true
-		}
-	}
-	return false
-}
+func looksBooted(p string) bool { return bootReady(p, false) }
 
 func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	handle := o.Session + ":" + o.Slot
