@@ -1507,12 +1507,19 @@ func (runner gate) stepCheckOnly(result GateResult, target GateTarget, forged ga
 				return finish(true, err)
 			}
 		}
-		// the checked tip: origin/<branch> when a PR is recorded
-		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-		g.res.CheckedHead, _ = g.git(g.root, "rev-parse", g.headRef)
+		// The checked tip is the head the earlier steps (PR match, verdicts,
+		// review depth) checked, never the remote ref read again: a fetch since
+		// may have moved it to a commit nobody reviewed. Without a remote there
+		// is no such head, and the branch is read here.
+		head := strings.TrimSpace(g.verified)
+		if head == "" {
+			head, _ = g.git(g.root, "rev-parse", g.headRef)
+		}
+		g.res.CheckedHead = head
+		g.res.SHA = strutil.ShortSHA(head)
 		// A train member says its tier, so the train verifies by the highest.
 		if g.o.BehaviourDir == "" {
-			tier := g.classify(g.baseRef + "..." + g.headRef)
+			tier := g.classify(g.baseRef + "..." + head)
 			g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
 		}
 		g.res.Verdict = GateFresh

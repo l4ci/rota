@@ -5,10 +5,13 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -189,11 +192,28 @@ func TestWorkerGateIntegrationRereadsRecordUnderLock(t *testing.T) {
 		err error
 	}
 	gated := make(chan out, 1)
+	// The gate resolves the git common dir twice before it blocks: for its
+	// run key, then for the integration lock, after it read the record.
+	ge := w.env(false).WithDefaults()
+	inner, calls, locking := ge.Git, 0, make(chan struct{})
+	var mu sync.Mutex
+	ge.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if slices.Contains(args, "--git-common-dir") {
+			mu.Lock()
+			if calls++; calls == 2 {
+				close(locking)
+			}
+			mu.Unlock()
+		}
+		return inner(ctx, dir, args...)
+	}
 	go func() {
-		res, err := w.landPR9()
+		res, err := ge.Gate(bg, w.dir, GateOpts{Slot: "9", Base: "main"})
 		gated <- out{res, err}
 	}()
-	// While the gate waits, a train records member 8 as pending.
+	<-locking
+	// Only now, with the record read and the gate at the lock, a train
+	// records member 8 as pending.
 	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) {
 		it.Members[1].Pending, it.Members[1].Conflicts = true, []string{"work2.txt"}
 	}); err != nil {
@@ -248,5 +268,42 @@ func TestWorkerGateIntegrationAlreadyMergedEndsMembers(t *testing.T) {
 	}
 	if !intRecord(t, w).Landed {
 		t.Fatal("the record was not marked landed")
+	}
+}
+
+func TestTrainIntegrationMergesReviewedHeadWhenRefMoves(t *testing.T) {
+	w := integrationWorld(t)
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	reviewed := w.forgeWord("sha#8")
+	// An unreviewed commit, fetched into the gate checkout.
+	gittest.Run(t, w.worker, "checkout", "-q", "-B", "w2-late", "origin/w2")
+	late := trainWrite2(t, w.worker, "late.txt")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w2-late")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w2-late")
+	e := w.env(false).WithDefaults()
+	inner, moved := e.Git, false
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		r, err := inner(ctx, dir, args...)
+		// Right after member 8's check resolved origin/w2, another fetch moves it.
+		if !moved && len(args) == 2 && args[0] == "rev-parse" && args[1] == "origin/w2" {
+			moved = true
+			if out, err := exec.Command("git", "-C", w.dir, "update-ref", "refs/remotes/origin/w2", late).CombinedOutput(); err != nil {
+				t.Errorf("update-ref: %v %s", err, out)
+			}
+		}
+		return r, err
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"7", "8"}, Integration: "a"})
+	if !moved {
+		t.Fatal("the member's head was never resolved as expected")
+	}
+	if err := exec.Command("git", "-C", w.origin, "cat-file", "-e", intBranch+":late.txt").Run(); err == nil {
+		t.Fatalf("the unreviewed commit was merged: %+v", res)
+	}
+	if err == nil && res.Verdict == GatePass {
+		if m, _ := intRecord(t, w).Member("8"); m.Head != reviewed {
+			t.Fatalf("merged %s, not the reviewed %s", m.Head, reviewed)
+		}
 	}
 }
