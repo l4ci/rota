@@ -549,7 +549,7 @@ def check_prose(issues):
                     issues.append(f"{p.as_posix()}: {msg}")
 
 
-def main(prose=True):
+def run_checks(prose=True):
     issues = []
 
     skill_files = sorted(Path(".").glob("skills/rota-*/SKILL.md"))
@@ -614,15 +614,20 @@ def parse_args(argv):
     return root, prose
 
 
-try:
-    if len(sys.argv) == 3 and sys.argv[1] == "--layout":
-        layout_only(sys.argv[2])
-    if len(sys.argv) == 3 and sys.argv[1] == "--fields":
-        print_fields(sys.argv[2])
-    root, prose = parse_args(sys.argv[1:])
-    if root is not None:
-        os.chdir(root)
-    main(prose)
-except Exception as exc:
-    print(f"validate-skills: ERROR {exc}", file=sys.stderr)
-    sys.exit(2)
+def main(argv):
+    try:
+        if len(argv) == 2 and argv[0] == "--layout":
+            layout_only(argv[1])
+        if len(argv) == 2 and argv[0] == "--fields":
+            print_fields(argv[1])
+        root, prose = parse_args(argv)
+        if root is not None:
+            os.chdir(root)
+        run_checks(prose)
+    except Exception as exc:
+        print(f"validate-skills: ERROR {exc}", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
