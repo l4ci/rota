@@ -27,7 +27,7 @@ func TestReviewPolicyPathsAndDriftShape(t *testing.T) {
 		`{"ship":{"review":{"paths":"x"}}}`,
 		`{"ship":{"review":{"paths":{"a/**":"deep"}}}}`,
 		`{"ship":{"review":{"scopeDrift":"no"}}}`,
-		`{"ship":{"review":{"paths":{"a/**/b":"full"}}}}`,
+		`{"ship":{"review":{"paths":{"a/{b,c}":"full"}}}}`,
 		`{"ship":{"review":{"paths":{"a/[":"full"}}}}`,
 	} {
 		if _, err := ReviewPolicyOf(decode(t, cfg)); err == nil {
@@ -43,7 +43,8 @@ func TestSupportPathsShape(t *testing.T) {
 		`{"ship":{"review":{"supportPaths":"docs"}}}`:                 false,
 		`{"ship":{"review":{"supportPaths":[1]}}}`:                    false,
 		`{"ship":{"review":{"supportPaths":[""]}}}`:                   false,
-		`{"ship":{"review":{"supportPaths":["a/**/b"]}}}`:             false,
+		`{"ship":{"review":{"supportPaths":["a/**/b"]}}}`:             true,
+		`{"ship":{"review":{"supportPaths":["a/{b,c}"]}}}`:            false,
 		`{"ship":{"review":{"supportPaths":["a/["]}}}`:                false,
 	} {
 		if _, err := ReviewPolicyOf(decode(t, cfg)); (err == nil) != ok {
