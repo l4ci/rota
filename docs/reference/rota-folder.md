@@ -132,6 +132,7 @@ Notes are scoped per branch and overwritten by later `/rota-pause` runs on the s
 | `escalations` | questions put to you with `rota round escalate send`: id (`e1`, `e2`, ...), the issue or PR thread, `pending` or `answered`, and the answer |
 | `limits` | the usage-limit log: one entry per limit, with the session, the reset time, whether it sleeps or switches, and its status |
 | `host` | `herdr`, `tmux` or `solo`, fixed by `rota round start` for the life of the round |
+| `integrations` | one record per integration branch (`worker train --integration`), keyed by branch: the name and round, the base, the members (target, PR, branch, issue, the head merged, pending and the conflict paths), the commit the branch started on, the tip after rota's merges (`assembled`), the merges rota made (`rotaMerges`), the tip and base the last green train verified, the PR, the interaction items and whether it landed |
 | `round`, `scope`, `slate` | the round number, the scope it started with, and the issue IDs for a `slate` scope |
 
 `rota round status` and `rota round reconcile` show what it holds against the host, git and the tracker. A slot that is gone from the host but still registered is drift; `reconcile --apply` repairs the safe kinds (including parking a slot whose PR already merged, so `watch` stops looping on it) and `rota reap` removes what nothing owns.

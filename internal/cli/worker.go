@@ -766,6 +766,9 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	d.Set("slot", r.Slot)
 	d.Set("verdict", r.Verdict)
 	d.Set("base", r.Base)
+	if len(r.IntegrationMembers) > 0 {
+		d.Set("integrationMembers", jsonx.Strings(r.IntegrationMembers))
+	}
 	if r.Branch != "" {
 		d.Set("branch", r.Branch)
 	}
