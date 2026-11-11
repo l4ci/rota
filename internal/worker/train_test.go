@@ -144,12 +144,43 @@ func TestTrainBisectsToTheCulprit(t *testing.T) {
 	}
 }
 
-func TestTrainNamesTheInteraction(t *testing.T) {
-	// b1 and b3 are each fine; together they break the tree.
-	w := trainWorld(t, "! (test -f b1.txt && test -f b3.txt)", "b1", "b2", "b3")
+// The pair search names exactly the two members that break the tree together,
+// whichever earlier member the partner is (#3095).
+func TestTrainInteractionPair(t *testing.T) {
+	for _, pair := range [][2]string{{"b1", "b3"}, {"b2", "b3"}} {
+		t.Run(pair[0]+"+"+pair[1], func(t *testing.T) {
+			w := trainWorld(t, fmt.Sprintf("! (test -f %s.txt && test -f %s.txt)", pair[0], pair[1]), "b1", "b2", "b3")
+			res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+			want := pair[0] + "," + pair[1]
+			if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != want {
+				t.Fatalf("want the interaction of exactly %s: %+v %v", want, res, err)
+			}
+			if !strings.Contains(res.Err, "TRAIN-INTERACTION "+pair[0]+", "+pair[1]) {
+				t.Errorf("message: %s", res.Err)
+			}
+		})
+	}
+}
+
+// Three members that only fail all together name every member up to the red.
+func TestTrainInteractionOfThree(t *testing.T) {
+	w := trainWorld(t, "! (test -f b1.txt && test -f b2.txt && test -f b3.txt)", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b3" {
+	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2,b3" {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// --land-green still lands the verified prefix before the member the bisect
+// named when the red is an interaction (#3095 AC-1).
+func TestTrainInteractionLandGreen(t *testing.T) {
+	w := trainWorld(t, "! (test -f b2.txt && test -f b3.txt)", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Landed, ",") != "b1,b2" || strings.Join(res.Interaction, ",") != "b2,b3" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !w.onMain("b2.txt") || w.onMain("b3.txt") {
+		t.Error("main holds the verified prefix only")
 	}
 }
 
@@ -620,8 +651,8 @@ func TestTrainCachesPassingVerdicts(t *testing.T) {
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("re-run: %+v %v", res, err)
 	}
-	// the red full tree and the red bisect step run again; only the green prefix hits
-	if got := runs(t, counter); got != first+1 {
+	// the red full tree and b2's alone-run run again; only the green prefix hits
+	if got := runs(t, counter); got != first+2 {
 		t.Errorf("a red re-verifies, a pass is reused: %d runs, then %d", first, got)
 	}
 	if len(res.CacheHits) != 1 || !strings.Contains(res.CacheHits[0], "first 1 member") {
@@ -1482,5 +1513,98 @@ func TestTrainLandGreenSkipsDiagnosticOnlyRedPrefix(t *testing.T) {
 	}
 	if len(res.Landed) > 1 {
 		t.Fatalf("landed %q: the b1+b2 prefix ran red", res.Landed)
+	}
+}
+
+// Two members that each pass alone but fail together are an interaction: no
+// culprit, both named, nothing landed (#3095).
+func TestTrainInteraction(t *testing.T) {
+	w := trainWorld(t, "! (test -f b1.txt && test -f b2.txt)", "b1", "b2")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "b1,b2" {
+		t.Fatalf("want an interaction of b1 and b2, got verdict %q culprit %q interaction %q", res.Verdict, res.Culprit, res.Interaction)
+	}
+	if !strings.HasPrefix(res.Err, "TRAIN-INTERACTION") || len(res.Landed) != 0 || res.Changed || w.onMain("b1.txt") {
+		t.Fatalf("an interaction lands nothing: %+v", res)
+	}
+	for _, m := range res.Members {
+		if m.Culprit {
+			t.Errorf("no member is culprit: %+v", res.Members)
+		}
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("an interaction blames nobody in the train cache: %+v", c.f.Culprits)
+	}
+}
+
+// A member that fails on the base alone stays the culprit (#3095 AC-2).
+func TestTrainInteractionKeepsAloneCulprit(t *testing.T) {
+	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Interaction) != 0 {
+		t.Fatalf("b2 fails alone, so it is the culprit: %+v %v", res, err)
+	}
+}
+
+// goFail prints a go-test-shaped failure of test in package pkg and exits 1.
+func goFail(test, pkg string) string {
+	return fmt.Sprintf(`{ printf -- '--- FAIL: %s (0.00s)\nFAIL\t%s\t0.01s\nFAIL\n'; exit 1; }`, test, pkg)
+}
+
+// An alone-run reruns only the failing tests through test.vacuousCommand when
+// the output names them, and its time counts as diagnosis (#3095 AC-4).
+func TestTrainAloneRunUsesVacuousTemplate(t *testing.T) {
+	both := "test -f b1.txt && test -f b2.txt"
+	log := filepath.Join(t.TempDir(), "alone")
+	w := trainWorld(t, "", "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`,
+		"! ("+both+") || "+goFail("TestPair/sub", "ex.com/p"),
+		"sleep 0.3; echo {packages} {tests} >> "+log+"; ! ("+both+")"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	b, _ := os.ReadFile(log)
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || lines[0] != "ex.com/p ^(TestPair)$" {
+		t.Fatalf("want two template runs selecting TestPair in ex.com/p, got %q", lines)
+	}
+	if res.DiagnoseTime < 600*time.Millisecond {
+		t.Errorf("the two alone-runs take 0.6s, diagnosis counted %v", res.DiagnoseTime)
+	}
+}
+
+// Output that names no test reruns the failing command, not the template.
+func TestTrainAloneRunFallsBackToCommand(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "alone")
+	w := trainWorld(t, "", "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`,
+		"! (test -f b1.txt && test -f b2.txt)", "echo {tests} >> "+log+"; false"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateInteraction {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if b, _ := os.ReadFile(log); len(b) != 0 {
+		t.Errorf("the template ran though the output names no test: %q", b)
+	}
+}
+
+// A failure the in-tree retry recovers stays a flake: no alone-run (#3095 AC-3).
+func TestTrainFlakeSkipsAloneRun(t *testing.T) {
+	dir := t.TempDir()
+	seen, log := filepath.Join(dir, "seen"), filepath.Join(dir, "alone")
+	w := trainWorld(t, "", "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`,
+		"test ! -f b2.txt || test -f "+seen+" || { touch "+seen+"; "+goFail("TestFlaky", "ex.com/p")+"; }",
+		"echo {tests} >> "+log))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GatePass || len(res.Flaky) != 1 {
+		t.Fatalf("the retry recovers the flake and the train lands: %+v %v", res, err)
+	}
+	if b, _ := os.ReadFile(log); len(b) != 0 {
+		t.Errorf("an alone-run started on a flake: %q", b)
 	}
 }

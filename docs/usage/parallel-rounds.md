@@ -1100,8 +1100,14 @@ Gates and trains on one repository queue on a single lock (`<git-common-dir>/rot
 With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/train` and waits for CI instead of running `test.full` here (`test.e2e` still runs here, after CI is green); bisect pushes each prefix the same way, one CI run per step. `test.ciChecks` names the checks that must pass and must not be empty. If a listed check never appears or CI does not finish in time the verdict is `ci-not-run` or `verify-timeout`, and nothing lands; a member that changes the CI definition stops it as `ci-config-changed`. See [running the full tier on CI](configuration.md#running-the-full-tier-on-ci).
 
 A red train, from either tier, bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
-breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be an interaction with the members before it, not that PR alone.
-Nothing lands unless you pass `--land-green`, which lands the members before the culprit, and only a
+breaks the tree. Before it blames that member, the train reruns only the failing tests on the base plus that member alone, so a red ends in one of three classes:
+
+- **Culprit**: the member is red alone. The verdict is `verify-failed` and the member is named `culprit`. Send it back to its worker.
+- **Interaction**: the member is green alone, but red together with an earlier member (the train reruns the pairs in order and names the first red one), or only with all the members before it. The verdict is `interaction`, the message starts `TRAIN-INTERACTION` and names the members, and no member is the culprit: no PR notice goes out and no bounce is counted. Hold those members and fix the interaction on one of them, then train again. The autopilot holds each at its head and lists it as `train-interaction` in `needsYou`.
+- **Flake**: a command whose failing tests pass on the one sequential retry inside the run never reaches the bisect. It is recorded as `FLAKY` (see below) and blames nobody.
+
+The reruns select the failing tests through `test.vacuousCommand` (`{packages}`, `{tests}`) when the output names them, and otherwise rerun the failed command; their time counts as diagnosis. A red the reruns cannot reproduce, a member that does not merge on the base alone, and a train verified on CI (`test.fullWhere: ci`) keep the old culprit naming, with a `TRAIN-UNCLASSIFIED` note.
+Nothing lands unless you pass `--land-green`, which lands the members before the culprit (or before the member the bisect stopped on, for an interaction), and only a
 prefix whose own verify ran green: a prefix that went red only during diagnosis never lands.
 When the failure already names the test, `--on-fail stop` skips the bisect: the train ends after the
 red run with its evidence, names no culprit and lands nothing, so `--land-green` has no effect with

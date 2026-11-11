@@ -154,13 +154,6 @@ func vacuousGoTestsRan(out string) bool {
 // The Go default selects test entry points in the changed files, with caching
 // disabled. Other languages use {files}; every expansion is shell quoted.
 func vacuousCommand(dir string, files []string, template string) (string, error) {
-	quote := func(values []string) string {
-		out := make([]string, len(values))
-		for i, value := range values {
-			out[i] = shlex.QuoteAlways(value)
-		}
-		return strings.Join(out, " ")
-	}
 	packages, names := []string{}, []string{}
 	if strings.Contains(template, "{packages}") || strings.Contains(template, "{tests}") {
 		for _, file := range files {
@@ -189,8 +182,22 @@ func vacuousCommand(dir string, files []string, template string) (string, error)
 			return "", nil
 		}
 	}
+	return expandTestTemplate(template, files, packages, names), nil
+}
+
+// expandTestTemplate fills a test.vacuousCommand template: {files} and
+// {packages} with the shell-quoted lists, {tests} with one quoted -run regex
+// matching exactly names.
+func expandTestTemplate(template string, files, packages, names []string) string {
+	quote := func(values []string) string {
+		out := make([]string, len(values))
+		for i, value := range values {
+			out[i] = shlex.QuoteAlways(value)
+		}
+		return strings.Join(out, " ")
+	}
 	re := "^(" + strings.Join(names, "|") + ")$"
-	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template), nil
+	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template)
 }
 
 func (g *gateOperation) vacuousRun(before, after string) (bool, error) {

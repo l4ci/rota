@@ -227,3 +227,30 @@ func TestCancelTrainSignalsTheHolder(t *testing.T) {
 		t.Errorf("a finished train is not running: %v", err)
 	}
 }
+
+// A cancel during an alone-run classifies nothing: the train settles as
+// cancelled, with no interaction and no culprit (#3095).
+func TestTrainCancelDuringAloneRun(t *testing.T) {
+	dir := t.TempDir()
+	mark, started := filepath.Join(dir, "mark"), filepath.Join(dir, "started")
+	// The full tree fails and leaves mark; the pair rerun of b1 and b2 then hangs.
+	verify := "! (test -f b1.txt && test -f b2.txt) || { if test -f " + mark + "; then touch " + started + "; exec sleep 300; fi; touch " + mark + "; exit 1; }"
+	w := trainWorld(t, verify, "b1", "b2")
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	go func() {
+		waitFile(t, started, 30*time.Second)
+		cancel()
+	}()
+	began := time.Now()
+	res, err := w.env(false).Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateCancelled || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 {
+		t.Fatalf("a cancelled alone-run is no finding: %+v %v", res, err)
+	}
+	if time.Since(began) > time.Minute {
+		t.Errorf("the cancel did not stop the alone-run: %v", time.Since(began))
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("nobody is blamed: %+v", c.f.Culprits)
+	}
+}
