@@ -73,22 +73,22 @@ imports. A discovery failure stops both normal and `FAST_DRY_RUN=1` invocations 
 before they report a plan or execute checks; partial graph output cannot produce green proof.
 
 Every fast-tier run also executes the repository source guards, even for docs, unmapped paths
-or an empty change. `test/treescan/registry.json` declares the tests to run; the runner validates
-registration before running those tests with the Go test cache disabled, so every invocation
+or an empty change. The runner discovers the tests to run from the test sources, validates
+`test/treescan/registry.json` and runs them with the Go test cache disabled, so every invocation
 executes the scans afresh. This step runs before the selected package checks.
 `FAST_DRY_RUN=1` includes `plan: tree-scans` without executing the guards.
 
-When adding a source-scanning test, register it there. The registration check follows test
-helpers across files and flags unregistered tests that enumerate directories or parse source
-files from disk. It also recognizes external `grep`, `git grep` and `git ls-files` commands,
-and combines disk reads with repository-root paths reached through helpers. Production
-helpers contribute direct disk reads; the check does not follow their application call graphs.
-Tests that only inspect isolated fixtures carry an explicit reason in the same registry.
-Fixed-file checks of other packages or docs also belong in the scan list. Tests of tooling
-behavior against mutated fixture trees run with their package rather than on every fast run.
+A source-scanning test joins the tier by being discovered: adding one needs no registry edit.
+The discovery follows test helpers across files and finds tests that enumerate directories or
+parse source files from disk. It also recognizes external `grep`, `git grep` and `git ls-files`
+commands, and combines disk reads with repository-root paths reached through helpers.
+Production helpers contribute direct disk reads; the check does not follow their application
+call graphs. The registry holds only `fixtures`: a discovered test that only inspects isolated
+fixtures carries an explicit reason there and stays out of the tier. A fixture entry for a
+test that no longer exists, or without a reason, fails validation. Tests of tooling behavior
+against mutated fixture trees run with their package rather than on every fast run.
 Run `go run ./test/treescan --check` to validate the registry without executing its tests.
-The registry test removes each registered guard in turn to check detection. The fast-tier
-wiring test runs for scanner changes and in smoke section 175 at the merge gate.
+The fast-tier wiring test runs for scanner changes and in smoke section 175 at the merge gate.
 
 Round 50 measured `go run ./test/treescan` on base `9c89bab1` and the scan changes
 at `a711d110` on the shared round machine:

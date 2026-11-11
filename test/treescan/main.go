@@ -23,9 +23,10 @@ import (
 	"unicode"
 )
 
+// registry holds only what discovery cannot know: why a discovered test is
+// exempt from the fast tier. The tier itself is derived by scans.
 type registry struct {
-	Scans    map[string][]string `json:"scans"`
-	Fixtures map[string]string   `json:"fixtures"`
+	Fixtures map[string]string `json:"fixtures"`
 }
 
 type inventory struct {
@@ -64,7 +65,7 @@ func main() {
 	if err := validate(r, inv); err != nil {
 		fatal(err)
 	}
-	args := command(r)
+	args := command(scans(r, inv))
 	if *list && len(args) > 0 {
 		fmt.Printf("go test -count=1 -run %s %s\n", strconv.Quote(args[3]), strings.Join(args[4:], " "))
 		return
@@ -100,8 +101,8 @@ func readRegistry(name string) (registry, error) {
 	if err := dec.Decode(&r); err != nil {
 		return r, err
 	}
-	if r.Scans == nil || r.Fixtures == nil {
-		return r, fmt.Errorf("registry requires scans and fixtures objects")
+	if r.Fixtures == nil {
+		return r, fmt.Errorf("registry requires a fixtures object")
 	}
 	return r, nil
 }
@@ -425,41 +426,13 @@ func sourcePath(args []ast.Expr) bool {
 }
 
 func validate(r registry, inv inventory) error {
-	registered := map[string]bool{}
 	var problems []string
-	for pkg, names := range r.Scans {
-		if pkg != "." && (!strings.HasPrefix(pkg, "./") || path.Clean(pkg[2:]) != pkg[2:] || strings.HasPrefix(pkg[2:], "../")) {
-			problems = append(problems, "invalid package "+pkg)
-		}
-		if len(names) == 0 {
-			problems = append(problems, "empty scan list for "+pkg)
-		}
-		for _, name := range names {
-			key := pkg + "/" + name
-			if registered[key] {
-				problems = append(problems, "duplicate scan "+key)
-			}
-			registered[key] = true
-			if !inv.Tests[key] {
-				problems = append(problems, "stale scan "+key)
-			}
-		}
-	}
 	for key, reason := range r.Fixtures {
-		if registered[key] {
-			problems = append(problems, "scan/fixture overlap "+key)
-		}
-		registered[key] = true
 		if strings.TrimSpace(reason) == "" {
 			problems = append(problems, "fixture needs a reason: "+key)
 		}
 		if !inv.Tests[key] {
 			problems = append(problems, "stale fixture "+key)
-		}
-	}
-	for key := range inv.Candidates {
-		if !registered[key] {
-			problems = append(problems, "unregistered tree scan "+key+" (add to scans, or fixtures with a reason)")
 		}
 	}
 	sort.Strings(problems)
@@ -469,13 +442,13 @@ func validate(r registry, inv inventory) error {
 	return nil
 }
 
-func command(r registry) []string {
-	if len(r.Scans) == 0 {
+func command(tier map[string][]string) []string {
+	if len(tier) == 0 {
 		return nil
 	}
 	packages, names := []string{}, []string{}
 	seen := map[string]bool{}
-	for pkg, tests := range r.Scans {
+	for pkg, tests := range tier {
 		packages = append(packages, pkg)
 		for _, name := range tests {
 			if !seen[name] {
@@ -487,4 +460,21 @@ func command(r registry) []string {
 	sort.Strings(packages)
 	sort.Strings(names)
 	return append([]string{"test", "-count=1", "-run", "^(" + strings.Join(names, "|") + ")$"}, packages...)
+}
+
+// scans is the fast tier: every discovered tree scan not exempted as a fixture,
+// grouped by package. Adding a scan test needs no registry edit.
+func scans(r registry, inv inventory) map[string][]string {
+	tier := map[string][]string{}
+	for key := range inv.Candidates {
+		if _, exempt := r.Fixtures[key]; exempt {
+			continue
+		}
+		slash := strings.LastIndex(key, "/")
+		tier[key[:slash]] = append(tier[key[:slash]], key[slash+1:])
+	}
+	for _, names := range tier {
+		sort.Strings(names)
+	}
+	return tier
 }
