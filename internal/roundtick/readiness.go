@@ -2,7 +2,6 @@ package roundtick
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/stamp"
@@ -56,7 +55,7 @@ func ReadinessOf(in ReadinessInput) Readiness {
 			}
 		}
 	}
-	if bh := in.BounceHead; bh != "" && (strings.HasPrefix(in.Head, bh) || strings.HasPrefix(bh, in.Head)) {
+	if verdict.SameHead(in.BounceHead, in.Head) {
 		return Readiness{} // sent back and not yet pushed to
 	}
 	blocked := TrainBlocked(in.Records)
