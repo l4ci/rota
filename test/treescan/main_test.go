@@ -32,27 +32,12 @@ func TestRegistry(t *testing.T) {
 	if err := validate(r, inv); err != nil {
 		t.Fatal(err)
 	}
-	// Exercise the same validation as --check, removing each real guard in turn.
-	for pkg, names := range r.Scans {
-		for i, name := range names {
-			t.Run(pkg+"/"+name, func(t *testing.T) {
-				missing := registry{Scans: map[string][]string{}, Fixtures: r.Fixtures}
-				for p, tests := range r.Scans {
-					missing.Scans[p] = append([]string(nil), tests...)
-				}
-				missing.Scans[pkg] = append(missing.Scans[pkg][:i], missing.Scans[pkg][i+1:]...)
-				if len(missing.Scans[pkg]) == 0 {
-					delete(missing.Scans, pkg)
-				}
-				if err := validate(missing, inv); err == nil || !strings.Contains(err.Error(), "unregistered tree scan "+pkg+"/"+name) {
-					t.Fatalf("removed scan was not detected: %v", err)
-				}
-			})
-		}
+	if len(scans(r, inv)) == 0 {
+		t.Fatal("derived tier is empty")
 	}
 }
 
-func TestMissingRegistrationThroughHelpersAndAliases(t *testing.T) {
+func TestHelpersAndAliasesJoinTierUnlessExempt(t *testing.T) {
 	root := t.TempDir()
 	writeSource(t, root, "scan_test.go", `package scan
 import "testing"
@@ -71,12 +56,15 @@ func second() { cycle(); p.WalkDir(".", nil); f.ReadDir(nil, ".") }
 	if !inv.Candidates["./TestGuard"] {
 		t.Fatal("helper chain with import aliases was missed")
 	}
-	if err := validate(registry{}, inv); err == nil || !strings.Contains(err.Error(), "unregistered tree scan ./TestGuard") {
-		t.Fatalf("missing registration: %v", err)
+	if got := scans(registry{}, inv); !reflect.DeepEqual(got, map[string][]string{".": {"TestGuard"}}) {
+		t.Fatalf("tier = %v", got)
 	}
 	r := registry{Fixtures: map[string]string{"./TestGuard": "Only enumerates a temporary fixture."}}
 	if err := validate(r, inv); err != nil {
 		t.Fatal(err)
+	}
+	if got := scans(r, inv); len(got) != 0 {
+		t.Fatalf("exempt fixture stayed in tier: %v", got)
 	}
 }
 
@@ -124,13 +112,10 @@ func TestIgnoredNestedCheckoutsAndFixtureTrees(t *testing.T) {
 	}
 }
 
-func TestStaleDuplicateAndOverlappingRegistrations(t *testing.T) {
+func TestStaleAndReasonlessFixtures(t *testing.T) {
 	inv := inventory{Tests: map[string]bool{"./p/TestGuard": true}}
 	for name, r := range map[string]registry{
-		"stale scan":    {Scans: map[string][]string{"./p": {"TestMissing"}}},
 		"stale fixture": {Fixtures: map[string]string{"./p/TestMissing": "Temporary fixture."}},
-		"duplicate":     {Scans: map[string][]string{"./p": {"TestGuard", "TestGuard"}}},
-		"overlap":       {Scans: map[string][]string{"./p": {"TestGuard"}}, Fixtures: map[string]string{"./p/TestGuard": "Fixture."}},
 		"empty reason":  {Fixtures: map[string]string{"./p/TestGuard": " "}},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -143,7 +128,7 @@ func TestStaleDuplicateAndOverlappingRegistrations(t *testing.T) {
 
 func TestRegistryRejectsDuplicateJSONKeys(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "registry.json")
-	if err := os.WriteFile(file, []byte(`{"scans":{"./p":["TestA"],"./p":["TestB"]},"fixtures":{}}`), 0644); err != nil {
+	if err := os.WriteFile(file, []byte(`{"fixtures":{"./p/TestA":"a","./p/TestA":"b"}}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readRegistry(file); err == nil || !strings.Contains(err.Error(), "duplicate registry key") {
@@ -152,7 +137,7 @@ func TestRegistryRejectsDuplicateJSONKeys(t *testing.T) {
 }
 
 func TestCommandForcesFreshRunsAndExactNames(t *testing.T) {
-	got := command(registry{Scans: map[string][]string{"./z": {"TestZ"}, "./a": {"TestA"}}})
+	got := command(map[string][]string{"./z": {"TestZ"}, "./a": {"TestA"}})
 	want := []string{"test", "-count=1", "-run", "^(TestA|TestZ)$", "./a", "./z"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("command = %q, want %q", got, want)
@@ -253,7 +238,33 @@ func read(name string) { os.ReadFile(name) }
 	if !reflect.DeepEqual(inv.Candidates, want) {
 		t.Fatalf("dynamic and exec scans = %v, want %v", inv.Candidates, want)
 	}
-	if err := validate(registry{}, inv); err == nil {
-		t.Fatal("unregistered planted scans accepted")
+	if got := scans(registry{}, inv); len(got["."]) != len(want) {
+		t.Fatalf("planted scans missing from tier: %v", got)
+	}
+}
+
+func TestNewMarkedScanJoinsTierWithoutRegistryEdit(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "scan_test.go", `package scan
+import ("os"; "testing")
+func TestNewGuard(t *testing.T) { os.ReadDir("..") }
+func TestExempt(t *testing.T) { os.ReadDir(".") }
+func TestPlain(t *testing.T) {}
+`)
+	inv, err := discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := registry{Fixtures: map[string]string{"./TestExempt": "Only enumerates a temporary fixture."}}
+	if err := validate(r, inv); err != nil {
+		t.Fatalf("new scan needs no registry entry: %v", err)
+	}
+	want := map[string][]string{".": {"TestNewGuard"}}
+	if got := scans(r, inv); !reflect.DeepEqual(got, want) {
+		t.Fatalf("scans = %v, want %v", got, want)
+	}
+	got := command(scans(r, inv))
+	if len(got) < 4 || got[3] != "^(TestNewGuard)$" {
+		t.Fatalf("command omits the new scan: %q", got)
 	}
 }

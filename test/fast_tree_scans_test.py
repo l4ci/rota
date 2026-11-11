@@ -26,7 +26,6 @@ class FastTreeScansTest(unittest.TestCase):
             shutil.copytree(scanner, self.root / "test/treescan")
         (self.root / "test/treescan").mkdir(exist_ok=True)
         (self.root / "test/treescan/registry.json").write_text(json.dumps({
-            "scans": {"./internal/harness": ["TestNoKindNamedOutsideHarness"]},
             "fixtures": {
                 "./internal/harness/TestKindGuardFindsEachPlantedShape":
                     "Only scans planted files in t.TempDir().",
@@ -69,7 +68,7 @@ class FastTreeScansTest(unittest.TestCase):
                 self.assertIn("fast: tree-scans", result.stdout)
                 self.assertIn("github.com/l4ci/rota/internal/harness", result.stdout)
 
-    def test_new_unregistered_scan_fails_before_package_checks(self):
+    def test_new_scan_runs_without_registry_edit_before_package_checks(self):
         (self.root / "leaf/leaf_test.go").write_text('''package leaf
 
 import (
@@ -78,11 +77,12 @@ import (
 )
 
 func inspectSource() { _, _ = os.ReadDir("..") }
-func TestNewSourceGuard(t *testing.T) { inspectSource() }
+func TestNewSourceGuard(t *testing.T) { inspectSource(); t.Fatal("planted scan ran") }
 ''')
         result = self.fast("leaf/leaf_test.go")
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("unregistered tree scan ./leaf/TestNewSourceGuard", result.stdout)
+        self.assertIn("planted scan ran", result.stdout)
+        self.assertIn("TestNewSourceGuard", result.stdout)
         self.assertNotIn("fast: go vet", result.stdout)
 
     def test_scanner_changes_select_the_wiring_test(self):
