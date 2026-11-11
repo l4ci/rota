@@ -51,3 +51,43 @@ func TestTripwireCatchesBinaryAndReportsHit(t *testing.T) {
 		t.Fatalf("Check = %q", got)
 	}
 }
+
+// Close must hand PATH and TMPDIR back as they were, set or unset, so later
+// tests in the process never see a deleted dir.
+func TestTripwireCloseRestoresPathAndTmpdir(t *testing.T) {
+	cases := []struct {
+		name   string
+		tmpdir *string // nil = unset before NewTripwire
+	}{
+		{"set", ptr(t.TempDir())},
+		{"unset", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("PATH", "/usr/bin:/bin")
+			t.Setenv("TMPDIR", "x") // registers restore of the real value
+			if c.tmpdir == nil {
+				os.Unsetenv("TMPDIR")
+			} else {
+				os.Setenv("TMPDIR", *c.tmpdir)
+			}
+			tw, err := NewTripwire("testiso-restore", "herdr")
+			if err != nil {
+				t.Fatal(err)
+			}
+			tw.Close()
+			if got := os.Getenv("PATH"); got != "/usr/bin:/bin" {
+				t.Errorf("PATH after Close = %q", got)
+			}
+			got, ok := os.LookupEnv("TMPDIR")
+			if c.tmpdir == nil && ok {
+				t.Errorf("TMPDIR set after Close: %q", got)
+			}
+			if c.tmpdir != nil && got != *c.tmpdir {
+				t.Errorf("TMPDIR after Close = %q, want %q", got, *c.tmpdir)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
