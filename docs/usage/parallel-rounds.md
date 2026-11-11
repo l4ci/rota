@@ -1134,18 +1134,6 @@ cached: a red can come from the machine (a killed compiler, a load flake), so a 
 re-verifies. The same file notes a member named as culprit at its current head, so a later train that
 passes with that head clears the blame.
 
-#### Integration branch
-
-`rota worker train <PR>... --base <branch> --integration <name>` lands nothing on the base. It merges each reviewed member `--no-ff` into `integration/r<round>-<name>`, merges the base in after them, pushes that branch and records it under `integrations` in `workers.json`. The branch is pushed before the verify, so a red tip still leaves a branch to fix on. Members must be PRs, the round must be started, and the flag cannot go with `--plan`, `--land-green` or `--on-fail stop`. `round.batch` keeps its meaning (the in-flight item cap). An integration train takes its own lock, not the land lock, so a long verify does not hold up other landings.
-
-A rerun starts from the pushed tip. Members already in it are skipped (`INTEGRATED`), a member whose head moved merges again (its new head needs its own review first, as for any train member), and the base merges in again when it moved. The push is a plain fast-forward: a branch that moved since the run started is refused (`base-moved`), never overwritten.
-
-A member that conflicts, or a red test that passes on each member alone, is an interaction, not a culprit: the verdict is `interaction`, nothing is bounced and nothing lands. For a conflict, the members before it are pushed and the member is recorded as pending with the paths. The train files one interaction item (`INTERACTION-ITEM`), linked to the member issues and recorded on the branch, and a rerun with the same interaction reuses it. Assign it like any issue: its slot is cut from the integration branch and its PR targets that branch. The gate refuses that PR on any other base, and it gets no review of its own (`REVIEW-DEFERRED`). It is reviewed with the branch's other fix commits.
-
-Review covers only the fix commits, the first-parent commits on the branch that rota did not merge itself. A tip with none needs no review. Otherwise the gate wants the verdicts its review depth asks for, recorded at a commit after which only rota's merges follow. `rota review package integration/r<round>-<name>` defaults `--since` to just before the first fix.
-
-A green train opens one PR from the branch to the base, with a `Closes #N` line per member issue, and prints it. Land it with `rota worker gate <PR> --base <branch>`, not the merge button. When the head is the tip the train verified and the base has not moved since, the gate lands without a second verify (`INTEGRATION-VERIFIED`). Otherwise it merges the base and verifies again (`INTEGRATION-REVERIFY`). A pending member, or one whose head moved since its merge, refuses the landing (`stale`) until a rerun of the train. On landing the member PRs leave the review queue, their issues close through the `Closes` lines, the slots that held them are parked, and the record is marked landed, so `rota round reconcile` has nothing to repair.
-
 Whether a human also has to say yes is `ship.mergeApproval`:
 
 | Value | Behavior |
@@ -1176,6 +1164,27 @@ every time. Each approval is appended to `.rota/gate-audit.jsonl`. This policy h
 [configuration](configuration.md#shipmergeapproval-and-shipmergeapprovalpaths).
 
 `rota worker gate <slot> --check-only` judges freshness, PR identity and provenance and merges nothing.
+
+#### Integration branch
+
+`rota worker train <PR>... --base <branch> --integration <name>` lands nothing on the base. It merges each reviewed member `--no-ff` into `integration/r<round>-<name>`, at the head its review was checked at, merges the base in after them, pushes that branch and records it under `integrations` in `workers.json`. The branch is pushed before the verify, so a red tip still leaves a branch to fix on. Members must be PRs, the round must be started, and the flag cannot go with `--plan`, `--land-green` or `--on-fail stop`. `round.batch` keeps its meaning (the in-flight item cap). An integration train takes its own lock, not the land lock, so a long verify does not hold up other landings.
+
+A rerun starts from the pushed tip. Members already in it are skipped (`INTEGRATED`), a member whose head moved merges again (its new head needs its own review first, as for any train member), and the base merges in again when it moved. The push is a plain fast-forward: a branch that moved since the run started is refused (`base-moved`), never overwritten.
+
+A member that conflicts, or a red test that passes on each member alone, is an interaction, not a culprit: the verdict is `interaction`, nothing is bounced and nothing lands. For a conflict, the members before it are pushed and the member is recorded as pending with the paths. The train files one interaction item (`INTERACTION-ITEM`), linked to the member issues and recorded on the branch, and a rerun with the same interaction reuses it. Assign it like any issue: its slot is cut from the integration branch and its PR targets that branch. The gate refuses that PR on any other base, and it gets no review of its own (`REVIEW-DEFERRED`). It is reviewed with the branch's other fix commits.
+
+Review covers only the fix commits, the first-parent commits on the branch that rota did not merge itself. A tip with none needs no review. Otherwise the gate wants the verdicts its review depth asks for, recorded at a commit after which only rota's merges follow. `rota review package integration/r<round>-<name>` defaults `--since` to just before the first fix.
+
+A green train opens one PR from the branch to the base, with `## Assumptions`, `## Rulings` and a `Closes #N` line per member issue, and prints it; a rerun rewrites that body, so a member it added is closed too. A train run with `--no-verify` (or an empty `test.full`) records no verified tip (`INTEGRATION-UNVERIFIED`), and the gate verifies instead. Land it with `rota worker gate <PR> --base <branch>`, not the merge button. When the head is the tip the train verified and the base has not moved since, the gate lands without a second verify (`INTEGRATION-VERIFIED`). Otherwise it merges the base and verifies again (`INTEGRATION-REVERIFY`). A pending member, or one whose branch moved or is gone since its merge, refuses the landing (`stale`) until a rerun of the train. A plain train refuses the integration PR as a member: only the gate lands it. On landing the member PRs leave the review queue, their issues close through the `Closes` lines, the slots that held them are parked, and the record is marked landed, so `rota round reconcile` has nothing to repair.
+
+In practice:
+
+1. Train the reviewed PRs into the branch: `rota worker train 41 42 43 --base main --integration ui`. It pushes `integration/r<round>-ui`.
+2. If it answers `interaction`, assign the item it filed (`INTERACTION-ITEM <id>`): `rota round assign <id>`. The slot's branch is cut from the integration branch and its PR targets it.
+3. Land that fix PR into the branch with `rota worker gate <slot> --base integration/r<round>-ui`. It needs no review of its own (`REVIEW-DEFERRED`).
+4. Run the same train command again. It skips the members already merged, merges the base again, verifies the tip, and opens the one PR to `main` (or updates its body).
+5. Review the fix commits: `rota review package integration/r<round>-ui` starts at the first fix, then run /rota-review on it.
+6. Land everything with `rota worker gate <PR> --base main`. On a pass the member issues end and their slots park.
 
 ## Best-of: two workers on one issue
 
