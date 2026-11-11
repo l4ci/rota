@@ -28,6 +28,21 @@ func TestNewRefusesSoloAndUnknownKinds(t *testing.T) {
 			if !errors.Is(err, ErrUnknownKind) {
 				t.Fatalf("Spawn error = %v, want ErrUnknownKind", err)
 			}
+			if err := h.Send(context.Background(), "ben", "h", "f"); !errors.Is(err, ErrUnknownKind) {
+				t.Fatalf("Send error = %v, want ErrUnknownKind", err)
+			}
+			if err := h.Kill(context.Background(), "ben", "h"); !errors.Is(err, ErrUnknownKind) {
+				t.Fatalf("Kill error = %v, want ErrUnknownKind", err)
+			}
+			if got := h.Capture(context.Background(), "ben", "h", 5); got != "" {
+				t.Fatalf("Capture = %q, want empty", got)
+			}
+			if got := h.Status(context.Background(), "ben", "h"); got != "" {
+				t.Fatalf("Status = %q, want empty", got)
+			}
+			if h.InSession() || h.Where() != "" {
+				t.Fatalf("InSession/Where = %v/%q, want zero values", h.InSession(), h.Where())
+			}
 		})
 	}
 }
