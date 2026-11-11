@@ -218,3 +218,32 @@ func trainWrite2(t *testing.T, dir, file string) string {
 	gittest.Run(t, dir, "commit", "-q", "-m", "add "+file)
 	return strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "HEAD"))
 }
+
+// A fix that triggers a review lens is covered only with that lens recorded
+// too, not by the core reviews alone.
+func TestIntegrationFixReviewNeedsLens(t *testing.T) {
+	w := integrationWorld(t)
+	w.setConfig(`{"ship":{"review":"light"},"review":{"lenses":{"security":{"paths":["fix.txt"]}}},"test":{"full":["true"]}}`)
+	integrationPR(t, w)
+	fix := w.pushFix("fix.txt")
+	w.pointPR9()
+	w.record(intBranch, fix, verdict.ReviewQuality, verdict.ReviewSpec)
+	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+		t.Fatalf("the core reviews covered a lens-triggering fix: %+v", res)
+	}
+	w.record(intBranch, fix, verdict.LensKind("security"))
+	if res, err := w.gateCheck("9"); err != nil || !res.OK() {
+		t.Fatalf("the fix with its lens review still refuses: %+v %v", res, err)
+	}
+}
+
+// A verify skipped for an integration tip binds the merge to that tip: a PR
+// head pinned anywhere else is refused, since no verify saw it.
+func TestWorkerGateIntegrationVerifiedTipBindsMerge(t *testing.T) {
+	w := integrationWorld(t)
+	integrationPR(t, w)
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "9", Base: "main", LandVerified: true, LandVerifiedTip: strings.Repeat("e", 40)})
+	if err != nil || res.Verdict != GateBaseMoved || res.Changed || w.onMain("work.txt") {
+		t.Fatalf("a head other than the verified tip landed: %+v %v", res, err)
+	}
+}

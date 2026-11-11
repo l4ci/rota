@@ -76,7 +76,7 @@ func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts,
 	case base != rec.VerifiedBase:
 		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — %s moved from %s to %s since the verify; merging it and verifying again", rec.Branch, rec.Base, strutil.ShortSHA(rec.VerifiedBase), strutil.ShortSHA(base))}
 	}
-	o.LandVerified = true
+	o.LandVerified, o.LandVerifiedTip = true, tip
 	return nil, []string{fmt.Sprintf("INTEGRATION-VERIFIED %s — the train verified tip %s on %s %s; no second verify", rec.Branch, strutil.ShortSHA(tip), rec.Base, strutil.ShortSHA(base))}
 }
 
