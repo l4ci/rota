@@ -198,7 +198,7 @@ func defaultDeps() *Deps {
 	d.TrainPlan = planTrainNudge
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
-	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
+	d.ConnTesters = tracker.ConnectionTesters()
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
 	// The lease reads the same clock as the worker env, so pinning Deps.Now
 	// pins its StartedAt; d.Now is read at call time, so a later swap counts.
