@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"os"
 	"os/signal"
 	"strconv"
@@ -246,7 +247,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 				opts.ConfigDir = *configDir
 			}
 			opts.Account = c.deps().WorkerAccounts().AccountOf(root, opts.ConfigDir)
-			env.UsageMarker = keepalive.UsageMarker(cd, root)
+			env.UsageMarker = hook.UsageMarker(cd, root)
 			env.Choose = usageChoose(ctx, c, root)
 			env.Record = keepalive.UsageRecorder(root, c.deps().Now)
 		}
@@ -352,7 +353,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	ks, found, err := keepalive.ReadState(keepalive.StatePath(cd))
+	ks, found, err := keepstate.ReadState(keepstate.StatePath(cd))
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -381,7 +382,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 		text += fmt.Sprintf(", holder pid %d, round %d", l.PID, l.Round)
 	}
 	if found {
-		raw, _ := os.ReadFile(keepalive.StatePath(cd))
+		raw, _ := os.ReadFile(keepstate.StatePath(cd))
 		if v, derr := jsonx.Decode(raw); derr == nil {
 			d.Set("keepalive", v)
 		}
