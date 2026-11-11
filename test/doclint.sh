@@ -155,7 +155,7 @@ pass "the prose lint names a skill that lost a pinned phrase and a missing targe
 VS="$TMP/vs"
 mkdir -p "$VS"
 cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$VS/"
-mkdir -p "$VS/test"; cp "$TESTDIR/validate-skills.py" "$VS/test/"
+mkdir -p "$VS/test" "$VS/scripts"; cp "$TESTDIR/validate-skills.py" "$VS/test/"; cp "$REPO/scripts/fmlite.py" "$VS/scripts/"
 BASE_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills fixture does not pass on its own: $BASE_OUT"
 # A decoy skill that would fail every check, and a duplicate of a real one.
 mkdir -p "$VS/.worktrees/x/skills/rota-decoy" "$VS/.worktrees/x/skills/rota-plan"

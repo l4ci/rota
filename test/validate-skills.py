@@ -19,37 +19,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-
-def parse_frontmatter(text):
-    """Return (dict_of_keys, post_frontmatter_text) or (None, text) if no frontmatter."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None, text
-    end = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            end = i
-            break
-    if end is None:
-        return None, text
-    fm_lines = lines[1:end]
-    post = "\n".join(lines[end + 1:])
-    keys = {}
-    for line in fm_lines:
-        m = re.match(r'^(\w[\w-]*):\s*(.*)', line)
-        if m:
-            k, v = m.group(1), m.group(2).strip()
-            # strip surrounding quotes if present
-            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                v = v[1:-1]
-            keys[k] = v
-    return keys, post
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+from fmlite import FmError, load_front_matter  # noqa: E402
 
 
 def check_frontmatter(path, text, issues):
-    fm, _ = parse_frontmatter(text)
-    if fm is None:
-        issues.append(f"{path}: no frontmatter block found")
+    try:
+        fm = spec_fields(text, path)
+    except FmError as exc:
+        issues.append(f"{path}: {exc}")
         return
     for key in ("name", "description"):
         if key not in fm or not fm[key]:
@@ -81,47 +59,14 @@ REF_TOC_LINES = 100
 BLOCK_SCALARS = {">", "|", ">-", "|-", ">+", "|+"}
 
 
-def spec_fields(text):
-    """Top-level frontmatter as {key: value}, folding indented continuation
-    lines into the value; None without a frontmatter block. A folded block
-    (> or >-) follows YAML and scripts/fmlite.py: lines join with a space and
-    a blank line is a newline."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None
-    out, key, folded, cont = {}, None, False, []
-
-    def flush():
-        if key is None or not cont:
-            return
-        if folded:
-            paras, cur = [], []
-            for c in cont:
-                if c:
-                    cur.append(c)
-                else:
-                    paras.append(" ".join(cur))
-                    cur = []
-            paras.append(" ".join(cur))
-            out[key] = "\n".join(paras).strip("\n")
-        else:
-            out[key] = (out[key] + " " + " ".join(c for c in cont if c)).strip()
-
-    for line in lines[1:]:
-        if line.strip() == "---":
-            flush()
-            return out
-        m = re.match(r"^([A-Za-z0-9_-]+):[ \t]*(.*)$", line)
-        if m:
-            flush()
-            key, val = m.group(1), m.group(2).strip()
-            cont, folded = [], val[:1] == ">"
-            if len(val) > 1 and val[0] == val[-1] and val[0] in "\"'":
-                val = val[1:-1]
-            out[key] = "" if val in BLOCK_SCALARS else val
-        elif key and (line[:1] in (" ", "\t") or not line.strip()):
-            cont.append(line.strip())
-    return None
+def spec_fields(text, path="SKILL.md"):
+    """Top-level frontmatter as {key: str}, read by scripts/fmlite.py, the one
+    reader of the subset (folded blocks, quoting, errors). Scalars come back as
+    strings (true -> "true"); raises FmError when the block is absent or outside
+    the subset."""
+    fm = load_front_matter(path, text)[0]
+    return {k: (str(v).lower() if isinstance(v, bool) else v if isinstance(v, (dict, list)) else "" if v is None else str(v))
+            for k, v in fm.items()}
 
 
 def plain_scalar_hazards(text):
@@ -146,10 +91,21 @@ def plain_scalar_hazards(text):
 
 def check_spec_frontmatter(path, text, issues):
     path = Path(path)
-    fm = spec_fields(text)
-    if fm is None:
-        return
     rel = path.as_posix()
+    # Raw-text hazard check first: fmlite rejects every value it flags, and the
+    # author's advice (a folded block or quotes) must not depend on the parse.
+    if text.startswith("---"):
+        for key in plain_scalar_hazards(text):
+            issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
+                          f"use a folded block (>-) or quote it")
+    try:
+        fm = spec_fields(text, path)
+    except FmError:
+        return  # check_frontmatter reports it
+    nonscalar = [k for k in ("name", "description", "compatibility") if not isinstance(fm.get(k, ""), str)]
+    if nonscalar:
+        issues.append(f"{rel}: frontmatter {', '.join(nonscalar)} must be a string, not a mapping or list")
+        return
     name, desc = fm.get("name", ""), fm.get("description", "")
     if name and name != path.parent.name:
         issues.append(f"{rel}: frontmatter name '{name}' must equal the directory '{path.parent.name}'")
@@ -163,9 +119,6 @@ def check_spec_frontmatter(path, text, issues):
     if SECOND_PERSON.search(re.sub(r'"[^"]*"', "", desc)):
         issues.append(f"{rel}: description must be in the third person: say 'the user', not 'you' or 'I', "
                       f"outside quoted trigger phrases")
-    for key in plain_scalar_hazards(text):
-        issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
-                      f"use a folded block (>-) or quote it")
     if len(fm.get("compatibility", "")) > 500:
         issues.append(f"{rel}: compatibility is over 500 chars")
     extra = sorted(set(fm) - SPEC_KEYS - CLAUDE_KEYS)
@@ -176,7 +129,10 @@ def check_spec_frontmatter(path, text, issues):
 
 def check_manual_only(path, text, issues):
     """disable-model-invocation: true and agents/openai.yaml go together."""
-    fm = spec_fields(text) or {}
+    try:
+        fm = spec_fields(text, path)
+    except FmError:
+        fm = {}  # check_frontmatter reports it
     flag = fm.get("disable-model-invocation")
     yaml_path = Path(path).parent / "agents" / "openai.yaml"
     rel = Path(path).as_posix()
@@ -206,10 +162,16 @@ def check_manual_only(path, text, issues):
         issues.append(f"{yaml_path.as_posix()}: needs policy.allow_implicit_invocation: false")
 
 
+def _flag(path):
+    try:
+        return spec_fields(path.read_text(encoding="utf-8"), path).get("disable-model-invocation")
+    except FmError:
+        return None  # check_frontmatter reports it
+
+
 def check_flag_consistency(skill_files, issues):
     """The flagged set matches authoring-conventions, and no skill chains into a flagged one (#1897)."""
-    flagged = {s.parent.name for s in skill_files
-               if (spec_fields(s.read_text(encoding="utf-8")) or {}).get("disable-model-invocation") == "true"}
+    flagged = {s.parent.name for s in skill_files if _flag(s) == "true"}
     conv = Path("skills/references/authoring-conventions.md")
     if not conv.is_file():
         listed = flagged  # a minimal tree has no conventions doc: nothing to compare
@@ -631,7 +593,11 @@ def layout_only(skills_dir):
 
 def print_fields(path):
     """--fields <SKILL.md>: the parsed top-level fields as JSON (the seam test compares them)."""
-    print(json.dumps(spec_fields(Path(path).read_text(encoding="utf-8"))))
+    try:
+        print(json.dumps(spec_fields(Path(path).read_text(encoding="utf-8"), path)))
+    except FmError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(1)
     sys.exit(0)
 
 
