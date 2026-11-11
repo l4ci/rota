@@ -661,7 +661,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// Kind, tier, model, headroom and scope (C9): the shared preflight.
 	pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
-		FlagKind: o.Kind, FlagModel: o.Model, SlotKind: slot.HarnessKind(), Fixed: bo, Resuming: resuming})
+		FlagKind: o.Kind, FlagModel: o.Model, SlotKind: slot.Kind(), Fixed: bo, Resuming: resuming})
 	res.Pick = pf.Pick
 	if pf.Kind != "" {
 		res.Kind, res.KindSource, res.Tier, res.TierReason = pf.Kind, pf.KindSource, tier, reason

@@ -251,7 +251,7 @@ func TestPickRepeatIsANoOpAndAnotherPRIsRefused(t *testing.T) {
 func TestPickLeavesAnExternalLoserSlotAndWarns(t *testing.T) {
 	f := newPickFx(t)
 	f.bothHavePRs(t)
-	if err := rawSlot(f.root, "dana", func(s *jsonx.Object) { s.Set("kind", "external") }); err != nil {
+	if err := rawSlot(f.root, "dana", func(s *jsonx.Object) { s.Set("provenance", "external") }); err != nil {
 		t.Fatal(err)
 	}
 	res, err := f.pick("7", "ben's is smaller")

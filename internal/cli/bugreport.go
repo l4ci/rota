@@ -142,7 +142,7 @@ func brEnvironment(c *Ctx, root string, r bugreport.Record, harness, model strin
 		Harness: strutil.FirstNonEmpty(harness, r.Harness), Model: strutil.FirstNonEmpty(model, r.Model)}
 	if name := c.deps().Getenv("ROTA_SLOT"); name != "" && (env.Harness == "" || env.Model == "") {
 		if s := worker.LoadRegistryTolerant(root).Slot(name); s != nil {
-			env.Harness = strutil.FirstNonEmpty(env.Harness, s.HarnessKind())
+			env.Harness = strutil.FirstNonEmpty(env.Harness, s.Kind())
 			env.Model = strutil.FirstNonEmpty(env.Model, s.Model())
 		}
 	}
