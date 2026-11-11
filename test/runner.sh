@@ -98,9 +98,8 @@ TMP="$(cd "$d" && pwd -P)" || exit 1
 # $RUN_TMP, so the EXIT trap removes them with everything else.
 ROTA_STAGE="$(mktemp -d)" || exit 1
 if [ -z "${ROTA_BIN:-}" ]; then
-  ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
-  (cd "$REPO" && go build -tags rotatest -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
-    -o "$ROTA_STAGE/rota" ./cmd/rota) || { echo "runner: go build ./cmd/rota failed" >&2; exit 2; }
+  source "$TESTDIR/lib.sh" # build_rota; sourced again below for pass/fail
+  build_rota "$ROTA_STAGE/rota" || { echo "runner: go build ./cmd/rota failed" >&2; exit 2; }
   ROTA_BIN="$ROTA_STAGE/rota"
 fi
 export ROTA_BIN
