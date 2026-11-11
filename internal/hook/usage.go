@@ -5,18 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/stamp"
 )
-
-// UsageHandoff is the marker a usage block leaves in the session file (D4,
-// #206): which window tripped, how full it was and when it resets. The
-// supervisor reads it to tell a usage handoff from a context one.
-type UsageHandoff struct {
-	Window   string  `json:"window"`
-	UsedPct  float64 `json:"usedPct"`
-	ResetsAt string  `json:"resetsAt,omitempty"`
-	At       string  `json:"at"`
-}
 
 // Window names of rateLimits.
 const (
@@ -57,7 +48,7 @@ func UsageOf(raw json.RawMessage) (window string, pct float64, resetsAt string, 
 	return
 }
 
-func usageReason(m UsageHandoff, threshold int, path string) string {
+func usageReason(m keepstate.UsageHandoff, threshold int, path string) string {
 	reset := ""
 	if m.ResetsAt != "" {
 		reset = ", resets " + m.ResetsAt
@@ -69,4 +60,23 @@ func usageReason(m UsageHandoff, threshold int, path string) string {
 		"references/handoff-template.md with a \"## Round state\" section (slots, who holds what, merges pending, escalations open). "+
 		"Commit nothing you do not own. Then run /exit.",
 		trimPct(m.UsedPct), m.Window, reset, threshold, path, HandoffMarker)
+}
+
+// UsageMarker finds the newest usage handoff written at or after since in the
+// session files whose cwd is the project root (D4).
+func UsageMarker(commonDir, root string) func(since time.Time) (keepstate.UsageHandoff, bool) {
+	return func(since time.Time) (keepstate.UsageHandoff, bool) {
+		// Ranked by the handoff's own time, so a newer session with no handoff
+		// does not mask an older one that has it.
+		st, at, ok := NewestAtRoot(commonDir, root, func(st State) (string, bool) {
+			if st.UsageHandoff == nil {
+				return "", false
+			}
+			return st.UsageHandoff.At, true
+		})
+		if !ok || at.Before(since.Truncate(time.Second)) {
+			return keepstate.UsageHandoff{}, false
+		}
+		return *st.UsageHandoff, true
+	}
 }

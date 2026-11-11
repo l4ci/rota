@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/status"
 )
 
@@ -31,34 +32,21 @@ func NotePath(root, branch string) string {
 	return filepath.Join(root, filepath.FromSlash(rel))
 }
 
-// Handoff is what the filesystem says about the handoff file.
-type Handoff struct {
-	Exists  bool
-	ModTime time.Time
-}
-
-// Fresh is the freshness rule of every D1 and D2 decision: the handoff exists
-// and was written no more than maxAge ago. A consumed handoff (renamed to
-// .consumed) does not exist, so it is never fresh.
-func (h Handoff) Fresh(maxAge time.Duration, now time.Time) bool {
-	return h.Exists && now.Sub(h.ModTime) <= maxAge
-}
-
 // StatHandoff reads the handoff file's presence and mtime, for callers that
 // need no content.
-func StatHandoff(path string) Handoff {
+func StatHandoff(path string) keepstate.Handoff {
 	fi, err := os.Stat(path)
 	if err != nil || !fi.Mode().IsRegular() {
-		return Handoff{}
+		return keepstate.Handoff{}
 	}
-	return Handoff{Exists: true, ModTime: fi.ModTime()}
+	return keepstate.Handoff{Exists: true, ModTime: fi.ModTime()}
 }
 
 // Note is the orchestrator handoff note as one read of its file: presence,
 // mtime and content come from the same open, so the marker and freshness
 // rules judge what Consume later archives.
 type Note struct {
-	Handoff
+	keepstate.Handoff
 	Path string
 	Body string
 }
@@ -83,7 +71,7 @@ func ReadNote(path string) (Note, error) {
 	if err != nil {
 		return n, err
 	}
-	n.Handoff = Handoff{Exists: true, ModTime: fi.ModTime()}
+	n.Handoff = keepstate.Handoff{Exists: true, ModTime: fi.ModTime()}
 	n.Body = string(b)
 	return n, nil
 }

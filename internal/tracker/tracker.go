@@ -293,6 +293,10 @@ type IssueTracker interface {
 	List(ctx context.Context, f ListFilter) ([]Issue, error)
 	Edit(ctx context.Context, key IssueKey, e IssueEdit) error
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
+	// AddLabels adds labels to the issue. autoCreate decides what a label the
+	// tracker does not know yet does: true creates it, false fails with
+	// KindNotFound. A tracker whose labels are free text (Jira) has no unknown
+	// label, so it always creates on use and autoCreate changes nothing there.
 	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
 	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
 	// Close with reason CloseCompleted (or "") or CloseNotPlanned; comment is optional.

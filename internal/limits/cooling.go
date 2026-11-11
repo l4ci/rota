@@ -12,9 +12,9 @@ import (
 // known: Codex has no usage meter, so the limit message the watcher logged is
 // the only evidence. An entry with no account or a reset already past is not
 // counted.
-func Cooling(root, kind string, now time.Time) map[string]time.Time {
+func Cooling(entries []Entry, kind string, now time.Time) map[string]time.Time {
 	out := map[string]time.Time{}
-	for _, e := range Load(root) {
+	for _, e := range entries {
 		if e.Status != StatusWaiting && e.Status != StatusSwitched {
 			continue
 		}
@@ -31,8 +31,8 @@ func Cooling(root, kind string, now time.Time) map[string]time.Time {
 
 // LoggedPick is the first of the logins of a kind with no usage meter that is
 // not excluded and not cooling, in configured order.
-func LoggedPick(root, kind string, logins []string, exclude string, now time.Time) (string, bool) {
-	cooling := Cooling(root, kind, now)
+func LoggedPick(entries []Entry, kind string, logins []string, exclude string, now time.Time) (string, bool) {
+	cooling := Cooling(entries, kind, now)
 	meters := make([]worker.Meter, 0, len(logins))
 	for _, l := range logins {
 		verdict := worker.VerdictUnknown

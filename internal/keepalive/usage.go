@@ -2,10 +2,10 @@ package keepalive
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -26,23 +26,15 @@ type Choice struct {
 // Decision is one usage handoff's outcome, for the limits log.
 type Decision struct {
 	Action    string
-	Marker    hook.UsageHandoff
+	Marker    keepstate.UsageHandoff
 	From, To  string
 	Note      string
 	HoldUntil string // empty when there is no hold
 }
 
-// Hold is `switchHold` in the state file: until then the Stop hook passes on
-// usage, so a session with no account to move to works on and D3's
-// in-session sleep handles the real limit.
-type Hold struct {
-	Until  string `json:"until"`
-	Window string `json:"window"`
-}
-
 // decideUsage applies a usage handoff before a restart: it names the account
 // the next child runs under (curDir, st.Account) and records the decision.
-func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHandoff, warn func(string)) {
+func decideUsage(env Env, o Options, st *keepstate.State, curDir *string, m keepstate.UsageHandoff, warn func(string)) {
 	now := env.Now()
 	ch := env.Choose(*curDir, o.UsageThreshold)
 	d := Decision{Marker: m, From: st.Account}
@@ -68,7 +60,7 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 		}
 		if until.After(now) {
 			d.HoldUntil = stamp.Format(until)
-			st.SwitchHold = &Hold{Until: d.HoldUntil, Window: m.Window}
+			st.SwitchHold = &keepstate.Hold{Until: d.HoldUntil, Window: m.Window}
 			d.Note += "; switch held until " + d.HoldUntil
 		} else {
 			st.SwitchHold = nil
@@ -79,25 +71,6 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 		if err := env.Record(d); err != nil {
 			warn("limits not recorded: " + err.Error())
 		}
-	}
-}
-
-// UsageMarker finds the newest usage handoff written at or after since in the
-// session files whose cwd is the project root (D4).
-func UsageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandoff, bool) {
-	return func(since time.Time) (hook.UsageHandoff, bool) {
-		// Ranked by the handoff's own time, so a newer session with no handoff
-		// does not mask an older one that has it.
-		st, at, ok := hook.NewestAtRoot(commonDir, root, func(st hook.State) (string, bool) {
-			if st.UsageHandoff == nil {
-				return "", false
-			}
-			return st.UsageHandoff.At, true
-		})
-		if !ok || at.Before(since.Truncate(time.Second)) {
-			return hook.UsageHandoff{}, false
-		}
-		return *st.UsageHandoff, true
 	}
 }
 
