@@ -812,13 +812,19 @@ func verdictRefusal(verdict string, ref *exitcode.Refusal, err error, msg, hint 
 }
 
 // recordedFailRefusal turns a recorded-FAIL refusal from the gate or train into the
-// exit-4 envelope the ship paths give: d plus blockedBy verdict and the record.
+// exit-4 envelope the ship paths give: d plus blockedBy verdict and the record,
+// or just blockedBy verdict when the verdict store could not be read.
 func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 	var vb *verdict.BlockedError
-	if !errors.As(err, &vb) {
-		return Result{}, err
+	if errors.As(err, &vb) {
+		return verdictBlocked(vb, d, false)
 	}
-	return verdictBlocked(vb, d, false)
+	// An unreadable store refuses the same way, with no record to report.
+	var ee *exitcode.Error
+	if errors.As(err, &ee) && ee.Exit == exitcode.ExitRefused {
+		return blockedRefusal(d, worker.BlockedByVerdict, ee.Message, ee.Hint)
+	}
+	return Result{}, err
 }
 
 // noVerifyRefusal is the exit-4 envelope for an empty test.full: d plus
