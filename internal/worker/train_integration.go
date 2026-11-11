@@ -156,7 +156,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		return true, err
 	}
 	for i, m := range res.Members {
-		im := IntegrationMember{Target: m.Target, PR: m.PR, Head: p.heads[i]}
+		im := IntegrationMember{Target: m.Target, PR: m.PR, Branch: m.Branch, Head: p.heads[i]}
 		if gt, err := reg.GateTargetAny(m.Target); err == nil {
 			im.Issue = gt.Issue
 		}
@@ -170,6 +170,9 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		if _, code := e.git(t.root, "merge-base", "--is-ancestor", m.Head, tip); m.Pending && code == 0 {
 			it.Members[j].Pending, it.Members[j].Conflicts = false, nil
 		}
+	}
+	if it.Start == "" {
+		it.Start = p.baseSHA
 	}
 	it.Assembled = tip
 	it.RotaMerges = append(it.RotaMerges, merges...)
@@ -243,7 +246,7 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 	if done, err := t.assembleIntegration(p); done || err != nil {
 		return done, err
 	}
-	im := IntegrationMember{Target: pending.Target, PR: pending.PR, Head: pendingHead, Pending: true, Conflicts: paths}
+	im := IntegrationMember{Target: pending.Target, PR: pending.PR, Branch: pending.Branch, Head: pendingHead, Pending: true, Conflicts: paths}
 	if reg, err := LoadRegistry(t.root); err == nil {
 		if gt, err := reg.GateTargetAny(pending.Target); err == nil {
 			im.Issue = gt.Issue
