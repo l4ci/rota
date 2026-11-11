@@ -40,7 +40,8 @@ type Worker interface {
 	PoolInit(ctx context.Context, root string, o worker.InitOpts, acc *worker.Accounts) (worker.InitResult, error)
 	ModelAppliesTo(root, kind string) bool
 	NeedsModel(root, kind string) bool
-	Preflight(ctx context.Context, root, kind, slot, model string) (harness.Setup, error)
+	PlanLaunch(root, kind, model string) (worker.LaunchPlan, error)
+	Preflight(ctx context.Context, root, slot string, lp worker.LaunchPlan) (harness.Setup, error)
 	Dispatch(ctx context.Context, root string, o worker.DispatchOpts) (worker.DispatchResult, error)
 	Poll(ctx context.Context, root string, o worker.PollOpts) (worker.PollResult, error)
 
