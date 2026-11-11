@@ -21,6 +21,9 @@ type Integration struct {
 	// Members are the PRs merged into the branch, in merge order; Head is the
 	// member head the last merge took.
 	Members []IntegrationMember `json:"members"`
+	// Start is the base commit the branch was first assembled on: every
+	// first-parent commit after it is a rota merge or a fix.
+	Start string `json:"start"`
 	// Assembled is the tip after rota's own merges, before any fix commit.
 	Assembled string `json:"assembled"`
 	// RotaMerges are the first-parent merges rota made cleanly: member merges
@@ -40,6 +43,7 @@ type Integration struct {
 type IntegrationMember struct {
 	Target string `json:"target"`
 	PR     string `json:"pr"`
+	Branch string `json:"branch,omitempty"`
 	Issue  string `json:"issue,omitempty"`
 	Head   string `json:"head"`
 	// Pending is a member whose merge conflicted: an interaction item resolves
