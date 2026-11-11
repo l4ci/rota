@@ -840,3 +840,30 @@ func TestTickTrainInteraction(t *testing.T) {
 	r2.NeedsYou = slices.DeleteFunc(r2.NeedsYou, func(n Item) bool { return n.Target == "b" })
 	check(r2, "held tick")
 }
+
+// An unreproduced red is a flake: no member is held at its head or reported
+// as a bounce, and every one is retried on the next tick (#3113).
+func TestTickTrainUnreproducedRetriesEveryMember(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{Verdict: worker.GateVerifyFailed, Unreproduced: true,
+			Members: []worker.TrainMember{{Target: "a"}, {Target: "b"}}, Err: "TRAIN-FAIL unreproduced — a flake"}}
+	}
+	e := f.env()
+	e.Head = func(_ context.Context, target string) (string, error) { return target + ":head", nil }
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Held) != 0 || len(r.FailedHeads) != 0 || len(r.NeedsYou) != 0 {
+		t.Fatalf("held %v failedHeads %v needsYou %+v: a flake holds no member", r.Held, r.FailedHeads, r.NeedsYou)
+	}
+	e.Held, e.FailedHeads = r.Held, r.FailedHeads
+	f.trained = nil
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.trained) != 1 || strings.Join(f.trained[0][1:], ",") != "a,b" {
+		t.Fatalf("trained %v on the next tick, want a,b retrained", f.trained)
+	}
+}

@@ -37,6 +37,8 @@ type trainOutcome struct {
 	Excluded []worker.TrainCulprit
 	// Interaction names the members that are red only together (#3095).
 	Interaction []string
+	// Unreproduced is a red that reproduced nowhere: a flake (#3113).
+	Unreproduced bool
 }
 
 func (e Env) targetBase(target string) string {
@@ -90,7 +92,7 @@ func (e Env) trainTargets(ctx context.Context, targets []string, base string) tr
 	if run.Err != nil && !run.Refused {
 		return out // died on an error: nothing of the result is reported
 	}
-	out.Culprit, out.Interaction = r.Culprit, r.Interaction
+	out.Culprit, out.Interaction, out.Unreproduced = r.Culprit, r.Interaction, r.Unreproduced
 	for _, m := range r.Members {
 		if m.Landed {
 			out.Landed = append(out.Landed, m.Target)

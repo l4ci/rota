@@ -1545,7 +1545,7 @@ func TestTrainInteraction(t *testing.T) {
 func TestTrainInteractionKeepsAloneCulprit(t *testing.T) {
 	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Interaction) != 0 {
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Interaction) != 0 || res.Unreproduced {
 		t.Fatalf("b2 fails alone, so it is the culprit: %+v %v", res, err)
 	}
 }
@@ -1624,8 +1624,8 @@ func TestTrainUnreproducedRedBlamesNobody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateVerifyFailed || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 {
-		t.Fatalf("want a red train with nobody blamed, got verdict %q culprit %q interaction %q landed %q", res.Verdict, res.Culprit, res.Interaction, res.Landed)
+	if res.Verdict != GateVerifyFailed || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 || !res.Unreproduced {
+		t.Fatalf("want a red train with nobody blamed, got verdict %q culprit %q interaction %q landed %q unreproduced %v", res.Verdict, res.Culprit, res.Interaction, res.Landed, res.Unreproduced)
 	}
 	for _, m := range res.Members {
 		if m.Culprit {
