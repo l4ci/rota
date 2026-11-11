@@ -92,16 +92,25 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 		return Result{}, Usage("usage: rota review cleanup <workspace>")
 	}
 	path := filepath.Clean(args[0])
-	root := filepath.Dir(path)
+	if !filepath.IsAbs(path) || filepath.Base(path) != "tree" {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
 	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
 	if err != nil {
 		return Result{}, Unavailable("resolve temporary directory: %v", err)
 	}
-	canonical, err := filepath.EvalSymlinks(root)
-	if err != nil || !filepath.IsAbs(path) || canonical != root || filepath.Dir(root) != temp ||
-		!strings.HasPrefix(filepath.Base(root), reviewWorkspacePrefix) || filepath.Base(path) != "tree" {
+	// Resolve only the workspace's parent: a symlinked ancestor (macOS /var ->
+	// /private/var) is fine, a symlinked workspace dir is not.
+	wsDir := filepath.Dir(path)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(wsDir))
+	if err != nil || parent != temp || !strings.HasPrefix(filepath.Base(wsDir), reviewWorkspacePrefix) {
 		return Result{}, Refused("not a prepared review workspace: %s", path)
 	}
+	root := filepath.Join(parent, filepath.Base(wsDir))
+	if canonical, err := filepath.EvalSymlinks(root); err != nil || canonical != root {
+		return Result{}, Refused("not a prepared review workspace: %s", path)
+	}
+	path = filepath.Join(root, "tree")
 	info, err := os.Lstat(filepath.Join(root, reviewWorkspaceMarker))
 	if err != nil || !info.Mode().IsRegular() {
 		return Result{}, Refused("missing review workspace ownership record: %s", path)
