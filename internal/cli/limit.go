@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/round"
@@ -356,7 +356,7 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		d.Set("changed", false)
 		return Result{Data: d}, &Error{Exit: ExitRefused, Message: msg, Hint: hint}
 	}
-	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
+	if ks, found, _ := keepstate.ReadState(keepstate.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
 		return refuse(blockedby.Supervised, fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
 			"run rota limit status, or start the supervisor with --no-limits to watch by hand")
 	}

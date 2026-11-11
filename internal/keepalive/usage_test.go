@@ -1,15 +1,12 @@
 package keepalive
 
 import (
-	"os"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/keepstate"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // usageRig is a rig whose first child leaves a usage handoff.
@@ -26,8 +23,8 @@ func usageRig(t *testing.T, choice Choice, resets string) (*rig, Env, Options, *
 	var gaps []bool
 	gap := new(atomic.Bool)
 	env.Gap = gap
-	env.UsageMarker = func(since time.Time) (hook.UsageHandoff, bool) {
-		return hook.UsageHandoff{Window: hook.WindowFiveHour, UsedPct: 93, ResetsAt: resets, At: since.Format(time.RFC3339)}, true
+	env.UsageMarker = func(since time.Time) (keepstate.UsageHandoff, bool) {
+		return keepstate.UsageHandoff{Window: limits.WindowFiveHour, UsedPct: 93, ResetsAt: resets, At: since.Format(time.RFC3339)}, true
 	}
 	env.Choose = func(dir string, thr int) Choice { return choice }
 	env.Record = func(d Decision) error { recs = append(recs, d); return nil }
@@ -95,7 +92,7 @@ func TestUsageHandoffWithNoAccountRestartsAndHolds(t *testing.T) {
 		}
 	}
 	st := r.state()
-	if st.Account != "a" || st.SwitchHold == nil || st.SwitchHold.Until != resets || st.SwitchHold.Window != hook.WindowFiveHour {
+	if st.Account != "a" || st.SwitchHold == nil || st.SwitchHold.Until != resets || st.SwitchHold.Window != limits.WindowFiveHour {
 		t.Errorf("state: %+v", st)
 	}
 	d := (*recs)[0]
@@ -124,7 +121,7 @@ func TestUsageHoldFallbackAndPastReset(t *testing.T) {
 
 func TestNoUsageMarkerOrSwitchOffRestartsAsBefore(t *testing.T) {
 	r, env, o, recs, _, _ := usageRig(t, Choice{To: &Target{Name: "b", ConfigDir: "/cfg/b"}}, "")
-	env.UsageMarker = func(time.Time) (hook.UsageHandoff, bool) { return hook.UsageHandoff{}, false }
+	env.UsageMarker = func(time.Time) (keepstate.UsageHandoff, bool) { return keepstate.UsageHandoff{}, false }
 	if res, err := Run(env, o); err != nil || res.Switches != 0 || len(*recs) != 0 || len(r.starts) != 2 {
 		t.Fatalf("context handoff: %+v %v recs=%d", res, err, len(*recs))
 	}
@@ -132,43 +129,5 @@ func TestNoUsageMarkerOrSwitchOffRestartsAsBefore(t *testing.T) {
 	o.SwitchOnUsage = false
 	if res, err := Run(env, o); err != nil || res.Switches != 0 || len(*recs) != 0 || hasEnv(r.envs[1], "CLAUDE_CONFIG_DIR=/cfg/b") {
 		t.Fatalf("switch off: %+v %v", res, err)
-	}
-}
-
-// sessionFile writes a hook session state under commonDir.
-func sessionFile(t *testing.T, commonDir, id, cwd string, uh *hook.UsageHandoff) {
-	t.Helper()
-	path := filepath.Join(rotastate.SessionDir(commonDir), id+".json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	err := hook.UpdateState(path, func(st hook.State, _ bool) hook.State {
-		st.SessionID, st.Cwd, st.UsageHandoff = id, cwd, uh
-		return st
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestUsageMarkerPicksNewestForRootAfterSince(t *testing.T) {
-	cd, root, other := t.TempDir(), t.TempDir(), t.TempDir()
-	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	at := func(d time.Duration) string { return base.Add(d).Format(time.RFC3339) }
-	mk := func(w, when string) *hook.UsageHandoff {
-		return &hook.UsageHandoff{Window: w, UsedPct: 90, At: when}
-	}
-	sessionFile(t, cd, "old", root, mk("old", at(-time.Hour)))
-	sessionFile(t, cd, "mid", root, mk("mid", at(time.Minute)))
-	sessionFile(t, cd, "new", root, mk("new", at(2*time.Minute)))
-	sessionFile(t, cd, "elsewhere", other, mk("elsewhere", at(5*time.Minute)))
-	sessionFile(t, cd, "none", root, nil)
-
-	got, ok := UsageMarker(cd, root)(base)
-	if !ok || got.Window != "new" {
-		t.Fatalf("marker = %+v, %v; want window new", got, ok)
-	}
-	if _, ok := UsageMarker(cd, root)(base.Add(10 * time.Minute)); ok {
-		t.Fatal("marker found though every handoff is before since")
 	}
 }

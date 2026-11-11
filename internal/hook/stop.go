@@ -2,6 +2,7 @@ package hook
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/keepstate"
 	"strings"
 	"time"
 
@@ -30,7 +31,7 @@ type StopDecision struct {
 // state. The caller has already established that the session is the
 // orchestrator and found a readable state file (st). handoffPath only
 // appears in the block reason.
-func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath string, now time.Time) StopDecision {
+func DecideStop(in StopIn, st State, set Settings, ho keepstate.Handoff, handoffPath string, now time.Time) StopDecision {
 	d := StopDecision{State: st}
 	if st.HandoffFailed {
 		return d // gave up already: never hold the session again
@@ -40,10 +41,10 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 		return d // a stale reading is not acted on
 	}
 	ctxTrip := st.ContextPct != nil && *st.ContextPct >= float64(set.Threshold)
-	var usage *UsageHandoff
+	var usage *keepstate.UsageHandoff
 	if set.SwitchOnUsage && in.Supervised && !now.Before(in.HoldUntil) {
 		if w, p, r, ok := UsageOf(st.RateLimits); ok && p >= float64(set.UsageThreshold) {
-			usage = &UsageHandoff{Window: w, UsedPct: p, ResetsAt: r, At: stamp.Format(now)}
+			usage = &keepstate.UsageHandoff{Window: w, UsedPct: p, ResetsAt: r, At: stamp.Format(now)}
 		}
 	}
 	if !ctxTrip && usage == nil {
@@ -78,7 +79,7 @@ type handoffRule struct {
 // HandoffFailed at the cap, and otherwise stamps the block into d.State and
 // returns true; the caller then sets Reason. d.Persist is set whenever d.State
 // changed.
-func holdForHandoff(d *StopDecision, set Settings, ho Handoff, now time.Time, r handoffRule) bool {
+func holdForHandoff(d *StopDecision, set Settings, ho keepstate.Handoff, now time.Time, r handoffRule) bool {
 	var blockedAt time.Time
 	if d.State.BlockedAt != "" {
 		blockedAt, _ = stamp.Parse(d.State.BlockedAt)
