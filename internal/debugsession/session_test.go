@@ -134,3 +134,14 @@ func TestMissingSessionWordingIsPinned(t *testing.T) {
 		t.Fatalf("Rm = %v, want %q", err, want)
 	}
 }
+func TestShowReportsReadErrorsAsFailures(t *testing.T) {
+	root := t.TempDir()
+	// a directory where the file should be: readable path, unreadable file
+	if err := os.MkdirAll(filepath.Join(root, ".rota", "debug", "b07.md"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Show(root, "b07")
+	if err == nil || exitOf(err) == exitcode.ExitResolution {
+		t.Fatalf("Show of an unreadable file = %v, want a failure that is not 'not found'", err)
+	}
+}
