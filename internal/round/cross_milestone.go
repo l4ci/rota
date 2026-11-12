@@ -12,14 +12,19 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// activeMilestoneIDs is the milestones that are active, read from be's store
-// when it carries one and from the project's files otherwise.
-func activeMilestoneIDs(root string, be backlog.Backend) ([]string, error) {
-	var store milestone.Store = milestone.FileStore{Root: root}
-	if b, ok := be.(interface{ MilestoneStore() milestone.Store }); ok {
-		store = b.MilestoneStore()
+// milestoneList is the milestones of be's store; a backend without one has
+// none.
+func milestoneList(be backlog.Backend) ([]milestone.Entry, error) {
+	store, ok := backlog.MilestoneStoreOf(be)
+	if !ok {
+		return nil, nil
 	}
-	list, err := store.List()
+	return store.List()
+}
+
+// activeMilestoneIDs is the milestones that are active, read from be's store.
+func activeMilestoneIDs(be backlog.Backend) ([]string, error) {
+	list, err := milestoneList(be)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +85,7 @@ func (c *crossMilestones) loadActive() error {
 		return nil
 	}
 	var err error
-	c.active, err = activeMilestoneIDs(c.root, c.be)
+	c.active, err = activeMilestoneIDs(c.be)
 	c.activeRead = err == nil
 	return err
 }

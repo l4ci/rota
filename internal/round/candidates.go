@@ -445,11 +445,7 @@ func (e Env) WhyEmpty(ctx context.Context, root string, be backlog.Backend, scop
 	}
 	if open == 0 {
 		if ok, evidence := hasConcept(root); ok {
-			var store milestone.Store = milestone.FileStore{Root: root}
-			if b, ok := be.(interface{ MilestoneStore() milestone.Store }); ok {
-				store = b.MilestoneStore()
-			}
-			milestones, err := store.List()
+			milestones, err := milestoneList(be)
 			if err != nil {
 				return Empty{}, err
 			}
@@ -513,10 +509,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	for _, is := range issues {
 		labelled[is.Key] = true
 	}
-	var wf backlog.ItemTracker
-	if be.Capabilities().ItemStatus {
-		wf, _ = be.(backlog.ItemTracker)
-	}
+	wf, _ := backlog.ItemTrackerFor(be)
 	return func(it backlog.Item) bool {
 		if labelled[it.IssueKey()] || e.hasClaimSignal(it) {
 			return true

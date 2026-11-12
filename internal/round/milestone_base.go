@@ -18,11 +18,7 @@ func (e Env) milestoneTarget(root string, be Board, it *backlog.Item) (string, e
 	if len(tagged) == 0 {
 		return "", nil
 	}
-	var store milestone.Store = milestone.FileStore{Root: root}
-	if b, ok := be.(interface{ MilestoneStore() milestone.Store }); ok {
-		store = b.MilestoneStore()
-	}
-	list, err := store.List()
+	list, err := milestoneList(be)
 	if err != nil {
 		return "", err
 	}

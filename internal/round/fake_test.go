@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"slices"
 	"strconv"
@@ -19,6 +20,9 @@ import (
 // wires Env.Forge = r.asForge() and Env.Board = r, so both sides agree on what
 // exists; a file-mode case wires only the Forge.
 type fakeRemote struct {
+	// msRoot is the project root whose milestone files the fake's store reads.
+	msRoot string
+
 	// Backend methods a test never reaches panic on the nil embed.
 	backlog.Backend
 
@@ -407,3 +411,6 @@ func (f *fakeRemote) Comments(ref, kind string) ([]backlog.Comment, error) {
 func (f *fakeRemote) NoteGet(string, string) (string, bool, error) { return "", false, nil }
 func (f *fakeRemote) NotePut(string, string, string) (bool, error) { return false, nil }
 func (f *fakeRemote) NoteRm(string, string) (bool, error)          { return false, nil }
+
+// MilestoneStore is the fake's milestone store: the project files under msRoot.
+func (f *fakeRemote) MilestoneStore() milestone.Store { return milestone.FileStore{Root: f.msRoot} }

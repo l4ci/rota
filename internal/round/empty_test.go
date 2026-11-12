@@ -50,7 +50,7 @@ func TestWhyEmptyConceptHint(t *testing.T) {
 			if tt.milestone {
 				milestoneDoc(t, milestoneRoot, "M01", "planned")
 			}
-			remote := &fakeRemote{}
+			remote := &fakeRemote{msRoot: milestoneRoot}
 			if tt.open {
 				remote.add("1", "open item", "", false, "")
 			}
