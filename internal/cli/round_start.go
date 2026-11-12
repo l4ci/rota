@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -176,6 +177,12 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		ctx := c.Context()
 		cfg := c.deps().Config(root)
 		env := roundEnv(c, ctx, root)
+		// Warn about drift since the last baseline, then take a fresh one: the
+		// round's own changes are what the next status should compare against.
+		warnRepoConfigDrift(c, ctx, root)
+		if err := repoconfig.Record(ctx, c.deps().Git, root); err != nil {
+			c.Warn("repo config baseline not recorded: %v", err)
+		}
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base,
 			Settings: set, DefaultNum: set.Slots, Dispatch: config.Dispatch(cfg),
@@ -370,4 +377,12 @@ func (n *handoffNote) line() string {
 		return l + "\tconsume failed: note left in place"
 	}
 	return l + "\tread it before choosing the slate, then rerun with --consume-handoff"
+}
+
+// warnRepoConfigDrift warns when repo-scope git config moved since the
+// recorded baseline, naming the keys. It says nothing without a baseline.
+func warnRepoConfigDrift(c *Ctx, ctx context.Context, root string) {
+	if dr, err := repoconfig.Check(ctx, c.deps().Git, root); err == nil && !dr.Clean() {
+		c.Warn("repo-scope git config changed since the baseline (%s); linked worktrees share .git/config", dr.Summary())
+	}
 }

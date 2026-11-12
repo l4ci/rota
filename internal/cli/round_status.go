@@ -59,6 +59,7 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 		for _, w := range rep.Warnings {
 			c.Warn("%s", w)
 		}
+		warnRepoConfigDrift(c, ctx, root)
 		d := jsonx.NewObject()
 		d.Set("needsYou", waitRows)
 		d.Set("slots", rowList(rep.Rows))

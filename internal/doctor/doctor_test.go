@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
@@ -1145,5 +1146,35 @@ func TestHookSettingsReadOncePerRun(t *testing.T) {
 	d.optIn()
 	if d.hooks() != first {
 		t.Fatal("settings view was rebuilt during the run")
+	}
+}
+
+func TestRepoConfigCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dr   *repoconfig.Drift
+		warn bool
+	}{
+		{"drift warns naming the keys", &repoconfig.Drift{HasBaseline: true, Added: []string{"core.hookspath"}, Changed: []string{"user.name"}}, true},
+		{"unchanged baseline is silent", &repoconfig.Drift{HasBaseline: true}, false},
+		{"no drift data is silent", nil, false},
+	} {
+		f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+		rep := Run(context.Background(), Input{RepoConfig: tc.dr, Exec: f.exec, Look: f.look})
+		var got *Check
+		for i := range rep.Checks {
+			if rep.Checks[i].Name == "repo config" {
+				got = &rep.Checks[i]
+			}
+		}
+		if !tc.warn {
+			if got != nil {
+				t.Errorf("%s: unexpected %+v", tc.name, *got)
+			}
+			continue
+		}
+		if got == nil || got.Status != Warn || !strings.Contains(got.Detail, "added: core.hookspath") || !strings.Contains(got.Detail, "changed: user.name") {
+			t.Errorf("%s: got %+v", tc.name, got)
+		}
 	}
 }
