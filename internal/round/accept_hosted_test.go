@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"slices"
@@ -44,15 +45,15 @@ func TestAcceptHostedReviewKeepsCompletionGuards(t *testing.T) {
 			f := newMoveFx(t)
 			f.mintReview(t, "12")
 			f.host.capture = "ROTA-DONE ben issues:none\n"
-			want := BlockSlotBusy
+			want := blockedby.SlotBusy
 			switch name {
 			case "blocked without evidence":
 				f.host.capture = "ROTA-BLOCKED ben: wait\n"
 				// A blocked state can settle, but cannot invent review evidence.
-				want = BlockNoIssues
+				want = blockedby.NoIssues
 			case "missing evidence":
 				f.host.capture = "ROTA-DONE ben issues:\n"
-				want = BlockNoIssues
+				want = blockedby.NoIssues
 			case "dirty":
 				if err := os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644); err != nil {
 					t.Fatal(err)

@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
 	"os"
@@ -92,16 +93,16 @@ func TestAssignRefusesBusyOrDirtySlot(t *testing.T) {
 	f := newMoveFx(t)
 	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("pr", pr7) }) // state still busy
 	_, err := f.assign("13", "ben")
-	if by := blockedBy(t, err); by != BlockSlotBusy || !strings.Contains(err.Error(), "slot ben holds 12 (busy") {
+	if by := blockedBy(t, err); by != blockedby.SlotBusy || !strings.Contains(err.Error(), "slot ben holds 12 (busy") {
 		t.Errorf("busy: %v", err)
 	}
 	f.finish(t, "ben", "")
-	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "no PR recorded") {
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "no PR recorded") {
 		t.Errorf("done without a PR: %v", err)
 	}
 	f.finish(t, "ben", pr7)
 	os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("x"), 0o644)
-	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "uncommitted") {
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "uncommitted") {
 		t.Errorf("dirty: %v", err)
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
@@ -146,7 +147,7 @@ func TestAssignOntoDoneSlotWithNoOpenPRNamesBranchAndReconcile(t *testing.T) {
 	f.forge.prs = []tracker.PR{{Number: 8, Branch: "dana/99-other", URL: "https://github.com/o/r/pull/8"}}
 
 	_, err := f.assign("13", "ben")
-	if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "no PR recorded") ||
+	if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "no PR recorded") ||
 		!strings.Contains(err.Error(), branch) || !strings.Contains(err.Error(), "round reconcile") {
 		t.Errorf("refusal: %v", err)
 	}
@@ -159,7 +160,7 @@ func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	f := newMoveFx(t)
 	f.finish(t, "ben", pr7)
 	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
-	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockBriefMissing {
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != blockedby.BriefMissing {
 		t.Fatalf("%v", err)
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
@@ -189,7 +190,7 @@ func TestAssignWithoutAgentPrefersAnEmptySlot(t *testing.T) {
 	}
 	// Both slots now hold running work.
 	f.be.add("15", "Fourth", "M01", false, "## Acceptance\n- [ ] ok")
-	if _, err := f.assign("15", ""); blockedBy(t, err) != BlockNoFreeSlot {
+	if _, err := f.assign("15", ""); blockedBy(t, err) != blockedby.NoFreeSlot {
 		t.Errorf("no free slot: %v", err)
 	}
 }
@@ -224,7 +225,7 @@ func TestQueuedIssueIsHeldAndNotAssignable(t *testing.T) {
 			t.Errorf("%s is held, not a candidate", c.ID)
 		}
 	}
-	if _, err := f.assign("12", "dana"); blockedBy(t, err) != BlockClaimed || !strings.Contains(err.Error(), "transfer") {
+	if _, err := f.assign("12", "dana"); blockedBy(t, err) != blockedby.Claimed || !strings.Contains(err.Error(), "transfer") {
 		t.Errorf("a queued issue is not assignable: %v", err)
 	}
 	// Its footprint and branch count for overlap: 14 names the same file as 12.
@@ -437,7 +438,7 @@ func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
 	f := newMoveFx(t)
 	f.reportIssues(t, "ben", "#139")
 	_, err := f.assign("13", "ben")
-	if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "not an architecture review item") {
+	if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "not an architecture review item") {
 		t.Fatalf("%v", err)
 	}
 	if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
@@ -445,7 +446,7 @@ func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
 	}
 	// a title alone is not trusted either: the registry must have minted it
 	f.be.items["12"].Title = ReviewTitle("cli")
-	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockReviewNotMinted || f.be.items["12"].Closed {
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != blockedby.ReviewNotMinted || f.be.items["12"].Closed {
 		t.Errorf("unminted review title: %v", err)
 	}
 }
@@ -454,7 +455,7 @@ func TestOverlapSkipsClosedIssues(t *testing.T) {
 	t.Run("target slot's own open unmerged issue still overlaps", func(t *testing.T) {
 		f := newMoveFx(t)
 		f.finish(t, "ben", pr7)
-		if _, err := f.assign("14", "ben"); blockedBy(t, err) != BlockOverlap {
+		if _, err := f.assign("14", "ben"); blockedBy(t, err) != blockedby.Overlap {
 			t.Fatalf("ben's PR is open, so 12 is still live: %v", err)
 		}
 	})
@@ -467,13 +468,13 @@ func TestOverlapSkipsClosedIssues(t *testing.T) {
 	})
 	t.Run("live overlap with another slot", func(t *testing.T) {
 		f := newMoveFx(t)
-		if _, err := f.assign("14", "dana"); blockedBy(t, err) != BlockOverlap {
+		if _, err := f.assign("14", "dana"); blockedBy(t, err) != blockedby.Overlap {
 			t.Fatalf("12 is live on ben: %v", err)
 		}
 	})
 	t.Run("busy target slot still refused", func(t *testing.T) {
 		f := newMoveFx(t)
-		if _, err := f.assign("14", "ben"); blockedBy(t, err) != BlockSlotBusy {
+		if _, err := f.assign("14", "ben"); blockedBy(t, err) != blockedby.SlotBusy {
 			t.Fatalf("ben is mid-work, not parkable: %v", err)
 		}
 	})
@@ -513,7 +514,7 @@ func TestQueueKeepsARecordWhenTheSlotRecordsItsPRAgain(t *testing.T) {
 	f.finish(t, "ben", pr7) // the stale sentinel of issue 12, now on issue 13's slot
 	f.be.add("15", "Fourth issue", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/fourth.go")
 	f.be.items["15"].Number = 15
-	if _, err := f.assign("15", "ben"); blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "already queued") {
+	if _, err := f.assign("15", "ben"); blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "already queued") {
 		t.Errorf("a PR queued for another issue is not this slot's PR: %v", err)
 	}
 	q := f.queued()
@@ -568,7 +569,7 @@ func TestAssignOntoAPartialSlotDoesNotQueueIt(t *testing.T) {
 			}
 			continue
 		}
-		if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), kind) {
+		if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), kind) {
 			t.Errorf("%s: err = %v, want slot-busy naming the outcome", kind, err)
 		}
 		if len(f.queued()) != 0 {
@@ -617,7 +618,7 @@ func TestParkableBlockedSlotByPRState(t *testing.T) {
 				}
 				return
 			}
-			if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "slot dana holds 13 (blocked;") {
+			if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "slot dana holds 13 (blocked;") {
 				t.Errorf("%s PR keeps the refusal: %v", state, err)
 			}
 		})
@@ -637,8 +638,8 @@ func TestAssignSkipsParkableSlotWithoutLogin(t *testing.T) {
 	}
 	f.be.add("16", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/other2.go")
 	_, err := f.assign("16", "")
-	if blockedBy(t, err) != BlockNoLogin || !strings.Contains(err.Error(), "ben") {
-		t.Fatalf("err = %v, want %s naming ben", err, BlockNoLogin)
+	if blockedBy(t, err) != blockedby.NoLogin || !strings.Contains(err.Error(), "ben") {
+		t.Fatalf("err = %v, want %s naming ben", err, blockedby.NoLogin)
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
 		t.Errorf("a skipped slot parks nothing: %v", f.queued())

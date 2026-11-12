@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"reflect"
 	"strings"
 	"testing"
@@ -95,7 +96,7 @@ func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 	be := &fakeRemote{claimedBy: "dana@1"}
 	steps := []step{claimStep(be, "12", "ben@1", 1, false, &ownership{reserved: true}, func() error { t.Error("unbind without a claim"); return nil }, nil)}
 	err := runSteps(steps)
-	if blockedBy(t, err) != BlockClaimed {
+	if blockedBy(t, err) != blockedby.Claimed {
 		t.Fatalf("got %v", err)
 	}
 }

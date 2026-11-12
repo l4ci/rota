@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"testing"
 
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -34,7 +35,7 @@ func TestTransferScopeOverlapBlock(t *testing.T) {
 	f = setup()
 	f.env.Round.BlockScopeOverlap = true
 	_, err = f.transfer("12", "nia", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("block: a scope-only clash refuses the move: %v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -197,7 +198,7 @@ func checkActive(reg worker.Registry, set roundcfg.Settings, name string, resumi
 	if slices.Contains(draining, name) {
 		why = "is draining: it finishes the work it holds"
 	}
-	return blocked(BlockDraining, "slot %s %s and takes no new work; the round uses its first %d roster slots (round.slots or --slots)", name, why, len(active))
+	return blocked(blockedby.Draining, "slot %s %s and takes no new work; the round uses its first %d roster slots (round.slots or --slots)", name, why, len(active))
 }
 
 // IdleSlotInRound is IdleSlot over the round's active slots: a slot draining

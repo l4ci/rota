@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
@@ -48,7 +49,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	}
 	s := reg.Slot(o.Slot)
 	if s == nil || s.Task() != worker.NormID(o.Task) || s.ClaimID() == "" {
-		return "", o, blocked(BlockSlotBusy, "slot %s is not assigned %s", o.Slot, o.Task)
+		return "", o, blocked(blockedby.SlotBusy, "slot %s is not assigned %s", o.Slot, o.Task)
 	}
 	it, err := be.Get(s.Task())
 	if err != nil {
@@ -65,7 +66,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	cacheDir := skills.CacheDir(e.getenv())
 	contract, _, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
 	if !ok {
-		return "", o, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+		return "", o, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}
 	if o.Kind == "" {
 		o.Kind = s.Kind()
@@ -74,7 +75,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 		o.Model = resolveModel(s.Model(), pick.Model, set.Model(o.Kind, s.Tier()))
 	}
 	if pick.Model != "" && !e.Worker.ModelAppliesTo(root, o.Kind) {
-		return "", o, blocked(BlockModelLabel, "model:%s cannot apply: the launch command has no {model} placeholder", pick.Model)
+		return "", o, blocked(blockedby.ModelLabel, "model:%s cannot apply: the launch command has no {model} placeholder", pick.Model)
 	}
 	o.Task, o.Branch = s.Task(), s.Branch()
 	t := tierBrief{Kind: o.Kind, Tier: s.Tier(), Model: o.Model, Default: set.Tier, Reason: s.TierReason(),

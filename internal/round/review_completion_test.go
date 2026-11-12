@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 	"testing"
@@ -55,7 +56,7 @@ func TestReviewCompletionSeam(t *testing.T) {
 				}
 				res, err := f.accept("12", mod)
 				if !tc.complete {
-					if blockedBy(t, err) != BlockNoIssues || !strings.Contains(err.Error(), "--issues") {
+					if blockedBy(t, err) != blockedby.NoIssues || !strings.Contains(err.Error(), "--issues") {
 						t.Fatalf("missing evidence: %+v %v", res, err)
 					}
 					if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {

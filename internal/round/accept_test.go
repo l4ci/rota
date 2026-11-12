@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ func TestAcceptRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.reportIssues(t, "ben", "#139")
 		_, err := f.accept("12", func(in *AcceptInput) { in.Issues = []string{"#1"} })
-		if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "needs a PR") {
+		if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "needs a PR") {
 			t.Fatalf("%v", err)
 		}
 		if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
@@ -64,7 +65,7 @@ func TestAcceptRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.be.items["12"].Title = ReviewTitle("cli")
 		f.reportIssues(t, "ben", "#139")
-		if _, err := f.accept("12", nil); blockedBy(t, err) != BlockReviewNotMinted || f.be.items["12"].Closed {
+		if _, err := f.accept("12", nil); blockedBy(t, err) != blockedby.ReviewNotMinted || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})
@@ -74,7 +75,7 @@ func TestAcceptRefusals(t *testing.T) {
 		f.reportIssues(t, "ben", "#139")
 		os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644)
 		_, err := f.accept("12", nil)
-		if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "uncommitted") || f.be.items["12"].Closed {
+		if blockedBy(t, err) != blockedby.SlotBusy || !strings.Contains(err.Error(), "uncommitted") || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})
@@ -82,7 +83,7 @@ func TestAcceptRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.mintReview(t, "12")
 		f.host.status = "working"
-		if _, err := f.accept("12", func(in *AcceptInput) { in.Issues = []string{"#1"} }); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
+		if _, err := f.accept("12", func(in *AcceptInput) { in.Issues = []string{"#1"} }); blockedBy(t, err) != blockedby.SlotBusy || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})
@@ -97,14 +98,14 @@ func TestAcceptRefusals(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.accept("12", nil); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
+			if _, err := f.accept("12", nil); blockedBy(t, err) != blockedby.SlotBusy || f.be.items["12"].Closed {
 				t.Fatalf("%v", err)
 			}
 		})
 	}
 	t.Run("no slot holds the id", func(t *testing.T) {
 		f := newMoveFx(t)
-		if _, err := f.accept("13", nil); blockedBy(t, err) != BlockNoSlotHolds {
+		if _, err := f.accept("13", nil); blockedBy(t, err) != blockedby.NoSlotHolds {
 			t.Fatalf("%v", err)
 		}
 	})

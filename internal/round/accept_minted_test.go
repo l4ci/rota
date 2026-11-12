@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestAcceptRefusesReviewWithoutTrustedMintComment(t *testing.T) {
 			f := newMoveFx(t)
 			f.holdMainMinted(t, tc.author)
 			_, err := f.accept("12", nil)
-			if blockedBy(t, err) != BlockReviewNotMinted || !strings.Contains(err.Error(), "not minted by main") {
+			if blockedBy(t, err) != blockedby.ReviewNotMinted || !strings.Contains(err.Error(), "not minted by main") {
 				t.Fatalf("%v", err)
 			}
 			if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
@@ -60,7 +61,7 @@ func TestAcceptRefusalSaysWriteAccessUncheckableWithoutTrust(t *testing.T) {
 	f.holdMainMinted(t, "maintainer")
 	f.env.Forge = noTrustForge{f.env.Forge}
 	_, err := f.accept("12", nil)
-	if blockedBy(t, err) != BlockReviewNotMinted || !strings.Contains(err.Error(), "write access cannot be checked") {
+	if blockedBy(t, err) != blockedby.ReviewNotMinted || !strings.Contains(err.Error(), "write access cannot be checked") {
 		t.Fatalf("%v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"os"
@@ -67,7 +68,7 @@ func TestAdoptRefusesOverlap(t *testing.T) {
 	root, e, be := adoptFixture(t)
 	writeRegistry(t, root, slot(root, "ben", "ben/13-other", func(o *jsonx.Object) { o.Set("task", "13") }))
 	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("want overlap: %v", err)
 	}
 	if worker.LoadRegistryTolerant(root).Slot("ext-1") != nil {
@@ -96,7 +97,7 @@ func TestAdoptRejectsForeignPath(t *testing.T) {
 func TestAdoptRefusesHeldIssue(t *testing.T) {
 	root, e, be := adoptFixture(t)
 	writeRegistry(t, root, slot(root, "ben", "ben/12-thing", func(o *jsonx.Object) { o.Set("task", "12") }))
-	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"}); blockedBy(t, err) != BlockHeld {
+	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"}); blockedBy(t, err) != blockedby.Held {
 		t.Fatalf("want held: %v", err)
 	}
 }
@@ -106,7 +107,7 @@ func TestAdoptRefusesRegisteredBranch(t *testing.T) {
 	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "13"}); blockedBy(t, err) != BlockRegistered {
+	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "13"}); blockedBy(t, err) != blockedby.Registered {
 		t.Fatalf("want registered: %v", err)
 	}
 }
@@ -264,7 +265,7 @@ func TestAdoptRefusesReclaimedBranch(t *testing.T) {
 	if err == nil {
 		t.Fatal("adopted reclaimed branch, want blocked claimed")
 	}
-	if got := blockedBy(t, err); got != BlockClaimed {
+	if got := blockedBy(t, err); got != blockedby.Claimed {
 		t.Fatalf("blockedBy %q, want claimed", got)
 	}
 	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
@@ -287,7 +288,7 @@ func TestAdoptRefusesReclaimedBranchThroughUmbrella(t *testing.T) {
 	if err == nil {
 		t.Fatalf("adopted reclaimed branch through umbrella: %+v", res)
 	}
-	if got := blockedBy(t, err); got != BlockClaimed {
+	if got := blockedBy(t, err); got != blockedby.Claimed {
 		t.Fatalf("blockedBy %q, want claimed", got)
 	}
 	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
@@ -332,7 +333,7 @@ func TestAdoptRefusesStaleOtherHolder(t *testing.T) {
 	if err == nil {
 		t.Fatal("adopted despite stale holder")
 	}
-	if got := blockedBy(t, err); got != BlockClaimed {
+	if got := blockedBy(t, err); got != blockedby.Claimed {
 		t.Fatalf("blockedBy %q, want claimed", got)
 	}
 }

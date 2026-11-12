@@ -10,14 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/labels"
 )
 
-// Blocked reasons of a bad harness: or model: label (exit 4, `blockedBy`).
-const (
-	BlockHarnessLabel = blockedby.HarnessLabel
-	BlockModelLabel   = blockedby.ModelLabel
-	// BlockDecisionLabel: a bad decision: label.
-	BlockDecisionLabel = blockedby.DecisionLabel
-)
-
 // Decision types of a decision item (a `decision:<type>` label, a `Decision:`
 // field on a file bullet).
 const (
@@ -53,13 +45,13 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 	if !caps.IssueIDs {
 		if m := fileField["Harness"].FindStringSubmatch(it.Line); m != nil {
 			if !harness.Valid(m[1]) {
-				return p, blocked(BlockHarnessLabel, "%s has Harness: %s: harness must be one of %s", it.ID, m[1], strings.Join(harness.Kinds(), ", "))
+				return p, blocked(blockedby.HarnessLabel, "%s has Harness: %s: harness must be one of %s", it.ID, m[1], strings.Join(harness.Kinds(), ", "))
 			}
 			p.Harness = m[1]
 		}
 		if m := fileField["Model"].FindStringSubmatch(it.Line); m != nil {
 			if !ValidModel(m[1]) {
-				return p, blocked(BlockModelLabel, "%s has Model: %s: not a valid model id", it.ID, m[1])
+				return p, blocked(blockedby.ModelLabel, "%s has Model: %s: not a valid model id", it.ID, m[1])
 			}
 			p.Model = m[1]
 		}
@@ -67,22 +59,22 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 	}
 	hs, ms := labelsWith(it.Labels, harness.LabelPrefix), labelsWith(it.Labels, labels.ModelPrefix)
 	if len(hs) > 1 {
-		return p, blocked(BlockHarnessLabel, "%s has more than one harness: label (%s): keep one", it.ID, strings.Join(hs, ", "))
+		return p, blocked(blockedby.HarnessLabel, "%s has more than one harness: label (%s): keep one", it.ID, strings.Join(hs, ", "))
 	}
 	if len(ms) > 1 {
-		return p, blocked(BlockModelLabel, "%s has more than one model: label (%s): keep one", it.ID, strings.Join(ms, ", "))
+		return p, blocked(blockedby.ModelLabel, "%s has more than one model: label (%s): keep one", it.ID, strings.Join(ms, ", "))
 	}
 	if len(hs) == 1 {
 		v := harness.FromLabels(hs)
 		if v == "" {
-			return p, blocked(BlockHarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds(), ", "))
+			return p, blocked(blockedby.HarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds(), ", "))
 		}
 		p.Harness = v
 	}
 	if len(ms) == 1 {
 		v := strings.TrimPrefix(ms[0], labels.ModelPrefix)
 		if !ValidModel(v) {
-			return p, blocked(BlockModelLabel, "%s has label %s: not a valid model id (letters, digits, . _ : / @ -)", it.ID, ms[0])
+			return p, blocked(blockedby.ModelLabel, "%s has label %s: not a valid model id (letters, digits, . _ : / @ -)", it.ID, ms[0])
 		}
 		p.Model = v
 	}
@@ -108,11 +100,11 @@ func DecisionOf(caps backlog.Capabilities, it backlog.Item) (string, error) {
 		case 1:
 			v = strings.TrimPrefix(ds[0], labels.DecisionPrefix)
 		default:
-			return "", blocked(BlockDecisionLabel, "%s has more than one decision: label (%s): keep one", it.ID, strings.Join(ds, ", "))
+			return "", blocked(blockedby.DecisionLabel, "%s has more than one decision: label (%s): keep one", it.ID, strings.Join(ds, ", "))
 		}
 	}
 	if v != DecisionResearch && v != DecisionGrilling {
-		return "", blocked(BlockDecisionLabel, "%s has decision %s: must be %s or %s", it.ID, v, DecisionResearch, DecisionGrilling)
+		return "", blocked(blockedby.DecisionLabel, "%s has decision %s: must be %s or %s", it.ID, v, DecisionResearch, DecisionGrilling)
 	}
 	return v, nil
 }

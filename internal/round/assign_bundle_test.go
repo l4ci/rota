@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"reflect"
 	"strconv"
 	"strings"
@@ -78,21 +79,21 @@ func TestAssignBundleRefusals(t *testing.T) {
 		by     string
 		inText string
 	}{
-		{"oversize", func(f *assignFixture) { f.env.Round.BundleMax = 1 }, "12", bundleOf("15", "16"), BlockBundle, "round.bundleMax"},
+		{"oversize", func(f *assignFixture) { f.env.Round.BundleMax = 1 }, "12", bundleOf("15", "16"), blockedby.Bundle, "round.bundleMax"},
 		{"member held by another slot", func(f *assignFixture) {
 			if _, err := f.assign("15", "dana", nil); err != nil {
 				t.Fatal(err)
 			}
-		}, "12", bundleOf("15"), BlockClaimed, "15"},
+		}, "12", bundleOf("15"), blockedby.Claimed, "15"},
 		{"member in another slot's bundle", func(f *assignFixture) {
 			if _, err := f.assign("16", "dana", bundleOf("17")); err != nil {
 				t.Fatal(err)
 			}
-		}, "12", bundleOf("17"), BlockClaimed, "17"},
-		{"member not ready", nil, "12", bundleOf("15", "14"), BlockNotReady, "14"},
-		{"member closed", func(f *assignFixture) { f.be.items["15"].Closed = true }, "12", bundleOf("15"), BlockBundle, "closed"},
-		{"best-of member", func(f *assignFixture) { f.labelled("15", BestOfLabel) }, "12", bundleOf("15"), BlockBundle, "best-of:2"},
-		{"best-of lead", func(f *assignFixture) { f.labelled("12", BestOfLabel) }, "12", bundleOf("15"), BlockBundle, "best-of:2"},
+		}, "12", bundleOf("17"), blockedby.Claimed, "17"},
+		{"member not ready", nil, "12", bundleOf("15", "14"), blockedby.NotReady, "14"},
+		{"member closed", func(f *assignFixture) { f.be.items["15"].Closed = true }, "12", bundleOf("15"), blockedby.Bundle, "closed"},
+		{"best-of member", func(f *assignFixture) { f.labelled("15", BestOfLabel) }, "12", bundleOf("15"), blockedby.Bundle, "best-of:2"},
+		{"best-of lead", func(f *assignFixture) { f.labelled("12", BestOfLabel) }, "12", bundleOf("15"), blockedby.Bundle, "best-of:2"},
 		{"member overlaps another slot", func(f *assignFixture) {
 			f.env.Round.BlockScopeOverlap = true
 			f.be.add("30", "Holder", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
@@ -100,7 +101,7 @@ func TestAssignBundleRefusals(t *testing.T) {
 			if _, err := f.assign("30", "dana", nil); err != nil {
 				t.Fatal(err)
 			}
-		}, "12", bundleOf("15", "31"), BlockOverlap, "31"},
+		}, "12", bundleOf("15", "31"), blockedby.Overlap, "31"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -140,7 +141,7 @@ func TestAssignBundleMemberWithAnOpenPRIsRefused(t *testing.T) {
 	}
 	f.env.Forge = (&fakeRemote{prs: []tracker.PR{{Number: 104, Branch: "kit/99-other", Body: "Closes #15"}}}).asForge()
 	_, err := f.assign("12", "ben", bundleOf("15"))
-	if by := blockedBy(t, err); by != BlockOpenPR || !strings.Contains(err.Error(), "15") || !strings.Contains(err.Error(), "#104") {
+	if by := blockedBy(t, err); by != blockedby.OpenPR || !strings.Contains(err.Error(), "15") || !strings.Contains(err.Error(), "#104") {
 		t.Fatalf("an open PR on a member refuses the bundle: %v", err)
 	}
 	if len(f.be.claims) != 0 {
@@ -214,7 +215,7 @@ func TestAssignBundleResume(t *testing.T) {
 		t.Errorf("bundle: %v", got)
 	}
 	_, err := f.assign("40", "ben", bundleOf("15"))
-	if by := blockedBy(t, err); by != BlockBundle || !strings.Contains(err.Error(), "rota round transfer") {
+	if by := blockedBy(t, err); by != blockedby.Bundle || !strings.Contains(err.Error(), "rota round transfer") {
 		t.Errorf("a different bundle on a resume: %v", err)
 	}
 }
@@ -238,7 +239,7 @@ func TestInFlightItemsIncludeBundleMembers(t *testing.T) {
 	f.be.add("32", "Clasher", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- get /thing-15\n")
 	f.env.Round.BlockScopeOverlap = true
 	_, err := f.assign("32", "dana", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Errorf("a member's scope blocks another slot: %v", err)
 	}
 	// Queued: the record keeps the bundle and its members stay in flight.

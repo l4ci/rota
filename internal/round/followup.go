@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"regexp"
 	"slices"
 	"sort"
@@ -127,7 +128,7 @@ type ContinueOpts struct {
 // relayed again; Transfer sets the cursor in the same registry write that hands
 // the receiver the queued PR. Everything Transfer checks still holds: the claim, overlap,
 // the harness and account preflight, the receiver's guard. At round.maxBounces
-// it refuses (BlockMaxBounces), and a record that moved since FollowUps read
+// it refuses (blockedby.MaxBounces), and a record that moved since FollowUps read
 // it (another start, a merge) refuses too; either way nothing moves, so the
 // follow-up stays pending.
 func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts) (Transferred, error) {
@@ -137,7 +138,7 @@ func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts
 		return Transferred{}, err
 	}
 	if q := reg.QueuedIssue(u.Issue); q == nil || q.PR != u.PR || q.ReviewSeen != u.Seen {
-		return Transferred{}, blocked(BlockSlotBusy, "the follow-up on %s moved since it was read (started, merged or requeued); nothing to start", u.PR)
+		return Transferred{}, blocked(blockedby.SlotBusy, "the follow-up on %s moved since it was read (started, merged or requeued); nothing to start", u.PR)
 	}
 	store, err := e.Worker.BounceStore(root)
 	if err != nil {
@@ -148,7 +149,7 @@ func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts
 		return Transferred{}, err
 	}
 	capped := func(n int) error {
-		return blocked(BlockMaxBounces, "%s was already sent back %d time(s) (round.maxBounces is %d); %s", u.Issue, n, o.MaxBounces, CapHint(u.Issue))
+		return blocked(blockedby.MaxBounces, "%s was already sent back %d time(s) (round.maxBounces is %d); %s", u.Issue, n, o.MaxBounces, CapHint(u.Issue))
 	}
 	if worker.AtCap(n, o.MaxBounces) {
 		return Transferred{}, capped(n)

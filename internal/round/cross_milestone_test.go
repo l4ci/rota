@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gittest"
 	"strings"
 	"testing"
@@ -45,8 +46,8 @@ func TestCandidateFlagsADependencyOnAnotherActiveMilestone(t *testing.T) {
 	f := crossFixture(t)
 	f.be.details["12"] = "## Acceptance\n- [ ] ok\n\n## Depends on\n- #20"
 	c := candidate(t, f, "12")
-	if c.BlockedBy != BlockCrossMilestone {
-		t.Fatalf("BlockedBy = %q, want %q", c.BlockedBy, BlockCrossMilestone)
+	if c.BlockedBy != blockedby.CrossMilestone {
+		t.Fatalf("BlockedBy = %q, want %q", c.BlockedBy, blockedby.CrossMilestone)
 	}
 	flag := strings.Join(c.CrossMilestone, "\n")
 	if !strings.Contains(flag, "M01") || !strings.Contains(flag, "M02") || !strings.Contains(flag, "20 of") {
@@ -59,7 +60,7 @@ func TestCandidateFlagsASharedTouchWithAnotherActiveMilestone(t *testing.T) {
 	f.be.details["12"] = "## Acceptance\n- [ ] ok\n\n## Touches\n- `post /shared`"
 	c := candidate(t, f, "12")
 	flag := strings.Join(c.CrossMilestone, "\n")
-	if c.BlockedBy != BlockCrossMilestone || !strings.Contains(flag, "M02") || !strings.Contains(flag, "24 of") {
+	if c.BlockedBy != blockedby.CrossMilestone || !strings.Contains(flag, "M02") || !strings.Contains(flag, "24 of") {
 		t.Errorf("BlockedBy = %q, flag = %q", c.BlockedBy, flag)
 	}
 }
@@ -80,7 +81,7 @@ func TestAssignRefusesACrossMilestoneDependencyUnlessAccepted(t *testing.T) {
 	if err == nil {
 		t.Fatal("assign must refuse")
 	}
-	if by := blockedBy(t, err); by != BlockCrossMilestone || !strings.Contains(err.Error(), "M02") {
+	if by := blockedBy(t, err); by != blockedby.CrossMilestone || !strings.Contains(err.Error(), "M02") {
 		t.Errorf("blockedBy = %q, err = %v", by, err)
 	}
 	if _, err := f.assign("12", "", func(o *AssignOpts) { o.AcceptCrossMilestone = true }); err != nil {
@@ -125,7 +126,7 @@ func TestCrossMilestoneChecksUntaggedDependencies(t *testing.T) {
 			if operation == "candidates" {
 				c := candidate(t, f, "12")
 				flag := strings.Join(c.CrossMilestone, "\n")
-				if c.BlockedBy != BlockCrossMilestone || !strings.Contains(flag, "main") || !strings.Contains(flag, "M02") {
+				if c.BlockedBy != blockedby.CrossMilestone || !strings.Contains(flag, "main") || !strings.Contains(flag, "M02") {
 					t.Fatalf("untagged dependency not flagged: %+v", c)
 				}
 			} else {
@@ -133,7 +134,7 @@ func TestCrossMilestoneChecksUntaggedDependencies(t *testing.T) {
 				if err == nil {
 					t.Fatal("assign accepted dependency confined to M02")
 				}
-				if by := blockedBy(t, err); by != BlockCrossMilestone {
+				if by := blockedBy(t, err); by != blockedby.CrossMilestone {
 					t.Fatalf("blocked by %q: %v", by, err)
 				}
 			}
@@ -148,7 +149,7 @@ func TestAssignChecksCrossMilestoneBundleMembers(t *testing.T) {
 	if err == nil {
 		t.Fatal("assign accepted bundle member dependent on M02")
 	}
-	if by := blockedBy(t, err); by != BlockCrossMilestone || !strings.Contains(err.Error(), "15") {
+	if by := blockedBy(t, err); by != blockedby.CrossMilestone || !strings.Contains(err.Error(), "15") {
 		t.Fatalf("blocked by %q: %v", by, err)
 	}
 	if len(f.be.claims) != 0 {
@@ -264,7 +265,7 @@ func TestCrossMilestoneCachesSharedTouchBodies(t *testing.T) {
 		t.Fatalf("candidates: %+v", cs)
 	}
 	for _, c := range cs {
-		if c.BlockedBy != BlockCrossMilestone {
+		if c.BlockedBy != blockedby.CrossMilestone {
 			t.Fatalf("shared touch missed: %+v", c)
 		}
 	}
@@ -305,7 +306,7 @@ func TestCandidateFlagsAnOpenMilestoneDependency(t *testing.T) {
 	f.be.details["12"] = "## Acceptance\n- [ ] ok\n\n## Depends on\n- #24"
 	c := candidate(t, f, "12")
 	flag := strings.Join(c.CrossMilestone, "\n")
-	if c.BlockedBy != BlockCrossMilestone || !strings.Contains(flag, "M01") || !strings.Contains(flag, "M02 (open)") {
+	if c.BlockedBy != blockedby.CrossMilestone || !strings.Contains(flag, "M01") || !strings.Contains(flag, "M02 (open)") {
 		t.Fatalf("open dependency not flagged: %+v", c)
 	}
 }

@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -129,12 +130,12 @@ func TestAssignSkipsDrainingSlot(t *testing.T) {
 	}
 	holdTask(t, f.root, "ben", "51")
 	holdTask(t, f.root, "dana", "52")
-	if _, err := f.assign("12", "", nil); blockedBy(t, err) != BlockNoFreeSlot {
+	if _, err := f.assign("12", "", nil); blockedBy(t, err) != blockedby.NoFreeSlot {
 		t.Fatalf("assign picked a slot outside the round: %v", err)
 	}
 	for _, agent := range []string{"nia", "kit"} {
-		if _, err := f.assign("12", agent, nil); blockedBy(t, err) != BlockDraining {
-			t.Fatalf("assign --agent %s: %v, want %q", agent, err, BlockDraining)
+		if _, err := f.assign("12", agent, nil); blockedBy(t, err) != blockedby.Draining {
+			t.Fatalf("assign --agent %s: %v, want %q", agent, err, blockedby.Draining)
 		}
 	}
 }

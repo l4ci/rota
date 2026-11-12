@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestReclaimRefusesAnUnverifiableSlotWithoutForce(t *testing.T) {
 	f.env.Snapshot = nil // the host cannot be asked
 	unverifiableBen(f, "host-unreachable")
 	_, err := f.reclaim("ben", nil)
-	if blockedBy(t, err) != BlockUnverifiable {
+	if blockedBy(t, err) != blockedby.Unverifiable {
 		t.Fatalf("an unverifiable slot: %v", err)
 	}
 	if got := err.Error(); !strings.Contains(got, "host-unreachable") || !strings.Contains(got, "--force") {
@@ -41,7 +42,7 @@ func TestReclaimForceOnAnUnverifiableSlotStillNeedsTheHost(t *testing.T) {
 	f.env.Snapshot = nil
 	unverifiableBen(f, "stale-handle")
 	_, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true })
-	if blockedBy(t, err) != BlockLiveAgent {
+	if blockedBy(t, err) != blockedby.LiveAgent {
 		t.Fatalf("--force with no host to kill through: %v", err)
 	}
 	if !strings.Contains(err.Error(), "stale-handle") {

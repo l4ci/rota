@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -178,7 +179,7 @@ func TestAssignRefusals(t *testing.T) {
 	f := newAssignFixture(t)
 
 	_, err := f.assign("14", "ben", nil)
-	if by := blockedBy(t, err); by != BlockNotReady || !strings.Contains(err.Error(), "criteria") {
+	if by := blockedBy(t, err); by != blockedby.NotReady || !strings.Contains(err.Error(), "criteria") {
 		t.Errorf("no criteria: %v", err)
 	}
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.host.spawned) != 0 {
@@ -196,19 +197,19 @@ func TestAssignRefusals(t *testing.T) {
 	}
 
 	f.env.HolderPID = 999
-	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockNoRound {
+	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != blockedby.NoRound {
 		t.Errorf("a process without the lease: %v", err)
 	}
 	f.env.HolderPID = 100
 
 	f.be.claimedBy = "dana@1"
-	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockClaimed || !strings.Contains(err.Error(), "dana@1") {
+	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != blockedby.Claimed || !strings.Contains(err.Error(), "dana@1") {
 		t.Errorf("claimed elsewhere: %v", err)
 	}
 	f.be.claimedBy = ""
 
 	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
-	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockBriefMissing {
+	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != blockedby.BriefMissing {
 		t.Errorf("missing brief: %v", err)
 	}
 	f.env.Round = f.set
@@ -258,7 +259,7 @@ func TestAssignOverlapAndAcceptOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.assign("13", "dana", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("13 overlaps 12: %v", err)
 	}
 	var b *BlockedError
@@ -287,7 +288,7 @@ func TestAssignScopeOverlapBlock(t *testing.T) {
 	}
 	f.env.Round.BlockScopeOverlap = true
 	_, err = f.assign("31", "dana", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("block mode refuses a scope-only clash: %v", err)
 	}
 	var b *BlockedError
@@ -306,7 +307,7 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.assign("13", "ben", nil); blockedBy(t, err) != BlockSlotBusy {
+	if _, err := f.assign("13", "ben", nil); blockedBy(t, err) != blockedby.SlotBusy {
 		t.Errorf("ben holds 12: %v", err)
 	}
 	// No --agent: the next idle roster slot, in roster order.
@@ -315,7 +316,7 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 		t.Fatalf("first idle slot is dana: %v %+v", err, res)
 	}
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
-	if _, err := f.assign("15", "", nil); blockedBy(t, err) != BlockNoFreeSlot {
+	if _, err := f.assign("15", "", nil); blockedBy(t, err) != blockedby.NoFreeSlot {
 		t.Errorf("both slots busy: %v", err)
 	} else if _, err := f.assign("15", "", nil); strings.Contains(err.Error(), "not provisioned") {
 		t.Errorf("an all-busy round is not unprovisioned: %v", err)
@@ -329,7 +330,7 @@ func TestAssignNoFreeSlotNamesUnprovisionedRosterSlots(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.assign("12", "", nil)
-	if blockedBy(t, err) != BlockNoFreeSlot {
+	if blockedBy(t, err) != blockedby.NoFreeSlot {
 		t.Fatalf("want no free slot: %v", err)
 	}
 	for _, want := range []string{"not provisioned", "ben, dana", "rota round start"} {
@@ -354,7 +355,7 @@ func TestAssignNoFreeSlotMixesUnprovisionedAndBusy(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.assign("13", "", func(o *AssignOpts) { o.AcceptOverlap = true })
-	if blockedBy(t, err) != BlockNoFreeSlot {
+	if blockedBy(t, err) != blockedby.NoFreeSlot {
 		t.Fatalf("want no free slot: %v", err)
 	}
 	for _, want := range []string{"not provisioned", "dana", "the other slots are busy"} {
@@ -427,7 +428,7 @@ func TestAssignRacingOnOneSlotRefusesTheLaterWriter(t *testing.T) {
 			t.Errorf("reconcile reports %d %s findings: %+v", count, kind, out.Drift)
 		}
 	}
-	if blockedBy(t, err) != BlockSlotBusy {
+	if blockedBy(t, err) != blockedby.SlotBusy {
 		t.Fatalf("the later writer must be refused as slot-busy: %v", err)
 	}
 	reg := worker.LoadRegistryTolerant(f.root)
@@ -487,7 +488,7 @@ func TestAssignBatchCap(t *testing.T) {
 		t.Fatalf("under the cap: %v", err)
 	}
 	_, err := f.assign("13", "dana", batch)
-	if by := blockedBy(t, err); by != BlockBatch {
+	if by := blockedBy(t, err); by != blockedby.Batch {
 		t.Fatalf("one open of batch 1 refuses the next: %v", err)
 	}
 	var b *BlockedError
@@ -500,7 +501,7 @@ func TestAssignBatchCap(t *testing.T) {
 	}
 	// Unset is no limit.
 	f.env.Round = f.set
-	if _, err := f.assign("15", "", func(o *AssignOpts) { o.AcceptOverlap = true }); blockedBy(t, err) == BlockBatch {
+	if _, err := f.assign("15", "", func(o *AssignOpts) { o.AcceptOverlap = true }); blockedBy(t, err) == blockedby.Batch {
 		t.Errorf("batch 0 never refuses: %v", err)
 	}
 }
@@ -628,7 +629,7 @@ func TestAssignUndoesWhenNothingWasSent(t *testing.T) {
 	wt := filepath.Join(f.root, ".worktrees", "ben")
 	os.WriteFile(filepath.Join(wt, "scratch.txt"), []byte("wip"), 0o644)
 	_, err := f.assign("12", "ben", nil)
-	if blockedBy(t, err) != BlockSlotBusy {
+	if blockedBy(t, err) != blockedby.SlotBusy {
 		t.Fatalf("a slot holding work is busy: %v", err)
 	}
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
@@ -874,7 +875,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	gr := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	gr.install(g)
 	g.host.name = "herdr"
-	if _, err := g.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" }); blockedBy(t, err) != BlockNoTierMap {
+	if _, err := g.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" }); blockedBy(t, err) != blockedby.NoTierMap {
 		t.Fatalf("a custom {model} command with no map is refused: %v", err)
 	}
 	if len(gr.calls) != 0 || g.host.launch != "" {
@@ -892,7 +893,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 		hint string
 	}{
 		"no codex":      {rig: codexRig{noCodex: true}, exit: exitcode.ExitUnavailable},
-		"flag missing":  {rig: codexRig{version: "codex-cli 0.160.1\n", noFlag: "--no-daemon", loggedIn: true}, by: BlockCodexFlags},
+		"flag missing":  {rig: codexRig{version: "codex-cli 0.160.1\n", noFlag: "--no-daemon", loggedIn: true}, by: blockedby.CodexFlags},
 		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: exitcode.ExitUnavailable, hint: "codex login"},
 		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: exitcode.ExitUnavailable},
 	}
@@ -1028,7 +1029,7 @@ func TestCandidatesMarkIssuesWithAnOpenPR(t *testing.T) {
 func TestAssignRefusesAnIssueWithAnOpenPR(t *testing.T) {
 	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
 	_, err := f.assign("12", "dana", nil)
-	if by := blockedBy(t, err); by != BlockOpenPR || !strings.Contains(err.Error(), "#104") {
+	if by := blockedBy(t, err); by != blockedby.OpenPR || !strings.Contains(err.Error(), "#104") {
 		t.Fatalf("open PR must refuse and name it: %v", err)
 	}
 	if len(f.be.claims) != 0 || f.host.sent != "" {
@@ -1148,9 +1149,9 @@ func TestAssignRefusesBadHarnessAndModelLabels(t *testing.T) {
 		mod    func(*AssignOpts)
 		named  string
 	}{
-		"unknown harness": {labels: []string{"harness:gemini"}, by: BlockHarnessLabel, named: "harness:gemini"},
-		"two harness":     {labels: []string{"harness:claude", "harness:codex"}, by: BlockHarnessLabel, named: "harness:codex"},
-		"two model":       {labels: []string{"model:a", "model:b"}, by: BlockModelLabel, named: "model:b"},
+		"unknown harness": {labels: []string{"harness:gemini"}, by: blockedby.HarnessLabel, named: "harness:gemini"},
+		"two harness":     {labels: []string{"harness:claude", "harness:codex"}, by: blockedby.HarnessLabel, named: "harness:codex"},
+		"two model":       {labels: []string{"model:a", "model:b"}, by: blockedby.ModelLabel, named: "model:b"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newAssignFixture(t)
@@ -1330,8 +1331,8 @@ func TestAssignSkipsSlotWhoseAccountHasNoLogin(t *testing.T) {
 func TestAssignExplicitSlotWithoutLoginRefusesWithHint(t *testing.T) {
 	f := noLoginFixture(t)
 	_, err := f.assign("12", "ben", nil)
-	if blockedBy(t, err) != BlockNoLogin {
-		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	if blockedBy(t, err) != blockedby.NoLogin {
+		t.Fatalf("err = %v, want %s", err, blockedby.NoLogin)
 	}
 	for _, want := range []string{"rota worker account assign", "claude /login", "CLAUDE_CONFIG_DIR="} {
 		if !strings.Contains(err.Error(), want) {
@@ -1349,8 +1350,8 @@ func TestAssignResumingHolderWithoutLoginRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.assign("12", "", nil)
-	if blockedBy(t, err) != BlockNoLogin {
-		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	if blockedBy(t, err) != blockedby.NoLogin {
+		t.Fatalf("err = %v, want %s", err, blockedby.NoLogin)
 	}
 }
 
@@ -1362,8 +1363,8 @@ func TestAssignRefusesWhenEveryFreeSlotHasNoLogin(t *testing.T) {
 		}
 	}
 	res, err := f.assign("12", "", nil)
-	if blockedBy(t, err) != BlockNoLogin {
-		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	if blockedBy(t, err) != blockedby.NoLogin {
+		t.Fatalf("err = %v, want %s", err, blockedby.NoLogin)
 	}
 	if !strings.Contains(err.Error(), "every free roster slot") || !strings.Contains(err.Error(), "ben") || !strings.Contains(err.Error(), "dana") {
 		t.Errorf("message %q should name the refusal and both slots", err)
@@ -1456,8 +1457,8 @@ func TestAssignSkipsALimitedAccount(t *testing.T) {
 func TestAssignRefusesQuotaNamingEveryExhaustedAccount(t *testing.T) {
 	f := limitedFixture(t, map[string]int{"a": 100, "b": 100})
 	_, err := f.assign("12", "ben", nil)
-	if got := blockedBy(t, err); got != BlockQuota {
-		t.Fatalf("blockedBy %q, want %q (%v)", got, BlockQuota, err)
+	if got := blockedBy(t, err); got != blockedby.Quota {
+		t.Fatalf("blockedBy %q, want %q (%v)", got, blockedby.Quota, err)
 	}
 	for _, name := range []string{"a", "b"} {
 		if !strings.Contains(err.Error(), name) {
@@ -1532,7 +1533,7 @@ func TestAssignRacingOnOneSlotAndIssueKeepsTheWinnersClaim(t *testing.T) {
 	if !fired || firstErr != nil || !first.Dispatched {
 		t.Fatalf("first assign: fired=%v dispatched=%v err=%v", fired, first.Dispatched, firstErr)
 	}
-	if blockedBy(t, err) != BlockSlotBusy {
+	if blockedBy(t, err) != blockedby.SlotBusy {
 		t.Fatalf("the later writer is refused as slot-busy: %v", err)
 	}
 	s := worker.LoadRegistryTolerant(f.root).Slot("ben")

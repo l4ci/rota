@@ -222,10 +222,10 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 func (e Env) checkStaleClaim(ctx context.Context, root string, be Board, key tracker.IssueKey, holder string) error {
 	st, err := statusOf(be, key.String())
 	if err != nil {
-		return blocked(BlockNotStale, "cannot verify claim %s on %s: %v", holder, key.Ref(), err)
+		return blocked(blockedby.NotStale, "cannot verify claim %s on %s: %v", holder, key.Ref(), err)
 	}
 	if st == nil || st.Claim != holder {
-		return blocked(BlockNotStale, "claim %s is not the current holder of %s", holder, key.Ref())
+		return blocked(blockedby.NotStale, "claim %s is not the current holder of %s", holder, key.Ref())
 	}
 	claims, warnings := e.StaleClaims(ctx, root, be, []tracker.IssueKey{key})
 	for _, c := range claims {
@@ -233,5 +233,5 @@ func (e Env) checkStaleClaim(ctx context.Context, root string, be Board, key tra
 			return nil
 		}
 	}
-	return blocked(BlockNotStale, "claim %s on %s is not stale (or activity cannot be verified): %s", holder, key.Ref(), strings.Join(warnings, "; "))
+	return blocked(blockedby.NotStale, "claim %s on %s is not stale (or activity cannot be verified): %s", holder, key.Ref(), strings.Join(warnings, "; "))
 }
