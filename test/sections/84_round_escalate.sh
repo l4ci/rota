@@ -17,7 +17,7 @@ chmod +x "$FK/bin/gh" "$FK/bin/herdr"
 # A PATH without any herdr: only gh (the fake) and what the fakes themselves need.
 cp "$FK/bin/gh" "$FK/nobin/gh"
 for tool in bash sh env git python3 dirname cat; do
-  real="$(command -v "$tool" || true)"
+  real="$(type -P "$tool" || true)"
   [ -n "$real" ] && ln -s "$real" "$FK/nobin/$tool"
 done
 

@@ -43,3 +43,22 @@ worktree_guard_check() {
   printf 'error: the run changed the worktrees of %s (< before, > after):\n%s\n' "$2" "$d" >&2
   return 1
 }
+
+# repo_config_snapshot <repo>: the repo's local user.* git config, one key=value
+# per line (branch.* and remote.* change legitimately while workers run). Linked worktrees share it, so a fixture that writes an identity here
+# makes every slot commit as that identity (#3133).
+repo_config_snapshot() {
+  git -C "$1" config --local --list 2>/dev/null | { grep -E '^user\.' || true; } | sort
+}
+
+# repo_config_guard_check <before-file> <repo>: fail, naming the difference, when
+# the repo's local config is not what repo_config_snapshot recorded.
+repo_config_guard_check() {
+  local now d
+  now="$(mktemp)" || return 1
+  repo_config_snapshot "$2" > "$now"
+  if d="$(diff "$1" "$now")"; then rm -f "$now"; return 0; fi
+  rm -f "$now"
+  printf 'error: the run changed the local git config of %s (< before, > after):\n%s\n' "$2" "$d" >&2
+  return 1
+}

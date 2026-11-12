@@ -155,6 +155,10 @@ isolate_env "$RUN_TMP/iso"
 HAS_GIT=0; [ -e "$REPO/.git" ] && HAS_GIT=1
 WORKTREES_BEFORE="$(mktemp)" || exit 1
 [ "$HAS_GIT" = 0 ] || worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
+# Same for the repo's local git config (#3133): a fixture identity written there
+# is shared by every linked worktree.
+CONFIG_BEFORE="$(mktemp)" || exit 1
+[ "$HAS_GIT" = 0 ] || repo_config_snapshot "$REPO" > "$CONFIG_BEFORE"
 
 # Snapshot the checkout read-only. A difference may be a leak OR legitimate
 # concurrent work; never restore it. The explicit post-loop check survives
@@ -191,7 +195,7 @@ _(none active — set with `/rota-vision`)_
 
 ## Milestones
 EOF
-echo '{"bugs":0,"features":0,"tasks":0,"milestones":0}' > .rota/counters.json
+git -C "$TMP" config user.email t@t && git -C "$TMP" config user.name t
 echo '{"active":[]}' > .rota/status.json
 
 git init -q
@@ -239,8 +243,9 @@ LEAKED=0
 if [ "$HAS_GIT" = 1 ]; then
   python3 "$TESTDIR/lib/checkout-guard.py" check "$REPO" "$REPO_SNAPSHOT" "$SMOKE_DIAGNOSTICS" || LEAKED=1
   worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || LEAKED=1
+  repo_config_guard_check "$CONFIG_BEFORE" "$REPO" || LEAKED=1
 fi
-rm -f "$WORKTREES_BEFORE"
+rm -f "$WORKTREES_BEFORE" "$CONFIG_BEFORE"
 # Temp-dir guard (#110): everything the run made is under $RUN_TMP. Entries
 # other than the runner's own were left behind by sections or helpers; report
 # the count so growth shows up, then the EXIT trap removes it all.

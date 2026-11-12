@@ -10,7 +10,7 @@ TMP_GT="$(mktemp -d)"
 trap 'rm -rf "$TMP_GT"' EXIT
 
 GT_BIN="$TMP_GT/fakebin"; mkdir -p "$GT_BIN"
-REAL_GIT="$(command -v git)"
+REAL_GIT="$(type -P git)"
 cp "$TESTDIR/fakes/fake_forge.py" "$GT_BIN/forge.py"
 for t in gh glab; do printf '#!/usr/bin/env bash\nFORGE_TOOL=%s exec python3 "%s/forge.py" "$@"\n' "$t" "$GT_BIN" > "$GT_BIN/$t"; chmod +x "$GT_BIN/$t"; done
 # broken-check shim: a git whose merge-base always dies with 128

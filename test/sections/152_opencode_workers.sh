@@ -179,7 +179,7 @@ pass "agents write emits .opencode/agents/rota-<role>.md for the three roles"
 
 # doctor: the opencode row shows the version and the unguarded note, never a version gate.
 DRB="$TMP_OC/drbin"
-mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/opencode" "$FKB/herdr" "$DRB/"
+mkdir -p "$DRB" && ln -s "$(type -P git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/opencode" "$FKB/herdr" "$DRB/"
 [ ! -e "$FKB/opencode.fake" ] || cp "$FKB/opencode.fake" "$DRB/"
 DR_ENV=(ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$TMP_OC/dc")
 doctor_run "$OC" "${DR_ENV[@]}"

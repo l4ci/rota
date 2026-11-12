@@ -147,7 +147,7 @@ cxc config set round.accounts "[]" >/dev/null
 
 # doctor: the codex check passes on the default home, then fails on an account that lost its login.
 DRB="$TMP_CX/drbin"
-mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/codex" "$FKB/herdr" "$DRB/"
+mkdir -p "$DRB" && ln -s "$(type -P git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/codex" "$FKB/herdr" "$DRB/"
 DR_ENV=(ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$DEFH")
 doctor_run "$CX" "${DR_ENV[@]}"
 [ "$(doctor_check_field codex status)" = "pass" ] || fail "doctor codex should pass with the default home logged in: $OUT"

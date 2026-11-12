@@ -87,7 +87,7 @@ cd ..
 echo "spike add no orphan branch on file-collision"
 mkdir spike-orphan && cd spike-orphan
 git init -q
-git config user.email t@t && git config user.name t
+git -C "$PWD" config user.email t@t && git -C "$PWD" config user.name t
 git checkout -q -b main 2>/dev/null || git branch -m main
 echo "x" > f && git add f && git commit -q -m "seed"
 mkdir -p .rota/spikes

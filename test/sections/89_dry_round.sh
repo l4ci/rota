@@ -37,7 +37,7 @@ chmod +x "$FK/bin/herdr" "$FK/bin/gh"
 : > "$FK/herdr/pane.txt"
 
 # doctor's tool lookup: its own PATH, so only these fakes (and real git) exist.
-ln -s "$(command -v git)" "$FK/doctor/git"; printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/jq"; chmod +x "$FK/doctor/jq"
+ln -s "$(type -P git)" "$FK/doctor/git"; printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/jq"; chmod +x "$FK/doctor/jq"
 # The bare origin names no forge, so doctor (a reader) assumes github and asks gh (#889).
 printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/gh"; chmod +x "$FK/doctor/gh"
 # Doctor's PATH holds only these fakes, so the shared fake gets a bash to run on.
@@ -57,7 +57,7 @@ git init -q --bare -b main "$ORIGIN"
 git clone -q "$ORIGIN" "$DY" 2>/dev/null
 (
   cd "$DY" && git checkout -q -b main 2>/dev/null
-  git config user.email t@t && git config user.name t
+  git -C "$DY" config user.email t@t && git -C "$DY" config user.name t
   mkdir -p .rota/milestones skills/references
   printf '.rota/\n.worktrees/\n' > .gitignore
   cp "$WORKER_CONTRACT" skills/references/worker-contract.md

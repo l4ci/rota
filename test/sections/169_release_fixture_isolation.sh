@@ -9,7 +9,7 @@ mkdir -p "$TMP_RFI/proj/.rota" "$TMP_RFI/empty" "$TMP_RFI/bin"
 printf '{"round":{"dispatch":"solo"}}\n' > "$TMP_RFI/proj/.rota/config.json"
 git -C "$TMP_RFI/proj" init -q
 printf '.worktrees/\n' > "$TMP_RFI/proj/.gitignore"
-ln -s "$(command -v git)" "$TMP_RFI/bin/git"
+ln -s "$(type -P git)" "$TMP_RFI/bin/git"
 printf '#!/bin/sh\nexit 0\n' > "$TMP_RFI/bin/jq"
 chmod +x "$TMP_RFI/bin/jq"
 printf 'ROTA-BLOCKED sam: fixture only\n' > "$TMP_RFI/pane.txt"

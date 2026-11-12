@@ -106,7 +106,7 @@ RC=0; OUT=$(ek knowledge stats --external) || RC=$?
 pass "stats --external prints bullets and bytes per topic"
 
 # Doctor looks tools up in ROTA_TEST_DOCTOR_PATH, so no real codex or forge CLI runs.
-EKBIN="$TMP_EK/bin"; mkdir -p "$EKBIN"; ln -s "$(command -v git)" "$EKBIN/git"
+EKBIN="$TMP_EK/bin"; mkdir -p "$EKBIN"; ln -s "$(type -P git)" "$EKBIN/git"
 RC=0; OUT=$(ROTA_TEST_DOCTOR_PATH="$EKBIN" ek doctor 2>/dev/null) || RC=$?
 python3 -c '
 import json,sys
