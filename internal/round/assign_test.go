@@ -1035,13 +1035,54 @@ func TestAssignRefusesAnIssueWithAnOpenPR(t *testing.T) {
 	if len(f.be.claims) != 0 || f.host.sent != "" {
 		t.Fatal("a refusal must write nothing")
 	}
-	if _, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {
+	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {
 		t.Fatalf("--accept-open-pr is a deliberate redo: %v", err)
 	}
 }
 
-// A redo onto an issue whose PR is open starts on that PR's head: the slot is
-// not "done" until its own worker says so (#2074).
+func TestAssignAcceptOpenPRRefusesAnotherAgentsBranch(t *testing.T) {
+	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
+	beforeBranches := gittest.Run(t, f.root, "branch", "--list")
+	beforeRegistry, err := os.ReadFile(worker.RegistryPath(f.root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true })
+	if by := blockedBy(t, err); by != blockedby.OpenPR {
+		t.Fatalf("want open PR refusal, got %v", err)
+	}
+	for _, want := range []string{"#104", "ben/12-add-the-round-assign", "round transfer 12 --to dana"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal must name %q: %v", want, err)
+		}
+	}
+	if len(f.be.claims) != 0 || len(f.be.notes) != 0 || len(f.be.bstates) != 0 || f.host.sent != "" {
+		t.Fatal("refusal must not claim, mark, comment or dispatch")
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("dana"); s.Task() != "" || s.ClaimID() != "" || s.Branch() != "park/dana" || s.AwaitingDone() {
+		t.Fatalf("refusal changed slot: %v", s)
+	}
+	if got := gittest.Run(t, f.root, "branch", "--list"); got != beforeBranches {
+		t.Fatalf("refusal changed branches:\nbefore: %s\nafter: %s", beforeBranches, got)
+	}
+	if got, err := os.ReadFile(worker.RegistryPath(f.root)); err != nil || string(got) != string(beforeRegistry) {
+		t.Fatalf("refusal changed registry: %s (read error: %v)", got, err)
+	}
+}
+
+func TestAssignAcceptOpenPRMatchedOnlyByBody(t *testing.T) {
+	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "feature/round-assign", Body: "Closes #12"})
+	res, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := worker.LoadRegistryTolerant(f.root).Slot("dana")
+	if s.Task() != "12" || s.Branch() != res.Branch || !s.AwaitingDone() || !res.Dispatched {
+		t.Fatalf("body-only match must still bind, await done and dispatch: %+v, %v", res, s)
+	}
+}
+
+// An accepted redo of an open PR is not "done" until its own worker says so (#2074).
 func TestAssignAcceptOpenPRMarksTheSlotAwaitingDone(t *testing.T) {
 	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {

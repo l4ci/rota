@@ -147,6 +147,14 @@ func TestAssignBundleMemberWithAnOpenPRIsRefused(t *testing.T) {
 	if len(f.be.claims) != 0 {
 		t.Errorf("claims: %v", f.be.claims)
 	}
+	_, err = f.assign("12", "ben", func(o *AssignOpts) { o.Bundle = []string{"15"}; o.AcceptOpenPR = true })
+	if by := blockedBy(t, err); by != blockedby.OpenPR || !strings.Contains(err.Error(), "kit/99-other") || !strings.Contains(err.Error(), "round transfer 15 --to ben") {
+		t.Fatalf("another agent's round head must still refuse a bundle member: %v", err)
+	}
+	if len(f.be.claims) != 0 || worker.LoadRegistryTolerant(f.root).Slot("ben").Task() != "" {
+		t.Fatal("refusal must not claim or bind the bundle")
+	}
+	f.env.Forge = (&fakeRemote{prs: []tracker.PR{{Number: 104, Branch: "feature/bundle", Body: "Closes #15"}}}).asForge()
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Bundle = []string{"15"}; o.AcceptOpenPR = true }); err != nil {
 		t.Fatalf("--accept-open-pr: %v", err)
 	}
