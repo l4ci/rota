@@ -258,7 +258,7 @@ func workClaims(be backlog.Backend, items []*workItem, branch string) (changed b
 	if err != nil {
 		return false, err
 	}
-	tr, _ := be.(backlog.ItemTracker)
+	tr, _ := backlog.ItemTrackerFor(be)
 	for _, it := range items {
 		if it.missing, err = readyReasons(be, it.id); err != nil {
 			return changed, err

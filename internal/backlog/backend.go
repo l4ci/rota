@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 
 	"github.com/l4ci/rota/internal/config"
+	ms "github.com/l4ci/rota/internal/milestone"
 )
 
 // Backend is the read side of a backlog, whichever store holds it.
@@ -133,6 +134,27 @@ func Optional[T any](be Backend, has func(Capabilities) bool) (T, bool) {
 	}
 	v, ok := be.(T)
 	return v, ok
+}
+
+// ItemTrackerFor is be's ItemTracker when it declares ItemStatus: the one
+// gate for callers that degrade without status and notes (no error, unlike
+// ItemTrackerOf).
+func ItemTrackerFor(be Backend) (ItemTracker, bool) {
+	return Optional[ItemTracker](be, func(c Capabilities) bool { return c.ItemStatus })
+}
+
+// MilestoneStorer is a backend that owns a milestone store: the file backend
+// and both issue backends.
+type MilestoneStorer interface{ MilestoneStore() ms.Store }
+
+// MilestoneStoreOf is be's milestone store; ok is false for a backend (or nil)
+// that has none. No capability gates it: every real backend has a store.
+func MilestoneStoreOf(be Backend) (ms.Store, bool) {
+	s, ok := be.(MilestoneStorer)
+	if !ok {
+		return nil, false
+	}
+	return s.MilestoneStore(), true
 }
 
 // CapabilitiesFor is what Open's backend will report, from the loaded config

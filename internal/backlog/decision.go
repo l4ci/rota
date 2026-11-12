@@ -42,7 +42,7 @@ func (f *File) MilestoneStore() ms.Store {
 // idempotent: a line for ref already there is left alone. An item with no
 // milestone, or a backend with no milestone store, logs nothing and returns "".
 func LogDecision(be Backend, it *Item, ref, gist string) (string, error) {
-	s, ok := be.(interface{ MilestoneStore() ms.Store })
+	st, ok := MilestoneStoreOf(be)
 	if !ok {
 		return "", nil
 	}
@@ -50,7 +50,6 @@ func LogDecision(be Backend, it *Item, ref, gist string) (string, error) {
 	if len(mids) == 0 {
 		return "", nil
 	}
-	st := s.MilestoneStore()
 	text, err := st.Show(mids[0])
 	if err != nil {
 		return "", err

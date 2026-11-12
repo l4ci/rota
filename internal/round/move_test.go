@@ -70,6 +70,8 @@ func newMoveFx(t *testing.T) *moveFx {
 	f := &moveFx{now: time.Now(), host: &hostFake{}, forge: &fakeRemote{comments: map[string][]string{}}}
 	f.be = f.forge
 	f.root = newRepo(t, nil)
+	f.forge.msRoot = f.root
+	milestoneDoc(t, f.root, "M01", "active")
 	for p, c := range map[string]string{"skills/references/worker-contract.md": "contract", "internal/cli/round.go": "x"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(f.root, p)), 0o755); err != nil {
 			t.Fatal(err)

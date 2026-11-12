@@ -119,3 +119,18 @@ func TestAdoptClaimWithoutHistoryWarnsUnavailable(t *testing.T) {
 		t.Errorf("warnings %v", warnings)
 	}
 }
+
+// A backend with no milestone store has no milestones: the lookup degrades to
+// an empty list instead of reading the project's files behind its back.
+func TestActiveMilestoneIDsWithoutStore(t *testing.T) {
+	root := newRepo(t, nil)
+	milestoneDoc(t, root, "M01", "active")
+	be := struct{ backlog.Backend }{}
+	ids, err := activeMilestoneIDs(be)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("activeMilestoneIDs = %v on a backend with no store, want none", ids)
+	}
+}
