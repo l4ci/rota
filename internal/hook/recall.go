@@ -10,6 +10,39 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 )
 
+// RecallRequest supplies the process reads needed for Edit/Write recall.
+// Entries queries the project at cwd for an absolute file path.
+type RecallRequest struct {
+	Payload    Payload
+	DefaultCwd string
+	Entries    func(cwd, file string) ([]knowledge.PathEntry, error)
+	CommonDir  func(cwd string) (string, error)
+	Now        func() time.Time
+}
+
+// DecideRecall resolves the edited path and emits unseen project context.
+// Missing input, lookup failures and failed receipt writes all pass silently.
+func DecideRecall(in RecallRequest) string {
+	tool := in.Payload.String("tool_name")
+	file := in.Payload.String("tool_input", "file_path")
+	if (tool != "Edit" && tool != "Write") || file == "" {
+		return ""
+	}
+	cwd := in.Payload.CwdOr(in.DefaultCwd)
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(cwd, file)
+	}
+	entries, err := in.Entries(cwd, file)
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+	cd, err := in.CommonDir(cwd)
+	if err != nil {
+		return ""
+	}
+	return Recall(cd, in.Payload.SessionID, entries, in.Now())
+}
+
 // Recall claims unseen entries under the session lock before returning context.
 // A failed claim emits nothing so concurrent invocations cannot repeat entries.
 func Recall(commonDir, sessionID string, entries []knowledge.PathEntry, now time.Time) string {
