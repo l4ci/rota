@@ -19,6 +19,57 @@
 pass() { printf '  \033[32mOK\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit "${ROTA_SMOKE_ASSERTION_EXIT:-1}"; }
 
+# git shim (#3133): a fixture's bare `git config user.*` writes to whatever repo
+# the cwd is in (or that `-C` names). If a cd before it failed, that is the real checkout, and the
+# identity then sticks to every linked worktree. Refuse an identity write whose
+# repo (cwd, or the -C target) is not under the run's scratch root, naming the
+# calling line. Every other subcommand passes straight through.
+git() {
+  if [ -n "${RUN_TMP:-}" ]; then
+    # Resolve the leading -C dirs (git applies them in order) to find the repo
+    # the call really targets, then the subcommand and its key.
+    local -a rest=("$@"); local dir="$PWD" sub="" key="" scope=local a
+    while [ "${rest[0]:-}" = -C ] && [ "${#rest[@]}" -ge 2 ]; do
+      case "${rest[1]}" in /*) dir="${rest[1]}" ;; *) dir="$dir/${rest[1]}" ;; esac
+      rest=("${rest[@]:2}")
+    done
+    sub="${rest[0]:-}"
+    if [ "$sub" = config ]; then
+      for a in "${rest[@]:1}"; do
+        case "$a" in
+          --global|--system) scope=$a ;;
+          -*) ;;
+          *) [ -n "$key" ] || key=$a ;;
+        esac
+      done
+      case "$key" in
+        user.*)
+          local top here
+          top="$(command git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || top=""
+          here="$(cd "${top:-$dir}" 2>/dev/null && pwd -P)" || here=""
+          case "$scope:$here" in
+            local:"$RUN_TMP"/*) ;;
+            *) printf '  \033[31mFAIL\033[0m git config %s targets %s outside the run root (%s:%s); use a scratch dir\n' \
+                 "$key" "${here:-$dir}" "${BASH_SOURCE[1]:-?}" "${BASH_LINENO[0]:-?}" >&2
+               return 1 ;;
+          esac ;;
+      esac
+    fi
+  fi
+  command git "$@"
+}
+
+# identity_config_scan <file>...: fail, listing each line, when a section writes
+# git identity with `-C "$PWD"` or `-C .`. That names the same repo as a bare
+# call but slips past a reader's eye; give the scratch dir explicitly (#3133).
+# The runtime shim above catches every other form.
+identity_config_scan() {
+  local hits
+  hits=$(grep -nE 'git[[:space:]]+-C[[:space:]]+("\$PWD"|\$PWD|"\."|\.)[[:space:]]+config[[:space:]]+(--[a-z]+[[:space:]]+)*user\.' "$@" 2>/dev/null) || return 0
+  printf '\033[31merror: git -C "$PWD"/. config user.* is a bare write in disguise; name the scratch dir (#3133):\033[0m\n%s\n' "$hits" >&2
+  return 1
+}
+
 # vfail is the handler for a captured verb call (#579): `OUT=$(hvj item show X) || vfail`.
 # It reads the failing status, finds the source line of the call and fails with the
 # verb's own text, so the message names which call broke without a hand-written string.
@@ -153,6 +204,9 @@ check_section_conventions() {
       violations=$((violations + 1))
     fi
   done
+
+  # #3133 — an identity write aimed at the cwd under another name.
+  identity_config_scan "$sections_dir"/*.sh || violations=$((violations + 1))
 
   # #579 — a bare `VAR=$(rota ...)` aborts the section silently under set -e
   # when the verb fails (#461 hid a failure this way). Capture the exit code

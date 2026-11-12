@@ -5,7 +5,7 @@ trap 'rm -rf "$TMP_SP"' EXIT
 mkdir -p "$TMP_SP/proj/.rota" "$TMP_SP/bin"
 (
   cd "$TMP_SP/proj"
-  git init -q -b main . && git config user.email t@t && git config user.name t
+  git init -q -b main . && git -C "$TMP_SP/proj" config user.email t@t && git -C "$TMP_SP/proj" config user.name t
   printf '.worktrees/\n' > .gitignore
   printf '{"round":{"portBase":31000,"portBlock":50,"envSetup":"echo $ROTA_SLOT $ROTA_PORT_BASE $ROTA_PORT_BLOCK $ROTA_DB_SUFFIX >> %s/env.txt"}}\n' "$TMP_SP" > .rota/config.json
   git add .gitignore && git commit -q -m seed
@@ -23,7 +23,7 @@ BASES=$(cd "$TMP_SP/proj" && python3 -c 'import json; print(",".join(str(s["port
 [ "$BASES" = "31000,31050" ] || fail "a reaped slot's block should be reusable and w2 keep its own: $BASES"
 pass "port blocks are reserved per slot and freed on reap"
 
-ln -s "$(command -v git)" "$TMP_SP/bin/git"
+ln -s "$(type -P git)" "$TMP_SP/bin/git"
 printf '#!/bin/sh\nexit 0\n' > "$TMP_SP/bin/jq"; chmod +x "$TMP_SP/bin/jq"
 printf '#!/bin/sh\necho "LISTEN 0 128 *:31010 *:* users:((\\"node\\",pid=%s,fd=3))"\n' "$$" > "$TMP_SP/bin/ss"; chmod +x "$TMP_SP/bin/ss"
 OUT=$( cd "$TMP_SP/proj" && ROTA_TEST_DOCTOR_PATH="$TMP_SP/bin" "$ROTA_BIN" doctor 2>&1 || true )

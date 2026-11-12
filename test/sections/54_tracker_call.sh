@@ -110,7 +110,7 @@ done
 
   # missing CLI: PATH with python3/coreutils but no gh/glab
   mkdir -p "$TMP_TC/nobin"
-  for t in python3 bash env dirname cat wc tr git; do ln -sf "$(command -v $t)" "$TMP_TC/nobin/$t"; done
+  for t in python3 bash env dirname cat wc tr git; do ln -sf "$(type -P $t)" "$TMP_TC/nobin/$t"; done
   rc=0; PATH="$TMP_TC/nobin" "$ROTA_BIN" tracker call -- issue list </dev/null >/dev/null 2>&1 || rc=$?
   [ "$rc" = 5 ] || fail "missing CLI should exit 5 (got $rc)"
   pass "missing CLI exits 5"

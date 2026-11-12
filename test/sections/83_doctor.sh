@@ -8,7 +8,7 @@ trap 'rm -rf "$TMP_DR"' EXIT
 
 DR_BIN="$TMP_DR/bin"
 mkdir -p "$DR_BIN"
-ln -s "$(command -v git)" "$DR_BIN/git"; printf '#!/bin/sh\nexit 0\n' > "$DR_BIN/jq"; chmod +x "$DR_BIN/jq"
+ln -s "$(type -P git)" "$DR_BIN/git"; printf '#!/bin/sh\nexit 0\n' > "$DR_BIN/jq"; chmod +x "$DR_BIN/jq"
 dr_herdr() { # dr_herdr <version>: a fake herdr; "installed" in CLAUDE_CONFIG_DIR means the claude hook is current
   cat >"$DR_BIN/herdr" <<FAKE
 #!/bin/sh

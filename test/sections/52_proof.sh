@@ -6,8 +6,8 @@ mkdir -p "$TMP_PF/proj"
 (
   cd "$TMP_PF/proj"
   git init -q -b main .
-  git config user.email t@t
-  git config user.name t
+  git -C "$TMP_PF/proj" config user.email t@t
+  git -C "$TMP_PF/proj" config user.name t
   mkdir -p .rota
   printf '## Bugs\n\n- **[B01] [P1] Proven bug.** Desc.\n- **[B02] [P1] Bare bug.** Desc.\n- **[B03] [P1] Dropped bug.** Desc.\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   echo '{}' > .rota/counters.json
