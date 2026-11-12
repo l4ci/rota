@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -60,7 +61,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 		return out, err
 	}
 	if out.Decision == DecisionGrilling {
-		return out, blocked(BlockHumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
+		return out, blocked(blockedby.HumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
 	}
 	// The first harness is the project default, ahead of the slot's kind:
 	// a slot that once ran a fallback must not carry it to the next issue.
@@ -79,7 +80,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := resolveModel(in.FlagModel, out.Pick.Model, set.Model(kind, in.Tier))
 	if model == "" && e.Worker.NeedsModel(root, kind) {
-		return out, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, in.Tier, kind)
+		return out, blocked(blockedby.NoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, in.Tier, kind)
 	}
 	out.Model, out.AppliedModel = model, model
 	if !in.Resuming {
@@ -100,7 +101,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 			if in.FlagModel != "" {
 				src = "--model " + in.FlagModel
 			}
-			return out, blocked(BlockModelLabel, "%s cannot apply: %s has no {model} placeholder", src, hz.CommandKey())
+			return out, blocked(blockedby.ModelLabel, "%s cannot apply: %s has no {model} placeholder", src, hz.CommandKey())
 		}
 		out.AppliedModel = ""
 		out.Warnings = append(out.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
@@ -113,7 +114,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 			return out, err
 		}
 		if !ok {
-			return out, blocked(BlockOutOfScope, "%s is outside the round's scope (%s)", id, scope)
+			return out, blocked(blockedby.OutOfScope, "%s is outside the round's scope (%s)", id, scope)
 		}
 	}
 	return out, nil
@@ -133,7 +134,7 @@ type fallbackPick struct {
 // best-of attempt and a backend that cannot record the pick never move.
 func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, in preflightIn, out preflightOut, kind, why string) (fallbackPick, error) {
 	set := in.Settings
-	refuse := blocked(BlockQuota, "%s", why)
+	refuse := blocked(blockedby.Quota, "%s", why)
 	pinned := out.KindSource == KindFromFlag || out.KindSource == KindFromLabel || in.FlagModel != "" || out.Pick.Model != ""
 	if len(set.Harnesses) == 0 || in.NoFallback || pinned || in.Fixed != nil || !e.canRecordHarness(be) {
 		return fallbackPick{}, refuse
@@ -157,7 +158,7 @@ func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, i
 		return fallbackPick{to: k, model: model, hz: hz}, nil
 	}
 	if len(tried) > 0 {
-		return fallbackPick{}, blocked(BlockQuota, "%s; no fallback harness has headroom or a model (%s)", why, strings.Join(tried, ", "))
+		return fallbackPick{}, blocked(blockedby.Quota, "%s; no fallback harness has headroom or a model (%s)", why, strings.Join(tried, ", "))
 	}
 	return fallbackPick{}, refuse
 }

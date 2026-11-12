@@ -12,14 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// Blocked reasons of pick (exit 4, `blockedBy`).
-const (
-	BlockNotBestOf      = blockedby.NotBestOf
-	BlockNotAttempt     = blockedby.NotAttempt
-	BlockPicked         = blockedby.AlreadyPicked
-	BlockAttemptRunning = blockedby.AttemptRunning
-)
-
 // Attempt states, as pick reports them.
 const (
 	AttemptOpenPR = "open-pr" // the attempt has a PR
@@ -74,7 +66,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		return res, wrap(err)
 	}
 	if !ok {
-		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+		return res, blocked(blockedby.NoRound, "this process holds no round lease: run rota round start first")
 	}
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
@@ -83,7 +75,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	id := worker.NormID(o.ID)
 	rec := reg.BestOf(id)
 	if rec == nil {
-		return res, blocked(BlockNotBestOf, "%s has no best-of attempts in this round's registry", tracker.RefOf(id))
+		return res, blocked(blockedby.NotBestOf, "%s has no best-of attempts in this round's registry", tracker.RefOf(id))
 	}
 	res.ID = id
 	want, ok := worker.PRRefNumber(o.PR)
@@ -117,7 +109,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		}
 	}
 	if rec.Pick != "" && !rec.Picked(o.PR) {
-		return res, blocked(BlockPicked, "%s already picked %s", tracker.RefOf(id), rec.Pick)
+		return res, blocked(blockedby.AlreadyPicked, "%s already picked %s", tracker.RefOf(id), rec.Pick)
 	}
 	if winner < 0 && rec.Pick != "" { // the picked PR no longer resolves (merged, say)
 		res.Winner = PickAttempt{PR: fmt.Sprintf("#%d", want)}
@@ -128,7 +120,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		for _, v := range views {
 			have = append(have, fmt.Sprintf("%s: %s", v.Slot, strutil.FirstNonEmpty(v.PR, v.State)))
 		}
-		return res, blocked(BlockNotAttempt, "#%d is not an attempt of %s (attempts: %s)", want, tracker.RefOf(id), strings.Join(have, ", "))
+		return res, blocked(blockedby.NotAttempt, "#%d is not an attempt of %s (attempts: %s)", want, tracker.RefOf(id), strings.Join(have, ", "))
 	}
 	for i := range views {
 		if i != winner {
@@ -146,7 +138,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	}
 	if lv.State == AttemptNoPR && lv.slot != nil {
 		if worker.Building(lv.slot.State()) {
-			return res, blocked(BlockAttemptRunning, "%s is still building %s: wait for its PR, or reclaim it", lv.Slot, tracker.RefOf(id))
+			return res, blocked(blockedby.AttemptRunning, "%s is still building %s: wait for its PR, or reclaim it", lv.Slot, tracker.RefOf(id))
 		}
 	}
 

@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +40,7 @@ func TestAssignKeyedIssuesClaimBranchAndOverlap(t *testing.T) {
 	}
 
 	_, err = f.assign("PROJ-124", "dana", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("PROJ-124 overlaps PROJ-123: %v", err)
 	}
 }

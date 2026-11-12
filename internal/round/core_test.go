@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
@@ -17,7 +18,7 @@ func TestCoreMissingSnapshotHandleCannotBeReclaimed(t *testing.T) {
 	if h.Health != HealthUnverifiable || h.Known {
 		t.Fatalf("missing Core identity health=%+v", h)
 	}
-	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != BlockUnverifiable {
+	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != blockedby.Unverifiable {
 		t.Fatalf("reclaim must refuse uncertain absence: %v", err)
 	}
 	if len(f.killed) != 0 {

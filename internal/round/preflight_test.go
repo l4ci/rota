@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/strutil"
 	"time"
 
@@ -33,12 +34,12 @@ func TestPreflight(t *testing.T) {
 		"tier map model":                    {model: "sonnet", applied: "sonnet"},
 		"label beats tier":                  {labels: []string{"model:opus"}, model: "opus", applied: "opus"},
 		"flag beats label":                  {labels: []string{"model:opus"}, in: func(i *preflightIn) { i.FlagModel = "haiku" }, model: "haiku", applied: "haiku"},
-		"label, no {model}":                 {labels: []string{"model:opus"}, cfg: noModelPlaceholder, by: BlockModelLabel, named: "model:opus"},
-		"--model, no {model}":               {cfg: noModelPlaceholder, in: func(i *preflightIn) { i.FlagModel = "opus" }, by: BlockModelLabel, named: "--model opus"},
+		"label, no {model}":                 {labels: []string{"model:opus"}, cfg: noModelPlaceholder, by: blockedby.ModelLabel, named: "model:opus"},
+		"--model, no {model}":               {cfg: noModelPlaceholder, in: func(i *preflightIn) { i.FlagModel = "opus" }, by: blockedby.ModelLabel, named: "--model opus"},
 		"tier model, no {model} only warns": {cfg: noModelPlaceholder, model: "sonnet", applied: "", warnings: 1},
-		"outside the scope":                 {id: "20", by: BlockOutOfScope, named: "outside the round's scope"},
+		"outside the scope":                 {id: "20", by: blockedby.OutOfScope, named: "outside the round's scope"},
 		"outside the scope, resuming":       {id: "20", in: func(i *preflightIn) { i.Resuming = true }, model: "sonnet", applied: "sonnet"},
-		"every account cooling":             {cfg: twoAccounts, meters: map[string]bool{"a": true, "b": true}, by: BlockQuota},
+		"every account cooling":             {cfg: twoAccounts, meters: map[string]bool{"a": true, "b": true}, by: blockedby.Quota},
 		"every account cooling, resuming": {cfg: twoAccounts, meters: map[string]bool{"a": true, "b": true},
 			in: func(i *preflightIn) { i.Resuming = true }, model: "sonnet", applied: "sonnet"},
 	} {
@@ -97,7 +98,7 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 		}
 		f.be.items["12"].Labels = []string{"model:opus"}
 		_, err := f.transfer("12", "dana", nil)
-		if by := blockedBy(t, err); by != BlockModelLabel {
+		if by := blockedBy(t, err); by != blockedby.ModelLabel {
 			t.Fatalf("got %v", err)
 		}
 		if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "" {
@@ -108,7 +109,7 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 		f := newMoveFx(t)
 		f.be.items["12"].Fields.Milestone = "M09"
 		_, err := f.transfer("12", "dana", nil)
-		if by := blockedBy(t, err); by != BlockOutOfScope {
+		if by := blockedBy(t, err); by != blockedby.OutOfScope {
 			t.Fatalf("got %v", err)
 		}
 		if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "" {
@@ -130,7 +131,7 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 				return v.(*jsonx.Object), ""
 			}})
 		_, err := f.transfer("12", "dana", nil)
-		if by := blockedBy(t, err); by != BlockQuota {
+		if by := blockedBy(t, err); by != blockedby.Quota {
 			t.Fatalf("got %v", err)
 		}
 		if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "" {

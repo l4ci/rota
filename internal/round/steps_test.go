@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"reflect"
 	"strings"
 	"testing"
@@ -142,7 +143,7 @@ func TestTransferClaimStepRefusedKeepsTheHeadSteps(t *testing.T) {
 	f.be.claimedBy = "kit@1"
 	const through = 5 // the head and the claim
 	err := runSteps(steps[:through])
-	if blockedBy(t, err) != BlockClaimed {
+	if blockedBy(t, err) != blockedby.Claimed {
 		t.Fatalf("got %v", err)
 	}
 	n := 0

@@ -17,13 +17,6 @@ import (
 // BestOfLabel is the issue label that has two slots build the issue at once.
 const BestOfLabel = labels.BestOfTwo
 
-// Blocked reasons of a best-of:2 issue (exit 4, `blockedBy`).
-const (
-	BlockBestOfLabel = blockedby.BestOfLabel
-	BlockBestOfSlots = blockedby.BestOfSlots
-	BlockBestOf      = blockedby.BestOf
-)
-
 // KindFromBestOf is the kind source of a best-of:2 attempt that took the
 // harness its sibling did not.
 const KindFromBestOf = "best-of"
@@ -42,9 +35,9 @@ func BestOfOf(caps backlog.Capabilities, it backlog.Item) (bool, error) {
 	case len(ls) == 1 && ls[0] == BestOfLabel:
 		return true, nil
 	case len(ls) == 1:
-		return false, blocked(BlockBestOfLabel, "%s has label %s: only %s is supported", it.ID, ls[0], BestOfLabel)
+		return false, blocked(blockedby.BestOfLabel, "%s has label %s: only %s is supported", it.ID, ls[0], BestOfLabel)
 	}
-	return false, blocked(BlockBestOfLabel, "%s has labels %s: only %s is supported", it.ID, strings.Join(ls, ", "), BestOfLabel)
+	return false, blocked(blockedby.BestOfLabel, "%s has labels %s: only %s is supported", it.ID, strings.Join(ls, ", "), BestOfLabel)
 }
 
 // bestOfRun is what one attempt of a best-of:2 issue knows beyond a plain
@@ -119,7 +112,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
 	}
 	if len(slots) < 2 {
-		return res, blocked(BlockBestOfSlots, "%s is best-of:2 and needs two free slots; %d free", id, len(slots))
+		return res, blocked(blockedby.BestOfSlots, "%s is best-of:2 and needs two free slots; %d free", id, len(slots))
 	}
 
 	pick, err := PickOf(be.Capabilities(), *it)

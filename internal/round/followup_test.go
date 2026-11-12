@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 	"time"
@@ -207,7 +208,7 @@ func TestContinueAtCapRefuses(t *testing.T) {
 	}
 	seen := f.queued()[0].ReviewSeen
 	_, err := f.env.Continue(bg, f.root, f.be, ContinueOpts{FollowUp: list[0], To: "dana", MaxBounces: 3})
-	if blockedBy(t, err) != BlockMaxBounces {
+	if blockedBy(t, err) != blockedby.MaxBounces {
 		t.Fatalf("want the bounce cap, got %v", err)
 	}
 	if q := f.queued(); len(q) != 1 || q[0].ReviewSeen != seen || f.slot("dana").HeldID() != "" {
@@ -233,7 +234,7 @@ func TestTransferReserveSlot(t *testing.T) {
 	if got := Reserve(worker.LoadRegistryTolerant(f.root), f.set); strings.Join(got, ",") != "nia" {
 		t.Fatalf("reserve %v, want nia", got)
 	}
-	if _, err := f.assign("14", "nia"); blockedBy(t, err) != BlockDraining {
+	if _, err := f.assign("14", "nia"); blockedBy(t, err) != blockedby.Draining {
 		t.Fatalf("backlog onto the reserve slot: %v", err)
 	}
 	fg.notes = []tracker.Comment{{ID: "6", Author: "alice", Body: "one more thing", CreatedAt: f.later(time.Hour)}}
@@ -244,7 +245,7 @@ func TestTransferReserveSlot(t *testing.T) {
 	// The reserve flag does not open a slot outside the reserve.
 	f.set.FollowupReserve = 0
 	f.env.Round = f.set
-	if _, err := f.env.Continue(bg, f.root, f.be, ContinueOpts{FollowUp: list[0], To: "nia", Reserve: true, MaxBounces: 3}); blockedBy(t, err) != BlockDraining {
+	if _, err := f.env.Continue(bg, f.root, f.be, ContinueOpts{FollowUp: list[0], To: "nia", Reserve: true, MaxBounces: 3}); blockedBy(t, err) != blockedby.Draining {
 		t.Fatalf("reserve off: %v", err)
 	}
 	f.set.FollowupReserve = 1

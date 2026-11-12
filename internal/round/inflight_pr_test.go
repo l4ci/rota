@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -187,7 +188,7 @@ func TestAssignComparesOpenPRFiles(t *testing.T) {
 	f := newMoveFx(t)
 	f.withPR([]string{"internal/cli/round.go"}, nil)
 	_, err := f.assign("14", "dana")
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("a PR touching round.go blocks 14: %v", err)
 	}
 	f.forge.prs = nil
@@ -210,7 +211,7 @@ func TestTransferComparesOpenPRFiles(t *testing.T) {
 	}
 	f.withPRFor("dana", 8, []string{"internal/cli/round.go"}, nil)
 	_, err := f.transfer("12", "nia", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("dana's PR touches round.go, which 12 names: %v", err)
 	}
 	f.withPRFor("dana", 8, []string{"internal/cli/nudge.go"}, nil)

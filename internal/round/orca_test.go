@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
@@ -23,7 +24,7 @@ func TestOrcaMissingSnapshotHandleCannotBeReclaimed(t *testing.T) {
 	if h.Health != HealthUnverifiable || h.Known || h.Reason != "stale-handle" {
 		t.Fatalf("missing handle health = %+v", h)
 	}
-	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != BlockUnverifiable {
+	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != blockedby.Unverifiable {
 		t.Fatalf("reclaim did not refuse missing handle: %v", err)
 	}
 	if len(f.killed) != 0 {
@@ -142,7 +143,7 @@ func TestOrcaForceReclaimUsesAdapterRetainedProcessProof(t *testing.T) {
 				t.Fatalf("stale health=%+v", health)
 			}
 			before := treeCalls
-			if _, e = f.reclaim("ben", nil); blockedBy(t, e) != BlockUnverifiable {
+			if _, e = f.reclaim("ben", nil); blockedBy(t, e) != blockedby.Unverifiable {
 				t.Fatalf("unforced reclaim: %v", e)
 			}
 			if treeCalls != before || closed != 0 {

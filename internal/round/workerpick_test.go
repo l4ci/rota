@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -20,15 +21,15 @@ func TestPickOf(t *testing.T) {
 		{name: "harness", it: issue("harness:codex"), harness: "codex"},
 		{name: "model", it: issue("model:gpt-5.5-codex"), mod: "gpt-5.5-codex"},
 		{name: "both", it: issue("harness:claude", "model:claude-opus-5-5", "size:Minor"), harness: "claude", mod: "claude-opus-5-5"},
-		{name: "unknown harness", it: issue("harness:gemini"), by: BlockHarnessLabel, msg: "harness:gemini"},
-		{name: "two harness", it: issue("harness:claude", "harness:codex"), by: BlockHarnessLabel, msg: "harness:claude, harness:codex"},
-		{name: "two model", it: issue("model:a", "model:b"), by: BlockModelLabel, msg: "model:a, model:b"},
-		{name: "empty model", it: issue("model:"), by: BlockModelLabel, msg: "model:"},
-		{name: "injection label", it: issue("model:x;rm -rf"), by: BlockModelLabel, msg: "not a valid model id"},
-		{name: "flag-like label", it: issue("model:--yolo"), by: BlockModelLabel, msg: "not a valid model id"},
-		{name: "file injection", it: file("- **[B01] x.** Model: $(id)"), by: BlockModelLabel, msg: "not a valid model id"},
+		{name: "unknown harness", it: issue("harness:gemini"), by: blockedby.HarnessLabel, msg: "harness:gemini"},
+		{name: "two harness", it: issue("harness:claude", "harness:codex"), by: blockedby.HarnessLabel, msg: "harness:claude, harness:codex"},
+		{name: "two model", it: issue("model:a", "model:b"), by: blockedby.ModelLabel, msg: "model:a, model:b"},
+		{name: "empty model", it: issue("model:"), by: blockedby.ModelLabel, msg: "model:"},
+		{name: "injection label", it: issue("model:x;rm -rf"), by: blockedby.ModelLabel, msg: "not a valid model id"},
+		{name: "flag-like label", it: issue("model:--yolo"), by: blockedby.ModelLabel, msg: "not a valid model id"},
+		{name: "file injection", it: file("- **[B01] x.** Model: $(id)"), by: blockedby.ModelLabel, msg: "not a valid model id"},
 		{name: "file fields", it: file("- **[B01] x.** Harness: codex Model: gpt-5.5-codex Milestone: M1"), harness: "codex", mod: "gpt-5.5-codex"},
-		{name: "file unknown", it: file("- **[B01] x.** Harness: gemini"), by: BlockHarnessLabel, msg: "Harness: gemini"},
+		{name: "file unknown", it: file("- **[B01] x.** Harness: gemini"), by: blockedby.HarnessLabel, msg: "Harness: gemini"},
 		{name: "file none", it: file("- **[B01] x.** Related: B02")},
 	} {
 		t.Run(c.name, func(t *testing.T) {

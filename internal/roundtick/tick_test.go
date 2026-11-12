@@ -3,6 +3,7 @@ package roundtick
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"reflect"
 	"slices"
 	"strings"
@@ -272,7 +273,7 @@ func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
 	f.assignFn = func(id string) ([]string, error) {
 		if id == "#1" {
-			return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "overlap"}
+			return nil, &round.BlockedError{By: blockedby.NotReady, Msg: "overlap"}
 		}
 		f.assigned = append(f.assigned, id)
 		return []string{"ben"}, nil
@@ -289,7 +290,7 @@ func TestSlotFilledMeanwhileSkipsToNextCandidate(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
 	f.assignFn = func(id string) ([]string, error) {
 		if id == "#1" {
-			return nil, &round.BlockedError{By: round.BlockSlotBusy, Msg: "slot ben was filled by another assign"}
+			return nil, &round.BlockedError{By: blockedby.SlotBusy, Msg: "slot ben was filled by another assign"}
 		}
 		f.assigned = append(f.assigned, id)
 		return []string{"ben"}, nil
@@ -375,7 +376,7 @@ func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
 
 func TestReviewMintRefusedStaysForLaterTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
-	f.assignFn = func(id string) ([]string, error) { return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "no"} }
+	f.assignFn = func(id string) ([]string, error) { return nil, &round.BlockedError{By: blockedby.NotReady, Msg: "no"} }
 	e := f.env()
 	e.Review = fakeReview{due: true, mint: func() ([]string, error) { return []string{"#9"}, nil }}
 	r, err := Run(context.Background(), e)
@@ -492,7 +493,7 @@ func TestBestOfAssignNamesBothSlots(t *testing.T) {
 func TestBlockedByNoRoundIsAFailureNotARefusal(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	f.assignFn = func(string) ([]string, error) {
-		return nil, &round.BlockedError{By: round.BlockNoRound, Msg: "no round"}
+		return nil, &round.BlockedError{By: blockedby.NoRound, Msg: "no round"}
 	}
 	if _, err := Run(context.Background(), f.env()); err == nil {
 		t.Fatal("no round must stop the tick")
@@ -561,7 +562,7 @@ func TestBatchRefusalMidTickStopsAssigning(t *testing.T) {
 	calls := 0
 	f.assignFn = func(string) ([]string, error) {
 		calls++
-		return nil, &round.BlockedError{By: round.BlockBatch, Msg: "2 items are open and round.batch is 2"}
+		return nil, &round.BlockedError{By: blockedby.Batch, Msg: "2 items are open and round.batch is 2"}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil || !r.BatchFull || calls != 1 {
@@ -576,7 +577,7 @@ func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
 	why := "every round.accounts account is cooling down; slots fill again at 13:00 UTC"
 	f.assignFn = func(string) ([]string, error) {
-		return nil, &round.BlockedError{By: round.BlockQuota, Msg: why}
+		return nil, &round.BlockedError{By: blockedby.Quota, Msg: why}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil || r.Capped != why {
@@ -584,7 +585,7 @@ func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
 	}
 	// A refusal for another reason stays quiet.
 	f.assignFn = func(string) ([]string, error) {
-		return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "overlap"}
+		return nil, &round.BlockedError{By: blockedby.NotReady, Msg: "overlap"}
 	}
 	if r, err = Run(context.Background(), f.env()); err != nil || r.Capped != "" {
 		t.Fatalf("err %v capped %q", err, r.Capped)

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -651,7 +652,7 @@ func TestReturnRefusals(t *testing.T) {
 	}
 	f.env.HolderPID = 999
 	_, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot = false })
-	if blockedBy(t, err) != BlockNotYourSlot {
+	if blockedBy(t, err) != blockedby.NotYourSlot {
 		t.Errorf("neither the slot's worker nor the lease holder: %v", err)
 	}
 	if f.be.claims["12"] != "ben@1" {
@@ -777,22 +778,22 @@ func TestTransferRefusals(t *testing.T) {
 		t.Errorf("no slot holds 13: %v", err)
 	}
 	f.env.HolderPID = 999
-	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockNoRound {
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != blockedby.NoRound {
 		t.Errorf("no lease: %v", err)
 	}
 	f.env.HolderPID = 100
-	if _, err := f.transfer("12", "ben", nil); blockedBy(t, err) != BlockSameSlot {
+	if _, err := f.transfer("12", "ben", nil); blockedBy(t, err) != blockedby.SameSlot {
 		t.Errorf("same slot: %v", err)
 	}
 	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
-	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockBriefMissing {
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != blockedby.BriefMissing {
 		t.Errorf("brief: %v", err)
 	}
 	f.env.Round = f.set
 	if _, err := f.assign("13", "dana"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockSlotBusy {
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != blockedby.SlotBusy {
 		t.Errorf("dana holds 13: %v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
@@ -814,7 +815,7 @@ func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 	// dana's real changes count: she edits the file 12 names.
 	f.commit(t, "dana", "internal/cli/round.go")
 	_, err := f.transfer("12", "nia", nil)
-	if by := blockedBy(t, err); by != BlockOverlap {
+	if by := blockedBy(t, err); by != blockedby.Overlap {
 		t.Fatalf("12 now overlaps dana's work: %v", err)
 	}
 	var blk *BlockedError
@@ -985,7 +986,7 @@ func TestReclaimRefusesAHealthySlotWithoutForceAndKillsAfterForce(t *testing.T) 
 	f := newMoveFx(t)
 	f.agents("ben")
 	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
-	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != BlockHealthy {
+	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != blockedby.Healthy {
 		t.Fatalf("a healthy slot: %v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || len(f.killed) != 0 {
@@ -1034,13 +1035,13 @@ func TestReclaimRefusals(t *testing.T) {
 	if _, err := f.reclaim("zed", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
-	if _, err := f.reclaimAs(999, "ben"); blockedBy(t, err) != BlockNoRound {
+	if _, err := f.reclaimAs(999, "ben"); blockedBy(t, err) != blockedby.NoRound {
 		t.Errorf("no lease: %v", err)
 	}
 	// No host to ask: a forced reclaim cannot prove the pane gone.
 	f.env.Snapshot = nil
 	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
-	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true }); blockedBy(t, err) != BlockLiveAgent {
+	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true }); blockedBy(t, err) != blockedby.LiveAgent {
 		t.Errorf("live agent: %v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || len(f.killed) != 0 {
@@ -1473,7 +1474,7 @@ func TestTransferTakesSettingsAndHolderFromEnv(t *testing.T) {
 		t.Errorf("moved to %q, want dana", res.To)
 	}
 	f.env.HolderPID = 999
-	if _, err := f.env.Transfer(bg, f.root, f.be, TransferOpts{Issue: "12", To: "ben"}); blockedBy(t, err) != BlockNoRound {
+	if _, err := f.env.Transfer(bg, f.root, f.be, TransferOpts{Issue: "12", To: "ben"}); blockedBy(t, err) != blockedby.NoRound {
 		t.Errorf("a holder pid that holds no lease must refuse: %v", err)
 	}
 }

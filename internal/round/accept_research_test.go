@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func TestAcceptResearchRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.researchDone(t, false, false)
 		_, err := f.accept("12", func(in *AcceptInput) { in.Gist = "g" })
-		if blockedBy(t, err) != BlockFindingMissing || f.be.items["12"].Closed {
+		if blockedBy(t, err) != blockedby.FindingMissing || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})
@@ -56,7 +57,7 @@ func TestAcceptResearchRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.researchDone(t, true, true)
 		_, err := f.accept("12", func(in *AcceptInput) { in.Gist = "g" })
-		if blockedBy(t, err) != BlockFindingMissing || f.be.items["12"].Closed {
+		if blockedBy(t, err) != blockedby.FindingMissing || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})
@@ -64,7 +65,7 @@ func TestAcceptResearchRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.researchDone(t, true, false)
 		_, err := f.accept("12", nil)
-		if blockedBy(t, err) != BlockNoGist || !strings.Contains(err.Error(), "--gist") || f.be.items["12"].Closed {
+		if blockedBy(t, err) != blockedby.NoGist || !strings.Contains(err.Error(), "--gist") || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})

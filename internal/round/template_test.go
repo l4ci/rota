@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func TestAssignLegacyFeatureResumeAndRedo(t *testing.T) {
 		f := newAssignFixture(t)
 		f.be.items["12"].Type = "F"
 		_, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true })
-		if err == nil || blockedBy(t, err) != BlockNotReady || !strings.Contains(err.Error(), "## Out of scope") {
+		if err == nil || blockedBy(t, err) != blockedby.NotReady || !strings.Contains(err.Error(), "## Out of scope") {
 			t.Fatalf("flag alone must not exempt a fresh item: %v", err)
 		}
 	})
@@ -54,7 +55,7 @@ func TestAssignFeatureTemplate(t *testing.T) {
 			if err == nil {
 				t.Fatal("feature without required sections was assigned")
 			}
-			if blockedBy(t, err) != BlockNotReady || !strings.Contains(err.Error(), "## Acceptance") || !strings.Contains(err.Error(), "## Out of scope") {
+			if blockedBy(t, err) != blockedby.NotReady || !strings.Contains(err.Error(), "## Acceptance") || !strings.Contains(err.Error(), "## Out of scope") {
 				t.Fatalf("refusal must name both missing sections: %v", err)
 			}
 			if len(f.be.notes) != 0 || len(f.host.spawned) != 0 {

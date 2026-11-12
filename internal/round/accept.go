@@ -10,25 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// BlockNoSlotHolds: accept found no slot holding the item, and the item is not
-// one it already closed.
-const BlockNoSlotHolds = blockedby.NoSlotHolds
-
-// BlockNoIssues: neither the slot nor --issues supplies completed review evidence.
-const BlockNoIssues = blockedby.NoIssues
-
-// BlockFindingMissing: a research item has no finding comment posted since its
-// assignment.
-const BlockFindingMissing = blockedby.FindingMissing
-
-// BlockNoGist: a decision item closes with a one-line gist for the milestone's
-// decision log.
-const BlockNoGist = blockedby.NoGist
-
-// BlockReviewNotMinted: the held item has an architecture-review title but no
-// trusted proof that a round minted it.
-const BlockReviewNotMinted = blockedby.ReviewNotMinted
-
 // AcceptInput is the flags of `rota round accept`.
 type AcceptInput struct {
 	ID string
@@ -78,7 +59,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 		if d, _ := DecisionOf(be.Capabilities(), *it); it.Closed && d == DecisionResearch {
 			return res, nil
 		}
-		return res, blocked(BlockNoSlotHolds, "no slot holds %s", tracker.RefOf(id))
+		return res, blocked(blockedby.NoSlotHolds, "no slot holds %s", tracker.RefOf(id))
 	}
 	res.Slot = s.Name()
 	it, err := be.Get(id)
@@ -107,7 +88,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 		}
 		next := fresh.Slot(s.Name())
 		if next == nil || next.HeldID() != id || next.Attempt() != s.Attempt() {
-			return res, blocked(BlockNoSlotHolds, "slot %s no longer holds the same assignment of %s", s.Name(), tracker.RefOf(id))
+			return res, blocked(blockedby.NoSlotHolds, "slot %s no longer holds the same assignment of %s", s.Name(), tracker.RefOf(id))
 		}
 		s = next
 	}
@@ -115,14 +96,14 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 		return e.acceptResearch(ctx, root, be, s, it, in, res)
 	}
 	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
-		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), id, why))
+		return res, blocked(blockedby.SlotBusy, "%s", busyMsg(s.Name(), id, why))
 	}
 	result := s.ReviewResult()
 	if len(in.Issues) > 0 {
 		result = worker.ParseReviewResult("issues:" + strings.Join(in.Issues, ","))
 	}
 	if !result.Complete() {
-		return res, blocked(BlockNoIssues, "slot %s recorded no completed review evidence: pass --issues #a,#b or --issues none for a completed review with no findings", s.Name())
+		return res, blocked(blockedby.NoIssues, "slot %s recorded no completed review evidence: pass --issues #a,#b or --issues none for a completed review with no findings", s.Name())
 	}
 	note := strings.TrimSpace(in.Gist)
 	if note == "" {
@@ -140,14 +121,14 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 // since the assignment. The gist is the line the milestone's decision log gets.
 func (e Env) acceptResearch(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, in AcceptInput, res Accepted) (Accepted, error) {
 	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
-		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), it.ID, why))
+		return res, blocked(blockedby.SlotBusy, "%s", busyMsg(s.Name(), it.ID, why))
 	}
 	if !findingSinceAssign(be, it.ID) {
-		return res, blocked(BlockFindingMissing, "%s has no finding comment since it was assigned to %s: the worker posts one with `rota item comment add --kind finding`", tracker.RefOf(it.ID), s.Name())
+		return res, blocked(blockedby.FindingMissing, "%s has no finding comment since it was assigned to %s: the worker posts one with `rota item comment add --kind finding`", tracker.RefOf(it.ID), s.Name())
 	}
 	gist := strings.TrimSpace(in.Gist)
 	if gist == "" {
-		return res, blocked(BlockNoGist, "%s is a research item: pass --gist <one line> for the milestone's decision log", tracker.RefOf(it.ID))
+		return res, blocked(blockedby.NoGist, "%s is a research item: pass --gist <one line> for the milestone's decision log", tracker.RefOf(it.ID))
 	}
 	// The decision log follows acceptance preflight but still precedes the
 	// close, so a failed close can retry the idempotent log.

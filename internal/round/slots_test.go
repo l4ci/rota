@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func TestIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	}
 	f.env.Round.Roster = []string{"zed", "ben", "dana"}
 
-	if _, err := f.transfer("12", "zed", nil); blockedBy(t, err) != BlockExternal {
+	if _, err := f.transfer("12", "zed", nil); blockedBy(t, err) != blockedby.External {
 		t.Fatalf("the fixture's external slot should be refused: %v", err)
 	}
 	// The watcher offers only the round's active slots (cli buildLimits).

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
@@ -90,7 +91,7 @@ func TestFallbackRefusesPinnedIssues(t *testing.T) {
 			f := fallbackRig(t, fallbackCfg)
 			f.labelled("12", c.labels...)
 			_, err := f.assign("12", "ben", c.mod)
-			if by := blockedBy(t, err); by != BlockQuota {
+			if by := blockedBy(t, err); by != blockedby.Quota {
 				t.Fatalf("err %v", err)
 			}
 			if ls := f.be.items["12"].Labels; slices.Contains(ls, "harness:codex") {
@@ -103,7 +104,7 @@ func TestFallbackRefusesPinnedIssues(t *testing.T) {
 func TestFallbackRefusesWhenNoLaterHarnessHasHeadroom(t *testing.T) {
 	f := fallbackRig(t, strings.Replace(fallbackCfg, `"harnesses":["claude","codex"]`, `"harnesses":["claude"]`, 1))
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "cooling down") {
+	if by := blockedBy(t, err); by != blockedby.Quota || !strings.Contains(err.Error(), "cooling down") {
 		t.Fatalf("err %v", err)
 	}
 }
@@ -111,7 +112,7 @@ func TestFallbackRefusesWhenNoLaterHarnessHasHeadroom(t *testing.T) {
 func TestFallbackUnsetChangesNothing(t *testing.T) {
 	f := fallbackRig(t, strings.Replace(fallbackCfg, `"harnesses":["claude","codex"],`, "", 1))
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota {
+	if by := blockedBy(t, err); by != blockedby.Quota {
 		t.Fatalf("err %v", err)
 	}
 	if st := f.env.Fallback(bg, f.root, f.set); st.Active {
@@ -206,7 +207,7 @@ func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota {
+	if by := blockedBy(t, err); by != blockedby.Quota {
 		t.Fatalf("err %v", err)
 	}
 	// status derives from the resolved default (codex), which has no later harness
@@ -233,7 +234,7 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 			return v.(*jsonx.Object), ""
 		}})
 	_, err = f.transfer("12", "dana", nil)
-	if by := blockedBy(t, err); by != BlockQuota {
+	if by := blockedBy(t, err); by != blockedby.Quota {
 		t.Fatalf("err %v", err)
 	}
 	if ls := f.be.items["12"].Labels; slices.Contains(ls, "harness:codex") {

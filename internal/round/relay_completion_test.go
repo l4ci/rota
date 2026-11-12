@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,7 +136,7 @@ func TestRelayCompletionWithoutCommitAllowsNextAssignment(t *testing.T) {
 			if err != nil || poll.Slots[0].State != worker.StateBusy || f.slot("ben").State() != "busy" {
 				t.Fatalf("old completion after relay: %+v, %v", poll, err)
 			}
-			if _, err := f.assign("13", "ben"); err == nil || blockedBy(t, err) != BlockSlotBusy {
+			if _, err := f.assign("13", "ben"); err == nil || blockedBy(t, err) != blockedby.SlotBusy {
 				t.Fatalf("assignment before relay completion: %v", err)
 			}
 			h.panes = []string{f.host.sent + "\n● working\n", strings.Repeat("● work\n", 80) + "ROTA-DONE ben\n"}

@@ -18,21 +18,6 @@ import (
 // With round.support set, machine:<name> pins an issue to that machine.
 // With support disabled the pins do not restrict a single-machine round.
 
-// Blocked reasons of the support split and the support side's fresh base.
-const (
-	// BlockSite: the issue belongs to the other machine's side of the split.
-	BlockSite = blockedby.Site
-	// BlockFetch: the support side could not fetch origin/<base> to cut from.
-	BlockFetch = blockedby.Fetch
-	// BlockConflict: a resumed support branch does not merge origin/<base>.
-	BlockConflict = blockedby.Conflict
-	// BlockDirty: a resumed support branch has uncommitted changes, so it is
-	// not merged with origin/<base> at all.
-	BlockDirty = blockedby.Dirty
-	// BlockConfig: the verb needs a config key that is not set.
-	BlockConfig = blockedby.Config
-)
-
 // offSite is why it belongs to the other side of the split ("" when this
 // machine may take it, and always with round.support empty).
 func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
@@ -62,7 +47,7 @@ func (e Env) supportPinStep(ctx context.Context, be Board, it *backlog.Item) ste
 		},
 		do: func() error {
 			if !e.forgeOn(be) {
-				return blocked(BlockConfig, "pinning support work needs an issue tracker with labels")
+				return blocked(blockedby.Config, "pinning support work needs an issue tracker with labels")
 			}
 			if err := e.Forge.AddLabels(ctx, it.IssueKey(), []string{label}, true); err != nil {
 				return err
@@ -101,15 +86,15 @@ func pinLabels(names []string) []string {
 // OfferSupport pins ids to the support side, or with withdraw removes the
 // pin, and returns the ids it changed. Support can also pull unpinned work. Every id is checked before any label
 // moves: an issue a main slot or claim holds is not offered, and one a support
-// claim holds is not withdrawn (BlockClaimed). It needs round.support
-// (BlockConfig) and a tracker.
+// claim holds is not withdrawn (blockedby.Claimed). It needs round.support
+// (blockedby.Config) and a tracker.
 func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []string, withdraw bool) ([]string, error) {
 	support := e.Round.Support
 	if support == "" {
-		return nil, blocked(BlockConfig, "round.support is empty: set it to the support machine's name first (rota config set round.support <name>)")
+		return nil, blocked(blockedby.Config, "round.support is empty: set it to the support machine's name first (rota config set round.support <name>)")
 	}
 	if !e.forgeOn(be) {
-		return nil, blocked(BlockConfig, "offering issues to the support machine needs an issue tracker with labels")
+		return nil, blocked(blockedby.Config, "offering issues to the support machine needs an issue tracker with labels")
 	}
 	held := heldIDs(root)
 	prefix := support + "-"
@@ -123,7 +108,7 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 			return nil, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, id)
 		}
 		if pins := roundcfg.PinsOf(it.Labels); !withdraw && len(pins) > 0 && !slices.Contains(pins, support) {
-			return nil, blocked(BlockSite, "%s is pinned %s: remove that label before offering it to %s", it.ID, strings.Join(pinLabels(pins), ", "), roundcfg.MachineLabel(support))
+			return nil, blocked(blockedby.Site, "%s is pinned %s: remove that label before offering it to %s", it.ID, strings.Join(pinLabels(pins), ", "), roundcfg.MachineLabel(support))
 		}
 		st, err := statusOf(be, it.ID)
 		if err != nil {
@@ -135,11 +120,11 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		}
 		switch {
 		case !withdraw && held[worker.NormID(it.ID)]:
-			return nil, blocked(BlockClaimed, "%s is held by a slot of this round: it stays with main", it.ID)
+			return nil, blocked(blockedby.Claimed, "%s is held by a slot of this round: it stays with main", it.ID)
 		case !withdraw && slices.ContainsFunc(claims, func(c string) bool { return !strings.HasPrefix(c, prefix) }):
-			return nil, blocked(BlockClaimed, "%s is claimed on main (%s): it stays with main", it.ID, strings.Join(claims, ", "))
+			return nil, blocked(blockedby.Claimed, "%s is claimed on main (%s): it stays with main", it.ID, strings.Join(claims, ", "))
 		case withdraw && slices.ContainsFunc(claims, func(c string) bool { return strings.HasPrefix(c, prefix) }):
-			return nil, blocked(BlockClaimed, "%s is claimed by the support machine (%s): it stays there until that claim is released", it.ID, strings.Join(claims, ", "))
+			return nil, blocked(blockedby.Claimed, "%s is claimed by the support machine (%s): it stays there until that claim is released", it.ID, strings.Join(claims, ", "))
 		}
 		items = append(items, it)
 	}
@@ -173,17 +158,17 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 // origin/<base> and returns it, so a support branch is cut from the main the
 // main machine last pushed, never from this machine's stale local base. A slot
 // resuming its issue on its branch merges it first; a merge that fails is
-// aborted and refused (BlockConflict) before the brief goes out, and a dirty
-// worktree is refused (BlockDirty) before any merge runs.
+// aborted and refused (blockedby.Conflict) before the brief goes out, and a dirty
+// worktree is refused (blockedby.Dirty) before any merge runs.
 func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool, target string) (string, error) {
 	base := strutil.FirstNonEmpty(target, e.Base)
 	remote, rerr := e.remote(root)
 	if rerr != nil {
-		return "", blocked(BlockFetch, "%v", rerr)
+		return "", blocked(blockedby.Fetch, "%v", rerr)
 	}
 	res, err := e.Git(ctx, root, "fetch", "-q", remote, base)
 	if err != nil || res.ExitCode != 0 {
-		return "", blocked(BlockFetch, "could not fetch %s/%s to cut the support branch from (%s): a support machine never cuts from its local %s", remote, base, gitWhy(res.Stderr, err), base)
+		return "", blocked(blockedby.Fetch, "could not fetch %s/%s to cut the support branch from (%s): a support machine never cuts from its local %s", remote, base, gitWhy(res.Stderr, err), base)
 	}
 	from := remote + "/" + base
 	if !resuming {
@@ -196,14 +181,14 @@ func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, bran
 	// Uncommitted work is the slot's to keep: no merge touches it, and the
 	// refusal says dirty, never conflict.
 	if st, err := e.Git(ctx, wt, "status", "--porcelain"); err != nil || st.ExitCode != 0 || strings.TrimSpace(st.Stdout) != "" {
-		return "", blocked(BlockDirty, "%s has uncommitted changes in %s: commit or discard them before %s is merged in and the slot resumes", branch, wt, from)
+		return "", blocked(blockedby.Dirty, "%s has uncommitted changes in %s: commit or discard them before %s is merged in and the slot resumes", branch, wt, from)
 	}
 	m, err := e.Git(ctx, wt, "merge", "--no-edit", "-q", from)
 	if err == nil && m.ExitCode == 0 {
 		return from, nil
 	}
 	e.Git(ctx, wt, "merge", "--abort")
-	return "", blocked(BlockConflict, "%s does not merge %s cleanly (%s): resolve it on the branch, then assign again", branch, from, gitWhy(m.Stdout+m.Stderr, err))
+	return "", blocked(blockedby.Conflict, "%s does not merge %s cleanly (%s): resolve it on the branch, then assign again", branch, from, gitWhy(m.Stdout+m.Stderr, err))
 }
 
 func gitWhy(out string, err error) string {
@@ -220,9 +205,6 @@ func gitWhy(out string, err error) string {
 // posts on an issue it hands back to main.
 const SupportReturnMarker = "<!-- rota:support-return -->"
 
-// BlockRole: the verb belongs to the other machine's role.
-const BlockRole = blockedby.Role
-
 // SupportReturned is what ReturnSupport did.
 type SupportReturned struct {
 	ID      string
@@ -232,18 +214,18 @@ type SupportReturned struct {
 
 // ReturnSupport is the support machine's hand-back: it posts reason on the
 // issue under SupportReturnMarker, releases support's claims and removes the
-// support pin, so main's candidates can list the issue again. It refuses on main (BlockRole), with
-// round.support empty or no tracker (BlockConfig) and while a slot still holds
-// the issue (BlockClaimed). An issue that no longer carries the label is
+// support pin, so main's candidates can list the issue again. It refuses on main (blockedby.Role), with
+// round.support empty or no tracker (blockedby.Config) and while a slot still holds
+// the issue (blockedby.Claimed). An issue that no longer carries the label is
 // already main's: nothing is posted and Changed is false.
 func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reason string) (SupportReturned, error) {
 	switch {
 	case e.Round.Support == "":
-		return SupportReturned{}, blocked(BlockConfig, "round.support is empty: set it to the support machine's name first (rota config set round.support <name>)")
+		return SupportReturned{}, blocked(blockedby.Config, "round.support is empty: set it to the support machine's name first (rota config set round.support <name>)")
 	case !e.forgeOn(be):
-		return SupportReturned{}, blocked(BlockConfig, "handing an issue back needs an issue tracker with labels")
+		return SupportReturned{}, blocked(blockedby.Config, "handing an issue back needs an issue tracker with labels")
 	case e.Round.Role != roundcfg.RoleSupport:
-		return SupportReturned{}, blocked(BlockRole, "round support return runs on the support machine (round.role support); main takes an offer back with: rota round support offer --withdraw")
+		return SupportReturned{}, blocked(blockedby.Role, "round support return runs on the support machine (round.role support); main takes an offer back with: rota round support offer --withdraw")
 	}
 	it, err := be.Get(id)
 	if err != nil {
@@ -253,7 +235,7 @@ func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reaso
 		return SupportReturned{}, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, id)
 	}
 	if heldIDs(root)[worker.NormID(it.ID)] {
-		return SupportReturned{}, blocked(BlockClaimed, "%s is held by a slot of this round: return or reclaim that slot first", it.ID)
+		return SupportReturned{}, blocked(blockedby.Claimed, "%s is held by a slot of this round: return or reclaim that slot first", it.ID)
 	}
 	out := SupportReturned{ID: it.ID}
 	if !slices.Contains(it.Labels, e.SupportLabel) {

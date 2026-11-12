@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -204,7 +205,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if d, err := DecisionOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else if c.Decision = d; d == DecisionGrilling {
-			c.BlockedBy = BlockHumanDecision
+			c.BlockedBy = blockedby.HumanDecision
 		}
 		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()
@@ -214,9 +215,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		if why := e.offSite(o.Support, o.Role, o.LegacySupportLabel, it); why != "" {
 			if c.BlockedBy == "" {
-				c.BlockedBy = BlockSite
+				c.BlockedBy = blockedby.Site
 			}
-			c.Checks = append(c.Checks, Check{Name: BlockSite, Detail: []string{why}})
+			c.Checks = append(c.Checks, Check{Name: blockedby.Site, Detail: []string{why}})
 		}
 		if unclear[it.IssueKey()] {
 			c.Checks = append(c.Checks, Check{Name: NeedsInfoLabel, Detail: []string{"labelled " + NeedsInfoLabel + ": triage found it unclear, so it waits for the reporter"}})
@@ -229,9 +230,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		if len(c.CrossMilestone) > 0 {
 			if c.BlockedBy == "" {
-				c.BlockedBy = BlockCrossMilestone
+				c.BlockedBy = blockedby.CrossMilestone
 			}
-			c.Checks = append(c.Checks, Check{Name: BlockCrossMilestone, Detail: c.CrossMilestone})
+			c.Checks = append(c.Checks, Check{Name: blockedby.CrossMilestone, Detail: c.CrossMilestone})
 		}
 		out = append(out, c)
 	}

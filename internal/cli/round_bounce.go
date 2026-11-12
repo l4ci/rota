@@ -40,7 +40,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		if slotName, lead := bundleHolder(root, issue); lead != "" {
 			d := jsonx.NewObject()
 			d.Set("issue", issue)
-			d.Set("blockedBy", round.BlockBundle)
+			d.Set("blockedBy", blockedby.Bundle)
 			d.Set("lead", lead)
 			d.Set("changed", false)
 			return Result{Data: d}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s is bundled under %s (slot %s): a bundle bounces once, on its lead", tracker.RefOf(issue), tracker.RefOf(lead), slotName),
