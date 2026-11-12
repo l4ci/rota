@@ -7,8 +7,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"testing"
 )
@@ -17,11 +17,7 @@ import (
 // of values. A value declared by two consts fails the test.
 func Declared(t testing.TB) map[string]bool {
 	t.Helper()
-	_, self, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate blockedby.go")
-	}
-	src := filepath.Join(filepath.Dir(self), "..", "blockedby.go")
+	src := filepath.Join(moduleRoot(t), "internal", "blockedby", "blockedby.go")
 	f, err := parser.ParseFile(token.NewFileSet(), src, nil, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -35,11 +31,18 @@ func Declared(t testing.TB) map[string]bool {
 		for _, spec := range gd.Specs {
 			vs := spec.(*ast.ValueSpec)
 			for i, name := range vs.Names {
+				if i >= len(vs.Values) {
+					continue
+				}
 				b, ok := vs.Values[i].(*ast.BasicLit)
 				if !ok || b.Kind != token.STRING {
 					continue
 				}
-				v, _ := strconv.Unquote(b.Value)
+				v, err := strconv.Unquote(b.Value)
+				if err != nil {
+					t.Errorf("const %s: %v", name.Name, err)
+					continue
+				}
 				if set[v] {
 					t.Errorf("const %s repeats the value %q", name.Name, v)
 				}
@@ -52,4 +55,24 @@ func Declared(t testing.TB) map[string]bool {
 		t.Fatal("blockedby.go declares no string consts")
 	}
 	return set
+}
+
+// moduleRoot walks up from the test's working directory to the go.mod, which
+// holds under -trimpath where runtime.Caller names no file on disk.
+func moduleRoot(t testing.TB) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("no go.mod above the test's working directory")
+		}
+		dir = parent
+	}
 }
