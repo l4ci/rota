@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/skills"
@@ -185,10 +186,10 @@ type Input struct {
 	SmokeShardsSource string
 
 	// Slots are the live worker slots with a reserved port block; empty skips
-	// the ports check. CwdOf answers a process's working directory ("" when
-	// unknown); nil reads every directory as unknown.
+	// the ports check. Procs lists the listeners and answers a process's
+	// working directory; nil skips the ports check as unscannable.
 	Slots []SlotBlock
-	CwdOf func(pid int) string
+	Procs pidlive.Source
 
 	// ExternalKnowledge is the state of the configured external knowledge
 	// clone (knowledge.external); the zero value, no Path, is the feature off.

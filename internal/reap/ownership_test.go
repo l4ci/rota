@@ -78,23 +78,6 @@ func TestOwnershipTable(t *testing.T) {
 			t.Errorf("Tab(%s) = %v, want %v", c.name, got, c.want)
 		}
 	}
-
-	for _, c := range []struct {
-		name string
-		p    Process
-		want bool
-	}{
-		{"free", Process{PID: 5, Tab: "w1:t1", Cwd: "/r/.worktrees/free"}, false},
-		{"no pid", Process{Tab: "w1:t1", Cwd: "/r/.worktrees/free"}, true},
-		{"live cwd", Process{PID: 5, Tab: "w1:t1", Cwd: "/r/.worktrees/live"}, true},
-		{"agent tab", Process{PID: 5, Tab: "w3:t9", Cwd: "/r/.worktrees/free"}, true},
-		{"slot tab", Process{PID: 5, Tab: "w6:t1", Cwd: "/r/.worktrees/free"}, true},
-		{"outside", Process{PID: 5, Tab: "w1:t1", Cwd: "/elsewhere"}, true},
-	} {
-		if got := o.Process(c.p); got != c.want {
-			t.Errorf("Process(%s) = %v, want %v", c.name, got, c.want)
-		}
-	}
 }
 
 func TestOwnershipSlotWorktreePaths(t *testing.T) {

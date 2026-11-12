@@ -105,3 +105,52 @@ func TestRewriteLines(t *testing.T) {
 		t.Fatalf("file = %q", b)
 	}
 }
+
+func TestAppendTextKeepsBytesVerbatim(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log")
+	for _, s := range []string{"== a\nout", "== b\n"} {
+		if err := AppendText(p, s, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b, _ := os.ReadFile(p); string(b) != "== a\nout== b\n" {
+		t.Fatalf("file = %q", b)
+	}
+}
+
+func TestAppendLineUniqueConcurrentAddsOnce(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "info", "exclude")
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	adds := 0
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ok, err := AppendLineUnique(p, "/node_modules", 0o644)
+			if err != nil {
+				t.Error(err)
+			}
+			if ok {
+				mu.Lock()
+				adds++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if b, _ := os.ReadFile(p); string(b) != "/node_modules\n" || adds != 1 {
+		t.Fatalf("file = %q, adds = %d", b, adds)
+	}
+}
+
+func TestAppendLineUniqueFramesMissingNewline(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "exclude")
+	os.WriteFile(p, []byte("# c\n/a"), 0o644)
+	if _, err := AppendLineUnique(p, "/b", 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "# c\n/a\n/b\n" {
+		t.Fatalf("file = %q", b)
+	}
+}

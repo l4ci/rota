@@ -167,6 +167,12 @@ type crossDetailBackend struct {
 	err error
 }
 
+// MilestoneStore forwards the wrapped board's store.
+func (b crossDetailBackend) MilestoneStore() milestone.Store {
+	st, _ := backlog.MilestoneStoreOf(b.Board)
+	return st
+}
+
 func (b crossDetailBackend) Detail(id string) (string, bool, error) {
 	if id == b.id {
 		return "", false, b.err

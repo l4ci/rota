@@ -136,23 +136,8 @@ func (e Env) excludeLink(wt, rel string) {
 	if !filepath.IsAbs(p) {
 		p = filepath.Join(wt, p)
 	}
-	line := "/" + filepath.ToSlash(rel)
-	have, _ := os.ReadFile(p)
-	for _, l := range strings.Split(string(have), "\n") {
-		if l == line {
-			return
-		}
-	}
-	os.MkdirAll(filepath.Dir(p), 0o777)
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	if len(have) > 0 && !bytes.HasSuffix(have, []byte("\n")) {
-		f.WriteString("\n")
-	}
-	f.WriteString(line + "\n")
+	// Advisory: a failed write leaves the link showing in `git status`.
+	_, _ = fsio.AppendLineUnique(p, "/"+filepath.ToSlash(rel), 0o644)
 }
 
 // slotDeps prepares a slot's dependencies: it shares round.sharedDirs when it

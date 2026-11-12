@@ -29,7 +29,7 @@ d=json.load(sys.stdin)["data"]
 print(",".join(c["id"]+("!" if "held" in c else "") for c in d["candidates"]))'; }
 rp_field() { python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["data"][sys.argv[1]]))' "$1"; }
 
-# The worktree, branch, tab and process candidates need a host the binary
+# The worktree, branch, tab candidates need a host the binary
 # cannot fake: they are covered by internal/cli/reap_test.go through Deps.Host.
 # What is left here is the lease, which reap finds from git and the process
 # table alone.

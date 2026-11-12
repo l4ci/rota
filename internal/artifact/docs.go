@@ -1,6 +1,8 @@
 package artifact
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -20,11 +22,15 @@ func (d FileDocs) NotFound(key string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "%s %s not found (.rota/%s/%s.md)", d.Kind, key, d.Dir, key)
 }
 
-// Read is the stored document, verbatim.
+// Read is the stored document, verbatim. A missing file is NotFound; any
+// other read error (a directory, EACCES) is returned as it is.
 func (d FileDocs) Read(key string) (string, error) {
 	b, err := os.ReadFile(d.Path(key))
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", d.NotFound(key)
+	}
+	if err != nil {
+		return "", err
 	}
 	return string(b), nil
 }

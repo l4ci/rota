@@ -113,7 +113,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	f.ws = worker.Env{Config: diskConfig, Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
 	f.env.Worker = wk(f.ws)
-	fb := &fakeRemote{}
+	fb := &fakeRemote{msRoot: root}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	fb.add("13", "Second issue", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
 	fb.add("14", "No criteria", "M01", false, "")

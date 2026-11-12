@@ -1,9 +1,6 @@
 package plan
 
 import (
-	"fmt"
-	"strconv"
-
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -114,13 +111,7 @@ func (s notes) Create(r Ref, render func(unit string) string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		next := 0
-		for _, u := range units {
-			if n, err := strconv.Atoi(u[1:]); err == nil && n > next {
-				next = n
-			}
-		}
-		unit = fmt.Sprintf("S%02d", next+1)
+		unit = nextUnit(units)
 	}
 	key := milestone + "-" + unit
 	err = artifact.CreateNote("plan", sliceNote{sl, milestone, unit}, key, render(unit))

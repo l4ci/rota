@@ -124,6 +124,16 @@ func TestPutMakesDirectorySelfIgnoring(t *testing.T) {
 	}
 }
 
+func TestMissingSessionWordingIsPinned(t *testing.T) {
+	root := t.TempDir()
+	want := "debug session gone not found (.rota/debug/gone.md)"
+	if _, err := Show(root, "gone"); err == nil || err.Error() != want {
+		t.Fatalf("Show = %v, want %q", err, want)
+	}
+	if err := Rm(root, "gone"); err == nil || err.Error() != want {
+		t.Fatalf("Rm = %v, want %q", err, want)
+	}
+}
 func TestShowReportsReadErrorsAsFailures(t *testing.T) {
 	root := t.TempDir()
 	// a directory where the file should be: readable path, unreadable file

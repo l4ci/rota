@@ -438,3 +438,54 @@ func TestRemoveSidecars(t *testing.T) {
 		t.Errorf("unrelated sidecar gone: %v", err)
 	}
 }
+
+func TestMoveFileRename(t *testing.T) {
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "a"), filepath.Join(d, "b")
+	os.WriteFile(src, []byte("x"), 0o644)
+	if err := MoveFile(src, dst, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(dst)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("dst = %v, %v; want mode 0600", fi, err)
+	}
+	if _, err := os.Stat(src); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("src still there: %v", err)
+	}
+}
+
+func TestMoveFileCopyFallback(t *testing.T) {
+	orig := rename
+	t.Cleanup(func() { rename = orig })
+	rename = func(string, string) error { return &os.LinkError{Op: "rename", Err: syscall.EXDEV} }
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "a"), filepath.Join(d, "b")
+	os.WriteFile(src, []byte("secret"), 0o644)
+	if err := MoveFile(src, dst, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(dst)
+	fi, _ := os.Stat(dst)
+	if string(got) != "secret" || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("dst = %q mode %v", got, fi.Mode().Perm())
+	}
+	if _, err := os.Stat(src); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("src still there: %v", err)
+	}
+}
+
+func TestMoveFileCopyFailureKeepsSrc(t *testing.T) {
+	orig := rename
+	t.Cleanup(func() { rename = orig })
+	rename = func(string, string) error { return syscall.EXDEV }
+	d := t.TempDir()
+	src := filepath.Join(d, "a")
+	os.WriteFile(src, []byte("x"), 0o644)
+	if err := MoveFile(src, filepath.Join(d, "missing", "b"), 0o600); err == nil {
+		t.Fatal("want error")
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("src lost: %v", err)
+	}
+}

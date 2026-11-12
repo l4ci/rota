@@ -81,12 +81,8 @@ func migrate(old, path string) {
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
 		return
 	}
-	if os.Rename(old, path) != nil {
-		// A different filesystem: copy, then drop the old file.
-		b, err := os.ReadFile(old)
-		if err != nil || fsio.WriteFileAtomic(path, b) != nil {
-			return
-		}
+	if fsio.MoveFile(old, path, 0o644) != nil {
+		return
 	}
 	fsio.RemoveWithLock(old)
 }

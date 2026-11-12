@@ -3,10 +3,8 @@ package cli
 import (
 	"context"
 	"flag"
-	"fmt"
 	"strings"
 
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
@@ -25,19 +23,10 @@ func defaultReapEnv(ctx context.Context, root string, d *Deps) (round.Env, reap.
 	var ops reap.HostOps
 	if e.Snapshot != nil {
 		if tl := d.Host(e.HostName).Capabilities().TabLister; tl != nil {
-			ops = terminalReapOps{tl}
+			ops = tl
 		}
 	}
 	return e, ops
-}
-
-// terminalReapOps adapts a host tab listing. Process proof stays inside the
-// host's CloseTab; reap offers no standalone processes on a real host.
-type terminalReapOps struct{ host.TabLister }
-
-func (terminalReapOps) Processes(context.Context) ([]reap.Process, error) { return nil, nil }
-func (terminalReapOps) StopProcess(context.Context, int) error {
-	return fmt.Errorf("stopping a process is not supported on a real host")
 }
 
 func reapCommand() *Command {
