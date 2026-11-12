@@ -26,7 +26,7 @@ rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> -
 rota verdict route <branch> --for ship-second-opinion --json
 ```
 
-Exit 2 from `add` names the malformed field: ask the agent to resend; never guess a verdict. Route per the Step 3 table.
+Exit 2 from `add` names the malformed field: resend the error to the same agent session once (SendMessage, not a fresh dispatch); a second malformed block exits 4: record nothing and tell the orchestrator. Never guess a verdict. Route per the Step 3 table.
 
 ## Step 3.75 — QA Gate
 

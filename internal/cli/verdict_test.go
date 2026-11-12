@@ -46,7 +46,7 @@ func TestVerdictAddValidates(t *testing.T) {
 		{"lowercase", []string{"--kind", "qa", "--verdict", "pass"}, 2},
 		{"bad body", []string{"--kind", "qa", "--verdict", "FAIL", "--body-file", bad}, 2},
 		{"missing body file", []string{"--kind", "qa", "--verdict", "FAIL", "--body-file", filepath.Join(dir, "nope")}, 2},
-		{"body verdict differs", []string{"--kind", "qa", "--verdict", "FAIL", "--body-file", writeBody(t, t.TempDir(), `{"verdict": "PASS"}`)}, 2},
+		{"body verdict differs", []string{"--kind", "review-quality", "--verdict", "FAIL", "--body-file", writeBody(t, t.TempDir(), `{"verdict": "PASS"}`)}, 2},
 		{"unknown branch", []string{"nope", "--kind", "qa", "--verdict", "FAIL"}, 3},
 	}
 	for _, c := range cases {
@@ -433,5 +433,36 @@ func TestVerdictAddRefusesCorruptStore(t *testing.T) {
 	}
 	if raw, _ := os.ReadFile(store); string(raw) != "not json" {
 		t.Errorf("store rewritten: %q", raw)
+	}
+}
+
+// A malformed reviewer block is re-asked in the same session once; the second
+// malformed block is refused, and a valid one in between resets the count.
+func TestVerdictAddReasksMalformedBlockOnce(t *testing.T) {
+	dir := verdictRepo(t)
+	bad := writeBody(t, t.TempDir(), `{"findings": [{"severity": "huge", "title": "t"}]}`)
+	add := func(body string) (int, string) {
+		code, _, se := rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "FAIL", "--body-file", body)
+		return code, se
+	}
+	code, se := add(bad)
+	if code != 2 || !strings.Contains(se, "same reviewer session") {
+		t.Fatalf("first malformed block: exit %d, want 2 with a same-session re-ask hint\n%s", code, se)
+	}
+	code, se = add(bad)
+	if code != 4 || !strings.Contains(se, "already re-asked") {
+		t.Fatalf("second malformed block: exit %d, want 4 refusing a further re-ask\n%s", code, se)
+	}
+	// A different kind has its own count.
+	if code, _, se := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", bad); code != 2 {
+		t.Errorf("other kind: exit %d, want a fresh re-ask (2)\n%s", code, se)
+	}
+	// A valid block records and clears the count.
+	good := writeBody(t, t.TempDir(), `{"verdict": "FAIL"}`)
+	if code, _ := add(good); code != 0 {
+		t.Fatalf("valid block: exit %d, want 0", code)
+	}
+	if code, se := add(bad); code != 2 {
+		t.Errorf("malformed after a valid record: exit %d, want a fresh re-ask (2)\n%s", code, se)
 	}
 }
