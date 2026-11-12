@@ -77,7 +77,7 @@ type AssignOpts struct {
 	Siblings       []string
 	CheckOnly      bool
 	AcceptOverlap  bool
-	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
+	// AcceptOpenPR lets a deliberate redo through unless another agent owns the PR head.
 	AcceptOpenPR bool
 	// AcceptCrossMilestone lets the maintainer assign an issue that depends on another active milestone.
 	AcceptCrossMilestone bool
@@ -651,16 +651,22 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if err != nil && !o.AcceptOpenPR {
 			return run, false, err
 		}
-		// A redo onto an open PR starts on its head: the slot awaits its own done.
-		hasOpenPR = err == nil && openPR[it.IssueKey()] != 0
+		// A redo of an open PR awaits the assigned worker's own done.
+		hasOpenPR = err == nil && openPR[it.IssueKey()].Number != 0
 		if o.AcceptOpenPR {
+			for _, item := range append([]*backlog.Item{it}, members...) {
+				pr := openPR[item.IssueKey()]
+				if worker.RoundBranch(pr.Branch) && !strings.HasPrefix(pr.Branch, agent+"/") {
+					return run, false, blocked(blockedby.OpenPR, "%s has open PR #%d on %s, owned by another agent: rota round transfer %s --to %s picks it up", item.ID, pr.Number, pr.Branch, item.ID, agent)
+				}
+			}
 			openPR = nil
 		}
-		if n := openPR[it.IssueKey()]; n != 0 {
+		if n := openPR[it.IssueKey()].Number; n != 0 {
 			return run, false, blocked(blockedby.OpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
 		}
 		for _, m := range members {
-			if n := openPR[m.IssueKey()]; n != 0 {
+			if n := openPR[m.IssueKey()].Number; n != 0 {
 				return run, false, blocked(blockedby.OpenPR, "bundle member %s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", m.ID, n)
 			}
 		}
