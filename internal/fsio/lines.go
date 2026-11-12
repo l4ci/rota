@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // AppendLine appends line plus a newline to path under the file's lock and
@@ -11,20 +13,64 @@ import (
 // disk. The file is created with mode when absent; its directory is not.
 func AppendLine(path string, line []byte, mode os.FileMode) error {
 	return Locked(path, LockTimeout, func() error {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, mode)
-		if err != nil {
-			return err
-		}
-		if _, err := f.Write(append(line[:len(line):len(line)], '\n')); err != nil {
-			f.Close()
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			f.Close()
-			return err
-		}
-		return f.Close()
+		return appendLocked(path, append(line[:len(line):len(line)], '\n'), mode)
 	})
+}
+
+// AppendText appends text verbatim (no newline added) to path under the
+// file's lock and fsyncs it. The file is created with mode when absent.
+func AppendText(path, text string, mode os.FileMode) error {
+	return Locked(path, LockTimeout, func() error { return appendLocked(path, []byte(text), mode) })
+}
+
+// AppendLineUnique appends line plus a newline to path unless a line equal to
+// it is already there, and reports whether it appended. The check and the
+// append happen under one lock. A file whose last line lacks a newline gets
+// one first. The file is created with mode when absent and its directory is
+// created as needed.
+func AppendLineUnique(path, line string, mode os.FileMode) (added bool, err error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return false, err
+	}
+	err = Locked(path, LockTimeout, func() error {
+		have, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		for _, l := range strings.Split(string(have), "\n") {
+			if l == line {
+				return nil
+			}
+		}
+		out := line + "\n"
+		if len(have) > 0 && !bytes.HasSuffix(have, []byte("\n")) {
+			out = "\n" + out
+		}
+		if err := appendLocked(path, []byte(out), mode); err != nil {
+			return err
+		}
+		added = true
+		return nil
+	})
+	return added, err
+}
+
+// appendLocked writes data to path with O_APPEND and fsyncs; the caller holds
+// the lock.
+func appendLocked(path string, data []byte, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // LinePolicy says what ReadLines does with a line decode rejects.
