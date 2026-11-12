@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
@@ -122,7 +123,9 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 		out, code := shell(ctx, dir, c)
 		section := "== " + c + "\n" + out
 		log.WriteString(section)
-		appendFile(logPath, section)
+		// The log is a best-effort aid for a failed run: a write error
+		// must not fail the verify.
+		_ = fsio.AppendText(logPath, section, 0o600)
 		excused, covered := led.Excuses(out, now)
 		switch {
 		case code == 0:
@@ -135,6 +138,7 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 		}
 	}
 	res.Log = log.String()
+	os.Remove(fsio.LockPath(logPath))
 	if res.OK() {
 		cleanup()
 	} else {
