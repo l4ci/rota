@@ -671,7 +671,9 @@ it. For a worker it refuses (exit 2, one-line reason) the commands the worker co
 It parses the command line, so `git -C <dir> push -f`, `/usr/bin/git`, `sudo`, `env`, `timeout`, `xargs`,
 `bash -c '…'`, `$(…)` and `a && b` chains are all seen; text inside an argument or a commit message is not.
 When the line mentions `git` or `gh` and the guard cannot parse it, or cannot read the branch or worktree
-it needs, it refuses and asks for the plain command.
+it needs, it refuses and asks for the plain command. It also follows a changed directory or git dir:
+`env -C`, `sudo -D`, `pushd` (including `-n` and stack rotation) and `GIT_DIR=`. A `pushd` option it
+does not model is refused. `@` counts as `HEAD` in push refspecs.
 
 Install it in `project` or `user` scope (`rota hook install --scope project`): a worker's worktree does
 not read the untracked `.claude/settings.local.json`. `install` warns when the guard sits only there, and

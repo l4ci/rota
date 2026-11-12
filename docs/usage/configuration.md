@@ -53,6 +53,8 @@ Each key has a scope, which `rota config show` prints beside the source (`(sourc
 
 `rota config check` and `rota config fill` count a required key as supplied when the project, local or global layer holds a non-null value for it. The global layer excludes project-owned keys. For example, `docs.path` set only in `config.local.json` satisfies the check, and fill leaves it there without adding a tracked default. When every required key is supplied and no migration or removal is pending, fill reports `changed: false` and leaves the project file unchanged.
 
+A `.rota/config.json` or `.rota/config.local.json` that does not parse, or holds JSON other than an object, makes every verb exit 5 and name the file. Only `config`, `migrate`, `init`, `setup`, `version`, `update`, `skills`, `hook`, `statusline` and `worker prompt-check` still run. `rota config set` refuses to overwrite such a file. A blank file reads as `{}`. A bad global config is skipped with a warning.
+
 ### Moving keys to their layer
 
 A config written before scopes can hold machine keys in the tracked file, where they shadow the global config (an empty `round.accounts` hides the global accounts). `rota migrate config` lists what it would change, with each key's effective value before and after, and writes nothing:

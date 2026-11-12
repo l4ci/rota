@@ -47,9 +47,10 @@ See [parallel rounds](../usage/parallel-rounds.md) and [unattended rounds](../us
 | 2 | Usage error: unknown verb or flag, missing argument |
 | 3 | Something named could not be resolved (item, plan, sub-repo, base branch, `.rota/` itself) |
 | 4 | A mutating verb refused to break an invariant |
-| 5 | An external dependency is missing or failing (`git`, `gh`, `glab`, network) |
+| 5 | An external dependency is missing or failing (`git`, `gh`, `glab`, network), or a config file you own does not parse (the message names the file) |
 | 6 | Transient: rate limit or lock timeout, retry later |
 | 70 | Bug in `rota`; report it |
+| 130 | Interrupted: SIGINT or SIGTERM cancelled the verb. Not a bug, nothing is reported |
 
 Not a stable API across major versions, but `--json` shapes only change
 additively within one. Full rules:
@@ -134,7 +135,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota backlog drift` | open items that commits already mention |
 | `rota backlog backfill` | stamp Since: on open items that lack it |
 | `rota backlog archive [--days <n>]` | move old completed items to ARCHIVE.md |
-| `rota backlog stale --kind <map\|knowledge\|todo> [--days <n>]` | stale map, knowledge or backlog entries |
+| `rota backlog stale --kind <map\|knowledge\|todo> [--days <n>]` | stale map, knowledge or backlog entries; `todo` reads the selected tracker and lists items it could not date under `skippedUndated` (`--json`) |
 
 ## `rota summary`
 
@@ -527,7 +528,7 @@ A statusline command, not a query: it prints nothing of its own, always exits 0 
 
 Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They live in `.rota/verdicts.json`, which `/rota-ship` routes on.
 
-If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hint instead of overwriting the file: fix or delete the file, then record the verdict again. Read verbs treat an unparseable store as empty.
+If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hint instead of overwriting the file: fix or delete the file, then record the verdict again. `rota worker gate` and `ship` refuse with exit 4 too, because an unreadable store would hide a failing verdict. Other read verbs treat an unparseable store as empty. A missing file is empty everywhere.
 
 ## `rota tracker`
 
