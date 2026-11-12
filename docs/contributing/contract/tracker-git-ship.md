@@ -128,6 +128,8 @@ old: none (new verb)
 note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call. `data.head` is the branch sha resolved once and diffed; pass it to `rota verdict add --sha`.
 note: the base need not be an ancestor of the branch tip: the diff is `base...branch`, so a base that moved on since the fork is fine. Only unrelated histories fail. `--since` is a point on the branch and must be an ancestor; the range is then `since..branch`.
 
+note: (#3096) with no `--since`, the branch of an open (not landed) integration record in `workers.json` is packaged on its fix commits only: `--since` defaults to the parent of the oldest fix commit, or the assembled tip when there is none. Any other branch, or an unreadable registry, keeps the whole-branch range. A failure resolving that parent exits 3.
+
 ### rota review prepare
 rota review prepare <commit>
 repo: scoped
