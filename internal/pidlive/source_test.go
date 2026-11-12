@@ -172,3 +172,5 @@ func TestRealParentsListsSelf(t *testing.T) {
 		t.Errorf("ps lists self under %d (found %v), want %d", pp, found, parentPID())
 	}
 }
+
+func (fakeTable) Listeners() ([]Listener, bool) { return nil, false }

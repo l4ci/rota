@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/initproj"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/skills"
@@ -856,23 +857,31 @@ func TestConfigDirsFallBackToTheDefaultDir(t *testing.T) {
 	}
 }
 
-func portsInput(f *fake, cwd map[int]string) Input {
+// procTable is a recorded process table: its listeners (ok false when no
+// scanner works) and the working directory of each pid.
+type procTable struct {
+	pidlive.Source
+	ls  []pidlive.Listener
+	ok  bool
+	cwd map[int]string
+}
+
+func (p procTable) Listeners() ([]pidlive.Listener, bool) { return p.ls, p.ok }
+func (p procTable) Cwd(pid int) string                    { return p.cwd[pid] }
+
+func portsInput(p procTable) Input {
 	return Input{
 		Slots: []SlotBlock{{Name: "w1", Worktree: "/p/.worktrees/w1", Base: 20000, Size: 100}, {Name: "w2", Worktree: "/p/.worktrees/w2", Base: 20100, Size: 100}},
-		CwdOf: func(pid int) string { return cwd[pid] },
-		Exec:  f.exec, Look: f.look,
+		Procs: p,
+		Exec:  (&fake{}).exec, Look: (&fake{}).look,
 	}
 }
 
-const ssOut = `LISTEN 0 511 127.0.0.1:20042 0.0.0.0:* users:(("node",pid=77,fd=19))
-LISTEN 0 511 *:20150 *:* users:(("node",pid=78,fd=19))
-LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=5,fd=3))
-`
+var portListeners = []pidlive.Listener{{Port: 20042, PID: 77}, {Port: 20150, PID: 78}, {Port: 22, PID: 5}}
 
 func TestPortsWarnsOnForeignListenerInASlotBlock(t *testing.T) {
-	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
 	// pid 77 runs in w1's own worktree; pid 78 sits in w2's block but lives in w1's worktree.
-	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1/web", 78: "/p/.worktrees/w1"})
+	in := portsInput(procTable{ls: portListeners, ok: true, cwd: map[int]string{77: "/p/.worktrees/w1/web", 78: "/p/.worktrees/w1"}})
 	c := statusOf(Run(context.Background(), in), "ports")
 	if c.Status != Warn || !strings.Contains(c.Detail, "20150") || !strings.Contains(c.Detail, "w2") || strings.Contains(c.Detail, "20042") {
 		t.Errorf("ports = %+v, want one warn naming 20150 in w2 only", c)
@@ -880,42 +889,34 @@ func TestPortsWarnsOnForeignListenerInASlotBlock(t *testing.T) {
 }
 
 func TestPortsQuietWhenListenersBelongToTheirSlot(t *testing.T) {
-	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
-	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w2/x"})
+	in := portsInput(procTable{ls: portListeners, ok: true, cwd: map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w2/x"}})
 	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
 		t.Errorf("ports line = %+v, want none", c)
 	}
 }
 
-func TestPortsFallsBackToLsofAndTreatsUnknownOwnerAsForeign(t *testing.T) {
-	f := &fake{have: map[string]bool{"lsof": true}, reply: map[string]Result{"lsof -nP -iTCP -sTCP:LISTEN -Fpn": {Stdout: "p91\nn*:20003\n"}}}
-	c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports")
-	if c.Status != Warn || !strings.Contains(c.Detail, "20003") {
-		t.Errorf("ports = %+v, want a warn naming 20003", c)
+func TestPortsTreatsUnknownOwnerAsForeign(t *testing.T) {
+	in := portsInput(procTable{ls: []pidlive.Listener{{Port: 20003}}, ok: true})
+	c := statusOf(Run(context.Background(), in), "ports")
+	if c.Status != Warn || !strings.Contains(c.Detail, "20003") || !strings.Contains(c.Detail, "unknown process") {
+		t.Errorf("ports = %+v, want a warn naming 20003 and an unknown process", c)
 	}
 }
 
 func TestPortsReportsWhenNoScannerWorks(t *testing.T) {
-	for name, f := range map[string]*fake{
-		"none installed": {have: map[string]bool{}},
-		"ss fails":       {have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {ExitCode: 1}}},
-	} {
-		c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports")
+	in := portsInput(procTable{})
+	in2 := portsInput(procTable{})
+	in2.Procs = nil
+	for name, in := range map[string]Input{"scan fails": in, "no process source": in2} {
+		c := statusOf(Run(context.Background(), in), "ports")
 		if c.Status != Skip || !strings.Contains(c.Detail, "not checked") {
 			t.Errorf("%s: ports = %+v, want a skip saying blocks were not checked", name, c)
 		}
 	}
 }
 
-func TestParseLsofDualStackDedupe(t *testing.T) {
-	if got := ParseLsof("p91\nn*:20003\nn[::1]:20003\n"); len(got) != 1 {
-		t.Errorf("ParseLsof listed %v, want one entry for the dual-stack port", got)
-	}
-}
-
 func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
-	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
-	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w1"})
+	in := portsInput(procTable{ls: portListeners, ok: true, cwd: map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w1"}})
 	in.Slots[1].Size = 10 // w2 holds 20100-20109: 20150 is outside it
 	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
 		t.Errorf("ports line = %+v, want none", c)

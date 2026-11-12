@@ -153,3 +153,5 @@ func TestCommCurrentPid(t *testing.T) {
 		t.Fatalf("Comm(missing pid) = %q, want empty", got)
 	}
 }
+
+func (fixedState) Listeners() ([]Listener, bool) { return nil, false }

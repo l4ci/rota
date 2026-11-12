@@ -39,6 +39,9 @@ type Source interface {
 	// Parents maps every pid to its parent pid; ok is false when the table
 	// could not be listed.
 	Parents() (ppids map[int]int, ok bool)
+	// Listeners lists the machine's TCP listeners; ok is false when no scanner
+	// (ss, lsof) is installed or the scan failed.
+	Listeners() (ls []Listener, ok bool)
 }
 
 // PSFunc runs ps with args and returns its trimmed stdout.
@@ -47,7 +50,10 @@ type PSFunc func(args ...string) (string, error)
 // Real is the Source over this machine: /proc where it exists, ps (and lsof for
 // a working directory) where it does not (macOS). PS replaces the ps runner; a
 // test of the ps parsing sets it.
-type Real struct{ PS PSFunc }
+type Real struct {
+	PS   PSFunc
+	Scan ScanFunc // replaces the ss and lsof runner of Listeners
+}
 
 func (r Real) ps(args ...string) (string, error) {
 	if r.PS != nil {
