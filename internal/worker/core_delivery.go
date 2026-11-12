@@ -74,8 +74,12 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		}
 		switch state {
 		case "prepared", "unknown", "submitted":
-			res.Handle, res.Delivery = t.handle, jsonx.Str(p, "state")
-			return true, res, fail(exitcode.ExitUnavailable, "Core has an unresolved delivery; inspect the original terminal and retry that message to reconcile; to give the issue to another slot without waiting, run rota round transfer "+transferID(o)+" --to <free slot> (slot "+o.Slot+" stays blocked until the delivery is confirmed); before using rota worker dispatch "+o.Slot+" --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed")
+			res.Handle, res.Delivery = t.handle, state
+			message := "Core has an unresolved delivery (state: " + state + "); inspect the original terminal and retry that message to reconcile; to give the issue to another slot without waiting, run rota round transfer " + transferID(o) + " --to <free slot> (slot " + o.Slot + " stays blocked until the delivery is confirmed)"
+			if state == "unknown" {
+				message += "; before using rota worker dispatch " + o.Slot + " --confirm-not-submitted, the maintainer must confirm after reading the original terminal screen that nothing was typed"
+			}
+			return true, res, fail(exitcode.ExitUnavailable, message)
 		}
 		return false, res, nil
 	}
@@ -155,8 +159,12 @@ func (e Env) ConfirmCoreNotSubmitted(ctx context.Context, root, slot string) err
 			return
 		}
 		p := corePending(s)
-		if s.IsExternal() || s.PaneHandle() == "" || p == nil || jsonx.Str(p, "state") != "unknown" {
+		if s.IsExternal() || s.PaneHandle() == "" || p == nil {
 			reconcileErr = fail(exitcode.ExitRefused, "slot has no unknown Core delivery to confirm")
+			return
+		}
+		if state := jsonx.Str(p, "state"); state != "unknown" {
+			reconcileErr = fail(exitcode.ExitRefused, "slot '"+slot+"' has a Core delivery in state: "+state+"; retry the original dispatch to reconcile; to give the issue to another slot without waiting, run rota round transfer "+transferID(DispatchOpts{Task: s.HeldID()})+" --to <free slot>")
 			return
 		}
 		payload := jsonx.Str(p, "payload")

@@ -116,8 +116,8 @@ func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
 		t.Fatalf("task: %+v %v, want submitted", res, err)
 	}
 	relay := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer once"), Relay: true}
-	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery") || !strings.Contains(err.Error(), "the maintainer must confirm after reading the original terminal screen") {
-		t.Fatalf("unconfirmed task must require the maintainer's screen confirmation: %v", err)
+	if _, err := e.Dispatch(bg, dir, relay); err == nil || !strings.Contains(err.Error(), "unresolved delivery (state: submitted)") || strings.Contains(err.Error(), "--confirm-not-submitted") {
+		t.Fatalf("submitted task must require reconciliation without suggesting manual confirmation: %v", err)
 	}
 	// #3001: the refusal also names the maintainer-free way forward.
 	_, refusal := e.Dispatch(bg, dir, relay)

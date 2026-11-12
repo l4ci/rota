@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/testutil/coretest"
 )
 
@@ -212,6 +214,11 @@ func TestCoreAdapterUnknownTaskCanBeConfirmedAndRetried(t *testing.T) {
 	}
 	handle := LoadRegistryTolerant(dir).Slot("w1").Handle()
 	peer.Mode("")
+	later := DispatchOpts{Slot: "w1", Relay: true, BodyFile: writeBrief(t, "later message")}
+	res, err := e.Dispatch(bg, dir, later)
+	if err == nil || res.Delivery != "unknown" || !strings.Contains(err.Error(), "state: unknown") || !strings.Contains(err.Error(), "--confirm-not-submitted") {
+		t.Fatalf("unknown delivery must offer manual confirmation: %+v, %v", res, err)
+	}
 	if err := e.ConfirmCoreNotSubmitted(bg, dir, "w1"); err != nil {
 		t.Fatal(err)
 	}
@@ -225,5 +232,52 @@ func TestCoreAdapterUnknownTaskCanBeConfirmedAndRetried(t *testing.T) {
 	runs, sends, _ := peer.Counts()
 	if runs != 1 || sends != 2 || sent[0] != sent[1] || LoadRegistryTolerant(dir).Slot("w1").Handle() != handle {
 		t.Fatalf("recovery replaced original assignment: runs=%d sends=%d payloads=%v", runs, sends, sent)
+	}
+}
+
+func TestCoreAdapterSubmittedDeliveryRefusalsAgree(t *testing.T) {
+	for _, prior := range []string{"prepared", "submitted", "unknown"} {
+		t.Run(prior, func(t *testing.T) {
+			dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
+				t.Fatal(err)
+			}
+			peer, h := coretest.New(t, "claude-code")
+			rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+			e := rig.env(h)
+			e.Getenv = func(string) string { return "" }
+			task := DispatchOpts{Slot: "w1", Task: "T1", Kind: harness.Claude, BodyFile: writeBrief(t, "original submitted assignment")}
+			if res, err := e.Dispatch(bg, dir, task); err != nil || res.Delivery != "submitted" {
+				t.Fatalf("initial dispatch: %+v, %v; want submitted", res, err)
+			}
+			// Model an interrupted worker outcome write. Core retains its real
+			// submitted receipt; a prepared record must never be re-sent, while
+			// an unknown record can reconcile to the host's submitted evidence.
+			if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+				corePending(s).Set("state", prior)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			want := "submitted"
+			if prior == "prepared" {
+				want = "prepared"
+			}
+			relay := DispatchOpts{Slot: "w1", Relay: true, BodyFile: writeBrief(t, "later message")}
+			res, dispatchErr := e.Dispatch(bg, dir, relay)
+			confirmErr := e.ConfirmCoreNotSubmitted(bg, dir, "w1")
+			t.Logf("confirmation refusal exit: %d", exitOf(confirmErr))
+			if dispatchErr == nil || res.Delivery != want || !strings.Contains(dispatchErr.Error(), want) || strings.Contains(dispatchErr.Error(), "--confirm-not-submitted") {
+				t.Errorf("dispatch must report %s without a manual-confirm hint: %+v, %v", want, res, dispatchErr)
+			}
+			if confirmErr == nil || exitOf(confirmErr) != exitcode.ExitRefused || !strings.Contains(confirmErr.Error(), want) || !strings.Contains(confirmErr.Error(), "retry") || !strings.Contains(confirmErr.Error(), "rota round transfer") {
+				t.Errorf("confirmation must refuse %s with recovery guidance: %v", want, confirmErr)
+			}
+			if got := jsonx.Str(corePending(LoadRegistryTolerant(dir).Slot("w1")), "state"); got != want {
+				t.Errorf("refusals left recorded delivery %q, want %q", got, want)
+			}
+			if runs, sends, _ := peer.Counts(); runs != 1 || sends != 1 {
+				t.Errorf("refusals replaced or replayed delivery: runs=%d sends=%d", runs, sends)
+			}
+		})
 	}
 }
