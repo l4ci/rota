@@ -54,12 +54,8 @@ func usageReason(m keepstate.UsageHandoff, threshold int, path string) string {
 		reset = ", resets " + m.ResetsAt
 	}
 	return fmt.Sprintf("Usage is at %s%% of the %s window%s, at or above the switch threshold of %d%%. "+
-		"The next orchestrator session may run under another account. "+
-		"Write the handoff for it to %s now: first line %q, "+
-		"second line \"<!-- written <UTC timestamp, YYYY-MM-DDTHH:MM:SSZ> -->\", then the body from "+
-		"references/handoff-template.md with a \"## Round state\" section (slots, who holds what, merges pending, escalations open). "+
-		"Commit nothing you do not own. Then run /exit.",
-		trimPct(m.UsedPct), m.Window, reset, threshold, path, HandoffMarker)
+		"The next orchestrator session may run under another account. ",
+		trimPct(m.UsedPct), m.Window, reset, threshold) + handoffInstruction("it", path)
 }
 
 // UsageMarker finds the newest usage handoff written at or after since in the
