@@ -87,6 +87,31 @@ func TestStatuslineDumpRejectsJSON(t *testing.T) {
 	}
 }
 
+type panicHookInput struct{}
+
+func (panicHookInput) Read([]byte) (int, error) { panic("broken hook input") }
+
+func TestHookPanicPassesWithOptionalDebug(t *testing.T) {
+	for _, verb := range []string{"stop", "prompt", "session-start", "guard"} {
+		for _, debug := range []string{"", "1"} {
+			t.Run(verb+"/debug="+debug, func(t *testing.T) {
+				t.Setenv("ROTA_HOOK_DEBUG", debug)
+				var out, errOut strings.Builder
+				code := mainWith(testDeps(), []string{"hook", verb, "--json"}, panicHookInput{}, &out, &errOut)
+				if code != 0 || out.Len() != 0 {
+					t.Fatalf("panic must pass without protocol output: exit %d, stdout %q, stderr %q", code, out.String(), errOut.String())
+				}
+				if debug == "" && errOut.Len() != 0 {
+					t.Fatalf("debug disabled: stderr %q", errOut.String())
+				}
+				if debug != "" && !strings.Contains(errOut.String(), "panic: broken hook input") {
+					t.Fatalf("debug enabled: missing panic diagnostic in %q", errOut.String())
+				}
+			})
+		}
+	}
+}
+
 func TestHookStopThreshold(t *testing.T) {
 	dir := orchProject(t, true)
 	for _, c := range []struct {
