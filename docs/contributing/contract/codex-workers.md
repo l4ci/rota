@@ -11,6 +11,7 @@ refs:
   - internal/round/quota.go
   - internal/roundcfg/roundcfg.go
   - internal/cli/hook.go
+  - internal/cli/hook_install.go
   - internal/roundwatch/maintainer.go
   - internal/hook
   - internal/doctor/doctor.go
@@ -151,6 +152,7 @@ rota hook stop
 repo: none
 data: none. The verb speaks Claude Code's hook protocol: JSON on stdout, exit 0.
 exit: always 0, including on a state it cannot read: a broken hook must never wedge the orchestrator in a block loop.
+env: `ROTA_HOOK_DEBUG` set to a nonempty value reports recovered panics on stderr for `hook stop`, `hook prompt`, `hook session-start` and `hook guard`. A panic still exits 0 with no hook response; unset, it passes silently.
 old: none (new in D1)
 note: reads the Stop payload on stdin (`session_id`, `stop_hook_active`, `cwd`). Passes (no output) unless all hold: this session is the orchestrator (any other session is decided by `work.contextGuard`, see the note below; when that passes, such a session with `ROTA_SLOT` unset and open bug records gets a non-blocking `systemMessage` offer, once per record and session, `bugreport.md`); its state file exists and its `updatedAt` is no older than the fixed 120 s state age limit (a stale reading is not acted on); `contextPct` is at or above `orchestrator.handoffThreshold`; and no fresh handoff exists yet. Otherwise prints `{"decision":"block","reason":"…"}` where the reason names the percentage and the threshold and tells the orchestrator to write the handoff to the handoff path below, commit nothing it does not own, and run `/exit`.
 note: context guard (#921). A session that is not the orchestrator is read against `work.contextGuard` (`off|warn|auto`, default `warn`, silent default not seeded by init; an unknown value reads as `off`). Only `auto` blocks: on a fresh reading at or above `orchestrator.handoffThreshold` the hook prints a block whose reason tells the session to run `/rota-pause` at the next task boundary, at most 2 blocks per crossing (every block counts, `stop_hook_active` or not), then passes and records `handoffFailed`. A fresh reading below the threshold resets the count. `rota hook prompt` prints one `additionalContext` line recommending `/rota-pause` for `warn`, once per crossing (`guardWarned` in the state file, cleared below the threshold). The orchestrator path is unchanged.

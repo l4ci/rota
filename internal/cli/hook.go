@@ -8,24 +8,18 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/keepstate"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
-	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -41,13 +35,32 @@ func statuslineCommands() *Command {
 
 func hookCommands() *Command {
 	return &Command{Name: "hook", Summary: "Claude Code hooks that hand the orchestrator off before its context runs out", Subs: []*Command{
-		{Name: "stop", Fence: fenceAllowed, Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
-		{Name: "prompt", Fence: fenceAllowed, Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
-		{Name: "guard", Fence: fenceAllowed, Summary: "PreToolUse hook: recall path-scoped context before Edit/Write; deny destructive git for workers", Verb: noFlags(hookGuard)},
-		{Name: "session-start", Fence: fenceAllowed, Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
+		{Name: "stop", Fence: fenceAllowed, Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookVerb(hookStop))},
+		{Name: "prompt", Fence: fenceAllowed, Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookVerb(hookPrompt))},
+		{Name: "guard", Fence: fenceAllowed, Summary: "PreToolUse hook: recall path-scoped context before Edit/Write; deny destructive git for workers", Verb: noFlags(hookVerb(hookGuard))},
+		{Name: "session-start", Fence: fenceAllowed, Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookVerb(hookSessionStart))},
 		{Name: "install", Fence: fenceAllowed, Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
 		{Name: "uninstall", Fence: fenceAllowed, Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
 	}}
+}
+
+// hookVerb keeps protocol stdout free of CLI envelopes and passes on a panic.
+// Debug diagnostics go to stderr so a hook malfunction never blocks a build.
+func hookVerb(run RunFunc) RunFunc {
+	return func(c *Ctx, args []string) (res Result, err error) {
+		c.JSON = false
+		debug := false
+		defer func() {
+			if r := recover(); r != nil {
+				res, err = Result{}, nil
+				if debug {
+					fmt.Fprintf(c.Stderr, "rota hook: panic: %v\n", r)
+				}
+			}
+		}()
+		debug = c.deps().Getenv("ROTA_HOOK_DEBUG") != ""
+		return run(c, args)
+	}
 }
 
 const maxHookInput = 8 << 20
@@ -221,13 +234,7 @@ func handoffFile(d *Deps, root string, cfg any) string {
 	return hook.NotePath(root, base)
 }
 
-func hookStop(c *Ctx, args []string) (res Result, _ error) {
-	c.JSON = false
-	defer func() {
-		if r := recover(); r != nil {
-			res = Result{}
-		}
-	}()
+func hookStop(c *Ctx, args []string) (Result, error) {
 	hc, ok := hookSetupFor(c, false, true)
 	if !ok {
 		return Result{}, nil
@@ -291,13 +298,7 @@ func guardPrompt(hc hookContext, sid string) string {
 // reminder when no watch is armed. Any other session gets only the context
 // guard line (work.contextGuard=warn); the orchestrator is silent when nothing
 // is active.
-func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
-	c.JSON = false
-	defer func() {
-		if r := recover(); r != nil {
-			res = Result{}
-		}
-	}()
+func hookPrompt(c *Ctx, args []string) (Result, error) {
 	hc, ok := hookSetupFor(c, false, true)
 	if !ok {
 		return Result{}, nil
@@ -335,13 +336,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	return hookPrint(out), nil
 }
 
-func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
-	c.JSON = false
-	defer func() {
-		if r := recover(); r != nil {
-			res = Result{}
-		}
-	}()
+func hookSessionStart(c *Ctx, args []string) (Result, error) {
 	hc, ok := hookSetup(c, true)
 	if !ok {
 		return Result{}, nil
@@ -369,38 +364,25 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 // hookGuard recalls path-scoped context before Edit/Write for any session.
 // For Bash it exits 2 when a worker runs a command its contract forbids (#702).
 // Unreadable payloads pass silently.
-func hookGuard(c *Ctx, args []string) (res Result, _ error) {
-	c.JSON = false
-	defer func() {
-		if r := recover(); r != nil {
-			res = Result{}
-		}
-	}()
+func hookGuard(c *Ctx, args []string) (Result, error) {
 	payload, err := hook.ParsePayload(readInput(c))
 	if err != nil {
 		return Result{}, nil
 	}
 	wd, _ := c.deps().Getwd()
 	if tool := payload.String("tool_name"); tool == "Edit" || tool == "Write" {
-		cwd := payload.CwdOr(wd)
-		file := payload.String("tool_input", "file_path")
-		root, err := findRoot(cwd, false)
-		if err != nil || file == "" {
-			return Result{}, nil
-		}
-		if !filepath.IsAbs(file) {
-			file = filepath.Join(cwd, file)
-		}
-		st := knowledge.Store{Root: root, Repos: repos.Paths(root), Config: c.deps().Config}
-		entries, err := st.PathEntries(file)
-		if err != nil || len(entries) == 0 {
-			return Result{}, nil
-		}
-		cd, err := c.CommonDir(cwd)
-		if err != nil {
-			return Result{}, nil
-		}
-		context := hook.Recall(cd, payload.SessionID, entries, c.deps().Now())
+		context := hook.DecideRecall(hook.RecallRequest{
+			Payload: payload, DefaultCwd: wd,
+			Entries: func(cwd, file string) ([]knowledge.PathEntry, error) {
+				root, err := findRoot(cwd, false)
+				if err != nil {
+					return nil, err
+				}
+				st := knowledge.Store{Root: root, Repos: repos.Paths(root), Config: c.deps().Config}
+				return st.PathEntries(file)
+			},
+			CommonDir: c.CommonDir, Now: c.deps().Now,
+		})
 		if context == "" {
 			return Result{}, nil
 		}
@@ -426,148 +408,6 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil
-}
-
-// settingsPaths maps each scope to its file. Project scopes are "" outside a
-// project root.
-func settingsPaths(root, home string, getenv func(string) string) map[hook.Scope]string {
-	cfgDir := skills.ClaudeDir(getenv, home)
-	m := map[hook.Scope]string{}
-	for _, sc := range hook.Scopes {
-		base := root
-		if sc == hook.ScopeUser {
-			base = cfgDir
-		}
-		if p := hook.SettingsPath(sc, base); p != "" {
-			m[sc] = p
-		}
-	}
-	return m
-}
-
-// settingsTarget resolves --scope to its file, with the exit codes the
-// contract names: 3 when a project scope is asked outside a project root.
-func settingsTarget(c *Ctx, scopeFlag string) (hook.Scope, string, map[hook.Scope]string, error) {
-	scope := hook.Scope(scopeFlag)
-	if !scope.Valid() {
-		return "", "", nil, Usage("--scope must be project-local, project or user")
-	}
-	root, rerr := c.Root()
-	if rerr != nil && scope != hook.ScopeUser {
-		return "", "", nil, rerr
-	}
-	home, _ := c.deps().UserHomeDir()
-	paths := settingsPaths(root, home, c.deps().Getenv)
-	p := paths[scope]
-	if p == "" {
-		return "", "", nil, Resolution("no settings path for scope %s (CLAUDE_CONFIG_DIR and HOME unset)", scope)
-	}
-	return scope, p, paths, nil
-}
-
-func writeSettings(path string, o *jsonx.Object) error {
-	b, err := jsonx.Marshal(o)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
-}
-
-func hookInstall(fs *flag.FlagSet) RunFunc {
-	scopeFlag := fs.String("scope", "project-local", "project-local, project or user")
-	wrap := fs.Bool("wrap-statusline", false, "wrap an existing statusline instead of refusing")
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := noArgs(args); err != nil {
-			return Result{}, err
-		}
-		scope, path, paths, err := settingsTarget(c, *scopeFlag)
-		if err != nil {
-			return Result{}, err
-		}
-		files := map[hook.Scope]*jsonx.Object{}
-		for sc, p := range paths {
-			o, rerr := hook.ReadSettings(p)
-			if rerr != nil {
-				if sc == scope {
-					return Result{}, &Error{Exit: ExitInternal, Message: rerr.Error(), Hint: "fix or move the settings file; rota will not overwrite a file it cannot parse"}
-				}
-				o = nil // another scope's broken file does not block this one
-			}
-			files[sc] = o
-		}
-		if files[scope] == nil {
-			files[scope] = jsonx.NewObject()
-		}
-		out, err := hook.Install(hook.InstallIn{Scope: scope, Wrap: *wrap, Files: files})
-		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-		}
-		if out.Blocked {
-			d := jsonx.Obj("blockedBy", blockedby.StatuslineExists, "scope", string(scope), "settingsPath", path, "changed", false)
-			return Result{Data: d}, Refused("a statusline is already configured and would be replaced").
-				WithHint("run: rota hook install --wrap-statusline (keeps it, runs it after the dump)")
-		}
-		if out.Changed {
-			if err := writeSettings(path, files[scope]); err != nil {
-				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-			}
-		}
-		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "hooks", out.Hooks, "statusline", out.Statusline, "changed", out.Changed)
-		text := fmt.Sprintf("%s: hooks %s, statusline %s", path, strings.Join(out.Hooks, ", "), out.Statusline)
-		if !out.Changed {
-			text = path + ": already installed"
-		}
-		if !guardReachesWorkers(files) {
-			c.Warn("the worker guard (PreToolUse) sits only in project-local scope, which worker worktrees do not read: run rota hook install --scope project (or --scope user)")
-		}
-		return Result{Data: d, Text: text}, nil
-	}
-}
-
-// guardReachesWorkers reports whether a marked PreToolUse entry sits in a scope
-// a worker worktree reads: project or user. Project-local is untracked.
-func guardReachesWorkers(files map[hook.Scope]*jsonx.Object) bool {
-	for _, sc := range []hook.Scope{hook.ScopeProject, hook.ScopeUser} {
-		if _, ok := hook.MarkedEvents(files[sc])[hook.EventGuard]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func hookUninstall(fs *flag.FlagSet) RunFunc {
-	scopeFlag := fs.String("scope", "project-local", "project-local, project or user")
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := noArgs(args); err != nil {
-			return Result{}, err
-		}
-		scope, path, _, err := settingsTarget(c, *scopeFlag)
-		if err != nil {
-			return Result{}, err
-		}
-		o, rerr := hook.ReadSettings(path)
-		if rerr != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: rerr.Error()}
-		}
-		removed := hook.Uninstall(o)
-		if removed == nil {
-			removed = []string{}
-		}
-		if len(removed) > 0 {
-			if err := writeSettings(path, o); err != nil {
-				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-			}
-		}
-		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "removed", removed, "changed", len(removed) > 0)
-		text := path + ": nothing to remove"
-		if len(removed) > 0 {
-			text = path + ": removed " + strings.Join(removed, ", ")
-		}
-		return Result{Data: d, Text: text}, nil
-	}
 }
 
 // bugreportStopOffer is the solo session's end-of-turn offer (#1175): one

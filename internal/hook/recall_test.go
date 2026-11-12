@@ -1,6 +1,8 @@
 package hook
 
 import (
+	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -8,6 +10,65 @@ import (
 
 	"github.com/l4ci/rota/internal/knowledge"
 )
+
+func TestDecideRecall(t *testing.T) {
+	root, commonDir := t.TempDir(), t.TempDir()
+	now := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name, tool, file, cwd  string
+		entriesErr, commonErr  bool
+		noEntries, wantContext bool
+	}{
+		{name: "relative edit", tool: "Edit", file: "internal/x.go", cwd: root, wantContext: true},
+		{name: "absolute write with fallback cwd", tool: "Write", file: filepath.Join(root, "internal/x.go"), wantContext: true},
+		{name: "other tool", tool: "Bash", file: "internal/x.go"},
+		{name: "missing path", tool: "Edit"},
+		{name: "query failure", tool: "Edit", file: "internal/x.go", entriesErr: true},
+		{name: "no matches", tool: "Write", file: "internal/x.go", noEntries: true},
+		{name: "common dir failure", tool: "Write", file: "internal/x.go", commonErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := RecallRequest{
+				Payload: Payload{SessionID: strings.ReplaceAll(tc.name, " ", "-"), Cwd: tc.cwd, Fields: map[string]any{
+					"tool_name": tc.tool, "tool_input": map[string]any{"file_path": tc.file},
+				}},
+				DefaultCwd: root,
+				Entries: func(cwd, file string) ([]knowledge.PathEntry, error) {
+					if cwd != root || file != filepath.Join(root, "internal/x.go") {
+						t.Fatalf("query cwd=%q file=%q", cwd, file)
+					}
+					if tc.entriesErr {
+						return nil, errors.New("unreadable knowledge")
+					}
+					if tc.noEntries {
+						return nil, nil
+					}
+					return []knowledge.PathEntry{{ID: "one", Text: "Keep the seam."}}, nil
+				},
+				CommonDir: func(cwd string) (string, error) {
+					if cwd != root {
+						t.Fatalf("common dir cwd=%q", cwd)
+					}
+					if tc.commonErr {
+						return "", errors.New("git unavailable")
+					}
+					return commonDir, nil
+				},
+				Now: func() time.Time { return now },
+			}
+			want := ""
+			if tc.wantContext {
+				want = "Path-scoped project context (before editing):\n\nKeep the seam."
+			}
+			if got := DecideRecall(in); got != want {
+				t.Fatalf("context=%q, want %q", got, want)
+			}
+			if got := DecideRecall(in); got != "" {
+				t.Fatalf("repeated context=%q", got)
+			}
+		})
+	}
+}
 
 func TestRecallClaimsConcurrentEntriesAndPreservesRefresh(t *testing.T) {
 	dir := t.TempDir()
