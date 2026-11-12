@@ -180,7 +180,7 @@ func TestWorkerGateIntegrationRereadsRecordUnderLock(t *testing.T) {
 	held, release := make(chan struct{}), make(chan struct{})
 	lockDone := make(chan error, 1)
 	go func() {
-		lockDone <- e.withIntegrationLock(context.Background(), w.dir, "a", func() error {
+		lockDone <- e.WithIntegrationLock(context.Background(), w.dir, "a", func() error {
 			close(held)
 			<-release
 			return nil

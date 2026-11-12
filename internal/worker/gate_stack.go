@@ -109,11 +109,14 @@ func (e Env) restack(ctx context.Context, root string, rec Integration) (Integra
 		cur, c2 := e.git(root, "rev-parse", "--verify", "--quiet", merged+"^{tree}")
 		same = c1 == 0 && c2 == 0 && old == cur
 	}
+	mergesOfBase := e.baseMerges(root, rec, merged, base)
 	err = UpdateIntegration(root, rec.Branch, func(it *Integration) {
 		it.Base, it.Onto, it.OntoBase = rec.OntoBase, "", ""
 		it.Assembled = merged
-		if merged != tip && !it.IsRotaMerge(merged) {
-			it.RotaMerges = append(it.RotaMerges, merged)
+		for _, c := range mergesOfBase {
+			if !it.IsRotaMerge(c) {
+				it.RotaMerges = append(it.RotaMerges, c)
+			}
 		}
 		if same {
 			it.VerifiedTip, it.VerifiedBase = merged, base
@@ -129,11 +132,51 @@ func (e Env) restack(ctx context.Context, root string, rec Integration) (Integra
 		return rec, "", err
 	}
 	out, _ := reg.IntegrationByBranch(rec.Branch)
+	e.refreshStackedBody(ctx, root, in.cfg, out)
 	verdict := "its tree changed, so it verifies again"
 	if same {
 		verdict = "its tree is unchanged, so its verify stands"
 	}
 	return out, fmt.Sprintf("STACK-RETARGET %s — %s landed; the PR now targets %s, which is merged in; %s", rec.Branch, rec.Onto, rec.OntoBase, verdict), nil
+}
+
+// baseMerges are the first-parent merges between the assembled tip and the new
+// tip that take in the base: a merge whose second parent the base holds. Pushed
+// by this attempt or an earlier one that failed before the record changed, they
+// are rota's own, never fixes for a review. A fix is never a merge of the base.
+func (e Env) baseMerges(root string, rec Integration, merged, base string) []string {
+	out, code := e.git(root, "rev-list", "--first-parent", "--merges", "--parents", rec.Assembled+".."+merged)
+	if code != 0 {
+		return []string{merged}
+	}
+	var found []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 {
+			continue
+		}
+		if _, code := e.git(root, "merge-base", "--is-ancestor", f[2], base); code == 0 {
+			found = append(found, f[0])
+		}
+	}
+	return found
+}
+
+// refreshStackedBody rewrites the PR body of a branch that left its stack, so it
+// names the base it now lands on. A failure is of no weight: the body is text.
+func (e Env) refreshStackedBody(ctx context.Context, root string, cfg GateConfig, rec Integration) {
+	if rec.PR == "" {
+		return
+	}
+	f, _, refusal := e.openForge(ctx, root, rec.PR, cfg, tracker.ForgeActor)
+	if refusal != nil {
+		return
+	}
+	if s, ok := f.(interface {
+		PRSetBody(ctx context.Context, pr int, body string) error
+	}); ok {
+		_ = s.PRSetBody(ctx, prNumberOf(rec.PR), IntegrationPRBody(rec))
+	}
 }
 
 // mergeBaseInto merges base into the integration branch's tip in a scratch
@@ -181,7 +224,7 @@ func (e Env) restackDependents(ctx context.Context, root string, landed Integrat
 		if dep.Landed || dep.Onto != landed.Branch {
 			continue
 		}
-		err := e.withIntegrationLock(ctx, root, dep.Name, func() error {
+		err := e.WithIntegrationLock(ctx, root, dep.Name, func() error {
 			cur, _ := LoadRegistry(root)
 			rec, ok := cur.IntegrationByBranch(dep.Branch)
 			if !ok || rec.Onto != landed.Branch {

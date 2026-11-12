@@ -318,7 +318,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	}
 	if o.Integration != "" { // it moves no base, so it does not take the land lock
 		lock = func(fn func(bool) error) error {
-			return e.withIntegrationLock(ctx, root, o.Integration, func() error { return fn(false) })
+			return e.WithIntegrationLock(ctx, root, o.Integration, func() error { return fn(false) })
 		}
 	}
 	err = lock(func(bool) (err error) {

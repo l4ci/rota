@@ -6,14 +6,15 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
 // The gate's side of an integration branch (#3096): the PR that lands the
 // branch, the review of its fix commits, and the slots that fix it.
 
-// integrationLanding is the open integration branch whose PR o targets; nil
-// for any other gate. It is matched by the recorded PR, never by a branch
+// integrationLanding is the unsettled integration branch whose PR o targets
+// (open, or landed with its cleanup not yet complete); nil for any other gate. It is matched by the recorded PR, never by a branch
 // name, so a PR whose branch only looks like one gets no integration rule. An
 // unreadable registry is an error: the gate cannot tell whether the integration
 // rules apply, so it must not land as if they did not.
@@ -29,7 +30,7 @@ func (e Env) integrationLanding(root string, o GateOpts) (*Integration, error) {
 	if gt, err := reg.GateTargetAny(o.Slot); err == nil && gt.PR != "" {
 		ref = gt.PR
 	}
-	if rec, ok := reg.IntegrationByPR(ref); ok && !rec.Landed {
+	if rec, ok := reg.IntegrationByPR(ref); ok && !rec.Settled {
 		return &rec, nil
 	}
 	return nil, nil
@@ -54,15 +55,18 @@ func (e Env) landIntegration(ctx context.Context, root string, o GateOpts, branc
 		return broke("the integration record of " + branch + " is gone")
 	}
 	o.HoldsLandLock = true
-	if rec.Landed {
-		r, err := e.gate(ctx, root, o)
-		*res = r
-		return err
-	}
-	refused, notes := e.integrationPreflight(ctx, root, &o, rec)
-	if refused != nil {
-		*res = *refused
-		return nil
+	// A PR the forge merged (the record says so, or the forge does after a
+	// retry whose local confirmation failed) is not a new landing: the member
+	// branches may be deleted or moved since, which only a new landing cares about.
+	merged := rec.Landed || e.integrationMerged(ctx, root, o, rec)
+	var notes []string
+	if !merged {
+		refused, n := e.integrationPreflight(ctx, root, &o, rec)
+		if refused != nil {
+			*res = *refused
+			return nil
+		}
+		notes = n
 	}
 	r, err := e.gate(ctx, root, o)
 	*res = r
@@ -74,6 +78,26 @@ func (e Env) landIntegration(ctx context.Context, root string, o GateOpts, branc
 		return integrationLanded(root, rec, res)
 	}
 	return nil
+}
+
+// integrationMerged reports whether the forge already merged the PR of rec into
+// the gate's base. Any failure to ask answers false: the landing then runs its
+// preflight as for a new one.
+func (e Env) integrationMerged(ctx context.Context, root string, o GateOpts, rec Integration) bool {
+	n, ok := PRRefNumber(rec.PR)
+	if !ok {
+		return false
+	}
+	in, err := e.GateInput(root)
+	if err != nil {
+		return false
+	}
+	f, _, refusal := e.openForge(ctx, root, rec.PR, in.cfg, tracker.ForgeActor)
+	if refusal != nil {
+		return false
+	}
+	info, err := f.PRView(ctx, n)
+	return err == nil && info.State == "MERGED" && info.Base == o.Base
 }
 
 // integrationPreflight runs before the gate of an integration PR, under its

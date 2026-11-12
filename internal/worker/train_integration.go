@@ -109,10 +109,13 @@ func refuseIntegrationPRs(root string, targets []string) error {
 	return nil
 }
 
-// withIntegrationLock serializes the trains of one integration branch. It is
+// WithIntegrationLock serializes the trains of one integration branch. It is
 // not the land lock: an integration train moves no base, so a long verify of
 // it never holds up another landing.
-func (e Env) withIntegrationLock(ctx context.Context, root, name string, fn func() error) error {
+//
+// Exported for the callers outside the package that publish what a train
+// recorded (the integration PR body).
+func (e Env) WithIntegrationLock(ctx context.Context, root, name string, fn func() error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {
 		return err

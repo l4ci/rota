@@ -258,3 +258,75 @@ func TestWorkerGateIntegrationVerifiedTipBindsMerge(t *testing.T) {
 		t.Fatalf("a head other than the verified tip landed: %+v %v", res, err)
 	}
 }
+
+// An external member PR whose branch names no issue still closes the issue
+// its body names: the record, the Closes lines and the landed members carry it.
+func TestIntegrationExternalMemberIssueFromBody(t *testing.T) {
+	w := integrationWorld(t)
+	if err := os.WriteFile(RegistryPath(w.dir), []byte(`{"round":55,"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	w.forge("body#7", "Closes #5\n"+completePRSections)
+	w.forge("body#8", "Closes #6\n"+completePRSections)
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("integration train of external PRs: %+v %v", res, err)
+	}
+	reg, _ := LoadRegistry(w.dir)
+	rec, _ := reg.IntegrationByBranch(intBranch)
+	var issues []string
+	for _, m := range rec.Members {
+		issues = append(issues, strings.TrimPrefix(m.Issue, "#"))
+	}
+	if !slices.Equal(issues, []string{"5", "6"}) {
+		t.Fatalf("member issues from the PR bodies: %v", issues)
+	}
+	body := IntegrationPRBody(rec)
+	if !strings.Contains(body, "Closes #5") || !strings.Contains(body, "Closes #6") {
+		t.Fatalf("closing lines: %s", body)
+	}
+}
+
+// A forge merge whose local confirmation failed is recovered by the retry even
+// when a member branch was deleted after the merge (auto-delete of heads).
+func TestWorkerGateIntegrationRecoversMergeWithDeletedMemberBranch(t *testing.T) {
+	w := integrationWorld(t)
+	integrationPR(t, w)
+	w.forge("state", "MERGED")
+	w.forge("base", "main")
+	gittest.Run(t, w.origin, "branch", "-D", "w2")
+	res, err := w.landPR9()
+	if err != nil || res.Verdict != GateAlreadyMerged {
+		t.Fatalf("a merged PR must recover, not refuse stale: %+v %v", res, err)
+	}
+	if !slices.Equal(res.IntegrationMembers, []string{"5", "6"}) {
+		t.Errorf("member bookkeeping skipped: %v", res.IntegrationMembers)
+	}
+	reg, _ := LoadRegistry(w.dir)
+	if rec, _ := reg.IntegrationByBranch(intBranch); !rec.Landed {
+		t.Errorf("record not landed: %+v", rec)
+	}
+}
+
+// Landed is persisted before the caller's cleanup: until the caller settles the
+// record, the next gate of the PR replays the member bookkeeping.
+func TestWorkerGateIntegrationReplaysUnsettledCleanup(t *testing.T) {
+	w := integrationWorld(t)
+	integrationPR(t, w)
+	if res, err := w.landPR9(); err != nil || res.Verdict != GatePass {
+		t.Fatalf("landing: %+v %v", res, err)
+	}
+	res, err := w.landPR9()
+	if err != nil || res.Verdict != GateAlreadyMerged || !slices.Equal(res.IntegrationMembers, []string{"5", "6"}) {
+		t.Fatalf("an unsettled landing must replay its members: %+v %v", res, err)
+	}
+	if err := SettleIntegration(w.dir, intBranch); err != nil {
+		t.Fatal(err)
+	}
+	res, err = w.landPR9()
+	if err != nil || len(res.IntegrationMembers) != 0 {
+		t.Fatalf("a settled landing replays nothing: %+v %v", res, err)
+	}
+}

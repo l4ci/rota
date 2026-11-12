@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -155,6 +156,9 @@ func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
 	// A rerun keeps the PR (it follows the branch) but writes the body again,
 	// so a member the rerun added gets its Closes line.
 	rec.Members = append(rec.Members, worker.IntegrationMember{Target: "10", PR: "https://github.com/o/r/pull/10", Issue: "12"})
+	if err := worker.RecordIntegration(dir, rec); err != nil {
+		t.Fatal(err)
+	}
 	if again, err := openIntegrationPR(context.Background(), spy, dir, rec); err != nil || again != url || len(spy.specs) != 1 {
 		t.Fatalf("rerun opened another PR: %q %v %d", again, err, len(spy.specs))
 	}
@@ -186,5 +190,30 @@ func TestWorkerTrainStackedPRTargetsBranchUnder(t *testing.T) {
 	}
 	if got, want := integrationRerun(it, []string{"8"}), "`rota worker train 8 --integration b --onto a --base main`"; got != want {
 		t.Errorf("rerun %q, want %q", got, want)
+	}
+}
+
+// A train that finished A+B and writes the PR body after another train added C
+// must publish what the record holds now, not the A+B it saw: the body is
+// written from a record read at publish time.
+func TestOpenIntegrationPRPublishesFreshRecord(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["true"]}}`)
+	pr := func(n string) string { return "https://github.com/o/r/pull/" + n }
+	stale := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", PR: pr("9"),
+		Members: []worker.IntegrationMember{{Target: "7", PR: pr("7"), Issue: "5"}, {Target: "8", PR: pr("8"), Issue: "6"}}}
+	if err := worker.RecordIntegration(dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	fresh := stale
+	fresh.Members = append(slices.Clone(stale.Members), worker.IntegrationMember{Target: "10", PR: pr("10"), Issue: "12"})
+	if err := worker.RecordIntegration(dir, fresh); err != nil {
+		t.Fatal(err)
+	}
+	spy := &prSpy{}
+	if _, err := openIntegrationPR(context.Background(), spy, dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(spy.bodies[9], "Closes #12\n") {
+		t.Fatalf("the late member's Closes line was overwritten: %q", spy.bodies[9])
 	}
 }

@@ -100,8 +100,16 @@ type prBodySetter interface {
 // openIntegrationPR opens the one PR from a verified integration branch to
 // its base and records it. A branch that has a PR keeps it (the PR follows
 // the branch), but its body is written again, so a member a rerun added gets
-// its Closes line.
+// its Closes line. The body is built from the record as it is stored now, not
+// from the one the caller read earlier: another train may have added members
+// since, and writing the older list would drop their Closes lines. Callers hold
+// the integration lock (openIntegrationPRVia), so no train changes it meanwhile.
 func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it worker.Integration) (string, error) {
+	if reg, err := worker.LoadRegistry(root); err == nil {
+		if fresh, ok := reg.IntegrationByBranch(it.Branch); ok {
+			it = fresh
+		}
+	}
 	body := worker.IntegrationPRBody(it)
 	if it.PR != "" {
 		n, ok := worker.PRRefNumber(it.PR)
@@ -135,7 +143,8 @@ func (f shipForge) PRSetBody(ctx context.Context, pr int, body string) error {
 	return nil
 }
 
-// openIntegrationPRVia opens the PR through the project's forge.
+// openIntegrationPRVia opens the PR through the project's forge, under the
+// integration lock so two trains of one integration publish one after the other.
 func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, error) {
 	cfg := c.deps().Config(root)
 	provider, err := actorForge(c, cfg, root)
@@ -146,12 +155,21 @@ func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, e
 	if err != nil {
 		return "", trackerErr(err)
 	}
-	return openIntegrationPR(c.Context(), shipForge{cl}, root, it)
+	var url string
+	err = workerEnvCtx(c, c.Context()).WithIntegrationLock(c.Context(), root, it.Name, func() error {
+		var err error
+		url, err = openIntegrationPR(c.Context(), shipForge{cl}, root, it)
+		return err
+	})
+	return url, err
 }
 
 // parkIntegrationMembers frees the slots that held the member PRs of the
 // integration PR that just landed, so the round needs no reconcile --apply.
-func parkIntegrationMembers(c *Ctx, root, pr string) {
+// With bookOK (the item bookkeeping after the landing succeeded) and every
+// slot parked, the integration record is settled; otherwise it stays unsettled
+// and the next gate of the PR replays the cleanup.
+func parkIntegrationMembers(c *Ctx, root, pr string, bookOK bool) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		fmt.Fprintln(c.Stderr, "PARK-KEPT — cannot read the registry: "+err.Error()+"; run rota round reconcile --apply")
@@ -167,7 +185,14 @@ func parkIntegrationMembers(c *Ctx, root, pr string) {
 		fmt.Fprintf(c.Stderr, "PARKED %s — its PR landed with %s\n", s, rec.Branch)
 	}
 	if err != nil {
-		fmt.Fprintln(c.Stderr, "PARK-KEPT — "+err.Error()+"; run rota round reconcile --apply")
+		fmt.Fprintln(c.Stderr, "PARK-KEPT — "+err.Error()+"; run rota round reconcile --apply, or gate the PR again to replay the cleanup")
+		return
+	}
+	if !bookOK {
+		return
+	}
+	if err := worker.SettleIntegration(root, rec.Branch); err != nil {
+		fmt.Fprintln(c.Stderr, "INTEGRATION-UNSETTLED "+rec.Branch+" — "+err.Error()+"; gate the PR again to replay the cleanup")
 	}
 }
 

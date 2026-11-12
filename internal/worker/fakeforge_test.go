@@ -98,6 +98,13 @@ func (f *fakeForge) PRSetBase(_ context.Context, pr int, base string) error {
 	return nil
 }
 
+// PRSetBody rewrites one PR's body: the forge DB word "body#N".
+func (f *fakeForge) PRSetBody(_ context.Context, pr int, body string) error {
+	f.logf("PRSetBody %d", pr)
+	f.w.forge(fmt.Sprintf("body#%d", pr), body)
+	return nil
+}
+
 // PRMergeable answers from the forge DB word "mergeable" (clean, conflict,
 // unknown, or error to fail), "mergeReason" naming why. Unset it is clean and
 // unlogged, so the frozen forge logs of the other cases keep their shape. A

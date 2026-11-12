@@ -194,4 +194,18 @@ func TestStackedRetargetRetriesAtLanding(t *testing.T) {
 	if !strings.Contains(w.logText(), "PRSetBase 10 main") {
 		t.Fatalf("the retry never retargeted:\n%s", w.logText())
 	}
+	// The first attempt pushed the merge of main; the retry finds it already
+	// there. It is still rota's merge, never a fix that needs a review.
+	reg, _ := LoadRegistry(w.dir)
+	b, _ := reg.IntegrationByBranch(intBranchB)
+	tip := strings.TrimSpace(gittest.Run(t, w.origin, "rev-parse", intBranchB))
+	if b.Onto != "" || b.Base != "main" || b.VerifiedTip != tip || !b.IsRotaMerge(tip) {
+		t.Fatalf("record after the retry: %+v (tip %s)", b, tip)
+	}
+	if fixes, err := w.env(false).WithDefaults().FixCommits(w.dir, b, "", tip); err != nil || len(fixes) != 0 {
+		t.Fatalf("the merge of main is reported as a fix: %v %v", fixes, err)
+	}
+	if body := w.forgeWord("body#10"); !strings.Contains(body, "on `main`") || strings.Contains(body, "on `"+intBranch+"`") {
+		t.Fatalf("the PR body still names the branch under it:\n%s", body)
+	}
 }

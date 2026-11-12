@@ -488,7 +488,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		// no train of this branch runs while its PR lands. The record is read
 		// again under both, and the verify skip decided there, so neither a
 		// train nor another landing can move what it was decided on.
-		err = e.withIntegrationLock(ctx, root, rec.Name, func() error {
+		err = e.WithIntegrationLock(ctx, root, rec.Name, func() error {
 			return e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) error {
 				return e.landIntegration(ctx, root, o, rec.Branch, &res)
 			})
@@ -838,7 +838,7 @@ func (runner gate) stepForge(result GateResult, target GateTarget) (gateForgeRes
 // stepExternal reads the head branch of a PR no slot owns from the forge, so
 // the later steps judge it like a slot's: freshness, identity, provenance,
 // approval, verify and land. Its issue, for the closes check, is the one its
-// branch name leads with (HeldID); a branch with none has nothing to check.
+// branch name leads with (HeldID), else the first its body closes.
 func (runner gate) stepExternal(result GateResult, target GateTarget, forged gateForgeResult) (GateTarget, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	finish := func(done bool, err error) (GateTarget, GateResult, bool, error) {
@@ -857,8 +857,14 @@ func (runner gate) stepExternal(result GateResult, target GateTarget, forged gat
 		return finish(g.broke(fmt.Sprintf("could not read PR %s from %s", g.pr, g.provider)))
 	}
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
-	// the head branch names the issue of a PR no slot or record owns
+	// the head branch names the issue of a PR no slot or record owns; a branch
+	// that names none falls back to the first issue the PR body closes
 	g.target.Issue = HeldID(g.target.Task, info.Head, g.target.Name)
+	if g.target.Issue == "" {
+		if closed := g.forge.ClosedNumbers(info.Body); len(closed) > 0 {
+			g.target.Issue = strconv.Itoa(closed[0])
+		}
+	}
 	g.target.Bundle = nil // a bundle belongs to a slot's lead, not to a branch-derived issue
 	g.res.Issue = g.target.Issue
 	g.target.relays = append(slices.Clone(g.target.relays), g.unrecordedSlotRelays(info.Head)...)
