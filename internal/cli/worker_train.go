@@ -240,6 +240,8 @@ type trainRunOpts struct {
 	RequestID string
 	// Integration names the round's integration branch the members merge into.
 	Integration string
+	// Onto stacks that integration branch on another open one, by name.
+	Onto string
 }
 
 // trainRun is one train run and the bookkeeping that followed it.
@@ -260,7 +262,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 	if err != nil {
 		return postgate.Env{}, postgate.Request{}, err
 	}
-	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root), RequestID: o.RequestID, Integration: o.Integration}
+	opts := worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root), RequestID: o.RequestID, Integration: o.Integration, Onto: o.Onto}
 	return landingEnv(c, ctx, root), postgate.Request{Train: &opts}, nil
 }
 
@@ -300,6 +302,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
 	integration := fs.String("integration", "", "merge the members into the round's pushed integration/r<round>-<name> branch and verify it, landing nothing on --base")
+	onto := fs.String("onto", "", "with --integration: stack the branch on the open integration branch of this name; its PR targets that branch until it lands, then --base")
 	plan := fs.Bool("plan", false, "preview the train: map member conflicts and name the largest conflict-free subset; runs no tests, pushes nothing")
 	var final stringList
 	fs.Var(&final, "final-slice", "a train member (slot or PR) that is the last slice of a partial-slice issue and may close it; repeatable")
@@ -343,7 +346,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if !*plan && !*noAssignCheck {
 			warnAssignFirst(c, root)
 		}
-		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, OnFail: *onFail, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req, RequestID: invocationReceipt(c.Context()).ID, Integration: *integration})
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, OnFail: *onFail, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req, RequestID: invocationReceipt(c.Context()).ID, Integration: *integration, Onto: *onto})
 		r, err := run.Result, run.Err
 		// Exclusion notes must remain visible when no member survives the checks.
 		for _, n := range r.Notes {
@@ -378,7 +381,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				}
 				return Result{}, nil
 			}); ferr != nil {
-				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM not filed — %s; next: fix that, then rerun %s to file it\n", ferr.Error(), integrationRerun(*r.Integration, args, *base))
+				fmt.Fprintf(c.Stderr, "INTERACTION-ITEM not filed — %s; next: fix that, then rerun %s to file it\n", ferr.Error(), integrationRerun(*r.Integration, args))
 			}
 		}
 		res := Result{Data: trainData(r)}
@@ -390,13 +393,15 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			url, perr := openIntegrationPRVia(c, root, *r.Integration)
 			if perr != nil {
 				// The branch is verified and recorded; only the PR is missing.
-				fmt.Fprintf(c.Stderr, "INTEGRATION-PR not opened — %s; next: rerun %s, which opens it (merged members are skipped)\n", perr.Error(), integrationRerun(*r.Integration, args, *base))
+				fmt.Fprintf(c.Stderr, "INTEGRATION-PR not opened — %s; next: rerun %s, which opens it (merged members are skipped)\n", perr.Error(), integrationRerun(*r.Integration, args))
 			} else {
 				r.Integration.PR = url
 				res.Data = trainData(r)
 			}
-			res.Text = fmt.Sprintf("pass: integrated %d member(s) into %s (%s), verified; nothing landed on %s", len(r.Members), r.Integration.Branch, r.SHA, r.Base)
-			if url != "" {
+			res.Text = fmt.Sprintf("pass: integrated %d member(s) into %s (%s), verified; nothing landed on %s", len(r.Members), r.Integration.Branch, r.SHA, r.Integration.LandBase())
+			if url != "" && r.Integration.Onto != "" {
+				res.Text += fmt.Sprintf("\nPR %s targets %s and lands after it: once that branch lands the PR retargets to %s, then `rota worker gate %s --base %s`", url, r.Integration.Onto, r.Integration.OntoBase, url, r.Integration.OntoBase)
+			} else if url != "" {
 				res.Text += fmt.Sprintf("\nPR %s lands it: rota worker gate %s --base %s", url, url, r.Base)
 			}
 			res.Text += "\n" + trainSummary(r)

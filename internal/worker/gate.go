@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -163,6 +164,10 @@ type GateOpts struct {
 	Base      string
 	CheckOnly bool
 	NoVerify  bool
+	// PRBase is the branch the PR is expected to target when that is not Base:
+	// a member of a stacked integration branch (#3098) merges onto the branch
+	// under it but its PR targets the base that branch lands on.
+	PRBase string
 	// FinalSlice marks the PR as the last slice of a partial-slice issue, the
 	// one PR allowed to close it (--final-slice). Without it a PR the forge
 	// says closes a partial-slice issue is refused (stepCloses).
@@ -496,6 +501,9 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		err = nil
 	}
 	res.Round = o.Round
+	if rec != nil && err == nil && (res.Verdict == GatePass || res.Verdict == GateAlreadyMerged) {
+		res.Notes = append(res.Notes, e.restackDependents(ctx, root, *rec)...)
+	}
 	return res, err
 }
 
@@ -1023,7 +1031,13 @@ func (runner gate) stepRefs(result GateResult, branch string, remote bool) (gate
 	}
 
 	root, o := g.root, g.o
-	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
+	// A remote gate may judge a base that lives only on the remote (the integration
+	// branch a stacked one is built on); the fetched ref is checked below.
+	_, local := g.git(root, "rev-parse", "--verify", "--quiet", o.Base)
+	if local != 0 && g.remote {
+		_, local = g.git(root, "rev-parse", "--verify", "--quiet", g.rem()+"/"+o.Base)
+	}
+	if local != 0 {
 		return finish(true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base)))
 	}
 	if !g.remote {
@@ -1209,8 +1223,8 @@ func (runner gate) stepPRMatches(result GateResult, target GateTarget, forged ga
 	case info.State != "OPEN":
 		g.res.AlreadyMerged = info.State == "MERGED"
 		return finish(mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State)))
-	case info.Base != g.o.Base:
-		return finish(mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base)))
+	case info.Base != cmp.Or(g.o.PRBase, g.o.Base):
+		return finish(mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, cmp.Or(g.o.PRBase, g.o.Base))))
 	case info.Head != g.branch:
 		return finish(mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.Head, g.o.Slot, g.branch)))
 	}

@@ -70,6 +70,13 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	if b := w.forgeWord(fmt.Sprintf("body#%d", pr)); b != "" {
 		info.Body = b
 	}
+	// "state#9" and "base#9" are that PR's own state and target branch.
+	if st := w.forgeWord(fmt.Sprintf("state#%d", pr)); st != "" {
+		info.State = st
+	}
+	if b := w.forgeWord(fmt.Sprintf("base#%d", pr)); b != "" {
+		info.Base = b
+	}
 	if w.mode == "ff" {
 		info.MergeSHA = "" // a fast-forward merge has no merge commit
 	}
@@ -79,6 +86,23 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 		info.HeadSHA = strings.Repeat("0", 40)
 	}
 	return info, nil
+}
+
+// PRSetBase retargets one PR: it records the new target as that PR's "base#N".
+func (f *fakeForge) PRSetBase(_ context.Context, pr int, base string) error {
+	f.logf("PRSetBase %d %s", pr, base)
+	if f.w.forgeWord("setBaseErr") != "" {
+		return errors.New(f.w.forgeWord("setBaseErr"))
+	}
+	f.w.forge(fmt.Sprintf("base#%d", pr), base)
+	return nil
+}
+
+// PRSetBody rewrites one PR's body: the forge DB word "body#N".
+func (f *fakeForge) PRSetBody(_ context.Context, pr int, body string) error {
+	f.logf("PRSetBody %d", pr)
+	f.w.forge(fmt.Sprintf("body#%d", pr), body)
+	return nil
 }
 
 // PRMergeable answers from the forge DB word "mergeable" (clean, conflict,

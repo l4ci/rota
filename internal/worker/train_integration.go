@@ -34,7 +34,18 @@ var integrationNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 // stop-without-diagnosis; a preview pushes nothing, so it has no branch.
 func integrationOpts(o TrainOpts) error {
 	if o.Integration == "" {
+		if o.Onto != "" {
+			return fail(exitcode.ExitUsage, "--onto needs --integration")
+		}
 		return nil
+	}
+	if o.Onto != "" {
+		if !integrationNameRe.MatchString(o.Onto) {
+			return fail(exitcode.ExitUsage, fmt.Sprintf("--onto %q is not a valid branch name component", o.Onto))
+		}
+		if o.Onto == o.Integration {
+			return fail(exitcode.ExitUsage, "an integration branch cannot stack on itself")
+		}
 	}
 	if !integrationNameRe.MatchString(o.Integration) {
 		return fail(exitcode.ExitUsage, fmt.Sprintf("--integration %q is not a valid branch name component", o.Integration))
@@ -45,6 +56,36 @@ func integrationOpts(o TrainOpts) error {
 		}
 	}
 	return nil
+}
+
+// resolveOnto points a stacked train (`--onto a`) at the open integration
+// branch it stacks on: that branch is the train's base, so the members and a's
+// tip merge onto it and its PR targets it. The base the caller gave must be
+// the one a integrates into, since that is where b returns when a lands.
+func resolveOnto(root string, o TrainOpts) (TrainOpts, error) {
+	if o.Onto == "" {
+		return o, nil
+	}
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return o, err
+	}
+	round, ok := reg.Round()
+	if !ok {
+		return o, fail(exitcode.ExitResolution, "no round recorded: an integration branch is named for its round (rota round start)")
+	}
+	branch := IntegrationBranch(round, o.Onto)
+	rec, ok := reg.IntegrationByBranch(branch)
+	switch {
+	case !ok:
+		return o, fail(exitcode.ExitRefused, fmt.Sprintf("--onto %s: %s is not an open integration (rota has no record of it)", o.Onto, branch))
+	case rec.Landed:
+		return o, fail(exitcode.ExitRefused, fmt.Sprintf("--onto %s: %s already landed; train onto %s without --onto", o.Onto, branch, rec.Base))
+	case rec.Base != o.Base:
+		return o, fail(exitcode.ExitUsage, fmt.Sprintf("--onto %s: %s integrates into %s, not %s; pass --base %s", o.Onto, branch, rec.Base, o.Base, rec.Base))
+	}
+	o.ontoBase, o.Base = rec.Base, branch
+	return o, nil
 }
 
 // refuseIntegrationPRs refuses a train with an integration PR among its
@@ -93,12 +134,19 @@ func integrationPlan(reg Registry, o TrainOpts, withPR, targets int) (*Integrati
 		return nil, fail(exitcode.ExitResolution, "no round recorded: an integration branch is named for its round (rota round start)")
 	}
 	it := Integration{Name: o.Integration, Branch: IntegrationBranch(round, o.Integration), Round: round, Base: o.Base}
+	if o.Onto != "" {
+		it.Onto, it.OntoBase = o.Base, o.ontoBase
+	}
 	if rec, ok := reg.IntegrationByBranch(it.Branch); ok {
 		if rec.Landed {
 			return nil, fail(exitcode.ExitRefused, fmt.Sprintf("%s already landed; name a new integration", it.Branch))
 		}
 		if rec.Base != o.Base {
-			return nil, fail(exitcode.ExitRefused, fmt.Sprintf("%s integrates into %s, not %s", it.Branch, rec.Base, o.Base))
+			why := ""
+			if rec.Onto != "" {
+				why = fmt.Sprintf(" (it is stacked on %s: pass --onto %s)", rec.Onto, rec.OntoName())
+			}
+			return nil, fail(exitcode.ExitRefused, fmt.Sprintf("%s integrates into %s, not %s%s", it.Branch, rec.Base, o.Base, why))
 		}
 		it = rec
 	}
@@ -314,8 +362,8 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 // files, never on a member branch, whose review would no longer hold.
 func (t *trainRun) integrationInteractionHint(it Integration, members []string) string {
 	return fmt.Sprintf("bounce neither of %s and change no member branch: the fix goes on %s through the interaction item this train files (INTERACTION-ITEM); "+
-		"assign it with `rota round assign <item>` (its slot is cut from %s and its PR targets it), land that PR with `rota worker gate <slot> --base %s`, then re-run `rota worker train %s --integration %s --base %s`",
-		strings.Join(members, ", "), it.Branch, it.Branch, it.Branch, strings.Join(t.o.Targets, " "), it.Name, it.Base)
+		"assign it with `rota round assign <item>` (its slot is cut from %s and its PR targets it), land that PR with `rota worker gate <slot> --base %s`, then re-run `rota worker train %s %s`",
+		strings.Join(members, ", "), it.Branch, it.Branch, it.Branch, strings.Join(t.o.Targets, " "), it.TrainFlags())
 }
 
 // touching names the merged members whose change touches one of paths, the
