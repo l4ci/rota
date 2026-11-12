@@ -36,8 +36,12 @@ type Integration struct {
 	VerifiedBase string `json:"verifiedBase,omitempty"`
 	PR           string `json:"pr,omitempty"`
 	// Items are the interaction items filed for this branch.
-	Items  []string `json:"items,omitempty"`
-	Landed bool     `json:"landed,omitempty"`
+	Items []string `json:"items,omitempty"`
+	// Landed says the forge merged the PR and the registry knows it. Settled
+	// says the caller's cleanup after it (the member bookkeeping and parking the
+	// member slots) finished: until then every gate of the PR replays it.
+	Landed  bool `json:"landed,omitempty"`
+	Settled bool `json:"settled,omitempty"`
 }
 
 // IntegrationMember is one member PR of an integration branch.
@@ -132,6 +136,12 @@ func UpdateIntegration(root, branch string, mutate func(*Integration)) error {
 		return err
 	}
 	return ferr
+}
+
+// SettleIntegration marks the post-landing cleanup of branch complete, so the
+// next gate of its PR no longer replays it.
+func SettleIntegration(root, branch string) error {
+	return UpdateIntegration(root, branch, func(it *Integration) { it.Settled = true })
 }
 
 // Integrations lists every recorded integration branch, in record order.
