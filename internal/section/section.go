@@ -52,6 +52,15 @@ func Find(content, name string) (start, end int, ok bool) {
 	return 0, 0, false
 }
 
+// HeadingRe matches the heading line of a section named name in the lenient
+// grammar item bodies are written with: any level from "#" to "######" and
+// any case, with trailing blanks allowed. Find is the strict grammar of the
+// state files (level 2, case-sensitive, Python-port byte parity); this is the
+// one other heading rule, so the two live side by side here.
+func HeadingRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(?mi)^#{1,6}[ \t]+` + regexp.QuoteMeta(name) + `[ \t]*$`)
+}
+
 // nextHeading is the offset of the first "## " that starts a line at or after
 // from+1 (Python searches content[from:] with ^ matching only after "\n").
 func nextHeading(content string, from int) int {

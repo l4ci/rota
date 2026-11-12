@@ -5,6 +5,7 @@
 package itembody
 
 import (
+	"github.com/l4ci/rota/internal/section"
 	"regexp"
 	"sort"
 	"strconv"
@@ -137,7 +138,7 @@ func appendBullets(body []byte, heading string, items []string) []byte {
 func SetSection(text, name, content string) string {
 	content = strings.Trim(content, "\n")
 	acceptance := strings.EqualFold(name, "acceptance")
-	head := regexp.MustCompile(`(?mi)^#{1,6}[ \t]+` + regexp.QuoteMeta(name) + `[ \t]*$`)
+	head := section.HeadingRe(name)
 	if acceptance {
 		head = AcceptanceHeadRe
 	}

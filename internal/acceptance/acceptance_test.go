@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/itembody"
 )
 
 const legacy = "Intro.\n\n- [ ] outside list\n\n## Acceptance\n\n- [ ] first  thing\n- [x] done thing\n  * [ ] nested\n\n## Notes\n\n- [ ] not a criterion\n"
@@ -137,5 +139,19 @@ func TestAppendMissingSectionOrNothingToAdd(t *testing.T) {
 	body := "## Acceptance\n- [ ] AC-1: a\n"
 	if got, ok := Append(body); !ok || got != body {
 		t.Errorf("no texts: ok=%v got %q", ok, got)
+	}
+}
+
+// SetSection (lenient: any level, any case) and scan (strict: "## Acceptance")
+// take different heading rules from internal/section on purpose. This pins the
+// divergence so changing it is a deliberate act: a "### acceptance" that
+// SetSection can replace is not read as the Acceptance section.
+func TestScanIsStrictWhereSetSectionIsLenient(t *testing.T) {
+	body := "intro\n\n### acceptance\n\n- [ ] AC-1: x\n"
+	if got := itembody.SetSection(body, "acceptance", "- [ ] AC-1: y\n"); !strings.Contains(got, "AC-1: y") {
+		t.Fatalf("SetSection must find the lenient heading, got %q", got)
+	}
+	if got := IDs(body); len(got) != 0 {
+		t.Errorf("IDs read a ### acceptance heading as Acceptance: %v", got)
 	}
 }
