@@ -72,14 +72,17 @@ func HumanBytes(n uint64) string {
 }
 
 // repoConfig warns when repo-scope git config moved since the recorded
-// baseline, naming the keys (never their values). Nothing moved, or no
-// baseline yet, adds no line.
+// baseline, naming the keys (never their values). With no baseline yet it
+// lists the program-running and identity keys already set. Read-only.
 func (d *runner) repoConfig() (Check, bool) {
 	dr := d.in.RepoConfig
 	if dr == nil || dr.Clean() {
 		return Check{}, false
 	}
-	return Check{Name: "repo config", Status: Warn,
-		Detail: "repo-scope git config changed since the baseline (" + dr.Summary() + ")",
-		Hint:   "linked worktrees share .git/config: inspect with git config --local --list; keys such as core.hooksPath run programs in rota's git calls; the next round start re-records the baseline"}, true
+	detail := "repo-scope git config changed since the baseline (" + dr.Summary() + ")"
+	if !dr.HasBaseline {
+		detail = "repo-scope git config has no baseline yet; risky keys present (" + dr.Summary() + ")"
+	}
+	return Check{Name: "repo config", Status: Warn, Detail: detail,
+		Hint: "linked worktrees share .git/config: inspect with git config --local --list; keys such as core.hooksPath run programs in rota's git calls; the next round start records the baseline"}, true
 }

@@ -2,7 +2,9 @@ package repoconfig
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -82,23 +84,46 @@ func TestNoBaselineIsNotDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.HasBaseline || !d.Clean() {
-		t.Fatalf("want no baseline and clean, got %+v", d)
+	if d.HasBaseline || len(d.Added)+len(d.Changed)+len(d.Removed) != 0 {
+		t.Fatalf("want no baseline and no drift, got %+v", d)
 	}
 }
 
-func TestEnsureKeepsExistingBaseline(t *testing.T) {
+func TestNoBaselineListsPreexistingRiskyKeys(t *testing.T) {
 	dir := newRepo(t)
-	ctx := context.Background()
-	if made, err := Ensure(ctx, runner, dir); err != nil || !made {
-		t.Fatalf("first Ensure: made=%v err=%v", made, err)
+	gitIn(t, dir, "config", "--local", "core.hooksPath", "/x")
+	gitIn(t, dir, "config", "--local", "core.fsmonitor", "/y")
+	gitIn(t, dir, "config", "--local", "filter.lfs.smudge", "z")
+	d, err := Check(context.Background(), runner, dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	gitIn(t, dir, "config", "--local", "user.name", "t")
-	if made, err := Ensure(ctx, runner, dir); err != nil || made {
-		t.Fatalf("second Ensure: made=%v err=%v", made, err)
+	if d.HasBaseline {
+		t.Fatal("Check must not record a baseline")
+	}
+	got := strings.Join(d.Risky, ",")
+	for _, want := range []string{"core.hookspath", "core.fsmonitor", "filter.lfs.smudge", "user.name"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("risky %q lacks %q", got, want)
+		}
+	}
+	if strings.Contains(got, "/x") {
+		t.Errorf("risky leaks values: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "rota")); err == nil {
+		t.Fatal("Check wrote under .git/rota")
+	}
+}
+
+func TestBaselineRecordedSilencesRisky(t *testing.T) {
+	dir := newRepo(t)
+	gitIn(t, dir, "config", "--local", "core.hooksPath", "/x")
+	ctx := context.Background()
+	if err := Record(ctx, runner, dir); err != nil {
+		t.Fatal(err)
 	}
 	d, _ := Check(ctx, runner, dir)
-	if d.Clean() {
-		t.Fatal("Ensure overwrote the baseline")
+	if len(d.Risky) != 0 {
+		t.Fatalf("risky with a baseline: %v", d.Risky)
 	}
 }

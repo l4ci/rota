@@ -1156,6 +1156,7 @@ func TestRepoConfigCheck(t *testing.T) {
 		warn bool
 	}{
 		{"drift warns naming the keys", &repoconfig.Drift{HasBaseline: true, Added: []string{"core.hookspath"}, Changed: []string{"user.name"}}, true},
+		{"no baseline lists existing risky keys", &repoconfig.Drift{Risky: []string{"core.hookspath", "user.name"}}, true},
 		{"unchanged baseline is silent", &repoconfig.Drift{HasBaseline: true}, false},
 		{"no drift data is silent", nil, false},
 	} {
@@ -1173,7 +1174,11 @@ func TestRepoConfigCheck(t *testing.T) {
 			}
 			continue
 		}
-		if got == nil || got.Status != Warn || !strings.Contains(got.Detail, "added: core.hookspath") || !strings.Contains(got.Detail, "changed: user.name") {
+		want := "added: core.hookspath"
+		if !tc.dr.HasBaseline {
+			want = "no baseline: core.hookspath"
+		}
+		if got == nil || got.Status != Warn || !strings.Contains(got.Detail, want) {
 			t.Errorf("%s: got %+v", tc.name, got)
 		}
 	}

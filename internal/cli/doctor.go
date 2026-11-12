@@ -164,13 +164,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	return in
 }
 
-// doctorRepoConfig records the repo-scope git config baseline when none exists
-// (the first look is the baseline) and reports drift from it. nil outside a
-// repository, on a git failure, or when nothing moved.
+// doctorRepoConfig reports drift from the baseline round start recorded, or
+// the risky keys present when there is none. It never writes. nil outside a
+// repository, on a git failure, or when nothing is to report.
 func doctorRepoConfig(ctx context.Context, run git.Runner, dir string) *repoconfig.Drift {
-	if _, err := repoconfig.Ensure(ctx, run, dir); err != nil {
-		return nil
-	}
 	dr, err := repoconfig.Check(ctx, run, dir)
 	if err != nil || dr.Clean() {
 		return nil

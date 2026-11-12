@@ -33,15 +33,21 @@ var baselineRel = filepath.Join("rota", "repo-config-baseline")
 type Drift struct {
 	HasBaseline             bool
 	Added, Changed, Removed []string // key names, sorted
+	// Risky names program-running or identity keys already present when no
+	// baseline exists, so the first observation does not bless them.
+	Risky []string
 }
 
-// Clean is true when nothing moved (or there is no baseline to compare to).
+// Clean is true when nothing moved and no risky key stands unbaselined.
 func (d Drift) Clean() bool {
-	return len(d.Added)+len(d.Changed)+len(d.Removed) == 0
+	return len(d.Added)+len(d.Changed)+len(d.Removed)+len(d.Risky) == 0
 }
 
 // Summary names the moved keys: "added: a, b; changed: c; removed: d".
 func (d Drift) Summary() string {
+	if len(d.Risky) > 0 {
+		return "no baseline: " + strings.Join(d.Risky, ", ")
+	}
 	var parts []string
 	for _, g := range []struct {
 		label string
@@ -120,22 +126,9 @@ func Record(ctx context.Context, run Runner, dir string) error {
 	return fsio.WriteFileAtomic(path, []byte(b.String()))
 }
 
-// Ensure records a baseline only when none exists, and says whether it did.
-func Ensure(ctx context.Context, run Runner, dir string) (bool, error) {
-	path, err := baselinePath(ctx, run, dir)
-	if err != nil {
-		return false, err
-	}
-	if _, err := os.Stat(path); err == nil {
-		return false, nil
-	} else if !os.IsNotExist(err) {
-		return false, err
-	}
-	return true, Record(ctx, run, dir)
-}
-
-// Check compares the current repo-scope config with the baseline. With no
-// baseline recorded it reports HasBaseline false and nothing drifted.
+// Check compares the current repo-scope config with the baseline. It never
+// writes. With no baseline recorded it reports HasBaseline false, nothing
+// drifted, and the risky keys already present.
 func Check(ctx context.Context, run Runner, dir string) (Drift, error) {
 	path, err := baselinePath(ctx, run, dir)
 	if err != nil {
@@ -143,7 +136,13 @@ func Check(ctx context.Context, run Runner, dir string) (Drift, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return Drift{}, nil
+		// Read-only: never record here. List what the first observation
+		// would otherwise bless.
+		cur, rerr := read(ctx, run, dir)
+		if rerr != nil {
+			return Drift{}, rerr
+		}
+		return Drift{Risky: risky(cur)}, nil
 	}
 	if err != nil {
 		return Drift{}, err
@@ -175,4 +174,30 @@ func Check(ctx context.Context, run Runner, dir string) (Drift, error) {
 	sort.Strings(d.Changed)
 	sort.Strings(d.Removed)
 	return d, nil
+}
+
+// riskyKeys run a program in rota's git calls or set the commit identity.
+var riskyKeys = map[string]bool{
+	"core.fsmonitor": true, "core.hookspath": true, "diff.external": true,
+	"core.sshcommand": true, "core.pager": true, "core.askpass": true,
+	"core.editor": true, "gpg.program": true, "credential.helper": true,
+	"user.name": true, "user.email": true,
+}
+
+// risky names the keys of cur that run programs or set identity, sorted:
+// the fixed list, plus filter.<n>.{clean,smudge,process} and diff.<n>.textconv.
+func risky(cur map[string]string) []string {
+	var out []string
+	for k := range cur {
+		sec, _, _ := strings.Cut(k, ".")
+		_, name, _ := strings.Cut(k, ".")
+		last := name[strings.LastIndex(name, ".")+1:]
+		if riskyKeys[k] ||
+			sec == "filter" && (last == "clean" || last == "smudge" || last == "process") ||
+			sec == "diff" && last == "textconv" {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
