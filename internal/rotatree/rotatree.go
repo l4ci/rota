@@ -40,6 +40,9 @@ const (
 	KnowledgeHits   = "knowledge-hits.jsonl"
 	GateAuditFile   = "gate-audit.jsonl"
 	KnowledgeTier   = "knowledge-tier.json"
+	LedgerFile      = "ledger.jsonl"
+	FlakesFile      = "flakes.jsonl"
+	BugReportsFile  = "bugreports.jsonl"
 
 	DesignsDir    = "designs"
 	PlansDir      = "plans"
