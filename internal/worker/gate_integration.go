@@ -83,10 +83,19 @@ func (e Env) landIntegration(ctx context.Context, root string, o GateOpts, branc
 // (LandVerified, bound to that tip and base). Any other tip runs the gate's
 // own verify, which merges the current base into it first.
 func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts, rec Integration) (*GateResult, []string) {
-	rerun := fmt.Sprintf("re-run `rota worker train %s --integration %s --base %s`", strings.Join(memberTargetsOf(rec), " "), rec.Name, rec.Base)
+	rerun := fmt.Sprintf("re-run `rota worker train %s %s`", strings.Join(memberTargetsOf(rec), " "), rec.TrainFlags())
 	refuse := func(verdict, msg, hint string) *GateResult {
 		return &GateResult{Slot: o.Slot, Base: o.Base, Branch: rec.Branch, PR: rec.PR, Verdict: verdict,
 			Err: fmt.Sprintf("INTEGRATION %s refused — %s; nothing landed", rec.Branch, msg), Hint: hint}
+	}
+	var stackNotes []string
+	if rec.Onto != "" {
+		moved, notes, refused := e.settleStack(ctx, root, rec)
+		if refused != nil {
+			return refuse(refused.verdict, refused.msg, refused.hint), nil
+		}
+		rec, stackNotes = moved, notes
+		o.Base = rec.Base
 	}
 	// The record alone decides a pending member: no remote is needed for it.
 	for _, m := range rec.Members {
@@ -119,16 +128,19 @@ func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts,
 	}
 	tip, _ := e.git(root, "rev-parse", "--verify", "--quiet", rem+"/"+rec.Branch)
 	base, _ := e.git(root, "rev-parse", "--verify", "--quiet", rem+"/"+rec.Base)
+	var note string
 	switch {
 	case rec.VerifiedTip == "":
-		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — no green train verified it; verifying the tip", rec.Branch)}
+		note = fmt.Sprintf("INTEGRATION-REVERIFY %s — no green train verified it; verifying the tip", rec.Branch)
 	case tip != rec.VerifiedTip:
-		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — the tip moved from %s to %s since the train verified it", rec.Branch, strutil.ShortSHA(rec.VerifiedTip), strutil.ShortSHA(tip))}
+		note = fmt.Sprintf("INTEGRATION-REVERIFY %s — the tip moved from %s to %s since the train verified it", rec.Branch, strutil.ShortSHA(rec.VerifiedTip), strutil.ShortSHA(tip))
 	case base != rec.VerifiedBase:
-		return nil, []string{fmt.Sprintf("INTEGRATION-REVERIFY %s — %s moved from %s to %s since the verify; merging it and verifying again", rec.Branch, rec.Base, strutil.ShortSHA(rec.VerifiedBase), strutil.ShortSHA(base))}
+		note = fmt.Sprintf("INTEGRATION-REVERIFY %s — %s moved from %s to %s since the verify; merging it and verifying again", rec.Branch, rec.Base, strutil.ShortSHA(rec.VerifiedBase), strutil.ShortSHA(base))
+	default:
+		o.LandVerified, o.LandVerifiedTip, o.LandVerifiedBase = true, tip, base
+		note = fmt.Sprintf("INTEGRATION-VERIFIED %s — the train verified tip %s on %s %s; no second verify", rec.Branch, strutil.ShortSHA(tip), rec.Base, strutil.ShortSHA(base))
 	}
-	o.LandVerified, o.LandVerifiedTip, o.LandVerifiedBase = true, tip, base
-	return nil, []string{fmt.Sprintf("INTEGRATION-VERIFIED %s — the train verified tip %s on %s %s; no second verify", rec.Branch, strutil.ShortSHA(tip), rec.Base, strutil.ShortSHA(base))}
+	return nil, append(stackNotes, note)
 }
 
 // integrationLanded is the bookkeeping of a landed integration PR: the member

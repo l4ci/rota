@@ -25,6 +25,7 @@ func TestWorkerTrainIntegrationFlag(t *testing.T) {
 		{"slots without PRs", nil, "every member needs an open PR"},
 		{"a name that is no ref component", []string{"--integration", "a/b"}, "not a valid branch name"},
 		{"a name with a dot", []string{"--integration", "x.lock"}, "not a valid branch name"},
+		{"--onto itself", []string{"--onto", "a"}, "cannot stack on itself"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			args := append([]string{"worker", "train", "w1", "w2", "--base", "main", "--integration", "a", "--no-assign-check"}, c.args...)
@@ -159,5 +160,31 @@ func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
 	}
 	if !strings.Contains(spy.bodies[9], "Closes #12\n") || !strings.Contains(spy.bodies[9], "Closes #5\n") {
 		t.Fatalf("rerun body: %q", spy.bodies[9])
+	}
+}
+
+func TestWorkerTrainOntoNeedsIntegration(t *testing.T) {
+	dir := planProject(t, gateConfig(t, `{"test":{"full":["true"]}}`, "off", nil), false)
+	code, out, errOut := rotaIn(t, dir, "worker", "train", "w1", "--base", "main", "--onto", "a", "--no-assign-check")
+	if code != 2 || !strings.Contains(out+errOut, "--onto needs --integration") {
+		t.Fatalf("exit %d, want 2:\n%s%s", code, out, errOut)
+	}
+}
+
+// A stacked integration branch opens its PR against the branch under it, and
+// its rerun command carries --onto and the base it lands on afterwards.
+func TestWorkerTrainStackedPRTargetsBranchUnder(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["true"]}}`)
+	it := worker.Integration{Name: "b", Branch: "integration/r55-b", Round: 55, Base: "integration/r55-a", Onto: "integration/r55-a", OntoBase: "main",
+		Members: []worker.IntegrationMember{{Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6"}}}
+	if err := worker.RecordIntegration(dir, it); err != nil {
+		t.Fatal(err)
+	}
+	spy := &prSpy{}
+	if _, err := openIntegrationPR(context.Background(), spy, dir, it); err != nil || len(spy.specs) != 1 || spy.specs[0].Base != "integration/r55-a" {
+		t.Fatalf("PR must target the branch under it: %v %+v", err, spy.specs)
+	}
+	if got, want := integrationRerun(it, []string{"8"}), "`rota worker train 8 --integration b --onto a --base main`"; got != want {
+		t.Errorf("rerun %q, want %q", got, want)
 	}
 }

@@ -1202,6 +1202,12 @@ In practice:
 5. Review the fix commits: `rota review package integration/r<round>-ui` starts at the first fix, then run /rota-review on it.
 6. Land everything with `rota worker gate <PR> --base main`. On a pass the member issues end and their slots park.
 
+#### Stack an integration branch
+
+While the maintainer reviews one integration branch, the next batch can be verified on top of it: `rota worker train 51 52 --base main --integration b --onto a` builds `integration/r<round>-b` on the tip of the open `integration/r<round>-a`, and its PR targets that branch instead of `main`. `--base` stays the base `a` integrates into. The members keep their PRs on `main`.
+
+The stacked branch cannot land while `a` is open: `rota worker gate` refuses it (`stale`) and names `a`. It refuses the same way when `a` was closed without landing. When `a` lands, rota retargets the stacked PR to `main`, merges `main` into the stacked branch and pushes it (`STACK-RETARGET`). If that merge left the tree as the train verified it, the verify stands and the landing skips a second one. If it changed the tree, the gate verifies again (`INTEGRATION-REVERIFY`). When a step fails, the landing of `a` still stands and says `pending`; gating the stacked PR repeats the move.
+
 ## Best-of: two workers on one issue
 
 For a hard issue where you want two independent attempts, label it `best-of:2`. It costs twice

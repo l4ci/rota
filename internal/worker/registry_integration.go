@@ -19,6 +19,11 @@ type Integration struct {
 	Branch string `json:"branch"`
 	Round  int    `json:"round"`
 	Base   string `json:"base"`
+	// Onto is the open integration branch this one is stacked on: it is then
+	// Base, and OntoBase is where Base returns when Onto lands. Both are empty
+	// for a branch on a plain base, and again once Onto has landed.
+	Onto     string `json:"onto,omitempty"`
+	OntoBase string `json:"ontoBase,omitempty"`
 	// Members are the PRs merged into the branch, in merge order; Head is the
 	// member head the last merge took.
 	Members []IntegrationMember `json:"members"`
@@ -56,6 +61,29 @@ type IntegrationMember struct {
 // IntegrationBranch names the integration branch of a round.
 func IntegrationBranch(round int, name string) string {
 	return fmt.Sprintf("integration/r%d-%s", round, name)
+}
+
+// OntoName is the name of the integration branch this one is stacked on.
+func (it Integration) OntoName() string {
+	return strings.TrimPrefix(it.Onto, fmt.Sprintf("integration/r%d-", it.Round))
+}
+
+// LandBase is the branch the integration finally lands on: its own base, or
+// what a stacked one returns to when the branch under it lands.
+func (it Integration) LandBase() string {
+	if it.Onto != "" {
+		return it.OntoBase
+	}
+	return it.Base
+}
+
+// TrainFlags are the flags that run this integration's train again.
+func (it Integration) TrainFlags() string {
+	onto := ""
+	if it.Onto != "" {
+		onto = " --onto " + it.OntoName()
+	}
+	return fmt.Sprintf("--integration %s%s --base %s", it.Name, onto, it.LandBase())
 }
 
 // Member is the member recorded for target, false when there is none.

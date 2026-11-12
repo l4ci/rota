@@ -80,7 +80,7 @@ func interactionBody(it worker.Integration, r worker.TrainResult) string {
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "## Change\n\nPush the fix or the resolution to `%s` through a PR into it. A slot assigned this item is cut from that branch; its commits never land on a member branch.\n\n", it.Branch)
-	fmt.Fprintf(&b, "## Acceptance\n\n- [ ] AC-1: WHEN `rota worker train %s --integration %s --base %s` reruns THEN it verifies green.\n", strings.Join(memberTargets(it), " "), it.Name, it.Base)
+	fmt.Fprintf(&b, "## Acceptance\n\n- [ ] AC-1: WHEN `rota worker train %s %s` reruns THEN it verifies green.\n", strings.Join(memberTargets(it), " "), it.TrainFlags())
 	return b.String()
 }
 
@@ -172,6 +172,6 @@ func parkIntegrationMembers(c *Ctx, root, pr string) {
 }
 
 // integrationRerun is the train command that runs an integration again.
-func integrationRerun(it worker.Integration, targets []string, base string) string {
-	return fmt.Sprintf("`rota worker train %s --integration %s --base %s`", strings.Join(targets, " "), it.Name, base)
+func integrationRerun(it worker.Integration, targets []string) string {
+	return fmt.Sprintf("`rota worker train %s %s`", strings.Join(targets, " "), it.TrainFlags())
 }

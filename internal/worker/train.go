@@ -113,6 +113,12 @@ type TrainOpts struct {
 	// (integration/r<round>-<name>): the members merge into it, it is pushed
 	// and verified, and nothing lands on Base. "" is a plain train.
 	Integration string
+	// Onto stacks the integration branch on another open one (by name): the
+	// branch is built on that branch's tip and its PR targets it, until it
+	// lands (#3098). "" is an integration branch on Base.
+	Onto string
+	// ontoBase is the base Onto's branch integrates into, set by resolveOnto.
+	ontoBase string
 	// RequestID is the receipt id of this call. When set, the train writes a
 	// live marker under it (see TrainRun) so `rota worker train cancel` can
 	// find and stop it; "" writes none.
@@ -290,6 +296,10 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	if err := refuseIntegrationPRs(root, o.Targets); err != nil {
 		return TrainResult{}, err
 	}
+	o, err := resolveOnto(root, o)
+	if err != nil {
+		return TrainResult{}, err
+	}
 	var res TrainResult
 	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
 		return e.train(ctx, root, o, nil, nil)
@@ -311,7 +321,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			return e.withIntegrationLock(ctx, root, o.Integration, func() error { return fn(false) })
 		}
 	}
-	err := lock(func(bool) (err error) {
+	err = lock(func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
@@ -515,11 +525,16 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	if !reg.Exists {
 		return p.trainPlan, p.res, true, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
-	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
-		return p.trainPlan, p.res, true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
-	}
-	if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
-		return p.trainPlan, p.res, true, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
+	// A stacked integration's base is another integration branch, which lives on
+	// the remote only: the project's base stays checked out, and the fetch
+	// before the merge reads the branch from the remote.
+	if o.Onto == "" {
+		if _, code := e.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
+			return p.trainPlan, p.res, true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
+		}
+		if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
+			return p.trainPlan, p.res, true, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
+		}
 	}
 	// A bad test.fullWhere, test.ciChecks or ledger is refused before any
 	// member is checked, and the train carries this read through.
@@ -583,7 +598,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			}
 			// A PR outside the registry derives its repair issue from its head branch.
 			if gt.External {
-				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, NoVerdict: true})
+				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, NoVerdict: true})
 				if err != nil {
 					return p.trainPlan, p.res, true, err
 				}
@@ -603,7 +618,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	}
 	var merged []TrainMember
 	for _, tg := range targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
@@ -1294,7 +1309,7 @@ func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerifi
 			done, err := trainBrokeResult(res, "git checkout "+p.tips[i+1]+" failed in the scratch tree")
 			return v, result, done, err
 		}
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews,
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews,
 			ItemBody: o.ItemBody, BehaviourDir: p.scratch})
 		if ctx.Err() != nil { // a step the cancel stopped is no finding
 			return v, result, true, nil
