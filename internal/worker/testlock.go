@@ -2,15 +2,14 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/shlex"
 )
@@ -42,15 +41,14 @@ func (e Env) WithTestLock(ctx context.Context, root string, width int, verb stri
 	}
 	told := false
 	for {
-		f, err := tryTestSlot(paths)
+		slot, release, err := tryTestSlot(paths)
 		if err != nil {
 			return err
 		}
-		if f != nil {
-			defer f.Close() // closing the fd releases the flock
-			f.Truncate(0)
-			fmt.Fprintf(f, "%d %s", os.Getpid(), verb)
-			defer f.Truncate(0)
+		if release != nil {
+			defer release()
+			os.WriteFile(slot, fmt.Appendf(nil, "%d %s", os.Getpid(), verb), 0o644)
+			defer os.Truncate(slot, 0)
 			return fn()
 		}
 		if !told {
@@ -65,24 +63,19 @@ func (e Env) WithTestLock(ctx context.Context, root string, width int, verb stri
 	}
 }
 
-// tryTestSlot flocks the first free slot file without blocking; nil, nil when
-// every slot is held.
-func tryTestSlot(paths []string) (*os.File, error) {
+// tryTestSlot locks the first free slot file without blocking and returns its
+// path and the release; a nil release when every slot is held.
+func tryTestSlot(paths []string) (string, func(), error) {
 	for _, p := range paths {
-		f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0o644)
+		release, ok, err := fsio.TryLock(p)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			return f, nil
-		}
-		f.Close()
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
-			return nil, err
+		if ok {
+			return p, release, nil
 		}
 	}
-	return nil, nil
+	return "", nil, nil
 }
 
 // The holder record is advisory: a holder killed mid-run leaves its pid in the

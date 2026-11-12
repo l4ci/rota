@@ -489,3 +489,29 @@ func TestMoveFileCopyFailureKeepsSrc(t *testing.T) {
 		t.Fatalf("src lost: %v", err)
 	}
 }
+
+func TestTryLockSecondHandleBusyUntilRelease(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.lock")
+	rel, ok, err := TryLock(p)
+	if err != nil || !ok || rel == nil {
+		t.Fatalf("first TryLock = ok %v err %v rel nil %v, want acquired", ok, err, rel == nil)
+	}
+	rel2, ok, err := TryLock(p)
+	if err != nil || ok || rel2 != nil {
+		t.Fatalf("second TryLock on held path = ok %v err %v, want not acquired", ok, err)
+	}
+	rel()
+	rel()
+	rel3, ok, err := TryLock(p)
+	if err != nil || !ok {
+		t.Fatalf("TryLock after release = ok %v err %v, want acquired", ok, err)
+	}
+	rel3()
+}
+
+func TestTryLockErrorsOnUnopenablePath(t *testing.T) {
+	_, ok, err := TryLock(filepath.Join(t.TempDir(), "missing", "x.lock"))
+	if err == nil || ok {
+		t.Fatalf("TryLock in missing dir = ok %v err %v, want error", ok, err)
+	}
+}
