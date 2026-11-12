@@ -120,7 +120,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
 		}
 	}
-	in.Slots, in.CwdOf = doctorSlotBlocks(root), d.procs().Cwd
+	in.Slots, in.Procs = doctorSlotBlocks(root), d.procs()
 	issue, issueErr := issueBackend(d, root)
 	if issueErr != nil {
 		in.StaleClaimWarnings = []string{issueErr.Error()}

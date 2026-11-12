@@ -539,7 +539,7 @@ func (fakeProcs) Cwd(pid int) string { return map[int]string{91: "/p/.worktrees/
 
 // Doctor reads a listener's working directory through the injected process
 // source, not /proc or lsof itself.
-func TestDoctorInputReadsCwdThroughProcs(t *testing.T) {
+func TestDoctorInputCarriesTheProcessSource(t *testing.T) {
 	cwd, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -552,7 +552,7 @@ func TestDoctorInputReadsCwdThroughProcs(t *testing.T) {
 	d.Getenv = func(string) string { return "" }
 	d.Procs = fakeProcs{}
 	in := doctorInput(context.Background(), d)
-	if got := in.CwdOf(91); got != "/p/.worktrees/w1" {
-		t.Errorf("CwdOf(91) = %q, want the fake table's directory", got)
+	if got := in.Procs.Cwd(91); got != "/p/.worktrees/w1" {
+		t.Errorf("Procs.Cwd(91) = %q, want the fake table's directory", got)
 	}
 }
