@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -19,9 +18,6 @@ import (
 // ErrNoCandidates: the directory has no immediate child with a .git entry
 // (hv-umbrella-init exit 1).
 var ErrNoCandidates = errors.New("no immediate git children found")
-
-// umbrellaHeader opens the .gitignore block hv-umbrella-init appends.
-const umbrellaHeader = "# ── rota umbrella ──"
 
 // Candidates lists the immediate children of root that hold a .git entry (a
 // directory, or the file a git worktree has), sorted. Like the old `for child
@@ -207,39 +203,22 @@ func sortedUnion(a, b []string) []string {
 	return out
 }
 
-// ignoreBlock appends the umbrella block to .gitignore for every wanted line
-// that is missing. Existing lines are never rewritten or reordered (a CRLF
-// file is normalised to LF, as splitlines plus "\n".join did). It reports
-// whether it wrote.
+// ignoreBlock merges the umbrella lines into .gitignore for every wanted line
+// that is missing, through the same merge as project init. It reports whether
+// it wrote.
 func ignoreBlock(root string, names []string) (bool, error) {
 	path := filepath.Join(root, ".gitignore")
-	var lines []string
-	if text, err := fsio.ReadText(path); err == nil {
-		lines = pystr.Splitlines(text)
-	}
-	have := map[string]bool{}
-	for _, l := range lines {
-		have[l] = true
-	}
+	raw, err := os.ReadFile(path)
+	text := string(raw)
 	wanted := []string{".claude/", rotatree.RelPrefix}
 	for _, n := range names {
 		wanted = append(wanted, "/"+n+"/")
 	}
-	var missing []string
-	for _, w := range wanted {
-		if !have[w] {
-			missing = append(missing, w)
-		}
-	}
-	if len(missing) == 0 {
+	next := mergeIgnore(text, err == nil, umbrellaHeader, wanted)
+	if err == nil && next == text {
 		return false, nil
 	}
-	if len(lines) > 0 && lines[len(lines)-1] != "" {
-		lines = append(lines, "")
-	}
-	lines = append(lines, umbrellaHeader)
-	lines = append(lines, missing...)
-	return true, fsio.WriteFileAtomic(path, []byte(strings.Join(lines, "\n")+"\n"))
+	return true, fsio.WriteFileAtomic(path, []byte(next))
 }
 
 // snapshot is `find .rota .gitignore`: every path under .rota and the .gitignore,
