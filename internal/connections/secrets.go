@@ -226,8 +226,8 @@ func (f fileStore) moveLegacy() error {
 	// A symlink (a dotfiles-managed secrets.json) is never renamed: that would
 	// move the link, not the secret. Its target is copied and only the link
 	// removed, so the synced copy is left alone.
-	if li.Mode()&os.ModeSymlink == 0 && os.Rename(f.legacy, f.path) == nil {
-		return os.Chmod(f.path, 0o600)
+	if li.Mode()&os.ModeSymlink == 0 {
+		return fsio.MoveFile(f.legacy, f.path, 0o600)
 	}
 	raw, err := os.ReadFile(f.legacy)
 	if err != nil {

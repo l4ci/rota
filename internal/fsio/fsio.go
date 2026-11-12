@@ -104,6 +104,28 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode, exact bool) err
 	return syncDir(filepath.Dir(path))
 }
 
+// rename is a seam for tests.
+var rename = os.Rename
+
+// MoveFile moves src to dst and leaves dst with mode perm. It renames; when
+// that fails (typically across filesystems) it copies through
+// WriteFileAtomicMode and removes src. A failed copy leaves src in place. src
+// must be a regular file: a symlink would be moved as the link, which is the
+// caller's call to make.
+func MoveFile(src, dst string, perm os.FileMode) error {
+	if rename(src, dst) == nil {
+		return os.Chmod(dst, perm)
+	}
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := WriteFileAtomicMode(dst, b, perm); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
 // syncDir makes a rename in dir durable. It runs after the rename has
 // succeeded, so a filesystem that does not support fsync on a directory
 // (EINVAL, ENOTSUP) must not turn a completed write into a reported failure.
