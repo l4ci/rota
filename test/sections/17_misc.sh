@@ -85,9 +85,9 @@ pass "release bump reads and writes pyproject.toml"
 cd ..
 
 echo "spike add no orphan branch on file-collision"
-mkdir spike-orphan && cd spike-orphan
+SPO="$PWD/spike-orphan"; mkdir "$SPO" && cd "$SPO"
 git init -q
-git -C "$PWD" config user.email t@t && git -C "$PWD" config user.name t
+git -C "$SPO" config user.email t@t && git -C "$SPO" config user.name t
 git checkout -q -b main 2>/dev/null || git branch -m main
 echo "x" > f && git add f && git commit -q -m "seed"
 mkdir -p .rota/spikes

@@ -26,6 +26,22 @@ RC=0; ERR=$( cd "$GIREAL" && RUN_TMP="$TMP_GI/allowed" git config user.name leak
 [ -z "$(command git -C "$GIREAL" config --local user.name)" ] || fail "the refused write must not land"
 pass "bare git config user.* is refused outside the run's scratch root"
 
+# 2b. git -C <dir> config user.* is checked against the -C target, not the cwd.
+RC=0; ERR=$( cd "$TMP_GI" && RUN_TMP="$TMP_GI/allowed" git -C "$GIREAL" config user.name leaked 2>&1 ) || RC=$?
+[ "$RC" != 0 ] || fail "git -C <outside dir> config user.name should be refused"
+RC=0; ERR=$( cd "$GIREAL" && RUN_TMP="$TMP_GI/allowed" git -C "$(pwd)" config user.name leaked 2>&1 ) || RC=$?
+[ "$RC" != 0 ] || fail "git -C <cwd> config user.name in an outside repo should be refused"
+[ -z "$(command git -C "$GIREAL" config --local user.name)" ] || fail "the refused -C write must not land"
+pass "git -C config user.* is checked against its target repo"
+
+# 2c. The static scan refuses the -C "$PWD" / -C . evasion in section files.
+printf 'git -C %s config user.name t\n' '"$PWD"' > "$TMP_GI/evade.sh"
+RC=0; ERR=$(identity_config_scan "$TMP_GI/evade.sh" 2>&1) || RC=$?
+[ "$RC" != 0 ] || fail "static scan should flag git -C \"\$PWD\" config user.*"
+printf 'git -C "$SCRATCH" config user.name t\n' > "$TMP_GI/ok.sh"
+identity_config_scan "$TMP_GI/ok.sh" >/dev/null 2>&1 || fail "static scan should accept an explicit scratch dir"
+pass "static scan refuses -C \"\$PWD\" identity writes"
+
 # 3. Scratch roots, -C and reads still work.
 GISCR="$TMP/gi-scratch"; mkdir -p "$GISCR"
 ( cd "$GISCR" && git init -q && git config user.name ok && [ "$(git config user.name)" = ok ] ) || fail "identity write inside the scratch root should work"

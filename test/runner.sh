@@ -195,11 +195,11 @@ _(none active — set with `/rota-vision`)_
 
 ## Milestones
 EOF
-git -C "$TMP" config user.email t@t && git -C "$TMP" config user.name t
+echo '{"bugs":0,"features":0,"tasks":0,"milestones":0}' > .rota/counters.json
 echo '{"active":[]}' > .rota/status.json
 
 git init -q
-git config user.email t@t && git config user.name t
+git -C "$TMP" config user.email t@t && git -C "$TMP" config user.name t
 git checkout -q -b main 2>/dev/null || git branch -m main
 git add -A && git commit -q -m "seed"
 

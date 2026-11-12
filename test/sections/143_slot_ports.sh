@@ -5,7 +5,7 @@ trap 'rm -rf "$TMP_SP"' EXIT
 mkdir -p "$TMP_SP/proj/.rota" "$TMP_SP/bin"
 (
   cd "$TMP_SP/proj"
-  git init -q -b main . && git -C "$PWD" config user.email t@t && git -C "$PWD" config user.name t
+  git init -q -b main . && git -C "$TMP_SP/proj" config user.email t@t && git -C "$TMP_SP/proj" config user.name t
   printf '.worktrees/\n' > .gitignore
   printf '{"round":{"portBase":31000,"portBlock":50,"envSetup":"echo $ROTA_SLOT $ROTA_PORT_BASE $ROTA_PORT_BLOCK $ROTA_DB_SUFFIX >> %s/env.txt"}}\n' "$TMP_SP" > .rota/config.json
   git add .gitignore && git commit -q -m seed
