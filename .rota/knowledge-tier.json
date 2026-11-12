@@ -1515,6 +1515,26 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-11"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.Q2xvc2Ugb3JkZXIgaXMgY29tbWVudCwgbGFiZWwsIHRoZW4gc3RhdGU": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-12"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.SW50ZWdyYXRpb24gYnJhbmNoZXMgYXJlIHJlbW90ZS1vbmx5": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-12"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBUZXN0IGZha2VzICYgaXNvbGF0aW9u.UmVwcm9kdWNpbmcgYSBzdWJtaXR0ZWQgQ29yZSBkZWxpdmVyeQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-12"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlz.V29ya2VycyBzaGFyZSB0aGUgaGFybmVzcyB0ZW1wIGRpcg": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-12"
     }
   }
 }
