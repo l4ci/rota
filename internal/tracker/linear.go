@@ -841,9 +841,8 @@ func (l *Linear) moveTo(ctx context.Context, d linearIssue, want ...string) erro
 	return l.update(ctx, d.ID, map[string]any{"stateId": state})
 }
 
-// Close moves the issue to a completed state, or a canceled one for
-// not_planned, then posts comment. The move comes first, so a retry after it
-// failed posts no second comment.
+// Close posts comment, then moves the issue to a completed state, or a
+// canceled one for not_planned (the Adapter.Close order: state last).
 func (l *Linear) Close(ctx context.Context, key IssueKey, reason, comment string) error {
 	d, err := l.issue(ctx, key)
 	if err != nil {
@@ -853,15 +852,12 @@ func (l *Linear) Close(ctx context.Context, key IssueKey, reason, comment string
 	if reason == CloseNotPlanned {
 		want = "canceled"
 	}
-	if err := l.moveTo(ctx, d, want); err != nil {
-		return err
-	}
 	if comment != "" {
 		if _, err := l.AddComment(ctx, key, comment); err != nil {
 			return err
 		}
 	}
-	return nil
+	return l.moveTo(ctx, d, want)
 }
 
 // CloseAfterMerge closes the issue a merged PR names: rota relies on no

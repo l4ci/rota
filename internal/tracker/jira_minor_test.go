@@ -36,9 +36,9 @@ func TestChunksEndOnInvalidUTF8(t *testing.T) {
 	}
 }
 
-// Close moves the issue first: a retry after a failed transition must not
-// post its comment twice.
-func TestJiraCloseTransitionsBeforeCommenting(t *testing.T) {
+// Close keeps the Adapter.Close order: comment, not-planned label, then the
+// transition last.
+func TestJiraCloseCommentsLabelsThenTransitions(t *testing.T) {
 	ctx := context.Background()
 	j, s := fakeJira(t, jiratest.Options{})
 	k, err := j.Create(ctx, "t", "", nil, "")
@@ -54,10 +54,13 @@ func TestJiraCloseTransitionsBeforeCommenting(t *testing.T) {
 			writes = append(writes, strings.SplitN(r, "?", 2)[0])
 		}
 	}
-	tr := slices.IndexFunc(writes, func(r string) bool { return strings.HasSuffix(r, "/transitions") })
-	cm := slices.IndexFunc(writes, func(r string) bool { return strings.HasSuffix(r, "/comment") })
-	if tr < 0 || cm < 0 || tr > cm {
-		t.Fatalf("writes %v: the transition must come before the comment", writes)
+	at := func(suffix string) int {
+		return slices.IndexFunc(writes, func(r string) bool { return strings.HasSuffix(r, suffix) })
+	}
+	cm, tr := at("/comment"), at("/transitions")
+	lb := slices.IndexFunc(writes, func(r string) bool { return strings.HasPrefix(r, "PUT ") && strings.Contains(r, "/issue/") })
+	if cm < 0 || tr < 0 || lb < 0 || !(cm < lb && lb < tr) {
+		t.Fatalf("writes %v: want comment, then label, then transition", writes)
 	}
 }
 
