@@ -244,7 +244,7 @@ func TestTitleOf(t *testing.T) {
 		{ID: "T01", Key: "T01", Title: "Task. More"},
 		{ID: "12", Key: "B12", Number: 12, Title: "Issue"},
 	}
-	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "12": "Issue", "B12": "Issue", "#12": "Issue", "B99": "?"} {
+	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "12": "Issue", "B12": "?", "B99": "?"} {
 		if got := titleOf(rows, id); got != want {
 			t.Errorf("titleOf(%s) = %q, want %q", id, got, want)
 		}

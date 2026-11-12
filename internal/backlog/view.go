@@ -180,11 +180,11 @@ type Listing struct {
 
 var idInRelatedRe = BracketedIDRe
 
-// titleOf is hv-backlog's title_of read off the row of id: the [tag] of a
+// titleOf is hv-backlog's title_of read off the row of id (its exact ID, as the bullet spelled it): the [tag] of a
 // tagged item and its title up to the first "."; "?" when no row answers to id.
 func titleOf(rows []Row, id string) string {
 	for _, r := range rows {
-		if r.ID != id && !r.IssueMatches(map[string]bool{id: true}) {
+		if r.ID != id {
 			continue
 		}
 		t := r.Title
