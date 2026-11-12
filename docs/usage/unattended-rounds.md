@@ -92,6 +92,10 @@ The SessionStart hook fires on `startup` and `clear`.
 - After that they fail on a partial or broken install: one hook missing, a statusline without the
   dump, or a hook command that no longer resolves.
 
+The runtime hooks pass silently if they panic. Set `ROTA_HOOK_DEBUG=1` in the environment that
+launches Claude Code to report those panics on stderr; they still exit successfully and emit no
+hook response. For statusline diagnostics, use `ROTA_STATUSLINE_DEBUG=1`.
+
 ## 💓 Keepalive
 
 The hooks end an orchestrator session cleanly. `rota keepalive run` starts the next one. Start the
