@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.34.0 — 2026-11-12
+
+### New
+
+- **Integration branches.** `rota worker train --integration <name>` pushes the members onto `integration/r<round>-<name>`, files an interaction item when members conflict or interact, and opens one integration PR. Review covers only the fix commits on that branch, and the gate can land the verified tip without verifying it again. `--onto <name>` stacks one integration branch on another that is still open. New JSON: train `data.integration`, gate `data.integrationMembers`, and an `integrations` map in `workers.json`. Bad flags or names exit 2, no recorded round exits 3, and a missing or already-landed integration record exits 4. An open integration PR cannot be a train member (exit 2); land it with `rota worker gate`.
+- **Repo-config drift warning.** `rota round start` and `rota round status` warn on stderr when repo-scope git config keys changed during a round (keys only, never values). `rota doctor` gains a read-only `repo config` check that lists program-running and identity keys such as `core.hooksPath`.
+- **Verdict re-ask.** A malformed reviewer verdict block for `review-spec`, `review-quality`, a lens or `second-opinion` is refused once (exit 2) with a hint to resend it to the same reviewer session. A second malformed block for the same branch and kind exits 4.
+- **Account picker.** `rota worker account list --json` marks the account the next assign will use with `picked: true`.
+- **`ROTA_HOOK_DEBUG`.** Set it to print a recovered hook panic on stderr. Hooks still exit 0 with no output.
+
+### Changed
+
+- **Round watch** returns a permission prompt once instead of on every pass. If the prompt is still unanswered, it comes back after each heartbeat exit.
+- **`rota round assign --accept-open-pr`** now refuses an issue whose open PR sits on another agent's round branch (exit 4, `blockedBy: open PR`) and names the `rota round transfer` that picks it up. Redoing your own branch, or a PR whose head is not a round branch and matches only by `Closes #N`, works as before.
+- **Core delivery refusals** report the slot's state after reconcile, and show the `--confirm-not-submitted` hint only for `unknown`. Confirming a `prepared` or `submitted` delivery exits 4 with that state named.
+- **Tracker close order** is now the same on every adapter: comment first, then the not-planned label, then the state. A retry after a failed state change can post the comment again.
+- **Claude usage** is read through a shared cache with backoff. Only cache files owned by the current user are trusted, waits are capped at an hour, and a planted FIFO can no longer hang the read.
+
+### Fixed
+
+- Integration landings: closed a race and several recovery gaps. Every member ends when the integration PR lands, and a gate run after the forge merged the PR redoes the cleanup.
+- The tracker adapter factory refuses an unknown `forge.provider` value instead of guessing.
+
+### Internal
+
+- `round tick --observe` enforces read-only through one place, the round-tick world, with no per-method checks.
+- Hook wiring: managed hooks are listed once, `cli/hook.go` is slimmed, and install now lives in its own file.
+- The architecture review state uses a typed object-section codec.
+- The `round.Block` alias constants are removed; use `blockedby`.
+- Contract docs are restamped, and rounds 55 and 56 learnings are added to project knowledge.
+
+## Stats
+54 commits, 164 files changed, +7160 −1589 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.33.0...v0.34.0
+
 ## v0.33.0 — 2026-11-11
 
 Train red classification, fail-closed config and verdict reads, and a tighter worker guard.
