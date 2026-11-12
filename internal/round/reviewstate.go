@@ -54,7 +54,9 @@ func decodeReview(o *jsonx.Object) Review {
 
 func encodeReview(rv Review) *jsonx.Object {
 	o := jsonx.NewObject()
-	o.Set("at", rv.At)
+	if rv.At != "" {
+		o.Set("at", rv.At)
+	}
 	if rv.Seeded {
 		o.Set("seeded", true)
 	}
