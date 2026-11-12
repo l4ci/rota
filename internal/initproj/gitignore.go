@@ -78,7 +78,10 @@ func mergeIgnore(text string, exists bool, header string, wanted []string) strin
 	}
 	for i, l := range lines {
 		if strings.TrimRight(l, "\r") == header {
-			ins := append(append([]string{}, lines[:i+1]...), missing...)
+			ins := append([]string{}, lines[:i+1]...)
+			for _, m := range missing {
+				ins = append(ins, m+strings.TrimSuffix(eol, "\n"))
+			}
 			return strings.Join(append(ins, lines[i+1:]...), "\n")
 		}
 	}

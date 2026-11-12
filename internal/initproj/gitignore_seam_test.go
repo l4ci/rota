@@ -55,3 +55,14 @@ func TestManagedEntriesComeFromRotatree(t *testing.T) {
 		t.Errorf("worktrees line = %q", worktreesLine)
 	}
 }
+
+func TestGitignoreCRLFInsertUnderHeaderKeepsLineEnds(t *testing.T) {
+	in := rotaHeader + "\r\n" + ignoreLines[1] + "\r\n.worktrees/\r\n"
+	got := MergeGitignore(in, true)
+	if strings.Contains(strings.ReplaceAll(got, "\r\n", ""), "\n") {
+		t.Errorf("mixed line ends: %q", got)
+	}
+	if !strings.Contains(got, ignoreLines[2]+"\r\n") {
+		t.Errorf("missing line not inserted: %q", got)
+	}
+}
