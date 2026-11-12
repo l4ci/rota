@@ -119,12 +119,16 @@ func mergeStop(cur, decided State) State {
 }
 
 func blockReason(pct float64, threshold int, path string) string {
-	return fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. "+
-		"Write the handoff for the next orchestrator session to %s now: first line %q, "+
+	return fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. ",
+		trimPct(pct), threshold) + handoffInstruction("the next orchestrator session", path)
+}
+
+func handoffInstruction(recipient, path string) string {
+	return fmt.Sprintf("Write the handoff for %s to %s now: first line %q, "+
 		"second line \"<!-- written <UTC timestamp, YYYY-MM-DDTHH:MM:SSZ> -->\", then the body from "+
 		"references/handoff-template.md with a \"## Round state\" section (slots, who holds what, merges pending, escalations open). "+
 		"Commit nothing you do not own. Then run /exit.",
-		trimPct(pct), threshold, path, HandoffMarker)
+		recipient, path, HandoffMarker)
 }
 
 func trimPct(p float64) string {
