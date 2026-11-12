@@ -16,6 +16,19 @@ import (
 // redoing the work. A second malformed block means the session cannot fix it.
 const MaxReasks = 1
 
+// Reasked reports whether a malformed block of this kind is re-asked. Only an
+// in-process reviewer session can be resumed: the QA agent and the behaviour
+// gate fix their own bodies, and the cross-harness reviewer is a one-shot
+// external run (`--no-session-persistence`), so none of them has a session to
+// re-ask.
+func Reasked(kind string) bool {
+	switch kind {
+	case ReviewSpec, ReviewQuality, ReviewSecurity, ReviewPerf, ReviewUX, SecondOpinion:
+		return true
+	}
+	return false
+}
+
 // ReaskPath is the per-developer count of rejected blocks, keyed by branch and
 // kind. It sits under .rota/review/, which is gitignored.
 func ReaskPath(root string) string {

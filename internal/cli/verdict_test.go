@@ -466,3 +466,28 @@ func TestVerdictAddReasksMalformedBlockOnce(t *testing.T) {
 		t.Errorf("malformed after a valid record: exit %d, want a fresh re-ask (2)\n%s", code, se)
 	}
 }
+
+// The refusal ends one reviewer session's re-ask: a reviewer dispatched after it
+// gets its own. QA and cross-harness have no session to re-ask, so exit 2 stays.
+func TestVerdictAddReaskIsPerSessionAndReviewerOnly(t *testing.T) {
+	dir := verdictRepo(t)
+	bad := writeBody(t, t.TempDir(), `{"findings": [{"severity": "huge", "title": "t"}]}`)
+	add := func(kind string, extra ...string) int {
+		args := append([]string{"verdict", "add", "--kind", kind, "--verdict", "FAIL", "--body-file", bad}, extra...)
+		code, _, _ := rotaIn(t, dir, args...)
+		return code
+	}
+	for i, want := range []int{2, 4, 2, 4} {
+		if got := add("review-spec"); got != want {
+			t.Fatalf("review-spec malformed #%d: exit %d, want %d (a refusal resets the count)", i+1, got, want)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if got := add("qa"); got != 2 {
+			t.Fatalf("qa malformed #%d: exit %d, want 2 (never counted)", i+1, got)
+		}
+		if got := add("review-cross", "--harness", "codex", "--model", "m"); got != 2 {
+			t.Fatalf("review-cross malformed #%d: exit %d, want 2 (never counted)", i+1, got)
+		}
+	}
+}
