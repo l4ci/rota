@@ -124,14 +124,13 @@ func TestPutMakesDirectorySelfIgnoring(t *testing.T) {
 	}
 }
 
-func TestShowReportsReadErrorsAsFailures(t *testing.T) {
+func TestMissingSessionWordingIsPinned(t *testing.T) {
 	root := t.TempDir()
-	// a directory where the file should be: readable path, unreadable file
-	if err := os.MkdirAll(filepath.Join(root, ".rota", "debug", "b07.md"), 0o777); err != nil {
-		t.Fatal(err)
+	want := "debug session gone not found (.rota/debug/gone.md)"
+	if _, err := Show(root, "gone"); err == nil || err.Error() != want {
+		t.Fatalf("Show = %v, want %q", err, want)
 	}
-	_, err := Show(root, "b07")
-	if err == nil || exitOf(err) == exitcode.ExitResolution {
-		t.Fatalf("Show of an unreadable file = %v, want a failure that is not 'not found'", err)
+	if err := Rm(root, "gone"); err == nil || err.Error() != want {
+		t.Fatalf("Rm = %v, want %q", err, want)
 	}
 }
