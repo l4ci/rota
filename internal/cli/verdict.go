@@ -129,15 +129,26 @@ func verdictHead(c *Ctx, dir, ref string) (string, error) {
 
 // verdictBody reads and validates an optional --body-file.
 func verdictBody(c *Ctx, file string) (verdict.Body, error) {
+	b, readErr, parseErr := readVerdictBody(c, file)
+	if readErr != nil {
+		return b, readErr
+	}
+	return b, parseErr
+}
+
+// readVerdictBody is verdictBody with the two failures apart: an unreadable
+// file is the caller's to fix, a block that reads but does not parse is the
+// reviewer's to resend.
+func readVerdictBody(c *Ctx, file string) (b verdict.Body, readErr, parseErr error) {
 	if file == "" {
-		return verdict.Body{Findings: []verdict.Finding{}}, nil
+		return verdict.Body{Findings: []verdict.Finding{}}, nil, nil
 	}
 	text, err := readBody(c, file)
 	if err != nil {
-		return verdict.Body{}, err
+		return verdict.Body{}, err, nil
 	}
-	b, err := verdict.ParseBody(text)
-	return b, err
+	b, parseErr = verdict.ParseBody(text)
+	return b, nil, parseErr
 }
 
 // sameVerdict is exit 2 when the body names a verdict other than --verdict.
@@ -195,12 +206,13 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if *fileDeferred && strings.TrimSpace(*pr) == "" {
 			return Result{}, Usage("--file-deferred needs --pr, the PR the items cite")
 		}
-		b, err := verdictBody(c, *body)
-		if err != nil {
-			return Result{}, err
+		b, readErr, bodyErr := readVerdictBody(c, *body)
+		if readErr != nil {
+			return Result{}, readErr
 		}
-		if err := sameVerdict(b, *v); err != nil {
-			return Result{}, err
+		var err error
+		if bodyErr == nil {
+			bodyErr = sameVerdict(b, *v)
 		}
 		var deferred []verdict.Finding
 		floor := verdict.FloorMajor
@@ -224,6 +236,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if bodyErr != nil {
+			return Result{}, reaskMalformed(t, *kind, bodyErr)
+		}
 		if *fileDeferred && len(deferred) > 0 {
 			followUpPR = branchIsFollowUp(c, fileRoot, t.branch)
 		}
@@ -238,6 +253,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if r, err = verdict.AddBranch(t.root, t.key, r); err != nil {
 			return Result{}, err
 		}
+		clearErr := verdict.ClearMalformed(t.root, t.key, *kind)
 		d := r.Object()
 		setReportStatus(d, postVerdictReport(c, t, r))
 		next := verdict.ProducerNext(r.Kind, r.Verdict)
@@ -246,6 +262,12 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		text := r.Verdict
 		if r.Combined != "" {
 			text = r.Combined
+		}
+		if clearErr != nil {
+			// The record is written; a stale count only makes the next malformed
+			// block of this kind a refusal sooner.
+			d.Set("reaskNote", clearErr.Error())
+			text += " (re-ask count not cleared: " + clearErr.Error() + ")"
 		}
 		if note := raisedDepthNote(c, args, t, head, r.Kind); note != "" {
 			d.Set("depthNote", note)
@@ -305,6 +327,32 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
 	}
+}
+
+// reaskMalformed turns a rejected block into the bounded re-ask: the first
+// rejection tells the caller to resend to the same reviewer session (it still
+// holds the review, so the fix costs a few tokens, not a re-run); the next one
+// for the same branch and kind is refused, so the loop ends. Only a body that
+// is malformed counts; any other error passes through. A count that cannot be
+// kept leaves the plain rejection.
+func reaskMalformed(t verdictBranch, kind string, cause error) error {
+	var e *Error
+	if !verdict.Reasked(kind) || !errors.As(cause, &e) || e.Exit != ExitUsage {
+		return cause
+	}
+	n, err := verdict.NoteMalformed(t.root, t.key, kind)
+	if err != nil {
+		return cause
+	}
+	if n > verdict.MaxReasks {
+		// The refusal ends this reviewer session's turn; a reviewer the
+		// orchestrator dispatches next starts with its own re-ask.
+		_ = verdict.ClearMalformed(t.root, t.key, kind)
+		return Refused("%s; this %s block was already re-asked %d time(s) and is still malformed", e.Message, kind, verdict.MaxReasks).
+			WithHint("stop re-asking and record nothing: tell the orchestrator, who may re-dispatch the reviewer; never guess a verdict")
+	}
+	return Usage("%s", e.Message).
+		WithHint("resend to the same reviewer session (SendMessage to its agent) with this error, not a fresh reviewer: it re-emits the block without redoing the review; one re-ask allowed")
 }
 
 // branchIsFollowUp is whether the issue leading the branch is a deferred-findings

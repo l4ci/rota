@@ -152,7 +152,7 @@ Only blocking findings are relayed to the worker and count toward a bounce. File
 
 Then register the Step 4 hits (parallel batch) for the entries no finding names.
 
-Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask that reviewer to resend; never guess a verdict.
+Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Resend the error to the same reviewer session (SendMessage to its agent, not a fresh dispatch: it still holds the review and re-emits the block), once. The verb counts per branch and kind: a second malformed block exits 4; record nothing, tell the orchestrator, never guess a verdict.
 
 Present both reports **verbatim** (trim only restatements). Spec first, Standards second, each under its own heading, neither merged into or reranked against the other. Show each reviewer's `Declined to judge` list under its section when non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
 
