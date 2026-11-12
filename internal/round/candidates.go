@@ -189,7 +189,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		_, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
 		c.AutoHold = autoHold(be, it)
 		if st := stale[it.ID]; st.Holder != "" {
 			c.BlockedBy = StaleClaimKind

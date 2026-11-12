@@ -31,7 +31,7 @@ func TestAssignLegacyFeatureResumeAndRedo(t *testing.T) {
 		f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
 		f.be.items["12"].Type = "F"
 		f.be.details["12"] = "## Acceptance\n- [ ] Works\n"
-		if res, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil || !res.Ready() {
+		if res, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil || !res.Ready() {
 			t.Fatalf("redo of an open PR must not require a new heading: %+v %v", res, err)
 		}
 	})

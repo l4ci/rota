@@ -12,17 +12,17 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 )
 
-// openPRIssues maps an issue number to the lowest-numbered open PR that
-// resolves it: the PR's head branch is `<agent>/<issue>-<slug>` or its body
+// openPRIssues maps an issue number to the lowest-numbered open PR, keeping
+// its head branch. The PR resolves it by a head `<agent>/<issue>-<slug>` or its body
 // closes the issue (`Closes #N`). One OpenPRs call serves every issue. File
 // mode and a missing forge have no open PRs to read, so the map is nil.
-func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[tracker.IssueKey]int, error) {
+func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[tracker.IssueKey]tracker.PR, error) {
 	return e.openPRIssuesExcept(ctx, be, "")
 }
 
 // openPRIssuesExcept is openPRIssues without the PR whose head is skip ("" for
 // none): an attempt of a best-of:2 issue does not count its sibling's PR.
-func (e Env) openPRIssuesExcept(ctx context.Context, be backlog.Backend, skip string) (map[tracker.IssueKey]int, error) {
+func (e Env) openPRIssuesExcept(ctx context.Context, be backlog.Backend, skip string) (map[tracker.IssueKey]tracker.PR, error) {
 	prs, err := e.listOpenPRs(ctx, be)
 	if err != nil || prs == nil {
 		return nil, err
@@ -46,10 +46,10 @@ func (e Env) listOpenPRs(ctx context.Context, be backlog.Backend) ([]tracker.PR,
 }
 
 // issuesOfPRs is openPRIssuesExcept over an already listed set of open PRs.
-func (e Env) issuesOfPRs(prs []tracker.PR, skip string) map[tracker.IssueKey]int {
-	out := map[tracker.IssueKey]int{}
-	note := func(issue tracker.IssueKey, pr int) {
-		if cur, ok := out[issue]; !ok || pr < cur {
+func (e Env) issuesOfPRs(prs []tracker.PR, skip string) map[tracker.IssueKey]tracker.PR {
+	out := map[tracker.IssueKey]tracker.PR{}
+	note := func(issue tracker.IssueKey, pr tracker.PR) {
+		if cur, ok := out[issue]; !ok || pr.Number < cur.Number {
 			out[issue] = pr
 		}
 	}
@@ -58,10 +58,10 @@ func (e Env) issuesOfPRs(prs []tracker.PR, skip string) map[tracker.IssueKey]int
 			continue
 		}
 		if n, ok := worker.BranchIssue(pr.Branch); ok {
-			note(n, pr.Number)
+			note(n, pr)
 		}
 		for _, n := range e.Forge.ClosedNumbers(pr.Body) {
-			note(tracker.NumKey(n), pr.Number)
+			note(tracker.NumKey(n), pr)
 		}
 	}
 	return out
