@@ -675,3 +675,19 @@ func TestDialogRegionWorkingFromStatusAreaOnly(t *testing.T) {
 		t.Errorf("idle pane dropped its gutter line: %q", idle)
 	}
 }
+
+func TestReadsWaitPane(t *testing.T) {
+	for _, c := range []struct {
+		kind string
+		want bool
+	}{
+		{harness.Codex, true},
+		{harness.Claude, false},
+		{"", false},
+		{"not-a-harness", false},
+	} {
+		if got := ReadsWaitPane(c.kind); got != c.want {
+			t.Errorf("ReadsWaitPane(%q) = %v, want %v", c.kind, got, c.want)
+		}
+	}
+}
