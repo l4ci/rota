@@ -1,5 +1,5 @@
 // Package reap is the logic behind `rota reap`: it finds what a round left
-// behind that nothing live owns (worktrees, branches, tabs, processes) and,
+// behind that nothing live owns (worktrees, branches, tabs) and,
 // on request, removes the part that is provably safe to remove.
 //
 // The rules are fixed by the verb contract and are all fail-closed:
@@ -7,8 +7,8 @@
 //   - The live set is the round's status rows plus the host's agents matched
 //     by cwd, never the registry alone: workers started by hand are host
 //     agents that were never registered.
-//   - A running agent is never killed. Tab and process candidates need proof
-//     that no agent is under them; what a host cannot prove it does not list.
+//   - A running agent is never killed. A tab candidate needs proof
+//     that no agent is under it; what a host cannot prove it does not list.
 //   - A candidate holding work is listed with Held and never deleted.
 //   - Registered slots, park/* worktrees and branches, the base branch and
 //     any branch checked out in a worktree are never candidates.
@@ -42,14 +42,13 @@ const (
 	KindWorktree = "worktree"
 	KindBranch   = "branch"
 	KindTab      = "tab"
-	KindProcess  = "process"
 	KindLease    = "lease"
 	// KindSkillCache is an extracted skill tree of another rota version.
 	KindSkillCache = "skillcache"
 )
 
 // Kinds lists every kind, in the order candidates are found and removed.
-var Kinds = []string{KindWorktree, KindBranch, KindTab, KindProcess, KindLease, KindSkillCache}
+var Kinds = []string{KindWorktree, KindBranch, KindTab, KindLease, KindSkillCache}
 
 // Candidate is something to reap. Held, when set, says why it must not be.
 type Candidate struct {
@@ -59,30 +58,16 @@ type Candidate struct {
 	Path   string
 	Reason string
 	Held   string
-	// PID is the process a KindProcess candidate stops; Name is display text.
-	PID int
 }
 
 // Failure is one deletion that did not happen.
 type Failure struct{ ID, Error string }
 
-// Process is a process a host reports under a tab.
-type Process struct {
-	PID  int
-	Name string
-	Tab  string
-	Cwd  string
-}
-
 // HostOps is what reap asks of the host beyond the agent snapshot. A real
 // herdr offers tabs only; a host with no tab support is a nil HostOps.
 type HostOps interface {
 	Tabs(ctx context.Context) ([]host.Tab, error)
-	// Processes lists processes that sit under a tab. A host that cannot
-	// prove a process tree has no agent in it returns none.
-	Processes(ctx context.Context) ([]Process, error)
 	CloseTab(ctx context.Context, id string) error
-	StopProcess(ctx context.Context, pid int) error
 }
 
 // LeaseOps is the round lease as internal/round exposes it: round.Env
@@ -165,7 +150,6 @@ var finders = []finder{
 	{KindWorktree, findWorktrees, removeWorktree},
 	{KindBranch, findBranches, removeBranch},
 	{KindTab, findTabs, removeTab},
-	{KindProcess, findProcesses, removeProcess},
 	{KindLease, findLeases, removeLease},
 	{KindSkillCache, findSkillCache, removeSkillCache},
 }
@@ -438,10 +422,10 @@ func (s *state) owned(b string) bool {
 	return worker.RoundBranch(b) && slices.Contains(s.in.Roster, agent)
 }
 
-// hostCandidates guards the two host kinds: they need a readable host.
+// hostCandidates guards the tab kind: it needs a readable host.
 func (s *state) hostCandidates() bool {
 	if !s.hostOK {
-		s.warn("host unavailable: tab and process candidates skipped")
+		s.warn("host unavailable: tab candidates skipped")
 		return false
 	}
 	return s.in.Host != nil
@@ -466,30 +450,9 @@ func findTabs(ctx context.Context, s *state) ([]Candidate, error) {
 	return out, nil
 }
 
-func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
-	if !s.hostCandidates() {
-		return nil, nil
-	}
-	procs, err := s.in.Host.Processes(ctx)
-	if err != nil {
-		s.warn("processes unavailable: %v; process candidates skipped", err)
-		return nil, nil
-	}
-	var out []Candidate
-	for _, p := range procs {
-		if s.live.Process(p) {
-			continue
-		}
-		id := strconv.Itoa(p.PID)
-		out = append(out, Candidate{ID: KindProcess + ":" + id, Kind: KindProcess, Name: strings.TrimSpace(id + " " + p.Name), PID: p.PID, Path: p.Cwd, Reason: "process under a tab with no agent"})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out, nil
-}
-
 // Apply removes every candidate without Held. A removal that fails is a
 // Failure and the rest still run. Each removal re-proves its own safety
-// first: a worktree, tab or process is re-checked against the live set so an
+// first: a worktree or tab is re-checked against the live set so an
 // agent that appeared since Find is never disturbed. Worktree retention is
 // checked again, and git also refuses a dirty or locked worktree on its own.
 func Apply(ctx context.Context, in Input, cands []Candidate) Result {
@@ -610,31 +573,6 @@ func removeLease(ctx context.Context, s *state, c Candidate) error {
 		return fmt.Errorf("the lease is no longer stale; left alone")
 	}
 	return err
-}
-
-func removeProcess(ctx context.Context, s *state, c Candidate) error {
-	if s.in.Host == nil {
-		return fmt.Errorf("no host")
-	}
-	if c.PID <= 0 {
-		return fmt.Errorf("process candidate %s carries no pid", c.ID)
-	}
-	if !s.hostOK {
-		return fmt.Errorf("host unavailable; process %d left alone", c.PID)
-	}
-	procs, err := s.in.Host.Processes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, p := range procs {
-		if p.PID == c.PID {
-			if s.live.Process(p) {
-				return fmt.Errorf("an agent may own process %d; left running", c.PID)
-			}
-			return s.in.Host.StopProcess(ctx, c.PID)
-		}
-	}
-	return fmt.Errorf("process %d is gone", c.PID)
 }
 
 func gitErr(errOut string, code int, err error) error {
