@@ -127,6 +127,16 @@ const (
 	statusLinePadKey = "padding"
 )
 
+// managedHooks is the ordered list installed, reported and removed by rota.
+var managedHooks = []struct {
+	event, matcher, command string
+}{
+	{eventStop, "", StopCommand},
+	{eventSessionBeg, StartMatcher, StartCommand},
+	{eventPrompt, "", PromptCommand},
+	{eventPreTool, GuardMatcher, GuardCommand},
+}
+
 // Exported spellings of the statusline wrap keys, for `rota migrate hv`, which
 // renames the hv-era keys to these.
 const (
@@ -192,8 +202,8 @@ func HasMarker(command string) bool { return strings.Contains(command, Marker) }
 // EventGuard is the event the worker guard (`rota hook guard`) runs on.
 const EventGuard = eventPreTool
 
-// MarkedEvents lists the events (Stop, SessionStart, UserPromptSubmit,
-// PreToolUse) that hold a marked hook command, with that command.
+// MarkedEvents lists the managed events that hold a marked hook command,
+// with that command.
 func MarkedEvents(o *jsonx.Object) map[string]string {
 	out := map[string]string{}
 	if o == nil {
@@ -204,12 +214,12 @@ func MarkedEvents(o *jsonx.Object) map[string]string {
 	if hooks == nil {
 		return out
 	}
-	for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool} {
-		arr, _ := getAny(hooks, ev).([]any)
+	for _, spec := range managedHooks {
+		arr, _ := getAny(hooks, spec.event).([]any)
 		for _, g := range arr {
 			for _, h := range groupHooks(g) {
 				if c, _ := getAny(h, "command").(string); HasMarker(c) {
-					out[ev] = c
+					out[spec.event] = c
 				}
 			}
 		}
@@ -266,7 +276,10 @@ type InstallOut struct {
 // Install merges the hooks and the statusline into Files[Scope]. It never
 // removes or replaces an entry rota did not write.
 func Install(in InstallIn) (InstallOut, error) {
-	out := InstallOut{Hooks: []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool}}
+	out := InstallOut{Hooks: make([]string, 0, len(managedHooks))}
+	for _, spec := range managedHooks {
+		out.Hooks = append(out.Hooks, spec.event)
+	}
 	target := in.Files[in.Scope]
 	if target == nil {
 		return out, errors.New("no target settings object")
@@ -337,23 +350,15 @@ func Install(in InstallIn) (InstallOut, error) {
 	if err != nil {
 		return out, err
 	}
-	c1, err := ensureHook(hooks, eventStop, "", StopCommand)
-	if err != nil {
-		return out, err
+	changed := false
+	for _, spec := range managedHooks {
+		c, err := ensureHook(hooks, spec.event, spec.matcher, spec.command)
+		if err != nil {
+			return out, err
+		}
+		changed = changed || c
 	}
-	c2, err := ensureHook(hooks, eventSessionBeg, StartMatcher, StartCommand)
-	if err != nil {
-		return out, err
-	}
-	c3, err := ensureHook(hooks, eventPrompt, "", PromptCommand)
-	if err != nil {
-		return out, err
-	}
-	c4, err := ensureHook(hooks, eventPreTool, GuardMatcher, GuardCommand)
-	if err != nil {
-		return out, err
-	}
-	out.Changed = c1 || c2 || c3 || c4
+	out.Changed = changed
 	if apply != nil {
 		apply()
 		out.Changed = true
@@ -462,8 +467,8 @@ func Uninstall(o *jsonx.Object) []string {
 	}
 	if rota, ok := o.Get(hooksKey); ok {
 		if hooks, isObj := rota.(*jsonx.Object); isObj {
-			for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool} {
-				arr, isArr := getAny(hooks, ev).([]any)
+			for _, spec := range managedHooks {
+				arr, isArr := getAny(hooks, spec.event).([]any)
 				if !isArr {
 					continue
 				}
@@ -494,11 +499,11 @@ func Uninstall(o *jsonx.Object) []string {
 				if !did {
 					continue
 				}
-				removed = append(removed, ev)
+				removed = append(removed, spec.event)
 				if len(kept) == 0 {
-					hooks.Delete(ev)
+					hooks.Delete(spec.event)
 				} else {
-					hooks.Set(ev, kept)
+					hooks.Set(spec.event, kept)
 				}
 			}
 			if hooks.Len() == 0 {
