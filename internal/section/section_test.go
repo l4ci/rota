@@ -157,3 +157,27 @@ func TestAppend(t *testing.T) {
 		})
 	}
 }
+
+func TestHeadingRe(t *testing.T) {
+	for _, c := range []struct {
+		line string
+		want bool
+	}{
+		{"## Goal", true},
+		{"## goal", true},
+		{"### GOAL", true},
+		{"# Goal", true},
+		{"###### goal  ", true},
+		{"####### goal", false},
+		{"## Goals", false},
+		{"##Goal", false},
+		{"text ## goal", false},
+	} {
+		if got := HeadingRe("Goal").MatchString(c.line); got != c.want {
+			t.Errorf("HeadingRe(Goal) on %q = %v, want %v", c.line, got, c.want)
+		}
+	}
+	if !HeadingRe("a.b").MatchString("## a.b") || HeadingRe("a.b").MatchString("## axb") {
+		t.Error("HeadingRe must quote the name")
+	}
+}
