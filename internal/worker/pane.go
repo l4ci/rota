@@ -647,3 +647,11 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 	st, _, ok, _ := lastSentinel(all[start:], gutter)
 	return ok && st == StateDone
 }
+
+// ReadsWaitPane reports whether a kind's pane can show an internal tool wait
+// that its host snapshot reads as blocked, so a caller must read the pane
+// (ClassifyFor) before trusting that snapshot. A kind with no wait wording
+// (or no harness) never does.
+func ReadsWaitPane(kind string) bool {
+	return len(paneRulesFor(kind).waiting) > 0
+}
