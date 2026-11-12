@@ -122,8 +122,12 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	if observe {
 		renv = renv.ReadOnly()
 	}
-	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state, observe: observe}
-	e := roundtick.NewEnv(w, roundtick.Config{Observe: observe, Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
+	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state}
+	var world roundtick.World = w
+	if observe {
+		world = observingWorld{w}
+	}
+	e := roundtick.NewEnv(world, roundtick.Config{Observe: observe, Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
 	state.Apply(&e)
 	r, err := roundtick.Run(ctx, e)
 	if err != nil {
@@ -271,12 +275,11 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 // reviewAdapter wires the tick's architecture review to the backlog and the
 // round env. The decision is the tick's (round.DecideReview).
 type reviewAdapter struct {
-	c       *Ctx
-	root    string
-	set     roundcfg.Settings
-	renv    round.Env
-	board   round.Board
-	observe bool
+	c     *Ctx
+	root  string
+	set   roundcfg.Settings
+	renv  round.Env
+	board round.Board
 }
 
 func (r reviewAdapter) Facts(ctx context.Context) (round.Architecture, bool, error) {
@@ -284,16 +287,10 @@ func (r reviewAdapter) Facts(ctx context.Context) (round.Architecture, bool, err
 	if err != nil {
 		return round.Architecture{}, false, err
 	}
-	if r.observe {
-		return r.renv.InspectArchitectureFacts(ctx, r.root, r.board, r.set, cands)
-	}
 	return r.renv.ArchitectureFacts(ctx, r.root, r.board, r.set, cands)
 }
 
 func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string, error) {
-	if r.observe {
-		return nil, errReadOnlyWorld
-	}
 	return r.renv.MintReview(ctx, r.root, r.board, a, round.Current(r.root))
 }
 
@@ -312,9 +309,6 @@ type tickWorld struct {
 	be    backlog.Backend
 	board round.Board
 	state roundtick.State
-	// observe makes the world read-only: reads inspect without writing and
-	// everything that changes state is refused with errReadOnlyWorld.
-	observe bool
 }
 
 func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegistryTolerant(w.root) }
@@ -334,18 +328,12 @@ func (w *tickWorld) Waiting() []roundtick.ReadyPR {
 }
 
 func (w *tickWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
-	if w.observe {
-		return w.renv.InspectReconcile(ctx, w.root)
-	}
 	return w.renv.Reconcile(ctx, w.root, true)
 }
 
 func (w *tickWorld) Root() string { return w.root }
 
 func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
-	if w.observe {
-		return postgate.Env{}, req, errReadOnlyWorld
-	}
 	if req.Gate != nil {
 		o := req.Gate
 		return prepareGate(w.c, ctx, w.root, gateRunOpts{Slot: o.Slot, Base: o.Base, NoWait: o.NoWait})
@@ -356,28 +344,22 @@ func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate
 
 // ReviewReadiness says why a done slot still waits for required reviews, and
 // whether its identity/state verdict must go straight to the real gate; an
-// incomplete probe or a read error cannot confirm readiness. Observing asks
-// the gate for its no-write variant (no fetch, no verdict-report recovery).
+// incomplete probe or a read error cannot confirm readiness. An observing
+// world asks the gate for its no-write variant (no fetch, no verdict-report
+// recovery).
 func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
+	return w.reviewReadiness(slot, base, false)
+}
+
+func (w *tickWorld) reviewReadiness(slot, base string, observe bool) (string, bool) {
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: w.observe, VerdictRepo: shipVerdict(w.c, w.root, w.root).Repo, ItemBody: lazyItemBody(w.c, w.root)})
+	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, VerdictRepo: shipVerdict(w.c, w.root, w.root).Repo, ItemBody: lazyItemBody(w.c, w.root)})
 	return roundtick.ReviewReadinessOf(r, err, slot)
 }
 
 func (w *tickWorld) ReviewLoop(slot string) roundtick.ReviewOutcome {
-	src := reviewSources(w.c, w.root, w.set, slot)
-	src.Observe = w.observe
-	if w.observe && src.Relay != nil {
-		src.Relay = readOnlyRelay
-	}
-	return roundtick.ReviewStep(w.c.Context(), src)
-}
-
-// readOnlyRelay is the review relay of an observing world: it refuses, so the
-// guarantee holds even if a pass ignores ReviewSources.Observe.
-func readOnlyRelay(context.Context) (roundtick.RelayResult, error) {
-	return roundtick.RelayResult{}, errReadOnlyWorld
+	return roundtick.ReviewStep(w.c.Context(), reviewSources(w.c, w.root, w.set, slot))
 }
 
 func (w *tickWorld) Capped(ctx context.Context) string {
@@ -395,9 +377,6 @@ func (w *tickWorld) Candidates(ctx context.Context) ([]round.Candidate, error) {
 // Assign takes no tier, no kind and never accepts overlap: the round's
 // defaults, and only a candidate that is ready as it stands.
 func (w *tickWorld) Assign(ctx context.Context, id string) (round.Assigned, error) {
-	if w.observe {
-		return round.Assigned{}, errReadOnlyWorld
-	}
 	res, err := w.renv.Assign(ctx, w.root, w.board, round.AssignOpts{ID: id})
 	for _, warn := range res.Warnings {
 		w.c.Warn("%s", warn)
@@ -415,7 +394,7 @@ func (w *tickWorld) Assign(ctx context.Context, id string) (round.Assigned, erro
 }
 
 func (w *tickWorld) Review() roundtick.Reviewer {
-	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board, observe: w.observe}
+	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
 }
 
 // FollowUp wires the follow-up step (#2580) to the forge and the transfer
@@ -444,9 +423,6 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 			return out, err
 		},
 		Start: func(ctx context.Context, f roundtick.FollowUp, slot string, reserve bool) error {
-			if w.observe {
-				return errReadOnlyWorld
-			}
 			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f.Item, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
 			for _, warn := range res.Warnings {
 				w.c.Warn("%s", warn)
@@ -457,9 +433,6 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 }
 
 func (w *tickWorld) Audit(a roundtick.Action) {
-	if w.observe {
-		return
-	}
 	if err := gate.Autopilot(w.root, w.c.deps().Now(), "round tick "+a.Action, a.Target, a.Detail); err != nil {
 		w.c.Warn("audit line not written: %v", err)
 	}

@@ -127,24 +127,30 @@ func TestRoundTickObserveLeavesHeldWorktreeIndexAlone(t *testing.T) {
 	}
 }
 
-// The no-mutation guarantee is structural: an observing world refuses every
-// call that would change state, whatever the tick asks of it.
-func TestObservingTickWorldRefusesMutations(t *testing.T) {
-	w := &tickWorld{observe: true}
+// The no-mutation guarantee is structural: the observing world refuses every
+// call that would change state, whatever the tick asks of it. One table lists
+// each mutating World method; a new one must be added here or the seam's
+// explicit implementation will not compile.
+func TestObservingWorldRefusesMutations(t *testing.T) {
+	o := observingWorld{&tickWorld{}}
 	ctx := context.Background()
-	if _, _, err := w.Landing(ctx, postgate.Request{}); !errors.Is(err, errReadOnlyWorld) {
-		t.Errorf("Landing: %v", err)
+	refusals := map[string]func() error{
+		"Landing": func() error { _, _, err := o.Landing(ctx, postgate.Request{}); return err },
+		"Assign":  func() error { _, err := o.Assign(ctx, "#1"); return err },
+		"Review.Mint": func() error {
+			_, err := observingReviewer{}.Mint(ctx, round.Architecture{})
+			return err
+		},
+		"FollowUp.Start": func() error {
+			return o.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false)
+		},
 	}
-	if _, err := w.Assign(ctx, "#1"); !errors.Is(err, errReadOnlyWorld) {
-		t.Errorf("Assign: %v", err)
+	for name, call := range refusals {
+		if err := call(); !errors.Is(err, errReadOnlyWorld) {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
-	if _, err := w.Review().Mint(ctx, round.Architecture{}); !errors.Is(err, errReadOnlyWorld) {
-		t.Errorf("Mint: %v", err)
-	}
-	if err := w.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false); !errors.Is(err, errReadOnlyWorld) {
-		t.Errorf("FollowUp.Start: %v", err)
-	}
-	if _, err := readOnlyRelay(ctx); !errors.Is(err, errReadOnlyWorld) {
-		t.Errorf("review relay: %v", err)
-	}
+	// The audit line is dropped, not refused: the zero tickWorld would panic
+	// if it wrote.
+	o.Audit(roundtick.Action{})
 }
