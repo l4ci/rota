@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
@@ -88,6 +89,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	} else {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
+	in.RepoConfig = doctorRepoConfig(ctx, d.Git, in.Dir)
 	root, _ := findRoot(in.Dir, false)
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
@@ -160,6 +162,20 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.DefaultConfigDir = skills.ClaudeDir(d.Getenv, in.Home)
 	return in
+}
+
+// doctorRepoConfig records the repo-scope git config baseline when none exists
+// (the first look is the baseline) and reports drift from it. nil outside a
+// repository, on a git failure, or when nothing moved.
+func doctorRepoConfig(ctx context.Context, run git.Runner, dir string) *repoconfig.Drift {
+	if _, err := repoconfig.Ensure(ctx, run, dir); err != nil {
+		return nil
+	}
+	dr, err := repoconfig.Check(ctx, run, dir)
+	if err != nil || dr.Clean() {
+		return nil
+	}
+	return &dr
 }
 
 // staleBinary asks whether the running rota is behind the rota source checkout

@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
@@ -164,6 +165,10 @@ type Input struct {
 	// one Disk reads (the gate's builds grow it); nil adds no line.
 	CacheDisk *Disk
 
+	// RepoConfig is how the repo-scope git config differs from the baseline a
+	// round recorded; nil adds no line, as does a clean or missing baseline.
+	RepoConfig *repoconfig.Drift
+
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.
 	StaleBinary *stalebin.Finding
@@ -252,6 +257,7 @@ func (d *runner) checkTable() []checkEntry {
 		{"stale claims", d.staleClaims, false},
 		{"stale milestones", optional(d.staleMilestones), false},
 		{"ports", optional(d.ports), false},
+		{"repo config", optional(d.repoConfig), false},
 		{"stale binary", optional(d.staleBinary), false},
 		{"verify", optional(d.verify), false},
 		{"test lock", optional(d.testLock), false},
