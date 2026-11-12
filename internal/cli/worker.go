@@ -947,7 +947,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if !*check && (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 { // landed now, or before a retry (#3096)
-			parkIntegrationMembers(c, root, r.PR)
+			parkIntegrationMembers(c, root, r.PR, run.BookErr == nil)
 		}
 		if r.Verdict == worker.GateAlreadyMerged {
 			res.Text = r.Err

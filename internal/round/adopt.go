@@ -19,17 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// Blocked reasons of an adoption (exit 4, `blockedBy`).
-const (
-	// BlockRegistered: a slot already holds the branch.
-	BlockRegistered = blockedby.Registered
-	// BlockHeld: a slot already holds the issue.
-	BlockHeld = blockedby.Held
-	// BlockExternal: a destructive verb was pointed at an adopted slot, whose
-	// worktree and branch rota did not create.
-	BlockExternal = blockedby.External
-)
-
 // AdoptOpts are the flags of `rota worker adopt`.
 type AdoptOpts struct {
 	// Ref is a local branch name or a worktree path of this repo.
@@ -81,10 +70,10 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		return res, err
 	}
 	if s, _ := reg.BranchHolder(branch); s != nil {
-		return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
+		return res, blocked(blockedby.Registered, "slot %s already holds %s", s.Name(), branch)
 	}
 	if s := reg.SlotHolding(res.Issue); s != nil {
-		return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
+		return res, blocked(blockedby.Held, "slot %s already holds %s", s.Name(), res.Issue)
 	}
 	// A fresh claim by another worker can coexist with an orchestrator's
 	// fix-forward. Refuse only positive evidence of stale or reclaimed work.
@@ -121,7 +110,7 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 				detail = check.Detail
 			}
 		}
-		blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", res.Issue, strings.Join(detail, "; "))
+		blk := blocked(blockedby.Overlap, "%s overlaps work in flight: %s", res.Issue, strings.Join(detail, "; "))
 		blk.Readiness = &r
 		return res, blk
 	}
@@ -140,9 +129,9 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 			case worker.ConflictName:
 				return res, usage("slot %s already exists", name)
 			case worker.ConflictBranch:
-				return res, blocked(BlockRegistered, "slot %s already holds %s", rc.Slot, branch)
+				return res, blocked(blockedby.Registered, "slot %s already holds %s", rc.Slot, branch)
 			}
-			return res, blocked(BlockHeld, "slot %s already holds %s", rc.Slot, res.Issue)
+			return res, blocked(blockedby.Held, "slot %s already holds %s", rc.Slot, res.Issue)
 		}
 		return res, err
 	}
@@ -158,7 +147,7 @@ func fenceExternal(s *worker.Slot, verb, what string) error {
 	if !s.IsExternal() {
 		return nil
 	}
-	return blocked(BlockExternal, "%s", worker.ExternalMessage(s.Name(), verb, what))
+	return blocked(blockedby.External, "%s", worker.ExternalMessage(s.Name(), verb, what))
 }
 
 // checkAdoptPR validates the PR an adoption records: it must name a PR, the
@@ -290,7 +279,7 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 	stale, warnings := e.StaleClaims(ctx, root, be, []tracker.IssueKey{key})
 	for _, claim := range stale {
 		if slices.Contains(held, claim.Holder) {
-			return warnings, blocked(BlockClaimed, "%s has stale claim %s; branch %s cannot be adopted without reclaiming it", issue, claim.Holder, branch)
+			return warnings, blocked(blockedby.Claimed, "%s has stale claim %s; branch %s cannot be adopted without reclaiming it", issue, claim.Holder, branch)
 		}
 	}
 	var (
@@ -307,7 +296,7 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
 	}
 	if backlog.ReclaimedBranchClaim(comments, agent, held) {
-		return warnings, blocked(BlockClaimed, "%s was reclaimed from %s and is claimed by %s; branch %s cannot be adopted", issue, agent, strings.Join(held, ", "), branch)
+		return warnings, blocked(blockedby.Claimed, "%s was reclaimed from %s and is claimed by %s; branch %s cannot be adopted", issue, agent, strings.Join(held, ", "), branch)
 	}
 	return warnings, nil
 }

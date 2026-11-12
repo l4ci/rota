@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
 	"os"
@@ -50,7 +51,7 @@ func TestCandidatesPinnedElsewhereShown(t *testing.T) {
 			}
 			for _, c := range cs {
 				wantBlocked := slices.Contains(tc.blocked, c.ID)
-				if (c.BlockedBy == BlockSite) != wantBlocked {
+				if (c.BlockedBy == blockedby.Site) != wantBlocked {
 					t.Errorf("%s blockedBy = %q, want site = %v", c.ID, c.BlockedBy, wantBlocked)
 				}
 				if !wantBlocked && !c.Ready() {
@@ -99,7 +100,7 @@ func TestSupportCandidatesPinnedFirstThenUnpinned(t *testing.T) {
 			if c.ID == "1" && !c.Ready() {
 				t.Errorf("%s: unpinned issue must be ready: %+v", tc.role, c)
 			}
-			if tc.role == roundcfg.RoleSupport && c.ID == "3" && c.BlockedBy != BlockSite {
+			if tc.role == roundcfg.RoleSupport && c.ID == "3" && c.BlockedBy != blockedby.Site {
 				t.Errorf("pinned elsewhere must stay blocked: %+v", c)
 			}
 		}
@@ -117,7 +118,7 @@ func TestCandidatesLegacySupportBlocked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cs) != 1 || cs[0].Ready() || cs[0].BlockedBy != BlockSite {
+	if len(cs) != 1 || cs[0].Ready() || cs[0].BlockedBy != blockedby.Site {
 		t.Fatalf("legacy support issue must stay blocked until migration: %+v", cs)
 	}
 	if why := fmt.Sprint(cs[0].Checks); !strings.Contains(why, "rota migrate labels --apply") {
@@ -141,7 +142,7 @@ func TestAssignRefusesPinnedElsewhere(t *testing.T) {
 				}
 			})
 			var refusal *BlockedError
-			if !errors.As(err, &refusal) || refusal.By != BlockSite {
+			if !errors.As(err, &refusal) || refusal.By != blockedby.Site {
 				t.Fatalf("assign err = %v, want blockedBy site", err)
 			}
 			if !strings.Contains(err.Error(), "machine:mac") || !strings.Contains(err.Error(), "--withdraw") {
@@ -174,7 +175,7 @@ func TestAssignRefusesLegacySupport(t *testing.T) {
 					}
 				})
 				var refusal *BlockedError
-				if !errors.As(err, &refusal) || refusal.By != BlockSite || !strings.Contains(err.Error(), "rota migrate labels --apply") {
+				if !errors.As(err, &refusal) || refusal.By != blockedby.Site || !strings.Contains(err.Error(), "rota migrate labels --apply") {
 					t.Fatalf("assign err = %v, want migration refusal", err)
 				}
 				if len(f.be.claims) != 0 {
@@ -267,7 +268,7 @@ func TestSupportAssignPrefixesAndCutsFromFreshOrigin(t *testing.T) {
 func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
 	f.be.items["13"].Labels = []string{"machine:main"}
-	if _, err := f.assign("13", "", nil); blockedBy(t, err) != BlockSite {
+	if _, err := f.assign("13", "", nil); blockedBy(t, err) != blockedby.Site {
 		t.Errorf("support assign of an issue pinned to main: %v", err)
 	}
 	if len(f.be.claims) != 0 {
@@ -277,7 +278,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 	m := newAssignFixture(t)
 	m.env.Round.Support = "mac"
 	m.be.items["12"].Labels = []string{"machine:mac"}
-	if _, err := m.assign("12", "", nil); blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "--withdraw") {
+	if _, err := m.assign("12", "", nil); blockedBy(t, err) != blockedby.Site || !strings.Contains(err.Error(), "--withdraw") {
 		t.Errorf("main assign of a support issue: %v", err)
 	}
 }
@@ -287,7 +288,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 func TestSupportAssignFetchFailureRefuses(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
 	gittest.Run(t, f.root, "remote", "set-url", "origin", filepath.Join(gitTemp(t), "gone.git"))
-	if _, err := f.assign("12", "", nil); blockedBy(t, err) != BlockFetch {
+	if _, err := f.assign("12", "", nil); blockedBy(t, err) != blockedby.Fetch {
 		t.Fatalf("fetch failure: %v", err)
 	}
 	if len(f.be.claims) != 0 || len(f.host.spawned) != 0 {
@@ -325,7 +326,7 @@ func TestSupportResumeMergesOriginOrRefusesOnConflict(t *testing.T) {
 	before, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
 	pushToOrigin(t, origin, "work", "theirs")
 	sent := len(f.host.sents)
-	if _, err := f.assign("12", "mac-ben", nil); blockedBy(t, err) != BlockConflict {
+	if _, err := f.assign("12", "mac-ben", nil); blockedBy(t, err) != blockedby.Conflict {
 		t.Fatalf("conflicting resume: %v", err)
 	}
 	after, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
@@ -359,7 +360,7 @@ func TestSupportResumeRefusesDirtyWorktree(t *testing.T) {
 	pushToOrigin(t, origin, "other", "theirs")
 	before, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
 	sent := len(f.host.sents)
-	if _, err := f.assign("12", "mac-ben", nil); blockedBy(t, err) != BlockDirty {
+	if _, err := f.assign("12", "mac-ben", nil); blockedBy(t, err) != blockedby.Dirty {
 		t.Fatalf("dirty resume: %v", err)
 	}
 	after, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
@@ -380,7 +381,7 @@ func TestSupportAssignRefusesOffSiteBundleMember(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
 	f.be.items["13"].Labels = []string{"machine:main"}
 	_, err := f.assign("12", "", func(o *AssignOpts) { o.Bundle = []string{"13"} })
-	if blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "13") {
+	if blockedBy(t, err) != blockedby.Site || !strings.Contains(err.Error(), "13") {
 		t.Fatalf("support bundle with a member pinned to main: %v", err)
 	}
 	if len(f.be.claims) != 0 {
@@ -405,12 +406,12 @@ func TestOfferSupport(t *testing.T) {
 	}
 
 	f.be.claims = map[string]string{"14": "ben@1"}
-	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"14"}, false); blockedBy(t, err) != BlockClaimed {
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"14"}, false); blockedBy(t, err) != blockedby.Claimed {
 		t.Errorf("offer of an issue main holds: %v", err)
 	}
 
 	f.be.claims["12"] = "mac-ben@1"
-	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"13", "12"}, true); blockedBy(t, err) != BlockClaimed {
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"13", "12"}, true); blockedBy(t, err) != blockedby.Claimed {
 		t.Errorf("withdraw of an issue a support claim holds: %v", err)
 	}
 	if len(f.be.removed) != 0 {
@@ -421,7 +422,7 @@ func TestOfferSupport(t *testing.T) {
 	}
 
 	f.env.Round.Support = ""
-	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"13"}, false); blockedBy(t, err) != BlockConfig {
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"13"}, false); blockedBy(t, err) != blockedby.Config {
 		t.Errorf("offer with round.support unset: %v", err)
 	}
 }
@@ -519,7 +520,7 @@ func TestReturnSupport(t *testing.T) {
 	f.be.items["13"].Labels = []string{label}
 
 	f.env.Round.Role = roundcfg.RoleMain
-	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != BlockRole {
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != blockedby.Role {
 		t.Errorf("return on main: %v", err)
 	}
 	f.env.Round.Role = roundcfg.RoleSupport
@@ -527,14 +528,14 @@ func TestReturnSupport(t *testing.T) {
 	if err := worker.RegisterExternal(f.root, "ext-1", "mac-ben/12-x", "", "main", "13", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "13", "why"); blockedBy(t, err) != BlockClaimed {
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "13", "why"); blockedBy(t, err) != blockedby.Claimed {
 		t.Errorf("return of a held issue: %v", err)
 	}
 	if len(f.be.removed) != 0 || len(f.be.comments["13"]) != 0 {
 		t.Errorf("a refused return writes nothing: %v %v", f.be.removed, f.be.comments)
 	}
 	f.env.Round.Support = ""
-	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != BlockConfig {
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != blockedby.Config {
 		t.Errorf("return with round.support unset: %v", err)
 	}
 	f.env.Round.Support = "mac"
@@ -596,7 +597,7 @@ func TestOfferRefusesIssuePinnedElsewhere(t *testing.T) {
 			f.be.items["13"].Labels = []string{pin}
 			_, err := f.env.OfferSupport(bg, f.root, f.be, []string{"12", "13"}, false)
 			var refusal *BlockedError
-			if !errors.As(err, &refusal) || refusal.By != BlockSite {
+			if !errors.As(err, &refusal) || refusal.By != blockedby.Site {
 				t.Fatalf("offer err = %v, want blockedBy site", err)
 			}
 			if !strings.Contains(err.Error(), pin) || !strings.Contains(err.Error(), "remove") {
@@ -675,9 +676,9 @@ func TestSupportAndMainClaimSameIssueOneWins(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := BlockClaimed
+			want := blockedby.Claimed
 			if supportFirst {
-				want = BlockSite
+				want = blockedby.Site
 			} // support's winning claim now pins the issue
 			if _, err := second.assign("12", "", nil); blockedBy(t, err) != want {
 				t.Fatalf("lost claim: %v", err)
@@ -762,7 +763,7 @@ func TestSupportAssignLostClaimAddsNoPin(t *testing.T) {
 	f.env.Forge = f.be.asForge()
 	f.be.items["12"].Labels = nil
 	f.be.claimedBy = "dana@1"
-	if _, err := f.assign("12", "", nil); blockedBy(t, err) != BlockClaimed {
+	if _, err := f.assign("12", "", nil); blockedBy(t, err) != blockedby.Claimed {
 		t.Fatalf("assign: %v", err)
 	}
 	if len(f.be.items["12"].Labels) != 0 || len(f.be.added) != 0 {

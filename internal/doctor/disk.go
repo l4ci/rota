@@ -70,3 +70,16 @@ func HumanBytes(n uint64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
+
+// repoConfig warns when repo-scope git config moved since the recorded
+// baseline, naming the keys (never their values). Nothing moved, or no
+// baseline yet, adds no line.
+func (d *runner) repoConfig() (Check, bool) {
+	dr := d.in.RepoConfig
+	if dr == nil || dr.Clean() {
+		return Check{}, false
+	}
+	return Check{Name: "repo config", Status: Warn,
+		Detail: "repo-scope git config changed since the baseline (" + dr.Summary() + ")",
+		Hint:   "linked worktrees share .git/config: inspect with git config --local --list; keys such as core.hooksPath run programs in rota's git calls; the next round start re-records the baseline"}, true
+}

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -52,7 +53,7 @@ func (e Env) milestoneBase(ctx context.Context, root string, be Board, it *backl
 	res, err := e.Git(ctx, root, "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/"+branch)
 	switch {
 	case err != nil || (res.ExitCode != 0 && res.ExitCode != 2):
-		return "", "", blocked(BlockFetch, "could not read origin to look for %s (%s)", branch, gitWhy(res.Stderr, err))
+		return "", "", blocked(blockedby.Fetch, "could not read origin to look for %s (%s)", branch, gitWhy(res.Stderr, err))
 	case res.ExitCode == 2:
 		// An active milestone from before branches were cut: its issues
 		// keep the round base rather than stall.
@@ -68,12 +69,12 @@ func (e Env) milestoneBase(ctx context.Context, root string, be Board, it *backl
 func (e Env) fetchBase(ctx context.Context, root, base string) (string, error) {
 	res, err := e.Git(ctx, root, "fetch", "-q", "origin", base)
 	if err != nil || res.ExitCode != 0 {
-		return "", blocked(BlockFetch, "could not fetch origin/%s to cut the branch from (%s)", base, gitWhy(res.Stderr, err))
+		return "", blocked(blockedby.Fetch, "could not fetch origin/%s to cut the branch from (%s)", base, gitWhy(res.Stderr, err))
 	}
 	from := "origin/" + base
 	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+base); err == nil && res.ExitCode != 0 {
 		if res, err := e.Git(ctx, root, "branch", base, from); err != nil || res.ExitCode != 0 {
-			return "", blocked(BlockFetch, "could not create %s from %s (%s)", base, from, gitWhy(res.Stderr, err))
+			return "", blocked(blockedby.Fetch, "could not create %s from %s (%s)", base, from, gitWhy(res.Stderr, err))
 		}
 	} else {
 		e.Git(ctx, root, "fetch", "-q", "origin", base+":"+base)

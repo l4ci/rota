@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -22,10 +23,10 @@ func TestDecisionOf(t *testing.T) {
 		{"none", issues, backlog.Item{Labels: []string{"bug"}}, "", ""},
 		{"research label", issues, backlog.Item{Labels: []string{"decision:research"}}, DecisionResearch, ""},
 		{"grilling label", issues, backlog.Item{Labels: []string{"x", "decision:grilling"}}, DecisionGrilling, ""},
-		{"two labels", issues, backlog.Item{Labels: []string{"decision:research", "decision:grilling"}}, "", BlockDecisionLabel},
-		{"unknown type", issues, backlog.Item{Labels: []string{"decision:prototype"}}, "", BlockDecisionLabel},
+		{"two labels", issues, backlog.Item{Labels: []string{"decision:research", "decision:grilling"}}, "", blockedby.DecisionLabel},
+		{"unknown type", issues, backlog.Item{Labels: []string{"decision:prototype"}}, "", blockedby.DecisionLabel},
 		{"file field", file, backlog.Item{Line: "- [B07] x Decision: research"}, DecisionResearch, ""},
-		{"file bad", file, backlog.Item{Line: "- [B07] x Decision: nope"}, "", BlockDecisionLabel},
+		{"file bad", file, backlog.Item{Line: "- [B07] x Decision: nope"}, "", blockedby.DecisionLabel},
 		{"file none", file, backlog.Item{Line: "- [B07] x"}, "", ""},
 	}
 	for _, c := range cases {
@@ -67,7 +68,7 @@ func TestAssignRefusesGrilling(t *testing.T) {
 	f.be.items["12"].Labels = []string{"decision:grilling"}
 	for _, accept := range []bool{false, true} {
 		_, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOverlap, o.AcceptBatch, o.AcceptOpenPR = accept, accept, accept })
-		if err == nil || blockedBy(t, err) != BlockHumanDecision || !strings.Contains(err.Error(), "/rota-brainstorm 12") {
+		if err == nil || blockedBy(t, err) != blockedby.HumanDecision || !strings.Contains(err.Error(), "/rota-brainstorm 12") {
 			t.Fatalf("accept flags %v: %v", accept, err)
 		}
 	}
@@ -80,7 +81,7 @@ func TestTransferRefusesGrilling(t *testing.T) {
 	f := newMoveFx(t)
 	f.be.items["12"].Labels = []string{"decision:grilling"}
 	_, err := f.transfer("12", "dana", nil)
-	if err == nil || blockedBy(t, err) != BlockHumanDecision {
+	if err == nil || blockedBy(t, err) != blockedby.HumanDecision {
 		t.Fatalf("%v", err)
 	}
 }
@@ -103,7 +104,7 @@ func TestCandidatesGrillingNotReady(t *testing.T) {
 	for _, c := range cs {
 		by[c.ID] = c
 	}
-	if g := by["11"]; g.Ready() || g.BlockedBy != BlockHumanDecision || g.Decision != DecisionGrilling {
+	if g := by["11"]; g.Ready() || g.BlockedBy != blockedby.HumanDecision || g.Decision != DecisionGrilling {
 		t.Errorf("grilling: %+v", g)
 	}
 	if r := by["12"]; r.BlockedBy != "" || r.Decision != DecisionResearch {

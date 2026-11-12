@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -187,14 +188,14 @@ func TestPickRefusals(t *testing.T) {
 	before := snap()
 
 	_, err := f.pick("#9", "why")
-	wantBlocked(t, err, BlockNotAttempt)
+	wantBlocked(t, err, blockedby.NotAttempt)
 	if _, err = f.pick("#7", "  \n"); err == nil || errors.As(err, new(*BlockedError)) {
 		t.Errorf("an empty reason is a usage error: %v", err)
 	}
 	_, err = f.env.Pick(bg, f.root, f.be, PickOpts{ID: "13", PR: "#7", Reason: "x"})
-	wantBlocked(t, err, BlockNotBestOf)
+	wantBlocked(t, err, blockedby.NotBestOf)
 	_, err = f.env.holder(999).Pick(bg, f.root, f.be, PickOpts{ID: "12", PR: "#7", Reason: "x"})
-	wantBlocked(t, err, BlockNoRound)
+	wantBlocked(t, err, blockedby.NoRound)
 	if len(f.forge.closed) != 0 || snap() != before {
 		t.Errorf("a refusal changes nothing: closed %v, %s", f.forge.closed, snap())
 	}
@@ -224,7 +225,7 @@ func TestPickRefusesWhileTheOtherAttemptIsStillBuilding(t *testing.T) {
 	for _, st := range []string{"busy", ""} {
 		f.hold(t, "dana", st, "")
 		_, err := f.pick("#7", "why")
-		wantBlocked(t, err, BlockAttemptRunning)
+		wantBlocked(t, err, blockedby.AttemptRunning)
 		if b := worker.LoadRegistryTolerant(f.root).BestOf("12"); b.Pick != "" {
 			t.Errorf("state %q: nothing may be recorded", st)
 		}
@@ -243,7 +244,7 @@ func TestPickRepeatIsANoOpAndAnotherPRIsRefused(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	_, err = f.pick("#8", "changed my mind")
-	wantBlocked(t, err, BlockPicked)
+	wantBlocked(t, err, blockedby.AlreadyPicked)
 }
 
 // An adopted loser's checkout is not rota's to park: the pick closes its PR,

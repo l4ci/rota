@@ -33,17 +33,6 @@ import (
 // claim-mismatch that reconcile reports; every step is skipped when already
 // done, so a repeated call finishes the rest.
 
-// Blocked reasons of return, transfer and reclaim (exit 4, `blockedBy`).
-const (
-	BlockNotYourSlot = blockedby.NotYourSlot
-	BlockSameSlot    = blockedby.SameSlot
-	BlockHealthy     = blockedby.Healthy
-	BlockLiveAgent   = blockedby.LiveAgent
-	// BlockUnverifiable: the host could not vouch for the slot, which is not
-	// proof the agent is gone (#820).
-	BlockUnverifiable = blockedby.Unverifiable
-)
-
 // Slot health, as reclaim reports it.
 const (
 	HealthDead    = "dead"
@@ -351,7 +340,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 			return res, wrap(err)
 		}
 		if !ok {
-			return res, blocked(BlockNotYourSlot, "rota round return must run inside slot %s's worktree or hold the round lease", o.Slot)
+			return res, blocked(blockedby.NotYourSlot, "rota round return must run inside slot %s's worktree or hold the round lease", o.Slot)
 		}
 	}
 	tolerate := tolerateMissing(&res.Warnings, id)
@@ -520,7 +509,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		return res, wrap(err)
 	}
 	if !ok {
-		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+		return res, blocked(blockedby.NoRound, "this process holds no round lease: run rota round start first")
 	}
 	now := e.Worker.Now
 	h := e.Health(ctx, root, s, now())
@@ -529,10 +518,10 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		return res, nil
 	}
 	if h.Health == HealthHealthy && !o.Force {
-		return res, blocked(BlockHealthy, "slot %s is healthy (an agent is working on %s); --force reclaims it anyway", o.Slot, tracker.RefOf(h.Issue))
+		return res, blocked(blockedby.Healthy, "slot %s is healthy (an agent is working on %s); --force reclaims it anyway", o.Slot, tracker.RefOf(h.Issue))
 	}
 	if h.Health == HealthUnverifiable && !o.Force {
-		return res, blocked(BlockUnverifiable, "slot %s is unverifiable (%s): the host cannot say whether its agent lives, which is not proof it died. Inspect its pane, then wait or reclaim with --force", o.Slot, h.Reason)
+		return res, blocked(blockedby.Unverifiable, "slot %s is unverifiable (%s): the host cannot say whether its agent lives, which is not proof it died. Inspect its pane, then wait or reclaim with --force", o.Slot, h.Reason)
 	}
 	reason := "forced"
 	switch h.Health {
@@ -560,7 +549,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 			if h.Health == HealthUnverifiable {
 				why = fmt.Sprintf(" (unverifiable: %s)", h.Reason)
 			}
-			return res, blocked(BlockLiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone%s; start the host or close its pane", o.Slot, why)
+			return res, blocked(blockedby.LiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone%s; start the host or close its pane", o.Slot, why)
 		default:
 			if err := e.Worker.KillSlot(ctx, root, o.Slot); err != nil {
 				return res, wrap(err)
@@ -664,7 +653,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return res, err
 	}
 	if _, err := e.remote(root); err != nil {
-		return res, blocked(BlockFetch, "%v", err)
+		return res, blocked(blockedby.Fetch, "%v", err)
 	}
 	defer func() {
 		if err == nil && res.Changed {
@@ -770,7 +759,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		return nil, wrap(err)
 	}
 	if !ok {
-		return nil, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+		return nil, blocked(blockedby.NoRound, "this process holds no round lease: run rota round start first")
 	}
 	run := &transferRun{it: it, id: id, toHuman: toHuman, reason: reason, decisions: decisions, rnd: registryRound(root)}
 	rnd := run.rnd
@@ -785,7 +774,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// so it is looked up before "no slot holds".
 	if hs, hr := reg.BundleHolder(id, worker.HolderOpts{}); hs != nil || hr != nil {
 		if !toHuman {
-			return nil, blocked(BlockBundle, "%s is bundled: a member leaves a bundle only to the human (--to %s)", id, HumanTarget)
+			return nil, blocked(blockedby.Bundle, "%s is bundled: a member leaves a bundle only to the human (--to %s)", id, HumanTarget)
 		}
 		if !e.forgeOn(be) {
 			return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
@@ -813,7 +802,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			}
 		}
 		if len(holders) > 1 {
-			return nil, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
+			return nil, blocked(blockedby.BestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
 		}
 	}
 	for _, s := range reg.Holders(id, worker.HolderOpts{}) {
@@ -861,12 +850,12 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		for i, m := range bundle {
 			refs[i] = tracker.RefOf(m)
 		}
-		return nil, blocked(BlockBundle, "%s leads a bundle with %s: transfer each member to the human first, or return/reclaim the slot to release the whole bundle", tracker.RefOf(id), strings.Join(refs, ", "))
+		return nil, blocked(blockedby.Bundle, "%s leads a bundle with %s: transfer each member to the human first, or return/reclaim the slot to release the whole bundle", tracker.RefOf(id), strings.Join(refs, ", "))
 	}
 	switch {
 	case resuming:
 	case receiver != nil && sender == nil:
-		return nil, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
+		return nil, blocked(blockedby.SameSlot, "slot %s already holds %s", o.To, id)
 	case sender == nil && run.rec == nil:
 		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
 	}
@@ -892,7 +881,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		return nil, err
 	}
 	if sender != nil && e.mergeInProgress(ctx, sender.Worktree()) {
-		return nil, blocked(BlockMergeInProgress, "slot %s is mid-merge (MERGE_HEAD) in its worktree: wait for the worker to commit or abort it before moving %s", sender.Name(), id)
+		return nil, blocked(blockedby.MergeInProgress, "slot %s is mid-merge (MERGE_HEAD) in its worktree: wait for the worker to commit or abort it before moving %s", sender.Name(), id)
 	}
 	if !toHuman {
 		if run.to = reg.Slot(o.To); run.to == nil {
@@ -908,7 +897,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			if h := run.to.HeldID(); h != "" {
 				ok, why := e.parkable(ctx, run.to)
 				if !ok {
-					return nil, blocked(BlockSlotBusy, "%s", busyMsg(o.To, h, why))
+					return nil, blocked(blockedby.SlotBusy, "%s", busyMsg(o.To, h, why))
 				}
 				run.queueTo = true
 			}
@@ -939,7 +928,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		cacheDir := skills.CacheDir(e.getenv())
 		var briefWarn string
 		if run.brief, briefWarn, ok = resolveBrief(root, set, e.skillInstalls(root), cacheDir); !ok {
-			return nil, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+			return nil, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
 		}
 		if briefWarn != "" {
 			res.Warnings = append(res.Warnings, briefWarn)
@@ -957,7 +946,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 				return nil, wrap(err)
 			}
 			if ov := overlapCheck(r); ov != nil && !ov.OK {
-				blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", id, ov.Name+" ("+strings.Join(ov.Detail, "; ")+")")
+				blk := blocked(blockedby.Overlap, "%s overlaps work in flight: %s", id, ov.Name+" ("+strings.Join(ov.Detail, "; ")+")")
 				blk.Readiness = &r
 				return nil, blk
 			}
@@ -967,7 +956,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 				if _, err := e.Worker.ResetTo(root, o.To, id, worker.BranchName(o.To, id, it.Title), true); err != nil {
 					var we *exitcode.Error
 					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
-						return nil, blocked(BlockSlotBusy, "%s", we.Message)
+						return nil, blocked(blockedby.SlotBusy, "%s", we.Message)
 					}
 					return nil, wrap(err)
 				}
@@ -1167,7 +1156,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 				return wrap(err)
 			}
 			if !won {
-				return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
+				return blocked(blockedby.Claimed, "%s is claimed by %s", id, holder)
 			}
 			res.ClaimID = claimID
 			return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestCoreAdapterRoundSnapshotAbsenceAndIdentity(t *testing.T) {
 					t.Fatalf("%s offered destructive dead-tab repair", mode)
 				}
 			}
-			if _, err = f.reclaim("ben", nil); blockedBy(t, err) != BlockUnverifiable {
+			if _, err = f.reclaim("ben", nil); blockedBy(t, err) != blockedby.Unverifiable {
 				t.Fatalf("%s reclaim must refuse: %v", mode, err)
 			}
 			_, _, kills := peer.Counts()
@@ -130,7 +131,7 @@ func TestCoreAdapterAcceptReadsReviewCompletionWithoutPoll(t *testing.T) {
 			}
 			res, err := f.accept("12", nil)
 			if replaced {
-				if blockedBy(t, err) != BlockSlotBusy || res.Changed || f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
+				if blockedBy(t, err) != blockedby.SlotBusy || res.Changed || f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
 					t.Fatalf("replacement accepted: %+v %v", res, err)
 				}
 			} else if err != nil || !res.Changed || !res.NoFindings || !f.be.items["12"].Closed || f.slot("ben").Task() != "" {

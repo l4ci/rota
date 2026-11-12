@@ -56,50 +56,12 @@ func (e Env) forgeOn(be backlog.Backend) bool {
 	return e.Forge != nil && be.Capabilities().Forge
 }
 
-// Blocked reasons of an assignment (exit 4, `blockedBy`).
-const (
-	BlockNoRound    = blockedby.NoRound
-	BlockOutOfScope = blockedby.OutOfScope
-	BlockNotReady   = blockedby.NotReady
-	BlockOverlap    = blockedby.Overlap
-	BlockClaimed    = blockedby.Claimed
-	BlockOpenPR     = blockedby.OpenPR
-	BlockNotStale   = blockedby.NotStale
-	// BlockBatch: round.batch items are already assigned and not landed or parked.
-	BlockBatch = blockedby.Batch
-	// BlockBundle: the --bundle members are too many, repeat a slot's recorded
-	// bundle differently, are closed, or cannot be bundled (best-of:2).
-	BlockBundle   = blockedby.Bundle
-	BlockSlotBusy = blockedby.SlotBusy
-	// BlockMergeInProgress: the sender's worktree is mid-merge (MERGE_HEAD).
-	BlockMergeInProgress = blockedby.MergeInProgress
-	BlockNoFreeSlot      = blockedby.NoFreeSlot
-	// BlockNoLogin: the slot's account has no usable Claude login, so a session
-	// there would stall at a login prompt.
-	BlockNoLogin = blockedby.NoLogin
-	// BlockDraining: the slot is past the round's slot count (round.slots,
-	// --slots); it finishes the work it holds and takes nothing new.
-	BlockDraining = blockedby.Draining
-	// BlockMaxBounces: the item is at round.maxBounces; a follow-up does not start.
-	BlockMaxBounces = blockedby.MaxBounces
-	// BlockQuota: every account the worker kind could run under is cooling down.
-	BlockQuota        = blockedby.Quota
-	BlockBriefMissing = blockedby.BriefMissing
-	BlockNoTierMap    = blockedby.NoTierMap
-	// BlockHumanDecision: a decision:grilling item is resolved by the human in
-	// /rota-brainstorm, never by a worker.
-	BlockHumanDecision  = blockedby.HumanDecision
-	BlockCrossMilestone = blockedby.CrossMilestone
-	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
-	BlockCodexFlags = blockedby.CodexFlags
-)
-
 // BlockedError is an assignment refused before anything was marked or sent.
 type BlockedError struct {
 	By        string
 	Msg       string
 	Readiness *Readiness
-	// Batch and Open are set for BlockBatch: round.batch and the items open.
+	// Batch and Open are set for blockedby.Batch: round.batch and the items open.
 	Batch, Open int
 }
 
@@ -402,7 +364,7 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 		return err
 	}
 	if !held {
-		return blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+		return blocked(blockedby.NoRound, "this process holds no round lease: run rota round start first")
 	}
 	return nil
 }
@@ -419,7 +381,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, err
 	}
 	if _, err := e.remote(root); err != nil {
-		return res, blocked(BlockFetch, "%v", err)
+		return res, blocked(blockedby.Fetch, "%v", err)
 	}
 	frozen, err := landfreeze.Load(ctx, e.Git, root)
 	if err != nil {
@@ -446,7 +408,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	if bestOf {
 		if len(o.Bundle) > 0 {
-			return Assigned{ID: it.ID, Type: it.Type}, blocked(BlockBundle, "%s is labelled %s and cannot lead a bundle", it.ID, BestOfLabel)
+			return Assigned{ID: it.ID, Type: it.Type}, blocked(blockedby.Bundle, "%s is labelled %s and cannot lead a bundle", it.ID, BestOfLabel)
 		}
 		return e.assignBestOf(ctx, root, be, o, it)
 	}
@@ -564,7 +526,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, err
 	}
 	if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *it); why != "" {
-		return run, false, blocked(BlockSite, "%s", why)
+		return run, false, blocked(blockedby.Site, "%s", why)
 	}
 
 	// 2. The slot: the named one, else the first idle roster slot, else the
@@ -586,7 +548,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			return run, false, err
 		}
 		if why := e.SlotLoginProblem(slot); why != "" {
-			return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
+			return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
 		}
 	} else {
 		picked, skipped := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
@@ -595,7 +557,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		}
 		if len(picked) == 0 {
 			if len(skipped) > 0 {
-				return run, false, blocked(BlockNoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
+				return run, false, blocked(blockedby.NoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
 			}
 			active, _ := Members(reg, set)
 			var missing []string
@@ -609,16 +571,16 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 				if len(missing) < len(active) {
 					msg += "; the other slots are busy"
 				}
-				return run, false, blocked(BlockNoFreeSlot, "%s", msg)
+				return run, false, blocked(blockedby.NoFreeSlot, "%s", msg)
 			}
-			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
+			return run, false, blocked(blockedby.NoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]
 		// A holder resumes without the usable() gate in pickSlots: refuse it
 		// like the explicit --agent path rather than re-dispatch into a login prompt.
 		if slot.Holds(id) {
 			if why := e.SlotLoginProblem(slot); why != "" {
-				return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
+				return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
 			}
 		}
 	}
@@ -640,7 +602,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
-				return run, false, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
+				return run, false, blocked(blockedby.SlotBusy, "%s", busyMsg(agent, h, why))
 			}
 			queue = true
 		} else {
@@ -654,7 +616,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 	for _, m := range members {
 		if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *m); why != "" {
-			return run, false, blocked(BlockSite, "bundle member %s", why)
+			return run, false, blocked(blockedby.Site, "bundle member %s", why)
 		}
 		res.Bundle = append(res.Bundle, worker.NormID(m.ID))
 	}
@@ -674,7 +636,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	if q := inReview(reg, id, bo); q != nil && !resuming {
-		return run, false, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
+		return run, false, blocked(blockedby.Claimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
 	}
 
 	if o.ReclaimStale != "" {
@@ -695,11 +657,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			openPR = nil
 		}
 		if n := openPR[it.IssueKey()]; n != 0 {
-			return run, false, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
+			return run, false, blocked(blockedby.OpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
 		}
 		for _, m := range members {
 			if n := openPR[m.IssueKey()]; n != 0 {
-				return run, false, blocked(BlockOpenPR, "bundle member %s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", m.ID, n)
+				return run, false, blocked(blockedby.OpenPR, "bundle member %s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", m.ID, n)
 			}
 		}
 	}
@@ -714,7 +676,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 				return run, false, err
 			}
 			if len(flags) > 0 {
-				return run, false, blocked(BlockCrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", item.ID, strings.Join(flags, "; "))
+				return run, false, blocked(blockedby.CrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", item.ID, strings.Join(flags, "; "))
 			}
 		}
 	}
@@ -774,7 +736,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	// round.batch: a slot resuming its own issue adds nothing to the open count.
 	if n := set.Batch; n > 0 && !o.AcceptBatch && !resuming {
 		if open := openItems(be, reg, id); open >= n {
-			blk := blocked(BlockBatch, "%d items are open and round.batch is %d", open, n)
+			blk := blocked(blockedby.Batch, "%d items are open and round.batch is %d", open, n)
 			blk.Batch, blk.Open = n, open
 			return run, false, blk
 		}
@@ -791,7 +753,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	cacheDir := skills.CacheDir(e.getenv())
 	brief, briefWarn, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
 	if !ok {
-		return run, false, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+		return run, false, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}
 	if briefWarn != "" {
 		res.Warnings = append(res.Warnings, briefWarn)
@@ -848,14 +810,14 @@ func notReadyBy(r Readiness) string {
 			continue
 		}
 		if check.Name != CheckOverlap {
-			return BlockNotReady
+			return blockedby.NotReady
 		}
 		overlapFailed = true
 	}
 	if overlapFailed {
-		return BlockOverlap
+		return blockedby.Overlap
 	}
-	return BlockNotReady
+	return blockedby.NotReady
 }
 
 // bundleIDs is the --bundle members, normalized. A member that repeats or is
@@ -885,7 +847,7 @@ func bundleText(ids []string) string {
 }
 
 // bundleMembers settles the members of an assignment before anything is marked
-// and refuses (BlockBundle, BlockClaimed) a bundle that cannot be built: too
+// and refuses (blockedby.Bundle, blockedby.Claimed) a bundle that cannot be built: too
 // many members, a member that is closed, best-of:2 or held by another slot or
 // queued PR. A slot resuming its lead keeps its recorded bundle and refuses a
 // different one. None for a single issue.
@@ -899,10 +861,10 @@ func (e Env) bundleMembers(be Board, o AssignOpts, lead *backlog.Item, slot *wor
 		if len(ids) == 0 {
 			ids = rec
 		} else if !sameSet(ids, rec) {
-			return nil, blocked(BlockBundle, "slot %s already holds %s with %s; a member leaves only by `rota round transfer <member> --to human`", slot.Name(), lead.ID, bundleText(rec))
+			return nil, blocked(blockedby.Bundle, "slot %s already holds %s with %s; a member leaves only by `rota round transfer <member> --to human`", slot.Name(), lead.ID, bundleText(rec))
 		}
 	} else if n := e.Round.BundleMax; n > 0 && len(ids) > n {
-		return nil, blocked(BlockBundle, "%d members is more than round.bundleMax %d", len(ids), n)
+		return nil, blocked(blockedby.Bundle, "%d members is more than round.bundleMax %d", len(ids), n)
 	}
 	var out []*backlog.Item
 	for _, id := range ids {
@@ -915,12 +877,12 @@ func (e Env) bundleMembers(be Board, o AssignOpts, lead *backlog.Item, slot *wor
 			if resuming {
 				continue
 			}
-			return nil, blocked(BlockBundle, "bundle member %s is closed", m.ID)
+			return nil, blocked(blockedby.Bundle, "bundle member %s is closed", m.ID)
 		}
 		if bestOf, err := BestOfOf(be.Capabilities(), *m); err != nil {
 			return nil, err
 		} else if bestOf {
-			return nil, blocked(BlockBundle, "bundle member %s is labelled %s and cannot be bundled", m.ID, BestOfLabel)
+			return nil, blocked(blockedby.Bundle, "bundle member %s is labelled %s and cannot be bundled", m.ID, BestOfLabel)
 		}
 		opts := worker.HolderOpts{Lead: true}
 		if resuming {
@@ -933,7 +895,7 @@ func (e Env) bundleMembers(be Board, o AssignOpts, lead *backlog.Item, slot *wor
 			} else {
 				who += hq.From
 			}
-			return nil, blocked(BlockClaimed, "bundle member %s is already held by %s", m.ID, who)
+			return nil, blocked(blockedby.Claimed, "bundle member %s is already held by %s", m.ID, who)
 		}
 		out = append(out, m)
 	}
@@ -1052,7 +1014,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			if _, err := w.ResetFrom(root, agent, id, res.Branch, run.from, false); err != nil {
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
-					return blocked(BlockSlotBusy, "%s", we.Message)
+					return blocked(blockedby.SlotBusy, "%s", we.Message)
 				}
 				return err
 			}
@@ -1109,7 +1071,7 @@ func reserveStep(root, agent, id string, resuming bool, mine *ownership) step {
 		// the same issue "won" the same idempotent claim: it is the winner's.
 		mine.sameIssue = !ok && worker.NormID(held) == worker.NormID(id)
 		if !ok {
-			return blocked(BlockSlotBusy, "slot %s was filled by another assign: it holds %s", agent, held)
+			return blocked(blockedby.SlotBusy, "slot %s was filled by another assign: it holds %s", agent, held)
 		}
 		return nil
 	}, undo: func() error { return worker.ReleaseReserved(root, agent, id) }}
@@ -1163,7 +1125,7 @@ func claimStep(be Board, id, claimID string, holders int, resuming bool, mine *o
 		}
 
 		if !won {
-			return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
+			return blocked(blockedby.Claimed, "%s is claimed by %s", id, holder)
 		}
 		return nil
 	}, undo: func() error {
@@ -1291,7 +1253,7 @@ func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fal
 		hs, ok := backlog.Optional[backlog.HarnessSetter](be, func(c backlog.Capabilities) bool { return c.HarnessField })
 		if !ok {
 			return step{name: "harness field", do: func() error {
-				return blocked(BlockQuota, "%s cannot record the harness pick", be.Name())
+				return blocked(blockedby.Quota, "%s cannot record the harness pick", be.Name())
 			}}
 		}
 		return step{name: "harness field", do: func() error {

@@ -109,7 +109,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 				}
 			}
 			f.Set("changed", false)
-			if blk.By == round.BlockBatch {
+			if blk.By == blockedby.Batch {
 				f.Set("batch", blk.Batch)
 				f.Set("open", blk.Open)
 				return Result{Data: f}, Refused("%s", blk.Msg).WithHint("land or park an item first, or pass --accept-batch for this one")

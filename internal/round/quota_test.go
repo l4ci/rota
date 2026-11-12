@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,7 +68,7 @@ func TestQuotaCapStopsFillingWhenEveryAccountIsCooling(t *testing.T) {
 		t.Fatalf("reason %q resumes %v", c.Reason, c.ResumesAt)
 	}
 	_, err := f.assign("13", "", nil)
-	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "cooling down") {
+	if by := blockedBy(t, err); by != blockedby.Quota || !strings.Contains(err.Error(), "cooling down") {
 		t.Fatalf("assign while cooling: %v", err)
 	}
 }
@@ -77,7 +78,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 	f.config(t, twoAccounts)
 	f.meters(t, map[string]bool{"a": true, "b": true})
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota {
+	if by := blockedBy(t, err); by != blockedby.Quota {
 		t.Fatalf("assigned while every account was cooling: %v", err)
 	}
 	f.meters(t, nil) // the windows reset
@@ -132,7 +133,7 @@ func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 		t.Fatalf("cap %+v", c)
 	}
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "round.accounts") {
+	if by := blockedBy(t, err); by != blockedby.Quota || !strings.Contains(err.Error(), "round.accounts") {
 		t.Fatalf("assign: %v", err)
 	}
 }

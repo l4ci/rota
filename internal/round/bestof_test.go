@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"testing"
 
@@ -25,8 +26,8 @@ func TestBestOfOfReadsTheLabel(t *testing.T) {
 		{"none", issue, nil, false, "", ""},
 		{"other labels", issue, []string{"bug", "harness:codex"}, false, "", ""},
 		{"best-of:2", issue, []string{"bug", "best-of:2"}, true, "", ""},
-		{"best-of:3", issue, []string{"best-of:3"}, false, BlockBestOfLabel, "best-of:3"},
-		{"two labels", issue, []string{"best-of:2", "best-of:3"}, false, BlockBestOfLabel, "best-of:2, best-of:3"},
+		{"best-of:3", issue, []string{"best-of:3"}, false, blockedby.BestOfLabel, "best-of:3"},
+		{"two labels", issue, []string{"best-of:2", "best-of:3"}, false, blockedby.BestOfLabel, "best-of:2, best-of:3"},
 		{"file items carry no labels", backlog.Capabilities{}, []string{"best-of:3"}, false, "", ""},
 	} {
 		got, err := BestOfOf(c.caps, backlog.Item{ID: "12", Labels: c.labels})
@@ -101,7 +102,7 @@ func TestAssignBestOfNeedsTwoFreeSlots(t *testing.T) {
 	claims := len(f.be.claims)
 	_, err := f.assign("12", "", nil)
 	var blk *BlockedError
-	if !errors.As(err, &blk) || blk.By != BlockBestOfSlots || !strings.Contains(blk.Msg, "needs two free slots; 1 free") {
+	if !errors.As(err, &blk) || blk.By != blockedby.BestOfSlots || !strings.Contains(blk.Msg, "needs two free slots; 1 free") {
 		t.Fatalf("%v", err)
 	}
 	reg := worker.LoadRegistryTolerant(f.root)
@@ -142,8 +143,8 @@ func TestAssignBestOfRefusalKeepsNoLoginWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := f.assign("12", "", nil)
-	if blockedBy(t, err) != BlockBestOfSlots {
-		t.Fatalf("err = %v, want %s", err, BlockBestOfSlots)
+	if blockedBy(t, err) != blockedby.BestOfSlots {
+		t.Fatalf("err = %v, want %s", err, blockedby.BestOfSlots)
 	}
 	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ben") {
 		t.Errorf("warnings = %v, want one naming ben", res.Warnings)
@@ -199,7 +200,7 @@ func TestAssignBestOfRefusesOtherLabels(t *testing.T) {
 		f.labelled("12", labels...)
 		_, err := f.assign("12", "", nil)
 		var blk *BlockedError
-		if !errors.As(err, &blk) || blk.By != BlockBestOfLabel || !strings.Contains(blk.Msg, labels[len(labels)-1]) {
+		if !errors.As(err, &blk) || blk.By != blockedby.BestOfLabel || !strings.Contains(blk.Msg, labels[len(labels)-1]) {
 			t.Fatalf("%v: %v", labels, err)
 		}
 		if len(f.be.claims) != 0 || worker.LoadRegistryTolerant(f.root).Slot("ben").HeldID() != "" {
@@ -334,7 +335,7 @@ func TestTransferRefusesABestOfIssue(t *testing.T) {
 	})
 	_, err := f.transfer("12", "dana", nil)
 	var blk *BlockedError
-	if !errors.As(err, &blk) || blk.By != BlockBestOf || !strings.Contains(blk.Msg, "ben and review:kit") {
+	if !errors.As(err, &blk) || blk.By != blockedby.BestOf || !strings.Contains(blk.Msg, "ben and review:kit") {
 		t.Fatalf("%v", err)
 	}
 	if f.slot("ben").HeldID() != "12" {
@@ -343,7 +344,7 @@ func TestTransferRefusesABestOfIssue(t *testing.T) {
 	// After the pick dropped the loser's record one holder is left: the
 	// bounce-cap and item-timeout parks transfer it again.
 	worker.Update(f.root, func(d *worker.Doc) { d.DropQueued(func(worker.QueuedPR) bool { return true }) })
-	if _, err := f.transfer("12", "dana", nil); errors.As(err, &blk) && blk.By == BlockBestOf {
+	if _, err := f.transfer("12", "dana", nil); errors.As(err, &blk) && blk.By == blockedby.BestOf {
 		t.Errorf("one holder left, still refused: %v", err)
 	}
 }

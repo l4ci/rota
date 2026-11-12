@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"reflect"
 	"strings"
 	"testing"
@@ -103,7 +104,7 @@ func TestAdoptClaimBlocksOnReclaimedHistory(t *testing.T) {
 		{Body: marker.Claim("dana@7")},
 	}}
 	_, err := e.checkAdoptClaim(bg, root, be, "ben/12-thing", "12")
-	if err == nil || blockedBy(t, err) != BlockClaimed {
+	if err == nil || blockedBy(t, err) != blockedby.Claimed {
 		t.Fatalf("want claimed block, got %v", err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -744,7 +745,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 			// A quota refusal is the cap showing through a pool the cap check
 			// left open (Claude workers beside Codex logins): say why.
 			var blk *round.BlockedError
-			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
+			if errors.As(err, &blk) && blk.By == blockedby.Quota && r.Capped == "" {
 				r.Capped = blk.Msg
 			}
 			// A gate or train holds the land lock for the slot assign picked (or
@@ -755,7 +756,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 				return nil
 			}
 			// The batch filled during this tick: no later candidate fits either.
-			if errors.As(err, &blk) && blk.By == round.BlockBatch {
+			if errors.As(err, &blk) && blk.By == blockedby.Batch {
 				r.BatchFull = true
 				return nil
 			}
@@ -771,5 +772,5 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 // autopilot has no round to work for.
 func isRefusal(err error) bool {
 	var blk *round.BlockedError
-	return errors.As(err, &blk) && blk.By != round.BlockNoRound
+	return errors.As(err, &blk) && blk.By != blockedby.NoRound
 }

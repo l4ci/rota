@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
@@ -162,7 +163,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
 	if ok, why := e.parkable(ctx, s); !ok {
-		return blocked(BlockSlotBusy, "%s", busyMsg(name, s.HeldID(), why))
+		return blocked(blockedby.SlotBusy, "%s", busyMsg(name, s.HeldID(), why))
 	}
 	if s.PR() == "" {
 		return e.closeReview(ctx, root, be, s)
@@ -171,7 +172,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	// last ROTA-DONE is the previous issue's until the new worker prints its own.
 	// Queuing it would pair that PR with this issue and branch.
 	if q := reg.QueuedPR(s.PR()); q != nil && queuedIssue(*q) != s.HeldID() {
-		return blocked(BlockSlotBusy, "%s", busyMsg(name, s.HeldID(), fmt.Sprintf("its recorded PR %s is already queued for %s", s.PR(), q.Issue)))
+		return blocked(blockedby.SlotBusy, "%s", busyMsg(name, s.HeldID(), fmt.Sprintf("its recorded PR %s is already queued for %s", s.PR(), q.Issue)))
 	}
 	p, err := e.Park(ctx, root, name, "assign")
 	if err != nil {
@@ -200,7 +201,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 // item a round minted, and a "needs a PR" refusal otherwise. Only such an
 // item closes without a PR, so a worker cannot close an arbitrary issue by
 // naming issues in its done line. A review-titled item no registry knows is
-// refused for its own reason (BlockReviewNotMinted), so a support machine
+// refused for its own reason (blockedby.ReviewNotMinted), so a support machine
 // sees why main's review was not recognised.
 func (e Env) reviewItem(ctx context.Context, root string, be Board, name, id, did string) (*backlog.Item, error) {
 	it, err := be.Get(id)
@@ -208,7 +209,7 @@ func (e Env) reviewItem(ctx context.Context, root string, be Board, name, id, di
 		return it, wrap(err)
 	}
 	if !IsReviewTitle(it.Title) {
-		return it, blocked(BlockSlotBusy, "%s", busyMsg(name, id, did+", but it is not an architecture review item; it needs a PR"))
+		return it, blocked(blockedby.SlotBusy, "%s", busyMsg(name, id, did+", but it is not an architecture review item; it needs a PR"))
 	}
 	minted, err := e.mintedReview(ctx, root, be, it)
 	if err != nil {
@@ -219,7 +220,7 @@ func (e Env) reviewItem(ctx context.Context, root string, be Board, name, id, di
 		if _, ok := any(e.Forge).(tracker.PushTrust); !ok {
 			why = "write access cannot be checked here (no forge permission check), so no review-minted comment can be trusted"
 		}
-		return it, blocked(BlockReviewNotMinted, "%s", busyMsg(name, id, did+", but it was not minted by main: "+why))
+		return it, blocked(blockedby.ReviewNotMinted, "%s", busyMsg(name, id, did+", but it was not minted by main: "+why))
 	}
 	return it, nil
 }
