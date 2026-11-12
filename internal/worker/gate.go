@@ -20,7 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/testledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -2111,15 +2110,6 @@ func (g *gateOperation) staleReason() (why string, shared []string, brokeMsg str
 		return "", nil, fmt.Sprintf("git diff --name-only against %s failed", mb)
 	}
 	return "", pairwisePaths(onBase, onHead, g.in.cfg.SharedPaths), ""
-}
-
-func appendFile(path, text string) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	f.WriteString(text)
 }
 
 func indentTail(text string, n int) string {
