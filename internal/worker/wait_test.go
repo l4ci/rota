@@ -480,6 +480,36 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 	}
 }
 
+// `round watch` re-arms after every wake, so a prompt it already returned must
+// not end the next watch (#3088): it comes back once the slot was seen busy in
+// between. The prompt's evidence is generic, so a second prompt answered and
+// re-asked between two polls is the accepted gap. DEAD stays news every time.
+func TestWaitRememberPromptsReturnsAPromptOnce(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	e := envWith(watcherHost{h})
+	o := WaitOpts{Timeout: 5 * time.Second, RememberPrompts: true}
+	h.set("w1", "Do you want to proceed?\n", "idle")
+	if res, err := e.Wait(bg, dir, o); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("first prompt: %+v %v", res, err)
+	}
+	quiet := WaitOpts{Timeout: 30 * time.Millisecond, RememberPrompts: true}
+	if res, err := e.Wait(bg, dir, quiet); err != nil || !res.TimedOut {
+		t.Fatalf("same prompt again: %+v %v, want a timeout", res, err)
+	}
+	// The slot goes busy (answered), then shows the same prompt again: news.
+	h.set("w1", "working...\n", "working")
+	waitPassThenStop(t, h, e, dir)
+	h.set("w1", "Do you want to proceed?\n", "idle")
+	if res, err := e.Wait(bg, dir, o); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("same prompt after busy: %+v %v", res, err)
+	}
+	// Without the option `round wait` still returns it every time.
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("one-shot wait: %+v %v", res, err)
+	}
+}
+
 func TestDispatchAndPollClearSeen(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	set := func() {
