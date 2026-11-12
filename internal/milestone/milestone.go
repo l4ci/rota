@@ -196,11 +196,7 @@ func Show(root, id string) (string, error) {
 	if err := checkID(id); err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(detailPath(root, id))
-	if err != nil {
-		return "", notFound(id)
-	}
-	return string(b), nil
+	return milestoneDocs(root).Read(id)
 }
 
 // Put replaces a milestone's text. The text must carry frontmatter with

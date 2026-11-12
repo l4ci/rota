@@ -35,6 +35,10 @@ func checkName(name string) error {
 	return nil
 }
 
+func spikeDocs(root string) artifact.FileDocs {
+	return artifact.FileDocs{Root: root, Dir: rotatree.SpikesDir, Kind: "spike"}
+}
+
 func file(root, name string) string { return rotatree.Doc(root, rotatree.SpikesDir, name) }
 
 // git runs args in dir through run (gitx.Exec when nil).
@@ -142,7 +146,7 @@ func Finish(root, name string, today func() time.Time) (changed bool, err error)
 	if err = checkName(name); err != nil {
 		return
 	}
-	return artifact.FileDocs{Root: root, Dir: rotatree.SpikesDir, Kind: "spike"}.Update(name, func(content string) (string, error) {
+	return spikeDocs(root).Update(name, func(content string) (string, error) {
 		fm, _, _ := frontmatter.Parse(content)
 		if _, has := fm["status"]; !has {
 			return "", exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
@@ -164,11 +168,7 @@ func Show(root, name string) (string, error) {
 	if err := checkName(name); err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(file(root, name))
-	if err != nil {
-		return "", exitcode.Errf(exitcode.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
-	}
-	return string(b), nil
+	return spikeDocs(root).Read(name)
 }
 
 // Entry is one row of List.

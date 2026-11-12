@@ -189,3 +189,19 @@ func TestFileDocsCreate(t *testing.T) {
 		t.Errorf("recreate overwrote: %q", b)
 	}
 }
+
+func TestFileDocsReadPassesThroughRealErrors(t *testing.T) {
+	root := t.TempDir()
+	d := FileDocs{Root: root, Dir: "debug", Kind: "debug session"}
+	// a directory where the file should be: exists, cannot be read as a file
+	if err := os.MkdirAll(d.Path("b07"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	_, err := d.Read("b07")
+	if err == nil || exitOf(err) == exitcode.ExitResolution {
+		t.Fatalf("Read of an unreadable path = %v, want the read error, not 'not found'", err)
+	}
+	if _, err := d.Read("missing"); exitOf(err) != exitcode.ExitResolution {
+		t.Fatalf("Read of a missing file = %v, want not found", err)
+	}
+}

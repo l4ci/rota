@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -25,7 +26,7 @@ func checkSlug(slug string) error {
 	return nil
 }
 
-func file(root, slug string) string { return rotatree.Doc(root, rotatree.DebugDir, slug) }
+func file(root, slug string) string { return docs(root).Path(slug) }
 
 // Put writes the session file, replacing any earlier one.
 func Put(root, slug, body string) error {
@@ -58,8 +59,9 @@ func selfIgnore(dir string) error {
 	return fsio.WriteFileAtomic(gi, []byte("*\n"))
 }
 
-func notFound(slug string) error {
-	return exitcode.Errf(exitcode.ExitResolution, "debug session %s not found (.rota/debug/%s.md)", slug, slug)
+// docs is the session store; FileDocs owns the not-found wording and locking.
+func docs(root string) artifact.FileDocs {
+	return artifact.FileDocs{Root: root, Dir: rotatree.DebugDir, Kind: "debug session"}
 }
 
 // Show returns the session file's text.
@@ -67,14 +69,7 @@ func Show(root, slug string) (string, error) {
 	if err := checkSlug(slug); err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(file(root, slug))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", notFound(slug)
-		}
-		return "", err
-	}
-	return string(b), nil
+	return docs(root).Read(slug)
 }
 
 // List returns the open session slugs, sorted. A missing directory is none.
@@ -101,11 +96,5 @@ func Rm(root, slug string) error {
 	if err := checkSlug(slug); err != nil {
 		return err
 	}
-	if err := os.Remove(file(root, slug)); err != nil {
-		if os.IsNotExist(err) {
-			return notFound(slug)
-		}
-		return err
-	}
-	return nil
+	return docs(root).Remove(slug)
 }
