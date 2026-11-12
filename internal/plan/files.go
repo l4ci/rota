@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -72,25 +71,19 @@ func (s files) Create(r Ref, render func(unit string) string) (key string, err e
 	}
 	return docs(s.root).Create(lockKey, func() (string, string) {
 		if unit == "" {
-			unit = fmt.Sprintf("S%02d", nextSlice(dir, milestone))
+			unit = nextUnit(sliceUnits(dir, milestone))
 		}
 		return milestone + "-" + unit, render(unit)
 	})
 }
 
-// nextSlice is 1 + the highest S<NN> among the milestone's plan files.
-func nextSlice(dir, milestone string) int {
-	files := fsio.GlobDir(dir, milestone+"-S*.md")
-	re := regexp.MustCompile(`^` + regexp.QuoteMeta(milestone) + `-S(\d+)`)
-	max := 0
-	for _, f := range files {
-		if m := re.FindStringSubmatch(strings.TrimSuffix(filepath.Base(f), ".md")); m != nil {
-			if n, _ := strconv.Atoi(m[1]); n > max {
-				max = n
-			}
-		}
+// sliceUnits lists the S-units of the milestone's plan files.
+func sliceUnits(dir, milestone string) []string {
+	var units []string
+	for _, f := range fsio.GlobDir(dir, milestone+"-S*.md") {
+		units = append(units, strings.TrimSuffix(strings.TrimPrefix(filepath.Base(f), milestone+"-"), ".md"))
 	}
-	return max + 1
+	return units
 }
 
 func (s files) Read(key string) (string, error) { return docs(s.root).Read(key) }
