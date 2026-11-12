@@ -11,25 +11,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-)
 
-func declared(t *testing.T) map[string]bool {
-	t.Helper()
-	set := map[string]bool{}
-	for _, v := range All() {
-		if set[v] {
-			t.Errorf("All() lists %q twice", v)
-		}
-		set[v] = true
-	}
-	return set
-}
+	"github.com/l4ci/rota/internal/blockedby/blockedbytest"
+)
 
 // TestBlockedByIsClosed holds the contract docs against the declared set: a
 // blockedBy value a doc quotes that nothing declares is a typo or a new
 // spelling that bypassed this package.
 func TestBlockedByIsClosed(t *testing.T) {
-	set := declared(t)
+	set := blockedbytest.Declared(t)
 	files, err := filepath.Glob("../../docs/contributing/contract/*.md")
 	skillFiles, _ := filepath.Glob("../../skills/*/*.md")
 	files = append(files, skillFiles...)
@@ -59,44 +49,9 @@ func TestBlockedByIsClosed(t *testing.T) {
 		}
 		for _, v := range got {
 			if v != "string" && !set[v] {
-				t.Errorf("%s quotes blockedBy %q, which blockedby.All() does not declare", filepath.Base(f), v)
+				t.Errorf("%s quotes blockedBy %q, which blockedby.go does not declare", filepath.Base(f), v)
 			}
 		}
-	}
-}
-
-// TestAllListsEveryConst holds All() against blockedby.go itself: a string
-// const declared there but left out of All() would go unseen by the doc scan
-// until some doc happened to quote it.
-func TestAllListsEveryConst(t *testing.T) {
-	f, err := parser.ParseFile(token.NewFileSet(), "blockedby.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	set := declared(t)
-	n := 0
-	ast.Inspect(f, func(node ast.Node) bool {
-		gd, ok := node.(*ast.GenDecl)
-		if !ok || gd.Tok != token.CONST {
-			return true
-		}
-		for _, spec := range gd.Specs {
-			vs := spec.(*ast.ValueSpec)
-			for i, name := range vs.Names {
-				b, ok := vs.Values[i].(*ast.BasicLit)
-				if !ok || b.Kind != token.STRING {
-					continue
-				}
-				n++
-				if v, _ := strconv.Unquote(b.Value); !set[v] {
-					t.Errorf("const %s = %s is not listed in All()", name.Name, b.Value)
-				}
-			}
-		}
-		return false
-	})
-	if n != len(set) {
-		t.Errorf("blockedby.go declares %d string consts, All() lists %d", n, len(set))
 	}
 }
 

@@ -148,23 +148,3 @@ const (
 	DuplicateCreate     = "duplicate-create"
 	BatchCap            = "batch-cap"
 )
-
-// All is every declared blockedBy value, each once.
-func All() []string {
-	return []string{Freeze,
-		NoRound, OutOfScope, NotReady, Overlap, Claimed, NotStale, StaleClaim, ClaimLost, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
-		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, CrossMilestone, Registered, Held, External, NoPRRecorded, Site, Fetch,
-		Conflict, Dirty, Role, NoSlotHolds, NoIssues, FindingMissing, NoGist, ReviewNotMinted, NotYourSlot, SameSlot, Healthy,
-		LiveAgent, Unverifiable, MergeInProgress,
-		BestOfLabel, BestOfSlots, BestOf, NotBestOf, NotAttempt, AlreadyPicked, AttemptRunning, HarnessLabel,
-		ModelLabel, DecisionLabel, NoBlockingFinds,
-		CodexFlags, OpencodeFlags, OpencodeBinary, OutsideHerdr, Host, ResumeFlag, Limited, Dialog, ResetGuard,
-		Dispatch, MaxBounces, State, Handle,
-		Verdict, NoVerify, VacuousTests, Closes, AssumptionsMissing, RulingsMissing, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
-		Backend, Config, Active, Umbrella, Proof, ProofMissing, UnmetAcceptance, ClosedItem, Exists, Ambiguous, AliasCollision, Edited, Unmanaged, IDMismatch, RequestID, LeaseHeld,
-		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
-		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
-		AccountConflict, ConfigConflict, ConfigMigration, BothDirs, DirtyTree, LockHeld, BackupDir, Worktree,
-		Attempt, BaseBranch, BranchMoved, NotOnBaseBranch, DirtyTreeShip, NotAMerge, MergeSubject, PostMergeCommits, PRMode, RoundWorker, DuplicateCreate, BatchCap,
-	}
-}
