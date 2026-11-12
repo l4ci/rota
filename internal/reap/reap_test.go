@@ -89,11 +89,8 @@ func (f *fakeGit) clean(name string) {
 type fakeHost struct {
 	calls     []string
 	tabs      []host.Tab
-	procs     []Process
 	tabsErr   error
-	procsErr  error
 	closed    []string
-	stopped   []int
 	closeErr  map[string]error
 	afterTabs func() // runs after each Tabs call
 }
@@ -106,19 +103,11 @@ func (h *fakeHost) Tabs(context.Context) ([]host.Tab, error) {
 	}
 	return t, h.tabsErr
 }
-func (h *fakeHost) Processes(context.Context) ([]Process, error) {
-	h.calls = append(h.calls, "processes")
-	return h.procs, h.procsErr
-}
 func (h *fakeHost) CloseTab(_ context.Context, id string) error {
 	if err := h.closeErr[id]; err != nil {
 		return err
 	}
 	h.closed = append(h.closed, id)
-	return nil
-}
-func (h *fakeHost) StopProcess(_ context.Context, pid int) error {
-	h.stopped = append(h.stopped, pid)
 	return nil
 }
 
@@ -366,24 +355,10 @@ func TestTabsOnlyWhenNoAgentIsProvenAndOwnerIsFree(t *testing.T) {
 	}
 }
 
-func TestProcessUnderLiveAgentTabIsNotListed(t *testing.T) {
-	g := repo(nil, nil)
-	h := &fakeHost{procs: []Process{
-		{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"},
-		{PID: 11, Name: "node", Tab: "w2:t1", Cwd: "/r/.worktrees/old"}, // agent on this tab
-		{PID: 12, Name: "sleep", Tab: "w3:t1", Cwd: "/elsewhere"},
-	}}
-	agents := []host.Agent{{Tab: "w2:t1", Name: "a", Cwd: "/elsewhere/a", Status: "working"}}
-	res := find(t, input(g, nil, agents, h), KindProcess)
-	if got := ids(res.Candidates); !reflect.DeepEqual(got, []string{"process:10"}) {
-		t.Errorf("processes = %v", got)
-	}
-}
-
 func TestHostUnavailableFailsClosed(t *testing.T) {
 	g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
 	g.clean("done")
-	h := &fakeHost{tabs: []host.Tab{tab("w1:t1", "/r/.worktrees/done", true)}, procs: []Process{{PID: 5, Tab: "w1:t1", Cwd: "/r/.worktrees/done"}}}
+	h := &fakeHost{tabs: []host.Tab{tab("w1:t1", "/r/.worktrees/done", true)}}
 	in := input(g, nil, nil, h)
 	in.Report.Unavailable = []string{round.SourceHost}
 	res := find(t, in)
@@ -464,7 +439,7 @@ func TestApplyReprovesABranchBeforeDeleting(t *testing.T) {
 }
 
 func TestFindSelectsDiscoveryByKind(t *testing.T) {
-	all := []string{"worktree:done", "branch:kit/9-old", "tab:w1:t1", "process:10", "lease:round", "skillcache:old"}
+	all := []string{"worktree:done", "branch:kit/9-old", "tab:w1:t1", "lease:round", "skillcache:old"}
 	for _, tt := range []struct {
 		name      string
 		kinds     []string
@@ -474,24 +449,20 @@ func TestFindSelectsDiscoveryByKind(t *testing.T) {
 		hostCalls []string
 		leases    int
 	}{
-		{"omitted", nil, all, true, true, []string{"tabs", "processes"}, 1},
-		{"empty", []string{}, all, true, true, []string{"tabs", "processes"}, 1},
+		{"omitted", nil, all, true, true, []string{"tabs"}, 1},
+		{"empty", []string{}, all, true, true, []string{"tabs"}, 1},
 		{"worktree", []string{KindWorktree}, []string{"worktree:done"}, true, false, nil, 0},
 		{"branch", []string{KindBranch}, []string{"branch:kit/9-old"}, false, true, nil, 0},
 		{"tab", []string{KindTab}, []string{"tab:w1:t1"}, false, false, []string{"tabs"}, 0},
-		{"process", []string{KindProcess}, []string{"process:10"}, false, false, []string{"processes"}, 0},
 		{"lease", []string{KindLease}, []string{"lease:round"}, false, false, nil, 1},
 		{"skillcache", []string{KindSkillCache}, []string{"skillcache:old"}, false, false, nil, 0},
-		{"combined reversed with duplicate", []string{KindLease, KindProcess, KindBranch, KindLease}, []string{"branch:kit/9-old", "process:10", "lease:round"}, false, true, []string{"processes"}, 1},
+		{"combined reversed with duplicate", []string{KindLease, KindTab, KindBranch, KindLease}, []string{"branch:kit/9-old", "tab:w1:t1", "lease:round"}, false, true, []string{"tabs"}, 1},
 		{"unknown", []string{"unknown"}, []string{}, false, false, nil, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
 			g.clean("done")
-			h := &fakeHost{
-				tabs:  []host.Tab{tab("w1:t1", "/r/.worktrees/gone", true)},
-				procs: []Process{{PID: 10, Tab: "w1:t1", Cwd: "/r/.worktrees/gone"}},
-			}
+			h := &fakeHost{tabs: []host.Tab{tab("w1:t1", "/r/.worktrees/gone", true)}}
 			l := &fakeLease{l: deadHolder, st: roundlease.Stale}
 			in := input(g, nil, []host.Agent{}, h)
 			in.Lease = l
@@ -532,7 +503,7 @@ func TestFindExcludesUnselectedDiscoveryWarnings(t *testing.T) {
 	for _, hostUnavailable := range []bool{false, true} {
 		t.Run(fmt.Sprintf("hostUnavailable=%t", hostUnavailable), func(t *testing.T) {
 			g := repo(nil, []string{"kit/9-old"}, "kit/9-old")
-			h := &fakeHost{tabsErr: errors.New("tabs broken"), procsErr: errors.New("processes broken")}
+			h := &fakeHost{tabsErr: errors.New("tabs broken")}
 			l := &fakeLease{readErr: errors.New("lease broken")}
 			in := input(g, nil, []host.Agent{}, h)
 			in.Lease = l
@@ -552,11 +523,11 @@ func TestFindExcludesUnselectedDiscoveryWarnings(t *testing.T) {
 				t.Errorf("excluded discovery: host calls = %v, lease reads = %d, warnings = %v", h.calls, l.reads, res.Warnings)
 			}
 			// The same failing dependencies must still warn when selected.
-			selected := find(t, in, KindTab, KindProcess, KindLease, KindSkillCache)
-			if len(selected.Candidates) != 0 || len(selected.Warnings) != 4 || l.reads != 1 {
+			selected := find(t, in, KindTab, KindLease, KindSkillCache)
+			if len(selected.Candidates) != 0 || len(selected.Warnings) != 3 || l.reads != 1 {
 				t.Errorf("selected failing discovery = %+v, lease reads = %d", selected, l.reads)
 			}
-			wantHostCalls := []string{"tabs", "processes"}
+			wantHostCalls := []string{"tabs"}
 			if hostUnavailable {
 				wantHostCalls = nil
 			}
@@ -666,7 +637,7 @@ func TestFindLeaseSkipsUnrelatedDiscoveryFailure(t *testing.T) {
 	g := repo([]wt{{"done", "kit/1-a", ""}}, []string{"kit/9-old"}, "kit/9-old", "HEAD")
 	g.clean("done")
 	g.resp["for-each-ref --format=%(refname:short) refs/heads/"] = gitResp{code: 128, err: "unrelated branch failure"}
-	h := &fakeHost{tabsErr: errors.New("unrelated tabs failure"), procsErr: errors.New("unrelated processes failure")}
+	h := &fakeHost{tabsErr: errors.New("unrelated tabs failure")}
 	l := &fakeLease{l: deadHolder, st: roundlease.Stale}
 	in := input(g, nil, []host.Agent{}, h)
 	in.Lease = l
@@ -796,54 +767,6 @@ func TestReapPrunesOldSkillCache(t *testing.T) {
 	}
 }
 
-func TestApplyRefusesAHandBuiltProcessCandidate(t *testing.T) {
-	g := repo(nil, nil)
-	h := &fakeHost{procs: []Process{
-		{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"},
-		{PID: 11, Name: "node", Tab: "w2:t1", Cwd: "/r/.worktrees/old"},
-	}}
-	agents := []host.Agent{{Tab: "w2:t1", Name: "a", Cwd: "/elsewhere/a", Status: "working"}}
-	in := input(g, nil, agents, h)
-	cases := map[string]Candidate{
-		"agent live on its tab": {ID: "process:11", Kind: KindProcess, PID: 11},
-		"no pid":                {ID: "process:", Kind: KindProcess, Name: "10 npm"},
-		"pid not running":       {ID: "process:99", Kind: KindProcess, PID: 99},
-	}
-	for name, c := range cases {
-		out := Apply(bg, in, []Candidate{c})
-		if len(out.Reaped) != 0 || len(out.Failed) != 1 || len(h.stopped) != 0 {
-			t.Errorf("%s: apply = %+v, stopped %v", name, out, h.stopped)
-		}
-	}
-}
-
-func TestApplyStopsTheProcessByPID(t *testing.T) {
-	g := repo(nil, nil)
-	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
-	in := input(g, nil, []host.Agent{}, h)
-	res := find(t, in, KindProcess)
-	if len(res.Candidates) != 1 || res.Candidates[0].PID != 10 {
-		t.Fatalf("candidates = %+v", res.Candidates)
-	}
-	res.Candidates[0].Name = "display text, not a pid"
-	out := Apply(bg, in, res.Candidates)
-	if !reflect.DeepEqual(h.stopped, []int{10}) || len(out.Failed) != 0 {
-		t.Errorf("stopped %v, apply = %+v", h.stopped, out)
-	}
-}
-
-func TestApplyNeverStopsAProcessAnAgentTookOver(t *testing.T) {
-	g := repo(nil, nil)
-	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
-	in := input(g, nil, []host.Agent{}, h)
-	res := find(t, in, KindProcess)
-	in.Report.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: "working"}}
-	out := Apply(bg, in, res.Candidates)
-	if len(h.stopped) != 0 || len(out.Failed) != 1 {
-		t.Errorf("stopped %v, apply = %+v", h.stopped, out)
-	}
-}
-
 func TestApplyRefusesAWorktreeAnAgentTookOver(t *testing.T) {
 	g := repo([]wt{{"old", "kit/1-a", ""}}, nil, "kit/1-a")
 	g.clean("old")
@@ -883,15 +806,14 @@ func TestApplyRereadsAgentsAtApplyTime(t *testing.T) {
 	g.clean("old")
 	g.resp["/r/.worktrees/old|merge-base --is-ancestor HEAD main"] = gitResp{}
 	g.resp["worktree remove /r/.worktrees/old"] = gitResp{}
-	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
-	in := input(g, nil, []host.Agent{}, h)
-	res := find(t, in, KindWorktree, KindProcess)
+	in := input(g, nil, []host.Agent{}, nil)
+	res := find(t, in, KindWorktree)
 	late := *in.Report
 	late.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: "working"}}
 	in.Refresh = func(context.Context) (*round.Report, error) { return &late, nil }
 	out := Apply(bg, in, res.Candidates)
-	if len(out.Reaped) != 0 || len(out.Failed) != len(res.Candidates) || g.ran("worktree remove") || len(h.stopped) != 0 {
-		t.Errorf("stopped %v, apply = %+v, calls %v", h.stopped, out, g.calls)
+	if len(out.Reaped) != 0 || len(out.Failed) != len(res.Candidates) || g.ran("worktree remove") {
+		t.Errorf("apply = %+v, calls %v", out, g.calls)
 	}
 }
 
@@ -906,20 +828,5 @@ func TestApplyFailsClosedWhenTheFreshReportErrors(t *testing.T) {
 	out := Apply(bg, in, res.Candidates)
 	if len(out.Reaped) != 0 || len(out.Failed) != 1 || g.ran("worktree remove") {
 		t.Errorf("apply = %+v, calls %v", out, g.calls)
-	}
-}
-
-func TestApplyRefusesAProcessWhenProcessesErrOrHostIsDown(t *testing.T) {
-	cand := []Candidate{{ID: "process:10", Kind: KindProcess, Name: "10 npm", PID: 10}}
-	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/x"}}, procsErr: errors.New("ps down")}
-	in := input(repo(nil, nil), nil, []host.Agent{}, h)
-	if out := Apply(bg, in, cand); len(out.Failed) != 1 || len(h.stopped) != 0 {
-		t.Errorf("processes error: stopped %v, apply = %+v", h.stopped, out)
-	}
-	h2 := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/x"}}}
-	in = input(repo(nil, nil), nil, []host.Agent{}, h2)
-	in.Report.Unavailable = []string{round.SourceHost}
-	if out := Apply(bg, in, cand); len(out.Failed) != 1 || len(h2.stopped) != 0 {
-		t.Errorf("host down: stopped %v, apply = %+v", h2.stopped, out)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -384,4 +385,32 @@ func HeldLockUnder(root string, skip func(path string, d fs.DirEntry) bool) stri
 		return nil
 	})
 	return held
+}
+
+// TryLock takes an exclusive flock on path without blocking, creating the file
+// when missing. ok is false (and release nil) when another handle holds it. On
+// success the lock lasts until release is called or the process dies; release
+// is idempotent. Unlike Locked, the lock sits on path itself, so use it for a
+// file that is only a lock, never an atomically replaced data file.
+func TryLock(path string) (release func(), ok bool, err error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, false, err
+	}
+	for {
+		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		break
+	}
+	if err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	var once sync.Once
+	return func() { once.Do(func() { f.Close() }) }, true, nil // closing the fd releases the flock
 }

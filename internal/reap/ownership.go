@@ -140,8 +140,3 @@ func (o *ownership) Tab(t host.Tab) bool {
 	}
 	return false
 }
-
-// Process: a process reap must not stop.
-func (o *ownership) Process(p Process) bool {
-	return p.PID <= 0 || o.cwd(p.Cwd) || o.tabLive(p.Tab)
-}
