@@ -265,7 +265,10 @@ func (d *Deps) procs() pidlive.Source {
 	if d.Procs != nil {
 		return d.Procs
 	}
-	return pidlive.Real{}
+	return pidlive.Real{Look: func(name string) (string, bool) {
+		p, err := d.LookPath(name)
+		return p, err == nil
+	}}
 }
 
 // Toplevel is the toplevel of the git work tree around the working directory,

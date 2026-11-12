@@ -26,7 +26,7 @@ func (d *runner) ports() (Check, bool) {
 	var ls []pidlive.Listener
 	ok := false
 	if d.in.Procs != nil {
-		ls, ok = d.in.Procs.Listeners()
+		ls, ok = d.in.Procs.Listeners(d.ctx)
 	}
 	if !ok {
 		return skip("ports", "cannot scan listeners: ss and lsof are missing or failed, so port blocks are not checked"), true

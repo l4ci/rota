@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -14,30 +15,38 @@ import (
 // when the scanner may not see the owner.
 type Listener struct{ Port, PID int }
 
+// scanTimeout bounds one ss or lsof call, so a hung scanner cannot stall a caller.
+const scanTimeout = 20 * time.Second
+
 // ScanFunc runs the listener scanner name with args and returns its stdout;
 // ok is false when the tool is missing or exited non-zero. A test of the
 // listener scan sets Real.Scan.
-type ScanFunc func(name string, args ...string) (stdout string, ok bool)
+type ScanFunc func(ctx context.Context, name string, args ...string) (stdout string, ok bool)
 
-func (r Real) scan(name string, args ...string) (string, bool) {
+func (r Real) scan(ctx context.Context, name string, args ...string) (string, bool) {
 	if r.Scan != nil {
-		return r.Scan(name, args...)
+		return r.Scan(ctx, name, args...)
 	}
-	bin, err := exec.LookPath(name)
-	if err != nil {
+	look := r.Look
+	if look == nil {
+		look = func(n string) (string, bool) { p, err := exec.LookPath(n); return p, err == nil }
+	}
+	bin, found := look(name)
+	if !found {
 		return "", false
 	}
-	res, err := proc.Run(context.Background(), proc.Cmd{Name: bin, Args: args, Env: []string{"LC_ALL=C"}})
+	res, err := proc.Run(ctx, proc.Cmd{Name: bin, Args: args, Env: []string{"LC_ALL=C"}, Timeout: scanTimeout})
 	return res.Stdout, err == nil && res.ExitCode == 0
 }
 
-// Listeners reads the machine's TCP listeners with ss, else lsof. ok is false
-// when neither is installed or the scan failed.
-func (r Real) Listeners() ([]Listener, bool) {
-	if out, ok := r.scan("ss", "-ltnpH"); ok {
+// Listeners reads the machine's TCP listeners with ss, else lsof, each call
+// bounded by 20s and by ctx. ok is false when neither is installed or the scan
+// failed.
+func (r Real) Listeners(ctx context.Context) ([]Listener, bool) {
+	if out, ok := r.scan(ctx, "ss", "-ltnpH"); ok {
 		return parseSS(out), true
 	}
-	if out, ok := r.scan("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"); ok {
+	if out, ok := r.scan(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"); ok {
 		return parseLsofListeners(out), true
 	}
 	return nil, false

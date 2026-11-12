@@ -1,6 +1,7 @@
 package pidlive
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -173,4 +174,4 @@ func TestRealParentsListsSelf(t *testing.T) {
 	}
 }
 
-func (fakeTable) Listeners() ([]Listener, bool) { return nil, false }
+func (fakeTable) Listeners(context.Context) ([]Listener, bool) { return nil, false }

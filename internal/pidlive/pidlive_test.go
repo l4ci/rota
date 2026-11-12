@@ -1,6 +1,7 @@
 package pidlive
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strconv"
@@ -154,4 +155,4 @@ func TestCommCurrentPid(t *testing.T) {
 	}
 }
 
-func (fixedState) Listeners() ([]Listener, bool) { return nil, false }
+func (fixedState) Listeners(context.Context) ([]Listener, bool) { return nil, false }

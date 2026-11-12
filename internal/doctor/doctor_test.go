@@ -866,8 +866,8 @@ type procTable struct {
 	cwd map[int]string
 }
 
-func (p procTable) Listeners() ([]pidlive.Listener, bool) { return p.ls, p.ok }
-func (p procTable) Cwd(pid int) string                    { return p.cwd[pid] }
+func (p procTable) Listeners(context.Context) ([]pidlive.Listener, bool) { return p.ls, p.ok }
+func (p procTable) Cwd(pid int) string                                   { return p.cwd[pid] }
 
 func portsInput(p procTable) Input {
 	return Input{
@@ -1182,5 +1182,24 @@ func TestRepoConfigCheck(t *testing.T) {
 		if got == nil || got.Status != Warn || !strings.Contains(got.Detail, want) {
 			t.Errorf("%s: got %+v", tc.name, got)
 		}
+	}
+}
+
+// A slot worktree reached through a symlink still owns its processes: the
+// containment resolves symlinks (worker.PathContains).
+func TestPortsContainmentResolvesSymlinks(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real", "w1")
+	if err := os.MkdirAll(filepath.Join(real, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(filepath.Join(root, "real"), link); err != nil {
+		t.Fatal(err)
+	}
+	in := portsInput(procTable{ls: []pidlive.Listener{{Port: 20042, PID: 77}}, ok: true, cwd: map[int]string{77: filepath.Join(real, "web")}})
+	in.Slots = []SlotBlock{{Name: "w1", Worktree: filepath.Join(link, "w1"), Base: 20000, Size: 100}}
+	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
+		t.Errorf("ports line = %+v, want none: the cwd is inside the symlinked worktree", c)
 	}
 }
