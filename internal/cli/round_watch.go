@@ -89,7 +89,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Wait: func(ctx context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
 				// The timeout covers one whole classification (its settle gap),
 				// or a wait that ends mid-capture would never see a slot.
-				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines, UnverifiableAfter: unverifiableAfter(c, root), RememberPrompts: true})
+				res, err := wenv.Wait(ctx, root, watchWaitOpts(d, secs(*settle), *lines, unverifiableAfter(c, root)))
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
 					return nil, roundwatch.ErrNothingToWatch
@@ -102,8 +102,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 				}
 				return &roundwatch.SlotNews{Slot: res.Slot, State: strings.ToLower(res.State), Evidence: res.Evidence, Source: res.Source}, nil
 			},
-			Local: func() roundwatch.Snapshot { return roundwatch.LocalSnapshot(wenv, root) },
-			Forge: func(ctx context.Context) roundwatch.Snapshot { return watchForge(ctx, c, root) },
+			OnHeartbeat: func() { _ = worker.ClearPromptSeen(root) },
+			Local:       func() roundwatch.Snapshot { return roundwatch.LocalSnapshot(wenv, root) },
+			Forge:       func(ctx context.Context) roundwatch.Snapshot { return watchForge(ctx, c, root) },
 		}
 		st := roundwatch.NewSeenStore(cd)
 		env.Seen, env.Mark = st.Seen, st.Mark
@@ -120,6 +121,14 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		ok = err == nil && ctx.Err() == nil
 		return res, err
 	})
+}
+
+// watchWaitOpts is one wait of the watch. The timeout covers a whole
+// classification (its settle gap), or a wait that ends mid-capture would never
+// see a slot. RememberPrompts keeps a re-armed watch from exiting at once for a
+// permission prompt it already returned (#3088).
+func watchWaitOpts(d, settle time.Duration, lines int, unverifiable time.Duration) worker.WaitOpts {
+	return worker.WaitOpts{Timeout: d + settle + 2*time.Second, Settle: settle, Lines: lines, UnverifiableAfter: unverifiable, RememberPrompts: true}
 }
 
 func secs(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }

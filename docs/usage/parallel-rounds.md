@@ -641,7 +641,7 @@ nothing to report, and the harness wakes the orchestrator when it exits. Keep ex
 re-arm it after every wake; a second one is refused (exit 4). The registry is read every `--poll`
 seconds and the forge every `--forge-poll`; `reason` in the result says which woke it.
 A permission prompt the watch already returned does not wake the next watch again until the slot has been
-seen working (you answered it) or the heartbeat passes; `rota round wait` still returns it on every call.
+seen working (you answered it) or a heartbeat exit passes, so a worker stuck on a prompt is returned once per heartbeat; `rota round wait` still returns it on every call.
 The exit digest says the watch is exiting and must be re-armed; the prompt hook reports
 whether a watch is currently armed.
 

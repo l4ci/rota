@@ -406,7 +406,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		if ev := s.Event(); ev != nil && ev.Kind != EventHeartbeat {
 			key += "\t#" + strconv.Itoa(ev.Seq) // a second event of the same state is news
 		}
-		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
+		if news := o.alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
 			name := s.Name()
 			if _, err := UpdateSlot(root, name, func(s *Slot) {
 				if !news {
@@ -489,4 +489,15 @@ func (o WaitOpts) alwaysNews(state string) bool {
 		return false
 	}
 	return alwaysNews(state)
+}
+
+// ClearPromptSeen forgets the returned permission prompts of every slot, so
+// the next `round watch` returns one still unanswered. The watch calls it at
+// its heartbeat: an orchestrator must not lose a worker stuck on a prompt.
+func ClearPromptSeen(root string) error {
+	return UpdateSlots(root, func(s *Slot) {
+		if strings.HasPrefix(s.Seen(), seenKey(StateNeedsPermission, "")) {
+			s.ClearSeen()
+		}
+	})
 }

@@ -510,6 +510,31 @@ func TestWaitRememberPromptsReturnsAPromptOnce(t *testing.T) {
 	}
 }
 
+// AC-3 (#3088): w1 stays on a prompt the watch already returned; w2 changing
+// still wakes the next wait. The heartbeat's ClearPromptSeen then makes the
+// unanswered prompt news again.
+func TestWaitRememberPromptsOtherSlotStillWakes(t *testing.T) {
+	dir := waitProject(t, 2, map[string]string{"w1": "w9:t1", "w2": "w9:t2"})
+	h := newWaitHost("herdr")
+	e := envWith(watcherHost{h})
+	o := WaitOpts{Timeout: 5 * time.Second, RememberPrompts: true}
+	h.set("w1", "Do you want to proceed?\n", "idle")
+	h.set("w2", "working...\n", "working")
+	if res, err := e.Wait(bg, dir, o); err != nil || res.Slot != "w1" || res.State != StateNeedsPermission {
+		t.Fatalf("w1 prompt: %+v %v", res, err)
+	}
+	h.set("w2", "ROTA-DONE w2 x\n", "done")
+	if res, err := e.Wait(bg, dir, o); err != nil || res.Slot != "w2" || res.State != StateDone {
+		t.Fatalf("w2 change with w1 still prompting: %+v %v", res, err)
+	}
+	if err := ClearPromptSeen(dir); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := e.Wait(bg, dir, o); err != nil || res.Slot != "w1" || res.State != StateNeedsPermission {
+		t.Fatalf("w1 prompt after the heartbeat clear: %+v %v", res, err)
+	}
+}
+
 func TestDispatchAndPollClearSeen(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	set := func() {
