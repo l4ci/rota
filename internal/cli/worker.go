@@ -773,6 +773,9 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	d.Set("slot", r.Slot)
 	d.Set("verdict", r.Verdict)
 	d.Set("base", r.Base)
+	if len(r.IntegrationMembers) > 0 {
+		d.Set("integrationMembers", jsonx.Strings(r.IntegrationMembers))
+	}
 	if r.Branch != "" {
 		d.Set("branch", r.Branch)
 	}
@@ -942,6 +945,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			if run.BookErr != nil {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
 			}
+		}
+		if !*check && (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 { // landed now, or before a retry (#3096)
+			parkIntegrationMembers(c, root, r.PR)
 		}
 		if r.Verdict == worker.GateAlreadyMerged {
 			res.Text = r.Err

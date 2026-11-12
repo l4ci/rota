@@ -136,3 +136,25 @@ func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
 		t.Errorf("posts %+v, want one for the registry's branch and PR", b.posts)
 	}
 }
+
+// A landed integration PR ends every member issue, though the gate's own
+// target (the integration PR) has none.
+func TestGateIntegrationLandsMembers(t *testing.T) {
+	b := &fakeBook{}
+	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GatePass, IntegrationMembers: []string{"5", "6"}}); err != nil {
+		t.Fatal(err)
+	}
+	if want := append(landedCalls("5"), landedCalls("6")...); !reflect.DeepEqual(b.calls, want) {
+		t.Errorf("calls %v, want %v", b.calls, want)
+	}
+	// A retry after the forge merged it ends them too.
+	b = &fakeBook{}
+	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateAlreadyMerged, IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
+		t.Fatalf("already-merged retry: %v %v", err, b.calls)
+	}
+	// A refused integration landing ends nothing.
+	b = &fakeBook{}
+	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateStale, IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 {
+		t.Fatalf("refused landing: %v %v", err, b.calls)
+	}
+}

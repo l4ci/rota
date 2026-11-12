@@ -179,6 +179,13 @@ type GateOpts struct {
 	// reports its own) and does not refuse a branch behind the base only
 	// because an earlier train member landed.
 	LandVerified bool
+	// LandVerifiedTip binds an integration PR's LandVerified to the tip its
+	// train verified (#3096): a head pinned anywhere else refuses the merge,
+	// since the skipped verify never saw it.
+	LandVerifiedTip string
+	// LandVerifiedBase is the base commit that verify merged: a base that moved
+	// since refuses the merge for the same reason.
+	LandVerifiedBase string
 	// HoldsLandLock says the caller already holds the repository's land lock
 	// (the train does, through its landing steps), so the gate does not retake
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
@@ -232,7 +239,10 @@ func (o GateOpts) skipsVerify() bool { return o.NoVerify || o.LandVerified }
 // GateResult is the gate's answer. Err is the message for a non-success
 // verdict, Hint what to do about it.
 type GateResult struct {
-	Slot string
+	// IntegrationMembers are the member issues of an integration PR that
+	// landed (#3096): the post-gate bookkeeping ends each one.
+	IntegrationMembers []string
+	Slot               string
 	// TargetSlot is the pool slot the gate target resolved to, "" when it
 	// resolved to none (an external PR, a queued record whose slot moved on).
 	// Slot echoes the argument, which may be a PR number.
@@ -241,9 +251,12 @@ type GateResult struct {
 	Base       string
 	// Issue is the item the gate acted on, resolved once from the target: the
 	// queued record's, else the one the slot held. "" when it cannot be told.
-	Issue         string
-	Branch        string
-	SHA           string
+	Issue  string
+	Branch string
+	SHA    string
+	// CheckedHead is the full head commit a CheckOnly gate checked, the one
+	// its review verdicts were read at; an integration train merges exactly it.
+	CheckedHead   string
 	PR            string
 	Verified      []string
 	Flaky         []flakeledger.Entry
@@ -453,10 +466,31 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		}
 		defer release()
 	}
-	err := e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) (err error) {
-		res, err = e.gate(ctx, root, o)
-		return err
-	})
+	land := func() error {
+		return e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) (err error) {
+			res, err = e.gate(ctx, root, o)
+			return err
+		})
+	}
+	rec, err := e.integrationLanding(root, o)
+	switch {
+	case err != nil:
+		res = GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: GateCheckBroke,
+			Err: checkBrokeMessage(o.Slot, "cannot read the integration records: "+err.Error())}
+		return res, nil
+	case rec != nil:
+		// The integration lock before the land lock, as the train takes it:
+		// no train of this branch runs while its PR lands. The record is read
+		// again under both, and the verify skip decided there, so neither a
+		// train nor another landing can move what it was decided on.
+		err = e.withIntegrationLock(ctx, root, rec.Name, func() error {
+			return e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) error {
+				return e.landIntegration(ctx, root, o, rec.Branch, &res)
+			})
+		})
+	default:
+		err = land()
+	}
 	if errors.Is(err, errLandingBusy) {
 		res = GateResult{Slot: o.Slot, Base: o.Base, Verdict: GateRunning, Err: err.Error()}
 		err = nil
@@ -579,7 +613,10 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 	adopted := runGateStage(external, func(result GateResult) (GateTarget, GateResult, bool, error) {
 		return g.stepAdoptPR(result, external.Value, forged.Value)
 	})
-	frozen := runGateStage(adopted, func(result GateResult) (struct{}, GateResult, bool, error) {
+	onIntegration := runGateStage(adopted, func(result GateResult) (struct{}, GateResult, bool, error) {
+		return g.stepIntegrationBase(result, adopted.Value)
+	})
+	frozen := runGateStage(onIntegration, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepFreeze(result, adopted.Value.Issue, adopted.Value.PR)
 	})
 	picked := runGateStage(frozen, func(result GateResult) (struct{}, GateResult, bool, error) {
@@ -1283,9 +1320,30 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	if g.pr != "" {
 		prBody = g.prBody
 	}
+	// An integration branch is judged on its fix commits only (#3096): the
+	// members were reviewed on their own PRs before they merged.
+	span := g.baseRef + "..." + g.headRef
+	reg, err := LoadRegistry(g.root)
+	if err != nil { // the integration rules may apply: fail closed
+		return finish(g.broke("cannot read the integration records: " + err.Error()))
+	}
+	intRec, isInt := reg.IntegrationByBranch(g.branch)
+	isInt = isInt && !intRec.Landed
+	var intHead string
+	if isInt {
+		var code int
+		if intHead, code = g.git(g.root, "rev-parse", g.headRef); code != 0 {
+			return finish(g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code)))
+		}
+		since, err := g.e.ReviewSince(g.root, intRec, intHead)
+		if err != nil {
+			return finish(g.broke(err.Error()))
+		}
+		span = since + "..." + g.headRef
+	}
 	inputs, err := BuildReviewInputs(g.ctx, ReviewInputOptions{
 		Config: g.in.cfg, Root: g.root, Dir: g.root, Branch: g.branch,
-		Span: g.baseRef + "..." + g.headRef, Git: g.e.Git, Target: &g.target,
+		Span: span, Git: g.e.Git, Target: &g.target,
 		Issues:       func() (ReviewIssues, error) { return g.issues, nil },
 		TargetPRBody: prBody,
 	})
@@ -1306,6 +1364,56 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	}
 	if !g.o.CheckReviews {
 		return finish(false, nil)
+	}
+	// A fix PR into an open integration branch is reviewed once, with the
+	// branch's fix commits, not on its own (orchestrator ruling, round 55).
+	if into, ok := reg.IntegrationByBranch(g.o.Base); ok && !into.Landed {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEFERRED %s — its commits are reviewed with the fix commits of %s", g.o.Slot, into.Branch))
+		return finish(false, nil)
+	}
+	if isInt {
+		store, err := verdict.LoadStrict(g.root)
+		if err != nil {
+			g.res.Verdict = GateVerdictBlocked
+			return finish(true, err)
+		}
+		list := store.Branch(g.o.VerdictRepo, g.branch)
+		// A commit covers the fixes only with every review the depth asks for
+		// (the core kinds, the cross-harness review and each triggered lens)
+		// and none of them blocking: the bounce rule the head gets otherwise,
+		// applied where the review was recorded, since rota's later merges move
+		// the head past it.
+		covered := func(sha string) bool {
+			if _, bad := verdict.BlockingAtHead(list, sha); bad {
+				return false
+			}
+			if len(verdict.MissingReviews(depth, res.HasSpec, verdict.Recorded(list, sha))) > 0 {
+				return false
+			}
+			if NeedsCross(res, depth) {
+				if r, ok := verdict.CrossAt(list, sha); !ok || r.Harness != res.Cross {
+					return false
+				}
+			}
+			for _, l := range res.Lenses {
+				if _, ok := verdict.LensAt(list, verdict.LensKind(l.Name), sha); !ok {
+					return false
+				}
+			}
+			return true
+		}
+		ok, note, err := g.e.integrationReviewed(g.root, intRec, list, intHead, covered)
+		if err != nil {
+			return finish(g.broke(err.Error()))
+		}
+		if ok {
+			g.res.Notes = append(g.res.Notes, note)
+			return finish(false, nil)
+		}
+		g.res.SHA = strutil.ShortSHA(intHead)
+		g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(verdict.MissingReviews(depth, res.HasSpec, nil), " and ")),
+			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it", g.branch))
+		return finish(true, nil)
 	}
 	// stepPRMatches resolved the head when the slot has a remote; otherwise resolve it here
 	head := g.verified
@@ -1399,11 +1507,19 @@ func (runner gate) stepCheckOnly(result GateResult, target GateTarget, forged ga
 				return finish(true, err)
 			}
 		}
-		// the checked tip: origin/<branch> when a PR is recorded
-		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
+		// The checked tip is the head the earlier steps (PR match, verdicts,
+		// review depth) checked, never the remote ref read again: a fetch since
+		// may have moved it to a commit nobody reviewed. Without a remote there
+		// is no such head, and the branch is read here.
+		head := strings.TrimSpace(g.verified)
+		if head == "" {
+			head, _ = g.git(g.root, "rev-parse", g.headRef)
+		}
+		g.res.CheckedHead = head
+		g.res.SHA = strutil.ShortSHA(head)
 		// A train member says its tier, so the train verifies by the highest.
 		if g.o.BehaviourDir == "" {
-			tier := g.classify(g.baseRef + "..." + g.headRef)
+			tier := g.classify(g.baseRef + "..." + head)
 			g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
 		}
 		g.res.Verdict = GateFresh
@@ -1597,6 +1713,18 @@ func (runner gate) stepMerge(result GateResult, target GateTarget, forged gateFo
 		return g.landed, *g.res, done, err
 	}
 
+	if tip := g.o.LandVerifiedTip; tip != "" && strings.TrimSpace(verified) != tip {
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — the PR head %s is not the tip %s its train verified; nothing landed", g.o.Slot, strutil.ShortSHA(verified), strutil.ShortSHA(tip)),
+			"re-run the integration train, then gate the PR again")
+		return finish(true, nil)
+	}
+	if want := g.o.LandVerifiedBase; want != "" {
+		if base, _ := g.git(g.root, "rev-parse", g.baseRef); base != want {
+			g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s since its train verified the tip; nothing landed", g.o.Slot, g.o.Base, strutil.ShortSHA(want), strutil.ShortSHA(base)),
+				"gate the PR again: it verifies the tip on the new base")
+			return finish(true, nil)
+		}
+	}
 	if g.remote {
 		if g.mergeRemote() {
 			return finish(true, nil)

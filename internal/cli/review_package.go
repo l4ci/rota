@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).
@@ -56,6 +57,15 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		head = strings.TrimSpace(head)
+		// An integration branch is reviewed on its fix commits only: --since
+		// defaults to just before the first of them (#3096).
+		if *sinceFlag == "" {
+			if since, ok, err := integrationSince(c, t.Dir, t.Branch, head); err != nil {
+				return Result{}, err
+			} else if ok {
+				*sinceFlag = since
+			}
+		}
 		// base...branch is the merge-base diff, so a base that has moved on since
 		// the branch forked is fine; only unrelated histories have no merge-base.
 		// --since is a point on the branch, so it must be an ancestor of its tip.
@@ -137,4 +147,26 @@ func reviewIsAncestor(c *Ctx, dir, ancestor, ref string) (bool, error) {
 // reviewPackageName turns a branch into a file stem: "nia/240-x" -> "nia-240-x".
 func reviewPackageName(branch string) string {
 	return strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(branch)
+}
+
+// integrationSince is the --since default of an open integration branch, ok
+// false for any other branch.
+func integrationSince(c *Ctx, dir, branch, head string) (string, bool, error) {
+	root, err := c.Root()
+	if err != nil {
+		return "", false, nil
+	}
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return "", false, nil
+	}
+	rec, ok := reg.IntegrationByBranch(branch)
+	if !ok || rec.Landed {
+		return "", false, nil
+	}
+	since, err := worker.Env{}.WithDefaults().ReviewSince(dir, rec, head)
+	if err != nil {
+		return "", false, Resolution("%v", err)
+	}
+	return since, since != "", nil
 }

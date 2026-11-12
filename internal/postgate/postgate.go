@@ -60,7 +60,19 @@ type Failure struct {
 // its clocks. A stale merge and a provenance failure are bookkeeping the worker
 // repairs (worker.verdictMeanings): they count nothing and never park the item,
 // but a support machine's worker is still told on its PR.
+//
+// A landed integration PR (#3096) ends every member issue it carried, as a
+// train ends each member it landed.
 func Gate(book Book, root, issue string, r worker.GateResult) error {
+	// already-merged is a retry after the forge merged it but a later step failed.
+	if (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
+		for _, m := range r.IntegrationMembers {
+			if err := landed(book, root, m); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if issue == "" {
 		return nil
 	}
