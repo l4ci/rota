@@ -498,7 +498,11 @@ The autopilot skips that refusal and continues to the next candidate.
   the second worker's brief.
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
   is `not ready: waiting on open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
-  assigns it again for a deliberate redo.
+  assigns it again for a deliberate redo when the head belongs to the target agent. If the head
+  is another agent's round branch, assign still refuses with `blockedBy: open PR`, naming the head
+  and `rota round transfer <ID> --to <agent>` to pick it up; it creates no branch, claim or binding.
+  PRs matched only by `Closes #N` with a head outside the round-branch naming scheme keep the
+  existing redo behavior. An accepted redo binds the slot and waits for its worker's own done.
 - **Deferred follow-up.** A follow-up item filed by `rota verdict add --file-deferred` is
   `not ready: depends on PR #N` while its source PR is open. It turns ready when that PR merges
   or is closed without merging.
