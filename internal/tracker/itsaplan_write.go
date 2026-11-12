@@ -338,22 +338,19 @@ func (t *Itsaplan) moveTo(ctx context.Context, key IssueKey, want ...string) err
 	return t.patch(ctx, d.ID, map[string]any{"columnId": col.ID})
 }
 
-// Close moves the issue to a completed column, or a canceled one for
-// not_planned, then posts comment. The move comes first, so a retry after it
-// failed posts no second comment.
+// Close posts comment, then moves the issue to a completed column, or a
+// canceled one for not_planned (the Adapter.Close order: state last).
 func (t *Itsaplan) Close(ctx context.Context, key IssueKey, reason, comment string) error {
 	want := "completed"
 	if reason == CloseNotPlanned {
 		want = "canceled"
 	}
-	if err := t.moveTo(ctx, key, want); err != nil {
-		return err
-	}
 	if comment != "" {
-		_, err := t.AddComment(ctx, key, comment)
-		return err
+		if _, err := t.AddComment(ctx, key, comment); err != nil {
+			return err
+		}
 	}
-	return nil
+	return t.moveTo(ctx, key, want)
 }
 
 // Reopen moves a closed issue to an unstarted column, else a started one.

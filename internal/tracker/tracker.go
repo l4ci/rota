@@ -299,7 +299,18 @@ type IssueTracker interface {
 	// label, so it always creates on use and autoCreate changes nothing there.
 	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
 	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
-	// Close with reason CloseCompleted (or "") or CloseNotPlanned; comment is optional.
+	// Close closes the issue with reason CloseCompleted (or "") or
+	// CloseNotPlanned, the one value callers pass for not planned; comment is
+	// optional. Every adapter maps the reason onto its forge: GitHub's "not
+	// planned" close reason, the configured not-planned label on GitLab and
+	// Jira, a canceled state on Linear and It's a Plan.
+	//
+	// Order every adapter keeps: the comment first, then the not-planned
+	// marker (a label), then the state change last. A failure before that last
+	// step returns the error and leaves the issue open, so no caller sees a
+	// closed issue whose comment is missing. The price is that a retry after a
+	// failed state change posts the comment again. GitHub does comment and
+	// close in one call, which fails as a whole.
 	Close(ctx context.Context, key IssueKey, reason, comment string) error
 	Reopen(ctx context.Context, key IssueKey) error
 	AssignSelf(ctx context.Context, key IssueKey) error

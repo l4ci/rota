@@ -592,24 +592,22 @@ func (j *Jira) transition(ctx context.Context, key IssueKey, want ...string) err
 	return failed("%s has no transition to a status in category %s from its current status (check the project's workflow)", key, strings.Join(want, " or "))
 }
 
-// Close moves the issue to a done-category status, then labels a not-planned
-// close and posts comment. The transition comes first, so a retry after it
-// failed posts no second comment.
+// Close posts comment, labels a not-planned close, then moves the issue to a
+// done-category status (the Adapter.Close order: state last, so a failure
+// leaves the issue open and comment unposted or posted, never closed without
+// it).
 func (j *Jira) Close(ctx context.Context, key IssueKey, reason, comment string) error {
-	if err := j.transition(ctx, key, "done"); err != nil {
-		return err
+	if comment != "" {
+		if _, err := j.AddComment(ctx, key, comment); err != nil {
+			return err
+		}
 	}
 	if reason == CloseNotPlanned {
 		if err := j.AddLabels(ctx, key, []string{j.notPlanned}, true); err != nil {
 			return err
 		}
 	}
-	if comment != "" {
-		if _, err := j.AddComment(ctx, key, comment); err != nil {
-			return err
-		}
-	}
-	return nil
+	return j.transition(ctx, key, "done")
 }
 
 var _ MergeCloser = (*Jira)(nil)
