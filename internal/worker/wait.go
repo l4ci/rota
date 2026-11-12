@@ -22,6 +22,12 @@ type WaitOpts struct {
 	// UnverifiableAfter: how long a slot may stay unverifiable before the wait
 	// returns it once, with its reason. 0 never returns it.
 	UnverifiableAfter time.Duration
+	// RememberPrompts makes a permission prompt already returned count as seen,
+	// like a blocked question: it comes back when the slot shows other evidence
+	// or was observed busy. `round watch` sets it, since it re-arms after every
+	// wake; one-shot `round wait` callers keep the every-time rule. DEAD stays
+	// news every time either way.
+	RememberPrompts bool
 }
 
 // maxResubscribe is how many times in a row the herdr event stream may be lost
@@ -273,7 +279,7 @@ wait:
 			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
-			if r.State != StateBusy && (r.State != StateUnverifiable || overdue(r.Name)) && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
+			if r.State != StateBusy && (r.State != StateUnverifiable || overdue(r.Name)) && (seen[r.Name] != key || o.alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
 				var done *ledger.Entry
 				stale := false
@@ -292,7 +298,7 @@ wait:
 						stale = true
 						return
 					}
-					if rowErr == nil && !alwaysNews(r.State) {
+					if rowErr == nil && !o.alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
 					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {
@@ -400,7 +406,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		if ev := s.Event(); ev != nil && ev.Kind != EventHeartbeat {
 			key += "\t#" + strconv.Itoa(ev.Seq) // a second event of the same state is news
 		}
-		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
+		if news := o.alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
 			name := s.Name()
 			if _, err := UpdateSlot(root, name, func(s *Slot) {
 				if !news {
@@ -474,4 +480,24 @@ func handleOf(targets []pollTarget, name string) string {
 		}
 	}
 	return ""
+}
+
+// alwaysNews reports whether a row in state is returned every time this wait
+// sees it.
+func (o WaitOpts) alwaysNews(state string) bool {
+	if o.RememberPrompts && state == StateNeedsPermission {
+		return false
+	}
+	return alwaysNews(state)
+}
+
+// ClearPromptSeen forgets the returned permission prompts of every slot, so
+// the next `round watch` returns one still unanswered. The watch calls it at
+// its heartbeat: an orchestrator must not lose a worker stuck on a prompt.
+func ClearPromptSeen(root string) error {
+	return UpdateSlots(root, func(s *Slot) {
+		if strings.HasPrefix(s.Seen(), seenKey(StateNeedsPermission, "")) {
+			s.ClearSeen()
+		}
+	})
 }

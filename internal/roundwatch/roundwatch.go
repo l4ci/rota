@@ -236,6 +236,10 @@ type Env struct {
 	// Both nil: the first poll is the baseline, as for every other entry.
 	Seen func() Snapshot
 	Mark func(Snapshot)
+	// OnHeartbeat runs when the watch returns for ReasonHeartbeat. The CLI
+	// uses it to forget returned permission prompts, so the next watch
+	// returns one that is still unanswered (#3088). May be nil.
+	OnHeartbeat func()
 }
 
 // Opts are the intervals of a watch.
@@ -266,6 +270,9 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 	for {
 		elapsed := env.Now().Sub(start)
 		if elapsed >= o.Heartbeat {
+			if env.OnHeartbeat != nil {
+				env.OnHeartbeat()
+			}
 			return Result{Reason: ReasonHeartbeat, Waited: elapsed}, nil
 		}
 		d := minDur(o.Poll, o.Heartbeat-elapsed)

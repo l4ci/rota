@@ -135,6 +135,22 @@ func TestRunHeartbeat(t *testing.T) {
 	}
 }
 
+func TestRunHeartbeatCallsOnHeartbeat(t *testing.T) {
+	fc := &fakeClock{now: time.Unix(0, 0)}
+	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, empty)
+	n := 0
+	env.OnHeartbeat = func() { n++ }
+	if res, err := Run(context.Background(), env, Opts{Heartbeat: 100 * time.Second, Poll: 30 * time.Second}); err != nil || res.Reason != ReasonHeartbeat || n != 1 {
+		t.Fatalf("%+v %v calls=%d", res, err, n)
+	}
+	n = 0
+	env = fc.env(func(time.Duration) (*SlotNews, error) { return &SlotNews{Slot: "ben", State: "done"}, nil }, empty, empty)
+	env.OnHeartbeat = func() { n++ }
+	if _, err := Run(context.Background(), env, Opts{Heartbeat: time.Hour, Poll: 30 * time.Second}); err != nil || n != 0 {
+		t.Fatalf("slot news must not clear prompts: %v calls=%d", err, n)
+	}
+}
+
 func TestRunSlotNews(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
 	calls := 0
