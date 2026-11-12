@@ -3,7 +3,6 @@ package backlog
 import (
 	"errors"
 	ms "github.com/l4ci/rota/internal/milestone"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,21 +47,17 @@ func issueRows(be Backend, umbrella bool) ([]Row, error) {
 	return rows, nil
 }
 
-// OpenRows lists the open items of be in section order, with the Markdown the
-// listing renders its titles from. ok is false when there is no backlog to
-// read: no BACKLOG.md in file mode.
-func OpenRows(be Backend) (rows []Row, md string, ok bool, err error) {
+// OpenRows lists the open items of be in section order. ok is false when
+// there is no backlog to read: no BACKLOG.md in file mode.
+func OpenRows(be Backend) (rows []Row, ok bool, err error) {
 	rows, err = be.Rows()
 	if errors.Is(err, ErrNotFound) {
-		return nil, "", false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, "", false, err
+		return nil, false, err
 	}
-	if md, err = be.Markdown(0); err != nil {
-		return nil, "", false, err
-	}
-	return rows, md, true, nil
+	return rows, true, nil
 }
 
 // activeIn is whether an umbrella issue row is claimed by an active stream. A
@@ -183,37 +178,39 @@ type Listing struct {
 	outIDs      map[string]string
 }
 
-var (
-	progressTitleRe = regexp.MustCompile(`\]` + sp + `+([^.]+?)\.`)
-	idInRelatedRe   = BracketedIDRe
-)
+var idInRelatedRe = BracketedIDRe
 
-// titleOf is hv-backlog's title_of: the text between the ID and the first "."
-// of the item's bullet, which keeps the [tag] of a tagged item; "?" when the
-// ID has no bullet or no ".".
-func titleOf(md, id string) string {
-	m := boldRef(id).FindString(md)
-	if m == "" {
-		return "?"
+// titleOf is hv-backlog's title_of read off the row of id: the [tag] of a
+// tagged item and its title up to the first "."; "?" when no row answers to id.
+func titleOf(rows []Row, id string) string {
+	for _, r := range rows {
+		if r.ID != id && !r.IssueMatches(map[string]bool{id: true}) {
+			continue
+		}
+		t := r.Title
+		if i := strings.Index(t, "."); i >= 0 {
+			t = t[:i]
+		}
+		t = pystr.Strip(t)
+		if r.Tag != "" {
+			t = "[" + r.Tag + "] " + t
+		}
+		return t
 	}
-	t := progressTitleRe.FindStringSubmatch(m)
-	if t == nil {
-		return "?"
-	}
-	return pystr.Strip(t[1])
+	return "?"
 }
 
 // BuildListing assembles rota backlog list. Items that are active appear only in
 // In Progress. grep, when non-empty, keeps the Bugs, Features and Tasks rows
 // whose bullet contains it, case-insensitively, and the clusters with a member
 // that matched; In Progress is never filtered.
-func BuildListing(rows []Row, md string, active []Active, grep string) *Listing {
+func BuildListing(rows []Row, active []Active, grep string) *Listing {
 	l := &Listing{Clusters: [][]string{}}
 	activeIDs := map[string]bool{}
 	for _, e := range active {
 		for _, id := range e.Items {
 			activeIDs[id] = true
-			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(md, id),
+			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(rows, id),
 				Branch: e.Branch, StartedAt: e.StartedAt, Repo: e.Repo})
 		}
 	}
@@ -247,7 +244,7 @@ func BuildListing(rows []Row, md string, active []Active, grep string) *Listing 
 	sort.SliceStable(l.Features, func(i, j int) bool { return rank(size, l.Features[i].Tag) < rank(size, l.Features[j].Tag) })
 
 	l.cluster(rows, match)
-	l.render(md, active, grep)
+	l.render(active, grep)
 	return l
 }
 
@@ -447,7 +444,7 @@ func first10(s string) string {
 // render builds the Markdown hv-backlog prints, line by line as the helper
 // does: each out entry is one joined segment, and a heading carries its own
 // trailing newline.
-func (l *Listing) render(md string, active []Active, grep string) {
+func (l *Listing) render(active []Active, grep string) {
 	var out []string
 	if len(active) > 0 {
 		showRepo := false

@@ -75,7 +75,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		rows, md, ok, err := backlog.OpenRows(be)
+		rows, ok, err := backlog.OpenRows(be)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -87,7 +87,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 		for _, e := range status.Entries(root) {
 			active = append(active, backlog.Active{Branch: e.Branch, Repo: e.Repo, Items: e.Items, StartedAt: e.StartedAt})
 		}
-		l := backlog.BuildListing(rows, md, active, *grep)
+		l := backlog.BuildListing(rows, active, *grep)
 
 		typeOfID := map[string]string{}
 		for _, r := range rows {
@@ -163,7 +163,7 @@ func backlogIDs(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		rows, _, _, err := backlog.OpenRows(be)
+		rows, _, err := backlog.OpenRows(be)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -185,7 +185,7 @@ func backlogMilestones(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		rows, _, _, err := backlog.OpenRows(be)
+		rows, _, err := backlog.OpenRows(be)
 		if err != nil {
 			return backlogFail(err)
 		}

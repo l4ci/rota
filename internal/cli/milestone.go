@@ -499,7 +499,7 @@ func milestoneChildren(c *Ctx, id string) ([]ms.Child, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, _, _, err := backlog.OpenRows(be)
+	rows, _, err := backlog.OpenRows(be)
 	if err != nil {
 		return nil, err
 	}

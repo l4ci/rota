@@ -98,7 +98,7 @@ func openItemsOf(c *Ctx, root, repo string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, _, ok, err := backlog.OpenRows(be)
+	rows, ok, err := backlog.OpenRows(be)
 	if err != nil || !ok {
 		return nil, err
 	}

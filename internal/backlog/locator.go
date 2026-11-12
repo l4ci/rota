@@ -47,11 +47,6 @@ func completedMark(ref string) *regexp.Regexp {
 		pystr.SpaceClass + `]+\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}`)
 }
 
-// boldRef matches the bold `**[ref] ... **` span of ref's bullet anywhere in md.
-func boldRef(ref string) *regexp.Regexp {
-	return regexp.MustCompile(boldTag(ref) + `[^*]*\*\*`)
-}
-
 // titleAfterRef matches `[ref]`, an optional `[tag]`, then the title up to its
 // first period, capturing the title.
 func titleAfterRef(ref string) *regexp.Regexp {

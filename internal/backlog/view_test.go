@@ -51,9 +51,9 @@ func rowIDs(rows []Row) []string {
 }
 
 func TestOpenRowsFile(t *testing.T) {
-	rows, md, ok, err := OpenRows(fileBackend(t, viewBacklog))
-	if err != nil || !ok || md != viewBacklog {
-		t.Fatalf("OpenRows = %v %v %v", ok, err, md == viewBacklog)
+	rows, ok, err := OpenRows(fileBackend(t, viewBacklog))
+	if err != nil || !ok {
+		t.Fatalf("OpenRows = %v %v", ok, err)
 	}
 	// Indented bullets count, as in the helpers; completed ones do not.
 	if got := rowIDs(rows); !reflect.DeepEqual(got, []string{"B01", "B02", "B03", "B04", "F01", "F02", "T01"}) {
@@ -62,7 +62,7 @@ func TestOpenRowsFile(t *testing.T) {
 	if r := rows[0]; r.Tag != "P2" || r.Title != "Two" || r.Section != "Bugs" || r.Type != "B" || !strings.HasPrefix(r.Raw, "- **[B01]") {
 		t.Errorf("row 0 = %+v", r)
 	}
-	if _, _, ok, err := OpenRows(fileBackend(t, "")); ok || err != nil {
+	if _, ok, err := OpenRows(fileBackend(t, "")); ok || err != nil {
 		t.Errorf("missing BACKLOG.md: ok=%v err=%v", ok, err)
 	}
 }
@@ -74,7 +74,7 @@ func TestOpenRowsIssues(t *testing.T) {
 		{Key: tracker.NumKey(7), Title: "Closed", State: "closed", Labels: []string{"type:bug"}},
 	}}
 	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: tr}
-	rows, _, ok, err := OpenRows(b)
+	rows, ok, err := OpenRows(b)
 	if err != nil || !ok {
 		t.Fatalf("OpenRows: %v %v", ok, err)
 	}
@@ -96,7 +96,7 @@ func TestParseMilestones(t *testing.T) {
 }
 
 func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
-	rows, _, _, _ := OpenRows(fileBackend(t, viewBacklog))
+	rows, _, _ := OpenRows(fileBackend(t, viewBacklog))
 	if got := IDsByMilestone(rows, "M02"); !reflect.DeepEqual(got, []string{"B01", "F01"}) {
 		t.Errorf("M02 = %v", got)
 	}
@@ -116,11 +116,11 @@ func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 
 func listing(t *testing.T, md string, active []Active, grep string) *Listing {
 	t.Helper()
-	rows, md, ok, err := OpenRows(fileBackend(t, md))
+	rows, ok, err := OpenRows(fileBackend(t, md))
 	if err != nil || !ok {
 		t.Fatal(err)
 	}
-	return BuildListing(rows, md, active, grep)
+	return BuildListing(rows, active, grep)
 }
 
 func TestBuildListingOrderAndMarkdown(t *testing.T) {
@@ -224,11 +224,11 @@ func TestBuildListingIssuesKeepSpellings(t *testing.T) {
 		{Key: tracker.NumKey(12), Title: "Crash", State: "open", Labels: []string{"type:bug"}, Body: "<!-- rota:fields\nRelated: F3\n-->"},
 		{Key: tracker.NumKey(3), Title: "Idea", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
 	}}
-	rows, md, _, err := OpenRows(&Issues{Cfg: mustDecode(t, `{}`), Tracker: tr})
+	rows, _, err := OpenRows(&Issues{Cfg: mustDecode(t, `{}`), Tracker: tr})
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := BuildListing(rows, md, nil, "")
+	l := BuildListing(rows, nil, "")
 	if len(l.Bugs) != 1 || l.Bugs[0].ID != "12" || len(l.Features) != 1 || l.Features[0].ID != "3" {
 		t.Fatalf("rows: %+v %+v", l.Bugs, l.Features)
 	}
@@ -239,9 +239,13 @@ func TestBuildListingIssuesKeepSpellings(t *testing.T) {
 }
 
 func TestTitleOf(t *testing.T) {
-	md := "- **[B01] [P1] Tagged one.** x\n- **[T01] Task.** y\n- **[T02] No period**\n- ~~**[B09] [P2] Done. Really.** z~~ Done 2026-01-01 [`a`]\n"
-	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "T02": "?", "B09": "[P2] Done", "B99": "?"} {
-		if got := titleOf(md, id); got != want {
+	rows := []Row{
+		{ID: "B01", Key: "B01", Tag: "P1", Title: "Tagged one"},
+		{ID: "T01", Key: "T01", Title: "Task. More"},
+		{ID: "12", Key: "B12", Number: 12, Title: "Issue"},
+	}
+	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "12": "Issue", "B12": "Issue", "#12": "Issue", "B99": "?"} {
+		if got := titleOf(rows, id); got != want {
 			t.Errorf("titleOf(%s) = %q, want %q", id, got, want)
 		}
 	}
@@ -283,5 +287,30 @@ func TestBuildSummary(t *testing.T) {
 	}
 	if len(sm.Milestones) != 0 {
 		t.Errorf("milestones = %+v", sm.Milestones)
+	}
+}
+
+// A listing in issue mode costs one tracker fetch: rows carry the titles, so
+// nothing renders Markdown (a second List) to read them back.
+func TestListingFetchesOpenIssuesOnce(t *testing.T) {
+	tr := &fakeTracker{Issues: []Issue{
+		{Key: tracker.NumKey(12), Title: "Crash. Badly", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(3), Title: "Idea", State: "open", Labels: []string{"type:feature"}},
+	}}
+	rows, ok, err := OpenRows(&Issues{Cfg: mustDecode(t, `{}`), Tracker: tr})
+	if err != nil || !ok {
+		t.Fatalf("OpenRows: %v %v", ok, err)
+	}
+	lists := 0
+	for _, c := range tr.Calls {
+		if c.Method == "list" || c.Method == "List" {
+			lists++
+		}
+	}
+	if lists != 1 {
+		t.Errorf("tracker list calls = %d, want 1 (calls %v)", lists, tr.Calls)
+	}
+	if l := BuildListing(rows, []Active{{Branch: "b", Items: []string{"12"}}}, ""); len(l.InProgress) != 1 || l.InProgress[0].Title != "Crash" {
+		t.Errorf("in progress = %+v", l.InProgress)
 	}
 }

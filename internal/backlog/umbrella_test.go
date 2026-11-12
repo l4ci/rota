@@ -557,7 +557,7 @@ func TestUmbrellaDetail(t *testing.T) {
 
 func TestOpenRowsQualifiesUmbrellaIDs(t *testing.T) {
 	u, _, _ := twoRepos(t)
-	rows, _, ok, err := OpenRows(u)
+	rows, ok, err := OpenRows(u)
 	if err != nil || !ok {
 		t.Fatal(err)
 	}
@@ -583,11 +583,11 @@ func TestListingClustersStaySubRepoLocal(t *testing.T) {
 		"web": {withFields(typed(1, "feature", "Web one"), "Related: B2"), typed(2, "bug", "Web two")},
 		"api": {withFields(typed(1, "feature", "Api one"), "Related: B2"), typed(2, "bug", "Api two")},
 	}, "web", "api")
-	rows, md, _, err := OpenRows(u)
+	rows, _, err := OpenRows(u)
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := BuildListing(rows, md, nil, "")
+	l := BuildListing(rows, nil, "")
 	// components sort on (key, repo), so the tie between the two B2s goes by name
 	want := [][]string{{"api:2", "api:1"}, {"web:2", "web:1"}}
 	if !reflect.DeepEqual(l.Clusters, want) {
@@ -608,13 +608,13 @@ func withFields(is Issue, lines ...string) Issue {
 
 func TestListingActiveStreamsHideOnlyTheirOwnRepoRow(t *testing.T) {
 	u, _, _ := twoRepos(t)
-	rows, md, _, err := OpenRows(u)
+	rows, _, err := OpenRows(u)
 	if err != nil {
 		t.Fatal(err)
 	}
 	features := func(active ...Active) string {
 		var out []string
-		for _, r := range BuildListing(rows, md, active, "").Features {
+		for _, r := range BuildListing(rows, active, "").Features {
 			out = append(out, r.ID)
 		}
 		return strings.Join(out, " ")

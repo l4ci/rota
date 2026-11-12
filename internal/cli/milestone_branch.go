@@ -186,7 +186,7 @@ func untagMilestone(c *Ctx, id string) error {
 	if err != nil {
 		return err
 	}
-	rows, _, _, err := backlog.OpenRows(be)
+	rows, _, err := backlog.OpenRows(be)
 	if err != nil {
 		return err
 	}
