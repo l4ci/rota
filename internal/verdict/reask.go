@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // MaxReasks is how many times a reviewer session is asked to resend a block
@@ -18,7 +19,7 @@ const MaxReasks = 1
 // ReaskPath is the per-developer count of rejected blocks, keyed by branch and
 // kind. It sits under .rota/review/, which is gitignored.
 func ReaskPath(root string) string {
-	return filepath.Join(root, ".rota", "review", "reask.json")
+	return rotatree.File(root, "review", "reask.json")
 }
 
 func reaskKey(key, kind string) string { return key + "|" + kind }
@@ -66,4 +67,3 @@ func NoteMalformed(root, key, kind string) (int, error) {
 func ClearMalformed(root, key, kind string) error {
 	return updateReasks(root, func(m map[string]int) { delete(m, reaskKey(key, kind)) })
 }
-
