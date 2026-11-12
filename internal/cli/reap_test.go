@@ -20,12 +20,10 @@ import (
 
 type reapTestHost struct{ tabs []host.Tab }
 
-func (h reapTestHost) Tabs(context.Context) ([]host.Tab, error)        { return h.tabs, nil }
-func (reapTestHost) Processes(context.Context) ([]reap.Process, error) { return nil, nil }
+func (h reapTestHost) Tabs(context.Context) ([]host.Tab, error) { return h.tabs, nil }
 func (reapTestHost) CloseTab(_ context.Context, id string) error {
 	return fmt.Errorf("close %s: refused", id)
 }
-func (reapTestHost) StopProcess(context.Context, int) error { return nil }
 
 // reapProject: base feat/x; worktrees old (clean, merged), dirty (untracked
 // file), live (an agent works in it); branch kit/9-gone merged and unowned.
@@ -166,42 +164,33 @@ func TestReapFailureExitsOneWithData(t *testing.T) {
 	}
 }
 
-// A host's tabs and processes are reaped through the ops the env hands reap; a
-// live agent's tab and process stay. (Replaces the ROTA_TEST_REAP_HOST smoke.)
-func TestReapApplyClosesDeadTabAndProcess(t *testing.T) {
+// A host's tabs are reaped through the ops the env hands reap; a live agent's
+// tab stays. (Replaces the ROTA_TEST_REAP_HOST smoke.)
+func TestReapApplyClosesDeadTab(t *testing.T) {
 	ops := &recordingReapOps{
-		tabs:  []host.Tab{{ID: "w5:t1", Agentless: true}, {ID: "w3:t1", Agentless: false}},
-		procs: []reap.Process{{PID: 4242, Name: "npm", Tab: "w5:t1"}, {PID: 4343, Name: "node", Tab: "w3:t1"}},
+		tabs: []host.Tab{{ID: "w5:t1", Agentless: true}, {ID: "w3:t1", Agentless: false}},
 	}
 	root, deps := reapProject(t, ops, true)
 	ops.tabs[0].Cwds = []string{filepath.Join(root, ".worktrees", "old")}
 	ops.tabs[1].Cwds = []string{filepath.Join(root, ".worktrees", "live")}
-	ops.procs[0].Cwd = filepath.Join(root, ".worktrees", "old")
-	ops.procs[1].Cwd = filepath.Join(root, ".worktrees", "live")
 	_, out, _ := rotaInWith(t, deps, root, "--json", "reap", "--apply")
 	d := data(t, out)
-	if !reflect.DeepEqual(d["reaped"], []any{"worktree:old", "branch:kit/9-gone", "tab:w5:t1", "process:4242"}) {
+	if !reflect.DeepEqual(d["reaped"], []any{"worktree:old", "branch:kit/9-gone", "tab:w5:t1"}) {
 		t.Fatalf("reaped = %v", d["reaped"])
 	}
-	if !reflect.DeepEqual(ops.removed, []string{"tab w5:t1", "process 4242"}) {
+	if !reflect.DeepEqual(ops.removed, []string{"tab w5:t1"}) {
 		t.Errorf("host removals = %v", ops.removed)
 	}
 }
 
 type recordingReapOps struct {
 	tabs    []host.Tab
-	procs   []reap.Process
 	removed []string
 }
 
-func (o *recordingReapOps) Tabs(context.Context) ([]host.Tab, error)          { return o.tabs, nil }
-func (o *recordingReapOps) Processes(context.Context) ([]reap.Process, error) { return o.procs, nil }
+func (o *recordingReapOps) Tabs(context.Context) ([]host.Tab, error) { return o.tabs, nil }
 func (o *recordingReapOps) CloseTab(_ context.Context, id string) error {
 	o.removed = append(o.removed, "tab "+id)
-	return nil
-}
-func (o *recordingReapOps) StopProcess(_ context.Context, pid int) error {
-	o.removed = append(o.removed, fmt.Sprintf("process %d", pid))
 	return nil
 }
 

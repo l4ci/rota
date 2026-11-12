@@ -85,7 +85,6 @@ still reads the registry, round status and worktree list to establish ownership 
 | `worktree` | a `.worktrees/<name>` checkout with no live owner, or one git marks prunable | it holds no work |
 | `branch` | a local `<agent>/<issue>-slug` branch checked out nowhere and owned by no registered slot | it is reachable from the base or `origin/<base>`, proven from git alone |
 | `tab` | a herdr tab inside `.worktrees/` whose panes run only plain shells | always (tmux has no agent state, so it yields none) |
-| `process` | a process under a tab with no agent | a real host lists none; only test fakes supply any |
 | `lease` | the round lease, when its holder is gone | the staleness is proven again under the lease lock |
 | `skillcache` | an extracted skill tree (`rota/skills/<version>/` in the user cache) of a rota version other than the running one | always; the running version's tree and a tree being written are never listed |
 
@@ -97,7 +96,7 @@ remain protected.
 
 **What reap never removes.**
 
-- A running agent. A tab or process with a live agent under it is not listed.
+- A running agent. A tab with a live agent under it is not listed.
 - Work. A candidate with uncommitted changes, commits not on the base, or a branch not reachable from
   the base is listed with `held: <why>` and never deleted. There is no flag to override that.
 - A `stalled` slot. Reap reclaims `dead` slots only: a worker in a long test run makes no commits and

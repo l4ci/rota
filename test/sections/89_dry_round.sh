@@ -295,9 +295,9 @@ pass "reconcile: clean after wind-down, no dead tab left behind"
 rc=0; OUT="$(dyj reap)" || rc=$?
 [ "$rc" = "0" ] && [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "dry round: reap preview exits 0 and changes nothing: rc=$rc $OUT"
 KINDS="$(python3 -c 'import json,sys; print(",".join(c["id"] for c in json.load(sys.stdin)["data"]["candidates"]))' <<<"$OUT")"
-case ",$KINDS," in *,tab:*|*,process:*|*,worktree:*) fail "dry round: reap lists a live or parked thing: $KINDS" ;; esac
+case ",$KINDS," in *,tab:*|*,worktree:*) fail "dry round: reap lists a live or parked thing: $KINDS" ;; esac
 [ -d "$DY/.worktrees/ben" ] || fail "dry round: a reap preview removed the slot"
-pass "reap preview: lists no tab, process or worktree, removes nothing (candidates: ${KINDS:-none})"
+pass "reap preview: lists no tab or worktree, removes nothing (candidates: ${KINDS:-none})"
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "${TMP_DY:?}"
