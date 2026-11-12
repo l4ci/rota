@@ -180,24 +180,32 @@ type Listing struct {
 
 var idInRelatedRe = BracketedIDRe
 
-// titleOf is hv-backlog's title_of read off the row of id (its exact ID, as the bullet spelled it): the [tag] of a
-// tagged item and its title up to the first "."; "?" when no row answers to id.
-func titleOf(rows []Row, id string) string {
-	for _, r := range rows {
-		if r.ID != id {
+// titleOf is hv-backlog's title_of read off the rows: the [tag] of a tagged
+// item and its title up to the first ".", "?" when no row answers to id. id is
+// the spelling the bullet carried (ID or Key, not a repo-qualified one); in an
+// umbrella the row of the stream's own repo wins over another sub-repo's.
+func titleOf(rows []Row, id, repo string) string {
+	var hit *Row
+	for i, r := range rows {
+		if r.ID != id && r.Key != id {
 			continue
 		}
-		t := r.Title
-		if i := strings.Index(t, "."); i >= 0 {
-			t = t[:i]
+		if hit == nil || (r.Repo == repo && hit.Repo != repo) {
+			hit = &rows[i]
 		}
-		t = pystr.Strip(t)
-		if r.Tag != "" {
-			t = "[" + r.Tag + "] " + t
-		}
-		return t
 	}
-	return "?"
+	if hit == nil {
+		return "?"
+	}
+	t := hit.Title
+	if i := strings.Index(t, "."); i >= 0 {
+		t = t[:i]
+	}
+	t = pystr.Strip(t)
+	if hit.Tag != "" {
+		t = "[" + hit.Tag + "] " + t
+	}
+	return t
 }
 
 // BuildListing assembles rota backlog list. Items that are active appear only in
@@ -210,7 +218,7 @@ func BuildListing(rows []Row, active []Active, grep string) *Listing {
 	for _, e := range active {
 		for _, id := range e.Items {
 			activeIDs[id] = true
-			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(rows, id),
+			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(rows, id, e.Repo),
 				Branch: e.Branch, StartedAt: e.StartedAt, Repo: e.Repo})
 		}
 	}

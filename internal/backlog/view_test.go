@@ -244,10 +244,20 @@ func TestTitleOf(t *testing.T) {
 		{ID: "T01", Key: "T01", Title: "Task. More"},
 		{ID: "12", Key: "B12", Number: 12, Title: "Issue"},
 	}
-	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "12": "Issue", "B12": "?", "B99": "?"} {
-		if got := titleOf(rows, id); got != want {
+	for id, want := range map[string]string{"B01": "[P1] Tagged one", "T01": "Task", "12": "Issue", "B12": "Issue", "#12": "?", "web:F1": "?", "B99": "?"} {
+		if got := titleOf(rows, id, ""); got != want {
 			t.Errorf("titleOf(%s) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestTitleOfPrefersTheStreamsRepo(t *testing.T) {
+	rows := []Row{{ID: "web:1", Key: "F1", Repo: "web", Title: "Web feat"}, {ID: "api:1", Key: "F1", Repo: "api", Title: "Api feat"}}
+	if got := titleOf(rows, "F1", "api"); got != "Api feat" {
+		t.Errorf("api stream = %q", got)
+	}
+	if got := titleOf(rows, "F1", ""); got != "Web feat" {
+		t.Errorf("no repo = %q, want the first row", got)
 	}
 }
 
