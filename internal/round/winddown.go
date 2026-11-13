@@ -170,6 +170,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		wasParked := s.Branch() == park && s.Task() == ""
 		claim := s.ClaimID()
 		issue := s.HeldID()
+		kind := s.Kind()
 		members := s.Bundle() // read before the park unbinds them
 		if !wasParked {
 			so.Issue = strutil.FirstNonEmpty(so.Issue, issue)
@@ -210,8 +211,13 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				return res, err
 			}
 			if !wasParked {
-				e.Worker.Ledger().Note(root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
-					Detail: ledger.Detail("merged", so.Merged)})
+				pe := ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
+					Detail: ledger.Detail("merged", so.Merged)}
+				pe.Harness = kind
+				if cd, err := e.commonDir(ctx, root); err == nil {
+					worker.LedgerSessionAt(cd, e.Worker.Config(root), root, pe, pe.Detail)
+				}
+				e.Worker.Ledger().Note(root, pe)
 			}
 			if claim != "" && issue != "" && be != nil {
 				if _, err := be.Release(issue, claim); err != nil {

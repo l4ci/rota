@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
@@ -636,8 +637,15 @@ func workerPromptCheck(fs *flag.FlagSet) RunFunc {
 		var in struct {
 			Prompt *string `json:"prompt"`
 		}
-		if err := json.Unmarshal(readInput(c), &in); err != nil || in.Prompt == nil {
+		input := readInput(c)
+		if err := json.Unmarshal(input, &in); err != nil || in.Prompt == nil {
 			return Result{}, Usage("blocked: the hook input is not JSON with a prompt field")
+		}
+		// Codex reports its session id and rollout path in the hook payload.
+		if p, err := hook.ParsePayload(input); err == nil {
+			if cd, err := c.CommonDir(p.CwdOr(".")); err == nil {
+				noteSlotSession(c, cd, p, c.deps().Now())
+			}
 		}
 		if ok, why := harness.CheckPrompt(key, *in.Prompt); !ok {
 			return Result{}, Usage("%s", strings.TrimPrefix(why, "rota: "))

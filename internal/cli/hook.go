@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/landfreeze"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -119,7 +120,19 @@ func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 	if err != nil {
 		return err
 	}
+	noteSlotSession(c, cd, p, now)
 	return hook.Dump(cd, p, now)
+}
+
+// noteSlotSession records the session a worker's harness reports, so the
+// round ledger can name it when the issue ends. Only a slot's own session
+// (ROTA_SLOT set) is recorded; a failure is silent, the hook never blocks.
+func noteSlotSession(c *Ctx, commonDir string, p hook.Payload, now time.Time) {
+	slot := c.deps().Getenv("ROTA_SLOT")
+	if slot == "" || p.SessionID == "" {
+		return
+	}
+	_ = ledger.RecordSession(commonDir, ledger.Session{Slot: slot, ID: p.SessionID, Transcript: p.TranscriptPath, UpdatedAt: now})
 }
 
 // hookPrint is a hook's stdout: one JSON line, no HTML escaping.

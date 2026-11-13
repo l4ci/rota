@@ -58,6 +58,7 @@ const (
 	RoundFreshAtKey                  = "round.freshAt"
 	RoundFollowupReserveKey          = "round.followupReserve"
 	RoundLedgerKeepKey               = "round.ledgerKeep"
+	RoundCopyTranscriptsKey          = "round.copyTranscripts"
 	RoundArchitectureEveryKey        = "round.architectureEvery"
 	RoundArchitectureAreasKey        = "round.architectureAreas"
 	RoundArchitectureIdleMinItemsKey = "round.architectureIdleMinItems"
@@ -281,6 +282,7 @@ var Keys = []Key{
 	bounded(k(RoundFollowupReserveKey, ScopeMachine, num("0"), false, TypeInt, "Rounds: Roster slots past round.slots kept for follow-ups a person asks for on a PR whose worker moved on. Under round.reviewLoop auto the autopilot starts such a follow-up before backlog work, on an idle round slot or else one of these; backlog work never goes to them. rota round start provisions them. 0 keeps none."), 0, MaxInt),
 	bounded(k(RoundFreshAtKey, ScopeProject, num("2"), false, TypeInt, "Rounds: Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."), 0, MaxInt),
 	bounded(k(RoundLedgerKeepKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."), 0, MaxInt),
+	k(RoundCopyTranscriptsKey, ScopeMachine, false, false, TypeBool, "Rounds: Whether a worker's session transcript is copied under <git-common-dir>/rota/transcripts/ when its issue ends. The round ledger records the transcript path, session id and token totals either way; copies are large, so this is off by default."),
 	bounded(k(RoundArchitectureEveryKey, ScopeProject, num("20"), false, TypeInt, "Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off."), 0, MaxInt),
 	k(RoundArchitectureAreasKey, ScopeProject, []any{}, false, TypeList, "Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),
 	bounded(k(RoundArchitectureIdleMinItemsKey, ScopeProject, num("5"), false, TypeInt, "Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty."), 0, MaxInt),

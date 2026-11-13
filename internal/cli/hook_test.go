@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -596,5 +597,40 @@ func TestStatuslineDumpResolvesWorkspaceCurrentDir(t *testing.T) {
 	st, found, err := hook.ReadState(p)
 	if err != nil || !found || st.Cwd != dir {
 		t.Fatalf("state cwd = %q (found %v, err %v), want %q", st.Cwd, found, err, dir)
+	}
+}
+
+// A worker's harness reports its session id and transcript path through the
+// hooks it already runs: the Claude statusline and the Codex prompt check.
+func TestSlotSessionIsReportedByStatuslineAndPromptCheck(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "")
+	dir := orchProject(t, false)
+	cd, err := rotastatetest.CommonDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Not a slot's session: nothing recorded.
+	in := `{"session_id":"s1","transcript_path":"/t/s1.jsonl","cwd":"` + dir + `"}`
+	if code, _, e := rotaStdin(t, dir, in, "statusline", "dump"); code != 0 {
+		t.Fatalf("dump %d %s", code, e)
+	}
+	if _, ok := ledger.LoadSession(cd, "dana"); ok {
+		t.Fatal("a session without ROTA_SLOT must not be recorded")
+	}
+	t.Setenv("ROTA_SLOT", "dana")
+	if code, _, e := rotaStdin(t, dir, in, "statusline", "dump"); code != 0 {
+		t.Fatalf("dump %d %s", code, e)
+	}
+	if s, ok := ledger.LoadSession(cd, "dana"); !ok || s.ID != "s1" || s.Transcript != "/t/s1.jsonl" {
+		t.Errorf("statusline session %+v %v", s, ok)
+	}
+	key := filepath.Join(dir, "rota-prompt.key")
+	os.WriteFile(key, []byte(strings.Repeat("ab", 32)+"\n"), 0o600)
+	hin := `{"session_id":"c7","transcript_path":"/r/rollout-c7.jsonl","cwd":"` + dir + `","prompt":"m: ok"}`
+	if code, _, e := rotaStdin(t, dir, hin, "worker", "prompt-check", "--key", key); code != 0 {
+		t.Fatalf("prompt-check %d %s", code, e)
+	}
+	if s, ok := ledger.LoadSession(cd, "dana"); !ok || s.ID != "c7" || s.Transcript != "/r/rollout-c7.jsonl" {
+		t.Errorf("codex session %+v %v", s, ok)
 	}
 }
