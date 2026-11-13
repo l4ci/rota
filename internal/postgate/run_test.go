@@ -9,11 +9,74 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+func TestRunReturnsRegistryErrorBeforeStartingTrain(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(worker.RegistryPath(root)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(worker.RegistryPath(root), []byte(`{"slots":`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	e := Env{Worker: worker.Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+		called = true
+		return git.Result{}, errors.New("train should not start")
+	}}}
+	run := e.Run(context.Background(), root, Request{Train: &worker.TrainOpts{Targets: []string{"kit"}}}).Train
+	if !errors.Is(run.Err, fsio.ErrUnreadable) || !strings.Contains(run.Err.Error(), "postgate: load train targets") || called {
+		t.Fatalf("want registry error before train starts; got err=%v, git called=%v", run.Err, called)
+	}
+}
+
+// The gate's process boundary is fake: this exercises Run's bookkeeping port
+// without creating a git repository or running git. The worker still reads its
+// own registry, so only that input lives on disk.
+func TestRunUsesBookWithoutGit(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(worker.RegistryPath(root)), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(worker.RegistryPath(root), []byte(`{"slots":[{"name":"kit","branch":"feature","task":"12"}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	b := &fakeBook{}
+	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider":"local"}}`))
+	e := Env{Book: b, Worker: worker.Env{
+		Config: func(string) any { return cfg },
+		Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+			switch strings.Join(args, " ") {
+			case "rev-parse --git-common-dir":
+				return git.Result{Stdout: filepath.Join(root, ".git")}, nil
+			case "rev-parse --verify --quiet main", "rev-parse --verify --quiet feature", "rev-parse --short=7 feature":
+				return git.Result{Stdout: "abcdef0"}, nil
+			case "merge-base --is-ancestor main feature":
+				return git.Result{ExitCode: 1}, nil
+			case "merge-base --is-ancestor feature main":
+				return git.Result{}, nil
+			case "rev-list --count feature..main":
+				return git.Result{Stdout: "1"}, nil
+			default:
+				t.Fatalf("unexpected git command: %v", args)
+				return git.Result{}, nil
+			}
+		},
+	}}
+	run := e.Run(context.Background(), root, Request{Gate: &worker.GateOpts{Slot: "kit", Base: "main", HoldsLandLock: true}}).Gate
+	if run.Err != nil || run.Refused || run.Result.Verdict != worker.GateStale || run.BookErr != nil {
+		t.Fatalf("gate: %+v", run)
+	}
+	if len(b.calls) != 0 || len(b.posts) != 1 || b.posts[0].branch != "feature" || b.posts[0].head != "abcdef0" {
+		t.Fatalf("bookkeeping: calls=%v posts=%+v", b.calls, b.posts)
+	}
+}
 
 func landingRepo(t *testing.T) string {
 	t.Helper()
@@ -60,6 +123,18 @@ func (f *reportForge) AddMRNote(_ context.Context, _ int, body string) (string, 
 }
 func (f *reportForge) AuthenticatedUser(context.Context) (string, error) { return "kit", nil }
 
+// observedBook retains coverage of the real registry adapter while checking
+// that the train goes through the supplied port.
+type observedBook struct {
+	Book
+	cleared []string
+}
+
+func (b *observedBook) ClearBounces(root, issue string) error {
+	b.cleared = append(b.cleared, issue)
+	return b.Book.ClearBounces(root, issue)
+}
+
 func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 	root := landingRepo(t)
 
@@ -86,6 +161,8 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 		}
 		return "", 0
 	}}}
+	book := &observedBook{Book: WorkerBook{e.Worker}}
+	e.Book = book
 	e.Report = func(ctx context.Context, _ string, r Report) error {
 		// The report is durable before any clocks or bounce accounting change.
 		if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); !ok {
@@ -106,6 +183,9 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 	}
 	if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); ok {
 		t.Error("landed item clock still running")
+	}
+	if len(book.cleared) != 1 || book.cleared[0] != "1" {
+		t.Errorf("injected Book cleared %v, want only landed item 1", book.cleared)
 	}
 	// A failed verify counts no bounce: only a gate pass or a review does.
 	if bounces(root, "12") != 0 || bounces(root, "1") != 0 {
