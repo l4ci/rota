@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -292,7 +293,15 @@ func (r Registry) QueuedIssue(id string) *QueuedPR {
 // each keep their own record.
 func (d *Doc) QueuePR(rec QueuedPR) {
 	d.dropQueued(func(q *jsonx.Object) bool {
-		return jsonx.Str(q, "issue") == rec.Issue && jsonx.Str(q, "from") == rec.From
+		if jsonx.Str(q, "issue") != rec.Issue || jsonx.Str(q, "from") != rec.From {
+			return false
+		}
+		if n, ok := PRRefNumber(rec.PR); ok {
+			if old, ok := PRRefNumber(jsonx.Str(q, "pr")); ok && old == n {
+				rec.Relays = dedupeRelays(append(slices.Clone(listOf(q, "relays")), rec.Relays...))
+			}
+		}
+		return true
 	})
 	d.doc.Set("prs", append(d.list("prs"), rec.object()))
 }
@@ -392,6 +401,53 @@ func (d *Doc) LogRelays(pr string, relays []any) {
 	d.doc.Set("relayLog", append(keep, o))
 }
 
+// KeepRelays saves a slot's relay log before its next task resets it, so a PR
+// that waits in review keeps the relays that were sent about it (#3266). It is
+// keyed by PR only: by dispatch time the slot may already sit on the next
+// task's branch, so a branch key could hand one task's relays to another's PR.
+// It merges into an entry of the same PR, so a second pass never drops what
+// the first kept.
+func (d *Doc) KeepRelays(pr string, relays []any) {
+	n, ok := PRRefNumber(pr)
+	if !ok || len(relays) == 0 {
+		return
+	}
+	merged := slices.Clone(relays)
+	var keep []any
+	for _, e := range d.list("relayLog") {
+		if o, ok := e.(*jsonx.Object); ok {
+			if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
+				merged = append(listOf(o, "relays"), merged...)
+				continue
+			}
+		}
+		keep = append(keep, e)
+	}
+	o := jsonx.NewObject()
+	o.Set("pr", pr)
+	o.Set("relays", dedupeRelays(merged))
+	d.doc.Set("relayLog", append(keep, o))
+}
+
+// dedupeRelays drops a relay entry equal to an earlier one (same round, time and summary).
+func dedupeRelays(in []any) []any {
+	var out []any
+	seen := map[string]bool{}
+	for _, e := range in {
+		k := fmt.Sprint(e)
+		if o, ok := e.(*jsonx.Object); ok {
+			r, _ := o.Get("round")
+			k = fmt.Sprint(r, "|", jsonx.Str(o, "ts"), "|", jsonx.Str(o, "summary"))
+		}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, e)
+	}
+	return out
+}
+
 // ClearRelayLog drops every kept relay log, at wind-down.
 func (d *Doc) ClearRelayLog() { d.doc.Delete("relayLog") }
 
@@ -401,12 +457,57 @@ func (r Registry) LoggedRelays(ref string) []any {
 	if !ok {
 		return nil
 	}
+	var out []any
 	for _, o := range r.objects("relayLog") {
 		if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
-			return listOf(o, "relays")
+			out = append(out, listOf(o, "relays")...)
 		}
 	}
-	return nil
+	return out
+}
+
+// KeepSlotRelays archives the surviving relays using their original target.
+// A delivery retracted before the slot is freed leaves no relay to archive.
+func (d *Doc) KeepSlotRelays(s *Slot) {
+	pr, issue, branch := s.relayTarget()
+	if pr != "" {
+		d.KeepRelays(pr, s.Relays())
+	} else {
+		d.keepTaskRelays(issue, branch, s.Relays())
+	}
+}
+
+// Exact branch and issue matching keeps best-of siblings and new tasks apart.
+func (d *Doc) keepTaskRelays(issue, branch string, relays []any) {
+	issue = NormID(issue)
+	if issue == "" || branch == "" || strings.HasPrefix(branch, "park/") || len(relays) == 0 {
+		return
+	}
+	for _, o := range d.objects("relayLog") {
+		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
+			o.Set("relays", dedupeRelays(append(slices.Clone(listOf(o, "relays")), relays...)))
+			return
+		}
+	}
+	o := jsonx.NewObject()
+	o.Set("issue", issue)
+	o.Set("branch", branch)
+	o.Set("relays", slices.Clone(relays))
+	d.doc.Set("relayLog", append(d.list("relayLog"), o))
+}
+
+func (r Registry) taskRelays(issue, branch string) []any {
+	issue = NormID(issue)
+	if issue == "" || branch == "" {
+		return nil
+	}
+	var out []any
+	for _, o := range r.objects("relayLog") {
+		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
+			out = append(out, listOf(o, "relays")...)
+		}
+	}
+	return out
 }
 
 // BranchHolder finds who holds branch: the slot on it and the queued record

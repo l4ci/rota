@@ -120,6 +120,11 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, turnSeq i
 		}
 		for _, s := range d.Slots() {
 			if s.Name() == slot {
+				if task != "" {
+					// The new task resets the relay log, but a PR parked in review
+					// still needs it for its gate (#3266).
+					d.KeepSlotRelays(s)
+				}
 				s.Dispatch(handle, task, kind, now)
 				s.SetTurnSeq(turnSeq)
 			}
