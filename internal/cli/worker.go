@@ -628,10 +628,7 @@ func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot, pr string, thro
 	}
 	if pr != "" {
 		return worker.Update(root, func(d *worker.Doc) {
-			if q := d.QueuedPR(pr); q != nil {
-				q.ReviewSeen = b.Cursor
-				d.QueuePR(*q)
-			}
+			d.SetQueuedReviewSeen(pr, b.Cursor)
 		})
 	}
 	_, err = worker.UpdateSlot(root, slot, func(s *worker.Slot) { s.SetReviewSeen(b.Cursor) })
