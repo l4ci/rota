@@ -234,6 +234,31 @@ func TestListMigratesTheConfigDirRegistry(t *testing.T) {
 	}
 }
 
+func TestListMigrationPreservesRegistryMode(t *testing.T) {
+	x, env := isolate(t)
+	old := oldRegistry(t, x, `{"projects":[{"path":"/private-project","name":"private"}]}`)
+	if err := os.Chmod(old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := List(env)
+	if err != nil || len(ps) != 1 || ps[0].Path != "/private-project" {
+		t.Fatalf("migrated registry: %+v, %v", ps, err)
+	}
+	info, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("migrated registry mode: %04o", info.Mode().Perm())
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("migrated registry mode = %04o, want 0600", got)
+	}
+	for _, f := range []string{old, old + ".lock"} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("%s must be gone, got %v", f, err)
+		}
+	}
+}
+
 func TestMigrationKeepsTheStateRegistryWhenBothExist(t *testing.T) {
 	x, env := isolate(t)
 	proj := t.TempDir()
