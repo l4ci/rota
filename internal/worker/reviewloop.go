@@ -23,6 +23,8 @@ type ReviewForge interface {
 type ReviewVerdict struct {
 	At   time.Time
 	Text string
+	// Shas are the heads the failing reviews were recorded at; empty when unknown.
+	Shas []string
 }
 
 // ReviewBatch is the review input waiting on a done slot's PR.

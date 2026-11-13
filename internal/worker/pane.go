@@ -582,8 +582,10 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if reResume.MatchString(tail) {
 		return StateDead, "crashed session offering resume"
 	}
+	// Only the harness's own dialog counts, not permission wording the worker
+	// quotes inside a reply (#3161).
 	for _, re := range permissionPatterns {
-		if re.MatchString(tail) {
+		if re.MatchString(dialog) {
 			return StateNeedsPermission, "stopped at a permission prompt — approve in the pane, or widen round.commands.claude"
 		}
 	}
