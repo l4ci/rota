@@ -2,6 +2,7 @@ package reap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,7 +17,8 @@ import (
 
 // tmpMinAge is how long an entry under the project temp root must sit
 // untouched before reap offers it: a younger one may belong to a running step.
-const tmpMinAge = time.Hour
+// A var only so a test can age a just-made symlink past it.
+var tmpMinAge = time.Hour
 
 // EntryStat sizes the tree at path (regular files only) and finds its newest
 // mtime. It uses Lstat semantics: a symlink counts as itself and is never
@@ -65,8 +67,9 @@ func tmpName(name string) bool {
 }
 
 // heldTmp returns "" when nothing owns the entry at path, else why it is held.
-// Anything it cannot prove is held.
-func (s *state) heldTmp(path string, newest time.Time) string {
+// Anything it cannot prove is held. uses and usesErr are one read of the
+// process table (readUses).
+func (s *state) heldTmp(path string, newest time.Time, uses []ProcUse, usesErr error) string {
 	if age := time.Since(newest); age < tmpMinAge {
 		return fmt.Sprintf("younger than %s (a run may still own it)", HumanAge(tmpMinAge))
 	}
@@ -80,19 +83,25 @@ func (s *state) heldTmp(path string, newest time.Time) string {
 			return "host agent " + a.Name + " works under it"
 		}
 	}
-	if s.in.ProcessCwds == nil {
-		return "cannot prove no process uses it"
+	if usesErr != nil {
+		return "cannot prove no process uses it: " + usesErr.Error()
 	}
-	cwds, err := s.in.ProcessCwds()
-	if err != nil {
-		return "cannot prove no process uses it: " + err.Error()
-	}
-	for _, c := range cwds {
-		if worker.PathContains(path, c) {
-			return "a live process works under it"
+	for _, u := range uses {
+		for _, p := range u.Paths {
+			if worker.PathContains(path, p) {
+				return fmt.Sprintf("live process %d uses %s", u.PID, p)
+			}
 		}
 	}
 	return ""
+}
+
+// readUses reads the process table once; no reader is an error.
+func (s *state) readUses() ([]ProcUse, error) {
+	if s.in.ProcessUses == nil {
+		return nil, errors.New("no process table on this host")
+	}
+	return s.in.ProcessUses()
 }
 
 func findTmp(_ context.Context, s *state) ([]Candidate, error) {
@@ -112,6 +121,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 		}
 		return nil, nil
 	}
+	uses, usesErr := s.readUses()
 	var out []Candidate
 	for _, e := range ents {
 		if !tmpName(e.Name()) {
@@ -124,7 +134,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 		}
 		out = append(out, Candidate{ID: KindTmp + ":" + e.Name(), Kind: KindTmp, Name: e.Name(), Path: path,
 			Reason: fmt.Sprintf("%s, last touched %s ago", doctor.HumanBytes(uint64(size)), HumanAge(time.Since(newest))),
-			Held:   s.heldTmp(path, newest)})
+			Held:   s.heldTmp(path, newest, uses, usesErr)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -139,7 +149,8 @@ func removeTmp(_ context.Context, s *state, c Candidate) error {
 	if !ok {
 		return fmt.Errorf("%s is gone", c.Name)
 	}
-	if h := s.heldTmp(path, newest); h != "" {
+	uses, usesErr := s.readUses()
+	if h := s.heldTmp(path, newest, uses, usesErr); h != "" {
 		return fmt.Errorf("%s: %s; left alone", c.Name, h)
 	}
 	return os.RemoveAll(path)

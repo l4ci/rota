@@ -3,9 +3,6 @@ package cli
 import (
 	"context"
 	"flag"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -31,26 +28,6 @@ func defaultReapEnv(ctx context.Context, root string, d *Deps) (round.Env, reap.
 		}
 	}
 	return e, ops
-}
-
-// procCwds reads the working directory of every process from /proc. A process
-// of another user (or one that exited) has no readable cwd and is skipped; an
-// unreadable /proc is an error, since then no process can be ruled out.
-func procCwds() ([]string, error) {
-	ents, err := os.ReadDir("/proc")
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, e := range ents {
-		if _, err := strconv.Atoi(e.Name()); err != nil {
-			continue
-		}
-		if cwd, err := os.Readlink(filepath.Join("/proc", e.Name(), "cwd")); err == nil {
-			out = append(out, cwd)
-		}
-	}
-	return out, nil
 }
 
 func reapCommand() *Command {
@@ -97,7 +74,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			in.SkillCache = skills.CacheDir(c.deps().Getenv)
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
 		}
-		in.ProcessCwds = c.deps().ProcessCwds
+		in.ProcessUses = c.deps().ProcessUses
 		if cd, err := rotastate.CommonDirVia(ctx, c.deps().Git, root); err == nil {
 			if tr, ok := rotastate.TempRoot(cd); ok {
 				in.TempRoot = tr

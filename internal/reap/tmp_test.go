@@ -45,10 +45,11 @@ func tmpInput(t *testing.T, dir string, cwds []string, cwdErr error) Input {
 	g := repo(nil, nil)
 	in := input(g, nil, nil, nil)
 	in.TempRoot = dir
-	if cwds != nil || cwdErr != nil {
-		in.ProcessCwds = func() ([]string, error) { return cwds, cwdErr }
-	} else {
-		in.ProcessCwds = func() ([]string, error) { return []string{}, nil }
+	in.ProcessUses = func() ([]ProcUse, error) {
+		if cwdErr != nil {
+			return nil, cwdErr
+		}
+		return []ProcUse{{PID: 42, Paths: cwds}}, nil
 	}
 	return in
 }
@@ -88,6 +89,7 @@ func TestTmpHeld(t *testing.T) {
 		{name: "process cwd under it", age: 5 * time.Hour, cwds: func(d string) []string { return []string{filepath.Join(d, "run-a", "sub")} }, want: "process"},
 		{name: "process cwd is it", age: 5 * time.Hour, cwds: func(d string) []string { return []string{filepath.Join(d, "run-a")} }, want: "process"},
 		{name: "sibling prefix is not under it", age: 5 * time.Hour, cwds: func(d string) []string { return []string{filepath.Join(d, "run-ab")} }, want: ""},
+		{name: "process HOME or open file under it", age: 5 * time.Hour, cwds: func(d string) []string { return []string{"/elsewhere", filepath.Join(d, "run-a", "home")} }, want: "live process 42 uses"},
 		{name: "process table unreadable", age: 5 * time.Hour, err: errors.New("no /proc"), want: "cannot prove no process uses it"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,10 +124,10 @@ func TestTmpHeld(t *testing.T) {
 	}
 }
 
-func TestTmpNilProcessCwdsHolds(t *testing.T) {
+func TestTmpNilProcessUsesHolds(t *testing.T) {
 	dir := tmpRoot(t, map[string]time.Duration{"run-a": 5 * time.Hour})
 	in := tmpInput(t, dir, nil, nil)
-	in.ProcessCwds = nil
+	in.ProcessUses = nil
 	res := find(t, in, KindTmp)
 	if len(res.Candidates) != 1 || !strings.Contains(res.Candidates[0].Held, "cannot prove no process uses it") {
 		t.Fatalf("candidates = %v", ids(res.Candidates))
@@ -192,10 +194,21 @@ func TestTmpSymlinkEntryNotFollowed(t *testing.T) {
 	if err := os.Symlink(target, filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
 	}
+	// A just-made link is young; drop the age hold so removal really runs.
+	old := tmpMinAge
+	tmpMinAge = -time.Hour
+	t.Cleanup(func() { tmpMinAge = old })
 	in := tmpInput(t, dir, nil, nil)
 	res := find(t, in, KindTmp)
-	// The link itself is young (just made), so it is held; its target stays either way.
-	Apply(bg, in, res.Candidates)
+	if got := ids(res.Candidates); len(got) != 1 || got[0] != "tmp:link" || res.Candidates[0].Held != "" {
+		t.Fatalf("candidates = %+v, want the link free to remove", res.Candidates)
+	}
+	if applied := Apply(bg, in, res.Candidates); len(applied.Reaped) != 1 {
+		t.Fatalf("link not reaped: %+v", applied)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "link")); !os.IsNotExist(err) {
+		t.Errorf("link survived removal: %v", err)
+	}
 	if _, err := os.Lstat(filepath.Join(target, "keep")); err != nil {
 		t.Errorf("symlink target contents removed: %v", err)
 	}
