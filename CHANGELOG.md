@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.34.1 — 2026-11-13
+
+Safer smoke runs, real read errors, and steadier doctor and init.
+
+### Fixed
+
+- **Smoke runs keep out of the real repo's git identity.** A shim refuses any `git config user.*` write aimed outside the run's scratch root, `-C` targets included. A static scan flags `-C "$PWD"` and `-C .` identity writes, and the runner fails the run if the real repo's local `user.*` config changes.
+- **Real read errors.** `rota milestone show`, `rota spike show` and file-backed design and plan reads now report a permission error or a directory in the way instead of "not found". Such a failure exits 70 where it used to exit 3.
+- **`rota doctor` port check** bounds each `ss`/`lsof` call to 20 seconds and stops on Ctrl-C.
+- **`rota init` and CRLF.** Lines added under an existing rota header in a CRLF `.gitignore` keep CRLF endings.
+
+### Changed
+
+- **`rota reap --kind process` is gone.** The kind never matched anything. Passing it exits 2 and lists the valid kinds, and `--json` output no longer carries it.
+- **`.gitignore` handling.** `rota doctor` ignores CR and treats `.worktrees` spellings alike when it lists missing lines. `rota init` no longer starts an empty `.gitignore` with a blank line, and adds a missing `.worktrees/` under the existing worktrees header.
+- **Symlinks.** `rota doctor`'s port check resolves symlinks when it decides whether a listener's working directory sits inside a worktree.
+
+### Known issue
+
+- Migrating a legacy project registry writes the new file with mode 0644, even when the old one was 0600 (#3267). If yours was private, run `chmod 600 "${XDG_STATE_HOME:-$HOME/.local/state}/rota/projects.json"`.
+- `rota debug session rm` still reports "not found" when the stat or remove fails for another reason, such as a permission error.
+
+### Internal
+
+- Shared `fsio` helpers for moves, appends and the machine test lock, one owner for heading matching (`section.HeadingRe`), backlog lookups through helpers, and one plan-slice numbering rule for both stores.
+- Contract docs are restamped and round 57 learnings are folded in.
+
+### Stats
+
+19 commits, 91 files changed, +1553 −1232 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.34.0...v0.34.1
+
 ## v0.34.0 — 2026-11-12
 
 ### New
