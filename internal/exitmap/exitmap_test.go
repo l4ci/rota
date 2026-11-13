@@ -1,6 +1,7 @@
 package exitmap
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -353,5 +354,15 @@ func TestTranslateKeepsTheCause(t *testing.T) {
 	// Nothing is found that the original did not hold.
 	if errors.Is(out, backlog.ErrInvalid) {
 		t.Error("errors.Is matched a sentinel the error never wrapped")
+	}
+}
+
+// A tracker call canceled by a signal is an interruption (130), not exit 70 (#3159).
+func TestTranslateCanceledTrackerCallIsInterrupted(t *testing.T) {
+	te := &tracker.Error{Kind: tracker.KindInternal, Message: "gh: context canceled", Cause: context.Canceled}
+	_, out := Translate(te, Options{Classes: Tracker})
+	var e *exitcode.Error
+	if !errors.As(out, &e) || e.Exit != exitcode.ExitInterrupted {
+		t.Fatalf("got %v, want exit %d", out, exitcode.ExitInterrupted)
 	}
 }

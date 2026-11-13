@@ -396,7 +396,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	it, err := be.Get(o.ID)
 	if err != nil {
-		return res, err
+		return res, readStage("read-issue", err)
 	}
 	if it.Closed {
 		return res, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, o.ID)
@@ -453,7 +453,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	run, stop, err := e.planAssign(ctx, root, be, o, it, bo, tier, reason, &res)
 	if err != nil || stop {
-		return res, err
+		return res, readStage("plan", err)
 	}
 	// The marks and the dispatch run as compensating steps (saga.go): a
 	// failure before dispatch undoes the claim and state; the dispatch itself

@@ -73,9 +73,15 @@ type Error struct {
 	// that is not installed, as opposed to one that is unauthenticated or
 	// timed out. Read it with IsCLIMissing.
 	CLIMissing bool
+	// Cause is the error behind a KindInternal failure that came from the
+	// caller's context (a signal), so errors.Is(err, context.Canceled) holds.
+	Cause    error
+	timedOut bool // a per-attempt timeout, which a read retries once
 }
 
 func (e *Error) Error() string { return e.Message }
+
+func (e *Error) Unwrap() error { return e.Cause }
 
 // Unavailable is a KindUnavailable error (exit code 3) with a formatted message.
 func Unavailable(format string, a ...any) *Error {
@@ -105,6 +111,8 @@ func internal(format string, a ...any) *Error {
 // glab "404 Not Found". reRepoMissing is the same wording about the
 // repository or project itself, which is a setup problem, not a missing
 // object (gh "Could not resolve to a Repository", glab "404 Project Not Found").
+var reCtxFail = regexp.MustCompile(`(?i)context (canceled|deadline exceeded)`)
+
 var (
 	reNotFound    = regexp.MustCompile(`(?i)not found|could not resolve|404|no pull requests found`)
 	reRepoMissing = regexp.MustCompile(`(?i)project not found|repository not found|could not resolve to a repository`)

@@ -356,18 +356,32 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		case err == nil:
 			return Result{Stdout: out, Stderr: errb, ExitCode: code}, nil
 		case ctx.Err() != nil:
-			return Result{}, internal("%s: %v", cli, ctx.Err())
+			e := internal("%s: %v", cli, ctx.Err())
+			e.Cause = ctx.Err() // a signal: the dispatcher answers 130, not 70
+			return Result{}, e
 		case actx.Err() != nil:
-			return Result{}, Unavailable("%s timed out after %s", cli, c.timeout())
+			e := Unavailable("%s timed out after %s", cli, c.timeout())
+			e.timedOut = true
+			return Result{}, e
 		case errors.Is(err, exec.ErrNotFound):
 			return Result{}, cliMissing(cli)
 		}
 		return Result{}, internal("cannot run %s: %v", cli, err)
 	}
 
+	// A read that timed out or died on gh's own context error runs once more
+	// (#3159). A write does not: it may have landed.
+	retryRead := isRead(args)
 	r, err := attempt()
+	var te *Error
+	if retryRead && ctx.Err() == nil && ((errors.As(err, &te) && te.timedOut) || (err == nil && ctxFailure(r))) {
+		r, err = attempt()
+	}
 	if err != nil {
 		return Result{}, err
+	}
+	if retryRead && ctxFailure(r) {
+		return Result{}, Unavailable("%s failed twice: %s", cli, strings.TrimSpace(string(r.Stderr)))
 	}
 	for try := 1; try <= 2 && r.ExitCode != 0; try++ {
 		if reSecondary.Match(r.Stderr) {
@@ -399,6 +413,11 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		}
 	}
 	return r, nil
+}
+
+// ctxFailure is a gh call that exited non-zero on its own context error.
+func ctxFailure(r Result) bool {
+	return r.ExitCode != 0 && reCtxFail.Match(r.Stderr)
 }
 
 func (c *CLI) timeout() time.Duration {
