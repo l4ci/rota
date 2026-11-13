@@ -214,8 +214,10 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				pe := ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
 					Detail: ledger.Detail("merged", so.Merged)}
 				pe.Harness = kind
-				if cd, err := e.commonDir(ctx, root); err == nil {
-					worker.LedgerSessionAt(cd, e.Worker.Config(root), root, pe, pe.Detail)
+				if cd, err := e.commonDir(ctx, root); err != nil {
+					ledger.SetUnavailable(pe.Detail)
+				} else {
+					worker.LedgerSessionAt(cd, e.Worker.Config(root), root, pe, pe.Detail, func(m string) { res.Warnings = append(res.Warnings, m) })
 				}
 				e.Worker.Ledger().Note(root, pe)
 			}

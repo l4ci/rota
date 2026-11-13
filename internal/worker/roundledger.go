@@ -259,13 +259,14 @@ func LedgerSession(env Env, root string, e ledger.Entry, detail *jsonx.Object) {
 	env = env.WithDefaults()
 	cd, err := rotastate.CommonDirVia(env.Ctx, env.Git, root)
 	if err != nil {
+		ledger.SetUnavailable(detail)
 		return
 	}
-	LedgerSessionAt(cd, env.Config(root), root, e, detail)
+	LedgerSessionAt(cd, env.Config(root), root, e, detail, func(m string) { fmt.Fprintln(env.Stderr, m) })
 }
 
 // LedgerSessionAt is LedgerSession with the git common dir and project config already read.
-func LedgerSessionAt(cd string, cfg any, root string, e ledger.Entry, detail *jsonx.Object) {
+func LedgerSessionAt(cd string, cfg any, root string, e ledger.Entry, detail *jsonx.Object, warn func(string)) {
 	var since time.Time
 	es, _ := ledger.Load(root)
 	if a := ledger.LatestAssign(es, ledger.AssignQuery{Issue: e.Issue, Slot: e.Slot}); a != nil {
@@ -275,7 +276,7 @@ func LedgerSessionAt(cd string, cfg any, root string, e ledger.Entry, detail *js
 	if on, err := config.Bool(cfg, config.RoundCopyTranscriptsKey); err == nil && on {
 		copyDir = filepath.Join(rotastate.Dir(cd), "transcripts")
 	}
-	d := ledger.SessionDetail(cd, e.Slot, e.Harness, since, copyDir)
+	d := ledger.SessionDetail(cd, e.Slot, e.Harness, since, copyDir, warn)
 	for _, k := range d.Keys() {
 		v, _ := d.Get(k)
 		detail.Set(k, v)

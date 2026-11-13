@@ -112,13 +112,11 @@ func mustGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
 // none. Whatever cannot be read says "unavailable". The transcript is copied
 // into copyDir only when it is non-empty (the opt-in config key); the path is
 // recorded either way.
-func SessionDetail(commonDir, slot, kind string, since time.Time, copyDir string) *jsonx.Object {
+func SessionDetail(commonDir, slot, kind string, since time.Time, copyDir string, warn func(string)) *jsonx.Object {
 	d := jsonx.NewObject()
 	s, ok := LoadSession(commonDir, slot)
 	if !ok || s.UpdatedAt.Before(since) {
-		d.Set("session", Unavailable)
-		d.Set("transcript", Unavailable)
-		d.Set("tokens", Unavailable)
+		SetUnavailable(d)
 		return d
 	}
 	d.Set("session", s.ID)
@@ -137,7 +135,13 @@ func SessionDetail(commonDir, slot, kind string, since time.Time, copyDir string
 		d.Set("subagents", l)
 	}
 	if copyDir != "" && s.Transcript != "" {
-		if cp, err := copyTranscript(s, copyDir); err == nil {
+		cp, err := copyTranscript(s, copyDir)
+		if err != nil {
+			d.Set("transcriptCopy", "failed")
+			if warn != nil {
+				warn(fmt.Sprintf("rota: transcript of session %s not copied: %v", s.ID, err))
+			}
+		} else {
 			d.Set("transcriptCopy", cp)
 		}
 	}
@@ -159,9 +163,17 @@ func copyTranscript(s Session, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	// A transcript holds the whole conversation: owner-only.
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	dst := filepath.Join(dir, s.ID+".jsonl")
-	return dst, fsio.WriteFileAtomic(dst, b)
+	return dst, fsio.WriteFileAtomicMode(dst, b, 0o600)
+}
+
+// SetUnavailable marks every session key of detail unavailable.
+func SetUnavailable(detail *jsonx.Object) {
+	for _, k := range []string{"session", "transcript", "tokens"} {
+		detail.Set(k, Unavailable)
+	}
 }

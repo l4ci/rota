@@ -59,22 +59,18 @@ func eachLine(path string, fn func([]byte)) error {
 
 // claudeFileUsage sums the usage of a Claude transcript. A streamed message
 // is written several times under one id, so each id counts once.
-func claudeFileUsage(path string) (Tokens, error) {
+func claudeFileUsage(path string) (Tokens, bool, error) {
 	var t Tokens
+	found := false
 	seen := map[string]bool{}
 	err := eachLine(path, func(line []byte) {
 		var l struct {
 			Message struct {
-				ID    string `json:"id"`
-				Usage *struct {
-					In  int64 `json:"input_tokens"`
-					Out int64 `json:"output_tokens"`
-					CR  int64 `json:"cache_read_input_tokens"`
-					CW  int64 `json:"cache_creation_input_tokens"`
-				} `json:"usage"`
+				ID    string    `json:"id"`
+				Usage *rawUsage `json:"usage"`
 			} `json:"message"`
 		}
-		if json.Unmarshal(line, &l) != nil || l.Message.Usage == nil {
+		if json.Unmarshal(line, &l) != nil || l.Message.Usage == nil || !l.Message.Usage.counted() {
 			return
 		}
 		if id := l.Message.ID; id != "" {
@@ -83,23 +79,47 @@ func claudeFileUsage(path string) (Tokens, error) {
 			}
 			seen[id] = true
 		}
-		u := l.Message.Usage
-		t.add(Tokens{Input: u.In, Output: u.Out, CacheRead: u.CR, CacheWrite: u.CW})
+		t.add(l.Message.Usage.tokens())
+		found = true
 	})
-	return t, err
+	return t, found, err
+}
+
+// rawUsage is a usage object as a transcript writes it. A field is a pointer
+// so an object with no counts reads as unusable, not as a measured zero.
+type rawUsage struct {
+	In  *int64 `json:"input_tokens"`
+	Out *int64 `json:"output_tokens"`
+	CR  *int64 `json:"cache_read_input_tokens"`
+	CW  *int64 `json:"cache_creation_input_tokens"`
+}
+
+func (u rawUsage) counted() bool { return u.In != nil || u.Out != nil || u.CR != nil || u.CW != nil }
+
+func (u rawUsage) tokens() Tokens {
+	n := func(p *int64) int64 {
+		if p == nil {
+			return 0
+		}
+		return *p
+	}
+	return Tokens{Input: n(u.In), Output: n(u.Out), CacheRead: n(u.CR), CacheWrite: n(u.CW)}
 }
 
 // ClaudeUsage is the token total of a Claude session transcript and of the
 // subagent transcripts beside it (<transcript minus .jsonl>/subagents/agent-*.jsonl),
 // with the subagent paths. A transcript that cannot be read is an error.
 func ClaudeUsage(path string) (Tokens, []string, error) {
-	total, err := claudeFileUsage(path)
+	total, found, err := claudeFileUsage(path)
 	if err != nil {
 		return Tokens{}, nil, err
 	}
+	if !found {
+		return Tokens{}, nil, errors.New("no usage in " + path)
+	}
 	subs, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents", "agent-*.jsonl"))
 	for _, s := range subs {
-		t, err := claudeFileUsage(s)
+		t, _, err := claudeFileUsage(s)
 		if err != nil {
 			return Tokens{}, nil, err
 		}
@@ -118,26 +138,30 @@ func CodexUsage(path string) (Tokens, error) {
 			Payload struct {
 				Type string `json:"type"`
 				Info *struct {
-					Total struct {
-						In  int64 `json:"input_tokens"`
-						CR  int64 `json:"cached_input_tokens"`
-						CW  int64 `json:"cache_write_input_tokens"`
-						Out int64 `json:"output_tokens"`
+					Total *struct {
+						In  *int64 `json:"input_tokens"`
+						CR  *int64 `json:"cached_input_tokens"`
+						CW  *int64 `json:"cache_write_input_tokens"`
+						Out *int64 `json:"output_tokens"`
 					} `json:"total_token_usage"`
 				} `json:"info"`
 			} `json:"payload"`
 		}
-		if json.Unmarshal(line, &l) != nil || l.Payload.Type != "token_count" || l.Payload.Info == nil {
+		if json.Unmarshal(line, &l) != nil || l.Payload.Type != "token_count" || l.Payload.Info == nil || l.Payload.Info.Total == nil {
 			return
 		}
-		u := l.Payload.Info.Total
-		t, found = Tokens{Input: u.In, Output: u.Out, CacheRead: u.CR, CacheWrite: u.CW}, true
+		// An event with no counts is no measurement: it must not replace an earlier total.
+		u := rawUsage{In: l.Payload.Info.Total.In, Out: l.Payload.Info.Total.Out, CR: l.Payload.Info.Total.CR, CW: l.Payload.Info.Total.CW}
+		if !u.counted() {
+			return
+		}
+		t, found = u.tokens(), true
 	})
 	if err != nil {
 		return Tokens{}, err
 	}
 	if !found {
-		return Tokens{}, errors.New("no token_count event in " + path)
+		return Tokens{}, errors.New("no usable token_count event in " + path)
 	}
 	return t, nil
 }

@@ -79,3 +79,38 @@ func TestTranscriptUsageRefusesAKindWithoutAReader(t *testing.T) {
 		t.Fatal("want an error")
 	}
 }
+
+// Usage that cannot be read is unknown, not a measured zero.
+func TestClaudeUsageWithoutUsableUsageIsAnError(t *testing.T) {
+	for name, lines := range map[string][]string{
+		"no usage at all":      {`{"type":"user","message":{"role":"user"}}`},
+		"usage without counts": {`{"type":"assistant","message":{"id":"m1","usage":{}}}`},
+		"null counts":          {`{"type":"assistant","message":{"id":"m1","usage":{"input_tokens":null}}}`},
+	} {
+		p := filepath.Join(t.TempDir(), "s.jsonl")
+		writeLines(t, p, lines...)
+		if tok, _, err := ClaudeUsage(p); err == nil {
+			t.Errorf("%s: got %+v, want an error", name, tok)
+		}
+	}
+}
+
+func TestCodexUsageEmptyEventDoesNotOverwriteAValidTotal(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "rollout.jsonl")
+	writeLines(t, p,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":50,"output_tokens":9}}}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{}}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{}}}}`)
+	got, err := CodexUsage(p)
+	if err != nil || got != (Tokens{Input: 50, Output: 9}) {
+		t.Errorf("got %+v %v, want the earlier total", got, err)
+	}
+}
+
+func TestCodexUsageOnlyEmptyEventsIsAnError(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "rollout.jsonl")
+	writeLines(t, p, `{"type":"event_msg","payload":{"type":"token_count","info":{}}}`)
+	if tok, err := CodexUsage(p); err == nil {
+		t.Errorf("got %+v, want an error", tok)
+	}
+}

@@ -603,8 +603,17 @@ func TestStatuslineDumpResolvesWorkspaceCurrentDir(t *testing.T) {
 // A worker's harness reports its session id and transcript path through the
 // hooks it already runs: the Claude statusline and the Codex prompt check.
 func TestSlotSessionIsReportedByStatuslineAndPromptCheck(t *testing.T) {
-	t.Setenv("ROTA_SLOT", "")
 	dir := orchProject(t, false)
+	slot := "" // the ROTA_SLOT the hooks see, stubbed through Deps.Getenv
+	pinDir(t, dir, func(d *Deps) {
+		prev := d.Getenv
+		d.Getenv = func(k string) string {
+			if k == "ROTA_SLOT" {
+				return slot
+			}
+			return prev(k)
+		}
+	})
 	cd, err := rotastatetest.CommonDir(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -617,7 +626,7 @@ func TestSlotSessionIsReportedByStatuslineAndPromptCheck(t *testing.T) {
 	if _, ok := ledger.LoadSession(cd, "dana"); ok {
 		t.Fatal("a session without ROTA_SLOT must not be recorded")
 	}
-	t.Setenv("ROTA_SLOT", "dana")
+	slot = "dana"
 	if code, _, e := rotaStdin(t, dir, in, "statusline", "dump"); code != 0 {
 		t.Fatalf("dump %d %s", code, e)
 	}
