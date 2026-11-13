@@ -1137,7 +1137,7 @@ func (l *Linear) PutClaim(ctx context.Context, key IssueKey, id string) error {
 	return l.claimStore().PutClaim(ctx, key, id)
 }
 
-// DropClaim deletes every claim comment of id; none is a no-op.
-func (l *Linear) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	return l.claimStore().DropClaim(ctx, key, id)
+// DropClaim records the release and deletes every claim comment of id; none is a no-op.
+func (l *Linear) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
+	return l.claimStore().DropClaim(ctx, key, id, byHand)
 }

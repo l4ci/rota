@@ -31,10 +31,10 @@ func TestItsaplanClaimsArePlainComments(t *testing.T) {
 			t.Errorf("a claim carries a marker: %s", raw)
 		}
 	}
-	if err := cs.DropClaim(ctx, k, "nia@2"); err != nil {
+	if err := cs.DropClaim(ctx, k, "nia@2", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := cs.DropClaim(ctx, k, "nobody"); err != nil {
+	if err := cs.DropClaim(ctx, k, "nobody", false); err != nil {
 		t.Fatalf("dropping an absent claim: %v", err)
 	}
 	if got, _ := cs.Claims(ctx, k); !slices.Equal(got, []string{"ben@1", "a_b*c"}) {
@@ -55,7 +55,7 @@ func TestItsaplanClaimBeyondTheFirstFeedPage(t *testing.T) {
 	if n := len(feedRequests(s)); n != 3 {
 		t.Errorf("%d feed pages read, want 3", n)
 	}
-	if err := it.DropClaim(ctx, k, "ben@1"); err != nil {
+	if err := it.DropClaim(ctx, k, "ben@1", false); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := it.Claims(ctx, k); !slices.Equal(got, []string{"nia@2"}) {

@@ -54,17 +54,17 @@ func TestJiraClaimsArePlainComments(t *testing.T) {
 			t.Errorf("a claim carries a marker: %s", raw)
 		}
 	}
-	if err := cs.DropClaim(ctx, key, "nia@2"); err != nil {
+	if err := cs.DropClaim(ctx, key, "nia@2", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := cs.DropClaim(ctx, key, "nobody"); err != nil {
+	if err := cs.DropClaim(ctx, key, "nobody", false); err != nil {
 		t.Fatalf("dropping an absent claim: %v", err)
 	}
 	if got, _ := cs.Claims(ctx, key); !slices.Equal(got, []string{"ben@1", "a_b*c"}) {
 		t.Fatalf("after release: %v", got)
 	}
-	if n := len(s.CommentBodies(string(key))); n != 3 {
-		t.Fatalf("release left %d comments, want 3 (two claims and the person's)", n)
+	if n := len(s.CommentBodies(string(key))); n != 4 {
+		t.Fatalf("release left %d comments, want 4 (two claims, a release and the person's)", n)
 	}
 }
 

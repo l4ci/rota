@@ -71,19 +71,19 @@ func TestClaimCommentsDrop(t *testing.T) {
 	}
 
 	f := mk()
-	if err := f.store().DropClaim(ctx, "K-1", "a@1"); err != nil || !slices.Equal(f.deleted, []string{"1", "2"}) {
+	if err := f.store().DropClaim(ctx, "K-1", "a@1", false); err != nil || !slices.Equal(f.deleted, []string{"1", "2"}) {
 		t.Fatalf("DropClaim a@1 deleted %v, %v; want [1 2]", f.deleted, err)
 	}
 
 	f = mk()
-	if err := f.store().DropClaim(ctx, "K-1", "nobody"); err != nil || len(f.deleted) != 0 {
+	if err := f.store().DropClaim(ctx, "K-1", "nobody", false); err != nil || len(f.deleted) != 0 {
 		t.Fatalf("dropping an absent claim deleted %v, %v", f.deleted, err)
 	}
 
 	// a comment already gone is not an error and the rest still go.
 	f = mk()
 	f.delErr = map[string]error{"1": &Error{Kind: KindNotFound}}
-	if err := f.store().DropClaim(ctx, "K-1", "a@1"); err != nil || !slices.Equal(f.deleted, []string{"1", "2"}) {
+	if err := f.store().DropClaim(ctx, "K-1", "a@1", false); err != nil || !slices.Equal(f.deleted, []string{"1", "2"}) {
 		t.Fatalf("not-found on delete: deleted %v, %v; want [1 2], nil", f.deleted, err)
 	}
 
@@ -91,7 +91,7 @@ func TestClaimCommentsDrop(t *testing.T) {
 	f = mk()
 	boom := errors.New("boom")
 	f.delErr = map[string]error{"1": boom}
-	if err := f.store().DropClaim(ctx, "K-1", "a@1"); !errors.Is(err, boom) || !slices.Equal(f.deleted, []string{"1"}) {
+	if err := f.store().DropClaim(ctx, "K-1", "a@1", false); !errors.Is(err, boom) || !slices.Equal(f.deleted, []string{"1"}) {
 		t.Fatalf("delete failure: deleted %v, %v; want [1], boom", f.deleted, err)
 	}
 }

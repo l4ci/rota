@@ -339,15 +339,16 @@ type IssueTracker interface {
 
 // ClaimStore is an issue tracker that keeps claims out of comment markers:
 // one record per claimer, read back earliest first. A tracker that implements
-// it (Jira and Linear, as plain `Claimed by` comments) takes claims this way
-// instead of as claim and release marker comments.
+// it (Jira, Linear and Itsaplan, as plain `Claimed by` comments) takes claims
+// this way. Releases retain markers so deliberate releases survive reconcile.
 type ClaimStore interface {
 	// Claims lists the claim ids held on key, earliest first.
 	Claims(ctx context.Context, key IssueKey) ([]string, error)
 	// PutClaim records id's claim on key; a claim already held keeps its place.
 	PutClaim(ctx context.Context, key IssueKey, id string) error
-	// DropClaim removes id's claim; one not held is a no-op.
-	DropClaim(ctx context.Context, key IssueKey, id string) error
+	// DropClaim removes id's claim and records its release, marked deliberate
+	// when byHand is true; one not held is a no-op.
+	DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error
 }
 
 // MergeCloser is an issue tracker a merged PR does not close by itself

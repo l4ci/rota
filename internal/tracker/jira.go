@@ -939,7 +939,7 @@ func (j *Jira) PutClaim(ctx context.Context, key IssueKey, id string) error {
 	return j.claimStore().PutClaim(ctx, key, id)
 }
 
-// DropClaim deletes every claim comment of id; none is a no-op.
-func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	return j.claimStore().DropClaim(ctx, key, id)
+// DropClaim records the release and deletes every claim comment of id; none is a no-op.
+func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
+	return j.claimStore().DropClaim(ctx, key, id, byHand)
 }
