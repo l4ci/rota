@@ -598,6 +598,10 @@ type TransferOpts struct {
 	// worker) or ledger.CapFresh (to a fresh context at round.freshAt, below
 	// the cap). "" is a transfer that is not a cap decision.
 	CapReason string
+	// ResumeDispatch is the receipt's word that an earlier call of this transfer
+	// failed at the dispatch stage: a receiver already bound to the issue resumes
+	// whatever state a poll since marked it in.
+	ResumeDispatch bool
 }
 
 // Transferred is what Transfer did.
@@ -812,7 +816,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		}
 	}
 	sender, receiver := run.sender, run.receiver
-	run.resuming = receiver != nil && sender == nil && worker.IsIdle(receiver.State()) &&
+	run.resuming = receiver != nil && sender == nil && (worker.IsIdle(receiver.State()) || o.ResumeDispatch) &&
 		receiver.ClaimID() == o.To+"@"+strconv.Itoa(rnd)
 	resuming := run.resuming
 	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
