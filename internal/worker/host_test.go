@@ -20,22 +20,24 @@ import (
 
 // fakeHost is a scripted host.Host.
 type fakeHost struct {
-	name       host.Kind
-	inSession  bool
-	where      string
-	requireErr error
-	spawnErr   error
-	spawnTab   string // the tab a failing Spawn leaves open
-	killErr    error
-	sendErr    error
-	status     map[string]string
-	explain    map[string]string   // per slot; "" is a failing explain
-	panes      map[string][]string // captures returned in order, per slot
-	calls      []string
-	sent       string
-	spawnOpts  host.SpawnOpts
-	onSend     func() // runs inside Send, before it returns
-	receipts   bool   // advertise the DeliveryReconciler side (Core)
+	name        host.Kind
+	inSession   bool
+	where       string
+	requireErr  error
+	spawnErr    error
+	spawnTab    string // the tab a failing Spawn leaves open
+	killErr     error
+	sendErr     error
+	status      map[string]string
+	statusPolls int
+	statusSeq   map[string][]string // statuses returned in order, per slot, before status
+	explain     map[string]string   // per slot; "" is a failing explain
+	panes       map[string][]string // captures returned in order, per slot
+	calls       []string
+	sent        string
+	spawnOpts   host.SpawnOpts
+	onSend      func() // runs inside Send, before it returns
+	receipts    bool   // advertise the DeliveryReconciler side (Core)
 }
 
 // unconfirmed is a DeliveryReconciler that never confirms anything.
@@ -82,7 +84,14 @@ func (f *fakeHost) Capture(_ context.Context, slot, handle string, _ int) string
 	f.panes[slot] = q[1:]
 	return q[0]
 }
-func (f *fakeHost) Status(_ context.Context, slot, handle string) string { return f.status[slot] }
+func (f *fakeHost) Status(_ context.Context, slot, handle string) string {
+	f.statusPolls++
+	if q := f.statusSeq[slot]; len(q) > 0 {
+		f.statusSeq[slot] = q[1:]
+		return q[0]
+	}
+	return f.status[slot]
+}
 func (f *fakeHost) Kill(_ context.Context, slot, handle string) error {
 	f.calls = append(f.calls, "kill "+slot+" "+handle)
 	return f.killErr

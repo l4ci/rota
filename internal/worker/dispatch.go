@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -518,6 +519,11 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	syncLabel(ctx, h, root, o.Slot)
 	labelWorkspace(ctx, h, root)
 
+	// A harness switch spawns a session whose input can come up after the host
+	// reports it: hold the brief until it accepts input (#3165).
+	if err := e.awaitInput(ctx, t, o.Slot); err != nil {
+		return res, err
+	}
 	out := signBrief(prompt, signKey, roundOf(root), 0, "", string(t.brief))
 	// A task dispatch starts a fresh session and has nothing pending.
 	sendErr := e.sendTracked(ctx, root, o, t, out, false)
@@ -532,6 +538,40 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 		})
 	}
 	return sendFailure(h, o.Slot, res, sendErr)
+}
+
+// bootingStatus is a native host state a just-spawned session reports while
+// its input is not yet live. "idle" and "blocked" (a dialog the send reports)
+// are ready, and so is "" (a host with no native state: its Spawn already
+// waited). "unknown" is the host's "cannot classify" state: it only counts as
+// booting after a real booting state was seen (see awaitInput).
+func bootingStatus(s string) bool {
+	return s == "working" || s == "starting"
+}
+
+// awaitInput holds a fresh session's brief until the host stops reporting it
+// as booting, polling once a second for at most the boot timeout. A status the
+// host cannot classify ("unknown") never blocks on its own: a session that
+// never reported working or starting, or whose pane looks booted, gets its
+// brief. It fails the dispatch (exit 6, retryable) when the session is still
+// booting at the timeout, with nothing sent, so a replay delivers the brief.
+func (e Env) awaitInput(ctx context.Context, t *dispatchTarget, slot string) error {
+	sawBooting := false
+	for i := 0; ; i++ {
+		st := t.h.Status(ctx, slot, t.handle)
+		switch {
+		case bootingStatus(st):
+			sawBooting = true
+		case st == "unknown" && sawBooting && !host.PaneBooted(t.h.Capture(ctx, slot, t.handle, 40)):
+			// A flicker between booting states: keep waiting.
+		default:
+			return nil
+		}
+		if i >= t.timeout {
+			return fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' session did not accept input within %ds — inspect it, then replay with the same --request-id", slot, t.timeout))
+		}
+		e.Sleep(time.Second)
+	}
 }
 
 // DispatchRelay sends a relay into the slot's RUNNING session and logs it

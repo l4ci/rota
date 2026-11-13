@@ -56,6 +56,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
 			Issue: id, To: *to, Note: text, Decisions: decisions, AcceptOverlap: *accept,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model, CapReason: *capReason,
+			ResumeDispatch: invocationReceipt(c.Context()).ResumedFrom == "dispatch",
 		})
 		if err != nil {
 			r, ferr := moveFailure(err, res.Changed)
