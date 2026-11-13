@@ -240,6 +240,10 @@ type Result struct {
 	// Deferred says why a merge or assign yielded to running or queued landing
 	// work. The next tick retries; the reason names the holder when known.
 	Deferred string
+	// Holds are due PRs the tick did not start, one line each with the reason:
+	// the autopilot says why it holds instead of leaving the train nudge
+	// unanswered. Not attention items: they never wake the watch.
+	Holds    []Item
 	NeedsYou []Item
 	New      []Item
 	// Held and Reported are the state the next tick starts from.
@@ -422,6 +426,9 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		return nil
 	}
 	if e.Role == roundcfg.RoleSupport {
+		for _, t := range targets {
+			r.hold(t, "support role: the main orchestrator lands it")
+		}
 		return nil
 	}
 	if e.humanMerge() {
@@ -469,6 +476,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 		if e.TrainFill.Enabled() || len(run) < e.cap() {
 			run = append(run, t)
+		} else {
+			r.hold(t, capHold(e.cap()))
 		}
 	}
 	if len(run) == 0 {
@@ -477,6 +486,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	for _, m := range e.mergeAll(ctx, r, run) {
 		switch {
 		case m.Skip:
+			r.hold(m.Target, strutil.FirstNonEmpty(m.Detail, "did not land through no fault of its own")+"; retried next tick")
 		case m.Verdict == worker.GateRunning:
 			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
@@ -498,6 +508,15 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 	}
 	return nil
+}
+
+func capHold(n int) string {
+	return fmt.Sprintf("over round.autopilotCap (%d) merges this tick; next tick", n)
+}
+
+// hold records why a due target was not started this tick.
+func (r *Result) hold(target, why string) {
+	r.Holds = append(r.Holds, Item{Kind: "train-hold", Target: target, Why: why})
 }
 
 const heldHeadHint = "; held at PR head; push a new head to retry"
@@ -545,7 +564,7 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 	}
 	var out []Merged
 	remaining := e.cap()
-	for _, b := range order {
+	for i, b := range order {
 		ts := groups[b]
 		if e.TrainFill.Enabled() {
 			var filling []string
@@ -554,6 +573,7 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 					out = append(out, e.land(ctx, r, []string{target}, b)...)
 					remaining--
 					if remaining == 0 {
+						e.holdUnreached(r, groups, order[i+1:], ts[slices.Index(ts, target)+1:])
 						return out
 					}
 				} else {
@@ -590,10 +610,24 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 		out = append(out, e.land(ctx, r, ts, b)...)
 		remaining -= len(ts)
 		if remaining == 0 {
+			e.holdUnreached(r, groups, order[i+1:], nil)
 			break
 		}
 	}
 	return out
+}
+
+// holdUnreached names the cap as the reason for the targets the merge step ran
+// out of room before: the rest of the current group, then every later base.
+func (e Env) holdUnreached(r *Result, groups map[string][]string, bases, rest []string) {
+	for _, t := range rest {
+		r.hold(t, capHold(e.cap()))
+	}
+	for _, b := range bases {
+		for _, t := range groups[b] {
+			r.hold(t, capHold(e.cap()))
+		}
+	}
 }
 
 func (e Env) gate(ctx context.Context, target, base string) Merged {
@@ -634,13 +668,13 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 		case slices.Contains(tr.Landed, t):
 			m.Landed, m.Detail = true, "train into "+base
 		case v == "base-moved":
-			m.Skip = true // nothing landed; the base moved under the train
+			m.Skip, m.Detail = true, "base moved under the train, nothing landed"
 		case tr.Unreproduced:
-			m.Skip = true // a flake blames nobody: the next tick retrains
+			m.Skip, m.Detail = true, "train red did not reproduce (flake); will retrain"
 		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
-			m.Skip = true // another member broke the train: retried without it
+			m.Skip, m.Detail = true, "train broke on "+tr.Culprit+"; retried without it"
 		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):
-			m.Skip = true // a bystander of an interaction: retried without it
+			m.Skip, m.Detail = true, "bystander of an interaction among "+strings.Join(tr.Interaction, ", ")+"; retried without it"
 		case len(tr.Interaction) > 0:
 			m.Verdict, m.Hold = v, worker.ClassifyVerdict(v).Hold
 			m.Detail = "fix on one of: " + strings.Join(tr.Interaction, ", ") + "; bounce neither"
