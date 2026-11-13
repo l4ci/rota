@@ -159,8 +159,11 @@ below. Other docs under `docs/` need no stamp.
 
 To re-stamp (on `main`, as bookkeeping after merges; the strict run lists what to fix): `git diff <sha> HEAD -- <ref>`
 for each flagged path, read the doc against that diff and fix what drifted, then
-`python3 test/check-doc-stamps.py --restamp <doc>.md…` sets those stamps to `git rev-parse HEAD`. Add a path to
-`refs:` when the doc starts describing new code.
+push the reviewed commit and fetch `origin main`.
+`python3 test/check-doc-stamps.py --restamp <doc>.md…` sets those stamps to `git rev-parse HEAD` only when
+HEAD is reachable from `origin/main`. Use `--base <branch>` to check `origin/<branch>` instead.
+A missing base or unpublished HEAD fails without writing `STAMPS`; the check uses the local remote-tracking
+ref and does not fetch. Add a path to `refs:` when the doc starts describing new code.
 
 ## Review, merge and completion
 

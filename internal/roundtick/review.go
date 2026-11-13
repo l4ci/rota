@@ -112,6 +112,10 @@ func PendingSummary(ctx context.Context, f round.ReviewForge, s *worker.Slot, v 
 	if !strings.EqualFold(info.State, "OPEN") {
 		return "", nil
 	}
+	// A FAIL recorded at a head the PR has moved past is not review input (#3162).
+	if v != nil && !verdictAtHead(v, info.HeadSHA) {
+		v = nil
+	}
 	b, err := worker.PendingReview(ctx, f, s, v, now)
 	if err != nil || b.Empty() {
 		return "", err
@@ -174,4 +178,18 @@ func RelayResultOf(nothing bool, items, bounces int, err error) RelayResult {
 		out.AtCap = true
 	}
 	return out
+}
+
+// verdictAtHead: some failing review was recorded at head. An unknown head on
+// either side keeps the verdict, so a forge that reports no head changes nothing.
+func verdictAtHead(v *worker.ReviewVerdict, head string) bool {
+	if head == "" || len(v.Shas) == 0 {
+		return true
+	}
+	for _, sha := range v.Shas {
+		if sha != "" && (strings.HasPrefix(head, sha) || strings.HasPrefix(sha, head)) {
+			return true
+		}
+	}
+	return false
 }
