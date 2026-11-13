@@ -52,6 +52,21 @@ func TestDispatchTaskSendsWhenUnknownStatusButPaneBooted(t *testing.T) {
 	}
 }
 
+// A status the host cannot classify from the start (the dry-round fake herdr)
+// never blocks the brief, even with a pane that shows no prompt.
+func TestDispatchTaskSendsWhenStatusStaysUnknownFromStart(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	h := tmuxFake()
+	h.status = map[string]string{"w1": "unknown"}
+	if _, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", BootTimeout: 3}); err != nil {
+		t.Fatalf("unknown from the start still gets its brief: %v", err)
+	}
+	if !strings.Contains(h.sent, "task") {
+		t.Fatalf("brief not delivered: %q", h.sent)
+	}
+}
+
 // A session still booting at the boot timeout fails the dispatch stage, with
 // nothing sent, so the receipt's replay delivers it later.
 func TestDispatchTaskFailsWhenSessionNeverAcceptsInput(t *testing.T) {

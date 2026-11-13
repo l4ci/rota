@@ -543,28 +543,28 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 // bootingStatus is a native host state a just-spawned session reports while
 // its input is not yet live. "idle" and "blocked" (a dialog the send reports)
 // are ready, and so is "" (a host with no native state: its Spawn already
-// waited).
+// waited). "unknown" is the host's "cannot classify" state: it only counts as
+// booting after a real booting state was seen (see awaitInput).
 func bootingStatus(s string) bool {
-	switch s {
-	case "working", "starting", "unknown":
-		return true
-	}
-	return false
+	return s == "working" || s == "starting"
 }
 
 // awaitInput holds a fresh session's brief until the host stops reporting it
-// as booting, polling once a second for at most the boot timeout. It fails the
-// dispatch (exit 6, retryable) when the session is still not ready, with
-// nothing sent, so a replay of the same call delivers the brief.
+// as booting, polling once a second for at most the boot timeout. A status the
+// host cannot classify ("unknown") never blocks on its own: a session that
+// never reported working or starting, or whose pane looks booted, gets its
+// brief. It fails the dispatch (exit 6, retryable) when the session is still
+// booting at the timeout, with nothing sent, so a replay delivers the brief.
 func (e Env) awaitInput(ctx context.Context, t *dispatchTarget, slot string) error {
+	sawBooting := false
 	for i := 0; ; i++ {
 		st := t.h.Status(ctx, slot, t.handle)
-		if !bootingStatus(st) {
-			return nil
-		}
-		// "unknown" is also herdr's standing "cannot classify" state for a
-		// booted, idle session: a pane that looks booted is ready.
-		if st == "unknown" && host.PaneBooted(t.h.Capture(ctx, slot, t.handle, 40)) {
+		switch {
+		case bootingStatus(st):
+			sawBooting = true
+		case st == "unknown" && sawBooting && !host.PaneBooted(t.h.Capture(ctx, slot, t.handle, 40)):
+			// A flicker between booting states: keep waiting.
+		default:
 			return nil
 		}
 		if i >= t.timeout {

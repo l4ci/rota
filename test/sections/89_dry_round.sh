@@ -115,11 +115,13 @@ OUT="$(dyj round candidates)"
 pass "candidates: F01 ready (criteria, dependencies, overlap)"
 
 # ── 4. assign (tier above the default needs a reason) ───────────────────────
-echo working > "$FK/herdr/status"
 rc=0; OUT="$(dyj round assign F01 --check-only --tier heavy --holder-pid "$DYHOLD")" || rc=$?
 [ "$rc" = "2" ] || fail "dry round: heavy without --tier-reason should exit 2, got $rc: $OUT"
 rc=0; OUT="$(dyj round assign F01 --tier heavy --tier-reason "dry round exercises the heavy path" --holder-pid "$DYHOLD")" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: assign exit $rc: $OUT"
+# A real session is idle until it has the brief, then works: dispatch waits on a
+# booting status, so the fake turns "working" only once assign has delivered it.
+echo working > "$FK/herdr/status"
 [ "$(jget data.agent <<<"$OUT")" = "ben" ] && [ "$(jget data.branch <<<"$OUT")" = "ben/f01-first" ] || fail "dry round: assign names ben and its branch: $OUT"
 [ "$(jget data.tier <<<"$OUT")" = "heavy" ] && [ "$(jget data.tierReason <<<"$OUT")" = "dry round exercises the heavy path" ] || fail "dry round: assign reports tier and reason: $OUT"
 [ "$(git -C "$DY/.worktrees/ben" symbolic-ref --short HEAD)" = "ben/f01-first" ] || fail "dry round: assign should cut the slot's branch"
