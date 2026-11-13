@@ -367,11 +367,15 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	}
 	if n, ok := PRRefNumber(arg); ok {
 		if q := r.QueuedPR(arg); q != nil {
-			return gateQueued(*q), nil
+			t := gateQueued(*q)
+			t.relays = dedupeRelays(append(slices.Clone(t.relays), r.LoggedRelays(q.PR)...))
+			return t, nil
 		}
 		for _, sl := range r.Slots() {
 			if m, ok := PRRefNumber(sl.PR()); ok && m == n {
-				return gateSlot(sl), nil
+				t := gateSlot(sl)
+				t.relays = dedupeRelays(append(slices.Clone(t.relays), r.LoggedRelays(sl.PR())...))
+				return t, nil
 			}
 		}
 		return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
@@ -2306,6 +2310,8 @@ func (g *gateOperation) checkProvenance() (failMsg, brokeMsg string) {
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
 	g.sectionBody = &body
+	g.target.relays = dedupeRelays(append(slices.Clone(g.target.relays),
+		LoadRegistryTolerant(g.root).taskRelays(g.target.Issue, g.branch)...))
 	relays, offered, support, err := g.supportApprovals()
 	if err != nil {
 		// Relay citations fall back to the local relay log with a skip note.
