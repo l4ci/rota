@@ -68,7 +68,7 @@ echo "do the task" > "$TMP_HD/brief.md"
 : >"$FAKE/log"
 OUT="$(hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --task T1)" \
   || fail "herdr dispatch failed: $OUT"
-grep -q "^tab create --workspace w9 --cwd $WT1 --label w1 --no-focus --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1\$" "$FAKE/log" \
+grep -q "^tab create --workspace w9 --cwd $WT1 --label w1 --no-focus --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1 --env TMPDIR=[^ ]*/.rota/tmp/slots/w1\$" "$FAKE/log" \
   || fail "tab create must adopt the slot worktree with the account env; log: $(cat "$FAKE/log")"
 grep -q '^agent start rota-w1-w9-t7 --kind claude --pane w9:p17 --timeout 60000 -- --model sonnet --dangerously-skip-permissions$' "$FAKE/log" \
   || fail "agent start must run claude in the new pane with the worker args; log: $(cat "$FAKE/log")"
