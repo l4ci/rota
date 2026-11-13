@@ -555,7 +555,13 @@ func bootingStatus(s string) bool {
 // nothing sent, so a replay of the same call delivers the brief.
 func (e Env) awaitInput(ctx context.Context, t *dispatchTarget, slot string) error {
 	for i := 0; ; i++ {
-		if !bootingStatus(t.h.Status(ctx, slot, t.handle)) {
+		st := t.h.Status(ctx, slot, t.handle)
+		if !bootingStatus(st) {
+			return nil
+		}
+		// "unknown" is also herdr's standing "cannot classify" state for a
+		// booted, idle session: a pane that looks booted is ready.
+		if st == "unknown" && host.PaneBooted(t.h.Capture(ctx, slot, t.handle, 40)) {
 			return nil
 		}
 		if i >= t.timeout {

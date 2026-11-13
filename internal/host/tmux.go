@@ -90,6 +90,11 @@ var bootPatterns = []*regexp.Regexp{
 
 func looksBooted(p string) bool { return bootReady(p, false) }
 
+// PaneBooted reports whether pane text is a booted agent session at its
+// prompt, for callers that must tell a session a host cannot classify from one
+// still starting.
+func PaneBooted(p string) bool { return looksBooted(p) }
+
 func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	handle := o.Session + ":" + o.Slot
 	launch := o.Launch

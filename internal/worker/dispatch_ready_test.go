@@ -35,6 +35,23 @@ func TestDispatchTaskWaitsForLateSessionInput(t *testing.T) {
 	}
 }
 
+// herdr reports a booted, idle session it cannot classify as "unknown" for
+// good: the brief must not wait out the boot timeout on it.
+func TestDispatchTaskSendsWhenUnknownStatusButPaneBooted(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	h := tmuxFake()
+	h.status = map[string]string{"w1": "unknown"}
+	h.panes = map[string][]string{"w1": {"? for shortcuts\n", "? for shortcuts\n", "? for shortcuts\n"}}
+	res, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", BootTimeout: 3})
+	if err != nil {
+		t.Fatalf("a booted pane with unknown status still gets its brief: %v", err)
+	}
+	if res.Handle == "" || !strings.Contains(h.sent, "task") {
+		t.Fatalf("brief not delivered: %+v sent=%q", res, h.sent)
+	}
+}
+
 // A session still booting at the boot timeout fails the dispatch stage, with
 // nothing sent, so the receipt's replay delivers it later.
 func TestDispatchTaskFailsWhenSessionNeverAcceptsInput(t *testing.T) {
