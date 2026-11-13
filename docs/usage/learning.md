@@ -83,7 +83,7 @@ an older Bash-only installation; `rota hook uninstall` removes the marked hook.
 
 Every time [`/rota-work`](running-work.md) or `/rota-review` consults a bullet and the consuming step actually uses it (not just reads past it), the bullet's hit counter increments via `rota knowledge hit`. Hits accumulate across sessions; the counter is durable.
 
-At the `learn.promoteThreshold` mark, a `provisional` bullet auto-promotes to `confirmed`. Two skip conditions: the bullet already has a pending contradiction (auto-promotion stays blocked until you resolve it), or the threshold is `0` (in which case `provisional` is bypassed entirely on insert: a config choice, not a normal mode).
+At the `learn.promoteThreshold` mark, a `provisional` bullet auto-promotes to `confirmed`. Auto-promotion is skipped only when the bullet has a pending contradiction; it stays blocked until you resolve it. The threshold is 1 or more: `config set` refuses `0`, and a `0` written by hand falls back to the default `3`.
 
 See [`learn.promoteThreshold`](configuration.md#learnpromotethreshold) for tuning.
 

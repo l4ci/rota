@@ -76,8 +76,9 @@ The percentage comes from `context_window.used_percentage`, else from `current_u
 
 The SessionStart hook fires on `startup` and `clear`.
 
-- When the new session holds the lease and the handoff exists, the hook injects the file as context and
-  moves it to `<base>.md.consumed`.
+- When the new session holds the lease and the handoff's first line is
+  `<!-- rota-handoff: orchestrator -->`, the hook injects the file as context and moves it to
+  `<base>.md.consumed`. A note without that marker is ignored.
 - A restarted orchestrator has not run `rota round start` yet, so it holds no lease. A fresh handoff
   written by the Stop hook (first line `<!-- rota-handoff: orchestrator -->`) is injected anyway. Its
   first act is `rota round start`, then it reads the handoff.
