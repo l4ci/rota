@@ -148,3 +148,20 @@ func TestSetUnavailableMarksEverySessionKey(t *testing.T) {
 		}
 	}
 }
+
+// A transcript with no usable usage still lists the subagent transcripts beside it.
+func TestSessionDetailKeepsSubagentsWhenTheMainTranscriptHasNoUsage(t *testing.T) {
+	cd, dir := t.TempDir(), t.TempDir()
+	tr := filepath.Join(dir, "sid-1.jsonl")
+	writeFile(t, tr, `{"type":"user","message":{"role":"user"}}`+"\n")
+	sub := filepath.Join(dir, "sid-1", "subagents", "agent-a.jsonl")
+	writeFile(t, sub, usageLine)
+	RecordSession(cd, Session{Slot: "dana", ID: "sid-1", Transcript: tr, UpdatedAt: sessNow})
+	d := SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), "", nil)
+	if subs, _ := d.Get("subagents"); !reflect.DeepEqual(subs, []any{sub}) {
+		t.Errorf("subagents %v, want [%s]", subs, sub)
+	}
+	if (Entry{Detail: d}).DetailStr("tokens") != Unavailable {
+		t.Errorf("tokens %v, want unavailable", d)
+	}
+}

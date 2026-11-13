@@ -108,20 +108,23 @@ func (u rawUsage) tokens() Tokens {
 
 // ClaudeUsage is the token total of a Claude session transcript and of the
 // subagent transcripts beside it (<transcript minus .jsonl>/subagents/agent-*.jsonl),
-// with the subagent paths. A transcript that cannot be read is an error.
+// with the subagent paths. A transcript that cannot be read, or holds no usage,
+// is an error; the subagent paths come back with it when they were found.
 func ClaudeUsage(path string) (Tokens, []string, error) {
 	total, found, err := claudeFileUsage(path)
 	if err != nil {
 		return Tokens{}, nil, err
 	}
-	if !found {
-		return Tokens{}, nil, errors.New("no usage in " + path)
-	}
+	// The subagent transcripts are listed whatever the usage says, so a row
+	// whose tokens read unavailable still names them.
 	subs, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents", "agent-*.jsonl"))
+	if !found {
+		return Tokens{}, subs, errors.New("no usage in " + path)
+	}
 	for _, s := range subs {
 		t, _, err := claudeFileUsage(s)
 		if err != nil {
-			return Tokens{}, nil, err
+			return Tokens{}, subs, err
 		}
 		total.add(t)
 	}
