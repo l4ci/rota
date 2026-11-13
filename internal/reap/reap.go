@@ -10,6 +10,10 @@
 //   - A running agent is never killed. A tab candidate needs proof
 //     that no agent is under it; what a host cannot prove it does not list.
 //   - A candidate holding work is listed with Held and never deleted.
+//   - A tmp candidate (a direct child of the project temp root, never its
+//     .gitignore) is held while its newest file is under an hour old, a
+//     checkout, host agent or live process works at or under it, or the process
+//     table cannot be read.
 //   - Registered slots, park/* worktrees and branches, the base branch and
 //     any branch checked out in a worktree are never candidates.
 //
@@ -45,10 +49,12 @@ const (
 	KindLease    = "lease"
 	// KindSkillCache is an extracted skill tree of another rota version.
 	KindSkillCache = "skillcache"
+	// KindTmp is an entry under the project temp root (<main checkout>/.rota/tmp).
+	KindTmp = "tmp"
 )
 
 // Kinds lists every kind, in the order candidates are found and removed.
-var Kinds = []string{KindWorktree, KindBranch, KindTab, KindLease, KindSkillCache}
+var Kinds = []string{KindWorktree, KindBranch, KindTab, KindLease, KindSkillCache, KindTmp}
 
 // Candidate is something to reap. Held, when set, says why it must not be.
 type Candidate struct {
@@ -105,6 +111,12 @@ type Input struct {
 	// SkillCache finds none.
 	SkillCache     string
 	SkillCacheKeep string
+	// TempRoot is the project temp root; each direct child but .gitignore is a
+	// candidate. Empty finds none.
+	TempRoot string
+	// ProcessCwds lists the working directory of every live process. Nil or an
+	// error holds every tmp candidate: nothing can prove no process uses it.
+	ProcessCwds func() ([]string, error)
 }
 
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
@@ -152,6 +164,7 @@ var finders = []finder{
 	{KindTab, findTabs, removeTab},
 	{KindLease, findLeases, removeLease},
 	{KindSkillCache, findSkillCache, removeSkillCache},
+	{KindTmp, findTmp, removeTmp},
 }
 
 // findLeases lists the round lease when its holder is gone. A live, foreign

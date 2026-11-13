@@ -13,6 +13,8 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/reap"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // leakAge is how old a temp dir must be before doctor calls it leaked: a run
@@ -31,10 +33,13 @@ func statDisk(dir string) *doctor.Disk {
 // doctorLeftovers names what rota left behind that would give disk back: temp
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // It only runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, now time.Time) []string {
+func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot string, now time.Time) []string {
 	var out []string
 	if n, size := leakedTempDirs(temp, now.Add(-leakAge)); n > 0 {
 		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, doctor.HumanBytes(uint64(size))))
+	}
+	if n, size := staleTmpEntries(tempRoot, now.Add(-leakAge)); n > 0 {
+		out = append(out, fmt.Sprintf("%d stale entries under %s (%s); run: rota reap --kind tmp", n, tempRoot, doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
 		if n := prunableWorktrees(ctx, run, root); n > 0 {
@@ -44,8 +49,33 @@ func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, now
 	return out
 }
 
-// leakedTempDirs counts the smoke run dirs (rota-smoke.*) and gate log dirs
-// (rota-gate-logs-*) in dir last modified before cutoff, and their total size.
+// staleTmpEntries counts the direct children of the project temp root (not its
+// .gitignore) whose newest file is older than cutoff, and their total size. It
+// only reads; `rota reap --kind tmp` decides what may go.
+func staleTmpEntries(root string, cutoff time.Time) (n int, size int64) {
+	if root == "" {
+		return 0, 0
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return 0, 0
+	}
+	for _, e := range entries {
+		if e.Name() == rotastate.IgnoreFile {
+			continue
+		}
+		sz, newest, ok := reap.EntryStat(filepath.Join(root, e.Name()))
+		if !ok || !newest.Before(cutoff) {
+			continue
+		}
+		n++
+		size += sz
+	}
+	return n, size
+}
+
+// leakedTempDirs counts the smoke run dirs (rota-smoke.*), gate dirs
+// (rota-gate-*) and review dirs (rota-review-*) in dir last modified before cutoff, and their total size.
 func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -53,7 +83,7 @@ func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-logs-")) {
+		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-") || strings.HasPrefix(name, "rota-review-")) {
 			continue
 		}
 		if fi, err := e.Info(); err != nil || !fi.ModTime().Before(cutoff) {
@@ -102,7 +132,13 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 		in.CacheDisk = d.DiskUsage(cache)
 	}
 	now := d.Now()
-	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), now) }
+	var tempRoot string
+	if root != "" {
+		if cd, err := rotastate.CommonDirVia(ctx, d.Git, root); err == nil {
+			tempRoot, _ = rotastate.TempRoot(cd)
+		}
+	}
+	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), tempRoot, now) }
 }
 
 // goCacheDir is where the Go build cache lives: $GOCACHE, else go-build under

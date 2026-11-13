@@ -52,6 +52,11 @@ type Deps struct {
 	// time); nil means this machine's. A test swaps in a recorded table.
 	Procs pidlive.Source
 
+	// ProcessCwds lists the working directory of every live process, for the
+	// tmp kind of reap; an error means the table could not be read. A test
+	// swaps it.
+	ProcessCwds func() ([]string, error)
+
 	// ReviewRemoveAll is the filesystem boundary for disposable review cleanup.
 	ReviewRemoveAll func(string) error
 
@@ -172,6 +177,7 @@ func defaultDeps() *Deps {
 		Proc:             proc.Run,
 		QuotaExchange:    proc.Duplex,
 		ReviewRemoveAll:  os.RemoveAll,
+		ProcessCwds:      procCwds,
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,

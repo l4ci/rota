@@ -10,7 +10,10 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// selfIgnore is the temp root's own .gitignore: it ignores everything under
+// IgnoreFile is the temp root's own .gitignore, never temp data itself.
+const IgnoreFile = ".gitignore"
+
+// selfIgnore is the content of IgnoreFile: it ignores everything under
 // the root, itself included, so a project whose .gitignore predates the root
 // still keeps it out of git status, classify and footprint overlap.
 const selfIgnore = "*\n"
@@ -60,7 +63,7 @@ func EnsureTempRoot(root string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
-	ignore := filepath.Join(root, ".gitignore")
+	ignore := filepath.Join(root, IgnoreFile)
 	if _, err := os.Lstat(ignore); err == nil || !os.IsNotExist(err) {
 		return err
 	}
