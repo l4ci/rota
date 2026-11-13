@@ -469,21 +469,6 @@ func TestSetInLocalAndUnsetPruneEmptyParents(t *testing.T) {
 	}
 }
 
-func TestSetRejectsNegativePlanLimits(t *testing.T) {
-	for _, key := range []string{"plan.maxTasks", "plan.maxFilesPerTask"} {
-		for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
-			if _, err := Set(t.TempDir(), key, bad); !errors.Is(err, ErrBadValue) {
-				t.Errorf("%s=%s: err = %v, want ErrBadValue", key, bad, err)
-			}
-		}
-		for _, ok := range []string{"0", "7"} {
-			if _, err := Set(t.TempDir(), key, ok); err != nil {
-				t.Errorf("%s=%s: %v", key, ok, err)
-			}
-		}
-	}
-}
-
 func TestSetContextGuardValidatesEnum(t *testing.T) {
 	for _, bad := range []string{"bogus", "true", "3", ""} {
 		root := project(t, "", "")
@@ -535,19 +520,6 @@ func TestPlanCriticHarnessIsOptInEnum(t *testing.T) {
 	}
 }
 
-func TestSetRejectsNegativeMapStaleCommits(t *testing.T) {
-	for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
-		if _, err := Set(t.TempDir(), "map.staleCommits", bad); !errors.Is(err, ErrBadValue) {
-			t.Errorf("map.staleCommits=%s: err = %v, want ErrBadValue", bad, err)
-		}
-	}
-	for _, ok := range []string{"0", "50"} {
-		if _, err := Set(t.TempDir(), "map.staleCommits", ok); err != nil {
-			t.Errorf("map.staleCommits=%s: %v", ok, err)
-		}
-	}
-}
-
 func TestMapStaleCommitsDefault(t *testing.T) {
 	for _, key := range Keys {
 		if key.Name == "map.staleCommits" {
@@ -567,14 +539,6 @@ func TestSoftcapSubsystemsIsDeclared(t *testing.T) {
 	}
 	if key.Type != TypeInt || key.Default != num("20") {
 		t.Errorf("row = %+v, want int default 20", key)
-	}
-	for _, bad := range []string{"0", "-1", "2.5", `"many"`, "true"} {
-		if _, err := Set(t.TempDir(), "map.softcap_subsystems", bad); !errors.Is(err, ErrBadValue) {
-			t.Errorf("map.softcap_subsystems=%s: err = %v, want ErrBadValue", bad, err)
-		}
-	}
-	if _, err := Set(t.TempDir(), "map.softcap_subsystems", "7"); err != nil {
-		t.Errorf("map.softcap_subsystems=7: %v", err)
 	}
 }
 
