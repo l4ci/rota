@@ -53,7 +53,7 @@ PY
             ["git", "-C", str(self.repo), "-c", "user.name=test", "-c",
              "user.email=test@example.com", *args], stderr=subprocess.STDOUT)
 
-    def start(self, name="one", leak=False, gate=False, section_fail=False):
+    def start(self, name="one", leak=False, gate=False, section_fail=False, env_extra=None):
         control = self.root / name
         control.mkdir()
         env = dict(os.environ, ROTA_BIN="/bin/true", ROTA_TEST_LOCK_HELD="1",
@@ -64,6 +64,11 @@ PY
                    SECTION_FAIL=str(int(section_fail)),
                    ROTA_GATE_LOGS=str(self.root / "gate-logs"),
                    ROTA_GATE_LOCK=str(self.root / "gate.lock"))
+        for key, value in (env_extra or {}).items():
+            if value is None:
+                env.pop(key, None)
+            else:
+                env[key] = value
         command = ["bash", str(self.repo / "test/runner.sh")]
         if gate:
             command = ["bash", str(self.repo / "test/gate.sh"), "--smoke-only", "--shards", "1"]
@@ -172,6 +177,36 @@ PY
         # under the project temp root (#2499), not under the logs.
         self.assertFalse(list(self.root.glob("rota-gate-tmp.*")), "gate must remove its scratch root")
         self.assertFalse(list((self.repo / ".rota/tmp").glob("rota-gate-bin-*")), "gate must remove its bin dir")
+
+    def test_gate_builds_smoke_binary_under_project_temp(self):
+        # A stand-in go records where the runner builds rota and with which
+        # GOTMPDIR, then writes a dummy binary there (#2499: gate test binaries
+        # live under the project temp root, not the system temp dir).
+        fakebin = self.root / "fakebin"
+        fakebin.mkdir()
+        log = self.root / "go.log"
+        (fakebin / "go").write_text(f'''#!/usr/bin/env bash
+out=""; prev=""
+for a in "$@"; do [ "$prev" = -o ] && out="$a"; prev="$a"; done
+printf 'out=%s gotmp=%s\\n' "$out" "${{GOTMPDIR:-}}" >> {str(log)!r}
+[ -z "$out" ] || {{ printf '#!/bin/sh\\nexit 0\\n' > "$out"; chmod +x "$out"; }}
+''')
+        (fakebin / "go").chmod(0o755)
+        (self.repo / "VERSION").write_text("0.0.0\n")
+        run = self.start(gate=True, env_extra={
+            "ROTA_BIN": None, "PATH": f"{fakebin}:{os.environ['PATH']}"})
+        self.finish(run, expected=0)
+        project_tmp = (self.repo / ".rota/tmp").resolve()
+        lines = [l for l in log.read_text().splitlines() if not l.startswith("out= ")]
+        self.assertTrue(lines, "the runner built no rota binary")
+        for line in lines:
+            fields = dict(f.split("=", 1) for f in line.split(" "))
+            for key in ("out", "gotmp"):
+                path = Path(fields[key]).resolve()
+                self.assertTrue(path.is_relative_to(project_tmp) and
+                                path.relative_to(project_tmp).parts[0].startswith("rota-gate-bin-"),
+                                f"{key} {path} is not in a gate bin dir under {project_tmp}")
+        self.assertFalse(list(project_tmp.glob("rota-gate-bin-*")), "gate must remove its bin dir")
 
     def test_initial_deletion_and_new_files(self):
         (self.repo / "AGENTS.md").unlink()

@@ -111,11 +111,15 @@ fi
 
 # 2. A fresh project initializes and passes its own check.
 SCRATCH="$(mktemp -d)"
-trap 'rm -rf "${SCRATCH:?}"' EXIT
+# Under the gate (#2499) the rota binary is built in the gate's bin dir under the
+# project temp root; this run removes its own subdir.
+BIN_TMP="$SCRATCH"
+[ -z "${ROTA_GATE_BIN:-}" ] || BIN_TMP="$(mktemp -d "$ROTA_GATE_BIN/grep-gate.XXXXXX")" || exit 1
+trap 'rm -rf "${SCRATCH:?}" "${BIN_TMP:?}"' EXIT
 if [ -z "${ROTA_BIN:-}" ]; then
   VERSION="$(tr -d '[:space:]' < VERSION)"
-  go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$VERSION" -o "$SCRATCH/rota" ./cmd/rota
-  ROTA_BIN="$SCRATCH/rota"
+  go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$VERSION" -o "$BIN_TMP/rota" ./cmd/rota
+  ROTA_BIN="$BIN_TMP/rota"
 fi
 mkdir "$SCRATCH/proj"
 git -C "$SCRATCH/proj" init -q
