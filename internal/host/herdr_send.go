@@ -26,7 +26,7 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	if err != nil {
 		return err
 	}
-	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
+	text = strings.TrimRight(text, "\n") // omit trailing newlines from the prompt text
 	name := AgentName(slot, handle)
 	read := func() string { return h.draftPane(ctx, name) }
 	if err := clearDialog(&h.d, read, func(k string) { h.herdr(ctx, "agent", "send-keys", name, k) }); err != nil {
