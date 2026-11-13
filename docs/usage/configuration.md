@@ -2,7 +2,7 @@
 
 All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments). `rota init` fills any missing required project key with its default (see [Scopes](#scopes-which-file-a-key-belongs-in)). Don't hand-edit the file. `rota config save-global` merges this project's `config.json` keys (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) into `config.json` in the rota config dir, keeping the global keys the project does not set (see [the global config dir](#the-global-config-dir)), beside `connections.json`. The global file is a runtime layer: values resolve as schema default < global < `.rota/config.json` < `.rota/config.local.json`, so a value set once applies to every project that does not set that key, and `rota config show` reports `global` as its source (a key the project overrides also carries the global value in `--json`, as `global`). `rota config show --global`, `set --global` and `edit --global` read and write the global file itself, from any directory and with no project; in your home directory (no `.rota/` there or above) they do so without `--global`, and `config set` says `global:` in its output. A project-owned key is refused there. Bare `rota` in your home directory is a launcher whose Config entry opens the global config. On the config screen, `g` switches a key between inheriting the global value and overriding it in this project. The project-owned keys (`rota.version`, `git.baseBranch`, `umbrella.enabled`) are never read from it. A missing file changes nothing; a corrupt one warns and is skipped (every write to it, `set --global`, `save-global` and setup's save offer included, refuses with exit 5 and leaves the file as it is), and `rota config fill` then writes no defaults (so they are not pinned over the repaired global) while `rota config check` names the corrupt global. `rota init` and `rota setup` do not copy global values into the new `config.json`; the project inherits them, and `rota setup` offers each as the question's default. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
 
-Allowed values and option labels of each key are in [Configuration options](../reference/config-options.md).
+Allowed values and option labels of each key are in [Configuration options](../reference/config-options.md). `config set` checks integer ranges before writing: for example, `round.slots 0` and `orchestrator.usageThreshold 500` are usage errors (exit 2). A refused value leaves the config unchanged.
 
 Default config (what `rota init --no-blocks` writes in a fresh repo; `rota.version` is stamped with the release that wrote it):
 
@@ -512,7 +512,7 @@ See [learning](learning.md) for the full `/rota-learn` workflow.
 
 ## learn.promoteThreshold
 
-The F03 knowledge promotion lifecycle: how many `rota knowledge hit` events a `provisional` bullet must accumulate before auto-promotion to `confirmed`. Integer ≥ 0; default `3`.
+The F03 knowledge promotion lifecycle: how many `rota knowledge hit` events a `provisional` bullet must accumulate before auto-promotion to `confirmed`. Integer ≥ 1; default `3`. `0` is refused by `config set` and falls back to `3` if written by hand.
 
 A "hit" registers when `/rota-work` or `/rota-review` consumes the bullet during a cycle's K+D consult (the bullet shows up in a worker brief's `Known gotchas:` section) AND the user doesn't push back with a correction that overlaps the bullet's body. At the threshold the bullet becomes `confirmed`: `rota knowledge query` drops the `(provisional)` suffix and consumers see it as established knowledge.
 
@@ -521,7 +521,6 @@ A "hit" registers when `/rota-work` or `/rota-review` consumes the bullet during
 | `3` (default) | Auto-promote at the third clean hit. |
 | `≥4` | Stricter. Use when weak bullets reach `confirmed` too quickly. |
 | `1` or `2` | Looser. Almost every new bullet auto-promotes on its first or second consult. Use when the manual `/rota-learn --promote` flow feels heavy. |
-| `0` | Auto-promote on `rota knowledge add` itself, which disables the `provisional` tier. |
 
 Pending contradictions block auto-promotion regardless of hit count. The user must resolve them via `/rota-learn` Step 9 (Demote / Keep / Defer) before the bullet can flow forward.
 
