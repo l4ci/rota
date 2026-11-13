@@ -1565,6 +1565,21 @@
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-06"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlzOiBSZWxheXMgJiBicmllZnM.TW92ZSBhIHN0dWNrIHNsb3QncyB1bnB1c2hlZCB3b3JrIGJ5IHN0YXNoIG9yIGNvbW1pdCBzaGE": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-13"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBXb3JrZXJzICYgcmVsYXlzOiBSZWxheXMgJiBicmllZnM.QSB0cmFuc2ZlciBzdHVjayBhdCBkaXNwYXRjaCBtb3ZlcyBvbiBieSBhIHNlY29uZCB0cmFuc2Zlcg": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-13"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBSZXZpZXdzICYgdmVyZGljdHM6IEJvdW5jZXMgJiByZS1yZXZpZXdz.UmUtcmV2aWV3IGRpZmZzOiBmaXggY29tbWl0cyBvbmx5OyBldmVyeSBicmFuY2ggbGVucyByZS1yZWNvcmRz": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-13"
     }
   }
 }
