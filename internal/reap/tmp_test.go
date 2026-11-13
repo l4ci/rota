@@ -200,3 +200,27 @@ func TestTmpSymlinkEntryNotFollowed(t *testing.T) {
 		t.Errorf("symlink target contents removed: %v", err)
 	}
 }
+
+// Reap deletes only under a root rota made: without the root's own .gitignore
+// (or with another one) the directory is not the project temp root.
+func TestTmpRootWithoutMarkerListsNothing(t *testing.T) {
+	dir := tmpRoot(t, map[string]time.Duration{"run-a": 3 * time.Hour})
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("other\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	in := tmpInput(t, dir, nil, nil)
+	got, err := Find(context.Background(), in, []string{KindTmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Candidates) != 0 {
+		t.Fatalf("an unowned root listed %v", ids(got.Candidates))
+	}
+	res := Apply(context.Background(), in, []Candidate{{ID: "tmp:run-a", Kind: KindTmp, Name: "run-a"}})
+	if len(res.Reaped) != 0 {
+		t.Fatalf("an unowned root reaped %v", res.Reaped)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "run-a")); err != nil {
+		t.Fatalf("entry removed: %v", err)
+	}
+}

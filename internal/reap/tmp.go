@@ -99,6 +99,12 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 	if s.in.TempRoot == "" {
 		return nil, nil
 	}
+	if !rotastate.Owned(s.in.TempRoot) {
+		if _, err := os.Lstat(s.in.TempRoot); err == nil {
+			s.warn("%s is not a temp root rota made (a symlink, or no rota .gitignore); tmp candidates skipped", s.in.TempRoot)
+		}
+		return nil, nil
+	}
 	ents, err := os.ReadDir(s.in.TempRoot)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -125,7 +131,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 }
 
 func removeTmp(_ context.Context, s *state, c Candidate) error {
-	if s.in.TempRoot == "" || !tmpName(c.Name) {
+	if s.in.TempRoot == "" || !rotastate.Owned(s.in.TempRoot) || !tmpName(c.Name) {
 		return fmt.Errorf("%q is not an entry of the project temp root", c.Name)
 	}
 	path := filepath.Join(s.in.TempRoot, c.Name)

@@ -23,12 +23,20 @@ const selfIgnore = "*\n"
 // in one place. ok is false when there is no main checkout (a bare repository)
 // or it holds no .rota/ (not a rota project); callers then use the system temp
 // dir. It creates nothing.
+//
+// A .rota or .rota/tmp that is a symlink (a tracked link, say) is no root: it
+// would steer workspaces, and the cleanup and reap anchored on the root, out
+// of the project.
 func TempRoot(commonDir string) (string, bool) {
 	main, ok := MainCheckout(commonDir)
-	if !ok || !rotatree.Exists(main) {
+	if !ok || !realDir(rotatree.Dir(main)) {
 		return "", false
 	}
-	return rotatree.File(main, rotatree.TmpDir), true
+	root := rotatree.File(main, rotatree.TmpDir)
+	if _, err := os.Lstat(root); err == nil && !realDir(root) {
+		return "", false
+	}
+	return root, true
 }
 
 // TempRootVia is TempRoot for the repository that holds dir, created on first
@@ -50,6 +58,9 @@ func TempRootVia(ctx context.Context, run git.Runner, dir string) (string, bool,
 	if err := EnsureTempRoot(root); err != nil {
 		return "", false, err
 	}
+	if !realDir(root) {
+		return "", false, nil
+	}
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return "", false, err
@@ -68,4 +79,22 @@ func EnsureTempRoot(root string) error {
 		return err
 	}
 	return os.WriteFile(ignore, []byte(selfIgnore), 0o600)
+}
+
+// Owned reports whether root is a temp root rota made: a real directory (not a
+// symlink) holding the self-ignoring IgnoreFile. Reap removes entries only
+// under an owned root.
+func Owned(root string) bool {
+	if !realDir(root) {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(root, IgnoreFile))
+	return err == nil && string(b) == selfIgnore
+}
+
+// realDir reports whether path is a directory reached without following a
+// symlink at path itself.
+func realDir(path string) bool {
+	fi, err := os.Lstat(path)
+	return err == nil && fi.IsDir()
 }

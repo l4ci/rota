@@ -130,3 +130,54 @@ func TestTempRootViaWithoutProjectFallsBack(t *testing.T) {
 		t.Errorf("outside a repository: TempRootVia = %q, %v, %v; want no root, no error", got, ok, err)
 	}
 }
+
+// A tracked symlink at .rota or .rota/tmp would steer temp workspaces, and the
+// reap and cleanup anchored on them, out of the project: neither is a root.
+func TestTempRootRefusesSymlinks(t *testing.T) {
+	for _, link := range []string{".rota", ".rota/tmp"} {
+		t.Run(link, func(t *testing.T) {
+			repo := gittest.NewRepo(t, "main")
+			outside := t.TempDir()
+			if link == ".rota/tmp" {
+				if err := os.Mkdir(filepath.Join(repo, ".rota"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Symlink(outside, filepath.Join(repo, link)); err != nil {
+				t.Fatal(err)
+			}
+			cd := filepath.Join(repo, ".git")
+			if real, err := filepath.EvalSymlinks(cd); err == nil {
+				cd = real
+			}
+			if got, ok := TempRoot(cd); ok {
+				t.Errorf("TempRoot = %q, want no root through a symlinked %s", got, link)
+			}
+			if got, ok, err := TempRootVia(context.Background(), git.Exec, repo); ok {
+				t.Errorf("TempRootVia = %q, %v, %v; want no root through a symlinked %s", got, ok, err, link)
+			}
+			if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+				t.Errorf("wrote %d entries through the symlink", len(ents))
+			}
+		})
+	}
+}
+
+func TestOwnedTempRootNeedsItsMarker(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tmp")
+	if Owned(root) {
+		t.Error("a missing root is not owned")
+	}
+	if err := EnsureTempRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	if !Owned(root) {
+		t.Error("a root EnsureTempRoot made is owned")
+	}
+	if err := os.WriteFile(filepath.Join(root, IgnoreFile), []byte("other\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if Owned(root) {
+		t.Error("a root whose .gitignore is not rota's is not owned")
+	}
+}
