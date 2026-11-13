@@ -241,10 +241,36 @@ func (s *Slot) Relays() []any {
 }
 
 // AppendRelays adds entries to the relay log (a transferred PR's history).
-func (s *Slot) AppendRelays(entries []any) { s.o.Set("relays", append(s.Relays(), entries...)) }
+func (s *Slot) AppendRelays(entries []any) {
+	if len(entries) == 0 {
+		return
+	}
+	if len(s.Relays()) == 0 {
+		target := jsonx.NewObject()
+		target.Set("pr", s.PR())
+		target.Set("issue", s.HeldID())
+		target.Set("branch", s.Branch())
+		s.o.Set("relayTarget", target)
+	}
+	s.o.Set("relays", append(s.Relays(), entries...))
+}
+
+// relayTarget survives Unbind and Bind until dispatch archives the old relays.
+// Old registries have no snapshot; their recorded PR remains the fallback.
+func (s *Slot) relayTarget() (pr, issue, branch string) {
+	if v, ok := s.o.Get("relayTarget"); ok {
+		if target, ok := v.(*jsonx.Object); ok {
+			return jsonx.Str(target, "pr"), jsonx.Str(target, "issue"), jsonx.Str(target, "branch")
+		}
+	}
+	return s.PR(), "", ""
+}
 
 // ResetRelays starts a fresh relay log.
-func (s *Slot) ResetRelays() { s.o.Set("relays", []any{}) }
+func (s *Slot) ResetRelays() {
+	s.o.Set("relays", []any{})
+	s.o.Delete("relayTarget")
+}
 
 // SetClaimID records the claim on the slot's issue; "" removes it.
 func (s *Slot) SetClaimID(id string) {
@@ -369,7 +395,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.o.Set("task", task)
 	s.o.Set("pr", nil)
 	s.o.Delete("reviewSeen")
-	s.o.Set("relays", []any{})
+	s.ResetRelays()
 	s.o.Delete("unsent")
 	if kind != "" && (!harness.IsDefault(kind) || s.Kind() != "") {
 		s.o.Set("kind", kind)
@@ -405,9 +431,7 @@ func (s *Slot) SetUnsent(v bool) {
 
 // AppendRelay logs a relay sent to the slot.
 func (s *Slot) AppendRelay(entry *jsonx.Object) {
-	v, _ := s.o.Get("relays")
-	l, _ := v.([]any)
-	s.o.Set("relays", append(l, entry))
+	s.AppendRelays([]any{entry})
 }
 
 // SetAccount records the account the slot runs under and its config dir.

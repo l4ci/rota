@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/l4ci/rota/internal/marker"
 )
 
 // claimText opens a claim comment: "Claimed by <claim id>", with no marker,
@@ -72,10 +74,22 @@ func (c claimComments) PutClaim(ctx context.Context, key IssueKey, id string) er
 	return c.add(ctx, key, claimText+id)
 }
 
-// DropClaim deletes every claim comment of id; none is a no-op.
-func (c claimComments) DropClaim(ctx context.Context, key IssueKey, id string) error {
+// DropClaim records the release before deleting every claim comment of id.
+// A failed marker write leaves the claim held, so reconcile cannot mistake a
+// deliberate release for a lost claim. None held is a no-op.
+func (c claimComments) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
 	cs, err := c.claims(ctx, key)
 	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(cs, func(cm Comment) bool { got, _ := claimOf(cm.Body); return got == id }) {
+		return nil
+	}
+	body := marker.Release(id)
+	if byHand {
+		body = marker.HandRelease(id)
+	}
+	if err := c.add(ctx, key, body); err != nil {
 		return err
 	}
 	for _, cm := range cs {

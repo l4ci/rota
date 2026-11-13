@@ -84,7 +84,7 @@ type limitRig struct {
 func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.Settings, holderPID int, tick time.Duration, gap *atomic.Bool, warn func(string, ...any)) (*limitRig, error) {
 	kind := c.deps().resolvePaneHost(root, cfg)
 	if kind == host.Solo {
-		kind = host.Tmux // New maps solo to tmux; say so for the error text
+		kind = host.Tmux // this pane watcher explicitly uses tmux for solo rounds
 	}
 	h := c.deps().Host(kind)
 	if err := h.Require(); err != nil {

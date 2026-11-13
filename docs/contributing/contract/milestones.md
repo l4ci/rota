@@ -1,5 +1,6 @@
 ---
 refs:
+  - internal/artifact/docs.go
   - internal/milestone
   - internal/cli/milestone.go
   - internal/cli/plan_pass.go
@@ -7,6 +8,13 @@ refs:
 ---
 
 ## A6: milestones, plans, designs, spikes, proof, debug
+
+File-backed document reads (`milestone show`, `plan show`, `design show`, `spike show`,
+`debug session show`) and document stat/remove failures (`plan rm`, `design rm`,
+`debug session rm`) exit 5 (`unavailable`) for non-missing filesystem errors,
+including permission denial or an unsuitable file type. The message names the
+path and OS error. A missing document remains exit 3 (`resolution`). This does
+not change lock-file handling.
 
 ### rota milestone add
 rota milestone add --title <text> --summary <text> [--depends M01,M02] [--kind <delivery|decision>]

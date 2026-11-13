@@ -29,9 +29,9 @@ func (t *Itsaplan) PutClaim(ctx context.Context, key IssueKey, id string) error 
 	return t.claimStore().PutClaim(ctx, key, id)
 }
 
-// DropClaim deletes every claim comment of id; none is a no-op.
-func (t *Itsaplan) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	return t.claimStore().DropClaim(ctx, key, id)
+// DropClaim records the release and deletes every claim comment of id; none is a no-op.
+func (t *Itsaplan) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
+	return t.claimStore().DropClaim(ctx, key, id, byHand)
 }
 
 // ---- assign and close on merge -------------------------------------------------

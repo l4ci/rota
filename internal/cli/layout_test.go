@@ -208,23 +208,61 @@ func TestLayoutWarnsAboutAForeignPane(t *testing.T) {
 	}
 }
 
-func TestLayoutTmuxAndSoloRoundsAreSkipped(t *testing.T) {
-	for _, h := range []string{"tmux", "solo"} {
-		root, rig, deps := layoutProject(t, h, []string{"ben"}, "ben")
-		code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
-		if code != ExitUnavailable || !strings.Contains(errs, "host is "+h+": layout needs herdr") {
-			t.Errorf("%s: exit %d, stderr %q", h, code, errs)
+// Use the real host adapters with a fake process runner: a rig that implements
+// Layouter would hide accidental herdr queries for unsupported round hosts.
+func TestLayoutSkipsRoundsWithoutLayoutSupport(t *testing.T) {
+	for _, kind := range []string{"herdr-core", "orca", "tmux", "solo"} {
+		for _, mode := range []string{"", "split", "tabs"} {
+			t.Run(kind+"/"+mode, func(t *testing.T) {
+				root, _, deps := layoutProject(t, kind, []string{"ben"}, "ben")
+				paneLists := 0
+				deps.Host = func(k host.Kind) host.Host {
+					return host.New(k, host.Deps{
+						Getenv:   func(string) string { return "" },
+						LookPath: func(name string) (string, error) { return "/fake/" + name, nil },
+						Run: func(_ context.Context, name string, args []string) (host.Result, error) {
+							if name == "herdr" {
+								switch strings.Join(args, " ") {
+								case "pane list":
+									paneLists++
+									return host.Result{Stdout: `{"result":{"panes":[]}}`}, nil
+								case "tab list":
+									return host.Result{Stdout: `{"result":{"tabs":[]}}`}, nil
+								case "workspace list":
+									return host.Result{Stdout: `{"result":{"workspaces":[]}}`}, nil
+								}
+							}
+							return host.Result{}, nil
+						},
+					})
+				}
+				var code int
+				var env map[string]any
+				var errs string
+				wantCode := 0
+				if mode == "" {
+					code, env, errs = rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
+				} else {
+					code, env, errs = rotaRunWith(t, deps, "--json", "-C", root, "layout", mode, "--project", root)
+					wantCode = ExitUnavailable
+				}
+				wantSkip := "host is " + kind + ": layout needs herdr"
+				rows := layoutRows(env)
+				if code != wantCode {
+					t.Errorf("exit %d, want %d; rows %v, stderr %q", code, wantCode, rows, errs)
+				}
+				if mode == "" && (len(rows) != 1 || jsonx.Str(rows[0], "skipped") != wantSkip) {
+					t.Errorf("status rows %v do not name the unsupported host", rows)
+				}
+				if mode != "" && !strings.Contains(errs, wantSkip) {
+					t.Errorf("stderr %q does not name the unsupported host", errs)
+				}
+				t.Logf("herdr pane-list calls: %d", paneLists)
+				if paneLists != 0 {
+					t.Errorf("herdr pane-list calls = %d, want 0", paneLists)
+				}
+			})
 		}
-		if len(rig.log) != 0 {
-			t.Errorf("%s: moved panes: %v", h, rig.log)
-		}
-		_ = env
-	}
-	// Bare status exits 0 and names the skip.
-	root, _, deps := layoutProject(t, "tmux", []string{"ben"}, "ben")
-	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
-	if code != 0 || jsonx.Str(layoutRows(env)[0], "skipped") != "host is tmux: layout needs herdr" {
-		t.Errorf("status: exit %d %v", code, env)
 	}
 }
 

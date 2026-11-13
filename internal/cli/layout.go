@@ -67,18 +67,13 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	h, caps, herr := layoutHost(c.deps())
 	ctx := c.Context()
 	var outs []layoutOut
 	var panes []host.LayoutPane
-	if herr == nil {
-		if panes, herr = h.LayoutPanes(ctx); herr != nil {
-			h = nil
-		}
-	}
-	if herr != nil {
-		c.Warn("herdr: %v", herr)
-	}
+	var h host.Layouter
+	var caps host.Capabilities
+	var herr error
+	loaded := false
 	for _, root := range roots {
 		o := layoutOut{root: root, name: filepath.Base(root)}
 		reg, err := worker.LoadRegistry(root)
@@ -86,13 +81,29 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			return Result{}, err
 		}
 		explicit := project != ""
-		switch rh := reg.Host(); {
-		case rh == host.Solo || rh == host.Tmux:
-			// A stale registry of an old tmux round is not worth a line.
+		rh := reg.Host()
+		if rh == host.Solo || host.CapabilitiesForKind(rh).Layouter == nil {
+			// A stale registry without pane handles is not worth a line.
 			if !explicit && !hasHandle(reg) {
 				continue
 			}
 			o.skipped = "host is " + rh.String() + ": layout needs herdr"
+			outs = append(outs, o)
+			continue
+		}
+		// Share the initial snapshot, but only query herdr when a round can
+		// use it. Unsupported round hosts never need herdr installed.
+		if !loaded {
+			loaded = true
+			h, caps, herr = layoutHost(c.deps())
+			if herr == nil {
+				panes, herr = h.LayoutPanes(ctx)
+			}
+			if herr != nil {
+				c.Warn("herdr: %v", herr)
+			}
+		}
+		switch {
 		case herr != nil:
 			if !explicit {
 				continue

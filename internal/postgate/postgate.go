@@ -10,9 +10,8 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// Book is the item bookkeeping a landing leaves behind: the operations Gate
-// and Train need, so they run against an in-memory fake without a .rota tree.
-// WorkerBook is the production adapter.
+// Book is the item bookkeeping a landing leaves behind. Run, Gate and Train
+// share this port; WorkerBook is the production adapter.
 type Book interface {
 	// ClearItemStart ends the item's wall-clock (round.itemTimeoutMinutes).
 	ClearItemStart(root, issue string) error

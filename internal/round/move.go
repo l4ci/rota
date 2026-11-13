@@ -22,7 +22,6 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -284,7 +283,7 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 			if s == nil {
 				return
 			}
-			doc.LogRelays(s.PR(), s.Relays())
+			doc.KeepSlotRelays(s)
 			s.Park(r.gone)
 			if r.gone {
 				s.ReleasePort()
@@ -925,10 +924,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// Checks before anything moves: the brief, the receiver's launch, the
 	// overlap, the receiver's guard.
 	if !toHuman {
-		cacheDir := skills.CacheDir(e.getenv())
 		var briefWarn string
-		if run.brief, briefWarn, ok = resolveBrief(root, set, e.skillInstalls(root), cacheDir); !ok {
-			return nil, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
+		if run.brief, briefWarn, err = e.briefContract(root, set); err != nil {
+			return nil, err
 		}
 		if briefWarn != "" {
 			res.Warnings = append(res.Warnings, briefWarn)

@@ -63,40 +63,34 @@ type TodoSource interface {
 	List(includeClosed bool) ([]backlog.Item, error)
 }
 
-// Report is Find's result plus how many open todo items could not be dated.
+// Report lists stale entries and how many open todo items could not be dated.
 type Report struct {
 	Entries        []Entry
 	SkippedUndated int
 }
 
-// FindReport is Find that also counts the todo items it skipped for lacking a
-// usable Captured date (always 0 for the map and knowledge kinds).
-func FindReport(root, kind string, days int, today time.Time, todos TodoSource) (Report, error) {
-	if kind == "todo" {
-		es, skipped, err := findTodo(days, today, todos)
-		return Report{Entries: es, SkippedUndated: skipped}, err
-	}
-	es, err := Find(root, kind, days, today, todos)
-	return Report{Entries: es}, err
-}
-
-// Find lists the entries of kind that are days or more old on today. Missing
-// files give none. Map entries are dated by their frontmatter "touched" or,
-// failing that, the last git commit of the file; the knowledge file, which has
-// no per-topic dates, lists every topic with the file's commit date; open
+// FindReport lists the entries of kind that are days or more old on today.
+// Missing files give none. Map entries are dated by their frontmatter "touched"
+// or, failing that, the last git commit of the file; the knowledge file, which
+// has no per-topic dates, lists every topic with the file's commit date. Open
 // backlog items from todos (the caller's selected backend; nil lists none) are
-// dated by their Captured field, and an item without one is skipped.
-func Find(root, kind string, days int, today time.Time, todos TodoSource) ([]Entry, error) {
+// dated by their Captured field. SkippedUndated counts items without a usable
+// Captured date (always 0 for the map and knowledge kinds).
+func FindReport(root, kind string, days int, today time.Time, todos TodoSource) (Report, error) {
+	var es []Entry
+	var skipped int
+	var err error
 	switch kind {
 	case "map":
-		return findMap(root, days, today)
+		es, err = findMap(root, days, today)
 	case "knowledge":
-		return findKnowledge(root, days, today)
+		es, err = findKnowledge(root, days, today)
 	case "todo":
-		es, _, err := findTodo(days, today, todos)
-		return es, err
+		es, skipped, err = findTodo(days, today, todos)
+	default:
+		err = fmt.Errorf("%w: %s", ErrKind, kind)
 	}
-	return nil, fmt.Errorf("%w: %s", ErrKind, kind)
+	return Report{Entries: es, SkippedUndated: skipped}, err
 }
 
 func fmtDate(t time.Time) string { return stamp.Date(t) }

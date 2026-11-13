@@ -95,7 +95,7 @@ for f in "$@"; do
     internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
   esac
   case "$f" in
-    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate_retry_test.py|test/fast.sh|test/fast_*test.py) infra=1 ;;
+    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate-*.txt|internal/flakeledger/infrastructure-markers.txt|test/gate_retry_test.py|test/fast.sh|test/fast_*test.py) infra=1 ;;
     test/treescan/*) infra=1; add_pkg ./test/treescan ;;
   esac
   case "$f" in

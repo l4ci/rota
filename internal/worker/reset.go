@@ -23,9 +23,9 @@ type ResetResult struct {
 	Changed  bool
 }
 
-// Reset is the slot reset guard of bin/hv-worker-reset (#38): refuse to reuse
-// a slot that still holds work, otherwise cut a fresh per-task branch from
-// the slot's base. checkOnly stops after the guard.
+// Reset refuses to reuse a slot that still holds work (#38), otherwise cuts
+// a fresh per-task branch from the slot's base. checkOnly stops after the
+// guard.
 //
 // The guard refuses when the worktree has uncommitted changes (untracked files
 // included) or commits that never reached the base (`git cherry <base> HEAD`

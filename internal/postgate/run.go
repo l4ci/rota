@@ -16,9 +16,11 @@ type Report struct {
 	Ref, Body string
 }
 
-// Env supplies worker operations and the remote report boundary.
+// Env supplies worker operations, item bookkeeping and remote reporting.
 type Env struct {
 	Worker worker.Env
+	// Book defaults to WorkerBook using Worker.
+	Book   Book
 	Report func(context.Context, string, Report) error
 }
 
@@ -62,6 +64,10 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		err := fmt.Errorf("postgate: select exactly one gate or train")
 		return Result{Gate: GateRun{Err: err}, Train: TrainRun{Err: err}}
 	}
+	book := e.Book
+	if book == nil {
+		book = WorkerBook{e.Worker}
+	}
 	if req.Gate != nil {
 		r, err := e.Worker.Gate(ctx, root, *req.Gate)
 		run := GateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
@@ -70,7 +76,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		}
 		run.Warnings = e.report(ctx, root, r)
 		if !run.Refused && err == nil {
-			run.BookErr = Gate(WorkerBook{e.Worker}, root, r.Issue, r)
+			run.BookErr = Gate(book, root, r.Issue, r)
 		}
 		return Result{Gate: run}
 	}
@@ -81,7 +87,10 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 	// Landing can drop queued records, so retain the item identities first.
 	issues := make(map[string]string, len(o.Targets))
 	targets := make(map[string]worker.GateTarget, len(o.Targets))
-	reg, _ := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return Result{Train: TrainRun{Err: fmt.Errorf("postgate: load train targets: %w", err)}}
+	}
 	for _, target := range o.Targets {
 		if gt, err := reg.GateTargetAny(target); err == nil {
 			issues[target] = gt.Issue
@@ -112,7 +121,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		run.Warnings = append(run.Warnings, e.report(ctx, root, g)...)
 	}
 	if !run.Refused && err == nil {
-		run.Book = Train(WorkerBook{e.Worker}, o.Round, root, issues, targets, r)
+		run.Book = Train(book, o.Round, root, issues, targets, r)
 	}
 	return Result{Train: run}
 }
