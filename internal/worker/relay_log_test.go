@@ -1,15 +1,91 @@
 package worker
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gittest"
 )
 
 const relayQueuedPR = "https://github.com/o/r/pull/9"
+
+// A slot has moved on, and more than one of its PRs waits in review. An
+// explicit target must reach the older PR without lending it to the new task.
+func TestDispatchRelayExplicitPRSurvivesReassignment(t *testing.T) {
+	w := newWorld(t, "")
+	e := w.env(false)
+	e.NewHost = envWith(tmuxFake()).NewHost
+	if err := Update(w.dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetTask("6")
+		s.SetBranch("next/6-task")
+		s.SetHandle("rota:w1")
+		s.Raw().Set("worktree", w.worker)
+		d.QueuePR(QueuedPR{Issue: "5", PR: ghURL, From: "w1", Branch: "w1", Base: "main"})
+		d.QueuePR(QueuedPR{Issue: "8", PR: relayQueuedPR, From: "w1", Branch: "other/8-task", Base: "main"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, w.dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "use the cache\n"), Relay: true, PR: "7"}); err != nil {
+		t.Fatal(err)
+	}
+	w.setPRBody("Closes #5\n\n## Approvals\n- orchestrator relay round 1\n")
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+	if err != nil || res.Verdict != GateFresh {
+		t.Fatalf("explicit PR relay must pass its gate: %+v (%v)", res, err)
+	}
+	reg := LoadRegistryTolerant(w.dir)
+	if len(reg.Slot("w1").Relays()) != 0 || len(reg.QueuedPR(relayQueuedPR).Relays) != 0 {
+		t.Fatal("targeted relay leaked to the current issue or another queued PR")
+	}
+}
+
+func TestDispatchRelayExplicitPRRefusesBeforeChangingState(t *testing.T) {
+	for _, state := range []string{"CLOSED", "MERGED", "unlisted", "archived-only"} {
+		t.Run(state, func(t *testing.T) {
+			w := newWorld(t, "")
+			h := tmuxFake()
+			e := w.env(false)
+			e.NewHost = envWith(h).NewHost
+			if err := Update(w.dir, func(d *Doc) {
+				s := d.Slot("w1")
+				s.SetTask("6")
+				s.SetHandle("rota:w1")
+				s.Raw().Set("worktree", w.worker)
+				if state != "unlisted" && state != "archived-only" {
+					d.QueuePR(QueuedPR{Issue: "5", PR: ghURL, From: "w1", Branch: "w1", Base: "main"})
+				}
+				if state == "archived-only" {
+					d.LogRelays(ghURL, relayLog(1, "earlier relay"))
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			w.forge("state", state)
+			path := filepath.Join(w.dir, ".rota", "workers.json")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			round := 55
+			_, err = e.Dispatch(bg, w.dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "use the cache"), Relay: true, PR: "7", Round: &round})
+			if exitOf(err) != exitcode.ExitRefused {
+				t.Fatalf("%s: want exit 4, got %v", state, err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) || h.sent != "" {
+				t.Fatal("refused relay changed registry or sent input")
+			}
+		})
+	}
+}
 
 func relayCited(t *testing.T, dir string) string {
 	t.Helper()
