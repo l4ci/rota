@@ -3,6 +3,7 @@ package knowledge
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -453,36 +454,11 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 	if !tiered(topic) {
 		return Entry{}, false, nil
 	}
-	sc, err := s.effective(scope)
+	sc, err := s.effectiveBackfilled(scope)
 	if err != nil {
 		return Entry{}, false, err
 	}
-	e, ok, err := sc.Get(topic, title)
-	if err != nil || ok {
-		return e, ok, err
-	}
-	km, err := s.KnowledgePath(scope)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	content, err := ReadFile(km)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	for _, t := range section.Topics(content) {
-		if t.Name != topic {
-			continue
-		}
-		for _, line := range pystr.Splitlines(t.Body) {
-			if got, ok := bulletfmt.Title(line); ok && got == title {
-				if _, err := sc.Init(topic, title, s.today()); err != nil {
-					return Entry{}, false, err
-				}
-				return sc.Get(topic, title)
-			}
-		}
-	}
-	return Entry{}, false, nil
+	return sc.Get(topic, title)
 }
 
 // TierSet puts (topic, title) on tier and returns the previous tier ("" for an
@@ -527,8 +503,9 @@ func (s Store) TierList(scope, tier string) ([]Entry, error) {
 // effectiveBackfilled is effective plus, in memory, a provisional entry for
 // every titled bullet of scope's KNOWLEDGE.md that has none, so bullets written
 // before tiers existed read like new ones. It is the lazy form of the retired
-// hv-knowledge-migrate and serves `tier get` and `tier list`; `query` stays
-// read-only. Nothing is written: a read must not dirty the tracked sidecar.
+// hv-knowledge-migrate and the one tier read for every reader (`query`, path
+// entries, `tier get`, `tier list`). Nothing is written: a read must not dirty
+// the tracked sidecar.
 func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 	sc, err := s.effective(scope)
 	if err != nil {
@@ -548,7 +525,10 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 		}
 		for _, line := range pystr.Splitlines(t.Body) {
 			if title, ok := bulletfmt.Title(line); ok {
-				if _, err := sc.Init(t.Name, title, s.today()); err != nil {
+				// An ambiguous legacy record owns this bullet: leave it
+				// unbackfilled so the error surfaces where that bullet is
+				// read (Get), not on every unrelated topic.
+				if _, err := sc.Init(t.Name, title, s.today()); err != nil && !errors.Is(err, ErrMultiMatch) {
 					return nil, err
 				}
 			}

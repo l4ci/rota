@@ -65,6 +65,7 @@ shim: stdout is `text`; each stderr `warning: … no topic heading matches '<x>'
 note: a topic matches by case-insensitive substring of the `## ` heading text, so `Smoke testing` finds `Build & Tooling: Smoke testing`; when the text equals one heading (case-insensitive) that heading is returned alone. A bare category such as `Build & Tooling` therefore returns the whole family of headings containing it. `missing` lists only topics that match no heading. Matching is the same for `decisions query`.
 note: zero topics is exit 2, where the old helper exited 0 silently; a topic with no matching heading stays a warning and exit 0.
 note: `text` is the old markdown verbatim, including the ` (provisional)` suffix and `> from:` lines, not a structured bullet list.
+note: a bullet with no sidecar entry (written before tiers) reads as provisional here, in `tier get`, `tier list` and path entries alike: one in-memory backfill, never written.
 
 ### rota knowledge stats
 rota knowledge stats

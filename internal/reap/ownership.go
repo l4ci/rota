@@ -65,16 +65,18 @@ func protectedBranch(b, base string) bool {
 	return b == base || worker.IsPark(b)
 }
 
-// inside reports whether p is dir or below it.
-func inside(p, dir string) bool {
-	p, dir = filepath.Clean(p), filepath.Clean(dir)
-	return p == dir || strings.HasPrefix(p, dir+string(os.PathSeparator))
+// physical resolves symlinks, falling back to the cleaned path when p is gone.
+func physical(p string) string {
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	return filepath.Clean(p)
 }
 
 // agentIn: some host agent works inside dir.
 func (o *ownership) agentIn(dir string) bool {
 	for _, a := range o.agents {
-		if a.Cwd != "" && inside(a.Cwd, dir) {
+		if worker.PathContains(dir, a.Cwd) {
 			return true
 		}
 	}
@@ -109,10 +111,10 @@ func (o *ownership) Branch(b string) bool {
 // alone: a registered, parked, base-branch or live checkout, or anything
 // outside .worktrees/ (another project's, or the main checkout's).
 func (o *ownership) cwd(cwd string) bool {
-	if !inside(cwd, o.wtDir) {
+	if !worker.PathContains(o.wtDir, cwd) {
 		return true
 	}
-	rel, err := filepath.Rel(o.wtDir, filepath.Clean(cwd))
+	rel, err := filepath.Rel(physical(o.wtDir), physical(cwd))
 	if err != nil {
 		return true
 	}

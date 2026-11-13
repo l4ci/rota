@@ -58,7 +58,9 @@ func TestAmendAmbiguousAcrossFiles(t *testing.T) {
 	}
 }
 
-func TestTierReadBackfillsLegacyBullets(t *testing.T) {
+// A legacy bullet (no sidecar entry) reads as provisional through every tier
+// reader, and no reader writes the sidecar.
+func TestLegacyBulletHasOneTierAcrossReaders(t *testing.T) {
 	root := t.TempDir()
 	rota := filepath.Join(root, ".rota")
 	os.MkdirAll(rota, 0o777)
@@ -67,17 +69,34 @@ func TestTierReadBackfillsLegacyBullets(t *testing.T) {
 	if _, _, err := s.TierSet(Umbrella, "Arch", "Kept", Confirmed); err != nil {
 		t.Fatal(err)
 	}
+	sidecar := filepath.Join(rota, "knowledge-tier.json")
+	before, err := os.ReadFile(sidecar)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	e, ok, err := s.TierGet(Umbrella, "Arch", "Old")
 	if err != nil || !ok || e.Tier != Provisional || e.Hits != 0 {
-		t.Fatalf("legacy bullet = %+v ok=%v err=%v", e, ok, err)
+		t.Fatalf("tier get legacy = %+v ok=%v err=%v", e, ok, err)
 	}
 	if e, _, _ := s.TierGet(Umbrella, "Arch", "Kept"); e.Tier != Confirmed {
 		t.Errorf("tracked entry overwritten: %+v", e)
 	}
-	list, _ := s.TierList(Umbrella, "")
-	if len(list) != 2 {
-		t.Errorf("list = %+v, want Old and Kept (no Glossary)", list)
+	list, err := s.TierList(Umbrella, Provisional)
+	if err != nil || len(list) != 1 || list[0].Title != "Old" {
+		t.Errorf("tier list provisional = %+v err=%v, want only Old", list, err)
+	}
+	all, _ := s.TierList(Umbrella, "")
+	if len(all) != 2 {
+		t.Errorf("list = %+v, want Old and Kept (no Glossary)", all)
+	}
+	out, _, err := s.Query(Umbrella, []string{"Arch"}, QueryOpts{Tier: Provisional})
+	if err != nil || !strings.Contains(out, "Old") || strings.Contains(out, "Kept") || !strings.Contains(out, "(provisional)") {
+		t.Errorf("query --tier provisional = %q err=%v, want Old only", out, err)
+	}
+	after, _ := os.ReadFile(sidecar)
+	if string(before) != string(after) {
+		t.Errorf("a read wrote the sidecar:\n%s\n->\n%s", before, after)
 	}
 }
 

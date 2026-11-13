@@ -138,6 +138,23 @@ func TestDumpRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestNoteEligible(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		n    Note
+		want bool
+	}{
+		{"missing file", Note{}, false},
+		{"marked", Note{Handoff: keepstate.Handoff{Exists: true}, Body: HandoffMarker + "\n# r\n"}, true},
+		{"unmarked", Note{Handoff: keepstate.Handoff{Exists: true}, Body: "# worker note\n"}, false},
+		{"marker not first line", Note{Handoff: keepstate.Handoff{Exists: true}, Body: "x\n" + HandoffMarker}, false},
+	} {
+		if got := c.n.Eligible(); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+}
+
 func TestShouldInject(t *testing.T) {
 	ho := keepstate.Handoff{Exists: true, ModTime: t0.Add(-time.Minute)}
 	max := 15 * time.Minute
@@ -149,14 +166,13 @@ func TestShouldInject(t *testing.T) {
 		body       string
 		want       bool
 	}{
-		{"orchestrator startup", "startup", true, false, ho, "x", true},
-		{"orchestrator clear", "clear", true, false, ho, "x", true},
-		{"resume keeps", "resume", true, false, ho, "x", false},
-		{"compact keeps", "compact", true, false, ho, "x", false},
-		{"no file", "startup", true, false, keepstate.Handoff{}, "", false},
+		{"orchestrator startup", "startup", true, false, ho, HandoffMarker, true},
+		{"orchestrator clear", "clear", true, false, ho, HandoffMarker, true},
+		{"orchestrator, unmarked", "startup", true, false, ho, "x", false},
+		{"resume keeps", "resume", true, false, ho, HandoffMarker, false},
+		{"compact keeps", "compact", true, false, ho, HandoffMarker, false},
 		{"other holder", "startup", false, false, ho, HandoffMarker, false},
 		{"no lease, marked, fresh", "startup", false, true, ho, HandoffMarker + "\n", true},
-		{"no lease, unmarked", "startup", false, true, ho, "# pause", false},
 		{"no lease, marked, old", "startup", false, true, keepstate.Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, HandoffMarker, false},
 	} {
 		if got := ShouldInject(c.source, c.orch, c.free, Note{Handoff: c.ho, Body: c.body}, max, t0); got != c.want {
@@ -414,13 +430,13 @@ func TestReadOrchestratorNote(t *testing.T) {
 			t.Fatalf("got %v %q", n, w)
 		}
 	})
-	t.Run("unmarked is left alone", func(t *testing.T) {
+	t.Run("ineligible is left alone", func(t *testing.T) {
 		p := write(t, "# worker note\n")
 		if n, w := ReadOrchestratorNote(p, true); n != nil || w != "" {
 			t.Fatalf("got %v %q", n, w)
 		}
 		if _, err := os.Stat(p); err != nil {
-			t.Fatalf("unmarked note moved: %v", err)
+			t.Fatalf("ineligible note moved: %v", err)
 		}
 	})
 	t.Run("marked, no consume", func(t *testing.T) {

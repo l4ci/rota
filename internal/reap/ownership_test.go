@@ -1,6 +1,8 @@
 package reap
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
@@ -108,5 +110,38 @@ func TestOwnershipSlotWorktreePaths(t *testing.T) {
 	// A recorded checkout elsewhere is held by path.
 	if !o.slotHolds("/elsewhere/away/sub") {
 		t.Error("path under a slot's recorded Worktree not held")
+	}
+}
+
+// An agent whose cwd is spelled through a symlink still protects the
+// worktree it physically works in, for agentIn and for a tab's cwd.
+func TestOwnershipSymlinkedAgentCwd(t *testing.T) {
+	root := t.TempDir()
+	wtDir := filepath.Join(root, ".worktrees")
+	live := filepath.Join(wtDir, "live")
+	if err := os.MkdirAll(filepath.Join(live, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(live, link); err != nil {
+		t.Fatal(err)
+	}
+	checkouts := []checkout{{path: live, branch: "kit/2-a"}}
+	rep := &round.Report{Agents: []host.Agent{{Tab: "w3:t9", Cwd: filepath.Join(link, "sub")}}}
+	o := newOwnership(rep, "main", wtDir, checkouts)
+	if !o.agentIn(live) {
+		t.Error("agentIn missed an agent whose cwd is reached through a symlink")
+	}
+	if !o.Worktree(&checkouts[0]) {
+		t.Error("worktree with a symlink-cwd agent is a removal candidate")
+	}
+	free := o.cwd(filepath.Join(link, "sub"))
+	if !free {
+		t.Error("cwd through a symlink into a live checkout not protected")
+	}
+	// A symlinked cwd into an unowned checkout still resolves to its name.
+	o2 := newOwnership(&round.Report{}, "main", wtDir, checkouts)
+	if o2.cwd(filepath.Join(link, "sub")) {
+		t.Error("cwd through a symlink into a free checkout wrongly protected")
 	}
 }

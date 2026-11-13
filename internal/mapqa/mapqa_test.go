@@ -168,7 +168,7 @@ func TestEntriesSortsBySubsystemAndSkipsUnnamed(t *testing.T) {
 	}
 }
 
-// An unparseable touched value is dated by git, the rule stale.Find also uses.
+// An unparseable touched value is dated by git, the rule stale.FindReport also uses.
 func TestStatsUnparseableTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n")

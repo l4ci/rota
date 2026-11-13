@@ -21,79 +21,79 @@ func matchFixture(t *testing.T) Clone {
 
 func TestMatchAcrossTopics(t *testing.T) {
 	c := matchFixture(t)
-	text, n, err := c.Match([]string{"rpc"}, nil, nil)
+	res, err := c.MatchWith([]string{"rpc"}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 4 {
-		t.Errorf("n = %d, text = %q", n, text)
+	if res.N != 4 {
+		t.Errorf("n = %d, text = %q", res.N, res.Text)
 	}
-	gi, ni := strings.Index(text, "## Godot: Networking\n"), strings.Index(text, "## Go\n")
+	gi, ni := strings.Index(res.Text, "## Godot: Networking\n"), strings.Index(res.Text, "## Go\n")
 	if gi < 0 || ni < 0 {
-		t.Fatalf("sections missing: %q", text)
+		t.Fatalf("sections missing: %q", res.Text)
 	}
-	if strings.Contains(text, "sub-index") || strings.Contains(text, "(networking.md)") {
-		t.Errorf("sub-index line printed: %q", text)
+	if strings.Contains(res.Text, "sub-index") || strings.Contains(res.Text, "(networking.md)") {
+		t.Errorf("sub-index line printed: %q", res.Text)
 	}
 	// Wrapped bullet matches as one bullet and prints both lines.
-	if !strings.Contains(text, "- **Wrapped RPC** — first line\n  mentions authority on the second") {
-		t.Errorf("wrapped bullet: %q", text)
+	if !strings.Contains(res.Text, "- **Wrapped RPC** — first line\n  mentions authority on the second") {
+		t.Errorf("wrapped bullet: %q", res.Text)
 	}
 }
 
 func TestMatchNeverPrintsWholeFiles(t *testing.T) {
 	c := matchFixture(t)
-	text, n, err := c.Match([]string{"autoloads"}, nil, nil)
-	if err != nil || n != 1 {
-		t.Fatalf("n = %d err = %v", n, err)
+	res, err := c.MatchWith([]string{"autoloads"}, nil, nil)
+	if err != nil || res.N != 1 {
+		t.Fatalf("n = %d err = %v", res.N, err)
 	}
-	if !strings.Contains(text, "## Godot\n- **Autoload order**") {
-		t.Errorf("text = %q", text)
+	if !strings.Contains(res.Text, "## Godot\n- **Autoload order**") {
+		t.Errorf("text = %q", res.Text)
 	}
 	for _, other := range []string{"Signals", "RPC authority", "Vet"} {
-		if strings.Contains(text, other) {
-			t.Errorf("printed %q: %q", other, text)
+		if strings.Contains(res.Text, other) {
+			t.Errorf("printed %q: %q", other, res.Text)
 		}
 	}
-	text, n, _ = c.Match([]string{"RPC", "AUTHORITY"}, nil, nil)
-	if n != 2 || !strings.Contains(text, "RPC authority") || !strings.Contains(text, "Wrapped RPC") || strings.Contains(text, "Race flag") {
-		t.Errorf("all words, case-insensitive: n=%d %q", n, text)
+	res, _ = c.MatchWith([]string{"RPC", "AUTHORITY"}, nil, nil)
+	if res.N != 2 || !strings.Contains(res.Text, "RPC authority") || !strings.Contains(res.Text, "Wrapped RPC") || strings.Contains(res.Text, "Race flag") {
+		t.Errorf("all words, case-insensitive: n=%d %q", res.N, res.Text)
 	}
 }
 
 func TestMatchIgnoresStamp(t *testing.T) {
 	c := matchFixture(t)
 	for _, w := range []string{"source:game", "2026-03-01", "godot@4.6"} {
-		text, n, err := c.Match([]string{w}, nil, nil)
-		if err != nil || n != 0 || text != "" {
-			t.Errorf("%q matched the stamp: n=%d %q err=%v", w, n, text, err)
+		res, err := c.MatchWith([]string{w}, nil, nil)
+		if err != nil || res.N != 0 || res.Text != "" {
+			t.Errorf("%q matched the stamp: n=%d %q err=%v", w, res.N, res.Text, err)
 		}
 	}
 }
 
 func TestMatchRestrictedToTopics(t *testing.T) {
 	c := matchFixture(t)
-	text, n, _ := c.Match([]string{"rpc"}, []string{"Go"}, nil)
-	if n != 1 || strings.Contains(text, "Godot") {
-		t.Errorf("Go only: n=%d %q", n, text)
+	res, _ := c.MatchWith([]string{"rpc"}, []string{"Go"}, nil)
+	if res.N != 1 || strings.Contains(res.Text, "Godot") {
+		t.Errorf("Go only: n=%d %q", res.N, res.Text)
 	}
-	text, n, _ = c.Match([]string{"rpc"}, []string{"Godot"}, nil)
-	if n != 3 || !strings.Contains(text, "## Godot: Networking") || strings.Contains(text, "## Go\n") {
-		t.Errorf("split parent includes subtopics: n=%d %q", n, text)
+	res, _ = c.MatchWith([]string{"rpc"}, []string{"Godot"}, nil)
+	if res.N != 3 || !strings.Contains(res.Text, "## Godot: Networking") || strings.Contains(res.Text, "## Go\n") {
+		t.Errorf("split parent includes subtopics: n=%d %q", res.N, res.Text)
 	}
-	text, n, _ = c.Match([]string{"signals"}, []string{"Godot: Networking"}, nil)
-	if n != 0 || text != "" {
-		t.Errorf("subtopic only: n=%d %q", n, text)
+	res, _ = c.MatchWith([]string{"signals"}, []string{"Godot: Networking"}, nil)
+	if res.N != 0 || res.Text != "" {
+		t.Errorf("subtopic only: n=%d %q", res.N, res.Text)
 	}
 }
 
 func TestMatchNoHit(t *testing.T) {
 	c := matchFixture(t)
-	text, n, err := c.Match([]string{"zzzz"}, nil, nil)
-	if err != nil || n != 0 || text != "" {
-		t.Errorf("n=%d %q err=%v", n, text, err)
+	res, err := c.MatchWith([]string{"zzzz"}, nil, nil)
+	if err != nil || res.N != 0 || res.Text != "" {
+		t.Errorf("n=%d %q err=%v", res.N, res.Text, err)
 	}
-	if _, _, err := c.Match(nil, nil, nil); err == nil {
+	if _, err := c.MatchWith(nil, nil, nil); err == nil {
 		t.Error("no words should be an error")
 	}
 }
@@ -101,20 +101,20 @@ func TestMatchNoHit(t *testing.T) {
 func TestMatchPunctuationIsLiteral(t *testing.T) {
 	c := matchFixture(t)
 	for _, w := range []string{"RPC.call", "--force"} {
-		text, n, _ := c.Match([]string{w}, nil, nil)
-		if n != 1 || !strings.Contains(text, "**Flags**") {
-			t.Errorf("%q: n=%d %q", w, n, text)
+		res, _ := c.MatchWith([]string{w}, nil, nil)
+		if res.N != 1 || !strings.Contains(res.Text, "**Flags**") {
+			t.Errorf("%q: n=%d %q", w, res.N, res.Text)
 		}
 	}
-	if _, n, _ := c.Match([]string{"RPC.cal."}, nil, nil); n != 0 {
+	if res, _ := c.MatchWith([]string{"RPC.cal."}, nil, nil); res.N != 0 {
 		t.Errorf("regexp-like word matched")
 	}
 }
 
 func TestMatchShowsRecheckMarker(t *testing.T) {
 	c := matchFixture(t)
-	text, _, _ := c.Match([]string{"autoloads"}, nil, map[string]string{"godot": "4.8"})
-	if !strings.Contains(text, "recheck)") {
-		t.Errorf("no marker: %q", text)
+	res, _ := c.MatchWith([]string{"autoloads"}, nil, map[string]string{"godot": "4.8"})
+	if !strings.Contains(res.Text, "recheck)") {
+		t.Errorf("no marker: %q", res.Text)
 	}
 }
