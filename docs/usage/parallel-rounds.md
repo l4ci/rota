@@ -738,7 +738,8 @@ it was, so it is safe in the middle of a round.
   orchestrator's tab.
 - **Only rota's panes move.** A shell you opened in the orchestrator's tab stays where it is and is
   named in a warning. Parked and dead slots are skipped.
-- **herdr only.** A round on tmux or solo is skipped with `host is tmux: layout needs herdr`.
+- **herdr only.** Rounds on herdr-core, Orca, tmux or solo are skipped with
+  `host is <kind>: layout needs herdr`. These rounds do not query herdr panes.
 
 A worker's recorded tab id is the tab it started in, and after a move that tab may be gone. `rota round
 reconcile` and `rota round status` still find the live agent: they match it by its
