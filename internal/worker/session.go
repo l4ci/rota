@@ -32,7 +32,7 @@ func inSessionRefusal(h host.Host, handoff bool, cwd string) *exitcode.Error {
 	return err
 }
 
-// Attachable host session guarantee: the port of bin/hv-worker-session.
+// Host session checks and handoffs keep worker panes accessible to a human.
 //
 // `round.dispatch: tmux` is worth its cost for one reason: a worker that needs
 // a decision can idle and a human can answer it in that worker's pane. If

@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 )
 
-// Worker slot classification: the port of bin/hv-worker-poll.
+// Worker slot classification uses pane text, movement and host status.
 //
 // States: BUSY | IDLE | BLOCKED | DONE | DEAD | LIMITED | NEEDS-PERMISSION |
 // UNKNOWN (herdr only).

@@ -26,8 +26,8 @@ import (
 	"time"
 )
 
-// Merge gate for one worker slot's branch/PR into the cycle branch: the port
-// of bin/hv-worker-gate, with the #39 fixes.
+// Merge gate for one worker slot's branch/PR verifies the merged tree before
+// landing it on the cycle branch, with the #39 fixes.
 //
 // Worker-owned branches buy git-native integration and bring back the failure
 // class that per-branch verification structurally cannot catch: two workers
