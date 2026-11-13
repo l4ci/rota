@@ -258,12 +258,47 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)"
   || fail "--strict should fail on drift (rc $rc): $OUT"
 rc=0; OUT="$(ROTA_DOC_STAMPS=strict python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] || fail "ROTA_DOC_STAMPS=strict should fail on drift (rc $rc): $OUT"
-# --restamp clears the drift and touches only STAMPS, never the doc
+# --restamp refuses unpublished HEAD without changing STAMPS (#3160).
+git -C "$SG" update-ref refs/remotes/origin/main "$SSHA"
+cp "$SSTAMPS" "$TMP/stamps-before"
+SHEAD="$(git -C "$SG" rev-parse HEAD)"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "$SHEAD" <<<"$OUT" && grep -qF "origin/main" <<<"$OUT" \
+  && cmp -s "$TMP/stamps-before" "$SSTAMPS" \
+  || fail "--restamp should refuse unpublished HEAD, name HEAD and base, and leave STAMPS alone (rc $rc): $OUT"
+# Once published, --restamp clears the drift and touches only STAMPS, never the doc.
+git -C "$SG" update-ref refs/remotes/origin/main "$SHEAD"
 DOC_BEFORE="$(cat "$SDOC")"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp ok.md 2>&1)" || rc=$?
-[ "$rc" = 0 ] && [ "$DOC_BEFORE" = "$(cat "$SDOC")" ] || fail "--restamp should exit 0 and leave the doc alone (rc $rc): $OUT"
+[ "$rc" = 0 ] && [ "$DOC_BEFORE" = "$(cat "$SDOC")" ] && grep -qxF "ok.md $SHEAD" "$SSTAMPS" \
+  || fail "--restamp should stamp HEAD and leave the doc alone (rc $rc): $OUT"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)" || rc=$?
 [ "$rc" = 0 ] || fail "a restamped doc should pass --strict (rc $rc): $OUT"
+# --base selects that origin branch, even when origin/main contains HEAD.
+cp "$SSTAMPS" "$TMP/stamps-before"
+git -C "$SG" update-ref refs/remotes/origin/release/next "$SSHA"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --base release/next --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "$SHEAD" <<<"$OUT" && grep -qF "origin/release/next" <<<"$OUT" \
+  && cmp -s "$TMP/stamps-before" "$SSTAMPS" \
+  || fail "--base should refuse HEAD absent from the selected origin branch (rc $rc): $OUT"
+git -C "$SG" update-ref refs/remotes/origin/release/next "$SHEAD"
+printf 'ok.md %s\n' "$SSHA" > "$SSTAMPS"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --base release/next --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 0 ] && grep -qxF "ok.md $SHEAD" "$SSTAMPS" \
+  || fail "--base should stamp HEAD reachable from the selected origin branch (rc $rc): $OUT"
+# A missing remote-tracking ref also fails closed, preserving the sidecar bytes.
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --base missing --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "$SHEAD" <<<"$OUT" && grep -qF "origin/missing" <<<"$OUT" \
+  && cmp -s "$TMP/stamps-before" "$SSTAMPS" \
+  || fail "a missing base should refuse restamping without writing STAMPS (rc $rc): $OUT"
+# Reachable includes an ancestor of the remote tip, not just an equal HEAD.
+git -C "$SG" commit -q --allow-empty -m "remote tip"
+git -C "$SG" update-ref refs/remotes/origin/main HEAD
+git -C "$SG" checkout -q --detach "$SHEAD"
+printf 'ok.md %s\n' "$SSHA" > "$SSTAMPS"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 0 ] && grep -qxF "ok.md $SHEAD" "$SSTAMPS" \
+  || fail "--restamp should stamp HEAD when it is behind origin/main (rc $rc): $OUT"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp nope.md 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "nope.md: not a contract doc" <<<"$OUT" || fail "--restamp of an unknown doc should fail (rc $rc): $OUT"
 printf 'ok.md nothex\n' > "$SSTAMPS"
@@ -297,7 +332,7 @@ rc=0; OUT="$(git -C "$SG" merge -q pr1 2>&1)" || rc=$?
 [ "$rc" = 0 ] || fail "pr1 should merge (rc $rc): $OUT"
 rc=0; OUT="$(git -C "$SG" merge -q pr2 2>&1)" || rc=$?
 [ "$rc" = 0 ] || fail "two PRs on one contract doc should merge with no stamp conflict (rc $rc): $OUT"
-pass "contract doc drift warns by default and fails under strict; --restamp clears it; a bad sha, unknown sha, missing ref, missing stamp and a stamp left in the doc always fail by name; two PRs on one doc merge clean"
+pass "contract doc drift warns by default and fails under strict; --restamp requires HEAD reachable from the origin base; broken stamps fail by name; two PRs on one doc merge clean"
 
 # ── the config reference page is generated from the schema (#541) ───────────
 # internal/config/keys.go is the source; a hand edit or a stale page fails.
