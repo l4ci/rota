@@ -71,8 +71,12 @@ mkdir -p "$LOGS"
 SMOKE_DIAGNOSTICS="$(cd "$LOGS" && pwd -P)"
 # Every check makes its temp files under one gate-owned root, so a leak is
 # countable: the root must be empty once the checks have exited (#85). It is
-# fresh (GATE_TMP is rm -rf'd) and in the system temp dir, never the project's.
-GATE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-tmp.XXXXXX")" || exit 1
+# fresh and in the system temp dir, never the project's. It sits in one private
+# (mktemp, 0700) parent with the isolated HOME and the worktree snapshot, so no
+# gate path is a guessable name in the shared temp dir; the parent is rm -rf'd.
+GATE_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-tmp.XXXXXX")" || exit 1
+GATE_TMP="$GATE_SCRATCH/tmp"
+mkdir "$GATE_TMP" || exit 1
 export TMPDIR="$GATE_TMP"
 # The gate runs in a fresh scratch worktree each time. Without -trimpath the Go
 # build cache keys every compile on the source directory, so each path adds a
@@ -84,9 +88,9 @@ case " ${GOFLAGS:-} " in *" -trimpath "*) ;; *) export GOFLAGS="${GOFLAGS:+$GOFL
 # rota verbs outside the smoke runner's own scrub. The worktree list of this repo
 # must come out unchanged, whatever a check does.
 . "$REPO/test/lib/isolate.sh"
-ISO_DIR="$GATE_TMP.iso"
+ISO_DIR="$GATE_SCRATCH/iso"
 isolate_env "$ISO_DIR"
-WORKTREES_BEFORE="$GATE_TMP.worktrees"
+WORKTREES_BEFORE="$GATE_SCRATCH/worktrees"
 worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 PIDS=()
 # OSC 7501 status (#2642): working/progress while the checks run, then done or
@@ -96,7 +100,7 @@ GATE_OK=0 STATUS_DONE=0
 osc7501() { [ -t 1 ] && [ -t 2 ] && printf '\033]7501;state=%s:app=rota%s\033\\' "$1" "${2:+:progress=$2}" >&2; return 0; }
 cleanup() {
   if [ "$STATUS_DONE" = 0 ]; then STATUS_DONE=1; if [ "$GATE_OK" = 1 ]; then osc7501 done; else osc7501 error; fi; fi
-  gate_lock_release "$LOCK"; rm -rf "$GATE_TMP" "$ISO_DIR" "$WORKTREES_BEFORE"
+  gate_lock_release "$LOCK"; rm -rf "$GATE_SCRATCH"
 }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).
