@@ -16,6 +16,8 @@ type Payload struct {
 	Fields map[string]any
 	// SessionID is the payload's session_id, "" when absent.
 	SessionID string
+	// TranscriptPath is the payload's transcript_path, "" when absent.
+	TranscriptPath string
 	// Cwd is the directory the payload names: the cwd key, else
 	// workspace.current_dir. "" when it names none; callers pick their own
 	// fallback.
@@ -30,6 +32,7 @@ func ParsePayload(input []byte) (Payload, error) {
 	}
 	p := Payload{Raw: input, Fields: m}
 	p.SessionID, _ = m["session_id"].(string)
+	p.TranscriptPath, _ = m["transcript_path"].(string)
 	if p.Cwd, _ = m["cwd"].(string); p.Cwd == "" {
 		p.Cwd = p.String("workspace", "current_dir")
 	}

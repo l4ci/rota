@@ -3,12 +3,17 @@ package round
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -315,5 +320,93 @@ func TestReportRecordsTheCodexAccount(t *testing.T) {
 	}
 	if e := lastOf(ledgerKinds(t, f.root), ledger.KindDone); e == nil || e.Account != "cx-home" || e.Harness != harness.Codex {
 		t.Fatalf("done entry = %+v, want the codex home account cx-home", e)
+	}
+}
+
+func parkEntry(t *testing.T, f *assignFixture) ledger.Entry {
+	t.Helper()
+	for _, x := range ledgerKinds(t, f.root) {
+		if x.Kind == ledger.KindPark {
+			return x
+		}
+	}
+	t.Fatal("no park entry")
+	return ledger.Entry{}
+}
+
+// A park row names the session the slot's harness reported, and says
+// unavailable (never drops the keys) when the git common dir cannot be read.
+func TestWindDownParkRowCarriesTheSessionOrSaysUnavailable(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	cd, err := rotastatetest.CommonDir(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.RecordSession(cd, ledger.Session{Slot: "ben", ID: "sid-4", Transcript: filepath.Join(t.TempDir(), "gone.jsonl"), UpdatedAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	f.verifyWith(t, `["true"]`)
+	if _, err := f.windDown(nil); err != nil {
+		t.Fatal(err)
+	}
+	if p := parkEntry(t, f); p.DetailStr("session") != "sid-4" || p.DetailStr("tokens") != "unavailable" {
+		t.Errorf("park detail %v", p.Detail)
+	}
+}
+
+func TestWindDownParkRowSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T) {
+	// A wind-down reads the git common dir in several places (the lease
+	// finding, the park row). A readable session is seeded so a park row that
+	// reads it differs from one that could not, and each read is failed in turn
+	// (failAt) until one changes the row: that is the park row's own lookup.
+	run := func(failAt int) (calls int, p ledger.Entry, ok bool) {
+		f := newAssignFixture(t)
+		if _, err := f.assign("12", "ben", nil); err != nil {
+			t.Fatal(err)
+		}
+		cd, err := rotastatetest.CommonDir(f.root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr := filepath.Join(t.TempDir(), "sid-4.jsonl")
+		os.WriteFile(tr, []byte(`{"type":"assistant","message":{"id":"m1","usage":{"input_tokens":3,"output_tokens":4}}}`+"\n"), 0o644)
+		if err := ledger.RecordSession(cd, ledger.Session{Slot: "ben", ID: "sid-4", Transcript: tr, UpdatedAt: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		f.verifyWith(t, `["true"]`)
+		f.env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+			if slices.Contains(args, "--git-common-dir") {
+				calls++
+				if calls == failAt {
+					return git.Result{ExitCode: 128}, nil
+				}
+			}
+			return git.Exec(ctx, dir, args...)
+		}
+		if _, err := f.windDown(nil); err != nil {
+			return calls, ledger.Entry{}, false // failing this read broke the wind-down itself
+		}
+		return calls, parkEntry(t, f), true
+	}
+	n, base, ok := run(0)
+	if !ok || base.DetailStr("session") != "sid-4" {
+		t.Fatalf("with a readable common dir the park row names the session: %v", base.Detail)
+	}
+	var hit *ledger.Entry
+	for i := 1; i <= n && hit == nil; i++ {
+		if _, p, ok := run(i); ok && p.DetailStr("session") != "sid-4" {
+			hit = &p
+		}
+	}
+	if hit == nil {
+		t.Fatalf("no unreadable common dir read changed the park row; the park row's own lookup is not covered (%d reads)", n)
+	}
+	for _, k := range []string{"session", "transcript", "tokens"} {
+		if hit.DetailStr(k) != "unavailable" {
+			t.Errorf("%s = %q, want unavailable (%v)", k, hit.DetailStr(k), hit.Detail)
+		}
 	}
 }

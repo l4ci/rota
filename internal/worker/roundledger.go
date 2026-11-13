@@ -1,10 +1,15 @@
 package worker
 
 import (
+	"path/filepath"
+	"time"
+
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/jsonx"
 	"slices"
 	"strings"
 	"sync"
@@ -109,6 +114,7 @@ func LedgerDone(env Env, ctx context.Context, a *Accounts, root string, e ledger
 func LedgerDoneIn(env Env, m *RoundMemo, ctx context.Context, a *Accounts, root string, e ledger.Entry) {
 	e.Kind = ledger.KindDone
 	e.Detail = ledger.Detail("headroom", LedgerHeadroom(ctx, a, root, e.Harness, e.Account))
+	LedgerSession(env, root, e, e.Detail)
 	LedgerNoteIn(env, m, root, e)
 }
 
@@ -241,4 +247,38 @@ func (env Env) recordVerification(root string, m *RoundMemo, tier string, target
 		target.PR = prs[0]
 	}
 	LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindVerification, Issue: target.Issue, Slot: target.Name, PR: target.PR, Detail: detail})
+}
+
+// LedgerSession adds the slot's session facts (id, transcript path, subagent
+// transcripts, token totals) to detail, the Detail of a done or park row for
+// e's slot and issue. The session is the one the slot's harness reported since
+// the issue's latest assignment; whatever is missing says "unavailable". The
+// transcript is copied under <git-common-dir>/rota/transcripts only when
+// round.copyTranscripts is on.
+func LedgerSession(env Env, root string, e ledger.Entry, detail *jsonx.Object) {
+	env = env.WithDefaults()
+	cd, err := rotastate.CommonDirVia(env.Ctx, env.Git, root)
+	if err != nil {
+		ledger.SetUnavailable(detail)
+		return
+	}
+	LedgerSessionAt(cd, env.Config(root), root, e, detail, func(m string) { fmt.Fprintln(env.Stderr, m) })
+}
+
+// LedgerSessionAt is LedgerSession with the git common dir and project config already read.
+func LedgerSessionAt(cd string, cfg any, root string, e ledger.Entry, detail *jsonx.Object, warn func(string)) {
+	var since time.Time
+	es, _ := ledger.Load(root)
+	if a := ledger.LatestAssign(es, ledger.AssignQuery{Issue: e.Issue, Slot: e.Slot}); a != nil {
+		since = a.TS
+	}
+	copyDir := ""
+	if on, err := config.Bool(cfg, config.RoundCopyTranscriptsKey); err == nil && on {
+		copyDir = filepath.Join(rotastate.Dir(cd), "transcripts")
+	}
+	d := ledger.SessionDetail(cd, e.Slot, e.Harness, since, copyDir, warn)
+	for _, k := range d.Keys() {
+		v, _ := d.Get(k)
+		detail.Set(k, v)
+	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -379,5 +380,81 @@ func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
 	}
 	if len(verdicts) != 3 || verdicts["b1"] != GateInteraction || verdicts["b3"] != GateInteraction || verdicts["b2"] != "" {
 		t.Fatalf("verdicts %v, want interaction on b1 and b3 only", verdicts)
+	}
+}
+
+// The done row names the session the slot's harness reported, with token
+// totals; a transcript that is gone says unavailable, never 0.
+func TestLedgerDoneRecordsTheReportedSession(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","state":"busy"}`)
+	cd, err := rotastatetest.CommonDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := filepath.Join(t.TempDir(), "sid-9.jsonl")
+	os.WriteFile(tr, []byte(`{"type":"assistant","message":{"id":"m1","usage":{"input_tokens":3,"output_tokens":4}}}`+"\n"), 0o644)
+	if err := ledger.RecordSession(cd, ledger.Session{Slot: "ben", ID: "sid-9", Transcript: tr, UpdatedAt: ledgerNow}); err != nil {
+		t.Fatal(err)
+	}
+	env := Env{Now: func() time.Time { return ledgerNow }}
+	LedgerDone(env, context.Background(), nil, dir, ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"})
+	os.Remove(tr)
+	LedgerDone(env, context.Background(), nil, dir, ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"})
+	es, _ := ledger.Load(dir)
+	if len(es) != 2 {
+		t.Fatalf("entries %+v", es)
+	}
+	if tok, ok := es[0].DetailTokens(); es[0].DetailStr("session") != "sid-9" || es[0].DetailStr("transcript") != tr || !ok || tok.Input != 3 || tok.Output != 4 {
+		t.Errorf("first row %v", es[0].Detail)
+	}
+	if es[1].DetailStr("session") != "sid-9" || es[1].DetailStr("tokens") != "unavailable" {
+		t.Errorf("row with the transcript gone %v", es[1].Detail)
+	}
+}
+
+// round.copyTranscripts gates the copy at the call site: off writes nothing,
+// on copies under <git-common-dir>/rota/transcripts.
+func TestLedgerSessionAtCopiesOnlyUnderTheConfigKey(t *testing.T) {
+	cd := t.TempDir()
+	tr := filepath.Join(t.TempDir(), "sid-9.jsonl")
+	body := `{"type":"assistant","message":{"id":"m1","usage":{"input_tokens":3,"output_tokens":4}}}` + "\n"
+	os.WriteFile(tr, []byte(body), 0o644)
+	if err := ledger.RecordSession(cd, ledger.Session{Slot: "ben", ID: "sid-9", Transcript: tr, UpdatedAt: ledgerNow}); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	copyPath := filepath.Join(cd, "rota", "transcripts", "sid-9.jsonl")
+	for _, c := range []struct {
+		cfg  string
+		want bool
+	}{{`{}`, false}, {`{"round":{"copyTranscripts":false}}`, false}, {`{"round":{"copyTranscripts":true}}`, true}} {
+		cfg, err := jsonx.Decode([]byte(c.cfg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := jsonx.NewObject()
+		LedgerSessionAt(cd, cfg, root, ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"}, d, nil)
+		_, recorded := d.Get("transcriptCopy")
+		_, statErr := os.Stat(copyPath)
+		if recorded != c.want || (statErr == nil) != c.want {
+			t.Errorf("config %s: copy recorded %v, on disk %v, want %v", c.cfg, recorded, statErr == nil, c.want)
+		}
+		os.RemoveAll(filepath.Join(cd, "rota", "transcripts"))
+	}
+}
+
+// When the git common dir cannot be read the row says unavailable instead of
+// dropping the session keys.
+func TestLedgerSessionSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T) {
+	env := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{ExitCode: 128}, nil
+	}}
+	d := jsonx.NewObject()
+	LedgerSession(env, t.TempDir(), ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"}, d)
+	e := ledger.Entry{Detail: d}
+	for _, k := range []string{"session", "transcript", "tokens"} {
+		if e.DetailStr(k) != "unavailable" {
+			t.Errorf("%s = %q, want unavailable", k, e.DetailStr(k))
+		}
 	}
 }
