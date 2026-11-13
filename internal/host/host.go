@@ -98,8 +98,8 @@ type Deps struct {
 	// Start returns pid's process start time, comparable only with another read
 	// from the same Start. A recorded pid whose start differs is a reused number.
 	Start func(pid int) (uint64, bool)
-	// KillWait is how many one-second polls Kill waits for a close to take
-	// (ROTA_HOST_KILL_WAIT in the shell helper). Zero means 10.
+	// KillWait bounds the presence checks after a close, one second apart.
+	// A non-positive value uses ROTA_HOST_KILL_WAIT when positive, else 10.
 	KillWait int
 	// LookPath reports whether a binary is installed.
 	LookPath func(string) (string, error)

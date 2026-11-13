@@ -39,19 +39,19 @@ func TestLinearClaimsArePlainComments(t *testing.T) {
 	if a := s.Attachments(string(k)); len(a) != 0 {
 		t.Errorf("claims left attachments %v", a)
 	}
-	if err := cs.DropClaim(ctx, k, "nia@2"); err != nil {
+	if err := cs.DropClaim(ctx, k, "nia@2", false); err != nil {
 		t.Fatal(err)
 	}
 	if vars := shape(t, s, "CommentDelete", "mutation CommentDelete($id: String!)", "commentDelete(id: $id) { success }"); vars["id"] == "" {
 		t.Errorf("release deleted no comment id: %v", vars)
 	}
-	if err := cs.DropClaim(ctx, k, "nobody"); err != nil {
+	if err := cs.DropClaim(ctx, k, "nobody", false); err != nil {
 		t.Fatalf("dropping an absent claim: %v", err)
 	}
 	if got, _ := cs.Claims(ctx, k); !slices.Equal(got, []string{"ben@1", "a_b*c"}) {
 		t.Fatalf("after release: %v", got)
 	}
-	if n := len(s.CommentBodies(string(k))); n != 3 {
-		t.Fatalf("release left %d comments, want 3 (two claims and the person's)", n)
+	if n := len(s.CommentBodies(string(k))); n != 4 {
+		t.Fatalf("release left %d comments, want 4 (two claims, a release and the person's)", n)
 	}
 }
