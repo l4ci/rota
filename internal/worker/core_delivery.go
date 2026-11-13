@@ -20,7 +20,11 @@ import (
 // receipt. A CLI retry must not rotate the signing key, replace the terminal,
 // or allocate another relay number before reconciling that original payload.
 func coreRequest(t *dispatchTarget, o DispatchOpts) string {
-	sum := sha256.Sum256([]byte(t.slot.Attempt() + "\x00" + o.Task + "\x00" + string(t.brief)))
+	identity := t.slot.Attempt() + "\x00" + o.Task + "\x00" + string(t.brief)
+	if t.relayPR != "" {
+		identity += "\x00pr:" + t.relayPR
+	}
+	sum := sha256.Sum256([]byte(identity))
 	key := hex.EncodeToString(sum[:])
 	if o.Relay {
 		key = "relay:" + key
@@ -123,6 +127,9 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 			p.Set("confirmedAt", jsonx.Str(prior, "confirmedAt"))
 		}
 		p.Set("request", request)
+		if t.relayPR != "" {
+			p.Set("relayPR", t.relayPR)
+		}
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		s.o.Set("coreDelivery", p)
@@ -179,12 +186,18 @@ func (e Env) ConfirmCoreNotSubmitted(ctx context.Context, root, slot string) err
 		if strings.HasPrefix(jsonx.Str(p, "request"), "relay:") {
 			seq, _ := strconv.Atoi(harness.RelaySequence(strings.SplitN(payload, "\n", 2)[0]))
 			relayLog = s.o
-			if s.HeldID() == "" && s.PR() == "" {
+			if pr := jsonx.Str(p, "relayPR"); pr != "" {
+				relayLog = d.queuedByRef(pr)
+			} else if s.HeldID() == "" && s.PR() == "" {
 				for _, q := range d.queued() {
 					if jsonx.Str(q, "from") == slot {
 						relayLog = q
 					}
 				}
+			}
+			if relayLog == nil {
+				reconcileErr = fail(exitcode.ExitRefused, "unknown relay's PR is no longer on the review list; retain its evidence")
+				return
 			}
 			relays = listOf(relayLog, "relays")
 			if seq <= 0 || seq != len(relays) {

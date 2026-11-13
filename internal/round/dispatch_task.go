@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/marker"
@@ -45,9 +46,9 @@ func (e Env) RecoveryBrief(ctx context.Context, root string, be Board, cfg any, 
 
 // SupportRelay decides whether a relay is also posted on the slot's issue
 // (#1827): the main machine's gate cannot read a support machine's local relay
-// log, so the issue thread is where it looks. Only a support machine posts, and
-// only for a slot holding an issue; body is the comment text to add.
-func SupportRelay(root string, cfg any, slot string, round int, text string) (issue, body string, post bool, err error) {
+// log, so the issue thread is where it looks. Only a support machine posts:
+// on the explicit queued PR's issue, else the slot's held issue. body is the comment text.
+func SupportRelay(root string, cfg any, slot string, round int, text, pr string) (issue, body string, post bool, err error) {
 	if roundcfg.SupportName(cfg) == "" {
 		return "", "", false, nil
 	}
@@ -57,6 +58,12 @@ func SupportRelay(root string, cfg any, slot string, round int, text string) (is
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return "", "", false, err
+	}
+	if pr != "" {
+		if q := reg.QueuedPR(pr); q != nil {
+			return q.Issue, marker.RelayLine(round) + "\n" + strings.TrimSpace(text), true, nil
+		}
+		return "", "", false, fmt.Errorf("relay PR %s is no longer on the review list", pr)
 	}
 	s := reg.Slot(slot)
 	if s == nil || s.HeldID() == "" {
