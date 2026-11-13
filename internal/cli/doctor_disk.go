@@ -39,7 +39,7 @@ func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot s
 		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, doctor.HumanBytes(uint64(size))))
 	}
 	if n, size := staleTmpEntries(tempRoot, now.Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d stale entries under %s (%s); run: rota reap --kind tmp", n, tempRoot, doctor.HumanBytes(uint64(size))))
+		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", n, tempRoot, doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
 		if n := prunableWorktrees(ctx, run, root); n > 0 {

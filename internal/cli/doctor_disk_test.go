@@ -179,7 +179,7 @@ func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
 		os.Chtimes(p, ts, ts)
 	}
 	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
-	want := "2 stale entries under " + tempRoot + " (2.0 KiB); run: rota reap --kind tmp"
+	want := "2 entries older than 1h under " + tempRoot + " (2.0 KiB); preview with `rota reap --kind tmp`, `--apply` to remove"
 	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), tempRoot, now)
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("leftovers = %q, want [%q]", got, want)
