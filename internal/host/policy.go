@@ -27,6 +27,8 @@ import (
 //   - internal/config/keys.go: round.dispatch choices; internal/config/schema.go:
 //     setup help for that choice. Regenerate the config reference and update
 //     the public configuration docs when adding the choice.
+//   - internal/hostenv/hostenv.go: session environment prefixes; regenerate
+//     test/lib/host-env-prefixes via internal/hostenv/gen when adding a prefix.
 
 // PaneKinds are the host kinds that have panes, in resolution order.
 var PaneKinds = []Kind{Herdr, HerdrCore, Tmux, Orca}
