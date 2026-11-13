@@ -28,8 +28,7 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 )
 
-// Account usage headroom and slot assignment: the port of
-// bin/hv-worker-account.
+// Account usage headroom and slot assignment use per-account readings.
 //
 // Each slot can run under its own CLAUDE_CONFIG_DIR, which carries its own
 // OAuth credentials, so "how much headroom does this account have" is a
