@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 func (s Store) decisionsPath() string { return rotatree.Decisions(s.Root) }
@@ -29,7 +30,7 @@ func queryTopics(content string, topics []string) (string, []string, error) {
 	var missing []string
 	seen := map[string]bool{}
 	for _, t := range topics {
-		hit := resolveTopic(t, names)
+		hit := topicmatch.Headings(t, names)
 		for _, n := range hit {
 			wanted[n] = true
 		}

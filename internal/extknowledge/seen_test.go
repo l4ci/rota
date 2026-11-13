@@ -16,7 +16,7 @@ const seedGodot = "# Godot\n\n" +
 	"- **Current** — Fine on 4.8. <!-- 2026-09-03 source:game seen:godot@4.8 -->\n" +
 	"- **Legacy** — No version. <!-- 2026-08-02 source:kluft+Upracked -->\n"
 
-// withGodot adds a Godot topic to the working clone (Query reads the files).
+// withGodot adds a Godot topic to the working clone (QueryWith reads the files).
 func withGodot(t *testing.T, f *fixture) Clone {
 	t.Helper()
 	gittest.Write(t, f.a, IndexFile, seedIndex+"- [Godot](topics/godot.md) — engine quirks\n")
@@ -76,25 +76,25 @@ func TestParseBulletsFinalCommentIsStamp(t *testing.T) {
 func TestQueryFlagsNewerProjectVersion(t *testing.T) {
 	f := newFixture(t, "")
 	c := withGodot(t, f)
-	text, _, recheck, err := c.Query([]string{"godot"}, map[string]string{"godot": "4.8"})
+	res, err := c.QueryWith([]string{"godot"}, QueryOpts{Project: map[string]string{"godot": "4.8"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := "- **Tween leak** — Kill tweens on exit. (seen on godot 4.6, project on 4.8: recheck) <!-- 2026-09-01 source:game seen:godot@4.6 -->\n"
-	if !strings.Contains(text, want) {
-		t.Fatalf("text = %q", text)
+	if !strings.Contains(res.Text, want) {
+		t.Fatalf("text = %q", res.Text)
 	}
-	if strings.Contains(text, "Current — Fine on 4.8. (seen") {
-		t.Errorf("4.8 bullet flagged: %q", text)
+	if strings.Contains(res.Text, "Current — Fine on 4.8. (seen") {
+		t.Errorf("4.8 bullet flagged: %q", res.Text)
 	}
 	found := false
-	for _, r := range recheck {
+	for _, r := range res.Recheck {
 		if r.Title == "Tween leak" && r == (Recheck{Topic: "Godot", Title: "Tween leak", Tool: "godot", Seen: "4.6", Project: "4.8"}) {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("recheck = %+v", recheck)
+		t.Errorf("recheck = %+v", res.Recheck)
 	}
 }
 
@@ -107,36 +107,36 @@ func TestQueryWithoutSeenIsUnchanged(t *testing.T) {
 		"- **Current** — Fine on 4.8. <!-- 2026-09-03 source:game seen:godot@4.8 -->\n" +
 		"- **Legacy** — No version. <!-- 2026-08-02 source:kluft+Upracked -->\n"
 	for _, project := range []map[string]string{nil, {}, {"godot": "4.6"}, {"godot": "4.6.9"}} {
-		text, _, recheck, err := c.Query([]string{"godot"}, project)
-		if err != nil || text != golden || len(recheck) != 0 {
-			t.Errorf("project %v: err=%v recheck=%v text=%q", project, err, recheck, text)
+		res, err := c.QueryWith([]string{"godot"}, QueryOpts{Project: project})
+		if err != nil || res.Text != golden || len(res.Recheck) != 0 {
+			t.Errorf("project %v: err=%v recheck=%v text=%q", project, err, res.Recheck, res.Text)
 		}
 	}
 	// A legacy bullet is untouched even when the project is far ahead.
-	text, _, _, _ := c.Query([]string{"godot"}, map[string]string{"godot": "9.0"})
-	if !strings.Contains(text, "- **Legacy** — No version. <!-- 2026-08-02 source:kluft+Upracked -->\n") {
-		t.Errorf("legacy bullet changed: %q", text)
+	res, _ := c.QueryWith([]string{"godot"}, QueryOpts{Project: map[string]string{"godot": "9.0"}})
+	if !strings.Contains(res.Text, "- **Legacy** — No version. <!-- 2026-08-02 source:kluft+Upracked -->\n") {
+		t.Errorf("legacy bullet changed: %q", res.Text)
 	}
 }
 
 func TestQueryMarkerNamesEveryOutgrownTool(t *testing.T) {
 	f := newFixture(t, "")
 	c := withGodot(t, f)
-	text, _, recheck, err := c.Query([]string{"godot"}, map[string]string{"godot": "4.8", "swift": "6.2"})
+	res, err := c.QueryWith([]string{"godot"}, QueryOpts{Project: map[string]string{"godot": "4.8", "swift": "6.2"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := "- **Both tools** — Needs both. (seen on godot 4.6, project on 4.8; seen on swift 6.1, project on 6.2: recheck) <!-- 2026-09-02"
-	if !strings.Contains(text, want) {
-		t.Fatalf("text = %q", text)
+	if !strings.Contains(res.Text, want) {
+		t.Fatalf("text = %q", res.Text)
 	}
 	n := 0
-	for _, r := range recheck {
+	for _, r := range res.Recheck {
 		if r.Title == "Both tools" {
 			n++
 		}
 	}
 	if n != 2 {
-		t.Errorf("recheck rows for the bullet = %d, want 2 (%+v)", n, recheck)
+		t.Errorf("recheck rows for the bullet = %d, want 2 (%+v)", n, res.Recheck)
 	}
 }
