@@ -13,7 +13,7 @@
 //   - A tmp candidate (a direct child of the project temp root, never its
 //     .gitignore) is held while its newest file is under an hour old, a
 //     checkout or host agent works at or under it, a live process of the user
-//     has its cwd, executable, an open file, HOME or TMPDIR there, or the
+//     has its cwd, executable, an open or mapped file, HOME or TMPDIR there, or the
 //     process table cannot be fully read.
 //   - Registered slots, park/* worktrees and branches, the base branch and
 //     any branch checked out in a worktree are never candidates.

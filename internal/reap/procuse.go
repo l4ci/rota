@@ -13,7 +13,8 @@ import (
 )
 
 // ProcUse is what one live process holds by path: its working directory, its
-// executable, every open file, and the HOME and TMPDIR it started with.
+// executable, every open file, every file it maps into memory, and the HOME
+// and TMPDIR it started with.
 type ProcUse struct {
 	PID   int
 	Paths []string
@@ -24,9 +25,8 @@ type ProcUse struct {
 var procEnvKeys = []string{"HOME=", "TMPDIR="}
 
 // ReadProcUses reads the process table under procRoot (/proc) for the processes
-// of uid. Others are skipped: the project temp root is 0700 and the user's
-// own, so no other user's process can work in it (and /proc shows a
-// non-dumpable process, ssh-agent say, as root's). A process that exited
+// of uid (consulted). Others are skipped: the project temp root is 0700 and the
+// user's own, so no other user's process can work in it. A process that exited
 // during the scan is skipped. Anything else it cannot read (no table, or one
 // of uid's processes it may not read) is an error, since then no process can
 // be ruled out.
@@ -66,7 +66,7 @@ func readProcUse(dir string, pid, uid int) (u ProcUse, ok bool, err error) {
 	if !isStat {
 		return u, false, errors.New("no owner in the process table")
 	}
-	if int(st.Uid) != uid {
+	if !consulted(st, uid) {
 		return u, false, nil
 	}
 	u.PID = pid
@@ -96,6 +96,18 @@ func readProcUse(dir string, pid, uid int) (u ProcUse, ok bool, err error) {
 		}
 		add(p)
 	}
+	// A file mapped into memory stays in use after its fd is closed. Each maps
+	// line ends in the mapped path, the one field that starts with "/";
+	// anonymous mappings ([heap], [stack], none) have no path.
+	maps, err := os.ReadFile(filepath.Join(dir, "maps"))
+	if err != nil && !gone(err) {
+		return u, false, err
+	}
+	for _, line := range strings.Split(string(maps), "\n") {
+		if i := strings.IndexByte(line, '/'); i >= 0 {
+			add(line[i:])
+		}
+	}
 	env, err := os.ReadFile(filepath.Join(dir, "environ"))
 	if err != nil && !gone(err) {
 		return u, false, err
@@ -108,4 +120,18 @@ func readProcUse(dir string, pid, uid int) (u ProcUse, ok bool, err error) {
 		}
 	}
 	return u, true, nil
+}
+
+// consulted reports whether the process whose /proc/<pid> directory st
+// describes is one reap must account for: those of uid. The temp root is 0700
+// and uid's own, so no other user's process can work in it. Pending a
+// maintainer decision (#2499), this is the one place that decides which
+// processes count. Measured on Linux 6.8: a non-dumpable process of uid
+// (gpg-agent, an sshd session) keeps /proc/<pid> owned by uid, but its cwd, fd
+// and maps entries turn root's and unreadable, so it counts and its unreadable
+// entries fail the scan closed. Skipping it instead means comparing the owner
+// of <pid>/cwd here rather than of the directory. The user's systemd manager
+// (capabilities held) is unreadable too, with entries still owned by uid.
+func consulted(st *syscall.Stat_t, uid int) bool {
+	return int(st.Uid) == uid
 }

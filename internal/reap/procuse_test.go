@@ -93,3 +93,43 @@ func TestReadProcUsesNoTableFails(t *testing.T) {
 		t.Fatal("a missing process table must be an error")
 	}
 }
+
+// A file a process mapped and then closed shows only in its maps: it is still
+// in use, so its path counts.
+func TestReadProcUsesCountsFileMappings(t *testing.T) {
+	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}}, nil)
+	maps := "7f00-7f01 r--p 00000000 08:01 1234       /w/scratch/lib name.so\n" +
+		"7f01-7f02 rw-p 00000000 00:00 0          [heap]\n" +
+		"7f02-7f03 r--p 00000000 08:01 99         /w/gone.dat (deleted)\n" +
+		"7f03-7f04 rw-p 00000000 00:00 0\n"
+	if err := os.WriteFile(filepath.Join(root, "100", "maps"), []byte(maps), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uses, err := ReadProcUses(root, os.Getuid())
+	if err != nil || len(uses) != 1 {
+		t.Fatalf("ReadProcUses = %v, %v", uses, err)
+	}
+	for _, want := range []string{"/w/scratch/lib name.so", "/w/gone.dat (deleted)"} {
+		if !slices.Contains(uses[0].Paths, want) {
+			t.Errorf("paths %v lack the mapping %s", uses[0].Paths, want)
+		}
+	}
+	if slices.Contains(uses[0].Paths, "[heap]") {
+		t.Errorf("paths %v hold an anonymous mapping", uses[0].Paths)
+	}
+}
+
+// An unreadable maps file of the user's own process leaves the scan incomplete.
+func TestReadProcUsesUnreadableMapsFails(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every mode")
+	}
+	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}}, nil)
+	maps := filepath.Join(root, "100", "maps")
+	if err := os.WriteFile(maps, []byte("x"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if uses, err := ReadProcUses(root, os.Getuid()); err == nil {
+		t.Fatalf("unreadable maps read as %v, want an error", uses)
+	}
+}
