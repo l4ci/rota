@@ -140,6 +140,7 @@ func TestReviewStepManual(t *testing.T) {
 // given notes waiting on it.
 type reviewFake struct {
 	state   string
+	head    string
 	viewErr error
 	notes   []tracker.Comment
 }
@@ -147,7 +148,7 @@ type reviewFake struct {
 func (f reviewFake) MRNotes(context.Context, int) ([]tracker.Comment, error) { return f.notes, nil }
 func (f reviewFake) Reviews(context.Context, int) ([]tracker.Review, error)  { return nil, nil }
 func (f reviewFake) PRView(context.Context, int) (tracker.PRInfo, error) {
-	return tracker.PRInfo{State: f.state}, f.viewErr
+	return tracker.PRInfo{State: f.state, HeadSHA: f.head}, f.viewErr
 }
 
 func TestPendingSummary(t *testing.T) {
@@ -287,5 +288,24 @@ func TestRelayResultOfMarksTheBounceCap(t *testing.T) {
 	}
 	if got := RelayResultOf(true, 0, 0, errors.New("other")); got.AtCap || !got.Nothing {
 		t.Fatalf("plain error = %+v", got)
+	}
+}
+
+// TestPendingSummaryStaleFailVerdict pins #3162: a FAIL recorded at a head the
+// PR has moved past is not review input; one at the current head still is.
+func TestPendingSummaryStaleFailVerdict(t *testing.T) {
+	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	slot := worker.NewSlot("nia", "nia/9-x", "", "main", "")
+	slot.SetPR("https://github.com/o/r/pull/9")
+	v := &worker.ReviewVerdict{At: at, Text: "review FAIL at abc1234", Shas: []string{"abc1234def"}}
+	for name, tc := range map[string]struct{ head, want string }{
+		"stale head":   {"fff9999000", ""},
+		"current head": {"abc1234def", "review verdict FAIL https://github.com/o/r/pull/9"},
+		"unknown head": {"", "review verdict FAIL https://github.com/o/r/pull/9"},
+	} {
+		got, err := PendingSummary(context.Background(), reviewFake{state: "OPEN", head: tc.head}, slot, v, at.Add(-time.Hour))
+		if err != nil || got != tc.want {
+			t.Errorf("%s: got %q, %v want %q", name, got, err, tc.want)
+		}
 	}
 }

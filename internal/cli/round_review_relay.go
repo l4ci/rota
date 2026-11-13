@@ -152,7 +152,9 @@ func openFindings(list []verdict.Record) []string {
 func failVerdict(list []verdict.Record) *worker.ReviewVerdict {
 	var sb strings.Builder
 	var at time.Time
+	var shas []string
 	for i, r := range failRecords(list) {
+		shas = append(shas, r.Sha)
 		t, err := stamp.Parse(r.RecordedAt)
 		if err != nil {
 			return nil
@@ -177,7 +179,7 @@ func failVerdict(list []verdict.Record) *worker.ReviewVerdict {
 	if sb.Len() == 0 {
 		return nil
 	}
-	return &worker.ReviewVerdict{At: at, Text: sb.String()}
+	return &worker.ReviewVerdict{At: at, Text: sb.String(), Shas: shas}
 }
 
 func reviewRelayResult(res round.Relayed, set roundcfg.Settings, err error) (Result, error) {
