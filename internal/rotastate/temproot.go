@@ -3,8 +3,10 @@ package rotastate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -39,6 +41,34 @@ func TempRoot(commonDir string) (string, bool) {
 	return root, true
 }
 
+// EnclosingTempRoot is the project temp root that holds dir (dir itself or an
+// ancestor), found by path: a review tree prepared there is fenced from git by
+// its own empty repository, so git cannot name the project, and the walk up
+// stops at the nearest .rota/tmp (rotatree.IsTempRoot) as rota's root walks do.
+// ok is false when that nearest one is no root rota owns under a real .rota/.
+func EnclosingTempRoot(dir string) (string, bool) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	for d := abs; ; {
+		if rotatree.IsTempRoot(d) {
+			if realDir(filepath.Dir(d)) && Owned(d) {
+				return d, true
+			}
+			return "", false
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return "", false
+		}
+		d = parent
+	}
+}
+
 // TempRootVia is TempRoot for the repository that holds dir, created on first
 // use (0700, self-ignoring) and symlink-resolved, so a caller can anchor on it
 // as an exact parent. ok is false with a nil error outside a repository or
@@ -69,10 +99,24 @@ func TempRootVia(ctx context.Context, run git.Runner, dir string) (string, bool,
 }
 
 // EnsureTempRoot creates root (0700) and its self-ignoring .gitignore when
-// either is missing. An existing .gitignore is left as it is.
+// either is missing. An existing root must belong to the current user and is
+// set back to 0700, so no other user can reach what rota keeps there; an
+// existing .gitignore is left as it is.
 func EnsureTempRoot(root string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
+	}
+	fi, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if !mine(fi) {
+		return fmt.Errorf("%s belongs to another user", root)
+	}
+	if fi.Mode().Perm() != 0o700 {
+		if err := os.Chmod(root, 0o700); err != nil {
+			return err
+		}
 	}
 	ignore := filepath.Join(root, IgnoreFile)
 	if _, err := os.Lstat(ignore); err == nil || !os.IsNotExist(err) {
@@ -82,10 +126,11 @@ func EnsureTempRoot(root string) error {
 }
 
 // Owned reports whether root is a temp root rota made: a real directory (not a
-// symlink) holding the self-ignoring IgnoreFile. Reap removes entries only
-// under an owned root.
+// symlink) of the current user holding the self-ignoring IgnoreFile. Reap
+// removes entries only under an owned root.
 func Owned(root string) bool {
-	if !realDir(root) {
+	fi, err := os.Lstat(root)
+	if err != nil || !fi.IsDir() || !mine(fi) {
 		return false
 	}
 	b, err := os.ReadFile(filepath.Join(root, IgnoreFile))
@@ -97,4 +142,10 @@ func Owned(root string) bool {
 func realDir(path string) bool {
 	fi, err := os.Lstat(path)
 	return err == nil && fi.IsDir()
+}
+
+// mine reports whether fi belongs to the current user.
+func mine(fi os.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && int(st.Uid) == os.Getuid()
 }

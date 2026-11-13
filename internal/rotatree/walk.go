@@ -7,9 +7,16 @@ import "path/filepath"
 // reports whether visit stopped the walk. It is the one upward walk to a root
 // marker: callers pass the predicate for their marker and keep their own
 // reading of the result.
+//
+// The walk ends, unvisited, at a project temp root (IsTempRoot): a review tree
+// or scratch dir made there is no part of the project, so a rota verb run in
+// it never resolves, reads or writes the live .rota/ above (#2499).
 func Ascend(start string, visit func(dir string) bool) bool {
 	dir := start
 	for {
+		if IsTempRoot(dir) {
+			return false
+		}
 		if visit(dir) {
 			return true
 		}
@@ -32,4 +39,10 @@ func Find(start string) (string, bool) {
 		return "", false
 	}
 	return root, true
+}
+
+// IsTempRoot reports whether dir is, by name, a project temp root: a TmpDir
+// directly under a .rota/ directory. It reads no filesystem.
+func IsTempRoot(dir string) bool {
+	return filepath.Base(dir) == TmpDir && filepath.Base(filepath.Dir(dir)) == DirName
 }

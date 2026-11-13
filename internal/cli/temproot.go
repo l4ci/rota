@@ -9,8 +9,12 @@ import (
 // tempRootFor is where rota makes its own temp workspaces for work in dir: the
 // project temp root (<main checkout>/.rota/tmp, #2499; project true), else the
 // system temp dir outside a rota project. Both come back symlink-resolved, so
-// cleanup can anchor on either as an exact parent.
+// cleanup can anchor on either as an exact parent. A dir inside a project temp
+// root (a prepared review tree, fenced from git) resolves to that root.
 func (c *Ctx) tempRootFor(dir string) (root string, project bool, err error) {
+	if root, ok := rotastate.EnclosingTempRoot(dir); ok {
+		return root, true, nil
+	}
 	root, project, err = rotastate.TempRootVia(c.Context(), c.deps().Git, dir)
 	if err != nil || project {
 		return root, project, err

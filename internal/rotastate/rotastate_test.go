@@ -181,3 +181,44 @@ func TestOwnedTempRootNeedsItsMarker(t *testing.T) {
 		t.Error("a root whose .gitignore is not rota's is not owned")
 	}
 }
+
+// A root that already exists with a looser mode is set back to 0700 on use,
+// so no other user can reach what rota keeps in it.
+func TestEnsureTempRootTightensMode(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".rota", "tmp")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureTempRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(root)
+	if err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("root mode = %v, %v; want 0700", fi.Mode().Perm(), err)
+	}
+}
+
+// EnclosingTempRoot finds the owned root a path sits in by walking up, and
+// stops at the nearest .rota/tmp: an unowned one is no root.
+func TestEnclosingTempRoot(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	root := filepath.Join(top, ".rota", "tmp")
+	deep := filepath.Join(root, "rota-review-1", "tree", "pkg")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := EnclosingTempRoot(deep); ok {
+		t.Fatalf("a root without its marker resolved: %s", got)
+	}
+	if err := EnsureTempRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{deep, root} {
+		if got, ok := EnclosingTempRoot(dir); !ok || got != root {
+			t.Fatalf("EnclosingTempRoot(%s) = %q, %v; want %s", dir, got, ok, root)
+		}
+	}
+	if got, ok := EnclosingTempRoot(top); ok {
+		t.Fatalf("the project itself is not inside its temp root: %s", got)
+	}
+}

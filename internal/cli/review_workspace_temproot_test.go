@@ -154,3 +154,39 @@ func TestGitTmpDirPrintsProjectRootOrSystemTemp(t *testing.T) {
 		t.Fatalf("tmp-dir outside a rota project = rc %d %v, want the system temp %s", o.code, data, canonical)
 	}
 }
+
+// Inside a prepared tree (fenced from git by its own empty repository) a probe
+// and `rota git tmp-dir` still resolve to the project temp root the tree sits
+// in, never the system temp dir; and no verb there reads the live .rota/.
+func TestReviewTreeResolvesProjectTempRootNotLiveRota(t *testing.T) {
+	d, main, _, system := tempReviewProject(t)
+	write(t, filepath.Join(main, ".rota", "config.json"), `{"work":{"isolation":"worktree"}}`)
+	real, err := filepath.EvalSymlinks(main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(real, ".rota", "tmp")
+	tree := tempReviewPrepared(t, d, main)
+
+	o := trRunWith(t, d, tree, "", "git", "tmp-dir", "--json")
+	if o.code != 0 {
+		t.Fatalf("tmp-dir in the tree: rc=%d %s %s", o.code, o.stdout, o.stderr)
+	}
+	if data := envelope(t, o.stdout)["data"].(map[string]any); data["path"] != want || data["project"] != true {
+		t.Fatalf("tmp-dir in the tree = %v, want %s (system temp %s)", data, want, system)
+	}
+
+	o = trRunWith(t, d, tree, "", "review", "probe", "--json", "--", "sh", "-c", `printf %s "$HOME"`)
+	if o.code != 0 {
+		t.Fatalf("probe in the tree: rc=%d %s %s", o.code, o.stdout, o.stderr)
+	}
+	home := envelope(t, o.stdout)["data"].(map[string]any)["stdout"].(string)
+	if rel, err := filepath.Rel(want, home); err != nil || !filepath.IsLocal(rel) {
+		t.Fatalf("probe HOME %s from the tree is not under the project temp root %s", home, want)
+	}
+
+	o = trRunWith(t, d, tree, "", "config", "show", "work.isolation", "--json")
+	if strings.Contains(o.stdout, "worktree") {
+		t.Fatalf("config show in the review tree read the live project config: rc=%d %s", o.code, o.stdout)
+	}
+}
