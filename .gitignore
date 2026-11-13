@@ -37,6 +37,7 @@ __pycache__/
 .rota/debug/
 .rota/review/
 .rota/qa-runs/
+.rota/tmp/
 .rota/verdicts.json
 .rota/gate-audit.jsonl
 .rota/ledger.jsonl

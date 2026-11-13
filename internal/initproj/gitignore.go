@@ -26,6 +26,7 @@ var ignoreLines = []string{
 	relDir(rotatree.DebugDir),
 	relDir(rotatree.ReviewDir),
 	relDir(rotatree.QARunsDir),
+	relDir(rotatree.TmpDir),
 	rel(rotatree.VerdictsFile),
 	rel(rotatree.GateAuditFile),
 	rel(rotatree.LedgerFile),
