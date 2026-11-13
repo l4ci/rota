@@ -76,11 +76,18 @@ func ReadNote(path string) (Note, error) {
 	return n, nil
 }
 
-// Marked is the marker rule, stated once: the first line is HandoffMarker.
+// Marked is the marker test Eligible builds on: the first line is HandoffMarker.
 func (n Note) Marked() bool {
 	first, _, _ := strings.Cut(n.Body, "\n")
 	return strings.TrimSpace(first) == HandoffMarker
 }
+
+// Eligible is the one rule for which note counts, for every reader and every
+// holder: the file exists and carries the marker as its first line, so only a
+// handoff written for the orchestrator is ever injected or reported. An
+// unmarked file (a worker's /rota-pause note filed under the same branch) never
+// counts, lease holder or not.
+func (n Note) Eligible() bool { return n.Exists && n.Marked() }
 
 // heading is the first markdown heading after the marker line.
 func (n Note) heading() string {
@@ -110,13 +117,13 @@ func ShouldInject(source string, orchestrator, leaseFree bool, n Note, maxAge ti
 	if source != "startup" && source != "clear" {
 		return false
 	}
-	if !n.Exists {
+	if !n.Eligible() {
 		return false
 	}
 	if orchestrator {
 		return true
 	}
-	return leaseFree && n.Fresh(maxAge, now) && n.Marked()
+	return leaseFree && n.Fresh(maxAge, now)
 }
 
 // OrchestratorNote is a marked orchestrator handoff found at a path.
@@ -136,7 +143,7 @@ func ReadOrchestratorNote(path string, consume bool) (note *OrchestratorNote, wa
 	if err != nil {
 		return nil, "handoff note " + path + " unreadable: " + err.Error()
 	}
-	if !n.Exists || !n.Marked() {
+	if !n.Eligible() {
 		return nil, ""
 	}
 	out := &OrchestratorNote{Heading: n.heading()}
