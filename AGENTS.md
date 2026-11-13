@@ -31,8 +31,12 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 - Rounds: Orchestration: Reviews & verdicts: Reviewer briefs & conduct
 - Rounds: Orchestration: Reviews & verdicts: Verdict records & lenses
 - Rounds: Orchestration: Reviews & verdicts: Bounces & re-reviews
-- Rounds: Orchestration: Gate, trains & bookkeeping
-- Rounds: Orchestration: Workers & relays
+- Rounds: Orchestration: Gate, trains & bookkeeping: Gate refusals
+- Rounds: Orchestration: Gate, trains & bookkeeping: Trains
+- Rounds: Orchestration: Gate, trains & bookkeeping: Gate runs & cleanup
+- Rounds: Orchestration: Workers & relays: Slots & assignment
+- Rounds: Orchestration: Workers & relays: Relays & briefs
+- Rounds: Orchestration: Workers & relays: Worker sessions
 - Rounds: Orchestration: Slate & issues
 
 <!-- rota-knowledge-end -->
