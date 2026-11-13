@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.34.2 — 2026-11-13
+
+Relay provenance that survives parking, range checks on `config set`, and a registry migration that keeps file permissions.
+
+### Fixed
+
+- The merge gate no longer fails a parked PR whose `## Approvals` cites a relay that was really sent. Relays now stay on record when a slot is parked, its PR re-queued, or the slot handed a new task. A citation of a round with no relay for that branch still fails (#3266).
+- `rota config set` refuses an integer outside the range its reader accepts, for every bounded key, with exit 2 and the allowed range. Values that used to save and then fail or get ignored at read time, such as `change.smallBelow -1`, `round.slots 0`, `learn.promoteThreshold 0` or `test.slots 65`, are now refused up front; existing config files are not rewritten (#3197).
+- Migrating the legacy project registry keeps its file mode (a `0600` file stays `0600`), including across filesystems, and removes the old copy and its lock. The migration runs automatically on first use; a registry migrated by an earlier version keeps the mode it got then (#3267).
+- Hand releases now survive on ClaimStore trackers (Jira, Linear, Itsaplan), the same as on GitHub (#3246).
+- `rota layout split|tabs` skips hosts that can't lay out panes (herdr-core, Orca, tmux, solo) instead of querying herdr, and exits 5 when there was nothing to arrange (#3242).
+- Document reads and removals report filesystem errors other than "not found" as `unavailable` (exit 5); before, a read error exited 70 and a stat or remove error exited 3.
+- A SessionStart handoff note is picked up only when it carries the `<!-- rota-handoff: orchestrator -->` marker on its first line, for the lease holder too. Unmarked notes are ignored (#3208).
+- Legacy knowledge bullets with no tier record show as `(provisional)` in `rota knowledge query` and match `--tier provisional`, the same as in `tier get` and `tier list` (#3212).
+- The gate's smoke retry reads its infrastructure-failure markers from the same file the Go path uses, so smoke no longer retries a failure the Go path rejects (#3239).
+
+### Changed
+
+- Internal cleanup with no behaviour change of its own: one owner each for the worker brief contract and reap path containment; postgate runs through its bookkeeping port; unused knowledge and staleness wrappers are gone.
+
+### Documentation
+
+- Contract docs cover relay targets and their archive writers, hand releases on ClaimStore trackers, layout skips, smoke marker ownership and registry permissions; stale host and worker comments now match the code.
+
+## Stats
+33 commits, 92 files changed, +1677 −707 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.34.1...v0.34.2
+
 ## v0.34.1 — 2026-11-13
 
 Safer smoke runs, real read errors, and steadier doctor and init.
