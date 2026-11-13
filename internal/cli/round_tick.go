@@ -197,6 +197,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 	if r.Observed {
 		d.Set("unknown", items(r.Unknown))
 	}
+	if len(r.Holds) > 0 {
+		d.Set("holds", items(r.Holds))
+	}
 	d.Set("needsYou", items(r.NeedsYou))
 	d.Set("new", items(r.New))
 	return d
@@ -220,6 +223,9 @@ func tickLines(r roundtick.Result) string {
 	lines = append(lines, r.Holding...)
 	for _, a := range r.Did {
 		lines = append(lines, fmt.Sprintf("did\t%s\t%s\t%s", a.Action, a.Target, dash(a.Detail)))
+	}
+	for _, it := range r.Holds {
+		lines = append(lines, fmt.Sprintf("hold\t%s\t%s", it.Target, it.Why))
 	}
 	for _, it := range r.NeedsYou {
 		lines = append(lines, fmt.Sprintf("needs-you\t%s\t%s\t%s", it.Kind, it.Target, it.Why))

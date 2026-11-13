@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.
@@ -23,6 +24,7 @@ type DispatchOpts struct {
 	BodyFile    string
 	Task        string
 	Relay       bool
+	PR          string // with Relay: explicit PR on the round's review list
 	Round       *int
 	BootTimeout int // seconds; 0 means 60
 	// Model is the model this worker starts with ("" keeps round.tiers.claude.standard, or
@@ -195,6 +197,7 @@ type dispatchTarget struct {
 	handle   string
 	session  string
 	timeout  int
+	relayPR  string // explicit, validated review-list target; empty keeps slot routing
 }
 
 // prepareDispatch is the shared front of a task dispatch and a relay: refuse
@@ -581,10 +584,29 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		return res, err
 	}
 	reg, s, h := t.reg, t.slot, t.h
+	if o.PR != "" {
+		q := reg.QueuedPR(o.PR)
+		if q == nil {
+			return res, fail(exitcode.ExitRefused, "relay PR is not on the round's review list")
+		}
+		f, _, refusal := e.openForge(ctx, root, q.PR, ParseGateConfig(t.cfg), tracker.ForgeReader)
+		if refusal != nil {
+			return res, fail(exitcode.ExitRefused, "cannot verify relay PR: "+refusal.err.Error())
+		}
+		n, _ := PRRefNumber(q.PR)
+		pr, err := f.PRView(ctx, n)
+		if err != nil {
+			return res, fail(exitcode.ExitRefused, "cannot verify relay PR: "+err.Error())
+		}
+		if !strings.EqualFold(pr.State, "OPEN") {
+			return res, fail(exitcode.ExitRefused, "relay PR is not open")
+		}
+		t.relayPR = q.PR
+	}
 	// A relay is logged where the gate of its PR reads it: on the slot while it
 	// holds an issue or PR, else on the PR queued from it. With neither there is
 	// nothing the gate could read, so refuse before anything is sent.
-	relayQueued := s.HeldID() == "" && s.PR() == ""
+	relayQueued := o.PR == "" && s.HeldID() == "" && s.PR() == ""
 	if relayQueued && t.handle != "" && reg.QueuedFrom(o.Slot) == nil {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' holds no issue or queued PR to log a relay against — assign it work, or gate the PR directly", o.Slot))
 	}
@@ -625,6 +647,9 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	if relayQueued {
 		relaySeq = len(reg.QueuedFrom(o.Slot).Relays) + 1
 	}
+	if t.relayPR != "" {
+		relaySeq = len(reg.QueuedPR(t.relayPR).Relays) + 1
+	}
 	// A relay also carries a note: the worker writes its own PR body and cannot
 	// otherwise tell a relay from the maintainer typing in its pane.
 	note := fmt.Sprintf("[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
@@ -649,7 +674,20 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		// unlogged; only a refused dialog or a human draft is certain nothing
 		// went out.
 		entry := newRelayEntry(round, e.Now(), string(t.brief))
-		if relayQueued {
+		if t.relayPR != "" {
+			logged := false
+			if err := Update(root, func(d *Doc) {
+				if q := d.queuedByRef(t.relayPR); q != nil {
+					q.Set("relays", append(listOf(q, "relays"), entry))
+					logged = true
+				}
+			}); err != nil {
+				return res, err
+			}
+			if !logged {
+				return res, fmt.Errorf("relay sent but PR %s left the review list before logging", t.relayPR)
+			}
+		} else if relayQueued {
 			logged := false
 			if err := Update(root, func(d *Doc) { logged = d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
 				return res, err
