@@ -55,6 +55,9 @@ const (
 	QARunsDir     = "qa-runs"
 	HandoffDir    = "handoff"
 	ReviewDir     = "review"
+	// TmpDir is the project temp root (#2499): rota's own scratch workspaces,
+	// gate logs and agent scratch files. Gitignored; nothing in it is source.
+	TmpDir = "tmp"
 )
 
 // RelPrefix starts a repo-relative slash path under .rota/; concatenate it
