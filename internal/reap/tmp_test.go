@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/round"
 )
 
 func agentAt(cwd string) host.Agent { return host.Agent{Tab: "t", Name: "x", Cwd: cwd} }
@@ -235,5 +236,26 @@ func TestTmpRootWithoutMarkerListsNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "run-a")); err != nil {
 		t.Fatalf("entry removed: %v", err)
+	}
+}
+
+// A live slot's TMPDIR lives under <root>/slots/<slot> (#3164): reap holds the
+// slots entry while any slot is registered, and offers it once none is.
+func TestTmpSlotsDirHeldWhileASlotIsRegistered(t *testing.T) {
+	dir := tmpRoot(t, map[string]time.Duration{"slots": 5 * time.Hour})
+	in := tmpInput(t, dir, nil, nil)
+	in.Report.Rows = []round.Row{{Name: "kit", Registered: true}}
+	res := find(t, in, KindTmp)
+	if len(res.Candidates) != 1 || !strings.Contains(res.Candidates[0].Held, "slot kit") {
+		t.Fatalf("candidates = %v", ids(res.Candidates))
+	}
+	applied := Apply(bg, in, res.Candidates)
+	if len(applied.Reaped) != 0 {
+		t.Errorf("held slots dir reaped: %+v", applied)
+	}
+	in.Report.Rows = nil
+	res = find(t, in, KindTmp)
+	if len(res.Candidates) != 1 || res.Candidates[0].Held != "" {
+		t.Fatalf("with no slot registered: %v", ids(res.Candidates))
 	}
 }

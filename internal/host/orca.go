@@ -78,7 +78,7 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	for _, entry := range env {
 		k, v, ok := strings.Cut(entry, "=")
 		switch k {
-		case "CLAUDE_CONFIG_DIR", "CODEX_HOME", "OPENCODE_CONFIG_DIR", "ROTA_SLOT", "ROTA_PORT_BASE", "ROTA_PORT_BLOCK", "ROTA_DB_SUFFIX":
+		case "CLAUDE_CONFIG_DIR", "CODEX_HOME", "OPENCODE_CONFIG_DIR", "ROTA_SLOT", "ROTA_PORT_BASE", "ROTA_PORT_BLOCK", "ROTA_DB_SUFFIX", "TMPDIR":
 		default:
 			return "", fmt.Errorf("orca refuses environment key %q: shell history may expose secrets", k)
 		}

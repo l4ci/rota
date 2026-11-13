@@ -75,8 +75,12 @@ Work only this task, then stop.
   variables, say so in your PR instead of changing its test suite.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
-- Scratch. Make scratch files, bodies, extracts and scratch HOMEs under
-  `$(rota git tmp-dir)`, the project temp root every worktree shares, never `/tmp`:
+- Scratch. Your session runs with `TMPDIR` set to your slot's own dir under the project temp
+  root (`.rota/tmp/slots/<slot>`): write every temp file (PR bodies, briefs, extracts, scratch
+  HOMEs) under `$TMPDIR`, never `/tmp` or the shared harness temp dir, and never a fixed file
+  name outside it. Another slot on this machine writes the same names, and a shared one let a
+  worker PATCH another's PR body onto its own PR. Without `TMPDIR` (a solo session), use
+  `$(rota git tmp-dir)`, the project temp root every worktree shares:
   `rota reap --kind tmp` can then find what a run left behind.
 - Docs. Update the public docs in your own PR: `/rota-ship` runs `/rota-docs` after-work (Step 8.6) on your branch and the edit lands in the PR. There is no per-round docs pass. Scaffold and restructure stay the maintainer's: `ROTA-BLOCKED` instead. When a parallel PR edits the same doc page, the train marks yours STALE; merge main, keep both sides and push again.
 - Never edit `docs/contributing/contract/STAMPS` or run `check-doc-stamps.py --restamp`: the orchestrator restamps on `main` after merges. A new contract doc is the one exception: add its line.
