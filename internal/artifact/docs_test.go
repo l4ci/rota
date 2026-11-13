@@ -2,11 +2,14 @@ package artifact
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 func exitOf(err error) int {
@@ -198,10 +201,91 @@ func TestFileDocsReadPassesThroughRealErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := d.Read("b07")
-	if err == nil || exitOf(err) == exitcode.ExitResolution {
-		t.Fatalf("Read of an unreadable path = %v, want the read error, not 'not found'", err)
+	if exitOf(err) != exitcode.ExitUnavailable {
+		t.Fatalf("Read of a directory = %v (exit %d), want exit 5", err, exitOf(err))
+	}
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) || pathErr.Path != d.Path("b07") || !strings.Contains(err.Error(), pathErr.Error()) {
+		t.Fatalf("Read error = %v, want the path and underlying OS error", err)
 	}
 	if _, err := d.Read("missing"); exitOf(err) != exitcode.ExitResolution {
 		t.Fatalf("Read of a missing file = %v, want not found", err)
+	}
+}
+
+func TestFileDocsRemoveRealErrors(t *testing.T) {
+	for _, kind := range []string{"nonempty directory", "permission", "stat"} {
+		t.Run(kind, func(t *testing.T) {
+			d := FileDocs{Root: t.TempDir(), Dir: "debug", Kind: "debug session"}
+			p := d.Path("b07")
+			parent := filepath.Dir(p)
+			if err := os.MkdirAll(parent, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "nonempty directory":
+				if err := os.Mkdir(p, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(p, "child"), []byte("keep"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "permission":
+				if os.Geteuid() == 0 {
+					t.Skip("root bypasses directory write permissions")
+				}
+				// Pre-create the sidecar so this exercises removal, not lock creation.
+				for _, file := range []string{p, fsio.LockPath(p)} {
+					if err := os.WriteFile(file, nil, 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Chmod(parent, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+			case "stat":
+				if err := os.Remove(parent); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(parent, nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := d.Remove("b07")
+			if exitOf(err) != exitcode.ExitUnavailable {
+				t.Fatalf("Remove = %v (exit %d), want exit 5", err, exitOf(err))
+			}
+			var pathErr *os.PathError
+			if !errors.As(err, &pathErr) || pathErr.Path != p || !strings.Contains(err.Error(), pathErr.Error()) {
+				t.Fatalf("Remove error = %v, want the path and underlying OS error", err)
+			}
+			if kind == "permission" && !errors.Is(err, fs.ErrPermission) {
+				t.Fatalf("Remove error = %v, want permission denied", err)
+			}
+			if kind != "stat" {
+				if _, err := os.Stat(p); err != nil {
+					t.Fatalf("failed Remove changed the document: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestFileDocsReadPermissionError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file read permissions")
+	}
+	d := FileDocs{Root: t.TempDir(), Dir: "debug", Kind: "debug session"}
+	p := d.Path("b07")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("keep"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	_, err := d.Read("b07")
+	if exitOf(err) != exitcode.ExitUnavailable || !errors.Is(err, fs.ErrPermission) || !strings.Contains(err.Error(), p) {
+		t.Fatalf("Read = %v (exit %d), want exit 5 naming %s with permission denied", err, exitOf(err), p)
 	}
 }
