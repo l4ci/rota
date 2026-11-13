@@ -77,7 +77,8 @@
       "nia",
       "kit",
       "sam"
-    ]
+    ],
+    "architectureEvery": 30
   },
   "release": {
     "versionFile": "VERSION"
