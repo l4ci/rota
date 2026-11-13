@@ -152,21 +152,20 @@ func (e Env) skillInstalls(root string) skillInstalls {
 	return skillInstalls{home, dirs}
 }
 
-// briefPath is the standing worker contract the pointer names: round.brief,
-// else the project's source-checkout copy, else the first installed skills
-// root's (the skills package owns both layouts). With round.brief unset and
-// none of those present, the copy in the skills cache under cache (the tree
-// this binary extracts, made when missing); "" skips it.
-func briefPath(root string, set roundcfg.Settings, inst skillInstalls, cache string) (string, bool) {
-	p, _, ok := resolveBrief(root, set, inst, cache)
-	return p, ok
+// briefContract resolves the standing contract path and its warning, or the
+// refusal shared by assign, transfer and task-brief recovery.
+func (e Env) briefContract(root string, set roundcfg.Settings) (string, string, error) {
+	cache := skills.CacheDir(e.getenv())
+	path, warning, ok := resolveBrief(root, set, e.skillInstalls(root), cache)
+	if !ok {
+		return "", "", blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cache))
+	}
+	return path, warning, nil
 }
 
-// resolveBrief is briefPath plus the warning for a stale round.brief: one
-// that is missing but lies under the skills cache root (an update removed the
-// tree it named) falls back to the current cache copy, and the warning names
-// the stale value and the path used. A missing round.brief elsewhere stays a
-// miss.
+// resolveBrief chooses round.brief, then the checkout copy, installed roots
+// and the cache. A missing round.brief under the cache root falls back with a
+// warning naming the stale value and the path used; elsewhere it stays a miss.
 func resolveBrief(root string, set roundcfg.Settings, inst skillInstalls, cache string) (string, string, bool) {
 	configured := ""
 	if set.Brief != "" {
@@ -756,10 +755,9 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	cacheDir := skills.CacheDir(e.getenv())
-	brief, briefWarn, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
-	if !ok {
-		return run, false, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
+	brief, briefWarn, err := e.briefContract(root, set)
+	if err != nil {
+		return run, false, err
 	}
 	if briefWarn != "" {
 		res.Warnings = append(res.Warnings, briefWarn)
