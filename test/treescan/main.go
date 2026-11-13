@@ -165,6 +165,10 @@ func discover(root string) (inventory, error) {
 				case ".git", ".worktrees", "vendor", "node_modules", "testdata":
 					return filepath.SkipDir
 				}
+				// The project temp root holds scratch, never source (#2499).
+				if filepath.ToSlash(name) == filepath.ToSlash(filepath.Join(root, ".rota", "tmp")) {
+					return filepath.SkipDir
+				}
 				if _, err := os.Stat(filepath.Join(name, ".git")); err == nil {
 					return filepath.SkipDir
 				} else if !os.IsNotExist(err) {

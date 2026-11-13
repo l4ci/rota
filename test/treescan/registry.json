@@ -235,6 +235,7 @@
     "./internal/proof/TestLegacyRowsAreReadAndSeedTheSidecar": "Walks the checked-in proof testdata into temporary test projects, or builds temporary sidecar files; does not enumerate repository sources.",
     "./internal/proof/TestStoresShareTheVerbs": "Walks checked-in proof testdata while constructing temporary test projects.",
     "./internal/receipt/TestPruneDropsTheFileAndTheClaims": "Checks the temporary receipt directory for removed claims.",
+    "./internal/rotastate/TestTempRootRefusesSymlinks": "Plants symlinked .rota and .rota/tmp entries in temporary test projects and lists them; does not enumerate repository sources.",
     "./internal/round/TestAssessOldFileFeatureTemplate": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
     "./internal/round/TestBriefContractFallsBackToTheSkillsCache": "Reads a planted temporary feature/brief or contract materialized into a temporary embedded-skills cache.",
     "./internal/round/TestInspectReconcilePreservesStateAndAgreesWithApply": "Walks a temporary round fixture to prove inspection leaves its files, indexes and state unchanged.",

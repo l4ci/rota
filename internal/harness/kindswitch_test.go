@@ -73,7 +73,7 @@ func kindNames(t *testing.T, root string) []string {
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			if testiso.NestedCheckout(root, path, d) {
+			if testiso.NestedCheckout(root, path, d) || testiso.ProjectTemp(root, path, d) {
 				return filepath.SkipDir
 			}
 			switch rel {
