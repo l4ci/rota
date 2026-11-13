@@ -18,6 +18,7 @@ import (
 var literalAllowed = map[string]string{
 	"internal/hvmigrate/hv.go":       "the legacy-state migration names its target directory",
 	"internal/initproj/gitignore.go": "ignore patterns are the literal text written to .gitignore, globs included",
+	"internal/testiso/nested.go":     "test helper built alone into test/fast_tree_scans_test.py's minimal module, so it cannot import rotatree",
 }
 
 // messageAllowed names the user-facing message literals that start with
