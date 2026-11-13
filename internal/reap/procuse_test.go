@@ -133,3 +133,34 @@ func TestReadProcUsesUnreadableMapsFails(t *testing.T) {
 		t.Fatalf("unreadable maps read as %v, want an error", uses)
 	}
 }
+
+// A non-dumpable process of the user (gpg-agent, an sshd session) keeps
+// /proc/<pid> as the user's, but its cwd, fd and maps entries show as root's
+// and cannot be read. Per the maintainer decision on #2499 it is skipped, not
+// a reason to fail the scan; the fake owner stands in for those root-owned
+// entries, which a test cannot create.
+func TestReadProcUsesSkipsNonDumpableProcesses(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every mode")
+	}
+	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}, "300": {"cwd": "/w/agent"}}, nil)
+	fd := filepath.Join(root, "300", "fd")
+	if err := os.Chmod(fd, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(fd, 0o755) })
+	uid := os.Getuid()
+	owner := func(path string) (int, error) {
+		if path == filepath.Join(root, "300", "cwd") {
+			return 0, nil
+		}
+		return uid, nil
+	}
+	uses, err := readProcUses(root, uid, owner)
+	if err != nil {
+		t.Fatalf("a non-dumpable process failed the scan: %v", err)
+	}
+	if len(uses) != 1 || uses[0].PID != 100 {
+		t.Fatalf("uses = %v, want only pid 100", uses)
+	}
+}

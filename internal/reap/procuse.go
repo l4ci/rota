@@ -31,6 +31,25 @@ var procEnvKeys = []string{"HOME=", "TMPDIR="}
 // of uid's processes it may not read) is an error, since then no process can
 // be ruled out.
 func ReadProcUses(procRoot string, uid int) ([]ProcUse, error) {
+	return readProcUses(procRoot, uid, lstatOwner)
+}
+
+// lstatOwner is the uid that owns path itself (a symlink is not followed).
+func lstatOwner(path string) (int, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return 0, err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, errors.New("no owner in the process table")
+	}
+	return int(st.Uid), nil
+}
+
+// readProcUses is ReadProcUses with the owner lookup as a seam: a test cannot
+// make the root-owned entries a non-dumpable process shows.
+func readProcUses(procRoot string, uid int, owner func(string) (int, error)) ([]ProcUse, error) {
 	ents, err := os.ReadDir(procRoot)
 	if err != nil {
 		return nil, err
@@ -41,7 +60,7 @@ func ReadProcUses(procRoot string, uid int) ([]ProcUse, error) {
 		if err != nil {
 			continue
 		}
-		u, ok, err := readProcUse(filepath.Join(procRoot, e.Name()), pid, uid)
+		u, ok, err := readProcUse(filepath.Join(procRoot, e.Name()), pid, uid, owner)
 		if err != nil {
 			return nil, fmt.Errorf("process %d: %w", pid, err)
 		}
@@ -54,19 +73,17 @@ func ReadProcUses(procRoot string, uid int) ([]ProcUse, error) {
 
 // readProcUse reads one process; ok is false for another user's process or
 // one that exited.
-func readProcUse(dir string, pid, uid int) (u ProcUse, ok bool, err error) {
-	fi, err := os.Stat(dir)
+func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u ProcUse, ok bool, err error) {
+	// Owner of <pid>/cwd, not of <pid>: per the maintainer decision on #2499,
+	// a non-dumpable process of uid (its entries show as root's) is skipped.
+	who, err := owner(filepath.Join(dir, "cwd"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return u, false, nil
 	}
 	if err != nil {
 		return u, false, err
 	}
-	st, isStat := fi.Sys().(*syscall.Stat_t)
-	if !isStat {
-		return u, false, errors.New("no owner in the process table")
-	}
-	if !consulted(st, uid) {
+	if !consulted(who, uid) {
 		return u, false, nil
 	}
 	u.PID = pid
@@ -122,16 +139,15 @@ func readProcUse(dir string, pid, uid int) (u ProcUse, ok bool, err error) {
 	return u, true, nil
 }
 
-// consulted reports whether the process whose /proc/<pid> directory st
-// describes is one reap must account for: those of uid. The temp root is 0700
-// and uid's own, so no other user's process can work in it. Pending a
-// maintainer decision (#2499), this is the one place that decides which
-// processes count. Measured on Linux 6.8: a non-dumpable process of uid
-// (gpg-agent, an sshd session) keeps /proc/<pid> owned by uid, but its cwd, fd
-// and maps entries turn root's and unreadable, so it counts and its unreadable
-// entries fail the scan closed. Skipping it instead means comparing the owner
-// of <pid>/cwd here rather than of the directory. The user's systemd manager
-// (capabilities held) is unreadable too, with entries still owned by uid.
-func consulted(st *syscall.Stat_t, uid int) bool {
-	return int(st.Uid) == uid
+// consulted reports whether a process whose <pid>/cwd entry owner owns is one
+// reap must account for: those of uid. The rest are skipped by the maintainer
+// decision on #2499 (comment, 2026-11-13): other users' processes cannot enter
+// the 0700 root, and a non-dumpable process of uid (gpg-agent, ssh-agent, an
+// sshd session) shows its entries as root's and cannot be read. Measured on
+// Linux 6.8, such a process keeps /proc/<pid> itself as uid's, so the owner
+// is taken from cwd. A process of uid that holds capabilities (the systemd
+// user manager) keeps its entries as uid's yet cannot be read: it still fails
+// the scan closed.
+func consulted(owner, uid int) bool {
+	return owner == uid
 }
