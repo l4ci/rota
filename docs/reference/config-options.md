@@ -194,7 +194,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
 | `learn.verify` | taste (tracked) | bool | `false` |  | Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote. |
-| `learn.promoteThreshold` | project (tracked) | int | `3` |  | Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 0 or more. |
+| `learn.promoteThreshold` | project (tracked) | int | `3` |  | Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 1 or more. |
 
 ### ship
 

@@ -425,25 +425,18 @@ func deleteIn(o *jsonx.Object, segs []string) bool {
 // projectPathKeys hold a path relative to the project root.
 var projectPathKeys = map[string]bool{"release.versionFile": true}
 
-// nonNegativeIntKeys are int keys `config set` refuses a negative or
-// non-integer value for.
-var nonNegativeIntKeys = map[string]bool{
-	"plan.maxTasks":        true,
-	"plan.maxFilesPerTask": true,
-	"map.staleCommits":     true,
+func inRange(n json.Number, min, max int) bool {
+	i, err := n.Int64()
+	return err == nil && i >= int64(min) && i <= int64(max)
 }
 
-// positiveIntKeys are int keys `config set` refuses anything below 1 for.
-var positiveIntKeys = map[string]bool{"map.softcap_subsystems": true}
-
-func isPositiveInt(n json.Number) bool {
-	i, err := n.Int64()
-	return err == nil && i >= 1
-}
-
-func isNonNegInt(n json.Number) bool {
-	i, err := n.Int64()
-	return err == nil && i >= 0
+// rangeWant words a bound for the usage error. MaxInt is the "no upper
+// bound" sentinel of the unbounded integer settings.
+func rangeWant(min, max int) string {
+	if max == MaxInt {
+		return fmt.Sprintf("want an integer of %d or more", min)
+	}
+	return fmt.Sprintf("want an integer from %d to %d", min, max)
 }
 
 // strictEnumKeys are enum keys whose Choices are the whole set, so `config set`
@@ -472,8 +465,8 @@ func validateEnum(key string, value any) error {
 	return fmt.Errorf("%w for %s (got %v): want one of %s", ErrBadValue, key, value, strings.Join(k.Choices, ", "))
 }
 
-// validateValue rejects a value its key cannot hold. A non-negative int key
-// takes an integer of 0 or more. A project path key takes a relative path that
+// validateValue rejects a value its key cannot hold. A bounded int key takes
+// an integer inside its Min..Max. A project path key takes a relative path that
 // stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
 	if err := validateType(key, value); err != nil {
@@ -498,15 +491,9 @@ func validateValue(key string, value any) error {
 		}
 		return nil
 	}
-	if nonNegativeIntKeys[key] {
-		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
-			return fmt.Errorf("%w for %s: want an integer of 0 or more", ErrBadValue, key)
-		}
-		return nil
-	}
-	if positiveIntKeys[key] {
-		if n, ok := value.(json.Number); !ok || !isPositiveInt(n) {
-			return fmt.Errorf("%w for %s: want an integer of 1 or more", ErrBadValue, key)
+	if k, ok := SchemaKey(key); ok && k.Min != nil && k.Max != nil {
+		if n, ok := value.(json.Number); !ok || !inRange(n, *k.Min, *k.Max) {
+			return fmt.Errorf("%w for %s: %s", ErrBadValue, key, rangeWant(*k.Min, *k.Max))
 		}
 		return nil
 	}
