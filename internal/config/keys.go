@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -179,7 +180,7 @@ var Keys = []Key{
 	emptyUnset(k(RoundAccountsKey, ScopeMachine, []any{}, false, TypeList, "Rounds: Logins for worker slots, as {kind, name, dir} objects. kind is claude, codex or opencode and dir the harness's config home (CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR); a leading ~ expands to the home directory. A name stands for one dir: it may repeat across kinds only with the same dir. Layers merge by kind: a layer that lists a kind replaces the lower layers' entries of that kind and inherits the others. Empty: every slot uses the orchestrator's login (Claude) or the harness's default home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
 	k("refactor.confirmBeforeExecute", ScopeTaste, true, false, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", ScopeTaste, false, false, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
-	bounded(k("learn.promoteThreshold", ScopeProject, num("3"), true, TypeInt, "Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 0 or more."), 1, MaxInt),
+	bounded(k("learn.promoteThreshold", ScopeProject, num("3"), true, TypeInt, "Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 1 or more."), 1, MaxInt),
 	k("ship.review", ScopeTaste, "full", false, TypeEnum, "How deep a review /rota-ship runs first: full, light (the Spec reviewer only, on the standard tier; the Standards reviewer when the branch references no issue) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels, paths, scopeDrift, supportPaths} picks the depth by diff size, label and path, and lifts light to full on a Door: one-way PR or a diff outside the issue's files (docs, tests and golden records beside them don't count); true and false still mean full and none.", "full", "light", "none"),
 	k("ship.secondOpinion", ScopeTaste, false, false, TypeBool, "Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5."),
 	k("ship.qa", ScopeTaste, false, false, TypeBool, "Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR."),
@@ -216,8 +217,8 @@ var Keys = []Key{
 	k("test.fast", ScopeProject, []any{}, true, TypeList, "Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it."),
 	k("test.full", ScopeProject, []any{}, true, TypeList, "Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify."),
 	k("test.e2e", ScopeProject, []any{}, true, TypeList, "Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step."),
-	k("test.audit.maxFullGateSeconds", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round when the latest recorded test.full duration after the last audit exceeds this many seconds. 0 disables the duration trigger."),
-	k("test.audit.prsBetweenAudits", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round after this many distinct recorded merged PRs since the last audit. 0 disables the PR trigger."),
+	bounded(k("test.audit.maxFullGateSeconds", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round when the latest recorded test.full duration after the last audit exceeds this many seconds. 0 disables the duration trigger."), 0, math.MaxInt),
+	bounded(k("test.audit.prsBetweenAudits", ScopeProject, num("0"), false, TypeInt, "Suggest a test-maintenance round after this many distinct recorded merged PRs since the last audit. 0 disables the PR trigger."), 0, math.MaxInt),
 	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.vacuousCheck", ScopeProject, false, false, TypeBool, "Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default."),
 	k("test.filePattern", ScopeProject, `_test\.go$`, false, TypeString, "Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files."),
@@ -230,7 +231,7 @@ var Keys = []Key{
 	k("change.docsPaths", ScopeProject, []any{"*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"}, false, TypeList, "Globs of documentation files. A diff whose every file is a Markdown or image file (.md, .png, .jpg, .jpeg, .gif, .svg, .webp) matching one is the docs tier; a script or source file under docs/ is code: the gate runs test.docs and review depth is none. * matches within a path segment, ** across directories; a glob with no slash matches at the root only (*.md is README.md, not docs/a.md); no braces."),
 	k("change.riskyPaths", ScopeProject, []any{}, false, TypeList, "Globs of files that always get the full tier: test.full and review depth full, whatever else the diff holds. Same glob grammar as change.docsPaths."),
 	k("change.smallPaths", ScopeProject, []any{}, false, TypeList, "Globs of the files test.small covers. A code diff with a file outside them is never the small tier. Empty turns the small tier off. Same glob grammar as change.docsPaths."),
-	k("change.smallBelow", ScopeProject, num("0"), false, TypeInt, "A code diff with fewer changed lines than this, and every file covered by change.smallPaths, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off."),
+	bounded(k("change.smallBelow", ScopeProject, num("0"), false, TypeInt, "A code diff with fewer changed lines than this, and every file covered by change.smallPaths, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off."), 0, math.MaxInt),
 	// #797: where issues live and where code lands, split. They replace
 	// backlog.backend and issues.provider (migrated by rota migrate source).
 	k("issues.source", ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
@@ -324,10 +325,10 @@ var Keys = []Key{
 	k("issues.linear.team", ScopeProject, "", false, TypeString, "Linear team key, such as ROT, that issues.connection reads from and writes to."),
 	k("issues.itsaplan.project", ScopeProject, "", false, TypeString, "It's a Plan project key, such as MKT, that issues.connection reads from and writes to."),
 	k("knowledge.external", ScopeMachine, "", false, TypePath, "Local path of the cloned external knowledge repo (README.md, topics/, rota-knowledge.json) that rota knowledge --external reads and writes, and that /rota-learn and the knowledge consult also use. Machine-specific, so set it in the global config. Empty means the feature is off."),
-	k("knowledge.externalTTL", ScopeMachine, num("10"), false, TypeInt, "Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read."),
-	k("knowledge.externalMaxBullets", ScopeMachine, num("25"), false, TypeInt, "Bullets a topic file of the external knowledge repo may hold before rota doctor warns that it has outgrown a cheap read. 0 turns the check off."),
-	k("knowledge.externalMaxBytes", ScopeMachine, num("8192"), false, TypeInt, "Bytes a topic file of the external knowledge repo may hold before rota doctor warns. 0 turns the check off."),
-	k("knowledge.externalMaxTopics", ScopeMachine, num("60"), false, TypeInt, "Topics the external knowledge index may list before rota doctor warns. 0 turns the check off."),
+	bounded(k("knowledge.externalTTL", ScopeMachine, num("10"), false, TypeInt, "Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read."), 0, math.MaxInt),
+	bounded(k("knowledge.externalMaxBullets", ScopeMachine, num("25"), false, TypeInt, "Bullets a topic file of the external knowledge repo may hold before rota doctor warns that it has outgrown a cheap read. 0 turns the check off."), 0, math.MaxInt),
+	bounded(k("knowledge.externalMaxBytes", ScopeMachine, num("8192"), false, TypeInt, "Bytes a topic file of the external knowledge repo may hold before rota doctor warns. 0 turns the check off."), 0, math.MaxInt),
+	bounded(k("knowledge.externalMaxTopics", ScopeMachine, num("60"), false, TypeInt, "Topics the external knowledge index may list before rota doctor warns. 0 turns the check off."), 0, math.MaxInt),
 	// Append new keys so frozen config fixtures keep existing row positions.
 	k(labels.ExtraKey, ScopeProject, jsonx.NewObject(), false, TypeObject, "Project tracker labels as name to description. Label sync treats these as known; registry labels retain their own metadata."),
 }

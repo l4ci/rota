@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -445,5 +447,27 @@ func TestConfigUnreadableLayerIs5(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// These readers use the native int range, not config.MaxInt (1<<30).
+func TestConfigSetNonNegativeReadSiteInts(t *testing.T) {
+	for _, key := range []string{
+		"test.audit.maxFullGateSeconds", "test.audit.prsBetweenAudits", "change.smallBelow",
+		"knowledge.externalTTL", "knowledge.externalMaxBullets", "knowledge.externalMaxBytes", "knowledge.externalMaxTopics",
+	} {
+		t.Run(key, func(t *testing.T) {
+			root := trackerProject(t, "{}\n")
+			code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "--", key, "-1")
+			if code != ExitUsage || !strings.Contains(stderr, key) {
+				t.Errorf("negative value: exit %d, want usage error naming %s: %s", code, key, stderr)
+			}
+			for _, raw := range []string{"0", "1073741825", fmt.Sprint(math.MaxInt)} {
+				code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", key, raw)
+				if code != ExitOK {
+					t.Errorf("%s=%s: exit %d, want success: %s", key, raw, code, stderr)
+				}
+			}
+		})
 	}
 }
