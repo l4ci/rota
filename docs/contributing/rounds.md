@@ -19,6 +19,8 @@ runs once more, alone, on the same clean tree. More than three failed Go package
 package retries. Go retries bypass the test cache; smoke retries use the original shard's
 section list and require an assertion failure plus the runner's failure summary after its
 guards complete. Infrastructure failures stay red, and `--smoke-only` never retries.
+Both retry helpers read `internal/flakeledger/infrastructure-markers.txt`; smoke
+also reads its runner-only phrases from `test/gate-smoke-markers.txt`.
 A passing retry prints `FLAKY` and feeds the verifier's
 flake ledger; a second failure keeps the gate red. Validation, gofmt, vet, doclint and
 grep-gate failures are never retried by this wrapper. Initial and retry logs stay separate;
