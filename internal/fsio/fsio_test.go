@@ -490,6 +490,64 @@ func TestMoveFileCopyFailureKeepsSrc(t *testing.T) {
 	}
 }
 
+func TestMoveFilePreserveModeRename(t *testing.T) {
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "a"), filepath.Join(d, "b")
+	os.WriteFile(src, []byte("x"), 0o600)
+	if err := MoveFilePreserveMode(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(dst)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("dst = %v, %v; want mode 0600", fi, err)
+	}
+	if _, err := os.Stat(src); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("src still there: %v", err)
+	}
+}
+
+func TestMoveFilePreserveModeCopyFallback(t *testing.T) {
+	orig := rename
+	t.Cleanup(func() { rename = orig })
+	rename = func(string, string) error { return &os.LinkError{Op: "rename", Err: syscall.EXDEV} }
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "a"), filepath.Join(d, "b")
+	os.WriteFile(src, []byte("secret"), 0o600)
+	if err := MoveFilePreserveMode(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(dst)
+	fi, _ := os.Stat(dst)
+	if string(got) != "secret" || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("dst = %q mode %v, want secret 0600", got, fi.Mode().Perm())
+	}
+	if _, err := os.Stat(src); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("src still there: %v", err)
+	}
+}
+
+func TestMoveFilePreserveModeCopyFailureKeepsSrc(t *testing.T) {
+	orig := rename
+	t.Cleanup(func() { rename = orig })
+	rename = func(string, string) error { return syscall.EXDEV }
+	d := t.TempDir()
+	src := filepath.Join(d, "a")
+	os.WriteFile(src, []byte("x"), 0o600)
+	if err := MoveFilePreserveMode(src, filepath.Join(d, "missing", "b")); err == nil {
+		t.Fatal("want error")
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("src lost: %v", err)
+	}
+}
+
+func TestMoveFilePreserveModeMissingSrc(t *testing.T) {
+	d := t.TempDir()
+	if err := MoveFilePreserveMode(filepath.Join(d, "nope"), filepath.Join(d, "b")); err == nil {
+		t.Fatal("want error")
+	}
+}
+
 func TestTryLockSecondHandleBusyUntilRelease(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "x.lock")
 	rel, ok, err := TryLock(p)

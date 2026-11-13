@@ -81,7 +81,7 @@ func migrate(old, path string) {
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
 		return
 	}
-	if fsio.MoveFile(old, path, 0o644) != nil {
+	if fsio.MoveFilePreserveMode(old, path) != nil {
 		return
 	}
 	fsio.RemoveWithLock(old)
