@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/cfgdir"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -327,6 +328,27 @@ func TestWorkerDispatchRelayConsumesWhatItCarried(t *testing.T) {
 	f.comments = f.comments[:1]
 	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
 		t.Fatalf("relayed batch reported again: %q", got)
+	}
+}
+
+func TestWorkerDispatchExplicitPRConsumesItsReviewInput(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}}
+	c, dir, brief := relaySlot(t, f)
+	gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+	if err := worker.Update(dir, func(d *worker.Doc) {
+		s := d.Slot("w1")
+		d.QueuePR(worker.QueuedPR{From: "w1", Issue: s.HeldID(), PR: s.PR(), Branch: s.Branch(), Base: "main"})
+		s.SetTask("578")
+		s.SetPR("")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errs := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--pr", "9", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
+		t.Fatalf("targeted review relay: %d %s %s", code, out, errs)
+	}
+	reg := worker.LoadRegistryTolerant(dir)
+	if reg.QueuedPR("9").ReviewSeen == "" || reg.Slot("w1").ReviewSeen() != "" {
+		t.Fatal("review cursor must move on the selected PR, leaving the new issue alone")
 	}
 }
 

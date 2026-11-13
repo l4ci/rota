@@ -442,6 +442,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	body := fs.String("body-file", "", "brief to send; - reads stdin")
 	task := fs.String("task", "", "task id: recreates the slot's session and cuts its branch")
 	relay := fs.Bool("relay", false, "inject into the running session as an orchestrator relay")
+	pr := fs.String("pr", "", "with --relay: log against this open PR on the round's review list")
 	round := fs.String("round", "", "orchestrator round for the signature")
 	through := fs.String("review-through", "", "with --relay: RFC 3339 time the relayed review input was read; input dated before it counts as seen")
 	boot := fs.Int("boot-timeout", 60, "seconds to wait for the session to boot")
@@ -453,7 +454,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if *confirmNotSubmitted {
-			for _, name := range []string{"body-file", "task", "relay", "round", "review-through", "boot-timeout", "kind", "accept-codex-version"} {
+			for _, name := range []string{"body-file", "task", "relay", "pr", "round", "review-through", "boot-timeout", "kind", "accept-codex-version"} {
 				provided := false
 				fs.Visit(func(f *flag.Flag) {
 					if f.Name == name {
@@ -478,6 +479,14 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		if *body == "" {
 			return Result{}, Usage("--body-file is required")
 		}
+		prProvided := false
+		fs.Visit(func(f *flag.Flag) { prProvided = prProvided || f.Name == "pr" })
+		if prProvided {
+			n, err := strconv.Atoi(*pr)
+			if !*relay || *task != "" || err != nil || n <= 0 || strings.TrimLeft(*pr, "0123456789") != "" {
+				return Result{}, Usage("--pr must be a positive PR number and needs --relay without --task")
+			}
+		}
 		if *acceptCodex {
 			c.Warn("--accept-codex-version is deprecated and does nothing: rota no longer checks the Codex version")
 		}
@@ -485,7 +494,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--kind must be one of %s", strings.Join(harness.Kinds(), ", "))
 		}
 		opts := worker.DispatchOpts{Slot: slot, Task: *task, Relay: *relay, BootTimeout: *boot,
-			Kind: *kind}
+			Kind: *kind, PR: *pr}
 		if *round != "" {
 			n, err := strconv.Atoi(*round)
 			if err != nil || n < 0 || strings.TrimLeft(*round, "0123456789") != "" {
@@ -516,7 +525,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		defer cleanup()
-		if reviewThrough != nil {
+		if reviewThrough != nil && opts.PR == "" {
 			if s := worker.LoadRegistryTolerant(root).Slot(slot); s != nil && s.PR() == "" {
 				return Result{}, Resolution("slot '%s' has no PR whose review input a relay could carry: --review-through needs one", slot)
 			}
@@ -550,11 +559,11 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if opts.Round != nil {
 				n = *opts.Round
 			}
-			if err := postSupportRelay(c, root, slot, path, n); err != nil {
+			if err := postSupportRelay(c, root, slot, path, n, opts.PR); err != nil {
 				c.Warn("the relay was sent but not posted on the issue (the main gate cannot see it): %v", err)
 			}
 			if reviewThrough != nil {
-				if err := consumeReviewRelay(c, ctx, root, slot, *reviewThrough); err != nil {
+				if err := consumeReviewRelay(c, ctx, root, slot, opts.PR, *reviewThrough); err != nil {
 					c.Warn("the relay was sent but its review input stays pending, so the watch may report it again: %v", err)
 				}
 			}
@@ -594,8 +603,18 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 // for its own (#1866). The second `through` falls in is left pending, since a
 // forge dates to the second: a repeat report is safe, a lost comment is not. No
 // bounce is counted: that stays review-relay's.
-func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot string, through time.Time) error {
-	s := worker.LoadRegistryTolerant(root).Slot(slot)
+func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot, pr string, through time.Time) error {
+	reg := worker.LoadRegistryTolerant(root)
+	s := reg.Slot(slot)
+	if pr != "" {
+		q := reg.QueuedPR(pr)
+		if q == nil {
+			return Refused("relay PR %s is no longer on the review list", pr)
+		}
+		s = worker.NewSlot(slot, q.Branch, "", q.Base, "")
+		s.SetPR(q.PR)
+		s.SetReviewSeen(q.ReviewSeen)
+	}
 	if s == nil || s.PR() == "" {
 		return Resolution("slot '%s' has no PR whose review input a relay could carry", slot)
 	}
@@ -606,6 +625,14 @@ func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot string, through 
 	b, err := worker.PendingReviewBefore(ctx, fg, s, failVerdict(branchVerdicts(c, root, s.Branch())), c.deps().Now(), through.Truncate(time.Second))
 	if err != nil || b.Empty() {
 		return err
+	}
+	if pr != "" {
+		return worker.Update(root, func(d *worker.Doc) {
+			if q := d.QueuedPR(pr); q != nil {
+				q.ReviewSeen = b.Cursor
+				d.QueuePR(*q)
+			}
+		})
 	}
 	_, err = worker.UpdateSlot(root, slot, func(s *worker.Slot) { s.SetReviewSeen(b.Cursor) })
 	return err

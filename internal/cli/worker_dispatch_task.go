@@ -55,12 +55,12 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 // support machine's local relay log, so the issue thread is where it looks.
 // Main keeps its local log only. The brief is already sent; a failed post is
 // returned for the caller to warn about.
-func postSupportRelay(c *Ctx, root, slot, bodyFile string, n int) error {
+func postSupportRelay(c *Ctx, root, slot, bodyFile string, n int, pr string) error {
 	text, err := os.ReadFile(bodyFile)
 	if err != nil {
 		return err
 	}
-	issue, body, post, err := round.SupportRelay(root, c.deps().Config(root), slot, n, string(text))
+	issue, body, post, err := round.SupportRelay(root, c.deps().Config(root), slot, n, string(text), pr)
 	if err != nil || !post {
 		return err
 	}
