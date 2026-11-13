@@ -127,6 +127,28 @@ func MoveFile(src, dst string, perm os.FileMode) error {
 	return os.Remove(src)
 }
 
+// MoveFilePreserveMode is MoveFile with the mode taken from src instead of a
+// caller-supplied one: rename keeps it as is, and the cross-filesystem copy
+// applies src's permission bits to dst before src is removed. A failed copy
+// leaves src in place.
+func MoveFilePreserveMode(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if rename(src, dst) == nil {
+		return nil
+	}
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := WriteFileAtomicMode(dst, b, info.Mode().Perm()); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
 // syncDir makes a rename in dir durable. It runs after the rename has
 // succeeded, so a filesystem that does not support fsync on a directory
 // (EINVAL, ENOTSUP) must not turn a completed write into a reported failure.

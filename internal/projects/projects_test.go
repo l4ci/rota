@@ -248,7 +248,6 @@ func TestListMigrationPreservesRegistryMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("migrated registry mode: %04o", info.Mode().Perm())
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Errorf("migrated registry mode = %04o, want 0600", got)
 	}

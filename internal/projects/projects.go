@@ -71,8 +71,7 @@ func file(env cfgdir.Env) (string, error) {
 // already in the state dir wins: the old copy is just removed. A failure
 // leaves the old file in place and the move is retried on the next call.
 func migrate(old, path string) {
-	info, err := os.Stat(old)
-	if err != nil {
+	if _, err := os.Stat(old); err != nil {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -82,16 +81,8 @@ func migrate(old, path string) {
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
 		return
 	}
-	// Rename preserves the source mode without a fallible chmod after the move.
-	// Across filesystems, apply the mode to the copy before removing the source.
-	if os.Rename(old, path) != nil {
-		b, err := os.ReadFile(old)
-		if err != nil {
-			return
-		}
-		if fsio.WriteFileAtomicMode(path, b, info.Mode().Perm()) != nil {
-			return
-		}
+	if fsio.MoveFilePreserveMode(old, path) != nil {
+		return
 	}
 	fsio.RemoveWithLock(old)
 }
