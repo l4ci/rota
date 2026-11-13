@@ -1039,7 +1039,7 @@ Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable
 | Cache | `$XDG_CACHE_HOME/rota/skills` (the OS user cache dir) | the extracted embedded skills |
 | Data | `$XDG_DATA_HOME/rota`, default `~/.local/share/rota` | the secrets fallback file (`secrets.json`), in a `0700` dir |
 
-An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir and removes the old copy; a registry already in the state dir wins.
+An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir, preserves its file permissions and removes the old copy and lock; a registry already in the state dir wins.
 
 `rota init` and `rota setup` leave projects in temporary storage out of this registry: paths under `$TMPDIR`, `/tmp` or macOS's `/var/folders` (including `/private/var/folders`), after resolving symlinks. Init still seeds the project and prints `project not registered: temporary directory`. `rota projects cleanup` removes older temp entries as well as missing projects and projects that no longer hold `.rota/`; it lists each removed entry and leaves the project files alone. Temporary removals have a `(temporary)` column in text output; JSON rows add `reason: "temporary"` or `reason: "stale"`. When nothing is removed, text output says `noop: no stale or temporary projects`. Plain `rota projects` keeps listing existing entries until you remove them.
 
