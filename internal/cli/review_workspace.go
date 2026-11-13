@@ -45,7 +45,7 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 	}
 	head = strings.TrimSpace(out)
 	// Canonical paths let cleanup reject symlinked parents rather than following them.
-	temp, err := c.tempRootFor(dir)
+	temp, _, err := c.tempRootFor(dir)
 	if err != nil {
 		return "", "", Unavailable("resolve temporary directory: %v", err)
 	}
@@ -60,6 +60,12 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 			}
 		}
 	}()
+	// An empty repository at the workspace root fences git discovery: git run
+	// in the tree stops here instead of reaching the checkout that holds the
+	// project temp root, where it would read, or change, the live repo.
+	if _, err = reviewGit(c.Context(), c.deps(), root, "init", "--quiet"); err != nil {
+		return "", "", err
+	}
 	path = filepath.Join(root, "tree")
 	archive := filepath.Join(root, "source.tar")
 	if _, err = reviewGit(c.Context(), c.deps(), dir, "archive", "--format=tar", "--output="+archive, head); err != nil {

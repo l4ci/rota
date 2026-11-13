@@ -553,6 +553,7 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota git guard feature-branch [<branch>]` | fail on the base branch or a detached HEAD |
 | `rota git branch <name> --repos <a,b,...>` | create one branch in several sub-repos, or in none |
 | `rota git worktree-path <branch>` | print the umbrella worktree path of a sub-repo branch |
+| `rota git tmp-dir` | print the project temp root (`.rota/tmp` of the main checkout), created on first use |
 
 ## `rota change`
 

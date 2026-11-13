@@ -72,6 +72,13 @@ exit: 2 when --repo is missing; 3 when the umbrella or repo cannot be resolved
 old: hv-worktree-path --repo <repo> <branch>  (global `--repo` becomes the old first-arg flag)
 shim: `path` is the stdout line, `<umbrella>/.claude/worktrees/<repo>/<branch>`. Old exit 1 with a usage message becomes 2; other old exit 1 becomes 3.
 
+### rota git tmp-dir
+rota git tmp-dir
+repo: scoped
+data: {"path": string, "project": bool}
+exit: 2 at an umbrella root without --repo; 5 when the root cannot be created
+note: `path` is the project temp root, `<main checkout>/.rota/tmp`, the same from the main checkout and every linked worktree; it is created (0700, with a `.gitignore` of `*`) on first use. Outside a rota project (no `.rota/` in the main checkout, a bare repository, or not a repository) `path` is the system temp dir and `project` is false. A `.rota` or `.rota/tmp` that is a symlink is not used. New verb (#2499), no old helper.
+
 ### rota review scope
 rota review scope [<branch>]
 repo: scoped
@@ -136,7 +143,7 @@ repo: scoped
 data: {"changed": bool, "path": string, "head": string}
 exit: 2 at an umbrella root without --repo; 3 when the commit cannot be resolved; 5 when archive creation, extraction or setup fails
 old: none (new verb)
-note: resolves the requested commit once, archives that SHA, and extracts into a fresh private temporary directory without registering a git worktree. `path` is the absolute extracted tree, `head` the resolved SHA; `.review/` is created for caller inputs. A tracked `.review` refuses setup. Archive creation and extraction are checked separately, and setup failures return no launchable result and attempt removal of only the new temporary directory. A failed removal is reported with its path. No live-checkout fallback exists. The caller copies its inputs before launching and uses `path` as the reviewer cwd. This cwd is disposable, not an OS sandbox: absolute-path access and ambient user configuration remain reachable.
+note: resolves the requested commit once, archives that SHA, and extracts into a fresh private temporary directory without registering a git worktree. The directory sits under the project temp root (`rota git tmp-dir`: `.rota/tmp` of the main checkout, the same from every worktree), or under the system temp dir outside a rota project. Its parent also holds an empty git repository, so git run inside the tree stops there and never reaches the enclosing checkout. `path` is the absolute extracted tree, `head` the resolved SHA; `.review/` is created for caller inputs. A tracked `.review` refuses setup. Archive creation and extraction are checked separately, and setup failures return no launchable result and attempt removal of only the new temporary directory. A failed removal is reported with its path. No live-checkout fallback exists. The caller copies its inputs before launching and uses `path` as the reviewer cwd. This cwd is disposable, not an OS sandbox: absolute-path access and ambient user configuration remain reachable.
 
 ### rota review cleanup
 rota review cleanup <workspace>
@@ -144,7 +151,7 @@ repo: none
 data: {"changed": bool, "path": string, "head": string}
 exit: 4 when the path is not an owned prepared workspace; 5 when removal fails
 old: none (new verb)
-note: accepts only the absolute `path` returned by preparation under the current temporary directory (reached directly or through a symlinked ancestor such as macOS `/var` -> `/private/var`, resolved before comparison and reported canonical), with a matching ownership record outside the extracted tree. Removes that workspace's private temporary parent and no other workspace; symlinks inside it are removed without following their targets. Missing, malformed or symlinked ownership records and a symlinked workspace directory or `tree` refuse. A cleanup failure is surfaced, never retried against a broader path. Call after reviewer success, failure or cancellation, with the same temporary-directory environment as preparation.
+note: accepts only the absolute `path` returned by preparation whose private parent sits directly in one of the temp roots: the system temp dir, or the existing project temp root of the working directory's repository (an exact parent, never a deeper path or another directory of the project; a symlinked `.rota` or `.rota/tmp` is no root). Either is reached directly or through a symlinked ancestor such as macOS `/var` -> `/private/var`, resolved before comparison and reported canonical. It needs a matching ownership record outside the extracted tree. Removes that workspace's private temporary parent and no other workspace; symlinks inside it are removed without following their targets. Missing, malformed or symlinked ownership records and a symlinked workspace directory or `tree` refuse. A cleanup failure is surfaced, never retried against a broader path. Call after reviewer success, failure or cancellation, from the repository preparation ran in (or a worktree of it), with the same temporary-directory environment.
 
 ### rota review probe
 rota review probe -- <command> [<arg>...]
@@ -152,7 +159,7 @@ repo: none
 data: {"changed": bool, "exitCode": number, "stdout": string, "stderr": string}
 exit: 2 without a command after `--`; 1 when the command exits nonzero (its exit code is in `data.exitCode`); 4 on a support machine (arbitrary-command fence); 5 when temporary setup, process launch or cleanup fails
 old: none (new verb)
-note: runs the command as an argument vector in the current directory, with empty stdin. Uses a fresh private temporary root for `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `ROTA_CONFIG_DIR`, `GH_CONFIG_DIR`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR` and `OPENCODE_CONFIG_DIR`, replacing inherited values. Each directory is created before launch; setup failure never launches the command. Other environment variables are inherited. The subprocess is bounded by the normal process timeout and runs in its own process group for cancellation. Output is captured in the result; text mode prints stdout and stderr. Removes the temporary root after success, nonzero exit, launch failure or cancellation, and reports a cleanup failure with its path. Use one shell command for multi-step probes that need the same temporary config state. The managed reviewer briefs require this operation for binary probes, using the caller's installed binary; harness launch and authentication are unchanged.
+note: runs the command as an argument vector in the current directory, with empty stdin. Uses a fresh private temporary root (under the project temp root, else the system temp dir) for `HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `ROTA_CONFIG_DIR`, `GH_CONFIG_DIR`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR` and `OPENCODE_CONFIG_DIR`, replacing inherited values. Each directory is created before launch; setup failure never launches the command. Other environment variables are inherited. The subprocess is bounded by the normal process timeout and runs in its own process group for cancellation. Output is captured in the result; text mode prints stdout and stderr. Removes the temporary root after success, nonzero exit, launch failure or cancellation, and reports a cleanup failure with its path. Use one shell command for multi-step probes that need the same temporary config state. The managed reviewer briefs require this operation for binary probes, using the caller's installed binary; harness launch and authentication are unchanged.
 note: this is environment isolation, not an OS sandbox. Unsandboxed commands can still access arbitrary absolute paths, expand tildes through passwd, and inspect process environments. A command that explicitly overrides the temporary config roots defeats that isolation.
 
 ### rota review queue

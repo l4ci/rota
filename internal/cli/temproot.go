@@ -7,18 +7,16 @@ import (
 )
 
 // tempRootFor is where rota makes its own temp workspaces for work in dir: the
-// project temp root (<main checkout>/.rota/tmp, #2499), else the system temp
-// dir outside a rota project. Both come back symlink-resolved, so cleanup can
-// anchor on either as an exact parent.
-func (c *Ctx) tempRootFor(dir string) (string, error) {
-	root, ok, err := rotastate.TempRootVia(c.Context(), c.deps().Git, dir)
-	if err != nil {
-		return "", err
+// project temp root (<main checkout>/.rota/tmp, #2499; project true), else the
+// system temp dir outside a rota project. Both come back symlink-resolved, so
+// cleanup can anchor on either as an exact parent.
+func (c *Ctx) tempRootFor(dir string) (root string, project bool, err error) {
+	root, project, err = rotastate.TempRootVia(c.Context(), c.deps().Git, dir)
+	if err != nil || project {
+		return root, project, err
 	}
-	if ok {
-		return root, nil
-	}
-	return systemTempDir(c.deps().TempDir())
+	root, err = systemTempDir(c.deps().TempDir())
+	return root, false, err
 }
 
 // systemTempDir is the OS temp dir, absolute and symlink-resolved.

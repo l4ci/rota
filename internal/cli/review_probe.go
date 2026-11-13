@@ -21,7 +21,7 @@ func reviewProbe(c *Ctx, args []string) (result Result, err error) {
 	if err != nil {
 		return Result{}, Unavailable("resolve probe directory: %v", err)
 	}
-	temp, err := c.tempRootFor(dir)
+	temp, _, err := c.tempRootFor(dir)
 	if err != nil {
 		return Result{}, Unavailable("resolve probe temporary directory: %v", err)
 	}

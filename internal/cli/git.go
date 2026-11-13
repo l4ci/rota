@@ -25,6 +25,7 @@ func gitCommands() *Command {
 		}},
 		{Name: "branch", Fence: fenceAllowed, Summary: "create one branch in several sub-repos, or in none", Verb: gitBranch},
 		{Name: "worktree-path", Fence: fenceAllowed, Summary: "print the umbrella worktree path of a sub-repo branch", Repo: true, Verb: noFlags(gitWorktreePath)},
+		{Name: "tmp-dir", Fence: fenceAllowed, Summary: "print the project temp root (.rota/tmp of the main checkout), created on first use", Repo: true, Verb: noFlags(gitTmpDir)},
 	}}
 }
 
@@ -342,4 +343,23 @@ func gitWorktreePath(c *Ctx, args []string) (Result, error) {
 	}
 	p := git.WorktreePath(root, c.Repo, args[0])
 	return Result{Data: jsonx.Obj("path", p), Text: p}, nil
+}
+
+// gitTmpDir prints the project temp root for the working directory (or
+// --repo): <main checkout>/.rota/tmp, the same from every worktree, created on
+// first use. Outside a rota project it is the system temp dir and project is
+// false, so a skill's `mktemp "$(rota git tmp-dir)/..."` works anywhere.
+func gitTmpDir(c *Ctx, args []string) (Result, error) {
+	if err := noArgs(args); err != nil {
+		return Result{}, err
+	}
+	dir, err := gitDir(c)
+	if err != nil {
+		return Result{}, err
+	}
+	root, project, err := c.tempRootFor(dir)
+	if err != nil {
+		return Result{}, Unavailable("resolve the temp root: %v", err)
+	}
+	return Result{Data: jsonx.Obj("path", root, "project", project), Text: root}, nil
 }

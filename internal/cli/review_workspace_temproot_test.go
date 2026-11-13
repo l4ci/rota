@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
@@ -45,6 +46,11 @@ func TestReviewWorkspaceUnderProjectTemp(t *testing.T) {
 		path := tempReviewPrepared(t, d, dir)
 		if got := filepath.Dir(filepath.Dir(path)); got != want {
 			t.Fatalf("%s: workspace %s is not under the project temp root %s", name, path, want)
+		}
+		// git run in the exported tree must stop at the workspace, never
+		// resolve to the checkout the temp root lives in.
+		if top := strings.TrimSpace(gittest.Run(t, path, "rev-parse", "--show-toplevel")); top != filepath.Dir(path) {
+			t.Fatalf("%s: git in the review tree resolves to %s, want the workspace %s", name, top, filepath.Dir(path))
 		}
 		if o := trRunWith(t, d, dir, "", "review", "cleanup", path, "--json"); o.code != 0 {
 			t.Fatalf("%s: cleanup: rc=%d %s %s", name, o.code, o.stdout, o.stderr)
@@ -119,5 +125,32 @@ func TestReviewWorkspaceCleanupKeepsSystemTemp(t *testing.T) {
 	}
 	if o := trRunWith(t, d, main, "", "review", "cleanup", path, "--json"); o.code != 0 {
 		t.Fatalf("cleanup of a system-temp workspace: rc=%d %s %s", o.code, o.stdout, o.stderr)
+	}
+}
+
+func TestGitTmpDirPrintsProjectRootOrSystemTemp(t *testing.T) {
+	d, main, wt, system := tempReviewProject(t)
+	real, err := filepath.EvalSymlinks(main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(real, ".rota", "tmp")
+	o := trRunWith(t, d, wt, "", "git", "tmp-dir", "--json")
+	if o.code != 0 {
+		t.Fatalf("tmp-dir: rc=%d %s %s", o.code, o.stdout, o.stderr)
+	}
+	data := envelope(t, o.stdout)["data"].(map[string]any)
+	if data["path"] != want || data["project"] != true {
+		t.Fatalf("tmp-dir from a linked worktree = %v, want %s in the project", data, want)
+	}
+	if fi, err := os.Stat(want); err != nil || !fi.IsDir() {
+		t.Fatalf("tmp-dir did not create the root: %v", err)
+	}
+	plain := newRepo(t, t.TempDir(), "plain", "main")
+	o = trRunWith(t, d, plain, "", "git", "tmp-dir", "--json")
+	canonical, _ := filepath.EvalSymlinks(system)
+	data = envelope(t, o.stdout)["data"].(map[string]any)
+	if o.code != 0 || data["path"] != canonical || data["project"] != false {
+		t.Fatalf("tmp-dir outside a rota project = rc %d %v, want the system temp %s", o.code, data, canonical)
 	}
 }
