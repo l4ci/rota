@@ -785,7 +785,7 @@ func (b *Issues) putClaim(n tracker.IssueKey, claimID string) error {
 
 func (b *Issues) dropClaim(n tracker.IssueKey, claimID string, byHand bool) error {
 	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
-		return cs.DropClaim(b.ctx(), n, claimID)
+		return cs.DropClaim(b.ctx(), n, claimID, byHand)
 	}
 	body := marker.Release(claimID)
 	if byHand {
@@ -803,8 +803,8 @@ func (b *Issues) dropClaim(n tracker.IssueKey, claimID string, byHand bool) erro
 func (b *Issues) Release(ref, claimID string) (bool, error) { return b.release(ref, claimID, false) }
 
 // ReleaseByHand is Release for a person's own release: the comment also
-// carries the hand-release marker, which reconcile reads as "leave it gone". A
-// tracker.ClaimStore keeps no release comment, so the marker is lost there.
+// carries the hand-release marker, which reconcile reads as "leave it gone"
+// on both comment-marker and tracker.ClaimStore trackers.
 func (b *Issues) ReleaseByHand(ref, claimID string) (bool, error) {
 	return b.release(ref, claimID, true)
 }
@@ -1030,7 +1030,9 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			continue
 		}
 		handReleased = slices.DeleteFunc(handReleased, func(h string) bool { return h == id })
-		if verb == marker.KindRelease && marker.IsHandRelease(c.Body, id) {
+		// ClaimStore claims are plain comments: an open claim supersedes an
+		// older hand release without carrying a claim marker of its own.
+		if verb == marker.KindRelease && marker.IsHandRelease(c.Body, id) && !slices.Contains(held, id) {
 			handReleased = append(handReleased, id)
 		}
 	}
