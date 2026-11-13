@@ -23,16 +23,20 @@ func (d FileDocs) NotFound(key string) *exitcode.Error {
 }
 
 // Read is the stored document, verbatim. A missing file is NotFound; any
-// other read error (a directory, EACCES) is returned as it is.
+// other read error (a directory, EACCES) is unavailable, with its OS cause.
 func (d FileDocs) Read(key string) (string, error) {
 	b, err := os.ReadFile(d.Path(key))
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", d.NotFound(key)
 	}
 	if err != nil {
-		return "", err
+		return "", unavailable(err)
 	}
 	return string(b), nil
+}
+
+func unavailable(err error) error {
+	return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error(), Cause: err}
 }
 
 // Replace overwrites an existing document; changed is false when it already
@@ -95,15 +99,22 @@ func (d FileDocs) Create(lockKey string, build func() (key, text string)) (key s
 	return key, err
 }
 
-// Remove deletes an existing document.
+// Remove deletes an existing document. Only a missing document is NotFound;
+// other stat or remove failures are unavailable, with their OS cause.
 func (d FileDocs) Remove(key string) error {
 	p := d.Path(key)
 	if _, err := os.Stat(p); err != nil {
-		return d.NotFound(key)
+		if errors.Is(err, fs.ErrNotExist) {
+			return d.NotFound(key)
+		}
+		return unavailable(err)
 	}
 	return fsio.Locked(p, fsio.LockTimeout, func() error {
 		if err := os.Remove(p); err != nil {
-			return d.NotFound(key)
+			if errors.Is(err, fs.ErrNotExist) {
+				return d.NotFound(key)
+			}
+			return unavailable(err)
 		}
 		return nil
 	})
