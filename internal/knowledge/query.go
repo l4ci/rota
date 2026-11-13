@@ -28,7 +28,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 	if err != nil {
 		return "", nil, err
 	}
-	umbrellaTier, err := s.effective(Umbrella)
+	umbrellaTier, err := s.effectiveBackfilled(Umbrella)
 	if err != nil {
 		return "", nil, err
 	}
@@ -44,7 +44,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		if err != nil {
 			return "", nil, err
 		}
-		t, err := s.effective(scope)
+		t, err := s.effectiveBackfilled(scope)
 		if err != nil {
 			return "", nil, err
 		}
