@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"os"
 	"path/filepath"
@@ -469,21 +470,6 @@ func TestSetInLocalAndUnsetPruneEmptyParents(t *testing.T) {
 	}
 }
 
-func TestSetRejectsNegativePlanLimits(t *testing.T) {
-	for _, key := range []string{"plan.maxTasks", "plan.maxFilesPerTask"} {
-		for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
-			if _, err := Set(t.TempDir(), key, bad); !errors.Is(err, ErrBadValue) {
-				t.Errorf("%s=%s: err = %v, want ErrBadValue", key, bad, err)
-			}
-		}
-		for _, ok := range []string{"0", "7"} {
-			if _, err := Set(t.TempDir(), key, ok); err != nil {
-				t.Errorf("%s=%s: %v", key, ok, err)
-			}
-		}
-	}
-}
-
 func TestSetContextGuardValidatesEnum(t *testing.T) {
 	for _, bad := range []string{"bogus", "true", "3", ""} {
 		root := project(t, "", "")
@@ -535,19 +521,6 @@ func TestPlanCriticHarnessIsOptInEnum(t *testing.T) {
 	}
 }
 
-func TestSetRejectsNegativeMapStaleCommits(t *testing.T) {
-	for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
-		if _, err := Set(t.TempDir(), "map.staleCommits", bad); !errors.Is(err, ErrBadValue) {
-			t.Errorf("map.staleCommits=%s: err = %v, want ErrBadValue", bad, err)
-		}
-	}
-	for _, ok := range []string{"0", "50"} {
-		if _, err := Set(t.TempDir(), "map.staleCommits", ok); err != nil {
-			t.Errorf("map.staleCommits=%s: %v", ok, err)
-		}
-	}
-}
-
 func TestMapStaleCommitsDefault(t *testing.T) {
 	for _, key := range Keys {
 		if key.Name == "map.staleCommits" {
@@ -567,14 +540,6 @@ func TestSoftcapSubsystemsIsDeclared(t *testing.T) {
 	}
 	if key.Type != TypeInt || key.Default != num("20") {
 		t.Errorf("row = %+v, want int default 20", key)
-	}
-	for _, bad := range []string{"0", "-1", "2.5", `"many"`, "true"} {
-		if _, err := Set(t.TempDir(), "map.softcap_subsystems", bad); !errors.Is(err, ErrBadValue) {
-			t.Errorf("map.softcap_subsystems=%s: err = %v, want ErrBadValue", bad, err)
-		}
-	}
-	if _, err := Set(t.TempDir(), "map.softcap_subsystems", "7"); err != nil {
-		t.Errorf("map.softcap_subsystems=7: %v", err)
 	}
 }
 
@@ -604,5 +569,39 @@ func TestRetiredRejectsRelativeAccountDirs(t *testing.T) {
 		if !strings.Contains(got[i], "round.accounts") || !strings.Contains(got[i], name) || !strings.Contains(got[i], "must be absolute or start with ~") {
 			t.Errorf("problem %d does not name round.accounts, %s and the rule: %q", i, name, got[i])
 		}
+	}
+}
+
+// TestSetRefusesOutOfRangeInts walks every int key. A key with a declared
+// range accepts its bounds and refuses a step outside them. This is the
+// write-path half of the bound-vs-read-site check in cli/config_ranges_test.go.
+func TestSetRefusesOutOfRangeInts(t *testing.T) {
+	bounded := 0
+	for _, key := range Keys {
+		if key.Type != TypeInt {
+			continue
+		}
+		if key.Min == nil || key.Max == nil {
+			if key.Min != nil || key.Max != nil {
+				t.Errorf("%s: declares only one end of its range", key.Name)
+			}
+			continue
+		}
+		bounded++
+		root := project(t, "{}", "")
+		lo, hi := *key.Min, *key.Max
+		for _, ok := range []int{lo, hi} {
+			if _, err := Set(root, key.Name, fmt.Sprint(ok)); err != nil {
+				t.Errorf("%s=%d: %v", key.Name, ok, err)
+			}
+		}
+		for _, bad := range []string{fmt.Sprint(lo - 1), fmt.Sprint(uint64(hi) + 1), "2.5", `"many"`, "true"} {
+			if _, err := Set(root, key.Name, bad); !errors.Is(err, ErrBadValue) {
+				t.Errorf("%s=%s: err = %v, want ErrBadValue", key.Name, bad, err)
+			}
+		}
+	}
+	if bounded < 25 {
+		t.Errorf("only %d bounded int keys; the schema lost its ranges", bounded)
 	}
 }
