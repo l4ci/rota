@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/topicmatch"
 )
 
 // QueryOpts are the filters of Query.
@@ -95,7 +96,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		names := headingNames(all)
 		wanted := map[string]bool{}
 		for _, t := range topics {
-			hit := resolveTopic(t, names)
+			hit := topicmatch.Headings(t, names)
 			for _, n := range hit {
 				wanted[n] = true
 			}
@@ -139,7 +140,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		first := true
 		for _, w := range topics {
 			wl := strings.ToLower(strings.TrimSpace(w))
-			for _, hl := range resolveTopic(w, names) {
+			for _, hl := range topicmatch.Headings(w, names) {
 				matched[wl] = true
 				printed := false
 				for i, p := range pairs {

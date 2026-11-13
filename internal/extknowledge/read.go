@@ -177,23 +177,15 @@ func entries(topics []Topic) []topicmatch.Entry {
 // Recheck is one tool a bullet was seen on that the project has since outgrown.
 type Recheck struct{ Topic, Title, Tool, Seen, Project string }
 
-// Query prints "## Name" sections for the requested topics, in argument
-// order. missing lists the requests that matched no index entry. A bullet seen
-// on an older major.minor of a tool than project (tool name to version) gets a
-// recheck marker before its stamp and a row in recheck; bullets are never
-// hidden and a bullet with nothing outgrown prints as stored.
-func (c Clone) Query(want []string, project map[string]string) (text string, missing []string, recheck []Recheck, err error) {
-	res, err := c.QueryWith(want, QueryOpts{Project: project})
-	if err != nil {
-		return "", nil, nil, err
-	}
-	return res.Text, res.Missing, res.Recheck, nil
-}
-
-// QueryWith is Query with options. A split topic prints its README (sub-index
-// and any bullets not yet given a subtopic); All adds a section per subtopic.
-// A subtopic named on its own prints only its file. A stray flat file beside a
-// split topic prints under "## Name (stray: file)" and is listed in Strays.
+// QueryWith prints "## Name" sections for the requested topics, in argument
+// order. Missing lists the requests that matched no index entry. A bullet seen
+// on an older major.minor of a tool than opts.Project gets a recheck marker
+// before its stamp and a row in Recheck; bullets are never hidden and a bullet
+// with nothing outgrown prints as stored.
+// A split topic prints its README (sub-index and any bullets not yet given a
+// subtopic); All adds a section per subtopic. A subtopic named on its own prints
+// only its file. A stray flat file beside a split topic prints under
+// "## Name (stray: file)" and is listed in Strays.
 func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
 	topics, err := c.Topics()
 	if err != nil {
@@ -360,7 +352,7 @@ func (c Clone) insideClone(dir string) error {
 	return nil
 }
 
-// QueryOpts tunes Query.
+// QueryOpts tunes QueryWith.
 type QueryOpts struct {
 	All     bool              // a split topic also prints every subtopic
 	Project map[string]string // tool versions the project runs
@@ -384,19 +376,14 @@ type MatchResult struct {
 	Missing []string
 }
 
-// Match prints "## Name" sections holding only the bullets (with their
+// MatchWith prints "## Name" sections holding only the bullets (with their
 // continuation lines) whose title or body contain every word,
 // case-insensitively. Words are literal substrings; the stamp never matches.
 // With no topics it searches every topic and subtopic in index order; with
 // topics it searches those (a split parent includes its subtopics, and a
 // stray flat file beside a split topic is searched too). A matched bullet
-// carries the recheck marker as Query prints it. n counts the bullets.
-func (c Clone) Match(words []string, topics []string, project map[string]string) (text string, n int, err error) {
-	res, err := c.MatchWith(words, topics, project)
-	return res.Text, res.N, err
-}
-
-// MatchWith is Match that also lists the requested topics that named no index entry.
+// carries the recheck marker as QueryWith prints it. N counts the bullets;
+// Missing lists the requested topics that named no index entry.
 func (c Clone) MatchWith(words []string, want []string, project map[string]string) (MatchResult, error) {
 	var ws []string
 	for _, w := range words {
