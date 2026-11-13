@@ -20,6 +20,7 @@ class GateRetryTest(unittest.TestCase):
         shutil.copytree(source / "lib", self.repo / "test/lib")
         for helper in source.glob("gate-*.py"):
             shutil.copy(helper, self.repo / "test" / helper.name)
+        shutil.copy(source / "gate-smoke-markers.txt", self.repo / "test/gate-smoke-markers.txt")
         markers = Path("internal/flakeledger/infrastructure-markers.txt")
         (self.repo / markers.parent).mkdir(parents=True)
         shutil.copy(source.parent / markers, self.repo / markers)
@@ -166,6 +167,29 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                 self.assertEqual(max(c["n"] for c in calls), 1, calls)
                 self.assertNotIn("ROTA-FLAKY ", result.stdout)
 
+    def test_shared_infrastructure_marker_stays_red(self):
+        markers = self.repo / "internal/flakeledger/infrastructure-markers.txt"
+        with markers.open("a") as stream:
+            stream.write("zz-shared-only-marker\n")
+        # Commit the fixture edit so the clean-tree guard cannot mask a retry.
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=test", "-c",
+                        "user.email=test@example.com", "commit", "-qam", "add marker"], check=True)
+        samples = {"^panic:": "panic: boom", r"\bkilled\b": "worker killed", "signal:": "signal: killed"}
+        for marker in markers.read_text().splitlines():
+            sample = samples.get(marker) or marker.replace("\\", "")
+            for check, variable in (("go:internal/example", "GO_INFRA"),
+                                    ("smoke-shard1", "SMOKE_INFRA")):
+                with self.subTest(marker=marker, check=check):
+                    for path in self.control.glob("*.count"):
+                        path.unlink()
+                    (self.control / "calls").unlink(missing_ok=True)
+                    self.env[variable] = sample
+                    result, calls = self.run_gate(check)
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertEqual(max(c["n"] for c in calls), 1, calls)
+                    self.assertNotIn("ROTA-FLAKY ", result.stdout)
+                    self.env.pop(variable)
+
     def test_smoke_failure_requires_assertion_and_summary(self):
         for missing in ("SMOKE_NO_ASSERT", "SMOKE_NO_SUMMARY"):
             with self.subTest(missing=missing):
@@ -218,26 +242,6 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual(result.returncode, 0, result.stdout)
         path = Path(result.stdout.split("logs in ", 1)[1].splitlines()[0])
         self.assertFalse(path.exists(), result.stdout)
-
-    def test_go_helper_classifies_with_the_shared_marker_file(self):
-        # The Go side owns the infrastructure markers; gate-go.py must read the
-        # same file, so every line there makes a package ineligible for retry.
-        source = Path(__file__).resolve().parent
-        lines = (source.parent / "internal/flakeledger/infrastructure-markers.txt").read_text().splitlines()
-        self.assertGreater(len(lines), 10)
-        # A marker added to the file alone must reach the helper unchanged.
-        lines.append("zz-new-marker")
-        (self.repo / "internal/flakeledger/infrastructure-markers.txt").write_text("\n".join(lines) + "\n")
-        samples = {"^panic:": "panic: boom", "\\bkilled\\b": "worker killed", "signal:": "signal: killed"}
-        log = self.root / "go.json"
-        for marker in lines:
-            sample = samples.get(marker) or marker.replace("\\", "")
-            with self.subTest(marker=marker):
-                log.write_text(json.dumps(dict(Action="output", Package="p", Output=sample)) + "\n" +
-                               json.dumps(dict(Action="fail", Package="p")) + "\n")
-                result = subprocess.run(["python3", str(self.repo / "test/gate-go.py"), "failed", str(log)],
-                                        capture_output=True, text=True)
-                self.assertEqual(result.returncode, 1, (sample, result.stdout))
 
     def test_go_timeout_is_not_retried(self):
         self.env["GO_TIMEOUT"] = "1"
