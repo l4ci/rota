@@ -168,7 +168,10 @@ PY
         diagnostics = self.assert_diagnostics((logs / "smoke-shard1.log").read_text())
         self.assertEqual(diagnostics.parent, logs)
         self.assertEqual((diagnostics / "after/AGENTS.md").read_bytes(), b"test leak\n")
-        self.assertFalse(list(logs.glob("tmp.*")), "gate must remove its scratch root")
+        # Scratch lives in the system temp dir (TMPDIR=self.root) and the bin dir
+        # under the project temp root (#2499), not under the logs.
+        self.assertFalse(list(self.root.glob("rota-gate-tmp.*")), "gate must remove its scratch root")
+        self.assertFalse(list((self.repo / ".rota/tmp").glob("rota-gate-bin-*")), "gate must remove its bin dir")
 
     def test_initial_deletion_and_new_files(self):
         (self.repo / "AGENTS.md").unlink()

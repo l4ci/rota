@@ -13,14 +13,18 @@ TESTDIR="$REPO/test"
 . "$TESTDIR/lib.sh"
 
 TMP="$(mktemp -d)" || exit 1
-trap 'rm -rf "$TMP"' EXIT
+# Under the gate (#2499) the rota binary is built in the gate's bin dir under the
+# project temp root; this run removes its own subdir.
+BIN_TMP="$TMP"
+[ -z "${ROTA_GATE_BIN:-}" ] || BIN_TMP="$(mktemp -d "$ROTA_GATE_BIN/doclint.XXXXXX")" || exit 1
+trap 'rm -rf "$TMP" "$BIN_TMP"' EXIT
 SK='SKILL''.md'
 
 # validate-skills.py reads relative links through `rota skills links`, so every
 # run of it below needs a binary; build one here.
 if [ -z "${ROTA_BIN:-}" ]; then
-  build_rota "$TMP/rota" || fail "go build ./cmd/rota failed"
-  ROTA_BIN="$TMP/rota"
+  build_rota "$BIN_TMP/rota" || fail "go build ./cmd/rota failed"
+  ROTA_BIN="$BIN_TMP/rota"
 fi
 export ROTA_BIN
 

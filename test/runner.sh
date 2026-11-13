@@ -99,8 +99,15 @@ TMP="$(cd "$d" && pwd -P)" || exit 1
 ROTA_STAGE="$(mktemp -d)" || exit 1
 if [ -z "${ROTA_BIN:-}" ]; then
   source "$TESTDIR/lib.sh" # build_rota; sourced again below for pass/fail
-  build_rota "$ROTA_STAGE/rota" || { echo "runner: go build ./cmd/rota failed" >&2; exit 2; }
-  ROTA_BIN="$ROTA_STAGE/rota"
+  # Under the gate (#2499) the binary is built in the gate's bin dir under the
+  # project temp root, not the system temp dir; this run removes its own subdir.
+  ROTA_BUILD_DIR="$ROTA_STAGE"
+  if [ -n "${ROTA_GATE_BIN:-}" ]; then
+    ROTA_BUILD_DIR="$(mktemp -d "$ROTA_GATE_BIN/smoke.XXXXXX")" || exit 1
+    trap 'rm -rf "$RUN_TMP" "$ROTA_BUILD_DIR"' EXIT
+  fi
+  build_rota "$ROTA_BUILD_DIR/rota" || { echo "runner: go build ./cmd/rota failed" >&2; exit 2; }
+  ROTA_BIN="$ROTA_BUILD_DIR/rota"
 fi
 export ROTA_BIN
 

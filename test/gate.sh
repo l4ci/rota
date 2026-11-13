@@ -78,6 +78,12 @@ GATE_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-tmp.XXXXXX")" || exit 1
 GATE_TMP="$GATE_SCRATCH/tmp"
 mkdir "$GATE_TMP" || exit 1
 export TMPDIR="$GATE_TMP"
+# Compiled test binaries and the runners' rota builds go under the project temp
+# root (#2499), in a private dir this run removes. GOTMPDIR keeps go test's
+# binaries out of TMPDIR; t.TempDir() fixtures still use TMPDIR above.
+ROTA_GATE_BIN="$(mktemp -d "$PROJECT_TMP/rota-gate-bin-XXXXXX")" || exit 1
+mkdir "$ROTA_GATE_BIN/gotmp" || exit 1
+export ROTA_GATE_BIN GOTMPDIR="$ROTA_GATE_BIN/gotmp"
 # The gate runs in a fresh scratch worktree each time. Without -trimpath the Go
 # build cache keys every compile on the source directory, so each path adds a
 # full copy (~210 MB measured, 85 GB over a round, #709); with it, entries are
@@ -100,7 +106,7 @@ GATE_OK=0 STATUS_DONE=0
 osc7501() { [ -t 1 ] && [ -t 2 ] && printf '\033]7501;state=%s:app=rota%s\033\\' "$1" "${2:+:progress=$2}" >&2; return 0; }
 cleanup() {
   if [ "$STATUS_DONE" = 0 ]; then STATUS_DONE=1; if [ "$GATE_OK" = 1 ]; then osc7501 done; else osc7501 error; fi; fi
-  gate_lock_release "$LOCK"; rm -rf "$GATE_SCRATCH"
+  gate_lock_release "$LOCK"; rm -rf "$GATE_SCRATCH" "$ROTA_GATE_BIN"
 }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).

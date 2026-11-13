@@ -18,6 +18,6 @@ project_tmp() {
   if [ ! -d "$root" ]; then
     (umask 077 && mkdir -p "$root") || return 1
   fi
-  [ -e "$root/.gitignore" ] || printf '*\n' > "$root/.gitignore" || return 1
+  [ -e "$root/.gitignore" ] || [ -L "$root/.gitignore" ] || printf '*\n' > "$root/.gitignore" || return 1
   printf '%s\n' "$root"
 }
