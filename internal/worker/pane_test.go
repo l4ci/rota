@@ -14,30 +14,32 @@ import (
 // paneFixtures are static pane texts covering every rule of the classifier,
 // including the edge cases the rules are written around.
 var paneFixtures = map[string]string{
-	"blank":               "",
-	"idle":                "  claude ready\n> \n",
-	"done url":            "work\nROTA-DONE w1 https://github.com/o/r/pull/12\n",
-	"done branch":         "ROTA-DONE w1 rota-worker/w1-t1\n",
-	"done bare":           "ROTA-DONE w1\nnext line\n",
-	"done multiline":      "ROTA-DONE w1\nsomething after\n",
-	"blocked":             "ROTA-BLOCKED w1: which of A or B?\n",
-	"blocked + done":      "ROTA-DONE w1 x\nROTA-BLOCKED w1: still a question\n",
-	"blocked indent":      "   ROTA-BLOCKED   w1 :   spaced out  \n",
-	"retry":               "API Error: Overloaded\nRetrying in 4 seconds\n",
-	"api error":           "doing things\nAPI Error: 529 Overloaded\n",
-	"crashed":             "Resume this session with: claude --resume abc\n",
-	"limit":               "You've hit your usage limit. resets at 5pm\n",
-	"limit funds":         "You've hit your limit\nAdd funds to continue\n",
-	"limit approaching":   "Approaching usage limit\n",
-	"limit reset":         "limit will reset at 3am\n",
-	"limit prose":         "I read the rate limit code in limiter.go\n",
-	"permission":          "Do you want to proceed?\n 1. Yes\n 2. No, and tell Claude what to do differently\n",
-	"permission allow":    "Allow Bash(git push) to run?\n",
-	"permission dont":     "Yes, and don't ask again for this\n",
-	"sentinel over limit": "reached your usage limit\nROTA-DONE w1 https://gitlab.com/o/r/-/merge_requests/3\n",
-	"unicode":             "héllo wörld — ünïcode ✓\n❯ \n",
-	"crlf":                "ROTA-BLOCKED w1: windows\r\nline\r\n",
-	"long limit line":     "usage limit reached " + strings.Repeat("x", 200) + "\n",
+	"blank":                         "",
+	"idle":                          "  claude ready\n> \n",
+	"done url":                      "work\nROTA-DONE w1 https://github.com/o/r/pull/12\n",
+	"done branch":                   "ROTA-DONE w1 rota-worker/w1-t1\n",
+	"done bare":                     "ROTA-DONE w1\nnext line\n",
+	"done multiline":                "ROTA-DONE w1\nsomething after\n",
+	"blocked":                       "ROTA-BLOCKED w1: which of A or B?\n",
+	"blocked + done":                "ROTA-DONE w1 x\nROTA-BLOCKED w1: still a question\n",
+	"blocked indent":                "   ROTA-BLOCKED   w1 :   spaced out  \n",
+	"retry":                         "API Error: Overloaded\nRetrying in 4 seconds\n",
+	"api error":                     "doing things\nAPI Error: 529 Overloaded\n",
+	"crashed":                       "Resume this session with: claude --resume abc\n",
+	"limit":                         "You've hit your usage limit. resets at 5pm\n",
+	"limit funds":                   "You've hit your limit\nAdd funds to continue\n",
+	"limit approaching":             "Approaching usage limit\n",
+	"limit reset":                   "limit will reset at 3am\n",
+	"limit prose":                   "I read the rate limit code in limiter.go\n",
+	"permission":                    "Do you want to proceed?\n 1. Yes\n 2. No, and tell Claude what to do differently\n",
+	"permission allow":              "Allow Bash(git push) to run?\n",
+	"permission quoted":             "● The classifier reports NEEDS-PERMISSION when the pane shows:\n\n  Do you want to proceed?\n  1. Yes\n  2. No, and tell Claude what to do differently\n\n  Allow Bash(git push) to run?\n\n❯ \n",
+	"permission dialog under reply": "● Pushing now.\n\n────────────────\n Bash command\n\n Do you want to proceed?\n  1. Yes\n  2. No, and tell Claude what to do differently\n",
+	"permission dont":               "Yes, and don't ask again for this\n",
+	"sentinel over limit":           "reached your usage limit\nROTA-DONE w1 https://gitlab.com/o/r/-/merge_requests/3\n",
+	"unicode":                       "héllo wörld — ünïcode ✓\n❯ \n",
+	"crlf":                          "ROTA-BLOCKED w1: windows\r\nline\r\n",
+	"long limit line":               "usage limit reached " + strings.Repeat("x", 200) + "\n",
 }
 
 // TestClassify checks every pane fixture under every polled status against the
@@ -689,5 +691,19 @@ func TestReadsWaitPane(t *testing.T) {
 		if got := ReadsWaitPane(c.kind); got != c.want {
 			t.Errorf("ReadsWaitPane(%q) = %v, want %v", c.kind, got, c.want)
 		}
+	}
+}
+
+// TestClassifyPermissionQuotedInReplyIsNotNeedsPermission pins #3161: permission
+// wording quoted inside the worker's own reply is not a dialog; the same wording
+// in a dialog under the reply still is.
+func TestClassifyPermissionQuotedInReplyIsNotNeedsPermission(t *testing.T) {
+	quoted := paneFixtures["permission quoted"]
+	if st, _ := Classify(quoted, false, 60, "idle"); st == StateNeedsPermission {
+		t.Errorf("quoted permission text read as a dialog: %s", st)
+	}
+	dlg := paneFixtures["permission dialog under reply"]
+	if st, _ := Classify(dlg, false, 60, "idle"); st != StateNeedsPermission {
+		t.Errorf("a real dialog under a reply: %s", st)
 	}
 }
