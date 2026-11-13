@@ -22,9 +22,11 @@ unrelated PRs are not blocked; `--strict` (or ROTA_DOC_STAMPS=strict) fails on i
 Either way the line names the doc and the changed paths. To clear drift, re-read
 the doc against the changed paths, fix what drifted, then run `--restamp <doc>` on
 main (docs/contributing/rounds.md, Contract doc stamps).
+Restamping refuses to write unless HEAD is reachable from origin/main (or
+origin/<base> with --base). Fetch that base after publishing HEAD there first.
 
 Usage: check-doc-stamps.py [--root <repo>] [--strict]   (default root: this checkout)
-       check-doc-stamps.py [--root <repo>] --restamp <doc.md>...   (set those stamps to HEAD)
+       check-doc-stamps.py [--root <repo>] [--base <branch>] --restamp <doc.md>...
 Exit:  0 no errors (and no drift when strict), 1 otherwise (one line each on stdout)
 """
 import os
@@ -129,6 +131,8 @@ def main():
                     help="fail on drifted refs too (also ROTA_DOC_STAMPS=strict)")
     ap.add_argument("--restamp", nargs="+", metavar="DOC",
                     help="set these docs' stamps to HEAD (main only, after re-reading each against its refs)")
+    ap.add_argument("--base", default="main", metavar="BRANCH",
+                    help="origin branch that must contain HEAD before --restamp (default: main)")
     args = ap.parse_args()
     root = Path(args.root).resolve()
     docs = sorted((root / "docs/contributing/contract").glob("*.md"))
@@ -142,7 +146,19 @@ def main():
         if errors or unknown:
             print("\n".join(errors + [f"{d}: not a contract doc" for d in unknown]))
             return 1
-        head = git(root, "rev-parse", "HEAD").stdout.strip()
+        head_result = git(root, "rev-parse", "--verify", "HEAD^{commit}")
+        if head_result.returncode != 0:
+            print("cannot restamp: HEAD is not a known commit")
+            return 1
+        head = head_result.stdout.strip()
+        base = f"origin/{args.base}"
+        base_result = git(root, "rev-parse", "--verify", f"refs/remotes/{base}^{{commit}}")
+        if base_result.returncode != 0:
+            print(f"cannot restamp HEAD {head}: base {base} is not a known commit; fetch it first")
+            return 1
+        if git(root, "merge-base", "--is-ancestor", head, base_result.stdout.strip()).returncode != 0:
+            print(f"cannot restamp HEAD {head}: not reachable from {base}; publish HEAD there and fetch it first")
+            return 1
         stamps.update({os.path.basename(d): head for d in args.restamp})
         (root / STAMPS).write_text("".join(f"{n} {stamps[n]}\n" for n in sorted(stamps)))
         print(f"OK restamped {len(args.restamp)} doc(s) at {head}")
