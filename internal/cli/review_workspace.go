@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 const reviewWorkspacePrefix = "rota-review-"
@@ -43,7 +45,7 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 	}
 	head = strings.TrimSpace(out)
 	// Canonical paths let cleanup reject symlinked parents rather than following them.
-	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
+	temp, _, err := c.tempRootFor(dir)
 	if err != nil {
 		return "", "", Unavailable("resolve temporary directory: %v", err)
 	}
@@ -58,6 +60,12 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 			}
 		}
 	}()
+	// An empty repository at the workspace root fences git discovery: git run
+	// in the tree stops here instead of reaching the checkout that holds the
+	// project temp root, where it would read, or change, the live repo.
+	if _, err = reviewGit(c.Context(), c.deps(), root, "init", "--quiet"); err != nil {
+		return "", "", err
+	}
 	path = filepath.Join(root, "tree")
 	archive := filepath.Join(root, "source.tar")
 	if _, err = reviewGit(c.Context(), c.deps(), dir, "archive", "--format=tar", "--output="+archive, head); err != nil {
@@ -95,15 +103,16 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	if !filepath.IsAbs(path) || filepath.Base(path) != "tree" {
 		return Result{}, Refused("not a prepared review workspace: %s", path)
 	}
-	temp, err := reviewWorkspaceTempDir(c.deps().TempDir())
+	roots, err := reviewCleanupRoots(c)
 	if err != nil {
 		return Result{}, Unavailable("resolve temporary directory: %v", err)
 	}
 	// Resolve only the workspace's parent: a symlinked ancestor (macOS /var ->
-	// /private/var) is fine, a symlinked workspace dir is not.
+	// /private/var) is fine, a symlinked workspace dir is not. The parent must be
+	// one of the temp roots exactly, never a path under one.
 	wsDir := filepath.Dir(path)
 	parent, err := filepath.EvalSymlinks(filepath.Dir(wsDir))
-	if err != nil || parent != temp || !strings.HasPrefix(filepath.Base(wsDir), reviewWorkspacePrefix) {
+	if err != nil || !slices.Contains(roots, parent) || !strings.HasPrefix(filepath.Base(wsDir), reviewWorkspacePrefix) {
 		return Result{}, Refused("not a prepared review workspace: %s", path)
 	}
 	root := filepath.Join(parent, filepath.Base(wsDir))
@@ -129,10 +138,28 @@ func reviewCleanup(c *Ctx, args []string) (Result, error) {
 	return Result{Data: jsonx.Obj("changed", true, "path", path, "head", marker.Head), Text: fmt.Sprintf("removed %s", path)}, nil
 }
 
-func reviewWorkspaceTempDir(dir string) (string, error) {
-	temp, err := filepath.Abs(dir)
+// reviewCleanupRoots are the exact parents a prepared workspace may sit in: the
+// system temp dir (workspaces made outside a project, or before #2499) and,
+// when the working directory (or --repo) is in a rota project, its existing
+// project temp root. Both are symlink-resolved; cleanup never creates a root.
+func reviewCleanupRoots(c *Ctx) ([]string, error) {
+	system, err := systemTempDir(c.deps().TempDir())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return filepath.EvalSymlinks(temp)
+	roots := []string{system}
+	dir, err := gitDir(c)
+	if err != nil {
+		return roots, nil
+	}
+	cd, err := c.CommonDirCtx(c.Context(), dir)
+	if err != nil {
+		return roots, nil
+	}
+	if root, ok := rotastate.TempRoot(cd); ok {
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			roots = append(roots, real)
+		}
+	}
+	return roots, nil
 }

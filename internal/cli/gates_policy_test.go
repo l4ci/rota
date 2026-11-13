@@ -74,7 +74,7 @@ var oldSupportAllowed = []string{
 	"rota decisions check", "rota decisions query", "rota decisions stats", "rota decisions topics",
 	"rota design list", "rota design show",
 	"rota doctor", "rota gate list",
-	"rota git base", "rota git branch", "rota git guard clean", "rota git guard feature-branch", "rota git worktree-path",
+	"rota git base", "rota git branch", "rota git guard clean", "rota git guard feature-branch", "rota git tmp-dir", "rota git worktree-path",
 	"rota glossary read",
 	"rota init check",
 	"rota issues imported", "rota issues provider",

@@ -37,6 +37,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 				age  time.Duration
 			}{
 				{"rota-smoke.old", 3 * time.Hour}, {"rota-gate-logs-old", 3 * time.Hour},
+				{"rota-review-old", 3 * time.Hour}, {"rota-gate-old", 3 * time.Hour}, {"rota-review-fresh", 0},
 				{"rota-smoke.fresh", 0}, {"tmp.other", 3 * time.Hour}, {"other", 3 * time.Hour},
 			} {
 				p := filepath.Join(temp, entry.name)
@@ -95,7 +96,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 			} else if in.CacheDisk == nil || in.CacheDisk.Path != cachePath {
 				t.Fatalf("cache disk = %+v, want %s", in.CacheDisk, cachePath)
 			}
-			want := "2 leaked temp dirs under " + temp + " (4.0 KiB); safe to delete once no run is active"
+			want := "4 leaked temp dirs under " + temp + " (8.0 KiB); safe to delete once no run is active"
 			got := in.ScanLeftovers()
 			if len(got) != 1 || got[0] != want {
 				t.Fatalf("leftovers = %q, want %q", got, want)
@@ -155,5 +156,38 @@ func TestDoctorDiskSkipsSharedCacheVolume(t *testing.T) {
 	d.doctorDiskInput(context.Background(), &in, nil, "")
 	if in.CacheDisk != nil {
 		t.Errorf("cache on the repo volume duplicated the disk check: %+v", in.CacheDisk)
+	}
+}
+
+func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	tempRoot := t.TempDir()
+	for _, e := range []struct {
+		name string
+		age  time.Duration
+	}{{"old-a", 3 * time.Hour}, {"old-b", 5 * time.Hour}, {"fresh", 10 * time.Minute}, {".gitignore", 9 * time.Hour}} {
+		p := filepath.Join(tempRoot, e.name)
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		f := filepath.Join(p, "f")
+		if err := os.WriteFile(f, make([]byte, 1024), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		ts := now.Add(-e.age)
+		os.Chtimes(f, ts, ts)
+		os.Chtimes(p, ts, ts)
+	}
+	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
+	want := "2 entries older than 1h under " + tempRoot + " (2.0 KiB); preview with `rota reap --kind tmp`, `--apply` to remove"
+	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), tempRoot, now)
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("leftovers = %q, want [%q]", got, want)
+	}
+	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), "", now); len(got) != 0 {
+		t.Fatalf("no temp root: leftovers = %q", got)
+	}
+	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), filepath.Join(tempRoot, "absent"), now); len(got) != 0 {
+		t.Fatalf("missing temp root was created or listed: %q", got)
 	}
 }

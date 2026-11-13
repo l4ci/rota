@@ -468,7 +468,7 @@ Read-only, runs without `.rota/`. Exit 1 when any check fails; every failure car
 
 | Usage | What it does |
 |---|---|
-| `rota reap [--kind <worktree\|branch\|tab\|lease\|skillcache>[,…]] [--apply]` | list, and with `--apply` remove, what a round left behind that nothing live owns, and the extracted skill trees of other rota versions |
+| `rota reap [--kind <worktree\|branch\|tab\|lease\|skillcache\|tmp>[,…]] [--apply]` | list, and with `--apply` remove, what a round left behind that nothing live owns, and the extracted skill trees of other rota versions |
 
 Previews by default. It never kills a running agent and never deletes work: a candidate that holds uncommitted changes or unmerged commits is listed with `held` and left alone. Exit 1 under `--apply` when a deletion failed. Exit 5, with nothing listed or deleted, when `.rota/workers.json` exists but does not parse; `rota worker pool reap` refuses the same way.
 
@@ -553,6 +553,7 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota git guard feature-branch [<branch>]` | fail on the base branch or a detached HEAD |
 | `rota git branch <name> --repos <a,b,...>` | create one branch in several sub-repos, or in none |
 | `rota git worktree-path <branch>` | print the umbrella worktree path of a sub-repo branch |
+| `rota git tmp-dir` | print the project temp root (`.rota/tmp` of the main checkout), created on first use |
 
 ## `rota change`
 

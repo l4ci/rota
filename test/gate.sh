@@ -11,8 +11,11 @@
 #                 that quietly needs another's state fails (shard-safety guard)
 #   --shards N    shard count; default ROTA_SMOKE_SHARDS, else one per
 #                 two cores (nproc/2, 1 to 4)
-# Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a tmp dir that
-#      is kept only when a check fails); ROTA_GATE_LOCK=<path> moves the lock.
+# Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a dir under the
+#      project temp root, <main checkout>/.rota/tmp, or the system temp dir
+#      outside a rota project, kept only when a check fails); ROTA_GATE_LOCK=<path>
+#      moves the lock. TMPDIR and the isolated HOME stay in the system temp dir:
+#      under the checkout, a fixture walking up would find the project's .rota/.
 #
 # Only one gate runs per machine: a second one waits for the first. Two gates at
 # once starve the Go tests of CPU and produce time-budget false reds. The gate
@@ -21,12 +24,14 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$REPO/test/lib/project-tmp.sh"
+PROJECT_TMP="$(project_tmp "$REPO")" || PROJECT_TMP="${TMPDIR:-/tmp}"
 # Run under the test lock: re-enter through `rota test lock`, which marks the
 # child (ROTA_TEST_LOCK_HELD) so this branch runs once.
 if [ -z "${ROTA_TEST_LOCK_HELD:-}" ]; then
   LOCK_BIN="${ROTA_BIN:-}"
   if [ -z "$LOCK_BIN" ]; then
-    LOCK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-bin-XXXXXX")" || exit 1
+    LOCK_DIR="$(mktemp -d "$PROJECT_TMP/rota-gate-bin-XXXXXX")" || exit 1
     (cd "$REPO" && go build -trimpath -o "$LOCK_DIR/rota" ./cmd/rota) || { rm -rf "$LOCK_DIR"; echo "gate: go build ./cmd/rota failed" >&2; exit 2; }
     LOCK_BIN="$LOCK_DIR/rota"
   fi
@@ -59,15 +64,26 @@ case "$SHARDS" in ''|*[!0-9]*|0) echo "gate: shard count must be an integer >= 1
 LOCK="${ROTA_GATE_LOCK:-/tmp/rota-gate.lock}"
 gate_lock_acquire "$LOCK"
 
-LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-logs-XXXXXX")}"
+LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "$PROJECT_TMP/rota-gate-logs-XXXXXX")}"
 mkdir -p "$LOGS"
 # Smoke differences retain snapshots beside the logs, outside GATE_TMP (which
 # cleanup always removes). Resolve relative log paths before runners change cwd.
 SMOKE_DIAGNOSTICS="$(cd "$LOGS" && pwd -P)"
 # Every check makes its temp files under one gate-owned root, so a leak is
-# countable: the root must be empty once the checks have exited (#85).
-GATE_TMP="$(mktemp -d "$LOGS/tmp.XXXXXX")" || exit 1  # fresh: LOGS may be shared, and GATE_TMP is rm -rf'd
+# countable: the root must be empty once the checks have exited (#85). It is
+# fresh and in the system temp dir, never the project's. It sits in one private
+# (mktemp, 0700) parent with the isolated HOME and the worktree snapshot, so no
+# gate path is a guessable name in the shared temp dir; the parent is rm -rf'd.
+GATE_SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-tmp.XXXXXX")" || exit 1
+GATE_TMP="$GATE_SCRATCH/tmp"
+mkdir "$GATE_TMP" || exit 1
 export TMPDIR="$GATE_TMP"
+# Compiled test binaries and the runners' rota builds go under the project temp
+# root (#2499), in a private dir this run removes. GOTMPDIR keeps go test's
+# binaries out of TMPDIR; t.TempDir() fixtures still use TMPDIR above.
+ROTA_GATE_BIN="$(mktemp -d "$PROJECT_TMP/rota-gate-bin-XXXXXX")" || exit 1
+mkdir "$ROTA_GATE_BIN/gotmp" || exit 1
+export ROTA_GATE_BIN GOTMPDIR="$ROTA_GATE_BIN/gotmp"
 # The gate runs in a fresh scratch worktree each time. Without -trimpath the Go
 # build cache keys every compile on the source directory, so each path adds a
 # full copy (~210 MB measured, 85 GB over a round, #709); with it, entries are
@@ -78,9 +94,9 @@ case " ${GOFLAGS:-} " in *" -trimpath "*) ;; *) export GOFLAGS="${GOFLAGS:+$GOFL
 # rota verbs outside the smoke runner's own scrub. The worktree list of this repo
 # must come out unchanged, whatever a check does.
 . "$REPO/test/lib/isolate.sh"
-ISO_DIR="$LOGS/iso"
+ISO_DIR="$GATE_SCRATCH/iso"
 isolate_env "$ISO_DIR"
-WORKTREES_BEFORE="$GATE_TMP.worktrees"
+WORKTREES_BEFORE="$GATE_SCRATCH/worktrees"
 worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 PIDS=()
 # OSC 7501 status (#2642): working/progress while the checks run, then done or
@@ -90,7 +106,7 @@ GATE_OK=0 STATUS_DONE=0
 osc7501() { [ -t 1 ] && [ -t 2 ] && printf '\033]7501;state=%s:app=rota%s\033\\' "$1" "${2:+:progress=$2}" >&2; return 0; }
 cleanup() {
   if [ "$STATUS_DONE" = 0 ]; then STATUS_DONE=1; if [ "$GATE_OK" = 1 ]; then osc7501 done; else osc7501 error; fi; fi
-  gate_lock_release "$LOCK"; rm -rf "$GATE_TMP" "$ISO_DIR" "$WORKTREES_BEFORE"
+  gate_lock_release "$LOCK"; rm -rf "$GATE_SCRATCH" "$ROTA_GATE_BIN"
 }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).

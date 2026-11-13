@@ -34,7 +34,7 @@ func roundKeyLiterals(t *testing.T, root string) []string {
 			return err
 		}
 		if d.IsDir() {
-			if testiso.NestedCheckout(root, path, d) {
+			if testiso.NestedCheckout(root, path, d) || testiso.ProjectTemp(root, path, d) {
 				return fs.SkipDir
 			}
 			switch d.Name() {
@@ -95,6 +95,7 @@ func TestRoundKeyGuard(t *testing.T) {
 		{"test", "internal/x/x_test.go", `var v = "round.scope"`, 0},
 		{"fixture", "internal/x/testdata/x.go", `var v = "round.scope"`, 0},
 		{"worktree", ".worktrees/x/x.go", `var v = "round.scope"`, 0},
+		{"project temp root", ".rota/tmp/scratch.go", `var v = (`, 0},
 		{"comment", "internal/x/x.go", `// "round.scope"`, 0},
 		{"diagnostic", "internal/x/x.go", `var v = "round.scope must be valid"`, 0},
 		{"other key", "internal/x/x.go", `var v = "work.tdd"`, 0},

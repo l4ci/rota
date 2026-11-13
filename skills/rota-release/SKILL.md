@@ -101,7 +101,7 @@ Show the full draft, then the `## Cross-harness review` block from Step 5 under 
 
 This answer is the human approval for Steps 10 and 11. Keep it verbatim as `$APPROVAL` (the option label, or the replacement text's first line after Edit) for `--confirm-note`. Never auto-pick this question in any autonomy mode.
 
-Write the approved notes to `NOTES_FILE=$(mktemp /tmp/rota-release-notes.XXXXXX.md)`. The cross-harness block is for the maintainer, not the published notes: leave it out unless the maintainer's replacement text kept part of it.
+Write the approved notes to `NOTES_FILE=$(mktemp "$(rota git tmp-dir)/rota-release-notes.XXXXXX.md")`. The cross-harness block is for the maintainer, not the published notes: leave it out unless the maintainer's replacement text kept part of it.
 
 ## Step 7 — Write Version File and CHANGELOG
 

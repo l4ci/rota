@@ -97,7 +97,7 @@ func TestIgnoredNestedCheckoutsAndFixtureTrees(t *testing.T) {
 	root := t.TempDir()
 	source := `package scan; import ("os"; "testing"); func TestGuard(t *testing.T) { os.ReadDir(".") }`
 	writeSource(t, root, "own/scan_test.go", source)
-	for _, dir := range []string{".git", ".worktrees/worker", "vendor", "node_modules", "testdata", "nested"} {
+	for _, dir := range []string{".git", ".worktrees/worker", "vendor", "node_modules", "testdata", "nested", ".rota/tmp"} {
 		writeSource(t, root, dir+"/scan_test.go", source)
 	}
 	writeSource(t, root, "nested/.git", "gitdir: somewhere")
