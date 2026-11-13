@@ -26,7 +26,7 @@ var (
 
 var oldSupportFenced = []string{
 	// Merge.
-	"rota worker gate", "rota worker train", "rota worker train cancel",
+	"rota worker gate", "rota worker train", "rota worker train cancel", "rota worker refs",
 	"rota ship merge", "rota ship pr-merge", "rota ship undo",
 	// Runs an arbitrary command.
 	"rota test lock", "rota review probe",

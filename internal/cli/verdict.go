@@ -187,6 +187,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if !verdict.KnownKind(*kind) || *kind == verdict.DebugFix {
 			return Result{}, Usage("--kind must be one of %s", strings.Join(verdict.BranchKinds, ", "))
 		}
+		if *kind == verdict.Look && c.deps().Getenv("ROTA_SLOT") != "" {
+			return Result{}, Refused("--kind %s is the maintainer's approval: a worker slot cannot record it", verdict.Look)
+		}
 		if err := checkVerdict(*kind, *v); err != nil {
 			return Result{}, err
 		}

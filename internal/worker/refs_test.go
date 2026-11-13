@@ -72,3 +72,15 @@ func TestRefsRefusesAFileOutsideThePattern(t *testing.T) {
 		t.Fatal("the command ran in the main checkout")
 	}
 }
+
+func TestRefsRefusesACommandThatMovesHead(t *testing.T) {
+	w, tip := refsWorld(t, "mkdir -p refs && echo new > refs/a.png && git add refs && git -c user.name=x -c user.email=x@x commit -qm sneaky")
+	w.record(intBranch, tip, verdict.Look)
+	res, err := w.refs()
+	if err != nil || res.Verdict == RefsRenewed || !strings.Contains(res.Message, "HEAD") {
+		t.Fatalf("want a refusal naming HEAD: %+v %v", res, err)
+	}
+	if got := gittest.Run(t, w.origin, "rev-parse", intBranch); got != tip {
+		t.Fatalf("nothing may be pushed, tip moved to %s", got)
+	}
+}

@@ -133,6 +133,13 @@ func (e Env) Refs(ctx context.Context, root string, o RefsOpts) (RefsResult, err
 			return res, nil
 		}
 	}
+	// A command that moved HEAD (a commit, a checkout) would put commits the
+	// look never approved under the pushed one: refuse, push nothing.
+	if head, code := e.git(dir, "rev-parse", "HEAD"); code != 0 || head != tip {
+		res.Verdict = RefsOutside
+		res.Message = fmt.Sprintf("test.refs moved HEAD off the approved tip %s; nothing was committed", strutil.ShortSHA(tip))
+		return res, nil
+	}
 	out, code := e.git(dir, "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames")
 	if code != 0 {
 		return res, fmt.Errorf("git status failed in the scratch tree: %s", out)
