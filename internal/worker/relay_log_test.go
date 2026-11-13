@@ -149,4 +149,16 @@ func TestRelaySurvivesTheSlotsNextTask(t *testing.T) {
 	if msg := CheckApprovals("## Approvals\n- ok per orchestrator relay round 7\n", tgt.Relays()); msg == "" {
 		t.Error("a relay round that was never sent must still fail")
 	}
+	// The next task's own PR cannot cite the previous task's relays.
+	const other = "https://github.com/o/r/pull/10"
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetPR(other) }); err != nil {
+		t.Fatal(err)
+	}
+	next, err := LoadRegistryTolerant(dir).GateTarget(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg := CheckApprovals("## Approvals\n- ok per orchestrator relay round 1\n", next.Relays()); msg == "" {
+		t.Error("the next task's PR inherited the previous task's relays")
+	}
 }
