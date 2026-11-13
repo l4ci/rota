@@ -868,3 +868,84 @@ func TestTickTrainUnreproducedRetriesEveryMember(t *testing.T) {
 		t.Fatalf("trained %v on the next tick, want a,b retrained", f.trained)
 	}
 }
+
+// holdOf is the hold line for target, "" when the tick named none.
+func holdOf(r Result, target string) string {
+	for _, h := range r.Holds {
+		if h.Target == target {
+			return h.Why
+		}
+	}
+	return ""
+}
+
+func twoDone() *fake {
+	return &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+}
+
+func TestTickStartsDueTrainAndHoldsNothing(t *testing.T) {
+	f := twoDone()
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := [][]string{{"main", "a", "b"}}; !reflect.DeepEqual(f.trained, want) {
+		t.Fatalf("trained %v, want %v", f.trained, want)
+	}
+	if len(r.Holds) != 0 {
+		t.Fatalf("a started train holds nothing: %+v", r.Holds)
+	}
+}
+
+func TestTickNamesWhyItHoldsADueTrain(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(*fake, *Env)
+		want  map[string]string // target -> substring of the hold reason
+	}{
+		{"support role", func(_ *fake, e *Env) { e.Role = roundcfg.RoleSupport }, map[string]string{"a": "support", "b": "support"}},
+		{"over the cap", func(_ *fake, e *Env) { e.Cap = 1 }, map[string]string{"b": "round.autopilotCap"}},
+		{"base moved", func(f *fake, _ *Env) {
+			f.trainOut = func([]string) TrainRun { return TrainRun{Result: worker.TrainResult{Verdict: "base-moved"}} }
+		}, map[string]string{"a": "base moved", "b": "base moved"}},
+		{"flake", func(f *fake, _ *Env) {
+			f.trainOut = func([]string) TrainRun {
+				return TrainRun{Result: worker.TrainResult{Verdict: "verify-failed", Unreproduced: true}}
+			}
+		}, map[string]string{"a": "retrain", "b": "retrain"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := twoDone()
+			e := f.env()
+			tc.setup(f, &e)
+			r, err := Run(context.Background(), e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for target, sub := range tc.want {
+				if got := holdOf(r, target); !strings.Contains(got, sub) {
+					t.Errorf("hold for %s = %q, want it to name %q", target, got, sub)
+				}
+			}
+		})
+	}
+}
+
+func TestObserveReportsTheSameHoldAsExecution(t *testing.T) {
+	f := twoDone()
+	e := f.env()
+	e.Role = roundcfg.RoleSupport
+	run, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Observe = true
+	obs, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(run.Holds, obs.Holds) || len(obs.Holds) == 0 {
+		t.Fatalf("observe holds %+v, execution holds %+v", obs.Holds, run.Holds)
+	}
+}
