@@ -156,7 +156,7 @@ printf '{"round":{"dispatch":"herdr","commands":{"claude":"FOO=1 claude --model 
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null \
   || fail "dispatch with a custom round.commands.claude failed"
-grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1$' "$FAKE/log" \
+grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1 --env TMPDIR=[^ ]*/.rota/tmp/slots/w1$' "$FAKE/log" \
   || fail "leading env assignments in round.commands.claude must become tab --env; log: $(cat "$FAKE/log")"
 grep -q -- '-- --model haiku --settings s.json$' "$FAKE/log" \
   || fail "round.commands.claude args must pass through to agent start; log: $(cat "$FAKE/log")"
