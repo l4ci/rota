@@ -1221,6 +1221,15 @@ While the maintainer reviews one integration branch, the next batch can be verif
 
 The stacked branch cannot land while `a` is open: `rota worker gate` refuses it (`stale`) and names `a`. It refuses the same way when `a` was closed without landing. When `a` lands, rota retargets the stacked PR to `main`, merges `main` into the stacked branch and pushes it (`STACK-RETARGET`). If that merge left the tree as the train verified it, the verify stands and the landing skips a second one. If it changed the tree, the gate verifies again (`INTEGRATION-REVERIFY`). When a step fails, the landing of `a` still stands and says `pending`; gating the stacked PR repeats the move.
 
+#### Renew reference files
+
+A project that keeps reference images (screenshots, snapshots) often wants their renewal in its own commit, after the maintainer approved how the batch looks. Set `test.refs` (the commands that rewrite the files) and `test.refsPattern` (a regular expression matching the reference paths), record the approval, then run the verb:
+
+1. Record the approval at the branch's tip: `rota verdict add integration/r<round>-ui --kind look --verdict PASS --sha <tip>`. It is a sha-bound verdict, so a push after it voids it.
+2. `rota worker refs integration/r<round>-ui` (or just `ui`) runs `test.refs` in a scratch tree at the pushed tip. It commits the files that changed, which all match `test.refsPattern`, as one commit and pushes it to the branch.
+
+It refuses, exit 4 and nothing committed, when there is no `look` PASS at the tip (`refs-no-look`, naming the missing approval), when a command changed a file outside the pattern (`refs-outside`, naming it) or when a command failed (`refs-failed`). A run that changes nothing reports `refs-clean`. The new commit moves the tip, so a gate that needs a verdict at the tip needs it again.
+
 ## Best-of: two workers on one issue
 
 For a hard issue where you want two independent attempts, label it `best-of:2`. It costs twice

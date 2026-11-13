@@ -47,6 +47,10 @@ const (
 	// DebugReset is the human reset of an item's failed-fix count (B3). It is
 	// written by `debug reset` only: no verb takes it as --kind.
 	DebugReset = "debug-reset"
+	// Look is the maintainer's approval of how a batch looks, recorded against
+	// an integration branch at its tip. A push after it voids it like any
+	// sha-bound verdict. `worker refs` runs only behind a PASS at the tip.
+	Look = "look"
 	// WorkFix is one /rota-work Step 7 fix dispatch (FAIL), or the PASS that
 	// ends the run of them. Its count is separate from the debug-fix one, so
 	// the cap that hands off to /rota-debug never halts /rota-debug itself.
@@ -92,6 +96,7 @@ var kindVerdicts = map[string][]string{
 	QA:            {Pass, Concerns, Fail, InfraFail},
 	DebugFix:      {Pass, Fail},
 	Behaviour:     {Pass, Fail},
+	Look:          {Pass, Fail},
 }
 
 func init() {

@@ -171,8 +171,8 @@ func checkVerdict(kind, v string) error {
 }
 
 func verdictAdd(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "review-spec, review-quality, review-cross, review-security, review-perf, review-ux, second-opinion, qa or behaviour")
-	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour takes PASS or FAIL)")
+	kind := fs.String("kind", "", "review-spec, review-quality, review-cross, review-security, review-perf, review-ux, second-opinion, qa, behaviour or look (the maintainer's approval of an integration branch's looks)")
+	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour and look take PASS or FAIL)")
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
 	fileDeferred := fs.Bool("file-deferred", false, "add each deferred (non-blocking, non-info) finding at or above review.fileDeferred to the one follow-up item for --pr")
 	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")

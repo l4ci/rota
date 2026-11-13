@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,11 @@ import (
 // asks for it (Where, CISettings, ReviewPolicy, IsolateEnabled).
 type GateConfig struct {
 	vacuous vacuousConfig
+	// Refs is test.refs, RefsPattern test.refsPattern: what `worker refs`
+	// runs and which changed files it may commit (#3099).
+	Refs        []string
+	RefsPattern *regexp.Regexp
+	refsErr     error
 	// rerunTemplate is test.vacuousCommand: how a train's alone-runs select
 	// only the failing tests (#3095).
 	rerunTemplate string
@@ -114,6 +120,8 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
 	c.legacyOnce = new(sync.Once)
 	c.vacuous = parseVacuousConfig(cfg)
+	c.Refs = commandList(cfg, "test.refs")
+	c.RefsPattern, c.refsErr = parseRefsPattern(cfg)
 	c.rerunTemplate = config.String(cfg, "test.vacuousCommand")
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
