@@ -847,6 +847,51 @@ func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	}
 }
 
+// A watch poll between the failed dispatch and the replay turns the receiver's
+// idle mark into blocked ("brief was not submitted"). The receipt's replay says
+// the stage was dispatch, so the half-done transfer resumes instead of refusing
+// "slot already holds" (#3293).
+func TestTransferReplayAfterDispatchFailureResumesBlockedReceiver(t *testing.T) {
+	f := newMoveFx(t)
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
+	if _, err := f.transfer("12", "dana", nil); err == nil {
+		t.Fatal("the dispatch fails")
+	}
+	if err := editSlot(f.root, "dana", func(s *worker.Slot) error { return s.MarkState("blocked", "") }); err != nil {
+		t.Fatal(err)
+	}
+	// Without the receipt's word the blocked holder is a worker waiting on an answer.
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != blockedby.SameSlot {
+		t.Fatalf("a plain call still refuses: %v", err)
+	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	})
+	res, err := f.transfer("12", "dana", func(o *TransferOpts) { o.ResumeDispatch = true })
+	if err != nil || !res.Dispatched {
+		t.Fatalf("the replay resumes at dispatch: %v %+v", err, res)
+	}
+	if f.be.claims["12"] != "dana@1" {
+		t.Errorf("a resume claims nothing new: %v", f.be.claims)
+	}
+}
+
+// The replay's word covers only the receipt's own issue: a receiver holding
+// another one still refuses.
+func TestTransferReplayRefusesWhenReceiverHoldsAnotherIssue(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.transfer("12", "dana", func(o *TransferOpts) { o.ResumeDispatch = true })
+	if err == nil {
+		t.Fatal("dana holds 13: the replay must refuse")
+	}
+	if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "13" {
+		t.Errorf("a refusal changes nothing: %v %v", f.be.claims, f.slot("dana").Task())
+	}
+}
+
 func TestTransferToHumanLabelsAndDispatchesNothing(t *testing.T) {
 	f := newMoveFx(t)
 	f.host.sent = ""
