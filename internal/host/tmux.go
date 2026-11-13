@@ -169,7 +169,7 @@ func (t *tmux) rawPaste(ctx context.Context, handle string) bool {
 
 // Capture: an empty target would capture the CALLER's pane, so a slot with
 // no handle yields nothing. lines is unused: capture-pane takes the visible
-// pane, as the shell host did.
+// pane without requesting scrollback.
 func (t *tmux) Capture(ctx context.Context, slot, handle string, lines int) string {
 	text, _ := t.ReadPane(ctx, slot, handle, lines)
 	return text

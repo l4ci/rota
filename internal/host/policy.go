@@ -13,8 +13,20 @@ import (
 
 // This file is where a host kind's policy lives: facts callers used to infer
 // by comparing a Kind. A caller asks CapabilitiesForKind(k) (or a host's
-// Capabilities()) and reads a field; a new host edits this file and its
-// adapter, nothing else.
+// Capabilities()) and reads a field.
+//
+// New-host registration checklist, in addition to the adapter and its tests:
+//   - host.go: Kind constant, KindOf, Binary (if it has an executable),
+//     CapabilitiesForKind and New.
+//   - policy.go: PaneKinds, paneEnv and kindPolicy.
+//   - resolve.go: Resolve's explicit kinds and detection; ResolveLaunch's
+//     in-session and outside-session selection rules.
+//   - panes.go: CurrentPaneAny, if the host supports detection without a kind.
+//   - pickup.go: pickupPolicies, if the adapter calls confirmPickup (Core uses
+//     its own delivery protocol instead).
+//   - internal/config/keys.go: round.dispatch choices; internal/config/schema.go:
+//     setup help for that choice. Regenerate the config reference and update
+//     the public configuration docs when adding the choice.
 
 // PaneKinds are the host kinds that have panes, in resolution order.
 var PaneKinds = []Kind{Herdr, HerdrCore, Tmux, Orca}

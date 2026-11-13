@@ -50,7 +50,7 @@ type LinkedLayouter interface {
 	OpenLinked(ctx context.Context, primary, slot, path string) (ws, rootTab string, err error)
 	// ToNewTabIn moves pane out into a new tab of workspace ws, named label.
 	ToNewTabIn(ctx context.Context, pane, ws, label string) error
-	// CloseTab closes a tab (host.TabCloser).
+	// CloseTab closes a tab and proves it gone.
 	CloseTab(ctx context.Context, tab string) error
 }
 
