@@ -813,6 +813,12 @@ whose worker is busy, blocked or has uncommitted files is never taken.
   a gate that left the PR merged with a red verify of the landed tree (`merged-remotely` included). A merged PR never stays under `review`.
   `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
   habitual slot gate never merges the slot's next branch.
+- **Send a relay about it**: `rota worker dispatch <slot> --relay --pr <N> --body-file <brief>`
+  sends into the named slot's running session and logs the relay on PR N's review record.
+  Use this when the slot has already taken another issue. The PR must be open and on the
+  round's review list; otherwise dispatch refuses before sending or logging anything.
+  Without `--pr`, the relay belongs to the slot's current issue, or its newest queued PR
+  when the slot is parked.
 - **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
   branch out in that slot, moves the PR back onto it and dispatches the follow-up. Use
   `--kind <harness>` and `--model <id>` to override the receiver's harness and model.

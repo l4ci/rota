@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -15,10 +16,21 @@ import (
 )
 
 func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
-	for _, queued := range []bool{false, true} {
-		t.Run(map[bool]string{false: "held-issue", true: "queued-pr"}[queued], func(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		queued, explicit bool
+	}{
+		{"held-issue", false, false}, {"queued-pr", true, false}, {"explicit-pr-after-reassignment", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queued := tc.queued
 			dir := workerProject(t, `{"round":{"dispatch":"herdr-core"}}`)
 			deps := testDeps()
+			if tc.explicit {
+				var forgeCalls []string
+				deps = workerForge(t, &forgeCalls)
+				gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+			}
 			pinNow(deps, "2026-11-05T12:34:56Z")
 			peer, h := coretest.New(t, "claude-code")
 			useHost(deps, h)
@@ -36,7 +48,11 @@ func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
 				s := d.Slot("w1")
 				s.Dispatch(handle, "T1", harness.Claude, "2026-11-05T00:00:00Z")
 				if queued {
-					s.SetTask("")
+					if tc.explicit {
+						s.SetTask("T2")
+					} else {
+						s.SetTask("")
+					}
 					d.QueuePR(worker.QueuedPR{From: "w1", Issue: "T1", PR: "https://github.com/o/r/pull/1", Relays: []any{prior}})
 				} else {
 					s.AppendRelay(prior)
@@ -49,6 +65,9 @@ func TestWorkerDispatchConfirmNotSubmitted(t *testing.T) {
 				t.Fatal(err)
 			}
 			send := []string{"worker", "dispatch", "w1", "--relay", "--body-file", brief, "--json"}
+			if tc.explicit {
+				send = append(send, "--pr", "1")
+			}
 			peer.Mode("uncertain")
 			if code, _, _ := rotaInWith(t, deps, dir, send...); code != 5 {
 				t.Fatalf("uncertain relay exit=%d, want 5", code)

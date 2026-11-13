@@ -83,7 +83,7 @@ func TestSupportRelay(t *testing.T) {
 		{"main machine", `{"round":{"support":"mac","role":"main"}}`, false},
 		{"no support name", `{"round":{"role":"support"}}`, false},
 	} {
-		issue, body, post, err := SupportRelay(f.root, cfgOf(t, tc.cfg), "ben", 7, "  hello  ")
+		issue, body, post, err := SupportRelay(f.root, cfgOf(t, tc.cfg), "ben", 7, "  hello  ", "")
 		if err != nil || post != tc.post {
 			t.Fatalf("%s: post=%v err=%v", tc.name, post, err)
 		}
@@ -91,7 +91,23 @@ func TestSupportRelay(t *testing.T) {
 			t.Errorf("%s: issue %q body %q", tc.name, issue, body)
 		}
 	}
-	if _, _, post, _ := SupportRelay(f.root, cfgOf(t, `{"round":{"support":"mac","role":"support"}}`), "zed", 7, "x"); post {
+	if _, _, post, _ := SupportRelay(f.root, cfgOf(t, `{"round":{"support":"mac","role":"support"}}`), "zed", 7, "x", ""); post {
 		t.Error("slot without a held issue must not post")
+	}
+}
+
+func TestSupportRelayExplicitPR(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Update(f.root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{From: "ben", Issue: "11", PR: "https://github.com/o/r/pull/7"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	issue, body, post, err := SupportRelay(f.root, cfgOf(t, `{"round":{"support":"mac","role":"support"}}`), "ben", 7, "hello", "7")
+	if err != nil || !post || issue != "11" || body != "<!-- rota:relay round=7 -->\nhello" {
+		t.Fatalf("explicit PR support relay: issue=%q body=%q post=%v err=%v", issue, body, post, err)
 	}
 }

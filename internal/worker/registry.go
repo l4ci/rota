@@ -262,6 +262,18 @@ func (r Registry) QueuedPR(ref string) *QueuedPR {
 	return nil
 }
 
+// SetQueuedReviewSeen updates a queued PR's cursor in place. Queue order must
+// stay intact: QueuedFrom uses it to find a slot's newest PR. "" clears it.
+func (d *Doc) SetQueuedReviewSeen(ref, cursor string) {
+	if q := d.queuedByRef(ref); q != nil {
+		if cursor == "" {
+			q.Delete("reviewSeen")
+		} else {
+			q.Set("reviewSeen", cursor)
+		}
+	}
+}
+
 func (r Registry) queuedByRef(ref string) *jsonx.Object {
 	n, ok := PRRefNumber(ref)
 	if !ok {
