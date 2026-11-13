@@ -54,7 +54,7 @@ func TestKnowledgeQueryPrintsShaAndKeepsTierRules(t *testing.T) {
 	}
 	for _, want := range []string{
 		"- **Pinned** — claims a flag. (provisional) <!-- 2026-05-05 sha:abc1234 -->",
-		"- **Legacy** — no sha. <!-- 2026-01-01 -->",
+		"- **Legacy** — no sha. (provisional) <!-- 2026-01-01 -->",
 	} {
 		if !strings.Contains(got.stdout, want) {
 			t.Errorf("output lacks %q:\n%s", want, got.stdout)

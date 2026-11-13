@@ -84,7 +84,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 		if err != nil {
 			return err
 		}
-		tiers, err := s.effective(scope)
+		tiers, err := s.effectiveBackfilled(scope)
 		if err != nil {
 			return err
 		}

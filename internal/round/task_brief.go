@@ -6,7 +6,6 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -63,10 +62,9 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	if err != nil {
 		return "", o, err
 	}
-	cacheDir := skills.CacheDir(e.getenv())
-	contract, _, ok := resolveBrief(root, set, e.skillInstalls(root), cacheDir)
-	if !ok {
-		return "", o, blocked(blockedby.BriefMissing, "%s", briefMissingMsg(set, cacheDir))
+	contract, _, err := e.briefContract(root, set)
+	if err != nil {
+		return "", o, err
 	}
 	if o.Kind == "" {
 		o.Kind = s.Kind()
