@@ -540,3 +540,68 @@ func TestFromConfigConstructorsRejectAnInvalidSource(t *testing.T) {
 		}
 	}
 }
+
+// A read whose gh call dies with its own "context canceled" or "deadline
+// exceeded" (#3159) runs once more; a second failure is a classified
+// unavailable error (exit 5), never an internal one (exit 70).
+func TestRunRetriesReadOnceOnContextFailure(t *testing.T) {
+	for _, msg := range []string{"context canceled", "Post \"x\": context deadline exceeded"} {
+		f := &fakeCLI{answer: func(n int, _ []string) (string, string, int) {
+			if n == 1 {
+				return "", msg, 1
+			}
+			return "[]", "", 0
+		}}
+		r, err := f.cli("github").Run(context.Background(), []string{"issue", "list"}, nil)
+		if err != nil || r.ExitCode != 0 || len(f.calls) != 2 {
+			t.Fatalf("%q: err=%v exit=%d calls=%d, want one retry that succeeds", msg, err, r.ExitCode, len(f.calls))
+		}
+	}
+	f := &fakeCLI{answer: func(int, []string) (string, string, int) { return "", "context canceled", 1 }}
+	_, err := f.cli("github").Run(context.Background(), []string{"issue", "view", "5"}, nil)
+	var te *Error
+	if !errors.As(err, &te) || te.Kind != KindUnavailable || len(f.calls) != 2 {
+		t.Fatalf("err=%v calls=%d, want KindUnavailable after exactly one retry", err, len(f.calls))
+	}
+}
+
+func TestRunDoesNotRetryAWriteOnContextFailure(t *testing.T) {
+	f := &fakeCLI{answer: func(int, []string) (string, string, int) { return "", "context canceled", 1 }}
+	r, err := f.cli("github").Run(context.Background(), []string{"issue", "comment", "5", "--body", "x"}, nil)
+	if err != nil || r.ExitCode != 1 || len(f.calls) != 1 {
+		t.Fatalf("err=%v exit=%d calls=%d, want the write run once", err, r.ExitCode, len(f.calls))
+	}
+}
+
+// A per-attempt timeout on a read is retried once too.
+func TestRunRetriesReadOnceOnAttemptTimeout(t *testing.T) {
+	calls := 0
+	c := &CLI{Provider: "github", Timeout: 20 * time.Millisecond, LookPath: func(string) (string, error) { return "/fake", nil },
+		Exec: func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+			calls++
+			if calls == 1 {
+				<-ctx.Done()
+				return nil, nil, 0, ctx.Err()
+			}
+			return []byte("[]"), nil, 0, nil
+		}}
+	if _, err := c.Run(context.Background(), []string{"issue", "list"}, nil); err != nil || calls != 2 {
+		t.Fatalf("err=%v calls=%d, want the timed-out read retried once", err, calls)
+	}
+}
+
+// A canceled caller (a signal) is not retried and keeps its cause, so the
+// dispatcher can answer 130 instead of 70.
+func TestRunKeepsCancelCause(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f := &fakeCLI{}
+	c := f.cli("github")
+	c.Exec = func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+		return nil, nil, 0, ctx.Err()
+	}
+	_, err := c.Run(ctx, []string{"issue", "list"}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want it to wrap context.Canceled", err)
+	}
+}
