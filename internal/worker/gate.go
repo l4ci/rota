@@ -2310,6 +2310,8 @@ func (g *gateOperation) checkProvenance() (failMsg, brokeMsg string) {
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
 	g.sectionBody = &body
+	g.target.relays = dedupeRelays(append(slices.Clone(g.target.relays),
+		LoadRegistryTolerant(g.root).taskRelays(g.target.Issue, g.branch)...))
 	relays, offered, support, err := g.supportApprovals()
 	if err != nil {
 		// Relay citations fall back to the local relay log with a skip note.

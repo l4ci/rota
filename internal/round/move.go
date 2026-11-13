@@ -283,7 +283,7 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 			if s == nil {
 				return
 			}
-			doc.LogRelays(s.PR(), s.Relays())
+			doc.KeepSlotRelays(s)
 			s.Park(r.gone)
 			if r.gone {
 				s.ReleasePort()

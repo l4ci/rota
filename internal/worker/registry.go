@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -292,7 +293,15 @@ func (r Registry) QueuedIssue(id string) *QueuedPR {
 // each keep their own record.
 func (d *Doc) QueuePR(rec QueuedPR) {
 	d.dropQueued(func(q *jsonx.Object) bool {
-		return jsonx.Str(q, "issue") == rec.Issue && jsonx.Str(q, "from") == rec.From
+		if jsonx.Str(q, "issue") != rec.Issue || jsonx.Str(q, "from") != rec.From {
+			return false
+		}
+		if n, ok := PRRefNumber(rec.PR); ok {
+			if old, ok := PRRefNumber(jsonx.Str(q, "pr")); ok && old == n {
+				rec.Relays = dedupeRelays(append(slices.Clone(listOf(q, "relays")), rec.Relays...))
+			}
+		}
+		return true
 	})
 	d.doc.Set("prs", append(d.list("prs"), rec.object()))
 }
@@ -451,6 +460,50 @@ func (r Registry) LoggedRelays(ref string) []any {
 	var out []any
 	for _, o := range r.objects("relayLog") {
 		if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
+			out = append(out, listOf(o, "relays")...)
+		}
+	}
+	return out
+}
+
+// KeepSlotRelays archives the surviving relays using their original target.
+// A delivery retracted before the slot is freed leaves no relay to archive.
+func (d *Doc) KeepSlotRelays(s *Slot) {
+	pr, issue, branch := s.relayTarget()
+	if pr != "" {
+		d.KeepRelays(pr, s.Relays())
+	} else {
+		d.keepTaskRelays(issue, branch, s.Relays())
+	}
+}
+
+// Exact branch and issue matching keeps best-of siblings and new tasks apart.
+func (d *Doc) keepTaskRelays(issue, branch string, relays []any) {
+	issue = NormID(issue)
+	if issue == "" || branch == "" || strings.HasPrefix(branch, "park/") || len(relays) == 0 {
+		return
+	}
+	for _, o := range d.objects("relayLog") {
+		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
+			o.Set("relays", dedupeRelays(append(slices.Clone(listOf(o, "relays")), relays...)))
+			return
+		}
+	}
+	o := jsonx.NewObject()
+	o.Set("issue", issue)
+	o.Set("branch", branch)
+	o.Set("relays", slices.Clone(relays))
+	d.doc.Set("relayLog", append(d.list("relayLog"), o))
+}
+
+func (r Registry) taskRelays(issue, branch string) []any {
+	issue = NormID(issue)
+	if issue == "" || branch == "" {
+		return nil
+	}
+	var out []any
+	for _, o := range r.objects("relayLog") {
+		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
 			out = append(out, listOf(o, "relays")...)
 		}
 	}
