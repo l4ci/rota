@@ -25,6 +25,9 @@ type receiptInvocationKey struct{}
 
 type receiptInvocation struct {
 	ID, Fingerprint string
+	// ResumedFrom is the stage the receipt's earlier call failed at, "" for a
+	// first call.
+	ResumedFrom string
 }
 
 func invocationReceipt(ctx context.Context) receiptInvocation {
@@ -72,7 +75,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			out, err := receipt.New(root).Do(call, func(prior receipt.Entry) (receipt.Entry, bool) {
 				res, runErr = func() (Result, error) {
 					previous := c.ctx
-					c.ctx = context.WithValue(c.Context(), receiptInvocationKey{}, receiptInvocation{ID: id, Fingerprint: fp})
+					c.ctx = context.WithValue(c.Context(), receiptInvocationKey{}, receiptInvocation{ID: id, Fingerprint: fp, ResumedFrom: prior.FailedStage})
 					defer func() { c.ctx = previous }()
 					return run(c, args)
 				}()
