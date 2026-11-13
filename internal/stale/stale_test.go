@@ -24,13 +24,25 @@ func date(t *testing.T, s string) time.Time {
 	return d
 }
 
-func TestDaysBetween(t *testing.T) {
-	a, b := date(t, "2026-10-02"), date(t, "2026-09-02")
-	if daysBetween(a, b) != 30 || daysBetween(b, a) != -30 || daysBetween(a, a) != 0 {
-		t.Errorf("daysBetween: %d %d", daysBetween(a, b), daysBetween(b, a))
-	}
-	if !isStale(b, a, 30) || isStale(b, a, 31) {
-		t.Error("isStale boundary")
+func TestFindReportTodoAgeBoundary(t *testing.T) {
+	src := fakeSource{items: []backlog.Item{
+		{ID: "old", Fields: backlog.Fields{Captured: "2026-09-02"}},
+		{ID: "today", Fields: backlog.Fields{Captured: "2026-10-02"}},
+		{ID: "future", Fields: backlog.Fields{Captured: "2026-11-01"}},
+	}}
+	for _, tc := range []struct {
+		days int
+		want []string
+	}{
+		{31, []string{}},
+		{30, []string{"old 2026-09-02"}},
+		{0, []string{"old 2026-09-02", "today 2026-10-02"}},
+		{-30, []string{"old 2026-09-02", "today 2026-10-02", "future 2026-11-01"}},
+	} {
+		got, err := FindReport(t.TempDir(), "todo", tc.days, date(t, "2026-10-02"), src)
+		if err != nil || !reflect.DeepEqual(names(got.Entries), tc.want) || got.SkippedUndated != 0 {
+			t.Errorf("days %d: report = %+v, err = %v, want %v", tc.days, got, err, tc.want)
+		}
 	}
 }
 
@@ -74,47 +86,32 @@ func TestFindTodoReadsThroughTheSuppliedSource(t *testing.T) {
 		item("12", "2026-01-01"), item("13", "2026-09-15"), item("14", ""),
 		item("15", "not-a-date"), item("16", "20260101"),
 	}}
-	got, err := Find(t.TempDir(), "todo", 90, date(t, "2026-10-02"), src)
-	if err != nil || !reflect.DeepEqual(names(got), []string{"12 2026-01-01", "16 2026-01-01"}) {
-		t.Errorf("todo = %v %v", names(got), err)
+	got, err := FindReport(t.TempDir(), "todo", 90, date(t, "2026-10-02"), src)
+	if err != nil || got.SkippedUndated != 2 || !reflect.DeepEqual(names(got.Entries), []string{"12 2026-01-01", "16 2026-01-01"}) {
+		t.Errorf("todo = %+v %v", got, err)
 	}
-	if _, err := Find(t.TempDir(), "todo", 90, date(t, "2026-10-02"), fakeSource{err: errors.New("boom")}); err == nil {
+	if _, err := FindReport(t.TempDir(), "todo", 90, date(t, "2026-10-02"), fakeSource{err: errors.New("boom")}); err == nil {
 		t.Error("source error swallowed")
 	}
-	if got, err := Find(t.TempDir(), "todo", 90, date(t, "2026-10-02"), fakeSource{err: backlog.ErrNotFound}); got != nil || err != nil {
+	if got, err := FindReport(t.TempDir(), "todo", 90, date(t, "2026-10-02"), fakeSource{err: backlog.ErrNotFound}); got.Entries != nil || err != nil {
 		t.Errorf("not found = %v %v", got, err)
-	}
-}
-
-func TestFindReportCountsUndatedTodos(t *testing.T) {
-	item := func(id, captured string) backlog.Item {
-		return backlog.Item{ID: id, Fields: backlog.Fields{Captured: captured}}
-	}
-	src := fakeSource{items: []backlog.Item{item("12", "2026-01-01"), item("14", ""), item("15", "not-a-date"), item("17", "")}}
-	rep, err := FindReport(t.TempDir(), "todo", 90, date(t, "2026-10-02"), src)
-	if err != nil || rep.SkippedUndated != 3 || len(rep.Entries) != 1 {
-		t.Errorf("report = %+v %v", rep, err)
-	}
-	rep, _ = FindReport(t.TempDir(), "map", 90, date(t, "2026-10-02"), nil)
-	if rep.SkippedUndated != 0 {
-		t.Errorf("map skipped = %d", rep.SkippedUndated)
 	}
 }
 
 func TestFindKnowledgeUsesTheFileCommitDate(t *testing.T) {
 	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n\n## Beta, gamma\ny\n\n## Delta  \nz\n"})
 	far := date(t, "2999-01-01")
-	got, err := Find(root, "knowledge", 90, far, nil)
-	if err != nil || len(got) != 3 || got[0].Name != "Alpha" || got[1].Name != "Beta, gamma" || got[2].Name != "Delta" {
-		t.Fatalf("knowledge = %v %v", names(got), err)
+	got, err := FindReport(root, "knowledge", 90, far, nil)
+	if err != nil || len(got.Entries) != 3 || got.Entries[0].Name != "Alpha" || got.Entries[1].Name != "Beta, gamma" || got.Entries[2].Name != "Delta" {
+		t.Fatalf("knowledge = %v %v", names(got.Entries), err)
 	}
-	if _, ok := pystr.ParseDate(got[0].Date); !ok {
-		t.Errorf("date = %q", got[0].Date)
+	if _, ok := pystr.ParseDate(got.Entries[0].Date); !ok {
+		t.Errorf("date = %q", got.Entries[0].Date)
 	}
-	if got, _ := Find(root, "knowledge", 90, time.Now(), nil); got != nil {
-		t.Errorf("a file committed today is stale: %v", names(got))
+	if got, _ := FindReport(root, "knowledge", 90, time.Now(), nil); got.Entries != nil {
+		t.Errorf("a file committed today is stale: %v", names(got.Entries))
 	}
-	if got, _ := Find(t.TempDir(), "knowledge", 0, far, nil); got != nil {
+	if got, _ := FindReport(t.TempDir(), "knowledge", 0, far, nil); got.Entries != nil {
 		t.Errorf("missing file: %v", got)
 	}
 }
@@ -132,19 +129,19 @@ func TestFindMap(t *testing.T) {
 		".rota/map/billing.md": fm("billing", ""), ".rota/map/nosub.md": "---\ntitle: x\n---\n", ".rota/map/plain.md": "no frontmatter\n",
 		".rota/map/zeta.md": fm("aaa", "2025-12-31"), ".rota/map/bad.md": fm("baddate", "soon"),
 	})
-	got, err := Find(root, "map", 90, date(t, "2026-10-02"), nil)
-	if err != nil {
-		t.Fatal(err)
+	got, err := FindReport(root, "map", 90, date(t, "2026-10-02"), nil)
+	if err != nil || got.SkippedUndated != 0 {
+		t.Fatalf("map = %+v, err = %v", got, err)
 	}
 	// Sorted by subsystem; billing and baddate have no touched date, so their git date (today) decides: fresh.
-	if !reflect.DeepEqual(names(got), []string{"aaa 2025-12-31", "auth 2026-01-01"}) {
-		t.Errorf("map = %v", names(got))
+	if !reflect.DeepEqual(names(got.Entries), []string{"aaa 2025-12-31", "auth 2026-01-01"}) {
+		t.Errorf("map = %v", names(got.Entries))
 	}
-	got, _ = Find(root, "map", 90, date(t, "2999-01-01"), nil)
-	if len(got) != 5 || got[0].Name != "aaa" || got[1].Name != "auth" || got[2].Name != "baddate" || got[3].Name != "billing" || got[4].Name != "cache" {
-		t.Errorf("map far future = %v", names(got))
+	got, _ = FindReport(root, "map", 90, date(t, "2999-01-01"), nil)
+	if len(got.Entries) != 5 || got.Entries[0].Name != "aaa" || got.Entries[1].Name != "auth" || got.Entries[2].Name != "baddate" || got.Entries[3].Name != "billing" || got.Entries[4].Name != "cache" {
+		t.Errorf("map far future = %v", names(got.Entries))
 	}
-	if got, _ := Find(t.TempDir(), "map", 0, date(t, "2999-01-01"), nil); got != nil {
+	if got, _ := FindReport(t.TempDir(), "map", 0, date(t, "2999-01-01"), nil); got.Entries != nil {
 		t.Errorf("missing dir: %v", got)
 	}
 }
@@ -153,23 +150,23 @@ func TestFindUntrackedMapFileIsNeverStale(t *testing.T) {
 	root := project(t, nil)
 	os.MkdirAll(filepath.Join(root, ".rota", "map"), 0o755)
 	os.WriteFile(filepath.Join(root, ".rota", "map", "a.md"), []byte("---\nsubsystem: a\n---\n"), 0o644)
-	if got, _ := Find(root, "map", 0, date(t, "2999-01-01"), nil); got != nil {
-		t.Errorf("untracked file listed: %v", names(got))
+	if got, _ := FindReport(root, "map", 0, date(t, "2999-01-01"), nil); got.Entries != nil {
+		t.Errorf("untracked file listed: %v", names(got.Entries))
 	}
 }
 
 func TestFindUnknownKind(t *testing.T) {
-	if _, err := Find(t.TempDir(), "plans", 1, time.Now(), nil); !errors.Is(err, ErrKind) || !strings.Contains(err.Error(), "plans") {
+	if _, err := FindReport(t.TempDir(), "plans", 1, time.Now(), nil); !errors.Is(err, ErrKind) || !strings.Contains(err.Error(), "plans") {
 		t.Errorf("err = %v", err)
 	}
 }
 
-// Stats (map views) and Find date a map file with an unparseable touched alike.
+// Stats (map views) and FindReport date a map file with an unparseable touched alike.
 func TestFindMapAgreesWithMapStatsOnUnparseableTouched(t *testing.T) {
 	root := project(t, map[string]string{".rota/map/g.md": "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n"})
 	st := mapqa.Stats(root)
-	got, err := Find(root, "map", 0, date(t, "2999-01-01"), nil)
-	if err != nil || len(st) != 1 || len(got) != 1 || st[0].Touched == "" || got[0].Date != st[0].Touched {
-		t.Errorf("Find = %v (%v), Stats = %+v", got, err, st)
+	got, err := FindReport(root, "map", 0, date(t, "2999-01-01"), nil)
+	if err != nil || len(st) != 1 || len(got.Entries) != 1 || st[0].Touched == "" || got.Entries[0].Date != st[0].Touched {
+		t.Errorf("FindReport = %v (%v), Stats = %+v", got, err, st)
 	}
 }

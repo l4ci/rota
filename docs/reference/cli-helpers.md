@@ -266,6 +266,11 @@ All writes target the umbrella `.rota/DECISIONS.md`, reject `--repo`, and refres
 
 ## `rota milestone`
 
+For stored milestone, plan, design, spike and debug session documents, `show`
+exits 3 when the file is missing and 5 (`unavailable`) for other filesystem
+errors. Document stat or removal errors from `plan rm`, `design rm` and
+`debug session rm` follow the same rule. The error names the path and OS error.
+
 | Usage | What it does |
 |---|---|
 | `rota milestone add --title <text> --summary <text> [--depends M01,M02] [--kind <delivery\|decision>]` | mint a milestone; `--kind decision` adds `kind: decision` and empty `## Decisions` and `## Not yet specified` sections |

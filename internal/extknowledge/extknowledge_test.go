@@ -244,15 +244,15 @@ func TestFreshenOfflineReadsStaleAndDoesNotStamp(t *testing.T) {
 func TestQueryPrintsTopicSectionsAndListsMissing(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	text, missing, _, err := c.Query([]string{"go", "rust"}, nil)
+	res, err := c.QueryWith([]string{"go", "rust"}, QueryOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(text, "## Go\n") || !strings.Contains(text, "- **Table tests** — Use t.Run per case.") {
-		t.Fatalf("text = %q", text)
+	if !strings.HasPrefix(res.Text, "## Go\n") || !strings.Contains(res.Text, "- **Table tests** — Use t.Run per case.") {
+		t.Fatalf("text = %q", res.Text)
 	}
-	if len(missing) != 1 || missing[0] != "rust" {
-		t.Fatalf("missing = %v", missing)
+	if len(res.Missing) != 1 || res.Missing[0] != "rust" {
+		t.Fatalf("missing = %v", res.Missing)
 	}
 	ts, _ := c.Topics()
 	if len(ts) != 1 || ts[0].Bullets != 1 || ts[0].Hook != "testing and tooling quirks" {

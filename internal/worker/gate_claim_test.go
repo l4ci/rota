@@ -133,13 +133,15 @@ type storedClaimIssues struct {
 	err  error
 }
 
+var _ tracker.ClaimStore = (*storedClaimIssues)(nil)
+
 func (s *storedClaimIssues) Claims(context.Context, tracker.IssueKey) ([]string, error) {
 	return s.held, s.err
 }
 func (*storedClaimIssues) PutClaim(context.Context, tracker.IssueKey, string) error {
 	return fmt.Errorf("unexpected write")
 }
-func (*storedClaimIssues) DropClaim(context.Context, tracker.IssueKey, string) error {
+func (*storedClaimIssues) DropClaim(context.Context, tracker.IssueKey, string, bool) error {
 	return fmt.Errorf("unexpected write")
 }
 
