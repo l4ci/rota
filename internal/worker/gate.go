@@ -367,11 +367,15 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	}
 	if n, ok := PRRefNumber(arg); ok {
 		if q := r.QueuedPR(arg); q != nil {
-			return gateQueued(*q), nil
+			t := gateQueued(*q)
+			t.relays = dedupeRelays(append(slices.Clone(t.relays), r.keptRelays(q.PR, q.Branch)...))
+			return t, nil
 		}
 		for _, sl := range r.Slots() {
 			if m, ok := PRRefNumber(sl.PR()); ok && m == n {
-				return gateSlot(sl), nil
+				t := gateSlot(sl)
+				t.relays = dedupeRelays(append(slices.Clone(t.relays), r.keptRelays(sl.PR(), sl.Branch())...))
+				return t, nil
 			}
 		}
 		return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
@@ -867,6 +871,7 @@ func (runner gate) stepExternal(result GateResult, target GateTarget, forged gat
 	g.target.Bundle = nil // a bundle belongs to a slot's lead, not to a branch-derived issue
 	g.res.Issue = g.target.Issue
 	g.target.relays = append(slices.Clone(g.target.relays), g.unrecordedSlotRelays(info.Head)...)
+	g.target.relays = dedupeRelays(append(g.target.relays, LoadRegistryTolerant(g.root).keptRelays(g.pr, info.Head)...))
 	return finish(false, nil)
 }
 

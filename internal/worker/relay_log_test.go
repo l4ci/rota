@@ -119,3 +119,34 @@ func TestGateByPRNumberDoesNotInheritRelaysOfAnotherBranchWithTheSameIssue(t *te
 		t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, GateProvenanceFail, res)
 	}
 }
+
+// #3266: a relay sent about a PR stays checkable after the slot takes a new
+// task. The task dispatch resets the slot's relay log, so it first keeps the
+// log where the gate reads it, by PR and by branch.
+func TestRelaySurvivesTheSlotsNextTask(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	e := envWith(tmuxFake())
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetPR(relayQueuedPR) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "use 1\n"), Relay: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "next\n"), Task: "13"}); err != nil {
+		t.Fatal(err)
+	}
+	tgt, err := LoadRegistryTolerant(dir).GateTargetAny(relayQueuedPR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg := CheckApprovals("## Approvals\n- ok per orchestrator relay round 1\n", tgt.Relays()); msg != "" {
+		t.Errorf("a relay that was sent must stay citable after the next task: %s", msg)
+	}
+	if msg := CheckApprovals("## Approvals\n- ok per orchestrator relay round 7\n", tgt.Relays()); msg == "" {
+		t.Error("a relay round that was never sent must still fail")
+	}
+}

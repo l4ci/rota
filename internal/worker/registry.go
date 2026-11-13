@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -392,6 +393,61 @@ func (d *Doc) LogRelays(pr string, relays []any) {
 	d.doc.Set("relayLog", append(keep, o))
 }
 
+// KeepRelays saves a slot's relay log before its next task resets it, so a PR
+// that waits in review keeps the relays that were sent about it (#3266). The
+// entry is keyed by PR and by branch: a slot that never recorded its PR still
+// leaves the branch to find it by. It merges into an entry of the same PR or
+// branch, so a second pass never drops what the first kept.
+func (d *Doc) KeepRelays(pr, branch string, relays []any) {
+	if len(relays) == 0 {
+		return
+	}
+	n, hasPR := PRRefNumber(pr)
+	if !hasPR && (branch == "" || strings.HasPrefix(branch, "park/")) {
+		return
+	}
+	merged := slices.Clone(relays)
+	var keep []any
+	for _, e := range d.list("relayLog") {
+		if o, ok := e.(*jsonx.Object); ok {
+			m, samePR := PRRefNumber(jsonx.Str(o, "pr"))
+			if (hasPR && samePR && m == n) || (branch != "" && jsonx.Str(o, "branch") == branch) {
+				merged = append(listOf(o, "relays"), merged...)
+				continue
+			}
+		}
+		keep = append(keep, e)
+	}
+	o := jsonx.NewObject()
+	if hasPR {
+		o.Set("pr", pr)
+	}
+	if branch != "" {
+		o.Set("branch", branch)
+	}
+	o.Set("relays", dedupeRelays(merged))
+	d.doc.Set("relayLog", append(keep, o))
+}
+
+// dedupeRelays drops a relay entry equal to an earlier one (same round, time and summary).
+func dedupeRelays(in []any) []any {
+	var out []any
+	seen := map[string]bool{}
+	for _, e := range in {
+		k := fmt.Sprint(e)
+		if o, ok := e.(*jsonx.Object); ok {
+			r, _ := o.Get("round")
+			k = fmt.Sprint(r, "|", jsonx.Str(o, "ts"), "|", jsonx.Str(o, "summary"))
+		}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, e)
+	}
+	return out
+}
+
 // ClearRelayLog drops every kept relay log, at wind-down.
 func (d *Doc) ClearRelayLog() { d.doc.Delete("relayLog") }
 
@@ -401,12 +457,32 @@ func (r Registry) LoggedRelays(ref string) []any {
 	if !ok {
 		return nil
 	}
+	var out []any
 	for _, o := range r.objects("relayLog") {
 		if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
-			return listOf(o, "relays")
+			out = append(out, listOf(o, "relays")...)
 		}
 	}
-	return nil
+	return out
+}
+
+// keptRelays is every relay kept for a PR or its branch.
+func (r Registry) keptRelays(pr, branch string) []any {
+	return append(r.LoggedRelays(pr), r.LoggedBranchRelays(branch)...)
+}
+
+// LoggedBranchRelays is the relay log kept for a branch by KeepRelays.
+func (r Registry) LoggedBranchRelays(branch string) []any {
+	if branch == "" {
+		return nil
+	}
+	var out []any
+	for _, o := range r.objects("relayLog") {
+		if jsonx.Str(o, "branch") == branch {
+			out = append(out, listOf(o, "relays")...)
+		}
+	}
+	return out
 }
 
 // BranchHolder finds who holds branch: the slot on it and the queued record
