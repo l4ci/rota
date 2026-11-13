@@ -1,8 +1,11 @@
 package round
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // step is one unit of a saga: a change plus the compensation that takes it
@@ -71,4 +74,15 @@ func runSteps(steps []step) error {
 		ran = append(ran, s.name)
 	}
 	return nil
+}
+
+// readStage names the stage of an assignment that failed before anything was
+// written, when the cause is a tracker call: the receipt then records where it
+// stopped and the retry hint names it (#3159). Other errors pass through.
+func readStage(stage string, err error) error {
+	var te *tracker.Error
+	if err == nil || !errors.As(err, &te) {
+		return err
+	}
+	return &StageError{Stage: stage, Err: err}
 }

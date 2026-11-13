@@ -6,6 +6,7 @@
 package exitmap
 
 import (
+	"context"
 	"errors"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -148,6 +149,8 @@ func translate(err error, o Options) (any, error) {
 	case has(Tracker) && errors.As(err, &ufe):
 		return jsonx.Obj("blockedBy", blockedby.Forge, "changed", false),
 			&exitcode.Error{Exit: exitcode.ExitRefused, Message: err.Error(), Hint: tracker.UnknownForgeHint}
+	case has(Tracker) && errors.As(err, &te) && errors.Is(te, context.Canceled):
+		return nil, &exitcode.Error{Exit: exitcode.ExitInterrupted, Message: "interrupted"}
 	case has(Tracker) && errors.As(err, &te):
 		return nil, &exitcode.Error{Exit: te.Kind.Exit(), Message: te.Message}
 	case has(Exiter) && errors.As(err, &ex):
