@@ -487,9 +487,14 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 		clearHandle(root, o.Slot)
 		return res, err
 	}
+	tmpEnv, err := e.slotTmpEnv(ctx, root, o.Slot)
+	if err != nil {
+		clearHandle(root, o.Slot)
+		return res, fail(exitcode.ExitUnavailable, err.Error())
+	}
 	var linked bool
 	t.handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: t.session, Cwd: worktree, LinkWorkspace: group, Linked: &linked,
-		Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: t.timeout})
+		Env: append(append(accountEnv, SlotEnv(o.Slot, portBase, width)...), tmpEnv...), Launch: launch, BootTimeout: t.timeout})
 	if err != nil {
 		clearHandle(root, o.Slot)
 		if t.handle != "" {

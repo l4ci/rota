@@ -73,6 +73,18 @@ func (s *state) heldTmp(path string, newest time.Time, uses []ProcUse, usesErr e
 	if age := time.Since(newest); age < tmpMinAge {
 		return fmt.Sprintf("younger than %s (a run may still own it)", HumanAge(tmpMinAge))
 	}
+	// A registered slot's session runs with TMPDIR under <root>/slots/<slot>
+	// (#3164), nothing a process table or cwd scan would show.
+	if filepath.Base(path) == worker.SlotsTmpDir && s.live != nil {
+		var names []string
+		for name := range s.live.registered {
+			names = append(names, name)
+		}
+		if len(names) > 0 {
+			sort.Strings(names)
+			return "slot " + names[0] + " is registered; its TMPDIR lives under it"
+		}
+	}
 	for i := range s.checkouts {
 		if worker.PathContains(path, s.checkouts[i].path) {
 			return "git worktree " + s.checkouts[i].path + " lies under it"

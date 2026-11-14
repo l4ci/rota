@@ -165,7 +165,7 @@ func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "ROTA_SLOT=w2,ROTA_PORT_BASE=31100,ROTA_PORT_BLOCK=100,ROTA_DB_SUFFIX=_w2"
-	if got := strings.Join(f.spawnOpts.Env, ","); got != want {
+	if got := strings.Join(withoutTmpdir(f.spawnOpts.Env), ","); got != want {
 		t.Errorf("spawn env = %q, want %q", got, want)
 	}
 }
@@ -183,7 +183,7 @@ func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "ROTA_SLOT=w1,ROTA_PORT_BASE=31000,ROTA_PORT_BLOCK=200,ROTA_DB_SUFFIX=_w1"
-	if got := strings.Join(f.spawnOpts.Env, ","); got != want {
+	if got := strings.Join(withoutTmpdir(f.spawnOpts.Env), ","); got != want {
 		t.Errorf("spawn env = %q, want %q", got, want)
 	}
 }
@@ -768,4 +768,48 @@ func TestPaneVerbsReadBareEnvAsTmux(t *testing.T) {
 	if len(kinds) != 1 || kinds[0] != host.Tmux {
 		t.Fatalf("SessionCheck asked for hosts %v, want [tmux]", kinds)
 	}
+}
+
+// Each slot's session gets its own TMPDIR under the project temp root (#3164),
+// so two workers writing the same file name never meet.
+func TestDispatchTaskGivesEachSlotItsOwnTmpdir(t *testing.T) {
+	dir := newProject(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000}}`)
+	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	round := 3
+	got := map[string]string{}
+	for _, slot := range []string{"w1", "w2"} {
+		f := tmuxFake()
+		if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: slot, BodyFile: writeBrief(t, "x\n"), Task: "T1", Round: &round}); err != nil {
+			t.Fatal(err)
+		}
+		for _, kv := range f.spawnOpts.Env {
+			if v, ok := strings.CutPrefix(kv, "TMPDIR="); ok {
+				got[slot] = v
+			}
+		}
+	}
+	for _, slot := range []string{"w1", "w2"} {
+		want := filepath.Join(real, ".rota", "tmp", "slots", slot)
+		if got[slot] != want {
+			t.Errorf("%s TMPDIR = %q, want %q", slot, got[slot], want)
+		}
+		if fi, err := os.Stat(want); err != nil || !fi.IsDir() {
+			t.Errorf("%s dir not created: %v", slot, err)
+		}
+	}
+}
+
+// withoutTmpdir drops the per-slot TMPDIR entry, whose path is the test's own.
+func withoutTmpdir(env []string) []string {
+	var out []string
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "TMPDIR=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
