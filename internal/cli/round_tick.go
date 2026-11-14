@@ -394,7 +394,7 @@ func (w *tickWorld) Assign(ctx context.Context, id string) (round.Assigned, erro
 	for _, o := range res.Overlaps {
 		w.c.Warn("%s %s", tracker.RefOf(id), o.String())
 	}
-	if p := res.Placement; p != nil && !p.Kept {
+	if p := res.Placement; p != nil && !p.Kept && !p.Fresh {
 		w.c.Warn("%s", placementLine(id, p))
 	}
 	return res, nil

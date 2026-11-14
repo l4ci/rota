@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -142,6 +143,9 @@ type Deps struct {
 	WorkerEnv      func() worker.Env
 	WorkerAccounts func() *worker.Accounts
 	AccountQuotas  func() *worker.Quotas
+	// quotas is the process-wide reader meterQuotas hands out.
+	quotasOnce sync.Once
+	quotas     *worker.Quotas
 	// QuotaExchange is a bounded duplex process boundary, separate from one-shot Proc.
 	QuotaExchange proc.Exchange
 

@@ -153,6 +153,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 				po.Set("headroom", *p.Headroom)
 			}
 			po.Set("kept", p.Kept)
+			po.Set("fresh", p.Fresh)
 			if p.Gap != nil {
 				po.Set("gap", *p.Gap)
 			}

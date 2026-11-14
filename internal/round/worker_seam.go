@@ -38,6 +38,7 @@ type Worker interface {
 	BounceStore(root string) (worker.BounceStore, error)
 
 	PoolInit(ctx context.Context, root string, o worker.InitOpts, acc *worker.Accounts) (worker.InitResult, error)
+	LoginProblem(ctx context.Context, kind, home string) string
 	ModelAppliesTo(root, kind string) bool
 	NeedsModel(root, kind string) bool
 	PlanLaunch(root, kind, model string) (worker.LaunchPlan, error)

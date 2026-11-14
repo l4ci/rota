@@ -1217,6 +1217,8 @@ func (p *Placement) verdict() string {
 		return ""
 	case p.Kept:
 		return "kept"
+	case p.Fresh:
+		return "placed"
 	}
 	return "moved"
 }

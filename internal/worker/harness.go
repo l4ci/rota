@@ -64,6 +64,16 @@ func (e Env) probe() harness.Probe {
 	}
 }
 
+// LoginProblem says why a home of a kind with a login probe (Codex) cannot
+// start a session; "" when it can or the kind has no probe.
+func (e Env) LoginProblem(ctx context.Context, kind, home string) string {
+	l, ok := harness.LookupLoginProber(kind)
+	if !ok {
+		return ""
+	}
+	return l.LoginProblem(ctx, e.WithDefaults().probe(), home)
+}
+
 // ModelApplies reports whether a chosen model reaches the default harness's
 // launch command: the default command always takes it, a custom
 // round.commands.claude only through the {model} placeholder.

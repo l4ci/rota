@@ -29,6 +29,8 @@ type Placement struct {
 	// account was ahead of it, nil when either reading is unknown.
 	Kept bool
 	Gap  *float64
+	// Fresh: the slot had no recorded harness, so this is its first placement.
+	Fresh bool
 	// Margin is round.accountRebalanceMargin in force.
 	Margin int
 }
@@ -43,10 +45,7 @@ func (p Placement) String() string {
 	if p.Headroom != nil {
 		head = fmt.Sprintf("headroom %g%%", *p.Headroom)
 	}
-	verdict := "moved"
-	if p.Kept {
-		verdict = "kept"
-	}
+	verdict := p.verdict()
 	gap := ""
 	if p.Gap != nil {
 		gap = fmt.Sprintf(", best is %g points ahead (margin %d)", *p.Gap, p.Margin)
@@ -151,9 +150,14 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 						pe.Skip = "no login (" + why + ")"
 					}
 				}
-			} else if m, ok := quotas[worker.QuotaAccount{Kind: kind, Name: acct.Name}]; ok {
-				pe.Meter = m
-				pe.Meter.Name = acct.Name
+			} else {
+				if m, ok := quotas[worker.QuotaAccount{Kind: kind, Name: acct.Name}]; ok {
+					pe.Meter = m
+					pe.Meter.Name = acct.Name
+				}
+				if why := e.Worker.LoginProblem(ctx, kind, acct.Dir); why != "" {
+					pe.Skip = "no login (" + why + ")"
+				}
 			}
 			if at, ok := coolingByLog[acct.Name]; ok && acct.Name != "" && pe.Skip == "" {
 				pe.Skip = "limited until " + at.UTC().Format("2006-01-02 15:04 MST")
@@ -174,7 +178,7 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 	if !ok {
 		return Placement{}, noAccount(entries, in.Restriction, cfg)
 	}
-	p := Placement{Kind: choice.Entry.Kind, Account: choice.Entry.Name, Headroom: choice.Entry.Meter.Headroom, Kept: choice.Kept, Gap: choice.Gap, Margin: in.Margin}
+	p := Placement{Kind: choice.Entry.Kind, Account: choice.Entry.Name, Headroom: choice.Entry.Meter.Headroom, Kept: choice.Kept, Gap: choice.Gap, Fresh: cur == nil, Margin: in.Margin}
 	return p, nil
 }
 

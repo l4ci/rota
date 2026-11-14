@@ -158,7 +158,16 @@ func (d *delivery) cleanup() {
 // dispatch only: a running session keeps the one it started with.
 func (e Env) applyPlacement(ctx context.Context, root, slot string, hz harness.Accounts, p Placement) (string, error) {
 	if p.Account == "" {
-		return "", nil // the orchestrator's own login
+		// The orchestrator's own login: drop the account the slot recorded, or
+		// dispatch would still launch under it.
+		return "", editSlot(root, slot, func(s *worker.Slot) error {
+			if hz.WorkAccounts() {
+				s.SetAccount("", "")
+			} else {
+				s.SetHomeAccount("")
+			}
+			return nil
+		})
 	}
 	if hz.WorkAccounts() {
 		if _, _, err := e.Worker.Accounts().Assign(ctx, root, slot, p.Account); err != nil {

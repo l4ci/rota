@@ -122,9 +122,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 		kind, source, pinned = in.Fixed.kind, in.Fixed.kindSource, true
 	}
 	if in.NoFallback && !pinned {
-		// A transfer keeps the receiver's kind: the first round.harnesses
-		// entry, else the slot's own.
-		if set.DefaultKind() != "" {
+		// A transfer keeps the receiver's recorded kind; the first
+		// round.harnesses entry stands in only for a receiver with none.
+		if in.SlotKind == "" && set.DefaultKind() != "" {
 			kind, source = set.DefaultKind(), KindFromHarnesses
 		}
 		pinned = true
@@ -141,7 +141,10 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	if !pinned {
 		kinds, restriction = allowedKinds(cfg, set), "any harness"
 		if name := strutil.FirstNonEmpty(in.FlagModel, out.Pick.Model); name != "" {
-			kinds, restriction = kindsOfModel(set, kinds, name), "model "+name
+			if kinds = kindsOfModel(set, kinds, name); len(kinds) == 0 {
+				return kind, source, nil, blocked(blockedby.ModelLabel, "model %s is named by no round.tiers entry of the harnesses this round may use", name)
+			}
+			restriction = "model " + name
 		}
 	}
 	// A kind with no model for the tier cannot take the worker.
@@ -187,7 +190,7 @@ func (e Env) checkTierModel(root, kind string, in preflightIn, out preflightOut)
 }
 
 // kindsOfModel narrows kinds to the ones whose round.tiers names the model;
-// rota has no other model-to-harness map. None naming it leaves the first.
+// rota has no other model-to-harness map. None naming it is empty.
 func kindsOfModel(set roundcfg.Settings, kinds []string, model string) []string {
 	var out []string
 	for _, k := range kinds {
@@ -197,9 +200,6 @@ func kindsOfModel(set roundcfg.Settings, kinds []string, model string) []string 
 				break
 			}
 		}
-	}
-	if len(out) == 0 {
-		return kinds[:1]
 	}
 	return out
 }

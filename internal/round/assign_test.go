@@ -841,6 +841,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 func TestAssignProjectWorkerKind(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"round":{"dispatch":"herdr","harnesses":["codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
 	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromHarnesses || res.Model != "c-s" {

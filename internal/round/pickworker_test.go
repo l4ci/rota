@@ -65,7 +65,11 @@ func (f *assignFixture) pool(t *testing.T, cfg string, used map[string]float64) 
 		Read: func(_ context.Context, _ harness.QuotaReporter, req harness.QuotaRequest, _ harness.QuotaOptions) harness.QuotaSnapshot {
 			r.reads.Add(1)
 			s := harness.QuotaSnapshot{Kind: harness.Codex, Name: req.Name, Status: "unavailable", Reason: "fake: unreadable", Windows: []harness.QuotaWindow{}}
-			if u, ok := r.used[req.Name]; ok {
+			name := req.Name
+			if req.Ambient {
+				name = ""
+			}
+			if u, ok := r.used[name]; ok {
 				mins, reset := 10080, quotaNow.Add(time.Hour)
 				s.Status, s.Reason = "available", ""
 				s.Windows = []harness.QuotaWindow{{DurationMins: &mins, UsedPercent: &u, ResetsAt: &reset, Status: "available"}}
@@ -348,5 +352,91 @@ func TestResumeKeepsTheSlotKind(t *testing.T) {
 				t.Fatalf("kind %q (%s), want %q (%s)", res.Kind, res.KindSource, c.wantKind, c.wantSrc)
 			}
 		})
+	}
+}
+
+// A transfer keeps a codex receiver on codex and on its account under
+// [claude, codex], whatever claude has.
+func TestTransferKeepsACodexReceiver(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 1, "c1": 1, "c2": 90})
+	pf, err := f.place(t, func(in *preflightIn) { in.NoFallback, in.SlotKind, in.SlotAccount = true, harness.Codex, "c2" })
+	wantPlacement(t, pf, err, harness.Codex, "c2", true)
+	if pf.KindSource != KindFromUsage && pf.KindSource != KindFromSlot {
+		t.Errorf("source %q", pf.KindSource)
+	}
+}
+
+// A logged-out codex account is dropped before the claim, not at dispatch.
+func TestPlaceDropsALoggedOutCodexAccount(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 90, "c1": 1, "c2": 1})
+	f.env.Worker = loggedOut{f.env.Worker, "c1"}
+	f.labelled("12", "harness:codex")
+	pf, err := f.place(t, nil)
+	wantPlacement(t, pf, err, harness.Codex, "c2", false)
+	f.env.Worker = loggedOut{f.env.Worker, "/h2"}
+	if _, err := f.place(t, nil); blockedBy(t, err) != blockedby.NoLogin {
+		t.Fatalf("every codex account logged out: %v", err)
+	}
+}
+
+// loggedOut fails the login probe of codex homes whose dir contains the text.
+type loggedOut struct {
+	Worker
+	dir string
+}
+
+func (l loggedOut) LoginProblem(ctx context.Context, kind, home string) string {
+	if kind == harness.Codex && (l.dir == "c1" && home == "/h1" || strings.Contains(home, l.dir)) {
+		return "not logged in"
+	}
+	return l.Worker.LoginProblem(ctx, kind, home)
+}
+
+// A model no allowed harness's tiers name is refused before the claim; one a
+// tier names narrows to that harness.
+func TestPlaceModelNamedByNoTierIsRefused(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 50, "c1": 50, "c2": 50})
+	f.labelled("12", "model:nobody-owns-this")
+	if _, err := f.place(t, nil); blockedBy(t, err) != blockedby.ModelLabel {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// Ruling 6: an allowed harness with no round.accounts entry is one ambient
+// candidate; placing a slot there drops the account it recorded, so dispatch
+// does not launch under the old config dir.
+func TestAmbientPlacementClearsTheSlotAccount(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, `{"round":{"dispatch":"herdr","harnesses":["claude","codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`, map[string]float64{})
+	f.env.Login = worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
+	}}
+	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("old", "/old/dir") })
+	pf, err := f.place(t, func(in *preflightIn) { in.SlotKind, in.SlotAccount = harness.Claude, "old" })
+	if err != nil || pf.Placement == nil || pf.Placement.Account != "" || pf.Kind != harness.Claude {
+		t.Fatalf("%v %+v", err, pf)
+	}
+	res, err := f.assign("12", "ben", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Kind != harness.Claude || res.Account != "" {
+		t.Fatalf("%+v", res)
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Account() != "" || s.ConfigDir() != "" || s.HomeAccount() != "" {
+		t.Errorf("slot still records %q %q %q", s.Account(), s.ConfigDir(), s.HomeAccount())
+	}
+}
+
+// A slot's first placement is placed, never moved.
+func TestFirstPlacementIsPlaced(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 50, "c1": 50, "c2": 50})
+	pf, err := f.place(t, func(in *preflightIn) { in.SlotKind, in.SlotAccount = "", "" })
+	if err != nil || !strings.Contains(pf.Placement.String(), "placed") {
+		t.Fatalf("%v %v", err, pf.Placement)
 	}
 }
