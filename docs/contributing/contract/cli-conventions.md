@@ -97,7 +97,7 @@ The first line is `rota <group> <verb>: <message>`, with `warning:` before the m
 | 6 | `retry` | A transient condition that a later retry can clear: a rate limit, or a lock held past its timeout. |
 | 70 | `internal` | A bug in `rota`: unexpected state or an unhandled error. Report it. |
 | 71 | `not_implemented` | The verb is in the tree but not ported yet. Only exists until A9. |
-| 130 | `interrupted` | SIGINT or SIGTERM cancelled the verb (Ctrl-C, or a harness killing a background command). Not a rota bug: no report hint, nothing recorded in the bug-report log. An interrupted `worker gate` still returns what it already knew (`data.changed`, verdict); an interrupted `worker train` is not 130: it settles its own `cancelled` verdict with exit 1. A `context.Canceled` that no signal caused stays 70. |
+| 130 | `interrupted` | SIGINT or SIGTERM cancelled the verb (Ctrl-C, or a harness killing a background command). Not a rota bug: no report hint, nothing recorded in the bug-report log. An interrupted `worker gate` still returns what it already knew (`data.changed`, verdict); an interrupted `worker train` is not 130: it settles its own `cancelled` verdict with exit 1. A `context.Canceled` that no signal caused stays 70, except a tracker error that wraps one: `exitmap` maps it to 130 without checking for a signal (#3159). |
 
 Use 1 when the verb exists to answer a question, and 4 when the verb exists to change something and declines to. A read-only verb never exits 4. When its precondition fails (the branch is the base branch, the requested version is not newer), the answer is no and the exit is 1.
 
