@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -283,5 +284,32 @@ func TestPlanPassDecision(t *testing.T) {
 	}
 	if !met {
 		t.Errorf("AC-1 not met after a decision pass: %v", acc)
+	}
+}
+
+// In an umbrella the owning sub-repo's tracker judges the author: a writer's
+// decision marks the criterion, a non-writer's refuses.
+func TestPlanPassDecisionUmbrella(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		writers map[string]bool
+		want    int
+	}{{"writer", map[string]bool{"fake-user": true}, 0}, {"non-writer", map[string]bool{}, 4}} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, deps, fakes, _ := umbrellaProject(t)
+			fakes["web"].Issues[1].Body = acceptBody
+			deps.NewTracker = func(_ context.Context, dir string, _ any) (backlog.Tracker, error) {
+				return writerFake{fakes[filepath.Base(dir)], tc.writers}, nil
+			}
+			code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "web:2", "--kind", "decision", "--body-file", bodyFile(t, "approved\n"))
+			cid, _ := issueGet(issueData(t, env), "commentId").(string)
+			if code != 0 || cid == "" {
+				t.Fatalf("comment add: %d %s %v", code, stderr, env)
+			}
+			code, _, stderr = rotaRunWith(t, deps, "--json", "-C", root, "plan", "pass", "#2", "AC-1", "--decision", cid)
+			if code != tc.want {
+				t.Fatalf("exit %d, want %d: %s", code, tc.want, stderr)
+			}
+		})
 	}
 }

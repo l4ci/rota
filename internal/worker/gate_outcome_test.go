@@ -131,10 +131,17 @@ func TestGateLiftsAFullyMetPartial(t *testing.T) {
 			{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · decision · 7 · ready\n"},
 		}
 	}
-	proven := func(sha string) []tracker.Comment {
+	// proven marks AC-1 at markSha; rows are the proof rows as "RESULT sha".
+	proven := func(markSha string, rows ...string) []tracker.Comment {
+		var proof strings.Builder
+		proof.WriteString("<!-- rota:proof -->\n## Proof\n")
+		for _, r := range rows {
+			res, sha, _ := strings.Cut(r, " ")
+			proof.WriteString("- 2026-11-14 · check · " + res + " · " + sha + " · ok\n")
+		}
 		return []tracker.Comment{
-			{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · " + sha + " · check · ready\n"},
-			{ID: "9", Body: "<!-- rota:proof -->\n## Proof\n- 2026-11-14 · check · PASS · " + sha + " · ok\n"},
+			{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · " + markSha + " · check · ready\n"},
+			{ID: "9", Body: proof.String()},
 		}
 	}
 	for _, c := range []struct {
@@ -149,8 +156,15 @@ func TestGateLiftsAFullyMetPartial(t *testing.T) {
 		{"decision by a writer", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, false, GatePass, true},
 		{"decision by a non-writer", "partial", func(string) []tracker.Comment { return decided("stranger") }, false, false, GateOutcomeOpen, false},
 		{"tracker cannot report access", "partial", func(string) []tracker.Comment { return decided("maintainer") }, true, false, GateOutcomeOpen, false},
-		{"proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7]) }, false, false, GatePass, true},
-		{"proof at an older sha", "partial", func(string) []tracker.Comment { return proven("deadbee") }, false, false, GateOutcomeOpen, false},
+		{"proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "PASS "+h[:7]) }, false, false, GatePass, true},
+		{"proof at an older sha", "partial", func(string) []tracker.Comment { return proven("deadbee", "PASS deadbee") }, false, false, GateOutcomeOpen, false},
+		{"failing proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "FAIL "+h[:7]) }, false, false, GateOutcomeOpen, false},
+		{"stale PASS then FAIL at the head", "partial", func(h string) []tracker.Comment {
+			return proven(h[:7], "PASS deadbee", "FAIL "+h[:7])
+		}, false, false, GateOutcomeOpen, false},
+		{"PASS then FAIL then PASS at the head", "partial", func(h string) []tracker.Comment {
+			return proven(h[:7], "PASS "+h[:7], "FAIL "+h[:7], "PASS "+h[:7])
+		}, false, false, GatePass, true},
 		{"open criterion", "partial", func(string) []tracker.Comment { return nil }, false, false, GateOutcomeOpen, false},
 		{"mark on a non-decision comment", "partial", func(string) []tracker.Comment {
 			cs := decided("maintainer")

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"regexp"
@@ -91,13 +92,19 @@ func planPass(fs *flag.FlagSet) RunFunc {
 
 		var row proof.Row
 		if byDecision {
-			ids, err := decisionIDs(be, ref)
-			if err != nil {
-				return backlogFail(err)
-			}
-			if !slices.Contains(ids, check) {
+			ids, unchecked, err := decisionIDs(be, ref)
+			switch {
+			case errors.Is(err, errNoDecisionTrust):
 				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
-					Refused("cannot mark %s met: comment %s on %s is not a decision by someone with write access (it needs the rota decision marker, and a tracker that reports the author's access; see `rota item comment list %s --kind decision`)", ac, check, id, id)
+					Refused("cannot mark %s met: %v", ac, err)
+			case err != nil:
+				return backlogFail(err)
+			case !slices.Contains(ids, check) && unchecked != nil:
+				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
+					Refused("cannot mark %s met: the access of a decision author could not be checked (%v)", ac, unchecked)
+			case !slices.Contains(ids, check):
+				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
+					Refused("cannot mark %s met: comment %s on %s is not a decision by someone with write access (it needs the rota decision marker; see `rota item comment list %s --kind decision`)", ac, check, id, id)
 			}
 			row = proof.Row{Sha: sha, Check: check}
 		} else {
@@ -161,9 +168,12 @@ func acceptanceCoverage(c *Ctx, be backlog.Backend, wf backlog.ItemTracker, ref 
 	var decisions []string
 	for _, m := range marks {
 		if m.Sha == acceptance.DecisionSha {
-			if decisions, err = decisionIDs(be, ref); err != nil {
+			// A backend that cannot say, or an author whose access cannot be
+			// checked, leaves the mark unmet; only a real failure is an error.
+			if decisions, _, err = decisionIDs(be, ref); err != nil && !errors.Is(err, errNoDecisionTrust) {
 				return nil, err
 			}
+			err = nil
 			break
 		}
 	}
@@ -184,23 +194,21 @@ func acceptanceCoverage(c *Ctx, be backlog.Backend, wf backlog.ItemTracker, ref 
 	}, decisions)), nil
 }
 
-// decisionIDs are the ids of the item's decision comments whose author has write
-// access; a backend without foreign authors (the file backend) takes the marker.
-func decisionIDs(be backlog.Backend, ref string) ([]string, error) {
-	if t, ok := be.(interface {
-		DecisionIDs(string) ([]string, error)
-	}); ok {
-		return t.DecisionIDs(ref)
+// errNoDecisionTrust: the backend cannot say who has write access, so no
+// decision comment on it counts.
+var errNoDecisionTrust = errors.New("this backend cannot report who has write access, so a decision comment cannot settle a criterion")
+
+// decisionIDs are the ids of the item's decision comments whose author has
+// write access. unchecked names the authors whose access could not be looked
+// up. A backend without the capability is errNoDecisionTrust.
+func decisionIDs(be backlog.Backend, ref string) (ids []string, unchecked error, err error) {
+	t, ok := be.(interface {
+		DecisionIDs(string) ([]string, error, error)
+	})
+	if !ok {
+		return nil, nil, errNoDecisionTrust
 	}
-	rows, err := be.Comments(ref, "decision")
-	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for _, r := range rows {
-		ids = append(ids, r.ID)
-	}
-	return ids, nil
+	return t.DecisionIDs(ref)
 }
 
 var commentURLRe = regexp.MustCompile(`issuecomment-(\d+)$`)

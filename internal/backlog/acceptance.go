@@ -2,6 +2,8 @@ package backlog
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/acceptance"
@@ -15,50 +17,64 @@ import (
 type DecisionTrust func(author string) (bool, error)
 
 // TrustOf takes the author check from src when it implements tracker.PushTrust
-// (GitHub), else nil. Answers are cached per login for the life of the check.
+// (GitHub), else nil. Answers, failures included, are cached per login for the
+// life of the check.
 func TrustOf(ctx context.Context, src any) DecisionTrust {
 	pt, ok := src.(tracker.PushTrust)
 	if !ok {
 		return nil
 	}
-	seen := map[string]bool{}
+	type answer struct {
+		ok  bool
+		err error
+	}
+	seen := map[string]answer{}
 	return func(author string) (bool, error) {
-		if v, ok := seen[author]; ok {
-			return v, nil
+		if a, ok := seen[author]; ok {
+			return a.ok, a.err
 		}
 		v, err := pt.CanPush(ctx, author)
-		seen[author] = v && err == nil
-		return seen[author], err
+		a := answer{v && err == nil, err}
+		if ctx.Err() == nil { // a cancelled check is not a fact about the login
+			seen[author] = a
+		}
+		return a.ok, a.err
 	}
 }
 
 // TrustedDecisionIDs are the ids of the comments carrying the decision marker
-// whose author trust vouches for. A nil trust vouches for none, and a failed
-// lookup vouches for nothing.
-func TrustedDecisionIDs(comments []tracker.Comment, trust DecisionTrust) ([]string, error) {
-	var ids []string
+// whose author trust vouches for. A nil trust vouches for none. A lookup that
+// fails (a deleted account, a forge error) leaves that one comment untrusted and
+// is reported in unchecked, so a refusal can say the access could not be
+// checked; a cancelled context is err and aborts.
+func TrustedDecisionIDs(comments []tracker.Comment, trust DecisionTrust) (ids []string, unchecked error, err error) {
 	for _, c := range comments {
 		if k, _, ok := marker.ParseComment(c.Body); !ok || k != "decision" || trust == nil {
 			continue
 		}
-		// A lookup that fails (a deleted account, a forge error) leaves that one
-		// comment untrusted; it never aborts the check for the whole item.
-		if ok, err := trust(c.Author); err == nil && ok {
+		ok, lerr := trust(c.Author)
+		switch {
+		case errors.Is(lerr, context.Canceled) || errors.Is(lerr, context.DeadlineExceeded):
+			return nil, nil, lerr
+		case lerr != nil:
+			unchecked = errors.Join(unchecked, fmt.Errorf("comment %s by %q: %w", c.ID, c.Author, lerr))
+		case ok:
 			ids = append(ids, c.ID)
 		}
 	}
-	return ids, nil
+	return ids, unchecked, nil
 }
 
-// DecisionIDs is the item's trusted decision comments, for `plan pass --decision`.
-func (b *Issues) DecisionIDs(ref string) ([]string, error) {
+// DecisionIDs is the item's trusted decision comments, for `plan pass --decision`;
+// unchecked reports the authors whose access could not be looked up.
+func (b *Issues) DecisionIDs(ref string) (ids []string, unchecked error, err error) {
 	is, _, err := b.require(ref)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	comments, err := b.Tracker.Comments(b.ctx(), is.Key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return TrustedDecisionIDs(comments, TrustOf(b.ctx(), b.Tracker))
 }
@@ -93,7 +109,7 @@ func UnmetAcceptance(body string, comments []tracker.Comment, lookup func(text, 
 		}
 		notes[kind] = text.String()
 	}
-	decisions, err := TrustedDecisionIDs(comments, trust)
+	decisions, _, err := TrustedDecisionIDs(comments, trust)
 	if err != nil {
 		return nil, err
 	}
