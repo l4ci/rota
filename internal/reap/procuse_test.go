@@ -61,20 +61,20 @@ func TestReadProcUsesCollectsCwdExeFilesAndEnvDirs(t *testing.T) {
 	}
 }
 
-// A process of the current user whose table entries cannot be read leaves the
-// scan incomplete: an error, never a process quietly treated as gone.
-func TestReadProcUsesUnreadableOwnProcessFails(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("root reads every mode")
-	}
+// A process of the current user whose table entries fail to read for a reason
+// other than permission leaves the scan incomplete: an error, never a process
+// quietly treated as gone.
+func TestReadProcUsesOtherReadErrorFails(t *testing.T) {
 	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}}, nil)
 	fd := filepath.Join(root, "100", "fd")
-	if err := os.Chmod(fd, 0); err != nil {
+	if err := os.Remove(fd); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(fd, 0o755) })
+	if err := os.WriteFile(fd, nil, 0o600); err != nil { // ReadDir on a file: ENOTDIR
+		t.Fatal(err)
+	}
 	if uses, err := ReadProcUses(root, os.Getuid()); err == nil {
-		t.Fatalf("unreadable fd table read as %v, want an error", uses)
+		t.Fatalf("fd table that is no directory read as %v, want an error", uses)
 	}
 }
 
@@ -119,18 +119,65 @@ func TestReadProcUsesCountsFileMappings(t *testing.T) {
 	}
 }
 
-// An unreadable maps file of the user's own process leaves the scan incomplete.
-func TestReadProcUsesUnreadableMapsFails(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("root reads every mode")
-	}
+// A maps entry that fails to read for a reason other than permission leaves
+// the scan incomplete.
+func TestReadProcUsesOtherMapsErrorFails(t *testing.T) {
 	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}}, nil)
-	maps := filepath.Join(root, "100", "maps")
-	if err := os.WriteFile(maps, []byte("x"), 0); err != nil {
+	if err := os.Mkdir(filepath.Join(root, "100", "maps"), 0o755); err != nil { // ReadFile on a dir: EISDIR
 		t.Fatal(err)
 	}
 	if uses, err := ReadProcUses(root, os.Getuid()); err == nil {
-		t.Fatalf("unreadable maps read as %v, want an error", uses)
+		t.Fatalf("maps that is no file read as %v, want an error", uses)
+	}
+}
+
+// A process of the user that holds capabilities (the systemd user manager)
+// keeps its entries as the user's yet denies the read of cwd, fd, maps and
+// environ. Per the maintainer decision on #3306 it is skipped like a
+// non-dumpable one: it does not hold every entry, and a process that reads fine
+// is still counted.
+func TestReadProcUsesSkipsPermissionDeniedOwnProcess(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every mode")
+	}
+	root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}, "300": {"cwd": "/w/systemd"}}, nil)
+	dir := filepath.Join(root, "300")
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	uid := os.Getuid()
+	owner := func(string) (int, error) { return uid, nil } // lstat of cwd still shows uid
+	uses, err := readProcUses(root, uid, owner)
+	if err != nil {
+		t.Fatalf("a permission-denied own process failed the scan: %v", err)
+	}
+	if len(uses) != 1 || uses[0].PID != 100 || !slices.Contains(uses[0].Paths, "/w/a") {
+		t.Fatalf("uses = %v, want only pid 100 holding /w/a", uses)
+	}
+}
+
+// A process whose cwd reads but whose fd, maps or environ is denied is only
+// partly seen: the paths already read still count, so an entry under its cwd
+// stays held.
+func TestReadProcUsesKeepsPathsWhenLaterEntryDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every mode")
+	}
+	for _, name := range []string{"fd", "maps", "environ"} {
+		root := fakeProc(t, map[string]map[string]string{"100": {"cwd": "/w/a"}}, map[string]string{"100": "HOME=/w\x00"})
+		if err := os.WriteFile(filepath.Join(root, "100", "maps"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(root, "100", name)
+		if err := os.Chmod(p, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(p, 0o755) })
+		uses, err := ReadProcUses(root, os.Getuid())
+		if err != nil || len(uses) != 1 || !slices.Contains(uses[0].Paths, "/w/a") {
+			t.Errorf("%s denied: ReadProcUses = %v, %v; want pid 100 still holding /w/a", name, uses, err)
+		}
 	}
 }
 

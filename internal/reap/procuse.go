@@ -27,8 +27,10 @@ var procEnvKeys = []string{"HOME=", "TMPDIR="}
 // ReadProcUses reads the process table under procRoot (/proc) for the processes
 // of uid (consulted). Others are skipped: the project temp root is 0700 and the
 // user's own, so no other user's process can work in it. A process that exited
-// during the scan is skipped. Anything else it cannot read (no table, or one
-// of uid's processes it may not read) is an error, since then no process can
+// during the scan is skipped. A process of uid whose entries are
+// denied by permission (capability holders, non-dumpable) is skipped too.
+// Anything else it cannot read (no table, or a failure other than permission)
+// is an error, since then no process can
 // be ruled out.
 func ReadProcUses(procRoot string, uid int) ([]ProcUse, error) {
 	return readProcUses(procRoot, uid, lstatOwner)
@@ -86,10 +88,28 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 	if !consulted(who, uid) {
 		return u, false, nil
 	}
+	return readProcEntries(dir, pid)
+}
+
+// readProcEntries reads the cwd, exe, fd, maps and environ of one process of uid.
+func readProcEntries(dir string, pid int) (u ProcUse, ok bool, err error) {
 	u.PID = pid
 	// gone reports whether a read failed because the process exited (or holds
 	// no such link, as a zombie), as opposed to one we may not read.
 	gone := func(err error) bool { return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ESRCH) }
+	// A capability holder (systemd --user) keeps its entries as uid's yet denies
+	// the read. Per the maintainer decision on #3306 a permission error is not
+	// a failure: keep the paths already read, so a readable cwd or exe still
+	// holds an entry, and skip the process only when nothing of it was
+	// readable. Any other failure still fails closed.
+	denied := false
+	unreadable := func(err error) bool {
+		if errors.Is(err, fs.ErrPermission) {
+			denied = true
+			return true
+		}
+		return gone(err)
+	}
 	add := func(p string) {
 		if strings.HasPrefix(p, "/") {
 			u.Paths = append(u.Paths, p)
@@ -97,18 +117,18 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 	}
 	for _, link := range []string{"cwd", "exe"} {
 		p, err := os.Readlink(filepath.Join(dir, link))
-		if err != nil && !gone(err) {
+		if err != nil && !unreadable(err) {
 			return u, false, err
 		}
 		add(p)
 	}
 	fds, err := os.ReadDir(filepath.Join(dir, "fd"))
-	if err != nil && !gone(err) {
+	if err != nil && !unreadable(err) {
 		return u, false, err
 	}
 	for _, fd := range fds {
 		p, err := os.Readlink(filepath.Join(dir, "fd", fd.Name()))
-		if err != nil && !gone(err) {
+		if err != nil && !unreadable(err) {
 			return u, false, err
 		}
 		add(p)
@@ -117,7 +137,7 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 	// line ends in the mapped path, the one field that starts with "/";
 	// anonymous mappings ([heap], [stack], none) have no path.
 	maps, err := os.ReadFile(filepath.Join(dir, "maps"))
-	if err != nil && !gone(err) {
+	if err != nil && !unreadable(err) {
 		return u, false, err
 	}
 	for _, line := range strings.Split(string(maps), "\n") {
@@ -126,7 +146,7 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 		}
 	}
 	env, err := os.ReadFile(filepath.Join(dir, "environ"))
-	if err != nil && !gone(err) {
+	if err != nil && !unreadable(err) {
 		return u, false, err
 	}
 	for _, kv := range bytes.Split(env, []byte{0}) {
@@ -136,7 +156,7 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 			}
 		}
 	}
-	return u, true, nil
+	return u, !denied || len(u.Paths) > 0, nil
 }
 
 // consulted reports whether a process whose <pid>/cwd entry owner owns is one
@@ -146,8 +166,8 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 // sshd session) shows its entries as root's and cannot be read. Measured on
 // Linux 6.8, such a process keeps /proc/<pid> itself as uid's, so the owner
 // is taken from cwd. A process of uid that holds capabilities (the systemd
-// user manager) keeps its entries as uid's yet cannot be read: it still fails
-// the scan closed.
+// user manager) keeps its entries as uid's yet denies the read; readProcUse
+// skips it on the permission error (#3306).
 func consulted(owner, uid int) bool {
 	return owner == uid
 }
