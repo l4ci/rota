@@ -93,7 +93,9 @@ Find a specific guide or setting. For the shortest path to a running round, see 
 - [How rota compares](../compare/README.md): one page per tool, with the version checked
 - [rota vs GSD](../compare/gsd.md): spec-driven phases from discuss to ship
 - [rota vs Superpowers](../compare/superpowers.md): a skills methodology for many harnesses
+- [rota vs Spec Kit](../compare/spec-kit.md): GitHub's spec, plan and tasks toolkit for 40+ agents
 - [rota vs OpenSpec](../compare/openspec.md): living specs and delta change folders
+- [rota vs the Elephant-Goldfish Model](../compare/elephant-goldfish.md): design docs reviewed by fresh-context agents
 - [rota vs ralph](../compare/ralph.md): a fresh-context loop over a `prd.json`
 - [rota vs Conductor](../compare/conductor.md): a Mac app for agents in workspaces
 - [rota vs Orca](../compare/orca.md): a desktop app for fleets of agents

@@ -6,7 +6,9 @@ Each page puts rota beside one other tool: what each is for, a side-by-side tabl
 
 - [GSD](gsd.md): spec-driven phases from discuss to ship
 - [Superpowers](superpowers.md): a skills methodology for many harnesses
+- [Spec Kit](spec-kit.md): GitHub's spec, plan and tasks toolkit for 40+ agents
 - [OpenSpec](openspec.md): living specs and delta change folders
+- [Elephant-Goldfish Model](elephant-goldfish.md): design docs reviewed by fresh-context agents
 - [ralph](ralph.md): a fresh-context loop over a `prd.json`
 
 **Parallel agents** in worktrees:
