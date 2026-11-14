@@ -483,3 +483,27 @@ func TestAssignPlacesOffALoggedOutPreviousAccount(t *testing.T) {
 		t.Errorf("slot account %q", s.HomeAccount())
 	}
 }
+
+// AC-2 holds without a pool and for a resuming slot: --kind claude with a
+// model only codex's tiers name is refused before the claim.
+func TestModelOfAnotherHarnessIsRefusedOnEveryPath(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 50, "c1": 50, "c2": 50})
+	t.Run("resuming", func(t *testing.T) {
+		_, err := f.place(t, func(in *preflightIn) { in.Resuming, in.FlagModel = true, "c-s" })
+		if blockedBy(t, err) != blockedby.ModelLabel {
+			t.Fatalf("err %v", err)
+		}
+	})
+	t.Run("no pool", func(t *testing.T) {
+		g := newAssignFixture(t)
+		g.config(t, `{"round":{"dispatch":"herdr","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+		_, err := g.place(t, func(in *preflightIn) { in.FlagKind, in.FlagModel = harness.Claude, "c-s" })
+		if blockedBy(t, err) != blockedby.ModelLabel {
+			t.Fatalf("err %v", err)
+		}
+		if _, err := g.place(t, func(in *preflightIn) { in.FlagKind, in.FlagModel = harness.Codex, "c-s" }); err != nil {
+			t.Fatalf("the owning harness takes it: %v", err)
+		}
+	})
+}

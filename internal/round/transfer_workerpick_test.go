@@ -63,7 +63,7 @@ func TestTransferWorkerPickPrecedence(t *testing.T) {
 				}
 			})
 			f.env.Round.Models = map[string]map[string]string{
-				tc.wantKind: {"standard": tc.tierModel},
+				tc.wantKind: {"standard": tc.tierModel, "light": "flag-model", "heavy": "label-model"},
 			}
 			if tc.project != "" {
 				f.env.Round.Harnesses = []string{tc.project}

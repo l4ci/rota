@@ -1153,6 +1153,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 	t.Run("model label wins over the tier map and keeps the tier", func(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:codex", "model:gpt-5.5-codex")
+		f.env.Round.Models[harness.Codex]["heavy"] = "gpt-5.5-codex" // a model must be named by a tier of its harness
 		res, err := f.assign("12", "ben", nil)
 		if err != nil || res.Model != "gpt-5.5-codex" || res.Tier != "standard" || !strings.Contains(f.host.launch, " --model gpt-5.5-codex ") {
 			t.Fatalf("%v %+v launch=%q", err, res, f.host.launch)
@@ -1161,6 +1162,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 	t.Run("flags beat labels", func(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:claude", "model:label-model")
+		f.env.Round.Models[harness.Codex]["heavy"] = "flag-model"
 		res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.Model = "flag-model" })
 		if err != nil || res.Kind != harness.Codex || res.Model != "flag-model" {
 			t.Fatalf("%v %+v", err, res)

@@ -45,10 +45,12 @@ func TestPreflight(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newAssignFixture(t)
-			f.set.Models = map[string]map[string]string{"claude": {"standard": "sonnet"}}
+			// A model named by label or flag must be named by a tier of the kind.
+			tiers := map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+			f.set.Models = tiers
 			if c.cfg != "" {
 				f.config(t, c.cfg)
-				f.set.Models = map[string]map[string]string{"claude": {"standard": "sonnet"}}
+				f.set.Models = tiers
 			}
 			if c.meters != nil {
 				f.meters(t, c.meters)
