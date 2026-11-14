@@ -87,13 +87,13 @@ func TestPickSlotsOrderIsResumeIdleParkable(t *testing.T) {
 		}
 		return
 	}
-	if got := names(e.pickSlots(bg, reg, roster, "7", 3)); len(got) != 2 || got[0] != "cy" || got[1] != "ben" {
+	if got := names(e.pickSlots(bg, "", reg, roster, "7", 3)); len(got) != 2 || got[0] != "cy" || got[1] != "ben" {
 		t.Errorf("resume then idle, busy dropped: %v", got)
 	}
-	if got := names(e.pickSlots(bg, reg, roster, "8", 1)); len(got) != 1 || got[0] != "ben" {
+	if got := names(e.pickSlots(bg, "", reg, roster, "8", 1)); len(got) != 1 || got[0] != "ben" {
 		t.Errorf("idle with nothing to resume: %v", got)
 	}
-	if got := names(e.pickSlots(bg, reg, roster, "8", 2, reg.Slot("dana"))); len(got) != 2 || got[0] != "dana" || got[1] != "ben" {
+	if got := names(e.pickSlots(bg, "", reg, roster, "8", 2, reg.Slot("dana"))); len(got) != 2 || got[0] != "dana" || got[1] != "ben" {
 		t.Errorf("a pre-chosen slot leads and is not listed twice: %v", got)
 	}
 }
@@ -111,7 +111,7 @@ func TestPickSlotsSkipsAccountsWithoutLogin(t *testing.T) {
 	reg := worker.LoadRegistryTolerant(root)
 	set := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
 	e := Env{Worker: wk(worker.Env{})}
-	got, skipped := e.pickSlots(bg, reg, set, "8", 3)
+	got, skipped := e.pickSlots(bg, "", reg, set, "8", 3)
 	if len(got) != 2 || got[0].Name() != "cy" || got[1].Name() != "dana" {
 		t.Errorf("picked %v, want cy then dana", got)
 	}
@@ -136,7 +136,7 @@ func TestSlotLoginProblemExemptsCodex(t *testing.T) {
 	if why := (Env{Worker: wk(worker.Env{})}).SlotLoginProblem(reg.Slot("cy")); why != "" {
 		t.Errorf("codex slot: %q, want no login problem", why)
 	}
-	got, skipped := Env{Worker: wk(worker.Env{})}.pickSlots(bg, reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
+	got, skipped := Env{Worker: wk(worker.Env{})}.pickSlots(bg, "", reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
 	if len(got) != 1 || got[0].Name() != "cy" || len(skipped) != 0 {
 		t.Errorf("picked %v skipped %v, want cy picked", got, skipped)
 	}

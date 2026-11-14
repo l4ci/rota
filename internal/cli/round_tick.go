@@ -300,9 +300,10 @@ func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string
 	return r.renv.MintReview(ctx, r.root, r.board, a, round.Current(r.root))
 }
 
-// fallbackLine is the warning a tick prints when an assign moved to a later harness.
-func fallbackLine(id string, fb *round.Fallback) string {
-	return fmt.Sprintf("fallback\t%s: %s -> %s: %s", tracker.RefOf(id), fb.From, fb.To, fb.Why)
+// placementLine is the warning a tick prints when an assign moved a slot to
+// another account.
+func placementLine(id string, p *round.Placement) string {
+	return fmt.Sprintf("moved\t%s: %s", tracker.RefOf(id), p)
 }
 
 // tickWorld is the CLI's side of a tick: every seam roundtick.NewEnv wires,
@@ -403,8 +404,8 @@ func (w *tickWorld) assign(ctx context.Context, o round.AssignOpts) (round.Assig
 	for _, o := range res.Overlaps {
 		w.c.Warn("%s %s", tracker.RefOf(id), o.String())
 	}
-	if fb := res.Fallback; fb != nil {
-		w.c.Warn("%s", fallbackLine(id, fb))
+	if p := res.Placement; p != nil && !p.Kept && !p.Fresh {
+		w.c.Warn("%s", placementLine(id, p))
 	}
 	return res, nil
 }

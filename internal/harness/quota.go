@@ -7,8 +7,9 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 )
 
-// QuotaReporter reads current account capacity for display only. It is deliberately
-// separate from UsageMeter, whose readings can affect scheduling and burn attribution.
+// QuotaReporter reads current account capacity. It is separate from UsageMeter,
+// whose readings also drive burn attribution; round assign reads it as a
+// scheduling meter through worker.QuotaMeter, never as burn attribution.
 type QuotaReporter interface {
 	ReadQuota(context.Context, QuotaRequest, QuotaOptions) QuotaSnapshot
 }

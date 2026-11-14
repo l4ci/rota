@@ -134,7 +134,7 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 // is never listed twice. A new-work slot whose account has no login
 // (Env.SlotLoginProblem) is not picked: skipped names each with its problem, for
 // the caller's warning.
-func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
+func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
 	roster := set.Roster
 	active, _ := Members(reg, set)
 	add := func(s *worker.Slot) {
@@ -151,7 +151,9 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 		}
 	}
 	usable := func(s *worker.Slot) bool {
-		if why := e.SlotLoginProblem(s); why != "" {
+		// With placement on, the slot's old account is not the one it will run
+		// under: the pick checks the new one.
+		if why := e.SlotLoginProblem(s); why != "" && !(e.placesAccounts(root) && !s.Holds(held)) {
 			skipped = append(skipped, fmt.Sprintf("%s (%s in %s)", s.Name(), why, s.ConfigDir()))
 			return false
 		}
@@ -179,7 +181,7 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 // parking or dispatching it. Advice uses the same active-slot, login and clean
 // worktree checks as assign rather than treating every done slot as free.
 func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (string, bool) {
-	slots, _ := e.pickSlots(ctx, reg, set, "", 1)
+	slots, _ := e.pickSlots(ctx, "", reg, set, "", 1)
 	if len(slots) == 0 {
 		return "", false
 	}

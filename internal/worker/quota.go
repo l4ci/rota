@@ -18,6 +18,101 @@ type Quotas struct {
 	Env     Env
 	Options harness.QuotaOptions
 	Read    func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot
+
+	mu    sync.Mutex
+	cache map[meterKey]cachedMeter
+}
+
+// How long a scheduling reading of a display-only account is reused. Each
+// read spawns the harness's app-server, so a tick that places several slots,
+// and the ticks after it, share one reading per account. A failed read is
+// kept shorter: the next tick may find the account reachable again.
+const (
+	meterTTL       = 5 * time.Minute
+	meterFailedTTL = time.Minute
+)
+
+// meterKey names a cached reading by the login it read: kind, account name
+// and the resolved home, so an account whose dir changed is read again.
+type meterKey struct {
+	QuotaAccount
+	home string
+}
+
+type cachedMeter struct {
+	m  Meter
+	at time.Time
+}
+
+// Meters reads the accounts of the given harness kinds as scheduling meters
+// (QuotaMeter), keyed by kind and account name; an ambient login (a kind with
+// no configured account) has the name "". A failed or timed-out read is an
+// unknown meter. Readings are cached per account, so one placement batch costs
+// one app-server read per account.
+func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[QuotaAccount]Meter {
+	e := q.Env.WithDefaults()
+	cfg := e.Config(root)
+	home, _ := e.Home()
+	now := e.Now()
+	if q.Options.Now != nil {
+		now = q.Options.Now()
+	}
+	var refs []QuotaAccount
+	homes := map[QuotaAccount]string{}
+	for _, kind := range kinds {
+		if _, ok := harness.LookupQuotaReporter(kind); !ok {
+			continue
+		}
+		hz, ok := harness.LookupAccounts(kind)
+		if !ok {
+			continue
+		}
+		entries := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
+		for _, entry := range entries {
+			ref := QuotaAccount{kind, entry.Name}
+			refs, homes[ref] = append(refs, ref), entry.Dir
+		}
+		if len(entries) == 0 {
+			ref := QuotaAccount{kind, ""}
+			refs, homes[ref] = append(refs, ref), hz.AmbientAccount(e.Getenv).Home
+		}
+	}
+	out := map[QuotaAccount]Meter{}
+	var miss []QuotaAccount
+	q.mu.Lock()
+	for _, ref := range refs {
+		c, ok := q.cache[meterKey{ref, homes[ref]}]
+		ttl := meterTTL
+		if c.m.Verdict == VerdictUnknown {
+			ttl = meterFailedTTL
+		}
+		if ok && now.Sub(c.at) < ttl {
+			out[ref] = c.m
+		} else {
+			miss = append(miss, ref)
+		}
+	}
+	q.mu.Unlock()
+	if len(miss) == 0 {
+		return out
+	}
+	rows := q.collect(ctx, e, cfg, home, miss)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cache == nil {
+		q.cache = map[meterKey]cachedMeter{}
+	}
+	for _, row := range rows {
+		ref := QuotaAccount{row.Kind, row.Name}
+		if row.Ambient {
+			ref.Name = ""
+		}
+		m := QuotaMeter(row, now)
+		m.Name = ref.Name
+		out[ref] = m
+		q.cache[meterKey{ref, homes[ref]}] = cachedMeter{m, now}
+	}
+	return out
 }
 
 // List reports each available reporting facet independently of worker defaults.

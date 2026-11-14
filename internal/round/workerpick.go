@@ -142,9 +142,9 @@ const (
 	// issue, ahead of the project default.
 	KindFromSlotResume = harness.AuthorFromResume
 	KindFromDefault    = harness.AuthorFromDefault
-	// KindFromFallback is a kind another harness's cooling accounts handed
-	// over to (round.harnesses).
-	KindFromFallback = "quota fallback"
+	// KindFromUsage is the harness of the account with the most headroom
+	// (round.harnesses and round.accounts).
+	KindFromUsage = "usage"
 )
 
 // resolveKind is the harness and where it came from: --kind, else the item's

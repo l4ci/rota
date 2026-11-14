@@ -38,10 +38,12 @@ type Worker interface {
 	BounceStore(root string) (worker.BounceStore, error)
 
 	PoolInit(ctx context.Context, root string, o worker.InitOpts, acc *worker.Accounts) (worker.InitResult, error)
+	LoginProblem(ctx context.Context, kind, home string) string
 	ModelAppliesTo(root, kind string) bool
 	NeedsModel(root, kind string) bool
 	PlanLaunch(root, kind, model string) (worker.LaunchPlan, error)
 	Preflight(ctx context.Context, root, slot string, lp worker.LaunchPlan) (harness.Setup, error)
+	PreflightAs(ctx context.Context, root, slot string, lp worker.LaunchPlan, account *string) (harness.Setup, error)
 	Dispatch(ctx context.Context, root string, o worker.DispatchOpts) (worker.DispatchResult, error)
 	Poll(ctx context.Context, root string, o worker.PollOpts) (worker.PollResult, error)
 

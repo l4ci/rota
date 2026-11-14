@@ -29,7 +29,11 @@ func (d *Deps) baseRoundEnv() round.Env {
 // and drops the worker's meters; non-nil turns it on, reading them.
 func newRoundEnv(d *Deps, w worker.Env, accounts *worker.Accounts) round.Env {
 	e := round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(w), Login: d.credentials()}
-	return e.WithAccounts(accounts)
+	e = e.WithAccounts(accounts)
+	if accounts != nil {
+		e.Quotas = d.meterQuotas()
+	}
+	return e
 }
 
 // buildRoundEnv wires the real git, host and forge. The host is herdr when
@@ -154,4 +158,12 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 		env.Board = b
 	}
 	return env
+}
+
+// meterQuotas is the one quota reader of the process: its per-account cache
+// (worker.Quotas.Meters) must outlive a single env, or every autopilot tick
+// would read every Codex account again.
+func (d *Deps) meterQuotas() *worker.Quotas {
+	d.quotasOnce.Do(func() { d.quotas = d.AccountQuotas() })
+	return d.quotas
 }

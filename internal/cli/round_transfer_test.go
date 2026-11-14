@@ -13,7 +13,7 @@ func TestRoundTransferWorkerFlagsRefuseLikeAssign(t *testing.T) {
 		code                            int
 	}{
 		{"unknown harness", "", "--kind", "unknown-harness", "kind must be", 2},
-		{"unusable model", `,"commands":{"claude":"mywrap --dangerously-skip-permissions"}`, "--model", "task-model", "--model task-model cannot apply: round.commands.claude has no {model} placeholder", 4},
+		{"unusable model", `,"commands":{"claude":"mywrap --dangerously-skip-permissions"},"tiers":{"claude":{"heavy":"task-model"}}`, "--model", "task-model", "--model task-model cannot apply: round.commands.claude has no {model} placeholder", 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newScopeFx(t, "warn", tc.cfg)

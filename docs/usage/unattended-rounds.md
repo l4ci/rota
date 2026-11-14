@@ -220,9 +220,10 @@ status` shows `cap <effective>/<roster>` and the reason while the cap is below t
 already working keep going. Slots fill again by themselves once an account's window resets.
 
 A Claude account is cooling when its meter shows a spent window with a reset ahead (`round.accounts`). A Codex
-login is cooling while the limit log holds a waiting entry for it (a `codex` entry in `round.accounts`). An unconfigured pool
-never counts as cooling, an account whose usage cannot be read counts as free, and the Claude pool is left out
-when the first entry of `round.harnesses` is `codex`.
+account is cooling while a quota window is spent with a reset ahead or the limit log holds a waiting entry for it (a
+`codex` entry in `round.accounts`). An unconfigured pool never counts as cooling, an account whose usage cannot be
+read counts as free, and only the harnesses a round may use count (`round.harnesses`, else every harness with a
+`round.accounts` entry).
 
 ### Resuming
 

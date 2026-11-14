@@ -753,6 +753,8 @@ type codexRig struct {
 	loggedIn bool
 	noCodex  bool
 	noFlag   string // a launch flag `codex --help` leaves out
+	// badHomes are CODEX_HOME values whose `codex login status` fails, whatever loggedIn says.
+	badHomes []string
 }
 
 // codexHelp is the `codex --help` the rig prints: every default launch flag.
@@ -784,6 +786,11 @@ func (c *codexRig) install(f *assignFixture) {
 			case "codex --help":
 				return host.Result{Stdout: strings.ReplaceAll(codexHelp, c.noFlag+"\n", "\n")}, nil
 			case "codex login status":
+				for _, bad := range c.badHomes {
+					if slices.Contains(env, "CODEX_HOME="+bad) {
+						return host.Result{Stderr: "Not logged in", ExitCode: 1}, nil
+					}
+				}
 				if c.loggedIn {
 					return host.Result{}, nil
 				}
@@ -841,6 +848,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 func TestAssignProjectWorkerKind(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"round":{"dispatch":"herdr","harnesses":["codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
 	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromHarnesses || res.Model != "c-s" {
@@ -1145,6 +1153,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 	t.Run("model label wins over the tier map and keeps the tier", func(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:codex", "model:gpt-5.5-codex")
+		f.env.Round.Models[harness.Codex]["heavy"] = "gpt-5.5-codex" // a model must be named by a tier of its harness
 		res, err := f.assign("12", "ben", nil)
 		if err != nil || res.Model != "gpt-5.5-codex" || res.Tier != "standard" || !strings.Contains(f.host.launch, " --model gpt-5.5-codex ") {
 			t.Fatalf("%v %+v launch=%q", err, res, f.host.launch)
@@ -1153,6 +1162,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 	t.Run("flags beat labels", func(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:claude", "model:label-model")
+		f.env.Round.Models[harness.Codex]["heavy"] = "flag-model"
 		res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.Model = "flag-model" })
 		if err != nil || res.Kind != harness.Codex || res.Model != "flag-model" {
 			t.Fatalf("%v %+v", err, res)
