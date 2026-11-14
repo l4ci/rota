@@ -56,6 +56,28 @@ func Accounts(cfg any) []Account {
 	return accountEntries(v)
 }
 
+// ReviewAccounts returns the object entries of review.accounts in order, read
+// like Accounts: the logins the cross-harness reviewer may run on.
+func ReviewAccounts(cfg any) []Account {
+	v, _ := Value(cfg, ReviewAccountsKey)
+	return accountEntries(v)
+}
+
+// ReviewOnlyKind reports whether kind has review.accounts entries and no
+// round.accounts entry: its logins are kept for review, so no worker goes to
+// that harness, not even on its ambient login.
+func ReviewOnlyKind(cfg any, kind string) bool {
+	if len(AccountsOf(cfg, kind)) > 0 {
+		return false
+	}
+	for _, a := range ReviewAccounts(cfg) {
+		if a.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // AccountsOf is Accounts narrowed to one kind.
 func AccountsOf(cfg any, kind string) []Account {
 	var out []Account
@@ -118,27 +140,32 @@ func DirProblem(field, dir string) string {
 	return field + " must be absolute or start with ~"
 }
 
-// AccountDirProblems lists, in config order, every round.accounts entry whose
+// AccountDirProblems lists, in config order, every round.accounts and review.accounts entry whose
 // kind is not a harness or whose dir DirProblem refuses, each naming the key
 // and the entry, and every name that stands for two dirs (a name may repeat
 // across kinds only with one dir, so name-keyed lookups stay unambiguous).
 func AccountDirProblems(cfg any) []string {
+	return append(accountListProblems(RoundAccountsKey, Accounts(cfg)), accountListProblems(ReviewAccountsKey, ReviewAccounts(cfg))...)
+}
+
+// accountListProblems is AccountDirProblems for one account list key.
+func accountListProblems(key string, list []Account) []string {
 	var out []string
 	dirOf := map[string]string{}
-	for _, a := range Accounts(cfg) {
+	for _, a := range list {
 		if first, seen := dirOf[a.Name]; !seen {
 			dirOf[a.Name] = a.Dir
 		} else if a.Name != "" && first != a.Dir {
-			out = append(out, fmt.Sprintf("round.accounts %q dirs %q and %q: one name needs one dir", a.Name, first, a.Dir))
+			out = append(out, fmt.Sprintf("%s %q dirs %q and %q: one name needs one dir", key, a.Name, first, a.Dir))
 		}
 		switch a.Kind {
 		case KindClaude, KindCodex, KindOpencode:
 		default:
-			out = append(out, fmt.Sprintf("round.accounts %q kind %q: must be claude, codex or opencode", a.Name, a.Kind))
+			out = append(out, fmt.Sprintf("%s %q kind %q: must be claude, codex or opencode", key, a.Name, a.Kind))
 			continue
 		}
 		if p := DirProblem("dir", a.Dir); p != "" {
-			out = append(out, fmt.Sprintf("round.accounts %q dir %q: %s", a.Name, a.Dir, p))
+			out = append(out, fmt.Sprintf("%s %q dir %q: %s", key, a.Name, a.Dir, p))
 		}
 	}
 	return out

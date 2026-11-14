@@ -53,13 +53,22 @@ func (p Placement) String() string {
 	return fmt.Sprintf("%s (%s, %s) %s%s", who, p.Kind, head, verdict, gap)
 }
 
-// allowedKinds is the harnesses a round may use, in tie-break order:
-// round.harnesses, else every kind with a round.accounts entry, else claude.
+// allowedKinds is the harnesses a round may use for workers, in tie-break order:
+// round.harnesses (less a kind whose logins are all in review.accounts), else every kind with a round.accounts entry, else claude.
 func allowedKinds(cfg any, set roundcfg.Settings) []string {
-	if len(set.Harnesses) > 0 {
-		return slices.Clone(set.Harnesses)
-	}
 	var out []string
+	if len(set.Harnesses) > 0 {
+		for _, k := range set.Harnesses {
+			// A harness whose only logins are review.accounts takes no worker.
+			if !config.ReviewOnlyKind(cfg, k) {
+				out = append(out, k)
+			}
+		}
+		if len(out) == 0 {
+			return []string{harness.Default}
+		}
+		return out
+	}
 	for _, k := range harness.Kinds() {
 		if len(config.AccountsOf(cfg, k)) > 0 {
 			out = append(out, k)
@@ -102,72 +111,15 @@ type workerPickIn struct {
 func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Placement, error) {
 	cfg := e.Worker.Config(root)
 	home, _ := e.Worker.Home()
-	now := e.now()
-	var meters []worker.Meter
-	if a := e.Worker.Accounts(); a != nil {
-		meters = a.Meters(ctx, root)
-	}
-	var quotas map[worker.QuotaAccount]worker.Meter
-	if e.Quotas != nil {
-		var metered []string
-		for _, k := range in.Kinds {
-			if !harness.ResolveAccounts(k).UsageMeter() {
-				metered = append(metered, k)
-			}
-		}
-		quotas = e.Quotas.Meters(ctx, root, metered)
-	}
+	ms := e.readMeters(ctx, root, in.Kinds)
 	load := e.accountLoad(root, in.Set, in.Slot)
-	log := limits.Load(root)
 
 	var entries []worker.PoolEntry
 	for _, kind := range in.Kinds {
 		hz := harness.ResolveAccounts(kind)
 		kind = hz.Kind()
 		list := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
-		if len(list) == 0 {
-			list = []harness.AccountEntry{{}}
-		}
-		coolingByLog := map[string]time.Time{}
-		if !hz.UsageMeter() {
-			coolingByLog = limits.Cooling(log, kind, now)
-		}
-		rank := slices.Index(in.Set.Harnesses, kind)
-		if rank < 0 {
-			rank = len(in.Set.Harnesses)
-		}
-		for _, acct := range list {
-			pe := worker.PoolEntry{Kind: kind, Name: acct.Name, Rank: rank, Order: len(entries), Load: load[worker.PoolRef{Kind: kind, Name: acct.Name}],
-				Meter: worker.Meter{Name: acct.Name, ConfigDir: acct.Dir, Verdict: worker.VerdictUnknown}}
-			if hz.UsageMeter() {
-				for _, m := range meters {
-					if acct.Name != "" && m.Name == acct.Name {
-						pe.Meter = m
-					}
-				}
-				if e.AccountPicking {
-					dir := acct.Dir
-					if acct.Name == "" { // the orchestrator's own login
-						dir = hz.AmbientAccount(e.Worker.Getenv).ConfigDir
-					}
-					if why := e.Worker.Accounts().LoginProblem(dir); why != "" {
-						pe.Skip = "no login (" + why + ")"
-					}
-				}
-			} else {
-				if m, ok := quotas[worker.QuotaAccount{Kind: kind, Name: acct.Name}]; ok {
-					pe.Meter = m
-					pe.Meter.Name = acct.Name
-				}
-				if why := e.Worker.LoginProblem(ctx, kind, acct.Dir); why != "" {
-					pe.Skip = "no login (" + why + ")"
-				}
-			}
-			if at, ok := coolingByLog[acct.Name]; ok && acct.Name != "" && pe.Skip == "" {
-				pe.Skip = "limited until " + at.UTC().Format("2006-01-02 15:04 MST")
-			}
-			entries = append(entries, pe)
-		}
+		entries = append(entries, e.poolEntries(ctx, ms, kind, list, in.Set, len(entries), load)...)
 	}
 
 	var cur *worker.PoolRef
@@ -184,6 +136,86 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 	}
 	p := Placement{Kind: choice.Entry.Kind, Account: choice.Entry.Name, Headroom: choice.Entry.Meter.Headroom, Kept: choice.Kept, Gap: choice.Gap, Fresh: cur == nil, Margin: in.Margin}
 	return p, nil
+}
+
+// meterReadings is every reading a pool needs, taken once per placement.
+type meterReadings struct {
+	meters []worker.Meter
+	quotas map[worker.QuotaAccount]worker.Meter
+	log    []limits.Entry
+	now    time.Time
+}
+
+// readMeters reads the scheduling meters of the given harness kinds: Claude's
+// usage meters, the display-only kinds' quota snapshots, and the watcher's
+// limit log.
+func (e Env) readMeters(ctx context.Context, root string, kinds []string, extra ...config.Account) meterReadings {
+	ms := meterReadings{now: e.now(), log: limits.Load(root)}
+	if a := e.Worker.Accounts(); a != nil {
+		ms.meters = a.MetersWith(ctx, root, extra)
+	}
+	if e.Quotas != nil {
+		var metered []string
+		for _, k := range kinds {
+			if !harness.ResolveAccounts(k).UsageMeter() {
+				metered = append(metered, k)
+			}
+		}
+		ms.quotas = e.Quotas.MetersWith(ctx, root, metered, extra)
+	}
+	return ms
+}
+
+// poolEntries is one kind's accounts as pool entries with their meter and
+// skip reason. An empty list is the orchestrator's own login (Name ""). order
+// is the pool position of the first entry; load counts slots per account.
+func (e Env) poolEntries(ctx context.Context, ms meterReadings, kind string, list []harness.AccountEntry, set roundcfg.Settings, order int, load map[worker.PoolRef]int) []worker.PoolEntry {
+	hz := harness.ResolveAccounts(kind)
+	if len(list) == 0 {
+		list = []harness.AccountEntry{{}}
+	}
+	coolingByLog := map[string]time.Time{}
+	if !hz.UsageMeter() {
+		coolingByLog = limits.Cooling(ms.log, kind, ms.now)
+	}
+	rank := slices.Index(set.Harnesses, kind)
+	if rank < 0 {
+		rank = len(set.Harnesses)
+	}
+	var entries []worker.PoolEntry
+	for _, acct := range list {
+		pe := worker.PoolEntry{Kind: kind, Name: acct.Name, Rank: rank, Order: order + len(entries), Load: load[worker.PoolRef{Kind: kind, Name: acct.Name}],
+			Meter: worker.Meter{Name: acct.Name, ConfigDir: acct.Dir, Verdict: worker.VerdictUnknown}}
+		if hz.UsageMeter() {
+			for _, m := range ms.meters {
+				if acct.Name != "" && m.Name == acct.Name {
+					pe.Meter = m
+				}
+			}
+			if e.AccountPicking {
+				dir := acct.Dir
+				if acct.Name == "" { // the orchestrator's own login
+					dir = hz.AmbientAccount(e.Worker.Getenv).ConfigDir
+				}
+				if why := e.Worker.Accounts().LoginProblem(dir); why != "" {
+					pe.Skip = "no login (" + why + ")"
+				}
+			}
+		} else {
+			if m, ok := ms.quotas[worker.QuotaAccount{Kind: kind, Name: acct.Name}]; ok {
+				pe.Meter = m
+				pe.Meter.Name = acct.Name
+			}
+			if why := e.Worker.LoginProblem(ctx, kind, acct.Dir); why != "" {
+				pe.Skip = "no login (" + why + ")"
+			}
+		}
+		if at, ok := coolingByLog[acct.Name]; ok && acct.Name != "" && pe.Skip == "" {
+			pe.Skip = "limited until " + at.UTC().Format("2006-01-02 15:04 MST")
+		}
+		entries = append(entries, pe)
+	}
+	return entries
 }
 
 // accountLoad counts the slots holding work on each account, so a batch of
