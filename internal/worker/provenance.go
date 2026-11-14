@@ -154,13 +154,19 @@ func checkApprovals(body string, relayLog []any, offerRequired, offered bool) st
 				problems = append(problems, fmt.Sprintf("cites the round support offer but no trusted support-offer comment is on the issue: %s", strings.TrimSpace(line)))
 			}
 		}
-		if m := reRelayCite.FindStringSubmatch(low); m != nil {
-			if n := m[1]; n != "" {
-				i, _ := strconv.Atoi(n)
-				if !rounds[i] {
-					problems = append(problems, fmt.Sprintf("cites an orchestrator relay for round %s but none is logged: %s", n, strings.TrimSpace(line)))
+		if ms := reRelayCite.FindAllStringSubmatch(low, -1); ms != nil {
+			numbered := false
+			for _, m := range ms {
+				if m[1] == "" {
+					continue
 				}
-			} else if len(relays) == 0 && !reSettledCite.MatchString(low) {
+				numbered = true
+				i, _ := strconv.Atoi(m[1])
+				if !rounds[i] {
+					problems = append(problems, fmt.Sprintf("cites an orchestrator relay for round %s but none is logged: %s", m[1], strings.TrimSpace(line)))
+				}
+			}
+			if !numbered && len(relays) == 0 && !reSettledCite.MatchString(low) {
 				problems = append(problems, fmt.Sprintf("cites an orchestrator relay but none is logged: %s", strings.TrimSpace(line)))
 			}
 		} else if strings.Contains(low, "maintainer") && !reSettledCite.MatchString(low) {

@@ -55,6 +55,8 @@ func TestCheckApprovals(t *testing.T) {
 		{"settled-in-brief cite is not inflation even when it echoes a relay", "## Approvals\n- settled in brief: the maintainer said use the shared cache for the lookup\n", relayed, ""},
 		{"settled-in-brief wording does not launder a relay cite", "## Approvals\n- settled in brief: orchestrator relay round 7\n", relayed, "relay for round 7 but none is logged"},
 		{"settled-in-brief line echoing the header's relay phrase passes with none logged", "## Approvals\n- settled in brief: keep the callback signature (not an orchestrator relay)\n", nil, ""},
+		{"mixed settled line: unnumbered phrase first does not hide an unlogged round", "## Approvals\n- settled in brief: keep X (not an orchestrator relay); orchestrator relay round 7\n", nil, "relay for round 7 but none is logged"},
+		{"mixed settled line with relays that lack the cited round", "## Approvals\n- settled in brief: keep X (not an orchestrator relay); orchestrator relay round 7\n", relayed, "relay for round 7 but none is logged"},
 		{"non-object relay entries are skipped", "just a body", []any{"junk"}, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
