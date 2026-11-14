@@ -1,6 +1,9 @@
 package worker
 
 import (
+	"errors"
+
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,5 +85,46 @@ func TestRefsRefusesACommandThatMovesHead(t *testing.T) {
 	}
 	if got := gittest.Run(t, w.origin, "rev-parse", intBranch); got != tip {
 		t.Fatalf("nothing may be pushed, tip moved to %s", got)
+	}
+}
+
+// An umbrella keys the verdict store "<repo>:<branch>": a look recorded
+// there must count when Refs is given the repo.
+func TestRefsReadsTheLookUnderTheUmbrellaKey(t *testing.T) {
+	w, tip := refsWorld(t, "mkdir -p refs && echo new > refs/a.png")
+	if _, err := verdict.AddBranch(w.dir, verdict.BranchKey("sub", intBranch), verdict.Record{Kind: verdict.Look, Verdict: verdict.Pass, Sha: tip}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := w.env(false).Refs(bg, w.dir, RefsOpts{Branch: intBranch, VerdictRepo: "sub"})
+	if err != nil || res.Verdict != RefsRenewed {
+		t.Fatalf("umbrella-keyed look must count: %+v %v", res, err)
+	}
+}
+
+// User-fixable mistakes are refusals (exit 4) or not-found (exit 3), never
+// an internal error (exit 70).
+func TestRefsUserMistakesAreTypedExits(t *testing.T) {
+	for _, tc := range []struct {
+		name, cfg, branch string
+		want              int
+	}{
+		{"refs unset", `{"test":{"full":["true"],"refsPattern":"^refs/"}}`, intBranch, exitcode.ExitRefused},
+		{"pattern unset", `{"test":{"full":["true"],"refs":["true"]}}`, intBranch, exitcode.ExitRefused},
+		{"bad pattern", `{"test":{"full":["true"],"refs":["true"],"refsPattern":"("}}`, intBranch, exitcode.ExitRefused},
+		{"unknown branch", `{"test":{"full":["true"],"refs":["true"],"refsPattern":"^refs/"}}`, "integration/r55-nope", exitcode.ExitResolution},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := integrationWorld(t)
+			integrationPR(t, w)
+			w.setConfig(tc.cfg)
+			_, err := w.env(false).Refs(bg, w.dir, RefsOpts{Branch: tc.branch})
+			var ee *exitcode.Error
+			if !errors.As(err, &ee) || ee.Exit != tc.want {
+				t.Fatalf("want exit %d, got %v", tc.want, err)
+			}
+			if ee.Hint == "" && !strings.Contains(ee.Message, "test.") && !strings.Contains(ee.Message, "rota") {
+				t.Fatalf("name the next step: %v", ee)
+			}
+		})
 	}
 }

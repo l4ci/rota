@@ -67,7 +67,32 @@ func splitRemote(c *Ctx, dir, branch string) (bare, remote string, err error) {
 	return branch, "", nil
 }
 
+// remoteOnlyArg rewrites a bare branch argument that exists only on origin
+// (an integration branch is never checked out locally) to origin/<branch>,
+// which splitRemote then strips back to the shared record key.
+func remoteOnlyArg(c *Ctx, args []string) ([]string, error) {
+	if len(args) != 1 || args[0] == "" {
+		return args, nil
+	}
+	dir, err := gitDir(c)
+	if err != nil || dir == "" {
+		return args, nil
+	}
+	r := c.deps().Repo(dir)
+	if local, err := r.Verify(c.Context(), args[0]+"^{commit}"); err != nil || local {
+		return args, nil
+	}
+	if remote, err := r.Verify(c.Context(), "refs/remotes/origin/"+args[0]); err == nil && remote {
+		return []string{"origin/" + args[0]}, nil
+	}
+	return args, nil
+}
+
 func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
+	args, err := remoteOnlyArg(c, args)
+	if err != nil {
+		return verdictBranch{}, err
+	}
 	t, err := resolveBranch(c, args)
 	if err != nil {
 		return verdictBranch{}, err

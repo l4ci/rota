@@ -1225,10 +1225,10 @@ The stacked branch cannot land while `a` is open: `rota worker gate` refuses it 
 
 A project that keeps reference images (screenshots, snapshots) often wants their renewal in its own commit, after the maintainer approved how the batch looks. Set `test.refs` (the commands that rewrite the files) and `test.refsPattern` (a regular expression matching the reference paths), record the approval, then run the verb:
 
-1. Record the approval at the branch's tip: `rota verdict add integration/r<round>-ui --kind look --verdict PASS --sha <tip>`. It is a sha-bound verdict, so a push after it voids it.
+1. Record the approval at the branch's tip: `rota verdict add integration/r<round>-ui --kind look --verdict PASS --sha <tip>`. An integration branch lives on `origin` only; `verdict add` resolves a branch with no local copy through `origin/<branch>`, and `rota verdict show` lists the `look`. It is a sha-bound verdict, so a push after it voids it.
 2. `rota worker refs integration/r<round>-ui` (or just `ui`) runs `test.refs` in a scratch tree at the pushed tip. It commits the files that changed, which all match `test.refsPattern`, as one commit and pushes it to the branch.
 
-It refuses, exit 4 and nothing committed, when there is no `look` PASS at the tip (`refs-no-look`, naming the missing approval), when a command changed a file outside the pattern (`refs-outside`, naming it) or when a command failed (`refs-failed`). A run that changes nothing reports `refs-clean`. The new commit moves the tip, so a gate that needs a verdict at the tip needs it again.
+It refuses, exit 4 and nothing committed, when there is no `look` PASS at the tip (`refs-no-look`, naming the missing approval), when a command changed a file outside the pattern (`refs-outside`, naming it) or when a command failed (`refs-failed`). A run that changes nothing reports `refs-clean`. A mistake in the setup also refuses with a next step: `test.refs` or `test.refsPattern` unset or a bad pattern exits 4, an unknown or deleted branch exits 3, an unreachable remote exits 5. The new commit moves the tip, so a gate that needs a verdict at the tip needs it again.
 
 ## Best-of: two workers on one issue
 

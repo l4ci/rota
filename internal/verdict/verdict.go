@@ -72,7 +72,7 @@ const (
 
 // BranchKinds are the kinds recorded against a branch, in the order
 // `verdict show` lists them.
-var BranchKinds = append(slices.Clone(readinessReviewKinds), QA, Behaviour)
+var BranchKinds = append(slices.Clone(readinessReviewKinds), QA, Behaviour, Look)
 
 // LensKinds are the lens review kinds, one per lens name.
 var LensKinds = lensKinds(config.LensNames)

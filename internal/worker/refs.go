@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -69,13 +70,13 @@ func (e Env) Refs(ctx context.Context, root string, o RefsOpts) (RefsResult, err
 	}
 	cfg := in.cfg
 	if cfg.refsErr != nil {
-		return RefsResult{}, cfg.refsErr
+		return RefsResult{}, exitcode.Errf(exitcode.ExitRefused, "%v", cfg.refsErr).WithHint("fix it with `rota config set test.refsPattern <regular expression>`")
 	}
 	if len(cfg.Refs) == 0 {
-		return RefsResult{}, fmt.Errorf("test.refs is not set: there is no command that renews reference files")
+		return RefsResult{}, exitcode.Errf(exitcode.ExitRefused, "test.refs is not set: there is no command that renews reference files").WithHint("set the commands with `rota config set test.refs <command>`")
 	}
 	if cfg.RefsPattern == nil {
-		return RefsResult{}, fmt.Errorf("test.refsPattern is not set: rota cannot tell which changed files are references")
+		return RefsResult{}, exitcode.Errf(exitcode.ExitRefused, "test.refsPattern is not set: rota cannot tell which changed files are references").WithHint("set it with `rota config set test.refsPattern <regular expression>`")
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
@@ -90,16 +91,16 @@ func (e Env) Refs(ctx context.Context, root string, o RefsOpts) (RefsResult, err
 		}
 	}
 	if !ok {
-		return RefsResult{}, fmt.Errorf("%s is no integration branch of this round (`rota round status` lists them)", o.Branch)
+		return RefsResult{}, exitcode.Errf(exitcode.ExitResolution, "%s is no integration branch of this round", o.Branch).WithHint("`rota round status` lists them")
 	}
 	res := RefsResult{Branch: rec.Branch}
 	rem := cfg.RemoteName()
 	if out, code := e.runGit(ctx, root, "fetch", "-q", "--prune", rem); code != 0 {
-		return res, fmt.Errorf("git fetch %s failed: %s", rem, strings.TrimSpace(out))
+		return res, exitcode.Errf(exitcode.ExitUnavailable, "git fetch %s failed: %s", rem, strings.TrimSpace(out)).WithHint("check the remote is reachable, then run the verb again")
 	}
 	tip, code := e.git(root, "rev-parse", "--verify", "--quiet", rem+"/"+rec.Branch+"^{commit}")
 	if code != 0 {
-		return res, fmt.Errorf("%s is gone from %s", rec.Branch, rem)
+		return res, exitcode.Errf(exitcode.ExitResolution, "%s is gone from %s", rec.Branch, rem).WithHint("the integration branch was deleted or landed; `rota round status` shows its state")
 	}
 	res.Tip = tip
 
