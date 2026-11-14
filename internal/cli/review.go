@@ -477,6 +477,14 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			data.Set("cross", res.Cross)
 			data.Set("crossWhy", res.CrossWhy)
 			text += fmt.Sprintf("\nREVIEW-CROSS %s — %s (%s)", t.Branch, res.Cross, res.CrossWhy)
+			if a := res.CrossAccount; a != nil {
+				acct := jsonx.Obj("kind", a.Kind, "name", a.Name, "dir", a.Dir, "fellBack", a.Fallback)
+				if a.Headroom != nil {
+					acct.Set("headroom", *a.Headroom)
+				}
+				data.Set("crossAccount", acct)
+				text += fmt.Sprintf("\nREVIEW-ACCOUNT %s — %s", t.Branch, crossAccountLine(a))
+			}
 		}
 		// Always present, so a caller reads "none" as an empty list, not a missing key.
 		lenses := make([]any, 0, len(res.Lenses))
@@ -529,6 +537,11 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 			return c.deps().issuesOrNone(c.Context(), cfg, root)
 		},
 		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", root) },
+		// The preview meters the reviewer accounts, so it names the account
+		// the review runs on; the gate does not (any eligible harness passes).
+		Pools: func(ctx context.Context) (worker.CrossPools, error) {
+			return accountedRoundEnv(c, ctx, root).CrossPools(ctx, root)
+		},
 	})
 	if err != nil {
 		var de *worker.ReviewDepthError
@@ -560,4 +573,21 @@ func branchPRBody(c *Ctx, f tracker.Forge, branch string) (body string, found bo
 		}
 	}
 	return "", false, nil
+}
+
+// crossAccountLine is the one-line REVIEW-ACCOUNT form of the reviewer login:
+// harness, name (or the ambient login), config dir and whether it is a fallback.
+func crossAccountLine(a *worker.CrossAccount) string {
+	name := a.Name
+	if name == "" {
+		name = "ambient login"
+	}
+	line := fmt.Sprintf("%s account %s", a.Kind, name)
+	if a.Dir != "" {
+		line += " dir " + a.Dir
+	}
+	if a.Fallback {
+		line += " (fallback to round.accounts)"
+	}
+	return line
 }

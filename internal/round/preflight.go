@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
@@ -132,6 +133,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	}
 	if _, err := worker.LaunchHarness(kind); err != nil {
 		return kind, source, nil, err
+	}
+	if pinned && !in.Resuming && !worker.IsSolo(root) && config.ReviewOnlyKind(cfg, kind) {
+		return kind, source, nil, blocked(blockedby.HarnessLabel, "no worker account for the %s harness: its logins are all in review.accounts, which never take a worker issue; add one to round.accounts or name another harness", kind)
 	}
 	// A resuming slot keeps its kind and account (dispatch refuses one at its
 	// limit), and solo runs every subagent on the orchestrator's own account.
