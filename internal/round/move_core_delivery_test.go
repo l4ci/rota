@@ -61,7 +61,9 @@ func (h coreHost) Capabilities() host.Capabilities {
 // #3001: `round assign` onto a slot with an unknown Core delivery refuses at
 // stage dispatch (blockedBy dispatch) and its message carries the transfer hint
 // next to the maintainer-confirmed --confirm-not-submitted path.
-func TestAssignDispatchRefusalNamesTransferForAnUnknownCoreDelivery(t *testing.T) {
+// #3320: assign always starts a fresh session, so a Core delivery saved for the
+// slot's earlier session no longer refuses it (it used to, naming transfer).
+func TestAssignFreshSessionIgnoresAnUnknownCoreDelivery(t *testing.T) {
 	f := newAssignFixture(t)
 	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return coreHost{f.host} } })
 	if err := worker.Update(f.root, func(d *worker.Doc) {
@@ -75,17 +77,11 @@ func TestAssignDispatchRefusalNamesTransferForAnUnknownCoreDelivery(t *testing.T
 	}); err != nil {
 		t.Fatal(err)
 	}
-	f.host.sendErr = host.ErrDeliveryUnknown
 	_, err := f.assign("12", "ben", nil)
-	if err == nil {
-		t.Fatal("assign onto a slot with an unknown delivery must refuse")
+	if err != nil && strings.Contains(err.Error(), "unresolved delivery") {
+		t.Fatalf("an earlier delivery blocked a fresh session: %v", err)
 	}
-	if se := stageOf(t, err); se.Stage != "dispatch" {
-		t.Fatalf("want stage dispatch: %+v", se)
-	}
-	for _, want := range []string{"unresolved delivery (state: unknown)", "rota round transfer 12 --to <free slot>", "stays blocked until the delivery is confirmed", "--confirm-not-submitted", "the maintainer must confirm after reading the original terminal screen"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("assign error lacks %q: %v", want, err)
-		}
+	if len(f.host.spawned) == 0 {
+		t.Fatal("assign did not start a fresh session")
 	}
 }
