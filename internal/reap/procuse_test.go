@@ -157,8 +157,10 @@ func TestReadProcUsesSkipsPermissionDeniedOwnProcess(t *testing.T) {
 	}
 }
 
-// Each unreadable entry of an own process is a permission skip, not only cwd.
-func TestReadProcUsesSkipsPermissionDeniedEntries(t *testing.T) {
+// A process whose cwd reads but whose fd, maps or environ is denied is only
+// partly seen: the paths already read still count, so an entry under its cwd
+// stays held.
+func TestReadProcUsesKeepsPathsWhenLaterEntryDenied(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("root reads every mode")
 	}
@@ -173,8 +175,8 @@ func TestReadProcUsesSkipsPermissionDeniedEntries(t *testing.T) {
 		}
 		t.Cleanup(func() { os.Chmod(p, 0o755) })
 		uses, err := ReadProcUses(root, os.Getuid())
-		if err != nil || len(uses) != 0 {
-			t.Errorf("%s denied: ReadProcUses = %v, %v; want skipped without error", name, uses, err)
+		if err != nil || len(uses) != 1 || !slices.Contains(uses[0].Paths, "/w/a") {
+			t.Errorf("%s denied: ReadProcUses = %v, %v; want pid 100 still holding /w/a", name, uses, err)
 		}
 	}
 }
