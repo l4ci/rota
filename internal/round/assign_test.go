@@ -1698,8 +1698,12 @@ func TestAssignSkipsSlotWithUnresolvedCoreDelivery(t *testing.T) {
 			f := newAssignFixture(t)
 			saveCoreDelivery(t, f.root, "ben", state)
 			reg := worker.LoadRegistryTolerant(f.root)
-			if name, ok := f.env.FreeSlot(bg, reg, f.set); !ok || name == "ben" {
+			name, ok, warns := f.env.FreeSlot(bg, reg, f.set)
+			if !ok || name == "ben" {
 				t.Errorf("FreeSlot = %q, %v; must skip ben", name, ok)
+			}
+			if len(warns) != 1 || !strings.Contains(warns[0], "ben") || !strings.Contains(warns[0], state) {
+				t.Errorf("FreeSlot warnings = %v, want one naming ben and %s", warns, state)
 			}
 			res, err := f.assign("12", "", nil)
 			if err != nil {
@@ -1723,7 +1727,7 @@ func TestAssignRefusesBeforeSideEffectsWhenEverySlotHasUnresolvedDelivery(t *tes
 		saveCoreDelivery(t, f.root, name, "submitted")
 	}
 	res, err := f.assign("12", "", nil)
-	if blockedBy(t, err) != blockedby.NoFreeSlot || !strings.Contains(err.Error(), "unresolved Core delivery") || !strings.Contains(err.Error(), "ben") {
+	if blockedBy(t, err) != blockedby.NoFreeSlot || !strings.Contains(err.Error(), "unresolved Core delivery") || !strings.Contains(err.Error(), "ben") || !strings.Contains(err.Error(), "rota round assign 12 --agent <slot>") || strings.Contains(err.Error(), "--confirm-not-submitted") {
 		t.Fatalf("err = %v, want %s naming the delivery and slot", err, blockedby.NoFreeSlot)
 	}
 	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "submitted") {
@@ -1732,11 +1736,61 @@ func TestAssignRefusesBeforeSideEffectsWhenEverySlotHasUnresolvedDelivery(t *tes
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 || len(f.host.sents) != 0 {
 		t.Fatalf("a refused assign must touch nothing: %+v %+v %v %v %v", f.be.claims, f.be.bstates, f.be.notes, f.host.spawned, f.host.sents)
 	}
-	branches, _ := git.Exec(bg, f.root, "branch", "--list", "ben/*", "dana/*")
+	branches, gerr := git.Exec(bg, f.root, "branch", "--list", "ben/*", "dana/*")
+	if gerr != nil || branches.ExitCode != 0 {
+		t.Fatalf("listing branches: %v %+v", gerr, branches)
+	}
 	if strings.TrimSpace(branches.Stdout) != "" {
 		t.Errorf("a refused assign created branches: %q", branches.Stdout)
 	}
+	if _, serr := os.Stat(filepath.Join(f.root, ".rota", "receipts.json")); !os.IsNotExist(serr) {
+		t.Errorf("a refused assign wrote a receipt: %v", serr)
+	}
 	if reg := worker.LoadRegistryTolerant(f.root); reg.Slot("ben").Task() != "" || reg.Slot("dana").Task() != "" {
 		t.Error("a refused assign marked a slot")
+	}
+}
+
+// A delivery whose worker reported done after it is not skipped: the evidence
+// frees the slot (#3320), and the pick takes it.
+func TestAssignDoesNotSkipSlotWhoseDeliveryWasConsumed(t *testing.T) {
+	f := newAssignFixture(t)
+	saveCoreDelivery(t, f.root, "ben", "submitted")
+	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) {
+		d, _ := s.Get("coreDelivery")
+		d.(*jsonx.Object).Set("at", "2026-01-01T00:00:00Z")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetEvent(worker.EventDone, "", "2026-02-01T00:00:00Z") }); err != nil {
+		t.Fatal(err)
+	}
+	name, ok, warns := f.env.FreeSlot(bg, worker.LoadRegistryTolerant(f.root), f.set)
+	if !ok || name != "ben" || len(warns) != 0 {
+		t.Errorf("FreeSlot = %q %v %v; want ben with no warning", name, ok, warns)
+	}
+}
+
+// The holder of the issue is resumed, never skipped for its own delivery.
+func TestAssignResumingHolderWithDeliveryIsNotSkipped(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	saveCoreDelivery(t, f.root, "ben", "submitted")
+	picked, _, unresolved := f.env.pickSlots(bg, f.root, worker.LoadRegistryTolerant(f.root), f.set, "12", 1)
+	if len(picked) != 1 || picked[0].Name() != "ben" || len(unresolved) != 0 {
+		t.Errorf("picked %v, unresolved %v; the holder must resume", picked, unresolved)
+	}
+}
+
+// A pre-chosen slot is held to the same filter as an idle one.
+func TestPickSkipsPreChosenSlotWithUnresolvedDelivery(t *testing.T) {
+	f := newAssignFixture(t)
+	saveCoreDelivery(t, f.root, "dana", "unknown")
+	reg := worker.LoadRegistryTolerant(f.root)
+	picked, _, unresolved := f.env.pickSlots(bg, f.root, reg, f.set, "13", 1, reg.Slot("dana"))
+	if len(picked) != 1 || picked[0].Name() == "dana" || len(unresolved) != 1 || !strings.Contains(unresolved[0], "dana (Core delivery unknown)") {
+		t.Errorf("picked %v, unresolved %v", picked, unresolved)
 	}
 }

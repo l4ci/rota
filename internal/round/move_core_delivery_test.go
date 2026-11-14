@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
@@ -77,11 +76,46 @@ func TestAssignFreshSessionIgnoresAnUnknownCoreDelivery(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.assign("12", "ben", nil)
-	if err != nil && strings.Contains(err.Error(), "unresolved delivery") {
+	res, err := f.assign("12", "ben", nil)
+	if err != nil {
 		t.Fatalf("an earlier delivery blocked a fresh session: %v", err)
 	}
-	if len(f.host.spawned) == 0 {
-		t.Fatal("assign did not start a fresh session")
+	if !res.Dispatched || len(f.host.spawned) == 0 {
+		t.Fatalf("assign did not start a fresh session: %+v", res)
+	}
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
+	if s.Task() != "12" || s.State() != "busy" || s.CoreDeliveryState() == "unknown" {
+		t.Errorf("slot after a fresh assign: task %q state %q delivery %q", s.Task(), s.State(), s.CoreDeliveryState())
+	}
+}
+
+// #3320: a transfer frees the sender; a delivery its worker demonstrably
+// consumed goes with the work, one with no evidence stays (the pane may still
+// hold the message).
+func TestTransferClearsAConsumedCoreDeliveryOnly(t *testing.T) {
+	for _, consumed := range []bool{true, false} {
+		f := newMoveFx(t)
+		if _, err := f.assign("12", "ben"); err != nil {
+			t.Fatal(err)
+		}
+		saveCoreDelivery(t, f.root, "ben", "submitted")
+		if err := rawSlot(f.root, "ben", func(s *jsonx.Object) {
+			d, _ := s.Get("coreDelivery")
+			d.(*jsonx.Object).Set("at", "2026-01-01T00:00:00Z")
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if consumed {
+			if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetEvent(worker.EventDone, "", "2026-02-01T00:00:00Z") }); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := f.transfer("12", HumanTarget, nil); err != nil {
+			t.Fatal(err)
+		}
+		got := worker.LoadRegistryTolerant(f.root).Slot("ben").CoreDeliveryState()
+		if consumed && got != "" || !consumed && got != "submitted" {
+			t.Errorf("consumed=%v: freed sender's delivery is %q", consumed, got)
+		}
 	}
 }

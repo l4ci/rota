@@ -57,30 +57,43 @@ func coreOutcome(err error) string {
 	}
 }
 
-// coreConsumed says the slot's worker demonstrably acted after the saved
-// delivery (#3320): a done event (worker done or a ROTA-DONE line) stamped
-// after it, or a commit on the slot's branch dated after it. No pane text is
-// read. A delivery without a stamp (saved by an older rota) has no evidence.
-func (e Env) coreConsumed(ctx context.Context, t *dispatchTarget, p *jsonx.Object) bool {
+// CoreConsumed says the slot's saved Core delivery was demonstrably acted on
+// (#3320); false when it has none. See coreConsumed for the evidence.
+func (e Env) CoreConsumed(ctx context.Context, root string, s *Slot) bool {
+	p := corePending(s)
+	return p != nil && e.coreConsumed(ctx, root, s, s.Worktree(), p)
+}
+
+// coreConsumed is the consumption evidence for a saved delivery: a done event
+// stamped after it (worker done), or a commit on the slot's remote-tracking
+// branch, past its base, dated after it. A ROTA-DONE line the poll records
+// clears the delivery itself (recordRow). No pane text is read here, and an
+// unpushed local commit proves nothing. A delivery without a stamp (saved by an
+// older rota) has no evidence and stays blocked.
+func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree string, p *jsonx.Object) bool {
 	at, err := stamp.Parse(jsonx.Str(p, "at"))
 	if err != nil {
 		return false
 	}
-	if ev := t.slot.Event(); ev != nil && ev.Kind == EventDone {
+	if ev := s.Event(); ev != nil && ev.Kind == EventDone {
 		if ts, err := stamp.Parse(ev.TS); err == nil && ts.After(at) {
 			return true
 		}
 	}
-	// Only commits the slot added past its base count: the inherited tip is not
-	// the worker's own work.
-	if b, base := t.slot.Branch(), t.slot.Base(); b != "" && base != "" {
-		if out, code := e.runGit(ctx, t.worktree, "log", "-1", "--format=%cI", "refs/heads/"+b, "--not", base); code == 0 {
-			if ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out)); err == nil && ct.After(at) {
-				return true
-			}
-		}
+	b, base := s.Branch(), s.Base()
+	if b == "" || base == "" || worktree == "" {
+		return false
 	}
-	return false
+	remote, err := e.Remote(root)
+	if err != nil || remote == "" {
+		return false
+	}
+	out, code := e.runGit(ctx, worktree, "log", "-1", "--format=%cI", "refs/remotes/"+remote+"/"+b, "--not", base)
+	if code != 0 {
+		return false
+	}
+	ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out))
+	return err == nil && ct.After(at)
 }
 
 // coreFresh is the saved delivery's end when its session is gone or consumed:
@@ -101,11 +114,16 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 	if p == nil {
 		return false, res, nil
 	}
+	// A task dispatch under another harness is a fresh session even when the
+	// task and brief repeat: the saved payload went to the old harness (#3320).
+	if fresh && o.Kind != "" && o.Kind != t.slot.Kind() {
+		return false, res, nil
+	}
 	if jsonx.Str(p, "request") != coreRequest(t, o) {
 		if fresh {
 			return false, res, nil
 		}
-		if e.coreConsumed(ctx, t, p) {
+		if e.coreConsumed(ctx, root, t.slot, t.worktree, p) {
 			if err := coreFresh(root, o.Slot); err != nil {
 				return true, res, err
 			}

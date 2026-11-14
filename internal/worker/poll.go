@@ -484,6 +484,12 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 		s.ClearSeen()
 	}
 	if r.State == StateDone && r.Evidence != relayEchoEvidence {
+		// A ROTA-DONE the poll reads past the busy edge, or past a pending
+		// relay, is the worker answering what it was sent: the saved Core
+		// delivery is spent (#3320). A static done re-read proves nothing new.
+		if !strings.EqualFold(prev, "done") || t.relayPending > 0 {
+			s.ClearCoreDelivery()
+		}
 		if t.relayPending > 0 {
 			// A reply past the pending relay's echo proves that even a send
 			// which timed out was accepted. Do not leave its unsent mark to

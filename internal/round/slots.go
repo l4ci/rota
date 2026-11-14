@@ -128,18 +128,33 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 	return "", false
 }
 
-// pickSlotsWhy chooses up to n roster slots for the issue held (a normalised ID):
+// pickSlots chooses up to n roster slots for the issue held (a normalised ID):
 // the pre-chosen slots first, then holders of the issue (resume, any roster
 // slot, a draining one included), then the round's active slots that are
 // idle or whose PR can be queued: only they take new work (Members). A slot
 // is never listed twice. A new-work slot whose account has no login
 // (Env.SlotLoginProblem) is not picked: skipped names each with its problem, for
 // the caller's warning.
-func (e Env) pickSlotsWhy(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped, unresolved []string) {
+func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped, unresolved []string) {
 	roster := set.Roster
 	active, _ := Members(reg, set)
+	// An unresolved Core delivery refuses the slot's next relay (#3321): a slot
+	// that would take new work, a pre-chosen one included, is skipped unless its
+	// worker demonstrably consumed it (#3320). A holder of this very issue is
+	// exempt: resuming re-sends its own brief, which coreRetry retries instead of
+	// refusing, and skipping it would hand its issue to a second slot.
+	deliveryOK := func(s *worker.Slot) bool {
+		if held != "" && s.HeldID() == held || !s.CoreDeliveryUnresolved() || e.Worker.CoreConsumed(ctx, root, s) {
+			return true
+		}
+		entry := fmt.Sprintf("%s (Core delivery %s)", s.Name(), s.CoreDeliveryState())
+		if !slices.Contains(unresolved, entry) {
+			unresolved = append(unresolved, entry)
+		}
+		return false
+	}
 	add := func(s *worker.Slot) {
-		if s != nil && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
+		if s != nil && deliveryOK(s) && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
 			out = append(out, s)
 		}
 	}
@@ -152,14 +167,6 @@ func (e Env) pickSlotsWhy(ctx context.Context, root string, reg worker.Registry,
 		}
 	}
 	usable := func(s *worker.Slot) bool {
-		// An unresolved Core delivery refuses the slot's next dispatch (#3321):
-		// pick another slot rather than claim, branch and brief into a refusal.
-		if s.CoreDeliveryUnresolved() {
-			if !slices.ContainsFunc(unresolved, func(u string) bool { return strings.HasPrefix(u, s.Name()+" (") }) {
-				unresolved = append(unresolved, fmt.Sprintf("%s (Core delivery %s)", s.Name(), s.CoreDeliveryState()))
-			}
-			return false
-		}
 		// With placement on, the slot's old account is not the one it will run
 		// under: the pick checks the new one.
 		if why := e.SlotLoginProblem(s); why != "" && !(e.placesAccounts(root) && !s.Holds(held)) {
@@ -186,22 +193,19 @@ func (e Env) pickSlotsWhy(ctx context.Context, root string, reg worker.Registry,
 	return out, skipped, unresolved
 }
 
-// pickSlots is pickSlotsWhy without the slots skipped for an unresolved
-// Core delivery.
-func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) ([]*worker.Slot, []string) {
-	out, skipped, _ := e.pickSlotsWhy(ctx, root, reg, set, held, n, pre...)
-	return out, skipped
-}
-
 // FreeSlot previews the slot a new assignment would select, without
 // parking or dispatching it. Advice uses the same active-slot, login and clean
 // worktree checks as assign rather than treating every done slot as free.
-func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (string, bool) {
-	slots, _, _ := e.pickSlotsWhy(ctx, "", reg, set, "", 1)
-	if len(slots) == 0 {
-		return "", false
+// warnings name the slots skipped for an unresolved Core delivery.
+func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (name string, ok bool, warnings []string) {
+	slots, _, unresolved := e.pickSlots(ctx, "", reg, set, "", 1)
+	if len(unresolved) > 0 {
+		warnings = []string{"skipped slots with an unresolved delivery: " + strings.Join(unresolved, "; ")}
 	}
-	return slots[0].Name(), true
+	if len(slots) == 0 {
+		return "", false, warnings
+	}
+	return slots[0].Name(), true, warnings
 }
 
 // checkActive refuses new work for a roster slot past the round's slot count:

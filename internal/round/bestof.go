@@ -107,7 +107,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 			}
 		}
 	}
-	slots, skipped, unresolved := e.pickSlotsWhy(ctx, root, reg, set, want, 2, pre...)
+	slots, skipped, unresolved := e.pickSlots(ctx, root, reg, set, want, 2, pre...)
 	if len(skipped) > 0 {
 		res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
 	}
