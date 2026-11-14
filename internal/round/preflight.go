@@ -2,13 +2,14 @@ package round
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/blockedby"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -22,13 +23,14 @@ type preflightIn struct {
 	// FlagKind and FlagModel are --kind and --model; FlagModel beats the
 	// item's model: label and the tier map.
 	FlagKind, FlagModel string
-	// SlotKind is the receiving slot's recorded harness kind.
-	SlotKind string
+	// Slot, SlotKind and SlotAccount are the receiving slot, its recorded
+	// harness kind and the account it ran under last.
+	Slot, SlotKind, SlotAccount string
 	// Fixed pins the kind and its source (a best-of:2 attempt whose pair
 	// settled its kinds together); it replaces the resolved kind.
 	Fixed *bestOfRun
-	// NoFallback keeps a quota refusal a refusal (transfer: the receiver's
-	// kind is not re-picked, and no label would record the move).
+	// NoFallback keeps the receiver's kind and account unless its account is
+	// cooling (transfer).
 	NoFallback bool
 	// Resuming is a slot that already holds the item: it has its account and
 	// its place in the scope, so neither is checked again.
@@ -44,7 +46,9 @@ type preflightOut struct {
 	Model            string // resolved: what the delivery refusals check
 	AppliedModel     string // Model, or "" when the launch command has no {model}
 	Warnings         []string
-	Fallback         *Fallback // set when Kind took over from a harness without headroom
+	// Placement is where the worker goes: nil when the project has no pool to
+	// balance (no round.harnesses and no round.accounts).
+	Placement *Placement
 }
 
 // preflight answers "can this item go to this slot" for assign and transfer:
@@ -63,36 +67,18 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	if out.Decision == DecisionGrilling {
 		return out, blocked(blockedby.HumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
 	}
-	// The first harness is the project default, ahead of the slot's kind:
-	// a slot that once ran a fallback must not carry it to the next issue.
-	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, set.DefaultKind(), in.SlotKind, in.Resuming)
-	if in.Fixed != nil {
-		kind, kindSource = in.Fixed.kind, in.Fixed.kindSource
+	kind, kindSource, placement, err := e.placeWorker(ctx, root, in, out)
+	if err != nil {
+		return out, err
 	}
 	hz, err := worker.LaunchHarness(kind)
 	if err != nil {
 		return out, err
 	}
 	kind = hz.Kind()
-	out.Kind, out.KindSource = kind, kindSource
-	// An unset codex tier map is allowed: the default codex command drops
-	// --model and Codex picks its own. A custom round.commands.codex holding
-	// {model} would fail at dispatch, after the claim, so it is refused here.
+	out.Kind, out.KindSource, out.Placement = kind, kindSource, placement
 	model := resolveModel(in.FlagModel, out.Pick.Model, set.Model(kind, in.Tier))
-	if model == "" && e.Worker.NeedsModel(root, kind) {
-		return out, blocked(blockedby.NoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, in.Tier, kind)
-	}
 	out.Model, out.AppliedModel = model, model
-	if !in.Resuming {
-		if why := e.Headroom(ctx, root, kind); why != "" {
-			fb, ferr := e.fallbackFor(ctx, root, be, in, out, kind, why)
-			if ferr != nil {
-				return out, ferr
-			}
-			out.Kind, out.KindSource, out.Model, out.AppliedModel, out.Fallback = fb.to, KindFromFallback, fb.model, fb.model, &Fallback{From: kind, To: fb.to, Why: why}
-			kind, hz = fb.to, fb.hz
-		}
-	}
 	if !e.Worker.ModelAppliesTo(root, kind) {
 		// A model asked for by name must reach the launch line; the tier map's
 		// is a default and only warns.
@@ -120,56 +106,110 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	return out, nil
 }
 
-// fallbackPick is the harness a refused assignment moves to.
-type fallbackPick struct {
-	to    string
-	model string
-	hz    harness.Launcher
-}
-
-// fallbackFor picks the next harness in round.harnesses with headroom for an
-// item whose resolved kind has none (why says so); no pick is the quota
-// refusal. An item that asked for its harness (--kind, a harness: label) or
-// its model (--model, a model: label; a model id belongs to one harness), a
-// best-of attempt and a backend that cannot record the pick never move.
-func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, in preflightIn, out preflightOut, kind, why string) (fallbackPick, error) {
+// placeWorker settles the worker's harness and account. An issue or call that
+// names a harness (--kind, a harness: label), a best-of pair's fixed kind, a
+// transfer's receiver and a slot resuming its issue pin the kind; the account
+// is still picked inside it. Otherwise every harness the round may use
+// competes by headroom (pickWorker), narrowed to the one whose round.tiers
+// names the model when the issue or call names one. A project with no
+// round.harnesses and no round.accounts has nothing to balance: the slot's
+// kind, else claude, and the orchestrator's own login.
+func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out preflightOut) (kind, source string, pl *Placement, err error) {
 	set := in.Settings
-	refuse := blocked(blockedby.Quota, "%s", why)
-	pinned := out.KindSource == KindFromFlag || out.KindSource == KindFromLabel || in.FlagModel != "" || out.Pick.Model != ""
-	if len(set.Harnesses) == 0 || in.NoFallback || pinned || in.Fixed != nil || !e.canRecordHarness(be) {
-		return fallbackPick{}, refuse
+	cfg := e.Worker.Config(root)
+	kind, source = resolveKind(in.FlagKind, out.Pick.Harness, "", in.SlotKind, in.Resuming)
+	pinned := source == KindFromFlag || source == KindFromLabel || source == KindFromSlotResume
+	if in.Fixed != nil {
+		kind, source, pinned = in.Fixed.kind, in.Fixed.kindSource, true
 	}
-	var tried []string
-	for _, k := range laterHarnesses(set.Harnesses, kind) {
-		hz, err := worker.LaunchHarness(k)
-		if err != nil {
+	if in.NoFallback && !pinned {
+		// A transfer keeps the receiver's recorded kind; the first
+		// round.harnesses entry stands in only for a receiver with none.
+		if in.SlotKind == "" && set.DefaultKind() != "" {
+			kind, source = set.DefaultKind(), KindFromHarnesses
+		}
+		pinned = true
+	}
+	if _, err := worker.LaunchHarness(kind); err != nil {
+		return kind, source, nil, err
+	}
+	// A resuming slot keeps its kind and account (dispatch refuses one at its
+	// limit), and solo runs every subagent on the orchestrator's own account.
+	if in.Resuming || worker.IsSolo(root) || !poolConfigured(cfg, set) {
+		return kind, source, nil, e.checkTierModel(root, kind, in, out)
+	}
+	kinds, restriction := []string{kind}, kind
+	if !pinned {
+		kinds, restriction = allowedKinds(cfg, set), "any harness"
+	}
+	// A model named by flag or label belongs to the harness whose round.tiers
+	// holds it, pinned kind or not.
+	if name := strutil.FirstNonEmpty(in.FlagModel, out.Pick.Model); name != "" {
+		if kinds = kindsOfModel(set, kinds, name); len(kinds) == 0 {
+			return kind, source, nil, blocked(blockedby.ModelLabel, "model %s is named by no round.tiers entry of %s", name, strings.Join(allowedOrPinned(pinned, kind, allowedKinds(cfg, set)), ", "))
+		}
+		restriction = "model " + name
+	}
+	// A kind with no model for the tier cannot take the worker.
+	var usable []string
+	var refused error
+	for _, k := range kinds {
+		if cerr := e.checkTierModel(root, k, in, out); cerr != nil {
+			refused = cerr
 			continue
 		}
-		k = hz.Kind()
-		if e.Headroom(ctx, root, k) != "" {
-			tried = append(tried, k)
-			continue
-		}
-		model := resolveModel("", "", set.Model(k, in.Tier))
-		if model == "" && e.Worker.NeedsModel(root, k) {
-			tried = append(tried, k)
-			continue
-		}
-		return fallbackPick{to: k, model: model, hz: hz}, nil
+		usable = append(usable, k)
 	}
-	if len(tried) > 0 {
-		return fallbackPick{}, blocked(blockedby.Quota, "%s; no fallback harness has headroom or a model (%s)", why, strings.Join(tried, ", "))
+	if len(usable) == 0 {
+		return kind, source, nil, refused
 	}
-	return fallbackPick{}, refuse
+	if pinned {
+		restriction = fmt.Sprintf("the %s harness", kind)
+	}
+	pi := workerPickIn{Kinds: usable, Set: set, Slot: in.Slot, SlotKind: in.SlotKind, SlotAccount: in.SlotAccount, Margin: set.AccountRebalanceMargin,
+		Keep: in.NoFallback || in.Resuming, Tier: in.Tier, FlagModel: in.FlagModel, LabelModel: out.Pick.Model, Restriction: restriction}
+	p, err := e.pickWorker(ctx, root, pi)
+	if err != nil {
+		return kind, source, nil, err
+	}
+	if !pinned {
+		source = KindFromUsage
+		if len(allowedKinds(cfg, set)) == 1 {
+			_, source = resolveKind("", "", p.Kind, in.SlotKind, false)
+		}
+	}
+	return p.Kind, source, &p, nil
 }
 
-// canRecordHarness says whether a fallback's pick can be written on the item:
-// the forge adds a label to an issue, the file backend writes its Harness:
-// field. Without either the pick would be lost on the next assign.
-func (e Env) canRecordHarness(be backlog.Backend) bool {
-	if be.Capabilities().IssueIDs {
-		return e.forgeOn(be)
+// checkTierModel refuses a kind whose worker would start with no model: an
+// unset codex tier map is allowed (the default codex command drops --model and
+// Codex picks its own), but a custom command holding {model} would fail at
+// dispatch, after the claim.
+func (e Env) checkTierModel(root, kind string, in preflightIn, out preflightOut) error {
+	if resolveModel(in.FlagModel, out.Pick.Model, in.Settings.Model(kind, in.Tier)) == "" && e.Worker.NeedsModel(root, kind) {
+		return blocked(blockedby.NoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, in.Tier, kind)
 	}
-	_, ok := backlog.Optional[backlog.HarnessSetter](be, func(c backlog.Capabilities) bool { return c.HarnessField })
-	return ok
+	return nil
+}
+
+// kindsOfModel narrows kinds to the ones whose round.tiers names the model;
+// rota has no other model-to-harness map. None naming it is empty.
+func kindsOfModel(set roundcfg.Settings, kinds []string, model string) []string {
+	var out []string
+	for _, k := range kinds {
+		for _, m := range set.Models[k] {
+			if m == model {
+				out = append(out, k)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func allowedOrPinned(pinned bool, kind string, allowed []string) []string {
+	if pinned {
+		return []string{kind}
+	}
+	return allowed
 }

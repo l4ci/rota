@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -21,7 +22,7 @@ import (
 // runs Claude subagents only (E3, #70), and a worker that cannot start (launch
 // flags, host, login) is refused here. dispatch runs the same preflight again.
 // A refusal carrying block data comes back as a BlockedError.
-func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string) (warnings []string, err error) {
+func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string, placed *Placement) (warnings []string, err error) {
 	lp, err := e.Worker.PlanLaunch(root, kind, model)
 	if err != nil {
 		return nil, err
@@ -29,7 +30,12 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if why := lp.H.SoloRefusal(); why != "" && worker.IsSolo(root) {
 		return nil, usage("%s", why)
 	}
-	setup, err := e.Worker.Preflight(ctx, root, slot, lp)
+	// The account the worker will run under, not the one it ran under last.
+	var as *string
+	if placed != nil && e.placesAccounts(root) && !harness.ResolveAccounts(kind).WorkAccounts() {
+		as = &placed.Account
+	}
+	setup, err := e.Worker.PreflightAs(ctx, root, slot, lp, as)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
@@ -46,7 +52,9 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 type delivery struct {
 	Slot, Task  string
 	Kind, Model string
-	Round       int
+	// Placement is the account pickWorker chose; nil leaves the slot's own.
+	Placement *Placement
+	Round     int
 	// Branch is read when the dispatch runs: a transfer settles it in an
 	// earlier step.
 	Branch func() string
@@ -88,14 +96,13 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	solo := worker.IsSolo(root)
 	var text string
 	steps := []step{
-		// The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own while
-		// it has headroom, else pick; none usable is a refusal to start.
-		// round.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
-		// Under solo every subagent runs on the orchestrator's own account.
+		// The account pickWorker chose: a Claude slot's is the pane's
+		// CLAUDE_CONFIG_DIR, a codex slot's its CODEX_HOME. Under solo every
+		// subagent runs on the orchestrator's own account.
 		{name: "account", skip: func() bool {
-			return solo || !hz.WorkAccounts() || !e.AccountPicking || len(e.Worker.Accounts().Configured(root)) == 0
+			return solo || d.Placement == nil || !e.AccountPicking
 		}, do: func() error {
-			name, err := e.pickAccount(ctx, root, d.Slot)
+			name, err := e.applyPlacement(ctx, root, d.Slot, hz, *d.Placement)
 			d.Account = name
 			return d.wrap(err)
 		}},
@@ -150,4 +157,28 @@ func (d *delivery) cleanup() {
 	if d.removeBrief != nil {
 		d.removeBrief()
 	}
+}
+
+// applyPlacement puts the slot on the account pickWorker chose, for the next
+// dispatch only: a running session keeps the one it started with.
+func (e Env) applyPlacement(ctx context.Context, root, slot string, hz harness.Accounts, p Placement) (string, error) {
+	if p.Account == "" {
+		// The orchestrator's own login: drop the account the slot recorded, or
+		// dispatch would still launch under it.
+		return "", editSlot(root, slot, func(s *worker.Slot) error {
+			if hz.WorkAccounts() {
+				s.SetAccount("", "")
+			} else {
+				s.SetHomeAccount("")
+			}
+			return nil
+		})
+	}
+	if hz.WorkAccounts() {
+		if _, _, err := e.Worker.Accounts().Assign(ctx, root, slot, p.Account); err != nil {
+			return "", err
+		}
+		return p.Account, nil
+	}
+	return p.Account, editSlot(root, slot, func(s *worker.Slot) error { s.SetHomeAccount(p.Account); return nil })
 }

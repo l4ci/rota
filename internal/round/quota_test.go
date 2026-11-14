@@ -123,13 +123,13 @@ func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 	}
 }
 
-// In a mixed config the cap stays open (Codex has logins), so a Claude assign
-// meets the cooling pool as a quota refusal: the tick reports that one.
+// Codex has logins but round.harnesses leaves it out: only the harnesses a
+// round may use count, so the cap closes and a Claude assign is a quota refusal.
 func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"claude","name":"a","dir":"/nowhere"},{"kind":"codex","name":"c1","dir":"/h1"}],"harnesses":["claude"]}}`)
 	f.meters(t, map[string]bool{"a": true})
-	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
+	if c := f.env.QuotaCap(bg, f.root, f.set); !c.Reduced() {
 		t.Fatalf("cap %+v", c)
 	}
 	_, err := f.assign("12", "ben", nil)

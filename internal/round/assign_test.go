@@ -753,6 +753,8 @@ type codexRig struct {
 	loggedIn bool
 	noCodex  bool
 	noFlag   string // a launch flag `codex --help` leaves out
+	// badHomes are CODEX_HOME values whose `codex login status` fails, whatever loggedIn says.
+	badHomes []string
 }
 
 // codexHelp is the `codex --help` the rig prints: every default launch flag.
@@ -784,6 +786,11 @@ func (c *codexRig) install(f *assignFixture) {
 			case "codex --help":
 				return host.Result{Stdout: strings.ReplaceAll(codexHelp, c.noFlag+"\n", "\n")}, nil
 			case "codex login status":
+				for _, bad := range c.badHomes {
+					if slices.Contains(env, "CODEX_HOME="+bad) {
+						return host.Result{Stderr: "Not logged in", ExitCode: 1}, nil
+					}
+				}
 				if c.loggedIn {
 					return host.Result{}, nil
 				}
@@ -841,6 +848,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 func TestAssignProjectWorkerKind(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"round":{"dispatch":"herdr","harnesses":["codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
 	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromHarnesses || res.Model != "c-s" {
