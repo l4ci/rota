@@ -57,6 +57,9 @@ func candidateList(cs []round.Candidate) []any {
 		}
 		o.Set("ready", c.Ready())
 		o.Set("scopeSource", c.ScopeSource)
+		if len(c.BundleWith) > 0 {
+			o.Set("bundleWith", jsonx.Strings(c.BundleWith))
+		}
 		if c.OpenPR != 0 {
 			o.Set("openPr", c.OpenPR)
 		}
@@ -100,6 +103,9 @@ func candidateLines(cs []round.Candidate) []string {
 			}
 			if c.AutoHold != "" {
 				state += "; autopilot holds it: " + c.AutoHold
+			}
+			if len(c.BundleWith) > 0 {
+				state += "; bundle? with " + strings.Join(c.BundleWith, ", ")
 			}
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))

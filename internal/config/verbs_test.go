@@ -43,7 +43,7 @@ func TestShowAllKeysInSchemaOrder(t *testing.T) {
 		t.Fatalf("%d entries, %v", len(es), err)
 	}
 	for i, e := range es {
-		if e.Key != Keys[i].Name || e.Source != "default" {
+		if e.Key != Keys[i].Name || e.Source != "default" && !(e.Key == RoundAutoBundleKey && strings.HasPrefix(e.Source, "default (autonomy.level ")) {
 			t.Fatalf("entry %d = %+v", i, e)
 		}
 	}
@@ -132,7 +132,9 @@ func TestShowMatchesRuntime(t *testing.T) {
 			}
 			for _, row := range rows {
 				want, err := Value(cfg, row.Key)
-				if err != nil || !reflect.DeepEqual(row.Value, want) || row.Source != tc.source {
+				// round.autoBundle names the autonomy.level its default came from.
+				derived := row.Key == RoundAutoBundleKey && tc.source == "default" && strings.HasPrefix(row.Source, "default (autonomy.level ")
+				if err != nil || !reflect.DeepEqual(row.Value, want) || row.Source != tc.source && !derived {
 					t.Errorf("%s: show=%v (%s), runtime=%v; want source %s, err=%v", row.Key, row.Value, row.Source, want, tc.source, err)
 				}
 				one, err := Show(cfgdir.OSEnv(), root, row.Key, true)

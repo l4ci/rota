@@ -54,6 +54,16 @@ type Candidate struct {
 	// ScopeSource is where the item's scope came from: touches, subsystem,
 	// inferred or none. A none candidate wants a scout before it is assigned.
 	ScopeSource string
+	// Tag is the item's size label ("Minor", "Major"), "" when it has none.
+	Tag string
+	// Scopes are the item's scope entries from any source; Declared only the
+	// `## Touches` ones. DependsOn are the items its `## Depends on` names.
+	Scopes, Declared, DependsOn []string
+	// BestOf is true for a best-of:2 item, which never joins a bundle.
+	BestOf bool
+	// BundleWith lists the other ready, unheld, non-Major candidates whose scope
+	// overlaps this one's: the orchestrator may hand them to one worker.
+	BundleWith []string
 	Readiness
 }
 
@@ -188,8 +198,14 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
-		_, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		scopes, src := ItemScopeSource(be, it.ID)
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Tag: it.Tag, Scopes: scopes, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		if src == SourceTouches {
+			c.Declared = scopes
+		}
+		if body, _, err := be.Detail(it.ID); err == nil {
+			c.DependsOn, _ = dependencies(body, it.IssueKey().Project())
+		}
 		c.AutoHold = autoHold(be, it)
 		if st := stale[it.ID]; st.Holder != "" {
 			c.BlockedBy = StaleClaimKind
@@ -207,8 +223,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		} else if c.Decision = d; d == DecisionGrilling {
 			c.BlockedBy = blockedby.HumanDecision
 		}
-		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
+		if bestOf, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()
+		} else {
+			c.BestOf = bestOf
 		}
 		if warning := legacySupportWarning(o.Support, o.LegacySupportLabel, it); warning != "" {
 			c.Warnings = append(c.Warnings, warning)
@@ -236,6 +254,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		out = append(out, c)
 	}
+	markBundleHints(out)
 	return out, nil
 }
 

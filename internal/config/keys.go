@@ -68,6 +68,7 @@ const (
 	RoundTrainFillMinutesKey         = "round.trainFillMinutes"
 	RoundBatchKey                    = "round.batch"
 	RoundBundleMaxKey                = "round.bundleMax"
+	RoundAutoBundleKey               = "round.autoBundle"
 	RoundReviewLoopKey               = "round.reviewLoop"
 	RoundEnvSetupKey                 = "round.envSetup"
 	RoundSharedDirsKey               = "round.sharedDirs"
@@ -294,6 +295,7 @@ var Keys = []Key{
 	bounded(k(RoundTrainFillMinutesKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Minutes since the oldest PR became ready that makes a train due, including a lone PR. Uses current-head reviews, or worker done time when review is disabled; a missing done time lands immediately. 0 disables this threshold."), 0, MaxInt),
 	bounded(k(RoundBatchKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit."), 0, MaxInt),
 	bounded(k(RoundBundleMaxKey, ScopeProject, num("3"), false, TypeInt, "Rounds: Most member issues rota round assign --bundle may hand one slot beside the lead issue. It refuses a bundle past it. 0 means no limit."), 0, MaxInt),
+	k(RoundAutoBundleKey, ScopeProject, false, false, TypeBool, "Rounds: Whether the autopilot tick hands ready, related issues to one worker as a bundle. Only strict signals count: the items' declared Touches overlap, every one is size:Minor or size:Cosmetic, none depends on another or carries a decision:* or needs-human label, and the group stays within round.bundleMax. Unset, it follows autonomy.level: true under auto, false otherwise. An explicit value wins either way."),
 	k(RoundReviewLoopKey, ScopeTaste, "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
 	k("issues.labels.needsHuman", ScopeProject, labels.NeedsHuman, false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k(RoundEnvSetupKey, ScopeProject, "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),

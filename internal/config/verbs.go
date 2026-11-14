@@ -98,6 +98,9 @@ func Show(env cfgdir.Env, root string, key string, one bool) ([]Entry, error) {
 		src := "default"
 		if configured {
 			src = source(k.Name)
+		} else if k.Name == RoundAutoBundleKey {
+			// The default follows autonomy.level, so say which level it read.
+			src = "default (autonomy.level " + AutonomyLevel(merged) + ")"
 		}
 		gv, hasG := walk(l.global, k.Name)
 		return Entry{Key: k.Name, Value: v, Source: src, Schema: &k, Global: gv, HasGlobal: hasG}

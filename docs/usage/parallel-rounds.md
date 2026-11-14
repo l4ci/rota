@@ -765,7 +765,9 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
    threshold is reached, or a slot is idle with nothing assignable, mint the review items
    (`round.architectureEvery` 0 never mints), one audit line per mint;
 5. assign the first ready candidate of the round's scope to each idle slot, at most
-   `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
+   `round.autopilotCap`, at the default tier and never with `--accept-overlap` (with
+   `round.autoBundle` on, strictly related small issues go to one slot as a bundle, see
+   [Bundles](#bundles-one-worker-several-small-issues)). Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
    down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
@@ -1294,6 +1296,19 @@ one unit. Each member is claimed and marked in progress for the slot, and the br
 issue's Acceptance, Out of scope and Touches. `round.bundleMax` caps the members (default 3, `0`
 means no limit). A `best-of:2` issue cannot be bundled, and a member another slot holds is refused.
 rota does not judge whether the issues are related: that is your call.
+
+`rota round candidates` helps you look: ready, non-Major candidates that share a `## Touches`
+entry, a subsystem or an inferred scope carry `bundleWith` in `--json` and a `bundle? with ...`
+note in the text output. It is a hint, and the orchestrator skill proposes each group with its
+lead and member order.
+
+Under `autonomy.level: auto` the autopilot tick bundles on its own, but only on strict signals
+and behind `round.autoBundle` (unset, it is on under `auto` and off otherwise; an explicit value
+wins, and `rota config show round.autoBundle` names where the effective value came from). The
+items must declare overlapping `## Touches` (inferred scope never counts), all be size:Minor or
+size:Cosmetic, depend on none of the others, carry no `decision:*` or `needs-human` label, and
+number at most `round.bundleMax` including the lead. The lowest issue number leads, and the tick
+output names the bundle and the shared paths. Size:Major items are never auto-bundled.
 
 The worker opens one PR with a `Closes #N` line for every issue and records proof per issue;
 `rota worker done` refuses while any issue lacks its PASS row. `rota review depth` lists the
