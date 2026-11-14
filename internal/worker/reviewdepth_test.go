@@ -311,3 +311,114 @@ func TestReviewDepthLensesBundle(t *testing.T) {
 		t.Fatalf("lenses = %v (%v), want %v", got.Lenses, err, want)
 	}
 }
+
+type fakePools struct{ p CrossPools }
+
+func (f fakePools) read(context.Context) (CrossPools, error) { return f.p, nil }
+
+func crossSources(t *testing.T, cfg roundcfg.CrossReview, labels []string, author string, pools func(context.Context) (CrossPools, error)) ReviewSources {
+	t.Helper()
+	pol, err := config.ParseReviewPolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ReviewSources{Policy: pol, Git: git.Exec, Dir: depthRepo(t), Span: "main...feat", Cross: cfg, Author: author, Pools: pools,
+		Issue: tracker.NumKey(5), Issues: fakeIssueGet{is: tracker.Issue{Labels: labels}}}
+}
+
+// review.accounts (#3315): the reviewer is the review account with the most
+// headroom of another harness, the depth output names it, and a review:<h>
+// label still picks the harness while review:none still skips.
+func TestReviewDepthCrossReviewAccounts(t *testing.T) {
+	cfg := roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"},
+		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}, {Kind: "codex", Name: "r2", Dir: "/r2"}},
+		Main:   []config.Account{{Kind: "claude", Name: "w", Dir: "/w"}, {Kind: "codex", Name: "wc", Dir: "/wc"}}}
+	pools := fakePools{CrossPools{
+		Review: []PoolEntry{pe("codex", "r1", 30, VerdictFree), pe("codex", "r2", 70, VerdictFree)},
+		Main:   []PoolEntry{pe("claude", "w", 90, VerdictFree), pe("codex", "wc", 50, VerdictFree)},
+	}}.read
+	major := []string{"size:Major"}
+
+	got, err := ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", pools))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Cross != harness.Codex || got.CrossAccount == nil || got.CrossAccount.Name != "r2" || got.CrossAccount.Dir != "/r2" || got.CrossAccount.Fallback {
+		t.Fatalf("review account: cross %q account %+v (%s), want codex r2 /r2", got.Cross, got.CrossAccount, got.CrossWhy)
+	}
+	if !strings.Contains(got.CrossWhy, "review.accounts") {
+		t.Errorf("why %q does not name review.accounts", got.CrossWhy)
+	}
+
+	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, cfg, []string{"size:Major", "review:claude"}, "claude", pools))
+	if got.Cross != harness.Claude || got.CrossAccount == nil || got.CrossAccount.Name != "w" || !got.CrossAccount.Fallback {
+		t.Errorf("label review:claude: cross %q account %+v, want the claude round account as a fallback (no claude review account)", got.Cross, got.CrossAccount)
+	}
+	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, cfg, []string{"size:Major", "review:none"}, "claude", pools))
+	if got.Cross != CrossNone || got.CrossAccount != nil {
+		t.Errorf("review:none: cross %q account %+v, want none", got.Cross, got.CrossAccount)
+	}
+}
+
+func TestReviewDepthCrossFallsBackAndReportsUnavailable(t *testing.T) {
+	cfg := roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"},
+		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}}}
+	major := []string{"size:Major"}
+	cooling := PoolEntry{Kind: "codex", Name: "r1", Meter: Meter{Name: "r1", ConfigDir: "/r1", Verdict: VerdictCooling}}
+
+	pools := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("codex", "wc", 40, VerdictFree), pe("claude", "w", 99, VerdictFree)}}}.read
+	got, _ := ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", pools))
+	if got.Cross != harness.Codex || got.CrossAccount == nil || got.CrossAccount.Name != "wc" || !got.CrossAccount.Fallback {
+		t.Fatalf("fallback: cross %q account %+v, want codex wc as a fallback", got.Cross, got.CrossAccount)
+	}
+	if !strings.Contains(got.CrossWhy, "fell back") || !strings.Contains(got.CrossWhy, "r1") || !strings.Contains(got.CrossWhy, "cooling") {
+		t.Errorf("why %q must say it fell back from r1 and why", got.CrossWhy)
+	}
+
+	none := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("claude", "w", 99, VerdictFree)}}}.read
+	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", none))
+	if got.Cross != CrossNone || !strings.Contains(got.CrossWhy, "unavailable") {
+		t.Errorf("unavailable: cross %q (%s), want none with an unavailable reason, never the author's harness", got.Cross, got.CrossWhy)
+	}
+}
+
+// Without metered pools (the gate) the harness comes from configuration and
+// any non-author review harness satisfies the requirement.
+func TestReviewDepthCrossStaticViewAcceptsEveryEligibleHarness(t *testing.T) {
+	cfg := roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"},
+		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}}}
+	got, err := ResolveReviewDepth(context.Background(), crossSources(t, cfg, []string{"size:Major"}, "claude", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Cross != harness.Codex || !slices.Equal(got.CrossAccepts, []string{harness.Codex}) {
+		t.Errorf("static: cross %q accepts %v, want codex only", got.Cross, got.CrossAccepts)
+	}
+	// review.accounts alone, with no round.harnesses, still asks for a review.
+	only := roundcfg.CrossReview{Labels: cfg.Labels, Review: cfg.Review}
+	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, only, []string{"size:Major"}, "claude", nil))
+	if got.Cross != harness.Codex {
+		t.Errorf("review.accounts without round.harnesses: cross %q, want codex", got.Cross)
+	}
+}
+
+func TestCrossSatisfiedBy(t *testing.T) {
+	d := ReviewDepth{Cross: "codex"}
+	if !d.CrossSatisfiedBy("codex") || d.CrossSatisfiedBy("claude") {
+		t.Error("a label-fixed harness must match exactly")
+	}
+	d.CrossAccepts = []string{"codex", "claude"}
+	if !d.CrossSatisfiedBy("claude") || d.CrossSatisfiedBy("opencode") {
+		t.Error("an account-picked harness accepts every eligible one, no other")
+	}
+}
+
+func TestStaticCrossPoolsLeaveOutReviewOnlyHarnessesFromTheFallback(t *testing.T) {
+	c := roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"},
+		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}},
+		Main:   []config.Account{{Kind: "claude", Name: "w", Dir: "/w"}}}
+	p := StaticCrossPools(c)
+	if len(p.Review) != 1 || p.Review[0].Name != "r1" || len(p.Main) != 1 || p.Main[0].Name != "w" {
+		t.Fatalf("pools %+v, want review r1 and main w only", p)
+	}
+}

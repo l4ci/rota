@@ -978,6 +978,11 @@ recorded with `rota proof record <ID> -- rota test run fast`. A later commit mak
 the worker records again. With `test.fast` unset it warns and skips that check. The worker brief then tells the worker to run `rota test run full` and have it green first, and `rota round start` warns once that the proof rows will be missing (reviewers treat that as minor at most). On success the slot is
 marked `done`.
 
+If a recorded PR has already merged or closed, `worker done` accepts a missing or
+stale remote branch ref after confirming that state with the forge. It warns that
+the push check was skipped; the worktree must still be clean and the other checks
+still apply. Open PRs and unavailable forge reads keep the push requirement.
+
 Before recording done, the verb also warns for each missing `## Approvals`,
 `## Rulings` or `## Assumptions` heading in the slot branch's open PR. If the slot
 has no PR URL recorded yet, done looks up the open PR by branch. Add the missing

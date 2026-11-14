@@ -115,6 +115,44 @@ func (f doneForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, f.err
 }
 
+type terminalDoneForge struct{ worker.Forge }
+
+func (terminalDoneForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{State: "MERGED"}, nil
+}
+
+func TestWorkerDoneMergedPRDeletedBranch(t *testing.T) {
+	dir := doneProject(t, "true")
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"forge":{"provider":"github"},"test":{"fast":["true"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(dir, "ben", func(s *worker.Slot) { s.SetPR("https://github.com/o/r/pull/7") }); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, dir, "push", "-q", "origin", "--delete", "feat/x")
+	if ref := gittest.Run(t, dir, "for-each-ref", "refs/remotes/origin/feat/x"); ref != "" {
+		t.Fatalf("remote tracking ref still exists: %s", ref)
+	}
+	deps := testDeps()
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {
+			return terminalDoneForge{}, nil
+		}}
+	}
+	if code, out, stderr := rotaInWith(t, deps, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+		t.Fatalf("record: %d %s %s", code, out, stderr)
+	}
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--json")
+	if code != 0 || data(t, out)["changed"] != true || slotState(t, dir) != "done" {
+		t.Fatalf("merged PR with deleted branch: %d %s %s", code, out, stderr)
+	}
+	for _, want := range []string{"push check skipped", "MERGED", "https://github.com/o/r/pull/7"} {
+		if !strings.Contains(out, want) || !strings.Contains(stderr, want) {
+			t.Errorf("JSON and stderr must explain %q: %s %s", want, out, stderr)
+		}
+	}
+}
+
 func TestWorkerDoneUnrecordedPRWarnings(t *testing.T) {
 	dir := doneProject(t, "")
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"forge":{"provider":"github"}}`), 0o644); err != nil {

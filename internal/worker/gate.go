@@ -1462,7 +1462,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 				return false
 			}
 			if NeedsCross(res, depth) {
-				if r, ok := verdict.CrossAt(list, sha); !ok || r.Harness != res.Cross {
+				if r, ok := verdict.CrossAt(list, sha); !ok || !res.CrossSatisfiedBy(r.Harness) {
 					return false
 				}
 			}
@@ -1505,7 +1505,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	// A depth of none reviews nothing, so it asks for no cross review either.
 	crossMissing := ""
 	if NeedsCross(res, depth) {
-		if r, ok := verdict.CrossAt(list, strings.TrimSpace(head)); !ok || r.Harness != res.Cross {
+		if r, ok := verdict.CrossAt(list, strings.TrimSpace(head)); !ok || !res.CrossSatisfiedBy(r.Harness) {
 			crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
 		}
 	}

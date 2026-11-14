@@ -119,18 +119,18 @@ func mergeLayers(l *layers) any {
 	if l.local != nil {
 		merged = Merge(merged, l.local)
 	}
-	return mergeAccounts(merged, l)
+	return mergeAccounts(mergeAccounts(merged, l, RoundAccountsKey), l, ReviewAccountsKey)
 }
 
-// mergeAccounts sets round.accounts of merged to the layers' lists merged by
+// mergeAccounts sets the account list key (round.accounts or review.accounts) of merged to the layers' lists merged by
 // kind: a layer that lists a kind replaces the lower layers' entries of that
 // kind and inherits the rest, so a project login for one harness does not hide
 // the global ones for another, and a later edit to the global list still
 // reaches the project. With fewer than two lists the plain merge stands.
-func mergeAccounts(merged any, l *layers) any {
+func mergeAccounts(merged any, l *layers, key string) any {
 	var lists [][]any
 	for _, layer := range []any{l.global, l.project, l.local} {
-		if v, ok := walk(layer, "round.accounts"); ok {
+		if v, ok := walk(layer, key); ok {
 			if list := asList(v); len(list) > 0 {
 				lists = append(lists, list)
 			}
@@ -141,7 +141,7 @@ func mergeAccounts(merged any, l *layers) any {
 		return merged
 	}
 	out := mergeByKind(lists)
-	return fillKey(cloneObject(obj), "", []string{"round", "accounts"}, out)
+	return fillKey(cloneObject(obj), "", strings.Split(key, "."), out)
 }
 
 // dropEmptyShadows removes an empty list from the project and local layers for

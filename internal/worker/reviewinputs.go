@@ -34,6 +34,9 @@ type ReviewInputOptions struct {
 	// BranchForge discovers an open PR before there is a gate target. A local
 	// forge or missing CLI means no PR; other errors follow the depth policy.
 	BranchForge func() (tracker.Forge, error)
+	// Pools reads the reviewer accounts with their meters (#3315). Nil is the
+	// gate's static view: no meters, any eligible harness satisfies the review.
+	Pools func(context.Context) (CrossPools, error)
 }
 
 // ReviewInputs holds the shared sources plus review-set metadata and the
@@ -91,7 +94,7 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 	in := &ReviewInputs{HasSpec: verdict.HasSpec(target.Issue)}
 	src := &in.Sources
 	*src = ReviewSources{Policy: policy, Git: o.Git, Dir: o.Dir, Span: o.Span,
-		Labels: slices.Clone(o.Labels), Cross: cross, Author: target.Kind, Lenses: lenses}
+		Labels: slices.Clone(o.Labels), Cross: cross, Author: target.Kind, Lenses: lenses, Pools: o.Pools}
 	src.Change, src.ChangeErr = o.Config.ChangePolicy()
 	author := harness.AuthorSources{Slot: target.Kind}
 	if author.Slot == "" {

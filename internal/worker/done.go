@@ -143,7 +143,19 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 			return fail(exitcode.ExitRefused, err.Error())
 		}
 		if err := settledBranch(env, dir, remote, sl.Branch(), res); err != nil {
-			return err
+			// A terminal PR can outlive its remote branch (or its last
+			// fetched ref). Keep dirty-tree and git errors as refusals; only
+			// a confirmed closed/merged PR waives the push check.
+			if !res.Unpushed {
+				return err
+			}
+			info, known := env.prInfoKnown(env.Ctx, req.Root, sl)
+			state := strings.ToUpper(info.State)
+			if !known || (state != "MERGED" && state != "CLOSED") {
+				return err
+			}
+			res.Unpushed = false
+			doneWarning(dp, res, fmt.Sprintf("PR %s is %s: push check skipped for %s", sl.PR(), state, sl.Branch()))
 		}
 	}
 	bundle := func() []string { return OpenBundle(sl.BundleIssues(), dp.Closed) }
