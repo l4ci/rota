@@ -220,7 +220,9 @@ func (f remoteForge) RemoveLabels(_ context.Context, key tracker.IssueKey, label
 	if it := f.items[strconv.Itoa(n)]; it != nil {
 		it.Labels = slices.DeleteFunc(it.Labels, func(l string) bool { return slices.Contains(labels, l) })
 	}
-	f.labels[n] = slices.DeleteFunc(f.labels[n], func(l string) bool { return slices.Contains(labels, l) })
+	if ls, ok := f.labels[n]; ok {
+		f.labels[n] = slices.DeleteFunc(ls, func(l string) bool { return slices.Contains(labels, l) })
+	}
 	return nil
 }
 

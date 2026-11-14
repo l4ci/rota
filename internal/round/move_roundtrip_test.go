@@ -163,3 +163,26 @@ func TestTransferOfAnUnheldIssueStillSaysNoSlotHolds(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// parkable is shared: assign onto a slot whose held PR merged also parks it
+// with salvage, instead of refusing for the dirty worktree.
+func TestAssignOntoASlotWhoseHeldPRMergedParksItEvenDirty(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.add("15", "Fifth issue", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/fifth.go")
+	f.be.items["15"].Number = 15
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	f.commit(t, "dana", "dana-work.txt")
+	worker.UpdateSlot(f.root, "dana", func(s *worker.Slot) { s.SetPR("https://github.com/o/r/pull/9"); _ = s.MarkState("done", "") })
+	f.forge.states = map[int]string{9: "merged"}
+	if err := os.WriteFile(filepath.Join(f.wt("dana"), "local.txt"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.assign("15", "dana"); err != nil {
+		t.Fatalf("a merged PR must not keep the slot busy: %v", err)
+	}
+	if got := f.slot("dana").Task(); got != "15" {
+		t.Errorf("dana holds %q", got)
+	}
+}
