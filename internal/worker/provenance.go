@@ -113,8 +113,9 @@ func CheckApprovalsOffer(body string, relayLog []any, offered bool) string {
 // section while relays exist, a cited relay round that was never sent, or the
 // maintainer cited for text the orchestrator relayed. A line opening with
 // `settled in brief` cites the brief's settled answers: they are not a logged
-// relay, so such a line is never inflation, but it cannot launder an
-// `orchestrator relay round N` cite either (#3330).
+// relay, so such a line is never inflation and may say it is not an
+// orchestrator relay (the brief header does), but it cannot launder a numbered
+// `orchestrator relay round N` cite (#3330).
 func CheckApprovals(body string, relayLog []any) string {
 	return checkApprovals(body, relayLog, false, false)
 }
@@ -159,7 +160,7 @@ func checkApprovals(body string, relayLog []any, offerRequired, offered bool) st
 				if !rounds[i] {
 					problems = append(problems, fmt.Sprintf("cites an orchestrator relay for round %s but none is logged: %s", n, strings.TrimSpace(line)))
 				}
-			} else if len(relays) == 0 {
+			} else if len(relays) == 0 && !reSettledCite.MatchString(low) {
 				problems = append(problems, fmt.Sprintf("cites an orchestrator relay but none is logged: %s", strings.TrimSpace(line)))
 			}
 		} else if strings.Contains(low, "maintainer") && !reSettledCite.MatchString(low) {
