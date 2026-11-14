@@ -128,6 +128,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 		}
 		pinned = true
 	}
+	if _, err := worker.LaunchHarness(kind); err != nil {
+		return kind, source, nil, err
+	}
 	if !poolConfigured(cfg, set) {
 		return kind, source, nil, e.checkTierModel(root, kind, in, out)
 	}
