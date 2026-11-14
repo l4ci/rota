@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -46,7 +47,9 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 type delivery struct {
 	Slot, Task  string
 	Kind, Model string
-	Round       int
+	// Placement is the account pickWorker chose; nil leaves the slot's own.
+	Placement *Placement
+	Round     int
 	// Branch is read when the dispatch runs: a transfer settles it in an
 	// earlier step.
 	Branch func() string
@@ -88,14 +91,13 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	solo := worker.IsSolo(root)
 	var text string
 	steps := []step{
-		// The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own while
-		// it has headroom, else pick; none usable is a refusal to start.
-		// round.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
-		// Under solo every subagent runs on the orchestrator's own account.
+		// The account pickWorker chose: a Claude slot's is the pane's
+		// CLAUDE_CONFIG_DIR, a codex slot's its CODEX_HOME. Under solo every
+		// subagent runs on the orchestrator's own account.
 		{name: "account", skip: func() bool {
-			return solo || !hz.WorkAccounts() || !e.AccountPicking || len(e.Worker.Accounts().Configured(root)) == 0
+			return solo || d.Placement == nil || !e.AccountPicking
 		}, do: func() error {
-			name, err := e.pickAccount(ctx, root, d.Slot)
+			name, err := e.applyPlacement(ctx, root, d.Slot, hz, *d.Placement)
 			d.Account = name
 			return d.wrap(err)
 		}},
@@ -150,4 +152,19 @@ func (d *delivery) cleanup() {
 	if d.removeBrief != nil {
 		d.removeBrief()
 	}
+}
+
+// applyPlacement puts the slot on the account pickWorker chose, for the next
+// dispatch only: a running session keeps the one it started with.
+func (e Env) applyPlacement(ctx context.Context, root, slot string, hz harness.Accounts, p Placement) (string, error) {
+	if p.Account == "" {
+		return "", nil // the orchestrator's own login
+	}
+	if hz.WorkAccounts() {
+		if _, _, err := e.Worker.Accounts().Assign(ctx, root, slot, p.Account); err != nil {
+			return "", err
+		}
+		return p.Account, nil
+	}
+	return p.Account, editSlot(root, slot, func(s *worker.Slot) error { s.SetHomeAccount(p.Account); return nil })
 }

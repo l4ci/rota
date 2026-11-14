@@ -41,6 +41,7 @@ const (
 	RoundRoleKey                     = "round.role"
 	RoundTierKey                     = "round.tier"
 	RoundHarnessesKey                = "round.harnesses"
+	RoundAccountRebalanceMarginKey   = "round.accountRebalanceMargin"
 	RoundProfileKey                  = "round.profile"
 	RoundTiersClaudeLightKey         = RoundTiersPrefix + "claude.light"
 	RoundTiersClaudeStandardKey      = RoundTiersPrefix + "claude.standard"
@@ -253,7 +254,8 @@ var Keys = []Key{
 	k(RoundSupportKey, ScopeProject, "", false, TypeString, "Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker."),
 	k(RoundRoleKey, ScopeMachine, "main", false, TypeEnum, "Rounds: This machine's role, set in .rota/config.local.json only. support builds machine:<name> issues and opens PRs but never merges or writes tracked .rota/ content.", "main", "support"),
 	k(RoundTierKey, ScopeTaste, "standard", false, TypeEnum, "Rounds: Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
-	k(RoundHarnessesKey, ScopeMachine, []any{}, false, TypeList, "Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. The first entry is the default kind; --kind and an issue's harness: label beat it. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: the slot's recorded kind, else claude."),
+	k(RoundHarnessesKey, ScopeMachine, []any{}, false, TypeList, "Rounds: The worker harnesses a round may use, and the order that breaks a tie between accounts with equal headroom, e.g. [claude, codex]. Not a default or a fallback order: round assign puts each issue on the account with the most headroom across every round.accounts entry of these harnesses (a harness with no entry adds the orchestrator's own login). --kind or a harness: label restricts the pick to one harness, --model or a model: label to the harness whose round.tiers names that model. Empty: every harness with a round.accounts entry, else claude (the slot's recorded kind decides when neither is set)."),
+	bounded(k(RoundAccountRebalanceMarginKey, ScopeProject, num("20"), false, TypeInt, "Rounds: How many headroom points (0-100, the tightest 5h/weekly window) another account must be ahead before round assign moves a slot off its current account, and the harness with it. Below the margin the slot keeps its account. An unknown reading never moves it. 0 never moves a usable account (a slot moves only when its account is cooling)."), 0, 100),
 	k(RoundProfileKey, ScopeMachine, "", false, TypeEnum, "Rounds: Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched.", "quality", "balanced", "budget", "inherit"),
 	k(RoundTiersClaudeLightKey, ScopeMachine, "haiku", false, TypeString, "Rounds: Model a light-tier Claude worker starts with."),
 	k(RoundTiersClaudeStandardKey, ScopeMachine, "sonnet", false, TypeString, "Rounds: Model a standard-tier Claude worker starts with. An explicit value beats round.profile."),

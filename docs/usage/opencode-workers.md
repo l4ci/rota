@@ -11,7 +11,7 @@ rota round assign 59 --kind opencode --check-only    # readiness, and the model 
 rota round assign 59 --kind opencode
 ```
 
-`--kind` is `claude`, `codex` or `opencode`. Without it, the issue's `harness:` label applies, then the first entry of `round.harnesses`, then the slot's recorded kind, else `claude`. `rota config set round.harnesses '["opencode"]'` makes it the project default. Unlike Codex workers, OpenCode workers run under tmux as well as herdr. Solo mode runs Claude subagents only.
+`--kind` is `claude`, `codex` or `opencode`. Without it, the issue's `harness:` label applies, then the account with the most headroom across the harnesses `round.harnesses` lists, else the slot's recorded kind, else `claude`. `rota config set round.harnesses '["opencode"]'` limits the round to it. Unlike Codex workers, OpenCode workers run under tmux as well as herdr. Solo mode runs Claude subagents only.
 
 ## What you need
 

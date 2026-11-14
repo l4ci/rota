@@ -27,7 +27,7 @@ const (
 // recorded assignment, first valid harness label, resumed slot, project default,
 // prior slot, then Default. Project is the first round.harnesses entry.
 // A resumed assignment supplies ResumeSlot; a new assignment supplies PriorSlot so
-// an earlier quota fallback cannot override the next issue's project default.
+// an earlier usage placement cannot override the next issue's project default.
 func ResolveAuthor(s AuthorSources) (kind, source string) {
 	for _, c := range []struct{ kind, source string }{
 		{s.Flag, AuthorFromFlag},

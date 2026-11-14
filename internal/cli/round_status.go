@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -90,12 +88,7 @@ func roundStatus(fs *flag.FlagSet) RunFunc {
 		}
 		if set, ok := c.deps().tolerantRoundSettings(root); ok {
 			// Status ran without accounts; the quota read gets its own accounted env.
-			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set) // one meter read serves the fallback and the cap
-			if st := qc.Fallback(set); st.Active {
-				fb, _ := fallbackData(st)
-				d.Set("fallback", fb)
-				lines = append(lines, fmt.Sprintf("fallback\t%s -> %s until %s", st.From, st.To, st.ResetsAt.UTC().Format(fallbackTime)))
-			}
+			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set)
 			if qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
@@ -340,25 +333,4 @@ func hostStateText(r round.Row) string {
 		return strutil.FirstNonEmpty(r.HostState, "done") + "/" + r.Outcome
 	}
 	return r.HostState
-}
-
-// quotaFallback reads the fallback state with the account meters.
-func quotaFallback(c *Ctx, ctx context.Context, root string, set roundcfg.Settings) round.FallbackState {
-	return accountedRoundEnv(c, ctx, root).Fallback(ctx, root, set)
-}
-
-// fallbackTime is how a fallback's reset prints in text.
-const fallbackTime = "2006-01-02 15:04 MST"
-
-// fallbackData is the `fallback` object of round status and candidates; ok is
-// false while no fallback is active.
-func fallbackData(st round.FallbackState) (*jsonx.Object, bool) {
-	if !st.Active {
-		return nil, false
-	}
-	o := jsonx.NewObject()
-	o.Set("from", st.From)
-	o.Set("to", st.To)
-	o.Set("resetsAt", limits.Time(st.ResetsAt))
-	return o, true
 }

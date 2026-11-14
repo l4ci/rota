@@ -479,21 +479,28 @@ The autopilot skips that refusal and continues to the next candidate.
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
   [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
   `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with
-  `Harness: codex Model: <id>`). Harness: `--kind`, then the label, then the first entry of `round.harnesses` (the project default), then the
-  slot's kind, else `claude` (a slot resuming its own issue keeps its kind ahead of the project default); `kindSource` in `round status` and `assign --check-only` names the winner. Model: `--model <id>`, then the label, then the tier map, else the harness default.
+  `Harness: codex Model: <id>`). Harness: `--kind`, then the label, then the usage pick below; a slot resuming its own issue keeps its kind and account. `kindSource` in `round status` and `assign --check-only` names the winner. Model: `--model <id>`, then the label, then the tier map, else the harness default.
   An unknown harness, two labels of one key, or a model id with anything beyond letters, digits and
   `. _ : / @ -` refuses with exit 4 (`blockedBy` `harness label` or `model label`). A model named by
   flag or label needs a `{model}` placeholder in the harness's command. `round candidates` and
   `round status` show the choice.
-  **Quota fallback.** List the harnesses a round may use in `round.harnesses` (`[claude, codex]`);
-  the first is the project default. When every account of an
-  issue's harness is cooling down and a later entry has headroom, `assign` and the tick give the
-  issue to that harness (`kindSource` `quota fallback`), label it `harness:<kind>` (file backend:
-  the `Harness:` field) and record `fallbackFrom` in the ledger. The label makes the pick explicit
-  for a later re-assign. An issue pinned by `--kind`, a `harness:` label, `--model` or a `model:`
-  label never falls back and is refused with `blockedBy: quota`. `round status` and
-  `round candidates` show `fallback` while it is active, with the first harness's reset time.
-  Unset: only the default harness.
+  **Balancing by usage.** Every `round.accounts` entry is in the worker pool, whatever its harness.
+  List the harnesses a round may use in `round.harnesses` (`[claude, codex]`; it also breaks ties) and,
+  for an issue with no `harness:` or `model:` label and no `--kind` or `--model`, `assign` and the tick
+  pick the account with the most headroom across them and run that account's harness (`kindSource`
+  `usage`). Headroom is 100 minus the highest used percent over every window the meter reports (Claude
+  5h and 7d, Codex every window of its quota report), so the numbers compare across providers. An
+  account whose reading is unavailable is unknown: it never beats a known one. A slot stays on the
+  account it ran under last unless the best account is `round.accountRebalanceMargin` points (default
+  20) ahead or its own account is cooling; `0` never moves it. Among accounts within the margin of the
+  best, a fresh slot takes the one holding the fewest slots, then the `round.harnesses` order, so one
+  tick does not send every slot to one account. `--kind` or a `harness:` label leaves that harness's
+  accounts; `--model` or a `model:` label the harness whose `round.tiers` names the model. With no
+  usable account `assign` is refused with `blockedBy: quota`, naming the restriction. The output and
+  `--json` `placement` name the account, its harness and headroom, and whether the slot kept or moved.
+  A usage pick writes no label, so the next assign balances again. The change reaches the next
+  dispatch only, never a running session. With `round.harnesses` unset and no `round.accounts`
+  entries there is nothing to balance.
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)

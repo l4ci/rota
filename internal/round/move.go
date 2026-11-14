@@ -620,6 +620,7 @@ type Transferred struct {
 // issue, the receiver and its resolved worker. The steps fill branch, parked and
 // oldClaim as they run.
 type transferRun struct {
+	placement         *Placement
 	it                *backlog.Item
 	id, from          string
 	toHuman, resuming bool
@@ -917,12 +918,12 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if !toHuman {
 		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: run.tier,
 			FlagKind: o.Kind, FlagModel: o.Model,
-			SlotKind: run.to.Kind(), Resuming: resuming, NoFallback: true})
+			Slot: o.To, SlotKind: run.to.Kind(), SlotAccount: run.to.AccountFor(""), Resuming: resuming, NoFallback: true})
 		res.Warnings = append(res.Warnings, pf.Warnings...)
 		if err != nil {
 			return nil, err
 		}
-		run.kind, run.kindSource, model, run.model = pf.Kind, pf.KindSource, pf.Model, pf.AppliedModel
+		run.kind, run.kindSource, model, run.model, run.placement = pf.Kind, pf.KindSource, pf.Model, pf.AppliedModel, pf.Placement
 	}
 
 	// Checks before anything moves: the brief, the receiver's launch, the
@@ -1138,7 +1139,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	if attempt == "" {
 		attempt = worker.NewAttempt()
 	}
-	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
+	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Placement: run.placement, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
 			transferRemote, _ := e.remote(root) // refused in Transfer before this runs

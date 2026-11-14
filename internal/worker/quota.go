@@ -18,6 +18,91 @@ type Quotas struct {
 	Env     Env
 	Options harness.QuotaOptions
 	Read    func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot
+
+	mu    sync.Mutex
+	cache map[QuotaAccount]cachedMeter
+}
+
+// How long a scheduling reading of a display-only account is reused. Each
+// read spawns the harness's app-server, so a tick that places several slots,
+// and the ticks after it, share one reading per account. A failed read is
+// kept shorter: the next tick may find the account reachable again.
+const (
+	meterTTL       = 5 * time.Minute
+	meterFailedTTL = time.Minute
+)
+
+type cachedMeter struct {
+	m  Meter
+	at time.Time
+}
+
+// Meters reads the accounts of the given harness kinds as scheduling meters
+// (QuotaMeter), keyed by kind and account name; an ambient login (a kind with
+// no configured account) has the name "". A failed or timed-out read is an
+// unknown meter. Readings are cached per account, so one placement batch costs
+// one app-server read per account.
+func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[QuotaAccount]Meter {
+	e := q.Env.WithDefaults()
+	cfg := e.Config(root)
+	home, _ := e.Home()
+	now := e.Now()
+	if q.Options.Now != nil {
+		now = q.Options.Now()
+	}
+	var refs []QuotaAccount
+	for _, kind := range kinds {
+		if _, ok := harness.LookupQuotaReporter(kind); !ok {
+			continue
+		}
+		hz, ok := harness.LookupAccounts(kind)
+		if !ok {
+			continue
+		}
+		entries := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
+		for _, entry := range entries {
+			refs = append(refs, QuotaAccount{kind, entry.Name})
+		}
+		if len(entries) == 0 {
+			refs = append(refs, QuotaAccount{kind, ""})
+		}
+	}
+	out := map[QuotaAccount]Meter{}
+	var miss []QuotaAccount
+	q.mu.Lock()
+	for _, ref := range refs {
+		c, ok := q.cache[ref]
+		ttl := meterTTL
+		if c.m.Verdict == VerdictUnknown {
+			ttl = meterFailedTTL
+		}
+		if ok && now.Sub(c.at) < ttl {
+			out[ref] = c.m
+		} else {
+			miss = append(miss, ref)
+		}
+	}
+	q.mu.Unlock()
+	if len(miss) == 0 {
+		return out
+	}
+	rows := q.collect(ctx, e, cfg, home, miss)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cache == nil {
+		q.cache = map[QuotaAccount]cachedMeter{}
+	}
+	for _, row := range rows {
+		ref := QuotaAccount{row.Kind, row.Name}
+		if row.Ambient {
+			ref.Name = ""
+		}
+		m := QuotaMeter(row, now)
+		m.Name = ref.Name
+		out[ref] = m
+		q.cache[ref] = cachedMeter{m, now}
+	}
+	return out
 }
 
 // List reports each available reporting facet independently of worker defaults.

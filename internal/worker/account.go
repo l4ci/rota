@@ -148,6 +148,12 @@ func (a *Accounts) login() Credentials {
 	return c
 }
 
+// LoginProblem says why the config dir has no usable login ("" when it has
+// one), reading credentials as the account picker does.
+func (a *Accounts) LoginProblem(configDir string) string {
+	return a.login().Problem(a.expand(configDir))
+}
+
 type acct struct{ name, configDir string }
 
 // Configured returns round.accounts of the project config, each configDir
@@ -757,8 +763,8 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 }
 
 // accountLimited says why the round.accounts account behind configDir cannot
-// take a new session: its meter is cooling, the verdict the quota fallback
-// uses. "" when it can, when the harness has no config-dir accounts, when
+// take a new session: its meter is cooling, the verdict placement
+// (round assign) uses. "" when it can, when the harness has no config-dir accounts, when
 // configDir is no configured account or when no meter reader is set.
 func (e Env) accountLimited(ctx context.Context, root string, hz harness.Accounts, configDir string) string {
 	if e.Accounts == nil || !hz.WorkAccounts() || configDir == "" {

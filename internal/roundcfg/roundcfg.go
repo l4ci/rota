@@ -82,10 +82,14 @@ type Settings struct {
 	Profile string
 	Models  map[string]map[string]string
 	Tiered  map[string]bool
-	// Harnesses is round.harnesses: the kinds a round may use, in quota-fallback
-	// order; the first is the project's default worker harness. Empty means the
-	// slot's recorded kind, else claude, decides.
+	// Harnesses is round.harnesses: the kinds a round may use, and the order
+	// that breaks a tie between accounts of equal headroom. Empty means every
+	// kind with a round.accounts entry, else the slot's recorded kind, else
+	// claude.
 	Harnesses []string
+	// AccountRebalanceMargin is round.accountRebalanceMargin: the headroom
+	// points a better account must be ahead before a slot leaves its own.
+	AccountRebalanceMargin int
 	// FullOnly is true when test.fast is empty but test.full is set: workers
 	// have no fast tier to prove against, so their brief says to run test.full.
 	FullOnly bool
@@ -309,6 +313,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.Harnesses, err = loadHarnesses(cfg); err != nil {
 		return s, err
 	}
+	if s.AccountRebalanceMargin, err = config.Int(cfg, config.RoundAccountRebalanceMarginKey, 0, 100); err != nil {
+		return s, err
+	}
 	if err := loadTiers(cfg, &s); err != nil {
 		return s, err
 	}
@@ -398,8 +405,9 @@ func ParseCrossReview(cfg any) (CrossReview, error) {
 // label and a harness list to pick the reviewer from are both set.
 func (c CrossReview) Active() bool { return len(c.Labels) > 0 && len(c.Harnesses) > 0 }
 
-// DefaultKind is the harness an issue with no pick resolves to:
-// the first of round.harnesses, else ""; the slot's kind and claude decide.
+// DefaultKind is the first of round.harnesses, else "". It no longer decides
+// where an issue goes (round assign ranks accounts by headroom); only the
+// best-of pairing and the cross-review author fall back to it.
 func (s Settings) DefaultKind() string {
 	if len(s.Harnesses) > 0 {
 		return s.Harnesses[0]

@@ -108,29 +108,26 @@ func (e Env) Headroom(ctx context.Context, root, kind string) string {
 
 // QuotaCap reads the account headroom behind the roster. The cap drops to the
 // slots already holding an issue when no pool a worker could run under has
-// headroom. A pool counts when its kind is the worker kind (the first round.harnesses entry,
-// else the default) or listed in round.harnesses; a kind without a usage meter
-// counts too once it has configured accounts.
+// headroom. A pool counts when its kind is one the round may use
+// (allowedKinds: round.harnesses, else every kind with a round.accounts entry,
+// else claude).
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
 	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
 	active, _ := Members(reg, set)
 	c := Cap{Roster: len(active), Effective: len(active), why: map[string]string{}, resets: map[string]time.Time{}}
-	wk := set.DefaultKind()
-	if wk == "" {
-		wk = harness.Default
-	}
+	allowed := allowedKinds(e.Worker.Config(root), set)
 	var open bool
 	var resets []time.Time
 	var pools []string
 	for _, k := range harness.Kinds() {
 		h := harness.ResolveAccounts(k)
-		p, configured := e.poolOf(ctx, root, h)
+		p, _ := e.poolOf(ctx, root, h)
 		key := e.poolKey(root, h)
 		if p.closed {
 			c.why[k] = coolingWhy(key, earliest(p.resets))
 			c.resets[k] = earliest(p.resets)
 		}
-		if k != wk && !slices.Contains(set.Harnesses, k) && !(!h.UsageMeter() && configured) {
+		if !slices.Contains(allowed, k) {
 			continue
 		}
 		if !p.closed {
@@ -166,57 +163,4 @@ func earliest(ts []time.Time) time.Time {
 		}
 	}
 	return out
-}
-
-// Fallback is a worker handed from one harness to the next in
-// round.harnesses: From has no account with headroom, Why says so.
-type Fallback struct {
-	From, To, Why string
-}
-
-// FallbackState is whether new work goes to a later harness right now:
-// Active when the first harness in round.harnesses has no headroom and a later
-// one has, ResetsAt the earliest reset of the first harness's accounts.
-type FallbackState struct {
-	Active   bool
-	From, To string
-	ResetsAt time.Time
-}
-
-// Fallback reads the fallback state; zero when round.harnesses is unset.
-func (e Env) Fallback(ctx context.Context, root string, set roundcfg.Settings) FallbackState {
-	return e.QuotaCap(ctx, root, set).Fallback(set)
-}
-
-// DefaultKind is the harness an issue with no pick resolves to: the first
-// of round.harnesses, else ""; the slot's kind and claude decide.
-func DefaultKind(set roundcfg.Settings) string { return set.DefaultKind() }
-
-// laterHarnesses is the harnesses after kind in round.harnesses, or all of
-// them when kind is not listed.
-func laterHarnesses(harnesses []string, kind string) []string {
-	if i := slices.Index(harnesses, kind); i >= 0 {
-		return harnesses[i+1:]
-	}
-	return harnesses
-}
-
-// Fallback is the state of the default harness read off the cap: active when
-// its accounts are all cooling and a later harness in round.harnesses has
-// headroom. Zero when round.harnesses is unset.
-func (c Cap) Fallback(set roundcfg.Settings) FallbackState {
-	from := DefaultKind(set)
-	if len(set.Harnesses) == 0 || from == "" {
-		return FallbackState{}
-	}
-	from = kindOrDefault(from)
-	if c.why[from] == "" {
-		return FallbackState{}
-	}
-	for _, k := range laterHarnesses(set.Harnesses, from) {
-		if k = kindOrDefault(k); k != from && c.why[k] == "" {
-			return FallbackState{Active: true, From: from, To: k, ResetsAt: c.resets[from]}
-		}
-	}
-	return FallbackState{}
 }

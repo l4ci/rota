@@ -137,6 +137,10 @@ type Env struct {
 	// value; WithAccounts is the one way to turn it on, so a verb opts in by
 	// name and Worker.Accounts alone (the meter read) never picks.
 	AccountPicking bool
+	// Quotas reads the accounts of harnesses with no usage meter (codex) as
+	// scheduling meters for pickWorker, cached per account. Nil leaves their
+	// headroom unknown.
+	Quotas *worker.Quotas
 	// Board is the backlog's claim side; claim-mismatch drift needs it, and
 	// without it (file mode) that kind is skipped.
 	Board Board
