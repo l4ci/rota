@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"os"
 	"strings"
@@ -194,10 +196,44 @@ func acceptBody2(body string) string {
 	return strings.Replace(body, "AC-2: second, reworded", "AC-2: second", 1)
 }
 
+// writerFake is a tracker that reports who has write access (GitHub's CanPush).
+type writerFake struct {
+	*trackertest.Fake
+	writers map[string]bool
+}
+
+func (w writerFake) CanPush(_ context.Context, login string) (bool, error) {
+	return w.writers[login], nil
+}
+
+// A marker comment by someone without write access, or on a tracker that
+// cannot report access, never marks a criterion.
+func TestPlanPassDecisionNeedsAWriter(t *testing.T) {
+	for name, mk := range map[string]func(*trackertest.Fake) backlog.Tracker{
+		"non-writer":    func(f *trackertest.Fake) backlog.Tracker { return writerFake{f, map[string]bool{}} },
+		"cannot report": func(f *trackertest.Fake) backlog.Tracker { return f },
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := trackerProject(t, issuesConfig)
+			fake := acceptFixture()
+			deps := withTracker(t, mk(fake))
+			code, env, _ := issueRunWith(t, deps, root, "item", "comment", "add", "7", "--kind", "decision", "--body-file", bodyFile(t, "approved\n"))
+			cid, _ := ddata(t, env)["commentId"].(string)
+			if code != 0 || cid == "" {
+				t.Fatalf("comment add: %d %v", code, env)
+			}
+			code, env, _ = issueRunWith(t, deps, root, "plan", "pass", "#7", "AC-1", "--decision", cid)
+			if d := ddata(t, env); code != 4 || d["changed"] != false || d["blockedBy"] != "unmet acceptance" {
+				t.Fatalf("exit %d data %v, want a refusal", code, d)
+			}
+		})
+	}
+}
+
 func TestPlanPassDecision(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
 	fake := acceptFixture()
-	deps := withTracker(t, fake)
+	deps := withTracker(t, writerFake{fake, map[string]bool{"fake-user": true}})
 	add := func(kind string) string {
 		t.Helper()
 		code, env, stderr := issueRunWith(t, deps, root, "item", "comment", "add", "7", "--kind", kind, "--body-file", bodyFile(t, "approved\n"))

@@ -153,7 +153,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 			if err != nil {
 				return stepOutcome{Broke: fmt.Sprintf("could not read acceptance notes on %s: %v", key.Ref(), err)}
 			}
-			unmet, err := backlog.UnmetAcceptance(is.Body, is.Comments, proof.Lookup)
+			unmet, err := backlog.UnmetAcceptance(is.Body, is.Comments, proof.Lookup, backlog.TrustOf(ctx, in.Issues))
 			if err != nil {
 				return stepOutcome{Broke: fmt.Sprintf("could not read acceptance on %s: %v", key.Ref(), err)}
 			}

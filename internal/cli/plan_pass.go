@@ -34,7 +34,7 @@ func passItemRef(verb, key string) (string, error) {
 // `acceptance` note and rests on a PASS proof row; nothing else writes it.
 func planPass(fs *flag.FlagSet) RunFunc {
 	proofRef := fs.String("proof", "", "the proof row, <sha>:<check> (as `rota proof show` prints them)")
-	decisionRef := fs.String("decision", "", "instead of --proof: the id (or URL) of a decision-marker comment on the item that settles the criterion")
+	decisionRef := fs.String("decision", "", "instead of --proof (the two are exclusive): the id or URL of a decision-marker comment, by an author with write access, that settles the criterion")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 2 {
 			return Result{}, Usage("plan pass takes a plan key and an AC id")
@@ -96,8 +96,8 @@ func planPass(fs *flag.FlagSet) RunFunc {
 				return backlogFail(err)
 			}
 			if !slices.Contains(ids, check) {
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.Proof, "changed", false)},
-					Refused("cannot mark %s met: comment %s on %s is not a decision (it needs the rota decision marker; see `rota item comment list %s --kind decision`)", ac, check, id, id)
+				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
+					Refused("cannot mark %s met: comment %s on %s is not a decision by someone with write access (it needs the rota decision marker, and a tracker that reports the author's access; see `rota item comment list %s --kind decision`)", ac, check, id, id)
 			}
 			row = proof.Row{Sha: sha, Check: check}
 		} else {
@@ -184,8 +184,14 @@ func acceptanceCoverage(c *Ctx, be backlog.Backend, wf backlog.ItemTracker, ref 
 	}, decisions)), nil
 }
 
-// decisionIDs are the ids of the item's comments that carry the decision marker.
+// decisionIDs are the ids of the item's decision comments whose author has write
+// access; a backend without foreign authors (the file backend) takes the marker.
 func decisionIDs(be backlog.Backend, ref string) ([]string, error) {
+	if t, ok := be.(interface {
+		DecisionIDs(string) ([]string, error)
+	}); ok {
+		return t.DecisionIDs(ref)
+	}
 	rows, err := be.Comments(ref, "decision")
 	if err != nil {
 		return nil, err

@@ -100,7 +100,7 @@ Work only this task, then stop.
   remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
   PR with some criteria met and others not, or a pre-flight failed that you could not fix;
   name the unmet ones or the failed check on the third line. `partial` and `failed` need no
-  `test.fast` PASS row (`done` records that the proof was skipped). `failed`:
+  `test.fast` PASS row (the verb reports `proofSkipped`). `failed`:
   you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
   encode partial or failed only in prose or in the PR title. `partial` and `failed` need the
   file; the gate refuses the PR (`blockedBy: outcome-open`) until the orchestrator relays or

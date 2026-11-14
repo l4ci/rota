@@ -296,7 +296,7 @@ errors. Document stat or removal errors from `plan rm`, `design rm` and
 | `rota plan rename-check <old> [-- <pathspec>…]` | files that mention a name |
 | `rota plan uncertain <ID>` | uncertainty pre-flight for an item |
 | `rota plan check <key>` | issue mode: every acceptance criterion of the item has a task, every task serves a criterion and has a Verify step; exit 1 lists the gaps |
-| `rota plan pass <key> <AC-n> (--proof <sha>:<check> \| --decision <comment>)` | issue mode: mark one acceptance criterion met by a proof row (as `rota proof show` prints them), or by a decision-marker comment on the item (its id or URL; any other comment exits 4) |
+| `rota plan pass <key> <AC-n> (--proof <sha>:<check> \| --decision <comment>)` | issue mode: mark one acceptance criterion met by a proof row (as `rota proof show` prints them), or by a decision-marker comment on the item (its id or URL, authored by someone with write access; any other comment, or a tracker that cannot report access, exits 4; exclusive with `--proof`) |
 
 ## `rota design`
 

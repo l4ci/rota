@@ -19,7 +19,8 @@ import (
 
 // workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
-// HEAD for test.fast or whose completed outcome has unmet explicit acceptance
+// HEAD for test.fast (a partial or failed outcome skips that check and reports
+// proofSkipped) or whose completed outcome has unmet explicit acceptance
 // criteria on tracker items the PR closes, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
