@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -226,7 +227,15 @@ func runProofCommand(c *Ctx, ctx context.Context, root, dir, command, verb strin
 	wrapped, niced := worker.NiceCommand(command, c.deps().lookPath())
 	run.niced = niced
 	err := withTestLock(c, ctx, root, c.deps().workerEnv().GateConfig(root), verb, func() error {
-		run.out, run.code = workerEnvCtx(c, ctx).RunShell(ctx, dir, "export "+testLockHeldEnv+"=1; "+wrapped)
+		env := workerEnvCtx(c, ctx)
+		if env.Shell == nil { // a test's fake shell stays
+			environ, err := systemTmpEnviron(ctx, c, root, os.Environ())
+			if err != nil {
+				return err
+			}
+			env.Shell = worker.IsolatedShell(environ)
+		}
+		run.out, run.code = env.RunShell(ctx, dir, "export "+testLockHeldEnv+"=1; "+wrapped)
 		return nil
 	})
 	return run, err

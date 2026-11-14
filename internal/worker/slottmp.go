@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/l4ci/rota/internal/rotastate"
 )
@@ -39,4 +40,21 @@ func (e Env) slotTmpEnv(ctx context.Context, root, slot string) ([]string, error
 		return nil, err
 	}
 	return []string{"TMPDIR=" + dir}, nil
+}
+
+// SystemTmpEnviron is environ without a TMPDIR that points into a slot's temp
+// dir (<tempRoot>/slots/...). A test process there would put its t.TempDir()
+// fixtures inside the project's own git repo, where helpers that walk up find
+// the real .rota and .git (#3317); without TMPDIR it falls back to the system
+// temp dir, as the merge gate does. Any other TMPDIR is kept.
+func SystemTmpEnviron(environ []string, tempRoot string) []string {
+	slots := filepath.Join(tempRoot, SlotsTmpDir)
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		if v, ok := strings.CutPrefix(kv, "TMPDIR="); ok && (v == slots || strings.HasPrefix(v, slots+string(filepath.Separator))) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }

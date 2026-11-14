@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -71,6 +72,9 @@ func testRun(fs *flag.FlagSet) RunFunc {
 			if environ, err = worker.IsolatedEnviron(environ, tmp); err != nil {
 				return Result{}, err
 			}
+		}
+		if environ, err = systemTmpEnviron(ctx, c, root, environ); err != nil {
+			return Result{}, err
 		}
 		// The commands run inside the held test lock: mark it so a nested
 		// `rota test lock` or `bash test/gate.sh` does not queue behind us (#1844).
@@ -190,4 +194,14 @@ func changedFiles(c *Ctx, root, base string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// systemTmpEnviron drops a worker slot's TMPDIR from environ (#3317): see
+// worker.SystemTmpEnviron. Outside a rota project environ is unchanged.
+func systemTmpEnviron(ctx context.Context, c *Ctx, root string, environ []string) ([]string, error) {
+	tr, ok, err := rotastate.TempRootVia(ctx, c.deps().workerEnvFor(ctx).Git, root)
+	if err != nil || !ok {
+		return environ, err
+	}
+	return worker.SystemTmpEnviron(environ, tr), nil
 }

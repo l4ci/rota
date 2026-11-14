@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -153,5 +157,54 @@ func TestTestRunMarksTheLockHeldForItsCommands(t *testing.T) {
 		if o := trRun(t, root, "", "test", "run", "fast"); o.code != 0 {
 			t.Errorf("isolate=%v: a command did not see ROTA_TEST_LOCK_HELD=1: exit %d\n%s%s", isolate, o.code, o.stdout, o.stderr)
 		}
+	}
+}
+
+// slotTmpProject is a project whose TMPDIR is a slot's temp dir under its own
+// temp root, as in a dispatched worker session (#3164).
+func slotTmpProject(t *testing.T, cfg string) (root, slotTmp string) {
+	t.Helper()
+	root = tierProject(t, cfg)
+	return root, slotTmpIn(t, root)
+}
+
+// slotTmpIn makes root's slot temp dir and points TMPDIR at it.
+func slotTmpIn(t *testing.T, root string) (slotTmp string) {
+	t.Helper()
+	tr, ok, err := rotastate.TempRootVia(context.Background(), git.Exec, root)
+	if err != nil || !ok {
+		t.Fatalf("temp root: %v %v", ok, err)
+	}
+	slotTmp = worker.SlotTmpDir(tr, "x")
+	if err := os.MkdirAll(slotTmp, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", slotTmp)
+	return slotTmp
+}
+
+// A slot's TMPDIR sits inside the project's git repo, so a t.TempDir() fixture
+// there finds the real .rota and .git (#3317): the tier's commands get the
+// system temp dir instead.
+func TestTestRunHandsCommandsTheSystemTempDirInASlot(t *testing.T) {
+	root, slotTmp := slotTmpProject(t, `{"test":{"fast":["printf '%s' \"$TMPDIR\" > out.txt"]}}`)
+	if o := trRun(t, root, "", "test", "run", "fast"); o.code != 0 {
+		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "out.txt"))
+	if got := string(b); strings.HasPrefix(got, filepath.Dir(filepath.Dir(slotTmp))) {
+		t.Errorf("command TMPDIR = %q, still inside the project temp root", got)
+	}
+}
+
+func TestProofRecordHandsCommandsTheSystemTempDirInASlot(t *testing.T) {
+	root := backlogProject(t)
+	slotTmp := slotTmpIn(t, root)
+	if o := trRun(t, root, "", "proof", "record", "B07", "--", `printf '%s' "$TMPDIR" > out.txt`); o.code != 0 {
+		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "out.txt"))
+	if got := string(b); strings.HasPrefix(got, filepath.Dir(filepath.Dir(slotTmp))) {
+		t.Errorf("command TMPDIR = %q, still inside the project temp root", got)
 	}
 }
