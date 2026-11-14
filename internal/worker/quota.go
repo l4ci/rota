@@ -20,7 +20,7 @@ type Quotas struct {
 	Read    func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot
 
 	mu    sync.Mutex
-	cache map[QuotaAccount]cachedMeter
+	cache map[meterKey]cachedMeter
 }
 
 // How long a scheduling reading of a display-only account is reused. Each
@@ -31,6 +31,13 @@ const (
 	meterTTL       = 5 * time.Minute
 	meterFailedTTL = time.Minute
 )
+
+// meterKey names a cached reading by the login it read: kind, account name
+// and the resolved home, so an account whose dir changed is read again.
+type meterKey struct {
+	QuotaAccount
+	home string
+}
 
 type cachedMeter struct {
 	m  Meter
@@ -51,6 +58,7 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 		now = q.Options.Now()
 	}
 	var refs []QuotaAccount
+	homes := map[QuotaAccount]string{}
 	for _, kind := range kinds {
 		if _, ok := harness.LookupQuotaReporter(kind); !ok {
 			continue
@@ -61,17 +69,19 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 		}
 		entries := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
 		for _, entry := range entries {
-			refs = append(refs, QuotaAccount{kind, entry.Name})
+			ref := QuotaAccount{kind, entry.Name}
+			refs, homes[ref] = append(refs, ref), entry.Dir
 		}
 		if len(entries) == 0 {
-			refs = append(refs, QuotaAccount{kind, ""})
+			ref := QuotaAccount{kind, ""}
+			refs, homes[ref] = append(refs, ref), hz.AmbientAccount(e.Getenv).Home
 		}
 	}
 	out := map[QuotaAccount]Meter{}
 	var miss []QuotaAccount
 	q.mu.Lock()
 	for _, ref := range refs {
-		c, ok := q.cache[ref]
+		c, ok := q.cache[meterKey{ref, homes[ref]}]
 		ttl := meterTTL
 		if c.m.Verdict == VerdictUnknown {
 			ttl = meterFailedTTL
@@ -90,7 +100,7 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.cache == nil {
-		q.cache = map[QuotaAccount]cachedMeter{}
+		q.cache = map[meterKey]cachedMeter{}
 	}
 	for _, row := range rows {
 		ref := QuotaAccount{row.Kind, row.Name}
@@ -100,7 +110,7 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 		m := QuotaMeter(row, now)
 		m.Name = ref.Name
 		out[ref] = m
-		q.cache[ref] = cachedMeter{m, now}
+		q.cache[meterKey{ref, homes[ref]}] = cachedMeter{m, now}
 	}
 	return out
 }

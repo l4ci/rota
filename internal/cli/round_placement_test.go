@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/cfgdir"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -60,5 +61,16 @@ func TestTickPlacementLine(t *testing.T) {
 	got := placementLine("12", &round.Placement{Kind: "codex", Account: "c1", Headroom: &head, Gap: &gap, Margin: 20})
 	if want := "moved\t#12: c1 (codex, headroom 80%) moved, best is 60 points ahead (margin 20)"; got != want {
 		t.Errorf("line %q, want %q", got, want)
+	}
+}
+
+// One quota reader serves every env of the process, so the Codex readings it
+// caches outlive a single autopilot tick.
+func TestRoundEnvsShareTheQuotaCache(t *testing.T) {
+	_, deps := roundFixture(t, []host.Agent{})
+	a := newRoundEnv(deps, deps.workerEnv(), &worker.Accounts{})
+	b := newRoundEnv(deps, deps.workerEnv(), &worker.Accounts{})
+	if a.Quotas == nil || a.Quotas != b.Quotas || a.Quotas != deps.meterQuotas() {
+		t.Fatalf("quota readers differ: %p %p", a.Quotas, b.Quotas)
 	}
 }

@@ -545,11 +545,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if err := checkActive(reg, set, o.Agent, slot.Holds(id), false); err != nil {
 			return run, false, err
 		}
-		if why := e.SlotLoginProblem(slot); why != "" {
+		if why := e.SlotLoginProblem(slot); why != "" && !(e.placesAccounts(root) && !slot.Holds(id)) {
 			return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
 		}
 	} else {
-		picked, skipped := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
+		picked, skipped := e.pickSlots(ctx, root, reg, set, worker.NormID(id), 1)
 		if len(skipped) > 0 {
 			res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
 		}
@@ -747,7 +747,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	// A worker that cannot start is refused before anything is marked.
-	warns, err := e.deliveryRefusals(ctx, root, pf.Kind, agent, pf.Model)
+	warns, err := e.deliveryRefusals(ctx, root, pf.Kind, agent, pf.Model, pf.Placement)
 	if err != nil {
 		return run, false, err
 	}

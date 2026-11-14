@@ -129,6 +129,13 @@ func (e Env) PlanLaunch(root, kind, model string) (LaunchPlan, error) {
 // killed, shared by `worker dispatch` and `round assign`. A harness with
 // nothing to check passes. It checks the plan's launch line as given.
 func (e Env) Preflight(ctx context.Context, root, slot string, lp LaunchPlan) (harness.Setup, error) {
+	return e.PreflightAs(ctx, root, slot, lp, nil)
+}
+
+// PreflightAs is Preflight for a slot about to run under another home account
+// ("" is the default home) than the one it recorded: assign checks the account
+// it picked, not the previous one. Nil keeps the slot's own.
+func (e Env) PreflightAs(ctx context.Context, root, slot string, lp LaunchPlan, account *string) (harness.Setup, error) {
 	e = e.WithDefaults()
 	h := lp.H
 	wt, current := "", ""
@@ -138,6 +145,9 @@ func (e Env) Preflight(ctx context.Context, root, slot string, lp LaunchPlan) (h
 	}
 	if s := reg.Slot(slot); s != nil {
 		wt, current = s.Worktree(), s.HomeAccount()
+	}
+	if account != nil {
+		current = *account
 	}
 	var accts []harness.HomeAccount
 	load := map[string]int{}

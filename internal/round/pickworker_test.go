@@ -440,3 +440,46 @@ func TestFirstPlacementIsPlaced(t *testing.T) {
 		t.Fatalf("%v %v", err, pf.Placement)
 	}
 }
+
+// --kind claude with a model only codex's tiers name is refused before the claim.
+func TestPlacePinnedKindRefusesAModelOfAnotherHarness(t *testing.T) {
+	for name, mod := range map[string]func(*preflightIn){
+		"--kind and --model": func(in *preflightIn) { in.FlagKind, in.FlagModel = harness.Claude, "c-s" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newAssignFixture(t)
+			f.pool(t, poolCfg, map[string]float64{"a": 50, "c1": 50, "c2": 50})
+			if _, err := f.place(t, mod); blockedBy(t, err) != blockedby.ModelLabel {
+				t.Fatalf("err %v", err)
+			}
+		})
+	}
+	t.Run("harness and model labels", func(t *testing.T) {
+		f := newAssignFixture(t)
+		f.pool(t, poolCfg, map[string]float64{"a": 50, "c1": 50, "c2": 50})
+		f.labelled("12", "harness:claude", "model:c-s")
+		if _, err := f.place(t, nil); blockedBy(t, err) != blockedby.ModelLabel {
+			t.Fatalf("err %v", err)
+		}
+	})
+}
+
+// The login that counts is the account the slot is placed on: a logged-out
+// previous account does not block a healthy replacement.
+func TestAssignPlacesOffALoggedOutPreviousAccount(t *testing.T) {
+	f := newAssignFixture(t)
+	f.pool(t, poolCfg, map[string]float64{"a": 90, "c1": 1, "c2": 40})
+	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true, badHomes: []string{"/h1"}}).install(f)
+	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex"); s.SetHomeAccount("c1") })
+	f.labelled("12", "harness:codex")
+	res, err := f.assign("12", "ben", nil)
+	if err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	if res.Kind != harness.Codex || res.Account != "c2" {
+		t.Fatalf("%+v", res)
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.HomeAccount() != "c2" {
+		t.Errorf("slot account %q", s.HomeAccount())
+	}
+}

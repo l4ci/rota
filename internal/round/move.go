@@ -937,7 +937,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			res.Warnings = append(res.Warnings, briefWarn)
 		}
 		// The receiver is refused as assign would refuse it, before anything moves.
-		warns, err := e.deliveryRefusals(ctx, root, run.kind, o.To, model)
+		warns, err := e.deliveryRefusals(ctx, root, run.kind, o.To, model, run.placement)
 		if err != nil {
 			return nil, wrap(err)
 		}

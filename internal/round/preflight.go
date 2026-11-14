@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -140,12 +141,14 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	kinds, restriction := []string{kind}, kind
 	if !pinned {
 		kinds, restriction = allowedKinds(cfg, set), "any harness"
-		if name := strutil.FirstNonEmpty(in.FlagModel, out.Pick.Model); name != "" {
-			if kinds = kindsOfModel(set, kinds, name); len(kinds) == 0 {
-				return kind, source, nil, blocked(blockedby.ModelLabel, "model %s is named by no round.tiers entry of the harnesses this round may use", name)
-			}
-			restriction = "model " + name
+	}
+	// A model named by flag or label belongs to the harness whose round.tiers
+	// holds it, pinned kind or not.
+	if name := strutil.FirstNonEmpty(in.FlagModel, out.Pick.Model); name != "" {
+		if kinds = kindsOfModel(set, kinds, name); len(kinds) == 0 {
+			return kind, source, nil, blocked(blockedby.ModelLabel, "model %s is named by no round.tiers entry of %s", name, strings.Join(allowedOrPinned(pinned, kind, allowedKinds(cfg, set)), ", "))
 		}
+		restriction = "model " + name
 	}
 	// A kind with no model for the tier cannot take the worker.
 	var usable []string
@@ -202,4 +205,11 @@ func kindsOfModel(set roundcfg.Settings, kinds []string, model string) []string 
 		}
 	}
 	return out
+}
+
+func allowedOrPinned(pinned bool, kind string, allowed []string) []string {
+	if pinned {
+		return []string{kind}
+	}
+	return allowed
 }

@@ -145,8 +145,12 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 						pe.Meter = m
 					}
 				}
-				if acct.Name != "" && e.AccountPicking {
-					if why := e.Worker.Accounts().LoginProblem(acct.Dir); why != "" {
+				if e.AccountPicking {
+					dir := acct.Dir
+					if acct.Name == "" { // the orchestrator's own login
+						dir = hz.AmbientAccount(e.Worker.Getenv).ConfigDir
+					}
+					if why := e.Worker.Accounts().LoginProblem(dir); why != "" {
 						pe.Skip = "no login (" + why + ")"
 					}
 				}
@@ -244,4 +248,11 @@ func accountLabel(name string) string {
 		return "ambient login"
 	}
 	return name
+}
+
+// placesAccounts says whether assign puts a fresh slot on an account of its
+// own choosing (and checks that account's login), so the login of the account
+// the slot ran under last no longer decides whether it can take work.
+func (e Env) placesAccounts(root string) bool {
+	return root != "" && e.AccountPicking && !worker.IsSolo(root) && poolConfigured(e.Worker.Config(root), e.Round)
 }

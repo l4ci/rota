@@ -22,7 +22,7 @@ import (
 // runs Claude subagents only (E3, #70), and a worker that cannot start (launch
 // flags, host, login) is refused here. dispatch runs the same preflight again.
 // A refusal carrying block data comes back as a BlockedError.
-func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string) (warnings []string, err error) {
+func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model string, placed *Placement) (warnings []string, err error) {
 	lp, err := e.Worker.PlanLaunch(root, kind, model)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,12 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if why := lp.H.SoloRefusal(); why != "" && worker.IsSolo(root) {
 		return nil, usage("%s", why)
 	}
-	setup, err := e.Worker.Preflight(ctx, root, slot, lp)
+	// The account the worker will run under, not the one it ran under last.
+	var as *string
+	if placed != nil && e.placesAccounts(root) && !harness.ResolveAccounts(kind).WorkAccounts() {
+		as = &placed.Account
+	}
+	setup, err := e.Worker.PreflightAs(ctx, root, slot, lp, as)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {

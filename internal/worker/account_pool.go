@@ -93,6 +93,7 @@ func ChoosePool(entries []PoolEntry, current *PoolRef, margin int) (PoolChoice, 
 	}
 	c := PoolChoice{Entry: pick}
 	if current != nil {
+		c.Kept = pick.Kind == current.Kind && pick.Name == current.Name
 		for _, e := range usable {
 			if e.Kind == current.Kind && e.Name == current.Name && e.Meter.Headroom != nil && best != nil {
 				gap := *best - *e.Meter.Headroom
