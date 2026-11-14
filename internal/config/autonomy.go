@@ -344,3 +344,7 @@ func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, er
 	}
 	return res, raiseProjectStamp(configPath(root))
 }
+
+// AutoBundle is round.autoBundle: an explicit value wins, otherwise it is true
+// exactly when autonomy.level is auto.
+func AutoBundle(cfg any) (bool, error) { return Bool(cfg, RoundAutoBundleKey) }

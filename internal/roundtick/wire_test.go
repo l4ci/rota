@@ -66,6 +66,10 @@ func (w *fakeWorld) Assign(context.Context, string) (round.Assigned, error) {
 	w.assigns++
 	return round.Assigned{}, nil
 }
+func (w *fakeWorld) AssignBundle(context.Context, string, []string) (round.Assigned, error) {
+	w.assigns++
+	return round.Assigned{}, nil
+}
 func (w *fakeWorld) Review() Reviewer { return nil }
 func (w *fakeWorld) Audit(Action)     { w.audits++ }
 func (w *fakeWorld) Say(string)       {}

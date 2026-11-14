@@ -13,7 +13,7 @@ Under `autonomy.level` set to `auto` ([`../references/autonomy.md`](../reference
 
 - repairs safe drift;
 - gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass);
-- assigns ready candidates to idle slots at the default tier.
+- assigns ready candidates to idle slots at the default tier. With `round.autoBundle` on (unset: on under `auto`), strictly related small items go to one slot as a bundle: declared `## Touches` overlap, all Minor or Cosmetic, no dependency among them, no `decision:*` or `needs-human` label, at most `round.bundleMax` items, lowest issue number as lead. The tick output names the bundle and the shared paths. Anything looser stays your call.
 
 It returns only for unseen `autopilot.needsYou` items: a blocked, limited or dead slot, a failed gate, a done slot waiting for review verdicts (`awaiting-review`: run `/rota-review` on it), drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual.
 

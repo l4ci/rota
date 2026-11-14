@@ -144,6 +144,10 @@ type Settings struct {
 	// BundleMax is round.bundleMax: the most member issues `round assign
 	// --bundle` hands one slot beside the lead; 0 means no limit.
 	BundleMax int
+	// AutoBundle is round.autoBundle: the autopilot tick may hand strictly
+	// related ready issues to one slot as a bundle. Unset, it follows
+	// autonomy.level (true under auto).
+	AutoBundle bool
 	// ReviewLoop is round.reviewLoop: "manual" or "auto" (ReviewLoopManual,
 	// ReviewLoopAuto). Under auto the forge poll relays a done slot's review
 	// input to its worker itself.
@@ -292,6 +296,9 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	if s.BundleMax, err = config.Int(cfg, config.RoundBundleMaxKey, 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.AutoBundle, err = config.AutoBundle(cfg); err != nil {
 		return s, err
 	}
 	if err := checkEnum(cfg, config.RoundReviewLoopKey); err != nil {

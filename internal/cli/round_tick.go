@@ -384,7 +384,17 @@ func (w *tickWorld) Candidates(ctx context.Context) ([]round.Candidate, error) {
 // Assign takes no tier, no kind and never accepts overlap: the round's
 // defaults, and only a candidate that is ready as it stands.
 func (w *tickWorld) Assign(ctx context.Context, id string) (round.Assigned, error) {
-	res, err := w.renv.Assign(ctx, w.root, w.board, round.AssignOpts{ID: id})
+	return w.assign(ctx, round.AssignOpts{ID: id})
+}
+
+// AssignBundle is Assign for a lead and its members: one slot, one branch.
+func (w *tickWorld) AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error) {
+	return w.assign(ctx, round.AssignOpts{ID: lead, Bundle: members})
+}
+
+func (w *tickWorld) assign(ctx context.Context, o round.AssignOpts) (round.Assigned, error) {
+	id := o.ID
+	res, err := w.renv.Assign(ctx, w.root, w.board, o)
 	for _, warn := range res.Warnings {
 		w.c.Warn("%s", warn)
 	}

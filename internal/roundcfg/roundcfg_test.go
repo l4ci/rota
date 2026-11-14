@@ -726,3 +726,21 @@ func TestSettingsSharedPathsTestsLabels(t *testing.T) {
 		t.Errorf("Lenient on malformed lists: %+v", l)
 	}
 }
+
+func TestAutoBundleFollowsAutonomyUnlessSet(t *testing.T) {
+	for cfg, want := range map[string]bool{
+		`{}`:                                 false,
+		`{"autonomy":{"level":"roundtrip"}}`: false,
+		`{"autonomy":{"level":"auto"}}`:      true,
+		`{"autonomy":{"level":"auto"},"round":{"autoBundle":false}}`: false,
+		`{"round":{"autoBundle":true}}`:                              true,
+	} {
+		s, err := Load(project(t, cfg))
+		if err != nil || s.AutoBundle != want {
+			t.Errorf("%s: AutoBundle = %v, %v; want %v", cfg, s.AutoBundle, err, want)
+		}
+	}
+	if _, err := Load(project(t, `{"round":{"autoBundle":"yes"}}`)); err == nil {
+		t.Error("a non-boolean round.autoBundle should be refused")
+	}
+}
