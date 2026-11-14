@@ -491,3 +491,25 @@ func TestVerdictAddReaskIsPerSessionAndReviewerOnly(t *testing.T) {
 		}
 	}
 }
+
+// An integration branch exists only on the remote: a bare name resolves
+// through origin/<branch>, and the record keys on the bare name.
+func TestVerdictAddResolvesARemoteOnlyBranch(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "") // a look is the maintainer's, never a slot's
+	dir := pushedVerdictRepo(t)
+	gittest.Run(t, dir, "push", "-q", "origin", "feat/x:refs/heads/integration/r1-ui")
+	gittest.Run(t, dir, "fetch", "-q", "origin")
+	tip := headSha(t, dir, "origin/integration/r1-ui")
+	code, out, errs := rotaIn(t, dir, "verdict", "add", "integration/r1-ui", "--kind", "look", "--verdict", "PASS", "--sha", tip, "--json")
+	if code != 0 {
+		t.Fatalf("add remote-only branch: %d %s %s", code, out, errs)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "integration/r1-ui", "--json")
+	d := data(t, out)
+	if d["branch"] != "integration/r1-ui" || len(d["records"].([]any)) != 1 {
+		t.Fatalf("show lists the look under the bare key: %v", d)
+	}
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "integration/r1-nope", "--kind", "look", "--verdict", "PASS"); code != 3 {
+		t.Fatalf("a branch nowhere is exit 3, got %d", code)
+	}
+}

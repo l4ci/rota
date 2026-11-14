@@ -84,6 +84,7 @@ func workerCommands() *Command {
 		{Name: "train", Fence: fenceRefused, Summary: "verify several PRs merged together once, then land them", Verb: workerTrain, Subs: []*Command{
 			{Name: "cancel", Fence: fenceRefused, Summary: "cancel the running train that holds a request id", Verb: workerTrainCancel},
 		}},
+		{Name: "refs", Fence: fenceRefused, Summary: "renew reference files on an integration branch in one commit, after a look approval", Verb: workerRefs},
 		{Name: "reset", Fence: fenceAllowed, Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
 			{Name: "list", Fence: fenceAllowed, Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},
