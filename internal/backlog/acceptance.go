@@ -27,24 +27,23 @@ func TrustOf(ctx context.Context, src any) DecisionTrust {
 			return v, nil
 		}
 		v, err := pt.CanPush(ctx, author)
-		if err == nil {
-			seen[author] = v
-		}
-		return v, err
+		seen[author] = v && err == nil
+		return seen[author], err
 	}
 }
 
 // TrustedDecisionIDs are the ids of the comments carrying the decision marker
-// whose author trust vouches for. A nil trust vouches for none.
+// whose author trust vouches for. A nil trust vouches for none, and a failed
+// lookup vouches for nothing.
 func TrustedDecisionIDs(comments []tracker.Comment, trust DecisionTrust) ([]string, error) {
 	var ids []string
 	for _, c := range comments {
 		if k, _, ok := marker.ParseComment(c.Body); !ok || k != "decision" || trust == nil {
 			continue
 		}
-		if ok, err := trust(c.Author); err != nil {
-			return nil, err
-		} else if ok {
+		// A lookup that fails (a deleted account, a forge error) leaves that one
+		// comment untrusted; it never aborts the check for the whole item.
+		if ok, err := trust(c.Author); err == nil && ok {
 			ids = append(ids, c.ID)
 		}
 	}
