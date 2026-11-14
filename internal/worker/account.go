@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -174,12 +175,29 @@ func (a *Accounts) Configured(root string) []acct {
 
 // Meters reads every configured account.
 func (a *Accounts) Meters(ctx context.Context, root string) []Meter {
+	return a.MetersWith(ctx, root, nil)
+}
+
+// MetersWith is Meters that also reads the Claude entries of extra (such as
+// review.accounts, #3315) that round.accounts does not already list by name.
+func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.Account) []Meter {
 	fetch := a.Fetch
 	if fetch == nil {
 		fetch = a.defaultFetch
 	}
 	var rows []Meter
-	for _, ac := range a.Configured(root) {
+	list := a.Configured(root)
+	for _, x := range extra {
+		if x.Kind != config.KindClaude || x.Name == "" || slices.ContainsFunc(list, func(c acct) bool { return c.name == x.Name }) {
+			continue
+		}
+		dir := x.Dir
+		if dir != "" {
+			dir = a.expand(dir)
+		}
+		list = append(list, acct{x.Name, dir})
+	}
+	for _, ac := range list {
 		if ac.name == "" {
 			continue
 		}

@@ -239,3 +239,12 @@ func TestIntOrClampsAboveMaxAndRejectsFloats(t *testing.T) {
 		}
 	}
 }
+
+// review.accounts is checked like round.accounts and named in the problem.
+func TestAccountDirProblemsCoverReviewAccounts(t *testing.T) {
+	cfg := `{"review":{"accounts":[{"kind":"codex","name":"r","dir":"rel/x"},{"kind":"gemini","name":"g","dir":"/g"}]}}`
+	got := AccountDirProblems(decode(t, cfg))
+	if len(got) != 2 || !strings.Contains(got[0], "review.accounts") || !strings.Contains(got[0], "dir must be absolute") || !strings.Contains(got[1], `kind "gemini"`) {
+		t.Errorf("problems = %v, want a review.accounts dir problem and an unknown kind", got)
+	}
+}

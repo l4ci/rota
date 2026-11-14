@@ -204,3 +204,23 @@ func TestEmptyAccountListKeepsOtherSemantics(t *testing.T) {
 		t.Errorf("unrelated key changed: %v", e.Value)
 	}
 }
+
+// review.accounts (#3315) is empty by default, merges by kind like
+// round.accounts, and never mixes into round.accounts.
+func TestReviewAccountsMergeByKindAndStaySeparate(t *testing.T) {
+	root, env := layerRig(t,
+		`{"review":{"accounts":[{"kind":"claude","name":"ra","dir":"/ra"},{"kind":"codex","name":"rg","dir":"/rg"}]},"round":{"accounts":[{"kind":"claude","name":"w","dir":"/w"}]}}`,
+		`{"review":{"accounts":[{"kind":"codex","name":"rc","dir":"/rc"}]}}`, "")
+	cfg := Load(env, root)
+	want := []Account{{KindClaude, "ra", "/ra"}, {KindCodex, "rc", "/rc"}}
+	if got := ReviewAccounts(cfg); !reflect.DeepEqual(got, want) {
+		t.Errorf("effective review.accounts = %v, want %v", got, want)
+	}
+	if got := Accounts(cfg); !reflect.DeepEqual(got, []Account{{KindClaude, "w", "/w"}}) {
+		t.Errorf("round.accounts = %v, want only the worker login", got)
+	}
+	root, env = layerRig(t, "", "", "")
+	if got := ReviewAccounts(Load(env, root)); len(got) != 0 {
+		t.Errorf("default review.accounts = %v, want empty", got)
+	}
+}

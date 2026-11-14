@@ -108,7 +108,7 @@ func migrateScopePlan(env cfgdir.Env, project, localFile *migrationFile, keep []
 				continue
 			}
 			c.Reason = "pinned at its default"
-		case hasLocal && k.Name == "round.accounts" && !sameJSON(mergeByKind([][]any{asList(v), asList(lv)}), lv):
+		case hasLocal && (k.Name == RoundAccountsKey || k.Name == ReviewAccountsKey) && !sameJSON(mergeByKind([][]any{asList(v), asList(lv)}), lv):
 			// Accounts merge by kind: kinds the local list lacks move into it.
 			c.Action, c.Reason, c.After = ScopeMove, "machine key", mergeByKind([][]any{asList(v), asList(lv)})
 			moves = true

@@ -76,7 +76,7 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 
 // Account picking is chosen where the env is built (accountedRoundEnv): no verb
 // sets the flag or Worker.Accounts on a round env itself, and the accounting
-// verbs (assign, tick, architecture, return, status's quota read) go through
+// verbs (assign, tick, architecture, return, status's quota read, review depth's reviewer meters) go through
 // the constructor. Only the constructors (newRoundEnv, buildRoundEnv) may switch it or call WithAccounts;
 // accountedRoundEnv only passes the meters in RoundOpts.
 func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
@@ -84,7 +84,7 @@ func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"round_assign.go": true, "round_tick.go": true, "round_architecture.go": true, "round_return.go": true, "round_status.go": true}
+	want := map[string]bool{"round_assign.go": true, "round_tick.go": true, "round_architecture.go": true, "round_return.go": true, "round_status.go": true, "review.go": true}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
 			continue

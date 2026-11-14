@@ -385,10 +385,12 @@ func loadRoles(cfg any, s *Settings) error {
 // CrossReview is what the cross-harness review requirement reads (#1612):
 // review.crossLabels, the labels that trigger it; round.harnesses, the
 // reviewers to pick from; and DefaultKind, the author's harness when no slot
-// or harness: label names one.
+// or harness: label names one. Review is review.accounts (#3315), the logins
+// kept for review; Main is round.accounts, the fallback when none is usable.
 type CrossReview struct {
 	Labels, Harnesses []string
 	DefaultKind       string
+	Review, Main      []config.Account
 }
 
 // ParseCrossReview reads the cross-harness review settings. A malformed
@@ -405,12 +407,16 @@ func ParseCrossReview(cfg any) (CrossReview, error) {
 		return CrossReview{}, err
 	}
 	c.Harnesses, c.DefaultKind = s.Harnesses, s.DefaultKind()
+	c.Review, c.Main = config.ReviewAccounts(cfg), config.Accounts(cfg)
 	return c, nil
 }
 
 // Active reports whether any PR can need a cross-harness review: a trigger
-// label and a harness list to pick the reviewer from are both set.
-func (c CrossReview) Active() bool { return len(c.Labels) > 0 && len(c.Harnesses) > 0 }
+// label and a harness list or a review.accounts list to pick the reviewer
+// from are both set.
+func (c CrossReview) Active() bool {
+	return len(c.Labels) > 0 && (len(c.Harnesses) > 0 || len(c.Review) > 0)
+}
 
 // DefaultKind is the first of round.harnesses, else "". It no longer decides
 // where an issue goes (round assign ranks accounts by headroom); only the
