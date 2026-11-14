@@ -27,8 +27,10 @@ var procEnvKeys = []string{"HOME=", "TMPDIR="}
 // ReadProcUses reads the process table under procRoot (/proc) for the processes
 // of uid (consulted). Others are skipped: the project temp root is 0700 and the
 // user's own, so no other user's process can work in it. A process that exited
-// during the scan is skipped. Anything else it cannot read (no table, or one
-// of uid's processes it may not read) is an error, since then no process can
+// during the scan is skipped. A process of uid whose entries are
+// denied by permission (capability holders, non-dumpable) is skipped too.
+// Anything else it cannot read (no table, or a failure other than permission)
+// is an error, since then no process can
 // be ruled out.
 func ReadProcUses(procRoot string, uid int) ([]ProcUse, error) {
 	return readProcUses(procRoot, uid, lstatOwner)
@@ -86,6 +88,18 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 	if !consulted(who, uid) {
 		return u, false, nil
 	}
+	u, ok, err = readProcEntries(dir, pid)
+	if errors.Is(err, fs.ErrPermission) {
+		// A capability holder (systemd --user) keeps its entries as uid's yet
+		// denies the read; per the maintainer decision on #3306 it is skipped
+		// like a non-dumpable one. Any other failure still fails closed.
+		return ProcUse{}, false, nil
+	}
+	return u, ok, err
+}
+
+// readProcEntries reads the cwd, exe, fd, maps and environ of one process of uid.
+func readProcEntries(dir string, pid int) (u ProcUse, ok bool, err error) {
 	u.PID = pid
 	// gone reports whether a read failed because the process exited (or holds
 	// no such link, as a zombie), as opposed to one we may not read.
@@ -146,8 +160,8 @@ func readProcUse(dir string, pid, uid int, owner func(string) (int, error)) (u P
 // sshd session) shows its entries as root's and cannot be read. Measured on
 // Linux 6.8, such a process keeps /proc/<pid> itself as uid's, so the owner
 // is taken from cwd. A process of uid that holds capabilities (the systemd
-// user manager) keeps its entries as uid's yet cannot be read: it still fails
-// the scan closed.
+// user manager) keeps its entries as uid's yet denies the read; readProcUse
+// skips it on the permission error (#3306).
 func consulted(owner, uid int) bool {
 	return owner == uid
 }
