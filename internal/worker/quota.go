@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 )
 
@@ -50,6 +52,14 @@ type cachedMeter struct {
 // unknown meter. Readings are cached per account, so one placement batch costs
 // one app-server read per account.
 func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[QuotaAccount]Meter {
+	return q.MetersWith(ctx, root, kinds, nil)
+}
+
+// MetersWith is Meters that also reads extra logins that are not in the
+// harness's own account list, such as review.accounts entries (#3315). An
+// extra entry shares the reading of a configured account of the same kind and
+// name.
+func (q *Quotas) MetersWith(ctx context.Context, root string, kinds []string, extra []config.Account) map[QuotaAccount]Meter {
 	e := q.Env.WithDefaults()
 	cfg := e.Config(root)
 	home, _ := e.Home()
@@ -77,6 +87,16 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 			refs, homes[ref] = append(refs, ref), hz.AmbientAccount(e.Getenv).Home
 		}
 	}
+	extras := extraEntries(extra, home)
+	for _, a := range extra {
+		ref := QuotaAccount{a.Kind, a.Name}
+		if _, ok := harness.LookupQuotaReporter(a.Kind); !ok || a.Name == "" {
+			continue
+		}
+		if _, dup := homes[ref]; !dup {
+			refs, homes[ref] = append(refs, ref), extras[ref].Dir
+		}
+	}
 	out := map[QuotaAccount]Meter{}
 	var miss []QuotaAccount
 	q.mu.Lock()
@@ -96,7 +116,7 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 	if len(miss) == 0 {
 		return out
 	}
-	rows := q.collect(ctx, e, cfg, home, miss)
+	rows := q.collect(ctx, e, cfg, home, miss, extras)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.cache == nil {
@@ -138,7 +158,7 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 			refs = append(refs, QuotaAccount{kind, ""})
 		}
 	}
-	return q.collect(ctx, e, cfg, home, refs)
+	return q.collect(ctx, e, cfg, home, refs, nil)
 }
 
 // ForAccounts resolves historical names only against unique current configured
@@ -147,7 +167,7 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 func (q *Quotas) ForAccounts(ctx context.Context, root string, refs []QuotaAccount) []harness.QuotaSnapshot {
 	e := q.Env.WithDefaults()
 	home, _ := e.Home()
-	return q.collect(ctx, e, e.Config(root), home, refs)
+	return q.collect(ctx, e, e.Config(root), home, refs, nil)
 }
 
 type quotaJob struct {
@@ -157,7 +177,17 @@ type quotaJob struct {
 	req      harness.QuotaRequest
 }
 
-func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs []QuotaAccount) []harness.QuotaSnapshot {
+// extraEntries maps each named extra login to its entry with the dir expanded.
+func extraEntries(extra []config.Account, home string) map[QuotaAccount]harness.AccountEntry {
+	out := map[QuotaAccount]harness.AccountEntry{}
+	for _, a := range extra {
+		list := harness.AccountList{Entries: []harness.AccountEntry{{Name: a.Name, Dir: a.Dir}}}.In(home).Entries
+		out[QuotaAccount{a.Kind, a.Name}] = list[0]
+	}
+	return out
+}
+
+func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs []QuotaAccount, extras map[QuotaAccount]harness.AccountEntry) []harness.QuotaSnapshot {
 	opts := q.Options
 	if opts.Now == nil {
 		opts.Now = e.Now
@@ -182,6 +212,9 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 			continue
 		}
 		entries := hz.Accounts(harness.ConfigFor(cfg, ref.Kind)).In(home).Entries
+		if x, ok := extras[ref]; ok && ref.Name != "" && !slices.ContainsFunc(entries, func(en harness.AccountEntry) bool { return en.Name == ref.Name }) {
+			entries = append(entries, x)
+		}
 		req := harness.QuotaRequest{Name: ref.Name}
 		reason := ""
 		if ref.Name == "" {

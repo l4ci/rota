@@ -444,6 +444,84 @@ func (r *doneRig) forge(f donePRForge) {
 	r.deps.Env.Forge = func(string, string, tracker.Settings) (Forge, error) { return f, nil }
 }
 
+func TestDoneTerminalPR(t *testing.T) {
+	for _, state := range []string{"MERGED", "CLOSED"} {
+		for _, remote := range []string{"", "1111"} {
+			t.Run(state+"/remote="+remote, func(t *testing.T) {
+				r := newDoneRig(t, oneSlot, fastCfg)
+				r.remote = remote // Deleted/pruned branch or stale tracking ref.
+				r.pass("7", proof.FastTierCheck)
+				r.forge(donePRForge{info: tracker.PRInfo{State: state}})
+				res, err := r.done(DoneRequest{})
+				if err != nil || !res.Changed || res.Unpushed || r.state() != "done" {
+					t.Fatalf("res %+v err %v state %s", res, err, r.state())
+				}
+				warning := strings.Join(res.Warnings, "\n")
+				for _, want := range []string{"push check skipped", ghURL, state} {
+					if !strings.Contains(warning, want) {
+						t.Errorf("warning %q must contain %q", warning, want)
+					}
+				}
+			})
+		}
+	}
+	for _, state := range []string{"OPEN", "UNKNOWN", "MERGED", "CLOSED"} {
+		t.Run(state+"/dirty", func(t *testing.T) {
+			r := newDoneRig(t, oneSlot, fastCfg)
+			r.status, r.remote = " M x.go\n", ""
+			r.pass("7", proof.FastTierCheck)
+			r.forge(donePRForge{info: tracker.PRInfo{State: state}})
+			res, err := r.done(DoneRequest{})
+			wantExit(t, err, exitcode.ExitRefused)
+			if !res.Dirty || r.state() != "busy" {
+				t.Fatalf("res %+v state %s", res, r.state())
+			}
+		})
+	}
+	t.Run("proof still required", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, fastCfg)
+		r.remote = ""
+		r.forge(donePRForge{info: tracker.PRInfo{State: "MERGED"}})
+		res, err := r.done(DoneRequest{})
+		wantExit(t, err, exitcode.ExitRefused)
+		if len(res.Missing) == 0 || res.Unpushed || r.state() != "busy" {
+			t.Fatalf("res %+v state %s", res, r.state())
+		}
+	})
+}
+
+func TestDoneUnsettledPR(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		err         error
+		noPR        bool
+	}{
+		{name: "open", state: "OPEN"},
+		{name: "unknown", state: "UNKNOWN"},
+		{name: "forge offline", state: "MERGED", err: errors.New("forge offline")},
+		{name: "no recorded PR", state: "MERGED", noPR: true},
+	} {
+		for _, remote := range []string{"", "1111"} {
+			t.Run(tc.name+"/remote="+remote, func(t *testing.T) {
+				r := newDoneRig(t, oneSlot, fastCfg)
+				r.remote = remote
+				r.pass("7", proof.FastTierCheck)
+				r.forge(donePRForge{info: tracker.PRInfo{State: tc.state}, err: tc.err})
+				if tc.noPR {
+					if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
+						t.Fatal(err)
+					}
+				}
+				res, err := r.done(DoneRequest{})
+				wantExit(t, err, exitcode.ExitRefused)
+				if !res.Unpushed || res.Changed || r.state() != "busy" {
+					t.Fatalf("res %+v state %s", res, r.state())
+				}
+			})
+		}
+	}
+}
+
 func TestDoneWarnsMissingPRSections(t *testing.T) {
 	r := newDoneRig(t, oneSlot, fastCfg)
 	r.pass("7", proof.FastTierCheck)

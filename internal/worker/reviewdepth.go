@@ -39,6 +39,10 @@ type ReviewSources struct {
 	// holding the branch, "" when no slot does.
 	Cross  roundcfg.CrossReview
 	Author string
+	// Pools reads the reviewer accounts with their meters (#3315). Nil is the
+	// gate's static view: every account as unread, so the harness is settled by
+	// configuration alone and the account by `rota review depth`.
+	Pools func(context.Context) (CrossPools, error)
 	// Lenses is review.lenses (#2064): the focused reviewers a branch triggers
 	// by the files it touches and its issues' labels. Empty triggers none.
 	Lenses config.Lenses
@@ -61,11 +65,27 @@ type ReviewDepth struct {
 	// when the requirement is skipped, "" when it does not apply. CrossWhy says
 	// which label and setting decided it.
 	Cross, CrossWhy string
+	// CrossAccount is the review.accounts or round.accounts login the review
+	// runs on; nil when no account list decided it (round.harnesses alone).
+	CrossAccount *CrossAccount
+	// CrossAccepts are the harnesses whose review-cross verdict satisfies the
+	// requirement when the account, not a label, picked the harness: headroom
+	// moves between the review and the gate, so the gate takes any of them.
+	CrossAccepts []string
 	// Lenses are the review lenses the branch triggers, each with the path or
 	// label that did it. None when the depth is none.
 	Lenses []config.LensHit
 	// Tier is the change tier the diff was put in.
 	Tier change.Result
+}
+
+// CrossAccount is the login a cross-harness review runs on. Name "" is the
+// harness's ambient login. Fallback says the review.accounts entries were not
+// usable and a round.accounts one took over.
+type CrossAccount struct {
+	Kind, Name, Dir string
+	Headroom        *float64
+	Fallback        bool
 }
 
 // ReviewDepthError identifies a failed source setup or read. Guessing a depth
@@ -183,12 +203,79 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	author, _ := harness.ResolveAuthor(harness.AuthorSources{
 		Slot: s.Author, Labels: labelSets[0], Project: s.Cross.DefaultKind,
 	})
+	var pools *CrossPools
 	for _, labels := range labelSets {
-		if c, why := resolveCross(s.Cross, labels, author); crossRank(c) > crossRank(out.Cross) {
-			out.Cross, out.CrossWhy = c, why
+		if pools == nil && s.Cross.Active() && len(s.Cross.Review) > 0 {
+			p, err := readCrossPools(ctx, s)
+			if err != nil {
+				return ReviewDepth{}, &ReviewDepthError{"accounts", fmt.Sprintf("could not read the reviewer accounts to pick the cross-harness reviewer: %v", err), err}
+			}
+			pools = &p
+		}
+		if r := resolveCross(s.Cross, labels, author, pools); crossRank(r.Harness) > crossRank(out.Cross) {
+			out.Cross, out.CrossWhy, out.CrossAccount, out.CrossAccepts = r.Harness, r.Why, r.Account, r.Accepts
 		}
 	}
 	return out, nil
+}
+
+// readCrossPools reads the reviewer accounts through s.Pools, or builds the
+// static view (every account unread) when the caller has no meters.
+func readCrossPools(ctx context.Context, s ReviewSources) (CrossPools, error) {
+	if s.Pools != nil {
+		return s.Pools(ctx)
+	}
+	return StaticCrossPools(s.Cross), nil
+}
+
+// StaticCrossPools is the reviewer pool with no meter readings: review.accounts
+// entries, then the round.accounts entries of every allowed harness (the
+// harness's ambient login when it has none). Rank is round.harnesses order.
+func StaticCrossPools(c roundcfg.CrossReview) CrossPools {
+	rank := func(kind string) int {
+		if i := slices.Index(c.Harnesses, kind); i >= 0 {
+			return i
+		}
+		return len(c.Harnesses)
+	}
+	entry := func(a config.Account, order int) PoolEntry {
+		return PoolEntry{Kind: a.Kind, Name: a.Name, Rank: rank(a.Kind), Order: order,
+			Meter: Meter{Name: a.Name, ConfigDir: a.Dir, Verdict: VerdictUnknown}}
+	}
+	var p CrossPools
+	for i, a := range c.Review {
+		p.Review = append(p.Review, entry(a, i))
+	}
+	kinds := c.Harnesses
+	if len(kinds) == 0 {
+		for _, a := range c.Main {
+			if !slices.Contains(kinds, a.Kind) {
+				kinds = append(kinds, a.Kind)
+			}
+		}
+	}
+	for _, k := range kinds {
+		// A harness with only review accounts has no worker login to fall back to.
+		if slices.ContainsFunc(c.Review, func(a config.Account) bool { return a.Kind == k }) && !slices.ContainsFunc(c.Main, func(a config.Account) bool { return a.Kind == k }) {
+			continue
+		}
+		n := len(p.Main)
+		for _, a := range c.Main {
+			if a.Kind == k {
+				p.Main = append(p.Main, entry(a, len(p.Main)))
+			}
+		}
+		if len(p.Main) == n {
+			p.Main = append(p.Main, entry(config.Account{Kind: k}, len(p.Main)))
+		}
+	}
+	return p
+}
+
+// CrossSatisfiedBy reports whether a review-cross verdict recorded by harness
+// meets the requirement: the harness it names, or any CrossAccepts one.
+func (r ReviewDepth) CrossSatisfiedBy(harness string) bool {
+	return harness == r.Cross || slices.Contains(r.CrossAccepts, harness)
 }
 
 // CrossNone is ReviewDepth.Cross when a PR that would need a cross-harness
@@ -211,14 +298,23 @@ func crossRank(c string) int {
 	return 2
 }
 
+// crossResult is one issue's cross-harness requirement.
+type crossResult struct {
+	Harness, Why string
+	Account      *CrossAccount
+	Accepts      []string
+}
+
 // resolveCross is one issue's cross-harness requirement (#1612): the reviewer
 // harness, CrossNone, or "" when none applies. A label in review.crossLabels
 // triggers it; review:none skips it and beats review:<harness>, which picks the
 // reviewer; otherwise it is the first reviewer in round.harnesses that is not
 // the author's harness. A review:<x> naming no reviewer is not a routing label.
-func resolveCross(c roundcfg.CrossReview, labels []string, author string) (string, string) {
+// With review.accounts set (#3315, pools non-nil) the account list decides
+// instead: see crossByAccount.
+func resolveCross(c roundcfg.CrossReview, labels []string, author string, pools *CrossPools) crossResult {
 	if !c.Active() {
-		return "", ""
+		return crossResult{}
 	}
 	var trigger, route string
 	for _, l := range labels {
@@ -231,20 +327,61 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string) (strin
 	}
 	switch {
 	case trigger == "" && route == "":
-		return "", ""
+		return crossResult{}
 	case trigger == "":
-		return CrossNone, fmt.Sprintf("label review:%s, but the issue has no label in review.crossLabels (%s)", route, strings.Join(c.Labels, ", "))
+		return crossResult{Harness: CrossNone, Why: fmt.Sprintf("label review:%s, but the issue has no label in review.crossLabels (%s)", route, strings.Join(c.Labels, ", "))}
 	case route == CrossNone:
-		return CrossNone, "label review:none"
-	case route != "":
-		return route, fmt.Sprintf("label %s; label review:%s", trigger, route)
+		return crossResult{Harness: CrossNone, Why: "label review:none"}
+	}
+	if pools != nil {
+		return crossByAccount(c, trigger, route, author, *pools)
+	}
+	if route != "" {
+		return crossResult{Harness: route, Why: fmt.Sprintf("label %s; label review:%s", trigger, route)}
 	}
 	for _, k := range c.Harnesses {
 		if k != author && crossReviewer(k) {
-			return k, fmt.Sprintf("label %s; first of round.harnesses other than the author's %s", trigger, author)
+			return crossResult{Harness: k, Why: fmt.Sprintf("label %s; first of round.harnesses other than the author's %s", trigger, author)}
 		}
 	}
-	return CrossNone, fmt.Sprintf("label %s, but round.harnesses lists no reviewer harness other than the author's %s", trigger, author)
+	return crossResult{Harness: CrossNone, Why: fmt.Sprintf("label %s, but round.harnesses lists no reviewer harness other than the author's %s", trigger, author)}
+}
+
+// crossByAccount is resolveCross when review.accounts is set: ChooseCross over
+// the pools. A label-picked harness is fixed. Otherwise the account picks the
+// harness, so the verdict of any eligible harness satisfies the gate (the
+// headroom that decided it moves between the review and the gate).
+func crossByAccount(c roundcfg.CrossReview, trigger, route, author string, pools CrossPools) crossResult {
+	ch := ChooseCross(CrossRequest{Author: author, Kind: route, Pools: pools})
+	how := "label " + trigger
+	if route != "" {
+		how += "; label review:" + route
+	}
+	if !ch.OK {
+		return crossResult{Harness: CrossNone, Why: how + "; " + ch.Why}
+	}
+	e := ch.Account
+	key := config.RoundAccountsKey
+	if ch.Review {
+		key = config.ReviewAccountsKey
+	}
+	why := fmt.Sprintf("%s; %s %s", how, key, accountName(e))
+	if e.Meter.Headroom != nil {
+		why += fmt.Sprintf(" (headroom %g%%)", *e.Meter.Headroom)
+	}
+	if ch.Why != "" {
+		why += "; " + ch.Why
+	}
+	res := crossResult{Harness: e.Kind, Why: why,
+		Account: &CrossAccount{Kind: e.Kind, Name: e.Name, Dir: e.Meter.ConfigDir, Headroom: e.Meter.Headroom, Fallback: ch.Fallback}}
+	if route == "" {
+		for _, p := range append(slices.Clone(pools.Review), pools.Main...) {
+			if p.Kind != author && crossReviewer(p.Kind) && !slices.Contains(res.Accepts, p.Kind) {
+				res.Accepts = append(res.Accepts, p.Kind)
+			}
+		}
+	}
+	return res
 }
 
 // DoorNote explains why a depth below full has not seen the PR's Door line: there
