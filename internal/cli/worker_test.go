@@ -685,7 +685,7 @@ func TestFileModeProofDoesNotDirtySlot(t *testing.T) {
 }
 
 func TestWorkerDispatchAssignedCodexRebuildsBrief(t *testing.T) {
-	f := newScopeFx(t, "warn", `,"dispatch":"herdr","tiers":{"codex":{"standard":"tier-default"}}`)
+	f := newScopeFx(t, "warn", `,"dispatch":"herdr","tiers":{"codex":{"standard":"tier-default","heavy":"gpt-task"}}`)
 	f.issues["2"] = strings.Replace(f.issues["2"], `"labels":[]`, `"labels":[{"name":"harness:codex"},{"name":"model:gpt-task"}]`, 1)
 	h := &cliHost{herdr: true, inSession: true}
 	useCodex(f.deps, h, "codex-cli 0.163.0", true)
