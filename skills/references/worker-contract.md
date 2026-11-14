@@ -82,6 +82,11 @@ Work only this task, then stop.
   worker PATCH another's PR body onto its own PR. Without `TMPDIR` (a solo session), use
   `$(rota git tmp-dir)`, the project temp root every worktree shares:
   `rota reap --kind tmp` can then find what a run left behind.
+  The slot dir sits inside the main checkout on purpose (the reaper and the project temp root find
+  it there), so a `t.TempDir()` fixture under it finds the real `.rota/` and `.git` (#3317). Run tests
+  through `rota test run` or `rota proof record`: both hand the command the system temp dir, as the
+  merge gate does. A raw `go test` in your shell still has the slot `TMPDIR`: prefix it with
+  `TMPDIR=/tmp` (or `env -u TMPDIR`).
 - Docs. Update the public docs in your own PR: `/rota-ship` runs `/rota-docs` after-work (Step 8.6) on your branch and the edit lands in the PR. There is no per-round docs pass. Scaffold and restructure stay the maintainer's: `ROTA-BLOCKED` instead. When a parallel PR edits the same doc page, the train marks yours STALE; merge main, keep both sides and push again.
 - Never edit `docs/contributing/contract/STAMPS` or run `check-doc-stamps.py --restamp`: the orchestrator restamps on `main` after merges. A new contract doc is the one exception: add its line.
 - Stage explicit paths. Never `git add -A` or `git add .`. A `PreToolUse` guard (`rota hook guard`,
