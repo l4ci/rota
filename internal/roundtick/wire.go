@@ -52,6 +52,8 @@ type World interface {
 	OpenItems() int
 	Candidates(ctx context.Context) ([]round.Candidate, error)
 	Assign(ctx context.Context, id string) (round.Assigned, error)
+	// AssignBundle assigns lead with members to one slot (round.autoBundle).
+	AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error)
 	Review() Reviewer
 	// FollowUp supplies the follow-up step (#2580); the zero value has none.
 	FollowUp() FollowUpSources
@@ -86,6 +88,7 @@ type wiring struct {
 func NewEnv(w World, cfg Config) Env {
 	set := cfg.Settings
 	e := Env{
+		AutoBundle: set.AutoBundle, BundleMax: set.BundleMax,
 		Cap: set.AutopilotCap, MergeApproval: cfg.MergeApproval, Batch: set.Batch, TrainFill: set.TrainFill,
 		Now: w.Now, Role: set.Role, Base: cfg.Base, BaseOverride: cfg.BaseOverride,
 	}
@@ -162,6 +165,13 @@ func NewEnv(w World, cfg Config) Env {
 	e.FollowUp = w.FollowUp()
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
 		res, err := w.Assign(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return AssignedAgents(res), nil
+	}
+	e.AssignBundle = func(ctx context.Context, lead string, members []string) ([]string, error) {
+		res, err := w.AssignBundle(ctx, lead, members)
 		if err != nil {
 			return nil, err
 		}

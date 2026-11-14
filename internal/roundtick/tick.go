@@ -151,6 +151,13 @@ type Env struct {
 	// (two for a best-of:2 issue). A *round.BlockedError (not ready after all,
 	// no slot) is a refusal, not a failure; "no round" is a failure.
 	Assign func(ctx context.Context, id string) (agents []string, err error)
+	// AutoBundle is round.autoBundle and BundleMax round.bundleMax: with it on
+	// and AssignBundle set, the assign step hands strictly related candidates
+	// (round.PlanBundles) to one slot as a bundle.
+	AutoBundle bool
+	BundleMax  int
+	// AssignBundle is Assign for a lead and its members: one slot, one branch.
+	AssignBundle func(ctx context.Context, lead string, members []string) (agents []string, err error)
 	// Review supplies the architecture review (#53): the facts the decision
 	// rests on, and the mint. The tick decides with round.DecideReview, at the
 	// round.architectureEvery threshold or because a slot is idle with nothing
@@ -746,6 +753,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 	if err != nil {
 		return err
 	}
+	var eligible []round.Candidate
 	for _, c := range cands {
 		if !c.Ready() || slices.Contains(minted, c.ID) {
 			if e.Observe && !c.Ready() {
@@ -759,20 +767,65 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 			continue
 		}
 		queue = append(queue, c.ID)
+		eligible = append(eligible, c)
 	}
-	for _, id := range queue {
+	// round.autoBundle: strictly related small items go to one slot. Every
+	// member rides with its lead, so it leaves the queue as a single item.
+	bundles := map[string]round.Bundle{}
+	members := map[string]bool{}
+	if e.AutoBundle && e.AssignBundle != nil {
+		for _, b := range round.PlanBundles(eligible, e.BundleMax) {
+			bundles[b.Lead] = b
+			for _, m := range b.Members {
+				members[m] = true
+			}
+		}
+	}
+	for i := 0; i < len(queue); i++ {
+		id := queue[i]
 		if n == 0 {
 			break
 		}
-		r.propose(Action{Action: "assign", Target: id, Detail: "ready candidate; active idle slot available"}, "claim, slot selection, branch creation and dispatch preflight")
+		if members[id] {
+			continue
+		}
+		b, bundled := bundles[id]
+		detail := "ready candidate; active idle slot available"
+		if bundled {
+			detail = bundleDetail(b)
+		}
+		r.propose(Action{Action: "assign", Target: id, Detail: detail}, "claim, slot selection, branch creation and dispatch preflight")
 		if e.Observe {
 			n--
 			continue
 		}
-		agents, err := e.Assign(ctx, id)
+		var agents []string
+		var err error
+		if bundled {
+			agents, err = e.AssignBundle(ctx, id, b.Members)
+			if isRefusal(err) {
+				// The bundle cannot be built as planned (a member claimed, the
+				// limit changed): its members go back to the queue as singles,
+				// and the lead is tried alone below.
+				for _, m := range b.Members {
+					delete(members, m)
+					if j := slices.Index(queue, m); j >= 0 && j < i {
+						queue = append(queue, m) // already passed over
+					}
+				}
+				bundled = false
+				agents, err = e.Assign(ctx, id)
+			}
+		} else {
+			agents, err = e.Assign(ctx, id)
+		}
 		switch {
 		case err == nil:
-			e.audit(r, Action{Action: "assign", Target: id, Detail: "to " + strings.Join(agents, " and ")})
+			d := "to " + strings.Join(agents, " and ")
+			if bundled {
+				d += "; " + bundleDetail(b)
+			}
+			e.audit(r, Action{Action: "assign", Target: id, Detail: d})
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
@@ -799,6 +852,11 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 		}
 	}
 	return nil
+}
+
+// bundleDetail names a bundle and the declared Touches that justified it.
+func bundleDetail(b round.Bundle) string {
+	return "bundle (+" + strings.Join(b.Members, ", +") + ") sharing " + strings.Join(b.Shared, ", ")
 }
 
 // isRefusal reports whether err is Assign declining without anything having

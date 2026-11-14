@@ -73,6 +73,10 @@ func (o observingWorld) OpenItems() int                    { return o.w.OpenItem
 func (o observingWorld) Candidates(ctx context.Context) ([]round.Candidate, error) {
 	return o.w.Candidates(ctx)
 }
+func (o observingWorld) AssignBundle(context.Context, string, []string) (round.Assigned, error) {
+	return round.Assigned{}, refuse()
+}
+
 func (o observingWorld) Assign(context.Context, string) (round.Assigned, error) {
 	return round.Assigned{}, refuse()
 }

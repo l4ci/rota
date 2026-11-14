@@ -417,3 +417,31 @@ func TestAutonomySetErrorKeepsMigration(t *testing.T) {
 		t.Errorf("failed set dropped the rewrites: %+v", res.Migration)
 	}
 }
+
+func TestAutoBundleDefaultsFromAutonomyLevel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg      string
+		want     bool
+		wantNote string
+	}{
+		"unset, off":         {`{}`, false, "default (autonomy.level off)"},
+		"unset, roundtrip":   {`{"autonomy":{"level":"roundtrip"}}`, false, "default (autonomy.level roundtrip)"},
+		"unset, auto":        {`{"autonomy":{"level":"auto"}}`, true, "default (autonomy.level auto)"},
+		"explicit off, auto": {`{"autonomy":{"level":"auto"},"round":{"autoBundle":false}}`, false, "project"},
+		"explicit on, off":   {`{"round":{"autoBundle":true}}`, true, "project"},
+	} {
+		root := project(t, tc.cfg, "")
+		cfg := Load(cfgdir.OSEnv(), root)
+		got, err := AutoBundle(cfg)
+		if err != nil || got != tc.want {
+			t.Errorf("%s: AutoBundle = %v, %v; want %v", name, got, err, tc.want)
+		}
+		es, err := Show(cfgdir.OSEnv(), root, RoundAutoBundleKey, true)
+		if err != nil || len(es) != 1 {
+			t.Fatalf("%s: show: %v %v", name, es, err)
+		}
+		if es[0].Value != tc.want || es[0].Source != tc.wantNote {
+			t.Errorf("%s: show = %v (source %q); want %v (source %q)", name, es[0].Value, es[0].Source, tc.want, tc.wantNote)
+		}
+	}
+}

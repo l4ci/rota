@@ -86,6 +86,10 @@ func effectiveValue(cfg any, k Key) (any, bool) {
 	if v, ok := walk(cfg, k.Name); ok {
 		return v, true
 	}
+	if k.Name == RoundAutoBundleKey {
+		// Unset, round.autoBundle follows autonomy.level.
+		return AutonomyLevel(cfg) == "auto", false
+	}
 	return Default(k), false
 }
 
