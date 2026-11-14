@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,6 +94,61 @@ func TestGateLandsADoneSlicePROnAPartialSliceIssue(t *testing.T) {
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+		})
+	}
+}
+
+// decisionIssues serves issue #5 with one criterion and the comments it is met by.
+type decisionIssues struct {
+	issueStub
+	comments []tracker.Comment
+}
+
+func (s *decisionIssues) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	return tracker.Issue{Key: n, State: "open", Body: "## Acceptance\n- [ ] AC-1: ready\n", Comments: s.comments}, nil
+}
+
+// A partial outcome with every criterion met (here by a decision comment) is
+// lifted by the gate itself and audited; one still open keeps refusing, and a
+// failed outcome is never lifted.
+func TestGateLiftsAFullyMetPartial(t *testing.T) {
+	met := []tracker.Comment{
+		{ID: "7", Body: "<!-- rota:comment decision -->\nship it"},
+		{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · decision · 7 · ready\n"},
+	}
+	notDecision := []tracker.Comment{
+		{ID: "7", Body: "<!-- rota:comment feedback -->\nship it"},
+		{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · decision · 7 · ready\n"},
+	}
+	for _, c := range []struct {
+		name     string
+		outcome  string
+		comments []tracker.Comment
+		want     string
+	}{
+		{"met partial", "partial", met, GatePass},
+		{"open criterion", "partial", nil, GateOutcomeOpen},
+		{"mark on a non-decision comment", "partial", notDecision, GateOutcomeOpen},
+		{"met but failed", "failed", met, GateOutcomeOpen},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.pushStamped("a.txt", "")
+			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
+			w.setOutcomeSlot(c.outcome)
+			e := w.env(false)
+			e.Issues = func(string, tracker.Settings) (Issues, error) {
+				return &decisionIssues{comments: c.comments}, nil
+			}
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != c.want {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.want, res)
+			}
+			audit, _ := os.ReadFile(filepath.Join(w.dir, ".rota", "gate-audit.jsonl"))
+			lifted := strings.Contains(string(audit), "partial outcome lifted")
+			if lifted != (c.want == GatePass) {
+				t.Errorf("audit lifted=%v, audit %q", lifted, audit)
 			}
 		})
 	}

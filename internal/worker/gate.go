@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
+	gateaudit "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
@@ -649,7 +651,7 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 		return g.stepAttempt(result, followed.Value.target, refs.Value)
 	})
 	outcome := runGateStage(attempt, func(result GateResult) (struct{}, GateResult, bool, error) {
-		return g.stepOutcome(result, followed.Value.target)
+		return g.stepOutcome(result, followed.Value.target, forged.Value)
 	})
 	fresh := runGateStage(outcome, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepFreshness(result, followed.Value.target, forged.Value, remote.Value, refs.Value)
@@ -1117,19 +1119,51 @@ func (runner gate) stepAttempt(result GateResult, target GateTarget, refs gateRe
 	return finish(false, nil)
 }
 
+// partialLifted reports whether a partial outcome no longer stands: every
+// issue the slot closes names AC-n criteria and all are met at head, by proof
+// or by a decision comment. A criterion still open, an item without explicit
+// criteria or a read that fails keeps the refusal.
+func (g *gateOperation) partialLifted() (string, bool) {
+	keys := g.bundleKeys()
+	if g.issues == nil || len(keys) == 0 {
+		return "", false
+	}
+	for _, key := range keys {
+		is, err := g.issues.Get(g.ctx, key, true)
+		if err != nil || !backlog.HasAcceptanceIDs(is.Body) {
+			return "", false
+		}
+		if unmet, err := backlog.UnmetAcceptance(is.Body, is.Comments, proof.Lookup); err != nil || len(unmet) > 0 {
+			return "", false
+		}
+	}
+	return fmt.Sprintf("partial outcome lifted for %s — every acceptance criterion of %s is met at head", g.o.Slot, refList(keys)), true
+}
+
 // stepOutcome refuses a PR whose worker reported partial or failed through
 // `worker done --outcome`: it goes to review or relay, never straight to the
 // gate. A relay or a transfer is a new brief and clears the outcome; so does the
 // worker's next `worker done`. It reads the slot, so a queued PR and an
 // external one have no outcome, and it runs under CheckOnly too.
-func (runner gate) stepOutcome(result GateResult, target GateTarget) (struct{}, GateResult, bool, error) {
-	g := runner.operation(result, target, gateForgeResult{})
+func (runner gate) stepOutcome(result GateResult, target GateTarget, forged gateForgeResult) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, target, forged)
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
 	if g.target.Queued || g.target.External || g.target.Outcome == "" {
 		return finish(false, nil)
+	}
+	if g.target.Outcome == OutcomePartial {
+		if note, ok := g.partialLifted(); ok {
+			g.res.Notes = append(g.res.Notes, note)
+			if !g.o.CheckOnly {
+				if err := appendGateAudit(g.root, g.e.Now(), "lift-partial", g.o.Slot, note); err != nil {
+					g.res.Notes = append(g.res.Notes, fmt.Sprintf("AUDIT-FAILED %s — could not record the lifted partial: %v", g.o.Slot, err))
+				}
+			}
+			return finish(false, nil)
+		}
 	}
 	g.verdict(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
 		fmt.Sprintf("read the summary (`rota round status`), then relay slot %s to finish the rest or `rota round transfer` it; a later `worker done --outcome done` lifts this", g.o.Slot))
@@ -2543,3 +2577,9 @@ type gitRunner struct {
 }
 
 func (r gitRunner) Run(args ...string) (git.Result, error) { return r.e.Git(r.ctx, r.dir, args...) }
+
+// appendGateAudit writes one line of .rota/gate-audit.jsonl for a gate step
+// that changed what the gate would otherwise have refused.
+func appendGateAudit(root string, now time.Time, verb, target, note string) error {
+	return gateaudit.AppendAudit(root, gateaudit.Record{TS: now, Gate: "outcome", Verb: verb, Target: target, Note: note})
+}

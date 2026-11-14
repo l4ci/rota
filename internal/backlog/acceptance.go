@@ -5,6 +5,7 @@ import (
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -36,10 +37,16 @@ func UnmetAcceptance(body string, comments []tracker.Comment, lookup func(text, 
 		}
 		notes[kind] = text.String()
 	}
-	return unmetAcceptance(body, notes["acceptance"], notes["proof"], lookup), nil
+	var decisions []string
+	for _, c := range comments {
+		if k, _, ok := marker.ParseComment(c.Body); ok && k == "decision" {
+			decisions = append(decisions, c.ID)
+		}
+	}
+	return unmetAcceptance(body, notes["acceptance"], notes["proof"], decisions, lookup), nil
 }
 
-func unmetAcceptance(body, note, proof string, lookup func(text, sha, check string) (string, bool)) []acceptance.Status {
+func unmetAcceptance(body, note, proof string, decisions []string, lookup func(text, sha, check string) (string, bool)) []acceptance.Status {
 	crits, _ := acceptance.Parse(body)
 	explicit := map[string]bool{}
 	for _, c := range crits {
@@ -48,12 +55,12 @@ func unmetAcceptance(body, note, proof string, lookup func(text, sha, check stri
 		}
 	}
 	var unmet []acceptance.Status
-	for _, st := range acceptance.Coverage(body, acceptance.ParseMarks(note), func(sha, check string) (string, bool) {
+	for _, st := range acceptance.Coverage(body, acceptance.ParseMarks(note), acceptance.WithDecisions(func(sha, check string) (string, bool) {
 		if lookup == nil {
 			return "", false
 		}
 		return lookup(proof, sha, check)
-	}) {
+	}, decisions)) {
 		if explicit[st.ID] && !st.Met && st.Flag != "missing" {
 			unmet = append(unmet, st)
 		}

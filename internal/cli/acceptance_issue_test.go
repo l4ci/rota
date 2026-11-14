@@ -193,3 +193,59 @@ func TestItemShowAcceptance(t *testing.T) {
 func acceptBody2(body string) string {
 	return strings.Replace(body, "AC-2: second, reworded", "AC-2: second", 1)
 }
+
+func TestPlanPassDecision(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := acceptFixture()
+	deps := withTracker(t, fake)
+	add := func(kind string) string {
+		t.Helper()
+		code, env, stderr := issueRunWith(t, deps, root, "item", "comment", "add", "7", "--kind", kind, "--body-file", bodyFile(t, "approved\n"))
+		if code != 0 {
+			t.Fatalf("comment add %s: %d %s", kind, code, stderr)
+		}
+		cid, _ := ddata(t, env)["commentId"].(string)
+		if cid == "" {
+			t.Fatalf("no commentId: %v", env)
+		}
+		return cid
+	}
+	pass := func(args ...string) (int, map[string]any) {
+		t.Helper()
+		code, env, _ := issueRunWith(t, deps, root, append([]string{"plan", "pass"}, args...)...)
+		return code, env
+	}
+	feedback, decision := add("feedback"), add("decision")
+
+	// A comment without the decision marker, an unknown id and a --proof beside
+	// --decision all refuse, and the body stays as it was.
+	if code, _ := pass("#7", "AC-1", "--decision", feedback); code != 4 {
+		t.Errorf("non-decision comment: exit %d, want 4", code)
+	}
+	if code, _ := pass("#7", "AC-1", "--decision", "99999"); code != 4 {
+		t.Errorf("unknown comment: exit %d, want 4", code)
+	}
+	if code, _ := pass("#7", "AC-1", "--decision", decision, "--proof", "abc1234:c"); code != 2 {
+		t.Errorf("both flags: exit %d, want 2", code)
+	}
+
+	code, env := pass("#7", "AC-1", "--decision", decision)
+	if d := ddata(t, env); code != 0 || d["ac"] != "AC-1" || d["changed"] != true {
+		t.Fatalf("decision pass: %d %v", code, d)
+	}
+	_, env, _ = issueRunWith(t, deps, root, "item", "note", "show", "7", "--kind", "acceptance")
+	if body, _ := ddata(t, env)["body"].(string); !strings.Contains(body, "- AC-1 · ") || !strings.Contains(body, " · decision · "+decision+" · first") {
+		t.Errorf("note lacks the decision as evidence: %q", body)
+	}
+	// The criterion now reads as met in item show.
+	_, env, _ = issueRunWith(t, deps, root, "item", "show", "7")
+	acc, _ := ddata(t, env)["acceptance"].([]any)
+	met := false
+	if len(acc) > 0 {
+		m, _ := acc[0].(*jsonx.Object).Get("met")
+		met = m == true
+	}
+	if !met {
+		t.Errorf("AC-1 not met after a decision pass: %v", acc)
+	}
+}

@@ -178,6 +178,26 @@ func Upsert(marks []Mark, m Mark) []Mark {
 // check. The proof package owns which row that is, so acceptance only asks.
 type Lookup func(sha, check string) (result string, found bool)
 
+// DecisionSha is the sha field of a mark that rests on a maintainer decision
+// comment instead of a proof row; its check field is the comment id.
+const DecisionSha = "decision"
+
+// WithDecisions extends proofOf so a mark with DecisionSha is PASS while its
+// comment id is among decisionIDs (the item's decision-marker comments).
+func WithDecisions(proofOf Lookup, decisionIDs []string) Lookup {
+	return func(sha, check string) (string, bool) {
+		if sha != DecisionSha {
+			return proofOf(sha, check)
+		}
+		for _, id := range decisionIDs {
+			if id == check {
+				return "PASS", true
+			}
+		}
+		return "", false
+	}
+}
+
 // Coverage reports every criterion of body (unlabeled ones under the id
 // Number would give them), then marks whose criterion is gone.
 func Coverage(body string, marks []Mark, proofOf Lookup) []Status {
