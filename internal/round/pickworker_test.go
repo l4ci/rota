@@ -234,8 +234,8 @@ func TestAssignMovesTheSlotToCodex(t *testing.T) {
 	}
 }
 
-// AC-6: a slot resuming its issue keeps its harness and account whatever is
-// ahead; a transfer keeps the receiver's.
+// AC-6: a slot resuming its issue is not re-placed (it keeps its harness and
+// account); a transfer keeps the receiver's.
 func TestPlaceResumeAndTransferKeepTheAccount(t *testing.T) {
 	for name, mod := range map[string]func(*preflightIn){
 		"resuming": func(in *preflightIn) { in.Resuming = true },
@@ -246,6 +246,12 @@ func TestPlaceResumeAndTransferKeepTheAccount(t *testing.T) {
 			// b is far ahead of a within the same kind: only Keep stops the move.
 			f.pool(t, strings.Replace(poolCfg, `"accounts":[`, `"accounts":[{"name":"b","configDir":"/nowhere"},`, 1), map[string]float64{"a": 95, "b": 1, "c1": 1, "c2": 1})
 			pf, err := f.place(t, mod)
+			if name == "resuming" {
+				if err != nil || pf.Placement != nil || pf.Kind != harness.Claude {
+					t.Fatalf("%v %+v", err, pf)
+				}
+				return
+			}
 			wantPlacement(t, pf, err, harness.Claude, "a", true)
 		})
 	}

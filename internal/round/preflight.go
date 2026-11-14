@@ -122,8 +122,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 		kind, source, pinned = in.Fixed.kind, in.Fixed.kindSource, true
 	}
 	if in.NoFallback && !pinned {
-		// A transfer keeps the receiver's kind.
-		if source == KindFromDefault && set.DefaultKind() != "" {
+		// A transfer keeps the receiver's kind: the first round.harnesses
+		// entry, else the slot's own.
+		if set.DefaultKind() != "" {
 			kind, source = set.DefaultKind(), KindFromHarnesses
 		}
 		pinned = true
@@ -131,7 +132,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	if _, err := worker.LaunchHarness(kind); err != nil {
 		return kind, source, nil, err
 	}
-	if !poolConfigured(cfg, set) {
+	// A resuming slot keeps its kind and account (dispatch refuses one at its
+	// limit), and solo runs every subagent on the orchestrator's own account.
+	if in.Resuming || worker.IsSolo(root) || !poolConfigured(cfg, set) {
 		return kind, source, nil, e.checkTierModel(root, kind, in, out)
 	}
 	kinds, restriction := []string{kind}, kind
