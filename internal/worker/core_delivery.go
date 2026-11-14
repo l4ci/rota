@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
@@ -55,7 +56,44 @@ func coreOutcome(err error) string {
 		return "unknown"
 	}
 }
-func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, res DispatchResult) (bool, DispatchResult, error) {
+
+// coreConsumed says the slot's worker demonstrably acted after the saved
+// delivery (#3320): a done event (worker done or a ROTA-DONE line) stamped
+// after it, or a commit on the slot's branch dated after it. No pane text is
+// read. A delivery without a stamp (saved by an older rota) has no evidence.
+func (e Env) coreConsumed(ctx context.Context, t *dispatchTarget, p *jsonx.Object) bool {
+	at, err := stamp.Parse(jsonx.Str(p, "at"))
+	if err != nil {
+		return false
+	}
+	if ev := t.slot.Event(); ev != nil && ev.Kind == EventDone {
+		if ts, err := stamp.Parse(ev.TS); err == nil && ts.After(at) {
+			return true
+		}
+	}
+	// Only commits the slot added past its base count: the inherited tip is not
+	// the worker's own work.
+	if b, base := t.slot.Branch(), t.slot.Base(); b != "" && base != "" {
+		if out, code := e.runGit(ctx, t.worktree, "log", "-1", "--format=%cI", "refs/heads/"+b, "--not", base); code == 0 {
+			if ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out)); err == nil && ct.After(at) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// coreFresh is the saved delivery's end when its session is gone or consumed:
+// the record is dropped so the slot takes the next message.
+func coreFresh(root, slot string) error {
+	_, err := UpdateSlot(root, slot, func(s *Slot) { s.ClearCoreDelivery() })
+	return err
+}
+
+// coreRetry reconciles a saved Core delivery before a new message goes out.
+// fresh is a task dispatch: it kills the old session and starts a new one, so
+// an earlier delivery to the dead session never blocks it (#3320).
+func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, res DispatchResult, fresh bool) (bool, DispatchResult, error) {
 	if !receipts(t.h) || t.handle == "" {
 		return false, res, nil
 	}
@@ -64,6 +102,15 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 		return false, res, nil
 	}
 	if jsonx.Str(p, "request") != coreRequest(t, o) {
+		if fresh {
+			return false, res, nil
+		}
+		if e.coreConsumed(ctx, t, p) {
+			if err := coreFresh(root, o.Slot); err != nil {
+				return true, res, err
+			}
+			return false, res, nil
+		}
 		state := jsonx.Str(p, "state")
 		// A message Core holds a receipt for (unknown, submitted) is
 		// reconciled before a new one is refused (#2640): with a receipt the
@@ -132,6 +179,7 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		}
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
+		p.Set("at", stamp.Format(e.Now()))
 		s.o.Set("coreDelivery", p)
 	}); err != nil {
 		return err

@@ -107,9 +107,12 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 			}
 		}
 	}
-	slots, skipped := e.pickSlots(ctx, root, reg, set, want, 2, pre...)
+	slots, skipped, unresolved := e.pickSlotsWhy(ctx, root, reg, set, want, 2, pre...)
 	if len(skipped) > 0 {
 		res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
+	}
+	if len(unresolved) > 0 {
+		res.Warnings = append(res.Warnings, "skipped slots with an unresolved delivery: "+strings.Join(unresolved, "; "))
 	}
 	if len(slots) < 2 {
 		return res, blocked(blockedby.BestOfSlots, "%s is best-of:2 and needs two free slots; %d free", id, len(slots))

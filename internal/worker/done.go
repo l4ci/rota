@@ -338,6 +338,8 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 			evidence = OutcomeEvidence(k, sum, s.PR())
 		}
 		s.SetEvent(EventDone, evidence, now)
+		// The worker acted on what it was sent: its Core delivery is spent (#3320).
+		s.ClearCoreDelivery()
 		if IsDone(s.State()) {
 			return
 		}

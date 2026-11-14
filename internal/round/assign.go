@@ -549,11 +549,17 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
 		}
 	} else {
-		picked, skipped := e.pickSlots(ctx, root, reg, set, worker.NormID(id), 1)
+		picked, skipped, unresolved := e.pickSlotsWhy(ctx, root, reg, set, worker.NormID(id), 1)
 		if len(skipped) > 0 {
 			res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
 		}
+		if len(unresolved) > 0 {
+			res.Warnings = append(res.Warnings, "skipped slots with an unresolved delivery: "+strings.Join(unresolved, "; "))
+		}
 		if len(picked) == 0 {
+			if len(unresolved) > 0 && len(skipped) == 0 {
+				return run, false, blocked(blockedby.NoFreeSlot, "every free roster slot has an unresolved Core delivery: %s; confirm it or transfer the issue to a slot without one", strings.Join(unresolved, "; "))
+			}
 			if len(skipped) > 0 {
 				return run, false, blocked(blockedby.NoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
 			}

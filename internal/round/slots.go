@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
+	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -127,14 +128,14 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 	return "", false
 }
 
-// pickSlots chooses up to n roster slots for the issue held (a normalised ID):
+// pickSlotsWhy chooses up to n roster slots for the issue held (a normalised ID):
 // the pre-chosen slots first, then holders of the issue (resume, any roster
 // slot, a draining one included), then the round's active slots that are
 // idle or whose PR can be queued: only they take new work (Members). A slot
 // is never listed twice. A new-work slot whose account has no login
 // (Env.SlotLoginProblem) is not picked: skipped names each with its problem, for
 // the caller's warning.
-func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
+func (e Env) pickSlotsWhy(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped, unresolved []string) {
 	roster := set.Roster
 	active, _ := Members(reg, set)
 	add := func(s *worker.Slot) {
@@ -151,6 +152,14 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 		}
 	}
 	usable := func(s *worker.Slot) bool {
+		// An unresolved Core delivery refuses the slot's next dispatch (#3321):
+		// pick another slot rather than claim, branch and brief into a refusal.
+		if s.CoreDeliveryUnresolved() {
+			if !slices.ContainsFunc(unresolved, func(u string) bool { return strings.HasPrefix(u, s.Name()+" (") }) {
+				unresolved = append(unresolved, fmt.Sprintf("%s (Core delivery %s)", s.Name(), s.CoreDeliveryState()))
+			}
+			return false
+		}
 		// With placement on, the slot's old account is not the one it will run
 		// under: the pick checks the new one.
 		if why := e.SlotLoginProblem(s); why != "" && !(e.placesAccounts(root) && !s.Holds(held)) {
@@ -174,6 +183,13 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 			}
 		}
 	}
+	return out, skipped, unresolved
+}
+
+// pickSlots is pickSlotsWhy without the slots skipped for an unresolved
+// Core delivery.
+func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) ([]*worker.Slot, []string) {
+	out, skipped, _ := e.pickSlotsWhy(ctx, root, reg, set, held, n, pre...)
 	return out, skipped
 }
 
@@ -181,7 +197,7 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 // parking or dispatching it. Advice uses the same active-slot, login and clean
 // worktree checks as assign rather than treating every done slot as free.
 func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (string, bool) {
-	slots, _ := e.pickSlots(ctx, "", reg, set, "", 1)
+	slots, _, _ := e.pickSlotsWhy(ctx, "", reg, set, "", 1)
 	if len(slots) == 0 {
 		return "", false
 	}

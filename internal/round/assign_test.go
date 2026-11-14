@@ -1678,3 +1678,65 @@ func TestAssignQueuedOriginMovedOnWhileGateHolds(t *testing.T) {
 		})
 	}
 }
+
+func saveCoreDelivery(t *testing.T, root, slot, state string) {
+	t.Helper()
+	if err := rawSlot(root, slot, func(s *jsonx.Object) {
+		d := jsonx.NewObject()
+		d.Set("state", state)
+		s.Set("coreDelivery", d)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// #3321 AC-1, AC-3: a slot with an unresolved Core delivery is skipped, with a
+// warning naming the slot and the state; FreeSlot skips it the same way.
+func TestAssignSkipsSlotWithUnresolvedCoreDelivery(t *testing.T) {
+	for _, state := range []string{"prepared", "unknown", "submitted"} {
+		t.Run(state, func(t *testing.T) {
+			f := newAssignFixture(t)
+			saveCoreDelivery(t, f.root, "ben", state)
+			reg := worker.LoadRegistryTolerant(f.root)
+			if name, ok := f.env.FreeSlot(bg, reg, f.set); !ok || name == "ben" {
+				t.Errorf("FreeSlot = %q, %v; must skip ben", name, ok)
+			}
+			res, err := f.assign("12", "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Agent == "ben" {
+				t.Errorf("assigned ben, whose Core delivery is %s", state)
+			}
+			if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "ben") || !strings.Contains(res.Warnings[0], state) {
+				t.Errorf("warnings = %v, want one naming ben and %s", res.Warnings, state)
+			}
+		})
+	}
+}
+
+// #3321 AC-2, AC-3: with every free slot skipped, assign refuses before any
+// claim, branch, reservation or dispatch.
+func TestAssignRefusesBeforeSideEffectsWhenEverySlotHasUnresolvedDelivery(t *testing.T) {
+	f := newAssignFixture(t)
+	for _, name := range []string{"ben", "dana"} {
+		saveCoreDelivery(t, f.root, name, "submitted")
+	}
+	res, err := f.assign("12", "", nil)
+	if blockedBy(t, err) != blockedby.NoFreeSlot || !strings.Contains(err.Error(), "unresolved Core delivery") || !strings.Contains(err.Error(), "ben") {
+		t.Fatalf("err = %v, want %s naming the delivery and slot", err, blockedby.NoFreeSlot)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "submitted") {
+		t.Errorf("warnings = %v, want the skipped-slot warning", res.Warnings)
+	}
+	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 || len(f.host.sents) != 0 {
+		t.Fatalf("a refused assign must touch nothing: %+v %+v %v %v %v", f.be.claims, f.be.bstates, f.be.notes, f.host.spawned, f.host.sents)
+	}
+	branches, _ := git.Exec(bg, f.root, "branch", "--list", "ben/*", "dana/*")
+	if strings.TrimSpace(branches.Stdout) != "" {
+		t.Errorf("a refused assign created branches: %q", branches.Stdout)
+	}
+	if reg := worker.LoadRegistryTolerant(f.root); reg.Slot("ben").Task() != "" || reg.Slot("dana").Task() != "" {
+		t.Error("a refused assign marked a slot")
+	}
+}

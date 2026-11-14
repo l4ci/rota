@@ -372,7 +372,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	if err := t.checkWorktree(o.Slot); err != nil {
 		return res, err
 	}
-	if handled, result, err := e.coreRetry(ctx, root, o, t, res); handled {
+	if handled, result, err := e.coreRetry(ctx, root, o, t, res, true); handled {
 		return result, err
 	}
 	h, cfg, worktree := t.h, t.cfg, t.worktree
@@ -621,7 +621,7 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	if t.handle == "" {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
 	}
-	if handled, result, err := e.coreRetry(ctx, root, o, t, res); handled {
+	if handled, result, err := e.coreRetry(ctx, root, o, t, res, false); handled {
 		return result, err
 	}
 	// A relay is signed by the key of the session it goes into.

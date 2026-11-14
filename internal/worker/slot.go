@@ -551,7 +551,29 @@ func (s *Slot) setState(next, now string) {
 func (s *Slot) Release() {
 	s.o.Set("handle", nil)
 	s.o.Set("state", "idle")
-	s.o.Delete("coreDelivery")
+	s.ClearCoreDelivery()
+}
+
+// ClearCoreDelivery drops the saved Core delivery: the worker consumed it, or
+// its session is gone.
+func (s *Slot) ClearCoreDelivery() { s.o.Delete("coreDelivery") }
+
+// CoreDeliveryState is the state of the slot's saved Core delivery
+// (prepared, unknown, submitted, ...); "" when it has none.
+func (s *Slot) CoreDeliveryState() string {
+	if p := corePending(s); p != nil {
+		return jsonx.Str(p, "state")
+	}
+	return ""
+}
+
+// CoreDeliveryUnresolved says a saved Core delivery blocks new messages.
+func (s *Slot) CoreDeliveryUnresolved() bool {
+	switch s.CoreDeliveryState() {
+	case "prepared", "unknown", "submitted":
+		return true
+	}
+	return false
 }
 
 // PRMerged says the forge showed the slot's recorded PR merged when the watch
