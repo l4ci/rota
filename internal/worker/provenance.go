@@ -59,6 +59,7 @@ var (
 	reH2            = regexp.MustCompile(`^##(\s|$)`)
 	reSpaces        = regexp.MustCompile(`\s+`)
 	reOfferCite     = regexp.MustCompile(`support offer`)
+	reSettledCite   = regexp.MustCompile(`^\W*settled in brief\b`)
 	reRelayCite     = regexp.MustCompile(`orchestrator relay(?:\s+round\s+(\d+))?`)
 )
 
@@ -110,7 +111,10 @@ func CheckApprovalsOffer(body string, relayLog []any, offered bool) string {
 // CheckApprovals cross-checks a PR body's `## Approvals` section against the
 // slot's relay log. It returns "" for a pass, else what is wrong: a missing
 // section while relays exist, a cited relay round that was never sent, or the
-// maintainer cited for text the orchestrator relayed.
+// maintainer cited for text the orchestrator relayed. A line opening with
+// `settled in brief` cites the brief's settled answers: they are not a logged
+// relay, so such a line is never inflation, but it cannot launder an
+// `orchestrator relay round N` cite either (#3330).
 func CheckApprovals(body string, relayLog []any) string {
 	return checkApprovals(body, relayLog, false, false)
 }
@@ -158,7 +162,7 @@ func checkApprovals(body string, relayLog []any, offerRequired, offered bool) st
 			} else if len(relays) == 0 {
 				problems = append(problems, fmt.Sprintf("cites an orchestrator relay but none is logged: %s", strings.TrimSpace(line)))
 			}
-		} else if strings.Contains(low, "maintainer") {
+		} else if strings.Contains(low, "maintainer") && !reSettledCite.MatchString(low) {
 			for _, r := range relays {
 				summary := norm(jsonx.Str(r, "summary"))
 				if len([]rune(summary)) >= 12 && (strings.Contains(low, summary) || strings.Contains(summary, low)) {

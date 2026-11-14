@@ -300,7 +300,7 @@ refuses `claimed` only with positive stale-holder or reclaimed-branch evidence; 
 different holder without that evidence does not prevent adoption. Unreadable history is
 reported as a warning and skipped.
 
-note: `--body-file` is a deprecated alias for `--settled-file`; both set the same input (the last flag wins). The worker brief calls this text “Settled answers”. Slots write it as `briefSettledAnswers`; re-briefing also reads legacy `briefDecisions` when the new key is absent. Updating or clearing the context removes the legacy key.
+note: `--body-file` is a deprecated alias for `--settled-file`; both set the same input (the last flag wins). The worker brief calls this text “Settled answers” and tells the worker to cite it in `## Approvals` as `settled in brief: <what>` (not a logged relay, so never `orchestrator relay round N`; `worker gate` accepts that form, #3330). Slots write it as `briefSettledAnswers`; re-briefing also reads legacy `briefDecisions` when the new key is absent. Updating or clearing the context removes the legacy key.
 
 ### rota round wind-down
 rota round wind-down [--no-verify] [--prune]
