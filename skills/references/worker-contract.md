@@ -98,8 +98,10 @@ Work only this task, then stop.
 - Outcome. Say how the work ended: `rota worker done <slot> --outcome done|partial|failed
   --summary-file <f>`. The file is exactly three lines: what changed, what was found, what
   remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
-  PR with some criteria met and others not; name the unmet ones on the third line. `failed`:
-  (the `test.fast` proof is not required) you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
+  PR with some criteria met and others not, or a pre-flight failed that you could not fix;
+  name the unmet ones or the failed check on the third line. `partial` and `failed` need no
+  `test.fast` PASS row (the verb reports `proofSkipped`). `failed`:
+  you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
   encode partial or failed only in prose or in the PR title. `partial` and `failed` need the
   file; the gate refuses the PR (`blockedBy: outcome-open`) until the orchestrator relays or
   transfers the slot, so say so rather than hoping it merges. A slice PR on an issue labelled

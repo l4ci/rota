@@ -180,6 +180,18 @@ func TestDoneProofAtHead(t *testing.T) {
 			t.Error("slot not marked done")
 		}
 	})
+	t.Run("a partial outcome needs no proof and records the skip", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, fastCfg)
+		res, err := r.done(DoneRequest{Kind: OutcomePartial, Summary: []string{"a", "b", "fast pre-flight failed: TestX"}})
+		if err != nil || !res.ProofSkipped || r.state() != "done" {
+			t.Fatalf("res %+v err %v", res, err)
+		}
+	})
+	t.Run("an explicit done outcome still needs the proof", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, fastCfg)
+		_, err := r.done(DoneRequest{Kind: OutcomeDone})
+		wantExit(t, err, exitcode.ExitRefused)
+	})
 	t.Run("a failed outcome needs no proof", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, fastCfg)
 		res, err := r.done(DoneRequest{Kind: OutcomeFailed, Summary: []string{"a", "b", "c"}})

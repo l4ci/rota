@@ -53,7 +53,7 @@ func (f *File) completionAcceptance(ref string, in CompleteInput) (string, error
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", err
 	}
-	record, err := completionAcceptanceRecord(ref, unmetAcceptance(body, "", "", nil), in)
+	record, err := completionAcceptanceRecord(ref, unmetAcceptance(body, "", "", nil, nil), in)
 	if refusal, ok := err.(*RefusedError); ok {
 		refusal.Hint = "file mode has no acceptance notes; pass --unmet-reason <text> to record why these criteria remain unmet"
 	}

@@ -225,13 +225,14 @@ func doneWarning(dp DoneDeps, res *DoneResult, message string) {
 	}
 }
 
-// doneProof gates the done on the proof at HEAD: none for a failed outcome, the
+// doneProof gates the done on the proof at HEAD: none for a failed or partial outcome, the
 // targeted command for a small task, else test.fast for every open bundle issue.
 func doneProof(env Env, req DoneRequest, dp DoneDeps, sl *Slot, dir string, bundle func() []string, res *DoneResult) error {
 	cmds := env.GateConfig(req.Root).Tier("fast")
 	switch {
-	case req.Kind == OutcomeFailed:
-		// A worker that cannot deliver has nothing to prove: the summary is its record.
+	case req.Kind == OutcomeFailed || req.Kind == OutcomePartial:
+		// A worker that cannot deliver, or whose pre-flight failed and could not be
+		// fixed, has no PASS row to show: the summary is its record.
 		res.ProofSkipped = true
 	case req.Targeted != "":
 		head, err := branchHead(env, req.Root, sl.Branch())

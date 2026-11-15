@@ -1,12 +1,83 @@
 package backlog
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker"
 )
+
+// DecisionTrust says whether a comment author has write (or higher) access to
+// the repository. Nil means the tracker cannot say: no decision counts.
+type DecisionTrust func(author string) (bool, error)
+
+// TrustOf takes the author check from src when it implements tracker.PushTrust
+// (GitHub), else nil. Answers, failures included, are cached per login for the
+// life of the check.
+func TrustOf(ctx context.Context, src any) DecisionTrust {
+	pt, ok := src.(tracker.PushTrust)
+	if !ok {
+		return nil
+	}
+	type answer struct {
+		ok  bool
+		err error
+	}
+	seen := map[string]answer{}
+	return func(author string) (bool, error) {
+		if a, ok := seen[author]; ok {
+			return a.ok, a.err
+		}
+		v, err := pt.CanPush(ctx, author)
+		a := answer{v && err == nil, err}
+		if ctx.Err() == nil { // a cancelled check is not a fact about the login
+			seen[author] = a
+		}
+		return a.ok, a.err
+	}
+}
+
+// TrustedDecisionIDs are the ids of the comments carrying the decision marker
+// whose author trust vouches for. A nil trust vouches for none. A lookup that
+// fails (a deleted account, a forge error) leaves that one comment untrusted and
+// is reported in unchecked, so a refusal can say the access could not be
+// checked; a cancelled context is err and aborts.
+func TrustedDecisionIDs(comments []tracker.Comment, trust DecisionTrust) (ids []string, unchecked error, err error) {
+	for _, c := range comments {
+		if k, _, ok := marker.ParseComment(c.Body); !ok || k != "decision" || trust == nil {
+			continue
+		}
+		ok, lerr := trust(c.Author)
+		switch {
+		case errors.Is(lerr, context.Canceled) || errors.Is(lerr, context.DeadlineExceeded):
+			return nil, nil, lerr
+		case lerr != nil:
+			unchecked = errors.Join(unchecked, fmt.Errorf("comment %s by %q: %w", c.ID, c.Author, lerr))
+		case ok:
+			ids = append(ids, c.ID)
+		}
+	}
+	return ids, unchecked, nil
+}
+
+// DecisionIDs is the item's trusted decision comments, for `plan pass --decision`;
+// unchecked reports the authors whose access could not be looked up.
+func (b *Issues) DecisionIDs(ref string) (ids []string, unchecked error, err error) {
+	is, _, err := b.require(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	comments, err := b.Tracker.Comments(b.ctx(), is.Key)
+	if err != nil {
+		return nil, nil, err
+	}
+	return TrustedDecisionIDs(comments, TrustOf(b.ctx(), b.Tracker))
+}
 
 // HasAcceptanceIDs reports whether the item explicitly names AC-n criteria.
 // Legacy unnumbered criteria keep their completion behavior.
@@ -23,7 +94,9 @@ func HasAcceptanceIDs(body string) bool {
 // UnmetAcceptance reads the same multipart notes and proof lookup as plan pass.
 // Only explicit ids still in the body can block completion; removed marks and
 // legacy unnumbered criteria do not acquire a new completion requirement.
-func UnmetAcceptance(body string, comments []tracker.Comment, lookup func(text, sha, check string) (string, bool)) ([]acceptance.Status, error) {
+// A decision mark counts only when its comment carries the decision marker and
+// trust says the comment's author has write access; a nil trust counts none.
+func UnmetAcceptance(body string, comments []tracker.Comment, lookup func(text, sha, check string) (string, bool), trust DecisionTrust) ([]acceptance.Status, error) {
 	notes := map[string]string{}
 	for _, kind := range []string{"acceptance", "proof"} {
 		parts, err := noteParts(comments, kind)
@@ -36,10 +109,14 @@ func UnmetAcceptance(body string, comments []tracker.Comment, lookup func(text, 
 		}
 		notes[kind] = text.String()
 	}
-	return unmetAcceptance(body, notes["acceptance"], notes["proof"], lookup), nil
+	decisions, _, err := TrustedDecisionIDs(comments, trust)
+	if err != nil {
+		return nil, err
+	}
+	return unmetAcceptance(body, notes["acceptance"], notes["proof"], decisions, lookup), nil
 }
 
-func unmetAcceptance(body, note, proof string, lookup func(text, sha, check string) (string, bool)) []acceptance.Status {
+func unmetAcceptance(body, note, proof string, decisions []string, lookup func(text, sha, check string) (string, bool)) []acceptance.Status {
 	crits, _ := acceptance.Parse(body)
 	explicit := map[string]bool{}
 	for _, c := range crits {
@@ -48,12 +125,12 @@ func unmetAcceptance(body, note, proof string, lookup func(text, sha, check stri
 		}
 	}
 	var unmet []acceptance.Status
-	for _, st := range acceptance.Coverage(body, acceptance.ParseMarks(note), func(sha, check string) (string, bool) {
+	for _, st := range acceptance.Coverage(body, acceptance.ParseMarks(note), acceptance.WithDecisions(func(sha, check string) (string, bool) {
 		if lookup == nil {
 			return "", false
 		}
 		return lookup(proof, sha, check)
-	}) {
+	}, decisions)) {
 		if explicit[st.ID] && !st.Met && st.Flag != "missing" {
 			unmet = append(unmet, st)
 		}
@@ -70,7 +147,7 @@ func (b *Issues) itemUnmetAcceptance(is Issue) ([]acceptance.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	return UnmetAcceptance(is.Body, comments, b.LookupProof)
+	return UnmetAcceptance(is.Body, comments, b.LookupProof, TrustOf(b.ctx(), b.Tracker))
 }
 
 // AcceptanceRefusal is shared by item completion and the pre-merge gate.

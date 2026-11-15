@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"context"
 	"fmt"
+	gateaudit "github.com/l4ci/rota/internal/gate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +95,119 @@ func TestGateLandsADoneSlicePROnAPartialSliceIssue(t *testing.T) {
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+		})
+	}
+}
+
+// decisionIssues serves issue #5 with one criterion and the comments it is met by.
+type decisionIssues struct {
+	issueStub
+	comments []tracker.Comment
+}
+
+func (s *decisionIssues) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	return tracker.Issue{Key: n, State: "open", Body: "## Acceptance\n- [ ] AC-1: ready\n", Comments: s.comments}, nil
+}
+
+// writerIssues also reports who has write access, as GitHub does.
+type writerIssues struct {
+	decisionIssues
+	writers map[string]bool
+}
+
+func (s *writerIssues) CanPush(_ context.Context, login string) (bool, error) {
+	return s.writers[login], nil
+}
+
+// A partial outcome with every criterion met at the gated head is lifted by the
+// gate itself and audited; one still open keeps refusing, and a failed outcome
+// is never lifted. A decision counts only from a writer, a proof mark only at
+// the head, and a lift needs its audit record.
+func TestGateLiftsAFullyMetPartial(t *testing.T) {
+	decided := func(author string) []tracker.Comment {
+		return []tracker.Comment{
+			{ID: "7", Author: author, Body: "<!-- rota:comment decision -->\nship it"},
+			{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · decision · 7 · ready\n"},
+		}
+	}
+	// proven marks AC-1 at markSha; rows are the proof rows as "RESULT sha".
+	proven := func(markSha string, rows ...string) []tracker.Comment {
+		var proof strings.Builder
+		proof.WriteString("<!-- rota:proof -->\n## Proof\n")
+		for _, r := range rows {
+			res, sha, _ := strings.Cut(r, " ")
+			proof.WriteString("- 2026-11-14 · check · " + res + " · " + sha + " · ok\n")
+		}
+		return []tracker.Comment{
+			{ID: "8", Body: "<!-- rota:acceptance -->\n- AC-1 · 2026-11-14 · " + markSha + " · check · ready\n"},
+			{ID: "9", Body: proof.String()},
+		}
+	}
+	for _, c := range []struct {
+		name      string
+		outcome   string
+		comments  func(head string) []tracker.Comment
+		noTrust   bool
+		badAudit  bool
+		want      string
+		wantAudit bool
+	}{
+		{"decision by a writer", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, false, GatePass, true},
+		{"decision by a non-writer", "partial", func(string) []tracker.Comment { return decided("stranger") }, false, false, GateOutcomeOpen, false},
+		{"tracker cannot report access", "partial", func(string) []tracker.Comment { return decided("maintainer") }, true, false, GateOutcomeOpen, false},
+		{"proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "PASS "+h[:7]) }, false, false, GatePass, true},
+		{"proof at an older sha", "partial", func(string) []tracker.Comment { return proven("deadbee", "PASS deadbee") }, false, false, GateOutcomeOpen, false},
+		{"failing proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "FAIL "+h[:7]) }, false, false, GateOutcomeOpen, false},
+		{"stale PASS then FAIL at the head", "partial", func(h string) []tracker.Comment {
+			return proven(h[:7], "PASS deadbee", "FAIL "+h[:7])
+		}, false, false, GateOutcomeOpen, false},
+		{"PASS then FAIL then PASS at the head", "partial", func(h string) []tracker.Comment {
+			return proven(h[:7], "PASS "+h[:7], "FAIL "+h[:7], "PASS "+h[:7])
+		}, false, false, GatePass, true},
+		{"open criterion", "partial", func(string) []tracker.Comment { return nil }, false, false, GateOutcomeOpen, false},
+		{"mark on a non-decision comment", "partial", func(string) []tracker.Comment {
+			cs := decided("maintainer")
+			cs[0].Body = "<!-- rota:comment feedback -->\nship it"
+			return cs
+		}, false, false, GateOutcomeOpen, false},
+		{"met but failed", "failed", func(string) []tracker.Comment { return decided("maintainer") }, false, false, GateOutcomeOpen, false},
+		{"audit cannot be written", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, true, GateOutcomeOpen, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			head := w.pushStamped("a.txt", "")
+			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
+			w.setOutcomeSlot(c.outcome)
+			auditPath := filepath.Join(w.dir, ".rota", "gate-audit.jsonl")
+			if c.badAudit {
+				if err := os.MkdirAll(auditPath, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			base := decisionIssues{comments: c.comments(strings.TrimSpace(head))}
+			var iss Issues = &base
+			if !c.noTrust {
+				iss = &writerIssues{decisionIssues: base, writers: map[string]bool{"maintainer": true}}
+			}
+			e := w.env(false)
+			e.Issues = func(string, tracker.Settings) (Issues, error) { return iss, nil }
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != c.want {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.want, res)
+			}
+			recs, _ := gateaudit.ReadAudit(w.dir)
+			var lifted []gateaudit.Record
+			for _, r := range recs {
+				if r.Gate == "outcome" && r.Verb == "lift-partial" && r.Target == "w1" {
+					lifted = append(lifted, r)
+				}
+			}
+			if (len(lifted) == 1) != c.wantAudit || len(lifted) > 1 {
+				t.Errorf("lift records = %+v, want audited=%v", lifted, c.wantAudit)
+			}
+			if c.wantAudit && !strings.HasPrefix(lifted[0].Note, "PARTIAL-LIFTED w1") {
+				t.Errorf("audit note %q", lifted[0].Note)
 			}
 		})
 	}

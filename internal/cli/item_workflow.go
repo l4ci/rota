@@ -69,7 +69,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 1, 1, "item show takes one item ID"); err != nil {
 			return Result{}, err
 		}
-		_, wf, _, _, err := itemTrack(c, args[0], "item show", backlog.FileShowHint)
+		be, wf, _, _, err := itemTrack(c, args[0], "item show", backlog.FileShowHint)
 		if err != nil {
 			return backlogFailRead(err)
 		}
@@ -91,7 +91,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		for _, n := range st.Notes {
 			notes = append(notes, n)
 		}
-		cover, err := acceptanceCoverage(c, wf, args[0], st)
+		cover, err := acceptanceCoverage(c, be, wf, args[0], st)
 		if err != nil {
 			return backlogFailRead(err)
 		}

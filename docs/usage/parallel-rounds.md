@@ -1002,7 +1002,7 @@ Items without explicit `AC-n` ids keep their existing behavior.
 For an unmet criterion, leave it unmarked and report `--outcome partial --summary-file <f>`
 (or `failed` when nothing can be delivered). The file has three lines: what changed,
 what was found, and each unmet id with its reason. These outcomes preserve the merge
-gate's hold until the orchestrator handles the gap. Non-closing `Refs` slices and file-mode
+gate's hold until the orchestrator handles the gap, unless every criterion ends up met (by proof or a maintainer decision comment, `rota plan pass <ID> AC-n --decision <comment>`): then the gate lifts a `partial` itself and audits it. A `partial` may also report a failed pre-flight on the third line; it needs no PASS `test.fast` row. Non-closing `Refs` slices and file-mode
 items keep their existing done flow. An intentional close with gaps uses
 `rota item complete <ID> --commit <sha> --unmet-reason <text>` to record the unmet criteria
 and reason. The merger handles this; a worker never closes an issue to bypass the refusal.
