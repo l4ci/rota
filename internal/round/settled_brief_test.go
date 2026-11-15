@@ -23,7 +23,7 @@ func TestSettledAnswersRebrief(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(brief, "Settled answers (verbatim):\n\nm: Preserve the original answer.") {
+			if !strings.Contains(brief, "Settled answers (verbatim; cite them under ## Approvals as `settled in brief: <what>`, never as an orchestrator relay):\n\nm: Preserve the original answer.") {
 				t.Fatalf("saved answers lost on re-brief:\n%s", brief)
 			}
 		})

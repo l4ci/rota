@@ -218,8 +218,10 @@ Every slot is its own worktree, so a node, python or rust repo would install or 
 - Stage explicit paths. Commit messages: imperative subject under 72 chars, body says why,
   no `Co-Authored-By` trailer.
 - The PR body carries an `## Approvals` section citing the channel of every decision you
-  acted on (`None` if you acted only on your brief, which is not a relay). A `## Rulings`
-  section lists your own calls as `<what> — <why> — <cost if wrong>`. An `## Assumptions` section lists each question the
+  acted on (cite the brief's settled answers as `settled in brief: <what>`; `None` if you
+  acted only on the brief's own text and issue, with no settled answers; the brief is not a
+  relay). A `## Rulings` section lists your own calls as `<what> — <why> — <cost if wrong>`.
+  An `## Assumptions` section lists each question the
   issue left open that you answered from the code, as `<question> — <answer> — <where in the code>`
   (`None` if there were none); it is not a Ruling. Reference the issue so it closes on
   merge, unless the PR is a partial slice.
