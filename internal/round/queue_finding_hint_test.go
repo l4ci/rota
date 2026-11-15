@@ -4,12 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// The slot hint points at `round accept` only for an item accept takes
-// (research, minted review). An ordinary item with a finding gets a step that
-// works, and accept refuses it (#3332).
+// The slot hint points at `round accept` exactly when accept takes the item
+// (research, minted review); otherwise it names a working step and accept
+// refuses for the item's kind (#3332). Each case runs both on one fixture, so
+// the test fails if either side's rule changes alone.
 func TestParkableFindingHintAgreesWithAccept(t *testing.T) {
 	cases := map[string]struct {
 		setup      func(f *moveFx, t *testing.T)
@@ -17,6 +19,9 @@ func TestParkableFindingHintAgreesWithAccept(t *testing.T) {
 	}{
 		"research": {func(f *moveFx, t *testing.T) { f.be.items["12"].Labels = []string{"decision:research"} }, true},
 		"review":   {func(f *moveFx, t *testing.T) { f.mintReview(t, "12") }, true},
+		"unminted review title": {func(f *moveFx, t *testing.T) {
+			f.be.items["12"].Title = ReviewTitle("cli")
+		}, false},
 		"ordinary": {func(f *moveFx, t *testing.T) {}, false},
 	}
 	for name, tc := range cases {
@@ -26,7 +31,7 @@ func TestParkableFindingHintAgreesWithAccept(t *testing.T) {
 			if err := editSlot(f.root, "ben", func(s *worker.Slot) error { s.SetFinding("99"); return nil }); err != nil {
 				t.Fatal(err)
 			}
-			ok, why := f.env.parkable(bg, f.be, f.slot("ben"))
+			ok, why := f.env.parkable(bg, f.root, f.be, f.slot("ben"))
 			if ok {
 				t.Fatalf("a slot with a finding and no PR is not parkable")
 			}
@@ -35,6 +40,13 @@ func TestParkableFindingHintAgreesWithAccept(t *testing.T) {
 			}
 			if !tc.acceptable && !strings.Contains(why, "round transfer 12 --to human") {
 				t.Errorf("hint %q names no working step", why)
+			}
+
+			_, err := f.accept("12", nil)
+			refusedForKind := err != nil && (strings.Contains(err.Error(), "needs a PR") ||
+				blockedBy(t, err) == blockedby.ReviewNotMinted)
+			if refusedForKind == tc.acceptable {
+				t.Errorf("accept refused for the item's kind = %v, but the hint says acceptable = %v (err: %v)", refusedForKind, tc.acceptable, err)
 			}
 		})
 	}
