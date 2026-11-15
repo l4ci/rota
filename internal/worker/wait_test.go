@@ -437,13 +437,10 @@ func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 	if err != nil || !res.TimedOut {
 		t.Fatalf("second: %+v %v, want a timeout", res, err)
 	}
-	// The slot goes busy, then finishes again: it is news.
+	// The slot goes busy, then reports again with new evidence: it is news.
 	h.set("w1", "working...\n", "working")
 	waitPassThenStop(t, h, e, dir)
-	if got := seenField(dir, "w1", "seen"); got != "" {
-		t.Errorf("seen = %q after the slot was observed busy", got)
-	}
-	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	h.set("w1", "ROTA-DONE w1 y\n", "done")
 	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("third: %+v %v", res, err)
 	}
@@ -940,6 +937,28 @@ func TestWaitReturnsASecondDoneEventForTheSamePR(t *testing.T) {
 	}
 }
 
+// #3324: a parked done slot whose pane reads busy for one pass (a redraw, a
+// scrollback read that differs) and then done again, with the same PR and no
+// relay or new event, is not news: the watch re-armed hours apart must not
+// wake on it again.
+func TestWaitDoesNotWakeOnADoneSlotThatFlickersBusyOnTheSamePR(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	const done = "ROTA-DONE w1 https://github.com/o/r/pull/7\n"
+	h.set("w1", done, "done")
+	e := envWith(watcherHost{h})
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	h.set("w1", "working...\n", "working")
+	waitPassThenStop(t, h, e, dir)
+	h.set("w1", done, "done")
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("after the flicker: %+v %v, want a timeout", res, err)
+	}
+}
+
 // #2058: the done lands before any wait starts and nothing was seen yet: the
 // first wait reports it.
 func TestWaitReportsADoneRecordedBeforeTheWaitStarted(t *testing.T) {
@@ -981,4 +1000,30 @@ func TestWaitReportsDoneOverAStaleUnsentAlarm(t *testing.T) {
 func UnsentOf(t *testing.T, dir string) bool {
 	t.Helper()
 	return LoadRegistryTolerant(dir).Slot("w1").Unsent()
+}
+
+// #3324: a done reported by the worker's event keys the seen record with the
+// event's seq. The busy flicker clears that event, and the pane then reads the
+// same done without it: the same arrival, not news.
+func TestWaitDoesNotWakeOnADoneEventTheFlickerCleared(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	const done = "ROTA-DONE w1 https://github.com/o/r/pull/7\n"
+	h.set("w1", done, "done")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetEvent(EventDone, "https://github.com/o/r/pull/7", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e := envWith(watcherHost{h})
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	h.set("w1", "working...\n", "working")
+	waitPassThenStop(t, h, e, dir)
+	h.set("w1", done, "done")
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("after the flicker: %+v %v, want a timeout", res, err)
+	}
 }

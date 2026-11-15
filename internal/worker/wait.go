@@ -251,14 +251,32 @@ wait:
 						if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 							if cur := s.Event(); cur != nil && cur.Seq == ev.Seq && s.PaneHandle() == targets[i].handle {
 								s.ClearEvent()
+								// A returned done keyed by this event is still the same
+								// arrival once the pane reads it without the event (#3324).
+								if k, ok := strings.CutPrefix(s.Seen(), seenKey(StateDone, "")); ok {
+									if base, _, found := strings.Cut(k, "\t#"); found {
+										s.SetSeen(seenKey(StateDone, "") + base)
+									}
+								}
 							}
 						}); err != nil {
 							return WaitResult{}, err
 						}
+						if k, ok := strings.CutPrefix(seen[r.Name], seenKey(StateDone, "")); ok {
+							if base, _, found := strings.Cut(k, "\t#"); found {
+								seen[r.Name] = seenKey(StateDone, "") + base
+							}
+						}
 					}
 				}
 			}
-			if seen[r.Name] != "" && seen[r.Name] != key {
+			// A returned done outlives a busy read (#3324): a parked slot's pane
+			// redraws or reads differently between captures, and re-arming on
+			// that woke every re-armed watch on the same PR. A new done is
+			// still news through its key (a relay, an event, another PR) and
+			// through dispatch and `worker done`, which clear seen themselves.
+			keepDone := r.State == StateBusy && strings.HasPrefix(seen[r.Name], seenKey(StateDone, ""))
+			if seen[r.Name] != "" && seen[r.Name] != key && !keepDone {
 				// The slot moved on: re-arm it.
 				delete(seen, r.Name)
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) { s.ClearSeen() }); err != nil {

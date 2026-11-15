@@ -356,6 +356,14 @@ func Run(ctx context.Context, e Env) (Result, error) {
 						continue
 					}
 				case out.Hold: // a failed poll: held without an item, the caller warned
+					// The slot is unchanged, so what the last tick reported for it
+					// stays reported: dropping it made the same item new on the
+					// next tick and woke the watch again (#3324).
+					for k := range e.Reported {
+						if strings.HasSuffix(k, " "+s.Name) {
+							r.Reported[k] = true
+						}
+					}
 					continue
 				}
 			}
