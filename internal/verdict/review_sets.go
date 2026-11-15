@@ -40,7 +40,7 @@ func LatestBranchRecords(records []Record) []Record {
 // Select the latest record first, then test its head: a newer stale local
 // record supersedes an older current-head record of the same kind.
 func latestAtHead(records []Record, kinds []string, head string) []Record {
-	return slices.DeleteFunc(latestPerHarness(records, kinds), func(r Record) bool { return !AtHead(r, head) })
+	return slices.DeleteFunc(latestPerHarness(records, kinds, head), func(r Record) bool { return !AtHead(r, head) })
 }
 
 func latestRecords(records []Record, kinds []string) []Record {
@@ -53,11 +53,13 @@ func latestRecords(records []Record, kinds []string) []Record {
 	return out
 }
 
-// latestPerHarness is latestRecords, except a review-cross kind yields the
-// newest record of each harness: a newer record from one harness must not
-// hide another harness's FAIL, so the blocking and readiness sets see both
-// (#3328). Records without a harness count as one.
-func latestPerHarness(records []Record, kinds []string) []Record {
+// latestPerHarness is latestRecords for the records at head, except a
+// review-cross kind yields the newest record AT head of each harness: a newer
+// record from one harness, or from the same harness at another commit, must not
+// hide a FAIL at head (#3328). Records without a harness count as one. Across
+// heads (FailingRecords without AtHead) a newer cross record clears an older
+// one, so that path keeps latestRecords.
+func latestPerHarness(records []Record, kinds []string, head string) []Record {
 	var out []Record
 	for _, kind := range kinds {
 		if kind != ReviewCross {
@@ -68,7 +70,7 @@ func latestPerHarness(records []Record, kinds []string) []Record {
 		}
 		seen := map[string]bool{}
 		for i := len(records) - 1; i >= 0; i-- {
-			if r := records[i]; r.Kind == kind && !seen[r.Harness] {
+			if r := records[i]; r.Kind == kind && AtHead(r, head) && !seen[r.Harness] {
 				seen[r.Harness] = true
 				out = append(out, r)
 			}

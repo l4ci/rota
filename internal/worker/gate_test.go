@@ -1710,6 +1710,17 @@ func (w *world) recordCross(branch, sha, harness string) {
 	}
 }
 
+// recordCrossV is recordCross with an explicit verdict.
+func (w *world) recordCrossV(branch, sha, harness, v string) {
+	w.t.Helper()
+	if sha == "" {
+		sha = gittest.Run(w.t, w.worker, "rev-parse", "HEAD")
+	}
+	if _, err := verdict.AddBranch(w.dir, branch, verdict.Record{Kind: verdict.ReviewCross, Verdict: v, Sha: sha, Harness: harness, Model: "m"}); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
 // A size:Major or risk:high issue needs a review-cross verdict at head from a
 // harness other than the author's (#1612); review:<h> picks it, review:none
 // skips it, and a Minor issue or an unset round.harnesses is gated as before.
@@ -1784,7 +1795,8 @@ func TestGateCrossRequirementSurvivesTransfer(t *testing.T) {
 		cross   []string // harnesses of review-cross records at head, oldest first
 		refused bool
 	}{
-		{name: "one record from each harness passes", cross: []string{"claude", "codex"}},
+		// The newest record is claude: the old slot-based lookup (codex) misses it.
+		{name: "one record from each harness passes", cross: []string{"codex", "claude"}},
 		{name: "the claude record alone passes", cross: []string{"claude"}},
 		{name: "the slot harness's record alone is refused", cross: []string{"codex"}, refused: true},
 	} {
@@ -1818,6 +1830,66 @@ func TestGateCrossRequirementSurvivesTransfer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A FAIL at head from the required harness refuses even when the same harness
+// later passed another commit (#3328): gating X must not be satisfied by Y.
+func TestGateCrossFailAtHeadSurvivesPassAtAnotherCommit(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+	w.setPRBody("Closes #5\n")
+	w.forge("issueLabels", "in-progress,size:Major")
+	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+	w.recordCrossV("w1", "", "codex", verdict.Fail)
+	w.recordCrossV("w1", gittest.Run(t, w.worker, "rev-parse", "HEAD~1"), "codex", verdict.Pass)
+	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+	if err == nil && res.Verdict == GateFresh {
+		t.Fatalf("verdict %s, want a refusal: the codex FAIL at head stands", res.Verdict)
+	}
+}
+
+// A first assignment row without a harness leaves the author to the slot (the
+// no-recorded-author rule), even when a later row records one; an unreadable
+// ledger refuses instead of routing by the slot silently.
+func TestGateCrossAuthorFirstRowWithoutHarness(t *testing.T) {
+	setup := func(t *testing.T) *world {
+		w := newWorld(t, ghURL)
+		w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
+		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+			[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+		w.setPRBody("Closes #5\n")
+		w.forge("issueLabels", "in-progress,size:Major")
+		w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+		return w
+	}
+	t.Run("harness-less first row falls back to the slot", func(t *testing.T) {
+		w := setup(t)
+		for _, h := range []string{"", "codex"} {
+			if err := ledger.Append(w.dir, ledger.Entry{TS: time.Now().UTC(), Kind: ledger.KindAssign, Issue: "5", Slot: "w1", Harness: h}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Slot claude authors, so codex reviews: the later codex row must not make it claude.
+		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
+			t.Fatalf("verdict %s (%s), want review-missing naming codex", res.Verdict, res.Err)
+		}
+	})
+	t.Run("an unreadable ledger refuses", func(t *testing.T) {
+		w := setup(t)
+		if err := os.MkdirAll(ledger.Path(w.dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+		if got := fmt.Sprint(err) + res.Err; !strings.Contains(got, "round ledger") {
+			t.Fatalf("verdict %s, err %q: want a refusal naming the unreadable ledger", res.Verdict, got)
+		}
+	})
 }
 
 // A triggered review lens (#2064) needs its review-<lens> verdict at head: a

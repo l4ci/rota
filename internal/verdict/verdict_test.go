@@ -716,7 +716,30 @@ func TestCrossAtByKeysOnHarness(t *testing.T) {
 	}
 }
 
-// A newer PASS from one harness must not hide another harness's FAIL at head.
+// A FAIL at head covers nothing, and a PASS from the same harness at another
+// commit neither covers head nor hides that FAIL.
+func TestCrossAtByIgnoresFailsAndOtherHeads(t *testing.T) {
+	const x, y = "aaa1111", "bbb2222"
+	list := []Record{
+		{Kind: ReviewCross, Verdict: Fail, Sha: x, Harness: "hx-a", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: y, Harness: "hx-a", Model: "m"},
+	}
+	accept := func(h string) bool { return h == "hx-a" }
+	if r, ok := CrossAtBy(list, x, accept); ok {
+		t.Fatalf("a FAIL at head is not coverage: %+v", r)
+	}
+	if r, ok := CrossAtBy(list, y, accept); !ok || r.Sha != y {
+		t.Fatalf("CrossAtBy(y) = %+v, %v", r, ok)
+	}
+	if r, ok := BlockingAtHead(list, x); !ok || r.Sha != x {
+		t.Fatalf("BlockingAtHead(x) = %+v, %v; want the FAIL at x under a newer PASS at y", r, ok)
+	}
+	if _, ok := BlockingAtHead(list, y); ok {
+		t.Fatal("nothing blocks at y")
+	}
+}
+
+// At head, a newer PASS from one harness must not hide another harness's FAIL.
 func TestBlockingAtHeadSeesEachHarnessCross(t *testing.T) {
 	const sha = "abc1234"
 	list := []Record{
@@ -726,7 +749,19 @@ func TestBlockingAtHeadSeesEachHarnessCross(t *testing.T) {
 	if r, ok := BlockingAtHead(list, sha); !ok || r.Harness != "hx-a" {
 		t.Fatalf("BlockingAtHead = %+v, %v; want the hx-a FAIL under a newer hx-b PASS", r, ok)
 	}
-	if _, ok := BlockingAnyHead(list); !ok {
-		t.Fatal("BlockingAnyHead must also see the hx-a FAIL")
+}
+
+// Across heads a newer cross record clears an older one: a stale FAIL from a
+// harness no longer required stops blocking once the required one passes.
+func TestBlockingAnyHeadNewerCrossClearsOlderFail(t *testing.T) {
+	list := []Record{
+		{Kind: ReviewCross, Verdict: Fail, Sha: "aaa1111", Harness: "hx-b", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: "bbb2222", Harness: "hx-a", Model: "m"},
+	}
+	if r, ok := BlockingAnyHead(list); ok {
+		t.Fatalf("BlockingAnyHead = %+v; the newer PASS from the required harness clears the old FAIL", r)
+	}
+	if r, ok := Blocking(list); ok {
+		t.Fatalf("Blocking = %+v", r)
 	}
 }

@@ -98,10 +98,13 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 	src.Change, src.ChangeErr = o.Config.ChangePolicy()
 	// The author is the harness recorded at the item's first assignment, so a
 	// transfer or park to another harness's slot does not flip the cross
-	// reviewer (#3328). Without one, the slot's own harness, then the latest
-	// assignment, as before.
-	es, _ := ledger.Load(root)
-	if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: target.Issue, RequireHarness: true, First: true}); e != nil && harness.Valid(e.Harness) {
+	// reviewer (#3328). When that row records no harness, the slot's own
+	// harness, then the latest assignment, as before.
+	es, err := ledger.Load(root)
+	if err != nil {
+		return nil, &ReviewDepthError{Stage: "ledger", Msg: fmt.Sprintf("could not read the round ledger to find the PR's author harness: %v", err), Err: err}
+	}
+	if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: target.Issue, First: true}); e != nil && harness.Valid(e.Harness) {
 		src.Author = e.Harness
 	} else {
 		author := harness.AuthorSources{Slot: target.Kind}
