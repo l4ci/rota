@@ -471,6 +471,7 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	}
 	key := rowKey(t, r)
 	prev := s.State()
+	wasPromoted := s.DonePromoted()
 	if t.evSeq > 0 {
 		s.SetUnsent(false) // the worker's own event proves the brief was submitted
 	}
@@ -486,11 +487,14 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
+	// A promoted done stays marked until a real one answers it, so the next
+	// poll's real ROTA-DONE (prev already done, no relay pending) still counts.
+	s.SetDonePromoted(r.State == StateDone && (t.promoted || wasPromoted && r.Evidence == relayEchoEvidence))
 	if r.State == StateDone && r.Evidence != relayEchoEvidence {
 		// A real ROTA-DONE (never a row promoted from an open PR) the poll reads past the busy edge, or past a pending
 		// relay, is the worker answering what it was sent: the saved Core
 		// delivery is spent (#3320). A static done re-read proves nothing new.
-		if !t.promoted && (!strings.EqualFold(prev, "done") || t.relayPending > 0) {
+		if !t.promoted && (!strings.EqualFold(prev, "done") || t.relayPending > 0 || wasPromoted) {
 			s.ClearCoreDelivery()
 		}
 		if t.relayPending > 0 {

@@ -209,7 +209,13 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 	if !receipts(t.h) {
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
-	tip := e.remoteTip(ctx, root, t.worktree, t.slot.Branch())
+	// The branch being dispatched: ResetTo moved the slot onto it after t.slot was
+	// loaded, and coreConsumed later reads the slot's current branch.
+	branch := t.slot.Branch()
+	if cur := LoadRegistryTolerant(root).Slot(o.Slot); cur != nil {
+		branch = cur.Branch()
+	}
+	tip := e.remoteTip(ctx, root, t.worktree, branch)
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
 		request := coreRequest(t, o)
 		p := jsonx.NewObject()

@@ -255,3 +255,52 @@ func TestRecordRowPromotedDoneKeepsCoreDelivery(t *testing.T) {
 		}
 	}
 }
+
+// #3320: a promoted done keeps the delivery; the next poll's real ROTA-DONE,
+// with no busy edge between and no relay pending, still clears it.
+func TestRecordRowRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
+	s := NewSlot("w1", "b", "wt", "main", "h")
+	s.MarkState("busy", "")
+	d := jsonx.NewObject()
+	d.Set("state", "submitted")
+	s.o.Set("coreDelivery", d)
+	tgt := slotTarget(s)
+	tgt.promoted = true
+	if _, err := recordRow(s, PollRow{"w1", StateDone, "ROTA-DONE"}, tgt, time.Now(), Registry{}); err != nil {
+		t.Fatal(err)
+	}
+	if corePending(s) == nil {
+		t.Fatal("a promoted done cleared the delivery")
+	}
+	tgt = slotTarget(s)
+	if _, err := recordRow(s, PollRow{"w1", StateDone, "ROTA-DONE"}, tgt, time.Now(), Registry{}); err != nil {
+		t.Fatal(err)
+	}
+	if corePending(s) != nil {
+		t.Fatal("a real ROTA-DONE after a promoted done left the delivery behind")
+	}
+}
+
+// #3320: the remote tip is snapshotted for the branch the dispatch moves the
+// slot onto, not the one it held before. The new task branch is already on the
+// remote and nothing is pushed after the delivery: still refused.
+func TestCoreDispatchSnapshotsTheDispatchedBranchTip(t *testing.T) {
+	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	sha := gitIn(t, dir, time.Now(), "rev-parse", "main")
+	gitIn(t, dir, time.Now(), "update-ref", "refs/remotes/origin/"+BranchFor("w1", "T1"), sha)
+	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrSubmitted}
+	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+	e := rig.env(h)
+	task := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "work once"), Task: "T1", Kind: "codex"}
+	if res, err := e.Dispatch(bg, dir, task); err != nil || res.Delivery != "submitted" {
+		t.Fatalf("task: %+v %v, want submitted", res, err)
+	}
+	s := LoadRegistryTolerant(dir).Slot("w1")
+	if got := jsonx.Str(corePending(s), "remoteTip"); got != sha {
+		t.Fatalf("remoteTip = %q, want the dispatched branch's tip %q", got, sha)
+	}
+	if _, err := e.Dispatch(bg, dir, relayOpts(t)); err == nil || !strings.Contains(err.Error(), "unresolved delivery (state: submitted)") {
+		t.Fatalf("nothing was pushed after the delivery: relay must still refuse: %v", err)
+	}
+}

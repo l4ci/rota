@@ -554,6 +554,19 @@ func (s *Slot) Release() {
 	s.ClearCoreDelivery()
 }
 
+// DonePromoted says the slot's last recorded done came from the forge (an idle
+// pane with an open PR), not from a ROTA-DONE line or a worker event.
+func (s *Slot) DonePromoted() bool { return jsonx.Bool(s.o, "donePromoted") }
+
+// SetDonePromoted records or clears that mark.
+func (s *Slot) SetDonePromoted(v bool) {
+	if v {
+		s.o.Set("donePromoted", true)
+		return
+	}
+	s.o.Delete("donePromoted")
+}
+
 // ClearCoreDelivery drops the saved Core delivery: the worker consumed it, or
 // its session is gone.
 func (s *Slot) ClearCoreDelivery() { s.o.Delete("coreDelivery") }
