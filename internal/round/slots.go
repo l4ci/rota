@@ -169,7 +169,7 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 			break
 		}
 		if s := reg.Slot(name); s != nil {
-			if ok, _ := e.parkable(ctx, s); ok && usable(s) {
+			if ok, _ := e.parkable(ctx, nil, s); ok && usable(s) {
 				add(s)
 			}
 		}
