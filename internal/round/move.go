@@ -627,6 +627,12 @@ type transferRun struct {
 	queueTo           bool // the receiver holds a PR that can wait in the queue
 	sender, receiver  *worker.Slot
 	rec               *worker.QueuedPR // no slot holds the issue but a queued PR does
+	// fromHuman: the issue carries needs-human and nothing holds it. The receiver
+	// claims it and the label goes; there is no sender to park or release.
+	fromHuman bool
+	// detach is the worktree whose checkout of the work branch is given up first:
+	// the freed sender's, still on the branch of its queued PR.
+	detach string
 	// bundleDrop: the issue leaves a bundle for the human. promote also replaces
 	// its lead. holder is the slot (or queued record) keeping the remaining work.
 	bundleDrop, promote bool
@@ -861,13 +867,22 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	case receiver != nil && sender == nil:
 		return nil, blocked(blockedby.SameSlot, "slot %s already holds %s", o.To, id)
 	case sender == nil && run.rec == nil:
-		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
+		handed, err := e.handedToHuman(ctx, be)
+		if err != nil {
+			return nil, wrap(err)
+		}
+		if toHuman || !handed[it.IssueKey()] {
+			return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
+		}
+		run.fromHuman = true
 	}
 	switch {
 	case sender != nil:
 		res.From = sender.Name()
 	case run.rec != nil:
 		res.From = run.rec.From
+	case run.fromHuman:
+		res.From = HumanTarget
 	default:
 		res.From = o.To
 	}
@@ -908,6 +923,12 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		}
 	} else if !e.forgeOn(be) {
 		return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
+	}
+
+	if !toHuman && !resuming {
+		if err := e.planBranchCheckout(ctx, root, be, run); err != nil {
+			return nil, err
+		}
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
@@ -987,11 +1008,15 @@ func (e Env) mergeInProgress(ctx context.Context, wt string) bool {
 
 // transferHeadSteps is what both targets share: park the sender, say so on the
 // issue and give the old claim up. A transfer left half done skips all three.
-func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred) []step {
+//
+// withRelease puts the old claim's release last. A transfer to a slot passes
+// false and does it itself once the branch is checked out, so a failed
+// check-out leaves the claim on the sender.
+func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred, withRelease bool) []step {
 	id, from, rnd := run.id, run.from, run.rnd
 	tolerate := tolerateMissing(&res.Warnings, id)
-	moved := func() bool { return run.resuming }
-	return []step{
+	moved := func() bool { return run.resuming || run.fromHuman }
+	steps := []step{
 		{name: "queue the receiver's PR", skip: func() bool { return !run.queueTo }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, o.To))
 		}},
@@ -1018,14 +1043,23 @@ func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o Tra
 			_, _, err := h.post(be, id)
 			return wrap(tolerate("handoff comment", err))
 		}},
-		{name: "release the old claim", skip: moved, do: func() error {
-			// To the human nothing re-claims the issue, so a claim the registry
-			// forgot would stay open: sweep every open claim of the sender. To a
-			// slot the receiver's own claim follows, so the recorded one is enough.
-			_, err := releaseClaims(be, id, from, run.oldClaim, run.toHuman)
-			return wrap(tolerate("claim release", err))
-		}},
 	}
+	if withRelease {
+		steps = append(steps, e.releaseOldClaim(be, run, res))
+	}
+	return steps
+}
+
+// releaseOldClaim gives up the sender's claim. To the human nothing re-claims the
+// issue, so a claim the registry forgot would stay open: it sweeps every open
+// claim of the sender. To a slot the receiver's own claim follows, so the
+// recorded one is enough.
+func (e Env) releaseOldClaim(be Board, run *transferRun, res *Transferred) step {
+	tolerate := tolerateMissing(&res.Warnings, run.id)
+	return step{name: "release the old claim", skip: func() bool { return run.resuming || run.fromHuman }, do: func() error {
+		_, err := releaseClaims(be, run.id, run.from, run.oldClaim, run.toHuman)
+		return wrap(tolerate("claim release", err))
+	}}
 }
 
 // transferToHumanSteps is the sequence for --to human: the head, then the state
@@ -1033,7 +1067,7 @@ func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o Tra
 func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred) []step {
 	id, from := run.id, run.from
 	tolerate := tolerateMissing(&res.Warnings, id)
-	return append(e.transferHeadSteps(ctx, root, be, o, run, res),
+	return append(e.transferHeadSteps(ctx, root, be, o, run, res, true),
 		step{name: "reset the state", do: func() error {
 			_, err := clearState(root, be, id, from)
 			return wrap(tolerate("state reset", err))
@@ -1108,7 +1142,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	id, from, rnd := run.id, run.from, run.rnd
 	sender, rec, receiver, resuming := run.sender, run.rec, run.receiver, run.resuming
 	moved := func() bool { return resuming }
-	steps := e.transferHeadSteps(ctx, root, be, o, run, res)
+	steps := e.transferHeadSteps(ctx, root, be, o, run, res, false)
 
 	// A queued PR is still the issue's PR: the receiver takes it and its relay
 	// log over once dispatched (dispatch resets both for a new task), and the
@@ -1152,6 +1186,22 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			return text
 		}}
 	steps = append(steps,
+		step{name: "detach the sender's worktree", skip: func() bool { return moved() || run.detach == "" }, do: func() error {
+			if _, errOut, code := e.gitOut(ctx, run.detach, "switch", "-q", "--detach"); code != 0 {
+				return unavailable("could not detach %s in %s: %s", run.branch, filepath.Base(run.detach), errOut)
+			}
+			return nil
+		}},
+		// The check-out runs before the claim moves: a failure here leaves the
+		// claim on the sender, so the gate does not refuse claim-lost.
+		step{name: "check out the branch", skip: moved, do: func() error {
+			if err := e.checkout(ctx, root, run.to, id, run.it.Title, &run.branch); err != nil {
+				return wrap(err)
+			}
+			res.Branch = run.branch
+			return nil
+		}},
+		e.releaseOldClaim(be, run, res),
 		step{name: "claim", skip: moved, do: func() error {
 			claimID := o.To + "@" + strconv.Itoa(rnd)
 			won, holder, err := be.Claim(id, claimID)
@@ -1164,15 +1214,16 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			res.ClaimID = claimID
 			return nil
 		}},
-		step{name: "free the sender", skip: func() bool { return resuming || sender == nil }, do: func() error {
-			return wrap(freeSlot(root, from, false))
-		}},
-		step{name: "check out the branch", skip: moved, do: func() error {
-			if err := e.checkout(ctx, root, run.to, id, run.it.Title, &run.branch); err != nil {
+		// Handing it to the human cleared the in-progress state and added the label:
+		// the receiver's claim puts the first back and the label goes.
+		step{name: "clear needs-human", skip: func() bool { return moved() || !run.fromHuman }, do: func() error {
+			if _, err := be.SetState(id, "in-progress"); err != nil {
 				return wrap(err)
 			}
-			res.Branch = run.branch
-			return nil
+			return wrap(e.Forge.RemoveLabels(ctx, run.it.IssueKey(), []string{e.NeedsHuman}))
+		}},
+		step{name: "free the sender", skip: func() bool { return resuming || sender == nil }, do: func() error {
+			return wrap(freeSlot(root, from, false))
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			if attemptBase == "" {
@@ -1294,4 +1345,71 @@ func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, tit
 		return unavailable("could not check out %s in %s: %s", *branch, filepath.Base(wt), errOut)
 	}
 	return nil
+}
+
+// planBranchCheckout refuses, before anything moves, a transfer whose work
+// branch is checked out in a worktree the transfer cannot free: git would
+// refuse the receiver's check-out after the claim had moved. A branch the sender
+// holds parks off with it. A queued PR's branch still on its freed sender's
+// worktree is detached there (run.detach). A human-held issue's branch comes from
+// its open PR.
+func (e Env) planBranchCheckout(ctx context.Context, root string, be Board, run *transferRun) error {
+	switch {
+	case run.sender != nil:
+		run.branch = run.sender.Branch()
+	case run.rec != nil:
+		run.branch = run.rec.Branch
+	case run.fromHuman:
+		prs, err := e.openPRIssuesExcept(ctx, be, "")
+		if err != nil {
+			return wrap(err)
+		}
+		if pr := prs[run.it.IssueKey()]; worker.RoundBranch(pr.Branch) {
+			run.branch = pr.Branch
+		}
+	}
+	if run.branch == "" || worker.IsPark(run.branch) || run.branch == run.to.Base() {
+		return nil
+	}
+	same := func(a, b string) bool {
+		if a == b {
+			return true
+		}
+		ra, ea := filepath.EvalSymlinks(a)
+		rb, eb := filepath.EvalSymlinks(b)
+		return ea == nil && eb == nil && ra == rb
+	}
+	for _, wt := range e.worktreesOn(ctx, root, run.branch) {
+		switch {
+		case same(wt, run.to.Worktree()):
+		case run.sender != nil && same(wt, run.sender.Worktree()):
+		case run.rec != nil && run.rec.From != "" && func() bool {
+			s := worker.LoadRegistryTolerant(root).Slot(run.rec.From)
+			return s != nil && same(wt, s.Worktree())
+		}():
+			run.detach = wt
+		default:
+			return blocked(blockedby.SlotBusy, "%s is checked out in %s, which this transfer cannot free: switch that worktree off it (`git -C %s switch --detach`) and retry", run.branch, wt, wt)
+		}
+	}
+	return nil
+}
+
+// worktreesOn lists the worktrees of the repository that have branch checked out.
+func (e Env) worktreesOn(ctx context.Context, root, branch string) []string {
+	out, _, code := e.gitOut(ctx, root, "worktree", "list", "--porcelain")
+	if code != 0 {
+		return nil
+	}
+	var found []string
+	var wt string
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(l, "worktree "):
+			wt = strings.TrimPrefix(l, "worktree ")
+		case l == "branch refs/heads/"+branch:
+			found = append(found, wt)
+		}
+	}
+	return found
 }

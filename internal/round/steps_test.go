@@ -118,8 +118,10 @@ func TestTransferToSlotStepsOrder(t *testing.T) {
 	f := newMoveFx(t)
 	_, steps := f.transferPlan(t, "12", "dana")
 	names := stepNames(steps)
-	head := []string{"queue the receiver's PR", "park the sender", "handoff comment", "release the old claim",
-		"claim", "free the sender", "check out the branch", "bind the receiver"}
+	// The check-out comes before the claim moves, so a failure there leaves the
+	// claim on the sender (#3322).
+	head := []string{"queue the receiver's PR", "park the sender", "handoff comment", "detach the sender's worktree",
+		"check out the branch", "release the old claim", "claim", "clear needs-human", "free the sender", "bind the receiver"}
 	if len(names) < len(head)+1 || !reflect.DeepEqual(names[:len(head)], head) || names[len(names)-1] != "adopt the queued PR" {
 		t.Errorf("got %v", names)
 	}
@@ -141,7 +143,7 @@ func TestTransferClaimStepRefusedKeepsTheHeadSteps(t *testing.T) {
 	f := newMoveFx(t)
 	_, steps := f.transferPlan(t, "12", "dana")
 	f.be.claimedBy = "kit@1"
-	const through = 5 // the head and the claim
+	const through = 7 // the head, the check-out, the release and the claim
 	err := runSteps(steps[:through])
 	if blockedBy(t, err) != blockedby.Claimed {
 		t.Fatalf("got %v", err)
