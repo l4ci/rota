@@ -72,7 +72,7 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "\nTry it: the issue has a ## Try it section, but its steps are withheld from this brief (%s). Do not run them; the merge gate skips them for the same reason.\n", w)
 	}
 	if d := strings.TrimSpace(decisions); d != "" {
-		fmt.Fprintf(&b, "\nSettled answers (verbatim):\n\n%s\n", d)
+		fmt.Fprintf(&b, "\nSettled answers (verbatim; cite them under ## Approvals as `settled in brief: <what>`, never as an orchestrator relay):\n\n%s\n", d)
 	}
 	if decisionContext != "" {
 		fmt.Fprintf(&b, "\n%s\n", decisionContext)

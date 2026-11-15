@@ -25,7 +25,7 @@ func TestRoundAssignSettledFile(t *testing.T) {
 				t.Fatalf("assign: %d %s %s", code, out, errOut)
 			}
 			brief := h.calls[len(h.calls)-1]
-			if !strings.Contains(brief, "Settled answers (verbatim):\n\nm: Keep the callback signature.") {
+			if !strings.Contains(brief, "Settled answers (verbatim; cite them under ## Approvals as `settled in brief: <what>`, never as an orchestrator relay):\n\nm: Keep the callback signature.") {
 				t.Fatalf("answers missing from brief: %s", brief)
 			}
 		})

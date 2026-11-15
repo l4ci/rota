@@ -230,8 +230,9 @@ Work only this task, then stop.
 - Put an `## Approvals` section in your PR body. One line per approval you acted
   on: what was approved and the channel it came through (`orchestrator relay
   round N`, `maintainer in pane`, `issue comment #<n>`). Never cite a relay as
-  the maintainer. The assignment brief is not a relay: a worker that acted only on
-  its brief writes `None` under Approvals, never `orchestrator relay round N`.
+  the maintainer. The assignment brief is not a relay, so never cite it as
+  `orchestrator relay round N`. Cite its "Settled answers" as `settled in brief: <what>`;
+  a worker that acted on nothing but the brief's own text and issue writes `None`.
 - Put a `## Rulings` section in your PR body. One line per call you made yourself,
   unratified by anyone: `<what> — <why> — <cost if wrong>`. State the cost
   concretely (a revert, a migration, a renamed flag users already typed), so the
@@ -296,5 +297,7 @@ The worker writes its own PR body, and an orchestrator relay, a maintainer typin
   - *inflation*: a line citing the maintainer that quotes a logged relay;
   - *deflation*: a line citing `orchestrator relay round N` when no relay for round N is logged;
   - a missing `## Approvals` section while `relays[]` is non-empty.
+
+  A line opening `settled in brief` cites the brief's settled answers, which are not relays: it is never inflation, and it does not excuse an `orchestrator relay round N` cite in the same line.
 
   No relays and no section is a pass. The text match is a heuristic against a free-form PR body, not proof: the orchestrator still reads every PR body for the channel named, not merely for whether a citation exists.
