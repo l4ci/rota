@@ -818,7 +818,7 @@ func FailingRecords(list []Record, s FailScope) []Record {
 		if s.SecondOpinion {
 			kinds = readinessReviewKinds[len(coreReviewKinds):]
 		}
-		cands = append(cands, latestRecords(list, kinds)...)
+		cands = append(cands, latestPerHarness(list, kinds)...)
 	}
 	return slices.DeleteFunc(cands, func(r Record) bool {
 		if s.Wide {

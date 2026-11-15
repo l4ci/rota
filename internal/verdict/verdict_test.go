@@ -701,17 +701,32 @@ func TestCheckPassesMissingStore(t *testing.T) {
 func TestCrossAtByKeysOnHarness(t *testing.T) {
 	const sha = "abc1234"
 	list := []Record{
-		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "claude", Model: "m"},
-		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "codex", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "hx-a", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "hx-b", Model: "m"},
 	}
-	r, ok := CrossAtBy(list, sha, func(h string) bool { return h == "claude" })
-	if !ok || r.Harness != "claude" {
-		t.Fatalf("CrossAtBy(claude) = %+v, %v; want the claude record under a newer codex one", r, ok)
+	r, ok := CrossAtBy(list, sha, func(h string) bool { return h == "hx-a" })
+	if !ok || r.Harness != "hx-a" {
+		t.Fatalf("CrossAtBy(hx-a) = %+v, %v; want the hx-a record under a newer hx-b one", r, ok)
 	}
-	if _, ok := CrossAtBy(list, sha, func(h string) bool { return h == "gemini" }); ok {
+	if _, ok := CrossAtBy(list, sha, func(h string) bool { return h == "hx-c" }); ok {
 		t.Fatal("a harness with no record must not match")
 	}
 	if _, ok := CrossAtBy(list, "other", func(string) bool { return true }); ok {
 		t.Fatal("a record at another head is stale")
+	}
+}
+
+// A newer PASS from one harness must not hide another harness's FAIL at head.
+func TestBlockingAtHeadSeesEachHarnessCross(t *testing.T) {
+	const sha = "abc1234"
+	list := []Record{
+		{Kind: ReviewCross, Verdict: Fail, Sha: sha, Harness: "hx-a", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "hx-b", Model: "m"},
+	}
+	if r, ok := BlockingAtHead(list, sha); !ok || r.Harness != "hx-a" {
+		t.Fatalf("BlockingAtHead = %+v, %v; want the hx-a FAIL under a newer hx-b PASS", r, ok)
+	}
+	if _, ok := BlockingAnyHead(list); !ok {
+		t.Fatal("BlockingAnyHead must also see the hx-a FAIL")
 	}
 }

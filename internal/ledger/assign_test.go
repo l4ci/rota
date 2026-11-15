@@ -65,11 +65,11 @@ func TestLatestAssignFilters(t *testing.T) {
 func TestFirstAssignKeepsTheOriginalAuthorHarness(t *testing.T) {
 	entries := []Entry{
 		{Kind: KindAssign, Issue: "12", Slot: "ben", Harness: ""},
-		{Kind: KindAssign, Issue: "12", Slot: "ben", Harness: "codex"},
-		{Kind: KindAssign, Issue: "12", Slot: "dana", Harness: "claude"},
+		{Kind: KindAssign, Issue: "12", Slot: "ben", Harness: "hx-a"},
+		{Kind: KindAssign, Issue: "12", Slot: "dana", Harness: "hx-b"},
 	}
 	got := LatestAssign(entries, AssignQuery{Issue: "12", RequireHarness: true, First: true})
-	if got == nil || got.Harness != "codex" {
-		t.Fatalf("First assignment = %+v, want the earliest one that records a harness (codex)", got)
+	if got == nil || got.Harness != "hx-a" {
+		t.Fatalf("First assignment = %+v, want the earliest one that records a harness (hx-a)", got)
 	}
 }
