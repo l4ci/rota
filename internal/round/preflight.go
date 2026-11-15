@@ -149,6 +149,9 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	kinds, restriction := []string{kind}, kind
 	if !pinned {
 		kinds, restriction = allowedKinds(cfg, set), "any harness"
+		if len(kinds) == 0 {
+			return kind, source, nil, blocked(blockedby.Quota, "no worker account: every harness in round.harnesses has only review.accounts logins, which never take a worker issue; add one to round.accounts or list another harness")
+		}
 	}
 	// A model named by flag or label belongs to the harness whose round.tiers
 	// holds it, pinned kind or not.

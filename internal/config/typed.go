@@ -145,7 +145,21 @@ func DirProblem(field, dir string) string {
 // and the entry, and every name that stands for two dirs (a name may repeat
 // across kinds only with one dir, so name-keyed lookups stay unambiguous).
 func AccountDirProblems(cfg any) []string {
-	return append(accountListProblems(RoundAccountsKey, Accounts(cfg)), accountListProblems(ReviewAccountsKey, ReviewAccounts(cfg))...)
+	round, review := Accounts(cfg), ReviewAccounts(cfg)
+	out := append(accountListProblems(RoundAccountsKey, round), accountListProblems(ReviewAccountsKey, review)...)
+	// A name is looked up across both lists, so it needs one dir across both.
+	dirOf := map[string]string{}
+	for _, a := range round {
+		if _, seen := dirOf[a.Name]; !seen {
+			dirOf[a.Name] = a.Dir
+		}
+	}
+	for _, a := range review {
+		if first, seen := dirOf[a.Name]; seen && a.Name != "" && first != a.Dir {
+			out = append(out, fmt.Sprintf("%s %q dir %q differs from %s dir %q: one name needs one dir: make the dirs match or rename one account", ReviewAccountsKey, a.Name, a.Dir, RoundAccountsKey, first))
+		}
+	}
+	return out
 }
 
 // accountListProblems is AccountDirProblems for one account list key.

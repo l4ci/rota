@@ -54,7 +54,7 @@ func (p Placement) String() string {
 }
 
 // allowedKinds is the harnesses a round may use for workers, in tie-break order:
-// round.harnesses (less a kind whose logins are all in review.accounts), else every kind with a round.accounts entry, else claude.
+// round.harnesses (less a kind whose logins are all in review.accounts; none left is an empty list), else every kind with a round.accounts entry, else claude.
 func allowedKinds(cfg any, set roundcfg.Settings) []string {
 	var out []string
 	if len(set.Harnesses) > 0 {
@@ -64,9 +64,8 @@ func allowedKinds(cfg any, set roundcfg.Settings) []string {
 				out = append(out, k)
 			}
 		}
-		if len(out) == 0 {
-			return []string{harness.Default}
-		}
+		// Empty when every listed harness is review-only: the caller refuses
+		// rather than quietly placing a worker on harness.Default.
 		return out
 	}
 	for _, k := range harness.Kinds() {

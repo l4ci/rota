@@ -158,3 +158,15 @@ func TestHeadroomReadsAccountsFromTheInjectedConfig(t *testing.T) {
 		t.Fatalf("headroom %q", why)
 	}
 }
+
+// With every round.harnesses kind review-only no worker can be placed: the cap
+// drops to the held slots and says why, instead of staying uncapped (#3339).
+func TestQuotaCapStopsFillingWhenEveryHarnessIsReviewOnly(t *testing.T) {
+	f := newAssignFixture(t)
+	f.config(t, strings.Replace(reviewOnlyCfg, `"harnesses":["claude","codex"]`, `"harnesses":["codex"]`, 1))
+	f.meters(t, map[string]bool{})
+	c := f.env.QuotaCap(bg, f.root, f.set)
+	if !c.Reduced() || c.Effective != 0 || !strings.Contains(c.Reason, "round.accounts") {
+		t.Fatalf("review-only harnesses, cap %+v", c)
+	}
+}

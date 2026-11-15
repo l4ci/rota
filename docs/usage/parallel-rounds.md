@@ -56,6 +56,8 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
    `rota worker account list` then shows each Claude account with its usage verdict, plus Codex current account quota reports for configured homes, or the caller-current ambient home when none are configured. Codex weekly capacity is display-only; it does not affect account selection. See [Codex weekly capacity](codex-workers.md#read-current-weekly-capacity).
 
+   To keep a login for cross-harness review only, list it in `review.accounts` instead: it never takes a worker issue (see [review and ship](review-and-ship.md#cross-harness-review)). A `round.harnesses` list whose harnesses all have only review logins places no worker: `rota round assign` refuses and names `round.accounts`.
+
    Claude usage comes from the OAuth usage endpoint, read through the cache Claude Code's status line writes
    (`/tmp/claude/statusline-usage[-<8 hex of sha256(config dir)>].json`, shared with the herdr `limits` mod).
    A cache under 5 minutes old is read without a request; files that are symlinks or not yours are ignored.
