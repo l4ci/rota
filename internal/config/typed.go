@@ -156,7 +156,7 @@ func AccountDirProblems(cfg any) []string {
 	}
 	for _, a := range review {
 		if first, seen := dirOf[a.Name]; seen && a.Name != "" && first != a.Dir {
-			out = append(out, fmt.Sprintf("%s %q dir %q differs from %s dir %q: one name needs one dir", ReviewAccountsKey, a.Name, a.Dir, RoundAccountsKey, first))
+			out = append(out, fmt.Sprintf("%s %q dir %q differs from %s dir %q: one name needs one dir: make the dirs match or rename one account", ReviewAccountsKey, a.Name, a.Dir, RoundAccountsKey, first))
 		}
 	}
 	return out

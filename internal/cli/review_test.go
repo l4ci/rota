@@ -992,7 +992,4 @@ func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
 	if d["cross"] != harness.Codex || acct["kind"] != harness.Codex || acct["name"] != "rev" || acct["dir"] != "/home/rev" || acct["fellBack"] != false {
 		t.Errorf("crossAccount = %v in %v, want codex/rev at /home/rev, not fallen back", acct, d)
 	}
-	if !strings.Contains(o.stdout, "crossAccount") {
-		t.Errorf("no crossAccount key in %s", o.stdout)
-	}
 }

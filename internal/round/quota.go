@@ -110,12 +110,28 @@ func (e Env) Headroom(ctx context.Context, root, kind string) string {
 // slots already holding an issue when no pool a worker could run under has
 // headroom. A pool counts when its kind is one the round may use
 // (allowedKinds: round.harnesses, else every kind with a round.accounts entry,
-// else claude).
+// else claude). When allowedKinds is empty (every round.harnesses kind has only
+// review.accounts logins) no worker can be placed: the cap drops to the held
+// slots with a reason naming round.accounts, as the placement refusal does.
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
 	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
 	active, _ := Members(reg, set)
 	c := Cap{Roster: len(active), Effective: len(active), why: map[string]string{}, resets: map[string]time.Time{}}
+	held := func() int {
+		n := 0
+		for _, name := range active {
+			if s := reg.Slot(name); s != nil && !SlotIdle(s) {
+				n++
+			}
+		}
+		return n
+	}
 	allowed := allowedKinds(e.Worker.Config(root), set)
+	if len(allowed) == 0 {
+		c.Effective = held()
+		c.Reason = "no worker account: every harness in round.harnesses has only review.accounts logins; add one to round.accounts or list another harness"
+		return c
+	}
 	var open bool
 	var resets []time.Time
 	var pools []string
@@ -140,13 +156,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 	}
 	c.ResumesAt = earliest(resets)
 	c.Reason = coolingWhy(strings.Join(pools, " and "), c.ResumesAt)
-	held := 0
-	for _, name := range active {
-		if s := reg.Slot(name); s != nil && !SlotIdle(s) {
-			held++
-		}
-	}
-	c.Effective = held
+	c.Effective = held()
 	return c
 }
 
