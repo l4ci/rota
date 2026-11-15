@@ -153,8 +153,9 @@ func TestGateLandingQueuedPRLeavesReassignedSlot(t *testing.T) {
 	}
 }
 
-// A queued PR's slot moved on, so the author kind comes from the issue's latest
-// assign ledger entry: a Codex-built PR needs a claude cross review, not codex.
+// A queued PR's slot moved on, so the author kind comes from the issue's first
+// assign ledger entry (#3328): a Codex-built PR needs a claude cross review, not
+// codex, even after a later assignment on a claude slot.
 func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 	run := func(t *testing.T, labels string, entries ...ledger.Entry) GateResult {
 		t.Helper()
@@ -176,11 +177,11 @@ func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 		}
 		return res
 	}
-	t.Run("latest assign entry names the author", func(t *testing.T) {
+	t.Run("first assign entry names the author", func(t *testing.T) {
 		res := run(t, ",harness:claude",
-			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "ben", Harness: "claude"},
+			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "ben", Harness: "codex"},
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "9", Slot: "kit", Harness: "claude"},
-			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "w2", Harness: "codex"})
+			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "w2", Harness: "claude"})
 		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
 			t.Fatalf("%s (%s), want review-missing naming claude", res.Verdict, res.Err)
 		}
