@@ -253,6 +253,9 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
 	e.noteRelayEcho(root, targets, e.Now())
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
+	for i := range targets {
+		_, targets[i].promoted = notes[targets[i].name]
+	}
 	notified := map[string]int{} // slot -> seq of the event whose notification went out
 	for i, r := range rows {
 		// Notify on the transition only: a poll loop re-reading a stuck slot
@@ -484,10 +487,10 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 		s.ClearSeen()
 	}
 	if r.State == StateDone && r.Evidence != relayEchoEvidence {
-		// A ROTA-DONE the poll reads past the busy edge, or past a pending
+		// A real ROTA-DONE (never a row promoted from an open PR) the poll reads past the busy edge, or past a pending
 		// relay, is the worker answering what it was sent: the saved Core
 		// delivery is spent (#3320). A static done re-read proves nothing new.
-		if !strings.EqualFold(prev, "done") || t.relayPending > 0 {
+		if !t.promoted && (!strings.EqualFold(prev, "done") || t.relayPending > 0) {
 			s.ClearCoreDelivery()
 		}
 		if t.relayPending > 0 {
@@ -553,6 +556,9 @@ type pollTarget struct {
 	ev         *Event
 	lastChange time.Time
 	evSeq      int
+	// promoted: the row's DONE came from the forge (promoteIdleWithPR), not from
+	// a ROTA-DONE sentinel or a worker event: it proves nothing about a delivery.
+	promoted bool
 }
 
 func slotTarget(s *Slot) pollTarget {

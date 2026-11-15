@@ -80,12 +80,22 @@ func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree st
 			return true
 		}
 	}
-	b, base := s.Branch(), s.Base()
-	if b == "" || base == "" || worktree == "" {
+	b := s.Branch()
+	if b == "" || worktree == "" {
 		return false
 	}
+	// A push after the delivery moved the remote-tracking ref off the tip saved
+	// with it (or created it): publication, not commit date, is the evidence. A
+	// local commit nobody pushed leaves the ref where it was.
+	if was := jsonx.Str(p, "remoteTip"); was != "" {
+		now := e.remoteTip(ctx, root, worktree, b)
+		return now != "" && now != "absent" && now != was
+	}
+	// A delivery saved before remoteTip was recorded: a commit past the slot's
+	// base on the remote-tracking branch, dated after the delivery.
+	base := s.Base()
 	remote, err := e.Remote(root)
-	if err != nil || remote == "" {
+	if base == "" || err != nil || remote == "" {
 		return false
 	}
 	out, code := e.runGit(ctx, worktree, "log", "-1", "--format=%cI", "refs/remotes/"+remote+"/"+b, "--not", base)
@@ -94,6 +104,23 @@ func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree st
 	}
 	ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out))
 	return err == nil && ct.After(at)
+}
+
+// remoteTip is the sha of the slot branch's remote-tracking ref, "absent" when
+// it does not exist, "" when it cannot be read.
+func (e Env) remoteTip(ctx context.Context, root, worktree, branch string) string {
+	remote, err := e.Remote(root)
+	if err != nil || remote == "" || branch == "" {
+		return ""
+	}
+	out, code := e.runGit(ctx, worktree, "rev-parse", "--verify", "-q", "refs/remotes/"+remote+"/"+branch)
+	switch {
+	case code == 0 && out != "":
+		return out
+	case code == 1:
+		return "absent"
+	}
+	return ""
 }
 
 // coreFresh is the saved delivery's end when its session is gone or consumed:
@@ -182,6 +209,7 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 	if !receipts(t.h) {
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
+	tip := e.remoteTip(ctx, root, t.worktree, t.slot.Branch())
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
 		request := coreRequest(t, o)
 		p := jsonx.NewObject()
@@ -198,6 +226,9 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		p.Set("at", stamp.Format(e.Now()))
+		if tip != "" {
+			p.Set("remoteTip", tip)
+		}
 		s.o.Set("coreDelivery", p)
 	}); err != nil {
 		return err

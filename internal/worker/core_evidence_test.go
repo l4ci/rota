@@ -91,39 +91,53 @@ func gitIn(t *testing.T, dir string, when time.Time, args ...string) string {
 
 // branchWithCommit makes the slot's branch carry one commit past main, dated
 // when, locally and, when pushed, on the remote-tracking ref too.
-func branchWithCommit(t *testing.T, dir string, when time.Time, pushed bool) {
+func branchWithCommit(t *testing.T, dir string, when time.Time, pushed, tip bool) {
 	t.Helper()
 	sha := gitIn(t, dir, when, "commit-tree", "main^{tree}", "-p", "main", "-m", "work")
 	gitIn(t, dir, when, "update-ref", "refs/heads/w1/t1-x", sha)
 	if pushed {
 		gitIn(t, dir, when, "update-ref", "refs/remotes/origin/w1/t1-x", sha)
 	}
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetBranch("w1/t1-x"); s.o.Set("base", "main") }); err != nil {
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetBranch("w1/t1-x")
+		s.o.Set("base", "main")
+		p := corePending(s)
+		if tip {
+			p.Set("remoteTip", "absent") // the ref did not exist when the delivery was saved
+		} else {
+			p.Delete("remoteTip") // a delivery saved before remoteTip existed
+		}
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// #3320 AC-1: a commit pushed to the slot's branch after the delivery is
-// evidence. The real git call runs: no stub.
-func TestCoreDeliveryClearedByLaterPushedCommit(t *testing.T) {
+// #3320 AC-1: publication after the delivery is the evidence, whatever the
+// commit date: a commit made before the delivery and pushed after it clears.
+// The real git calls run: no stub.
+func TestCoreDeliveryClearedByCommitPushedAfterDelivery(t *testing.T) {
 	dir, e, h := submittedSlot(t)
-	branchWithCommit(t, dir, e.Now().Add(time.Hour), true)
+	branchWithCommit(t, dir, e.Now().Add(-time.Hour), true, true)
 	e.Dispatch(bg, dir, relayOpts(t))
 	relayDelivered(t, dir, h)
 }
 
-// A local commit nobody pushed is not consumption evidence, nor is a pushed one
-// that predates the delivery.
-func TestCoreDeliveryKeptByUnpushedOrOlderCommit(t *testing.T) {
-	for name, tc := range map[string]struct {
-		offset time.Duration
-		pushed bool
-	}{"unpushed-later": {time.Hour, false}, "pushed-earlier": {-time.Hour, true}} {
+// A delivery saved before remoteTip existed keeps the commit-date rule.
+func TestCoreLegacyDeliveryUsesCommitDate(t *testing.T) {
+	dir, e, h := submittedSlot(t)
+	branchWithCommit(t, dir, e.Now().Add(time.Hour), true, false)
+	e.Dispatch(bg, dir, relayOpts(t))
+	relayDelivered(t, dir, h)
+}
+
+// A local commit nobody pushed is not consumption evidence, however new.
+func TestCoreDeliveryKeptByUnpushedCommit(t *testing.T) {
+	for name, tip := range map[string]bool{"with-tip": true, "legacy": false} {
 		t.Run(name, func(t *testing.T) {
 			dir, e, _ := submittedSlot(t)
-			branchWithCommit(t, dir, e.Now().Add(tc.offset), tc.pushed)
+			branchWithCommit(t, dir, e.Now().Add(time.Hour), false, tip)
 			if _, err := e.Dispatch(bg, dir, relayOpts(t)); err == nil || !strings.Contains(err.Error(), "unresolved delivery (state: submitted)") {
-				t.Fatalf("%s commit must not clear the delivery: %v", name, err)
+				t.Fatalf("an unpushed commit must not clear the delivery: %v", err)
 			}
 		})
 	}
@@ -218,5 +232,26 @@ func TestCoreHarnessChangeIsAFreshSession(t *testing.T) {
 	}
 	if spawns != before+1 {
 		t.Fatalf("a harness change must spawn a fresh session: %d -> %d spawns (err %v)", before, spawns, err)
+	}
+}
+
+// #3320: a done the poll only inferred (idle pane, open PR on the slot's branch:
+// pollTarget.promoted) is not the worker answering and leaves the delivery; a
+// real ROTA-DONE past the busy edge clears it.
+func TestRecordRowPromotedDoneKeepsCoreDelivery(t *testing.T) {
+	for _, promoted := range []bool{true, false} {
+		s := NewSlot("w1", "b", "wt", "main", "h")
+		s.MarkState("busy", "")
+		d := jsonx.NewObject()
+		d.Set("state", "submitted")
+		s.o.Set("coreDelivery", d)
+		tgt := slotTarget(s)
+		tgt.promoted = promoted
+		if _, err := recordRow(s, PollRow{"w1", StateDone, "ROTA-DONE"}, tgt, time.Now(), Registry{}); err != nil {
+			t.Fatal(err)
+		}
+		if kept := corePending(s) != nil; kept != promoted {
+			t.Errorf("promoted=%v: delivery kept=%v", promoted, kept)
+		}
 	}
 }

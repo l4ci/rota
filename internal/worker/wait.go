@@ -239,6 +239,9 @@ wait:
 		}
 		e.noteRelayEcho(root, targets, e.Now())
 		rows, notes := e.promoteIdleWithPR(ctx, root, rows)
+		for i := range targets {
+			_, targets[i].promoted = notes[targets[i].name]
+		}
 		last = rows
 		for _, r := range rows {
 			key := rowKey(targetOf(targets, r.Name), r)
