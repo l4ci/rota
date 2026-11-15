@@ -35,16 +35,24 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.PR() == "" && !s.ReviewResult().Complete():
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile --apply`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
-	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
-	if worker.IsBlocked(s.State()) && e.prMerged(ctx, s.PR()) {
-		return e.settled(ctx, s, worker.IsBlocked)
+	// A merged PR leaves the slot nothing to queue: it frees however its worker
+	// ended, and a dirty worktree is not a reason to keep it, because Park
+	// salvages the changes onto the branch (the existing park rules).
+	if e.prMerged(ctx, s.PR()) {
+		accept := worker.Parkable
+		// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
+		if worker.IsBlocked(s.State()) {
+			accept = worker.IsBlocked
+		}
+		return e.settled(ctx, s, accept, true)
 	}
-	return e.settled(ctx, s, worker.Parkable)
+	return e.settled(ctx, s, worker.Parkable, false)
 }
 
 // settled is the slot half of parkable: no partial or failed report, a state
-// the predicate accepts and a clean worktree. why names what is missing when it is not.
-func (e Env) settled(ctx context.Context, s *worker.Slot, accept func(state string) bool) (ok bool, why string) {
+// the predicate accepts and a clean worktree (unless allowDirty: the caller
+// parks it and Park salvages). why names what is missing when it is not.
+func (e Env) settled(ctx context.Context, s *worker.Slot, accept func(state string) bool, allowDirty bool) (ok bool, why string) {
 	// A partial or failed report waits for a relay or transfer: queuing its PR
 	// would let the gate merge it by number with nobody having answered it.
 	if k, _ := s.Outcome(); worker.OutcomeOpen(k) {
@@ -57,8 +65,8 @@ func (e Env) settled(ctx context.Context, s *worker.Slot, accept func(state stri
 	if err != nil {
 		return false, "worktree unreadable"
 	}
-	if len(dirty) > 0 {
-		return false, "uncommitted changes"
+	if len(dirty) > 0 && !allowDirty {
+		return false, dirtyWhy
 	}
 	return true, ""
 }
@@ -142,8 +150,20 @@ func (e Env) mergedBranchPR(ctx context.Context, root, branch, base string) (*tr
 	return nil, nil
 }
 
+// dirtyWhy is settled's reason for a worktree with uncommitted changes.
+const dirtyWhy = "uncommitted changes"
+
+// dirtyMsg is the refusal for a slot that cannot park because its worktree is
+// dirty: it names that state, not the item the slot holds.
+func dirtyMsg(name, why string) string {
+	return fmt.Sprintf("slot %s has %s in its worktree: commit or discard them, or wait for its worker to report done", name, why)
+}
+
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.
 func busyMsg(name, held, why string) string {
+	if why == dirtyWhy {
+		return dirtyMsg(name, why)
+	}
 	return fmt.Sprintf("slot %s holds %s (%s; a slot frees when its worker reports done with a PR)", name, held, why)
 }
 
