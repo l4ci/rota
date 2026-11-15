@@ -21,6 +21,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -1768,6 +1769,52 @@ func TestGateRequiresCrossReview(t *testing.T) {
 				if strings.Contains(notes, "REVIEW-CROSS") {
 					t.Errorf("a PR without a cross requirement must note nothing new: %q", notes)
 				}
+			}
+		})
+	}
+}
+
+// The cross reviewer is fixed by the harness that authored the PR (the first
+// recorded assignment), not by the slot it sits on now: after a transfer to a
+// claude slot a codex-authored PR still needs claude, and a newer codex cross
+// record at the same head must not hide the claude one (#3328).
+func TestGateCrossRequirementSurvivesTransfer(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		cross   []string // harnesses of review-cross records at head, oldest first
+		refused bool
+	}{
+		{name: "one record from each harness passes", cross: []string{"claude", "codex"}},
+		{name: "the claude record alone passes", cross: []string{"claude"}},
+		{name: "the slot harness's record alone is refused", cross: []string{"codex"}, refused: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+			// Authored on codex, then transferred to a claude slot.
+			for _, h := range []string{"codex", "claude"} {
+				if err := ledger.Append(w.dir, ledger.Entry{TS: time.Now().UTC(), Kind: ledger.KindAssign, Issue: "5", Slot: "w1", Harness: h}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w.setPRBody("Closes #5\n")
+			w.forge("issueLabels", "in-progress,size:Major")
+			w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+			for _, h := range c.cross {
+				w.recordCross("w1", "", h)
+			}
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused {
+				if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+					t.Fatalf("verdict %s (%s), want review-missing naming claude", res.Verdict, res.Err)
+				}
+			} else if res.Verdict != GateFresh {
+				t.Fatalf("verdict %s (%s), want a pass", res.Verdict, res.Err)
 			}
 		})
 	}

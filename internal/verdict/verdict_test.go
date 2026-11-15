@@ -695,3 +695,23 @@ func TestCheckPassesMissingStore(t *testing.T) {
 		t.Fatalf("a missing store must not block: %v", err)
 	}
 }
+
+// Two harnesses' review-cross records at one head coexist: the lookup finds
+// the newest record the requirement accepts, not the newest of any harness.
+func TestCrossAtByKeysOnHarness(t *testing.T) {
+	const sha = "abc1234"
+	list := []Record{
+		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "claude", Model: "m"},
+		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "codex", Model: "m"},
+	}
+	r, ok := CrossAtBy(list, sha, func(h string) bool { return h == "claude" })
+	if !ok || r.Harness != "claude" {
+		t.Fatalf("CrossAtBy(claude) = %+v, %v; want the claude record under a newer codex one", r, ok)
+	}
+	if _, ok := CrossAtBy(list, sha, func(h string) bool { return h == "gemini" }); ok {
+		t.Fatal("a harness with no record must not match")
+	}
+	if _, ok := CrossAtBy(list, "other", func(string) bool { return true }); ok {
+		t.Fatal("a record at another head is stale")
+	}
+}

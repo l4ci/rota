@@ -96,15 +96,23 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 	*src = ReviewSources{Policy: policy, Git: o.Git, Dir: o.Dir, Span: o.Span,
 		Labels: slices.Clone(o.Labels), Cross: cross, Author: target.Kind, Lenses: lenses, Pools: o.Pools}
 	src.Change, src.ChangeErr = o.Config.ChangePolicy()
-	author := harness.AuthorSources{Slot: target.Kind}
-	if author.Slot == "" {
-		es, _ := ledger.Load(root)
-		if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: target.Issue, RequireHarness: true}); e != nil {
-			author.Assigned = e.Harness
+	// The author is the harness recorded at the item's first assignment, so a
+	// transfer or park to another harness's slot does not flip the cross
+	// reviewer (#3328). Without one, the slot's own harness, then the latest
+	// assignment, as before.
+	es, _ := ledger.Load(root)
+	if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: target.Issue, RequireHarness: true, First: true}); e != nil && harness.Valid(e.Harness) {
+		src.Author = e.Harness
+	} else {
+		author := harness.AuthorSources{Slot: target.Kind}
+		if author.Slot == "" {
+			if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: target.Issue, RequireHarness: true}); e != nil {
+				author.Assigned = e.Harness
+			}
 		}
-	}
-	if author.Slot != "" || author.Assigned != "" {
-		src.Author, _ = harness.ResolveAuthor(author)
+		if author.Slot != "" || author.Assigned != "" {
+			src.Author, _ = harness.ResolveAuthor(author)
+		}
 	}
 	for _, id := range target.Bundle {
 		if key, ok := tracker.ParseKey(id); ok {

@@ -687,6 +687,19 @@ func CrossAt(list []Record, head string) (Record, bool) {
 	return r, ok && AtHead(r, head)
 }
 
+// CrossAtBy is the branch's newest review-cross record at head whose harness
+// accept approves. Records from different harnesses at one head coexist: a
+// newer record from another harness does not hide this one.
+func CrossAtBy(list []Record, head string, accept func(harness string) bool) (Record, bool) {
+	list = ForHead(list, head)
+	for i := len(list) - 1; i >= 0; i-- {
+		if r := list[i]; r.Kind == ReviewCross && AtHead(r, head) && accept(r.Harness) {
+			return r, true
+		}
+	}
+	return Record{}, false
+}
+
 // LensAt is the branch's newest record of the lens kind when it was recorded at
 // head; a record on another commit is stale and does not count.
 func LensAt(list []Record, kind, head string) (Record, bool) {
