@@ -65,3 +65,19 @@ func TestCrossPoolsReadsBothListsWithMeters(t *testing.T) {
 		t.Fatalf("main pool %+v, want only claude a with headroom 60 (codex is review-only)", got.Main)
 	}
 }
+
+// AC-2 (#3339): when every harness in round.harnesses has only review logins,
+// placement refuses with the round.accounts hint instead of falling back to the
+// default harness.
+func TestPlaceRefusesWhenEveryHarnessIsReviewOnly(t *testing.T) {
+	f := newAssignFixture(t)
+	cfg := strings.Replace(reviewOnlyCfg, `"harnesses":["claude","codex"]`, `"harnesses":["codex"]`, 1)
+	f.pool(t, cfg, map[string]float64{"a": 95, "r1": 0})
+	pf, err := f.place(t, nil)
+	if err == nil {
+		t.Fatalf("placed on %s/%+v, want a refusal", pf.Kind, pf.Placement)
+	}
+	if by := blockedBy(t, err); by != blockedby.Quota || !strings.Contains(err.Error(), "round.accounts") {
+		t.Fatalf("err %v (blockedBy %q), want a refusal naming round.accounts", err, by)
+	}
+}

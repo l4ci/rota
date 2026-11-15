@@ -16,7 +16,9 @@ import (
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 const reviewBacklog = `# Backlog
@@ -952,5 +954,45 @@ func TestReviewDepthListsLenses(t *testing.T) {
 		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "review": {"lenses": {"security": {"paths": ["x.txt"]}, "bogus": {}}}}`)
 	if o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json"); o.code == 0 || !strings.Contains(o.stdout+o.stderr, "review.lenses") {
 		t.Errorf("an unknown lens must fail naming the key: %d %s %s", o.code, o.stdout, o.stderr)
+	}
+}
+
+// AC-4 (#3339): `review depth --json` carries the crossAccount block when
+// review.accounts names a login of the reviewing harness.
+func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
+	deps := testDeps()
+	// The reviewer login probe: only `codex login status` is answered.
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{Run: func(_ context.Context, _ string, args, _ []string) (host.Result, error) {
+			if len(args) == 2 && args[0] == "login" && args[1] == "status" {
+				return host.Result{}, nil
+			}
+			return host.Result{ExitCode: 1}, nil
+		}}
+	}
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[{"name":"size:Major"}]}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "round": {"harnesses": ["claude", "codex"]}, "review": {"accounts": [{"kind": "codex", "name": "rev", "dir": "/home/rev"}]}}`)
+	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+	if o.code != 0 {
+		t.Fatalf("exit %d: %s %s", o.code, o.stdout, o.stderr)
+	}
+	d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+	acct, _ := d["crossAccount"].(map[string]any)
+	if d["cross"] != harness.Codex || acct["kind"] != harness.Codex || acct["name"] != "rev" || acct["dir"] != "/home/rev" || acct["fellBack"] != false {
+		t.Errorf("crossAccount = %v in %v, want codex/rev at /home/rev, not fallen back", acct, d)
+	}
+	if !strings.Contains(o.stdout, "crossAccount") {
+		t.Errorf("no crossAccount key in %s", o.stdout)
 	}
 }
