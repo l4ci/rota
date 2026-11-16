@@ -102,6 +102,33 @@ func TestTickHeldWithoutPendingIsSilent(t *testing.T) {
 	}
 }
 
+// #3324: a tick whose review read fails holds the slot without an item. The
+// item it reported before is still there, so it must not read as new on the
+// tick after, nor in the next watch run.
+func TestTickHeldReviewKeepsTheReportedItemQuiet(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "u/1"}}}
+	failRead := false
+	e := f.env()
+	e.ReviewLoop = func(context.Context, Slot) ReviewOutcome { return ReviewOutcome{Hold: failRead} }
+	e.AwaitingReview = func(context.Context, Slot, string) string { return "waiting for a verdict" }
+	r1, err := Run(context.Background(), e)
+	if err != nil || len(r1.New) != 1 {
+		t.Fatalf("first tick: %v %+v", err, r1.New)
+	}
+	failRead = true
+	e.Reported = r1.Reported
+	r2, err := Run(context.Background(), e)
+	if err != nil || len(r2.New) != 0 {
+		t.Fatalf("held tick: %v %+v", err, r2.New)
+	}
+	failRead = false
+	e.Reported = r2.Reported
+	r3, err := Run(context.Background(), e)
+	if err != nil || len(r3.New) != 0 {
+		t.Fatalf("tick after the hold: %v new %+v, want the same item quiet", err, r3.New)
+	}
+}
+
 func reviewSrc(auto bool) (ReviewSources, *[]string) {
 	var warned []string
 	return ReviewSources{

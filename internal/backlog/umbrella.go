@@ -448,6 +448,17 @@ func (u *Umbrella) Comments(ref, kind string) ([]Comment, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) ([]Comment, error) { return s.Comments(plain, kind) })
 }
 
+// DecisionIDs is the item's decision comments by authors with write access,
+// judged by the owning sub-repo's tracker.
+func (u *Umbrella) DecisionIDs(ref string) (ids []string, unchecked error, err error) {
+	ids, err = viaOwner(u, ref, func(s *Issues, plain string) ([]string, error) {
+		i, un, err := s.DecisionIDs(plain)
+		unchecked = un
+		return i, err
+	})
+	return ids, unchecked, err
+}
+
 // AddComment appends a comment on the item's tracker.
 func (u *Umbrella) AddComment(ref, kind, text string) (string, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (string, error) { return s.AddComment(plain, kind, text) })

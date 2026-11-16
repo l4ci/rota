@@ -248,3 +248,17 @@ func TestAccountDirProblemsCoverReviewAccounts(t *testing.T) {
 		t.Errorf("problems = %v, want a review.accounts dir problem and an unknown kind", got)
 	}
 }
+
+// AC-3 (#3339): one name in review.accounts and round.accounts with two dirs is
+// flagged like a repeat inside one list; the same dir is fine.
+func TestAccountDirProblemsFlagsNameWithTwoDirsAcrossLists(t *testing.T) {
+	same := `{"round":{"accounts":[{"kind":"codex","name":"x","dir":"/a"}]},"review":{"accounts":[{"kind":"codex","name":"x","dir":"/a"}]}}`
+	if got := AccountDirProblems(decode(t, same)); len(got) != 0 {
+		t.Errorf("same dir in both lists flagged: %v", got)
+	}
+	split := `{"round":{"accounts":[{"kind":"codex","name":"x","dir":"/a"}]},"review":{"accounts":[{"kind":"codex","name":"x","dir":"/b"}]}}`
+	got := AccountDirProblems(decode(t, split))
+	if len(got) != 1 || !strings.Contains(got[0], "review.accounts") || !strings.Contains(got[0], "round.accounts") || !strings.Contains(got[0], "one name needs one dir") {
+		t.Errorf("problems = %v, want one cross-list name/dir problem", got)
+	}
+}

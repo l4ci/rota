@@ -26,12 +26,15 @@ func queuedIssue(q worker.QueuedPR) string {
 // it holds an issue, records a PR (or, for a review item, the issues it filed),
 // reports done or idle and its worktree has
 // no dirty paths. why names what is missing when it is not.
-func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string) {
+func (e Env) parkable(ctx context.Context, root string, be Board, s *worker.Slot) (ok bool, why string) {
 	switch {
 	case s.HeldID() == "":
 		return false, "holds nothing"
 	case s.PR() == "" && !s.ReviewResult().Complete() && s.Finding() != "":
-		return false, "its finding awaits `rota round accept`"
+		if e.acceptable(ctx, root, be, s) {
+			return false, "its finding awaits `rota round accept`"
+		}
+		return false, fmt.Sprintf("its finding has no PR and accept takes only research and architecture-review items; hand it over with `rota round transfer %s --to human`", s.HeldID())
 	case s.PR() == "" && !s.ReviewResult().Complete():
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile --apply`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
@@ -47,6 +50,27 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 		return e.settled(ctx, s, accept, true)
 	}
 	return e.settled(ctx, s, worker.Parkable, false)
+}
+
+// acceptable says whether `round accept` takes the item the slot holds: a
+// decision:research item, or an architecture review this round minted. It mirrors Accept's own
+// gate, so the hint and the verb agree. An unreadable item, or no board, is no.
+func (e Env) acceptable(ctx context.Context, root string, be Board, s *worker.Slot) bool {
+	if be == nil {
+		return false
+	}
+	it, err := be.Get(s.HeldID())
+	if err != nil {
+		return false
+	}
+	if d, err := DecisionOf(be.Capabilities(), *it); err == nil && d == DecisionResearch {
+		return true
+	}
+	if !IsReviewTitle(it.Title) {
+		return false
+	}
+	minted, err := e.mintedReview(ctx, root, be, it)
+	return err == nil && minted
 }
 
 // settled is the slot half of parkable: no partial or failed report, a state
@@ -182,7 +206,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	if s == nil {
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
-	if ok, why := e.parkable(ctx, s); !ok {
+	if ok, why := e.parkable(ctx, root, be, s); !ok {
 		return blocked(blockedby.SlotBusy, "%s", busyMsg(name, s.HeldID(), why))
 	}
 	if s.PR() == "" {

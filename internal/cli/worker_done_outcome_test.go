@@ -118,15 +118,19 @@ func TestWorkerDoneOutcome(t *testing.T) {
 			}
 		}
 	})
-	t.Run("failed needs no test.fast proof", func(t *testing.T) {
+	t.Run("failed and partial need no test.fast proof", func(t *testing.T) {
 		dir := doneProject(t, "true")
 		sum := writeSummary(t, dir, threeLines)
 		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "failed", "--summary-file", sum, "--json"); code != 0 {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 		dir = doneProject(t, "true")
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum, "--json"); code != 4 {
-			t.Fatalf("partial still needs proof: exit %d: %s", code, out)
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum, "--json"); code != 0 || !strings.Contains(out, `"proofSkipped": true`) {
+			t.Fatalf("partial needs no proof and records the skip: exit %d: %s", code, out)
+		}
+		dir = doneProject(t, "true")
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "done", "--json"); code != 4 {
+			t.Fatalf("--outcome done still needs proof: exit %d: %s", code, out)
 		}
 	})
 }

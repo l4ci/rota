@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -192,4 +195,121 @@ func TestItemShowAcceptance(t *testing.T) {
 // acceptBody2 puts the second criterion's text back to what the mark saw.
 func acceptBody2(body string) string {
 	return strings.Replace(body, "AC-2: second, reworded", "AC-2: second", 1)
+}
+
+// writerFake is a tracker that reports who has write access (GitHub's CanPush).
+type writerFake struct {
+	*trackertest.Fake
+	writers map[string]bool
+}
+
+func (w writerFake) CanPush(_ context.Context, login string) (bool, error) {
+	return w.writers[login], nil
+}
+
+// A marker comment by someone without write access, or on a tracker that
+// cannot report access, never marks a criterion.
+func TestPlanPassDecisionNeedsAWriter(t *testing.T) {
+	for name, mk := range map[string]func(*trackertest.Fake) backlog.Tracker{
+		"non-writer":    func(f *trackertest.Fake) backlog.Tracker { return writerFake{f, map[string]bool{}} },
+		"cannot report": func(f *trackertest.Fake) backlog.Tracker { return f },
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := trackerProject(t, issuesConfig)
+			fake := acceptFixture()
+			deps := withTracker(t, mk(fake))
+			code, env, _ := issueRunWith(t, deps, root, "item", "comment", "add", "7", "--kind", "decision", "--body-file", bodyFile(t, "approved\n"))
+			cid, _ := ddata(t, env)["commentId"].(string)
+			if code != 0 || cid == "" {
+				t.Fatalf("comment add: %d %v", code, env)
+			}
+			code, env, _ = issueRunWith(t, deps, root, "plan", "pass", "#7", "AC-1", "--decision", cid)
+			if d := ddata(t, env); code != 4 || d["changed"] != false || d["blockedBy"] != "unmet acceptance" {
+				t.Fatalf("exit %d data %v, want a refusal", code, d)
+			}
+		})
+	}
+}
+
+func TestPlanPassDecision(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := acceptFixture()
+	deps := withTracker(t, writerFake{fake, map[string]bool{"fake-user": true}})
+	add := func(kind string) string {
+		t.Helper()
+		code, env, stderr := issueRunWith(t, deps, root, "item", "comment", "add", "7", "--kind", kind, "--body-file", bodyFile(t, "approved\n"))
+		if code != 0 {
+			t.Fatalf("comment add %s: %d %s", kind, code, stderr)
+		}
+		cid, _ := ddata(t, env)["commentId"].(string)
+		if cid == "" {
+			t.Fatalf("no commentId: %v", env)
+		}
+		return cid
+	}
+	pass := func(args ...string) (int, map[string]any) {
+		t.Helper()
+		code, env, _ := issueRunWith(t, deps, root, append([]string{"plan", "pass"}, args...)...)
+		return code, env
+	}
+	feedback, decision := add("feedback"), add("decision")
+
+	// A comment without the decision marker, an unknown id and a --proof beside
+	// --decision all refuse, and the body stays as it was.
+	if code, _ := pass("#7", "AC-1", "--decision", feedback); code != 4 {
+		t.Errorf("non-decision comment: exit %d, want 4", code)
+	}
+	if code, _ := pass("#7", "AC-1", "--decision", "99999"); code != 4 {
+		t.Errorf("unknown comment: exit %d, want 4", code)
+	}
+	if code, _ := pass("#7", "AC-1", "--decision", decision, "--proof", "abc1234:c"); code != 2 {
+		t.Errorf("both flags: exit %d, want 2", code)
+	}
+
+	code, env := pass("#7", "AC-1", "--decision", decision)
+	if d := ddata(t, env); code != 0 || d["ac"] != "AC-1" || d["changed"] != true {
+		t.Fatalf("decision pass: %d %v", code, d)
+	}
+	_, env, _ = issueRunWith(t, deps, root, "item", "note", "show", "7", "--kind", "acceptance")
+	if body, _ := ddata(t, env)["body"].(string); !strings.Contains(body, "- AC-1 · ") || !strings.Contains(body, " · decision · "+decision+" · first") {
+		t.Errorf("note lacks the decision as evidence: %q", body)
+	}
+	// The criterion now reads as met in item show.
+	_, env, _ = issueRunWith(t, deps, root, "item", "show", "7")
+	acc, _ := ddata(t, env)["acceptance"].([]any)
+	met := false
+	if len(acc) > 0 {
+		m, _ := acc[0].(*jsonx.Object).Get("met")
+		met = m == true
+	}
+	if !met {
+		t.Errorf("AC-1 not met after a decision pass: %v", acc)
+	}
+}
+
+// In an umbrella the owning sub-repo's tracker judges the author: a writer's
+// decision marks the criterion, a non-writer's refuses.
+func TestPlanPassDecisionUmbrella(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		writers map[string]bool
+		want    int
+	}{{"writer", map[string]bool{"fake-user": true}, 0}, {"non-writer", map[string]bool{}, 4}} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, deps, fakes, _ := umbrellaProject(t)
+			fakes["web"].Issues[1].Body = acceptBody
+			deps.NewTracker = func(_ context.Context, dir string, _ any) (backlog.Tracker, error) {
+				return writerFake{fakes[filepath.Base(dir)], tc.writers}, nil
+			}
+			code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "web:2", "--kind", "decision", "--body-file", bodyFile(t, "approved\n"))
+			cid, _ := issueGet(issueData(t, env), "commentId").(string)
+			if code != 0 || cid == "" {
+				t.Fatalf("comment add: %d %s %v", code, stderr, env)
+			}
+			code, _, stderr = rotaRunWith(t, deps, "--json", "-C", root, "plan", "pass", "#2", "AC-1", "--decision", cid)
+			if code != tc.want {
+				t.Fatalf("exit %d, want %d: %s", code, tc.want, stderr)
+			}
+		})
+	}
 }

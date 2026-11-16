@@ -942,7 +942,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		}
 		if !resuming {
 			if h := run.to.HeldID(); h != "" {
-				ok, why := e.parkable(ctx, run.to)
+				ok, why := e.parkable(ctx, root, be, run.to)
 				if !ok {
 					return nil, blocked(blockedby.SlotBusy, "%s", busyMsg(o.To, h, why))
 				}

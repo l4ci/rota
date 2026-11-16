@@ -680,11 +680,19 @@ func Recorded(list []Record, head string) []string {
 	return kinds
 }
 
-// CrossAt is the branch's newest review-cross record when it was recorded at
-// head; a record on another commit is stale and does not count.
-func CrossAt(list []Record, head string) (Record, bool) {
-	r, ok := Latest(ForHead(list, head), ReviewCross)
-	return r, ok && AtHead(r, head)
+// CrossAtBy is the branch's cross-harness coverage at head: the newest
+// review-cross record AT head from a harness accept approves, when it is not a
+// FAIL. Records from different harnesses coexist, so a newer record from
+// another harness, or from the same harness at another commit, does not hide
+// it; a FAIL at head covers nothing.
+func CrossAtBy(list []Record, head string, accept func(harness string) bool) (Record, bool) {
+	list = ForHead(list, head)
+	for i := len(list) - 1; i >= 0; i-- {
+		if r := list[i]; r.Kind == ReviewCross && AtHead(r, head) && accept(r.Harness) {
+			return r, r.Verdict != Fail
+		}
+	}
+	return Record{}, false
 }
 
 // LensAt is the branch's newest record of the lens kind when it was recorded at
@@ -704,13 +712,6 @@ func LensFails(list []Record) []Record {
 		}
 	}
 	return out
-}
-
-// CrossFail is the branch's newest review-cross record when it is FAIL: a
-// cross-harness review that blocks and is relayed like a review FAIL.
-func CrossFail(list []Record) (Record, bool) {
-	r, ok := Latest(list, ReviewCross)
-	return r, ok && r.Verdict == Fail
 }
 
 // LastReviewSet lists the review kinds recorded at the commit of the branch's

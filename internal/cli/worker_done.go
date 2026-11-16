@@ -19,12 +19,13 @@ import (
 
 // workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
-// HEAD for test.fast or whose completed outcome has unmet explicit acceptance
+// HEAD for test.fast (a partial or failed outcome skips that check and reports
+// proofSkipped) or whose completed outcome has unmet explicit acceptance
 // criteria on tracker items the PR closes, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
-	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary)")
+	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary); partial and failed skip the test.fast proof")
 	requireRed := fs.Bool("require-red", false, "refuse (exit 4) instead of warning when work.tdd is on and non-test Go changed with no failing (RED) proof row, or the diff cannot be computed")
 	targeted := fs.String("proof", "", "a targeted proof command for a small task: run at HEAD and recorded as the targeted proof row instead of test.fast")
 	summaryFile := fs.String("summary-file", "", "three lines: what changed, what was found, what remains (required for partial and failed)")
@@ -162,7 +163,7 @@ func doneAcceptance(c *Ctx, root, dir, branch string, ids []string) error {
 			_, err = backlogFail(err)
 			return err
 		}
-		cover, err := acceptanceCoverage(c, wf, id, &backlog.Status{Body: body})
+		cover, err := acceptanceCoverage(c, be, wf, id, &backlog.Status{Body: body})
 		if err != nil {
 			_, err = backlogFail(err)
 			return err

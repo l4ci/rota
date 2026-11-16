@@ -377,6 +377,10 @@ func TestReviewDepthCrossFallsBackAndReportsUnavailable(t *testing.T) {
 
 	none := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("claude", "w", 99, VerdictFree)}}}.read
 	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", none))
+	// /rota-review keys on this form ("; unavailable:"): pin it so the skill and the verb cannot drift.
+	if !strings.Contains(got.CrossWhy, "; unavailable: no account of ") {
+		t.Errorf("why %q lost the `; unavailable:` form the review skill keys on", got.CrossWhy)
+	}
 	if got.Cross != CrossNone || !strings.Contains(got.CrossWhy, "unavailable") {
 		t.Errorf("unavailable: cross %q (%s), want none with an unavailable reason, never the author's harness", got.Cross, got.CrossWhy)
 	}
