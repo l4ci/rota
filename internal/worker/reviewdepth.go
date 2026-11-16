@@ -282,6 +282,9 @@ func (r ReviewDepth) CrossSatisfiedBy(harness string) bool {
 // review gets none: review:none, or no other harness to run it.
 const CrossNone = "none"
 
+// crossWhyReviewNone is CrossWhy when the issue's review:none label skipped the cross review.
+const crossWhyReviewNone = "label review:none"
+
 // crossReviewer reports whether kind can run a cross-harness review.
 func crossReviewer(kind string) bool {
 	return harness.Valid(kind) && harness.ResolveReviewer(kind).CrossReviewer()
@@ -331,7 +334,7 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string, pools 
 	case trigger == "":
 		return crossResult{Harness: CrossNone, Why: fmt.Sprintf("label review:%s, but the issue has no label in review.crossLabels (%s)", route, strings.Join(c.Labels, ", "))}
 	case route == CrossNone:
-		return crossResult{Harness: CrossNone, Why: "label review:none"}
+		return crossResult{Harness: CrossNone, Why: crossWhyReviewNone}
 	}
 	if pools != nil {
 		return crossByAccount(c, trigger, route, author, *pools)
