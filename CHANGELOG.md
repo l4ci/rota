@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.35.0 — 2026-11-16
+
+Safer merges and transfers, a per-project temp root, and review accounts for cross-harness review.
+
+### New
+
+- **Per-project temp root.** Scratch files, gate logs, review workspaces and each worker slot's `TMPDIR` now live under `.rota/tmp/` (`rota git tmp-dir`). `rota reap` lists and removes stale entries there and holds any entry a process still uses.
+- **Review accounts.** `review.accounts` names the account a cross-harness reviewer runs on. Cross review is judged per harness at the PR head, and the gate ignores a stale `review-cross` FAIL on an issue labelled `review:none`, saying so in a `REVIEW-CROSS` note.
+- **Round transfer.** `round transfer` moves a whole bundle in one call. It also takes `--settled-file`, which adds to the settled answers carried over from the original assign. A refusal prints routes that actually work.
+- **Account balancing and bundling.** `round assign` places workers on the account with the most headroom, and the slate and the autopilot tick bundle related issues.
+- **Harvest hint.** After a gate or train lands a PR whose issue carries unharvested `learning` comments, rota prints a `HARVEST` line naming them and the command to read them.
+- **Plan critic design lens.** With a design note on the item, the plan critic also reports a `Consistency` heading.
+- **Decision marks.** A decision comment from a writer can mark an acceptance criterion (`plan pass --decision`).
+
+### Changed
+
+- `knowledge hit` exits 3 on a bullet that is not in KNOWLEDGE.md. `knowledge rm` matches titles case-insensitively in both stores and refuses two bullets that differ only by case. `knowledge add` refuses a multi-line title or one holding `*`.
+- The worker guard hook protects the project's configured base branch, not only `main`.
+- Overlap footprints treat `**` as any number of directories, as everywhere else in rota.
+- A `round tick` that sees a stop mid-pass now reports `stopped: true`, keeps that pass's merges and exits 0. `round watch --autopilot` stops on it.
+- `worker done --proof` and `proof record` print the working directory and, on failure, the last 20 lines of output.
+- `ROTA_TEST_*` clock and version overrides only work in test builds (`-tags rotatest`).
+
+### Fixed
+
+- The gate, verdicts and proofs share one commit-matching rule (at least 7 characters, either direction), so a 1 to 6 character sha no longer matches.
+- `git merge-base --is-ancestor` goes through one helper with three outcomes. An error no longer reads as "not an ancestor" in the gate, train or reap.
+- A train reads the gate config once, before any member lands.
+- Reap keeps a worktree when the main checkout's `node_modules` points into it, or when it cannot check.
+- A Core delivery clears when the worker really finishes, and assign skips a slot with an unresolved delivery.
+- `round status`, `round watch` and `round summary` no longer report a reassigned busy slot as done or stalled, log merges a tick did not make, or count a transferred PR as unmerged.
+- The bug-report log is redacted with the real hostname and repo name.
+- `site-sync` checks everything before it deletes the generated docs.
+
+## Stats
+132 commits, 400 files changed, +14151 −2175 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.34.2...v0.35.0
+
 ## v0.34.2 — 2026-11-13
 
 Relay provenance that survives parking, range checks on `config set`, and a registry migration that keeps file permissions.
