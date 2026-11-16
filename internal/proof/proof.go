@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 const sep = " · "
@@ -97,7 +98,8 @@ func Show(s Store, id string) (rows []Row, lines []string, err error) {
 	if !ok {
 		return []Row{}, []string{}, nil
 	}
-	return parseRows(content)
+	rows, lines = parseRows(content)
+	return rows, lines, nil
 }
 
 // rowLines is the "- " lines of the "## Proof" section of content: the one
@@ -119,7 +121,7 @@ func rowLines(content string) (lines []string) {
 func CountRows(content string) int { return len(rowLines(content)) }
 
 // parseRows reads the "- " rows of the "## Proof" section of content.
-func parseRows(content string) (rows []Row, lines []string, err error) {
+func parseRows(content string) (rows []Row, lines []string) {
 	rows, lines = []Row{}, []string{}
 	for _, l := range rowLines(content) {
 		p := strings.SplitN(l[2:], sep, 5)
@@ -131,9 +133,6 @@ func parseRows(content string) (rows []Row, lines []string, err error) {
 	}
 	return
 }
-
-// minSha is the shortest sha a row or a query may carry and still name a commit.
-const minSha = 7
 
 // Latest is the latest row for check at sha: the row's sha and sha agree as
 // prefixes either way, both at least 7 characters, and checks compare with
@@ -149,19 +148,16 @@ func Latest(rows []Row, sha, check string) (Row, bool) {
 }
 
 // speaksFor is the match rule behind Latest and Mark: a row's sha and the
-// queried sha agree as prefixes either way, both at least minSha characters,
+// queried sha agree as prefixes either way, both at least strutil.MinSHA characters,
 // and the checks agree with whitespace collapsed.
 func speaksFor(rowSha, rowCheck, sha, check string) bool {
 	sha = one(sha)
-	if len(sha) < minSha || len(rowSha) < minSha || one(rowCheck) != one(check) {
-		return false
-	}
-	return strings.HasPrefix(sha, rowSha) || strings.HasPrefix(rowSha, sha)
+	return one(rowCheck) == one(check) && strutil.SameSHA(sha, rowSha)
 }
 
 // Lookup reads the latest result for a mark from stored proof text.
 func Lookup(content, sha, check string) (string, bool) {
-	rows, _, _ := parseRows(content)
+	rows, _ := parseRows(content)
 	row, ok := Latest(rows, sha, check)
 	return row.Result, ok
 }

@@ -68,6 +68,7 @@ func (o observingWorld) ReviewLoop(slot string) roundtick.ReviewOutcome {
 	}
 	return roundtick.ReviewStep(o.w.c.Context(), src)
 }
+func (o observingWorld) Stop() (bool, string)              { return o.w.Stop() }
 func (o observingWorld) Capped(ctx context.Context) string { return o.w.Capped(ctx) }
 func (o observingWorld) OpenItems() int                    { return o.w.OpenItems() }
 func (o observingWorld) Candidates(ctx context.Context) ([]round.Candidate, error) {

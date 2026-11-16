@@ -235,24 +235,10 @@ func trainHoldingLines(c *Ctx, root string) []string {
 	if err != nil || !fill.Enabled() {
 		return nil
 	}
-	groups := map[string][]roundcfg.FillCandidate{}
-	var bases []string
-	seen := map[int]bool{}
-	for _, w := range waitingPRs(c, root) {
-		n, parsed := worker.PRRefNumber(w.PR)
-		if !w.Reviewed || w.Immediate || !parsed || seen[n] {
-			continue
-		}
-		seen[n] = true
-		if _, known := groups[w.Base]; !known {
-			bases = append(bases, w.Base)
-		}
-		groups[w.Base] = append(groups[w.Base], roundcfg.FillCandidate{ID: fmt.Sprint(n), Ready: w.ReadySince})
-	}
 	now := c.deps().Now()
 	var lines []string
-	for _, base := range bases {
-		if d := fill.Decide(base, groups[base], 0, now); d.Holding != "" {
+	for _, g := range fill.Group(fillPRs(waitingPRs(c, root))) {
+		if d := fill.Decide(g.Base, g.Fill, 0, now); d.Holding != "" {
 			lines = append(lines, d.Holding)
 		}
 	}
@@ -271,36 +257,44 @@ func prHashes(prs []string) []string {
 // the shared roundcfg decision. The zero policy preserves the legacy nudge at
 // two reviewed PRs.
 func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.Time) []trainNudge {
-	cands := map[string][]roundcfg.FillCandidate{}
 	branches := map[string]string{}
-	seen := map[int]bool{}
-	var bases []string
 	for _, w := range waiting {
-		if !w.Reviewed {
-			continue
+		if n, ok := worker.PRRefNumber(w.PR); ok {
+			branches[fmt.Sprint(n)] = w.Branch
 		}
-		n, ok := worker.PRRefNumber(w.PR)
-		if !ok || seen[n] {
-			continue
-		}
-		seen[n] = true
-		if _, known := cands[w.Base]; !known {
-			bases = append(bases, w.Base)
-		}
-		id := fmt.Sprint(n)
-		cands[w.Base] = append(cands[w.Base], roundcfg.FillCandidate{ID: id, Ready: w.ReadySince, Immediate: w.Immediate})
-		branches[id] = w.Branch
 	}
 	var out []trainNudge
-	for _, b := range bases {
-		cs := cands[b]
+	for _, g := range fill.Group(fillPRs(waiting)) {
+		// A bypass PR goes to an individual gate, as the tick sends it.
+		for _, id := range g.Bypass {
+			out = append(out, trainNudge{Base: g.Base, PRs: []string{id}, Reason: "review disabled; ready time unavailable, land now", Wait: fill.Wait(time.Time{}, now), ReadyCount: 1, Branches: branches})
+		}
+		cs := g.Fill
 		sort.Slice(cs, func(i, j int) bool {
 			return len(cs[i].ID) < len(cs[j].ID) || len(cs[i].ID) == len(cs[j].ID) && cs[i].ID < cs[j].ID
 		})
-		d := fill.Decide(b, cs, 0, now)
+		d := fill.Decide(g.Base, cs, 0, now)
 		if len(d.Land) > 0 {
-			out = append(out, trainNudge{Base: b, PRs: d.Land, Reason: d.Reason, Wait: d.Wait, ReadyCount: d.Count, Branches: branches})
+			out = append(out, trainNudge{Base: g.Base, PRs: d.Land, Reason: d.Reason, Wait: d.Wait, ReadyCount: d.Count, Branches: branches})
 		}
+	}
+	return out
+}
+
+// fillPRs is the reviewed waiting PRs, one per PR number, as the shared fill
+// grouping takes them: the tick feeds the same shape. A PR the forge no longer
+// lists as open is dropped by openOnly before this; the nudge has no read of a
+// PR's base, so only Immediate bypasses here.
+func fillPRs(waiting []waitingPR) []roundcfg.FillPR {
+	var out []roundcfg.FillPR
+	seen := map[int]bool{}
+	for _, w := range waiting {
+		n, ok := worker.PRRefNumber(w.PR)
+		if !w.Reviewed || !ok || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, roundcfg.FillPR{ID: fmt.Sprint(n), Base: w.Base, Ready: w.ReadySince, Bypass: w.Immediate})
 	}
 	return out
 }

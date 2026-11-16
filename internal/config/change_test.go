@@ -4,17 +4,18 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/change"
 )
+
+// defaultDocsPaths pins the change.docsPaths default in keys.go.
+var defaultDocsPaths = []string{"*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"}
 
 func TestChangePolicyDefaults(t *testing.T) {
 	p, err := ChangePolicyOf(decode(t, `{}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(p.DocsPaths, change.DefaultDocsPaths) || len(p.RiskyPaths) != 0 || p.SmallBelow != 0 {
-		t.Fatalf("defaults = %+v, want docsPaths %v, no riskyPaths, smallBelow 0", p, change.DefaultDocsPaths)
+	if !slices.Equal(p.DocsPaths, defaultDocsPaths) || len(p.RiskyPaths) != 0 || p.SmallBelow != 0 {
+		t.Fatalf("defaults = %+v, want docsPaths %v, no riskyPaths, smallBelow 0", p, defaultDocsPaths)
 	}
 	p, err = ChangePolicyOf(decode(t, `{"change":{"docsPaths":["docs/**"],"riskyPaths":["go.mod"],"smallBelow":100}}`))
 	if err != nil {

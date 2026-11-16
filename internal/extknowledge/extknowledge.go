@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/git"
 )
 
@@ -34,7 +35,7 @@ var (
 	ErrMultiMatch = errors.New("matches several bullets")
 	ErrPush       = errors.New("push failed")
 	ErrPolicy     = errors.New("invalid policy")
-	ErrContent    = errors.New("invalid bullet text")
+	ErrContent    = bulletfmt.ErrInvalid
 	ErrUsage      = errors.New("invalid request")
 	ErrIdentity   = errors.New("git has no author identity")
 )

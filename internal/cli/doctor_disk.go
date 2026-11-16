@@ -15,11 +15,12 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // leakAge is how old a temp dir must be before doctor calls it leaked: a run
 // that is still going owns a younger one.
-const leakAge = time.Hour
+const leakAge = reap.LeftoverAge
 
 func statDisk(dir string) *doctor.Disk {
 	var st syscall.Statfs_t
@@ -36,10 +37,10 @@ func statDisk(dir string) *doctor.Disk {
 func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot string, now time.Time) []string {
 	var out []string
 	if n, size := leakedTempDirs(temp, now.Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, doctor.HumanBytes(uint64(size))))
+		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, strutil.HumanBytes(uint64(size))))
 	}
-	if n, size := staleTmpEntries(tempRoot, now.Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", n, tempRoot, doctor.HumanBytes(uint64(size))))
+	if n, size := reap.StaleTmp(tempRoot, now); n > 0 {
+		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", n, tempRoot, strutil.HumanBytes(uint64(size))))
 	}
 	if root != "" {
 		if n := prunableWorktrees(ctx, run, root); n > 0 {
@@ -47,31 +48,6 @@ func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot s
 		}
 	}
 	return out
-}
-
-// staleTmpEntries counts the direct children of the project temp root (not its
-// .gitignore) whose newest file is older than cutoff, and their total size. It
-// only reads; `rota reap --kind tmp` decides what may go.
-func staleTmpEntries(root string, cutoff time.Time) (n int, size int64) {
-	if root == "" {
-		return 0, 0
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return 0, 0
-	}
-	for _, e := range entries {
-		if e.Name() == rotastate.IgnoreFile {
-			continue
-		}
-		sz, newest, ok := reap.EntryStat(filepath.Join(root, e.Name()))
-		if !ok || !newest.Before(cutoff) {
-			continue
-		}
-		n++
-		size += sz
-	}
-	return n, size
 }
 
 // leakedTempDirs counts the smoke run dirs (rota-smoke.*), gate dirs
@@ -83,7 +59,7 @@ func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-") || strings.HasPrefix(name, "rota-review-")) {
+		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-") || strings.HasPrefix(name, reviewWorkspacePrefix)) {
 			continue
 		}
 		if fi, err := e.Info(); err != nil || !fi.ModTime().Before(cutoff) {
@@ -102,7 +78,8 @@ func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	return n, size
 }
 
-// prunableWorktrees counts checkouts git marks prunable (directory gone).
+// prunableWorktrees counts the .worktrees/ checkouts git marks prunable
+// (directory gone): the ones `rota reap` lists.
 func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 	res, err := run(ctx, root, "worktree", "list", "--porcelain")
 	if err != nil || res.ExitCode != 0 {
@@ -110,7 +87,7 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 	}
 	n := 0
 	for _, w := range git.ParseWorktrees(res.Stdout) {
-		if w.Prunable {
+		if w.Prunable && reap.ScratchCheckout(root, w.Path) {
 			n++
 		}
 	}

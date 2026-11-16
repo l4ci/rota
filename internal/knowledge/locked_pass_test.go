@@ -24,6 +24,11 @@ func lockedStore(t *testing.T) Store {
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// Hit refuses a title no bullet owns, so every store starts with one.
+	km := "# K\n\n## Arch\n\n- **bullet** — body <!-- 2026-01-01 -->\n"
+	if err := os.WriteFile(filepath.Join(root, ".rota", "KNOWLEDGE.md"), []byte(km), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	return Store{Root: root}
 }
 
@@ -41,7 +46,7 @@ func TestHitReportsItsOwnCountUnderConcurrency(t *testing.T) {
 	const n = 12
 	hits := make([]int, n)
 	parallel(n, func(i int) {
-		r, err := s.Hit(Umbrella, "Architecture: A", "bullet")
+		r, err := s.Hit(Umbrella, "Arch", "bullet")
 		if err != nil {
 			t.Error(err)
 			return
@@ -62,7 +67,7 @@ func TestTierSetReportsExactlyOneChangeUnderConcurrency(t *testing.T) {
 	changed := 0
 	var mu sync.Mutex
 	parallel(n, func(int) {
-		_, ch, err := s.TierSet(Umbrella, "Architecture: A", "bullet", Confirmed)
+		_, ch, err := s.TierSet(Umbrella, "Arch", "bullet", Confirmed)
 		if err != nil {
 			t.Error(err)
 			return
@@ -83,7 +88,7 @@ func TestContradictionAddReportsItsOwnQueueLengthUnderConcurrency(t *testing.T) 
 	const n = 12
 	lens := make([]int, n)
 	parallel(n, func(i int) {
-		l, err := s.AddContradiction("Architecture: A", "bullet", "text")
+		l, err := s.AddContradiction("Arch", "bullet", "text")
 		if err != nil {
 			t.Error(err)
 			return

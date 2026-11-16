@@ -295,6 +295,9 @@ func TestClaimedBuffersFoundUnderMetacharacterRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := Store{Root: root}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "KNOWLEDGE.md"), []byte("## Arch\n\n- **bullet** — body <!-- 2026-01-01 -->\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	crashedFold(t, s, 2)
 	hp, _ := s.HitsPath(Umbrella)
 	claimed, err := claimedBuffers(hp)
