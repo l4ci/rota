@@ -16,7 +16,7 @@ func mkRota(t *testing.T, dir string) {
 
 func TestFindRoot(t *testing.T) {
 	top, _ := filepath.EvalSymlinks(t.TempDir())
-	none := func(string) []string { return nil }
+	none := func(string) []Sub { return nil }
 
 	deep := filepath.Join(top, "a", "b")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
@@ -35,9 +35,9 @@ func TestFindRoot(t *testing.T) {
 	if got, err := FindRoot(deep, none); err != nil || got != filepath.Join(top, "a") {
 		t.Fatalf("nearest: FindRoot = %q, %v", got, err)
 	}
-	registered := func(root string) []string {
+	registered := func(root string) []Sub {
 		if root == top {
-			return []string{"a"}
+			return []Sub{{Path: "a"}}
 		}
 		return nil
 	}
@@ -72,7 +72,7 @@ func TestAtUmbrellaRoot(t *testing.T) {
 // at .rota/tmp instead of reaching the live .rota/ above it.
 func TestRootWalksStopAtTempRoot(t *testing.T) {
 	top, _ := filepath.EvalSymlinks(t.TempDir())
-	none := func(string) []string { return nil }
+	none := func(string) []Sub { return nil }
 	mkRota(t, top)
 	tree := filepath.Join(top, DirName, TmpDir, "rota-review-1", "tree", "pkg")
 	if err := os.MkdirAll(tree, 0o755); err != nil {
@@ -100,5 +100,20 @@ func TestRootWalksStopAtTempRoot(t *testing.T) {
 	mkRota(t, own)
 	if got, err := FindRoot(tree, none); err != nil || got != own {
 		t.Fatalf("FindRoot in a tree with its own .rota/ = %q, %v; want %q", got, err, own)
+	}
+}
+
+// An absolute entry registers its tree as written, and the error names the
+// entry and the stray directory.
+func TestFindRootMaskedAbsoluteEntry(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	sub := filepath.Join(top, "svc")
+	mkRota(t, top)
+	mkRota(t, sub)
+	registered := func(string) []Sub { return []Sub{{Name: "svc", Path: sub}} }
+	_, err := FindRoot(sub, registered)
+	var m *MaskedError
+	if !errors.As(err, &m) || !errors.Is(err, ErrMasked) || m.Name != "svc" || m.Stray != filepath.Join(sub, DirName) {
+		t.Fatalf("absolute entry: err = %v (%+v)", err, m)
 	}
 }

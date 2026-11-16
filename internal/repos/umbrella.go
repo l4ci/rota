@@ -3,9 +3,6 @@ package repos
 import (
 	"context"
 	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -18,90 +15,49 @@ import (
 // least one sub-repo. umbrella.enabled plays no part.
 func Umbrella(base string) bool { return len(Load(base)) > 0 }
 
-// Errors of Which, from hv-resolve-repo, hv-resolve-umbrella and hv-walk-up.
+// Errors of Which, from hv-resolve-repo. A missing .rota/ and a masked
+// umbrella are rotatree.ErrNoRoot and rotatree.ErrMasked.
 var (
 	// ErrGitMissing: no git binary on PATH.
 	ErrGitMissing = errors.New("git is not installed")
 	// ErrNotGit: the working directory is not inside a git repo.
 	ErrNotGit = errors.New("not inside a git repo")
-	// ErrNoUmbrella: no .rota/ directory here or above.
-	ErrNoUmbrella = errors.New("no .rota/ found here or in any parent")
 	// ErrNotRegistered: the checkout is not a registered sub-repo.
 	ErrNotRegistered = errors.New("not inside a registered sub-repo")
 )
 
-// MaskedError is hv-walk-up --detect-masking's exit 2: a stray .rota/ in a
-// registered sub-repo hides the umbrella above it.
-type MaskedError struct {
-	Name  string // the registered sub-repo that holds the stray .rota/
-	Stray string // the stray .rota/ directory
+// FindRoot is rotatree.FindRoot over root's repos.json, nameless entries
+// included: the one umbrella walk-up.
+func FindRoot(start string) (string, error) {
+	return rotatree.FindRoot(start, subs)
 }
 
-func (e *MaskedError) Error() string {
-	return fmt.Sprintf("stray .rota/ inside registered sub-repo %s masks the umbrella", e.Name)
-}
-
-// FindUmbrella is hv-resolve-umbrella from start: it walks up for .rota/
-// directories (the filesystem root itself is never checked, as in the old
-// helper), returns the nearest one's parent, and fails with a *MaskedError
-// when a higher .rota/ registers that parent's tree as a sub-repo.
-func FindUmbrella(start string) (string, error) {
-	var cands []string
-	dir := Realpath(start)
-	rotatree.Ascend(dir, func(d string) bool {
-		if d == "/" {
-			return true
-		}
-		if rotatree.Exists(d) {
-			cands = append(cands, d)
-		}
-		return false
-	})
-	if len(cands) == 0 {
-		return "", ErrNoUmbrella
+// subs is root's repos.json entries for masking. Unlike Load it keeps an entry
+// without a name: its path still registers a tree.
+func subs(root string) []rotatree.Sub {
+	reg, _ := fsio.LoadJSON(rotatree.Repos(root), nil).(*jsonx.Object)
+	if reg == nil {
+		return nil
 	}
-	first := cands[0]
-	firstReal := Realpath(first)
-	for _, parent := range cands[1:] {
-		reg, _ := fsio.LoadJSON(rotatree.Repos(parent), nil).(*jsonx.Object)
-		if reg == nil {
+	list, _ := reg.Get("repos")
+	entries, _ := list.([]any)
+	var out []rotatree.Sub
+	for _, e := range entries {
+		o, ok := e.(*jsonx.Object)
+		if !ok {
 			continue
 		}
-		list, _ := reg.Get("repos")
-		entries, _ := list.([]any)
-		for _, e := range entries {
-			o, ok := e.(*jsonx.Object)
-			if !ok {
-				continue
-			}
-			rel := str(o, "path")
-			if rel == "" {
-				continue
-			}
-			if !filepath.IsAbs(rel) {
-				rel = filepath.Join(parent, rel)
-			}
-			if within(firstReal, Realpath(rel)) {
-				return "", &MaskedError{Name: str(o, "name"), Stray: rotatree.Dir(first)}
-			}
+		if p := str(o, "path"); p != "" {
+			out = append(out, rotatree.Sub{Name: str(o, "name"), Path: p})
 		}
 	}
-	return first, nil
-}
-
-// within is whether path is dir or lies below it.
-func within(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+	return out
 }
 
 // Which is hv-resolve-repo for the directory cwd: the registered sub-repo
 // whose checkout cwd belongs to. A Layout B worktree maps to its main repo
 // through git's common dir. The registry is the one of the umbrella that
-// FindUmbrella resolves from cwd.
+// FindRoot resolves from cwd.
 func Which(cwd string) (Repo, error) {
 	sub, ok, err := rotastate.MainCheckoutVia(context.Background(), git.Exec, cwd)
 	if errors.Is(err, git.ErrNoGit) {
@@ -111,7 +67,7 @@ func Which(cwd string) (Repo, error) {
 		return Repo{}, ErrNotGit
 	}
 	sub = Realpath(sub)
-	umb, err := FindUmbrella(cwd)
+	umb, err := FindRoot(cwd)
 	if err != nil {
 		return Repo{}, err
 	}
