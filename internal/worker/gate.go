@@ -672,7 +672,7 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 		return g.stepClaim(result, followed.Value.target, forged.Value, remote.Value)
 	})
 	verdict := runGateStage(claim, func(result GateResult) (struct{}, GateResult, bool, error) {
-		return g.stepVerdict(result, followed.Value.target.Branch, refs.Value.head)
+		return g.stepVerdict(result, followed.Value.target, forged.Value, refs.Value)
 	})
 	depth := runGateStage(verdict, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepReviewDepth(result, followed.Value.target, forged.Value, refs.Value, matched.Value)
@@ -1387,10 +1387,6 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		return struct{}{}, *g.res, done, err
 	}
 
-	var prBody func() (string, error)
-	if g.pr != "" {
-		prBody = g.prBody
-	}
 	// An integration branch is judged on its fix commits only (#3096): the
 	// members were reviewed on their own PRs before they merged.
 	span := g.baseRef + "..." + g.headRef
@@ -1412,16 +1408,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		}
 		span = since + "..." + g.headRef
 	}
-	inputs, err := BuildReviewInputs(g.ctx, ReviewInputOptions{
-		Config: g.in.cfg, Root: g.root, Dir: g.root, Branch: g.branch,
-		Span: span, Git: g.e.Git, Target: &g.target,
-		Issues:       func() (ReviewIssues, error) { return g.issues, nil },
-		TargetPRBody: prBody,
-	})
-	if err != nil {
-		return finish(g.broke(err.Error()))
-	}
-	res, err := inputs.Resolve(g.ctx)
+	res, err := g.resolveReview(span)
 	if err != nil {
 		return finish(g.broke(err.Error()))
 	}
@@ -1538,12 +1525,30 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 	return finish(true, nil)
 }
 
+// resolveReview resolves the review depth of the gate's branch over span.
+func (g *gateOperation) resolveReview(span string) (ReviewDepth, error) {
+	var prBody func() (string, error)
+	if g.pr != "" {
+		prBody = g.prBody
+	}
+	inputs, err := BuildReviewInputs(g.ctx, ReviewInputOptions{
+		Config: g.in.cfg, Root: g.root, Dir: g.root, Branch: g.branch,
+		Span: span, Git: g.e.Git, Target: &g.target,
+		Issues:       func() (ReviewIssues, error) { return g.issues, nil },
+		TargetPRBody: prBody,
+	})
+	if err != nil {
+		return ReviewDepth{}, err
+	}
+	return inputs.Resolve(g.ctx)
+}
+
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
 // ship paths apply. It runs under CheckOnly too, so a train member is refused
 // before anything merges.
-func (runner gate) stepVerdict(result GateResult, branch, headRef string) (struct{}, GateResult, bool, error) {
-	g := runner.operation(result, GateTarget{Branch: branch}, gateForgeResult{})
-	g.headRef = headRef
+func (runner gate) stepVerdict(result GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult) (struct{}, GateResult, bool, error) {
+	g := runner.operation(result, target, forged)
+	g.headRef, g.baseRef = refs.head, refs.base
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
@@ -1555,7 +1560,23 @@ func (runner gate) stepVerdict(result GateResult, branch, headRef string) (struc
 	// Loaded here, after the gate recovered the PR's reports into the store.
 	store, storeErr := verdict.LoadStrict(g.root)
 	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: store, StoreErr: storeErr, Repo: g.o.VerdictRepo}
-	if err := check.BlockGate(g.branch, head); err != nil {
+	err := check.BlockGate(g.branch, head)
+	// A cross FAIL recorded at an older commit is relaxed only under an explicit
+	// review:none; a FAIL at head, or one while cross is required, still blocks (#3458).
+	var blocked *verdict.BlockedError
+	if errors.As(err, &blocked) && blocked.Stale && blocked.Record.Kind == verdict.ReviewCross && blocked.Record.Verdict == verdict.Fail {
+		res, rerr := g.resolveReview(g.baseRef + "..." + g.headRef)
+		if rerr != nil {
+			return finish(g.broke(rerr.Error()))
+		}
+		if res.CrossWhy == crossWhyReviewNone {
+			check.IgnoreStaleCross = true
+			if err = check.BlockGate(g.branch, head); err == nil {
+				g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, blocked.Record.Sha, head, res.CrossWhy))
+			}
+		}
+	}
+	if err != nil {
 		g.res.Verdict = GateVerdictBlocked
 		return finish(true, err)
 	}

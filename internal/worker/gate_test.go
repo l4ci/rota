@@ -1989,3 +1989,47 @@ func TestGateReviewsOnlyIgnoresFreshness(t *testing.T) {
 		})
 	}
 }
+
+// A review-cross FAIL at an older commit blocks the gate unless the issue says
+// review:none, which relaxes only that stale record and names it (#3458). A FAIL
+// at the gate's head, or any stale FAIL while cross is required, still blocks.
+func TestGateStaleCrossFail(t *testing.T) {
+	const on = `{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`
+	for _, c := range []struct {
+		name, labels string
+		atHead       bool
+		refused      bool
+	}{
+		{name: "stale FAIL with review:none passes and is named", labels: "size:Major,review:none"},
+		{name: "FAIL at head blocks even with review:none", labels: "size:Major,review:none", atHead: true, refused: true},
+		{name: "stale FAIL blocks when cross is required", labels: "size:Major", refused: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(on)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+			w.setPRBody("Closes #5\n")
+			w.forge("issueLabels", "in-progress,"+c.labels)
+			w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+			sha := gittest.Run(t, w.worker, "rev-parse", "HEAD~1")
+			if c.atHead {
+				sha = ""
+			}
+			w.recordCrossV("w1", sha, "codex", verdict.Fail)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+			if c.refused {
+				if err == nil || !strings.Contains(err.Error(), "review-cross FAIL recorded") {
+					t.Fatalf("want the cross FAIL to block, got verdict %s err %v", res.Verdict, err)
+				}
+				return
+			}
+			if err != nil || res.Verdict != GateFresh {
+				t.Fatalf("verdict %s err %v (%s)", res.Verdict, err, res.Err)
+			}
+			if notes := strings.Join(res.Notes, "\n"); !strings.Contains(notes, "review-cross FAIL") || !strings.Contains(notes, "review:none") {
+				t.Errorf("notes %q must name the ignored stale cross FAIL and why", notes)
+			}
+		})
+	}
+}
