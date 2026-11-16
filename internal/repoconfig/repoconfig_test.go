@@ -7,22 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-)
 
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
+	"github.com/l4ci/rota/internal/gittest"
+)
 
 func newRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	gitIn(t, dir, "init", "-q")
-	gitIn(t, dir, "config", "--local", "user.name", "ok")
+	gittest.Run(t, dir, "init", "-q")
+	gittest.Run(t, dir, "config", "--local", "user.name", "ok")
 	return dir
 }
 
@@ -55,14 +48,14 @@ func TestUnchangedBaselineReportsNothing(t *testing.T) {
 
 func TestDriftNamesAddedChangedRemovedKeys(t *testing.T) {
 	dir := newRepo(t)
-	gitIn(t, dir, "config", "--local", "user.email", "a@b")
+	gittest.Run(t, dir, "config", "--local", "user.email", "a@b")
 	ctx := context.Background()
 	if err := Record(ctx, runner, dir); err != nil {
 		t.Fatal(err)
 	}
-	gitIn(t, dir, "config", "--local", "user.name", "t")
-	gitIn(t, dir, "config", "--local", "core.hooksPath", "/x")
-	gitIn(t, dir, "config", "--local", "--unset", "user.email")
+	gittest.Run(t, dir, "config", "--local", "user.name", "t")
+	gittest.Run(t, dir, "config", "--local", "core.hooksPath", "/x")
+	gittest.Run(t, dir, "config", "--local", "--unset", "user.email")
 	d, err := Check(ctx, runner, dir)
 	if err != nil {
 		t.Fatal(err)
@@ -91,9 +84,9 @@ func TestNoBaselineIsNotDrift(t *testing.T) {
 
 func TestNoBaselineListsPreexistingRiskyKeys(t *testing.T) {
 	dir := newRepo(t)
-	gitIn(t, dir, "config", "--local", "core.hooksPath", "/x")
-	gitIn(t, dir, "config", "--local", "core.fsmonitor", "/y")
-	gitIn(t, dir, "config", "--local", "filter.lfs.smudge", "z")
+	gittest.Run(t, dir, "config", "--local", "core.hooksPath", "/x")
+	gittest.Run(t, dir, "config", "--local", "core.fsmonitor", "/y")
+	gittest.Run(t, dir, "config", "--local", "filter.lfs.smudge", "z")
 	d, err := Check(context.Background(), runner, dir)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +110,7 @@ func TestNoBaselineListsPreexistingRiskyKeys(t *testing.T) {
 
 func TestBaselineRecordedSilencesRisky(t *testing.T) {
 	dir := newRepo(t)
-	gitIn(t, dir, "config", "--local", "core.hooksPath", "/x")
+	gittest.Run(t, dir, "config", "--local", "core.hooksPath", "/x")
 	ctx := context.Background()
 	if err := Record(ctx, runner, dir); err != nil {
 		t.Fatal(err)

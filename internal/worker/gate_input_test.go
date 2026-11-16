@@ -80,3 +80,43 @@ func TestGateAndTrainRefuseMalformedTestFull(t *testing.T) {
 	_, err = e.Train(bg, w.dir, TrainOpts{Targets: []string{"w1"}, Base: "main"})
 	check("train", err)
 }
+
+// A train reads the gate input once, before any member lands. Member b1 edits
+// .rota/config.json, so a later member's gate that re-read root would verify and
+// land under the config b1 brought, not the one the train started with.
+func TestTrainLoadsGateInputOnce(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	cfgPath := filepath.Join(".rota", "config.json")
+	gittest.Run(t, w.dir, "add", "-f", cfgPath)
+	gittest.Run(t, w.dir, "commit", "-q", "-m", "track config")
+	for _, b := range []string{"b1", "b2"} {
+		gittest.Run(t, w.dir, "checkout", "-q", b)
+		gittest.Run(t, w.dir, "merge", "-q", "main")
+	}
+	gittest.Run(t, w.dir, "checkout", "-q", "b1")
+	const edited = `{"issues":{"source":"github"},"test":{"full":["false"]}}`
+	if err := os.WriteFile(filepath.Join(w.dir, cfgPath), []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, w.dir, "commit", "-q", "-am", "b1 edits the config")
+	gittest.Run(t, w.dir, "checkout", "-q", "main")
+
+	e := w.env(false)
+	load := e.loadGateInput
+	var seen [][]string
+	e.GateInput = func(root string) (gateInput, error) {
+		in, err := load(root)
+		seen = append(seen, in.cfg.Full)
+		return in, err
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(w.dir, cfgPath)); string(got) != edited {
+		t.Fatalf("b1 did not land its config edit: %s", got)
+	}
+	if len(seen) != 1 || len(seen[0]) != 1 || seen[0][0] != "true" {
+		t.Errorf("GateInput loads = %v, want one load of the original test.full [true]", seen)
+	}
+}

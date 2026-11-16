@@ -236,6 +236,10 @@ type GateOpts struct {
 	// directory, the train's scratch tree with the member merged. A failing step
 	// ends the gate with verify-failed, as at the gate's own merge.
 	BehaviourDir string
+	// in is the gate input a train loaded before any member landed. Set, the
+	// gate uses it instead of reading root again, which by then may carry a
+	// landed member's .rota/config.json. Only the train sets it.
+	in *gateInput
 }
 
 // skipsVerify says the gate runs no verify tier: --no-verify, or a train's
@@ -544,8 +548,10 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		return res, err
 	}
 	res.Issue, res.TargetSlot = t.Issue, t.Name
-	in, err := e.GateInput(root)
-	if err != nil {
+	var in gateInput
+	if o.in != nil {
+		in = *o.in
+	} else if in, err = e.GateInput(root); err != nil {
 		return res, err
 	}
 	in.cfg.WarnLegacy(e.Stderr)

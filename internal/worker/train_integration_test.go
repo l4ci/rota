@@ -134,7 +134,10 @@ func TestTrainIntegrationConflictPushesPrefix(t *testing.T) {
 	// A worker resolves the conflict on the integration branch, not on w2.
 	gittest.Run(t, w.worker, "fetch", "-q", "origin", branch)
 	gittest.Run(t, w.worker, "checkout", "-q", "-b", "fix", "FETCH_HEAD")
-	exec.Command("git", "-C", w.worker, "merge", "-q", "--no-ff", "w2", "-m", "resolve").Run()
+	// The merge must stop on the clash: the resolution below finishes it.
+	if err := exec.Command("git", "-C", w.worker, "merge", "-q", "--no-ff", "w2", "-m", "resolve").Run(); err == nil {
+		t.Fatal("merging w2 onto the integration branch should conflict")
+	}
 	if err := os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\nother\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -605,7 +605,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			}
 			// A PR outside the registry derives its repair issue from its head branch.
 			if gt.External {
-				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, NoVerdict: true})
+				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, NoVerdict: true, in: &in})
 				if err != nil {
 					return p.trainPlan, p.res, true, err
 				}
@@ -625,7 +625,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	}
 	var merged []TrainMember
 	for _, tg := range targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews, in: &in})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
@@ -1318,7 +1318,7 @@ func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerifi
 			return v, result, done, err
 		}
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews,
-			ItemBody: o.ItemBody, BehaviourDir: p.scratch})
+			ItemBody: o.ItemBody, BehaviourDir: p.scratch, in: &p.in})
 		if ctx.Err() != nil { // a step the cancel stopped is no finding
 			return v, result, true, nil
 		}
@@ -1397,7 +1397,7 @@ func (t *trainRun) land(p trainPlan, result TrainResult, prefix trainVerified) (
 		// the member's state unknown, so it takes effect before the next member.
 		shielded := e
 		shielded.Ctx = context.WithoutCancel(e.Ctx)
-		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
+		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round, in: &p.in})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
 		res.Notes = appendNew(res.Notes, gr.Warnings...)
 		res.Changed = res.Changed || gr.Changed
