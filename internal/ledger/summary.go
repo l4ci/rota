@@ -149,6 +149,25 @@ func (f *folder) find(e Entry) *IssueRow {
 	return nil
 }
 
+// supersede marks the rows an item left behind when it moved to another slot
+// and merged there: the first slot's row is transferred, not an unmerged
+// assignment, and its gate verdict (a refusal of a head that later landed from
+// the other slot) is not this slot's to report. The merge counts once, on the
+// row that landed it (#3312).
+func (f *folder) supersede() {
+	for _, m := range f.rows {
+		if !m.Merged || m.Issue == "" {
+			continue
+		}
+		for _, o := range f.rows {
+			if o == m || o.Merged || o.Issue != m.Issue || o.Slot == m.Slot || o.Outcome == OutcomeClosed {
+				continue
+			}
+			o.Outcome, o.Gate = OutcomeTransferred, ""
+		}
+	}
+}
+
 func (f *folder) row(e Entry) *IssueRow {
 	if r := f.find(e); r != nil {
 		return r
@@ -260,6 +279,7 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 			r.Merged, r.Outcome, r.MergedAt = true, OutcomeMerged, &ts
 		}
 	}
+	f.supersede()
 	for _, r := range f.rows {
 		end := r.DoneAt
 		if end == nil {
