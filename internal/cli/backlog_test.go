@@ -135,14 +135,6 @@ func TestBacklogUsageErrors(t *testing.T) {
 	}
 }
 
-func TestBacklogStaleBadTodayEnv(t *testing.T) {
-	root := trackerProject(t, "")
-	t.Setenv("ROTA_TEST_TODAY", "tomorrow") // the env parse edge: envClock reports it as Usage
-	if code, _, stderr := rotaRun(t, "--json", "-C", root, "backlog", "stale", "--kind", "todo"); code != ExitUsage || !strings.Contains(stderr, "ROTA_TEST_TODAY") {
-		t.Errorf("exit %d, stderr %s", code, stderr)
-	}
-}
-
 func TestBacklogStaleTodoUsesPinnedToday(t *testing.T) {
 	root := trackerProject(t, "")
 	d := testDeps()
@@ -166,10 +158,6 @@ func TestBacklogArchiveHonoursTestToday(t *testing.T) {
 	pinDay(d, "2026-01-20")
 	if code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "1" {
 		t.Fatalf("10 days old not moved: %d %v", code, env)
-	}
-	t.Setenv("ROTA_TEST_TODAY", "soon") // the env parse edge again, on archive
-	if code, _, stderr := rotaRun(t, "--json", "-C", root, "backlog", "archive"); code != ExitUsage || !strings.Contains(stderr, "ROTA_TEST_TODAY") {
-		t.Errorf("bad ROTA_TEST_TODAY: exit %d, stderr %s", code, stderr)
 	}
 }
 

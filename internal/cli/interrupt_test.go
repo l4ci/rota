@@ -69,14 +69,11 @@ func TestInterruptedVerbKeepsItsAnswer(t *testing.T) {
 // context itself is untouched.
 func TestWorkerContextSignalMarksInterrupt(t *testing.T) {
 	var ch chan<- os.Signal
-	old := signalNotify
-	signalNotify = func(c chan<- os.Signal, _ ...os.Signal) { ch = c }
-	t.Cleanup(func() { signalNotify = old; signalSeen.Store(false) })
-	signalSeen.Store(false)
-
-	ctx, stop := workerContext()
+	d := defaultDeps()
+	d.Signals = &Signals{Notify: func(c chan<- os.Signal, _ ...os.Signal) { ch = c }}
+	ctx, stop := (&Ctx{Deps: d}).workerContext()
 	defer stop()
-	if err := interrupted(context.Background(), context.Canceled); asError(err).Exit != ExitInternal {
+	if err := interrupted(d.Signals, context.Background(), context.Canceled); asError(err).Exit != ExitInternal {
 		t.Fatalf("before any signal: %v", err)
 	}
 	ch <- os.Interrupt
@@ -85,7 +82,7 @@ func TestWorkerContextSignalMarksInterrupt(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("workerContext did not cancel on the signal")
 	}
-	if e := asError(interrupted(context.Background(), context.Canceled)); e.Exit != ExitInterrupted {
+	if e := asError(interrupted(d.Signals, context.Background(), context.Canceled)); e.Exit != ExitInterrupted {
 		t.Fatalf("after signal: exit %d, want 130", e.Exit)
 	}
 }

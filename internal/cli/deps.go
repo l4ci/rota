@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +27,6 @@ import (
 	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -83,16 +81,20 @@ type Deps struct {
 	// Now is the one clock. Today is the day date-stamped output and age
 	// checks use; it is Now unless a test pins the day alone. HolderPID names
 	// the process that holds a round lease, 0 meaning find it from the process
-	// table. defaultDeps reads the ROTA_TEST_* overrides once into these three;
-	// ClockErr is a malformed override, raised by the verbs that read Today.
+	// table. defaultDeps describes the real machine; only a rotatest build
+	// (invocationDeps) reads ROTA_TEST_* overrides into these. ClockErr is a
+	// malformed override, raised by the verbs that read Today.
 	Now       func() time.Time
 	Today     func() time.Time
 	HolderPID func() int
 	ClockErr  error
 
+	// Signals is the invocation's signal state: the Notify seam and whether a
+	// verb-local context saw SIGINT or SIGTERM.
+	Signals *Signals
+
 	// Getenv is the one environment reader; the clock overrides, the worker
 	// env, the accounts and every cli env read go through it. A test swaps it.
-	// defaultDeps reads ROTA_TEST_LATEST_VERSION into UpdateEnv.
 	Getenv  func(string) string
 	Environ func() []string
 	// RecordMistakes makes an internal error or panic write a record to the
@@ -204,12 +206,15 @@ func defaultDeps() *Deps {
 		OpenURL:          openBrowser,
 		ReadCache:        tracker.NewReadCache(),
 		RecordMistakes:   true,
+		Now:              time.Now,
+		Today:            time.Now,
+		HolderPID:        func() int { return 0 }, // 0: find the holder from the process table
+		Signals:          newSignals(),
 	}
 	d.TrainPlan = planTrainNudge
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = tracker.ConnectionTesters()
-	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
 	// The lease reads the same clock as the worker env, so pinning Deps.Now
 	// pins its StartedAt; d.Now is read at call time, so a later swap counts.
 	d.LeaseEnv = func() roundlease.Env {
@@ -217,15 +222,9 @@ func defaultDeps() *Deps {
 		e.Now = func() time.Time { return d.Now() }
 		return e
 	}
-	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
-	// smoke test cannot reach the update package any other way.
-	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")
 	d.UpdateEnv = func() update.Env {
 		e := update.DefaultEnv(version.Get().Version, d.Proc)
 		e.Commit = version.Commit // raw: Get shortens it, which hides a checkout build
-		if latest != "" {
-			e.Latest = func() string { return latest }
-		}
 		return e
 	}
 	d.WorkerPoll = func(ctx context.Context, root string, opts worker.PollOpts) (worker.PollResult, error) {
@@ -612,28 +611,4 @@ func failData(err error) Result {
 		return Result{Data: e.Data}
 	}
 	return Result{}
-}
-
-// envClock reads the test overrides of the clock once, at the edge:
-// ROTA_TEST_NOW (RFC 3339) fixes Now, ROTA_TEST_TODAY (YYYY-MM-DD) fixes the
-// day alone and wins over Now there, ROTA_TEST_HOLDER_PID stands in for the
-// nearest non-shell ancestor, which a smoke test cannot arrange. Not part of
-// the CLI.
-func envClock(getenv func(string) string) (now, today func() time.Time, holder func() int, err error) {
-	now = time.Now
-	if v := getenv("ROTA_TEST_NOW"); v != "" {
-		if t, perr := time.Parse(time.RFC3339, v); perr == nil {
-			now = func() time.Time { return t }
-		}
-	}
-	today = now
-	if v := getenv("ROTA_TEST_TODAY"); v != "" {
-		if t, ok := pystr.ParseDate(v); ok {
-			today = func() time.Time { return t }
-		} else {
-			err = Usage("ROTA_TEST_TODAY must be YYYY-MM-DD, got %q", v)
-		}
-	}
-	pid, _ := strconv.Atoi(getenv("ROTA_TEST_HOLDER_PID"))
-	return now, today, func() int { return pid }, err
 }

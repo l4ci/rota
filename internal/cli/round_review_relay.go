@@ -33,7 +33,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		c.ctx = ctx
 		// One load: Env.Round is the verb's settings. The env's own load maps a

@@ -90,7 +90,7 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		command := expanded[0]
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		run, err := runProofCommand(c, ctx, root, root, command, "proof record")
 		if err != nil {

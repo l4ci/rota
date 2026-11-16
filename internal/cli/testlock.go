@@ -54,7 +54,7 @@ func testLock(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		gc := c.deps().workerEnv().GateConfig(root)
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		code := 0
 		err = withTestLock(c, ctx, root, gc, "test lock", func() error {

@@ -442,7 +442,7 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 		return uiFinish(c, stdout, cmd, Result{})
 	}
 	res, err := runVerb(c, positional)
-	err = interrupted(ctx, err)
+	err = interrupted(c.deps().Signals, ctx, err)
 	if err != nil {
 		recordMistake(c, asError(err))
 		if g.ui && cmd.View != nil && res.Data != nil && asError(err).Exit == ExitFailed {

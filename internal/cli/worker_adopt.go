@@ -32,7 +32,7 @@ func workerAdopt(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		raw, err := openBacklog(c, root, false, "")
 		if err != nil {

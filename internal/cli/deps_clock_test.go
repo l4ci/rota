@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // One Deps clock and getenv reach the round env, the worker env and the
@@ -102,5 +103,33 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 	acc.Fetch = func(context.Context, string, string) (*jsonx.Object, string) { return nil, "no usage" }
 	if name, ok := acc.Pick(context.Background(), root, nil); !ok || name != "a" {
 		t.Errorf("Pick = %q, %v; want a (the ~/ configDir resolved to %s/.claude-a)", name, ok, home)
+	}
+}
+
+// A release build reads no ROTA_TEST_* variable: defaultDeps describes the
+// real machine, and only the rotatest invocationDeps applies the overrides.
+func TestDefaultDepsIgnoresTestOverrides(t *testing.T) {
+	t.Setenv("ROTA_TEST_NOW", "2001-02-03T04:05:06Z")
+	t.Setenv("ROTA_TEST_TODAY", "2001-02-03")
+	t.Setenv("ROTA_TEST_HOLDER_PID", "4242")
+	t.Setenv("ROTA_TEST_LATEST_VERSION", "99.0.0")
+	d := defaultDeps()
+	d.Proc = func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: "v1.2.3\n"}, nil // the release read, never the network
+	}
+	if got := d.Now(); got.Year() == 2001 {
+		t.Errorf("Now = %v, read ROTA_TEST_NOW", got)
+	}
+	if got := d.Today(); got.Year() == 2001 {
+		t.Errorf("Today = %v, read ROTA_TEST_TODAY", got)
+	}
+	if got := d.HolderPID(); got != 0 {
+		t.Errorf("HolderPID = %d, read ROTA_TEST_HOLDER_PID", got)
+	}
+	if d.ClockErr != nil {
+		t.Errorf("ClockErr = %v", d.ClockErr)
+	}
+	if got := d.UpdateEnv().Latest(); got != "1.2.3" {
+		t.Errorf("Latest = %q, want the release read's 1.2.3 (ROTA_TEST_LATEST_VERSION leaked)", got)
 	}
 }
