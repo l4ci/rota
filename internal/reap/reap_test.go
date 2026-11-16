@@ -830,3 +830,41 @@ func TestApplyFailsClosedWhenTheFreshReportErrors(t *testing.T) {
 		t.Errorf("apply = %+v, calls %v", out, g.calls)
 	}
 }
+
+// A node_modules symlink in the main checkout that resolves into a worktree
+// holds it: removing the worktree would strand every other checkout (#3445).
+func TestNodeModulesPointingIntoWorktreeHoldsIt(t *testing.T) {
+	dir := t.TempDir()
+	wtp := dir + "/.worktrees/w7"
+	if err := os.MkdirAll(wtp+"/node_modules/vite", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir+"/node_modules", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(wtp+"/node_modules/vite", dir+"/node_modules/vite"); err != nil {
+		t.Fatal(err)
+	}
+	g := &fakeGit{resp: map[string]gitResp{
+		"worktree list --porcelain":                 {out: "worktree " + dir + "\nHEAD abc\nbranch refs/heads/main\n\nworktree " + wtp + "\nHEAD abc\nbranch refs/heads/kit/1-a\n\n"},
+		wtp + "|status --porcelain":                 {},
+		wtp + "|merge-base --is-ancestor HEAD main": {},
+	}}
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Root = dir
+	res := find(t, in, KindWorktree)
+	if len(res.Candidates) != 1 || !strings.Contains(res.Candidates[0].Held, "pnpm install --offline --frozen-lockfile") {
+		t.Fatalf("candidates = %+v", res.Candidates)
+	}
+	g.calls = nil
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Reaped) != 0 || g.ran("worktree remove") {
+		t.Errorf("held worktree removed: %+v %v", out, g.calls)
+	}
+	// no node_modules at all: reaps as before
+	os.RemoveAll(dir + "/node_modules")
+	res = find(t, in, KindWorktree)
+	if len(res.Candidates) != 1 || res.Candidates[0].Held != "" {
+		t.Fatalf("no node_modules should not hold: %+v", res.Candidates)
+	}
+}
