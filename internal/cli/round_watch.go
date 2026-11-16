@@ -329,6 +329,8 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 	}
 	note := ""
 	switch {
+	case res.Reason == roundwatch.ReasonStopped && res.Tick != nil && res.Tick.Stopped != nil:
+		note = res.Tick.Stopped.Error()
 	case res.Reason == roundwatch.ReasonStopped && errors.Is(stoppedErr, roundtick.ErrStopped):
 		note = stoppedErr.Error()
 	case res.Reason == roundwatch.ReasonStopped:
