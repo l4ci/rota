@@ -11,22 +11,29 @@ func TestBranchNoPRWaitsForFinishedSlot(t *testing.T) {
 	root := newRepo(t, map[string]string{"kit": "kit/2179-work"}, "kit")
 	for _, tc := range []struct {
 		name, recorded, live string
+		doneEvent            bool // the worker reported done after its last dispatch
 		want                 int
 	}{
-		{"working overrides recorded done", "done", "working", 0},
-		{"busy", "busy", "busy", 0},
-		{"blocked", "blocked", "blocked", 0},
-		{"done", "busy", "done", 1},
-		{"idle", "busy", "idle", 1},
-		{"recorded busy without host", "busy", "", 0},
-		{"recorded done without host", "done", "", 1},
-		{"recorded idle without host", "idle", "", 1},
+		{"working overrides recorded done", "done", "working", false, 0},
+		{"busy", "busy", "busy", false, 0},
+		{"blocked", "blocked", "blocked", false, 0},
+		{"done after a done event", "busy", "done", true, 1},
+		{"reassigned slot keeps the last turn's native done", "busy", "done", false, 0},
+		{"idle after a done event", "busy", "idle", true, 1},
+		{"reassigned slot keeps the last turn's native idle", "busy", "idle", false, 0},
+		{"recorded busy without host", "busy", "", false, 0},
+		{"recorded done without host", "done", "", false, 1},
+		{"recorded idle without host", "idle", "", false, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			writeRegistry(t, root, slot(root, "kit", "kit/2179-work", func(o *jsonx.Object) {
 				o.Set("state", tc.recorded)
 				o.Set("task", "2179")
 				o.Set("handle", "w1:t1")
+				o.Set("activeAt", "2026-10-03T10:00:00Z")
+				if tc.doneEvent {
+					o.Set("event", jsonx.Obj("kind", "done", "ts", "2026-10-03T10:30:00Z"))
+				}
 			}))
 			e := env(nil, (&fakeRemote{labelled: []int{2179}}).asForge())
 			if tc.live != "" {
