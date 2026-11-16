@@ -671,10 +671,10 @@ it. For a worker it refuses (exit 2, one-line reason) the commands the worker co
 
 - `gh pr merge`, and `gh api` with a write method (`-X PUT`, `--method`, or a `-f`/`-F` body) on a
   path ending in `/merge`
-- a push to the base branch (`main`, `master`, or the base the caller passes in `GuardEnv.Base`), plain
-  or forced, including `HEAD:main` and a bare `git push origin main`; the hook does not read the
-  project base from config yet, so only `main` and `master` are covered in practice. A bare `git push`
-  that resolves to such an upstream is not inspected
+- a push to the base branch (`main`, `master`, or the project's configured base, which the hook
+  resolves for the calling directory), plain or forced, including `HEAD:main` and a bare
+  `git push origin main`. When the base cannot be resolved, only `main` and `master` are guarded.
+  A bare `git push` that resolves to such an upstream is not inspected
 - a force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) to any branch but the worker's own,
   `git push --delete`, `:ref` and `--mirror`; pushing the current branch, with or without
   `--force-with-lease`, is fine
@@ -1014,7 +1014,10 @@ The gate skips acceptance once that issue is explicitly closed.
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
 (`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch
 merge of the PR into the base (a worktree under `$TMPDIR`), runs `test.full` there, then `test.e2e`
-when set, and merges on a pass.
+when set, and merges on a pass. After a PR lands (by `gate` or `train`) the output adds one advisory
+`HARVEST` line when a landed issue carries `learning` comments no `harvested` mark names yet. It
+names the issues and a read command for each (`rota item comment list <id> --kind learning`); fold them in at
+[`/rota-learn`](learning.md#rota-learn). It never changes the verdict or the exit code.
 
 A worker's PR body carries four sections besides the closing keyword: `## Approvals` (the channel of each
 decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each

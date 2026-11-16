@@ -100,6 +100,9 @@ remain protected.
 - A running agent. A tab with a live agent under it is not listed.
 - Work. A candidate with uncommitted changes, commits not on the base, or a branch not reachable from
   the base is listed with `held: <why>` and never deleted. There is no flag to override that.
+- A worktree the main checkout's `node_modules` points into (an npm or pnpm link, or a pnpm virtual
+  store). It is listed with `held:` and the repair to run in the main checkout; reap it again after.
+  When the links cannot be read, the worktree is held rather than assumed clean.
 - A `stalled` slot. Reap reclaims `dead` slots only: a worker in a long test run makes no commits and
   looks stalled, and reaping it would kill it. Reclaiming a stalled slot is an explicit
   [`rota round reclaim`](parallel-rounds.md#moving-an-issue-that-is-assigned).
