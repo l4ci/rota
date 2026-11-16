@@ -365,6 +365,9 @@ func (s *state) heldWorktree(ctx context.Context, c *checkout) string {
 	} else if strings.TrimSpace(st) != "" {
 		return "uncommitted changes"
 	}
+	if hit := worker.NodeModulesPointer(s.root, c.path); hit != "" {
+		return worker.NodeModulesRefusal(c.path, hit)
+	}
 	return s.heldUnmerged(ctx, c.path, "HEAD")
 }
 

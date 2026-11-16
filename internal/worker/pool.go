@@ -299,6 +299,12 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 			reaped = append(reaped, name)
 			continue
 		}
+		if wt := s.Worktree(); wt != "" {
+			if hit := NodeModulesPointer(root, wt); hit != "" {
+				failed = append(failed, name+": "+NodeModulesRefusal(wt, hit))
+				continue
+			}
+		}
 		// Orca owns a terminal whose agent can outlive its runtime handle.
 		// Retain the worktree and registry until close proves the tree gone.
 		if host.CapabilitiesForKind(e.hostKind(root)).TreeKillClose && s.Handle() != "" {
