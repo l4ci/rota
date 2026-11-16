@@ -26,10 +26,12 @@ type gateOutcome struct {
 // trainOutcome interprets a train run. Landed names the members that merged,
 // Culprit the member that broke the train, if the train names one.
 type trainOutcome struct {
-	Landed  []string
-	Culprit string
-	Verdict string
-	Detail  string
+	Landed []string
+	// AlreadyMerged are members whose PR was on the base before this train ran.
+	AlreadyMerged []string
+	Culprit       string
+	Verdict       string
+	Detail        string
 	// Done is true when the whole train landed, with no member excluded.
 	Done bool
 	// Excluded are members the pre-filter dropped (a missing PR section):
@@ -83,15 +85,16 @@ func (e Env) trainTargets(ctx context.Context, targets []string, base string) tr
 		}
 		if r.OK() {
 			if len(r.Culprits) == 0 {
-				return trainOutcome{Done: true}
+				return trainOutcome{Done: true, AlreadyMerged: r.AlreadyMerged}
 			}
-			return trainOutcome{Landed: r.Landed, Excluded: r.Culprits}
+			return trainOutcome{Landed: r.Landed, Excluded: r.Culprits, AlreadyMerged: r.AlreadyMerged}
 		}
 	}
 	out := trainOutcome{Verdict: failedVerdict(r.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, r.Err)}
 	if run.Err != nil && !run.Refused {
 		return out // died on an error: nothing of the result is reported
 	}
+	out.AlreadyMerged = r.AlreadyMerged
 	out.Culprit, out.Interaction, out.Unreproduced = r.Culprit, r.Interaction, r.Unreproduced
 	for _, m := range r.Members {
 		if m.Landed {

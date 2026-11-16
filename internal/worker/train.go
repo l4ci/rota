@@ -135,6 +135,7 @@ func (r TrainResult) owned() TrainResult {
 	r.Flaky = slices.Clone(r.Flaky)
 	r.E2EVerified = slices.Clone(r.E2EVerified)
 	r.Landed = slices.Clone(r.Landed)
+	r.AlreadyMerged = slices.Clone(r.AlreadyMerged)
 	r.Notes = slices.Clone(r.Notes)
 	r.Order = slices.Clone(r.Order)
 	r.CacheHits = slices.Clone(r.CacheHits)
@@ -187,10 +188,13 @@ type TrainResult struct {
 	Flaky       []flakeledger.Entry // commands recovered on one sequential retry
 	E2EVerified []string            // test.e2e commands that passed
 	Landed      []string
-	Changed     bool
-	SHA         string
-	Err         string
-	Hint        string
+	// AlreadyMerged lists members whose PR was on the base before this run
+	// (an earlier train or a hand merge): this run landed nothing for them.
+	AlreadyMerged []string
+	Changed       bool
+	SHA           string
+	Err           string
+	Hint          string
 	// Refusal is the approval gate's refusal, set with verdict approval-required.
 	Refusal *exitcode.Refusal
 	Notes   []string
@@ -628,6 +632,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Notes = appendNew(res.Notes, gr.Notes...)
 		if gr.Verdict == GateAlreadyMerged {
 			merged = append(merged, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
+			res.AlreadyMerged = append(res.AlreadyMerged, tg)
 			res.Notes = append(res.Notes, gr.Err)
 			continue
 		}
