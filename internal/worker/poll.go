@@ -741,3 +741,14 @@ func IsPRURL(s string) bool {
 	_, ok := tracker.ParsePRURL(s)
 	return ok
 }
+
+// NativeDoneIsStale says the host's native done or idle is an earlier turn's:
+// the slot records a dispatch (busy) that no worker event has answered since.
+// `round status` reads it so a freshly reassigned slot is not shown done while
+// `worker poll` reads it busy (#3311).
+func NativeDoneIsStale(s *Slot, native string) bool {
+	if s == nil || (native != "done" && native != "idle") || !IsBusy(s.State()) {
+		return false
+	}
+	return !slotTarget(s).eventAfterDispatch()
+}
