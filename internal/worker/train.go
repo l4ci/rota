@@ -160,6 +160,9 @@ type TrainMember struct {
 	checked, issue string
 }
 
+// Issue is the item the member's check-only gate resolved, "" when unknown.
+func (m TrainMember) Issue() string { return m.issue }
+
 // TrainResult is the train's answer. Verdict is pass, or the verdict of the
 // step that refused: a member's check verdict (stale, pr-mismatch,
 // provenance-fail, ...), merge-failed, verify-failed, approval-required,
