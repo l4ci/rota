@@ -12,7 +12,7 @@ import (
 // Hand-written expectations per backend, deliberately not derived from
 // capabilitiesFor so a wrong flag there fails a test.
 var (
-	literalFile   = Capabilities{HarnessField: true}
+	literalFile   = Capabilities{}
 	literalIssues = Capabilities{
 		IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true,
 		SharedClaims: true, ClaimHistory: true, ClaimLabels: true, BodyEdit: true, SectionEdit: true,
@@ -143,7 +143,6 @@ func TestCapabilitiesMatchInterfaces(t *testing.T) {
 		{"ClaimLabels", func(c Capabilities) bool { return c.ClaimLabels }, func(b Backend) bool { _, ok := b.(ClaimLabelSyncer); return ok }},
 		{"BodyEdit", func(c Capabilities) bool { return c.BodyEdit }, func(b Backend) bool { _, ok := b.(BodyEditor); return ok }},
 		{"SectionEdit", func(c Capabilities) bool { return c.SectionEdit }, func(b Backend) bool { _, ok := b.(SectionEditor); return ok }},
-		{"HarnessField", func(c Capabilities) bool { return c.HarnessField }, func(b Backend) bool { _, ok := b.(HarnessSetter); return ok }},
 		{"ItemStatus", func(c Capabilities) bool { return c.ItemStatus }, func(b Backend) bool { _, ok := b.(ItemTracker); return ok }},
 	}
 	for _, be := range []Backend{&File{}, &Issues{}, &Umbrella{}} {
@@ -203,7 +202,7 @@ func TestOptional(t *testing.T) {
 	if _, ok := Optional[SharedClaimer](&File{}, claims); ok {
 		t.Error("flag false, interface absent: want !ok")
 	}
-	// Flag false while the interface is implemented: Issues has no HarnessField.
+	// Flag false while the interface is implemented: Issues has the interface but the flag says no.
 	if _, ok := Optional[SharedClaimer](&Issues{}, func(Capabilities) bool { return false }); ok {
 		t.Error("flag false with interface implemented resolved")
 	}

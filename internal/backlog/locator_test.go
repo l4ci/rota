@@ -47,11 +47,11 @@ func TestFileRefLocator(t *testing.T) {
 	if got := read(t, f, ".rota/BACKLOG.md"); !strings.Contains(got, "- **[B1] [P1] Short.** x\n") {
 		t.Fatalf("Reopen B1:\n%s", got)
 	}
-	if _, err := f.SetHarness("B10", "codex"); err != nil {
+	if _, err := f.SetField("B10", "related", "[F01]"); err != nil {
 		t.Fatal(err)
 	}
 	got = read(t, f, ".rota/BACKLOG.md")
-	if !strings.Contains(got, "- **[B1] [P1] Short.** x\n") || strings.Count(got, "Harness:") != 1 {
-		t.Fatalf("SetHarness B10 touched B1:\n%s", got)
+	if !strings.Contains(got, "- **[B1] [P1] Short.** x\n") || strings.Count(got, "Related:") != 1 {
+		t.Fatalf("SetField B10 touched B1:\n%s", got)
 	}
 }

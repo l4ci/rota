@@ -3,6 +3,7 @@ package repos
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,53 +69,42 @@ func TestWhichMaskedByStrayHV(t *testing.T) {
 	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
 	os.MkdirAll(filepath.Join(root, "web", ".rota"), 0o755)
 	_, err := Which(filepath.Join(root, "web"))
-	var m *MaskedError
+	var m *rotatree.MaskedError
 	if !errors.As(err, &m) || m.Name != "web" || m.Stray != filepath.Join(root, "web", ".rota") {
 		t.Errorf("masked: %v", err)
 	}
 	// a stray .rota/ in a directory the registry does not list is no mask
 	os.MkdirAll(filepath.Join(root, "other", ".rota"), 0o755)
-	if got, err := FindUmbrella(filepath.Join(root, "other")); err != nil || got != filepath.Join(root, "other") {
+	if got, err := FindRoot(filepath.Join(root, "other")); err != nil || got != filepath.Join(root, "other") {
 		t.Errorf("unregistered stray: %q %v", got, err)
 	}
 }
 
 // A stray .rota/ deep inside a registered sub-repo's source tree masks the
 // umbrella just like one at the sub-repo root.
-func TestFindUmbrellaMaskedByDeepStrayHV(t *testing.T) {
+func TestFindRootMaskedByDeepStrayHV(t *testing.T) {
 	root := umbrella(t, `{"repos": [{"name": "web", "path": "./web"}]}`)
 	deep := filepath.Join(root, "web", "src")
 	os.MkdirAll(filepath.Join(deep, ".rota"), 0o755)
-	_, err := FindUmbrella(deep)
-	var m *MaskedError
+	_, err := FindRoot(deep)
+	var m *rotatree.MaskedError
 	if !errors.As(err, &m) || m.Name != "web" || m.Stray != filepath.Join(deep, ".rota") {
 		t.Errorf("deep stray: %v", err)
 	}
 }
 
-func TestFindUmbrellaNone(t *testing.T) {
-	if _, err := FindUmbrella(t.TempDir()); !errors.Is(err, ErrNoUmbrella) {
+func TestFindRootNone(t *testing.T) {
+	if _, err := FindRoot(t.TempDir()); !errors.Is(err, rotatree.ErrNoRoot) {
 		t.Errorf("%v", err)
 	}
 }
 
-func TestFindUmbrellaMaskAlsoWithoutNameAndAbsolutePath(t *testing.T) {
+func TestFindRootMaskAlsoWithoutNameAndAbsolutePath(t *testing.T) {
 	root := umbrella(t, "", "web")
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"path": "`+filepath.Join(root, "web")+`"}]}`), 0o644)
 	os.MkdirAll(filepath.Join(root, "web", ".rota"), 0o755)
-	var m *MaskedError
-	if _, err := FindUmbrella(filepath.Join(root, "web")); !errors.As(err, &m) {
+	var m *rotatree.MaskedError
+	if _, err := FindRoot(filepath.Join(root, "web")); !errors.As(err, &m) {
 		t.Errorf("%v", err)
-	}
-}
-
-func TestWithin(t *testing.T) {
-	for _, c := range []struct {
-		path, dir string
-		want      bool
-	}{{"/a/b", "/a/b", true}, {"/a/b/c", "/a/b", true}, {"/a/bc", "/a/b", false}, {"/a", "/a/b", false}, {"/x", "/", true}} {
-		if got := within(c.path, c.dir); got != c.want {
-			t.Errorf("within(%s,%s) = %v", c.path, c.dir, got)
-		}
 	}
 }

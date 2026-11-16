@@ -1,6 +1,7 @@
 package verdict
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -38,6 +39,10 @@ type Check struct {
 	Repo  string // sub-repo name in an umbrella, else ""
 	// StoreErr is the LoadStrict error for Store; set, every check refuses.
 	StoreErr error
+	// IgnoreStaleCross drops review-cross records recorded at a commit other
+	// than the checked head, so an old cross FAIL no longer blocks. The caller
+	// sets it only when cross review is switched off by an explicit review:none.
+	IgnoreStaleCross bool
 }
 
 // Block returns a *BlockedError when a recorded FAIL blocks branch, nil
@@ -79,7 +84,13 @@ func (v Check) BlockAt(branch, head string) error {
 	if head == "" {
 		head = v.Head(branch)
 	}
-	r, ok = Blocking(ForHead(list, head))
+	list = ForHead(list, head)
+	if v.IgnoreStaleCross {
+		list = slices.DeleteFunc(slices.Clone(list), func(r Record) bool {
+			return r.Kind == ReviewCross && !AtHead(r, head)
+		})
+	}
+	r, ok = Blocking(list)
 	if !ok {
 		return nil
 	}
