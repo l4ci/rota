@@ -3,6 +3,8 @@ package doctor
 import (
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Disk is the space on one volume, in bytes.
@@ -34,7 +36,7 @@ func (d *runner) disk() (Check, bool) {
 		return Check{}, false
 	}
 	pct := disk.FreePercent()
-	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min)
+	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, strutil.HumanBytes(disk.Free), pct, min)
 	hint := "free space before a round; set doctor.minFreeDiskPercent to change the threshold"
 	if d.in.ScanLeftovers != nil {
 		if left := d.in.ScanLeftovers(); len(left) > 0 {
@@ -53,22 +55,8 @@ func (d *runner) cacheDisk() (Check, bool) {
 	}
 	pct := disk.FreePercent()
 	return Check{Name: "go-cache-disk", Status: Warn,
-		Detail: fmt.Sprintf("%s (the Go build cache) has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min),
+		Detail: fmt.Sprintf("%s (the Go build cache) has %s free (%.0f%%), under the %d%% threshold", disk.Path, strutil.HumanBytes(disk.Free), pct, min),
 		Hint:   "run: go clean -cache; set doctor.minFreeDiskPercent to change the threshold"}, true
-}
-
-// HumanBytes is a size in the largest unit that keeps it above 1.
-func HumanBytes(n uint64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := uint64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
 // repoConfig warns when repo-scope git config moved since the recorded

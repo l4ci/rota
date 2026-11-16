@@ -121,9 +121,14 @@ type Input struct {
 	ProcessUses func() ([]ProcUse, error)
 }
 
+// LeftoverAge is how long something a run left behind (a temp dir, a skill
+// extraction) must sit untouched before reap offers it and doctor calls it
+// leaked: a younger one may belong to a run still going.
+const LeftoverAge = time.Hour
+
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
 // before its `rota skills get` extraction counts as killed.
-const extractMaxAge = time.Hour
+const extractMaxAge = LeftoverAge
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
 type Result struct {
@@ -300,6 +305,16 @@ func (s *state) warn(format string, a ...any) {
 
 func (s *state) wtDir() string { return filepath.Join(s.root, worker.WorktreeRoot) }
 
+// ScratchCheckout reports whether the checkout at path is a direct child of
+// root's .worktrees/ directory, the only place reap lists checkouts from.
+// Doctor counts prunable checkouts through it so its hint matches reap's list.
+func ScratchCheckout(root, path string) bool {
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		root = real
+	}
+	return filepath.Dir(filepath.Clean(path)) == filepath.Join(root, worker.WorktreeRoot)
+}
+
 func (s *state) git(ctx context.Context, dir string, args ...string) (string, int, error) {
 	res, err := s.in.Git(ctx, dir, args...)
 	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
@@ -381,7 +396,7 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 	var out []Candidate
 	for i := range s.checkouts {
 		c := &s.checkouts[i]
-		if filepath.Dir(c.path) != s.wtDir() || s.live.Worktree(c) {
+		if !ScratchCheckout(s.root, c.path) || s.live.Worktree(c) {
 			continue
 		}
 		name := filepath.Base(c.path)
