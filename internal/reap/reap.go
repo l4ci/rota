@@ -344,11 +344,14 @@ func (s *state) heldUnmerged(ctx context.Context, dir, rev string) string {
 		return "no base branch to prove merged against"
 	}
 	for _, ref := range s.refs(ctx) {
-		_, code, err := s.git(ctx, dir, "merge-base", "--is-ancestor", rev, ref)
+		merged, err := git.IsAncestorWith(func(args ...string) (int, error) {
+			_, code, err := s.git(ctx, dir, args...)
+			return code, err
+		}, rev, ref)
 		if err != nil {
 			return "cannot prove " + rev + " is merged: " + err.Error()
 		}
-		if code == 0 {
+		if merged {
 			return ""
 		}
 	}

@@ -134,8 +134,7 @@ func remoteBase(ctx context.Context, repo git.Repo, base string) string {
 		return base
 	}
 	// Exit 0 when base is an ancestor of remote; equal tips are not "ahead".
-	anc, err := repo.Run(ctx, "merge-base", "--is-ancestor", base, remote)
-	if err != nil || anc.ExitCode != 0 {
+	if ahead, err := repo.IsAncestor(ctx, base, remote); err != nil || !ahead {
 		return base
 	}
 	same, err := repo.Run(ctx, "rev-parse", base, remote)

@@ -1423,7 +1423,8 @@ func (e Env) branchTip(ctx context.Context, root, branch string) string {
 		return local
 	}
 	if local != "" {
-		if _, _, code := e.gitOut(ctx, root, "merge-base", "--is-ancestor", remote, local); code == 0 {
+		// An unreadable local branch loses to the remote, like a diverged one.
+		if ahead, err := e.isAncestor(ctx, root, remote, local); err == nil && ahead {
 			return local
 		}
 	}

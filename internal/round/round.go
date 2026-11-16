@@ -352,8 +352,7 @@ func (e Env) ownsMergedPR(ctx context.Context, root, sha, base, branch string) b
 	if strings.TrimSpace(tip.Stdout) == sha {
 		return true
 	}
-	onBranch, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, branch)
-	if err != nil || onBranch.ExitCode != 0 {
+	if onBranch, err := e.isAncestor(ctx, root, sha, branch); err != nil || !onBranch {
 		return false
 	}
 	// Status never fetches, so origin/<base> can run ahead of local <base>: the
@@ -363,8 +362,8 @@ func (e Env) ownsMergedPR(ctx context.Context, root, sha, base, branch string) b
 		if ok, _ := e.Git(ctx, root, "rev-parse", "--verify", "-q", ref); ok.ExitCode != 0 {
 			continue
 		}
-		in, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, ref)
-		if err != nil || in.ExitCode != 1 {
+		// Unreadable counts as not ours, like a head already in base.
+		if in, err := e.isAncestor(ctx, root, sha, ref); err != nil || in {
 			return false
 		}
 		checked = true

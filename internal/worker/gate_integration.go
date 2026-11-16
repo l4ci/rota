@@ -249,7 +249,11 @@ func (e Env) integrationReviewed(root string, rec Integration, list []verdict.Re
 		if code != 0 {
 			continue
 		}
-		if _, code := e.git(root, "merge-base", "--is-ancestor", s, head); code != 0 {
+		onHead, err := e.isAncestor(root, s, head)
+		if err != nil {
+			return false, "", err
+		}
+		if !onHead {
 			continue
 		}
 		after, err := e.FixCommits(root, rec, s, head)

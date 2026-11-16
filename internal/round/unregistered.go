@@ -52,7 +52,8 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 			continue
 		}
 		seen[name] = true
-		if r, _ := e.Git(ctx, root, "merge-base", "--is-ancestor", ref, e.Base); r.ExitCode == 0 {
+		// An unreadable branch is listed rather than hidden as landed.
+		if landed, err := e.isAncestor(ctx, root, ref, e.Base); err == nil && landed {
 			continue // nothing to land
 		}
 		f := Finding{Kind: UnregisteredBranch, Issue: worker.IssueFromBranch(name), branch: name}

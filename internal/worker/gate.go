@@ -753,6 +753,14 @@ func (g gate) git(dir string, args ...string) (string, int) {
 	return g.e.runGit(g.ctx, dir, args...)
 }
 
+// isAncestor is Env.isAncestor on the gate's context.
+func (g gate) isAncestor(dir, ancestor, descendant string) (bool, error) {
+	return git.IsAncestorWith(func(args ...string) (int, error) {
+		_, code := g.git(dir, args...)
+		return code, nil
+	}, ancestor, descendant)
+}
+
 // stepRecordLedger appends the verdict to the gate ledger.
 func (runner gate) stepRecordLedger(result GateResult) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{}, gateForgeResult{})
@@ -1094,9 +1102,9 @@ func (runner gate) stepAttempt(result GateResult, target GateTarget, refs gateRe
 	// workers' stamped commits) are nobody's attempt here: exclude them too.
 	rng := []string{g.headRef, "^" + g.baseRef}
 	if t.AttemptBase != "" {
-		if _, code := g.git(g.root, "merge-base", "--is-ancestor", t.AttemptBase, g.headRef); code != 0 {
-			// A rebase rewrote the inherited tip: the inherited trailers cannot be
-			// told from the stale ones, so judge nothing.
+		if inherited, err := g.isAncestor(g.root, t.AttemptBase, g.headRef); err != nil || !inherited {
+			// A rebase rewrote the inherited tip, or git could not read it: the
+			// inherited trailers cannot be told from the stale ones, so judge nothing.
 			return finish(false, nil)
 		}
 		rng = append(rng, "^"+t.AttemptBase)
@@ -1195,12 +1203,12 @@ func (runner gate) stepFreshness(result GateResult, target GateTarget, forged ga
 	}
 
 	o := g.o
-	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", g.baseRef, g.headRef); code {
-	case 0:
+	upToDate, err := g.isAncestor(g.root, g.baseRef, g.headRef)
+	if err != nil {
+		return finish(g.broke(err.Error()))
+	}
+	if upToDate {
 		return finish(false, nil)
-	case 1:
-	default:
-		return finish(g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code)))
 	}
 	behind, c := g.git(g.root, "rev-list", "--count", g.headRef+".."+g.baseRef)
 	if c != 0 {
@@ -2157,7 +2165,11 @@ func pairwiseMergeConflict(runGit func(string, ...string) (string, int), root, a
 // overlap check ignores them. brokeMsg is set when a git check itself fails.
 func (g *gateOperation) staleReason() (why string, shared []string, brokeMsg string) {
 	root := g.root
-	if _, code := g.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
+	landed, err := g.isAncestor(root, g.headRef, g.baseRef)
+	if err != nil {
+		return "", nil, err.Error()
+	}
+	if landed {
 		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), nil, ""
 	}
 	conflict, out, code := pairwiseMergeConflict(g.git, root, g.baseRef, g.headRef)
@@ -2500,13 +2512,13 @@ func (g *gateOperation) confirmLanded(sha string) (done bool) {
 		g.broke("git fetch " + g.rem() + " failed after merging")
 		return true
 	}
-	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", sha, g.baseRef); code {
-	case 0:
-	case 1:
-		g.verdict(GateNotOnBase, fmt.Sprintf("NOT-ON-BASE %s — merge commit %s is not an ancestor of %s (merged into another branch?)", o.Slot, sha, g.baseRef), "")
+	onBase, err := g.isAncestor(g.root, sha, g.baseRef)
+	if err != nil {
+		g.broke(err.Error())
 		return true
-	default:
-		g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", sha, g.baseRef, code))
+	}
+	if !onBase {
+		g.verdict(GateNotOnBase, fmt.Sprintf("NOT-ON-BASE %s — merge commit %s is not an ancestor of %s (merged into another branch?)", o.Slot, sha, g.baseRef), "")
 		return true
 	}
 	g.res.Changed = true
@@ -2517,7 +2529,12 @@ func (g *gateOperation) confirmLanded(sha string) (done bool) {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))
 		return true
 	}
-	if _, code := g.git(g.root, "merge-base", "--is-ancestor", sha, "HEAD"); code != 0 {
+	inLocal, err := g.isAncestor(g.root, sha, "HEAD")
+	if err != nil {
+		g.mergedRemotely(fmt.Sprintf("could not check %s against the local %s (%v)", sha, o.Base, err))
+		return true
+	}
+	if !inLocal {
 		g.mergedRemotely(fmt.Sprintf("%s is not in the local %s", sha, o.Base))
 		return true
 	}
