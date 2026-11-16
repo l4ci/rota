@@ -75,6 +75,7 @@ type DoneResult struct {
 	ProofSkipped   bool
 	Targeted       bool
 	ProofCommand   string
+	ProofCwd       string
 	Head           string
 	Missing        []string
 	NoRedUnchecked bool
@@ -241,7 +242,7 @@ func doneProof(env Env, req DoneRequest, dp DoneDeps, sl *Slot, dir string, bund
 		}
 		command, err := dp.RunTargeted(dir, req.Targeted, req.Base, head, bundle())
 		if command != "" {
-			res.Targeted, res.ProofCommand = true, command
+			res.Targeted, res.ProofCommand, res.ProofCwd = true, command, dir
 		}
 		if err != nil {
 			return err

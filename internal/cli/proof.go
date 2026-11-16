@@ -113,10 +113,16 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		d.Set("exitCode", code)
 		d.Set("niced", run.niced)
 		d.Set("changed", changed)
-		res := Result{Data: d, Text: row.Result + ": " + row.Check}
+		d.Set("cwd", run.cwd)
+		text := row.Result + ": " + row.Check + "\ncwd: " + run.cwd
 		if code != 0 {
-			return res, Failed("%s (exit %d)", command, code)
+			d.Set("outputTail", run.tail())
+			if t := run.tail(); t != "" {
+				text += "\n" + t
+			}
+			return Result{Data: d, Text: text}, Failed("%s (exit %d)", command, code)
 		}
+		res := Result{Data: d, Text: text}
 		return res, nil
 	}
 }
@@ -199,9 +205,22 @@ func uncertainResult(id, typ string, reasons []string) (Result, error) {
 // whether it ran at lowered priority.
 type proofRun struct {
 	out      string
+	cwd      string
 	code     int
 	niced    bool
 	targeted bool
+}
+
+// outputTailLines caps the failing-proof output tail.
+const outputTailLines = 20
+
+// tail is the last outputTailLines lines of what the command printed, trimmed.
+func (r proofRun) tail() string {
+	lines := strings.Split(strings.TrimRight(r.out, "\n"), "\n")
+	if len(lines) > outputTailLines {
+		lines = lines[len(lines)-outputTailLines:]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // evidence is the proof row's evidence: the exit code and an output hash, then
@@ -223,7 +242,7 @@ func (r proofRun) evidence() string {
 // ROTA_TEST_LOCK_HELD keeps a `rota test run` inside it from queueing behind
 // the slot its parent holds.
 func runProofCommand(c *Ctx, ctx context.Context, root, dir, command, verb string) (proofRun, error) {
-	run := proofRun{}
+	run := proofRun{cwd: dir}
 	wrapped, niced := worker.NiceCommand(command, c.deps().lookPath())
 	run.niced = niced
 	err := withTestLock(c, ctx, root, c.deps().workerEnv().GateConfig(root), verb, func() error {
