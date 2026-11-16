@@ -11,6 +11,8 @@ import (
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/reap"
+	"github.com/l4ci/rota/internal/round"
 )
 
 func fixedDisk(free, total uint64) func(string) *doctor.Disk {
@@ -165,7 +167,7 @@ func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
 	for _, e := range []struct {
 		name string
 		age  time.Duration
-	}{{"old-a", 3 * time.Hour}, {"old-b", 5 * time.Hour}, {"fresh", 10 * time.Minute}, {".gitignore", 9 * time.Hour}} {
+	}{{"old-a", 3 * time.Hour}, {"old-b", 5 * time.Hour}, {"fresh", 10 * time.Minute}} {
 		p := filepath.Join(tempRoot, e.name)
 		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
@@ -178,6 +180,9 @@ func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
 		os.Chtimes(f, ts, ts)
 		os.Chtimes(p, ts, ts)
 	}
+	if err := os.WriteFile(filepath.Join(tempRoot, ".gitignore"), []byte("*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
 	want := "2 entries older than 1h under " + tempRoot + " (2.0 KiB); preview with `rota reap --kind tmp`, `--apply` to remove"
 	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), tempRoot, now)
@@ -189,5 +194,66 @@ func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
 	}
 	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), filepath.Join(tempRoot, "absent"), now); len(got) != 0 {
 		t.Fatalf("missing temp root was created or listed: %q", got)
+	}
+}
+
+// reapInput is the minimum reap.Input to list worktree and tmp candidates
+// from a scripted `git worktree list`.
+func reapInput(root, tempRoot, porcelain string) reap.Input {
+	run := func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: porcelain}, nil
+	}
+	return reap.Input{Root: root, Base: "main", Git: run, Report: &round.Report{}, TempRoot: tempRoot}
+}
+
+func ageTree(t *testing.T, dir string, ts time.Time) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "f"), make([]byte, 1024), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Chtimes(filepath.Join(dir, "f"), ts, ts)
+	os.Chtimes(dir, ts, ts)
+}
+
+// Doctor's hint says `rota reap --kind tmp` lists what it counted, so an
+// unowned root (no rota .gitignore) must read 0 on both sides.
+func TestDoctorAndReapAgreeOnAnUnownedTempRoot(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	tempRoot := t.TempDir()
+	old := filepath.Join(tempRoot, "old-run")
+	if err := os.MkdirAll(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ageTree(t, old, now.Add(-3*time.Hour))
+	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
+	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), tempRoot, now); len(got) != 0 {
+		t.Errorf("doctor counted an unowned root: %q", got)
+	}
+	res, err := reap.Find(context.Background(), reapInput(t.TempDir(), tempRoot, "worktree /nowhere\n"), []string{reap.KindTmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Candidates) != 0 {
+		t.Errorf("reap listed %v from an unowned root", res.Candidates)
+	}
+}
+
+// A prunable checkout outside .worktrees/ is not reap's to list, so doctor
+// must not count it either; the one inside is counted and listed by both.
+func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
+	root := t.TempDir()
+	porcelain := "worktree " + root + "\n\n" +
+		"worktree " + filepath.Join(root, ".worktrees", "gone") + "\nbranch refs/heads/kit/1-a\nprunable gitdir file points to non-existent location\n\n" +
+		"worktree " + filepath.Join(t.TempDir(), "elsewhere") + "\nbranch refs/heads/kit/2-b\nprunable gitdir file points to non-existent location\n"
+	run := func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: porcelain}, nil
+	}
+	counted := prunableWorktrees(context.Background(), run, root)
+	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counted != 1 || len(res.Candidates) != 1 {
+		t.Errorf("doctor counted %d, reap listed %d (%v); want 1 and 1", counted, len(res.Candidates), res.Candidates)
 	}
 }

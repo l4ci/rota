@@ -10,20 +10,20 @@ import (
 	"sort"
 	"time"
 
-	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 // tmpMinAge is how long an entry under the project temp root must sit
 // untouched before reap offers it: a younger one may belong to a running step.
 // A var only so a test can age a just-made symlink past it.
-var tmpMinAge = time.Hour
+var tmpMinAge = LeftoverAge
 
-// EntryStat sizes the tree at path (regular files only) and finds its newest
+// entryStat sizes the tree at path (regular files only) and finds its newest
 // mtime. It uses Lstat semantics: a symlink counts as itself and is never
 // followed. Unreadable parts are skipped; ok is false when path itself is gone.
-func EntryStat(path string) (size int64, newest time.Time, ok bool) {
+func entryStat(path string) (size int64, newest time.Time, ok bool) {
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return 0, time.Time{}, false
@@ -116,39 +116,76 @@ func (s *state) readUses() ([]ProcUse, error) {
 	return s.in.ProcessUses()
 }
 
-func findTmp(_ context.Context, s *state) ([]Candidate, error) {
-	if s.in.TempRoot == "" {
-		return nil, nil
+// TmpEntry is one direct child of the project temp root that reap may list.
+type TmpEntry struct {
+	Name, Path string
+	Size       int64
+	Newest     time.Time
+}
+
+// ListTmp is reap's one rule for which entries of the project temp root are
+// candidates: an owned root (a real directory with rota's .gitignore) and a
+// name tmpName accepts. warning says why a present root was skipped.
+func ListTmp(root string) (ents []TmpEntry, warning string) {
+	if root == "" {
+		return nil, ""
 	}
-	if !rotastate.Owned(s.in.TempRoot) {
-		if _, err := os.Lstat(s.in.TempRoot); err == nil {
-			s.warn("%s is not a temp root rota made (a symlink, or no rota .gitignore); tmp candidates skipped", s.in.TempRoot)
+	if !rotastate.Owned(root) {
+		if _, err := os.Lstat(root); err == nil {
+			warning = fmt.Sprintf("%s is not a temp root rota made (a symlink, or no rota .gitignore); tmp candidates skipped", root)
 		}
-		return nil, nil
+		return nil, warning
 	}
-	ents, err := os.ReadDir(s.in.TempRoot)
+	dirents, err := os.ReadDir(root)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			s.warn("temp root unreadable: %v; tmp candidates skipped", err)
+			warning = fmt.Sprintf("temp root unreadable: %v; tmp candidates skipped", err)
 		}
+		return nil, warning
+	}
+	for _, e := range dirents {
+		if !tmpName(e.Name()) {
+			continue
+		}
+		path := filepath.Join(root, e.Name())
+		size, newest, ok := entryStat(path)
+		if !ok {
+			continue
+		}
+		ents = append(ents, TmpEntry{Name: e.Name(), Path: path, Size: size, Newest: newest})
+	}
+	sort.Slice(ents, func(i, j int) bool { return ents[i].Name < ents[j].Name })
+	return ents, ""
+}
+
+// StaleTmp is how many ListTmp entries sat untouched past tmpMinAge at now,
+// and their total size: the count doctor reports for `rota reap --kind tmp`.
+func StaleTmp(root string, now time.Time) (n int, size int64) {
+	ents, _ := ListTmp(root)
+	for _, e := range ents {
+		if e.Newest.Before(now.Add(-tmpMinAge)) {
+			n++
+			size += e.Size
+		}
+	}
+	return n, size
+}
+
+func findTmp(_ context.Context, s *state) ([]Candidate, error) {
+	ents, warning := ListTmp(s.in.TempRoot)
+	if warning != "" {
+		s.warn("%s", warning)
+	}
+	if len(ents) == 0 {
 		return nil, nil
 	}
 	uses, usesErr := s.readUses()
 	var out []Candidate
 	for _, e := range ents {
-		if !tmpName(e.Name()) {
-			continue
-		}
-		path := filepath.Join(s.in.TempRoot, e.Name())
-		size, newest, ok := EntryStat(path)
-		if !ok {
-			continue
-		}
-		out = append(out, Candidate{ID: KindTmp + ":" + e.Name(), Kind: KindTmp, Name: e.Name(), Path: path,
-			Reason: fmt.Sprintf("%s, last touched %s ago", doctor.HumanBytes(uint64(size)), HumanAge(time.Since(newest))),
-			Held:   s.heldTmp(path, newest, uses, usesErr)})
+		out = append(out, Candidate{ID: KindTmp + ":" + e.Name, Kind: KindTmp, Name: e.Name, Path: e.Path,
+			Reason: fmt.Sprintf("%s, last touched %s ago", strutil.HumanBytes(uint64(e.Size)), HumanAge(time.Since(e.Newest))),
+			Held:   s.heldTmp(e.Path, e.Newest, uses, usesErr)})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
 
@@ -157,7 +194,7 @@ func removeTmp(_ context.Context, s *state, c Candidate) error {
 		return fmt.Errorf("%q is not an entry of the project temp root", c.Name)
 	}
 	path := filepath.Join(s.in.TempRoot, c.Name)
-	_, newest, ok := EntryStat(path)
+	_, newest, ok := entryStat(path)
 	if !ok {
 		return fmt.Errorf("%s is gone", c.Name)
 	}
