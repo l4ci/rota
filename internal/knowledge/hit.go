@@ -6,11 +6,15 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/section"
 )
 
 // HitResult reports Hit.
@@ -51,6 +55,9 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 		if err != nil {
 			return err
 		}
+		if err := s.requireBullet(scope, topic, title); err != nil {
+			return err
+		}
 		h := pendingHit{Topic: topic, Title: title, Date: s.today()}
 		res.Entry, res.Promoted, res.PromotionBlocked, err = bumpHit(sc, h, s.PromoteThreshold(), cm)
 		if err != nil {
@@ -60,6 +67,24 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 		return appendPending(hp, h)
 	})
 	return res, err
+}
+
+// requireBullet refuses a (topic, title) that names no bullet, as the external
+// store's Hit does, so a typo cannot leave an orphan tier record.
+func (s Store) requireBullet(scope, topic, title string) error {
+	target, err := s.KnowledgePath(scope)
+	if err != nil {
+		return err
+	}
+	content, err := ReadFile(target)
+	if err != nil {
+		return err
+	}
+	start, end, ok := section.Find(content, topic)
+	if !ok || !bulletfmt.HasTitle(pystr.Splitlines(content[start:end]), strings.TrimSpace(title)) {
+		return notFound("no bullet in %q is titled %q", topic, title)
+	}
+	return nil
 }
 
 // Contradiction is one pending entry of the queue.

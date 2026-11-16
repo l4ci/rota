@@ -31,7 +31,11 @@ type Term struct {
 }
 
 var (
-	termHead  = regexp.MustCompile(`^- \*\*([^*]+)\*\*\s*(?:—\s*(.*))?\s*$`)
+	// termHead is the one rule for a term line, shared by the reader
+	// (glossaryBlocks) and the writer (ParseGlossary): a bold name, then an
+	// optional "—", ":" or "-" separator and the definition. Rendering writes
+	// the canonical "— def" form; every other shape keeps its text.
+	termHead  = regexp.MustCompile(`^- \*\*([^*]+)\*\*\s*(?:[—:-]\s*)?(.*?)\s*$`)
 	aliasLine = regexp.MustCompile(`^- \*\*Aliases:\*\*\s*(.*)$`)
 	notLine   = regexp.MustCompile(`^- \*\*Not:\*\*\s*(.*)$`)
 	dateLine  = regexp.MustCompile(`^<!--\s*(\d{4}-\d{2}-\d{2})\s*-->\s*$`)
@@ -453,15 +457,13 @@ func (s Store) GlossaryRead(scope string, terms []string) (string, []string, err
 
 type glossaryBlock struct{ name, block string }
 
-var blockHead = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
-
 // glossaryBlocks splits the Glossary body into (name, raw block) pairs.
 func glossaryBlocks(text string) []glossaryBlock {
 	body := section.Body(text, GlossaryTopic)
 	lines := splitKeep(body)
 	var out []glossaryBlock
 	for i := 0; i < len(lines); {
-		m := blockHead.FindStringSubmatch(lines[i])
+		m := termHead.FindStringSubmatch(strings.TrimRight(lines[i], "\n"))
 		if m == nil {
 			i++
 			continue

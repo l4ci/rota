@@ -94,8 +94,11 @@ func (c Clone) Add(ctx context.Context, in AddIn) (res WriteResult, err error) {
 			return WriteResult{}, err
 		}
 	}
-	if strings.Contains(in.Title, "*") {
-		return WriteResult{}, fmt.Errorf("%w: title must not contain %q", ErrContent, "*")
+	if err := bulletfmt.CheckTitle(in.Title); err != nil {
+		return WriteResult{}, err
+	}
+	if err := bulletfmt.CheckDate(in.Date); err != nil {
+		return WriteResult{}, err
 	}
 	err = c.mutate(ctx, func() error {
 		res, err = c.add(ctx, in)

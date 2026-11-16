@@ -10,13 +10,46 @@
 package bulletfmt
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
+
+// ErrInvalid is the class of every refusal of text a bullet cannot carry.
+var ErrInvalid = errors.New("invalid bullet text")
 
 // titleRe reads the title of any titled bullet, dated or not.
 var titleRe = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
+
+// CheckTitle refuses a title no reader could find again: a line break, a
+// stamp closer or a "*", which titleRe cannot parse. Both stores' Add call it.
+func CheckTitle(title string) error {
+	if strings.ContainsAny(title, "\r\n") {
+		return fmt.Errorf("%w: title must be a single line", ErrInvalid)
+	}
+	if strings.Contains(title, "-->") {
+		return fmt.Errorf("%w: title must not contain %q", ErrInvalid, "-->")
+	}
+	if strings.Contains(title, "*") {
+		return fmt.Errorf("%w: title must not contain %q", ErrInvalid, "*")
+	}
+	return nil
+}
+
+// CheckDate refuses a stamp date that is not a real YYYY-MM-DD; "" is allowed
+// and means "today" to the caller.
+func CheckDate(date string) error {
+	if date == "" {
+		return nil
+	}
+	if _, err := stamp.ParseDate(date); err != nil {
+		return fmt.Errorf("%w: date must be a real YYYY-MM-DD, got %q", ErrInvalid, date)
+	}
+	return nil
+}
 
 // Title returns the bold title of a bullet line (surrounding whitespace is
 // ignored). ok is false when the line is not a titled bullet.

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/gittest"
 )
 
@@ -137,5 +138,17 @@ func TestHitsLogIsPrivate(t *testing.T) {
 	di, err := os.Stat(filepath.Dir(c.hitsPath()))
 	if err != nil || di.Mode().Perm() != 0o700 {
 		t.Fatalf("dir = %v, %v", di, err)
+	}
+}
+
+// The external Add refuses a malformed date with the same error class as the
+// local one (titles: TestBulletContentIsRejected).
+func TestAddRefusesInvalidDate(t *testing.T) {
+	f := newFixture(t, "")
+	for _, d := range []string{"2026-13-45", "26-1-1", "yesterday"} {
+		_, err := f.clone().Add(context.Background(), AddIn{Topic: "Go", Title: "t", Body: "b", Date: d})
+		if !errorsIs(err, bulletfmt.ErrInvalid) {
+			t.Errorf("date %q: err = %v, want bulletfmt.ErrInvalid", d, err)
+		}
 	}
 }
