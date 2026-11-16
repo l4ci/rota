@@ -23,6 +23,8 @@ var (
 	ErrAmbiguous = errors.New("ambiguous")
 	// ErrMultiMatch: a fragment, title or legacy tier key can match multiple bullets.
 	ErrMultiMatch = errors.New("matches several bullets")
+	// ErrInvalid: a title or date no bullet can carry; shared with the external store.
+	ErrInvalid = bulletfmt.ErrInvalid
 )
 
 // lockFiles runs fn holding the sidecar lock of every path, taken in the
@@ -69,6 +71,12 @@ func NormalizeSha(sha string) (string, error) {
 // KNOWLEDGE.md. A bullet whose title already exists (case-insensitive) is a
 // no-op. A new bullet is also registered as provisional in the tier sidecar.
 func (s Store) Add(scope, topic, title, body, date, sha string, paths ...string) (AddResult, error) {
+	if err := bulletfmt.CheckTitle(title); err != nil {
+		return AddResult{}, err
+	}
+	if err := bulletfmt.CheckDate(date); err != nil {
+		return AddResult{}, err
+	}
 	field, err := PathField(paths)
 	if err != nil {
 		return AddResult{}, err
