@@ -5,7 +5,6 @@
 package bugreport
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -15,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -76,10 +76,10 @@ func Path(ctx context.Context, run git.Runner, root string) string {
 
 // Add appends r (assigning ID, TS, Status open). An open record with the same
 // verb, exit and error is counted instead of added again.
-func Add(ctx context.Context, run git.Runner, root string, r Record, now time.Time) (Record, error) {
+func Add(ctx context.Context, run git.Runner, root string, env Env, r Record, now time.Time) (Record, error) {
 	// The log is gitignored, but a project whose .gitignore predates it could
 	// commit it: keep secrets out of what is stored, whatever the draft does later.
-	r = redactRecord(r)
+	r = redactRecord(r, env)
 	var out Record
 	err := fsio.Locked(Path(ctx, run, root), fsio.LockTimeout, func() error {
 		all, err := Load(ctx, run, root)
@@ -108,11 +108,11 @@ func Add(ctx context.Context, run git.Runner, root string, r Record, now time.Ti
 	return out, err
 }
 
-func redactRecord(r Record) Record {
-	r.Error = Redact(r.Error, Env{})
-	r.Summary = Redact(r.Summary, Env{})
-	r.Expected = Redact(r.Expected, Env{})
-	r.Args = redactArgs(r.Args, Env{})
+func redactRecord(r Record, e Env) Record {
+	r.Error = Redact(r.Error, e)
+	r.Summary = Redact(r.Summary, e)
+	r.Expected = Redact(r.Expected, e)
+	r.Args = redactArgs(r.Args, e)
 	return r
 }
 
@@ -157,23 +157,22 @@ func idNumber(id string) int {
 // Load returns every record in order; a missing log is none. A line that is
 // not a record is skipped.
 func Load(ctx context.Context, run git.Runner, root string) ([]Record, error) {
-	data, err := os.ReadFile(Path(ctx, run, root))
+	var out []Record
+	_, err := fsio.ReadLines(Path(ctx, run, root), fsio.Lenient, func(line []byte) error {
+		var r Record
+		if err := json.Unmarshal(line, &r); err != nil {
+			return err
+		}
+		if r.ID == "" {
+			return errors.New("record has no id")
+		}
+		out = append(out, r)
+		return nil
+	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	var out []Record
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(nil, 1<<20)
-	for sc.Scan() {
-		var r Record
-		if json.Unmarshal(sc.Bytes(), &r) == nil && r.ID != "" {
-			out = append(out, r)
-		}
-	}
-	return out, sc.Err()
+	return out, err
 }
 
 func save(ctx context.Context, run git.Runner, root string, all []Record) error {
@@ -396,7 +395,7 @@ func Redact(s string, e Env) string {
 	}
 	s = sb.String() + s[last:]
 	if len(e.Hostname) >= 3 {
-		s = regexp.MustCompile(`(?i)\b`+regexp.QuoteMeta(e.Hostname)+`(?:\.[A-Za-z0-9-]+)*`).ReplaceAllString(s, "<host>")
+		s = hostnameRE(e.Hostname).ReplaceAllString(s, "<host>")
 	}
 	if !upstream {
 		if len(owner) >= 3 && !strings.EqualFold(owner, upstreamOwner) {
@@ -410,6 +409,20 @@ func Redact(s string, e Env) string {
 		s = replaceWord(s, e.Repo, "<repo>")
 	}
 	return s
+}
+
+// hostRegexps caches the compiled pattern per hostname: Redact runs for every
+// field of every record, and a process has one hostname.
+var hostRegexps sync.Map
+
+func hostnameRE(host string) *regexp.Regexp {
+	if re, ok := hostRegexps.Load(host); ok {
+		return re.(*regexp.Regexp)
+	}
+	// The trailing \b keeps a short hostname ("dev") from eating word prefixes ("developer").
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(host) + `(?:\.[A-Za-z0-9-]+)*\b`)
+	hostRegexps.Store(host, re)
+	return re
 }
 
 // Environment is the environment block of a report.
