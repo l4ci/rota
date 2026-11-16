@@ -211,17 +211,17 @@ func restError(method, path string, status int, raw []byte) *Error {
 	if detail := strings.TrimSpace(string(raw)); detail != "" {
 		msg += ": " + strutil.Clip(detail, clipLen)
 	}
-	switch {
-	case status == http.StatusUnauthorized:
-		return Unavailable("%s (check the connection's token: rota connect test)", msg)
-	case status == http.StatusForbidden:
-		return Unavailable("%s (check the connection's token or its permission on this issue: rota connect test)", msg)
-	case status == http.StatusNotFound:
-		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
-	case status == http.StatusTooManyRequests:
-		return rateLimited("%s", msg)
+	r := byStatus(status)
+	if r == nil {
+		return failed("%s", msg)
 	}
-	return failed("%s", msg)
+	switch r.cause {
+	case causeUnauthorized:
+		msg += " (check the connection's token: rota connect test)"
+	case causeForbidden:
+		msg += " (check the connection's token or its permission on this issue: rota connect test)"
+	}
+	return r.err(msg)
 }
 
 // errRepeatedCursor stops a pager whose tracker hands back a cursor it gave before.

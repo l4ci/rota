@@ -106,17 +106,7 @@ func internal(format string, a ...any) *Error {
 	return &Error{Kind: KindInternal, Code: 1, Message: fmt.Sprintf(format, a...)}
 }
 
-// reNotFound is how gh and glab say the object of a call does not exist:
-// gh "Could not resolve to an Issue", "no pull requests found", "HTTP 404";
-// glab "404 Not Found". reRepoMissing is the same wording about the
-// repository or project itself, which is a setup problem, not a missing
-// object (gh "Could not resolve to a Repository", glab "404 Project Not Found").
 var reCtxFail = regexp.MustCompile(`(?i)context (canceled|deadline exceeded)`)
-
-var (
-	reNotFound    = regexp.MustCompile(`(?i)not found|could not resolve|404|no pull requests found`)
-	reRepoMissing = regexp.MustCompile(`(?i)project not found|repository not found|could not resolve to a repository`)
-)
 
 // IsKind reports whether err is a tracker *Error of kind k.
 func IsKind(err error, k Kind) bool {
@@ -751,7 +741,7 @@ func (b *base) run(ctx context.Context, args []string, body string) (string, err
 // KindNotFound when the CLI says the object does not exist, else KindFailed.
 func FailedCall(stderr string, code int) *Error {
 	kind := KindFailed
-	if reNotFound.MatchString(stderr) && !reRepoMissing.MatchString(stderr) {
+	if stderrIs(causeNotFound, []byte(stderr)) {
 		kind = KindNotFound
 	}
 	return &Error{Kind: kind, Code: code, Message: strings.TrimSpace(stderr)}
