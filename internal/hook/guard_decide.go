@@ -21,6 +21,9 @@ type GuardRequest struct {
 	Slot string
 	// DefaultCwd is used when the payload carries no cwd.
 	DefaultCwd string
+	// Base is the project base branch the guard protects besides main and
+	// master ("" when unresolved).
+	Base string
 	// Git runs git for the guard. Required: DecideGuard calls it unconditionally
 	// and panics on nil.
 	Git GitFunc
@@ -37,6 +40,7 @@ func DecideGuard(r GuardRequest) string {
 	cwd := r.Payload.CwdOr(r.DefaultCwd)
 	return Guard(command, GuardEnv{
 		Cwd:      cwd,
+		Base:     r.Base,
 		Worktree: slotWorktree(cwd, r.Slot, r.Git),
 		Branch: func(dir string) (string, error) {
 			return r.Git(dir, "branch", "--show-current")

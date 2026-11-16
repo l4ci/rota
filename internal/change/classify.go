@@ -57,9 +57,6 @@ type Policy struct {
 	SmallPaths []string
 }
 
-// DefaultDocsPaths is change.docsPaths when unset.
-var DefaultDocsPaths = []string{"*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"}
-
 // Input is the diff the policy classifies. Files lists every changed path,
 // both names of a rename. Lines is the changed-line count. Door is a
 // "Door: one-way" line in the PR body.

@@ -21,8 +21,8 @@ func TestCountRows(t *testing.T) {
 // Show and CountRows read the same lines, so a row Show returns is a row counted.
 func TestCountRowsAgreesWithShow(t *testing.T) {
 	text := "## Proof\r\n- a · b · c · d · e\r\n- f\r\n"
-	rows, _, err := parseRows(text)
-	if err != nil || len(rows) != CountRows(text) {
-		t.Fatalf("parseRows = %d rows, %v; CountRows = %d", len(rows), err, CountRows(text))
+	rows, _ := parseRows(text)
+	if len(rows) != CountRows(text) {
+		t.Fatalf("parseRows = %d rows; CountRows = %d", len(rows), CountRows(text))
 	}
 }

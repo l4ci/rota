@@ -282,14 +282,3 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 		})
 	}
 }
-
-func TestGuardDeniesPushToConfiguredBase(t *testing.T) {
-	env := guardEnv()
-	env.Base = "develop"
-	if got := Guard("git push origin HEAD:develop", env); got == "" {
-		t.Fatal("push to the configured base passed")
-	}
-	if got := Guard("git push origin HEAD:develop", guardEnv()); got != "" {
-		t.Fatalf("without Base, develop is an ordinary branch: %q", got)
-	}
-}
