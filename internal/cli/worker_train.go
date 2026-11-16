@@ -267,7 +267,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 }
 
 func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
-	ctx, stop := workerContext()
+	ctx, stop := c.workerContext()
 	defer stop()
 	env, req, err := prepareTrain(c, ctx, root, o)
 	if err != nil {

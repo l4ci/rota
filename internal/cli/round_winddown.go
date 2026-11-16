@@ -69,7 +69,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		var board round.Board
 		if raw, err := openBacklog(c, root, false, ""); err == nil {

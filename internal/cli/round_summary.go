@@ -41,7 +41,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		if !ledger.Exists(root) {
 			text = "no ledger yet: it fills as rounds assign, report and gate\n" + text
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		refs := make([]worker.QuotaAccount, 0, len(s.Issues))
 		for _, row := range s.Issues {

@@ -74,7 +74,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d, Text: line}, nil
 		}
 
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		raw, err := openBacklog(c, root, false, "")
 		if err != nil {

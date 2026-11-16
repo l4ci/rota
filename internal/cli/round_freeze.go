@@ -48,7 +48,7 @@ func roundFreeze(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		r, err := workerEnvCtx(c, ctx).Freeze(ctx, root, worker.FreezeOpts{RepairIssue: strings.TrimSpace(*issue), RepairPR: strings.TrimSpace(*pr), Verify: *verify, Clear: *clear, Reason: *reason})
 		d := jsonx.NewObject()

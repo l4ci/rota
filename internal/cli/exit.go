@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync/atomic"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -81,21 +83,45 @@ func asError(err error) *Error {
 	return &Error{Exit: ExitInternal, Message: err.Error(), Hint: "this is a bug in rota; please report it"}
 }
 
-// signalSeen is set when a verb's signal context saw SIGINT or SIGTERM. It
-// lets interrupted tell that cancellation from one rota raised itself.
-var signalSeen atomic.Bool
+// Signals is one invocation's signal state. Notify is os/signal's Notify, which
+// a test swaps to deliver a signal without signalling the real process group;
+// seen is set when a verb's signal context saw SIGINT or SIGTERM, so interrupted
+// can tell that cancellation from one rota raised itself. A nil *Signals uses
+// the real Notify and has seen nothing.
+type Signals struct {
+	Notify func(chan<- os.Signal, ...os.Signal)
+	seen   atomic.Bool
+}
+
+func newSignals() *Signals { return &Signals{Notify: signal.Notify} }
+
+func (s *Signals) notify(c chan<- os.Signal, sig ...os.Signal) {
+	if s == nil || s.Notify == nil {
+		signal.Notify(c, sig...)
+		return
+	}
+	s.Notify(c, sig...)
+}
+
+func (s *Signals) mark() {
+	if s != nil {
+		s.seen.Store(true)
+	}
+}
+
+func (s *Signals) wasSeen() bool { return s != nil && s.seen.Load() }
 
 // interrupted turns err into the exit-130 error when err is a cancellation
 // that SIGINT or SIGTERM caused: ctx is the invocation's signal context, and
-// signalSeen covers the verb-local contexts workerContext hands out. Any other
+// Signals covers the verb-local contexts Ctx.workerContext hands out. Any other
 // context.Canceled is unclassified and stays an internal error (exit 70). A
 // verb's own *Error keeps its class.
-func interrupted(ctx context.Context, err error) error {
+func interrupted(s *Signals, ctx context.Context, err error) error {
 	var e *Error
 	if err == nil || errors.As(err, &e) || !errors.Is(err, context.Canceled) {
 		return err
 	}
-	if ctx.Err() == nil && !signalSeen.Load() {
+	if ctx.Err() == nil && !s.wasSeen() {
 		return err
 	}
 	return &Error{Exit: ExitInterrupted, Message: "interrupted"}

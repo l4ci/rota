@@ -289,7 +289,7 @@ func targetedProof(c *Ctx, root, dir, command, base, head string, ids []string) 
 		return "", err
 	}
 	command = expanded[0]
-	ctx, stop := workerContext()
+	ctx, stop := c.workerContext()
 	defer stop()
 	for _, id := range ids {
 		_, st, _, err := openProof(c, id)

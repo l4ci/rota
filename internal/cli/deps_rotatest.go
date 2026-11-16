@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/update"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -18,6 +22,17 @@ import (
 // or defaultDeps, which always describes the real machine.
 func invocationDeps() *Deps {
 	d := defaultDeps()
+	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
+	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
+	// smoke test cannot reach the update package any other way.
+	if latest := d.Getenv("ROTA_TEST_LATEST_VERSION"); latest != "" {
+		base := d.UpdateEnv
+		d.UpdateEnv = func() update.Env {
+			e := base()
+			e.Latest = func() string { return latest }
+			return e
+		}
+	}
 	if path := d.Getenv("ROTA_TEST_DOCTOR_PATH"); path != "" {
 		look := d.LookPath
 		d.LookPath = func(name string) (string, error) {
@@ -63,4 +78,28 @@ func invocationDeps() *Deps {
 		}
 	}
 	return d
+}
+
+// envClock reads the test overrides of the clock once, at the edge:
+// ROTA_TEST_NOW (RFC 3339) fixes Now, ROTA_TEST_TODAY (YYYY-MM-DD) fixes the
+// day alone and wins over Now there, ROTA_TEST_HOLDER_PID stands in for the
+// nearest non-shell ancestor, which a smoke test cannot arrange. Not part of
+// the CLI.
+func envClock(getenv func(string) string) (now, today func() time.Time, holder func() int, err error) {
+	now = time.Now
+	if v := getenv("ROTA_TEST_NOW"); v != "" {
+		if t, perr := time.Parse(time.RFC3339, v); perr == nil {
+			now = func() time.Time { return t }
+		}
+	}
+	today = now
+	if v := getenv("ROTA_TEST_TODAY"); v != "" {
+		if t, ok := pystr.ParseDate(v); ok {
+			today = func() time.Time { return t }
+		} else {
+			err = Usage("ROTA_TEST_TODAY must be YYYY-MM-DD, got %q", v)
+		}
+	}
+	pid, _ := strconv.Atoi(getenv("ROTA_TEST_HOLDER_PID"))
+	return now, today, func() int { return pid }, err
 }

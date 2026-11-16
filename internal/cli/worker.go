@@ -35,20 +35,17 @@ import (
 // workerContext is cancelled on SIGINT and SIGTERM, so a Ctrl-C reaches the
 // git and host calls a verb has in flight instead of leaving them running.
 //
-// The signal is also remembered (signalSeen), so the dispatcher can tell this
+// The signal is also remembered (Deps.Signals), so the dispatcher can tell this
 // cancellation from an internal one when the verb returns context.Canceled.
-// signalNotify is os/signal's Notify; tests swap it to deliver a signal
-// without signalling the real process group.
-var signalNotify = signal.Notify
-
-func workerContext() (context.Context, context.CancelFunc) {
+func (c *Ctx) workerContext() (context.Context, context.CancelFunc) {
+	sg := c.deps().Signals
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
-	signalNotify(sigs, os.Interrupt, syscall.SIGTERM)
+	sg.notify(sigs, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-sigs:
-			signalSeen.Store(true)
+			sg.mark()
 			cancel()
 		case <-ctx.Done():
 		}
@@ -123,7 +120,7 @@ func poolInit(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		res, err := workerEnvCtx(c, ctx).PoolInit(ctx, root,
 			worker.InitOpts{Slots: n, Base: *base, Session: *session}, c.deps().WorkerAccounts())
@@ -186,7 +183,7 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		external := map[string]bool{}
 		// Tolerant: Reap below (and the CheckRegistry guard) refuse a corrupt registry.
@@ -253,7 +250,7 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		r, err := workerEnvCtx(c, ctx).Reset(root, slot, *task, *check)
 		res := Result{Data: resetData(r)}
@@ -315,7 +312,7 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	ctx, stop := workerContext()
+	ctx, stop := c.workerContext()
 	defer stop()
 	rows := c.deps().WorkerAccounts().Meters(ctx, root)
 	picked, _ := c.deps().WorkerAccounts().PickFrom(rows, nil)
@@ -382,7 +379,7 @@ func accountPick(fs *flag.FlagSet) RunFunc {
 		if err := worker.SoloRefusal(root, "every solo subagent runs on the orchestrator's own account"); err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		name, found := c.deps().WorkerAccounts().Pick(ctx, root, skip)
 		d := jsonx.NewObject()
@@ -412,7 +409,7 @@ func accountAssign(fs *flag.FlagSet) RunFunc {
 		if err := worker.SoloRefusal(root, "every solo subagent runs on the orchestrator's own account"); err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		name, changed, err := c.deps().WorkerAccounts().Assign(ctx, root, slot, *account)
 		if err != nil {
@@ -471,7 +468,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			ctx, stop := workerContext()
+			ctx, stop := c.workerContext()
 			defer stop()
 			if err := workerEnvCtx(c, ctx).ConfirmCoreNotSubmitted(ctx, root, slot); err != nil {
 				return Result{}, err
@@ -533,7 +530,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		opts.BodyFile = path
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		opts, cleanTask, err := assignedTaskDispatch(c, ctx, root, opts)
 		if err != nil {
@@ -694,7 +691,7 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		res, err := c.deps().WorkerPoll(ctx, root, worker.PollOpts{
 			Slot: slot, Settle: time.Duration(*settle * float64(time.Second)), Lines: *lines})
@@ -745,7 +742,7 @@ func sessionCheck(fs *flag.FlagSet) RunFunc {
 		if err := worker.SoloRefusal(root, "a solo round has no host session; there is nothing to check"); err != nil {
 			return Result{}, err
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		st := workerEnvCtx(c, ctx).SessionCheck(ctx, root)
 		if !st.Inside {
@@ -776,7 +773,7 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 			defer cleanup()
 			opts.BodyFile = path
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		st, err := workerEnvCtx(c, ctx).SessionEnsure(ctx, root, opts)
 		if err != nil {
@@ -917,7 +914,7 @@ func prepareGate(c *Ctx, ctx context.Context, root string, o gateRunOpts) (postg
 }
 
 func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
-	ctx, stop := workerContext()
+	ctx, stop := c.workerContext()
 	defer stop()
 	env, req, err := prepareGate(c, ctx, root, o)
 	if err != nil {

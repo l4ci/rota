@@ -50,7 +50,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		if len(cmds) == 0 {
 			return Result{}, Resolution("test.%s is empty", tier).WithHint(fmt.Sprintf("set it with: rota config set test.%s '[\"<command>\"]'", tier))
 		}
-		ctx, stop := workerContext()
+		ctx, stop := c.workerContext()
 		defer stop()
 		if cmds, err = expandFiles(c, root, *base, proof.ShellLines(cmds)...); err != nil {
 			return Result{}, err
