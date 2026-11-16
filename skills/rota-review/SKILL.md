@@ -127,6 +127,10 @@ Fill the bracketed parts from Steps 2-6 and drop any empty section. Read [`revie
 
 **Lens reviewers.** When the depth JSON's `lenses` is not empty, dispatch one more reviewer per listed lens in the same message, at `full` and at `light`: `security` on the orchestrator model, `perf` and `ux` on the `standard` tier. Read [`lens-briefs.md`](lens-briefs.md) and build each brief from it. Say in the report which lenses ran and why (`lenses[].why`). A lens does not change what Spec and Standards check; at `light` the lens still runs.
 
+**Delegated review.** When this review itself runs inside a subagent (the orchestrator handed `/rota-review` to one), dispatch no nested reviewers: a nested reviewer is owned by the main session, which the delegate cannot stop, and in practice it often never reports. The delegate reviews alone, one pass per axis in the same agent (Spec, then Standards, each from its own brief and prepared workspace, judged apart), and runs each lens the same way. It records the verdicts as in Step 8. The cross-harness review is not nested: the delegate runs it as the one read-only run `cross-harness-reviewer.md` describes, or reports it unavailable. An orchestrator that wants parallel reviewers dispatches them itself from the main session instead of delegating.
+
+**Time box and recovery.** Give every reviewer a time box: 20 minutes each for Spec, Standards, a lens and the cross run. A reviewer that has not reported when it runs out is dead: cancel it if you own it, then re-dispatch it once at the current head (`rota review prepare` again, new `REVIEWED`). Ignore any result that arrives late for an older head; never record it, since `--sha` refuses a stale record anyway. A fix push during the review makes the pending reviews stale, so re-dispatch at the new head rather than wait. A second timeout: report that axis unavailable and let the PR wait.
+
 ## Step 8 — Record and Relay the Verdict
 
 Save each reviewer's JSON block to its own temp file. Record **spec first, then quality**, at the same sha (umbrella: add `--repo <name>`, see `umbrella-mode.md`):
