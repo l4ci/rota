@@ -106,7 +106,9 @@ func newMoveFx(t *testing.T) *moveFx {
 	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir()))
 	f.env.Round, f.env.HolderPID = f.set, 100
 
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone)); err != nil {
+	so := startOpts(roundcfg.ScopeMilestone)
+	so.DefaultNum = 3
+	if _, err := f.env.Start(bg, f.root, so); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.assign("12", "ben"); err != nil {

@@ -2,10 +2,10 @@ package round
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // `round transfer <lead> --to <slot>` moves the whole bundle in one call and
@@ -86,9 +86,9 @@ func TestTransferQueuedBundleLeadToSlotMovesTheWholeBundle(t *testing.T) {
 	}
 }
 
-// When the move is refused for a real reason, the refusal names the members and
-// prints the commands that do the move by hand.
-func TestTransferBundleLeadRefusalNamesMembersAndCommands(t *testing.T) {
+// A busy receiver refuses the move; the refusal names the members and prints
+// routes that really move the whole bundle. Both printed routes are run here.
+func TestTransferBundleLeadBusyRefusalPrintsWorkingRoutes(t *testing.T) {
 	f := newMoveFx(t)
 	f.bundled(t, "15", "16")
 	if _, err := f.assign("13", "dana"); err != nil {
@@ -98,13 +98,41 @@ func TestTransferBundleLeadRefusalNamesMembersAndCommands(t *testing.T) {
 	if err == nil {
 		t.Fatal("a busy receiver must refuse")
 	}
-	for _, want := range []string{"#15", "#16", "rota round transfer 15 --to human", "rota round transfer 16 --to human", "rota round transfer 12 --to dana"} {
+	for _, want := range []string{"#15", "#16", "rota round return", "rota round assign 12 --bundle 15,16"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal lacks %q: %v", want, err)
 		}
 	}
+	if strings.Contains(err.Error(), "--to human") || strings.Contains(err.Error(), "assign each member") {
+		t.Errorf("refusal prints the broken per-member route: %v", err)
+	}
 	if s := f.slot("ben"); s.HeldID() != "12" || !reflect.DeepEqual(s.Bundle(), []string{"15", "16"}) {
 		t.Errorf("a refusal moves nothing: %+v", s.Raw())
 	}
-	_ = worker.NormID
+	m := regexp.MustCompile("`rota round transfer 12 --to ([a-z]+)`").FindStringSubmatch(err.Error())
+	if m == nil {
+		t.Fatalf("refusal names no free slot: %v", err)
+	}
+	// Route 1: the printed transfer to the free slot moves the whole bundle.
+	if _, err := f.transfer("12", m[1], nil); err != nil {
+		t.Fatalf("printed transfer route failed: %v", err)
+	}
+	if s := f.slot(m[1]); s.Task() != "12" || !reflect.DeepEqual(s.Bundle(), []string{"15", "16"}) {
+		t.Errorf("free slot must hold the whole bundle: %+v", s.Raw())
+	}
+}
+
+// Route 2: `round return` then the printed assign rebuilds the whole bundle.
+func TestTransferBundleLeadReturnRouteRebuildsBundle(t *testing.T) {
+	f := newMoveFx(t)
+	f.bundled(t, "15", "16")
+	if _, err := f.ret("ben", "move bundle", nil); err != nil {
+		t.Fatalf("return: %v", err)
+	}
+	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "12", Agent: "dana", Bundle: []string{"15", "16"}}); err != nil {
+		t.Fatalf("printed assign route failed: %v", err)
+	}
+	if s := f.slot("dana"); s.Task() != "12" || !reflect.DeepEqual(s.Bundle(), []string{"15", "16"}) {
+		t.Errorf("assign must rebuild the bundle: %+v", s.Raw())
+	}
 }

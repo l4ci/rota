@@ -32,8 +32,8 @@ func TestTransferCarriesForwardSettledAnswersAndDecisionContext(t *testing.T) {
 	}
 }
 
-// Answers passed to the transfer replace the recorded ones.
-func TestTransferExplicitSettledAnswersWin(t *testing.T) {
+// Answers passed to the transfer are added after the recorded ones.
+func TestTransferExplicitSettledAnswersAppend(t *testing.T) {
 	f := newMoveFx(t)
 	if err := editSlot(f.root, "ben", func(s *worker.Slot) error {
 		s.SetBriefContext("old answer", nil)
@@ -45,7 +45,7 @@ func TestTransferExplicitSettledAnswersWin(t *testing.T) {
 	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Decisions = "new answer" }); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(f.host.sent, "new answer") || strings.Contains(f.host.sent, "old answer") {
+	if o, n := strings.Index(f.host.sent, "old answer"), strings.Index(f.host.sent, "new answer"); o < 0 || n < o {
 		t.Errorf("brief:\n%s", f.host.sent)
 	}
 }

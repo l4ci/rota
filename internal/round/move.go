@@ -740,35 +740,47 @@ func (o TransferOpts) checkFlags(set roundcfg.Settings) (toHuman bool, reason st
 }
 
 // planTransfer makes every refusal Transfer can make before it moves anything
-// and fills res as far as it got. A refusal of a bundle lead's move names the
-// members and the commands that do the move by hand.
+// and fills res as far as it got. A bundle lead's move refused because the
+// receiver is busy names the members and the commands that do the move.
 func (e Env) planTransfer(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred) (*transferRun, error) {
 	var members []string
 	run, err := e.planTransferRun(ctx, root, be, o, res, &members)
-	if err != nil && len(members) > 0 {
-		var be *BlockedError
-		var ee *exitcode.Error
-		switch hint := bundleMoveHint(o.Issue, o.To, members); {
-		case errors.As(err, &be):
-			be.Msg += hint
-		case errors.As(err, &ee):
-			ee.Message += hint
+	var blk *BlockedError
+	if err != nil && len(members) > 0 && errors.As(err, &blk) && blk.By == blockedby.SlotBusy {
+		free := ""
+		if reg, lerr := worker.LoadRegistry(root); lerr == nil {
+			for _, s := range reg.Slots() {
+				if s.Name() != o.To && s.HeldID() == "" {
+					free = s.Name()
+					break
+				}
+			}
 		}
+		blk.Msg += bundleMoveHint(o.Issue, o.To, members, free)
 	}
 	return run, err
 }
 
-// bundleMoveHint names a bundle's members and the commands that move it by
-// hand: each member to the human, then the lead alone, then the members again.
-func bundleMoveHint(lead, to string, members []string) string {
+// bundleMoveHint names a bundle's members and the commands that move it whole.
+// Members cannot be re-added to a slot that resumes its lead, so the route is
+// never "transfer them out, then assign them again": the whole bundle goes to a
+// free slot in one call (free names one, empty when none is idle), or `round
+// return` releases the lead and every member and a fresh assign rebuilds it.
+func bundleMoveHint(lead, to string, members []string, free string) string {
 	refs := make([]string, len(members))
-	cmds := make([]string, 0, len(members)+1)
+	ids := make([]string, len(members))
 	for i, m := range members {
 		refs[i] = tracker.RefOf(m)
-		cmds = append(cmds, "rota round transfer "+worker.NormID(m)+" --to "+HumanTarget)
+		ids[i] = worker.NormID(m)
 	}
-	cmds = append(cmds, "rota round transfer "+worker.NormID(lead)+" --to "+to)
-	return fmt.Sprintf("; %s leads a bundle with %s: to move it by hand, run `%s`, then assign each member again", tracker.RefOf(lead), strings.Join(refs, ", "), strings.Join(cmds, "` then `"))
+	l := worker.NormID(lead)
+	out := fmt.Sprintf("; %s leads a bundle with %s: %s is busy, so the bundle cannot move there yet", tracker.RefOf(lead), strings.Join(refs, ", "), to)
+	if free != "" {
+		out += fmt.Sprintf("; move the whole bundle to the free slot with `rota round transfer %s --to %s`", l, free)
+	} else {
+		out += fmt.Sprintf("; no slot is free: once one is, `rota round transfer %s --to <slot>` moves the whole bundle", l)
+	}
+	return out + fmt.Sprintf(", or release it with `rota round return <slot> --reason <text>` and rebuild it with `rota round assign %s --bundle %s`", l, strings.Join(ids, ","))
 }
 
 func (e Env) planTransferRun(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred, members *[]string) (*transferRun, error) {
@@ -920,7 +932,7 @@ func (e Env) planTransferRun(ctx context.Context, root string, be Board, o Trans
 	}
 	run.from = res.From
 	// The settled answers and decision topics of the original assign carry
-	// forward; answers passed to this transfer replace the recorded ones.
+	// forward; answers passed to this transfer are added after the recorded ones.
 	var recorded string
 	switch {
 	case sender != nil:
@@ -932,8 +944,10 @@ func (e Env) planTransferRun(ctx context.Context, root string, be Board, o Trans
 	}
 	if run.decisions == "" {
 		run.decisions = recorded
-		decisions = recorded
+	} else if recorded != "" {
+		run.decisions = recorded + "\n\n" + run.decisions
 	}
+	decisions = run.decisions
 
 	if err := fenceExternal(sender, "transfer", "move a worktree"); err != nil {
 		return nil, err

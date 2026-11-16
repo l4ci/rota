@@ -703,6 +703,9 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 		// typed yet, so wait for it to report ready and send then. One that never
 		// gets there leaves a safe-to-resend failure.
 		for i := 0; ; i++ {
+			if cerr := ctx.Err(); cerr != nil {
+				return fmt.Errorf("%w: %v", ErrNotSubmitted, cerr)
+			}
 			if e = coreReady(t); e == nil || !coreStarting(t) {
 				break
 			}
