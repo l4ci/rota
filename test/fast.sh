@@ -12,7 +12,7 @@
 # internal/knowledge/skills_block.md) runs that package; skills/ is embedded by
 # the root package (embed.go), so it runs "."; test infra (test/lib, test/fakes,
 # test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
-# files, py_compile on the python ones, and test/runner_leak_test.py.
+# files, py_compile on the python ones, and the Python harness tests (test/py-tests.sh).
 # A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
 # (the piped grep -q lint), which scans all of them.
 # A non-test .go file (or embed asset) in a package also runs every package that
@@ -95,7 +95,7 @@ for f in "$@"; do
     internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
   esac
   case "$f" in
-    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate-*.txt|internal/flakeledger/infrastructure-markers.txt|test/gate_retry_test.py|test/fast.sh|test/fast_*test.py) infra=1 ;;
+    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate-*.txt|internal/flakeledger/infrastructure-markers.txt|test/py-tests.*|test/*_test.py|test/fast.sh) infra=1 ;;
     test/treescan/*) infra=1; add_pkg ./test/treescan ;;
   esac
   case "$f" in
@@ -204,8 +204,8 @@ if [ "$docs" = 1 ]; then
 fi
 
 if [ "$infra" = 1 ]; then
-  echo "fast: infra (bash -n, py_compile, runner_leak_test)"
-  for f in test/runner.sh test/lib.sh test/gate.sh test/gate-*.py test/gate_retry_test.py test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
+  echo "fast: infra (bash -n, py_compile, py-tests)"
+  for f in test/runner.sh test/lib.sh test/gate.sh test/gate-*.py test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
     [ -f "$f" ] || continue
     case "$f" in
       *.py) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f" ;;
@@ -213,9 +213,7 @@ if [ "$infra" = 1 ]; then
       *) if head -1 "$f" | grep -q bash; then bash -n "$f"; fi ;;
     esac
   done
-  python3 test/runner_leak_test.py
-  python3 test/gate_retry_test.py
-  python3 test/fast_tree_scans_test.py
+  bash test/py-tests.sh
 fi
 
 if [ "${#sections[@]}" -gt 0 ]; then
