@@ -319,7 +319,7 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 		Tick: func() (roundtick.Result, error) { return runAutopilotTick(c, root, set, base, pid, false) },
 		Stopped: func(err error) bool {
 			stoppedErr = err
-			return isAutopilotStopped(err)
+			return roundtick.IsStopped(err)
 		},
 		TrainFill: set.TrainFill.Enabled(),
 		Poll:      poll,

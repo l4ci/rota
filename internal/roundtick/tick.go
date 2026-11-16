@@ -27,16 +27,6 @@ import (
 	"time"
 )
 
-// ErrStopped says the round is winding down: Run assigns and merges nothing.
-var ErrStopped = errors.New("the round is stopped by `rota round wind-down`; the autopilot resumes when wind-down finishes or a wind-down verifies the base green")
-
-// StopVerifyFailed is the stop reason of a red wind-down verify.
-const StopVerifyFailed = "verify-failed"
-
-// ErrBaseRed is ErrStopped after a wind-down verify went red: only a wind-down
-// that verifies the base green resumes the autopilot.
-var ErrBaseRed = fmt.Errorf("%w: the base failed the wind-down verify; fix the base, then re-run `rota round wind-down`", ErrStopped)
-
 // DefaultCap is round.autopilotCap: the most assigns, and the most merges, one
 // tick does.
 const DefaultCap = 3
@@ -92,11 +82,11 @@ type Reviewer interface {
 
 // Env is the outside world of a tick.
 type Env struct {
-	// Stopped is the round's wind-down flag (State.Stopped): Run refuses before
-	// it reconciles, merges or assigns.
-	Stopped bool
-	// StoppedReason is State.StoppedReason: StopVerifyFailed picks ErrBaseRed.
-	StoppedReason string
+	// Stop reads the round's stop value afresh: nil while the round runs, else
+	// the reason (see stop.go). Run calls it at entry and before each phase
+	// that acts, so a wind-down that lands mid-tick halts the later phases.
+	// Nil means never stopped.
+	Stop func() error
 	// Observe runs the same pass over a read-only world: Reconcile,
 	// ReviewLoop, AwaitingReview and Review.Facts inspect without writing, and
 	// every action is proposed instead of taken. The adapters that execute
@@ -279,6 +269,14 @@ func (e Env) batchFull(ctx context.Context) bool {
 	return e.Batch > 0 && e.OpenItems != nil && e.OpenItems(ctx) >= e.Batch
 }
 
+// stopped re-reads the stop value: the error to return, nil while running.
+func (e Env) stopped() error {
+	if e.Stop == nil {
+		return nil
+	}
+	return e.Stop()
+}
+
 func (e Env) audit(r *Result, a Action) {
 	r.Did = append(r.Did, a)
 	if e.Audit != nil {
@@ -291,11 +289,8 @@ func (e Env) audit(r *Result, a Action) {
 // The merge comes before the assign so the next assignment branches from the
 // gated base (rota-orchestrate, section 6), not from before the merge.
 func Run(ctx context.Context, e Env) (Result, error) {
-	if e.Stopped {
-		if e.StoppedReason == StopVerifyFailed {
-			return Result{}, ErrBaseRed
-		}
-		return Result{}, ErrStopped
+	if err := e.stopped(); err != nil {
+		return Result{}, err
 	}
 	r := Result{Observed: e.Observe, Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
 	if r.FailedHeads == nil {
@@ -386,7 +381,13 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		targets = append(targets, e.Queued()...)
 	}
 
+	if err := e.stopped(); err != nil {
+		return r, err
+	}
 	if err := e.merge(ctx, &r, targets); err != nil {
+		return r, err
+	}
+	if err := e.stopped(); err != nil {
 		return r, err
 	}
 	if e.Capped != nil {
@@ -401,6 +402,9 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		return r, err
 	}
 	if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
+		if err := e.stopped(); err != nil {
+			return r, err
+		}
 		minted, err := e.review(ctx, &r)
 		if err != nil {
 			return r, err
@@ -572,49 +576,37 @@ func failedHeadVerdict(v string) bool {
 // verdict's call: a stale or provenance refusal goes back to the worker uncounted and
 // returns, any other failure waits for a person.
 func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged {
-	var order []string
-	groups := map[string][]string{}
-	for _, t := range targets {
-		b := e.targetBase(t)
-		if _, ok := groups[b]; !ok {
-			order = append(order, b)
+	prs := make([]roundcfg.FillPR, len(targets))
+	for i, t := range targets {
+		prs[i] = roundcfg.FillPR{ID: t, Base: e.targetBase(t), Bypass: e.FillBypass != nil && e.FillBypass(t)}
+		if e.TrainFill.Enabled() && e.ReadySince != nil {
+			prs[i].Ready = e.ReadySince(t)
 		}
-		groups[b] = append(groups[b], t)
 	}
+	groups := e.TrainFill.Group(prs)
 	var out []Merged
 	remaining := e.cap()
-	for i, b := range order {
-		ts := groups[b]
+	for i, g := range groups {
+		b := g.Base
+		ts := g.All
 		if e.TrainFill.Enabled() {
-			var filling []string
-			for _, target := range ts {
-				if e.FillBypass != nil && e.FillBypass(target) {
-					out = append(out, e.land(ctx, r, []string{target}, b)...)
-					remaining--
-					if remaining == 0 {
-						e.holdUnreached(r, groups, order[i+1:], ts[slices.Index(ts, target)+1:])
-						return out
-					}
-				} else {
-					filling = append(filling, target)
+			for j, target := range g.Bypass {
+				out = append(out, e.land(ctx, r, []string{target}, b)...)
+				remaining--
+				if remaining == 0 {
+					e.holdUnreached(r, groups[i+1:], slices.Concat(g.Bypass[j+1:], fillIDs(g.Fill)))
+					return out
 				}
 			}
-			ts = filling
-			if len(ts) == 0 {
+			if len(g.Fill) == 0 {
 				continue
 			}
-			cands := make([]roundcfg.FillCandidate, len(ts))
-			for i, t := range ts {
-				cands[i].ID = t
-				if e.ReadySince != nil {
-					cands[i].Ready = e.ReadySince(t)
-				}
-			}
+			ts = fillIDs(g.Fill)
 			now := time.Now()
 			if e.Now != nil {
 				now = e.Now()
 			}
-			d := e.TrainFill.Decide(b, cands, remaining, now)
+			d := e.TrainFill.Decide(b, g.Fill, remaining, now)
 			if len(d.Land) == 0 {
 				key := fmt.Sprintf("%s:%d/%d", b, len(ts), e.TrainFill.Max)
 				r.FillStatus = append(r.FillStatus, d.Holding)
@@ -629,21 +621,29 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 		out = append(out, e.land(ctx, r, ts, b)...)
 		remaining -= len(ts)
 		if remaining == 0 {
-			e.holdUnreached(r, groups, order[i+1:], nil)
+			e.holdUnreached(r, groups[i+1:], nil)
 			break
 		}
 	}
 	return out
 }
 
+func fillIDs(cs []roundcfg.FillCandidate) []string {
+	ids := make([]string, len(cs))
+	for i, c := range cs {
+		ids[i] = c.ID
+	}
+	return ids
+}
+
 // holdUnreached names the cap as the reason for the targets the merge step ran
 // out of room before: the rest of the current group, then every later base.
-func (e Env) holdUnreached(r *Result, groups map[string][]string, bases, rest []string) {
+func (e Env) holdUnreached(r *Result, later []roundcfg.FillGroup, rest []string) {
 	for _, t := range rest {
 		r.hold(t, capHold(e.cap()))
 	}
-	for _, b := range bases {
-		for _, t := range groups[b] {
+	for _, g := range later {
+		for _, t := range g.All {
 			r.hold(t, capHold(e.cap()))
 		}
 	}

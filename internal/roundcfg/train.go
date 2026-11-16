@@ -169,3 +169,46 @@ func (f TrainFill) Decide(base string, cands []FillCandidate, limit int, now tim
 	d.Land = OldestReady(land, limit, since)
 	return d
 }
+
+// FillPR is one PR waiting for a merge, as the fill rule groups it.
+type FillPR struct {
+	ID, Base string
+	Ready    time.Time
+	// Bypass sends the PR to an individual gate instead of the fill wait: a
+	// PR that is closed, whose base moved, or that is ready with no usable
+	// review clock (Immediate). The caller knows which; the grouping is one.
+	Bypass bool
+}
+
+// FillGroup is the PRs of one base. Bypass go to individual gates; Fill are the
+// candidates for TrainFill.Decide; All is every PR of the base in input order.
+type FillGroup struct {
+	Base   string
+	All    []string
+	Bypass []string
+	Fill   []FillCandidate
+}
+
+// Group splits prs by base, in first-seen order, and each base into the PRs
+// that bypass the fill wait and the candidates that wait for it. While the
+// policy is disabled nothing bypasses: the legacy rule decides the whole base.
+func (f TrainFill) Group(prs []FillPR) []FillGroup {
+	var out []FillGroup
+	at := map[string]int{}
+	for _, p := range prs {
+		i, ok := at[p.Base]
+		if !ok {
+			i = len(out)
+			at[p.Base] = i
+			out = append(out, FillGroup{Base: p.Base})
+		}
+		g := &out[i]
+		g.All = append(g.All, p.ID)
+		if f.Enabled() && p.Bypass {
+			g.Bypass = append(g.Bypass, p.ID)
+			continue
+		}
+		g.Fill = append(g.Fill, FillCandidate{ID: p.ID, Ready: p.Ready})
+	}
+	return out
+}

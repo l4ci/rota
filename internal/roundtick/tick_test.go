@@ -759,7 +759,7 @@ func TestStoppedRoundAssignsAndMergesNothing(t *testing.T) {
 		cands:  []round.Candidate{cand("#2", true)},
 	}
 	e := f.env()
-	e.Stopped = true
+	e.Stop = func() error { return StopError(true, "") }
 	r, err := Run(context.Background(), e)
 	if !errors.Is(err, ErrStopped) {
 		t.Fatalf("err = %v, want ErrStopped", err)
@@ -769,11 +769,70 @@ func TestStoppedRoundAssignsAndMergesNothing(t *testing.T) {
 	}
 }
 
-func TestStateStoppedReachesTheEnv(t *testing.T) {
-	var e Env
-	State{Stopped: true}.Apply(&e)
-	if !e.Stopped {
-		t.Fatal("State.Apply dropped Stopped")
+// The stop value is read again at each phase boundary: a wind-down that lands
+// while a tick is in flight halts every phase after it (#3413).
+func TestStopFlippedMidTickHaltsLaterPhases(t *testing.T) {
+	cases := []struct {
+		name         string
+		flipIn       string // the phase whose work sets the stop
+		wantMerged   bool
+		wantAssigned bool
+	}{
+		{"during reconcile", "reconcile", false, false},
+		{"during merge", "merge", true, false},
+		{"never", "", true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{
+				slots:  []Slot{{Name: "ben", State: "done", PR: "#7"}, {Name: "dana", State: "idle"}},
+				queued: []string{"#7"},
+				cands:  []round.Candidate{cand("#2", true)},
+			}
+			e := f.env()
+			stopped := false
+			e.Stop = func() error { return StopError(stopped, "") }
+			if tc.flipIn == "reconcile" {
+				e.Reconcile = func(context.Context) (Inspection, error) { stopped = true; return Inspection{}, nil }
+			}
+			if tc.flipIn == "merge" {
+				gate := e.RunGate
+				e.RunGate = func(ctx context.Context, tg, base string) GateRun { stopped = true; return gate(ctx, tg, base) }
+				train := e.RunTrain
+				e.RunTrain = func(ctx context.Context, ts []string, base string) TrainRun {
+					stopped = true
+					return train(ctx, ts, base)
+				}
+			}
+			_, err := Run(context.Background(), e)
+			if tc.flipIn != "" && !errors.Is(err, ErrStopped) {
+				t.Fatalf("err = %v, want ErrStopped", err)
+			}
+			if tc.flipIn == "" && err != nil {
+				t.Fatal(err)
+			}
+			if merged := len(f.gated)+len(f.trained) > 0; merged != tc.wantMerged {
+				t.Fatalf("merged = %v, want %v (gated=%v trained=%v)", merged, tc.wantMerged, f.gated, f.trained)
+			}
+			if assigned := len(f.assigned) > 0; assigned != tc.wantAssigned {
+				t.Fatalf("assigned = %v, want %v (%v)", assigned, tc.wantAssigned, f.assigned)
+			}
+		})
+	}
+}
+
+func TestStopErrorPicksTheReason(t *testing.T) {
+	if err := StopError(false, StopVerifyFailed); err != nil {
+		t.Fatalf("a running round = %v", err)
+	}
+	if err := StopError(true, ""); !errors.Is(err, ErrStopped) || errors.Is(err, ErrBaseRed) {
+		t.Fatalf("plain stop = %v", err)
+	}
+	if err := StopError(true, StopVerifyFailed); !errors.Is(err, ErrBaseRed) || !errors.Is(err, ErrStopped) {
+		t.Fatalf("verify-failed stop = %v", err)
+	}
+	if !IsStopped(ErrNoLease) || !IsStopped(ErrBaseRed) || IsStopped(errors.New("x")) {
+		t.Fatal("IsStopped misclassifies")
 	}
 }
 
