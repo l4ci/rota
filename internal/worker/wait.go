@@ -298,6 +298,22 @@ wait:
 					return WaitResult{}, err
 				}
 			}
+			// The worker's own done after a promoted one has the promoted row's key
+			// when it names the same PR, so it is no news; it still answers the
+			// saved Core delivery the promotion kept (#3320).
+			if t := targetOf(targets, r.Name); t.donePromoted && !t.promoted && r.State == StateDone && r.Evidence != relayEchoEvidence && seen[r.Name] == key {
+				var rowErr error
+				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+					if s.PaneHandle() == t.handle && s.DonePromoted() {
+						_, rowErr = recordRow(s, r, t, e.Now(), LoadRegistryTolerant(root))
+					}
+				}); err != nil {
+					return WaitResult{}, err
+				}
+				if rowErr != nil {
+					return WaitResult{}, rowErr
+				}
+			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
 			if r.State != StateBusy && (r.State != StateUnverifiable || overdue(r.Name)) && (seen[r.Name] != key || o.alwaysNews(r.State)) && !settled(r) {

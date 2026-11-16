@@ -563,6 +563,9 @@ type pollTarget struct {
 	// promoted: the row's DONE came from the forge (promoteIdleWithPR), not from
 	// a ROTA-DONE sentinel or a worker event: it proves nothing about a delivery.
 	promoted bool
+	// donePromoted: the slot's recorded done is such a promoted one, still
+	// waiting for the worker's own done to answer the delivery.
+	donePromoted bool
 }
 
 func slotTarget(s *Slot) pollTarget {
@@ -619,6 +622,7 @@ func refreshEvents(reg Registry, targets []pollTarget) {
 				targets[i].relayEvSeq = s.RelayEventSeq()
 				targets[i].relays = len(s.Relays())
 				targets[i].turnSeq = s.TurnSeq()
+				targets[i].donePromoted = s.DonePromoted()
 			}
 		}
 		targets[i].relayMarker, targets[i].relayObserved = false, false

@@ -304,3 +304,45 @@ func TestCoreDispatchSnapshotsTheDispatchedBranchTip(t *testing.T) {
 		t.Fatalf("nothing was pushed after the delivery: relay must still refuse: %v", err)
 	}
 }
+
+// #3320, through Wait: an idle pane with an open PR is promoted to DONE and
+// keeps the delivery; the worker's own ROTA-DONE for that same PR, with no busy
+// read between, has the same seen key. It is no news, but it still answers the
+// delivery.
+func TestWaitRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	if err := Update(w.dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetHandle("w9:t1")
+		s.MarkState("busy", stamp.Format(time.Now()))
+		del := jsonx.NewObject()
+		del.Set("state", "submitted")
+		s.o.Set("coreDelivery", del)
+		s.ClearSeen()
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := newWaitHost("herdr")
+	h.set("w1", "", "idle")
+	e := w.env(false)
+	e.NewHost = func(host.Kind) host.Host { return watcherHost{h} }
+	res, err := e.Wait(bg, w.dir, WaitOpts{Timeout: 5 * time.Second})
+	if err != nil || res.State != StateDone || res.Evidence != ghURL || res.Note != missingSentinelNote {
+		t.Fatalf("%+v %v, want a promoted DONE", res, err)
+	}
+	if !hasCoreDelivery(w.dir) {
+		t.Fatal("a promoted done cleared the delivery")
+	}
+	h.set("w1", "ROTA-DONE w1 "+ghURL+"\n", "done")
+	res, err = e.Wait(bg, w.dir, WaitOpts{Timeout: 50 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("%+v %v: the same DONE came back as news", res, err)
+	}
+	if hasCoreDelivery(w.dir) {
+		t.Error("the worker's ROTA-DONE after a promoted done left the delivery behind")
+	}
+	if LoadRegistryTolerant(w.dir).Slot("w1").DonePromoted() {
+		t.Error("the promoted mark outlived the real done")
+	}
+}

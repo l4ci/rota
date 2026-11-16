@@ -552,6 +552,7 @@ func (s *Slot) Release() {
 	s.o.Set("handle", nil)
 	s.o.Set("state", "idle")
 	s.ClearCoreDelivery()
+	s.SetDonePromoted(false)
 }
 
 // DonePromoted says the slot's last recorded done came from the forge (an idle
