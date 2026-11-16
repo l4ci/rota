@@ -107,7 +107,7 @@ How much planning an item gets is the planning dial. Before it plans, `/rota-pla
 
 ### A critic from another model
 
-A critic from the planner's own model shares its blind spots. Set `plan.criticHarness` to `claude`, `codex` or `opencode` and the level-4 critic runs on that harness instead: headless, read-only, with the same brief and the same inputs (the item and the saved proposal, nothing else). Unset, the critic is the same-harness subagent as before. Levels 1-3 never read the key, and level 3 with a `decision` comment keeps the same-harness critic.
+A critic from the planner's own model shares its blind spots. Set `plan.criticHarness` to `claude`, `codex` or `opencode` and the level-4 critic runs on that harness instead: headless, read-only, with the same brief and the same inputs (the item, its design when it has one, and the saved proposal, nothing else). Unset, the critic is the same-harness subagent as before. Levels 1-3 never read the key, and level 3 with a `decision` comment keeps the same-harness critic.
 
 ```bash
 rota config set plan.criticHarness codex
