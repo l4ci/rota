@@ -27,14 +27,14 @@ Callers choose a query rather than repeat a review-kind list:
 | Query | Kinds | Head policy |
 |---|---|---|
 | `CoreReviewsAtHead` (`Recorded` / `RecordedIn` coverage) | spec, quality | Latest per kind at head, after `ForHead` report precedence |
-| `BounceReviewsAtHead` | core, cross, lenses | Latest per kind in the supplied history, then require head match |
-| `ReadinessReviewsAtHead` | bounce set, second opinion | Latest per kind at head, after `ForHead` report precedence |
+| `BounceReviewsAtHead` | core, cross, lenses | Latest per kind in the supplied history, then require head match; cross is the newest record at head of each harness (#3328) |
+| `ReadinessReviewsAtHead` | bounce set, second opinion | Latest per kind at head, after `ForHead` report precedence; cross as in `BounceReviewsAtHead` |
 | `LatestBranchRecords` (show and report delivery) | readiness set, QA, behaviour, look | Latest per kind, including stale records, in display order |
 
 The sets extend one another inside verdict. Adding a kind to a narrower set
 also includes it in the wider sets. Selection takes the latest record before
 checking its SHA; an older record at head cannot override a newer local record
-of that kind. `ForHead` keeps the existing local-over-recovered-report rules.
+of that kind; the exception is `review-cross`, where a newer record from another harness, or from the same harness at another commit, does not hide a record at head. `ForHead` keeps the existing local-over-recovered-report rules.
 Blocking predicates and verdict routing remain separate from record selection.
 
 ### rota verdict add

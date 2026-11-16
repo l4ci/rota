@@ -90,7 +90,7 @@ note: text is one `<heading>: <n> bullets` line per topic, in document order. `d
 rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--path <glob>]… [--external [--hook <line>] [--seen <tools>]]
 repo: scoped (scope S)
 data: {"topic": string, "title": string, "changed": bool}
-exit: 2 when `--topic`, `--title` or `--body-file` is missing, or `--sha` is not 7 to 40 hex digits; 3 when the `## <T>` heading does not exist in S's KNOWLEDGE.md
+exit: 2 when `--topic`, `--title` or `--body-file` is missing, or `--sha` is not 7 to 40 hex digits; 3 when the `## <T>` heading does not exist in S's KNOWLEDGE.md; 4 when `--title` is not a single line or holds `*` or `-->`, or `--date` is not a real YYYY-MM-DD (#3395)
 old: hv-knowledge-merge [--repo <name>] --topic <T> --title <S> [--date <d>] [--body <text>]    (`--body-file -` pipes the shim's stdin to old stdin; `--body-file <p>` becomes `< <p>`; `--date` is the same flag)
 shim: stderr `wrote:` gives `changed: true`; `noop: … (title already present)` gives `changed: false`.
 note: the old inline `--body` and the TTY-blocking stdin fallback are dropped. Dedup is by case-insensitive title, so a repeated title is `changed: false`. A successful add also initializes the bullet's tier entry as provisional. The missing-topic exit moves from 1 to 3. `--sha` is new (not in the old helper): it stores the commit the bullet's claim about code was true at beside the date, as `<!-- YYYY-MM-DD sha:<hex> -->` (lowercased). `rota knowledge query` prints the bullet line as stored, so the sha shows, and still tier-filters it; entries without a sha render as before.
@@ -119,9 +119,9 @@ note: `amend` only appends and `rename-topic` only renames or moves; this is the
 rota knowledge rm --topic <T> --title <title> [--external]
 repo: scoped (scope S); edits S's KNOWLEDGE.md and tier sidecar only
 data: {"topic": string, "title": string, "changed": true}
-exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written); 4 when several bullets share the title (`blockedBy: ambiguous`)
+exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written); 4 when several bullets match the title, which is case-insensitive and ignores surrounding whitespace, so case-twins are refused and named (`blockedBy: ambiguous`) (#3396)
 old: none (new in #1286)
-note: removes the one bullet with that bold title, and its `<topic>::<title>` tier entry. The span is the bullet's `- ` line plus its indented continuation lines, so prose after it stays; a blank line left doubled by the removal collapses to one, and every other byte is kept. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
+note: removes the one bullet with that bold title (matched case-insensitively, as `--external` does), and its `<topic>::<title>` tier entry. The span is the bullet's `- ` line plus its indented continuation lines, so prose after it stays; a blank line left doubled by the removal collapses to one, and every other byte is kept. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
 
 ### rota knowledge rename-topic
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
@@ -145,10 +145,10 @@ note: lists the `learning` comments on the issues the ledger records as merged i
 rota knowledge hit --topic <T> --title <S>
 repo: scoped (scope S)
 data: {"topic": string, "title": string, "hits": number, "tier": "provisional"|"confirmed"|"deprecated", "promoted": bool, "promotionBlocked": bool, "changed": bool}
-exit: 2 when `--topic` or `--title` is missing
+exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not in S's KNOWLEDGE.md, so a typo leaves no orphan tier record (#3393); topic `Glossary` is exempt
 old: hv-knowledge-hit [--repo <name>] --topic <T> --title <S>    (same flags)
 shim: stderr `auto-promoted:` sets `promoted: true`; stderr `skip-auto-promote:` sets `promotionBlocked: true`; `hits` and `tier` come from a follow-up `hv-knowledge-tier --get` on the same scope.
-note: the result moves from stderr into `data`. For topic `Glossary` the old helper does nothing and exits 0; the contract returns `changed: false` with `hits` 0 and `tier` `provisional`. An untracked bullet is created with hits 1, provisional (`bump_hit` behaviour). The threshold is config `learn.promoteThreshold` (default 3), and promotion is skipped while the pair is in the contradiction queue.
+note: the result moves from stderr into `data`. For topic `Glossary` the old helper does nothing and exits 0; the contract returns `changed: false` with `hits` 0 and `tier` `provisional`. An existing bullet with no tier entry is created with hits 1, provisional (`bump_hit` behaviour). The threshold is config `learn.promoteThreshold` (default 3), and promotion is skipped while the pair is in the contradiction queue.
 note: the port reads the value it reports in the same locked pass as the write; the shim's follow-up read can skew it under concurrent writers.
 note: since #1290 a hit appends one JSON line `{topic, title, date}` to the gitignored per-developer buffer `knowledge-hits.jsonl` beside the scope's sidecar (under its `.lock`) and does not write the tracked `knowledge-tier.json`, so consulting a bullet never dirties the tree. `data` is what the sidecar reads once the buffer is folded in (`hits`, `tier`, `promoted`, `promotionBlocked`); `changed` is true. `rota knowledge tier fold` applies the buffer.
 
