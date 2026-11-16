@@ -100,15 +100,13 @@ type Capabilities struct {
 	BodyEdit bool
 	// SectionEdit: SectionEditor, one body section can be replaced.
 	SectionEdit bool
-	// HarnessField: HarnessSetter, the harness lives in a bullet field.
-	HarnessField bool
 }
 
 // capabilitiesFor is the one place the capability literals are spelled: the
 // file backend, the single-repo issues backend and the umbrella.
 func capabilitiesFor(k backendKind) Capabilities {
 	if k == kindFile {
-		return Capabilities{HarnessField: true}
+		return Capabilities{}
 	}
 	return Capabilities{
 		IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true,
