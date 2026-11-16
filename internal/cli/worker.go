@@ -991,6 +991,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 				res.Text = fmt.Sprintf("fresh: %s %s", slot, r.Branch)
 			} else {
 				res.Text = fmt.Sprintf("pass: %s %s -> %s (%s)", slot, r.Branch, r.Base, r.SHA)
+				if !*check {
+					hintHarvest(c, root, append([]string{r.Issue}, r.IntegrationMembers...))
+				}
 			}
 			return res, nil
 		}

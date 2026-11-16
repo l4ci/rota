@@ -408,6 +408,13 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			return res, nil
 		}
 		if r.OK() {
+			var landedIssues []string
+			for _, m := range r.Members {
+				if m.Landed {
+					landedIssues = append(landedIssues, m.Issue())
+				}
+			}
+			hintHarvest(c, root, landedIssues)
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s\n%s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "), trainSummary(r))
 			return res, nil
 		}
