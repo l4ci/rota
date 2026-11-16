@@ -55,6 +55,10 @@ type World interface {
 	// AssignBundle assigns lead with members to one slot (round.autoBundle).
 	AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error)
 	Review() Reviewer
+	// Stop reads the round's stored stop value afresh, never a copy taken at
+	// tick entry: stopped is true while the round winds down, reason says why
+	// (StopVerifyFailed, or empty).
+	Stop() (stopped bool, reason string)
 	// FollowUp supplies the follow-up step (#2580); the zero value has none.
 	FollowUp() FollowUpSources
 	Audit(Action)
@@ -94,6 +98,7 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	k := &wiring{w: w, e: &e, bypass: map[string]bool{}}
 	e.Capped = w.Capped
+	e.Stop = func() error { return StopError(w.Stop()) }
 	e.Slots = func() []Slot { return SlotsOf(w.TolerantRegistry().Slots()) }
 	e.Active = func() []string {
 		active, _ := round.Members(w.TolerantRegistry(), set)

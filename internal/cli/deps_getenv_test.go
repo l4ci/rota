@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/roundtick"
 )
 
 // OS environment, process identity and directory reads belong at the Deps boundary.
@@ -95,7 +96,7 @@ func TestLimitWatchGuardReadsInjectedEnv(t *testing.T) {
 func TestAutopilotTickLeaseCheckReadsInjectedEnv(t *testing.T) {
 	c, root, _, keys := heldLeaseDeps(t)
 	_, err := runAutopilotTick(c, root, roundcfg.Settings{}, "", 4242, false)
-	if err == errAutopilotStopped {
+	if err == roundtick.ErrNoLease {
 		t.Fatalf("holder 4242 holds the lease, tick reported stopped")
 	}
 	if !sawKey(*keys, "TMUX_PANE") {
