@@ -37,6 +37,7 @@ jobs:
           cache-dependency-path: go.mod
       - run: python3 test/validate-skills.py
       - run: bash test/doclint.sh
+      - run: bash test/py-tests.sh
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       # python3 is on the runner: the fake gh/glab in test/fakes are Python, and internal/worker still runs the legacy bin/ helpers.

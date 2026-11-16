@@ -146,18 +146,10 @@ def check_manual_only(path, text, issues):
     if not yaml_path.is_file():
         issues.append(f"{rel}: disable-model-invocation is true but {yaml_path.as_posix()} is missing")
         return
-    # Parse with PyYAML when present; else the one shape rota writes.
+    # One parser everywhere (CI has no PyYAML): the one shape rota writes.
     body = yaml_path.read_text(encoding="utf-8")
-    try:
-        import yaml
-        try:
-            val = ((yaml.safe_load(body) or {}).get("policy") or {}).get("allow_implicit_invocation")
-        except (yaml.YAMLError, AttributeError) as exc:
-            issues.append(f"{yaml_path.as_posix()}: does not parse as YAML: {exc}")
-            return
-    except ImportError:
-        m = re.search(r"(?m)^policy:[ \t]*\n[ \t]+allow_implicit_invocation:[ \t]*(true|false)[ \t]*$", body)
-        val = None if not m else m.group(1) == "true"
+    m = re.search(r"(?m)^policy:[ \t]*\n[ \t]+allow_implicit_invocation:[ \t]*(true|false)[ \t]*$", body)
+    val = None if not m else m.group(1) == "true"
     if val is not False:
         issues.append(f"{yaml_path.as_posix()}: needs policy.allow_implicit_invocation: false")
 
