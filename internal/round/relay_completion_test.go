@@ -176,3 +176,38 @@ func TestRelayCompletionWithoutCommitAllowsNextAssignment(t *testing.T) {
 		})
 	}
 }
+
+// round status reads the live state the way worker poll does: a done slot that
+// was just given a new issue is busy, even while the host still shows the old
+// turn's native done (#3311).
+func TestStatusDoneThenReassignedIsBusy(t *testing.T) {
+	for _, native := range []string{"done", "idle"} {
+		t.Run(native, func(t *testing.T) {
+			f := newMoveFx(t)
+			f.finish(t, "ben", pr7)
+			handle := f.slot("ben").Handle()
+			if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
+				s.Dispatch(s.Handle(), "13", "", "2026-11-03T10:00:00Z")
+			}); err != nil {
+				t.Fatal(err)
+			}
+			f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
+				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: native}}, nil
+			}
+			rep, err := f.env.Status(bg, f.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, row := range rep.Rows {
+				if row.Name != "ben" {
+					continue
+				}
+				if row.Issue != "13" || row.HostState != "working" || row.State == "done" {
+					t.Fatalf("issue=%q hostState=%q state=%q, want 13/working/not done", row.Issue, row.HostState, row.State)
+				}
+				return
+			}
+			t.Fatal("status omitted ben")
+		})
+	}
+}

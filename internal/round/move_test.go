@@ -1553,3 +1553,25 @@ func TestReconcileDoneEventIsNotStalled(t *testing.T) {
 		t.Errorf("a slot that reported done is not stalled: %+v", rep.Findings)
 	}
 }
+
+// A done slot is waiting on review, not stalled: its PR is open and nothing
+// moves until the orchestrator reviews it (#3309).
+func TestReconcileDoneSlotAwaitingReviewIsNotStalled(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
+		return []host.Agent{{Tab: "w1:ben", Name: "ben", Cwd: f.wt("ben"), Status: "done"}}, nil
+	}
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
+		s.Set("handle", "w1:ben")
+		s.Set("state", "done")
+		s.Set("activeAt", f.now.Add(-45*time.Minute).UTC().Format(time.RFC3339))
+	})
+	f.now = f.now.Add(2 * time.Hour)
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
+		t.Errorf("a done slot is waiting on review, not stalled: %+v", rep.Findings)
+	}
+}

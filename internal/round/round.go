@@ -734,6 +734,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			if ev := s.Event(); ev != nil && ev.Kind == worker.EventDone && !evBefore(ev.TS, s.ActiveAt()) {
 				continue
 			}
+			// A finished slot (done or idle) has handed its PR over and waits on review.
+			if slotFinished(r, s) {
+				continue
+			}
 			v := rep.views[r.Name]
 			st := e.Stalled(ctx, StallInput{
 				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
@@ -795,6 +799,19 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			r.State = e.ExternalState(ctx, root, forgeOK && !rep.views[r.Name].prErr, rep.views[r.Name].base, r)
 		} else if sameSession[r.Name] {
 			r.State = drivenCompletion(r, slotObj[r.Name], current.Slot(r.Name))
+		}
+		// The findings above judge the native state; only what is shown follows
+		// worker poll. A done the host still shows for a slot dispatched since
+		// is the last turn's, unless the pane shows this turn finished.
+		if r.State == "" && alive[r.Name] && worker.NativeDoneIsStale(slotObj[r.Name], r.HostState) {
+			done := false
+			if e.Capture != nil {
+				st, _ := worker.ClassifyFor(r.Kind, e.Capture(ctx, r.Name, r.Tab, 60), false, 60, r.HostState)
+				done = st == worker.StateDone
+			}
+			if !done {
+				r.HostState = "working"
+			}
 		}
 		rep.Rows = append(rep.Rows, *r)
 	}
