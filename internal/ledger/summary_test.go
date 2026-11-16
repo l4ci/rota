@@ -357,3 +357,46 @@ func TestSummaryIdleBetweenDoneAndNextAssign(t *testing.T) {
 		t.Errorf("no assign after done, yet:\n%s", txt)
 	}
 }
+
+// An item handed from one slot to another, whose PR then merges on the second,
+// leaves no unmerged ghost row on the first (#3312). The first row was gated
+// under its own slot before the hand-over and is not re-gated afterwards.
+func TestSummaryTransferThenMergeSupersedesTheFirstRow(t *testing.T) {
+	cases := map[string][]Entry{
+		"transfer": {
+			{TS: at(0), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
+			{TS: at(1), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
+			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: Detail("verdict", "review-missing")},
+			{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "#3165", Slot: "ben", Detail: Detail("from", "kit")},
+			{TS: at(4), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"}, // late done lands after the hand-over
+			{TS: at(5), Kind: KindMerge, Round: 1, Issue: "#3165", Slot: "ben", PR: "#3297"},
+		},
+		"reassign without a transfer event": {
+			{TS: at(0), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
+			{TS: at(1), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
+			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: Detail("verdict", "review-missing")},
+			{TS: at(3), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "ben"},
+			{TS: at(5), Kind: KindMerge, Round: 1, Issue: "#3165", Slot: "ben"},
+		},
+	}
+	for name, es := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := Fold(es, nil, 1)
+			kit, ben := row(t, s, "#3165", "kit"), row(t, s, "#3165", "ben")
+			if kit.Merged || kit.Outcome != OutcomeTransferred || gateOutcome(kit) != "transferred" {
+				t.Errorf("kit row %+v: want transferred, not MERGED no", kit)
+			}
+			if kit.Gate != "" {
+				t.Errorf("kit gate %q, want none: the gate never ran on the PR from that slot", kit.Gate)
+			}
+			if !ben.Merged {
+				t.Errorf("ben row %+v: want merged", ben)
+			}
+			for _, tot := range s.Slots {
+				if tot.Name == "kit" && tot.Merged != 0 || tot.Name == "ben" && tot.Merged != 1 {
+					t.Errorf("slot totals %+v: the merge counts once, on ben", s.Slots)
+				}
+			}
+		})
+	}
+}

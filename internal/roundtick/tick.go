@@ -54,9 +54,12 @@ type Merged struct {
 	Hold bool
 	// Skip is a member that did not land through no fault of its own (a train
 	// stopped at another member): the next tick tries it again.
-	Skip    bool
-	Verdict string
-	Detail  string
+	Skip bool
+	// AlreadyMerged is a target whose PR was on the base before this run: it
+	// landed nothing, so it is neither logged as a merge nor a failure.
+	AlreadyMerged bool
+	Verdict       string
+	Detail        string
 }
 
 // ReviewOutcome is what the review loop did for one done slot. The zero value
@@ -500,6 +503,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	}
 	for _, m := range e.mergeAll(ctx, r, run) {
 		switch {
+		case m.AlreadyMerged:
 		case m.Skip:
 			r.hold(m.Target, strutil.FirstNonEmpty(m.Detail, "did not land through no fault of its own")+"; retried next tick")
 		case m.Verdict == worker.GateRunning:
@@ -666,6 +670,10 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 	out := make([]Merged, 0, len(targets))
 	if tr.Done {
 		for _, t := range targets {
+			if slices.Contains(tr.AlreadyMerged, t) {
+				out = append(out, Merged{Target: t, AlreadyMerged: true})
+				continue
+			}
 			out = append(out, Merged{Target: t, Landed: true, Detail: "train into " + base})
 		}
 		return out
@@ -677,6 +685,8 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 	for _, t := range targets {
 		m := Merged{Target: t}
 		switch {
+		case slices.Contains(tr.AlreadyMerged, t):
+			m.AlreadyMerged = true
 		case excludedIdx(tr.Excluded, t) >= 0:
 			c := tr.Excluded[excludedIdx(tr.Excluded, t)]
 			m.Verdict, m.Hold, m.Detail = c.Gate.Verdict, worker.ClassifyVerdict(c.Gate.Verdict).Hold, strutil.FirstLine(c.Gate.Err)

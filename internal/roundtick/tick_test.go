@@ -949,3 +949,47 @@ func TestObserveReportsTheSameHoldAsExecution(t *testing.T) {
 		t.Fatalf("observe holds %+v, execution holds %+v", obs.Holds, run.Holds)
 	}
 }
+
+// A train whose members all merged before it ran lands nothing: two ticks over
+// one already-merged PR log no merge line and add no ledger merge row (#3308).
+func TestTickAlreadyMergedPRLogsNoMerge(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{
+			Verdict:       worker.GatePass,
+			AlreadyMerged: []string{"a", "b"},
+		}}
+	}
+	for i := 0; i < 2; i++ {
+		r, err := Run(context.Background(), f.env())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Did) != 0 || len(r.NeedsYou) != 0 {
+			t.Fatalf("tick %d: did %+v needsYou %+v, want neither for already-merged PRs", i, r.Did, r.NeedsYou)
+		}
+	}
+	if len(f.audit) != 0 {
+		t.Fatalf("audit (ledger) rows %v, want none", f.audit)
+	}
+}
+
+// Only the member this train landed is a merge; the already-merged one is not.
+func TestTickTrainLogsOnlyOwnLanding(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{
+			Verdict:       worker.GatePass,
+			Members:       []worker.TrainMember{{Target: "b", Landed: true}},
+			Landed:        []string{"b"},
+			AlreadyMerged: []string{"a"},
+		}}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Did) != 1 || r.Did[0].Target != "b" {
+		t.Fatalf("did %+v, want only b merged", r.Did)
+	}
+}
