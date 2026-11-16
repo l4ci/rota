@@ -16,16 +16,16 @@ func TestNodeModulesPointerSymlinkIntoWorktree(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(wt, "node_modules", ".pnpm", "vite"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got := NodeModulesPointer(root, wt); got != "" {
+	if got, _ := NodeModulesPointer(root, wt); got != "" {
 		t.Fatalf("clean node_modules flagged: %q", got)
 	}
 	other := t.TempDir()
 	os.Symlink(other, filepath.Join(nm, "fine"))
-	if got := NodeModulesPointer(root, wt); got != "" {
+	if got, _ := NodeModulesPointer(root, wt); got != "" {
 		t.Fatalf("unrelated link flagged: %q", got)
 	}
 	os.Symlink(filepath.Join(wt, "node_modules", ".pnpm", "vite"), filepath.Join(nm, "@scope", "vite"))
-	if got := NodeModulesPointer(root, wt); !strings.Contains(got, "@scope") {
+	if got, _ := NodeModulesPointer(root, wt); !strings.Contains(got, "@scope") {
 		t.Fatalf("scoped link into the worktree not found: %q", got)
 	}
 }
@@ -37,7 +37,7 @@ func TestNodeModulesPointerRelativeLinkAndHoistDir(t *testing.T) {
 	os.MkdirAll(hoist, 0o755)
 	os.MkdirAll(filepath.Join(wt, "x"), 0o755)
 	os.Symlink("../../../.worktrees/w7/x", filepath.Join(hoist, "x"))
-	if got := NodeModulesPointer(root, wt); got == "" {
+	if got, _ := NodeModulesPointer(root, wt); got == "" {
 		t.Fatal("relative link in .pnpm/node_modules not found")
 	}
 }
@@ -49,17 +49,17 @@ func TestNodeModulesPointerVirtualStoreDir(t *testing.T) {
 	os.MkdirAll(wt, 0o755)
 	yaml := "layoutVersion: 5\nvirtualStoreDir: " + filepath.Join(wt, "node_modules", ".pnpm") + "\n"
 	os.WriteFile(filepath.Join(root, "node_modules", ".modules.yaml"), []byte(yaml), 0o644)
-	if got := NodeModulesPointer(root, wt); !strings.Contains(got, "virtualStoreDir") {
+	if got, _ := NodeModulesPointer(root, wt); !strings.Contains(got, "virtualStoreDir") {
 		t.Fatalf("virtualStoreDir into the worktree not found: %q", got)
 	}
 	os.WriteFile(filepath.Join(root, "node_modules", ".modules.yaml"), []byte("virtualStoreDir: .pnpm\n"), 0o644)
-	if got := NodeModulesPointer(root, wt); got != "" {
+	if got, _ := NodeModulesPointer(root, wt); got != "" {
 		t.Fatalf("relative virtualStoreDir flagged: %q", got)
 	}
 }
 
 func TestNodeModulesPointerNoNodeModules(t *testing.T) {
-	if got := NodeModulesPointer(t.TempDir(), t.TempDir()); got != "" {
+	if got, _ := NodeModulesPointer(t.TempDir(), t.TempDir()); got != "" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -84,5 +84,46 @@ func TestPoolReapKeepsTheSlotWhenNodeModulesPointsIn(t *testing.T) {
 	}
 	if LoadRegistryTolerant(b).Slot("w1") != nil {
 		t.Error("w1 has no pointer and should be reaped")
+	}
+}
+
+// An I/O error while looking is not "nothing points in": reap is fail-closed.
+func TestNodeModulesPointerUnreadableHolds(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads anything")
+	}
+	root, wt := t.TempDir(), filepath.Join(t.TempDir(), "w7")
+	nm := filepath.Join(root, "node_modules")
+	if err := os.MkdirAll(filepath.Join(nm, "vite"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(nm, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(nm, 0o755) })
+	if got, err := NodeModulesPointer(root, wt); err == nil {
+		t.Fatalf("unreadable node_modules not held: %q", got)
+	}
+}
+
+// A link whose target is a symlink into the worktree resolves there too.
+func TestNodeModulesPointerResolvedLink(t *testing.T) {
+	root, wt := t.TempDir(), filepath.Join(t.TempDir(), "w7")
+	nm := filepath.Join(root, "node_modules")
+	if err := os.MkdirAll(nm, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(wt, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hop := filepath.Join(t.TempDir(), "hop")
+	if err := os.Symlink(filepath.Join(wt, "pkg"), hop); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(hop, filepath.Join(nm, "vite")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := NodeModulesPointer(root, wt); got == "" {
+		t.Fatal("link resolving into the worktree not flagged")
 	}
 }

@@ -300,7 +300,10 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 			continue
 		}
 		if wt := s.Worktree(); wt != "" {
-			if hit := NodeModulesPointer(root, wt); hit != "" {
+			if hit, err := NodeModulesPointer(root, wt); err != nil {
+				failed = append(failed, name+": could not verify node_modules pointers: "+err.Error())
+				continue
+			} else if hit != "" {
 				failed = append(failed, name+": "+NodeModulesRefusal(wt, hit))
 				continue
 			}

@@ -365,7 +365,9 @@ func (s *state) heldWorktree(ctx context.Context, c *checkout) string {
 	} else if strings.TrimSpace(st) != "" {
 		return "uncommitted changes"
 	}
-	if hit := worker.NodeModulesPointer(s.root, c.path); hit != "" {
+	if hit, err := worker.NodeModulesPointer(s.root, c.path); err != nil {
+		return "could not verify node_modules pointers: " + err.Error()
+	} else if hit != "" {
 		return worker.NodeModulesRefusal(c.path, hit)
 	}
 	return s.heldUnmerged(ctx, c.path, "HEAD")
@@ -536,7 +538,7 @@ func removeWorktree(ctx context.Context, s *state, c Candidate) error {
 		return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
 	}
 	if h := s.heldWorktree(ctx, co); h != "" {
-		return fmt.Errorf("%s holds work: %s; left alone", c.Name, h)
+		return fmt.Errorf("%s is held: %s; left alone", c.Name, h)
 	}
 	res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
 	errOut, code := res.Stderr, res.ExitCode
