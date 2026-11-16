@@ -29,7 +29,7 @@
 ## Where Spec Kit is stronger
 
 - **Specification as a process.** `specify` writes the what and why, `clarify` asks up to five questions and writes the answers back into the spec, and `checklist` writes "unit tests for requirements" that a human ticks off. rota has `/rota-brainstorm` and `/rota-plan`, but per item and only when the planning dial calls for it.
-- **Consistency checks across artifacts.** `analyze` reads spec, plan and tasks together before implementation and reports conflicts and gaps. rota's [plan critic](../../skills/references/plan-critic.md) reads only the item and the proposed plan.
+- **Consistency checks across artifacts.** `analyze` reads spec, plan and tasks together before implementation and reports conflicts and gaps. rota's [plan critic](../../skills/references/plan-critic.md) reads the item, its design when it has one, and the proposed plan, and reports unserved acceptance criteria, out-of-scope tasks and dropped design decisions under a `Consistency` heading.
 - **A loop back from code to spec.** `converge` keeps appending gap tasks until the code matches the artifacts. rota's acceptance marks block an unmet criterion but do not write the follow-up work for you.
 - **Reach and customization.** It installs into more than 40 agents, runs natively on Windows, and has extensions, presets, workflows and a community catalog. rota supports three harnesses and is configured, not extended.
 
