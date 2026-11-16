@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -151,7 +150,7 @@ func (diskOwners) Repo(dir string) string {
 // projectRoot is the project whose .rota/ holds the state of the checkout in
 // dir, dir itself when none resolves.
 func projectRoot(dir string) string {
-	if root, err := rotatree.FindRoot(dir, repos.Rels); err == nil {
+	if root, err := repos.FindRoot(dir); err == nil {
 		return root
 	}
 	return dir

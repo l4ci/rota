@@ -88,3 +88,16 @@ func TestFindRootMaskingAndMissing(t *testing.T) {
 		t.Fatalf("missing message = %q", missing.Message)
 	}
 }
+
+// A repos.json entry without a name still registers its tree: the stray
+// .rota/ inside it masks the umbrella through findRoot, as through repo which.
+func TestFindRootMasksOnNamelessAbsoluteEntry(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	sub := filepath.Join(top, "svc")
+	writeFile(t, filepath.Join(top, ".rota", "repos.json"), `{"repos":[{"path":"`+sub+`"}]}`)
+	writeFile(t, filepath.Join(sub, ".rota", "x"), "")
+	_, err := findRoot(sub, true)
+	if !errors.Is(err, rotatree.ErrMasked) {
+		t.Fatalf("nameless absolute entry: err = %v, want ErrMasked", err)
+	}
+}
