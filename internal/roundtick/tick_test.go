@@ -1094,7 +1094,10 @@ func TestStopSeenMidTickStillSavesState(t *testing.T) {
 	gate := e.RunGate
 	e.RunGate = func(ctx context.Context, tg, base string) GateRun { stopped = true; return gate(ctx, tg, base) }
 	train := e.RunTrain
-	e.RunTrain = func(ctx context.Context, ts []string, base string) TrainRun { stopped = true; return train(ctx, ts, base) }
+	e.RunTrain = func(ctx context.Context, ts []string, base string) TrainRun {
+		stopped = true
+		return train(ctx, ts, base)
+	}
 	r, err := Run(context.Background(), e)
 	if err != nil || r.Stopped == nil {
 		t.Fatalf("err %v stopped %v", err, r.Stopped)
