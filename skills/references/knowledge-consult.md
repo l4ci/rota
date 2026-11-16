@@ -71,7 +71,7 @@ rota knowledge hit --external --topic "<T>" --title "<title>"
 
 It appends one line to a log on this machine, never touches the clone or the network, and exits 3 when the bullet is not in the base (skip it: it was renamed or removed). Hits are per machine and never synced; `/rota-learn --external-review` reads them to find bullets nobody uses. They are not tiers: nothing auto-promotes.
 
-Issue all calls **in a single parallel tool-call batch**: each verb serializes its sidecar write behind a per-file lock, so concurrent calls don't lose hits. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3) without a pending contradiction.
+Issue all calls **in a single parallel tool-call batch**: each verb serializes its sidecar write behind a per-file lock, so concurrent calls don't lose hits. A local hit on a bullet missing from `KNOWLEDGE.md` exits 3 and is skipped (nothing recorded): ignore it and move on. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3) without a pending contradiction.
 
 **Only register bullets that survived into the brief.** Bullets returned by the query but pruned before they reached a `**Known gotchas:**` / `**Relevant project conventions:**` section don't earn credit; unused queries shouldn't drive promotion.
 

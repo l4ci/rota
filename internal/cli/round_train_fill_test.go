@@ -203,3 +203,21 @@ func TestTrainNudgeInvalidTrainKeyRefuses(t *testing.T) {
 		}
 	}
 }
+
+// The nudge sends an Immediate PR to its own gate, as the tick does, instead of
+// folding it into the base's train or dropping it (#3411).
+func TestTrainNudgeImmediateGoesAlone(t *testing.T) {
+	now := time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
+	ns := trainNudgesWithFill([]waitingPR{
+		{PR: "#1", Base: "main", Reviewed: true, ReadySince: now.Add(-time.Minute)},
+		{PR: "#2", Base: "main", Reviewed: true, ReadySince: now.Add(-2 * time.Minute)},
+		{PR: "#90", Base: "main", Reviewed: true, Immediate: true},
+	}, roundcfg.TrainFill{Max: 2}, now)
+	var cmds []string
+	for _, n := range ns {
+		cmds = append(cmds, n.Command())
+	}
+	if len(ns) != 2 || len(ns[0].PRs) != 1 || ns[0].PRs[0] != "90" || len(ns[1].PRs) != 2 {
+		t.Fatalf("want #90 alone then the train of #1 #2, got %v", cmds)
+	}
+}

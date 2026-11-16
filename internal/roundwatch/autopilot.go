@@ -20,7 +20,8 @@ type AutopilotOpts struct {
 }
 
 // AutopilotResult is a watch result plus the last tick. TickErr is set when
-// the tick failed; Tick is nil then and after a stop.
+// the tick failed; Tick is nil then and after a stop at tick entry. A stop
+// seen mid-tick keeps the tick (Tick.Stopped is set), so its merges are reported.
 type AutopilotResult struct {
 	Result
 	Tick    *roundtick.Result
@@ -40,6 +41,8 @@ func RunAutopilot(ctx context.Context, env Env, o Opts, a AutopilotOpts) (Autopi
 			return AutopilotResult{Result: Result{Reason: ReasonStopped}}, nil
 		case err != nil:
 			return AutopilotResult{Result: Result{Reason: ReasonChange}, TickErr: err}, nil
+		case tr.Stopped != nil:
+			return AutopilotResult{Result: Result{Reason: ReasonStopped}, Tick: &tr}, nil
 		case ctx.Err() != nil:
 			return AutopilotResult{Result: Result{Reason: ReasonInterrupt}, Tick: &tr}, nil
 		case wakes(tr, a.TrainFill):

@@ -13,6 +13,13 @@ mkdir -p "$TMP_LCK/.rota"
 # below, so every concurrent writer takes the plain increment path.
 printf '{"learn":{"promoteThreshold":99}}\n' > "$TMP_LCK/.rota/config.json"
 
+# A hit on a bullet missing from KNOWLEDGE.md exits 3 and is skipped, so seed it.
+cat > "$TMP_LCK/.rota/KNOWLEDGE.md" <<'EOF'
+## Concurrency
+
+- **Lock rule** — serialize sidecar writes. <!-- 2026-05-15 -->
+EOF
+
 # ── (a) 8 concurrent hits on one topic/title — hits must equal exactly 8 ─────
 for _ in 1 2 3 4 5 6 7 8; do
   "$ROTA_BIN" -C "$TMP_LCK" knowledge hit \

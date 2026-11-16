@@ -23,16 +23,6 @@ import (
 // --autopilot` does one on every wake. The steps and the rules are in
 // internal/roundtick; this file wires them to the real verbs.
 
-// errAutopilotStopped says the autopilot has no round to work for: the lease is
-// gone (wind-down released it, or another orchestrator took it).
-var errAutopilotStopped = errors.New("this process holds no round lease: the autopilot stops")
-
-// isAutopilotStopped is true when the tick found no round to work for: the lease
-// is gone, or the round is stopped for wind-down.
-func isAutopilotStopped(err error) bool {
-	return errors.Is(err, errAutopilotStopped) || errors.Is(err, roundtick.ErrStopped)
-}
-
 func roundTick(fs *flag.FlagSet) RunFunc {
 	observe := fs.Bool("observe", false, "report proposed autopilot actions without executing them")
 	base := fs.String("base", "", "the cycle branch PRs merge into (default each PR's recorded base)")
@@ -53,7 +43,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		}
 		r, err := runAutopilotTick(c, root, set, *base, c.holderPID, *observe)
 		switch {
-		case isAutopilotStopped(err):
+		case roundtick.IsStopped(err):
 			d := jsonx.NewObject()
 			d.Set("stopped", true)
 			d.Set("changed", false)
@@ -97,7 +87,7 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 		return roundtick.Result{}, err
 	}
 	if !held {
-		return roundtick.Result{}, errAutopilotStopped
+		return roundtick.Result{}, roundtick.ErrNoLease
 	}
 	cd, err := c.CommonDir(root)
 	if err != nil {
@@ -122,7 +112,7 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	if observe {
 		renv = renv.ReadOnly()
 	}
-	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state}
+	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state, commonDir: cd, round: lease.Round}
 	var world roundtick.World = w
 	if observe {
 		world = observingWorld{w}
@@ -148,6 +138,10 @@ func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(contex
 
 func tickData(r roundtick.Result) *jsonx.Object {
 	d := jsonx.NewObject()
+	if r.Stopped != nil {
+		d.Set("stopped", true)
+		d.Set("stoppedReason", r.Stopped.Error())
+	}
 	if len(r.Holding) > 0 {
 		d.Set("holding", jsonx.Strings(r.Holding))
 	}
@@ -207,6 +201,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 
 func tickLines(r roundtick.Result) string {
 	var lines []string
+	if r.Stopped != nil {
+		lines = append(lines, "stopped mid-tick: "+r.Stopped.Error())
+	}
 	if r.Observed {
 		lines = append(lines, observationNotice)
 		for _, p := range r.Proposed {
@@ -316,6 +313,9 @@ type tickWorld struct {
 	be    backlog.Backend
 	board round.Board
 	state roundtick.State
+	// commonDir and round locate the stored stop value Stop re-reads.
+	commonDir string
+	round     int
 }
 
 func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegistryTolerant(w.root) }
@@ -339,6 +339,13 @@ func (w *tickWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
 }
 
 func (w *tickWorld) Root() string { return w.root }
+
+// Stop re-reads the stored stop value: state is the snapshot taken at tick
+// entry, and a wind-down can set the flag after it.
+func (w *tickWorld) Stop() (bool, string) {
+	s := roundtick.LoadState(w.commonDir, w.round)
+	return s.Stopped, s.StoppedReason
+}
 
 func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
 	if req.Gate != nil {
