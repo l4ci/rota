@@ -417,7 +417,10 @@ func hookGuard(c *Ctx, args []string) (Result, error) {
 		}
 		return strings.TrimSpace(r.Stdout), nil
 	}
-	if reason := hook.DecideGuard(hook.GuardRequest{Payload: payload, Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
+	// An unresolved base ("") leaves only main/master guarded: the guard never
+	// blocks on its own malfunction.
+	base, _, _ := resolveBaseFor(c, payload.CwdOr(wd))
+	if reason := hook.DecideGuard(hook.GuardRequest{Payload: payload, Slot: slot, DefaultCwd: wd, Base: base, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil

@@ -643,3 +643,15 @@ func TestSlotSessionIsReportedByStatuslineAndPromptCheck(t *testing.T) {
 		t.Errorf("codex session %+v %v", s, ok)
 	}
 }
+
+// The guard protects the configured base branch, not only main/master (#3384).
+func TestHookGuardProtectsConfiguredBase(t *testing.T) {
+	dir := orchProject(t, false) // git.baseBranch = feat/x
+	t.Setenv("ROTA_SLOT", "dana")
+	if code, _, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push origin HEAD:feat/x"), "hook", "guard"); code != 2 {
+		t.Fatalf("push to the configured base: exit %d %q, want 2", code, errOut)
+	}
+	if code, _, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push origin HEAD:feat/y"), "hook", "guard"); code != 0 {
+		t.Fatalf("push to another branch: exit %d %q, want 0", code, errOut)
+	}
+}

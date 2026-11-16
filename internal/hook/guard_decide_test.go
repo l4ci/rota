@@ -71,3 +71,15 @@ func TestSlotWorktree(t *testing.T) {
 		t.Errorf("worktree list: got %q", got)
 	}
 }
+
+func TestDecideGuardProtectsConfiguredBase(t *testing.T) {
+	p := mustPayload(t, []byte(`{"tool_name":"Bash","tool_input":{"command":"git push origin HEAD:develop"},"cwd":"`+gWork+`"}`))
+	req := GuardRequest{Payload: p, Slot: "dana", DefaultCwd: gWork, Git: fakeGit, Base: "develop"}
+	if got := DecideGuard(req); got == "" {
+		t.Fatal("push to the configured base passed through DecideGuard")
+	}
+	req.Base = ""
+	if got := DecideGuard(req); got != "" {
+		t.Fatalf("without Base, develop is an ordinary branch: %q", got)
+	}
+}
