@@ -408,23 +408,31 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			return res, nil
 		}
 		if r.OK() {
-			var landedIssues []string
-			for _, m := range r.Members {
-				if m.Landed {
-					landedIssues = append(landedIssues, m.Issue())
-				}
-			}
-			hintHarvest(c, root, landedIssues)
+			hintHarvest(c, root, landedMemberIssues(r))
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s\n%s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "), trainSummary(r))
 			return res, nil
 		}
 		if r.Verdict == worker.GateCancelled {
 			res.Text = cancelledText(r)
 		}
+		if len(r.Landed) > 0 {
+			hintHarvest(c, root, landedMemberIssues(r))
+		}
 		e := Failed("%s", trainFailText(r))
 		e.Hint = r.Hint
 		return res, e
 	}
+}
+
+// landedMemberIssues is the issues of the members this train really landed.
+func landedMemberIssues(r worker.TrainResult) []string {
+	var out []string
+	for _, m := range r.Members {
+		if m.Landed {
+			out = append(out, m.Issue())
+		}
+	}
+	return out
 }
 
 // cancelledText is the text answer of a cancelled train: what landed and

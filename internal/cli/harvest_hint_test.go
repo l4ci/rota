@@ -27,7 +27,7 @@ func TestHarvestHintLine(t *testing.T) {
 	cid, _ := issueGet(issueData(t, env), "commentId").(string)
 
 	got := harvestHintLine(c, root, []string{"#7", "7", "9"})
-	if !strings.Contains(got, "#7 (1)") || !strings.Contains(got, "rota knowledge harvest") || strings.Contains(got, "#9") {
+	if !strings.Contains(got, "#7 (1)") || !strings.Contains(got, "rota item comment list 7 --kind learning") || strings.Contains(got, "#9") {
 		t.Fatalf("hint = %q", got)
 	}
 

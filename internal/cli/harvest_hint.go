@@ -1,12 +1,17 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+// harvestHintTimeout bounds the tracker reads behind the hint.
+const harvestHintTimeout = 8 * time.Second
 
 // harvestHintLine says which just-landed issues carry `learning` comments no
 // `harvested` mark names yet, and how to read them. Advisory like the assign
@@ -31,7 +36,14 @@ func harvestHintLine(c *Ctx, root string, issues []string) string {
 	if err != nil {
 		return ""
 	}
+	// Advice never holds up a landing: a slow tracker means no hint.
+	parent := c.Context()
+	ctx, cancel := context.WithTimeout(parent, harvestHintTimeout)
+	defer cancel()
+	c.ctx = ctx
+	defer func() { c.ctx = parent }()
 	var parts []string
+	var cmds []string
 	_, _ = withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 		for _, id := range ids {
 			learnings, marks, err := learningsAndMarks(be, trust, id)
@@ -50,15 +62,16 @@ func harvestHintLine(c *Ctx, root string, issues []string) string {
 			}
 			if n > 0 {
 				parts = append(parts, fmt.Sprintf("#%s (%d)", id, n))
+				cmds = append(cmds, "rota item comment list "+id+" --kind learning")
 			}
 		}
 		return Result{}, nil
 	})
-	if len(parts) == 0 {
+	if ctx.Err() != nil || len(parts) == 0 {
 		return ""
 	}
 	return "HARVEST unharvested learnings on landed " + strings.Join(parts, ", ") +
-		"; read them: rota knowledge harvest (or rota item comment list <id> --kind learning), fold in at /rota-learn"
+		"; read: " + strings.Join(cmds, "; ") + " (fold in at /rota-learn)"
 }
 
 func hintHarvest(c *Ctx, root string, issues []string) {
