@@ -89,7 +89,7 @@ func TestTransferQueuedBundleLeadToSlotMovesTheWholeBundle(t *testing.T) {
 // A busy receiver refuses the move; the refusal names the members and prints
 // routes that really move the whole bundle. Both printed routes are run here.
 func TestTransferBundleLeadBusyRefusalPrintsWorkingRoutes(t *testing.T) {
-	f := newMoveFx(t)
+	f := newMoveFxN(t, 3)
 	f.bundled(t, "15", "16")
 	if _, err := f.assign("13", "dana"); err != nil {
 		t.Fatal(err)
