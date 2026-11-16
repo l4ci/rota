@@ -1564,7 +1564,8 @@ func (runner gate) stepVerdict(result GateResult, target GateTarget, forged gate
 	// A cross FAIL recorded at an older commit is relaxed only under an explicit
 	// review:none; a FAIL at head, or one while cross is required, still blocks (#3458).
 	var blocked *verdict.BlockedError
-	if errors.As(err, &blocked) && blocked.Stale && blocked.Record.Kind == verdict.ReviewCross && blocked.Record.Verdict == verdict.Fail {
+	// An unreadable head cannot prove a FAIL stale, so the relaxation fails closed.
+	if errors.As(err, &blocked) && blocked.Stale && strings.TrimSpace(head) != "" && blocked.Record.Kind == verdict.ReviewCross && blocked.Record.Verdict == verdict.Fail {
 		res, rerr := g.resolveReview(g.baseRef + "..." + g.headRef)
 		if rerr != nil {
 			return finish(g.broke(rerr.Error()))
