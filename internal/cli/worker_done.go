@@ -60,6 +60,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, err
 		}
 		text := fmt.Sprintf("%s\tdone", slotName)
+		if res.Targeted {
+			text += "\nproof cwd: " + res.ProofCwd
+		}
 		if kind != "" {
 			d.Set("outcome", kind)
 			block := outcomeBlock(kind, summary)
@@ -258,6 +261,7 @@ func doneData(r *worker.DoneResult) *jsonx.Object {
 	if r.Targeted {
 		d.Set("targeted", true)
 		d.Set("proofCommand", r.ProofCommand)
+		d.Set("proofCwd", r.ProofCwd)
 	}
 	if r.Head != "" {
 		d.Set("head", r.Head)
@@ -320,7 +324,11 @@ func targetedProof(c *Ctx, root, dir, command, base, head string, ids []string) 
 			return command, err
 		}
 		if run.code != 0 {
-			e := Refused("%s: the targeted proof `%s` failed (exit %d)", id, command, run.code)
+			msg := fmt.Sprintf("%s: the targeted proof `%s` failed (exit %d) in cwd: %s", id, command, run.code, run.cwd)
+			if t := run.tail(); t != "" {
+				msg += "\n" + t
+			}
+			e := Refused("%s", msg)
 			e.Hint = "fix it, commit and push, then run `rota worker done` again"
 			return command, e
 		}
