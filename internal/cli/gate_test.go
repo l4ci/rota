@@ -172,7 +172,7 @@ func gateCases() []gateCase {
 		}},
 		{gate.BugreportFile, "bugreport file", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			root := trProject(t, gateConfig(t, "", level, nil))
-			if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
+			if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			f := &forge{answer: func(string, []string) (string, string, int) {

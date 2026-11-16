@@ -2,6 +2,7 @@ package bugreport
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,14 +47,14 @@ func project(t *testing.T) string {
 
 func TestAddLoadRoundTrip(t *testing.T) {
 	root := project(t)
-	got, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "worker done", Exit: 70, Error: "boom"}, t0)
+	got, err := Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAuto, Verb: "worker done", Exit: 70, Error: "boom"}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.ID != "bug-1" || got.Status != StatusOpen || got.TS != "2026-10-21T12:00:00Z" || got.Count != 1 {
 		t.Fatalf("added %+v", got)
 	}
-	second, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "a wrong refusal"}, t0)
+	second, err := Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAgent, Summary: "a wrong refusal"}, t0)
 	if err != nil || second.ID != "bug-2" {
 		t.Fatalf("second %+v %v", second, err)
 	}
@@ -76,8 +77,8 @@ func TestLoadMissingLogIsEmpty(t *testing.T) {
 func TestAddCountsAnOpenRepeat(t *testing.T) {
 	root := project(t)
 	r := Record{Source: SourceAuto, Verb: "gate", Exit: 70, Error: "x"}
-	Add(context.Background(), git.Exec, root, r, t0)
-	again, err := Add(context.Background(), git.Exec, root, r, t0)
+	Add(context.Background(), git.Exec, root, Env{}, r, t0)
+	again, err := Add(context.Background(), git.Exec, root, Env{}, r, t0)
 	if err != nil || again.ID != "bug-1" || again.Count != 2 {
 		t.Fatalf("repeat %+v %v", again, err)
 	}
@@ -89,9 +90,9 @@ func TestAddCountsAnOpenRepeat(t *testing.T) {
 
 func TestOpenSkipsFiledAndDismissed(t *testing.T) {
 	root := project(t)
-	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "a"}, t0)
-	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "b"}, t0)
-	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "c"}, t0)
+	Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAgent, Summary: "a"}, t0)
+	Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAgent, Summary: "b"}, t0)
+	Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAgent, Summary: "c"}, t0)
 	if _, err := Update(context.Background(), git.Exec, root, "bug-1", func(r *Record) { r.Status = StatusFiled; r.Issue = "https://x/1" }); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestDraftTitleIsRedactedBeforeItIsTruncated(t *testing.T) {
 
 func TestAddRedactsWhatItStores(t *testing.T) {
 	root := project(t)
-	got, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "x", Args: []string{"--token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, Error: "bad key sk-abcdefghijklmnopqrstuv"}, t0)
+	got, err := Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAuto, Verb: "x", Args: []string{"--token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, Error: "bad key sk-abcdefghijklmnopqrstuv"}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestBugreportWorktreeRecordsLandInTheMainLog(t *testing.T) {
 	gittest.Run(t, main, "commit", "-q", "-m", "i")
 	wt := filepath.Join(base, "wt")
 	gittest.Run(t, main, "worktree", "add", "-q", "-b", "w", wt)
-	if _, err := Add(context.Background(), git.Exec, wt, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
+	if _, err := Add(context.Background(), git.Exec, wt, Env{}, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
 		t.Fatal(err)
 	}
 	open, err := Open(context.Background(), git.Exec, main)
@@ -266,7 +267,7 @@ func TestRedactKeepsUpstreamAndPublicNames(t *testing.T) {
 
 func TestAddRedactsSpaceSeparatedFlagArgs(t *testing.T) {
 	root := project(t)
-	Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "x", Exit: 70, Args: []string{"--token", "plainvalue", "--force", "GH_TOKEN", "other"}, Error: "e"}, t0)
+	Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAuto, Verb: "x", Exit: 70, Args: []string{"--token", "plainvalue", "--force", "GH_TOKEN", "other"}, Error: "e"}, t0)
 	raw, _ := os.ReadFile(Path(context.Background(), git.Exec, root))
 	if strings.Contains(string(raw), "plainvalue") {
 		t.Errorf("log keeps the value: %s", raw)
@@ -354,5 +355,34 @@ func TestRedactScrubsHostAndOwnerInEveryRemoteForm(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A record longer than the old 1 MiB scanner cap still loads: ReadLines has no
+// line-length limit.
+func TestLoadReadsALongLine(t *testing.T) {
+	root := project(t)
+	long := strings.Repeat("a", 2<<20)
+	line, _ := json.Marshal(Record{ID: "bug-1", Summary: long})
+	if err := os.WriteFile(Path(context.Background(), git.Exec, root), append(line, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	all, err := Load(context.Background(), git.Exec, root)
+	if err != nil || len(all) != 1 || len(all[0].Summary) != len(long) {
+		t.Fatalf("loaded %d records, err %v", len(all), err)
+	}
+}
+
+func TestAddRedactsHostnameAndRepoInTheStoredFile(t *testing.T) {
+	root := project(t)
+	env := Env{Hostname: "vo-laptop", Repo: "acme-shop"}
+	_, err := Add(context.Background(), git.Exec, root, env, Record{Source: SourceAuto, Verb: "x",
+		Error: "cannot reach vo-laptop.local for acme-shop", Summary: "acme-shop on vo-laptop", Args: []string{"vo-laptop"}}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(Path(context.Background(), git.Exec, root))
+	if strings.Contains(string(raw), "vo-laptop") || strings.Contains(string(raw), "acme-shop") {
+		t.Errorf("stored log keeps host or repo: %s", raw)
 	}
 }

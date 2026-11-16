@@ -90,7 +90,7 @@ func TestWindDownOffersBugreports(t *testing.T) {
 		le.Alive = func(p int) bool { return p == os.Getpid() }
 		le.StartTime = func(p int) (uint64, bool) { return 1, p == os.Getpid() }
 		for i := 0; i < records; i++ {
-			if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "mistake " + strconv.Itoa(i)}, time.Now()); err != nil {
+			if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "mistake " + strconv.Itoa(i)}, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 		}

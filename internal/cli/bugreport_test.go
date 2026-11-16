@@ -312,7 +312,7 @@ func TestHookStopOffersOncePerSession(t *testing.T) {
 	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
 		t.Fatalf("no records: %d %q", code, out)
 	}
-	if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
+	if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop")
@@ -335,7 +335,7 @@ func TestHookStopOffersOncePerSession(t *testing.T) {
 
 func TestHookStopSkipsTheOfferForARoundWorker(t *testing.T) {
 	dir := orchProject(t, false)
-	bugreport.Add(context.Background(), git.Exec, dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "x"}, time.Now())
+	bugreport.Add(context.Background(), git.Exec, dir, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "x"}, time.Now())
 	t.Setenv("ROTA_SLOT", "dana")
 	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
 		t.Errorf("%d %q", code, out)
@@ -344,7 +344,7 @@ func TestHookStopSkipsTheOfferForARoundWorker(t *testing.T) {
 
 func TestBugreportListRedactsLikeDraft(t *testing.T) {
 	dir := trProject(t, "{}")
-	if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Record{Source: bugreport.SourceAgent, Verb: "worker done",
+	if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Verb: "worker done",
 		Summary: "broke in " + filepath.Base(dir)}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
