@@ -187,6 +187,7 @@ func (r Registry) objects(key string) []*jsonx.Object {
 type QueuedPR struct {
 	Issue, Branch, PR, Base, From, ClaimID string
 	DecisionContext                        string // assignment snapshot retained when its slot is reused
+	SettledAnswers                         string // the assignment's settled answers, retained the same way
 	Round                                  int
 	Relays                                 []any
 	// ReviewSeen is the review cursor the PR's slot held when it moved on
@@ -212,7 +213,7 @@ func queuedFrom(o *jsonx.Object) QueuedPR {
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		DecisionContext: jsonx.Str(o, "decisionContext"), ReviewSeen: jsonx.Str(o, "reviewSeen"),
+		DecisionContext: jsonx.Str(o, "decisionContext"), SettledAnswers: jsonx.Str(o, "settledAnswers"), ReviewSeen: jsonx.Str(o, "reviewSeen"),
 		Round: round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
 	}
 }
@@ -234,6 +235,9 @@ func (q QueuedPR) object() *jsonx.Object {
 	setStrList(o, "bundle", q.Bundle)
 	if q.DecisionContext != "" {
 		o.Set("decisionContext", q.DecisionContext)
+	}
+	if q.SettledAnswers != "" {
+		o.Set("settledAnswers", q.SettledAnswers)
 	}
 	if q.ReviewSeen != "" {
 		o.Set("reviewSeen", q.ReviewSeen)
