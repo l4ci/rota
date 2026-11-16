@@ -42,3 +42,31 @@ func TestEnd(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectTitle(t *testing.T) {
+	titles := []string{"Alpha", "beta", "ALPHA", "", "Gamma"}
+	cases := []struct {
+		name, want string
+		hits       []int
+	}{
+		{"exact case", "Gamma", []int{4}},
+		{"other case", "gamma", []int{4}},
+		{"padded", "  GAMMA ", []int{4}},
+		{"case-only twins both hit", "alpha", []int{0, 2}},
+		{"none", "delta", nil},
+		{"blank never matches an untitled entry", "", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := SelectTitle(titles, c.want)
+			if len(got) != len(c.hits) {
+				t.Fatalf("SelectTitle(%q) = %v, want %v", c.want, got, c.hits)
+			}
+			for i := range got {
+				if got[i] != c.hits[i] {
+					t.Fatalf("SelectTitle(%q) = %v, want %v", c.want, got, c.hits)
+				}
+			}
+		})
+	}
+}

@@ -79,6 +79,22 @@ func HasTitle(lines []string, title string) bool {
 	return false
 }
 
+// SelectTitle is the one title-selection rule both knowledge stores apply:
+// it returns the indexes of titles equal to want, ignoring case and
+// surrounding whitespace. An empty entry (a bullet with no bold title) never
+// matches. More than one index means the title is ambiguous, and the caller
+// refuses and names every hit.
+func SelectTitle(titles []string, want string) []int {
+	want = strings.ToLower(strings.TrimSpace(want))
+	var hits []int
+	for i, t := range titles {
+		if t != "" && strings.ToLower(t) == want {
+			hits = append(hits, i)
+		}
+	}
+	return hits
+}
+
 // Continues reports whether a line continues the bullet above it: it is
 // indented. A blank line or unindented prose does not.
 func Continues(line string) bool {
