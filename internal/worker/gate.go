@@ -1133,7 +1133,7 @@ func (g *gateOperation) partialLifted(headRef string) (string, bool) {
 		return "", false
 	}
 	atHead := func(content, sha, check string) (string, bool) {
-		if sha == "" || !strings.HasPrefix(head, sha) {
+		if !strutil.SameSHA(head, sha) {
 			return "", false
 		}
 		return proof.Lookup(content, sha, check)

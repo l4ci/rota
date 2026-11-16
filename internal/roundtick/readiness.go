@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -55,7 +56,7 @@ func ReadinessOf(in ReadinessInput) Readiness {
 			}
 		}
 	}
-	if verdict.SameHead(in.BounceHead, in.Head) {
+	if strutil.SameSHA(in.BounceHead, in.Head) {
 		return Readiness{} // sent back and not yet pushed to
 	}
 	blocked := TrainBlocked(in.Records)

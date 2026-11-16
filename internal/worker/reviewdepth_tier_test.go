@@ -44,7 +44,7 @@ func tierRepo(t *testing.T, files ...string) string {
 // and never lifted by scope drift; small caps at light; a label, a Door line
 // or a risky path keeps the policy's depth.
 func TestResolveReviewDepthTier(t *testing.T) {
-	docs := change.Policy{DocsPaths: change.DefaultDocsPaths}
+	docs := change.Policy{DocsPaths: testDocsPaths}
 	full, _ := config.ParseReviewPolicy("full")
 	light, _ := config.ParseReviewPolicy("light")
 	labelled, _ := config.ParseReviewPolicy(nil)
@@ -65,14 +65,14 @@ func TestResolveReviewDepthTier(t *testing.T) {
 	}{
 		{"docs under full and drift", []string{"README.md", "docs/a.md"}, full, docs, "", nil, config.DepthNone, reviewpolicy.SignalTier, "docs-only change (tier docs)"},
 		{"docs with a one-way door", []string{"README.md"}, light, docs, "Door: one-way.", nil, config.DepthFull, reviewpolicy.SignalDoor, "Door: one-way"},
-		{"docs with a risky path", []string{"docs/a.md"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, RiskyPaths: []string{"docs/**"}}, "", nil, config.DepthFull, reviewpolicy.SignalDefault, "default depth"},
+		{"docs with a risky path", []string{"docs/a.md"}, full, change.Policy{DocsPaths: testDocsPaths, RiskyPaths: []string{"docs/**"}}, "", nil, config.DepthFull, reviewpolicy.SignalDefault, "default depth"},
 		{"docs with a full label", []string{"README.md"}, labelled, docs, "", []string{"risk:high"}, config.DepthFull, reviewpolicy.SignalLabel, "risk:high"},
 		{"docs with a light label", []string{"README.md"}, labelled, docs, "", []string{"review:light"}, config.DepthLight, reviewpolicy.SignalLabel, "review:light"},
-		{"small with drift", []string{"x.go"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthLight, reviewpolicy.SignalTier, "small change (tier small)"},
+		{"small with drift", []string{"x.go"}, full, change.Policy{DocsPaths: testDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthLight, reviewpolicy.SignalTier, "small change (tier small)"},
 		{"docs under light, default policy", []string{"docs/a.md"}, light, docs, "", nil, config.DepthNone, reviewpolicy.SignalTier, "tier docs"},
 		{"docs with a paths rule", []string{"docs/sec/a.md"}, withPaths, docs, "", nil, config.DepthFull, reviewpolicy.SignalPath, "docs/sec/**"},
-		{"small with a binary file", []string{"x.go", "lib.bin"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthFull, reviewpolicy.SignalDefault, "default depth"},
-		{"risky path under light", []string{"internal/x.go"}, light, change.Policy{DocsPaths: change.DefaultDocsPaths, RiskyPaths: []string{"internal/**"}}, "", nil, config.DepthFull, reviewpolicy.SignalRisky, "change.riskyPaths"},
+		{"small with a binary file", []string{"x.go", "lib.bin"}, full, change.Policy{DocsPaths: testDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthFull, reviewpolicy.SignalDefault, "default depth"},
+		{"risky path under light", []string{"internal/x.go"}, light, change.Policy{DocsPaths: testDocsPaths, RiskyPaths: []string{"internal/**"}}, "", nil, config.DepthFull, reviewpolicy.SignalRisky, "change.riskyPaths"},
 		{"risky path with no other tier config", []string{"internal/x.go"}, light, change.Policy{RiskyPaths: []string{"internal/**"}}, "", nil, config.DepthFull, reviewpolicy.SignalRisky, "change.riskyPaths"},
 		{"tiers off", []string{"README.md"}, light, change.Policy{}, "", nil, config.DepthFull, reviewpolicy.SignalScopeDrift, "README.md"},
 	}
@@ -108,3 +108,6 @@ func TestResolveReviewDepthTier(t *testing.T) {
 		t.Fatalf("bad change policy: %+v %v", got, err)
 	}
 }
+
+// testDocsPaths mirrors the change.docsPaths default in internal/config/keys.go.
+var testDocsPaths = []string{"*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"}
