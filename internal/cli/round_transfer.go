@@ -12,7 +12,8 @@ import (
 func roundTransfer(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", "a roster slot, or human")
 	note := fs.String("note-file", "", "what is done and what is next, or the criteria audit at the bounce cap (- for stdin)")
-	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the receiver (- for stdin)")
+	body := fs.String("settled-file", "", "settled answers, passed verbatim to the receiver; default: the ones the original assign recorded (- for stdin)")
+	fs.StringVar(body, "body-file", "", "deprecated alias for --settled-file")
 	tier := fs.String("tier", "", "receiver's tier: light, standard or heavy (default round.tier)")
 	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
 	kind := fs.String("kind", "", "receiver's harness kind: "+harness.KindList()+" (default the issue's harness: label, then round.harnesses, then slot kind, else claude)")
@@ -41,7 +42,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		}
 		var decisions string
 		if *body != "" {
-			if decisions, err = readBodyText(c, "body-file", *body, ExitUsage); err != nil {
+			if decisions, err = readBodyText(c, "settled-file", *body, ExitUsage); err != nil {
 				return Result{}, err
 			}
 		}

@@ -48,7 +48,7 @@ func TestRoundNeedsYouReservedFilingAndReclaim(t *testing.T) {
 		t.Errorf("reclaiming a stale remote claim needs human approval: %d %s %s", code, out, stderr)
 	}
 	root, deps = roundFixture(t, nil)
-	if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Record{Source: bugreport.SourceAgent, Summary: "Wrong refusal"}, time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "Wrong refusal"}, time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	code, out, stderr = rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")

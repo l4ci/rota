@@ -268,9 +268,10 @@ SITE_DOCS = "https://volkerotto.net" + BASE
 SITE_ROOT = "https://volkerotto.net/rota/"
 
 
-def publish_agent_files(site):
-    """Copy llms.txt raw to <site>/rota/; fail on a docs link that is no page."""
+def build_agent_files():
+    """Read the agent files raw; fail on a docs link that is no page. Writes nothing."""
     pages = {permalink(r) for r in MD}
+    files = {}
     for name in AGENT_FILES:
         with open(os.path.join(REPO, name), encoding="utf-8") as f:
             text = f.read()
@@ -282,9 +283,8 @@ def publish_agent_files(site):
                     sys.exit("%s: link to no docs page: %s" % (name, url))
             elif url[len(SITE_ROOT):] not in AGENT_FILES:
                 sys.exit("%s: link to an unknown site path: %s" % (name, url))
-        os.makedirs(os.path.join(site, "rota"), exist_ok=True)
-        with open(os.path.join(site, "rota", name), "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
+        files[name] = text
+    return files
 
 
 def parse_nav():
@@ -348,20 +348,15 @@ def main():
     out_docs = os.path.join(site, "rota", "docs")
     nav_path = os.path.join(site, "_data", "rota", "nav.yml")
     data_dir = os.path.dirname(nav_path)
-    shutil.rmtree(out_docs, ignore_errors=True)
-    for name in ("nav.yml", "skills.json", "chains.json"):
-        if os.path.exists(os.path.join(data_dir, name)):
-            os.remove(os.path.join(data_dir, name))
-    os.makedirs(os.path.dirname(nav_path), exist_ok=True)
+    # Phase one: build every output in memory. Each failure exits here, before
+    # the site is touched.
+    pages = {}
     for rel in MD:
-        dst = os.path.join(out_docs, out_rel(rel))
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        with open(dst, "w", encoding="utf-8", newline="\n") as f:
-            f.write(convert(rel))
+        pages[os.path.join(out_docs, out_rel(rel))] = convert(rel).encode("utf-8")
+    copies = {}
     for rel in OTHER:
-        dst = os.path.join(out_docs, rel)
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copyfile(os.path.join(DOCS, rel), dst)
+        with open(os.path.join(DOCS, rel), "rb") as f:
+            copies[os.path.join(out_docs, rel)] = f.read()
     groups = parse_nav()
     simple = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ]*$")
     y = []
@@ -372,14 +367,35 @@ def main():
             y.append("    - title: " + (t if simple.match(t) else q(t)))
             y.append("      url: " + u)
             y.append("      desc: " + q(d))
-    with open(nav_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(y) + "\n")
+    nav = "\n".join(y) + "\n"
     skills, chains = skill_data()
+    data = {}
     for name, val in (("skills.json", skills), ("chains.json", chains)):
+        data[name] = json.dumps(val, indent=1, ensure_ascii=False, sort_keys=True) + "\n"
+    agent_files = build_agent_files()
+    # Phase two: delete the generated paths and write.
+    shutil.rmtree(out_docs, ignore_errors=True)
+    for name in ("nav.yml", "skills.json", "chains.json"):
+        if os.path.exists(os.path.join(data_dir, name)):
+            os.remove(os.path.join(data_dir, name))
+    os.makedirs(os.path.dirname(nav_path), exist_ok=True)
+    for dst, text in pages.items():
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text.decode("utf-8"))
+    for dst, content in copies.items():
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(content)
+    with open(nav_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(nav)
+    for name, text in data.items():
         with open(os.path.join(data_dir, name), "w", encoding="utf-8", newline="\n") as f:
-            json.dump(val, f, indent=1, ensure_ascii=False, sort_keys=True)
-            f.write("\n")
-    publish_agent_files(site)
+            f.write(text)
+    for name, text in agent_files.items():
+        os.makedirs(os.path.join(site, "rota"), exist_ok=True)
+        with open(os.path.join(site, "rota", name), "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
     navurls = reachable_pages({u for _, items in groups for _, u, _ in items})
     for rel in MD:
         if permalink(rel) not in navurls:

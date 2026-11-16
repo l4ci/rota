@@ -61,11 +61,8 @@ type CLI struct {
 }
 
 var (
-	reSecondary = regexp.MustCompile(`(?i)secondary rate limit|abuse detection`)
-	rePrimary   = regexp.MustCompile(`(?i)api rate limit exceeded|http 429|429 too many requests|rate limit exceeded`)
-	reAuth      = regexp.MustCompile(`(?i)gh auth login|glab auth login|not logged in|http 401|401 unauthorized`)
-	reLimitGH   = regexp.MustCompile(`^-L\d+$`)
-	reLimitGL   = regexp.MustCompile(`^-P\d+$`)
+	reLimitGH = regexp.MustCompile(`^-L\d+$`)
+	reLimitGL = regexp.MustCompile(`^-P\d+$`)
 )
 
 func (c *CLI) exec() Exec {
@@ -384,10 +381,10 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		return Result{}, Unavailable("%s failed twice: %s", cli, strings.TrimSpace(string(r.Stderr)))
 	}
 	for try := 1; try <= 2 && r.ExitCode != 0; try++ {
-		if reSecondary.Match(r.Stderr) {
+		if secondaryLimit.Match(r.Stderr) {
 			return Result{}, rateLimited("%s secondary rate limit — stopped; wait several minutes before retrying", c.Provider)
 		}
-		if !rePrimary.Match(r.Stderr) {
+		if !stderrIs(causeRateLimited, r.Stderr) {
 			break
 		}
 		if try == 2 {
@@ -401,7 +398,7 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		}
 	}
 	if r.ExitCode != 0 {
-		if reAuth.Match(r.Stderr) {
+		if stderrIs(causeUnauthorized, r.Stderr) {
 			return Result{}, Unavailable("%s is not authenticated; run '%s auth login'", cli, cli)
 		}
 		return r, nil

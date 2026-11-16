@@ -47,7 +47,7 @@ func brAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		rec, err := bugreport.Add(c.Context(), c.deps().Git, root, bugreport.Record{Source: bugreport.SourceAgent, Verb: *verb,
+		rec, err := bugreport.Add(c.Context(), c.deps().Git, root, brRedactEnv(c, root), bugreport.Record{Source: bugreport.SourceAgent, Verb: *verb,
 			Summary: *summary, Expected: *expected, Harness: *harness, Model: *model}, c.deps().Now())
 		if err != nil {
 			return Result{}, err
@@ -313,7 +313,7 @@ func recordMistake(c *Ctx, e *Error) {
 	if err != nil {
 		return
 	}
-	_, _ = bugreport.Add(c.Context(), c.deps().Git, root, bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: c.verbArgs,
+	_, _ = bugreport.Add(c.Context(), c.deps().Git, root, brRedactEnv(c, root), bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: c.verbArgs,
 		Exit: e.Exit, Error: e.Message}, c.deps().Now())
 }
 

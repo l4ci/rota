@@ -48,7 +48,4 @@ git -C "$GR" worktree remove --force "$IS/rota-train-abc123/tree"
 git -C "$GR" worktree remove --force "$IS/rota-ci-def456/tree"
 pass "worktree guard ignores rota's scratch trees and still flags any other worktree"
 
-python3 "$TESTDIR/runner_leak_test.py" || fail "runner checkout guard regression"
-pass "runner preserves concurrent edits, deletions and merges across overlapping shards"
-
 trap 'rm -rf "$TMP"' EXIT

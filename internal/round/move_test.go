@@ -65,7 +65,10 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 
 // newMoveFx is a started round (ben and dana, pid 100 holds the lease) with a
 // bare origin, issue 12 assigned to ben and a commit on ben's branch.
-func newMoveFx(t *testing.T) *moveFx {
+func newMoveFx(t *testing.T) *moveFx { return newMoveFxN(t, 2) }
+
+// newMoveFxN is newMoveFx with n roster slots.
+func newMoveFxN(t *testing.T, n int) *moveFx {
 	t.Helper()
 	f := &moveFx{now: time.Now(), host: &hostFake{}, forge: &fakeRemote{comments: map[string][]string{}}}
 	f.be = f.forge
@@ -106,7 +109,9 @@ func newMoveFx(t *testing.T) *moveFx {
 	f.set, _ = roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), os.TempDir()))
 	f.env.Round, f.env.HolderPID = f.set, 100
 
-	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone)); err != nil {
+	so := startOpts(roundcfg.ScopeMilestone)
+	so.DefaultNum = n
+	if _, err := f.env.Start(bg, f.root, so); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.assign("12", "ben"); err != nil {

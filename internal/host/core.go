@@ -273,6 +273,26 @@ func coreProgram(v coreHandle, t coreTerminal) error {
 	}
 	return nil
 }
+
+// coreReadyWait is how many seconds a send waits for a starting session.
+const coreReadyWait = 60
+
+// coreStarting reports a session that has not yet reached a settled native
+// state: no status yet, or one that is not idle, done, working or blocked.
+func coreStarting(t coreTerminal) bool {
+	if !t.Reported || t.Status == nil {
+		return true
+	}
+	if !harness.CoreStatusSupported(t.Status.App) {
+		return false // an unsupported harness never becomes ready by waiting
+	}
+	switch t.Status.State {
+	case "idle", "done", "working", "blocked":
+		return false
+	}
+	return true
+}
+
 func coreReady(t coreTerminal) error {
 	if !t.Reported || t.Status == nil || !harness.CoreStatusSupported(t.Status.App) {
 		return fmt.Errorf("Core worker has not reported supported native OSC 7501 status; inspect the worker terminal for a startup or authentication prompt")
@@ -679,7 +699,28 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 			}
 			return deliveryError(prior.State)
 		}
-		if e = coreReady(t); e != nil {
+		// A session still starting is not an unknown delivery: nothing has been
+		// typed yet, so wait for it to report ready and send then. One that never
+		// gets there leaves a safe-to-resend failure.
+		for i := 0; ; i++ {
+			if cerr := ctx.Err(); cerr != nil {
+				return fmt.Errorf("%w: %v", ErrNotSubmitted, cerr)
+			}
+			if e = coreReady(t); e == nil || !coreStarting(t) {
+				break
+			}
+			if i >= coreReadyWait {
+				return fmt.Errorf("%w: %v after %ds", ErrNotSubmitted, e, coreReadyWait)
+			}
+			h.d.Sleep(time.Second)
+			if e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t); e != nil {
+				return e
+			}
+			if e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); e != nil {
+				return e
+			}
+		}
+		if e != nil {
 			return e
 		}
 		if e = h.guard(ctx, v, t, screen.Text); e != nil {

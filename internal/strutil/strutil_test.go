@@ -154,3 +154,28 @@ func TestHumanBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestSameSHA(t *testing.T) {
+	full := "bbbbbbb0123456789012345678901234567890a"
+	for _, c := range []struct {
+		name, a, b string
+		want       bool
+	}{
+		{"equal full", full, full, true},
+		{"short vs full", "bbbbbbb", full, true},
+		{"full vs short", full, "bbbbbbb", true},
+		{"longer vs shorter abbreviation", "bbbbbbb0123", "bbbbbbb01", true},
+		{"mismatch", "aaaaaaa", full, false},
+		{"mismatch same length", "bbbbbbc", "bbbbbbb", false},
+		{"empty a", "", full, false},
+		{"empty b", full, "", false},
+		{"both empty", "", "", false},
+		{"short below minimum", "bbb", full, false},
+		{"both short equal", "bbb", "bbb", false},
+		{"six chars", "bbbbbb", full, false},
+	} {
+		if got := SameSHA(c.a, c.b); got != c.want {
+			t.Errorf("%s: SameSHA(%q, %q) = %v, want %v", c.name, c.a, c.b, got, c.want)
+		}
+	}
+}

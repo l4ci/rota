@@ -70,3 +70,24 @@ func TestAutopilotStopsAndFailsAsTypedResults(t *testing.T) {
 		t.Fatalf("tick failure: %+v", res)
 	}
 }
+
+// A stop seen mid-tick comes back as a nil error with Result.Stopped set: the
+// watch stops at once and keeps that tick, so the merges it did are reported.
+func TestAutopilotStopsOnAMidTickStop(t *testing.T) {
+	fc := &fakeClock{now: time.Unix(0, 0)}
+	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, empty)
+	ticks := 0
+	res, err := RunAutopilot(context.Background(), env, Opts{Heartbeat: time.Minute, Poll: time.Minute}, AutopilotOpts{
+		Tick: func() (roundtick.Result, error) {
+			ticks++
+			return roundtick.Result{Stopped: roundtick.ErrStopped, Did: []roundtick.Action{{Action: roundtick.ActionMerge, Target: "#7"}}}, nil
+		},
+		Poll: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reason != ReasonStopped || res.Tick == nil || len(res.Tick.Did) != 1 || ticks != 1 {
+		t.Fatalf("mid-tick stop: reason %q tick %+v after %d ticks", res.Reason, res.Tick, ticks)
+	}
+}

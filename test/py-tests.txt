@@ -1,0 +1,9 @@
+# The Python harness tests (test/*_test.py), one per line. test/py-tests.sh runs
+# them; test/gate.sh, test/fast.sh and CI all go through it, and `--check` (run
+# by doclint) fails on a test/*_test.py that is not listed here (#3420).
+fast_tree_scans_test.py
+gate_retry_test.py
+runner_leak_test.py
+site_sync_test.py
+validate_skills_test.py
+video_catalog_test.py

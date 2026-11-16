@@ -88,9 +88,9 @@ else:
     print("controlled " + name)
 raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
 ''')
-        for name in ("doclint", "grep-gate", "gofmt"):
+        for name in ("doclint", "grep-gate", "gofmt", "py-tests"):
             (self.repo / "test" / (name + ".sh")).write_text(
-                'exec python3 "$CONTROL/check.py" ' + name.replace("grep-gate", "grepgate") + '\n')
+                'exec python3 "$CONTROL/check.py" ' + name.replace("grep-gate", "grepgate").replace("py-tests", "pytests") + '\n')
         (self.repo / "test/validate-skills.py").write_text(
             'import os, runpy, sys\nsys.argv = ["check", "validate"]\n'
             'runpy.run_path(os.environ["CONTROL"] + "/check.py", run_name="__main__")\n')
@@ -307,7 +307,7 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                 self.assertNotIn("FLAKY", result.stdout)
 
     def test_deterministic_checks_are_never_retried(self):
-        for check in ("gofmt", "vet", "doclint", "grepgate", "validate"):
+        for check in ("gofmt", "vet", "doclint", "pytests", "grepgate", "validate"):
             with self.subTest(check=check):
                 for path in self.control.glob("*.count"):
                     path.unlink()

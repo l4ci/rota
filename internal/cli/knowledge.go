@@ -74,7 +74,7 @@ func knErr(err error) error {
 		return nil
 	case errors.Is(err, knowledge.ErrScope), errors.Is(err, knowledge.ErrNotFound):
 		return Resolution("%s", trimSentinel(err))
-	case errors.Is(err, knowledge.ErrExists), errors.Is(err, knowledge.ErrAliasCollision), errors.Is(err, knowledge.ErrMultiMatch):
+	case errors.Is(err, knowledge.ErrExists), errors.Is(err, knowledge.ErrInvalid), errors.Is(err, knowledge.ErrAliasCollision), errors.Is(err, knowledge.ErrMultiMatch):
 		return Refused("%s", trimSentinel(err))
 	case errors.Is(err, knowledge.ErrAmbiguous), errors.Is(err, knowledge.ErrManifest):
 		return Usage("%s", trimSentinel(err))

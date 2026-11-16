@@ -108,3 +108,16 @@ func HumanBytes(n uint64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
+
+// MinSHA is the shortest abbreviation SameSHA accepts as naming a commit.
+const MinSHA = 7
+
+// SameSHA reports whether two commit ids name the same commit. Ids may be
+// abbreviated, so either may be the prefix of the other, but each must carry at
+// least MinSHA characters: an empty or very short id never matches.
+func SameSHA(a, b string) bool {
+	if len(a) < MinSHA || len(b) < MinSHA {
+		return false
+	}
+	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}

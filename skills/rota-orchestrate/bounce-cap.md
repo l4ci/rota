@@ -6,7 +6,7 @@ A bounce you send by hand counts: run `rota round bounce <issue> --head <pr-head
 
 1. **Audit the criteria.** Read the issue's `## Acceptance` from the tracker (`gh issue view`), never from memory. For each criterion write at most three lines: is it checkable as written, does it have one reading, and (if not) the second reading or the missing check. Write the audit to a file.
 2. **Any criterion ambiguous or uncheckable**: hand the item to the human with the audit as the note: `rota round transfer <issue> --to human --cap-reason ambiguous-criteria --note-file <audit>`. A stronger tier would build the same ambiguity a fourth time.
-3. **Every criterion checkable with one reading**: a stronger worker: `rota round transfer <issue> --to <free slot> --tier <heavy|standard> --tier-reason "<why>" --cap-reason tier --body-file <gap>`. The count stays with the item, so a second failure at the higher tier goes to the human.
+3. **Every criterion checkable with one reading**: a stronger worker: `rota round transfer <issue> --to <free slot> --tier <heavy|standard> --tier-reason "<why>" --cap-reason tier --settled-file <gap>`. The count stays with the item, so a second failure at the higher tier goes to the human.
 
 `--cap-reason` lands in the ledger row of the transfer, and `rota round summary` counts both reasons. The gate never counts or parks; at the cap `round bounce` refuses and the review relay escalates, and you make the transfer. Do the audit by hand; no model runs it.
 

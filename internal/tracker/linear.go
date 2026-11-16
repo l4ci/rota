@@ -147,18 +147,17 @@ func gqlFailure(op string, errs []gqlError) *Error {
 	if u := e.Extensions.UserPresentableMessage; u != "" && u != e.Message {
 		msg += " (" + u + ")"
 	}
-	code, typ := strings.ToUpper(e.Extensions.Code), strings.ToLower(e.Extensions.Type)
-	switch {
-	case code == "RATELIMITED" || typ == "ratelimited":
-		return rateLimited("%s", msg)
-	case code == "AUTHENTICATION_ERROR" || typ == "authentication error":
-		return Unavailable("%s (check the connection's API key: rota connect test)", msg)
-	case code == "FORBIDDEN" || typ == "forbidden":
-		return Unavailable("%s (check the API key's access to this team: rota connect test)", msg)
-	case strings.Contains(strings.ToLower(e.Message), "not found"):
-		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
+	r := byGQL(e.Extensions.Code, e.Extensions.Type, e.Message)
+	if r == nil {
+		return failed("%s", msg)
 	}
-	return failed("%s", msg)
+	switch r.cause {
+	case causeUnauthorized:
+		msg += " (check the connection's API key: rota connect test)"
+	case causeForbidden:
+		msg += " (check the API key's access to this team: rota connect test)"
+	}
+	return r.err(msg)
 }
 
 // query runs a read-only operation and decodes its data into out.

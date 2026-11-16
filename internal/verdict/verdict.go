@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 	"io"
 	"os"
 	"slices"
@@ -656,17 +657,10 @@ func Latest(list []Record, kind string) (Record, bool) {
 	return Record{}, false
 }
 
-// SameHead reports whether two commit ids name the same commit. Ids may be
-// short or full, so either may be the prefix of the other. An empty id never
-// matches.
-func SameHead(a, b string) bool {
-	return a != "" && b != "" && (strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
-}
-
 // AtHead reports whether rec was recorded at head. A record with no sha, or an
 // unknown head, is never at head.
 func AtHead(rec Record, head string) bool {
-	return SameHead(rec.Sha, head)
+	return strutil.SameSHA(rec.Sha, head)
 }
 
 // Recorded lists the review kinds (ReviewSpec, ReviewQuality) with a verdict
@@ -700,18 +694,6 @@ func CrossAtBy(list []Record, head string, accept func(harness string) bool) (Re
 func LensAt(list []Record, kind, head string) (Record, bool) {
 	r, ok := Latest(ForHead(list, head), kind)
 	return r, ok && AtHead(r, head)
-}
-
-// LensFails are the lens reviews whose newest record is FAIL, in LensKinds
-// order: lens reviews that block and are relayed like a review FAIL.
-func LensFails(list []Record) []Record {
-	var out []Record
-	for _, k := range LensKinds {
-		if r, ok := Latest(list, k); ok && r.Verdict == Fail {
-			out = append(out, r)
-		}
-	}
-	return out
 }
 
 // LastReviewSet lists the review kinds recorded at the commit of the branch's

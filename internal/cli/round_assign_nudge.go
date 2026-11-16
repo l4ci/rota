@@ -88,7 +88,10 @@ func freeSlotAssignment(c *Ctx, root string) *assignNudge {
 	}
 	env := roundEnv(c, c.Context(), root)
 	// Avoid reading the tracker when every slot is busy.
-	slot, ok := env.FreeSlot(c.Context(), reg, set)
+	slot, ok, warns := env.FreeSlot(c.Context(), reg, set)
+	for _, w := range warns {
+		c.Warn("%s", w)
+	}
 	if !ok {
 		return nil
 	}

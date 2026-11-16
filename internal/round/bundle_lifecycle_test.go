@@ -112,21 +112,6 @@ func TestTransferMemberToHumanDropsIt(t *testing.T) {
 	}
 }
 
-func TestTransferBundleLeadToSlotRefused(t *testing.T) {
-	f := newMoveFx(t)
-	f.bundled(t, "15", "16")
-	notes := len(f.be.comments["12"])
-	_, err := f.transfer("12", "dana", nil)
-	if blockedBy(t, err) != blockedby.Bundle || !strings.Contains(err.Error(), "#12 leads a bundle with #15, #16") ||
-		!strings.Contains(err.Error(), "transfer each member to the human first") {
-		t.Fatalf("%v", err)
-	}
-	s := f.slot("ben")
-	if s.Task() != "12" || len(s.Bundle()) != 2 || f.be.claims["12"] != "ben@1" || len(f.be.comments["12"]) != notes {
-		t.Errorf("nothing moves: %v %v", s, f.be.claims)
-	}
-}
-
 func TestTransferMemberToSlotRefused(t *testing.T) {
 	f := newMoveFx(t)
 	f.bundled(t, "15")

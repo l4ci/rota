@@ -89,13 +89,29 @@ RC=0; OUT="$(python3 "$SSK/scripts/site-sync.py" "$TMP/sitekey-out" 2>&1)" || RC
   || fail "site-sync did not exit with the validator message on a page missing order (rc $RC): $OUT"
 pass "site-sync exits with skills-docs' message on a skill page missing a required key"
 
+# ── Python harness tests come from one list (#3420) ──
+# test/py-tests.txt is the one registration: test/py-tests.sh runs it, test/gate.sh
+# and test/fast.sh both call that runner, and `--check` fails on a test/*_test.py
+# that is not listed (or a listed file that is gone).
+bash "$TESTDIR/py-tests.sh" --check || fail "test/py-tests.txt does not match test/*_test.py"
+grep -q 'py-tests\.sh' "$TESTDIR/gate.sh" || fail "test/gate.sh does not run test/py-tests.sh"
+grep -q 'py-tests\.sh' "$TESTDIR/fast.sh" || fail "test/fast.sh does not run test/py-tests.sh"
+PY="$TMP/pytests"
+mkdir -p "$PY/test"
+cp "$TESTDIR/py-tests.sh" "$TESTDIR/py-tests.txt" "$PY/test/"
+for t in $(grep -v '^#' "$TESTDIR/py-tests.txt"); do : > "$PY/test/$t"; done
+: > "$PY/test/new_harness_test.py"
+RC=0; OUT="$(bash "$PY/test/py-tests.sh" --check 2>&1)" || RC=$?
+[ "$RC" != 0 ] && grep -qF "test/new_harness_test.py is not listed in test/py-tests.txt" <<<"$OUT" \
+  || fail "py-tests --check missed an unlisted test file (rc $RC): $OUT"
+rm "$PY/test/new_harness_test.py"
+echo "gone_test.py" >> "$PY/test/py-tests.txt"
+RC=0; OUT="$(bash "$PY/test/py-tests.sh" --check 2>&1)" || RC=$?
+[ "$RC" != 0 ] && grep -qF "gone_test.py is listed in test/py-tests.txt but missing" <<<"$OUT" \
+  || fail "py-tests --check missed a listed file that is gone (rc $RC): $OUT"
+pass "the Python harness tests share one list, and --check fails on an unlisted or missing file"
+
 # ── site-sync generates the published video catalog (#2538) ──
-OUT="$(python3 "$TESTDIR/site_sync_test.py" 2>&1)" || fail "site-sync video catalog: $OUT"
-pass "site-sync generates published episodes and refreshes their media links"
-OUT="$(python3 "$TESTDIR/video_catalog_test.py" 2>&1)" || fail "video_catalog: $OUT"
-pass "video_catalog reads 32/64-bit mvhd and rejects a missing duration"
-OUT="$(python3 "$TESTDIR/validate_skills_test.py" 2>&1)" || fail "validate_skills import: $OUT"
-pass "validate-skills imports without running and exposes its checks"
 
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even

@@ -16,7 +16,7 @@ import (
 // either way, so callers tell masked and missing apart with errors.Is.
 func findRoot(dir string, masking bool) (string, error) {
 	if masking {
-		return rotatree.FindRoot(dir, repos.Rels)
+		return repos.FindRoot(dir)
 	}
 	if root, ok := rotatree.Find(dir); ok {
 		return root, nil

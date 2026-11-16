@@ -33,12 +33,21 @@ func coreFixture(t *testing.T) (Host, *coreFake) {
 		a, b := net.Pipe()
 		go f.serve(b)
 		return a, nil
-	}, Alive: func(int) bool { return false }, Tree: func(p int) []int { return []int{p} }}
+	}, Alive: func(int) bool { return false }, Tree: func(p int) []int { return []int{p} },
+		Sleep: func(time.Duration) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.slept++
+			if f.readyAfter > 0 && f.slept >= f.readyAfter {
+				f.status = "idle"
+			}
+		}}
 	return New(HerdrCore, d), f
 }
 
 type coreFake struct {
 	mu                 sync.Mutex
+	slept, readyAfter  int // Sleep calls so far; the one at which a starting session turns idle
 	screen, status     string
 	pid, turn          int
 	labels             map[string]string
@@ -1155,5 +1164,44 @@ func TestCoreAdapterConfirmationWithoutReceipt(t *testing.T) {
 				t.Fatalf("confirmation sent input: %d sends", f.sends)
 			}
 		})
+	}
+}
+
+// A relay sent while the session still reports a boot state waits for it to
+// become ready and is then delivered once, instead of failing as unknown.
+func TestCoreAdapterSendWaitsForStartingSession(t *testing.T) {
+	h, f := coreFixture(t)
+	s := coreSpawn(t, h)
+	p := coreBrief(t, "relay to a starting session")
+	f.mu.Lock()
+	f.status, f.readyAfter = "starting", 3
+	f.mu.Unlock()
+	err := h.Send(context.Background(), "dana", s, p)
+	if errors.Is(err, ErrDeliveryUnknown) || errors.Is(err, ErrMaybeSubmitted) {
+		t.Fatalf("relay to a starting session = %v, must not be an unknown delivery", err)
+	}
+	if !errors.Is(err, ErrSubmitted) {
+		t.Fatalf("relay = %v, want delivered once the session is ready", err)
+	}
+	if f.sends != 1 {
+		t.Fatalf("accepted sends = %d, want 1", f.sends)
+	}
+}
+
+// A session that never becomes ready within the wait leaves nothing typed: the
+// failure is the safe-to-resend class, not an unknown delivery.
+func TestCoreAdapterSendNeverReadyIsNotSubmitted(t *testing.T) {
+	h, f := coreFixture(t)
+	s := coreSpawn(t, h)
+	p := coreBrief(t, "relay to a stuck session")
+	f.mu.Lock()
+	f.status = "starting"
+	f.mu.Unlock()
+	err := h.Send(context.Background(), "dana", s, p)
+	if !errors.Is(err, ErrNotSubmitted) || errors.Is(err, ErrMaybeSubmitted) {
+		t.Fatalf("relay = %v, want not submitted", err)
+	}
+	if f.sends != 0 {
+		t.Fatalf("sends = %d, want 0", f.sends)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
@@ -531,7 +532,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		r, err := repos.Which(cwd)
-		var masked *repos.MaskedError
+		var masked *rotatree.MaskedError
 		switch {
 		case err == nil:
 			return Result{Data: jsonx.Obj("name", r.Name, "path", r.Path), Text: r.Name}, nil
@@ -541,7 +542,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%s", masked.Error()).WithHint("remove " + masked.Stray + " or run from the umbrella root")
 		case errors.Is(err, repos.ErrNotGit):
 			return Result{}, Resolution("not inside a git repo")
-		case errors.Is(err, repos.ErrNoUmbrella):
+		case errors.Is(err, rotatree.ErrNoRoot):
 			return Result{}, Resolution("no umbrella: no .rota/ here or in any parent")
 		}
 		return Result{}, Resolution("not inside a registered sub-repo")
