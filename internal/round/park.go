@@ -29,6 +29,15 @@ type Parked struct {
 	Moved    bool   // the worktree was switched to park/<agent>
 }
 
+// isAncestor asks git.IsAncestorWith through e.Git: an unreadable ref is an
+// error, never "not an ancestor".
+func (e Env) isAncestor(ctx context.Context, dir, ancestor, descendant string) (bool, error) {
+	return git.IsAncestorWith(func(args ...string) (int, error) {
+		res, err := e.Git(ctx, dir, args...)
+		return res.ExitCode, err
+	}, ancestor, descendant)
+}
+
 func (e Env) gitOut(ctx context.Context, dir string, args ...string) (string, string, int) {
 	res, err := e.Git(ctx, dir, args...)
 	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode

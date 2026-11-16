@@ -170,7 +170,11 @@ func (t *trainRun) integrationStart(p *trainPlanning) (string, bool, error) {
 	if it.Assembled == "" {
 		return "", true, fail(exitcode.ExitRefused, fmt.Sprintf("%s exists on %s but rota has no record of it; name a new integration", it.Branch, p.rem()))
 	}
-	if _, code := e.git(t.root, "merge-base", "--is-ancestor", it.Assembled, tip); code != 0 {
+	descends, err := e.isAncestor(t.root, it.Assembled, tip)
+	if err != nil {
+		return "", true, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with the tip rota assembled (%s): %v", it.Branch, strutil.ShortSHA(it.Assembled), err))
+	}
+	if !descends {
 		return "", true, fail(exitcode.ExitRefused, fmt.Sprintf("%s at %s does not descend from the tip rota assembled (%s): it was rewritten", it.Branch, strutil.ShortSHA(tip), strutil.ShortSHA(it.Assembled)))
 	}
 	return tip, false, nil
@@ -183,7 +187,8 @@ func (t *trainRun) skipIntegrated(p *trainPlanning, start string) {
 	var ms []TrainMember
 	var heads []string
 	for i, m := range res.Members {
-		if _, code := t.e.git(t.root, "merge-base", "--is-ancestor", p.heads[i], start); code == 0 {
+		// An unreadable pin counts as not integrated: the member merges again.
+		if held, err := t.e.isAncestor(t.root, p.heads[i], start); err == nil && held {
 			res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATED %s — %s is already merged into %s", m.Target, strutil.ShortSHA(p.heads[i]), p.integration.Branch))
 			continue
 		}
@@ -238,7 +243,11 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		}
 	}
 	for j, m := range it.Members {
-		if _, code := e.git(t.root, "merge-base", "--is-ancestor", m.Head, tip); m.Pending && code == 0 {
+		// An unreadable head leaves the member pending.
+		if !m.Pending {
+			continue
+		}
+		if held, err := e.isAncestor(t.root, m.Head, tip); err == nil && held {
 			it.Members[j].Pending, it.Members[j].Conflicts = false, nil
 		}
 	}

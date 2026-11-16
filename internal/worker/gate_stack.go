@@ -155,7 +155,8 @@ func (e Env) baseMerges(root string, rec Integration, merged, base string) []str
 		if len(f) != 3 {
 			continue
 		}
-		if _, code := e.git(root, "merge-base", "--is-ancestor", f[2], base); code == 0 {
+		// A best-effort listing: a ref git cannot read is left out, like one not on base.
+		if onBase, err := e.isAncestor(root, f[2], base); err == nil && onBase {
 			found = append(found, f[0])
 		}
 	}

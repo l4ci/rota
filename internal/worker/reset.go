@@ -205,15 +205,14 @@ func (e Env) resetBase(root, slot, base string) (string, error) {
 	if _, code := e.git(root, "fetch", "-q", name, base); code != 0 {
 		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not fetch %s before checking slot '%s'; not resetting it", remote, slot))
 	}
-	_, code := e.git(root, "merge-base", "--is-ancestor", base, remote)
-	switch code {
-	case 0:
-		return remote, nil
-	case 1:
-		return base, nil
-	default:
+	behind, err := e.isAncestor(root, base, remote)
+	if err != nil {
 		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with %s before resetting slot '%s'", base, remote, slot))
 	}
+	if behind {
+		return remote, nil
+	}
+	return base, nil
 }
 
 // reapNote says what `pool reap` costs a slot and how to get one back. A

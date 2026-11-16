@@ -32,6 +32,15 @@ func (e Env) git(dir string, args ...string) (string, int) {
 	return e.runGit(e.Ctx, dir, args...)
 }
 
+// isAncestor asks git.IsAncestorWith through the worker's git adapter: a git that
+// did not run or could not read a ref is an error, never "not an ancestor".
+func (e Env) isAncestor(dir, ancestor, descendant string) (bool, error) {
+	return git.IsAncestorWith(func(args ...string) (int, error) {
+		_, code := e.git(dir, args...)
+		return code, nil
+	}, ancestor, descendant)
+}
+
 // runGit is the one git adapter of package worker: git on ctx, a failure to
 // start as exit 127, stdout trimmed of one trailing newline.
 func (e Env) runGit(ctx context.Context, dir string, args ...string) (string, int) {

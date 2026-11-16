@@ -74,7 +74,10 @@ func BindHead(run Runner, t HeadTarget, sha string) (string, error) {
 	}
 	if full != tip {
 		if pushed {
-			if behind, err := headOK(run, "merge-base", "--is-ancestor", tip, full); err != nil {
+			if behind, err := git.IsAncestorWith(func(args ...string) (int, error) {
+				res, err := run.Run(args...)
+				return res.ExitCode, err
+			}, tip, full); err != nil {
 				return "", err
 			} else if behind {
 				return "", &HeadError{Message: fmt.Sprintf("--sha %s is ahead of %s (%s): the remote-tracking ref is behind", sha, target, tip[:7]), Hint: "git fetch " + remote + ", then retry"}

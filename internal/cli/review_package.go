@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -131,17 +132,15 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 
 // reviewIsAncestor reports whether ancestor is reachable from ref.
 func reviewIsAncestor(c *Ctx, dir, ancestor, ref string) (bool, error) {
-	res, err := c.deps().Repo(dir).Run(c.Context(), "merge-base", "--is-ancestor", ancestor, ref)
+	ok, err := c.deps().Repo(dir).IsAncestor(c.Context(), ancestor, ref)
+	var ae *git.AncestryError
+	if errors.As(err, &ae) {
+		return false, Unavailable("git merge-base failed: exit %d", ae.ExitCode)
+	}
 	if err != nil {
 		return false, gitErr(err)
 	}
-	switch res.ExitCode {
-	case 0:
-		return true, nil
-	case 1:
-		return false, nil
-	}
-	return false, Unavailable("git merge-base failed: exit %d", res.ExitCode)
+	return ok, nil
 }
 
 // reviewPackageName turns a branch into a file stem: "nia/240-x" -> "nia-240-x".
