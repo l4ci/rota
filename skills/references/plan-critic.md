@@ -2,31 +2,31 @@
 
 Used by `/rota-plan` (Step 3, between the self-check and the confirm question) when the planning dial (`references/planning-dial.md`) picks level 4, the adversarial pass, or level 3 when the item has at least one `decision` comment. At levels 1-2, and at level 3 without a decision comment, the step does not run and the flow is unchanged.
 
-The critic is a fresh `standard` subagent (`references/subagent-dispatch.md`, *Subagent tiers*), or, at level 4 with `plan.criticHarness` set, a read-only run on another harness (*Another harness* below). It sees only the item and the proposal. It never sees the planning conversation, the user's redirects or your reasoning, so it cannot inherit your blind spots.
+The critic is a fresh `standard` subagent (`references/subagent-dispatch.md`, *Subagent tiers*), or, at level 4 with `plan.criticHarness` set, a read-only run on another harness (*Another harness* below). It sees only the item, the item's design when it has one, and the proposal. It never sees the planning conversation, the user's redirects or your reasoning, so it cannot inherit your blind spots.
 
 ## Dispatch
 
 Dispatch one read-only subagent through the current harness (`references/subagent-dispatch.md`). Pass paths and IDs, not pasted content:
 
-- **Inputs**: the item (`rota item show <ID>`, including its `## Acceptance` and `## Out of scope`), and the proposal saved to a scratch file. Nothing else.
-- **Return**: a short list of findings, at most 7, one per line, under the four headings below. Write `none` under a heading with nothing to report. Word budget 250.
+- **Inputs**: the item (`rota item show <ID>`, including its `## Acceptance` and `## Out of scope`), the proposal saved to a scratch file, and, when the item has a design (`rota design show <ID>` prints one), that design written to a scratch file (`rota design show <ID> > <scratch-design>`) and passed by path. Nothing else. With no design, pass no design path.
+- **Return**: a short list of findings, at most 7, one per line, under the four headings below, plus a fifth, `Consistency`, when a design was passed. Write `none` under a heading with nothing to report. Word budget 250. The design raises neither the finding cap nor the word budget.
 
 ## Another harness
 
 Only level 4 reads `plan.criticHarness` (`rota config show plan.criticHarness`). Level 3 with a `decision` comment always takes the same-harness subagent above, whatever the key says. Unset, or equal to the harness you run in, changes nothing: use the subagent.
 
-With `claude`, `codex` or `opencode` set (a different harness than yours), save the critic brief below to a scratch file and run it headless and read-only from the project root, as [`cross-harness-run.md`](cross-harness-run.md) says (command, account, token line, reading the output). The inputs and the return shape are the ones above: the item, written with `rota item show <ID> > <scratch-item-file>` and passed by path, and the proposal file, by path, nothing else. Write the token into a scratch copy of the proposal (`{ echo "Review token: <hex>"; cat <proposal>; } > <scratch-proposal>`) and pass that copy, never the planner's own file. The repo guard in `cross-harness-run.md` applies: a run that changed the repo is unavailable.
+With `claude`, `codex` or `opencode` set (a different harness than yours), save the critic brief below to a scratch file and run it headless and read-only from the project root, as [`cross-harness-run.md`](cross-harness-run.md) says (command, account, token line, reading the output). The inputs and the return shape are the ones above: the item, written with `rota item show <ID> > <scratch-item-file>` and passed by path, the item's design when it has one (`rota design show <ID> > <scratch-design-file>`, by path), and the proposal file, by path, nothing else. Write the token into a scratch copy of the proposal (`{ echo "Review token: <hex>"; cat <proposal>; } > <scratch-proposal>`) and pass that copy, never the planner's own file. The repo guard in `cross-harness-run.md` applies: a run that changed the repo is unavailable.
 
-Trim the reply to the return shape (at most 7 lines, four headings).
+Trim the reply to the return shape (at most 7 lines; four headings, five with a design).
 
-**Fallback.** When the run is unavailable (`cross-harness-run.md`, *Read the output*) or `<out>` does not hold the four headings, run the same-harness subagent instead and print one line: `plan critic: <harness> unavailable (<reason>), ran on the planning harness`. Never skip the critic silently. Do not retry the other harness.
+**Fallback.** When the run is unavailable (`cross-harness-run.md`, *Read the output*) or `<out>` does not hold the expected headings (four, five with a design), run the same-harness subagent instead and print one line: `plan critic: <harness> unavailable (<reason>), ran on the planning harness`. Never skip the critic silently. Do not retry the other harness.
 
 ## Critic brief
 
 ```
 Goal: argue against this plan before the user approves it.
 
-You get an item and a proposed plan. Read both. You have not seen how the plan was
+You get an item, a proposed plan and, when one is passed, the item's design. Read them all. You have not seen how the plan was
 made; judge only what is on the page. Report under these headings, one line per
 finding, each naming the task or Acceptance line it concerns:
 
@@ -39,9 +39,13 @@ finding, each naming the task or Acceptance line it concerns:
    RED.
 4. Weakened outcomes: any task whose Observable behavior is weaker than the acceptance
    it serves (a narrower input, a softer guarantee, a case dropped to make it fit).
+5. Consistency (only when a design file is passed; otherwise omit this heading): read item,
+   design and plan side by side. List each Acceptance criterion no plan task serves, each
+   plan task outside the item's scope or its `## Out of scope`, and each design decision
+   the plan contradicts or drops. Name the criterion, task or decision.
 
 Do not rewrite the plan, praise it or restate it. Do not edit files. Skip style.
-Prefer fewer, concrete findings to many vague ones.
+Prefer fewer, concrete findings to many vague ones. At most 7 findings in all, 250 words.
 ```
 
 ## Folding the findings in
