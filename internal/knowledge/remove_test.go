@@ -3,6 +3,7 @@ package knowledge
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -13,11 +14,15 @@ func TestRemove(t *testing.T) {
 		want            string
 		err             error
 		tierGone        bool
+		tierTitle       string
+		names           []string
 	}{
 		{name: "no final newline", in: "## A\n\n- **One** a\n- **Two** b", title: "Two", want: "## A\n\n- **One** a\n", tierGone: true},
 		{name: "prose after last bullet stays", in: "## A\n\n- **One** a\n- **Two** b\n  wrapped\n\nSome prose.\n\n## B\n", title: "Two", want: "## A\n\n- **One** a\n\nSome prose.\n\n## B\n", tierGone: true},
 		{name: "duplicate title refused", in: "## A\n\n- **One** a\n- **One** b\n", title: "One", err: ErrMultiMatch},
 		{name: "only bullet collapses blanks", in: "## A\n\n- **One** a\n\n## B\n", title: "One", want: "## A\n\n## B\n", tierGone: true},
+		{name: "title matches case-insensitively", in: "## A\n\n- **One** a\n- **Two** b\n", title: "tWo", want: "## A\n\n- **One** a\n", tierGone: true, tierTitle: "Two"},
+		{name: "case-only twins refused as ambiguous", in: "## A\n\n- **Two** a\n- **TWO** b\n", title: "two", err: ErrMultiMatch, names: []string{"Two", "TWO"}},
 		{name: "missing bullet", in: "## A\n\n- **One** a\n", title: "Nope", err: ErrNotFound},
 	}
 	for _, c := range cases {
@@ -34,6 +39,11 @@ func TestRemove(t *testing.T) {
 			if !errors.Is(err, c.err) {
 				t.Fatalf("err = %v, want %v", err, c.err)
 			}
+			for _, n := range c.names {
+				if !strings.Contains(err.Error(), "'"+n+"'") {
+					t.Errorf("error %q does not name %q", err, n)
+				}
+			}
 			got, _ := os.ReadFile(km)
 			want := c.want
 			if c.err != nil {
@@ -43,7 +53,11 @@ func TestRemove(t *testing.T) {
 				t.Errorf("KNOWLEDGE.md = %q, want %q", got, want)
 			}
 			e, _ := LoadSidecar(sc)
-			if _, ok, _ := e.Get("A", c.title); ok == (c.tierGone && c.err == nil) && c.title != "Nope" {
+			if c.tierTitle != "" {
+				if _, ok, _ := e.Get("A", c.tierTitle); ok {
+					t.Errorf("tier entry for %q survived", c.tierTitle)
+				}
+			} else if _, ok, _ := e.Get("A", c.title); ok == (c.tierGone && c.err == nil) && c.title != "Nope" && len(c.names) == 0 {
 				t.Errorf("tier entry for %q present=%v", c.title, ok)
 			}
 			if c.err != nil {

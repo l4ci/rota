@@ -508,19 +508,26 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 			return notFound("topic '%s' not found in %s", topic, km)
 		}
 		body := content[st:en]
-		var hits [][]int
-		for _, m := range bulletStart.FindAllStringSubmatchIndex(body, -1) {
-			if body[m[2]:m[3]] == title {
-				hits = append(hits, m)
-			}
+		all := bulletStart.FindAllStringSubmatchIndex(body, -1)
+		titles := make([]string, len(all))
+		for i, m := range all {
+			titles[i] = body[m[2]:m[3]]
 		}
+		hits := bulletfmt.SelectTitle(titles, title)
 		switch {
 		case len(hits) == 0:
 			return notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
 		case len(hits) > 1:
-			return fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s", ErrMultiMatch, len(hits), title, topic, km)
+			named := make([]string, len(hits))
+			for i, h := range hits {
+				named[i] = "'" + titles[h] + "'"
+			}
+			return fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s: %s", ErrMultiMatch, len(hits), title, topic, km, strings.Join(named, ", "))
 		}
-		a, b := hits[0][0], bulletEnd(body, hits[0][0])
+		// The tier entry is keyed by the stored title, not the typed one.
+		title = titles[hits[0]]
+		hit := all[hits[0]]
+		a, b := hit[0], bulletEnd(body, hit[0])
 		// A blank line on both sides collapses to one.
 		tail := content[en:]
 		if strings.HasSuffix(content[:st+a], "\n\n") {

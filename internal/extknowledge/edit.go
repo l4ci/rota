@@ -60,19 +60,23 @@ func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	want := strings.ToLower(strings.TrimSpace(in.Title))
-	hit := -1
-	for _, b := range e.bullets() {
-		if b.Title != "" && strings.ToLower(b.Title) == want {
-			if hit >= 0 {
-				return WriteResult{}, fmt.Errorf("%w: several bullets in %q are titled %q", ErrMultiMatch, in.Topic, in.Title)
-			}
-			hit = b.Line
-		}
+	bs := e.bullets()
+	titles := make([]string, len(bs))
+	for i, b := range bs {
+		titles[i] = b.Title
 	}
-	if hit < 0 {
+	hits := bulletfmt.SelectTitle(titles, in.Title)
+	if len(hits) > 1 {
+		named := make([]string, len(hits))
+		for i, h := range hits {
+			named[i] = fmt.Sprintf("%q", titles[h])
+		}
+		return WriteResult{}, fmt.Errorf("%w: several bullets in %q are titled %q: %s", ErrMultiMatch, in.Topic, in.Title, strings.Join(named, ", "))
+	}
+	if len(hits) == 0 {
 		return WriteResult{}, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, in.Topic, in.Title)
 	}
+	hit := bs[hits[0]].Line
 	end := bulletfmt.End(e.lines, hit)
 	rest := e.lines[end:]
 	// Removing the only line between two blank lines would leave two in a row.
