@@ -386,3 +386,11 @@ func TestAddRedactsHostnameAndRepoInTheStoredFile(t *testing.T) {
 		t.Errorf("stored log keeps host or repo: %s", raw)
 	}
 }
+
+func TestRedactHostnameKeepsWordPrefixes(t *testing.T) {
+	got := Redact("developer on dev and dev.local ran devtools", Env{Hostname: "dev"})
+	want := "developer on <host> and <host> ran devtools"
+	if got != want {
+		t.Fatalf("Redact = %q, want %q", got, want)
+	}
+}

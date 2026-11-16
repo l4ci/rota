@@ -419,7 +419,8 @@ func hostnameRE(host string) *regexp.Regexp {
 	if re, ok := hostRegexps.Load(host); ok {
 		return re.(*regexp.Regexp)
 	}
-	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(host) + `(?:\.[A-Za-z0-9-]+)*`)
+	// The trailing \b keeps a short hostname ("dev") from eating word prefixes ("developer").
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(host) + `(?:\.[A-Za-z0-9-]+)*\b`)
 	hostRegexps.Store(host, re)
 	return re
 }
