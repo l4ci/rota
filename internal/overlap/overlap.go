@@ -24,7 +24,6 @@
 package overlap
 
 import (
-	"path"
 	"sort"
 	"strings"
 
@@ -92,7 +91,8 @@ func dirCover(x, y string) (dir, covered string, ok bool) {
 }
 
 // Paths lists the paths two declared footprints share: equal paths, a path
-// matching the other's glob, or a file under the other's directory. For
+// matching the other's glob (pathglob.Match: `**` as a whole segment spans
+// any number of directories, unlike Shared's single-level flavour), or a file under the other's directory. For
 // changed-file lists use Both.
 func Paths(a, b []string) []string {
 	hit := map[string]bool{}
@@ -104,9 +104,9 @@ func Paths(a, b []string) []string {
 				hit[x] = true
 			} else if _, covered, ok := dirCover(x, y); ok {
 				hit[covered] = true
-			} else if ok, _ := path.Match(x, y); ok {
+			} else if pathglob.Match(x, y) {
 				hit[y] = true
-			} else if ok, _ := path.Match(y, x); ok {
+			} else if pathglob.Match(y, x) {
 				hit[x] = true
 			}
 		}
