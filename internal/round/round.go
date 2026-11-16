@@ -327,6 +327,10 @@ func slotFinished(r *Row, s *worker.Slot) bool {
 	if state == "" && s != nil {
 		state = s.State()
 	}
+	// A native done/idle on a slot dispatched since is the last turn's (#3311).
+	if worker.NativeDoneIsStale(s, state) {
+		return false
+	}
 	return worker.Parkable(state)
 }
 
