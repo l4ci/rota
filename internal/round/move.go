@@ -661,16 +661,18 @@ type transferRun struct {
 	// bundleDrop: the issue leaves a bundle for the human. promote also replaces
 	// its lead. holder is the slot (or queued record) keeping the remaining work.
 	bundleDrop, promote bool
-	lead                string
-	holder              *worker.Slot
-	holderRec           *worker.QueuedPR
-	to                  *worker.Slot
-	kind, kindSource    string
-	model, tier         string // model is the applied one
-	reason              string
-	decisions, brief    string
-	decisionContext     string
-	rnd                 int
+	// bundle is the members that move with the lead to a slot (not to the human).
+	bundle           []string
+	lead             string
+	holder           *worker.Slot
+	holderRec        *worker.QueuedPR
+	to               *worker.Slot
+	kind, kindSource string
+	model, tier      string // model is the applied one
+	reason           string
+	decisions, brief string
+	decisionContext  string
+	rnd              int
 
 	branch, oldClaim string
 	parked           Parked
@@ -763,8 +765,50 @@ func (o TransferOpts) checkFlags(set roundcfg.Settings) (toHuman bool, reason st
 }
 
 // planTransfer makes every refusal Transfer can make before it moves anything
-// and fills res as far as it got.
+// and fills res as far as it got. A bundle lead's move refused because the
+// receiver is busy names the members and the commands that do the move.
 func (e Env) planTransfer(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred) (*transferRun, error) {
+	var members []string
+	run, err := e.planTransferRun(ctx, root, be, o, res, &members)
+	var blk *BlockedError
+	if err != nil && len(members) > 0 && errors.As(err, &blk) && blk.By == blockedby.SlotBusy {
+		free := ""
+		if reg, lerr := worker.LoadRegistry(root); lerr == nil {
+			for _, s := range reg.Slots() {
+				if s.Name() != o.To && s.HeldID() == "" {
+					free = s.Name()
+					break
+				}
+			}
+		}
+		blk.Msg += bundleMoveHint(o.Issue, o.To, members, free)
+	}
+	return run, err
+}
+
+// bundleMoveHint names a bundle's members and the commands that move it whole.
+// Members cannot be re-added to a slot that resumes its lead, so the route is
+// never "transfer them out, then assign them again": the whole bundle goes to a
+// free slot in one call (free names one, empty when none is idle), or `round
+// return` releases the lead and every member and a fresh assign rebuilds it.
+func bundleMoveHint(lead, to string, members []string, free string) string {
+	refs := make([]string, len(members))
+	ids := make([]string, len(members))
+	for i, m := range members {
+		refs[i] = tracker.RefOf(m)
+		ids[i] = worker.NormID(m)
+	}
+	l := worker.NormID(lead)
+	out := fmt.Sprintf("; %s leads a bundle with %s: %s is busy, so the bundle cannot move there yet", tracker.RefOf(lead), strings.Join(refs, ", "), to)
+	if free != "" {
+		out += fmt.Sprintf("; move the whole bundle to the free slot with `rota round transfer %s --to %s`", l, free)
+	} else {
+		out += fmt.Sprintf("; no slot is free: once one is, `rota round transfer %s --to <slot>` moves the whole bundle", l)
+	}
+	return out + fmt.Sprintf(", or release it with `rota round return <slot> --reason <text>` and rebuild it with `rota round assign %s --bundle %s`", l, strings.Join(ids, ","))
+}
+
+func (e Env) planTransferRun(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred, members *[]string) (*transferRun, error) {
 	set := e.Round
 	toHuman, reason, err := o.checkFlags(set)
 	if err != nil {
@@ -860,15 +904,18 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		run.rec = reg.QueuedIssue(id)
 	}
 	// To the human, a lead leaves just like a member: the first remaining
-	// member takes over without moving the worker or its branch. Moving a
-	// bundle to another slot still needs its members released first.
+	// member takes over without moving the worker or its branch. To a slot the
+	// lead takes every member along.
 	var bundle []string
 	switch {
 	case sender != nil:
 		bundle = sender.Bundle()
 	case run.rec != nil:
 		bundle = run.rec.Bundle
+	case receiver != nil:
+		bundle = receiver.Bundle() // a transfer left half done
 	}
+	*members = bundle
 	if len(bundle) > 0 {
 		if toHuman {
 			if !e.forgeOn(be) {
@@ -884,11 +931,8 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			res.From = run.from
 			return run, nil
 		}
-		refs := make([]string, len(bundle))
-		for i, m := range bundle {
-			refs[i] = tracker.RefOf(m)
-		}
-		return nil, blocked(blockedby.Bundle, "%s leads a bundle with %s: transfer each member to the human first, or return/reclaim the slot to release the whole bundle", tracker.RefOf(id), strings.Join(refs, ", "))
+		// To a slot the whole bundle moves: the lead's branch and PR carry it.
+		run.bundle = bundle
 	}
 	switch {
 	case resuming:
@@ -915,14 +959,23 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		res.From = o.To
 	}
 	run.from = res.From
+	// The settled answers and decision topics of the original assign carry
+	// forward; answers passed to this transfer are added after the recorded ones.
+	var recorded string
 	switch {
 	case sender != nil:
-		run.decisionContext = sender.BriefDecisionContext()
+		run.decisionContext, recorded = sender.BriefDecisionContext(), sender.BriefSettledAnswers()
 	case run.rec != nil:
-		run.decisionContext = run.rec.DecisionContext
+		run.decisionContext, recorded = run.rec.DecisionContext, run.rec.SettledAnswers
 	case receiver != nil:
-		run.decisionContext = receiver.BriefDecisionContext()
+		run.decisionContext, recorded = receiver.BriefDecisionContext(), receiver.BriefSettledAnswers()
 	}
+	if run.decisions == "" {
+		run.decisions = recorded
+	} else if recorded != "" {
+		run.decisions = recorded + "\n\n" + run.decisions
+	}
+	decisions = run.decisions
 
 	if err := fenceExternal(sender, "transfer", "move a worktree"); err != nil {
 		return nil, err
@@ -993,7 +1046,11 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		res.Warnings = append(res.Warnings, warns...)
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
-			r, err := AssessScoped(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions, set.BlockScopeOverlap)
+			// The bundle never overlaps itself: its members are not other work.
+			inFlight := slices.DeleteFunc(e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), func(x InFlight) bool {
+				return slices.Contains(run.bundle, worker.NormID(x.Issue))
+			})
+			r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.BlockScopeOverlap)
 			if err != nil {
 				return nil, wrap(err)
 			}
@@ -1171,6 +1228,16 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	sender, rec, receiver, resuming := run.sender, run.rec, run.receiver, run.resuming
 	moved := func() bool { return resuming }
 	steps := e.transferHeadSteps(ctx, root, be, o, run, res, false)
+	// The bundle's members get the lead's handoff comment.
+	for _, m := range run.bundle {
+		steps = append(steps, step{name: "handoff comment of " + m, skip: moved, do: func() error {
+			p := run.parked
+			h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
+				reason: "transferred to " + o.To + " with the bundle of " + tracker.RefOf(id), note: o.Note}
+			_, _, err := h.post(be, m)
+			return wrap(tolerateMissing(&res.Warnings, m)("handoff comment", err))
+		}})
+	}
 
 	// A queued PR is still the issue's PR: the receiver takes it and its relay
 	// log over once dispatched (dispatch resets both for a new task), and the
@@ -1205,7 +1272,11 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
 			transferRemote, _ := e.remote(root) // refused in Transfer before this runs
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Remote: transferRemote, Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD, Review: IsReviewTitle(run.it.Title)})
+			var bundle []bundleIssue
+			if len(run.bundle) > 0 {
+				bundle = bundleBrief(be, append([]string{id}, run.bundle...))
+			}
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, bundle, tierBrief{Remote: transferRemote, Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD, Review: IsReviewTitle(run.it.Title)})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {
@@ -1213,6 +1284,25 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			}
 			return text
 		}}
+	// The members change hands with the lead: the old claim goes, the
+	// receiver's takes its place, and their in-progress state stays.
+	claimMembers := step{name: "move the bundle's claims", skip: moved, do: func() error {
+		for _, m := range run.bundle {
+			if _, err := releaseClaims(be, m, from, run.oldClaim, false); err != nil {
+				if terr := tolerateMissing(&res.Warnings, m)("claim release", err); terr != nil {
+					return wrap(terr)
+				}
+			}
+			won, holder, err := be.Claim(m, res.ClaimID)
+			if err != nil {
+				return wrap(err)
+			}
+			if !won {
+				return blocked(blockedby.Claimed, "bundle member %s is claimed by %s", m, holder)
+			}
+		}
+		return nil
+	}}
 	steps = append(steps,
 		step{name: "detach the sender's worktree", skip: func() bool { return moved() || run.detach == "" }, do: func() error {
 			if _, errOut, code := e.gitOut(ctx, run.detach, "switch", "-q", "--detach"); code != 0 {
@@ -1241,7 +1331,11 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			}
 			res.ClaimID = claimID
 			return nil
-		}},
+		}})
+	if len(run.bundle) > 0 {
+		steps = append(steps, claimMembers)
+	}
+	steps = append(steps,
 		// Handing it to the human cleared the in-progress state and added the label:
 		// the receiver's claim puts the first back and the label goes.
 		step{name: "clear needs-human", skip: func() bool { return moved() || !run.fromHuman }, do: func() error {
@@ -1258,7 +1352,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 				attemptBase = e.branchTip(ctx, root, run.branch)
 			}
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: run.model, TierReason: run.reason, Attempt: attempt, AttemptBase: attemptBase})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: run.model, TierReason: run.reason, Attempt: attempt, AttemptBase: attemptBase, Bundle: run.bundle})
 				s.SetBranch(run.branch)
 				s.SetBriefContext(run.decisions, nil)
 				s.SetBriefDecisionContext(run.decisionContext)

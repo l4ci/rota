@@ -830,7 +830,7 @@ whose worker is busy, blocked or has uncommitted files is never taken.
   round's review list; otherwise dispatch refuses before sending or logging anything.
   Without `--pr`, the relay belongs to the slot's current issue, or its newest queued PR
   when the slot is parked.
-- **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
+- **Bounce it**: `rota round transfer <issue> --to <free slot> --settled-file <gap>` checks the
   branch out in that slot, moves the PR back onto it and dispatches the follow-up. Use
   `--kind <harness>` and `--model <id>` to override the receiver's harness and model.
   Transfer uses the same precedence and launch checks as `round assign`: flags override
@@ -1331,6 +1331,7 @@ acceptance. The gate refuses (`blockedBy: closes`) a PR that does not close ever
 lands or bounces as a unit: `rota round bounce` counts it on the lead and refuses a member.
 
 To drop one member, `rota round transfer <member> --to human`. Closing a member drops it too: `rota worker done` no longer wants its proof row, the gate no longer wants its `Closes` line, and the next `round assign` of the lead removes it from the slot's bundle.
+To move the whole bundle to another slot, `rota round transfer <lead> --to <slot>`: the lead and every member change hands in one call and keep the branch and PR. If the receiver is busy, the refusal names the members and two routes that keep the bundle whole: the same transfer to a free slot, or `rota round return <slot> --reason <text>` then `rota round assign <lead> --bundle <members>`. Transferring members out and assigning them again does not work: they return as separate branches.
 To drop the lead, `rota round transfer <lead> --to human`: the first member becomes the lead,
 and the other members stay in order. The branch and PR stay in place, and an active worker
 keeps its session. The dropped issue loses its claim and in-progress state and gets `needs-human`; the
