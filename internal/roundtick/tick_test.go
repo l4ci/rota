@@ -770,7 +770,8 @@ func TestStoppedRoundAssignsAndMergesNothing(t *testing.T) {
 }
 
 // The stop value is read again at each phase boundary: a wind-down that lands
-// while a tick is in flight halts every phase after it (#3413).
+// while a tick is in flight halts every phase after it, and the tick still
+// reports what ran before it so its state is saved (#3413).
 func TestStopFlippedMidTickHaltsLaterPhases(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -804,20 +805,50 @@ func TestStopFlippedMidTickHaltsLaterPhases(t *testing.T) {
 					return train(ctx, ts, base)
 				}
 			}
-			_, err := Run(context.Background(), e)
-			if tc.flipIn != "" && !errors.Is(err, ErrStopped) {
-				t.Fatalf("err = %v, want ErrStopped", err)
+			r, err := Run(context.Background(), e)
+			if err != nil {
+				t.Fatalf("a stop seen mid-tick is not an error: %v", err)
 			}
-			if tc.flipIn == "" && err != nil {
-				t.Fatal(err)
+			if tc.flipIn != "" && !errors.Is(r.Stopped, ErrStopped) {
+				t.Fatalf("Result.Stopped = %v, want ErrStopped", r.Stopped)
+			}
+			if tc.flipIn == "" && r.Stopped != nil {
+				t.Fatalf("Result.Stopped = %v on a running round", r.Stopped)
 			}
 			if merged := len(f.gated)+len(f.trained) > 0; merged != tc.wantMerged {
 				t.Fatalf("merged = %v, want %v (gated=%v trained=%v)", merged, tc.wantMerged, f.gated, f.trained)
+			}
+			if tc.wantMerged != (len(r.Did) > 0) {
+				t.Fatalf("Did = %+v: the merges that ran must be reported", r.Did)
 			}
 			if assigned := len(f.assigned) > 0; assigned != tc.wantAssigned {
 				t.Fatalf("assigned = %v, want %v (%v)", assigned, tc.wantAssigned, f.assigned)
 			}
 		})
+	}
+}
+
+// A stop between two landings holds the targets not yet reached, with the stop
+// as the reason, and the state the earlier landing produced survives.
+func TestStopBetweenLandingsHoldsTheRest(t *testing.T) {
+	f := &fake{
+		slots:  []Slot{{Name: "ben", State: "done", PR: "#7"}, {Name: "dana", State: "done", PR: "#8"}},
+		baseOf: func(t string) string { return map[string]string{"ben": "main", "dana": "release"}[t] },
+	}
+	e := f.env()
+	stopped := false
+	e.Stop = func() error { return StopError(stopped, "") }
+	gate := e.RunGate
+	e.RunGate = func(ctx context.Context, tg, base string) GateRun { stopped = true; return gate(ctx, tg, base) }
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated) != 1 || !errors.Is(r.Stopped, ErrStopped) {
+		t.Fatalf("gated %v stopped %v: only the first base may land", f.gated, r.Stopped)
+	}
+	if len(r.Holds) != 1 || r.Holds[0].Target != "dana" || !strings.Contains(r.Holds[0].Why, "wind-down") {
+		t.Fatalf("holds %+v, want dana held for the stop", r.Holds)
 	}
 }
 
@@ -1050,5 +1081,33 @@ func TestTickTrainLogsOnlyOwnLanding(t *testing.T) {
 	}
 	if len(r.Did) != 1 || r.Did[0].Target != "b" {
 		t.Fatalf("did %+v, want only b merged", r.Did)
+	}
+}
+
+// A tick that sees the stop mid-way still hands its state to SaveState: what
+// it reported and held survives, and the stored stop is not undone.
+func TestStopSeenMidTickStillSavesState(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "kit", State: "blocked", Issue: "#5"}, {Name: "ben", State: "done", PR: "#7"}}, queued: []string{"#7"}}
+	e := f.env()
+	stopped := false
+	e.Stop = func() error { return StopError(stopped, "") }
+	gate := e.RunGate
+	e.RunGate = func(ctx context.Context, tg, base string) GateRun { stopped = true; return gate(ctx, tg, base) }
+	train := e.RunTrain
+	e.RunTrain = func(ctx context.Context, ts []string, base string) TrainRun { stopped = true; return train(ctx, ts, base) }
+	r, err := Run(context.Background(), e)
+	if err != nil || r.Stopped == nil {
+		t.Fatalf("err %v stopped %v", err, r.Stopped)
+	}
+	cd := t.TempDir()
+	if err := SetStopped(cd, 3, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveState(cd, 3, r); err != nil {
+		t.Fatal(err)
+	}
+	s := LoadState(cd, 3)
+	if len(s.Reported) == 0 || !s.Stopped {
+		t.Fatalf("saved state %+v: want the reported items kept and the stop intact", s)
 	}
 }

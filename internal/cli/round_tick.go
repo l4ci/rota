@@ -138,6 +138,10 @@ func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(contex
 
 func tickData(r roundtick.Result) *jsonx.Object {
 	d := jsonx.NewObject()
+	if r.Stopped != nil {
+		d.Set("stopped", true)
+		d.Set("stoppedReason", r.Stopped.Error())
+	}
 	if len(r.Holding) > 0 {
 		d.Set("holding", jsonx.Strings(r.Holding))
 	}
@@ -197,6 +201,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 
 func tickLines(r roundtick.Result) string {
 	var lines []string
+	if r.Stopped != nil {
+		lines = append(lines, "stopped mid-tick: "+r.Stopped.Error())
+	}
 	if r.Observed {
 		lines = append(lines, observationNotice)
 		for _, p := range r.Proposed {

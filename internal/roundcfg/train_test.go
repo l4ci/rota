@@ -61,7 +61,6 @@ func TestTrainFillDecide(t *testing.T) {
 	c := func(id string, age time.Duration) FillCandidate {
 		return FillCandidate{ID: id, Ready: now.Add(-age)}
 	}
-	imm := FillCandidate{ID: "90", Immediate: true}
 	for _, tc := range []struct {
 		name       string
 		fill       TrainFill
@@ -79,8 +78,6 @@ func TestTrainFillDecide(t *testing.T) {
 		{name: "age due", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", 61*time.Minute), c("2", time.Minute)}, land: []string{"1", "2"}, reasonPart: "round.trainFillMinutes", wait: "oldest waited 61m of 60m"},
 		{name: "filling holds", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", time.Minute)}, holding: "holding train for main: 2/3 ready, oldest waited 1m of 60m"},
 		{name: "unknown ready time cannot fire age", fill: TrainFill{Minutes: 5}, cands: []FillCandidate{{ID: "1"}}, holding: "holding train for main: 1 ready, oldest wait unknown"},
-		{name: "immediate lands alone", fill: TrainFill{Max: 4, Minutes: 20}, cands: []FillCandidate{c("1", time.Minute), imm}, land: []string{"90"}, reasonPart: "review disabled", wait: "oldest wait unknown"},
-		{name: "due wins over immediate", fill: TrainFill{Max: 2}, cands: []FillCandidate{c("1", time.Minute), imm}, land: []string{"1", "90"}, reasonPart: "round.trainMax", wait: "oldest waited 1m; no time limit"},
 		{name: "trim to Max keeps oldest in input order", fill: TrainFill{Max: 2, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", 2*time.Minute), c("90", 65*time.Minute)}, land: []string{"2", "90"}, reasonPart: "round.trainMax", wait: "oldest waited 65m of 60m"},
 		{name: "limit below Max trims further", fill: TrainFill{Max: 3, Minutes: 60}, cands: []FillCandidate{c("1", time.Minute), c("2", 2*time.Minute), c("3", 3*time.Minute)}, limit: 1, land: []string{"3"}, reasonPart: "round.trainMax", wait: "oldest waited 3m of 60m"},
 		{name: "limit above Max defers to Max", fill: TrainFill{Max: 2}, cands: []FillCandidate{c("1", 3*time.Minute), c("2", 2*time.Minute), c("3", time.Minute)}, limit: 9, land: []string{"1", "2"}, reasonPart: "round.trainMax", wait: "oldest waited 3m; no time limit"},

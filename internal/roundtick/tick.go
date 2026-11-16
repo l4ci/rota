@@ -246,6 +246,10 @@ type Result struct {
 	Holds    []Item
 	NeedsYou []Item
 	New      []Item
+	// Stopped is the stop seen after the tick began (ErrStopped or ErrBaseRed):
+	// the phases after it did not act, and what ran before it is in Did and the
+	// state below. Nil when the round ran the whole tick.
+	Stopped error
 	// Held and Reported are the state the next tick starts from.
 	Held        map[string]string
 	Reported    map[string]bool
@@ -381,36 +385,38 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		targets = append(targets, e.Queued()...)
 	}
 
-	if err := e.stopped(); err != nil {
-		return r, err
-	}
-	if err := e.merge(ctx, &r, targets); err != nil {
-		return r, err
-	}
-	if err := e.stopped(); err != nil {
-		return r, err
-	}
-	if e.Capped != nil {
-		r.Capped = e.Capped(ctx)
-	}
-	if e.batchFull(ctx) {
-		r.BatchFull = true
-	}
-	// A follow-up reopens no item, so a full batch does not hold it.
-	started, taken, err := e.followUps(ctx, &r)
-	if err != nil {
-		return r, err
-	}
-	if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
-		if err := e.stopped(); err != nil {
+	// A stop seen after entry halts the phases that act; the tail below still
+	// runs, so the caller saves the state of the work already done.
+	if r.Stopped = e.stopped(); r.Stopped == nil {
+		if err := e.merge(ctx, &r, targets); err != nil {
 			return r, err
 		}
-		minted, err := e.review(ctx, &r)
+	}
+	if r.Stopped == nil {
+		r.Stopped = e.stopped()
+	}
+	if r.Stopped == nil {
+		if e.Capped != nil {
+			r.Capped = e.Capped(ctx)
+		}
+		if e.batchFull(ctx) {
+			r.BatchFull = true
+		}
+		// A follow-up reopens no item, so a full batch does not hold it.
+		started, taken, err := e.followUps(ctx, &r)
 		if err != nil {
 			return r, err
 		}
-		if err := e.assign(ctx, &r, minted, started, taken); err != nil {
-			return r, err
+		if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
+			if r.Stopped = e.stopped(); r.Stopped == nil {
+				minted, err := e.review(ctx, &r)
+				if err != nil {
+					return r, err
+				}
+				if err := e.assign(ctx, &r, minted, started, taken); err != nil {
+					return r, err
+				}
+			}
 		}
 	}
 
@@ -578,7 +584,7 @@ func failedHeadVerdict(v string) bool {
 func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged {
 	prs := make([]roundcfg.FillPR, len(targets))
 	for i, t := range targets {
-		prs[i] = roundcfg.FillPR{ID: t, Base: e.targetBase(t), Bypass: e.FillBypass != nil && e.FillBypass(t)}
+		prs[i] = roundcfg.FillPR{ID: t, Base: e.targetBase(t), Bypass: e.TrainFill.Enabled() && e.FillBypass != nil && e.FillBypass(t)}
 		if e.TrainFill.Enabled() && e.ReadySince != nil {
 			prs[i].Ready = e.ReadySince(t)
 		}
@@ -586,12 +592,26 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 	groups := e.TrainFill.Group(prs)
 	var out []Merged
 	remaining := e.cap()
+	// land re-reads the stop before each landing: a wind-down mid-merge holds
+	// the targets it did not reach, with the stop as the reason.
+	land := func(ts []string, base string) []Merged {
+		if r.Stopped == nil {
+			r.Stopped = e.stopped()
+		}
+		if r.Stopped != nil {
+			for _, t := range ts {
+				r.hold(t, "round stopped by wind-down; next tick after it resumes")
+			}
+			return nil
+		}
+		return e.land(ctx, r, ts, base)
+	}
 	for i, g := range groups {
 		b := g.Base
 		ts := g.All
 		if e.TrainFill.Enabled() {
 			for j, target := range g.Bypass {
-				out = append(out, e.land(ctx, r, []string{target}, b)...)
+				out = append(out, land([]string{target}, b)...)
 				remaining--
 				if remaining == 0 {
 					e.holdUnreached(r, groups[i+1:], slices.Concat(g.Bypass[j+1:], fillIDs(g.Fill)))
@@ -618,7 +638,7 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			}
 			ts = d.Land
 		}
-		out = append(out, e.land(ctx, r, ts, b)...)
+		out = append(out, land(ts, b)...)
 		remaining -= len(ts)
 		if remaining == 0 {
 			e.holdUnreached(r, groups[i+1:], nil)
