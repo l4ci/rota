@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
+	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -134,11 +135,26 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 // is never listed twice. A new-work slot whose account has no login
 // (Env.SlotLoginProblem) is not picked: skipped names each with its problem, for
 // the caller's warning.
-func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
+func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped, unresolved []string) {
 	roster := set.Roster
 	active, _ := Members(reg, set)
+	// An unresolved Core delivery refuses the slot's next relay (#3321): a slot
+	// that would take new work, a pre-chosen one included, is skipped unless its
+	// worker demonstrably consumed it (#3320). A holder of this very issue is
+	// exempt: resuming re-sends its own brief, which coreRetry retries instead of
+	// refusing, and skipping it would hand its issue to a second slot.
+	deliveryOK := func(s *worker.Slot) bool {
+		if held != "" && s.HeldID() == held || !s.CoreDeliveryUnresolved() || e.Worker.CoreConsumed(ctx, root, s) {
+			return true
+		}
+		entry := fmt.Sprintf("%s (Core delivery %s)", s.Name(), s.CoreDeliveryState())
+		if !slices.Contains(unresolved, entry) {
+			unresolved = append(unresolved, entry)
+		}
+		return false
+	}
 	add := func(s *worker.Slot) {
-		if s != nil && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
+		if s != nil && deliveryOK(s) && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
 			out = append(out, s)
 		}
 	}
@@ -174,18 +190,22 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 			}
 		}
 	}
-	return out, skipped
+	return out, skipped, unresolved
 }
 
 // FreeSlot previews the slot a new assignment would select, without
 // parking or dispatching it. Advice uses the same active-slot, login and clean
 // worktree checks as assign rather than treating every done slot as free.
-func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (string, bool) {
-	slots, _ := e.pickSlots(ctx, "", reg, set, "", 1)
-	if len(slots) == 0 {
-		return "", false
+// warnings name the slots skipped for an unresolved Core delivery.
+func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (name string, ok bool, warnings []string) {
+	slots, _, unresolved := e.pickSlots(ctx, "", reg, set, "", 1)
+	if len(unresolved) > 0 {
+		warnings = []string{"skipped slots with an unresolved delivery: " + strings.Join(unresolved, "; ")}
 	}
-	return slots[0].Name(), true
+	if len(slots) == 0 {
+		return "", false, warnings
+	}
+	return slots[0].Name(), true, warnings
 }
 
 // checkActive refuses new work for a roster slot past the round's slot count:

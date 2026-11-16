@@ -53,6 +53,8 @@ type Worker interface {
 	ResetTo(root, slot, task, newBranch string, checkOnly bool) (worker.ResetResult, error)
 	ResetFrom(root, slot, task, newBranch, from string, checkOnly bool) (worker.ResetResult, error)
 	ReleaseExternal(root, name string, prune bool) error
+	// CoreConsumed says the slot's saved Core delivery was demonstrably acted on.
+	CoreConsumed(ctx context.Context, root string, s *worker.Slot) bool
 }
 
 // envWorker is the one adapter of the concrete worker.Env to Worker. The

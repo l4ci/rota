@@ -69,6 +69,18 @@ func (e Env) holdsLease(ctx context.Context, root string) (bool, error) {
 	return held, err
 }
 
+// freeSender is freeSlot for a transfer's sender; spent drops its saved Core
+// delivery with the work.
+func freeSender(root, name string, spent bool) error {
+	return editSlot(root, name, func(s *worker.Slot) error {
+		if spent {
+			s.ClearCoreDelivery()
+		}
+		s.Park(false)
+		return nil
+	})
+}
+
 // freeSlot records a slot as idle and parked: no issue, no claim, no PR.
 func freeSlot(root, name string, clearHandle bool) error {
 	return editSlot(root, name, func(s *worker.Slot) error { s.Park(clearHandle); return nil })
@@ -225,6 +237,13 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 		}
 		return name + " of " + id
 	}
+	// The sender's saved Core delivery is dropped with its work when the session
+	// is gone or its worker demonstrably consumed it (#3320). The evidence is
+	// read here, before the park moves the slot to its park branch.
+	spent := r.gone
+	if cur := worker.LoadRegistryTolerant(r.root).Slot(r.slot); cur != nil && !spent {
+		spent = e.Worker.CoreConsumed(ctx, r.root, cur)
+	}
 	steps := []step{{name: "park", do: func() (err error) {
 		out.Park, err = e.Park(ctx, r.root, r.slot, r.verb)
 		return wrap(err)
@@ -284,6 +303,9 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 				return
 			}
 			doc.KeepSlotRelays(s)
+			if spent {
+				s.ClearCoreDelivery()
+			}
 			s.Park(r.gone)
 			if r.gone {
 				s.ReleasePort()
@@ -626,7 +648,10 @@ type transferRun struct {
 	toHuman, resuming bool
 	queueTo           bool // the receiver holds a PR that can wait in the queue
 	sender, receiver  *worker.Slot
-	rec               *worker.QueuedPR // no slot holds the issue but a queued PR does
+	// senderSpent: the sender's saved Core delivery was consumed (read before
+	// the park moves its branch), so freeing the sender drops it (#3320).
+	senderSpent bool
+	rec         *worker.QueuedPR // no slot holds the issue but a queued PR does
 	// fromHuman: the issue carries needs-human and nothing holds it. The receiver
 	// claims it and the label goes; there is no sender to park or release.
 	fromHuman bool
@@ -821,6 +846,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		} else if run.sender == nil {
 			run.sender = s
 		}
+	}
+	if run.sender != nil {
+		run.senderSpent = e.Worker.CoreConsumed(ctx, root, run.sender)
 	}
 	sender, receiver := run.sender, run.receiver
 	run.resuming = receiver != nil && sender == nil && (worker.IsIdle(receiver.State()) || o.ResumeDispatch) &&
@@ -1077,7 +1105,7 @@ func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o 
 		}},
 		step{name: "free the sender", do: func() error {
 			if run.sender != nil {
-				return wrap(freeSlot(root, from, false))
+				return wrap(freeSender(root, from, run.senderSpent))
 			}
 			return wrap(worker.RemoveQueuedPR(root, run.rec.PR))
 		}},
@@ -1223,7 +1251,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			return wrap(e.Forge.RemoveLabels(ctx, run.it.IssueKey(), []string{e.NeedsHuman}))
 		}},
 		step{name: "free the sender", skip: func() bool { return resuming || sender == nil }, do: func() error {
-			return wrap(freeSlot(root, from, false))
+			return wrap(freeSender(root, from, run.senderSpent))
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			if attemptBase == "" {

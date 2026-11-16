@@ -253,6 +253,9 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
 	e.noteRelayEcho(root, targets, e.Now())
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
+	for i := range targets {
+		_, targets[i].promoted = notes[targets[i].name]
+	}
 	notified := map[string]int{} // slot -> seq of the event whose notification went out
 	for i, r := range rows {
 		// Notify on the transition only: a poll loop re-reading a stuck slot
@@ -468,6 +471,7 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	}
 	key := rowKey(t, r)
 	prev := s.State()
+	wasPromoted := s.DonePromoted()
 	if t.evSeq > 0 {
 		s.SetUnsent(false) // the worker's own event proves the brief was submitted
 	}
@@ -483,7 +487,16 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
+	// A promoted done stays marked until a real one answers it, so the next
+	// poll's real ROTA-DONE (prev already done, no relay pending) still counts.
+	s.SetDonePromoted(r.State == StateDone && (t.promoted || wasPromoted && r.Evidence == relayEchoEvidence))
 	if r.State == StateDone && r.Evidence != relayEchoEvidence {
+		// A real ROTA-DONE (never a row promoted from an open PR) the poll reads past the busy edge, or past a pending
+		// relay, is the worker answering what it was sent: the saved Core
+		// delivery is spent (#3320). A static done re-read proves nothing new.
+		if !t.promoted && (!strings.EqualFold(prev, "done") || t.relayPending > 0 || wasPromoted) {
+			s.ClearCoreDelivery()
+		}
 		if t.relayPending > 0 {
 			// A reply past the pending relay's echo proves that even a send
 			// which timed out was accepted. Do not leave its unsent mark to
@@ -547,6 +560,12 @@ type pollTarget struct {
 	ev         *Event
 	lastChange time.Time
 	evSeq      int
+	// promoted: the row's DONE came from the forge (promoteIdleWithPR), not from
+	// a ROTA-DONE sentinel or a worker event: it proves nothing about a delivery.
+	promoted bool
+	// donePromoted: the slot's recorded done is such a promoted one, still
+	// waiting for the worker's own done to answer the delivery.
+	donePromoted bool
 }
 
 func slotTarget(s *Slot) pollTarget {
@@ -603,6 +622,7 @@ func refreshEvents(reg Registry, targets []pollTarget) {
 				targets[i].relayEvSeq = s.RelayEventSeq()
 				targets[i].relays = len(s.Relays())
 				targets[i].turnSeq = s.TurnSeq()
+				targets[i].donePromoted = s.DonePromoted()
 			}
 		}
 		targets[i].relayMarker, targets[i].relayObserved = false, false

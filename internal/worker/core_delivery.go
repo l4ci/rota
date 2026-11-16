@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
@@ -55,7 +56,84 @@ func coreOutcome(err error) string {
 		return "unknown"
 	}
 }
-func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, res DispatchResult) (bool, DispatchResult, error) {
+
+// CoreConsumed says the slot's saved Core delivery was demonstrably acted on
+// (#3320); false when it has none. See coreConsumed for the evidence.
+func (e Env) CoreConsumed(ctx context.Context, root string, s *Slot) bool {
+	p := corePending(s)
+	return p != nil && e.coreConsumed(ctx, root, s, s.Worktree(), p)
+}
+
+// coreConsumed is the consumption evidence for a saved delivery: a done event
+// stamped after it (worker done), or a commit on the slot's remote-tracking
+// branch, past its base, dated after it. A ROTA-DONE line the poll records
+// clears the delivery itself (recordRow). No pane text is read here, and an
+// unpushed local commit proves nothing. A delivery without a stamp (saved by an
+// older rota) has no evidence and stays blocked.
+func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree string, p *jsonx.Object) bool {
+	at, err := stamp.Parse(jsonx.Str(p, "at"))
+	if err != nil {
+		return false
+	}
+	if ev := s.Event(); ev != nil && ev.Kind == EventDone {
+		if ts, err := stamp.Parse(ev.TS); err == nil && ts.After(at) {
+			return true
+		}
+	}
+	b := s.Branch()
+	if b == "" || worktree == "" {
+		return false
+	}
+	// A push after the delivery moved the remote-tracking ref off the tip saved
+	// with it (or created it): publication, not commit date, is the evidence. A
+	// local commit nobody pushed leaves the ref where it was.
+	if was := jsonx.Str(p, "remoteTip"); was != "" {
+		now := e.remoteTip(ctx, root, worktree, b)
+		return now != "" && now != "absent" && now != was
+	}
+	// A delivery saved before remoteTip was recorded: a commit past the slot's
+	// base on the remote-tracking branch, dated after the delivery.
+	base := s.Base()
+	remote, err := e.Remote(root)
+	if base == "" || err != nil || remote == "" {
+		return false
+	}
+	out, code := e.runGit(ctx, worktree, "log", "-1", "--format=%cI", "refs/remotes/"+remote+"/"+b, "--not", base)
+	if code != 0 {
+		return false
+	}
+	ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out))
+	return err == nil && ct.After(at)
+}
+
+// remoteTip is the sha of the slot branch's remote-tracking ref, "absent" when
+// it does not exist, "" when it cannot be read.
+func (e Env) remoteTip(ctx context.Context, root, worktree, branch string) string {
+	remote, err := e.Remote(root)
+	if err != nil || remote == "" || branch == "" {
+		return ""
+	}
+	out, code := e.runGit(ctx, worktree, "rev-parse", "--verify", "-q", "refs/remotes/"+remote+"/"+branch)
+	switch {
+	case code == 0 && out != "":
+		return out
+	case code == 1:
+		return "absent"
+	}
+	return ""
+}
+
+// coreFresh is the saved delivery's end when its session is gone or consumed:
+// the record is dropped so the slot takes the next message.
+func coreFresh(root, slot string) error {
+	_, err := UpdateSlot(root, slot, func(s *Slot) { s.ClearCoreDelivery() })
+	return err
+}
+
+// coreRetry reconciles a saved Core delivery before a new message goes out.
+// fresh is a task dispatch: it kills the old session and starts a new one, so
+// an earlier delivery to the dead session never blocks it (#3320).
+func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *dispatchTarget, res DispatchResult, fresh bool) (bool, DispatchResult, error) {
 	if !receipts(t.h) || t.handle == "" {
 		return false, res, nil
 	}
@@ -63,7 +141,21 @@ func (e Env) coreRetry(ctx context.Context, root string, o DispatchOpts, t *disp
 	if p == nil {
 		return false, res, nil
 	}
+	// A task dispatch under another harness is a fresh session even when the
+	// task and brief repeat: the saved payload went to the old harness (#3320).
+	if fresh && o.Kind != "" && o.Kind != t.slot.Kind() {
+		return false, res, nil
+	}
 	if jsonx.Str(p, "request") != coreRequest(t, o) {
+		if fresh {
+			return false, res, nil
+		}
+		if e.coreConsumed(ctx, root, t.slot, t.worktree, p) {
+			if err := coreFresh(root, o.Slot); err != nil {
+				return true, res, err
+			}
+			return false, res, nil
+		}
 		state := jsonx.Str(p, "state")
 		// A message Core holds a receipt for (unknown, submitted) is
 		// reconciled before a new one is refused (#2640): with a receipt the
@@ -117,6 +209,13 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 	if !receipts(t.h) {
 		return e.sendSigned(ctx, t, o.Slot, payload, resubmit)
 	}
+	// The branch being dispatched: ResetTo moved the slot onto it after t.slot was
+	// loaded, and coreConsumed later reads the slot's current branch.
+	branch := t.slot.Branch()
+	if cur := LoadRegistryTolerant(root).Slot(o.Slot); cur != nil {
+		branch = cur.Branch()
+	}
+	tip := e.remoteTip(ctx, root, t.worktree, branch)
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
 		request := coreRequest(t, o)
 		p := jsonx.NewObject()
@@ -132,6 +231,10 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		}
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
+		p.Set("at", stamp.Format(e.Now()))
+		if tip != "" {
+			p.Set("remoteTip", tip)
+		}
 		s.o.Set("coreDelivery", p)
 	}); err != nil {
 		return err
