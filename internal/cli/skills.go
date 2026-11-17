@@ -91,26 +91,26 @@ func (a skillsArgs) mode() string {
 // At user scope the Claude roots cover the current config dir plus every
 // round.accounts configDir (skipped lists the configured dirs that do not
 // exist), since each dir holds its own copy of the skills.
-func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skipped []string, err error) {
+//
+// plugins says whether the installed rota plugin roots count: status reads
+// them, install, update and uninstall do not own them. warnings are the plugin
+// roots that could not be read.
+func skillsEnv(c *Ctx, a skillsArgs, plugins bool) (set *skills.Set, roots []skills.Root, skipped []string, warnings []error, err error) {
 	set, err = skills.Embedded()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	home, claudeDirs, skipped := skillsDirs(c, a)
-	top := ""
-	if a.scope != skills.User {
-		top = c.deps().Toplevel(c.Context())
-	}
-	roots, err = skills.Roots(a.scope, a.agent, home, claudeDirs, top)
+	roots, warnings, err = skillsRootSet(c.deps().Getenv, home, claudeDirs, a.scope, a.agent, skillsTop(c, a), plugins)
 	switch {
 	case errors.Is(err, skills.ErrNoProject):
-		return nil, nil, nil, Resolution("--scope project: the working directory is not in a git work tree")
+		return nil, nil, nil, nil, Resolution("--scope project: the working directory is not in a git work tree")
 	case errors.Is(err, skills.ErrNoHome):
-		return nil, nil, nil, Resolution("%v", err).WithHint("set HOME (or CLAUDE_CONFIG_DIR for --agent claude), or use --scope project")
+		return nil, nil, nil, nil, Resolution("%v", err).WithHint("set HOME (or CLAUDE_CONFIG_DIR for --agent claude), or use --scope project")
 	case err != nil:
-		return nil, nil, nil, Resolution("%v", err)
+		return nil, nil, nil, nil, Resolution("%v", err)
 	}
-	return set, roots, skipped, nil
+	return set, roots, skipped, warnings, nil
 }
 
 // skillsDirs is the home and the Claude config dirs (see
@@ -150,6 +150,29 @@ func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, a
 	return out, errs
 }
 
+// skillsRootSet is the one definition of the roots a report or verb works on:
+// the project and user roots of the scope and agent, plus the installed rota
+// plugin roots when plugins is true. Install and update pass false (a plugin is
+// updated by Claude Code); status and doctor pass true. top is the project
+// root, "" outside a work tree.
+func skillsRootSet(getenv func(string) string, home string, claudeDirs []string, scope, agent, top string, plugins bool) ([]skills.Root, []error, error) {
+	roots, err := skills.Roots(scope, agent, home, claudeDirs, top)
+	if err != nil || !plugins {
+		return roots, nil, err
+	}
+	pluginRoots, errs := skillsPluginRoots(getenv, claudeDirs, scope, agent, top)
+	return append(roots, pluginRoots...), errs, nil
+}
+
+// skillsTop is the project root a verb's scope reaches, "" at user scope or
+// outside a work tree.
+func skillsTop(c *Ctx, a skillsArgs) string {
+	if a.scope == skills.User {
+		return ""
+	}
+	return c.deps().Toplevel(c.Context())
+}
+
 // withSkipped reports the configured account dirs that were left out.
 func withSkipped(res Result, skipped []string) Result {
 	if len(skipped) == 0 {
@@ -179,7 +202,7 @@ func skillsErr(err error) error {
 }
 
 func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, skipped, err := skillsEnv(c, a)
+	set, roots, skipped, _, err := skillsEnv(c, a, false)
 	if err != nil {
 		return Result{}, err
 	}
@@ -192,7 +215,7 @@ func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
 }
 
 func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, skipped, err := skillsEnv(c, a)
+	set, roots, skipped, _, err := skillsEnv(c, a, false)
 	if err != nil {
 		return Result{}, err
 	}
@@ -203,11 +226,7 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 	if len(res) == 0 {
 		hint := "run: rota skills install"
 		_, claudeDirs, _ := skillsDirs(c, a)
-		top := ""
-		if a.scope != skills.User {
-			top = c.deps().Toplevel(c.Context())
-		}
-		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top); len(plugin) > 0 {
+		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, skillsTop(c, a)); len(plugin) > 0 {
 			hint = "the rota plugin is updated by Claude Code: claude plugin update rota@rota"
 		}
 		return withSkipped(withPromptsReport(c, Result{Data: jsonx.Obj("roots", []any{}, "changed", false)}), skipped),
@@ -292,7 +311,7 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 }
 
 func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
-	_, roots, skipped, err := skillsEnv(c, a)
+	_, roots, skipped, _, err := skillsEnv(c, a, false)
 	if err != nil {
 		return Result{}, err
 	}
@@ -326,17 +345,10 @@ func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
 }
 
 func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, skipped, err := skillsEnv(c, a)
+	set, roots, skipped, pluginErrs, err := skillsEnv(c, a, true)
 	if err != nil {
 		return Result{}, err
 	}
-	_, claudeDirs, _ := skillsDirs(c, a)
-	top := ""
-	if a.scope != skills.User {
-		top = c.deps().Toplevel(c.Context())
-	}
-	pluginRoots, pluginErrs := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top)
-	roots = append(roots, pluginRoots...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return Result{}, skillsErr(err)
@@ -546,11 +558,11 @@ func skillsFiles(fs *flag.FlagSet) RunFunc {
 
 // skillsNeedUpdate is whether `rota skills update` has work: false only when
 // at least one root is installed and every installed root is a current,
-// untouched stub. Plugin roots are not this verb's. Anything unreadable counts
+// untouched stub. Plugin roots are not this verb's (plugins false). Anything unreadable counts
 // as needing the update.
 func skillsNeedUpdate(c *Ctx) bool {
 	a := skillsArgs{agent: "all"}
-	set, roots, _, err := skillsEnv(c, a)
+	set, roots, _, _, err := skillsEnv(c, a, false)
 	if err != nil {
 		return true
 	}
