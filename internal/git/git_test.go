@@ -128,3 +128,29 @@ func TestIsMergeConflict(t *testing.T) {
 		}
 	}
 }
+
+func TestOutputAndCheck(t *testing.T) {
+	ctx := context.Background()
+	dir := newRepo(t)
+	r := Repo{Dir: dir}
+
+	if got, ok, err := r.Output(ctx, "log", "-1", "--format=%s"); err != nil || !ok || got != "first" {
+		t.Fatalf("Output = %q, %v, %v", got, ok, err)
+	}
+	if got, ok, err := r.Output(ctx, "log", "-1", "--format=%s", "nope"); err != nil || ok || got != "" {
+		t.Fatalf("Output of a failing call = %q, %v, %v; want empty, !ok, nil", got, ok, err)
+	}
+
+	if err := r.Check(ctx, "rev-parse", "--git-dir"); err != nil {
+		t.Fatalf("Check of a good call = %v", err)
+	}
+	err := r.Check(ctx, "rev-parse", "--verify", "refs/heads/nope")
+	if err == nil || strings.TrimSpace(err.Error()) == "" {
+		t.Fatalf("Check of a failing call = %v; want git's stderr", err)
+	}
+	if err := (Repo{Dir: dir, Runner: func(context.Context, string, ...string) (Result, error) {
+		return Result{ExitCode: 3}, nil
+	}}).Check(ctx, "status"); err == nil || !strings.Contains(err.Error(), "git status: exit status 3") {
+		t.Fatalf("Check with empty stderr = %v", err)
+	}
+}

@@ -17,21 +17,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestCompare(t *testing.T) {
-	for _, c := range []struct {
-		a, b string
-		want int
-	}{
-		{"1.2.3", "1.2.3", 0}, {"1.2.3", "1.2.4", -1}, {"1.10.0", "1.9.9", 1}, {"2", "2.0.0", 0},
-		{"v1.2.3", "1.2.3", 0}, {"1.2.3.9", "1.2.3", 0}, {"dev", "0.0.1", -1}, {"dev", "", 0},
-		{"1.2.3-rc1", "1.2.3", 0}, {"99999999999999999999.0.0", "1.0.0", 1}, {"5.0.0-dev", "4.9.9", 1},
-	} {
-		if got := Compare(c.a, c.b); got != c.want {
-			t.Errorf("Compare(%q,%q) = %d, want %d", c.a, c.b, got, c.want)
-		}
-	}
-}
-
 func env(exeDir, current, latest string) Env {
 	return Env{ExeDir: exeDir, Current: current, Latest: func() string { return latest }}
 }

@@ -8,6 +8,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -170,14 +171,30 @@ func (r Repo) CreateBranch(ctx context.Context, name string) (msg string, ok boo
 	return strings.TrimSpace(res.Stderr), res.ExitCode == 0, nil
 }
 
-// out runs git and returns stdout with trailing newlines trimmed. ok is
+// Output runs git and returns stdout with trailing newlines trimmed. ok is
 // false when git exited non-zero; a failure to run is an error.
-func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err error) {
+func (r Repo) Output(ctx context.Context, args ...string) (s string, ok bool, err error) {
 	res, err := r.Run(ctx, args...)
 	if err != nil || res.ExitCode != 0 {
 		return "", false, err
 	}
 	return strings.TrimRight(res.Stdout, "\n"), true, nil
+}
+
+// Check runs git and returns nil on exit 0. A non-zero exit is an error
+// carrying git's stderr, or its exit status when stderr is empty.
+func (r Repo) Check(ctx context.Context, args ...string) error {
+	res, err := r.Run(ctx, args...)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		if msg := strings.TrimSpace(res.Stderr); msg != "" {
+			return errors.New(msg)
+		}
+		return fmt.Errorf("git %s: exit status %d", strings.Join(args, " "), res.ExitCode)
+	}
+	return nil
 }
 
 // CommonDirVia is the absolute, symlink-resolved git common dir of dir, so a
@@ -207,25 +224,25 @@ func CommonDirVia(ctx context.Context, run Runner, dir string) (string, bool, er
 
 // Toplevel is the root of Dir's work tree; ok is false outside one.
 func (r Repo) Toplevel(ctx context.Context) (string, bool, error) {
-	return r.out(ctx, "rev-parse", "--show-toplevel")
+	return r.Output(ctx, "rev-parse", "--show-toplevel")
 }
 
 // ShortHead is HEAD's abbreviated hash; ok is false without a first commit.
 func (r Repo) ShortHead(ctx context.Context) (string, bool, error) {
-	return r.out(ctx, "rev-parse", "--short", "HEAD")
+	return r.Output(ctx, "rev-parse", "--short", "HEAD")
 }
 
 // LastCommitDate is the committer date (YYYY-MM-DD) of the newest commit that
 // touched path; ok is false when git fails or the path has no history.
 func (r Repo) LastCommitDate(ctx context.Context, path string) (string, bool, error) {
-	d, ok, err := r.out(ctx, "log", "-1", "--format=%cs", "--", path)
+	d, ok, err := r.Output(ctx, "log", "-1", "--format=%cs", "--", path)
 	return d, ok && d != "", err
 }
 
 // CommitsSince counts the commits reachable from HEAD but not from rev; ok is
 // false when rev does not resolve to a commit or git fails.
 func (r Repo) CommitsSince(ctx context.Context, rev string) (int, bool, error) {
-	out, ok, err := r.out(ctx, "rev-list", "--count", rev+"^{commit}..HEAD")
+	out, ok, err := r.Output(ctx, "rev-list", "--count", rev+"^{commit}..HEAD")
 	if !ok || err != nil {
 		return 0, false, err
 	}
@@ -236,7 +253,7 @@ func (r Repo) CommitsSince(ctx context.Context, rev string) (int, bool, error) {
 // ForEachRef lists the short names of the refs under prefix
 // ("refs/heads/spike/"); ok is false when git fails.
 func (r Repo) ForEachRef(ctx context.Context, prefix string) ([]string, bool, error) {
-	o, ok, err := r.out(ctx, "for-each-ref", "--format=%(refname:short)", prefix)
+	o, ok, err := r.Output(ctx, "for-each-ref", "--format=%(refname:short)", prefix)
 	if err != nil || !ok {
 		return nil, false, err
 	}
