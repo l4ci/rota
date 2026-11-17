@@ -6,7 +6,6 @@
 package plan
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -250,34 +249,21 @@ type Entry struct {
 // List is the stored plans, optionally only one milestone's.
 func List(s Store, milestone string) ([]Entry, error) { return s.List(milestone) }
 
-// Show is the stored plan.
-func Show(s Store, key string) (string, error) {
-	if _, err := s.Resolve(key); err != nil {
-		return "", err
-	}
-	return s.Read(key)
+func verbs(s Store) artifact.Verbs {
+	return artifact.Verbs{Kind: "plan", Store: s, Check: func(key string) error {
+		_, err := s.Resolve(key)
+		return err
+	}}
 }
+
+// Show is the stored plan.
+func Show(s Store, key string) (string, error) { return verbs(s).Show(key) }
 
 // Put replaces an existing plan's text; changed is false when identical.
-func Put(s Store, key, text string) (bool, error) {
-	if _, err := s.Resolve(key); err != nil {
-		return false, err
-	}
-	changed, err := s.Replace(key, text)
-	var ae *exitcode.Error
-	if errors.As(err, &ae) && ae.Exit == exitcode.ExitResolution {
-		ae.WithHint("rota plan add " + key + " --title <text>")
-	}
-	return changed, err
-}
+func Put(s Store, key, text string) (bool, error) { return verbs(s).Put(key, text) }
 
 // Rm deletes a plan; a missing one is exit 3, never a no-op.
-func Rm(s Store, key string) error {
-	if _, err := s.Resolve(key); err != nil {
-		return err
-	}
-	return s.Remove(key)
-}
+func Rm(s Store, key string) error { return verbs(s).Rm(key) }
 
 // RenameCheck lists the files git tracks that mention old (a git-grep basic
 // regex), limited to pathspecs. No match, a non-git directory and git

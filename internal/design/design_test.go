@@ -105,7 +105,7 @@ func TestListDefaultsAndSkips(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "plain.md"), []byte("# nothing\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "F02.md"), []byte("---\ntitle: T\n---\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "B01.md"), []byte("---\r\nid: B01\r\nstatus: done\r\ncreated: 2026-01-01\r\n---\r\n"), 0o644)
-	list, _ := List(root)
+	list, _ := Files(root).List()
 	if len(list) != 2 || list[0] != (Entry{"B01", "", "done", "2026-01-01"}) || list[1] != (Entry{"F02", "T", "draft", ""}) {
 		t.Fatalf("list = %+v", list)
 	}

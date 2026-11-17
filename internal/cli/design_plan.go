@@ -142,7 +142,7 @@ func runDesignList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return res, err
 	}
-	list, err := design.List(root)
+	list, err := design.Files(root).List()
 	if err != nil {
 		return Result{}, err
 	}
