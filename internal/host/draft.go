@@ -2,7 +2,6 @@ package host
 
 import (
 	"errors"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,13 +27,6 @@ const (
 // promptMarkers come from the harness adapters, including legacy captures.
 var promptMarkers = harness.ComposerMarkers()
 
-// dialogOption: a dialog marks its selected choice with the same glyph.
-var dialogOption = regexp.MustCompile(`^\d+[.)]\s`)
-
-// dialogFooter: a dialog's key hint below its options. Marks an unnumbered
-// choice (Claude Code's folder-trust dialog) that dialogOption cannot.
-var dialogFooter = regexp.MustCompile(`(?i)enter (to )?(confirm|select)|esc (to cancel|not now)`)
-
 // promptLine returns the text after the pane's last prompt marker, up to the
 // end of that line, "" when the pane has no marker or the line is empty or a
 // placeholder.
@@ -56,66 +48,6 @@ func promptLine(pane string) string {
 		}
 	}
 	return line
-}
-
-// themeOption is a row of Claude Code's first-run theme picker, whose
-// highlighted choice sits after the prompt glyph like input would.
-var themeOption = regexp.MustCompile(`^(?:Dark|Light) mode\b|^Auto \(match terminal\)`)
-
-func isDialog(line, rest string) bool {
-	return themeOption.MatchString(line) || dialogOption.MatchString(line) || dialogFooter.MatchString(rest)
-}
-
-// DialogError is ErrDialogOpen with the dialog's first line, for the refusal message.
-type DialogError struct{ First string }
-
-func (e *DialogError) Error() string { return ErrDialogOpen.Error() + ": " + e.First }
-
-func (e *DialogError) Is(target error) bool { return target == ErrDialogOpen }
-
-// Dialog is a harness dialog standing on the prompt line.
-type Dialog struct {
-	First   string   // the dialog's title line
-	Dismiss []string // keys that dismiss it without choosing anything; nil when unknown
-}
-
-var paneRule = regexp.MustCompile(`^[─━]{10,}$`)
-
-// ReadDialog reports whether the pane's prompt line is a harness dialog's
-// option row rather than input, with its first line and, for the dialogs whose
-// dismissal is known to be safe, the keys. Claude Code's autocompact picker
-// says "esc not now", so Escape declines it; any other dialog stays unknown.
-func ReadDialog(pane string) (Dialog, bool) {
-	i := strings.LastIndexAny(pane, promptMarkers)
-	if i < 0 {
-		return Dialog{}, false
-	}
-	_, size := utf8.DecodeRuneInString(pane[i:])
-	rest := pane[i+size:]
-	line, _, _ := strings.Cut(rest, "\n")
-	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
-	if !isDialog(line, rest) {
-		return Dialog{}, false
-	}
-	// The title is the first text line below the last rule above the marker.
-	var first string
-	for _, l := range strings.Split(pane[:i], "\n") {
-		t := strings.TrimFunc(l, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
-		switch {
-		case paneRule.MatchString(t):
-			first = ""
-		case t != "" && first == "":
-			first = t
-		}
-	}
-	if first == "" {
-		first = line
-	}
-	d := Dialog{First: first}
-	if strings.Contains(pane[:i], "Want to autocompact at") && strings.Contains(strings.ToLower(rest), "esc not now") {
-		d.Dismiss = []string{"esc"}
-	}
-	return d, true
 }
 
 // clearDialog dismisses a dialog on the prompt line once when its dismissal is

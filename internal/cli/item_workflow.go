@@ -66,7 +66,7 @@ func itemOpen(c *Ctx, ref string) (backlog.Backend, string, string, error) {
 
 func itemShow(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item show takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item show takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		be, wf, _, _, err := itemTrack(c, args[0], "item show", backlog.FileShowHint)
@@ -206,7 +206,7 @@ func checkClaimID(as string) error {
 func itemClaim(fs *flag.FlagSet) RunFunc {
 	as := fs.String("as", "", "claim ID")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item claim takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item claim takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if err := checkClaimID(*as); err != nil {
@@ -238,7 +238,7 @@ func itemClaim(fs *flag.FlagSet) RunFunc {
 func itemRelease(fs *flag.FlagSet) RunFunc {
 	as := fs.String("as", "", "claim ID")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item release takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item release takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if err := checkClaimID(*as); err != nil {
@@ -267,7 +267,7 @@ func itemRelease(fs *flag.FlagSet) RunFunc {
 func itemState(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", strings.Join(backlog.States, "|"))
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item state takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item state takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if !slices.Contains(backlog.States, *to) {
@@ -311,7 +311,7 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.NoteKinds, "|"))
 	bodyFile := fs.String("body-file", "", "note text, path or - for stdin")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item note add takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item note add takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
@@ -347,7 +347,7 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 func itemNoteShow(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.NoteKinds, "|"))
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item note show takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item note show takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
@@ -368,7 +368,7 @@ func itemNoteShow(fs *flag.FlagSet) RunFunc {
 func itemNoteRm(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.NoteKinds, "|"))
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item note rm takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item note rm takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {

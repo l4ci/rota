@@ -444,6 +444,19 @@ func (s *Slot) SetAccount(account, configDir string) {
 	s.o.Set("account", account)
 }
 
+// SetLaunch records the harness kind, where it came from and the model of the
+// slot's next session, leaving the rest of its binding as it is (a switch).
+// An empty value removes the field.
+func (s *Slot) SetLaunch(kind, source, model string) {
+	for _, f := range []struct{ k, v string }{{"kind", kind}, {"kindSource", source}, {"model", model}} {
+		if f.v == "" {
+			s.o.Delete(f.k)
+			continue
+		}
+		s.o.Set(f.k, f.v)
+	}
+}
+
 // Binding is what ties a slot to an issue.
 type Binding struct {
 	Task, ClaimID, Kind, KindSource, Tier, Model, TierReason string

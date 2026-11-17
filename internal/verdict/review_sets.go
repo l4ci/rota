@@ -10,6 +10,9 @@ var (
 	readinessReviewKinds = append(slices.Clone(bounceReviewKinds), SecondOpinion)
 )
 
+// IsCoreReview reports whether kind is one of the core reviews (spec, quality).
+func IsCoreReview(kind string) bool { return slices.Contains(coreReviewKinds, kind) }
+
 // CoreReviewsAtHead returns spec and quality coverage at head, applying the
 // local-over-recovered-report precedence shared by review and readiness.
 func CoreReviewsAtHead(records []Record, head string) []Record {

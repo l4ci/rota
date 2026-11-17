@@ -48,11 +48,8 @@ func (e Env) RecoveryBrief(ctx context.Context, root string, be Board, cfg any, 
 // (#1827): the main machine's gate cannot read a support machine's local relay
 // log, so the issue thread is where it looks. Only a support machine posts:
 // on the explicit queued PR's issue, else the slot's held issue. body is the comment text.
-func SupportRelay(root string, cfg any, slot string, round int, text, pr string) (issue, body string, post bool, err error) {
-	if roundcfg.SupportName(cfg) == "" {
-		return "", "", false, nil
-	}
-	if role, err := roundcfg.MachineRole(cfg); err != nil || role != roundcfg.RoleSupport {
+func SupportRelay(root string, set roundcfg.Settings, slot string, round int, text, pr string) (issue, body string, post bool, err error) {
+	if set.Support == "" || set.Role != roundcfg.RoleSupport {
 		return "", "", false, nil
 	}
 	reg, err := worker.LoadRegistry(root)

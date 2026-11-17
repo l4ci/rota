@@ -158,10 +158,13 @@ func TestMigrateApplyAndNoop(t *testing.T) {
 	if err != nil || res.Changed || len(f.Calls) != calls {
 		t.Errorf("rerun: %v changed %v, %d new calls", err, res.Changed, len(f.Calls)-calls)
 	}
-	for _, l := range res.Lines {
-		if !strings.HasPrefix(l, "skip ") && !strings.HasPrefix(l, "Next:") {
-			t.Errorf("rerun printed %q", l)
+	for _, op := range res.Ops {
+		if op.Action != "skip" {
+			t.Errorf("rerun recorded %v", op)
 		}
+	}
+	if len(res.Ops) == 0 || len(res.Lines) != len(res.Ops)+1 {
+		t.Errorf("rerun: %d ops, lines %q; want skips plus the Next line", len(res.Ops), res.Lines)
 	}
 }
 
@@ -176,12 +179,9 @@ func TestMigratePace(t *testing.T) {
 	}
 	// the pause comes before every write but the first
 	writes := 0
-	for _, l := range res.Lines {
-		for _, p := range opActions {
-			if strings.HasPrefix(l, p.prefix) && !strings.HasPrefix(l, "skip ") {
-				writes++
-				break
-			}
+	for _, op := range res.Ops {
+		if op.Action != "skip" {
+			writes++
 		}
 	}
 	if len(*sleeps) != writes-1 || len(*sleeps) == 0 {
@@ -613,5 +613,29 @@ func TestMigrateResumeSkipsCompletedSteps(t *testing.T) {
 		if got[m] != want[m] {
 			t.Errorf("%s ran %d times across the interrupted run and its resume, a clean run runs it %d", m, got[m], want[m])
 		}
+	}
+}
+
+// Every op renders one report line, in order, and the lines between are the
+// non-op ones; the ops are not re-parsed from the text.
+func TestMigrateLinesRenderFromOps(t *testing.T) {
+	root := migProject(t, nil)
+	o, _, _ := newMig(t, root, false, nil)
+	res, err := Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, op := range res.Ops {
+		want = append(want, strings.ReplaceAll(op.Action, "-", " ")+" "+op.Text)
+	}
+	var got []string
+	for _, l := range res.Lines {
+		if len(got) < len(want) && l == want[len(got)] {
+			got = append(got, l)
+		}
+	}
+	if !slices.Equal(got, want) || len(want) == 0 {
+		t.Errorf("ops %q are not rendered in order in lines %q", want, res.Lines)
 	}
 }

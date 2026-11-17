@@ -718,3 +718,11 @@ func physicalCwd(c *Ctx) {
 		os.Setenv("PWD", real)
 	}
 }
+
+// noArgs refuses any positional argument.
+func noArgs(args []string) error {
+	if len(args) > 0 {
+		return Usage("unexpected argument %q", args[0])
+	}
+	return nil
+}

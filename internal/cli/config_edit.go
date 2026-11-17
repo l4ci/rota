@@ -30,7 +30,7 @@ import (
 func configEdit(fs *flag.FlagSet) RunFunc {
 	global := fs.Bool("global", false, "edit the global config instead of the project's")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "config edit takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "config edit takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		d := c.deps()

@@ -16,7 +16,7 @@ import (
 // Issues on a tracker with a local forge cannot be served: exit 3.
 func shipStrategy(*flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "ship strategy takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "ship strategy takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)

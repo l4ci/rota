@@ -69,6 +69,9 @@ type Mover interface {
 	IdleSlot(ctx context.Context, kind, account string) (string, bool)
 	// Transfer is `rota round transfer <issue> --to <slot>`.
 	Transfer(ctx context.Context, issue, to string) error
+	// Switch is `rota round switch <slot> --account <account>`: the slot keeps
+	// its issue and moves to the account in place.
+	Switch(ctx context.Context, slot, account string) error
 }
 
 // Deps is everything the loop touches outside its own memory.
@@ -453,12 +456,23 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 	if !attempt {
 		return
 	}
-	if err := w.Move.Transfer(ctx, t.Issue, slot); err != nil {
-		e.Action, e.To = ActionSleep, ""
-		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" transfer of %s to %s failed: %v; sleeping instead.", t.Issue, slot, err))
-	} else {
-		e.Status, e.ResolvedAt = StatusSwitched, Time(now)
-		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" moved %s to %s on account %s.", t.Issue, slot, acct))
+	switch {
+	case slot == t.Session:
+		if err := w.Move.Switch(ctx, slot, acct); err != nil {
+			e.Action, e.To = ActionSleep, ""
+			e.Note = strings.TrimSpace(strings.TrimSuffix(e.Note, ".") + fmt.Sprintf("; the in-place switch of %s to account %s failed: %v; sleeping instead.", slot, acct, err))
+		} else {
+			e.Status, e.ResolvedAt = StatusSwitched, Time(now)
+			e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" switched %s in place to account %s, keeping %s.", slot, acct, t.Issue))
+		}
+	default:
+		if err := w.Move.Transfer(ctx, t.Issue, slot); err != nil {
+			e.Action, e.To = ActionSleep, ""
+			e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" transfer of %s to %s failed: %v; sleeping instead.", t.Issue, slot, err))
+		} else {
+			e.Status, e.ResolvedAt = StatusSwitched, Time(now)
+			e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" moved %s to %s on account %s.", t.Issue, slot, acct))
+		}
 	}
 	if err := Save(w.Root, e); err != nil {
 		w.warn("limits not recorded: %v", err)
@@ -478,8 +492,9 @@ func (w *Watcher) store(e *Entry, existing bool) error {
 }
 
 // decide chooses sleep or switch. For a switch it fills e.Action and e.To and
-// returns the slot and account to move to; every other outcome is a sleep with
-// the reason in the note.
+// returns the slot and account to move to: an idle slot on that account, else
+// the limited slot itself (an in-place switch). Every other outcome is a sleep
+// with the reason in the note.
 func (w *Watcher) decide(ctx context.Context, t Target, e *Entry) (slot, acct string, attempt bool) {
 	e.Action = ActionSleep
 	sleep := func(why string) (string, string, bool) {
@@ -502,7 +517,10 @@ func (w *Watcher) decide(ctx context.Context, t Target, e *Entry) (slot, acct st
 	}
 	slot, ok = w.Move.IdleSlot(ctx, t.Kind, acct)
 	if !ok {
-		return sleep(fmt.Sprintf("No idle slot on account %s.", acct))
+		// No slot to move the issue to: the limited slot moves to the account
+		// itself, keeping its issue and worktree (rota round switch).
+		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" No idle slot on account %s.", acct))
+		slot = t.Session
 	}
 	e.Action, e.To = ActionSwitch, slot
 	return slot, acct, true

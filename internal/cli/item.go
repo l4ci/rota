@@ -71,7 +71,7 @@ func itemCommands() []*Command {
 // ---- shared helpers -------------------------------------------------------
 
 // argCount checks the positional count of a verb.
-func argCount(c *Ctx, args []string, min, max int, usage string) error {
+func argCount(args []string, min, max int, usage string) error {
 	if len(args) < min || (max >= 0 && len(args) > max) {
 		return Usage("%s", usage)
 	}
@@ -154,7 +154,7 @@ var idCounters = []string{"bugs", "features", "tasks", "milestones"}
 func idNext(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "bugs|features|tasks|milestones")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "id next takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "id next takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -193,7 +193,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 		named[n] = fs.String(n, "", n+" field")
 	}
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "item create takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "item create takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -466,7 +466,7 @@ func checkFieldName(name string, allowed []string, what string) error {
 func itemFieldGet(fs *flag.FlagSet) RunFunc {
 	name := fs.String("name", "", strings.Join(itemGetFields, "|"))
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item field get takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item field get takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -491,7 +491,7 @@ func itemFieldGet(fs *flag.FlagSet) RunFunc {
 
 func itemFieldList(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item field list takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item field list takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -519,7 +519,7 @@ func itemFieldSet(fs *flag.FlagSet) RunFunc {
 	name := fs.String("name", "", strings.Join(itemSetFields, "|"))
 	value := fs.String("value", "", "new value; empty clears the field")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item field set takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item field set takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -556,7 +556,7 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 	name := fs.String("name", "", "section heading, e.g. acceptance")
 	bodyFile := fs.String("body-file", "", "section text, path or - for stdin")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item section set takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item section set takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		if strings.TrimSpace(*name) == "" || strings.ContainsAny(*name, "\r\n") || strings.HasPrefix(strings.TrimSpace(*name), "#") {
@@ -680,7 +680,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 	unmetReason := fs.String("unmet-reason", "", "reason for closing with unmet acceptance criteria")
 	gist := fs.String("gist", "", "decision items: the one-line gist for the milestone's decision log")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item complete takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item complete takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -720,7 +720,7 @@ func shortHead(c *Ctx) (string, error) {
 
 func itemReopen(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item reopen takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item reopen takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -895,7 +895,7 @@ func readyReasons(be backlog.Backend, ref string) ([]string, error) {
 
 func itemReady(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item ready takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item ready takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -930,7 +930,7 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "comment text, path or - for stdin")
 	relayRound := fs.Int("round", -1, "relay only: the round to carry (default the round state's)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item comment add takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item comment add takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -1009,7 +1009,7 @@ func decodeText(b []byte) string { return string([]rune(string(b))) }
 func itemCommentList(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.CommentKinds, "|")+"; default all")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "item comment list takes one item ID"); err != nil {
+		if err := argCount(args, 1, 1, "item comment list takes one item ID"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)

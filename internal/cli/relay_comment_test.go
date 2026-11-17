@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/l4ci/rota/internal/marker"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,5 +118,22 @@ func TestItemCommentRelayStampsSide(t *testing.T) {
 				t.Errorf("relay no longer parses with the stamp: %q", got)
 			}
 		})
+	}
+}
+
+// An invalid round.role is reported by the relay post, not read as "not
+// support" and skipped silently.
+func TestPostSupportRelayInvalidRole(t *testing.T) {
+	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	writeLocalConfig(t, dir, `{"round":{"role":"bogus"}}`+"\n")
+	deps := withTracker(t, issueFixture())
+	brief := filepath.Join(t.TempDir(), "b.md")
+	if err := os.WriteFile(brief, []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Ctx{Deps: deps, Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
+	err := postSupportRelay(c, dir, "w1", brief, 2, "")
+	if err == nil || !strings.Contains(err.Error(), "round.role") {
+		t.Fatalf("want a round.role error, got %v", err)
 	}
 }

@@ -87,7 +87,7 @@ Work another tool already started (a Codex worktree, an agent-team branch, a clo
 | `idle`, no PR | read the pane once. A worker that stopped without a PR or a question is stuck, not finished |
 | `blocked` | read the question. Answer, or escalate (section 5) |
 | `needs-permission` | decide from the request in the pane. Never approve what you would not run yourself |
-| `limited` | the account is out of quota. Wait for the reset, or reassign the issue to a slot on a free account |
+| `limited` | the account is out of quota. With an idle slot on a free account, `rota round transfer <ID> --to <slot>`. With none, `rota round switch <slot>` keeps the slot and its work and relaunches it on another account (`--kind` for the other harness); else wait for the reset |
 | `dead` | see section 4 |
 | `unknown` | see section 4 |
 | `unverifiable` | the host could not vouch for it: not dead, never reclaimed on that alone. `wait` returns it once after `round.stallMinutes` with the reason; see section 4 |
