@@ -25,11 +25,11 @@ func trackerCommands() *Command {
 // trackerSettings reads the issues.* config of the project, or the defaults
 // outside one. An invalid forge.provider or issues.source is a tracker error.
 func trackerSettings(c *Ctx) (tracker.Settings, error) {
-	root, err := c.Root()
+	_, cfg, err := c.Project()
 	if err != nil {
 		return tracker.SettingsFromConfig(nil), nil
 	}
-	return tracker.ReadSettings(c.deps().Config(root))
+	return tracker.ReadSettings(cfg)
 }
 
 // trackerErr maps a tracker failure onto the exit table through its kind.

@@ -90,6 +90,10 @@ type Ctx struct {
 	// terminal its host already proved.
 	termOut  io.Writer
 	warnings []string
+	// cfg is the merged config of cfgRoot, loaded once by projectConfig.
+	cfg     any
+	cfgRoot string
+	cfgDone bool
 
 	// holderPID is the --holder-pid value of the running verb, bound by
 	// holderPIDFlag; roundEnv and accountedRoundEnv put it on every Env they
@@ -153,6 +157,26 @@ func (c *Ctx) Root() (string, error) {
 		return "", rootError(err)
 	}
 	return root, nil
+}
+
+// Project is the project root and its merged config, the pair most verbs want.
+// The config is loaded once per invocation and shared with preflight, so a
+// verb sees the value the gates judged. Verbs that rewrite the config and read
+// it back, or that look the root up with masking on, keep their own lookup.
+func (c *Ctx) Project() (string, any, error) {
+	root, err := c.Root()
+	if err != nil {
+		return "", nil, err
+	}
+	return root, c.projectConfig(root), nil
+}
+
+// projectConfig is the merged config of root, loaded on first use.
+func (c *Ctx) projectConfig(root string) any {
+	if !c.cfgDone || c.cfgRoot != root {
+		c.cfg, c.cfgRoot, c.cfgDone = c.deps().Config(root), root, true
+	}
+	return c.cfg
 }
 
 // RepoPath resolves --repo to the sub-repo's absolute path through

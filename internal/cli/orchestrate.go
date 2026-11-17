@@ -90,7 +90,7 @@ func orchestrateVerb(fs *flag.FlagSet) RunFunc {
 }
 
 func runOrchestrate(c *Ctx, dry bool) (Result, error) {
-	root, err := c.Root()
+	root, cfg, err := c.Project()
 	if err != nil {
 		return Result{}, err
 	}
@@ -98,7 +98,6 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	if res, err := runDoctor(c, nil); err != nil {
 		return res, Failed("doctor reports a failure: no session started").WithHint("fix each fail above (the hint says how), then run rota orchestrate again")
 	}
-	cfg := c.deps().Config(root)
 	env := c.deps().orchestrateEnv()
 	if env.PickAccount == nil {
 		env.PickAccount = func(root string) (string, bool) {
