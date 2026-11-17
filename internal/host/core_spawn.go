@@ -24,7 +24,7 @@ func (h *coreHost) spawnIntentPath(core, slot, cwd string) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	sum := sha256.Sum256([]byte(h.d.Getenv("HC_TERMINAL_SOCKET") + "\x00" + core + "\x00" + slot + "\x00" + filepath.Clean(cwd)))
+	sum := sha256.Sum256([]byte(h.d.Getenv(envCoreSocket) + "\x00" + core + "\x00" + slot + "\x00" + filepath.Clean(cwd)))
 	return filepath.Join(d, "spawn-"+hex.EncodeToString(sum[:])+".json"), nil
 }
 func (h *coreHost) writeSpawnIntent(path string, v coreSpawnIntent) error {
@@ -55,7 +55,7 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 		}
 		env, _ := json.Marshal(launchEnv)
 		savedEnv, _ := json.Marshal(intent.Env)
-		if intent.Endpoint != h.d.Getenv("HC_TERMINAL_SOCKET") || intent.Core != c.core || intent.Slot != o.Slot || intent.Cwd != o.Cwd || intent.Launch != o.Launch || string(env) != string(savedEnv) {
+		if intent.Endpoint != h.d.Getenv(envCoreSocket) || intent.Core != c.core || intent.Slot != o.Slot || intent.Cwd != o.Cwd || intent.Launch != o.Launch || string(env) != string(savedEnv) {
 			return intent, terminal, fmt.Errorf("Core slot %s has an unresolved worker create with different launch settings; recover original worker first", o.Slot)
 		}
 		var listed struct{ Terminals *[]coreTerminal }
@@ -96,7 +96,7 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 	if _, e = rand.Read(tokenBytes); e != nil {
 		return intent, terminal, e
 	}
-	intent = coreSpawnIntent{Token: hex.EncodeToString(tokenBytes), Endpoint: h.d.Getenv("HC_TERMINAL_SOCKET"), Core: c.core, Slot: o.Slot, Cwd: o.Cwd, Launch: o.Launch, Env: launchEnv}
+	intent = coreSpawnIntent{Token: hex.EncodeToString(tokenBytes), Endpoint: h.d.Getenv(envCoreSocket), Core: c.core, Slot: o.Slot, Cwd: o.Cwd, Launch: o.Launch, Env: launchEnv}
 	if e = h.writeSpawnIntent(path, intent); e != nil {
 		return intent, terminal, fmt.Errorf("Core spawn not attempted: intent could not persist: %w", e)
 	}

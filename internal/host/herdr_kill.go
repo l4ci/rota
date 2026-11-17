@@ -83,7 +83,7 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 // that still holds a tab, and never passes --group, which would take the
 // orchestrator and every sibling slot with it.
 func (h *herdr) CloseWorkspace(ctx context.Context, id string) error {
-	if id == "" || id == h.d.Getenv("HERDR_WORKSPACE_ID") {
+	if id == "" || id == h.d.Getenv(envHerdrWorkspace) {
 		return fmt.Errorf("refusing to close workspace %q: not a slot workspace", id)
 	}
 	r := h.herdr(ctx, "workspace", "get", id)

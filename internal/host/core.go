@@ -116,7 +116,7 @@ func (h *coreHost) connect(ctx context.Context, endpoint, core string) (*coreCon
 }
 func (h *coreHost) connectMode(ctx context.Context, endpoint, core string, framed bool) (*coreConn, error) {
 	if endpoint == "" || !filepath.IsAbs(endpoint) {
-		return nil, fmt.Errorf("herdr-core requires inherited HC_TERMINAL_SOCKET absolute endpoint")
+		return nil, fmt.Errorf("herdr-core requires inherited %s absolute endpoint", envCoreSocket)
 	}
 	n, e := h.d.Dial(ctx, endpoint)
 	if e != nil {
@@ -149,7 +149,7 @@ func (h *coreHost) connectMode(ctx context.Context, endpoint, core string, frame
 	return c, nil
 }
 func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) {
-	c, e := h.connect(ctx, h.d.Getenv("HC_TERMINAL_SOCKET"), "")
+	c, e := h.connect(ctx, h.d.Getenv(envCoreSocket), "")
 	if e != nil {
 		return nil, coreTerminal{}, e
 	}
@@ -157,7 +157,7 @@ func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) 
 	var t coreTerminal
 	if id == "" || strings.Contains(id, "/") {
 		c.Close()
-		return nil, t, fmt.Errorf("herdr-core requires a local HC_TERMINAL_ID")
+		return nil, t, fmt.Errorf("herdr-core requires a local %s", envCoreTerm)
 	}
 	if e = c.call("terminal.get", map[string]any{"terminal": id}, &t); e != nil {
 		c.Close()
@@ -172,10 +172,10 @@ func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) 
 func (h *coreHost) Kind() Kind                 { return HerdrCore }
 func (h *coreHost) Capabilities() Capabilities { return kindPolicy(HerdrCore, CapabilitiesOf(h)) }
 func (h *coreHost) InSession() bool {
-	return h.d.Getenv(envCoreTerm) != "" && h.d.Getenv("HC_TERMINAL_SOCKET") != ""
+	return h.d.Getenv(envCoreTerm) != "" && h.d.Getenv(envCoreSocket) != ""
 }
 func (h *coreHost) Where() string {
-	return h.d.Getenv("HC_TERMINAL_SOCKET") + " / " + h.d.Getenv(envCoreTerm)
+	return h.d.Getenv(envCoreSocket) + " / " + h.d.Getenv(envCoreTerm)
 }
 func (h *coreHost) CoreIdentity() (string, string) {
 	h.mu.Lock()
@@ -385,7 +385,7 @@ func (h *coreHost) spawnLocked(ctx context.Context, c *coreConn, parent coreTerm
 		}
 	}()
 	token := intent.Token
-	v := coreHandle{Endpoint: h.d.Getenv("HC_TERMINAL_SOCKET"), Core: c.core, Address: t.Address, Token: token, Slot: o.Slot, Cwd: o.Cwd, Created: t.Created, PID: t.PID}
+	v := coreHandle{Endpoint: h.d.Getenv(envCoreSocket), Core: c.core, Address: t.Address, Token: token, Slot: o.Slot, Cwd: o.Cwd, Created: t.Created, PID: t.PID}
 	s := intent.Handle
 	if s != "" {
 		v, e = h.owned(s)
@@ -930,7 +930,7 @@ func (h *coreHost) Snapshot(ctx context.Context) ([]Agent, error) {
 	for _, p := range files {
 		b, e := h.d.FS.ReadFile(p)
 		var v coreHandle
-		if e == nil && json.Unmarshal(b, &v) == nil && v.Address != "" && v.Token != "" && v.Created > 0 && v.PID > 0 && v.Core == c.core && v.Endpoint == h.d.Getenv("HC_TERMINAL_SOCKET") {
+		if e == nil && json.Unmarshal(b, &v) == nil && v.Address != "" && v.Token != "" && v.Created > 0 && v.PID > 0 && v.Core == c.core && v.Endpoint == h.d.Getenv(envCoreSocket) {
 			owned[v.Address] = v
 		}
 	}
