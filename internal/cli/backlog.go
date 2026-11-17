@@ -402,7 +402,11 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		sm := backlog.BuildSummary(root, items, !be.Capabilities().IssueIDs)
+		in, err := backlog.LoadSummaryInputs(root, items, !be.Capabilities().IssueIDs)
+		if err != nil {
+			return backlogFail(err)
+		}
+		sm := backlog.BuildSummary(in)
 		lines := []string{fmt.Sprintf("Backlog: %s, %s, %s", plural(sm.Bugs, "bug"), plural(sm.Features, "feature"), plural(sm.Tasks, "task"))}
 		data := jsonx.Obj("backlog", jsonx.Obj("bugs", sm.Bugs, "features", sm.Features, "tasks", sm.Tasks))
 

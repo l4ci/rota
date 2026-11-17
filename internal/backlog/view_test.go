@@ -1,6 +1,8 @@
 package backlog
 
 import (
+	ms "github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -239,24 +241,21 @@ func TestTitleOf(t *testing.T) {
 }
 
 func TestBuildSummary(t *testing.T) {
-	f := fileBackend(t, viewBacklog)
-	root := f.Root
-	rota := filepath.Join(root, ".rota")
-	write := func(name, body string) {
-		t.Helper()
-		if err := os.WriteFile(filepath.Join(rota, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	item := func(id, typ string, closed bool, at string) Item {
+		return Item{ID: id, Type: typ, Closed: closed, ClosedAt: at, Reason: "done"}
 	}
-	write("KNOWLEDGE.md", "## A\n- x\n## B\n- y\n")
-	write("ARCHIVE.md", "- ~~one~~\n- ~~two~~\n- other\n")
-	write("status.json", `{"active":[{"items":["B01"],"branch":"b/x","startedAt":"2026-10-01T10:00:00Z"}]}`)
-	items, err := f.List(true)
-	if err != nil {
-		t.Fatal(err)
+	in := SummaryInputs{
+		Items: []Item{
+			item("B01", "B", false, ""), item("B02", "B", false, ""), item("B03", "B", false, ""),
+			item("F01", "F", false, ""), item("F02", "F", false, ""), item("T01", "T", false, ""),
+			item("B09", "B", true, "2026-09-30"),
+		},
+		Active:     []status.Entry{{Items: []string{"B01"}, Branch: "b/x", StartedAt: "2026-10-01T10:00:00Z"}},
+		Milestones: []ms.Entry{{ID: "M01", Title: "One", Status: "active"}, {ID: "M02", Title: "Two", Status: "planned"}},
+		Knowledge:  "## A\n- x\n## B\n- y\n",
+		Archive:    "- ~~one~~\n- ~~two~~\n- other\n",
 	}
-
-	sm := BuildSummary(root, items, true)
+	sm := BuildSummary(in)
 	if sm.Bugs != 3 || sm.Features != 2 || sm.Tasks != 1 {
 		t.Errorf("counts = %d/%d/%d", sm.Bugs, sm.Features, sm.Tasks)
 	}
@@ -272,7 +271,41 @@ func TestBuildSummary(t *testing.T) {
 	if sm.Archive != 2 {
 		t.Errorf("archive = %d", sm.Archive)
 	}
-	if len(sm.Milestones) != 0 {
+	if !reflect.DeepEqual(sm.Milestones, []SummaryMilestone{{"M01", "One"}}) {
 		t.Errorf("milestones = %+v", sm.Milestones)
+	}
+}
+
+func TestLoadSummaryInputs(t *testing.T) {
+	f := fileBackend(t, viewBacklog)
+	root := f.Root
+	rota := filepath.Join(root, ".rota")
+	if err := os.WriteFile(filepath.Join(rota, "KNOWLEDGE.md"), []byte("## A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in, err := LoadSummaryInputs(root, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Knowledge != "## A\n" || in.Decisions != "" || in.Archive != "" {
+		t.Errorf("texts = %q %q %q", in.Knowledge, in.Decisions, in.Archive)
+	}
+	// A milestone doc that cannot be read is an error, not an empty list.
+	msDir := filepath.Join(rota, "milestones")
+	if err := os.MkdirAll(msDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bad := filepath.Join(msDir, "M01.md")
+	if err := os.WriteFile(bad, []byte("---\nid: M01\n---\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(bad); err == nil {
+		t.Skip("file permissions not enforced (root)")
+	}
+	if _, err := LoadSummaryInputs(root, nil, true); err == nil {
+		t.Error("milestone read failure was dropped")
+	}
+	if _, err := LoadSummaryInputs(root, nil, false); err != nil {
+		t.Errorf("issue mode reads no milestones: %v", err)
 	}
 }
