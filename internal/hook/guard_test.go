@@ -239,6 +239,10 @@ func TestGuardDenies(t *testing.T) {
 		"git branch --force main abc123",
 		"git branch -M main",
 		"git branch -m main other",
+		// #3646: the prose exemption stops at `--` and covers only the bare rota command.
+		"rota review probe -- xargs --message 'git push origin main'",
+		"rota review probe -- xargs --message='git push origin main'",
+		"./rota item create --title 'git push origin main'",
 		"git branch -f " + gOtherBranch + " abc123",
 		"git -C " + gOther + " branch -M renamed",
 		"git push --prune origin 'refs/heads/*:refs/heads/*'",
