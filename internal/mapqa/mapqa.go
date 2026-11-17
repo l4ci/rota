@@ -84,10 +84,26 @@ func Entries(root string) []Entry {
 	return out
 }
 
-// Touched is the effective touch date of e: its `touched:` frontmatter when
-// that parses as a date, else the date of the file's last git commit in root;
-// ok is false when neither gives one.
+// CommitDate is the date of the last commit that touched rel, asked of repo;
+// ok is false when git fails, the path has no history or the date does not
+// parse. It is the one rule for a git-derived staleness date.
+func CommitDate(repo git.Repo, rel string) (time.Time, bool) {
+	out, ok, err := repo.LastCommitDate(context.Background(), rel)
+	if err != nil || !ok {
+		return time.Time{}, false
+	}
+	return pystr.ParseDate(out)
+}
+
+// Touched is TouchedIn for the real git repo at root.
 func (e Entry) Touched(root string) (time.Time, bool) {
+	return e.TouchedIn(git.Repo{Dir: root}, root)
+}
+
+// TouchedIn is the effective touch date of e: its `touched:` frontmatter when
+// that parses as a date, else the date of the file's last commit in repo (the
+// file's path taken relative to root); ok is false when neither gives one.
+func (e Entry) TouchedIn(repo git.Repo, root string) (time.Time, bool) {
 	if d, ok := pystr.ParseDate(frontmatter.Str(e.FM, "touched")); ok {
 		return d, true
 	}
@@ -95,11 +111,7 @@ func (e Entry) Touched(root string) (time.Time, bool) {
 	if err != nil {
 		rel = e.Path
 	}
-	out, ok, err := git.Repo{Dir: root}.LastCommitDate(context.Background(), rel)
-	if err != nil || !ok {
-		return time.Time{}, false
-	}
-	return pystr.ParseDate(out)
+	return CommitDate(repo, rel)
 }
 
 // MapIndexBlock is the body of the rota-map managed block.

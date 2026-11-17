@@ -1,7 +1,9 @@
 package stale
 
 import (
+	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -183,5 +185,16 @@ func TestFindKnowledgeReadErrors(t *testing.T) {
 	}
 	if _, err := FindReport(root, "knowledge", 0, date(t, "2999-01-01"), nil); err == nil {
 		t.Error("unreadable KNOWLEDGE.md gave no error")
+	}
+}
+
+func TestFindKnowledgeDatesThroughTheSuppliedRunner(t *testing.T) {
+	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n"})
+	repo := git.Repo{Runner: func(_ context.Context, _ string, _ ...string) (git.Result, error) {
+		return git.Result{Stdout: "2020-01-02\n"}, nil
+	}}
+	got, err := findKnowledge(repo, root, 90, date(t, "2021-01-01"))
+	if err != nil || len(got) != 1 || got[0].Date != "2020-01-02" {
+		t.Fatalf("findKnowledge = %v %v", got, err)
 	}
 }
