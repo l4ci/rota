@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 var t0 = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
@@ -644,13 +644,13 @@ func TestReadingOfMapsAMeter(t *testing.T) {
 	reset := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	for _, tc := range []struct {
 		name string
-		m    worker.Meter
+		m    usagelimit.Meter
 		want Reading
 	}{
-		{"unknown", worker.Meter{Verdict: worker.VerdictUnknown}, Reading{Window: WindowUnknown}},
-		{"under", worker.Meter{FiveHour: f(99), SevenDay: f(50)}, Reading{Known: true, Window: WindowUnknown}},
-		{"five hour spent", worker.Meter{Verdict: worker.VerdictCooling, FiveHour: f(100), ResetsAt: &reset}, Reading{Known: true, Cooling: true, ResetsAt: reset, Window: WindowFiveHour}},
-		{"seven day wins", worker.Meter{FiveHour: f(100), SevenDay: f(100)}, Reading{Known: true, Window: WindowSevenDay}},
+		{"unknown", usagelimit.Meter{Verdict: usagelimit.VerdictUnknown}, Reading{Window: WindowUnknown}},
+		{"under", usagelimit.Meter{FiveHour: f(99), SevenDay: f(50)}, Reading{Known: true, Window: WindowUnknown}},
+		{"five hour spent", usagelimit.Meter{Verdict: usagelimit.VerdictCooling, FiveHour: f(100), ResetsAt: &reset}, Reading{Known: true, Cooling: true, ResetsAt: reset, Window: WindowFiveHour}},
+		{"seven day wins", usagelimit.Meter{FiveHour: f(100), SevenDay: f(100)}, Reading{Known: true, Window: WindowSevenDay}},
 	} {
 		if got := ReadingOf(tc.m); got != tc.want {
 			t.Errorf("%s: got %+v want %+v", tc.name, got, tc.want)

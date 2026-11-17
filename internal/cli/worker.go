@@ -25,6 +25,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -280,7 +281,7 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func accountObject(m worker.Meter) *jsonx.Object {
+func accountObject(m usagelimit.Meter) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("kind", config.KindClaude) // the meter reads Anthropic's usage, so only claude entries are listed
 	o.Set("name", m.Name)

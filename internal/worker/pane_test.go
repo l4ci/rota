@@ -1,8 +1,8 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -217,24 +217,6 @@ func TestClassifyOpenCode(t *testing.T) {
 	}
 }
 
-func TestLimitRegexIsTheAlternationOfTheClassifierPhrases(t *testing.T) {
-	re := regexp.MustCompile(LimitRegex())
-	if len(limitPatterns) != len(limitPhrases) {
-		t.Fatalf("%d patterns for %d phrases", len(limitPatterns), len(limitPhrases))
-	}
-	for _, msg := range []string{"You've reached your usage limit", "Claude USAGE LIMIT REACHED", "Youve hit your usage limit", "Your limit will reset at 3pm", "Approaching your usage limit"} {
-		if !re.MatchString(msg) {
-			t.Errorf("%q not matched", msg)
-		}
-		if _, _, ok := FindLimit("", msg); ok == strings.HasPrefix(msg, "Approaching") {
-			t.Errorf("%q: FindLimit ok=%v", msg, ok)
-		}
-	}
-	if re.MatchString("the limit of the buffer") {
-		t.Error("matched a bare limit")
-	}
-}
-
 func TestParseReviewResult(t *testing.T) {
 	for in, want := range map[string][]string{
 		"issues:#139":             {"#139"},
@@ -322,35 +304,14 @@ func TestFindLimitIsTheOneDefinitionOfAHitLimit(t *testing.T) {
 		{"hit limit", "You've reached your usage limit\n", true, "reached your usage limit"},
 		{"add funds", "You've reached your usage limit\nAdd funds to continue\n", true, "Add funds"},
 	} {
-		_, _, found := FindLimit("", tc.pane)
+		_, _, found := usagelimit.FindLimit("", tc.pane)
 		state, ev := Classify(tc.pane, false, 40, "")
 		if found != tc.limited || (state == StateLimited) != tc.limited {
-			t.Errorf("%s: FindLimit=%v Classify=%s, want limited=%v", tc.name, found, state, tc.limited)
+			t.Errorf("%s: usagelimit.FindLimit=%v Classify=%s, want limited=%v", tc.name, found, state, tc.limited)
 		}
 		if tc.limited && !strings.Contains(ev, tc.evidence) {
 			t.Errorf("%s: evidence %q lacks %q", tc.name, ev, tc.evidence)
 		}
-	}
-}
-
-// FindLimit reads a kind's own phrases on top of the shared ones, for that kind only.
-func TestFindLimitReadsTheKindsOwnPhrases(t *testing.T) {
-	const quota = "Error: insufficient quota\n"
-	if _, _, ok := FindLimit(harness.OpenCode, quota); !ok {
-		t.Error("opencode quota text is not a limit for an opencode slot")
-	}
-	for _, kind := range []string{"", harness.Claude, harness.Codex} {
-		if _, _, ok := FindLimit(kind, quota); ok {
-			t.Errorf("opencode quota text is a limit for kind %q", kind)
-		}
-	}
-}
-
-// The herdr prefilter must let a kind's own limit text through, or the
-// watcher's per-kind reading never sees it.
-func TestLimitRegexIncludesKindPhrases(t *testing.T) {
-	if !regexp.MustCompile(LimitRegex()).MatchString("Error: insufficient quota") {
-		t.Error("LimitRegex drops opencode quota text")
 	}
 }
 
@@ -411,7 +372,7 @@ func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 	if st, _ := Classify(brief, true, 60, ""); st != StateBusy {
 		t.Errorf("moving pane under an echoed brief: %s", st)
 	}
-	if _, _, ok := FindLimit("", StripRelays("", brief)); ok {
+	if _, _, ok := usagelimit.FindLimit("", usagelimit.StripRelays("", brief)); ok {
 		t.Error("StripRelays left the echoed phrase in")
 	}
 	own := brief + "● working\nYou've reached your usage limit\nAdd funds to continue\n"
@@ -642,39 +603,6 @@ func TestClassifyCodexPaneLimitAbovePrompt(t *testing.T) {
 	limit := reply + "\n■ You've hit your usage limit. Try again in 2 hours.\n" + footer
 	if st, ev := ClassifyFor("codex", limit, false, 60, "idle"); st != StateLimited {
 		t.Errorf("codex limit: want LIMITED, got %s %q", st, ev)
-	}
-}
-
-// A reply-marker block's gutter lines are dialog only when no indented
-// paragraph of the same reply follows it: the paragraph proves the "⎿" output
-// belongs to the reply, so the limit phrase under it is not a hit limit.
-func TestDialogRegionGutterBeforeIndentedParagraphIsReply(t *testing.T) {
-	footer := "\n❯ \n  ⏵⏵ bypass permissions on\n"
-	const phrase = "You've hit your usage limit"
-	with := "● Update(x)\n  ⎿  " + phrase + "\n\n  The edit is done.\n" + footer
-	if got := DialogRegion(with, nil); strings.Contains(got, phrase) {
-		t.Errorf("gutter line before a reply paragraph kept as dialog: %q", got)
-	}
-	without := "● Update(x)\n  ⎿  " + phrase + "\n" + footer
-	if got := DialogRegion(without, nil); !strings.Contains(got, phrase) {
-		t.Errorf("idle gutter line with no paragraph after it dropped: %q", got)
-	}
-}
-
-// The working flag is seeded from the status area under the input box's edge:
-// a spinner or busy footer only there still marks the pane working, so "⎿"
-// tool output quoting the phrase above the box is not a hit limit.
-func TestDialogRegionWorkingFromStatusAreaOnly(t *testing.T) {
-	const phrase = "You've hit your usage limit"
-	reply := "● Bash(grep limit poll.go)\n  ⎿  poll.go:417: " + phrase + "\n"
-	box := "\n╭────╮\n│ ❯  │\n╰────╯\n"
-	got := DialogRegion(reply+box+"✻ Running… (3s · esc to interrupt)\n", nil)
-	if strings.Contains(got, phrase) {
-		t.Errorf("spinner below the box edge not read as working: %q", got)
-	}
-	idle := DialogRegion(reply+box+"  opus · ctx 40%\n", nil)
-	if !strings.Contains(idle, phrase) {
-		t.Errorf("idle pane dropped its gutter line: %q", idle)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ func usageDir(t *testing.T) string {
 	return dir
 }
 
-func goMeters(t *testing.T, dir, usage string) []Meter {
+func goMeters(t *testing.T, dir, usage string) []usagelimit.Meter {
 	t.Helper()
 	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
@@ -154,7 +155,7 @@ func TestAccountSelectionMeterReaders(t *testing.T) {
 			if tt.current == "" {
 				name, ok = acc.Pick(bg, "unused", tt.exclude)
 			} else {
-				var m Meter
+				var m usagelimit.Meter
 				m, ok, _ = acc.OrchestratorTarget(bg, "unused", tt.current, tt.threshold)
 				name = m.Name
 			}
@@ -295,11 +296,7 @@ func TestExpiredTokenReportsUnknownWithoutNetwork(t *testing.T) {
 	}
 }
 
-func TestSameConfigDirAndAccountOf(t *testing.T) {
-	home, _ := os.UserHomeDir()
-	if !SameConfigDirIn("", filepath.Join(home, ".claude"), home) || !SameConfigDirIn("~/.x/", filepath.Join(home, ".x"), home) || SameConfigDirIn("/a", "/b", home) {
-		t.Error("SameConfigDir")
-	}
+func TestAccountOf(t *testing.T) {
 	acc := &Accounts{Env: Env{Config: memConfig(t, acctConfig)}}
 	if acc.AccountOf("", "/acct/beta/") != "beta" || acc.AccountOf("", "/elsewhere") != "" {
 		t.Error("AccountOf")

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/keepstate"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
 	"os/signal"
 	"strconv"
@@ -24,7 +25,6 @@ import (
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // D2 (#66): `rota keepalive run|status`. The loop is internal/keepalive; this
@@ -306,7 +306,7 @@ func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) kee
 			return keepalive.Choice{Others: others}
 		}
 		return keepalive.Choice{
-			To:     &keepalive.Target{Name: m.Name, ConfigDir: worker.ExpandConfigDirIn(m.ConfigDir, homeOf(c.deps().UserHomeDir)), Headroom: *m.Headroom},
+			To:     &keepalive.Target{Name: m.Name, ConfigDir: usagelimit.ExpandConfigDirIn(m.ConfigDir, homeOf(c.deps().UserHomeDir)), Headroom: *m.Headroom},
 			Others: others,
 		}
 	}

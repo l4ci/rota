@@ -5,6 +5,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // SkillClaudeDirs is the home and the Claude config dirs user-scope skills go
@@ -28,10 +29,10 @@ func SkillClaudeDirs(getenv func(string) string, userHome func() (string, error)
 		if ac.Dir == "" {
 			continue
 		}
-		dir := ExpandConfigDirIn(ac.Dir, home)
+		dir := usagelimit.ExpandConfigDirIn(ac.Dir, home)
 		dup := false
 		for _, d := range append(append([]string{}, dirs...), skipped...) {
-			dup = dup || SameConfigDirIn(d, dir, home)
+			dup = dup || usagelimit.SameConfigDirIn(d, dir, home)
 		}
 		if dup {
 			continue
