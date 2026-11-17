@@ -186,7 +186,7 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 		next, err := release.Bump(dir, path, kind, bump, false)
 		if err != nil {
 			if errors.Is(err, release.ErrNotGreater) {
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.NotGreater, "changed", false)}, releaseBumpErr(err, true)
+				return blockedRefusalErr(nil, blockedby.NotGreater, releaseBumpErr(err, true))
 			}
 			return Result{}, releaseBumpErr(err, true)
 		}
@@ -326,8 +326,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		}
 		out, err := release.UpdateChangelog(existing, rerr == nil, version, stamp.Date(c.deps().Today()), notes)
 		if errors.Is(err, release.ErrSectionExists) {
-			return Result{Data: jsonx.Obj("blockedBy", blockedby.Exists, "changed", false)},
-				Refused("%s already has a section for v%s", *path, version)
+			return blockedRefusal(nil, blockedby.Exists, fmt.Sprintf("%s already has a section for v%s", *path, version), "")
 		}
 		if err != nil {
 			return Result{}, err

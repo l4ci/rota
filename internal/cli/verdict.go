@@ -707,12 +707,9 @@ func workFixAttempt(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("bugId", bug)
 		if !ok {
-			d.Set("blockedBy", blockedby.IronLaw)
-			d.Set("failedAttempts", n)
-			d.Set("next", "/rota-debug "+bug)
-			d.Set("changed", false)
-			return Result{Data: d}, Refused("%s has %d failed fix attempts; /rota-work dispatches no more, run /rota-debug %s", key, n, bug).
-				WithHint("rota debug work-fix reset " + bug + taskFlag(*task))
+			return blockedRefusal(d, blockedby.IronLaw,
+				fmt.Sprintf("%s has %d failed fix attempts; /rota-work dispatches no more, run /rota-debug %s", key, n, bug),
+				"rota debug work-fix reset "+bug+taskFlag(*task), "failedAttempts", n, "next", "/rota-debug "+bug)
 		}
 		d.Set("attempt", n)
 		d.Set("changed", true)

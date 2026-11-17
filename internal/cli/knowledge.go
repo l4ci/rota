@@ -741,11 +741,11 @@ func knFail(err error) (Result, error) {
 	e := knErr(err)
 	switch {
 	case errors.Is(err, knowledge.ErrAliasCollision):
-		return Result{Data: jsonx.Obj("blockedBy", blockedby.AliasCollision, "changed", false)}, e
+		return blockedRefusalErr(nil, blockedby.AliasCollision, e)
 	case errors.Is(err, knowledge.ErrExists):
-		return Result{Data: jsonx.Obj("blockedBy", blockedby.Exists, "changed", false)}, e
+		return blockedRefusalErr(nil, blockedby.Exists, e)
 	case errors.Is(err, knowledge.ErrMultiMatch):
-		return Result{Data: jsonx.Obj("blockedBy", blockedby.Ambiguous, "changed", false)}, e
+		return blockedRefusalErr(nil, blockedby.Ambiguous, e)
 	}
 	return Result{}, e
 }

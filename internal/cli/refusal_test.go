@@ -122,3 +122,38 @@ func TestRecordedFailRefusalKeepsEnvelopeForCorruptStore(t *testing.T) {
 		t.Fatalf("a non-refusal error must pass through untouched: %v", err)
 	}
 }
+
+func TestBlockedDataKeyOrderAndErrVariant(t *testing.T) {
+	d := blockedData(nil, "exists", "cap", 3)
+	b, err := jsonx.MarshalCompact(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"blockedBy": "exists", "cap": 3, "changed": false}`; got != want {
+		t.Fatalf("envelope = %s, want %s", got, want)
+	}
+	orig := Refused("nope").WithHint("try x")
+	res, err := blockedRefusalErr(nil, "exists", orig)
+	if err != error(orig) {
+		t.Fatalf("blockedRefusalErr replaced the error: %v", err)
+	}
+	if res.Data.(*jsonx.Object).Keys()[0] != "blockedBy" {
+		t.Fatalf("data = %v", res.Data)
+	}
+}
+
+// The unfinished-milestone refusal keeps blockedBy, changed, open, unticked in
+// that order: blockedData first, the audit lists after.
+func TestBlockedDataKeepsMilestoneKeyOrder(t *testing.T) {
+	d := blockedData(nil, "unfinished-milestone")
+	d.Set("open", jsonx.Strings([]string{"#1"}))
+	d.Set("unticked", jsonx.Strings([]string{"AC-1"}))
+	got, err := jsonx.MarshalCompact(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"blockedBy": "unfinished-milestone", "changed": false, "open": ["#1"], "unticked": ["AC-1"]}`
+	if string(got) != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+}

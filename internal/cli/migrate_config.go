@@ -167,11 +167,7 @@ func (p *preflight) roundKeys() (Result, error) {
 	}
 	msg := "config still uses the old round key names " + strings.Join(old, ", ") + ", which nothing reads since they moved to round.*"
 	if p.g.RoundKeys == RoundKeysRefuse {
-		d := jsonx.NewObject()
-		d.Set("blockedBy", blockedby.ConfigMigration)
-		d.Set("keys", jsonx.Strings(old))
-		d.Set("changed", false)
-		return Result{Data: d}, Refused("%s", msg).WithHint("run: rota migrate config --apply")
+		return blockedRefusal(nil, blockedby.ConfigMigration, msg, "run: rota migrate config --apply", "keys", jsonx.Strings(old))
 	}
 	c.Warn("%s; run: rota migrate config --apply", msg)
 	return Result{}, nil

@@ -240,10 +240,7 @@ func milestoneOverview(fs *flag.FlagSet) RunFunc {
 // blocked is the exit-4 failure data for a refusal that is not "exists".
 func blocked(err error, by string) any {
 	if ae := asArtifact(err); ae != nil && ae.Exit == 4 {
-		d := jsonx.NewObject()
-		d.Set("blockedBy", by)
-		d.Set("changed", false)
-		return d
+		return blockedData(nil, by)
 	}
 	return nil
 }
@@ -330,9 +327,7 @@ func milestoneShipAudit(c *Ctx, st ms.Store, id string) (Result, error) {
 	if f.Clean() {
 		return Result{}, nil
 	}
-	d := jsonx.NewObject()
-	d.Set("blockedBy", blockedby.UnfinishedMilestone)
-	d.Set("changed", false)
+	d := blockedData(nil, blockedby.UnfinishedMilestone)
 	d.Set("open", jsonx.Strings(f.Open))
 	d.Set("unticked", jsonx.Strings(f.Unticked))
 	msg := fmt.Sprintf("%s is not done: %d open item(s), %d unticked criteria", id, len(f.Open), len(f.Unticked))

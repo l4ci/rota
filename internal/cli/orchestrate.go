@@ -174,10 +174,7 @@ func orchestrateErr(err error) (Result, error) {
 	}
 	switch oe.Code {
 	case "refused":
-		d := jsonx.NewObject()
-		d.Set("blockedBy", oe.Msg)
-		d.Set("changed", false)
-		return Result{Data: d}, Refused("%s", oe.Msg).WithHint(oe.Hint)
+		return blockedRefusal(nil, oe.Msg, oe.Msg, oe.Hint)
 	case "unavailable":
 		return Result{}, Unavailable("%s", oe.Msg).WithHint(oe.Hint)
 	}

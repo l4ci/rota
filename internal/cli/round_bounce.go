@@ -40,19 +40,15 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		if slotName, lead := bundleHolder(root, issue); lead != "" {
 			d := jsonx.NewObject()
 			d.Set("issue", issue)
-			d.Set("blockedBy", blockedby.Bundle)
-			d.Set("lead", lead)
-			d.Set("changed", false)
-			return Result{Data: d}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s is bundled under %s (slot %s): a bundle bounces once, on its lead", tracker.RefOf(issue), tracker.RefOf(lead), slotName),
-				Hint: fmt.Sprintf("run `rota round bounce %s`", lead)}
+			return blockedRefusal(d, blockedby.Bundle,
+				fmt.Sprintf("%s is bundled under %s (slot %s): a bundle bounces once, on its lead", tracker.RefOf(issue), tracker.RefOf(lead), slotName),
+				fmt.Sprintf("run `rota round bounce %s`", lead), "lead", lead)
 		}
 		if !*force {
 			if refused := noBlockingFindings(c, root, issue, *slot, *head); refused != nil {
 				d := jsonx.NewObject()
 				d.Set("issue", issue)
-				d.Set("blockedBy", blockedby.NoBlockingFinds)
-				d.Set("changed", false)
-				return Result{Data: d}, refused
+				return blockedRefusalErr(d, blockedby.NoBlockingFinds, refused)
 			}
 		}
 		env := c.deps().workerEnv()

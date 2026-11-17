@@ -323,9 +323,9 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 func supportSetupStop(c *Ctx, dir string) (Result, error) {
 	tracked := config.Project(dir)
 	if roundcfg.SupportName(tracked) == "" {
-		d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundSupportKey, "changed", false)
-		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").
-			WithHint("on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again")
+		return blockedRefusal(nil, blockedby.Config, "the support path needs round.support in the tracked .rota/config.json, and it is empty",
+			"on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again",
+			"key", config.RoundSupportKey)
 	}
 	issue, err := issueBackend(c.deps(), dir)
 	if err != nil {

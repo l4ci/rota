@@ -64,8 +64,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !issue {
-			return Result{Data: jsonx.Obj("blockedBy", blockedby.Backend, "changed", false)},
-				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
+			return blockedRefusal(nil, blockedby.Backend, fmt.Sprintf("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path), "")
 		}
 		be, wf, id, _, err := itemTrack(c, ref, "plan pass", backlog.FileNoteHint)
 		if err != nil {
@@ -95,16 +94,13 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			ids, unchecked, err := decisionIDs(be, ref)
 			switch {
 			case errors.Is(err, errNoDecisionTrust):
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
-					Refused("cannot mark %s met: %v", ac, err)
+				return blockedRefusal(nil, blockedby.UnmetAcceptance, fmt.Sprintf("cannot mark %s met: %v", ac, err), "")
 			case err != nil:
 				return backlogFail(err)
 			case !slices.Contains(ids, check) && unchecked != nil:
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
-					Refused("cannot mark %s met: the access of a decision author could not be checked (%v)", ac, unchecked)
+				return blockedRefusal(nil, blockedby.UnmetAcceptance, fmt.Sprintf("cannot mark %s met: the access of a decision author could not be checked (%v)", ac, unchecked), "")
 			case !slices.Contains(ids, check):
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.UnmetAcceptance, "changed", false)},
-					Refused("cannot mark %s met: comment %s on %s is not a decision by someone with write access (it needs the rota decision marker; see `rota item comment list %s --kind decision`)", ac, check, id, id)
+				return blockedRefusal(nil, blockedby.UnmetAcceptance, fmt.Sprintf("cannot mark %s met: comment %s on %s is not a decision by someone with write access (it needs the rota decision marker; see `rota item comment list %s --kind decision`)", ac, check, id, id), "")
 			}
 			row = proof.Row{Sha: sha, Check: check}
 		} else {
@@ -122,8 +118,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 				if ok {
 					why = "the latest proof row for that sha and check is " + r.Result
 				}
-				return Result{Data: jsonx.Obj("blockedBy", blockedby.Proof, "changed", false)},
-					Refused("cannot mark %s met: %s (see `rota proof show %s`)", ac, why, id)
+				return blockedRefusal(nil, blockedby.Proof, fmt.Sprintf("cannot mark %s met: %s (see `rota proof show %s`)", ac, why, id), "")
 			}
 			row = r
 		}
