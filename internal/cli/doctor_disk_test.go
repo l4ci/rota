@@ -248,7 +248,10 @@ func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
 	run := func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{Stdout: porcelain}, nil
 	}
-	counted := prunableWorktrees(context.Background(), run, root)
+	counted := 0
+	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), "", time.Now()); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
+		counted = 1
+	}
 	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
 	if err != nil {
 		t.Fatal(err)

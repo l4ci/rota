@@ -69,6 +69,18 @@ func EnclosingTempRoot(dir string) (string, bool) {
 	}
 }
 
+// FindTempRoot is the project temp root of the repository that holds dir, as
+// TempRoot names it: nothing is created, so a read-only caller (doctor, reap)
+// can use it where TempRootVia would make the directory. ok is false outside
+// a repository or rota project.
+func FindTempRoot(ctx context.Context, run git.Runner, dir string) (string, bool) {
+	cd, err := CommonDirVia(ctx, run, dir)
+	if err != nil {
+		return "", false
+	}
+	return TempRoot(cd)
+}
+
 // TempRootVia is TempRoot for the repository that holds dir, created on first
 // use (0700, self-ignoring) and symlink-resolved, so a caller can anchor on it
 // as an exact parent. ok is false with a nil error outside a repository or
