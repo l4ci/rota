@@ -24,11 +24,11 @@ func TestRewriteMarkers(t *testing.T) {
 		"<!-- hv-handoff: orchestrator -->\n<!-- hv:fields 1/2 -->\n<!-- hv:comment -->\n<!-- hv-skills-start -->\n<!-- rota:claim -->\nprose hv-knowledge-start\n"
 	want := "<!-- rota-knowledge-start -->\nx\n<!-- rota-knowledge-end -->\n<!-- rota-decisions-start -->\n<!-- rota-decisions-end -->\n" +
 		"<!-- rota-handoff: orchestrator -->\n<!-- rota:fields 1/2 -->\n<!-- rota:comment -->\n<!-- rota-skills-start -->\n<!-- rota:claim -->\nprose hv-knowledge-start\n"
-	got, n := RewriteMarkers(in)
+	got, n := rewriteMarkers(in)
 	if got != want || n != 8 {
 		t.Errorf("n=%d\n%q", n, got)
 	}
-	if again, n := RewriteMarkers(got); again != got || n != 0 {
+	if again, n := rewriteMarkers(got); again != got || n != 0 {
 		t.Errorf("not idempotent: n=%d", n)
 	}
 }
@@ -45,7 +45,7 @@ func TestRewriteBlockHeadingsOnlyInsideBlocks(t *testing.T) {
 func TestRewriteGitignoreKeepsOrderAndOtherLines(t *testing.T) {
 	in := "dist/\n# ── hv ──\n.hv/bin/\n.hv/status.json\n/.hv/x\n!.hv/keep\n.hv/**/*.lock\n.hvx\n.worktrees/\n"
 	want := "dist/\n# ── rota ──\n.rota/bin/\n.rota/status.json\n/.rota/x\n!.rota/keep\n.rota/**/*.lock\n.hvx\n.worktrees/\n"
-	got, n := RewriteGitignore(in)
+	got, n := rewriteGitignore(in)
 	if got != want || n != 6 {
 		t.Errorf("n=%d %q", n, got)
 	}

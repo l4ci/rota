@@ -76,10 +76,10 @@ func copyFile(src, dst string) error {
 	return os.Chtimes(dst, fi.ModTime(), fi.ModTime())
 }
 
-// UnifiedDiff renders a unified diff with three lines of context in the
+// unifiedDiff renders a unified diff with three lines of context in the
 // layout of difflib.unified_diff. A rewrite replaces tokens inside lines and
 // never adds or removes a line, so the two texts line up one to one.
-func UnifiedDiff(old, new, label string) string {
+func unifiedDiff(old, new, label string) string {
 	a, b := splitLines(old), splitLines(new)
 	if len(a) != len(b) {
 		return fmt.Sprintf("--- %s\n+++ %s (rewritten)\n", label, label)

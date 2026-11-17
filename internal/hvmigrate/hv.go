@@ -133,10 +133,10 @@ var (
 	lingerRe       = regexp.MustCompile("\\.hv/|(?:^|[\\s(`])/hv-[a-z][a-z-]*")
 )
 
-// RewriteMarkers rewrites the hv-era hidden markers to rota's: managed block
+// rewriteMarkers rewrites the hv-era hidden markers to rota's: managed block
 // start and end lines (both generations), the handoff first line and the item
 // markers of the issues export. It returns the text and how many it changed.
-func RewriteMarkers(s string) (string, int) {
+func rewriteMarkers(s string) (string, int) {
 	n := 0
 	s = blockMarkerRe.ReplaceAllStringFunc(s, func(m string) string {
 		n++
@@ -182,9 +182,9 @@ func rewriteStateLinks(s string) (string, int) {
 	return s, n
 }
 
-// RewriteGitignore maps the hv ignore block to rota's: the header and every
+// rewriteGitignore maps the hv ignore block to rota's: the header and every
 // ".hv" path line, in place. Other lines are untouched.
-func RewriteGitignore(s string) (string, int) {
+func rewriteGitignore(s string) (string, int) {
 	lines := strings.Split(s, "\n")
 	n := 0
 	for i, l := range lines {
@@ -485,7 +485,7 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 	}
 	// .gitignore
 	if raw, ok := read(".gitignore"); ok {
-		if text, n := RewriteGitignore(raw); n > 0 {
+		if text, n := rewriteGitignore(raw); n > 0 {
 			add(".gitignore", raw, text)
 		}
 	}
@@ -496,7 +496,7 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 		if !ok {
 			continue
 		}
-		text, n := RewriteMarkers(raw)
+		text, n := rewriteMarkers(raw)
 		text, h := rewriteBlockHeadings(text)
 		if n+h > 0 {
 			p.blocks = true
@@ -527,7 +527,7 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 		if !ok {
 			return nil
 		}
-		text, n := RewriteMarkers(raw)
+		text, n := rewriteMarkers(raw)
 		text, l := rewriteStateLinks(text)
 		if n+l > 0 {
 			add(rel, raw, text)
@@ -753,7 +753,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 			}
 			hp.Files = append(hp.Files, rel)
 			if o.Verbose {
-				rep.Diffs = append(rep.Diffs, UnifiedDiff(e.orig, e.text, filepath.Join(scopeRel(p.scope), rel)))
+				rep.Diffs = append(rep.Diffs, unifiedDiff(e.orig, e.text, filepath.Join(scopeRel(p.scope), rel)))
 			}
 		}
 		rep.ManualReview = append(rep.ManualReview, pl.manual...)
@@ -790,7 +790,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 	for _, e := range settingsEdits {
 		rep.Settings = append(rep.Settings, e.abs)
 		if o.Verbose {
-			rep.Diffs = append(rep.Diffs, UnifiedDiff(e.orig, e.text, e.abs))
+			rep.Diffs = append(rep.Diffs, unifiedDiff(e.orig, e.text, e.abs))
 		}
 	}
 

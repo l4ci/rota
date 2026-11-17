@@ -52,7 +52,7 @@ func TestCandidates(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "wt"), 0o755)
 	os.WriteFile(filepath.Join(root, "wt", ".git"), []byte("gitdir: x\n"), 0o644)
 	os.Symlink(filepath.Join(root, "web"), filepath.Join(root, "link"))
-	got, err := Candidates(root)
+	got, err := candidates(root)
 	if err != nil {
 		t.Fatal(err)
 	}
