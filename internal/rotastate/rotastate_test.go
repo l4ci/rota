@@ -168,11 +168,11 @@ func TestOwnedTempRootNeedsItsMarker(t *testing.T) {
 	if Owned(root) {
 		t.Error("a missing root is not owned")
 	}
-	if err := EnsureTempRoot(root); err != nil {
+	if err := ensureTempRoot(root); err != nil {
 		t.Fatal(err)
 	}
 	if !Owned(root) {
-		t.Error("a root EnsureTempRoot made is owned")
+		t.Error("a root ensureTempRoot made is owned")
 	}
 	if err := os.WriteFile(filepath.Join(root, IgnoreFile), []byte("other\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestEnsureTempRootTightensMode(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureTempRoot(root); err != nil {
+	if err := ensureTempRoot(root); err != nil {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(root)
@@ -210,7 +210,7 @@ func TestEnclosingTempRoot(t *testing.T) {
 	if got, ok := EnclosingTempRoot(deep); ok {
 		t.Fatalf("a root without its marker resolved: %s", got)
 	}
-	if err := EnsureTempRoot(root); err != nil {
+	if err := ensureTempRoot(root); err != nil {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{deep, root} {

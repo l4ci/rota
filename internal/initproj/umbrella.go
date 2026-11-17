@@ -18,10 +18,10 @@ import (
 // (hv-umbrella-init exit 1).
 var ErrNoCandidates = errors.New("no immediate git children found")
 
-// Candidates lists the immediate children of root that hold a .git entry (a
+// candidates lists the immediate children of root that hold a .git entry (a
 // directory, or the file a git worktree has), sorted. Like the old `for child
 // in */` glob, hidden children are skipped and a symlink to a directory counts.
-func Candidates(root string) ([]string, error) {
+func candidates(root string) ([]string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ type Listing struct {
 // List is read-only. No candidates is not an error here: the caller decides
 // what an empty list means.
 func List(root string) (Listing, error) {
-	c, err := Candidates(root)
+	c, err := candidates(root)
 	if err != nil {
 		return Listing{}, err
 	}
@@ -81,7 +81,7 @@ type UmbrellaResult struct {
 // registry is rebuilt from the selection plus prior registrations still on
 // disk, and the .gitignore block only appends missing lines.
 func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaResult, error) {
-	found, err := Candidates(root)
+	found, err := candidates(root)
 	if err != nil {
 		return UmbrellaResult{}, err
 	}

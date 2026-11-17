@@ -97,7 +97,7 @@ func TempRootVia(ctx context.Context, run git.Runner, dir string) (string, bool,
 	if !ok {
 		return "", false, nil
 	}
-	if err := EnsureTempRoot(root); err != nil {
+	if err := ensureTempRoot(root); err != nil {
 		return "", false, err
 	}
 	if !realDir(root) {
@@ -110,11 +110,11 @@ func TempRootVia(ctx context.Context, run git.Runner, dir string) (string, bool,
 	return real, true, nil
 }
 
-// EnsureTempRoot creates root (0700) and its self-ignoring .gitignore when
+// ensureTempRoot creates root (0700) and its self-ignoring .gitignore when
 // either is missing. An existing root must belong to the current user and is
 // set back to 0700, so no other user can reach what rota keeps there; an
 // existing .gitignore is left as it is.
-func EnsureTempRoot(root string) error {
+func ensureTempRoot(root string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
