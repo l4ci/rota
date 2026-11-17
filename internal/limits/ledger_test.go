@@ -18,7 +18,7 @@ func TestLimitLedgerLimited(t *testing.T) {
 		t.Fatalf("entries %+v", es)
 	}
 	l := es[0]
-	if l.Slot != "ben" || l.Issue != "67" || l.Account != "a" || l.DetailStr("resetsAt") != Time(t0.Add(2*time.Hour)) {
+	if l.Slot != "ben" || l.Issue != "67" || l.Account != "a" || l.ResetsAt() != Time(t0.Add(2*time.Hour)) {
 		t.Errorf("limited = %+v", l)
 	}
 }

@@ -353,7 +353,7 @@ func (s issueBounces) Record(m *RoundMemo, issue, slot, head string, limit int) 
 		}
 		return BounceRecord{N: kept, Capped: at >= 0}, nil
 	}
-	LedgerNoteIn(s.e, m, s.root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
+	LedgerNoteIn(s.e, m, s.root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.BounceDetail(n)})
 	return BounceRecord{N: n, Counted: true, undo: func() error { return s.it.DeleteComment(s.e.Ctx, k, id) }}, nil
 }
 

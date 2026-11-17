@@ -183,7 +183,7 @@ func resolveBrief(root string, set roundcfg.Settings, inst skillInstalls, cache 
 		}
 	}
 	if set.Brief == "" || inCache(configured, cache) {
-		if c := skills.CachedBrief(version.Get().Version, cache); c != "" {
+		if c := skills.ExtractedBrief(version.Get().Version, cache); c != "" {
 			if set.Brief == "" {
 				return c, "", true
 			}
@@ -476,7 +476,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	if err == nil && !run.resuming {
 		if lerr := e.Worker.Ledger().AppendErr(root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
-			Detail: ledger.Detail("headroom", run.placement.headroomOr(worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, run.kind, res.Account)), "bundle", strings.Join(res.Bundle, ","), "placement", run.placement.verdict())}); lerr != nil {
+			Detail: ledger.AssignDetail(run.placement.headroomOr(worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, run.kind, res.Account)), strings.Join(res.Bundle, ","), run.placement.verdict())}); lerr != nil {
 			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
 		}
 	}

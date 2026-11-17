@@ -39,11 +39,11 @@ func trainStatus(c *Ctx, root string, d *jsonx.Object) []string {
 			continue
 		}
 		o := jsonx.NewObject()
-		o.Set("verdict", e.DetailStr("verdict"))
+		o.Set("verdict", e.Verdict())
 		o.Set("round", e.Round)
 		o.Set("at", stamp.Format(e.TS))
-		line := "last train\t" + e.DetailStr("verdict") + "\t" + stamp.Format(e.TS)
-		if id := e.DetailStr("requestId"); id != "" {
+		line := "last train\t" + e.Verdict() + "\t" + stamp.Format(e.TS)
+		if id := e.RequestID(); id != "" {
 			o.Set("requestId", id)
 			line += "\t" + id
 		}

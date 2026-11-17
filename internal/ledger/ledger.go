@@ -63,8 +63,8 @@ const (
 )
 
 // Entry is one ledger line. Round is 0 when no round was running (solo mode
-// without a lease). Detail holds the per-kind extras: headroom (assign, done),
-// verdict (gate), resetsAt (limited), from and capReason (transfer).
+// without a lease). Detail holds the per-kind extras; detail.go lists each
+// kind's keys, builds them and reads them back.
 type Entry struct {
 	TS                                time.Time
 	Kind                              string
@@ -75,35 +75,6 @@ type Entry struct {
 
 // Path is the ledger file of the project at root.
 func Path(root string) string { return rotatree.File(root, File) }
-
-// Detail builds a Detail object from key, value pairs. A nil value, a nil
-// *float64 and an empty string are skipped: absent means unknown.
-func Detail(kv ...any) *jsonx.Object {
-	o := jsonx.NewObject()
-	for i := 0; i+1 < len(kv); i += 2 {
-		v := kv[i+1]
-		switch t := v.(type) {
-		case nil:
-			continue
-		case *float64:
-			if t == nil {
-				continue
-			}
-			v = *t
-		case *bool:
-			if t == nil {
-				continue
-			}
-			v = *t
-		case string:
-			if t == "" {
-				continue
-			}
-		}
-		o.Set(kv[i].(string), v)
-	}
-	return o
-}
 
 func (e Entry) object() *jsonx.Object {
 	o := jsonx.NewObject()
@@ -235,32 +206,6 @@ func load(root string, strict bool) SummarySource {
 func Exists(root string) bool {
 	_, err := os.Stat(Path(root))
 	return err == nil
-}
-
-// DetailStr reads a string field of the entry's detail, "" when absent.
-func (e Entry) DetailStr(key string) string {
-	if e.Detail == nil {
-		return ""
-	}
-	return jsonx.Str(e.Detail, key)
-}
-
-// DetailFloat reads a numeric field of the entry's detail; ok is false when
-// absent, so "unknown" never reads as 0.
-func (e Entry) DetailFloat(key string) (float64, bool) {
-	if e.Detail == nil {
-		return 0, false
-	}
-	switch v, _ := e.Detail.Get(key); t := v.(type) {
-	case float64:
-		return t, true
-	case int:
-		return float64(t), true
-	case interface{ Float64() (float64, error) }:
-		f, err := t.Float64()
-		return f, err == nil
-	}
-	return 0, false
 }
 
 // Trim drops the entries of rounds older than the last keep rounds up to

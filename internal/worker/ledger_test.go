@@ -132,7 +132,7 @@ func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
 			merges = append(merges, e)
 		}
 	}
-	if len(merges) != 1 || merges[0].DetailStr("by") != "remote" {
+	if len(merges) != 1 || merges[0].MergedBy() != "remote" {
 		t.Fatalf("merge entries %+v, want one with by: remote", merges)
 	}
 }
@@ -159,7 +159,7 @@ func TestGateOfAPRMergedRemotelyRecordsTheMerge(t *testing.T) {
 			merges = append(merges, e)
 		}
 	}
-	if len(merges) != 1 || merges[0].DetailStr("by") != "remote" {
+	if len(merges) != 1 || merges[0].MergedBy() != "remote" {
 		t.Fatalf("merge entries %+v, want one with by: remote", merges)
 	}
 }

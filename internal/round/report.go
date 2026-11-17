@@ -163,16 +163,16 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		if spec.EveryRow {
 			// Every such event is a row, not only the edge into its state.
 			moved = true
-			held.Detail = ledger.Detail("seq", seq)
+			held.Detail = ledger.ReplyDetail("", "", seq)
 			if spec.RowBody {
-				held.Detail = ledger.Detail("event", o.Event, "body", o.Body, "seq", seq)
+				held.Detail = ledger.ReplyDetail(o.Event, o.Body, seq)
 			}
 		}
 	}
 	if kind != "" && moved {
 		held.Kind, held.PR = kind, strutil.FirstNonEmpty(pr, held.PR)
 		if kind == ledger.KindDone {
-			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, held.Harness, held.Account))
+			held.Detail = ledger.HeadroomDetail(worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, held.Harness, held.Account))
 		}
 		if err := e.Worker.Ledger().AppendErr(root, held); err != nil {
 			return res, fmt.Errorf("slot %s is now %s, but the round ledger row was not written: %w", o.Slot, state, err)

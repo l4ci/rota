@@ -57,7 +57,7 @@ func gateKinds(t *testing.T, w *world) (verdicts []string, merges int) {
 	for _, e := range es {
 		switch e.Kind {
 		case ledger.KindGate:
-			verdicts = append(verdicts, e.DetailStr("verdict"))
+			verdicts = append(verdicts, e.Verdict())
 		case ledger.KindMerge:
 			merges++
 		}
@@ -117,9 +117,9 @@ func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	got := map[string]string{}
 	for _, e := range es {
 		if e.Kind == ledger.KindGate {
-			got[e.Slot] = e.DetailStr("verdict")
-			if e.DetailStr("culprit") != "b3" {
-				t.Errorf("member %s entry names culprit %q, want b3", e.Slot, e.DetailStr("culprit"))
+			got[e.Slot] = e.Verdict()
+			if e.Culprit() != "b3" {
+				t.Errorf("member %s entry names culprit %q, want b3", e.Slot, e.Culprit())
 			}
 		}
 		if e.Kind == ledger.KindMerge {

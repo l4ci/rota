@@ -101,7 +101,7 @@ func TestSummaryMetricEvidence(t *testing.T) {
 			{TS: at(0), Round: 2, Kind: KindAssign, Issue: "1", Slot: "ben"},
 			{TS: at(0), Round: 2, Kind: KindDone, Issue: "1", Slot: "ben", PR: "#7"},
 			{TS: at(0), Round: 2, Kind: KindMerge, Issue: "1", Slot: "ben", PR: "#7"},
-			{TS: at(0), Round: 2, Kind: KindTrain, Detail: Detail("verdict", "pass")},
+			{TS: at(0), Round: 2, Kind: KindTrain, Detail: detail("verdict", "pass")},
 		}
 		s := Fold(es, nil, 2)
 		for _, name := range []string{"assignToMerged", "doneToMerged"} {
@@ -135,7 +135,7 @@ func TestSummaryMetricEvidence(t *testing.T) {
 	t.Run("winning transfer assignment", func(t *testing.T) {
 		s := Fold([]Entry{
 			{TS: at(0), Round: 2, Kind: KindAssign, Issue: "1", Slot: "ben"},
-			{TS: at(10), Round: 2, Kind: KindTransfer, Issue: "1", Slot: "dana", Detail: Detail("from", "ben")},
+			{TS: at(10), Round: 2, Kind: KindTransfer, Issue: "1", Slot: "dana", Detail: detail("from", "ben")},
 			{TS: at(20), Round: 2, Kind: KindDone, Issue: "1", Slot: "dana", PR: "#7"},
 			{TS: at(30), Round: 2, Kind: KindMerge, Issue: "1", Slot: "dana", PR: "#7"},
 		}, nil, 2)
@@ -156,8 +156,8 @@ func TestSummaryMetricEvidence(t *testing.T) {
 	})
 	t.Run("legacy train markers are unavailable", func(t *testing.T) {
 		s := Fold([]Entry{
-			{TS: at(0), Round: 2, Kind: KindGate, PR: "#7", Detail: Detail("train", true, "verdict", "verify-failed")},
-			{TS: at(1), Round: 2, Kind: KindTrain, Detail: Detail("verdict", "pass")},
+			{TS: at(0), Round: 2, Kind: KindGate, PR: "#7", Detail: detail("train", true, "verdict", "verify-failed")},
+			{TS: at(1), Round: 2, Kind: KindTrain, Detail: detail("verdict", "pass")},
 		}, nil, 2)
 		m := metricObject(t, s, "redTrainRate")
 		metricValue(t, m, "value", nil)

@@ -451,7 +451,7 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 	}
 	if w.Ledger != nil {
 		w.Ledger(ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
-			Detail: ledger.Detail("resetsAt", e.ResetsAt, "window", e.Window)})
+			Detail: ledger.LimitedDetail(e.ResetsAt, e.Window)})
 	}
 	if !attempt {
 		return

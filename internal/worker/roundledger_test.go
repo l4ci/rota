@@ -83,7 +83,7 @@ func TestLedgerRoundIsTheHeldLease(t *testing.T) {
 func TestLedgerNoteFillsSlotFromRegistry(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","account":"work"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
-	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12", Detail: ledger.Detail("count", 1)})
+	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12", Detail: ledger.BounceDetail(1)})
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12", Slot: "ben"})
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "99"})
 	es, err := ledger.Load(dir)
@@ -164,7 +164,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	if len(es) != 1 || es[0].Kind != ledger.KindDone || es[0].Slot != "ben" || es[0].Issue != "12" || es[0].PR != row.Evidence {
 		t.Fatalf("entries %+v", es)
 	}
-	if h, ok := es[0].DetailFloat("headroom"); !ok || h != 65 {
+	if h, ok := es[0].Headroom(); !ok || h != 65 {
 		t.Errorf("headroom = %v %v, want 65", h, ok)
 	}
 }
@@ -196,7 +196,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 	if len(es) != 1 || es[0].Kind != ledger.KindDone || es[0].Slot != "w1" || es[0].Account != "work" || es[0].PR != "https://github.com/o/r/pull/9" {
 		t.Fatalf("entries %+v", es)
 	}
-	if h, ok := es[0].DetailFloat("headroom"); !ok || h != 65 {
+	if h, ok := es[0].Headroom(); !ok || h != 65 {
 		t.Errorf("headroom = %v %v, want 65", h, ok)
 	}
 }
@@ -245,7 +245,7 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
 		if e.Kind == ledger.KindGate {
-			verdicts[e.Slot] = e.DetailStr("verdict")
+			verdicts[e.Slot] = e.Verdict()
 		}
 	}
 	if len(es) != 3 || verdicts["b2"] != GateVerifyFailed || verdicts["b3"] != "" {
@@ -375,7 +375,7 @@ func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
 		if e.Kind == ledger.KindGate {
-			verdicts[e.Slot] = e.DetailStr("verdict")
+			verdicts[e.Slot] = e.Verdict()
 		}
 	}
 	if len(verdicts) != 3 || verdicts["b1"] != GateInteraction || verdicts["b3"] != GateInteraction || verdicts["b2"] != "" {
@@ -404,10 +404,10 @@ func TestLedgerDoneRecordsTheReportedSession(t *testing.T) {
 	if len(es) != 2 {
 		t.Fatalf("entries %+v", es)
 	}
-	if tok, ok := es[0].DetailTokens(); es[0].DetailStr("session") != "sid-9" || es[0].DetailStr("transcript") != tr || !ok || tok.Input != 3 || tok.Output != 4 {
+	if es[0].SessionID() != "sid-9" || es[0].TranscriptPath() != tr || es[0].TokensUnavailable() {
 		t.Errorf("first row %v", es[0].Detail)
 	}
-	if es[1].DetailStr("session") != "sid-9" || es[1].DetailStr("tokens") != "unavailable" {
+	if es[1].SessionID() != "sid-9" || !es[1].TokensUnavailable() {
 		t.Errorf("row with the transcript gone %v", es[1].Detail)
 	}
 }
@@ -452,9 +452,7 @@ func TestLedgerSessionSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T) 
 	d := jsonx.NewObject()
 	LedgerSession(env, t.TempDir(), ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"}, d)
 	e := ledger.Entry{Detail: d}
-	for _, k := range []string{"session", "transcript", "tokens"} {
-		if e.DetailStr(k) != "unavailable" {
-			t.Errorf("%s = %q, want unavailable", k, e.DetailStr(k))
-		}
+	if e.SessionID() != "unavailable" || e.TranscriptPath() != "unavailable" || !e.TokensUnavailable() {
+		t.Errorf("not every session key says unavailable: %v", d)
 	}
 }

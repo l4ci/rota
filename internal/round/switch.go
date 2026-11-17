@@ -81,7 +81,7 @@ func (e Env) Switch(ctx context.Context, root string, be Board, o SwitchOpts) (r
 	}
 	res.Dispatched, res.Changed = true, true
 	if lerr := e.Worker.Ledger().AppendErr(root, ledger.Entry{Kind: ledger.KindSwitch, Issue: run.id, Slot: o.Slot, Account: res.ToAccount, Harness: res.ToKind,
-		Detail: ledger.Detail("fromAccount", res.FromAccount, "fromHarness", res.FromKind, "checkpoint", res.Checkpoint)}); lerr != nil {
+		Detail: ledger.SwitchDetail(res.FromAccount, res.FromKind, res.Checkpoint)}); lerr != nil {
 		return res, fmt.Errorf("slot %s is switched to %s, but the round ledger row was not written: %w", o.Slot, res.ToAccount, lerr)
 	}
 	return res, nil

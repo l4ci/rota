@@ -1464,7 +1464,7 @@ func TestTransferCapReasonIsValidatedAndLedgered(t *testing.T) {
 	var got string
 	for _, e := range es {
 		if e.Kind == ledger.KindTransfer {
-			got = e.DetailStr("capReason")
+			got = e.CapReason()
 		}
 	}
 	if got != "ambiguous-criteria" {
@@ -1483,7 +1483,7 @@ func TestTransferTierCapReasonLandsInTheLedgerForASlot(t *testing.T) {
 	var got string
 	for _, e := range es {
 		if e.Kind == ledger.KindTransfer {
-			got = e.DetailStr("capReason")
+			got = e.CapReason()
 		}
 	}
 	if got != "tier" {

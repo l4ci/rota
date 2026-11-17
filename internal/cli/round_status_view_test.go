@@ -26,6 +26,9 @@ type roundGoldenIn struct {
 
 type fakeClock struct{ t time.Time }
 
+// hdr is a ledger detail carrying only a headroom.
+func hdr(v float64) *jsonx.Object { return ledger.HeadroomDetail(&v) }
+
 func (f *fakeClock) now() time.Time          { return f.t }
 func (f *fakeClock) advance(d time.Duration) { f.t = f.t.Add(d) }
 
@@ -253,9 +256,9 @@ func TestFillBurnFromLedger(t *testing.T) {
 	dir := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	now := time.Now()
 	for _, e := range []ledger.Entry{
-		{TS: now, Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
-		{TS: now, Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex", Detail: ledger.Detail("headroom", 80.0)},
-		{TS: now, Kind: ledger.KindAssign, Issue: "14", Slot: "nia", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 30.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: hdr(80.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex", Detail: hdr(80.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "14", Slot: "nia", Account: "work", Harness: "claude", Detail: hdr(30.0)},
 		{TS: now, Kind: ledger.KindAssign, Issue: "15", Slot: "kit", Account: "work", Harness: "claude"},
 	} {
 		if err := ledger.Append(dir, e); err != nil {

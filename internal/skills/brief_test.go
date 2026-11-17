@@ -85,16 +85,16 @@ func TestCheckoutBrief(t *testing.T) {
 	}
 }
 
-func TestCachedBrief(t *testing.T) {
-	if p := CachedBrief("t", ""); p != "" {
+func TestExtractedBrief(t *testing.T) {
+	if p := ExtractedBrief("t", ""); p != "" {
 		t.Errorf("empty cache must skip: %q", p)
 	}
 	cache := t.TempDir()
-	p := CachedBrief("t", cache)
+	p := ExtractedBrief("t", cache)
 	if p == "" || filepath.Base(p) != "worker-contract.md" {
 		t.Fatalf("no cached brief: %q", p)
 	}
-	if p2 := CachedBrief("t", cache); p2 != p {
+	if p2 := ExtractedBrief("t", cache); p2 != p {
 		t.Errorf("second lookup moved: %q vs %q", p2, p)
 	}
 }

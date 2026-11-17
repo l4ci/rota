@@ -47,7 +47,7 @@ func recentCreates(c *Ctx, root string) map[string]string {
 	cutoff := c.deps().Now().Add(-createWindow)
 	for _, e := range entries {
 		if e.Kind == ledger.KindCreate && e.TS.After(cutoff) {
-			out[createKey(e.DetailStr("target"), e.DetailStr("title"))] = e.Issue
+			out[createKey(e.CreateTarget(), e.CreateTitle())] = e.Issue
 		}
 	}
 	return out
@@ -91,7 +91,7 @@ func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, 
 	res, err := r.Backend.Create(in)
 	if err == nil {
 		worker.LedgerNoteIn(r.c.deps().workerEnv(), r.memo, r.root, ledger.Entry{Kind: ledger.KindCreate, Issue: res.ID,
-			Detail: ledger.Detail("title", normCreateTitle(in.Title), "target", createTarget(r.Backend, in))})
+			Detail: ledger.CreateDetail(normCreateTitle(in.Title), createTarget(r.Backend, in))})
 	}
 	return res, err
 }

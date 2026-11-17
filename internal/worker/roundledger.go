@@ -109,7 +109,7 @@ func LedgerDone(env Env, ctx context.Context, a *Accounts, root string, e ledger
 // LedgerDoneIn is LedgerDone reading the round through m.
 func LedgerDoneIn(env Env, m *RoundMemo, ctx context.Context, a *Accounts, root string, e ledger.Entry) {
 	e.Kind = ledger.KindDone
-	e.Detail = ledger.Detail("headroom", LedgerHeadroom(ctx, a, root, e.Harness, e.Account))
+	e.Detail = ledger.HeadroomDetail(LedgerHeadroom(ctx, a, root, e.Harness, e.Account))
 	LedgerSession(env, root, e, e.Detail)
 	LedgerNoteIn(env, m, root, e)
 }
@@ -128,7 +128,7 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
 func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult) {
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped))}
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.GateDetail(res.Verdict, res.Tier, tierSkipped(res.Skipped))}
 	rec := env.ledgerIn(m)
 	rec.Note(root, e)
 	switch {
@@ -136,7 +136,7 @@ func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult
 		e.Kind, e.Detail = ledger.KindMerge, nil
 		rec.Note(root, e)
 	case res.AlreadyMerged && !mergeRecorded(root, e):
-		e.Kind, e.Detail = ledger.KindMerge, ledger.Detail("by", "remote")
+		e.Kind, e.Detail = ledger.KindMerge, ledger.MergeRemoteDetail()
 		rec.Note(root, e)
 	}
 }
@@ -175,7 +175,7 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 	}
 	rec := env.ledgerIn(m)
 	rec.Note(root, ledger.Entry{Kind: ledger.KindTrain,
-		Detail: ledger.Detail("verdict", res.Verdict, "tier", res.Tier, "skipped", tierSkipped(res.Skipped), "requestId", requestID)})
+		Detail: ledger.TrainDetail(res.Verdict, res.Tier, tierSkipped(res.Skipped), requestID)})
 	for _, culprit := range res.Culprits {
 		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
 	}
@@ -207,7 +207,7 @@ func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult,
 			verdict = ""
 		}
 		rec.Note(root, ledger.Entry{Kind: ledger.KindGate, Issue: gt.Issue, Slot: gt.Name, PR: gt.PR,
-			Detail: ledger.Detail("verdict", verdict, "train", true, "culprit", res.Culprit)})
+			Detail: ledger.TrainMemberDetail(verdict, res.Culprit)})
 	}
 }
 
@@ -221,7 +221,7 @@ func AdoptedBranches(root string) (map[string]bool, error) {
 	entries, err := ledger.Load(root)
 	for _, e := range entries {
 		if e.Kind == ledger.KindAdopt {
-			if b := e.DetailStr("branch"); b != "" {
+			if b := e.AdoptedBranch(); b != "" {
 				out[b] = true
 			}
 		}
@@ -235,10 +235,7 @@ func (env Env) recordVerification(root string, m *RoundMemo, tier string, target
 	if vr.CI || vr.Cached || vr.WallSeconds == nil || len(vr.Suites) == 0 {
 		return
 	}
-	detail := ledger.Detail("tier", tier, "wallSeconds", *vr.WallSeconds, "suites", vr.Suites)
-	if len(prs) > 0 {
-		detail.Set("prs", prs)
-	}
+	detail := ledger.VerificationDetail(tier, *vr.WallSeconds, vr.Suites, prs)
 	if target.PR == "" && len(prs) == 1 {
 		target.PR = prs[0]
 	}

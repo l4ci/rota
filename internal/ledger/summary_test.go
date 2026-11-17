@@ -13,7 +13,7 @@ var t0 = time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
 
 func at(min int) time.Time { return t0.Add(time.Duration(min) * time.Minute) }
 
-func hr(v float64) *jsonx.Object { return Detail("headroom", v) }
+func hr(v float64) *jsonx.Object { return detail("headroom", v) }
 
 func row(t *testing.T, s Summary, issue, slot string) IssueRow {
 	t.Helper()
@@ -64,7 +64,7 @@ func TestSummaryRowAndTotals(t *testing.T) {
 		{TS: at(1), Kind: KindAssign, Round: 2, Issue: "13", Slot: "dana", Account: "work", Harness: "claude", Detail: hr(78)},
 		{TS: at(5), Kind: KindBounce, Round: 2, Issue: "12"},
 		{TS: at(30), Kind: KindDone, Round: 2, Issue: "12", Slot: "ben", Account: "work", PR: "https://h/o/r/pull/7", Detail: hr(50)},
-		{TS: at(31), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", PR: "https://h/o/r/pull/7", Detail: Detail("verdict", "pass")},
+		{TS: at(31), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", PR: "https://h/o/r/pull/7", Detail: detail("verdict", "pass")},
 		{TS: at(31), Kind: KindMerge, Round: 2, Issue: "12", Slot: "ben", PR: "https://h/o/r/pull/7"},
 		{TS: at(40), Kind: KindAssign, Round: 1, Issue: "99", Slot: "kit"}, // another round
 	}
@@ -140,8 +140,8 @@ func TestSummaryBestOf(t *testing.T) {
 		{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "dana", Account: "b"},
 		{TS: at(20), Kind: KindDone, Round: 1, Issue: "12", Slot: "ben", PR: "#7"},
 		{TS: at(22), Kind: KindDone, Round: 1, Issue: "12", Slot: "dana", PR: "#8"},
-		{TS: at(25), Kind: KindPick, Round: 1, Issue: "12", Slot: "ben", PR: "#7", Detail: Detail("loser", "dana")},
-		{TS: at(26), Kind: KindGate, Round: 1, Issue: "12", Slot: "ben", PR: "#7", Detail: Detail("verdict", "pass")},
+		{TS: at(25), Kind: KindPick, Round: 1, Issue: "12", Slot: "ben", PR: "#7", Detail: detail("loser", "dana")},
+		{TS: at(26), Kind: KindGate, Round: 1, Issue: "12", Slot: "ben", PR: "#7", Detail: detail("verdict", "pass")},
 		{TS: at(26), Kind: KindMerge, Round: 1, Issue: "12", Slot: "ben", PR: "#7"},
 	}
 	s := Fold(es, nil, 1)
@@ -155,7 +155,7 @@ func TestSummaryBestOf(t *testing.T) {
 
 func TestSummaryExternalPR(t *testing.T) {
 	es := []Entry{
-		{TS: at(0), Kind: KindGate, Round: 1, PR: "https://h/o/r/pull/31", Detail: Detail("verdict", "pass")},
+		{TS: at(0), Kind: KindGate, Round: 1, PR: "https://h/o/r/pull/31", Detail: detail("verdict", "pass")},
 		{TS: at(0), Kind: KindMerge, Round: 1, PR: "https://h/o/r/pull/31"},
 	}
 	s := Fold(es, nil, 1)
@@ -171,7 +171,7 @@ func TestSummaryGateMatchesRowByPRNumber(t *testing.T) {
 	es := []Entry{
 		{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "ben"},
 		{TS: at(9), Kind: KindDone, Round: 1, Issue: "12", Slot: "ben", PR: "https://h/o/r/pull/7"},
-		{TS: at(10), Kind: KindGate, Round: 1, PR: "#7", Detail: Detail("verdict", "stale")}, // queued gate: no slot
+		{TS: at(10), Kind: KindGate, Round: 1, PR: "#7", Detail: detail("verdict", "stale")}, // queued gate: no slot
 	}
 	s := Fold(es, nil, 1)
 	if len(s.Issues) != 1 || s.Issues[0].Gate != "stale" {
@@ -182,7 +182,7 @@ func TestSummaryGateMatchesRowByPRNumber(t *testing.T) {
 func TestSummaryTransferMovesTheRow(t *testing.T) {
 	es := []Entry{
 		{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "ben", Account: "a", Harness: "claude"},
-		{TS: at(10), Kind: KindTransfer, Round: 1, Issue: "12", Slot: "dana", Detail: Detail("from", "ben")},
+		{TS: at(10), Kind: KindTransfer, Round: 1, Issue: "12", Slot: "dana", Detail: detail("from", "ben")},
 	}
 	s := Fold(es, nil, 1)
 	if len(s.Issues) != 2 {
@@ -231,7 +231,7 @@ func TestSummaryObjectShape(t *testing.T) {
 // issue's row rather than an empty one; the merge that follows folds into it.
 func TestSummaryAdoptOpensTheIssueRowNotAnEmptyOne(t *testing.T) {
 	es := []Entry{
-		{TS: at(0), Kind: KindAdopt, Round: 1, Issue: "12", Slot: "ext-1", PR: "https://h/o/r/pull/7", Detail: Detail("branch", "codex/12-thing")},
+		{TS: at(0), Kind: KindAdopt, Round: 1, Issue: "12", Slot: "ext-1", PR: "https://h/o/r/pull/7", Detail: detail("branch", "codex/12-thing")},
 		{TS: at(5), Kind: KindMerge, Round: 1, Issue: "12", Slot: "ext-1", PR: "https://h/o/r/pull/7"},
 	}
 	s := Fold(es, nil, 1)
@@ -248,8 +248,8 @@ func TestSummaryAdoptOpensTheIssueRowNotAnEmptyOne(t *testing.T) {
 func TestSummaryTrainMemberDropsAnEarlierGateVerdict(t *testing.T) {
 	es := []Entry{
 		{TS: at(0), Kind: KindAssign, Round: 2, Issue: "12", Slot: "ben"},
-		{TS: at(1), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "stale")},
-		{TS: at(2), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "", "train", true, "culprit", "dana")},
+		{TS: at(1), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: detail("verdict", "stale")},
+		{TS: at(2), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: detail("verdict", "", "train", true, "culprit", "dana")},
 	}
 	if g := row(t, Fold(es, nil, 2), "12", "ben").Gate; g != "" {
 		t.Errorf("gate = %q, want none for a member the train accepted", g)
@@ -271,8 +271,8 @@ func TestSummaryOwnerlessBounceMakesNoDashTotal(t *testing.T) {
 
 func TestSummaryCountsFreshTransfers(t *testing.T) {
 	es := []Entry{
-		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapFresh)},
-		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapFresh)},
+		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "dana", Detail: detail("from", "ben", "capReason", CapFresh)},
+		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: detail("from", "ben", "capReason", CapFresh)},
 	}
 	s := Fold(es, nil, 2)
 	if s.CapReasons.Fresh != 2 {
@@ -290,10 +290,10 @@ func TestSummaryCountsFreshTransfers(t *testing.T) {
 
 func TestSummaryCountsCapReasons(t *testing.T) {
 	es := []Entry{
-		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "human", Detail: Detail("from", "ben", "capReason", CapAmbiguousCriteria)},
-		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapTier)},
-		{TS: at(2), Kind: KindTransfer, Round: 2, Issue: "14", Slot: "kit", Detail: Detail("from", "ben")},
-		{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "15", Slot: "kit", Detail: Detail("capReason", CapTier)},
+		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "human", Detail: detail("from", "ben", "capReason", CapAmbiguousCriteria)},
+		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: detail("from", "ben", "capReason", CapTier)},
+		{TS: at(2), Kind: KindTransfer, Round: 2, Issue: "14", Slot: "kit", Detail: detail("from", "ben")},
+		{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "15", Slot: "kit", Detail: detail("capReason", CapTier)},
 	}
 	s := Fold(es, nil, 2)
 	if s.CapReasons != (CapReasons{AmbiguousCriteria: 1, Tier: 1}) {
@@ -366,15 +366,15 @@ func TestSummaryTransferThenMergeSupersedesTheFirstRow(t *testing.T) {
 		"transfer": {
 			{TS: at(0), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
 			{TS: at(1), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
-			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: Detail("verdict", "review-missing")},
-			{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "#3165", Slot: "ben", Detail: Detail("from", "kit")},
+			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: detail("verdict", "review-missing")},
+			{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "#3165", Slot: "ben", Detail: detail("from", "kit")},
 			{TS: at(4), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"}, // late done lands after the hand-over
 			{TS: at(5), Kind: KindMerge, Round: 1, Issue: "#3165", Slot: "ben", PR: "#3297"},
 		},
 		"reassign without a transfer event": {
 			{TS: at(0), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
 			{TS: at(1), Kind: KindDone, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297"},
-			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: Detail("verdict", "review-missing")},
+			{TS: at(2), Kind: KindGate, Round: 1, Issue: "#3165", Slot: "kit", PR: "#3297", Detail: detail("verdict", "review-missing")},
 			{TS: at(3), Kind: KindAssign, Round: 1, Issue: "#3165", Slot: "ben"},
 			{TS: at(5), Kind: KindMerge, Round: 1, Issue: "#3165", Slot: "ben"},
 		},

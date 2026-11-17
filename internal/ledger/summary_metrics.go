@@ -127,14 +127,14 @@ func trainRate(entries []Entry, round int) RatioMetric {
 		if e.Round != round {
 			continue
 		}
-		if e.Kind == KindGate && e.Detail != nil && jsonx.Bool(e.Detail, "train") && trains == 0 {
+		if e.Kind == KindGate && e.IsTrainMember() && trains == 0 {
 			reason = "legacy train members without recorded train outcomes"
 		}
-		if e.Kind != KindTrain || e.DetailStr("verdict") == "cancelled" { // a cancel is no outcome of the code
+		if e.Kind != KindTrain || e.Verdict() == "cancelled" { // a cancel is no outcome of the code
 			continue
 		}
 		trains++
-		if v := e.DetailStr("verdict"); v == "" {
+		if v := e.Verdict(); v == "" {
 			reason = "train outcome missing verdict"
 		} else if v != "pass" {
 			red++

@@ -399,7 +399,7 @@ func capReasons(t *testing.T, root string) []string {
 	var got []string
 	for _, e := range es {
 		if e.Kind == ledger.KindTransfer {
-			got = append(got, e.DetailStr("capReason"))
+			got = append(got, e.CapReason())
 		}
 	}
 	return got

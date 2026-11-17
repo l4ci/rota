@@ -200,9 +200,9 @@ func seedLedger(t *testing.T, dir string) {
 	t.Helper()
 	t0 := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 	for _, e := range []ledger.Entry{
-		{TS: t0, Kind: ledger.KindAssign, Round: 2, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
-		{TS: t0.Add(20 * time.Minute), Kind: ledger.KindDone, Round: 2, Issue: "12", Slot: "ben", PR: "#7", Detail: ledger.Detail("headroom", 55.0)},
-		{TS: t0.Add(21 * time.Minute), Kind: ledger.KindGate, Round: 2, Issue: "12", Slot: "ben", PR: "#7", Detail: ledger.Detail("verdict", "pass")},
+		{TS: t0, Kind: ledger.KindAssign, Round: 2, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: hdr(80.0)},
+		{TS: t0.Add(20 * time.Minute), Kind: ledger.KindDone, Round: 2, Issue: "12", Slot: "ben", PR: "#7", Detail: hdr(55.0)},
+		{TS: t0.Add(21 * time.Minute), Kind: ledger.KindGate, Round: 2, Issue: "12", Slot: "ben", PR: "#7", Detail: ledger.GateDetail("pass", "", nil)},
 		{TS: t0.Add(21 * time.Minute), Kind: ledger.KindMerge, Round: 2, Issue: "12", Slot: "ben", PR: "#7"},
 		{TS: t0, Kind: ledger.KindAssign, Round: 1, Issue: "3", Slot: "dana", Harness: "codex"},
 	} {
