@@ -92,9 +92,9 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		if out.Blocked {
-			d := jsonx.Obj("blockedBy", blockedby.StatuslineExists, "scope", string(scope), "settingsPath", path, "changed", false)
-			return Result{Data: d}, Refused("a statusline is already configured and would be replaced").
-				WithHint("run: rota hook install --wrap-statusline (keeps it, runs it after the dump)")
+			return blockedRefusal(nil, blockedby.StatuslineExists, "a statusline is already configured and would be replaced",
+				"run: rota hook install --wrap-statusline (keeps it, runs it after the dump)",
+				"scope", string(scope), "settingsPath", path)
 		}
 		if out.Changed {
 			if err := writeSettings(path, files[scope]); err != nil {

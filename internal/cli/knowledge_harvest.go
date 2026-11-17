@@ -106,7 +106,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 // its data carries no "changed"; --mark writes, so it keeps exit 4.
 func refuseHarvest(writes bool, blockedBy string, e *Error) (Result, error) {
 	if writes {
-		return Result{Data: jsonx.Obj("blockedBy", blockedBy, "changed", false)}, e
+		return blockedRefusalErr(nil, blockedBy, e)
 	}
 	e.Exit = ExitFailed
 	return Result{Data: jsonx.Obj("blockedBy", blockedBy)}, e

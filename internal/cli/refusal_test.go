@@ -122,3 +122,22 @@ func TestRecordedFailRefusalKeepsEnvelopeForCorruptStore(t *testing.T) {
 		t.Fatalf("a non-refusal error must pass through untouched: %v", err)
 	}
 }
+
+func TestBlockedDataKeyOrderAndErrVariant(t *testing.T) {
+	d := blockedData(nil, "exists", "cap", 3)
+	b, err := jsonx.MarshalCompact(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"blockedBy": "exists", "cap": 3, "changed": false}`; got != want {
+		t.Fatalf("envelope = %s, want %s", got, want)
+	}
+	orig := Refused("nope").WithHint("try x")
+	res, err := blockedRefusalErr(nil, "exists", orig)
+	if err != error(orig) {
+		t.Fatalf("blockedRefusalErr replaced the error: %v", err)
+	}
+	if res.Data.(*jsonx.Object).Keys()[0] != "blockedBy" {
+		t.Fatalf("data = %v", res.Data)
+	}
+}

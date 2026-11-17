@@ -273,10 +273,7 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 func counterRefusal(err error) (Result, error) {
 	var ae *exitcode.Error
 	if errors.As(err, &ae) && ae.Exit == exitcode.ExitRefused {
-		d := jsonx.NewObject()
-		d.Set("blockedBy", blockedby.Attempt)
-		d.Set("changed", false)
-		return Result{Data: d}, err
+		return blockedRefusalErr(nil, blockedby.Attempt, err)
 	}
 	return Result{}, err
 }

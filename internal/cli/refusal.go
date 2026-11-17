@@ -10,6 +10,19 @@ import (
 // fresh object when nil) plus blockedBy, the extra key/value pairs in order and
 // changed false, with the message and hint on the error.
 func blockedRefusal(d *jsonx.Object, by, msg, hint string, extra ...any) (Result, error) {
+	return Result{Data: blockedData(d, by, extra...)}, Refused("%s", msg).WithHint(hint)
+}
+
+// blockedRefusalErr is blockedRefusal for an error already built (its exit,
+// message and hint stay as they are): only the data is the shared envelope.
+func blockedRefusalErr(d *jsonx.Object, by string, err error, extra ...any) (Result, error) {
+	return Result{Data: blockedData(d, by, extra...)}, err
+}
+
+// blockedData is the refusal envelope alone: d (a fresh object when nil) plus
+// blockedBy, the extra pairs in order and changed false. For a refusal whose
+// error is built elsewhere, or one that exits 1 and carries the same data.
+func blockedData(d *jsonx.Object, by string, extra ...any) *jsonx.Object {
 	if d == nil {
 		d = jsonx.NewObject()
 	}
@@ -18,7 +31,7 @@ func blockedRefusal(d *jsonx.Object, by, msg, hint string, extra ...any) (Result
 		d.Set(extra[i].(string), extra[i+1])
 	}
 	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
+	return d
 }
 
 // verdictBlocked is the refusal for a recorded FAIL verdict. withVerdict adds

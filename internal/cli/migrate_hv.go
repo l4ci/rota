@@ -56,7 +56,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 			var ref *hvmigrate.Refusal
 			switch {
 			case errors.As(err, &ref):
-				return Result{Data: jsonx.Obj("blockedBy", ref.Blocked, "changed", false)}, Refused("%s", ref.Message)
+				return blockedRefusal(nil, ref.Blocked, ref.Message, "")
 			case errors.Is(err, hvmigrate.ErrNoState):
 				return Result{}, Resolution("%s", err.Error())
 			case errors.Is(err, hvmigrate.ErrGit):

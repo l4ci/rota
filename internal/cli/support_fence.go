@@ -2,11 +2,11 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -17,8 +17,7 @@ const supportBackendHint = "set issues.source to a tracker (github, gitlab, …)
 // supportFileModeStop refuses a support key set or in use under issues.source
 // file: a support round needs labels, comments and PRs (D3).
 func supportFileModeStop() (Result, error) {
-	d := jsonx.Obj("blockedBy", blockedby.Backend, "changed", false)
-	return Result{Data: d}, Refused("a support round needs an issue tracker, but issues.source is file").WithHint(supportBackendHint)
+	return blockedRefusal(nil, blockedby.Backend, "a support round needs an issue tracker, but issues.source is file", supportBackendHint)
 }
 
 // roleInTrackedConfig refuses every verb but `rota config` and `rota
@@ -36,9 +35,9 @@ func (p *preflight) roleInTrackedConfig() (Result, error) {
 	if !roundcfg.RoleInTrackedConfig(root) {
 		return Result{}, nil
 	}
-	d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
-	return Result{Data: d}, Refused("round.role is set in .rota/config.json, which every machine shares").
-		WithHint("remove it from .rota/config.json, then run: rota config set round.role <value>, which writes .rota/config.local.json")
+	return blockedRefusal(nil, blockedby.Config, "round.role is set in .rota/config.json, which every machine shares",
+		"remove it from .rota/config.json, then run: rota config set round.role <value>, which writes .rota/config.local.json",
+		"key", config.RoundRoleKey)
 }
 
 // supportRole refuses a fenced verb when this machine's round.role is
@@ -67,9 +66,10 @@ func supportRefusalWith(c *Ctx, root, what string, load func(string) any) (Resul
 	if err != nil || !support {
 		return res, err
 	}
-	d := jsonx.Obj("blockedBy", blockedby.Role, "role", roundcfg.RoleSupport, "changed", false)
-	return Result{Data: d}, Refused("%s is refused on a support machine (round.role support): only the main orchestrator merges and writes tracked .rota/ content", what).
-		WithHint("run this on the main machine, or unset round.role in .rota/config.local.json")
+	return blockedRefusal(nil, blockedby.Role,
+		fmt.Sprintf("%s is refused on a support machine (round.role support): only the main orchestrator merges and writes tracked .rota/ content", what),
+		"run this on the main machine, or unset round.role in .rota/config.local.json",
+		"role", roundcfg.RoleSupport)
 }
 
 // supportMachine is whether this machine's round.role is support. A role it
@@ -85,8 +85,8 @@ func supportMachineWith(root, what string, load func(string) any) (bool, Result,
 		return false, Result{}, &Error{Exit: ExitUnavailable, Message: rerr.Why, Hint: rerr.Hint}
 	}
 	if rerr != nil {
-		d := jsonx.Obj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
-		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, rerr.Why).WithHint(rerr.Hint)
+		res, err := blockedRefusal(nil, blockedby.Config, fmt.Sprintf("%s needs to know this machine's role: %s", what, rerr.Why), rerr.Hint, "key", config.RoundRoleKey)
+		return false, res, err
 	}
 	return support, Result{}, nil
 }
@@ -107,13 +107,11 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 		return supportFileModeStop()
 	}
 	if set.Role == roundcfg.RoleSupport && set.Support == "" {
-		d := jsonx.Obj("blockedBy", blockedby.Config, "changed", false)
-		return Result{Data: d}, Refused("round.role is support but round.support is empty").WithHint("set round.support to this machine's name")
+		return blockedRefusal(nil, blockedby.Config, "round.role is support but round.support is empty", "set round.support to this machine's name")
 	}
 	if set.Support != "" {
 		if _, err := c.deps().workerEnv().BounceStore(root); errors.Is(err, worker.ErrNoPushTrust) {
-			d := jsonx.Obj("blockedBy", blockedby.Forge, "changed", false)
-			return Result{Data: d}, Refused("%s", err.Error()).WithHint("a support round needs GitHub: only GitHub can say who has write access, which the bounce markers rely on")
+			return blockedRefusal(nil, blockedby.Forge, err.Error(), "a support round needs GitHub: only GitHub can say who has write access, which the bounce markers rely on")
 		} else if err != nil {
 			return Result{}, err
 		}

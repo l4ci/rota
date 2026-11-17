@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -57,14 +58,13 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	if !issue {
 		return root, Result{}, nil
 	}
-	d := jsonx.NewObject()
-	d.Set("blockedBy", blockedby.Backend)
-	d.Set("changed", false)
-	msg := "%s works on the file backend only (issues.source is a tracker)"
+	msg := fmt.Sprintf("%s works on the file backend only (issues.source is a tracker)", c.Path)
 	if readOnly {
-		return "", Result{Data: d}, Failed(msg, c.Path)
+		// A read-only verb exits 1 here (the conventions forbid 4), with the same data.
+		return "", Result{Data: blockedData(nil, blockedby.Backend)}, Failed("%s", msg)
 	}
-	return "", Result{Data: d}, Refused(msg, c.Path)
+	res, err := blockedRefusal(nil, blockedby.Backend, msg, "")
+	return "", res, err
 }
 
 func bodyFlag(fs *flag.FlagSet) *string {
@@ -126,10 +126,7 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 // refusal is the exit-4 failure data: {"blockedBy": "exists", "changed": false}.
 func refusal(err error) any {
 	if ae, ok := err.(*exitcode.Error); ok && ae.Exit == exitcode.ExitRefused {
-		d := jsonx.NewObject()
-		d.Set("blockedBy", blockedby.Exists)
-		d.Set("changed", false)
-		return d
+		return blockedData(nil, blockedby.Exists)
 	}
 	return nil
 }
