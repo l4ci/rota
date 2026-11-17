@@ -193,6 +193,9 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 		return nil
 	case prog == "source" || prog == ".":
 		// `source /dev/stdin` runs a script the parser never sees (#3530).
+		for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
+			rest = rest[1:] // skip -- and options
+		}
 		if len(rest) > 0 && isStdinPath(rest[0]) && mentionsGit.MatchString(g.line) {
 			return guardErr("a shell reading its script from stdin")
 		}
@@ -303,11 +306,12 @@ func shellReadsStdin(args []string) bool {
 
 // isStdinPath reports a path that names the process's standard input.
 func isStdinPath(p string) bool {
-	switch p {
-	case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+	p = filepath.Clean(p)
+	if p == "/dev/stdin" || p == "/dev/fd/0" {
 		return true
 	}
-	return false
+	// /proc/<pid>/fd/0 and /proc/self/fd/0
+	return strings.HasPrefix(p, "/proc/") && strings.HasSuffix(p, "/fd/0")
 }
 
 // pushd: options come before the directory and end at `--`. -n leaves the
@@ -438,19 +442,10 @@ func (g *guard) ghAPI(args []string) {
 
 // ghGraphQL denies a gh api graphql call that carries a merge mutation: the
 // same seat as gh pr merge (#3531). Queries and other mutations pass.
+// The endpoint is not parsed: any gh api argument naming a merge mutation is denied.
 func (g *guard) ghGraphQL(args []string) {
-	graphql := false
-	for _, a := range args {
-		// the endpoint may carry a leading slash, a trailing one or the full URL
-		a = strings.TrimSuffix(strings.TrimPrefix(a, "https://api.github.com"), "/")
-		if a == "graphql" || a == "/graphql" {
-			graphql = true
-			break
-		}
-	}
-	if !graphql {
-		return
-	}
+	// Scanned on every gh api call, whatever spelling the endpoint takes
+	// (/graphql, the full URL, a trailing slash).
 	for _, a := range args {
 		for _, m := range []string{"mergePullRequest", "enablePullRequestAutoMerge"} {
 			if strings.Contains(a, m) {

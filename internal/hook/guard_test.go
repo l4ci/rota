@@ -157,6 +157,8 @@ func TestGuardDenies(t *testing.T) {
 		"bash /dev/fd/0 <<<'git push origin main'",
 		"source /dev/stdin <<<'git push origin main'",
 		". /dev/stdin <<<'git push origin main'",
+		"bash /proc/self/fd/0 <<<'git push origin main'",
+		"source -- /dev/stdin <<<'git push origin main'",
 		"git push origin $B",
 		"git push origin HEAD:$B",
 		"git push origin `echo main`",
