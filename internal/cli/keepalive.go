@@ -188,11 +188,10 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if promptSet && strings.TrimSpace(*prompt) == "" {
 			return Result{}, Usage("--prompt must not be empty")
 		}
-		root, err := c.Root()
+		root, cfg, err := c.Project()
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := c.deps().Config(root)
 		set, err := keepalive.LoadSettings(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the orchestrator.* key with: rota config set"}

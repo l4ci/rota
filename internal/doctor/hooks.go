@@ -18,13 +18,13 @@ const (
 )
 
 func (d *runner) hook() Check {
-	if !host.CapabilitiesForKind(d.roundHost()).Harness.HerdrIntegration {
+	bin, applies, ok := d.herdrBinary()
+	if !applies {
 		return skip("hook", "host is not herdr")
 	}
 	if len(d.in.Accounts) == 0 {
 		return skip("hook", "no accounts in round.accounts")
 	}
-	bin, ok := d.in.Look(host.Herdr.Binary())
 	if !ok {
 		return skip("hook", "herdr not on PATH (see host)")
 	}
@@ -47,6 +47,45 @@ func (d *runner) hook() Check {
 		return fail("hook", strings.Join(parts, "; "), hookHint)
 	}
 	return pass("hook", strings.Join(parts, "; "))
+}
+
+// herdrBinary looks up herdr for the checks that need its integration:
+// applies is false when the round host has no herdr integration (nothing to
+// look up), ok whether the binary is on PATH.
+func (d *runner) herdrBinary() (bin string, applies, ok bool) {
+	if !host.CapabilitiesForKind(d.roundHost()).Harness.HerdrIntegration {
+		return "", false, false
+	}
+	bin, ok = d.in.Look(host.Herdr.Binary())
+	return bin, true, ok
+}
+
+// unreadable lists the paths of the files whose settings could not be read.
+func unreadable(files []hook.File) []string {
+	var paths []string
+	for _, f := range files {
+		if f.Err != nil {
+			paths = append(paths, f.Path)
+		}
+	}
+	return paths
+}
+
+// userFile is one config dir's user settings file with the dir that labels it.
+type userFile struct {
+	Label string
+	File  hook.File
+}
+
+// userFiles pairs each user settings file with its config dir, so no caller
+// indexes one slice by the other's position. With no config dir it is empty.
+func (d *runner) userFiles() []userFile {
+	dirs := d.configDirs()
+	var out []userFile
+	for i, f := range d.hooks().Users {
+		out = append(out, userFile{Label: dirs[i], File: f})
+	}
+	return out
 }
 
 // hooks returns the run's settings view, reading the files on first use.
@@ -81,22 +120,20 @@ func (d *runner) configDirs() []string {
 // that runs `rota statusline dump`. The hooks are opt-in, so with none of that
 // the checks skip; they fail only on a broken or partial install. Unreadable
 // files are returned so a skip can say it could not look there.
-func (d *runner) optIn() (in bool, unreadable []string) {
-	for _, f := range d.hooks().InScope() {
-		if f.Err != nil {
-			unreadable = append(unreadable, f.Path)
-		}
+func (d *runner) optIn() (in bool, bad []string) {
+	files := d.hooks().InScope()
+	for _, f := range files {
 		if len(f.Events) > 0 || (f.HasStatusLine && hook.IsOurStatusLine(f.StatusLineCmd)) {
 			in = true
 		}
 	}
-	return in, unreadable
+	return in, unreadable(files)
 }
 
-func notInstalled(name string, unreadable []string) Check {
+func notInstalled(name string, bad []string) Check {
 	detail := "hooks not installed (opt-in)"
-	if len(unreadable) > 0 {
-		detail += "; cannot read " + strings.Join(unreadable, ", ")
+	if len(bad) > 0 {
+		detail += "; cannot read " + strings.Join(bad, ", ")
 	}
 	return skip(name, detail+": rota hook install")
 }
@@ -111,20 +148,19 @@ func (d *runner) statusline() Check {
 	}
 	h := d.hooks()
 	proj := h.Project()
-	users := h.Users
-	labels := d.configDirs()
+	users := d.userFiles()
 	if len(users) == 0 {
-		users, labels = []hook.File{{}}, []string{""}
+		users = []userFile{{}}
 	}
 	anyFile := h.Local.Exists || h.Shared.Exists
 	var parts, bad []string
-	for i, dir := range labels {
+	for _, u := range users {
 		files := append([]hook.File{}, proj...)
 		label := "project"
-		if dir != "" {
-			files = append(files, users[i])
-			label = dir
-			anyFile = anyFile || users[i].Exists
+		if u.Label != "" {
+			files = append(files, u.File)
+			label = u.Label
+			anyFile = anyFile || u.File.Exists
 		}
 		var eff *hook.File
 		broken := ""
@@ -194,11 +230,8 @@ func (d *runner) stopHook() Check {
 		return notInstalled(name, bad)
 	}
 	found := map[string]string{}
-	var unreadable []string
-	for _, f := range d.hooks().InScope() {
-		if f.Err != nil {
-			unreadable = append(unreadable, f.Path)
-		}
+	files := d.hooks().InScope()
+	for _, f := range files {
 		for ev, c := range f.Events {
 			if _, ok := found[ev]; !ok {
 				found[ev] = c
@@ -213,8 +246,8 @@ func (d *runner) stopHook() Check {
 	}
 	if len(missing) > 0 {
 		detail := "no # rota-hook entry for " + strings.Join(missing, " and ")
-		if len(unreadable) > 0 {
-			detail += " (cannot read " + strings.Join(unreadable, ", ") + ")"
+		if bad := unreadable(files); len(bad) > 0 {
+			detail += " (cannot read " + strings.Join(bad, ", ") + ")"
 		}
 		return fail(name, detail, stopHookHint)
 	}
@@ -237,20 +270,17 @@ func (d *runner) guardHook() Check {
 	if in, bad := d.optIn(); !in {
 		return notInstalled(name, bad)
 	}
-	var unreadable []string
 	cmd := ""
-	for _, f := range d.hooks().Worktree() {
-		if f.Err != nil {
-			unreadable = append(unreadable, f.Path)
-		}
+	files := d.hooks().Worktree()
+	for _, f := range files {
 		if c, ok := f.Events[hook.EventGuard]; ok && cmd == "" {
 			cmd = c
 		}
 	}
 	if cmd == "" {
 		detail := "no # rota-hook PreToolUse entry in project or user scope (project-local does not reach worker worktrees)"
-		if len(unreadable) > 0 {
-			detail += " (cannot read " + strings.Join(unreadable, ", ") + ")"
+		if bad := unreadable(files); len(bad) > 0 {
+			detail += " (cannot read " + strings.Join(bad, ", ") + ")"
 		}
 		return fail(name, detail, guardHookHint)
 	}

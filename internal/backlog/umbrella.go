@@ -18,7 +18,7 @@ import (
 
 // Umbrella is the issue backlog of an umbrella project: every registered
 // sub-repo keeps its items on its own tracker (UmbrellaIssueBackend in
-// hvlib_backend.py). Reads merge the sub-repos' renderings, each bullet
+// the retired Python backend). Reads merge the sub-repos' renderings, each bullet
 // carrying `Repos: <name>`; an item's ID is "<repo>:<number>" (contract rule
 // 11); writes go to the tracker of the sub-repo that owns the item.
 //

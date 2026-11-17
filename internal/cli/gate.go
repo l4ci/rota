@@ -68,11 +68,14 @@ func confirmFlags(fs *flag.FlagSet) func() (gate.Confirm, error) {
 func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, extra *jsonx.Object) (Result, error) {
 	root, autonomy := "", ""
 	if conf.Given {
-		var err error
-		if root, err = c.Root(); err != nil {
+		var (
+			cfg any
+			err error
+		)
+		if root, cfg, err = c.Project(); err != nil {
 			return Result{}, err
 		}
-		autonomy = config.AutonomyLevel(c.deps().Config(root))
+		autonomy = config.AutonomyLevel(cfg)
 	}
 	verb := strings.TrimPrefix(c.Path, "rota ")
 	err := gate.Clear(root, autonomy, c.deps().Now(), name, verb, target, conf, paths)
@@ -93,11 +96,10 @@ func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, e
 // mergePolicy loads ship.mergeApproval for a merge verb; a bad value is exit 2.
 // Without a .rota/ root there is no config, so the default `none` applies.
 func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
-	root, err := c.Root()
+	_, cfg, err := c.Project()
 	if err != nil {
 		return gate.MergePolicy{Mode: gate.MergeNone}, nil
 	}
-	cfg := c.deps().Config(root)
 	mode, _ := config.Value(cfg, "ship.mergeApproval")
 	var paths []string
 	list, _ := config.Value(cfg, "ship.mergeApprovalPaths")

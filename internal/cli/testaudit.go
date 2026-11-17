@@ -27,7 +27,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
-		root, err := c.Root()
+		root, cfg, err := c.Project()
 		if err != nil {
 			return Result{}, err
 		}
@@ -37,7 +37,6 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		}
 		checkpointPath := rotastate.File(common, "test-audit.json")
 		checkpoint, cerr := testaudit.ReadCheckpoint(checkpointPath)
-		cfg := c.deps().Config(root)
 		threshold := func(key string) (int, error) {
 			v, err := config.Value(cfg, key)
 			if err != nil {

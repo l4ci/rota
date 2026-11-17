@@ -1,6 +1,9 @@
 package mapqa
 
 import (
+	"context"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -281,5 +284,37 @@ func TestStatsCommitsBehindSurfacesGitFailure(t *testing.T) {
 	}
 	if byName["old"].CommitsBehind != nil || byName["old"].CommitsBehindErr == nil {
 		t.Errorf("old = %+v, want nil count and an error", byName["old"])
+	}
+}
+
+func fakeGit(stdout string, exit int) git.Repo {
+	return git.Repo{Runner: func(_ context.Context, _ string, _ ...string) (git.Result, error) {
+		return git.Result{Stdout: stdout, ExitCode: exit}, nil
+	}}
+}
+
+func TestCommitDateReadsThroughTheSuppliedRunner(t *testing.T) {
+	if d, ok := CommitDate(fakeGit("2024-03-05\n", 0), "a.md"); !ok || stamp.Date(d) != "2024-03-05" {
+		t.Errorf("CommitDate = %v, %v", d, ok)
+	}
+	for name, repo := range map[string]git.Repo{
+		"git fails":  fakeGit("", 128),
+		"no history": fakeGit("\n", 0),
+		"bad date":   fakeGit("not-a-date\n", 0),
+	} {
+		if _, ok := CommitDate(repo, "a.md"); ok {
+			t.Errorf("%s: want not ok", name)
+		}
+	}
+}
+
+func TestTouchedInPrefersFrontmatterOverGit(t *testing.T) {
+	e := Entry{FM: map[string]any{"touched": "2020-01-02"}, Path: "/r/.rota/map/a.md"}
+	if d, ok := e.TouchedIn(fakeGit("2024-03-05\n", 0), "/r"); !ok || stamp.Date(d) != "2020-01-02" {
+		t.Errorf("frontmatter lost: %v %v", d, ok)
+	}
+	e.FM = nil
+	if d, ok := e.TouchedIn(fakeGit("2024-03-05\n", 0), "/r"); !ok || stamp.Date(d) != "2024-03-05" {
+		t.Errorf("git fallback: %v %v", d, ok)
 	}
 }

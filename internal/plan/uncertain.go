@@ -36,7 +36,7 @@ type Items interface {
 	Open(id string) (OpenItem, error)
 }
 
-// Uncertain ports hv-uncertain: whether an open item warrants a peek before
+// Uncertain ports the retired uncertain helper: whether an open item warrants a peek before
 // planning. Only Major items can be uncertain; the reasons are "no detail
 // file", "multiple open-question signals" and "no concrete identifiers
 // (unknown surface)". It returns the item's ID and type for the answer.
@@ -68,7 +68,7 @@ func (s fileItems) Open(id string) (OpenItem, error) {
 		}
 		return OpenItem{}, merr
 	}
-	// The sections list (ROTA_OPEN_SECTIONS, as hv-types.sh exported it) limits
+	// The sections list (ROTA_OPEN_SECTIONS, as the retired type registry exported it) limits
 	// which open sections the item may live in.
 	active := map[string]bool{}
 	sections := s.openSections

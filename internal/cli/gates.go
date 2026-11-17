@@ -80,9 +80,6 @@ type preflight struct {
 	rootDone bool
 	root     string
 	rootErr  error
-
-	cfgDone bool
-	cfg     any
 }
 
 // corruptConfig refuses (exit 5, naming the file) a project or local config
@@ -116,13 +113,9 @@ func (p *preflight) project() (string, bool) {
 	return p.root, p.rootErr == nil
 }
 
-// config is the merged config of root, loaded once.
+// config is the merged config of root, the one the verb reads through Ctx.Project.
 func (p *preflight) config(root string) any {
-	if !p.cfgDone {
-		p.cfg = p.c.deps().Config(root)
-		p.cfgDone = true
-	}
-	return p.cfg
+	return p.c.projectConfig(root)
 }
 
 // runGates is the gate sequence: the legacy state directory stop, a corrupt config, the old round keys, a

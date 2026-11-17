@@ -82,22 +82,22 @@ func MatchUnder(pattern, file string) bool {
 // matches at the root only (*.md is README.md, not docs/a.md); a ** segment
 // matches zero or more directories.
 func Match(pattern, file string) bool {
-	return MatchSegments(strings.Split(pattern, "/"), strings.Split(file, "/"))
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(file, "/"))
 }
 
-// MatchSegments matches already-split pattern and file segments.
-func MatchSegments(pattern, file []string) bool {
+// matchSegments matches already-split pattern and file segments.
+func matchSegments(pattern, file []string) bool {
 	if len(pattern) == 0 {
 		return len(file) == 0
 	}
 	if pattern[0] == "**" {
-		return MatchSegments(pattern[1:], file) || (len(file) > 0 && MatchSegments(pattern, file[1:]))
+		return matchSegments(pattern[1:], file) || (len(file) > 0 && matchSegments(pattern, file[1:]))
 	}
 	if len(file) == 0 {
 		return false
 	}
 	ok, _ := path.Match(pattern[0], file[0])
-	return ok && MatchSegments(pattern[1:], file[1:])
+	return ok && matchSegments(pattern[1:], file[1:])
 }
 
 // Valid reports whether glob is one every configured glob key accepts: slash

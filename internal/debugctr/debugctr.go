@@ -1,4 +1,4 @@
-// Package debugctr ports hv-debug-counter: the persistent fix-attempt
+// Package debugctr ports the retired debug-counter helper: the persistent fix-attempt
 // counter behind /rota-debug's Iron Law. State lives in
 // .rota/debug/<session>.json, where session is the current git branch with
 // "/" replaced by "-". The file keeps its old snake_case keys so rota and the

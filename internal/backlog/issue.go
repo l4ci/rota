@@ -19,7 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// Issue is the tracker's view of one issue (hvlib_tracker _norm).
+// Issue is the tracker's view of one issue (the retired Python tracker's _norm).
 type Issue = tracker.Issue
 
 // refTag is how a bullet spells an issue: the type letter and number of a
@@ -59,7 +59,7 @@ type Tracker interface {
 var _ Tracker = tracker.IssueTracker(nil)
 
 // Issues is the backlog served from an issue tracker (IssueBackend in
-// hvlib_backend.py). Rendered bullets keep the letter
+// the retired Python backend). Rendered bullets keep the letter
 // ("[F12]"); only Item.ID drops it, since an issue number is the identity.
 type Issues struct {
 	Cfg     any             // loaded config, for the label names

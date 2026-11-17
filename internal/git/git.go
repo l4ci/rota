@@ -51,14 +51,14 @@ type Runner func(ctx context.Context, dir string, args ...string) (Result, error
 
 // Exec is the production Runner.
 func Exec(ctx context.Context, dir string, args ...string) (Result, error) {
-	return Via(proc.Run, ctx, dir, args...)
+	return via(proc.Run, ctx, dir, args...)
 }
 
-// Via runs git through a process runner with the policy every git call shares:
+// via runs git through a process runner with the policy every git call shares:
 // the git timeout and the C locale. git translates its messages ("CONFLICT
 // (content)" among them) in some locales; callers match on them, so ask for
 // the C locale.
-func Via(run proc.Runner, ctx context.Context, dir string, args ...string) (Result, error) {
+func via(run proc.Runner, ctx context.Context, dir string, args ...string) (Result, error) {
 	res, err := run(ctx, proc.Cmd{
 		Name: "git", Args: args, Dir: dir, Timeout: Timeout,
 		Env: []string{"LC_ALL=C", "LANGUAGE=C"},

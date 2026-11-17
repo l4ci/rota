@@ -94,11 +94,11 @@ func TestParentSkipsWithoutComm(t *testing.T) {
 }
 
 func TestParseLsofCwd(t *testing.T) {
-	if got := ParseLsofCwd("p91\nfcwd\nn/Users/me/p/.worktrees/w1\n"); got != "/Users/me/p/.worktrees/w1" {
-		t.Errorf("ParseLsofCwd = %q", got)
+	if got := parseLsofCwd("p91\nfcwd\nn/Users/me/p/.worktrees/w1\n"); got != "/Users/me/p/.worktrees/w1" {
+		t.Errorf("parseLsofCwd = %q", got)
 	}
-	if got := ParseLsofCwd("p91\n"); got != "" {
-		t.Errorf("ParseLsofCwd(no n line) = %q", got)
+	if got := parseLsofCwd("p91\n"); got != "" {
+		t.Errorf("parseLsofCwd(no n line) = %q", got)
 	}
 }
 

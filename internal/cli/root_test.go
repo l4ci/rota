@@ -101,3 +101,41 @@ func TestFindRootMasksOnNamelessAbsoluteEntry(t *testing.T) {
 		t.Fatalf("nameless absolute entry: err = %v, want ErrMasked", err)
 	}
 }
+
+// Ctx.Project is the one root+config read of an invocation: asking twice loads
+// the config once, so preflight and the verb share the value.
+func TestCtxProjectLoadsConfigOnce(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	calls := 0
+	d.Config = func(string) any { calls++; return map[string]any{"k": "v"} }
+	c := &Ctx{Deps: d}
+	for i := 0; i < 3; i++ {
+		root, cfg, err := c.Project()
+		if err != nil || root != top || cfg == nil {
+			t.Fatalf("Project = %q, %v, %v; want %q and a config", root, cfg, err, top)
+		}
+	}
+	if calls != 1 {
+		t.Errorf("Config called %d times, want 1", calls)
+	}
+}
+
+// A missing root surfaces ErrNoRoot through Project, and a retry repeats it
+// without loading a config.
+func TestCtxProjectMissingRoot(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	calls := 0
+	d.Config = func(string) any { calls++; return nil }
+	c := &Ctx{Deps: d}
+	if _, _, err := c.Project(); err == nil {
+		t.Fatalf("Project err = %v, want the no-root error", err)
+	}
+	if calls != 0 {
+		t.Errorf("Config called %d times for a missing root", calls)
+	}
+}

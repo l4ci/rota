@@ -114,7 +114,7 @@ func TestDisplayPath(t *testing.T) {
 }
 
 func TestCountLinesSkipsBinary(t *testing.T) {
-	if got := CountLines("3\t1\ta.go\n-\t-\timg.png\n\n"); got != 4 {
+	if got := countLines("3\t1\ta.go\n-\t-\timg.png\n\n"); got != 4 {
 		t.Fatalf("got %d, want 4", got)
 	}
 }

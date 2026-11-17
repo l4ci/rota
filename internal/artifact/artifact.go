@@ -22,7 +22,7 @@ type Doc struct {
 }
 
 // ListDocs globs dir/*.md in name order and returns the files that carry
-// frontmatter, like hv-fm-list. A missing dir is an empty list.
+// frontmatter, like the retired fm-list helper. A missing dir is an empty list.
 func ListDocs(dir string) ([]Doc, error) {
 	files := fsio.GlobDir(dir, "*.md")
 	sort.Strings(files)

@@ -100,7 +100,7 @@ func ParseRef(s string) (Ref, error) {
 	return Ref{Letter: letter, Number: n}, nil
 }
 
-// resolveItemRef is hvlib_backend.resolve_item_ref: "#42", "42" or "F42" give
+// resolveItemRef is the retired Python resolve_item_ref: "#42", "42" or "F42" give
 // (42, "") or (42, "F"); the letter is upper-cased.
 func resolveItemRef(ref string) (n int, letter string, err error) {
 	s := pystr.Strip(ref)
