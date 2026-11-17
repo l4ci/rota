@@ -146,6 +146,26 @@ func TestGuardDenies(t *testing.T) {
 		"git -C " + gOther + " push --force origin HEAD",
 		"git -C " + gOther + " push --force-with-lease",
 		"cd " + gOther + " && git push -f origin " + gOtherBranch,
+		// #3530: a shell fed its script on stdin, and an unresolved refspec.
+		"bash <<<'git push origin main'",
+		"bash <<EOF\ngit push origin main\nEOF",
+		"echo 'git push origin main' | sh",
+		"echo 'git push origin main' | bash -s",
+		"git push origin $B",
+		"git push origin HEAD:$B",
+		"git push origin `echo main`",
+		"git push origin ~/x",
+		// #3531: other ways to move or delete a base or foreign ref.
+		"gh api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:\"x\"}){clientMutationId}}'",
+		"gh api graphql -f query='mutation{enablePullRequestAutoMerge(input:{pullRequestId:\"x\"}){clientMutationId}}'",
+		"git branch -f main abc123",
+		"git branch --force main abc123",
+		"git branch -M main",
+		"git branch -m main other",
+		"git branch -f " + gOtherBranch + " abc123",
+		"git -C " + gOther + " branch -M renamed",
+		"git push --prune origin 'refs/heads/*:refs/heads/*'",
+		"git push --prune",
 	} {
 		t.Run(line, func(t *testing.T) {
 			if got := Guard(line, guardEnv()); got == "" {
@@ -217,6 +237,18 @@ func TestGuardAllows(t *testing.T) {
 		`echo "it's" '"git push -f origin main"'`,
 		"echo $((1 + 2))",
 		"",
+		"sh -c 'git push origin " + gBranch + "'",
+		"git push origin " + gBranch,
+		"echo hi | sh",
+		"bash script.sh",
+		"bash ./build.sh git",
+		"bash -s <<<'echo hi'",
+		"gh api graphql -f query='query{viewer{login}}'",
+		"gh api graphql -f query='mutation{addComment(input:{}){clientMutationId}}'",
+		"git branch -f " + gBranch + " abc123",
+		"git branch -M " + gBranch,
+		"git branch --list",
+		"git branch newname",
 	} {
 		t.Run(line, func(t *testing.T) {
 			if got := Guard(line, guardEnv()); got != "" {

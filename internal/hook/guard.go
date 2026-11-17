@@ -43,7 +43,7 @@ var mentionsGit = regexp.MustCompile(`(^|[^A-Za-z0-9_-])(git|gh)([^A-Za-z0-9_-]|
 // It fails closed only when the line mentions git or gh and cannot be parsed or
 // the repo state it needs cannot be read; any other parse failure passes.
 func Guard(command string, env GuardEnv) string {
-	g := &guard{env: env, cwd: env.Cwd}
+	g := &guard{env: env, cwd: env.Cwd, line: command}
 	if err := g.script(command, 0); err != nil {
 		if mentionsGit.MatchString(command) {
 			return "guard could not parse: " + err.Error() + "; run the command plainly"
@@ -56,6 +56,7 @@ func Guard(command string, env GuardEnv) string {
 type guard struct {
 	env    GuardEnv
 	cwd    string // "" once a cd made it unknowable
+	line   string // the whole command line, for the mentions-git check on a stdin-fed shell
 	reason string
 }
 
@@ -184,6 +185,11 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 		if s, ok := shellScript(rest); ok {
 			return g.script(s, depth+1)
 		}
+		// A shell that reads its script from stdin (here-string, heredoc, pipe)
+		// hides the commands from the parser (#3530).
+		if shellReadsStdin(rest) && mentionsGit.MatchString(g.line) {
+			return guardErr("a shell reading its script from stdin")
+		}
 		return nil
 	case prog == "git":
 		return g.git(rest, sc)
@@ -261,6 +267,29 @@ func shellScript(args []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// shellReadsStdin reports a shell call with neither -c nor a script file, so it
+// reads the script from stdin; `-s` forces that even with positional arguments.
+func shellReadsStdin(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		isOpt := (strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+")) && len(a) > 1
+		if !isOpt {
+			return false // a script file
+		}
+		switch {
+		case strings.HasPrefix(a, "--"):
+			if a == "--rcfile" || a == "--init-file" {
+				i++
+			}
+		case strings.HasPrefix(a, "-") && strings.Contains(a, "s"):
+			return true
+		case strings.HasSuffix(a, "o") || strings.HasSuffix(a, "O"):
+			i++
+		}
+	}
+	return true
 }
 
 // pushd: options come before the directory and end at `--`. -n leaves the
@@ -344,6 +373,7 @@ func (g *guard) gh(args []string) {
 	}
 	if len(pos) >= 1 && pos[0] == "api" {
 		g.ghAPI(args)
+		g.ghGraphQL(args)
 	}
 }
 
@@ -385,6 +415,29 @@ func (g *guard) ghAPI(args []string) {
 	path, _, _ := strings.Cut(endpoint, "?")
 	if strings.HasSuffix(strings.TrimRight(path, "/"), "/merge") {
 		g.deny("workers never merge: gh api %s %s is the orchestrator's seat", method, path)
+	}
+}
+
+// ghGraphQL denies a gh api graphql call that carries a merge mutation: the
+// same seat as gh pr merge (#3531). Queries and other mutations pass.
+func (g *guard) ghGraphQL(args []string) {
+	graphql := false
+	for _, a := range args {
+		if a == "graphql" {
+			graphql = true
+			break
+		}
+	}
+	if !graphql {
+		return
+	}
+	for _, a := range args {
+		for _, m := range []string{"mergePullRequest", "enablePullRequestAutoMerge"} {
+			if strings.Contains(a, m) {
+				g.deny("workers never merge: gh api graphql %s is the orchestrator's seat", m)
+				return
+			}
+		}
 	}
 }
 
@@ -443,7 +496,7 @@ loop:
 	case "reset":
 		return g.reset(c)
 	case "branch":
-		g.branch(c)
+		return g.branch(c)
 	case "clean":
 		g.clean(c)
 	case "add":
@@ -516,16 +569,49 @@ func (g *guard) clean(c gitCall) {
 	}
 }
 
-func (g *guard) branch(c gitCall) {
-	short, long, _ := flagsOf(c.args)
+func (g *guard) branch(c gitCall) error {
+	short, long, pos := flagsOf(c.args)
 	force := short['f'] || long["--force"]
 	del := short['d'] || long["--delete"]
+	move := short['m'] || short['M'] || long["--move"]
 	switch {
 	case short['D']:
 		g.deny("git branch -D force-deletes a branch: use -d on a merged branch")
 	case del && force:
 		g.deny("git branch -d -f force-deletes a branch: use -d on a merged branch")
+	case (force || move) && !del && len(pos) > 0:
+		// -f rewrites the first branch; -m/-M renames the current branch or
+		// the first of two, and -M overwrites the second. Each name touched
+		// must be the worker's own and not a base (#3531).
+		cur, own, err := g.branches(c.dir)
+		if err != nil {
+			return err
+		}
+		touched := pos[:1]
+		if move {
+			touched = pos
+			if len(pos) == 1 {
+				touched = []string{cur, pos[0]}
+			}
+		}
+		for _, name := range touched {
+			if g.isBase(name) || name != own {
+				g.deny("git branch %s rewrites %s: a worker may only rewrite its own branch (%s)", branchFlag(short, long), name, own)
+				return nil
+			}
+		}
 	}
+	return nil
+}
+
+func branchFlag(short map[rune]bool, long map[string]bool) string {
+	switch {
+	case short['M']:
+		return "-M"
+	case short['m'] || long["--move"]:
+		return "-m"
+	}
+	return "-f"
 }
 
 func (g *guard) reset(c gitCall) error {
@@ -565,6 +651,10 @@ func (g *guard) push(c gitCall) error {
 		g.deny("git push --delete removes a remote ref: not for workers")
 		return nil
 	}
+	if long["--prune"] {
+		g.deny("git push --prune deletes every remote branch absent locally: not for workers")
+		return nil
+	}
 	force := short['f'] || long["--force"] || long["--force-with-lease"] || long["--force-if-includes"]
 	if len(pos) > 0 {
 		pos = pos[1:] // the remote
@@ -581,6 +671,10 @@ func (g *guard) push(c gitCall) error {
 	}
 	needBranch := force
 	for _, spec := range pos {
+		// A substitution (`...` or $(...)) leaves an empty word behind.
+		if spec == "" || strings.ContainsAny(spec, "$`~") {
+			return guardErr("git push refspec " + spec + " is not a literal")
+		}
 		if strings.HasPrefix(spec, ":") {
 			g.deny("git push %s deletes a remote ref: not for workers", spec)
 			return nil
