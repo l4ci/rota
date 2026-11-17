@@ -167,7 +167,7 @@ func (e Env) planSwitch(ctx context.Context, root string, be Board, o SwitchOpts
 	}
 	if !e.Worker.ModelAppliesTo(root, res.ToKind) {
 		if o.Model != "" {
-			return nil, blocked(blockedby.ModelLabel, "--model %s cannot apply: the %s launch command has no {model} placeholder", o.Model, res.ToKind)
+			return nil, blocked(blockedby.ModelLabel, "--model %s cannot apply: the %s launch command does not take {model}", o.Model, res.ToKind)
 		}
 		run.model = ""
 	} else if run.model == "" && e.Worker.NeedsModel(root, res.ToKind) {
