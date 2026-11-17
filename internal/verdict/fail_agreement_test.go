@@ -19,10 +19,32 @@ func TestGateAndBounceAgreeOnRecoveredReport(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, gate := BlockingAtHead(ForHead(tc.list, head), head)
-			bounce := len(BounceFailing(tc.list, head)) > 0
+			bounce := bounceReads(tc.list, head)
 			if gate != tc.want || bounce != tc.want {
 				t.Fatalf("gate=%v bounce=%v, want both %v", gate, bounce, tc.want)
 			}
 		})
+	}
+}
+
+// bounceReads is the bounce path the cli takes: the review records at head,
+// any of which is Failing. It does not call BounceFailing, so the gate rule
+// is checked against an independent reading.
+func bounceReads(list []Record, head string) bool {
+	for _, r := range BounceReviewsAtHead(list, head) {
+		if r.Failing() {
+			return true
+		}
+	}
+	return false
+}
+
+// Across the whole named-rule table the gate and the bounce path agree.
+func TestGateAndBounceAgreeAcrossRuleCases(t *testing.T) {
+	for _, c := range ruleCases() {
+		_, gate := BlockingAtHead(ForHead(c.list, c.head), c.head)
+		if bounce := bounceReads(c.list, c.head); gate != bounce {
+			t.Errorf("%s: gate=%v bounce=%v", c.name, gate, bounce)
+		}
 	}
 }

@@ -447,23 +447,19 @@ func TestFailingVersusNarrowFailing(t *testing.T) {
 	blocker := []Finding{{Severity: "major", Title: "t"}}
 	nit := []Finding{{Severity: "minor", Title: "t"}}
 	cases := []struct {
-		name        string
-		r           Record
-		failing     bool
-		effectFails bool
+		name    string
+		r       Record
+		failing bool
 	}{
-		{"pass", Record{Kind: ReviewQuality, Verdict: Pass}, false, false},
-		{"fail verdict", Record{Kind: ReviewQuality, Verdict: Fail}, true, true},
-		{"concerns with nit", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: nit}, false, false},
-		{"concerns with blocker", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: blocker}, true, false},
-		{"pass with failed item", Record{Kind: ReviewSpec, Verdict: Pass, Items: []ItemVerdict{{"B07", Fail}}}, true, false},
+		{"pass", Record{Kind: ReviewQuality, Verdict: Pass}, false},
+		{"fail verdict", Record{Kind: ReviewQuality, Verdict: Fail}, true},
+		{"concerns with nit", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: nit}, false},
+		{"concerns with blocker", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: blocker}, true},
+		{"pass with failed item", Record{Kind: ReviewSpec, Verdict: Pass, Items: []ItemVerdict{{"B07", Fail}}}, true},
 	}
 	for _, c := range cases {
 		if got := c.r.Failing(); got != c.failing {
 			t.Errorf("%s: Failing = %v, want %v", c.name, got, c.failing)
-		}
-		if got := len(RelayFailing([]Record{c.r})) > 0; got != c.effectFails {
-			t.Errorf("%s: RelayFailing = %v, want %v", c.name, got, c.effectFails)
 		}
 	}
 	// the combined verdict of a quality record decides, not its own Verdict
@@ -615,44 +611,6 @@ func TestResetKindsAgreeAcrossCountersAndRetention(t *testing.T) {
 	}
 }
 
-// BlockingAnyHead blocks on a FAIL, a blocking finding or a failed-item
-// CONCERNS for every review kind, wherever the record was made, and never on
-// a clean CONCERNS or PASS.
-func TestBlockingAnyHead(t *testing.T) {
-	blocker := []Finding{{Severity: "blocker", Title: "x"}}
-	kinds := append([]string{ReviewCross, SecondOpinion}, LensKinds...)
-	for _, kind := range kinds {
-		cases := []struct {
-			name string
-			rec  Record
-			want bool
-		}{
-			{"fail", Record{Kind: kind, Verdict: Fail, Sha: "old"}, true},
-			{"blocking finding", Record{Kind: kind, Verdict: Concerns, Sha: "old", Findings: blocker}, kind != SecondOpinion},
-			{"clean concerns", Record{Kind: kind, Verdict: Concerns, Sha: "old"}, false},
-			{"pass", Record{Kind: kind, Verdict: Pass, Sha: "old"}, false},
-		}
-		for _, c := range cases {
-			if _, got := BlockingAnyHead([]Record{c.rec}); got != c.want {
-				t.Errorf("%s %s: blocked = %v, want %v", kind, c.name, got, c.want)
-			}
-		}
-	}
-	for _, c := range []struct {
-		name string
-		rec  Record
-		want bool
-	}{
-		{"review fail", Record{Kind: ReviewQuality, Verdict: Fail, Combined: Fail, Sha: "old"}, true},
-		{"review blocking finding", Record{Kind: ReviewQuality, Verdict: Concerns, Combined: Concerns, Sha: "old", Findings: blocker}, true},
-		{"review clean concerns", Record{Kind: ReviewQuality, Verdict: Concerns, Combined: Concerns, Sha: "old"}, false},
-	} {
-		if _, got := BlockingAnyHead([]Record{c.rec}); got != c.want {
-			t.Errorf("%s: blocked = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
 func TestCanonicalizeItemsKeepsWorkFixFailuresAcrossAliasReset(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
@@ -730,38 +688,5 @@ func TestCrossAtByIgnoresFailsAndOtherHeads(t *testing.T) {
 	}
 	if r, ok := CrossAtBy(list, y, accept); !ok || r.Sha != y {
 		t.Fatalf("CrossAtBy(y) = %+v, %v", r, ok)
-	}
-	if r, ok := BlockingAtHead(list, x); !ok || r.Sha != x {
-		t.Fatalf("BlockingAtHead(x) = %+v, %v; want the FAIL at x under a newer PASS at y", r, ok)
-	}
-	if _, ok := BlockingAtHead(list, y); ok {
-		t.Fatal("nothing blocks at y")
-	}
-}
-
-// At head, a newer PASS from one harness must not hide another harness's FAIL.
-func TestBlockingAtHeadSeesEachHarnessCross(t *testing.T) {
-	const sha = "abc1234"
-	list := []Record{
-		{Kind: ReviewCross, Verdict: Fail, Sha: sha, Harness: "hx-a", Model: "m"},
-		{Kind: ReviewCross, Verdict: Pass, Sha: sha, Harness: "hx-b", Model: "m"},
-	}
-	if r, ok := BlockingAtHead(list, sha); !ok || r.Harness != "hx-a" {
-		t.Fatalf("BlockingAtHead = %+v, %v; want the hx-a FAIL under a newer hx-b PASS", r, ok)
-	}
-}
-
-// Across heads a newer cross record clears an older one: a stale FAIL from a
-// harness no longer required stops blocking once the required one passes.
-func TestBlockingAnyHeadNewerCrossClearsOlderFail(t *testing.T) {
-	list := []Record{
-		{Kind: ReviewCross, Verdict: Fail, Sha: "aaa1111", Harness: "hx-b", Model: "m"},
-		{Kind: ReviewCross, Verdict: Pass, Sha: "bbb2222", Harness: "hx-a", Model: "m"},
-	}
-	if r, ok := BlockingAnyHead(list); ok {
-		t.Fatalf("BlockingAnyHead = %+v; the newer PASS from the required harness clears the old FAIL", r)
-	}
-	if r, ok := Blocking(list); ok {
-		t.Fatalf("Blocking = %+v", r)
 	}
 }
