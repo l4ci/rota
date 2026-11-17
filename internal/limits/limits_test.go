@@ -44,6 +44,8 @@ type rig struct {
 	sent      []string          // "<session>: <prompt>"
 	xfers     []string
 	xferErr   error
+	switches  []string // "<slot>-><account>"
+	switchErr error
 	ledgered  []ledger.Entry
 	escal     []string
 	notified  []string
@@ -104,6 +106,11 @@ func (r *rig) Transfer(_ context.Context, issue, to string) error {
 		}
 	}
 	return r.xferErr
+}
+
+func (r *rig) Switch(_ context.Context, slot, account string) error {
+	r.switches = append(r.switches, slot+"->"+account)
+	return r.switchErr
 }
 
 func (r *rig) step(sweep bool, ms ...Match) { r.w.Step(context.Background(), ms, sweep) }
@@ -190,14 +197,32 @@ func TestSlotSwitchesToIdleSlotOnAnotherAccount(t *testing.T) {
 	}
 }
 
+// With no idle slot on the picked account, the limited slot itself moves to
+// that account in place (round switch) before the watcher would sleep.
+func TestSlotSwitchesInPlaceWhenNoSlotIsIdle(t *testing.T) {
+	r := slotRig(t)
+	delete(r.idle, "b")
+	r.build()
+	r.step(true)
+	e := r.only()
+	if len(r.xfers) != 0 || len(r.switches) != 1 || r.switches[0] != "ben->b" {
+		t.Fatalf("transfers %v switches %v", r.xfers, r.switches)
+	}
+	if e.Status != StatusSwitched || e.Action != ActionSwitch || e.To != "ben" || e.ResolvedAt == "" ||
+		!strings.Contains(e.Note, "switched ben in place to account b") {
+		t.Fatalf("entry %+v", e)
+	}
+}
+
 func TestSlotSleepsWhenSwitchImpossible(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mutate func(r *rig)
 		note   string
 	}{
-		"sleep mode":      {func(r *rig) { r.set.Mode = ModeSleep }, "limits.mode is sleep"},
-		"no account":      {func(r *rig) { r.pick = "" }, "No usable account"},
-		"no idle slot":    {func(r *rig) { delete(r.idle, "b") }, "No idle slot on account b"},
+		"sleep mode": {func(r *rig) { r.set.Mode = ModeSleep }, "limits.mode is sleep"},
+		"no account": {func(r *rig) { r.pick = "" }, "No usable account"},
+		"no idle slot, switch failed": {func(r *rig) { delete(r.idle, "b"); r.switchErr = errors.New("boom") },
+			"No idle slot on account b; the in-place switch of ben to account b failed: boom"},
 		"transfer failed": {func(r *rig) { r.xferErr = errors.New("boom") }, "transfer of 67 to dana failed: boom"},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -21,6 +21,7 @@ func roundCommands() *Command {
 		{Name: "wind-down", Fence: fenceAllowed, Summary: "re-verify the base, park every slot, release the lease", Verb: roundWindDown},
 		{Name: "return", Fence: fenceAllowed, Summary: "a worker hands its issue back: park, comment, release", Verb: roundReturn},
 		{Name: "transfer", Fence: fenceAllowed, Summary: "move an assigned issue to another slot or to the human", Verb: roundTransfer},
+		{Name: "switch", Fence: fenceAllowed, Summary: "move a slot that holds work to another account or harness in place: checkpoint, push, relaunch", Verb: roundSwitch},
 		{Name: "review-relay", Fence: fenceAllowed, Summary: "relay a done slot's new PR review input to its worker as a counted bounce; escalates at round.maxBounces", Verb: roundReviewRelay},
 		{Name: "bounce", Fence: fenceAllowed, Summary: "count a review bounce of an issue; refuses at round.maxBounces", Verb: roundBounce},
 		{Name: "report", Fence: fenceAllowed, Summary: "record a solo worker's result: state and PR", Verb: roundReport},

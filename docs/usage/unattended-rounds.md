@@ -205,11 +205,29 @@ another watcher.
 - **`switch`** applies to a worker slot only. It keeps the slot's account unless it is cooling, otherwise
   takes the account with the most headroom (`rota worker account pick --exclude <account>`), the rule
   `rota round assign` uses. With such an account and an idle slot on it, the slot's issue moves there with
-  `rota round transfer`, so the work continues from its pushed branch and a handoff comment. With no usable
-  account, or no idle slot on it, the limit sleeps instead and the entry says why.
+  `rota round transfer`, so the work continues from its pushed branch and a handoff comment. With such an
+  account and no idle slot on it, the limited slot moves to the account itself with `rota round switch`
+  (below). With no usable account, or a switch that fails, the limit sleeps instead and the entry says why.
 - **The orchestrator only sleeps.** A limited session cannot write a handoff, and a restarted one with no
   handoff has nothing to continue from. Moving it to another account is opt-in and happens before the
   limit: see [switching the orchestrator's account](#switching-the-orchestrators-account).
+
+### Switching a slot in place
+
+`rota round switch <slot>` moves a slot that holds work to another account without giving up the slot. It
+commits the uncommitted work as `wip: checkpoint before switch`, stamped with the slot's attempt, pushes the
+branch, records the new account on the slot and starts a new session on it. The old session is closed first.
+The slot keeps its issue, claim, attempt, bundle, branch and PR. The new session's brief names the checkpoint,
+the commands to read the branch with, and `git revert` as the way to drop the checkpoint.
+
+```sh
+rota round switch ben                   # the other account of ben's harness with the most headroom
+rota round switch ben --account work2   # a named account; refused as `limited` if it is spent
+rota round switch ben --kind codex      # move ben to the other harness
+```
+
+Without `--kind` the harness stays. A refusal (an account at its limit, a gate running on the slot) changes
+nothing. A failed push takes the checkpoint back and leaves the worktree as it was.
 
 ### The slot cap
 

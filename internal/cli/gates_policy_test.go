@@ -121,7 +121,7 @@ var oldSupportAllowed = []string{
 	"rota round freeze", "rota round accept", "rota round architecture", "rota round assign", "rota round bounce", "rota round escalate check",
 	"rota round escalate send", "rota round pick", "rota round reclaim", "rota round reconcile", "rota round report",
 	"rota round return", "rota round review-relay", "rota round scope", "rota round start", "rota round tick",
-	"rota round transfer", "rota round wind-down",
+	"rota round switch", "rota round transfer", "rota round wind-down",
 	"rota worker account assign", "rota worker account pick", "rota worker adopt", "rota worker dispatch", "rota worker done",
 	"rota worker inbox", "rota worker poll", "rota worker pool init", "rota worker pool reap", "rota worker reply",
 	"rota worker reset", "rota worker send", "rota worker session ensure",

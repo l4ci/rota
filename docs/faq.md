@@ -32,7 +32,7 @@ Workers never merge. They open a PR, and the orchestrator merges through the gat
 
 ## What happens when I hit a usage limit?
 
-`rota limit watch` notices the limit, waits for the reset and types a resume prompt into the pane. `rota orchestrate` runs it for you under `rota keepalive run`. With several accounts in `round.accounts`, a limited worker's issue moves to an idle slot on an account with headroom instead of waiting (`limits.mode: switch`, the default); with no such slot it waits. See [usage limits](usage/unattended-rounds.md#-usage-limits).
+`rota limit watch` notices the limit, waits for the reset and types a resume prompt into the pane. `rota orchestrate` runs it for you under `rota keepalive run`. With several accounts in `round.accounts`, a limited worker's issue moves to an idle slot on an account with headroom instead of waiting (`limits.mode: switch`, the default). With no idle slot there, the limited slot switches to that account in place (`rota round switch`), keeping its work; with no usable account it waits. See [usage limits](usage/unattended-rounds.md#-usage-limits).
 
 ## Can a round run overnight?
 
