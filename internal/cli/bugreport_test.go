@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ import (
 var brOK = []string{"--confirm", "--confirm-note", "yes, file it"}
 
 func TestBugreportUsesDepsGitForSharedLog(t *testing.T) {
-	root, main := trProject(t, "{}"), trProject(t, "{}")
+	root, main := brProject(t, "{}"), brProject(t, "{}")
 	d := testDeps()
 	d.Git = func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{Stdout: filepath.Join(main, ".git")}, nil
@@ -44,6 +45,15 @@ func TestBugreportUsesDepsGitForSharedLog(t *testing.T) {
 	}
 }
 
+// brProject is trProject whose git lookups stop above the project: a TMPDIR inside
+// a checkout would otherwise resolve the log to that checkout's real .rota/.
+func brProject(t *testing.T, cfg string) string {
+	t.Helper()
+	dir := trProject(t, cfg)
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+	return dir
+}
+
 func addRecord(t *testing.T, dir string) {
 	t.Helper()
 	o := trRun(t, dir, "", "bugreport", "add", "--summary", "worker done refused a valid attempt, mail me at me@example.com", "--expected", "it should accept it", "--verb", "worker done")
@@ -52,8 +62,32 @@ func addRecord(t *testing.T, dir string) {
 	}
 }
 
+// TestBugreportAddLeavesACheckoutAboveTMPDIRAlone runs with TMPDIR inside a fake
+// checkout that holds .rota/, as a worker slot's does.
+func TestBugreportAddLeavesACheckoutAboveTMPDIRAlone(t *testing.T) {
+	fake, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", fake, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	slotTmp := filepath.Join(fake, ".rota", "tmp", "slots", "x")
+	if err := os.MkdirAll(slotTmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", slotTmp)
+	// A test's TempDir parent is made on its first call, so the project needs a fresh t.
+	t.Run("add", func(t *testing.T) {
+		addRecord(t, brProject(t, "{}"))
+	})
+	if _, err := os.Stat(filepath.Join(fake, ".rota", "bugreports.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("fake checkout log written: %v", err)
+	}
+}
+
 func TestBugreportAddListDraft(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	addRecord(t, dir)
 	recs, _ := bugreport.Load(context.Background(), git.Exec, dir)
 	if len(recs) != 1 || recs[0].Source != bugreport.SourceAgent || recs[0].Verb != "worker done" || recs[0].Expected != "it should accept it" {
@@ -80,7 +114,7 @@ func TestBugreportAddListDraft(t *testing.T) {
 }
 
 func TestBugreportDraftTakesHarnessAndModelFromTheSlot(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	addRecord(t, dir)
 	reg := `{"slots":[{"name":"dana","kind":"claude","model":"sonnet-5"}]}`
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(reg), 0o644); err != nil {
@@ -102,7 +136,7 @@ func TestBugreportDraftTakesHarnessAndModelFromTheSlot(t *testing.T) {
 
 func TestBugreportFileIsAManualGate(t *testing.T) {
 	for _, level := range []string{"off", "auto"} {
-		dir := trProject(t, gateConfig(t, "", level, nil))
+		dir := brProject(t, gateConfig(t, "", level, nil))
 		addRecord(t, dir)
 		f := &forge{answer: func(string, []string) (string, string, int) { return "https://github.com/l4ci/rota/issues/9\n", "", 0 }}
 		d := useForge(t, f)
@@ -120,7 +154,7 @@ func TestBugreportFileIsAManualGate(t *testing.T) {
 }
 
 func TestBugreportFileCreatesTheIssueAndMarksFiled(t *testing.T) {
-	dir := trProject(t, gateConfig(t, "", "auto", nil))
+	dir := brProject(t, gateConfig(t, "", "auto", nil))
 	addRecord(t, dir)
 	f := &forge{answer: func(_ string, args []string) (string, string, int) {
 		if args[0] == "issue" {
@@ -151,7 +185,7 @@ func TestBugreportFileCreatesTheIssueAndMarksFiled(t *testing.T) {
 }
 
 func TestBugreportFileSurfacesTheURLWhenTheStatusUpdateFails(t *testing.T) {
-	dir := trProject(t, gateConfig(t, "", "auto", nil))
+	dir := brProject(t, gateConfig(t, "", "auto", nil))
 	addRecord(t, dir)
 	f := &forge{answer: func(_ string, args []string) (string, string, int) {
 		if args[0] == "issue" {
@@ -175,7 +209,7 @@ func TestBugreportFileSurfacesTheURLWhenTheStatusUpdateFails(t *testing.T) {
 }
 
 func TestBugreportFileCommentsOnADuplicate(t *testing.T) {
-	dir := trProject(t, gateConfig(t, "", "off", nil))
+	dir := brProject(t, gateConfig(t, "", "off", nil))
 	addRecord(t, dir)
 	f := &forge{answer: func(string, []string) (string, string, int) {
 		return "https://github.com/l4ci/rota/issues/7#issuecomment-1\n", "", 0
@@ -196,7 +230,7 @@ func TestBugreportFileCommentsOnADuplicate(t *testing.T) {
 }
 
 func TestBugreportDuplicatesSearchesOpenIssues(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	addRecord(t, dir)
 	f := &forge{answer: func(_ string, args []string) (string, string, int) {
 		if args[0] == "issue" {
@@ -219,7 +253,7 @@ func TestBugreportDuplicatesSearchesOpenIssues(t *testing.T) {
 }
 
 func TestBugreportDismiss(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	addRecord(t, dir)
 	if o := trRun(t, dir, "", "bugreport", "dismiss", "bug-1"); o.code != 0 {
 		t.Fatalf("%+v", o)
@@ -251,7 +285,7 @@ func chdirForTest(t *testing.T, dir string) {
 
 func TestInternalErrorsAndPanicsAreRecorded(t *testing.T) {
 	for _, verb := range []string{"plain", "panic"} {
-		dir := trProject(t, "{}")
+		dir := brProject(t, "{}")
 		chdirForTest(t, dir)
 		var so, se bytes.Buffer
 		code := run(testTree(), recordingDeps(), []string{"fail", verb}, strings.NewReader(""), &so, &se)
@@ -267,7 +301,7 @@ func TestInternalErrorsAndPanicsAreRecorded(t *testing.T) {
 }
 
 func TestRecordedArgsDropGlobalFlags(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	chdirForTest(t, ".") // -C changes the process directory; restore it
 	var so, se bytes.Buffer
 	code := run(testTree(), recordingDeps(), []string{"--json", "-C", dir, "fail", "plain", "--json", "--cwd", dir}, strings.NewReader(""), &so, &se)
@@ -285,7 +319,7 @@ func reflectArgs(got []string, want ...string) bool {
 }
 
 func TestOtherExitCodesAreNotRecorded(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	chdirForTest(t, dir)
 	var so, se bytes.Buffer
 	for _, verb := range []string{"refused", "lock", "leak"} {
@@ -343,7 +377,7 @@ func TestHookStopSkipsTheOfferForARoundWorker(t *testing.T) {
 }
 
 func TestBugreportListRedactsLikeDraft(t *testing.T) {
-	dir := trProject(t, "{}")
+	dir := brProject(t, "{}")
 	if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Verb: "worker done",
 		Summary: "broke in " + filepath.Base(dir)}, time.Now()); err != nil {
 		t.Fatal(err)
