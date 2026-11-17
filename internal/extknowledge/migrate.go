@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // MigrateChange is one bullet whose trailing "(seen on …)" moves into its
@@ -173,8 +175,8 @@ func owner(lines []string, i int) string {
 // migrateLine rewrites one bullet line. ch is nil when the line is unchanged.
 func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews []MigrateReview) {
 	title := titleOrLine(line)
-	stamp := stampTail.FindString(line)
-	text := strings.TrimRight(strings.TrimSuffix(line, stamp), " ")
+	body, stamp := bulletfmt.SplitStamp(line)
+	text := strings.TrimRight(body, " ")
 	m := trailingSeenRe.FindStringSubmatchIndex(text)
 	if m == nil {
 		for _, s := range anySeenRe.FindAllString(text, -1) {

@@ -14,8 +14,8 @@ import (
 // render are shared with the external format (internal/bulletfmt); this file owns
 // the stamp, which extknowledge writes with its own fields.
 
-// bulletRe splits a dated bullet into title, body and trailing stamp.
-var bulletRe = regexp.MustCompile(`^- \*\*([^*]+)\*\* — (.*?)(\s*<!-- \d{4}-\d{2}-\d{2}( sha:[0-9a-f]{7,40})?\s*-->\s*)$`)
+// stampRe is the stamp a local bullet ends with: a date and an optional sha.
+var stampRe = regexp.MustCompile(`^\s*<!-- ` + bulletfmt.DatePattern + `( sha:[0-9a-f]{7,40})?\s*-->\s*$`)
 
 // renderBullet is the line Add writes for a new entry.
 func renderBullet(title, body, date, sha string) string {
@@ -27,13 +27,14 @@ func renderBullet(title, body, date, sha string) string {
 }
 
 // parseBullet splits a bullet line (right-trimmed) into its title, body and
-// stamp; ok is false when the line is not a dated bullet.
+// stamp through bulletfmt.Parse; ok is false when the line is not a dated
+// bullet: no title, no " — " after it, or a stamp that is not date and sha.
 func parseBullet(line string) (title, body, stamp string, ok bool) {
-	m := bulletRe.FindStringSubmatch(line)
-	if m == nil {
+	p := bulletfmt.Parse(line)
+	if !p.Titled || !p.Dashed || !stampRe.MatchString(p.Stamp) {
 		return "", "", "", false
 	}
-	return strings.TrimSpace(m[1]), m[2], m[3], true
+	return p.Title, p.Body, p.Stamp, true
 }
 
 // appendToBullet adds text to the end of a bullet's body, ahead of its stamp.
@@ -41,12 +42,11 @@ func parseBullet(line string) (title, body, stamp string, ok bool) {
 // gets the text at the end, as before.
 func appendToBullet(line, text string) string {
 	trimmed := strings.TrimRight(line, " \t\r\f\v")
-	m := bulletRe.FindStringSubmatchIndex(trimmed)
-	if m == nil {
+	if _, _, _, ok := parseBullet(trimmed); !ok {
 		return line + " " + text
 	}
-	stampStart := m[6] // start of group 3, the stamp with its leading space
-	return strings.TrimRight(trimmed[:stampStart], " \t") + " " + text + trimmed[stampStart:]
+	body, stamp := bulletfmt.SplitStamp(trimmed)
+	return strings.TrimRight(body, " \t") + " " + text + stamp
 }
 
 // bulletEnd is the one definition of a local bullet's extent: the offset just

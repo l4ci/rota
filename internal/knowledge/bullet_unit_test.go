@@ -111,3 +111,17 @@ func TestBulletUnitAgreesAcrossOperations(t *testing.T) {
 		}
 	})
 }
+
+// A padded title and a dated bullet read the same here as in extknowledge:
+// both go through bulletfmt.Parse.
+func TestParseBulletTrimsTitlePadding(t *testing.T) {
+	title, body, stamp, ok := parseBullet("- ** Foo ** — the body <!-- 2026-01-02 sha:abc1234 -->")
+	if !ok || title != "Foo" || body != "the body" || stamp != " <!-- 2026-01-02 sha:abc1234 -->" {
+		t.Fatalf("got %q %q %q ok=%v", title, body, stamp, ok)
+	}
+	for _, l := range []string{"- **T** — b", "- **T** b <!-- 2026-01-02 -->", "- **T** — b <!-- note -->"} {
+		if _, _, _, ok := parseBullet(l); ok {
+			t.Errorf("%q must not be a dated bullet", l)
+		}
+	}
+}

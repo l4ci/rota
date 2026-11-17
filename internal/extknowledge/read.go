@@ -481,7 +481,7 @@ func (c Clone) MatchWith(words []string, want []string, project map[string]strin
 // continuation lines included, without the final stamp, lowercased.
 func bulletText(b bullet, unit []string) string {
 	s := strings.Join(unit, "\n")
-	s = strings.TrimSuffix(s, stampTail.FindString(s))
+	s, _ = bulletfmt.SplitStamp(s)
 	if b.Title != "" {
 		s = strings.Replace(s, "**"+b.Title+"**", b.Title, 1)
 	}

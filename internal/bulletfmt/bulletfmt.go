@@ -51,14 +51,14 @@ func CheckDate(date string) error {
 	return nil
 }
 
-// Title returns the bold title of a bullet line (surrounding whitespace is
-// ignored). ok is false when the line is not a titled bullet.
+// Title returns the bold title of a bullet line (surrounding whitespace, the
+// title's own included, is ignored). ok is false when the line is not a titled bullet.
 func Title(line string) (title string, ok bool) {
 	m := titleRe.FindStringSubmatch(strings.TrimSpace(line))
 	if m == nil {
 		return "", false
 	}
-	return m[1], true
+	return strings.TrimSpace(m[1]), true
 }
 
 // Render is the line a store writes for a new entry; stamp is the text between
@@ -120,6 +120,50 @@ var stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
 func SplitStamp(line string) (text, stamp string) {
 	stamp = stampTail.FindString(line)
 	return strings.TrimSuffix(line, stamp), stamp
+}
+
+// DatePattern is a stamp date, YYYY-MM-DD, as a regexp fragment for a store
+// that matches its own stamp shape; dateRe tests one token.
+const DatePattern = `\d{4}-\d{2}-\d{2}`
+
+var dateRe = regexp.MustCompile(`^` + DatePattern + `$`)
+
+// IsDate reports whether a stamp token is a YYYY-MM-DD date.
+func IsDate(tok string) bool { return dateRe.MatchString(tok) }
+
+// StampFields is the space-separated tokens inside a stamp's "<!-- … -->"; ""
+// gives none. Every reader and rewriter of stamp tokens starts here.
+func StampFields(stamp string) []string {
+	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(stamp), "<!--"), "-->"))
+	return strings.Fields(inner)
+}
+
+// Parts is a bullet line split into its title, body and stamp.
+type Parts struct {
+	Title  string // the trimmed **title**; "" when the line has none
+	Body   string // text between the title and the stamp, trimmed, without the dash
+	Stamp  string // the final "<!-- … -->", leading whitespace included; "" when none
+	Titled bool   // the line starts "- **title**"
+	Dashed bool   // the title is followed by " — " exactly
+}
+
+// Parse is the one splitter of a bullet line: both stores read title, body and
+// stamp through it, so a padded title or a loose dash parses alike. A line that
+// is not a "- " bullet has no title and its trimmed text as the body. What the
+// stamp may hold stays with each store.
+func Parse(line string) Parts {
+	text, stamp := SplitStamp(line)
+	p := Parts{Stamp: stamp}
+	if m := titleRe.FindStringSubmatch(text); m != nil {
+		p.Titled, p.Title = true, strings.TrimSpace(m[1])
+		text = text[len(m[0]):]
+		p.Dashed = strings.HasPrefix(text, " — ")
+		text = strings.TrimPrefix(strings.TrimSpace(text), "—")
+	} else {
+		text = strings.TrimPrefix(text, "- ")
+	}
+	p.Body = strings.TrimSpace(text)
+	return p
 }
 
 // SelectFragment is the one fragment-selection rule both knowledge stores

@@ -132,3 +132,41 @@ func TestDeleteBullet(t *testing.T) {
 		}
 	}
 }
+
+func TestParse(t *testing.T) {
+	cases := []struct {
+		name, line string
+		want       Parts
+	}{
+		{"dated", "- **T** — body <!-- 2026-01-02 sha:abc1234 -->",
+			Parts{"T", "body", " <!-- 2026-01-02 sha:abc1234 -->", true, true}},
+		{"padded title", "- ** T ** — body <!-- 2026-01-02 -->",
+			Parts{"T", "body", " <!-- 2026-01-02 -->", true, true}},
+		{"loose dash", "- **T** -- body",
+			Parts{"T", "-- body", "", true, false}},
+		{"no dash, no stamp", "- **T** body",
+			Parts{"T", "body", "", true, false}},
+		{"untitled", "- plain text <!-- 2026-01-02 -->",
+			Parts{"", "plain text", " <!-- 2026-01-02 -->", false, false}},
+		{"earlier comment stays in the body", "- **T** — a <!-- x --> b <!-- 2026-01-02 -->",
+			Parts{"T", "a <!-- x --> b", " <!-- 2026-01-02 -->", true, true}},
+	}
+	for _, c := range cases {
+		if got := Parse(c.line); got != c.want {
+			t.Errorf("%s: Parse(%q) = %+v, want %+v", c.name, c.line, got, c.want)
+		}
+	}
+}
+
+func TestStampFieldsAndIsDate(t *testing.T) {
+	got := StampFields(" <!-- 2026-01-02 source:x seen:go@1.22 -->")
+	if len(got) != 3 || got[0] != "2026-01-02" || got[2] != "seen:go@1.22" {
+		t.Fatalf("StampFields = %q", got)
+	}
+	if len(StampFields("")) != 0 {
+		t.Fatal("an empty stamp has no fields")
+	}
+	if !IsDate("2026-01-02") || IsDate("2026-1-2") || IsDate("x2026-01-02") {
+		t.Fatal("IsDate must accept only YYYY-MM-DD")
+	}
+}

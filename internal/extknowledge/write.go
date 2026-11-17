@@ -6,16 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/topicmatch"
-)
-
-var (
-	stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
 )
 
 // Slugify is the topic file name for a topic name.
@@ -322,8 +317,8 @@ func (c Clone) amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 		return WriteResult{}, err
 	}
 	l := e.lines[hit]
-	tail := stampTail.FindString(l)
-	text := strings.TrimRight(strings.TrimSuffix(l, tail), " ")
+	body, tail := bulletfmt.SplitStamp(l)
+	text := strings.TrimRight(body, " ")
 	if in.Text != "" {
 		text += " " + in.Text
 	}
