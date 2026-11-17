@@ -777,3 +777,40 @@ func TestReviewQueueKeepsFeedbackHandoff(t *testing.T) {
 		}
 	}
 }
+
+// Status reads a path through a symlinked directory the way uninstall does:
+// unsafe is checked before the file is hashed, so an unreadable path under a
+// link (here a link loop, whose Lstat fails with ELOOP) is Edited, not an error.
+func TestStatusMatchesUninstallOverUnreadableLink(t *testing.T) {
+	s := loadFake(t, nil)
+	roots := oneRoot(t)
+	if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
+		t.Fatal(err)
+	}
+	refs := filepath.Join(roots[0].Path, "rota-a", "references")
+	os.RemoveAll(refs)
+	if err := os.Symlink("references", refs); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := s.Status(roots, "")
+	if err != nil {
+		t.Fatalf("status errored where uninstall keeps the path: %v", err)
+	}
+	got := rep.Roots[0].Edited
+	res, err := Uninstall(roots, Options{Mode: ModeFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := map[string]bool{}
+	for _, p := range res[0].Kept {
+		kept[p] = true
+	}
+	for _, p := range got {
+		if !kept[p] {
+			t.Errorf("status says %s is edited but uninstall does not keep it", p)
+		}
+	}
+	if len(got) == 0 {
+		t.Error("status should flag the paths under the link as edited")
+	}
+}

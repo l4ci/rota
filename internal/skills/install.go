@@ -183,6 +183,21 @@ func unsafe(root, p string) bool {
 	return false
 }
 
+// readState fills the disk side of st for path p under root: Unsafe first, and
+// the file is hashed only when it is safe, so a path under a symlinked
+// directory is never read through. unsafeDir forces Unsafe (a skill directory
+// the plan will not write through). It is the one owner of the ordering
+// classify depends on; install, uninstall and status all go through it.
+func readState(root, p string, st pathState, unsafeDir bool) (pathState, error) {
+	st.Unsafe = unsafeDir || unsafe(root, p)
+	if st.Unsafe {
+		return st, nil
+	}
+	var err error
+	st.Have, err = diskHash(filepath.Join(root, filepath.FromSlash(p)))
+	return st, err
+}
+
 // HasManifest is whether the root was installed by rota.
 func HasManifest(root string) bool {
 	_, err := os.Stat(manifestPath(root))
@@ -357,15 +372,7 @@ func (s *Set) planRoot(r Root, o Options, old Manifest) (rootPlan, error) {
 		if replaced[skill] {
 			return st, nil
 		}
-		st.Unsafe = blocked[skill] || unsafe(r.Path, p)
-		if !st.Unsafe {
-			var err error
-			st.Have, err = diskHash(filepath.Join(r.Path, filepath.FromSlash(p)))
-			if err != nil {
-				return st, err
-			}
-		}
-		return st, nil
+		return readState(r.Path, p, st, blocked[skill])
 	}
 
 	for _, p := range s.paths {
@@ -516,12 +523,9 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 			}
 			sort.Strings(paths)
 			for _, p := range paths {
-				st := pathState{Recorded: m.Files[p], Managed: true, Overwrite: o.Overwrite}
-				if st.Unsafe = unsafe(r.Path, p); !st.Unsafe {
-					var err error
-					if st.Have, err = diskHash(filepath.Join(r.Path, filepath.FromSlash(p))); err != nil {
-						return err
-					}
+				st, err := readState(r.Path, p, pathState{Recorded: m.Files[p], Managed: true, Overwrite: o.Overwrite}, false)
+				if err != nil {
+					return err
 				}
 				switch classify(st).Action {
 				case actForget:
@@ -634,11 +638,11 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 			}
 			sort.Strings(paths)
 			for _, p := range paths {
-				have, err := diskHash(filepath.Join(r.Path, filepath.FromSlash(p)))
+				ps, err := readState(r.Path, p, pathState{Recorded: m.Files[p], Managed: true}, false)
 				if err != nil {
 					return rep, err
 				}
-				switch classify(pathState{Recorded: m.Files[p], Managed: true, Have: have, Unsafe: unsafe(r.Path, p)}).Action {
+				switch classify(ps).Action {
 				case actForget:
 					st.Missing = append(st.Missing, p)
 				case actKeep:
