@@ -34,18 +34,29 @@ var (
 	anyHeadRe = regexp.MustCompile(`(?m)^#{1,6}[ \t]`)
 )
 
+// sectionEnd is the one end-of-section rule: a section whose heading starts at
+// headStart and whose text starts at from runs to the next heading of the same
+// or a higher level, so deeper subsections belong to it. It returns the index
+// in text where the section ends, len(text) when nothing ends it. Section (the
+// reader) and SetSection (the writer) both use it, so what one writes the
+// other reads back whole.
+func sectionEnd(text string, headStart, from int) int {
+	level := strings.IndexFunc(text[headStart:], func(r rune) bool { return r != '#' })
+	if n := regexp.MustCompile(`(?m)^#{1,` + strconv.Itoa(level) + `}[ \t]`).FindStringIndex(text[from:]); n != nil {
+		return from + n[0]
+	}
+	return len(text)
+}
+
 // Section is the text under the first heading matching head, up to the next
-// heading of any level. ok is false when there is none.
+// heading of the same or a higher level (see sectionEnd). ok is false when
+// there is none.
 func Section(text string, head *regexp.Regexp) (string, bool) {
 	loc := head.FindStringIndex(text)
 	if loc == nil {
 		return "", false
 	}
-	rest := text[loc[1]:]
-	if n := anyHeadRe.FindStringIndex(rest); n != nil {
-		rest = rest[:n[0]]
-	}
-	return rest, true
+	return text[loc[1]:sectionEnd(text, loc[0], loc[1])], true
 }
 
 // Sections is every section under head, in order. A bundle's issue bodies are
@@ -133,7 +144,7 @@ func appendBullets(body []byte, heading string, items []string) []byte {
 // case; a replaced heading keeps its spelling, a new one is written as
 // "## Name". The acceptance section is the exception: it is found by
 // AcceptanceHeadRe, the grammar readiness reads, and its heading is rewritten
-// to AcceptanceHeading so the criteria numbering finds it. The section runs to the next heading of the same or a higher level. Everything
+// to AcceptanceHeading so the criteria numbering finds it. The section ends where sectionEnd says, the rule Section reads by. Everything
 // outside it is untouched. content is trimmed of surrounding newlines.
 func SetSection(text, name, content string) string {
 	content = strings.Trim(content, "\n")
@@ -159,13 +170,7 @@ func SetSection(text, name, content string) string {
 		}
 		return sec
 	}
-	// The section runs to the next heading of the same or a higher level, so
-	// deeper subsections belong to it.
-	level := strings.IndexFunc(text[loc[0]:], func(r rune) bool { return r != '#' })
-	end := len(text)
-	if n := regexp.MustCompile(`(?m)^#{1,` + strconv.Itoa(level) + `}[ \t]`).FindStringIndex(text[loc[1]:]); n != nil {
-		end = loc[1] + n[0]
-	}
+	end := sectionEnd(text, loc[0], loc[1])
 	heading := text[:loc[1]]
 	if acceptance {
 		heading = text[:loc[0]] + AcceptanceHeading

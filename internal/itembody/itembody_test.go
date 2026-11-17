@@ -2,6 +2,7 @@ package itembody
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -41,7 +42,9 @@ func TestSection(t *testing.T) {
 	}{
 		{"missing", "## Other\n- x\n", "", false},
 		{"up to next heading", "## Files\n- a\n- b\n## Next\n- c\n", "\n- a\n- b\n", true},
-		{"deeper heading ends it", "## Files\n- a\n#### Sub\nz\n", "\n- a\n", true},
+		{"deeper heading stays in", "## Files\n- a\n#### Sub\nz\n", "\n- a\n#### Sub\nz\n", true},
+		{"same level ends it", "### Files\n- a\n### Sub\nz\n", "\n- a\n", true},
+		{"higher level ends it", "### Files\n- a\n## Sub\nz\n", "\n- a\n", true},
 		{"to EOF", "intro\n## Files\n- a\n", "\n- a\n", true},
 		{"first match wins", "## Files\n- a\n## Files\n- b\n", "\n- a\n", true},
 	}
@@ -139,7 +142,6 @@ func TestSetSection(t *testing.T) {
 		{"replace middle", "a\n\n## Acceptance\n\nold\n\n## Pointers\n\n- p\n", "acceptance", "new", "a\n\n## Acceptance\n\nnew\n\n## Pointers\n\n- p\n"},
 		{"replace last keeps heading case", "a\n\n### Notes\n\nold\n", "Notes", "new\n", "a\n\n### Notes\n\nnew\n"},
 		{"first of two", "## X\n\n1\n\n## X\n\n2\n", "x", "n", "## X\n\nn\n\n## X\n\n2\n"},
-		{"subsection belongs", "## A\n\n- old\n\n### Edge\n\n- old edge\n\n## B\n", "a", "new", "## A\n\nnew\n\n## B\n"},
 		{"higher heading ends", "### A\n\nold\n\n## B\n", "a", "new", "### A\n\nnew\n\n## B\n"},
 		{"non-ascii title", "x\n", "über", "y", "x\n\n## Über\n\ny\n"},
 		{"name with regexp chars", "## a.b\n\nold\n", "a.b", "n", "## a.b\n\nn\n"},
@@ -193,5 +195,34 @@ func TestSectionsAndBulletPaths(t *testing.T) {
 	}
 	if got := strings.Join(BulletPaths(ptr[0], true), ","); got != "d/z.go" {
 		t.Errorf("Pointers paths = %s", got)
+	}
+}
+
+// Section (reader) and SetSection (writer) share one end-of-section rule: a
+// section runs to the next heading of the same or a higher level, so a deeper
+// subheading stays inside it on both sides.
+func TestSectionRoundTrip(t *testing.T) {
+	for _, c := range []struct {
+		name, text, content string
+		head                *regexp.Regexp
+		heading             string
+	}{
+		{"### inside Try it", "## Summary\n\nx\n\n## Try it\n\nold\n\n## Out of scope\n\n- y\n", "- `echo a`\n\n### Setup\n\n- `echo b`\n", TryItHeadRe, "Try it"},
+		{"#### inside Files", "## Files\n\n- old\n\n## Next\n\nz\n", "- a\n\n#### Group\n\n- b\n", FilesHeadRe, "Files"},
+		{"deeper section at EOF", "intro\n\n## Touches\n\nold\n", "- a\n### Sub\n- b", TouchesHeadRe, "Touches"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := SetSection(c.text, c.heading, c.content)
+			sec, ok := Section(got, c.head)
+			if !ok || strings.TrimSpace(sec) != strings.TrimSpace(c.content) {
+				t.Errorf("read back %q (ok=%v), wrote %q", sec, ok, c.content)
+			}
+			if c.head == TryItHeadRe {
+				steps, _, err := ParseTryIt(got)
+				if err != nil || len(steps) != 2 {
+					t.Errorf("ParseTryIt = %v, %v; want 2 steps", steps, err)
+				}
+			}
+		})
 	}
 }
