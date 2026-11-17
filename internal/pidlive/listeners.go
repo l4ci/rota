@@ -92,7 +92,7 @@ func parseSS(out string) []Listener {
 }
 
 // parseLsofListeners reads `lsof -nP -iTCP -sTCP:LISTEN -Fpn` output. Its
-// sibling ParseLsofCwd reads the `-d cwd` form of the same -F format.
+// sibling parseLsofCwd reads the `-d cwd` form of the same -F format.
 func parseLsofListeners(out string) []Listener {
 	var ls []Listener
 	pid := 0

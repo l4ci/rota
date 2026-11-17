@@ -1,6 +1,6 @@
 // Package section scans `## Topic` sections in the markdown state files
 // (KNOWLEDGE.md, DECISIONS.md) and writes managed blocks into the project
-// instructions file. It ports bin/hvlib_section.py, so rota and the old helpers
+// instructions file. It ports the retired Python section helper, so rota and the old helpers
 // produce byte-identical files.
 package section
 

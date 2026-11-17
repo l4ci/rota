@@ -13,7 +13,8 @@ import (
 	"github.com/l4ci/rota/internal/status"
 )
 
-// Item removal with dependency cleanup: bin/hv-rm and bin/hvlib_crossref.py.
+// Item removal with dependency cleanup (ported from the retired hv-rm and
+// cross-reference helpers).
 
 // allSections is ALL_BACKLOG_SECTIONS: the open sections plus Completed.
 var allSections = append(append([]string{}, OpenSections...), "Completed")
@@ -260,7 +261,7 @@ func (f *File) planFiles(id string) []string {
 }
 
 // Remove removes items from the backlog with their cross-references, detail
-// file and plan files (hv-rm). Without apply it only computes the plan. IDs
+// file and plan files. Without apply it only computes the plan. IDs
 // are exact ("B07"). An ID in neither BACKLOG.md nor ARCHIVE.md wraps
 // ErrNotFound; with apply, an ID that status.json lists on a branch is an
 // *ActiveError and nothing is written. An archived item's ARCHIVE.md entry is

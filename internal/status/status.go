@@ -1,6 +1,6 @@
 // Package status owns .rota/status.json, the record of active work streams and
-// the loop timestamp. It matches hv-status-add, hv-status-remove,
-// hv-status-repo-for, hv-resolve-handoff and hv-loop-stamp. The sub-repo
+// the loop timestamp. It ports the retired status-add, status-remove,
+// status-repo-for, resolve-handoff and loop-stamp helpers. The sub-repo
 // registry in .rota/repos.json is owned by package repos; this package only
 // holds helpers that compare names against it (Missing, HasCode).
 //
@@ -236,7 +236,7 @@ func Remove(root, branch, repo string) (removed int, err error) {
 }
 
 // Find is the first entry for branch. With repo given the entry's repo must
-// match too; without it any repo does (hv-status-repo-for took the first
+// match too; without it any repo does (the retired status-repo-for took the first
 // entry by branch).
 func Find(root, branch, repo string) (Entry, bool) {
 	for _, e := range Entries(root) {

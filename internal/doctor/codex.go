@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/host"
 )
 
 // KindInput is what one worker harness has configured.
@@ -100,10 +99,7 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 	if len(homes) == 0 {
 		return pass(name, head+tiers)
 	}
-	herdr := ""
-	if host.CapabilitiesForKind(d.roundHost()).Harness.HerdrIntegration {
-		herdr, _ = look(host.Herdr.Binary())
-	}
+	herdr, _, _ := d.herdrBinary()
 	var bad, notes []string
 	var hint string
 	for _, h := range homes {

@@ -1,7 +1,7 @@
 // Package backlog is the shared model of backlog items. It reads items from
 // either backend (BACKLOG.md and its archive, or the issue tracker) and
-// presents them as one Item, matching bin/hvlib_backend.py, hvlib_bullet.py
-// and hvlib_types.py.
+// presents them as one Item, matching the retired Python backend, bullet and
+// type helpers.
 //
 // The Python helpers match with regexps whose \s, \d and \w are Unicode. Go's
 // are ASCII, so patterns without lookahead use pystr.SpaceClass and \p{Nd}
@@ -15,7 +15,7 @@
 // find items.
 package backlog
 
-// Type is one row of the item-type registry (ROTA_TYPE_REGISTRY in bin/hv-types.sh).
+// Type is one row of the item-type registry (ported from the retired ROTA_TYPE_REGISTRY).
 type Type struct {
 	Letter    string // "B"
 	Section   string // open-section heading, "Bugs" ("" for S)
@@ -26,7 +26,7 @@ type Type struct {
 	Role      string // issue-label role key, "types.bug" ("" for S)
 }
 
-// Types is the registry in bin/hv-types.sh order: B, F, T and the plan-key
+// Types is the registry in its original order: B, F, T and the plan-key
 // only S (Slice). A test keeps it in step with that file.
 var Types = []Type{
 	{"B", "Bugs", "bugs", true, true, "P0 P1 P2 P3", "types.bug"},
