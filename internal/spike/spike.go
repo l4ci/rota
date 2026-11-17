@@ -4,7 +4,6 @@ package spike
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	gitx "github.com/l4ci/rota/internal/git"
@@ -41,21 +40,6 @@ func spikeDocs(root string) artifact.FileDocs {
 
 func file(root, name string) string { return rotatree.Doc(root, rotatree.SpikesDir, name) }
 
-// git runs args in dir through run (gitx.Exec when nil).
-func git(run gitx.Runner, dir string, args ...string) error {
-	res, err := gitx.Repo{Dir: dir, Runner: run}.Run(context.Background(), args...)
-	if err != nil {
-		return err
-	}
-	if res.ExitCode != 0 {
-		if msg := strings.TrimSpace(res.Stderr); msg != "" {
-			return errors.New(msg)
-		}
-		return fmt.Errorf("git %s: exit status %d", strings.Join(args, " "), res.ExitCode)
-	}
-	return nil
-}
-
 // Add (under the spike file's lock) creates branch spike/<name> in gitDir (the sub-repo named by repo, or
 // the working repository) and .rota/spikes/<name>.md under root. The spike
 // file check runs first, so an existing file leaves no branch behind.
@@ -82,7 +66,9 @@ func add(run gitx.Runner, root, gitDir, path, name, question, repo string, today
 	if _, serr := os.Stat(path); serr == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, ".rota/spikes/%s.md already exists", name)
 	}
-	if git(run, gitDir, "rev-parse", "--git-dir") != nil {
+	repo0 := gitx.Repo{Dir: gitDir, Runner: run}
+	ctx := context.Background()
+	if repo0.Check(ctx, "rev-parse", "--git-dir") != nil {
 		regs := artifact.Repos(root)
 		if repo == "" && len(regs) > 0 {
 			names := make([]string, 0, len(regs))
@@ -95,10 +81,10 @@ func add(run gitx.Runner, root, gitDir, path, name, question, repo string, today
 		}
 		return "", exitcode.Errf(exitcode.ExitUnavailable, "%s is not a git repository", gitDir)
 	}
-	if git(run, gitDir, "rev-parse", "--verify", branch) == nil {
+	if repo0.Check(ctx, "rev-parse", "--verify", branch) == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, "branch %s already exists", branch)
 	}
-	if err = git(run, gitDir, "branch", branch); err != nil {
+	if err = repo0.Check(ctx, "branch", branch); err != nil {
 		return "", exitcode.Errf(exitcode.ExitUnavailable, "git branch %s failed: %v", branch, err)
 	}
 	repoLine := ""

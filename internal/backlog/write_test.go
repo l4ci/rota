@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -107,7 +108,7 @@ func TestAppend(t *testing.T) {
 
 func TestAppendGolden(t *testing.T) {
 	f, _ := proj(t, rotaFiles(nil))
-	head, ok := f.git("rev-parse", "--short", "HEAD")
+	head, ok, _ := f.git().ShortHead(context.Background())
 	if !ok || head == "" {
 		t.Fatal("no HEAD in the fixture repo")
 	}

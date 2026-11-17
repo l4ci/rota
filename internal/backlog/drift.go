@@ -36,15 +36,6 @@ type SymbolDrift struct {
 	Files    []string // at most 5
 }
 
-// git runs git in dir. code is git's exit status, -1 when it did not run.
-func git(dir string, args ...string) (stdout string, code int) {
-	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
-	if err != nil {
-		return "", -1
-	}
-	return res.Stdout, res.ExitCode
-}
-
 // reachable is the set of commits in <since>..HEAD of dir, or nil when since
 // does not name a commit there. An anchor that starts with "-" is never
 // passed to git.
@@ -52,11 +43,12 @@ func reachable(dir, since string) map[string]bool {
 	if strings.HasPrefix(since, "-") {
 		return nil
 	}
-	if _, rc := git(dir, "cat-file", "-e", since+"^{commit}"); rc != 0 {
+	repo, ctx := gitx.Repo{Dir: dir}, context.Background()
+	if repo.Check(ctx, "cat-file", "-e", since+"^{commit}") != nil {
 		return nil
 	}
-	out, rc := git(dir, "rev-list", since+"..HEAD")
-	if rc != 0 {
+	out, ok, err := repo.Output(ctx, "rev-list", since+"..HEAD")
+	if err != nil || !ok {
 		return nil
 	}
 	set := map[string]bool{}
@@ -102,8 +94,8 @@ func (f *File) Drift(targets []Target) ([]DriftItem, []SymbolDrift, error) {
 				reach[anchor] = reachable(t.Dir, anchor)
 			}
 		}
-		out, rc := git(t.Dir, "log", "--pretty=%H%x09%s")
-		if rc != 0 {
+		out, ok, err := gitx.Repo{Dir: t.Dir}.Output(context.Background(), "log", "--pretty=%H%x09%s")
+		if err != nil || !ok {
 			continue
 		}
 		for _, line := range pystr.Splitlines(out) {
@@ -181,8 +173,12 @@ func grepFound(dir, symbol, treeish string) (files []string, ok bool) {
 	if strings.HasPrefix(treeish, "-") {
 		return nil, false
 	}
-	out, rc := git(dir, "grep", "-I", "-l", "-F", "-e", symbol, treeish, "--", ".", ":(exclude).rota/**")
-	switch rc {
+	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), "grep", "-I", "-l", "-F", "-e", symbol, treeish, "--", ".", ":(exclude).rota/**")
+	if err != nil {
+		return nil, false
+	}
+	out := res.Stdout
+	switch res.ExitCode {
 	case 0:
 	case 1:
 		return nil, true
