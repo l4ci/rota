@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -197,6 +198,44 @@ func TestMigrationFiles(t *testing.T) {
 					t.Fatalf("missing project created: %v", err)
 				}
 			})
+		})
+	}
+}
+
+// A refusal in any layer-file step leaves every file untouched, even the files
+// an earlier step would have rewritten: Migrate and Fill plan every step
+// before applying one.
+func TestRefusalLeavesEveryFileUntouched(t *testing.T) {
+	renamable := `{"work":{"dispatch":"tmux"}}`
+	cases := map[string]struct {
+		local string
+		want  func(error) bool
+	}{
+		"round": {`{"work":{"workerSlots":2},"round":{"slots":4}}`, func(err error) bool { var e *ConflictError; return errors.As(err, &e) }},
+		"accounts": {`{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}],"opencodeAccounts":[{"name":"x","configDir":"/o"}]}}`,
+			func(err error) bool { var e *AccountConflictError; return errors.As(err, &e) }},
+		"merges": {`{"models":{"orchestrator":"sonnet"},"orchestrator":{"model":"opus"}}`,
+			func(err error) bool { var e *MergeConflictError; return errors.As(err, &e) }},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := newAcctRig(t, "", renamable, tc.local)
+			before := map[string]string{}
+			for _, p := range []string{r.cfg(), localPath(r.root)} {
+				before[p] = readFile(t, p)
+			}
+			_, err := Migrate(r.env, r.root, true, nil)
+			if !tc.want(err) {
+				t.Fatalf("Migrate err = %v, want the %s refusal", err, name)
+			}
+			if _, err := Fill(r.env, r.root); !tc.want(err) {
+				t.Fatalf("Fill err = %v, want the %s refusal", err, name)
+			}
+			for p, want := range before {
+				if got := readFile(t, p); got != want {
+					t.Errorf("%s changed:\n%s", filepath.Base(p), got)
+				}
+			}
 		})
 	}
 }

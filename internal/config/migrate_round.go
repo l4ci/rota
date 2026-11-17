@@ -146,31 +146,23 @@ func MigrateRoundKeysFiles(root string, apply bool) (RoundMigration, error) {
 // migrateRoundPlan plans the round-key step over the project layers, local
 // first so a conflict list reads local then project.
 func migrateRoundPlan(files []*migrationFile, m *RoundMigration) error {
-	var all []Conflict
-	for i := len(files) - 1; i >= 0; i-- {
-		f := files[i]
-		if f.doc == nil {
-			continue
-		}
-		out, moved, c := MigrateRoundKeys(f.doc)
-		for _, x := range c {
-			x.File = f.name
-			all = append(all, x)
-		}
-		if len(moved) > 0 {
-			f.doc, f.changed = out, true
-		}
-		if f.layer == layerLocal {
-			m.Local = moved
-		} else {
-			m.Config = moved
-		}
-	}
-	if len(all) > 0 {
-		*m = RoundMigration{}
-		return &ConflictError{Conflicts: all}
-	}
-	return nil
+	return planLayers(files, true, func(c *Conflict, file string) { c.File = file },
+		func(f *migrationFile) []Conflict {
+			out, moved, c := MigrateRoundKeys(f.doc)
+			if len(moved) > 0 {
+				f.doc, f.changed = out, true
+			}
+			if f.layer == layerLocal {
+				m.Local = moved
+			} else {
+				m.Config = moved
+			}
+			return c
+		},
+		func(all []Conflict) error {
+			*m = RoundMigration{}
+			return &ConflictError{Conflicts: all}
+		})
 }
 
 // readMigrateTarget reads one config layer for the migration: nil for a
