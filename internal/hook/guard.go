@@ -227,18 +227,60 @@ var dataPrograms = map[string]bool{
 	"cat": true, "which": true, "type": true, "whereis": true, "head": true, "tail": true,
 }
 
+// rotaProseFlags are the rota flags whose value is text for a human (an issue
+// title, a note body), not a command. Their value may mention git (#3631).
+var rotaProseFlags = map[string]bool{
+	"--title": true, "--body": true, "--summary": true, "--reason": true, "--gist": true,
+	"--message": true, "--note": true, "--text": true, "--question": true,
+	"--blocked": true, "--description": true,
+}
+
+// rgPre checks the command of `--pre <cmd>` and `--pre=<cmd>`, the one way
+// ripgrep runs a program; the rest of rg is a data program.
+func (g *guard) rgPre(args []string, depth int, sc scope) error {
+	for i, a := range args {
+		var v string
+		switch {
+		case a == "--pre" && i+1 < len(args):
+			v = args[i+1]
+		case strings.HasPrefix(a, "--pre="):
+			v = strings.TrimPrefix(a, "--pre=")
+		default:
+			continue
+		}
+		return g.command(strings.Fields(v), depth+1, sc)
+	}
+	return nil
+}
+
 // opaque handles a program the guard does not know. Any program can run its
 // arguments as a command (flock, watch, su -c, chroot, script -c, python -c
 // os.system), and a list of those would never be complete (#3626). So it reads
 // the arguments instead: a git or gh word is a command from there on, and an
 // argument with spaces that mentions git or gh is parsed as a script.
 func (g *guard) opaque(words []string, depth int, sc scope) error {
-	if dataPrograms[filepath.Base(words[0])] {
+	prog := filepath.Base(words[0])
+	if prog == "rg" {
+		// `rg --pre <cmd>` runs <cmd> on every file it searches.
+		return g.rgPre(words[1:], depth, sc)
+	}
+	if dataPrograms[prog] {
 		return nil
 	}
+	prose := false // the previous word is a rota prose flag awaiting its value
 	for i, w := range words {
 		if g.reason != "" {
 			return nil
+		}
+		if prog == "rota" {
+			if prose {
+				prose = false
+				continue
+			}
+			if f, _, hasV := strings.Cut(w, "="); rotaProseFlags[f] {
+				prose = !hasV
+				continue
+			}
 		}
 		if i > 0 {
 			if b := filepath.Base(w); b == "git" || b == "gh" {
