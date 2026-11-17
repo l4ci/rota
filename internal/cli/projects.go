@@ -40,7 +40,7 @@ func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
 	for _, p := range gone {
 		reason := "stale"
 		line := fmt.Sprintf("removed\t%s\t%s", p.Name, p.Path)
-		if projects.Temporary(env, p.Path) {
+		if p.Temporary {
 			reason = "temporary"
 			line += "\t(temporary)"
 		}

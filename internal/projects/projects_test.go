@@ -287,3 +287,39 @@ func fakeEnv(vars map[string]string, home string) cfgdir.Env {
 		},
 	}
 }
+
+// One record reader decides Missing (the project path is gone) and Temporary
+// for every verb: a directory that exists but lost .rota/ is dropped by
+// Cleanup without being Missing, and List carries Temporary on the record.
+func TestRecordsCarryOneMissingAndTemporaryRule(t *testing.T) {
+	x, env := isolate(t)
+	bare := filepath.Join(x, "bare")
+	temp := filepath.Join(x, "scratch")
+	env.TempDirs = func() []string { return []string{temp} }
+	for _, dir := range []string{bare, temp} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Register(env, dir, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ps, err := List(env)
+	if err != nil || len(ps) != 2 {
+		t.Fatalf("list %+v, %v", ps, err)
+	}
+	for _, p := range ps {
+		if p.Missing || p.Temporary != (p.Name == "scratch") {
+			t.Fatalf("list record %+v: want Missing=false, Temporary only for scratch", p)
+		}
+	}
+	removed, err := Cleanup(env)
+	if err != nil || len(removed) != 2 {
+		t.Fatalf("cleanup %+v, %v; want both dropped (no .rota, temporary)", removed, err)
+	}
+	for _, p := range removed {
+		if p.Missing || p.Temporary != (p.Name == "scratch") {
+			t.Fatalf("cleanup record %+v: want Missing=false (dir exists), Temporary only for scratch", p)
+		}
+	}
+}
