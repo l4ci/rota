@@ -1,8 +1,8 @@
 ---
 subsystem: cli-dispatch
 summary: the rota command dispatcher, exit-code contract, error translation, per-verb gates and support fence, and the terminal UI (bare-rota palette, --ui screens)
-touched: 2026-11-09
-last_mapped_commit: a5ed8bdf14da0c12adfae97aaa7718668d37e726
+touched: 2026-11-17
+last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
 ---
 
 ## Purpose
@@ -13,19 +13,19 @@ Depends on (by map file): knowledge-and-map, config-and-setup (config, initproj,
 
 ## Entry points
 - cmd/rota/main.go:11 — `main`: `os.Exit(cli.Main(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))`
-- internal/cli/cli.go:250 — `Main`: builds the tree and default deps, calls `run` (cli.go:261, then `runWithContext` at :268)
-- internal/cli/cli.go:27 — `Command`: tree node (groups are `Subs`, verbs `Verb`); `RunFunc` at :54, `Result` at :59, `Ctx` at :68
+- internal/cli/cli.go:319 — `Main`: builds the tree and default deps, calls `run` (cli.go:330, then `runWithContext` at :345)
+- internal/cli/cli.go:29 — `Command`: tree node (groups are `Subs`, verbs `Verb`); `RunFunc` at :75, `Result` at :80, `Ctx` at :89
 - internal/cli/tree.go:14 — `Tree`: the whole command tree
-- internal/cli/tree_gates.go:81 — `fenceDecls`: per-verb support-fence class (refused, fenced inside the verb, allowed); `applyGates` at :14
+- internal/cli/tree_gates.go:12 — `applyGates`: applies `gateDecls` (:34, the per-verb pre-verb gate policies) to the tree; the support-fence class is not here but `Command.Fence` (cli.go:51, a `roundcfg.FenceClass`) declared where each verb is registered
 - internal/cli/root.go:17 — `findRoot`: the one project-root lookup in cli (masking on or off)
-- internal/cli/deps.go:48 — `Deps`: the injectable seams (clock, env, git, host, forge) verbs reach through `Ctx`
-- internal/exitcode/exitcode.go:12 — exit-code constants (0, 1, 2, 3, 4, 5, 6, 70, 71); `Error` at :40
-- internal/exitmap/exitmap.go:93 — `Translate`: domain error to exit-coded error, per `Options` (`Class` bit flags at :20, config classes in `exitmap/config.go`)
+- internal/cli/deps.go:45 — `Deps`: the injectable seams (clock, env, git, host, forge) verbs reach through `Ctx`
+- internal/exitcode/exitcode.go:12 — exit-code constants (0, 1, 2, 3, 4, 5, 6, 70, 71, 130); `Error` at :42
+- internal/exitmap/exitmap.go:97 — `Translate`: domain error to exit-coded error, per `Options` (`Class` bit flags at :21, config classes in `exitmap/config.go`)
 - internal/palette/palette.go:139 — `State.Update`: pure key handling for the bare-`rota` menu
 
 ## Key files / dirs
 - `cmd/rota/` — binary entry; otherwise tests (`frozen_test.go`, `scenarios_*_test.go`, `testdata/frozen`)
-- `internal/cli/` — one file group per verb family (`round_*.go`, `worker_*.go`, `knowledge*.go`, `item*.go`, `doctor*.go`, `migrate*.go`, ...); `cli.go` (dispatch), `root.go`, `tree.go`, `tree_gates.go`, `gates.go`, `deps*.go` (seams), `hook_identity.go`, `refusal.go`, `palette.go` (wires `palette` to verbs), `ui.go` and `view_*.go` (`--ui` screens), `testdata/`
+- `internal/cli/` — one file group per verb family (`round_*.go`, `worker_*.go`, `knowledge*.go`, `item*.go`, `doctor*.go`, `migrate*.go`, ...); `cli.go` (dispatch), `root.go`, `tree.go`, `tree_gates.go` (`gateDecls`), `gates.go` (`Gates`), `deps*.go` (seams), `hook_identity.go`, `refusal.go`, `palette.go` (wires `palette` to verbs), `ui.go` and `view_*.go` (`--ui` screens), `testdata/`
 - `internal/exitcode/` — exit-code table and the one exit-coded `Error`/`Refusal`; imports nothing from rota
 - `internal/exitmap/` — `exitmap.go` (`Translate`: backlog sentinels, `tracker.Error`, busy lock), `config.go` (config usage and internal classes)
 - `internal/palette/` — `palette.go` (State, Scope), `render.go`, `run.go` (`Run`, `RunTerminal`, `RunDefault`)
@@ -37,7 +37,7 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 ## Conventions specific here
 - Verb shape: `RunFunc func(c *Ctx, args []string) (Result, error)`; `Result.Data` fills the `--json` envelope, `Result.Text` is the plain output.
 - Invariants: verbs never print the envelope, stderr line or exit code themselves; `exitcode` imports nothing from rota (so cli, artifact and worker share it); `tui` Update and Render are pure, side effects go in a `Cmd`; `palette` core is pure and terminal work lives in `run.go` behind a `Config` tests fill with fakes.
-- Every verb is listed once in `fenceDecls` under its own path; a path in two support-fence classes panics.
+- Every verb sets its own `Command.Fence` (never inherited); a verb with none is `FenceUnclassified` and refused on a support machine, so a new verb fails safe. `gateDecls` names verb paths in the tree and `applyGates` panics on a path that is not there.
 - Project root comes from `findRoot`; masked (a stray `.rota/` in a registered sub-repo) and missing roots are different errors (`rotatree.ErrMasked`, `ErrNoRoot`).
 - Verb families differ in which domain errors `exitmap.Translate` recognises (`Class` bit flags in `Options`).
 - Tests isolate from the real machine with `isolate_test.go` / `testiso` (blank import) so global config loads as absent.
@@ -48,5 +48,5 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 - `go vet ./...`
 
 ## Concerns
-- `internal/cli` is the largest package (about 370 files); adding a verb touches `tree.go`, its entry in `fenceDecls`, plus its own file group.
+- `internal/cli` is the largest package (about 390 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
 - `internal/cli/doctor.go`, `reap.go`, `migrate*.go`, `hook.go` are thin verbs over packages mapped in other files; the logic is not here.

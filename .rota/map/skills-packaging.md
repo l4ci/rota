@@ -1,8 +1,8 @@
 ---
 subsystem: skills-packaging
 summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
-touched: 2026-11-09
-last_mapped_commit: a5ed8bdf14da0c12adfae97aaa7718668d37e726
+touched: 2026-11-17
+last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
 ---
 
 ## Purpose
@@ -14,10 +14,10 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references
 - internal/skills/set.go:37 — `Embedded`: the embedded set; `Load` at :59
-- internal/skills/install.go:250 — `Set.Install`; `Update` at :268, `Uninstall` at :503, `Set.Status` at :612
-- internal/skills/get.go:113 — `Set.Serve`: one skill or reference by name (read side)
-- internal/cli/skills.go:22 — `skillsCommands`: the `rota skills` verbs
-- internal/prompts/store.go:68 — `Open`; `Save` :238, `Adopt` :249, `Restore` :257; `Catalog` at internal/prompts/catalog.go:8
+- internal/skills/install.go:261 — `Set.Install`; `Update` at :279, `Uninstall` at :506, `Set.Status` at :612
+- internal/skills/get.go:132 — `Set.Serve`: one skill or reference by name (read side)
+- internal/cli/skills.go:21 — `skillsCommands`: the `rota skills` verbs
+- internal/prompts/store.go:82 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8
 - scripts/skills-docs.py:108 — `main`: regenerate the marked blocks from `docs/skills/*.md` (`--check` writes nothing)
 - scripts/site-sync.py:342 — `main`: generate the site's docs pages, nav and skill data
 - scripts/codex-plugin.sh:1 — builds `<out>/plugins/rota` with references copied as real files
