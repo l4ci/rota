@@ -17,6 +17,7 @@ refs:
   - internal/doctor
   - internal/reap
   - internal/roundtick
+  - internal/roundhook
   - internal/roundwatch
   - internal/tracker
 ---

@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/roundhook"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/worker"
@@ -270,7 +271,7 @@ func hookStop(c *Ctx, args []string) (Result, error) {
 	}
 	// A second stop in the same turn passes, so a refused watch cannot loop.
 	if !active {
-		if reason, block := roundwatch.StopBlock(workerEnvCtx(c, c.Context()), hc.lease, hc.root, hc.commonDir); block {
+		if reason, block := roundhook.StopBlock(workerEnvCtx(c, c.Context()), hc.lease, hc.root, hc.commonDir); block {
 			return hookPrint(hook.StopOutput(reason)), nil
 		}
 	}
@@ -334,14 +335,14 @@ func hookPrompt(c *Ctx, args []string) (Result, error) {
 		interval = time.Duration(marker.Heartbeat) * time.Second
 	}
 	waitLine := roundwatch.MaintainerSnapshotLine(hc.commonDir, c.deps().Now(), interval)
-	needsWatch, _ := roundwatch.NeedsWatch(workerEnvCtx(c, c.Context()), hc.root)
+	needsWatch := roundhook.NeedsWatch(workerEnvCtx(c, c.Context()), hc.root)
 	dec := hook.DecidePromptDigest(hook.PromptDigestIn{
 		Solo: worker.IsSolo(hc.root), NeedsWatch: needsWatch, Frozen: activeFreeze, WaitLine: waitLine,
 	})
 	if dec.Silent {
 		return Result{}, nil
 	}
-	digest := roundwatch.Digest(workerEnvCtx(c, c.Context()), hc.root, hc.who.Lease.Round, armed) + dec.Suffix
+	digest := roundhook.Digest(workerEnvCtx(c, c.Context()), hc.root, hc.who.Lease.Round, armed) + dec.Suffix
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":     "UserPromptSubmit",
 		"additionalContext": digest,
