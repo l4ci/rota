@@ -1670,6 +1670,31 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-16"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.TGVkZ2VyIHJvd3MgdGFrZSB0aGUgbGVhc2UncyByb3VuZCBvbmx5": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-17"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.dXBkYXRlRnJlZXplIHJ1bnMgdW5kZXIgdGhlIGNhbGxlcidzIGxhbmQgbG9jaw": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-17"
+    },
+    "QnVpbGQgJiBUb29saW5nOiBWaWRlbyBwaXBlbGluZQ.RWRpdGluZyBmbWxpdGUucHkgYnJlYWtzIHZpZGVvcyAtLWNoZWNr": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-17"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBTbGF0ZSAmIGlzc3Vlcw.VHJpYWdlIGFyY2hpdGVjdHVyZS1yZXZpZXcgZmluZGluZ3MgYmVmb3JlIGFzc2lnbmluZw": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-17"
+    },
+    "Um91bmRzOiBPcmNoZXN0cmF0aW9uOiBHYXRlLCB0cmFpbnMgJiBib29ra2VlcGluZzogR2F0ZSBydW5zICYgY2xlYW51cA.UmVsZWFzZSBhIGxhbmRlZCBzbGljZSdzIGNsYWltIGJ5IGhhbmQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-17"
     }
   }
 }
