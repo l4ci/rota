@@ -1,6 +1,7 @@
 package initproj
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,4 +66,51 @@ func TestGitignoreCRLFInsertUnderHeaderKeepsLineEnds(t *testing.T) {
 	if !strings.Contains(got, ignoreLines[2]+"\r\n") {
 		t.Errorf("missing line not inserted: %q", got)
 	}
+}
+
+// An unreadable .gitignore is not a missing one: both init paths refuse with
+// ErrSeed and leave the file as it was.
+func TestUnreadableGitignoreRefusesInBothInitPaths(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 file")
+	}
+	const user = "keep-me\n"
+	setup := func(t *testing.T) (string, string) {
+		dir := t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gi := filepath.Join(dir, ".gitignore")
+		if err := os.WriteFile(gi, []byte(user), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(gi, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(gi, 0o644) })
+		return dir, gi
+	}
+	check := func(t *testing.T, gi string, err error) {
+		t.Helper()
+		if !errors.Is(err, ErrSeed) {
+			t.Fatalf("err = %v, want ErrSeed", err)
+		}
+		if err := os.Chmod(gi, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if b, _ := os.ReadFile(gi); string(b) != user {
+			t.Errorf(".gitignore was rewritten: %q", b)
+		}
+	}
+
+	t.Run("umbrella", func(t *testing.T) {
+		dir, gi := setup(t)
+		_, err := Seed(dir, "web", "web")
+		check(t, gi, err)
+	})
+	t.Run("project", func(t *testing.T) {
+		_, gi := setup(t)
+		_, err := updateGitignore(gi)
+		check(t, gi, err)
+	})
 }
