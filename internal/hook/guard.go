@@ -155,7 +155,11 @@ func (s *scope) setDir(base, d string) {
 	s.chdir, s.dir = true, resolveDir(base, d)
 }
 
-var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
+var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "ash": true, "hush": true}
+
+// multiCall names the multi-call binaries whose first argument is an applet:
+// `busybox sh -c ...` is a shell like `sh -c ...`.
+var multiCall = map[string]bool{"busybox": true, "toybox": true}
 
 func (g *guard) command(words []string, depth int, sc scope) error {
 	for len(words) > 0 && (envAssign.MatchString(words[0]) || shellKeywords[words[0]]) {
@@ -169,6 +173,11 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	}
 	prog := filepath.Base(words[0])
 	rest := words[1:]
+	if multiCall[prog] && len(rest) > 0 {
+		// The applet is the real command: shell, wrapper (env, xargs), git, or
+		// another multi-call binary.
+		return g.command(rest, depth+1, sc)
+	}
 	switch {
 	case prog == "cd":
 		g.cd(rest)
@@ -196,15 +205,14 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 		for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
 			rest = rest[1:] // skip -- and options
 		}
-		if len(rest) > 0 && isStdinPath(rest[0]) && mentionsGit.MatchString(g.line) {
+		if len(rest) > 0 && isFdScriptPath(rest[0]) && mentionsGit.MatchString(g.line) {
 			return guardErr("a shell reading its script from stdin")
 		}
 		return nil
 	case prog == "git":
 		return g.git(rest, sc)
 	case prog == "gh":
-		g.gh(rest)
-		return nil
+		return g.gh(rest)
 	}
 	if w, ok := wrappers[prog]; ok {
 		return g.command(g.skipWrapped(rest, w.withArg, w.pos, w.chdir, &sc), depth+1, sc)
@@ -288,7 +296,7 @@ func shellReadsStdin(args []string) bool {
 		}
 		isOpt := (strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+")) && len(a) > 1
 		if !isOpt {
-			return isStdinPath(a) // a script file, unless it is stdin itself
+			return isFdScriptPath(a) // a script file, unless it is an fd
 		}
 		switch {
 		case strings.HasPrefix(a, "--"):
@@ -304,14 +312,23 @@ func shellReadsStdin(args []string) bool {
 	return true
 }
 
-// isStdinPath reports a path that names the process's standard input.
-func isStdinPath(p string) bool {
+// isFdScriptPath reports a script path the guard cannot read: standard input
+// or any other file descriptor (`bash /dev/fd/3 3<<<'...'`, a process
+// substitution at /dev/fd/63).
+func isFdScriptPath(p string) bool {
 	p = filepath.Clean(p)
-	if p == "/dev/stdin" || p == "/dev/fd/0" {
+	if strings.HasPrefix(p, "/dev/fd/") {
+		return p != "/dev/fd/"
+	}
+	if p == "/dev/stdin" {
 		return true
 	}
-	// /proc/<pid>/fd/0 and /proc/self/fd/0
-	return strings.HasPrefix(p, "/proc/") && strings.HasSuffix(p, "/fd/0")
+	// /proc/<pid>/fd/N and /proc/self/fd/N
+	if !strings.HasPrefix(p, "/proc/") {
+		return false
+	}
+	i := strings.LastIndex(p, "/fd/")
+	return i > 0 && i+4 < len(p)
 }
 
 // pushd: options come before the directory and end at `--`. -n leaves the
@@ -378,7 +395,7 @@ func joinDir(base, dir string) string {
 	return filepath.Join(base, dir)
 }
 
-func (g *guard) gh(args []string) {
+func (g *guard) gh(args []string) error {
 	var pos []string
 	for i := 0; i < len(args) && len(pos) < 2; i++ {
 		a := args[i]
@@ -395,8 +412,12 @@ func (g *guard) gh(args []string) {
 	}
 	if len(pos) >= 1 && pos[0] == "api" {
 		g.ghAPI(args)
-		g.ghGraphQL(args)
+		if g.reason != "" {
+			return nil
+		}
+		return g.ghGraphQL(args)
 	}
+	return nil
 }
 
 // ghAPI denies a write-method gh api call whose endpoint ends in /merge (the
@@ -416,9 +437,11 @@ func (g *guard) ghAPI(args []string) {
 			method = strings.ToUpper(strings.TrimPrefix(a, "--method="))
 		case strings.HasPrefix(a, "-X") && len(a) > 2:
 			method = strings.ToUpper(a[2:])
-		case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input":
+		case a == "--input" || ghSplitField(a):
 			fields = true
 			i++
+		case ghJoinedField(a) != "" || strings.HasPrefix(a, "--input="):
+			fields = true
 		case a == "-R" || a == "--repo" || a == "--hostname" || a == "-H" || a == "--header" || a == "-q" || a == "--jq" || a == "-t" || a == "--template" || a == "--cache":
 			i++
 		case strings.HasPrefix(a, "-"):
@@ -442,18 +465,90 @@ func (g *guard) ghAPI(args []string) {
 
 // ghGraphQL denies a gh api graphql call that carries a merge mutation: the
 // same seat as gh pr merge (#3531). Queries and other mutations pass.
-// The endpoint is not parsed: any gh api argument naming a merge mutation is denied.
-func (g *guard) ghGraphQL(args []string) {
+// The endpoint is not parsed for the mutation scan: any gh api argument naming
+// a merge mutation is denied. A graphql query the guard cannot read (a @file,
+// --input, or a value from a variable or substitution) fails closed (#3580).
+func (g *guard) ghGraphQL(args []string) error {
 	// Scanned on every gh api call, whatever spelling the endpoint takes
 	// (/graphql, the full URL, a trailing slash).
+	graphql := false
 	for _, a := range args {
 		for _, m := range []string{"mergePullRequest", "enablePullRequestAutoMerge"} {
 			if strings.Contains(a, m) {
 				g.deny("workers never merge: gh api graphql %s is the orchestrator's seat", m)
-				return
+				return nil
 			}
 		}
+		if !strings.HasPrefix(a, "-") && strings.HasSuffix(strings.TrimRight(a, "/"), "graphql") {
+			graphql = true
+		}
 	}
+	if !graphql {
+		return nil
+	}
+	for i, a := range args {
+		if a == "--input" || strings.HasPrefix(a, "--input=") {
+			return guardErr("gh api graphql --input reads a query the guard cannot see")
+		}
+		field := ghJoinedField(a)
+		if field == "" && i > 0 {
+			if ghSplitField(args[i-1]) {
+				field = a
+			}
+		}
+		if field == "" {
+			continue
+		}
+		a = field
+		if v, ok := strings.CutPrefix(a, "query="); ok && (v == "" || strings.ContainsAny(v[:1], "@$`")) {
+			return guardErr("gh api graphql query " + a + " is not a literal")
+		}
+	}
+	return nil
+}
+
+// ghJoinedField returns the key=value of a gh field flag written as one word
+// (--field=k=v, --raw-field=k=v, -Fk=v, -fk=v), or "" for any other word.
+func ghJoinedField(a string) string {
+	v, _ := ghFieldWord(a)
+	return v
+}
+
+// ghFieldWord classifies a gh field flag word: joined is its key=value when
+// written as one word; split reports a flag whose value is the next word
+// (-f, -F, --field, --raw-field, or an -i cluster ending in f/F like -if).
+func ghFieldWord(a string) (joined string, split bool) {
+	if a == "--field" || a == "--raw-field" {
+		return "", true
+	}
+	for _, p := range []string{"--field=", "--raw-field="} {
+		if v, ok := strings.CutPrefix(a, p); ok && v != "" {
+			return v, false
+		}
+	}
+	if len(a) < 2 || a[0] != '-' || a[1] == '-' {
+		return "", false
+	}
+	// A shorthand cluster: skip the boolean -i, then f/F takes the rest of the
+	// word as its value (pflag strips one leading '=').
+	for i := 1; i < len(a); i++ {
+		switch a[i] {
+		case 'i':
+		case 'f', 'F':
+			if i == len(a)-1 {
+				return "", true
+			}
+			return strings.TrimPrefix(a[i+1:], "="), false
+		default:
+			return "", false
+		}
+	}
+	return "", false
+}
+
+func ghSplitField(a string) bool {
+	_, split := ghFieldWord(a)
+	return split
 }
 
 // gitCall is one git invocation after its global options.
@@ -589,6 +684,10 @@ func (g *guard) branch(c gitCall) error {
 	force := short['f'] || long["--force"]
 	del := short['d'] || long["--delete"]
 	move := short['m'] || short['M'] || long["--move"]
+	// -C (or -c with -f) force-copies over the destination, the same seat as -M (#3580).
+	if short['C'] || ((short['c'] || long["--copy"]) && force) {
+		move = true
+	}
 	switch {
 	case short['D']:
 		g.deny("git branch -D force-deletes a branch: use -d on a merged branch")
@@ -621,6 +720,10 @@ func (g *guard) branch(c gitCall) error {
 
 func branchFlag(short map[rune]bool, long map[string]bool) string {
 	switch {
+	case short['C']:
+		return "-C"
+	case short['c'] || long["--copy"]:
+		return "-c"
 	case short['M']:
 		return "-M"
 	case short['m'] || long["--move"]:
@@ -687,7 +790,7 @@ func (g *guard) push(c gitCall) error {
 	needBranch := force
 	for _, spec := range pos {
 		// A substitution (`...` or $(...)) leaves an empty word behind.
-		if spec == "" || strings.ContainsAny(spec, "$`~") {
+		if spec == "" || strings.ContainsAny(spec, "$`~{*?[") {
 			return guardErr("git push refspec " + spec + " is not a literal")
 		}
 		if strings.HasPrefix(spec, ":") {
