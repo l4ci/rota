@@ -57,7 +57,7 @@ func latestRecords(records []Record, kinds []string) []Record {
 // review-cross kind yields the newest record AT head of each harness: a newer
 // record from one harness, or from the same harness at another commit, must not
 // hide a FAIL at head (#3328). Records without a harness count as one. Across
-// heads (FailingRecords without AtHead) a newer cross record clears an older
+// heads (the relay rule, failingRecords without AtHead) a newer cross record clears an older
 // one, so that path keeps latestRecords.
 func latestPerHarness(records []Record, kinds []string, head string) []Record {
 	var out []Record
