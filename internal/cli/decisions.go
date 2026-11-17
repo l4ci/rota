@@ -138,6 +138,11 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		subs := mapqa.Stats(st.Root)
+		for _, s := range subs {
+			if s.CommitsBehindErr != nil {
+				return Result{}, fmt.Errorf("map %s: counting commits behind HEAD: %w", s.Name, s.CommitsBehindErr)
+			}
+		}
 		list := []any{}
 		var lines []string
 		staleLimit := mapqa.StaleCommits(c.deps().Config(st.Root))

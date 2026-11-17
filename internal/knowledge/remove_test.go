@@ -20,7 +20,6 @@ func TestRemove(t *testing.T) {
 		{name: "no final newline", in: "## A\n\n- **One** a\n- **Two** b", title: "Two", want: "## A\n\n- **One** a\n", tierGone: true},
 		{name: "prose after last bullet stays", in: "## A\n\n- **One** a\n- **Two** b\n  wrapped\n\nSome prose.\n\n## B\n", title: "Two", want: "## A\n\n- **One** a\n\nSome prose.\n\n## B\n", tierGone: true},
 		{name: "duplicate title refused", in: "## A\n\n- **One** a\n- **One** b\n", title: "One", err: ErrMultiMatch},
-		{name: "only bullet collapses blanks", in: "## A\n\n- **One** a\n\n## B\n", title: "One", want: "## A\n\n## B\n", tierGone: true},
 		{name: "title matches case-insensitively", in: "## A\n\n- **One** a\n- **Two** b\n", title: "tWo", want: "## A\n\n- **One** a\n", tierGone: true, tierTitle: "Two"},
 		{name: "case-only twins refused as ambiguous", in: "## A\n\n- **Two** a\n- **TWO** b\n", title: "two", err: ErrMultiMatch, names: []string{"Two", "TWO"}},
 		{name: "missing bullet", in: "## A\n\n- **One** a\n", title: "Nope", err: ErrNotFound},

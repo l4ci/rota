@@ -67,6 +67,9 @@ type bullet struct {
 	Date   string
 	Source string
 	Seen   Seen
+	// SeenErr is the ParseSeen error of a malformed seen: token, so a reader
+	// that needs the versions can fail instead of reading the bullet as unseen.
+	SeenErr error
 }
 
 // parseBullets lists the bullets of a topic file. Only the final <!-- … --> on
@@ -107,9 +110,7 @@ func parseStamp(b *bullet, comment string) {
 		case strings.HasPrefix(tok, "source:"):
 			b.Source = strings.TrimPrefix(tok, "source:")
 		case strings.HasPrefix(tok, "seen:"):
-			if s, err := ParseSeen(strings.TrimPrefix(tok, "seen:")); err == nil {
-				b.Seen = s
-			}
+			b.Seen, b.SeenErr = ParseSeen(strings.TrimPrefix(tok, "seen:"))
 		}
 	}
 }
