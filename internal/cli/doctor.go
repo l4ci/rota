@@ -115,8 +115,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ProjectRoot = root
 	if name := in.Tracker.Connection; name != "" {
 		in.Connection = doctorConnection(ctx, d, name)
-		if in.Connection.State == string(connections.StateOK) &&
-			(in.Tracker.Source == config.SourceLinear && in.Tracker.LinearTeam != "" || in.Tracker.Source == config.SourceItsaplan && in.Tracker.ItsaplanProject != "") {
+		if doctor.TeamProbeApplies(in.Tracker, in.Connection.State == string(connections.StateOK)) {
 			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
 		}
 	}
@@ -189,12 +188,10 @@ func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *
 		return nil
 	}
 	_, dirs, _ := skillsClaudeDirs(d, getenv, func() (string, error) { return home, nil }, root)
-	roots, err := skills.Roots("", "all", home, dirs, top)
+	roots, pluginErrs, err := skillsRootSet(getenv, home, dirs, "", "all", top, true)
 	if err != nil {
 		return nil
 	}
-	pluginRoots, pluginErrs := skillsPluginRoots(getenv, dirs, "", "all", top)
-	roots = append(roots, pluginRoots...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return nil
