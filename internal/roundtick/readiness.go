@@ -28,6 +28,11 @@ type ReadinessInput struct {
 	DoneAt time.Time
 	// Records are the branch's recorded verdicts.
 	Records []verdict.Record
+	// CrossNone reports whether the PR's resolved review depth skips the cross
+	// review because of review:none. Nil reads as false. It is asked only when
+	// a review-cross FAIL at another commit is what blocks, since resolving the
+	// depth reads the issue.
+	CrossNone func() bool
 }
 
 // Readiness is the verdict of the rule: Ready when the PR may join a train,
@@ -59,7 +64,7 @@ func ReadinessOf(in ReadinessInput) Readiness {
 	if strutil.SameSHA(in.BounceHead, in.Head) {
 		return Readiness{} // sent back and not yet pushed to
 	}
-	blocked := TrainBlocked(in.Records)
+	blocked := trainBlocked(in)
 	if in.ReviewOff {
 		ready := !blocked
 		return Readiness{Ready: ready, Since: in.DoneAt, Immediate: ready && in.DoneAt.IsZero()}
@@ -74,6 +79,19 @@ func ReadinessOf(in ReadinessInput) Readiness {
 func TrainBlocked(records []verdict.Record) bool {
 	_, blocked := verdict.BlockingAnyHead(records)
 	return blocked
+}
+
+// trainBlocked is TrainBlocked plus the gate's stale-cross relaxation (#3458):
+// when a review-cross FAIL at another commit is what blocks and the PR's depth
+// skips cross because of review:none, that record is dropped and the rest are
+// judged again, so the train never holds a PR the gate would let through. The
+// depth is resolved only in that one case.
+func trainBlocked(in ReadinessInput) bool {
+	r, blocked := verdict.BlockingAnyHead(in.Records)
+	if !blocked || in.CrossNone == nil || !verdict.StaleCrossFail(r, in.Head) || !in.CrossNone() {
+		return blocked
+	}
+	return TrainBlocked(verdict.DropStaleCross(in.Records, in.Head))
 }
 
 // reviewReadySince uses the last current-head review prerequisite, so an old

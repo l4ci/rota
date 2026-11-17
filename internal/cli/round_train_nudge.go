@@ -327,7 +327,33 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 		return head
 	}
 	vc := shipVerdict(c, root, root)
-	reviewed := func(branch, issue, target, pr string, doneAt time.Time) roundtick.Readiness {
+	defBase := ""
+	// crossOff resolves the branch's review depth as the gate does and reports
+	// whether review:none switched cross off. A depth that cannot be resolved
+	// reads as not off, so the stale FAIL keeps blocking.
+	crossOff := func(branch, base string) func() bool {
+		return func() bool {
+			if base == "" {
+				if defBase == "" {
+					defBase = defaultBase(c, root)
+				}
+				base = defBase
+			}
+			inputs, err := worker.BuildReviewInputs(c.Context(), worker.ReviewInputOptions{
+				Config: worker.ParseGateConfig(cfg), Root: root, Dir: root, Branch: branch,
+				Span: base + "..." + branch, Git: c.deps().Git,
+				Issues: func() (worker.ReviewIssues, error) {
+					return c.deps().issuesOrNone(c.Context(), cfg, root)
+				},
+			})
+			if err != nil {
+				return false
+			}
+			res, err := inputs.Resolve(c.Context())
+			return err == nil && res.CrossOffByLabel()
+		}
+	}
+	reviewed := func(branch, issue, target, pr, base string, doneAt time.Time) roundtick.Readiness {
 		if branch == "" {
 			return roundtick.Readiness{}
 		}
@@ -338,7 +364,7 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 		return roundtick.ReadinessOf(roundtick.ReadinessInput{
 			Head: strings.TrimSpace(r.Stdout), PR: pr, Names: []string{target}, State: state,
 			BounceHead: bounceHead(issue), ReviewOff: reviewOff, DoneAt: doneAt,
-			Records: vc.Store.Branch(vc.Repo, branch),
+			Records: vc.Store.Branch(vc.Repo, branch), CrossNone: crossOff(branch, base),
 		})
 	}
 	var out []waitingPR
@@ -350,13 +376,13 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 					at = doneAt
 				}
 			}
-			rd := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
+			rd := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), s.Base(), at)
 			out = append(out, waitingPR{PR: s.PR(), Branch: s.Branch(), Base: s.Base(), Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
-			rd := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
+			rd := reviewed(q.Branch, q.Issue, q.From, q.PR, q.Base, time.Time{})
 			out = append(out, waitingPR{PR: q.PR, Branch: q.Branch, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}

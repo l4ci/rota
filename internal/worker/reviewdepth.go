@@ -285,6 +285,10 @@ const CrossNone = "none"
 // crossWhyReviewNone is CrossWhy when the issue's review:none label skipped the cross review.
 const crossWhyReviewNone = "label review:none"
 
+// CrossOffByLabel reports whether the cross review is skipped because the
+// issue carries review:none, the only reason that relaxes a stale cross FAIL.
+func (r ReviewDepth) CrossOffByLabel() bool { return r.CrossWhy == crossWhyReviewNone }
+
 // crossReviewer reports whether kind can run a cross-harness review.
 func crossReviewer(kind string) bool {
 	return harness.Valid(kind) && harness.ResolveReviewer(kind).CrossReviewer()

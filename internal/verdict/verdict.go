@@ -831,3 +831,20 @@ func BlockingAnyHead(list []Record) (Record, bool) {
 	}
 	return firstFailing(list, FailScope{Wide: true})
 }
+
+// StaleCrossFail is true when r is a review-cross FAIL recorded at a commit
+// other than head. An unreadable head ("") proves nothing stale, so it is false
+// then: a relaxation built on it fails closed.
+func StaleCrossFail(r Record, head string) bool {
+	return head != "" && r.Kind == ReviewCross && r.Verdict == Fail && !AtHead(r, head)
+}
+
+// DropStaleCross returns list without its review-cross records recorded at a
+// commit other than head. Callers apply it only when review:none switches the
+// cross review off, so an old cross FAIL no longer blocks (#3458). It never
+// edits list.
+func DropStaleCross(list []Record, head string) []Record {
+	return slices.DeleteFunc(slices.Clone(list), func(r Record) bool {
+		return r.Kind == ReviewCross && !AtHead(r, head)
+	})
+}
