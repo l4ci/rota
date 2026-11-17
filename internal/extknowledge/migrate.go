@@ -135,7 +135,10 @@ func (c Clone) migrateSeen(ctx context.Context, apply bool) (MigrateReport, erro
 				}
 				continue
 			}
-			nl, ch, reviews := migrateLine(f.Topic, l)
+			nl, ch, reviews, err := migrateLine(f.Topic, l)
+			if err != nil {
+				return MigrateReport{}, err
+			}
 			rep.ManualReview = append(rep.ManualReview, reviews...)
 			if ch != nil {
 				rep.Changes = append(rep.Changes, *ch)
@@ -173,7 +176,9 @@ func owner(lines []string, i int) string {
 }
 
 // migrateLine rewrites one bullet line. ch is nil when the line is unchanged.
-func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews []MigrateReview) {
+// A malformed seen: token already in the stamp is an error: merging over it
+// would read it as "no prior versions" and drop it.
+func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews []MigrateReview, err error) {
 	title := titleOrLine(line)
 	body, stamp := bulletfmt.SplitStamp(line)
 	text := strings.TrimRight(body, " ")
@@ -182,7 +187,7 @@ func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews [
 		for _, s := range anySeenRe.FindAllString(text, -1) {
 			reviews = append(reviews, MigrateReview{t.Name, title, s + " is not trailing"})
 		}
-		return line, nil, reviews
+		return line, nil, reviews, nil
 	}
 	rest, raw, dot := text[:m[0]], text[m[2]:m[3]], text[m[4]:m[5]]
 	for _, s := range anySeenRe.FindAllString(rest, -1) {
@@ -191,12 +196,15 @@ func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews [
 	found, inferred, err := parseSuffix(raw, t.toolSlug())
 	if err != nil {
 		reviews = append(reviews, MigrateReview{t.Name, title, "(seen on " + raw + "): " + err.Error()})
-		return line, nil, reviews
+		return line, nil, reviews, nil
 	}
 	var have Seen
 	if stamp != "" {
 		b := bullet{}
 		parseStamp(&b, strings.TrimSpace(stamp))
+		if b.SeenErr != nil {
+			return line, nil, reviews, fmt.Errorf("topic %s bullet %q: bad seen stamp: %w", t.Name, title, b.SeenErr)
+		}
 		have = b.Seen
 	}
 	merged := append(Seen{}, have...)
@@ -217,13 +225,13 @@ func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews [
 		}
 	}
 	if conflict {
-		return line, nil, reviews
+		return line, nil, reviews, nil
 	}
 	if dot != "" && !strings.HasSuffix(rest, ".") && !strings.HasSuffix(rest, "!") && !strings.HasSuffix(rest, "?") {
 		rest += "."
 	}
 	out = rest + " " + editStamp(strings.TrimSpace(stamp), "", &merged)
-	return out, &MigrateChange{Topic: t.Name, Title: title, Seen: merged.String(), Inferred: inferred}, reviews
+	return out, &MigrateChange{Topic: t.Name, Title: title, Seen: merged.String(), Inferred: inferred}, reviews, nil
 }
 
 // parseSuffix reads "Swift 6, macOS 26" into tool versions. A part that is
