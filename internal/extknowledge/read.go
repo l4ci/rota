@@ -214,10 +214,14 @@ func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
 		parts = append(parts, "## "+heading+"\n"+sectionBody(file))
 		return nil
 	}
+	missed := map[string]bool{}
 	for _, w := range want {
 		hit := resolve(w, topics)
 		if len(hit) == 0 {
-			res.Missing = append(res.Missing, w)
+			if k := strings.ToLower(strings.TrimSpace(w)); k != "" && !missed[k] {
+				missed[k] = true
+				res.Missing = append(res.Missing, w)
+			}
 			continue
 		}
 		for _, t := range hit {

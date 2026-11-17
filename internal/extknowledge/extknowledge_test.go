@@ -603,3 +603,15 @@ func TestReadmeWinsOverLegacyIndex(t *testing.T) {
 		t.Fatalf("README.md should win: %v", names)
 	}
 }
+
+func TestQueryMissingDedupesAndSkipsEmpty(t *testing.T) {
+	f := newFixture(t, "")
+	c := f.clone()
+	res, err := c.QueryWith([]string{"rust", "Rust ", "go", "", " ", "rust"}, QueryOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Missing) != 1 || res.Missing[0] != "rust" {
+		t.Fatalf("missing = %q", res.Missing)
+	}
+}
