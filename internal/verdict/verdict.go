@@ -90,18 +90,15 @@ func lensKinds(names []string) []string {
 func LensKind(name string) string { return "review-" + name }
 
 var kindVerdicts = map[string][]string{
-	ReviewSpec:    {Pass, Concerns, Fail},
-	ReviewQuality: {Pass, Concerns, Fail},
-	ReviewCross:   {Pass, Concerns, Fail},
-	SecondOpinion: {Pass, Concerns, Fail},
-	QA:            {Pass, Concerns, Fail, InfraFail},
-	DebugFix:      {Pass, Fail},
-	Behaviour:     {Pass, Fail},
-	Look:          {Pass, Fail},
+	QA:        {Pass, Concerns, Fail, InfraFail},
+	DebugFix:  {Pass, Fail},
+	Behaviour: {Pass, Fail},
+	Look:      {Pass, Fail},
 }
 
 func init() {
-	for _, k := range LensKinds {
+	// Every review kind takes the same three verdicts.
+	for _, k := range readinessReviewKinds {
 		kindVerdicts[k] = []string{Pass, Concerns, Fail}
 	}
 }
@@ -702,7 +699,7 @@ func LensAt(list []Record, kind, head string) (Record, bool) {
 func LastReviewSet(list []Record) []string {
 	var newest Record
 	for i := len(list) - 1; i >= 0; i-- {
-		if k := list[i].Kind; k == ReviewSpec || k == ReviewQuality {
+		if k := list[i].Kind; slices.Contains(coreReviewKinds, k) {
 			newest = list[i]
 			break
 		}

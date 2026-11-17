@@ -690,3 +690,28 @@ func TestCrossAtByIgnoresFailsAndOtherHeads(t *testing.T) {
 		t.Fatalf("CrossAtBy(y) = %+v, %v", r, ok)
 	}
 }
+
+// Every branch kind has a re-ask decision written here: a new kind or lens
+// fails this test until someone decides (#3551).
+func TestReaskedDecisionPerKind(t *testing.T) {
+	want := map[string]bool{
+		ReviewSpec: true, ReviewQuality: true, SecondOpinion: true,
+		ReviewCross: false, QA: false, Behaviour: false, Look: false,
+	}
+	for _, k := range LensKinds {
+		want[k] = true
+	}
+	for _, k := range BranchKinds {
+		w, ok := want[k]
+		if !ok {
+			t.Errorf("%s has no re-ask decision", k)
+			continue
+		}
+		if Reasked(k) != w {
+			t.Errorf("Reasked(%s) = %v, want %v", k, Reasked(k), w)
+		}
+	}
+	if got := reaskKinds(lensKinds(append(slices.Clone(config.LensNames), "a11y"))); !slices.Contains(got, "review-a11y") {
+		t.Errorf("a new lens is not re-asked: %v", got)
+	}
+}
