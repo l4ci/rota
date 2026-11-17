@@ -22,6 +22,7 @@ import (
 // Set is a skill set in its installed layout.
 type Set struct {
 	files  map[string][]byte // "<skill>/<path>" to content
+	srcs   map[string]string // "<skill>/<path>" to its path under the source tree
 	paths  []string          // sorted keys of files
 	skills []string          // sorted skill names
 	digest string
@@ -76,7 +77,7 @@ func Load(fsys fs.FS) (*Set, error) {
 	if err != nil {
 		return nil, fmt.Errorf("skills: %w", err)
 	}
-	s := &Set{files: map[string][]byte{}}
+	s := &Set{files: map[string][]byte{}, srcs: map[string]string{}}
 	for _, d := range top {
 		if !d.IsDir() || !strings.HasPrefix(d.Name(), "rota-") {
 			continue
@@ -112,11 +113,17 @@ func Load(fsys fs.FS) (*Set, error) {
 				files["agents/"+f.Name()] = b
 			}
 		}
+		src := map[string]string{}
+		for p := range files {
+			src[p] = d.Name() + "/" + p
+		}
 		for name := range closure(files, refs) {
 			files["references/"+name] = refs[name]
+			src["references/"+name] = "references/" + name
 		}
 		for p, b := range files {
 			s.files[d.Name()+"/"+p] = b
+			s.srcs[d.Name()+"/"+p] = src[p]
 		}
 		s.skills = append(s.skills, d.Name())
 	}
@@ -186,6 +193,12 @@ func (s *Set) Digest() string { return s.digest }
 
 // Paths are the installed paths ("<skill>/<file>"), sorted.
 func (s *Set) Paths() []string { return append([]string(nil), s.paths...) }
+
+// Source is where an installed path lives in the source tree Load read: a
+// skill's own file under its folder, a reference in the shared references/
+// folder. It is empty for a path the set does not hold, and for a set built
+// by Stubbed, whose files have no source file.
+func (s *Set) Source(p string) string { return s.srcs[p] }
 
 // Skills are the skill names, sorted.
 func (s *Set) Skills() []string { return append([]string(nil), s.skills...) }

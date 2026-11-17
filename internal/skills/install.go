@@ -657,7 +657,8 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 
 // stubChanges names the skills whose stub differs between what a manifest
 // recorded and the stub set now: added, removed, or changed (a SKILL.md stub,
-// whose frontmatter or body template moved, or an agent policy). Sorted by skill.
+// whose frontmatter or body template moved), or an agent policy added, removed
+// or changed. Sorted by skill.
 func stubChanges(recorded map[string]string, stub *Set) []string {
 	what := map[string]string{}
 	for _, p := range stub.paths {
@@ -666,6 +667,8 @@ func stubChanges(recorded map[string]string, stub *Set) []string {
 		switch {
 		case !ok && p == skill+"/SKILL.md":
 			what[skill] = "added"
+		case !ok && what[skill] == "":
+			what[skill] = "agent policy added"
 		case ok && have != hashBytes(stub.files[p]) && what[skill] == "":
 			// The manifest keeps only a hash per file, so the old frontmatter
 			// is gone: name what is known, not a guessed cause (the stub body
@@ -678,8 +681,14 @@ func stubChanges(recorded map[string]string, stub *Set) []string {
 	}
 	for p := range recorded {
 		skill, _, _ := strings.Cut(p, "/")
-		if _, ok := stub.files[p]; !ok && p == skill+"/SKILL.md" {
+		if _, ok := stub.files[p]; ok {
+			continue
+		}
+		switch {
+		case p == skill+"/SKILL.md":
 			what[skill] = "removed"
+		case what[skill] == "":
+			what[skill] = "agent policy removed"
 		}
 	}
 	var out []string

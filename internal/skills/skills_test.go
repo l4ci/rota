@@ -746,6 +746,26 @@ func TestStubChangesPolicyAndTemplateLabels(t *testing.T) {
 	}
 }
 
+// An agent policy added to or dropped from a skill must be named too: with
+// the SKILL.md stub untouched the change list used to come back empty.
+func TestStubChangesNamesAddedAndRemovedPolicy(t *testing.T) {
+	now := mustStub(t, stubSet(t, "# a\n", "# b\n", map[string]string{"rota-a/agents/openai.yaml": "v1\n"}))
+	rec := map[string]string{}
+	for _, p := range []string{"rota-a/SKILL.md", "rota-b/SKILL.md"} {
+		rec[p] = hashBytes(now.files[p])
+	}
+	got := stubChanges(rec, now)
+	if want := "rota-a (agent policy added)"; strings.Join(got, "|") != want {
+		t.Errorf("added policy: got %v, want [%s]", got, want)
+	}
+	rec["rota-a/agents/openai.yaml"] = hashBytes(now.files["rota-a/agents/openai.yaml"])
+	rec["rota-b/agents/openai.yaml"] = hashBytes([]byte("old\n"))
+	got = stubChanges(rec, now)
+	if want := "rota-b (agent policy removed)"; strings.Join(got, "|") != want {
+		t.Errorf("removed policy: got %v, want [%s]", got, want)
+	}
+}
+
 func mustStub(t *testing.T, s *Set) *Set {
 	t.Helper()
 	st, err := s.Stubbed()
