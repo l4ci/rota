@@ -32,7 +32,10 @@ type Failure struct {
 }
 
 // Classify maps a MergeLocal error to a Failure. A CleanupError wins over the
-// failure it wraps, as the type documents.
+// failure it wraps, even a conflict, and even when something wraps the
+// CleanupError. Deliberate: an unconfirmed abort leaves the merge tree dirty,
+// so "conflict, send it back to the slot" would be wrong advice; the caller
+// must report the recovery failure instead. Pinned by TestClassifyRefusal.
 func Classify(err error) Failure {
 	f := Failure{Err: err}
 	var me *MergeError

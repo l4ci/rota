@@ -827,7 +827,11 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		done, err := trainBrokeResult(res, brokeMsg)
 		return p.trainPlan, p.res, done, err
 	}
-	if merr != nil && p.integration == nil && autoOrder && failed >= nIso && failed > 0 && land.Classify(merr).Kind == land.FailConflict {
+	var mf land.Failure
+	if merr != nil {
+		mf = land.Classify(merr)
+	}
+	if merr != nil && p.integration == nil && autoOrder && failed >= nIso && failed > 0 && mf.Kind == land.FailConflict {
 		// A shared-path member conflicts with the ones before it. Git's pairwise
 		// conflicts do not depend on merge order, so no other order is tried.
 		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
@@ -836,8 +840,8 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
 		return p.trainPlan, p.res, true, nil
 	}
-	if merr != nil && p.integration != nil && land.Classify(merr).Kind == land.FailConflict {
-		done, err := t.integrationConflict(&p, failed, land.Classify(merr).Paths)
+	if merr != nil && p.integration != nil && mf.Kind == land.FailConflict {
+		done, err := t.integrationConflict(&p, failed, mf.Paths)
 		return p.trainPlan, p.res, done, err
 	}
 	if merr != nil {
@@ -845,7 +849,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Culprit = m.Target
 		res.Members[failed].Culprit = true
 		res.Verdict = GateMergeFailed
-		res.Err, res.Hint = land.Classify(merr).Refusal(land.Words{
+		res.Err, res.Hint = mf.Refusal(land.Words{
 			Failed:       fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed", m.Target, m.Branch),
 			Conflict:     fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed),
 			ConflictHint: fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base),

@@ -191,11 +191,7 @@ func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec Integratio
 	defer cleanup()
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
 	if err := land.MergeLocal(run, base, land.SyncSubject(rec.OntoBase, rec.Branch), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
-		msg, _ := land.Classify(err).Refusal(land.Words{
-			Failed:   fmt.Sprintf("merging %s into %s failed", rec.OntoBase, rec.Branch),
-			Conflict: fmt.Sprintf("merging %s into %s conflicts in: {paths}", rec.OntoBase, rec.Branch),
-		})
-		return "", errors.New(msg)
+		return "", mergeBaseError(rec, err)
 	}
 	merged, code := e.git(scratch, "rev-parse", "HEAD")
 	if code != 0 {
@@ -208,6 +204,31 @@ func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec Integratio
 		return "", fmt.Errorf("pushing %s to %s/%s failed: %s", strutil.ShortSHA(merged), rem, rec.Branch, strings.TrimSpace(out))
 	}
 	return merged, nil
+}
+
+// chainedError words a failure for the operator and keeps the cause for errors.Is/As.
+type chainedError struct {
+	msg string
+	err error
+}
+
+func (e *chainedError) Error() string { return e.msg }
+func (e *chainedError) Unwrap() error { return e.err }
+
+// mergeBaseError words a failed base merge and keeps the error chain. Only an
+// error that carries a git exit code gets "(exit N)": an error that is not a
+// git exit (ErrUnpinned, a runner failure) is worded without one.
+func mergeBaseError(rec Integration, err error) error {
+	failed := fmt.Sprintf("merging %s into %s failed", rec.OntoBase, rec.Branch)
+	f := land.Classify(err)
+	if f.Kind == land.FailOther {
+		return &chainedError{msg: fmt.Sprintf("%s: %v", failed, err), err: err}
+	}
+	msg, _ := f.Refusal(land.Words{
+		Failed:   failed,
+		Conflict: fmt.Sprintf("merging %s into %s conflicts in: {paths}", rec.OntoBase, rec.Branch),
+	})
+	return &chainedError{msg: msg, err: err}
 }
 
 // restackDependents runs after an integration branch landed: each open

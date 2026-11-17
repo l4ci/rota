@@ -149,7 +149,11 @@ func (e Env) planSwitch(ctx context.Context, root string, be Board, o SwitchOpts
 	run := &switchRun{slot: s, id: id, wt: wt, remote: remote}
 	if res.ToKind == res.FromKind && o.Account != "" && o.Account == res.FromAccount {
 		// The slot is already on it: a repeated call, after a dispatch that failed.
+		// Dispatch refuses a limited account too, so refuse it here, before the checkpoint.
 		res.ToAccount = res.FromAccount
+		if err := e.currentAccountLimit(ctx, root, o, res); err != nil {
+			return nil, err
+		}
 	} else {
 		p, err := e.switchPlacement(ctx, root, o, res)
 		if err != nil {
@@ -212,15 +216,8 @@ func (e Env) switchPlacement(ctx context.Context, root string, o SwitchOpts, res
 	ms := e.readMeters(ctx, root, []string{res.ToKind})
 	entries := e.poolEntries(ctx, ms, res.ToKind, list, e.Round, 0, e.accountLoad(root, e.Round, o.Slot))
 	if o.Account != "" {
-		pe := entries[0]
-		if strings.HasPrefix(pe.Skip, "limited") || pe.Meter.Verdict == usagelimit.VerdictCooling {
-			why := "account " + o.Account + " is at its usage limit"
-			if pe.Meter.ResetsAt != nil {
-				why += "; it resets at " + pe.Meter.ResetsAt.UTC().Format("2006-01-02 15:04 MST")
-			} else if pe.Skip != "" {
-				why += " (" + pe.Skip + ")"
-			}
-			return Placement{}, blocked(blockedby.Limited, "%s: pick another with --account, or leave it out", why)
+		if err := limitedRefusal(o.Account, entries[0]); err != nil {
+			return Placement{}, err
 		}
 	}
 	choice, ok := worker.ChoosePool(entries, nil, 0)
@@ -228,6 +225,35 @@ func (e Env) switchPlacement(ctx context.Context, root string, o SwitchOpts, res
 		return Placement{}, noAccount(entries, "the "+res.ToKind+" harness", cfg)
 	}
 	return Placement{Kind: res.ToKind, Account: choice.Entry.Name, Headroom: choice.Entry.Meter.Headroom}, nil
+}
+
+// currentAccountLimit is the `limited` check for the account the slot already
+// runs under, which a repeated call names instead of placing.
+func (e Env) currentAccountLimit(ctx context.Context, root string, o SwitchOpts, res *Switched) error {
+	cfg := e.Worker.Config(root)
+	home, _ := e.Worker.Home()
+	all := harness.ResolveAccounts(res.ToKind).Accounts(harness.ConfigFor(cfg, res.ToKind)).In(home).Entries
+	list := slices.DeleteFunc(slices.Clone(all), func(a harness.AccountEntry) bool { return a.Name != o.Account })
+	if len(list) == 0 {
+		return nil // not a configured login: Dispatch decides
+	}
+	ms := e.readMeters(ctx, root, []string{res.ToKind})
+	return limitedRefusal(o.Account, e.poolEntries(ctx, ms, res.ToKind, list, e.Round, 0, e.accountLoad(root, e.Round, o.Slot))[0])
+}
+
+// limitedRefusal is the `limited` refusal for a named account whose pool entry
+// is at its usage limit or cooling; nil otherwise.
+func limitedRefusal(account string, pe worker.PoolEntry) error {
+	if !strings.HasPrefix(pe.Skip, "limited") && pe.Meter.Verdict != usagelimit.VerdictCooling {
+		return nil
+	}
+	why := "account " + account + " is at its usage limit"
+	if pe.Meter.ResetsAt != nil {
+		why += "; it resets at " + pe.Meter.ResetsAt.UTC().Format("2006-01-02 15:04 MST")
+	} else if pe.Skip != "" {
+		why += " (" + pe.Skip + ")"
+	}
+	return blocked(blockedby.Limited, "%s: pick another with --account, or leave it out", why)
 }
 
 // checkpoint commits the worktree's dirty paths by name, stamped with the
@@ -272,9 +298,20 @@ func (e Env) checkpoint(ctx context.Context, wt, branch, remote, attempt string)
 		sha, _, _ = e.gitOut(ctx, wt, "rev-parse", "--short=7", "HEAD")
 	}
 	if _, errOut, code := e.gitOut(ctx, wt, "push", "-q", "-u", remote, branch); code != 0 {
-		if sha != "" {
-			e.gitOut(ctx, wt, "reset", "-q", "--soft", "HEAD~1")
-			e.gitOut(ctx, wt, "read-tree", index)
+		if sha == "" {
+			return "", unavailable("git push %s %s failed, nothing was committed: %s", remote, branch, errOut)
+		}
+		// Soft reset puts HEAD back; read-tree puts the index back. Either can fail,
+		// and then the worktree is not as found.
+		_, resetErr, resetCode := e.gitOut(ctx, wt, "reset", "-q", "--soft", "HEAD~1")
+		var treeErr string
+		treeCode := 0
+		if resetCode == 0 {
+			_, treeErr, treeCode = e.gitOut(ctx, wt, "read-tree", index)
+		}
+		if resetCode != 0 || treeCode != 0 {
+			return "", unavailable("git push %s %s failed (%s) and the rollback failed too: the checkpoint commit %s is still on the branch and the index may be changed (reset: %s; read-tree: %s); inspect `git status` in %s",
+				remote, branch, strings.TrimSpace(errOut), sha, strings.TrimSpace(resetErr), strings.TrimSpace(treeErr), wt)
 		}
 		return "", unavailable("git push %s %s failed, worktree left as found: %s", remote, branch, errOut)
 	}
