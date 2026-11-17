@@ -87,7 +87,7 @@ func UpdateField(content, field, value string) (string, bool) {
 		return content, false
 	}
 	fm, after := rest[:loc[0]], rest[loc[0]:]
-	pat := regexp.MustCompile(`(?m)^(` + regexp.QuoteMeta(field) + `:[ \t\r\n\f\v]*)\S+`)
+	pat := regexp.MustCompile(`(?m)^(` + regexp.QuoteMeta(field) + `:[ \t\r\f\v]*)\S+`)
 	done := false
 	newFM := pat.ReplaceAllStringFunc(fm, func(m string) string {
 		if done {
