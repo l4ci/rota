@@ -58,8 +58,8 @@ type Options struct {
 	NoteLimit string
 }
 
-// Op is one planned or run operation: Action is the first word of the
-// old helper's output line, Text the rest.
+// Op is one planned or run operation: Action names it (create-issue, note,
+// ...), Text is the rest of its report line.
 type Op struct{ Action, Text string }
 
 // Result is what a run did. It is returned with the error too, so a
@@ -303,29 +303,23 @@ func (m *migrator) state() string {
 	return string(a) + "\x00" + string(b)
 }
 
-var opActions = []struct{ prefix, action string }{
-	{"create milestone ", "create-milestone"}, {"create issue ", "create-issue"}, {"adopt ", "adopt"},
-	{"note ", "note"}, {"rewrite ", "rewrite"}, {"skip ", "skip"}, {"set ", "set"},
-}
-
-// say records one output line of the old helper.
+// say records one output line that is not an operation (progress, banners,
+// the would-be map).
 func (m *migrator) say(line string) {
 	m.res.Lines = append(m.res.Lines, line)
-	if strings.HasPrefix(line, "would-be map:") {
-		return
-	}
-	for _, p := range opActions {
-		if strings.HasPrefix(line, p.prefix) {
-			m.res.Ops = append(m.res.Ops, Op{p.action, strings.TrimPrefix(line, p.prefix)})
-			return
-		}
-	}
 }
 
-// op prints (preview) or runs (apply, paced) one operation.
-func (m *migrator) op(desc string, fn func() error) error {
+// record notes one operation as a value and renders its report line from it:
+// the action with its hyphens as spaces, then the text.
+func (m *migrator) record(action, text string) {
+	m.res.Ops = append(m.res.Ops, Op{action, text})
+	m.say(strings.ReplaceAll(action, "-", " ") + " " + text)
+}
+
+// op announces (preview) or runs (apply, paced) one operation.
+func (m *migrator) op(action, text string, fn func() error) error {
 	if !m.apply {
-		m.say(desc)
+		m.record(action, text)
 		return nil
 	}
 	if m.doneOps > 0 {
@@ -334,7 +328,7 @@ func (m *migrator) op(desc string, fn func() error) error {
 		}
 	}
 	m.doneOps++
-	m.say(desc)
+	m.record(action, text)
 	return fn()
 }
 
@@ -440,11 +434,11 @@ func (m *migrator) stepDone(old, step string) error {
 // records it, else desc is announced (and fn run on --apply), the step is
 // persisted after fn succeeds, and a preview marks it in memory so later
 // phases see it as done.
-func (m *migrator) step(old, name, desc string, fn func() error) error {
+func (m *migrator) step(old, name, action, text string, fn func() error) error {
 	if m.hasStep(old, name) {
 		return nil
 	}
-	if err := m.op(desc, func() error {
+	if err := m.op(action, text, func() error {
 		if err := fn(); err != nil {
 			return err
 		}
@@ -544,7 +538,7 @@ func (m *migrator) run() (bool, error) {
 		mid := ms.id
 		if _, ok := m.imap.Get(mid); !ok {
 			ms := ms
-			err := m.op(fmt.Sprintf("create milestone %s (%s)", mid, ms.status), func() error {
+			err := m.op("create-milestone", fmt.Sprintf("%s (%s)", mid, ms.status), func() error {
 				if err := m.milestoneAdd(mid, ms); err != nil {
 					if tracker.IsNoMilestones(err) {
 						m.noMS[mid] = true
@@ -576,7 +570,7 @@ func (m *migrator) run() (bool, error) {
 		}
 		if ms.status != "planned" {
 			ms := ms
-			err := m.step(mid, "status", fmt.Sprintf("set milestone %s status %s", mid, ms.status), func() error {
+			err := m.step(mid, "status", "set", fmt.Sprintf("milestone %s status %s", mid, ms.status), func() error {
 				return m.milestoneStatus(mid, ms.status)
 			})
 			if err != nil {
@@ -588,7 +582,7 @@ func (m *migrator) run() (bool, error) {
 	for _, it := range m.items {
 		old := it.id
 		if _, ok := m.imap.Get(old); ok {
-			m.say(fmt.Sprintf("skip %s (already migrated as %s)", old, m.entryID(old)))
+			m.record("skip", fmt.Sprintf("%s (already migrated as %s)", old, m.entryID(old)))
 			continue
 		}
 		if m.o.Limit >= 0 && m.created >= m.o.Limit {
@@ -624,9 +618,9 @@ func (m *migrator) run() (bool, error) {
 			note += " (Related not migrated: " + strings.Join(it.unmapped, ", ") + ")"
 		}
 		it, fields := it, fields
-		desc := fmt.Sprintf("create issue %s → %s \"%s\" [%s]%s", old, strings.TrimSuffix(it.kind, "s"), it.title,
+		text := fmt.Sprintf("%s → %s \"%s\" [%s]%s", old, strings.TrimSuffix(it.kind, "s"), it.title,
 			strings.Join(m.labelNames(it), ", "), note)
-		err := m.op(desc, func() error {
+		err := m.op("create-issue", text, func() error {
 			be, err := m.backend()
 			if err != nil {
 				return err
@@ -676,7 +670,7 @@ func (m *migrator) run() (bool, error) {
 				continue
 			}
 			n := n
-			err := m.step(old, n.kind, fmt.Sprintf("note %s on %s", n.kind, old), func() error {
+			err := m.step(old, n.kind, "note", fmt.Sprintf("%s on %s", n.kind, old), func() error {
 				body := *n.text
 				if n.kind != "proof" {
 					body = m.rewrite(body, false)
@@ -711,7 +705,7 @@ func (m *migrator) run() (bool, error) {
 					shown = append(shown, t+" → "+to)
 				}
 				newRel := newRel
-				err := m.step(old, "related", fmt.Sprintf("rewrite Related on %s: %s", old, strings.Join(shown, ", ")), func() error {
+				err := m.step(old, "related", "rewrite", fmt.Sprintf("Related on %s: %s", old, strings.Join(shown, ", ")), func() error {
 					be, err := m.backend()
 					if err != nil {
 						return err
@@ -734,7 +728,7 @@ func (m *migrator) run() (bool, error) {
 		if m.noMS[mid] {
 			continue
 		}
-		if err := m.step(mid, "body", fmt.Sprintf("set plan body of milestone %s", mid), func() error {
+		if err := m.step(mid, "body", "set", fmt.Sprintf("plan body of milestone %s", mid), func() error {
 			return m.putMilestone(mid, ms)
 		}); err != nil {
 			return false, err
@@ -745,7 +739,7 @@ func (m *migrator) run() (bool, error) {
 				continue
 			}
 			s := s
-			err := m.step(mid, step, fmt.Sprintf("note %s on %s", step, mid), func() error {
+			err := m.step(mid, step, "note", fmt.Sprintf("%s on %s", step, mid), func() error {
 				be, err := m.backend()
 				if err != nil {
 					return err
@@ -771,8 +765,8 @@ func (m *migrator) run() (bool, error) {
 func (m *migrator) adopt(it *migItem) error {
 	old, n := it.id, it.adopt
 	labels := m.labelNames(it)
-	desc := fmt.Sprintf("adopt %s → #%d \"%s\" [%s]", old, n, it.title, strings.Join(labels, ", "))
-	err := m.op(desc, func() error {
+	text := fmt.Sprintf("%s → #%d \"%s\" [%s]", old, n, it.title, strings.Join(labels, ", "))
+	err := m.op("adopt", text, func() error {
 		be, err := m.backend()
 		if err != nil {
 			return err
