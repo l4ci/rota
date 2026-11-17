@@ -1484,7 +1484,7 @@ unavailable metrics at exit 0, even with an explicit `--round`. Existing issue-r
 last merge observation; only the new lead-time metrics use the first.
 
 ```sh
-rota round summary              # the current round, else the highest in the ledger
+rota round summary              # the current round: live lease, else registry, else highest in the ledger
 rota round summary --round 3
 rota round summary --json
 ```
