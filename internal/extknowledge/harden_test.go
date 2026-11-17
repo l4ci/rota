@@ -128,7 +128,7 @@ func TestAddSubtopicUnderUnknownTopicRefused(t *testing.T) {
 func TestHitsLogIsPrivate(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	if _, err := c.Hit("go", "table tests", "game"); err != nil {
+	if _, _, err := c.Hit("go", "table tests", "game"); err != nil {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(c.hitsPath())

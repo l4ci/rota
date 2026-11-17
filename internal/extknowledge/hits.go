@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -103,45 +104,53 @@ func (c Clone) tally(topics []Topic) (map[string]hitTally, int, error) {
 }
 
 // Hit records that an agent used the bullet titled title under topic, and
-// returns the hits that bullet now has on this machine. It reads the clone as
-// it is and appends one line to the hits log: no fetch, no write to the clone.
-// ErrNotFound when the topic or the bullet is not in the base.
-func (c Clone) Hit(topic, title, project string) (int, error) {
+// returns the title the bullet is stored under (the log is keyed by it, not by
+// the typed one) and the hits that bullet now has on this machine. The bullet
+// is picked by the shared title rule (bulletfmt.SelectTitle): case-insensitive,
+// and a title two bullets share up to case is ErrMultiMatch. It reads the clone
+// as it is and appends one line to the hits log: no fetch, no write to the
+// clone. ErrNotFound when the topic or the bullet is not in the base.
+func (c Clone) Hit(topic, title, project string) (string, int, error) {
 	p := c.hitsPath()
 	if p == "" {
-		return 0, fmt.Errorf("no state directory to keep hits in")
+		return "", 0, fmt.Errorf("no state directory to keep hits in")
 	}
 	t, raw, err := c.topicFile(topic)
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
-	want := strings.ToLower(strings.TrimSpace(title))
-	found := false
+	var titles []string
 	if raw != nil {
 		for _, b := range t.bullets(string(raw)) {
-			if b.Title != "" && strings.ToLower(b.Title) == want {
-				title, found = b.Title, true
-				break
-			}
+			titles = append(titles, b.Title)
 		}
 	}
-	if !found {
-		return 0, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, topic, title)
+	hits := bulletfmt.SelectTitle(titles, title)
+	if len(hits) == 0 {
+		return "", 0, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, topic, title)
 	}
+	if len(hits) > 1 {
+		named := make([]string, len(hits))
+		for i, h := range hits {
+			named[i] = fmt.Sprintf("%q", titles[h])
+		}
+		return "", 0, fmt.Errorf("%w: several bullets in %q are titled %q: %s", ErrMultiMatch, topic, title, strings.Join(named, ", "))
+	}
+	title = titles[hits[0]]
 	topics, err := c.Topics()
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
 	// One O_APPEND write per hit: concurrent rota processes interleave whole
 	// lines, never characters.
 	if err := fsio.AppendJSONL(p, hitRow{Topic: t.Name, Title: title, Date: stamp.Date(c.now()), Project: project}); err != nil {
-		return 0, err
+		return "", 0, err
 	}
 	m, _, err := c.tally(topics)
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
-	return m[hitKey(family(t), title)].n, nil
+	return title, m[hitKey(family(t), title)].n, nil
 }
 
 // StatsWithHits is Stats plus, per topic and bullet, the hits on this machine.

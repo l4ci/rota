@@ -316,7 +316,7 @@ func knExtHit(c *Ctx, topic, title string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	n, err := cl.Hit(topic, title, extSource(c))
+	title, n, err := cl.Hit(topic, title, extSource(c))
 	if err != nil {
 		return Result{}, extErr(err)
 	}

@@ -26,11 +26,11 @@ func statHits(t *testing.T, c Clone) (map[string]TopicHits, int) {
 func TestHitAppendsOutsideClone(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	n, err := c.Hit("go", "table tests", "game")
+	_, n, err := c.Hit("go", "table tests", "game")
 	if err != nil || n != 1 {
 		t.Fatalf("Hit = %d, %v", n, err)
 	}
-	if n, err = c.Hit("Go", "Table tests", "app"); err != nil || n != 2 {
+	if _, n, err = c.Hit("Go", "Table tests", "app"); err != nil || n != 2 {
 		t.Fatalf("second Hit = %d, %v", n, err)
 	}
 	if out := gittest.Run(t, f.a, "status", "--porcelain"); strings.TrimSpace(out) != "" {
@@ -55,10 +55,10 @@ func TestHitAppendsOutsideClone(t *testing.T) {
 func TestHitUnknownBulletIsNotFound(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	if _, err := c.Hit("Go", "No such bullet", ""); !errors.Is(err, ErrNotFound) {
+	if _, _, err := c.Hit("Go", "No such bullet", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown title: %v", err)
 	}
-	if _, err := c.Hit("Rust", "Table tests", ""); !errors.Is(err, ErrNotFound) {
+	if _, _, err := c.Hit("Rust", "Table tests", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown topic: %v", err)
 	}
 	if _, err := os.Stat(c.hitsPath()); err == nil {
@@ -71,7 +71,7 @@ func TestStatsCountsHits(t *testing.T) {
 	gittest.Write(t, f.a, "topics/go.md", seedGo+"- **Second** — two. <!-- 2026-09-01 -->\n")
 	c := f.clone()
 	for _, title := range []string{"Table tests", "Table tests", "Second"} {
-		if _, err := c.Hit("Go", title, ""); err != nil {
+		if _, _, err := c.Hit("Go", title, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -88,7 +88,7 @@ func TestStatsCountsHits(t *testing.T) {
 func TestHitsSurviveSplit(t *testing.T) {
 	f := flatGodotFixture(t, "")
 	c := f.clone()
-	if _, err := c.Hit("Godot", "RPC authority", "game"); err != nil {
+	if _, _, err := c.Hit("Godot", "RPC authority", "game"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := c.Split(context.Background(), SplitIn{Topic: "Godot", Plan: netCorePlan()}); err != nil {
@@ -102,7 +102,7 @@ func TestHitsSurviveSplit(t *testing.T) {
 	if core := got["Godot: Core"]; core.Hits != 0 {
 		t.Fatalf("Core = %+v", core)
 	}
-	n, err := c.Hit("Godot: Networking", "RPC authority", "game")
+	_, n, err := c.Hit("Godot: Networking", "RPC authority", "game")
 	if err != nil || n != 2 {
 		t.Fatalf("hit after split = %d, %v", n, err)
 	}
@@ -111,7 +111,7 @@ func TestHitsSurviveSplit(t *testing.T) {
 func TestHitsTornLineSkipped(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	if _, err := c.Hit("Go", "Table tests", ""); err != nil {
+	if _, _, err := c.Hit("Go", "Table tests", ""); err != nil {
 		t.Fatal(err)
 	}
 	fh, err := os.OpenFile(c.hitsPath(), os.O_APPEND|os.O_WRONLY, 0o644)
@@ -124,7 +124,7 @@ func TestHitsTornLineSkipped(t *testing.T) {
 	if torn != 1 || got["Go"].Hits != 1 {
 		t.Fatalf("Go = %+v torn %d", got["Go"], torn)
 	}
-	if n, err := c.Hit("Go", "Table tests", ""); err != nil || n != 2 {
+	if _, n, err := c.Hit("Go", "Table tests", ""); err != nil || n != 2 {
 		t.Fatalf("hit after torn line = %d, %v", n, err)
 	}
 }
