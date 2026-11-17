@@ -513,7 +513,7 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 		scope := []string{c.Repo}
 		changed := false
 		if multi {
-			names := status.ParseReposCSV(*reposCSV)
+			names := pystr.SplitCSV(*reposCSV)
 			if len(names) == 0 {
 				return Result{}, Usage("--repos needs at least one name")
 			}

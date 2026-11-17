@@ -5,22 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 )
-
-// ParseReposCSV is parse_repos_csv: comma-separated names, stripped, empties
-// dropped, duplicates kept in order.
-func ParseReposCSV(csv string) []string {
-	var out []string
-	for _, p := range strings.Split(csv, ",") {
-		if p = pystr.Strip(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
 
 // Missing returns the names in names that registry does not register.
 func Missing(registry []repos.Repo, names []string) []string {
