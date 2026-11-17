@@ -14,7 +14,10 @@ func Machine(env cfgdir.Env, keychain func() Store) (string, *Secrets, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	sec := &Secrets{Getenv: env.Getenv, File: FileStore(data, dir)}
+	if err := MigrateLegacy(data, dir); err != nil {
+		return "", nil, err
+	}
+	sec := &Secrets{Getenv: env.Getenv, File: FileStore(data)}
 	if keychain != nil {
 		if kc := keychain(); kc != nil {
 			sec.Keychain = kc

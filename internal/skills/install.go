@@ -453,7 +453,7 @@ func (s *Set) applyPlan(r Root, o Options, mode string, old Manifest, hadManifes
 			res.Changed = true
 		}
 	}
-	pruneEmpty(r.Path, removed)
+	PruneEmpty(r.Path, removed)
 
 	m := Manifest{Schema: ManifestSchema, Version: o.Version, Digest: s.digest, Agent: r.Agent, Files: next, Mode: mode}
 	if !hadManifest || !sameManifest(old, m) {
@@ -477,8 +477,8 @@ func sameManifest(a, b Manifest) bool {
 	return true
 }
 
-// pruneEmpty removes the directories a removed file left empty, up to root.
-func pruneEmpty(root string, removed []string) {
+// PruneEmpty removes the directories a removed file left empty, up to root.
+func PruneEmpty(root string, removed []string) {
 	for _, p := range removed {
 		dir := filepath.Dir(filepath.Join(root, filepath.FromSlash(p)))
 		for dir != root && strings.HasPrefix(dir, root) {
@@ -540,7 +540,7 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 					res.Kept = append(res.Kept, p)
 				}
 			}
-			pruneEmpty(r.Path, res.Removed)
+			PruneEmpty(r.Path, res.Removed)
 			res.Changed = len(res.Removed) > 0
 			if len(res.Kept) == 0 {
 				res.Changed = true

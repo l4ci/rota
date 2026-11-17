@@ -426,3 +426,25 @@ func TestStaticCrossPoolsLeaveOutReviewOnlyHarnessesFromTheFallback(t *testing.T
 		t.Fatalf("pools %+v, want review r1 and main w only", p)
 	}
 }
+
+// No issue source (or key) leaves the body unread: the depth says drift went
+// unchecked, and an issue read with an empty body does not (#3555).
+func TestResolveReviewDepthUnknownIssueBody(t *testing.T) {
+	dir := depthRepo(t)
+	pol, err := config.ParseReviewPolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol.LightBelow = 100
+	src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat"}
+
+	got, err := ResolveReviewDepth(context.Background(), src)
+	if err != nil || got.DriftUnchecked == "" || !strings.Contains(got.Why, "scope drift was not checked") {
+		t.Fatalf("unread body: %+v %v", got, err)
+	}
+
+	src.Issue, src.Issues = tracker.NumKey(5), fakeIssueGet{is: tracker.Issue{Body: ""}}
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.DriftUnchecked != "" {
+		t.Fatalf("empty body read: %+v %v", got, err)
+	}
+}

@@ -16,7 +16,6 @@ import (
 
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/roundlease"
 )
 
 // LedgerRound is the round of the lease the project's git common dir holds,
@@ -40,10 +39,7 @@ func LedgerRound(env Env, root string) int {
 		fmt.Fprintf(env.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0
 	}
-	if st != roundlease.Live && st != roundlease.Foreign {
-		return 0
-	}
-	return l.Round
+	return CurrentRound(RoundSources{Lease: l, LeaseState: st}) // lease alone: see CurrentRound
 }
 
 // RoundMemo reads the round lease once for a verb: the verb makes one and hands

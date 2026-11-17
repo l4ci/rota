@@ -63,7 +63,7 @@ func TestLinearRoundAssign(t *testing.T) {
 	if task := worker.LoadRegistryTolerant(fx.root).Slot("dana").Task(); task != "ENG-1" {
 		t.Errorf("slot task %q", task)
 	}
-	if cs, err := it.(tracker.ClaimStore).Claims(context.Background(), "ENG-1"); err != nil || !slices.Equal(cs, []string{"dana@0"}) {
+	if cs, err := it.(tracker.ClaimStore).Claims(context.Background(), "ENG-1"); err != nil || !slices.Equal(cs, []string{"dana@1"}) {
 		t.Errorf("claims %v, %v; requests %v", cs, err, s.Requests())
 	}
 	if !slices.Contains(s.Labels("ENG-1"), "in-progress") || s.Assignee("ENG-1") == "" {

@@ -111,7 +111,9 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}
-	in := reviewpolicy.Input{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
+	// The body stays unknown until an issue read fills it: "" must never stand
+	// for "unread" in the policy (#3555).
+	in := reviewpolicy.Input{Changed: changed, Files: files, Labels: slices.Clone(s.Labels), IssueBodyUnknown: true}
 	// The PR body is read at most once, for the tier's Door line and the policy's.
 	prRead := false
 	var prBody string
@@ -156,7 +158,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 				}
 			}
 		}
-		in.IssueBody = strings.Join(bodies, "\n\n")
+		in.IssueBody, in.IssueBodyUnknown = strings.Join(bodies, "\n\n"), false
 		labelSets = labelSets[:0]
 		for _, is := range got {
 			labelSets = append(labelSets, append(slices.Clone(s.Labels), is.Labels...))
@@ -195,6 +197,9 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		}
 	}
 	out := ReviewDepth{Decision: decide(in), Changed: changed, Labels: in.Labels, Tier: tier}
+	if out.DriftUnchecked != "" {
+		out.Why += "; " + out.DriftUnchecked
+	}
 	// A depth of none reviews nothing, so no lens runs either. in.Labels is the
 	// union of the lead's and every member's, so any bundled issue can trigger.
 	if out.Depth != config.DepthNone {

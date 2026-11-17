@@ -81,17 +81,12 @@ func TrainBlocked(records []verdict.Record) bool {
 	return blocked
 }
 
-// trainBlocked is TrainBlocked plus the gate's stale-cross relaxation (#3458):
-// when a review-cross FAIL at another commit is what blocks and the PR's depth
-// skips cross because of review:none, that record is dropped and the rest are
-// judged again, so the train never holds a PR the gate would let through. The
-// depth is resolved only in that one case.
+// trainBlocked is TrainBlocked plus the gate's stale-cross relaxation (#3458),
+// decided by verdict.BlockingCrossOff so the train never holds a PR the gate
+// would let through.
 func trainBlocked(in ReadinessInput) bool {
-	r, blocked := verdict.BlockingAnyHead(in.Records)
-	if !blocked || in.CrossNone == nil || !verdict.StaleCrossFail(r, in.Head) || !in.CrossNone() {
-		return blocked
-	}
-	return TrainBlocked(verdict.DropStaleCross(in.Records, in.Head))
+	_, blocked, _ := verdict.BlockingCrossOff(in.Records, in.Head, verdict.BlockingAnyHead, in.CrossNone)
+	return blocked
 }
 
 // reviewReadySince uses the last current-head review prerequisite, so an old

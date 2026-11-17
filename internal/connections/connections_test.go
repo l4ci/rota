@@ -170,7 +170,7 @@ func TestResolveSurvivesBrokenKeychainWhenFileHasIt(t *testing.T) {
 
 func TestFileStoreIs0600(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "rota")
-	fs := FileStore(dir, "")
+	fs := FileStore(dir)
 	if err := fs.Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
@@ -190,10 +190,10 @@ func TestFileStoreIs0600(t *testing.T) {
 func TestFileStoreMovesLegacyFile(t *testing.T) {
 	root := t.TempDir()
 	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
-	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+	if err := FileStore(legacy).Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
-	fs := FileStore(dir, legacy)
+	fs := migratedStore(t, dir, legacy)
 	if v, ok, err := fs.Get(context.Background(), "work"); err != nil || !ok || v != "tok" {
 		t.Fatalf("%q %v %v", v, ok, err)
 	}
@@ -208,7 +208,7 @@ func TestFileStoreMovesLegacyFile(t *testing.T) {
 		t.Errorf("dir mode %v", di.Mode().Perm())
 	}
 	// a file already in the new place is never overwritten by a stale legacy one
-	if err := FileStore(legacy, "").Set(context.Background(), "work", "old"); err != nil {
+	if err := FileStore(legacy).Set(context.Background(), "work", "old"); err != nil {
 		t.Fatal(err)
 	}
 	if v, _, _ := fs.Get(context.Background(), "work"); v != "tok" {
@@ -219,13 +219,13 @@ func TestFileStoreMovesLegacyFile(t *testing.T) {
 func TestFileStoreMigrationTightensLegacyMode(t *testing.T) {
 	root := t.TempDir()
 	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
-	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+	if err := FileStore(legacy).Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(SecretsFile(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := FileStore(dir, legacy).Get(context.Background(), "work"); err != nil {
+	if _, _, err := migratedStore(t, dir, legacy).Get(context.Background(), "work"); err != nil {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(SecretsFile(dir))
@@ -242,7 +242,7 @@ func TestFileStoreTightensExistingDataDir(t *testing.T) {
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := FileStore(dir, "").Set(context.Background(), "work", "tok"); err != nil {
+	if err := FileStore(dir).Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
 	if di, _ := os.Stat(dir); di.Mode().Perm() != 0o700 {
@@ -250,20 +250,18 @@ func TestFileStoreTightensExistingDataDir(t *testing.T) {
 	}
 }
 
-func TestFileStoreMigratesUnderLock(t *testing.T) {
+func TestMigrateLegacyRunsUnderLock(t *testing.T) {
 	root := t.TempDir()
 	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
-	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+	if err := FileStore(legacy).Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
-	fs := FileStore(dir, legacy)
 	started := make(chan struct{})
 	done := make(chan error, 1)
 	err := fsio.Locked(SecretsFile(dir), fsio.LockTimeout, func() error {
 		go func() {
 			close(started)
-			_, _, err := fs.Get(context.Background(), "work")
-			done <- err
+			done <- MigrateLegacy(dir, legacy)
 		}()
 		<-started
 		time.Sleep(300 * time.Millisecond)
@@ -287,7 +285,7 @@ func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
 	root := t.TempDir()
 	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
 	synced := filepath.Join(root, "dotfiles")
-	if err := FileStore(synced, "").Set(context.Background(), "work", "tok"); err != nil {
+	if err := FileStore(synced).Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(legacy, 0o700); err != nil {
@@ -296,7 +294,7 @@ func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
 	if err := os.Symlink(SecretsFile(synced), SecretsFile(legacy)); err != nil {
 		t.Fatal(err)
 	}
-	v, _, err := FileStore(dir, legacy).Get(context.Background(), "work")
+	v, _, err := migratedStore(t, dir, legacy).Get(context.Background(), "work")
 	if err != nil || v != "tok" {
 		t.Fatalf("%q %v", v, err)
 	}
@@ -330,7 +328,7 @@ func TestFileStoreIgnoresNonFileLegacy(t *testing.T) {
 			if err := mk(SecretsFile(legacy), target); err != nil {
 				t.Fatal(err)
 			}
-			fs := FileStore(dir, legacy)
+			fs := migratedStore(t, dir, legacy)
 			ctx := context.Background()
 			if _, ok, err := fs.Get(ctx, "work"); err != nil || ok {
 				t.Fatalf("Get: ok=%v err=%v", ok, err)
@@ -357,7 +355,7 @@ func TestFileStoreMigrationDanglingSymlinkIsNoOp(t *testing.T) {
 	if err := os.Symlink(filepath.Join(root, "gone.json"), SecretsFile(legacy)); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := FileStore(dir, legacy).Get(context.Background(), "work"); err != nil || ok {
+	if _, ok, err := migratedStore(t, dir, legacy).Get(context.Background(), "work"); err != nil || ok {
 		t.Fatalf("ok=%v err=%v", ok, err)
 	}
 	if _, err := os.Lstat(SecretsFile(dir)); !os.IsNotExist(err) {
@@ -384,7 +382,7 @@ func TestFileStoreMigrationSymlinkToDirIsIgnored(t *testing.T) {
 	if err := os.Symlink(target, SecretsFile(legacy)); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := FileStore(dir, legacy).Get(context.Background(), "work"); err != nil || ok {
+	if _, ok, err := migratedStore(t, dir, legacy).Get(context.Background(), "work"); err != nil || ok {
 		t.Fatalf("a link to a directory is ignored: ok=%v err=%v", ok, err)
 	}
 	if _, err := os.Lstat(SecretsFile(dir)); !os.IsNotExist(err) {
@@ -619,7 +617,7 @@ func TestKeychainDeleteArgv(t *testing.T) {
 
 func TestFileStoreLeavesNoTempFiles(t *testing.T) {
 	dir := t.TempDir()
-	fs := FileStore(dir, "")
+	fs := FileStore(dir)
 	fs.Set(context.Background(), "a", "1")
 	fs.Set(context.Background(), "b", "2")
 	ents, _ := os.ReadDir(dir)
@@ -715,4 +713,31 @@ func TestSecurityRead(t *testing.T) {
 			t.Errorf("%s: %q lacks %q", tc.name, err, tc.wantMsg)
 		}
 	}
+}
+
+func TestFileStoreGetDoesNotMigrate(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	if err := FileStore(legacy).Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	fs := FileStore(dir)
+	if _, _, err := fs.Get(context.Background(), "work"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(SecretsFile(legacy)); err != nil {
+		t.Errorf("Get removed the legacy file: %v", err)
+	}
+	if _, err := os.Stat(SecretsFile(dir)); !os.IsNotExist(err) {
+		t.Errorf("Get created the store file: %v", err)
+	}
+}
+
+// migratedStore opens the store the way Machine does: migrate, then read.
+func migratedStore(t *testing.T, dir, legacy string) Store {
+	t.Helper()
+	if err := MigrateLegacy(dir, legacy); err != nil {
+		t.Fatal(err)
+	}
+	return FileStore(dir)
 }

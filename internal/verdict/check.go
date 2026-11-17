@@ -1,6 +1,7 @@
 package verdict
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -85,7 +86,7 @@ func (v Check) BlockAt(branch, head string) error {
 	}
 	list = ForHead(list, head)
 	if v.IgnoreStaleCross {
-		list = DropStaleCross(list, head)
+		list = dropStaleCross(list, head)
 	}
 	r, ok = Blocking(list)
 	if !ok {
@@ -119,4 +120,23 @@ func (v Check) BlockGate(branch, head string) error {
 		}
 	}
 	return e
+}
+
+// BlockGateCrossOff is BlockGate plus the stale-cross relaxation (#3458): when
+// a review-cross FAIL at another commit is what blocks and crossOff reports
+// cross review is off (review:none), that record is ignored and the gate is
+// judged again. relaxed is the ignored FAIL when that cleared the block. A FAIL
+// at head, or one while cross is required, still blocks, and an unreadable head
+// fails closed. BlockingCrossOff is the same decision for the train tick.
+func (v Check) BlockGateCrossOff(branch, head string, crossOff func() bool) (relaxed *Record, err error) {
+	err = v.BlockGate(branch, head)
+	var blocked *BlockedError
+	if !errors.As(err, &blocked) || !blocked.Stale || !crossOffRelaxes(blocked.Record, strings.TrimSpace(head), crossOff) {
+		return nil, err
+	}
+	v.IgnoreStaleCross = true
+	if err = v.BlockGate(branch, head); err != nil {
+		return nil, err
+	}
+	return &blocked.Record, nil
 }
