@@ -198,7 +198,10 @@ func (s Store) Amend(scope string, explicit bool, topic, fragment, text string) 
 }
 
 func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, text string) (string, bool, error) {
-	type hit struct{ file, content, line string }
+	type hit struct {
+		file, content string
+		line          int // index into the topic body's lines
+	}
 	var hits []hit
 	for _, f := range candidates {
 		content, err := ReadFile(f)
@@ -212,12 +215,12 @@ func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, 
 			}
 			continue
 		}
-		for _, line := range pystr.Splitlines(content[st:en]) {
-			stripped := strings.TrimSpace(line)
-			if strings.HasPrefix(stripped, "- ") && strings.Contains(stripped, fragment) {
-				hits = append(hits, hit{f, content, stripped})
-				break
-			}
+		switch in := bulletfmt.SelectFragment(strings.Split(content[st:en], "\n"), fragment); len(in) {
+		case 0:
+		case 1:
+			hits = append(hits, hit{f, content, in[0]})
+		default:
+			return "", false, fmt.Errorf("%w: fragment '%s' matches %d bullets under topic '%s' in %s; use a longer fragment", ErrMultiMatch, fragment, len(in), topic, f)
 		}
 	}
 	switch {
@@ -232,12 +235,9 @@ func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, 
 	}
 	h := hits[0]
 	st, en, _ := section.Find(h.content, topic)
-	body := h.content[st:en]
-	idx := strings.Index(body, h.line)
-	if idx < 0 {
-		return "", false, fmt.Errorf("internal: could not re-locate target line in section body")
-	}
-	body = body[:idx] + appendToBullet(h.line, text) + body[idx+len(h.line):]
+	lines := strings.Split(h.content[st:en], "\n")
+	lines[h.line] = appendToBullet(lines[h.line], text)
+	body := strings.Join(lines, "\n")
 	next := h.content[:st] + body + h.content[en:]
 	if next == h.content {
 		return h.file, false, nil
@@ -355,13 +355,11 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	bStart := tm[0]
 	bEnd := bulletEnd(srcBody, bStart)
 	block := strings.TrimRight(srcBody[bStart:bEnd], "\n")
-	// A blank line on both sides of the bullet collapses to one, as in Remove.
-	if strings.HasSuffix(content[:srcStart+bStart], "\n\n") && strings.HasPrefix(srcBody[bEnd:], "\n") {
-		bEnd++
-	}
-	newSrc := srcBody[:bStart] + srcBody[bEnd:]
-
-	dstBody := content[dstStart:dstEnd]
+	// The collapse of blank lines around the removed bullet is bulletfmt's, as
+	// in Remove; the target section is then read from the shortened text.
+	next := bulletfmt.DeleteSpan(content, srcStart+bStart, srcStart+bEnd)
+	dstStart, dstEnd, _ = section.Find(next, to)
+	dstBody := next[dstStart:dstEnd]
 	rest := strings.TrimLeft(dstBody, "\n")
 	lead := dstBody[:len(dstBody)-len(rest)]
 	sep := ""
@@ -372,12 +370,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	if !strings.HasSuffix(newDst, "\n") {
 		newDst += "\n"
 	}
-	var next string
-	if srcStart < dstStart {
-		next = content[:srcStart] + newSrc + content[srcEnd:dstStart] + newDst + content[dstEnd:]
-	} else {
-		next = content[:dstStart] + newDst + content[dstEnd:srcStart] + newSrc + content[srcEnd:]
-	}
+	next = next[:dstStart] + newDst + next[dstEnd:]
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return RenameResult{}, err
 	}
@@ -427,14 +420,8 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 		return res, nil
 	}
 	body := content[st:en]
-	type span struct{ a, b int }
-	var hits []span
-	for _, m := range bulletStart.FindAllStringIndex(body, -1) {
-		b := bulletEnd(body, m[0])
-		if strings.Contains(body[m[0]:b], old) {
-			hits = append(hits, span{m[0], b})
-		}
-	}
+	lines := strings.Split(body, "\n")
+	hits := bulletfmt.SelectFragment(lines, old)
 	switch {
 	case len(hits) == 0:
 		return res, notFound("no bullet under '%s' contains '%s' in %s", topic, old, km)
@@ -442,9 +429,10 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 		return res, fmt.Errorf("%w: '%s' matches %d bullets under '%s'; use a longer fragment", ErrMultiMatch, old, len(hits), topic)
 	}
 	h := hits[0]
-	block := body[h.a:h.b]
-	edited := strings.ReplaceAll(block, old, new)
-	oldTitle, newTitle := bulletTitle(block), bulletTitle(edited)
+	end := bulletfmt.End(lines, h)
+	edited := bulletfmt.ReplaceIn(lines[h:end], old, new)
+	oldTitle, _ := bulletfmt.Title(lines[h])
+	newTitle, _ := bulletfmt.Title(edited[0])
 	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Retitle(topic, oldTitle, newTitle); return err }); err != nil {
 			return res, err
@@ -453,7 +441,7 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 			return res, err
 		}
 	}
-	next := content[:st] + body[:h.a] + edited + body[h.b:] + content[en:]
+	next := content[:st] + strings.Join(append(append(lines[:h:h], edited...), lines[end:]...), "\n") + content[en:]
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return res, err
 	}
@@ -470,14 +458,6 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 		return res, err
 	}
 	return res, nil
-}
-
-// bulletTitle is the bold title opening a bullet block, or "".
-func bulletTitle(block string) string {
-	if m := bulletStart.FindStringSubmatch(block); m != nil {
-		return m[1]
-	}
-	return ""
 }
 
 // RemoveResult reports Remove.
@@ -527,16 +507,7 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		// The tier entry is keyed by the stored title, not the typed one.
 		title = titles[hits[0]]
 		hit := all[hits[0]]
-		a, b := hit[0], bulletEnd(body, hit[0])
-		// A blank line on both sides collapses to one.
-		tail := content[en:]
-		if strings.HasSuffix(content[:st+a], "\n\n") {
-			if strings.HasPrefix(body[b:], "\n") {
-				b++
-			} else if b == len(body) && strings.HasPrefix(tail, "\n") {
-				tail = tail[1:]
-			}
-		}
+		a := st + hit[0]
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Delete(topic, title); return err }); err != nil {
 			return err
 		}
@@ -545,7 +516,7 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		if _, err := s.FoldHits(scope); err != nil {
 			return err
 		}
-		next := content[:st] + body[:a] + body[b:] + tail
+		next := bulletfmt.DeleteSpan(content, a, st+bulletEnd(body, hit[0]))
 		if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 			return err
 		}

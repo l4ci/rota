@@ -110,3 +110,89 @@ func End(lines []string, i int) int {
 	}
 	return end
 }
+
+// stampTail is the final "<!-- … -->" comment of a bullet's first line.
+var stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
+
+// SplitStamp splits a bullet line into its text and its final "<!-- … -->"
+// stamp (leading whitespace included); stamp is "" when the line has none.
+// Only the last comment on the line is the stamp.
+func SplitStamp(line string) (text, stamp string) {
+	stamp = stampTail.FindString(line)
+	return strings.TrimSuffix(line, stamp), stamp
+}
+
+// SelectFragment is the one fragment-selection rule both knowledge stores
+// apply to Replace and Amend: it returns the indexes of the bullets whose text
+// contains fragment, case-sensitively.
+//
+//   - A bullet starts at a column-0 "- " line. An indented "- " line is a
+//     continuation of the bullet above it (see Continues), never a bullet.
+//   - A bullet's text is its first line without the stamp, plus its
+//     continuation lines, so wrapped bullets match as a whole. The stamp is
+//     never searched.
+//
+// More than one index means the fragment is ambiguous, and the caller refuses.
+func SelectFragment(lines []string, fragment string) []int {
+	var hits []int
+	for i, l := range lines {
+		if !strings.HasPrefix(l, "- ") {
+			continue
+		}
+		first, _ := SplitStamp(l)
+		text := first
+		for _, c := range lines[i+1 : End(lines, i)] {
+			text += "\n" + c
+		}
+		if strings.Contains(text, fragment) {
+			hits = append(hits, i)
+		}
+	}
+	return hits
+}
+
+// ReplaceIn swaps every old for new in a bullet's lines (the span SelectFragment
+// matched), leaving the first line's stamp untouched. It returns a new slice.
+func ReplaceIn(block []string, old, new string) []string {
+	out := make([]string, len(block))
+	for i, l := range block {
+		if i == 0 {
+			text, stamp := SplitStamp(l)
+			out[i] = strings.ReplaceAll(text, old, new) + stamp
+			continue
+		}
+		out[i] = strings.ReplaceAll(l, old, new)
+	}
+	return out
+}
+
+// LineStart is the offset of lines[i] in strings.Join(lines, "\n"); an i past
+// the last line gives the length of that text.
+func LineStart(lines []string, i int) int {
+	off := 0
+	for k := 0; k < i && k < len(lines); k++ {
+		off += len(lines[k]) + 1
+	}
+	if n := len(strings.Join(lines, "\n")); off > n {
+		return n
+	}
+	return off
+}
+
+// DeleteSpan removes text[a:b], a bullet (a at its first byte, b just past its
+// last newline). It is the one blank-line collapse on delete: when a blank
+// line sits on both sides, the two would join into a double blank, so one of
+// them goes too.
+func DeleteSpan(text string, a, b int) string {
+	if strings.HasSuffix(text[:a], "\n\n") && strings.HasPrefix(text[b:], "\n") {
+		b++
+	}
+	return text[:a] + text[b:]
+}
+
+// DeleteBullet removes the bullet at lines[i] with its continuation lines,
+// collapsing blanks as DeleteSpan does, and returns the remaining lines.
+func DeleteBullet(lines []string, i int) []string {
+	text := strings.Join(lines, "\n")
+	return strings.Split(DeleteSpan(text, LineStart(lines, i), LineStart(lines, End(lines, i))), "\n")
+}

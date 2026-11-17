@@ -1,6 +1,9 @@
 package bulletfmt
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTitle(t *testing.T) {
 	for _, c := range []struct {
@@ -68,5 +71,64 @@ func TestSelectTitle(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSelectFragment(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		frag  string
+		want  []int
+	}{
+		{"title and body", []string{"- **A** one <!-- 2026-01-01 -->", "- **B** two"}, "two", []int{1}},
+		{"case-sensitive", []string{"- **A** one"}, "ONE", nil},
+		{"stamp is not searched", []string{"- **A** one <!-- 2026-01-01 -->"}, "2026", nil},
+		{"only the last comment is the stamp", []string{"- **A** one <!-- x --> <!-- 2026-01-01 -->"}, "x", []int{0}},
+		{"continuation text belongs to its bullet", []string{"- **A** one", "  more", "- **B** two"}, "more", []int{0}},
+		{"indented dash line is not a bullet", []string{"- **A** one", "  - nested", "- **B** two"}, "nested", []int{0}},
+		{"unindented prose is not a bullet", []string{"- **A** one", "", "prose here"}, "prose", nil},
+		{"several", []string{"- **A** x", "- **B** x"}, "x", []int{0, 1}},
+	}
+	for _, c := range cases {
+		got := SelectFragment(c.lines, c.frag)
+		if len(got) != len(c.want) {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: got %v want %v", c.name, got, c.want)
+			}
+		}
+	}
+}
+
+func TestReplaceInKeepsTheStamp(t *testing.T) {
+	got := ReplaceIn([]string{"- **A** one 2026 <!-- 2026-01-01 -->", "  one 2026"}, "2026", "Y")
+	if got[0] != "- **A** one Y <!-- 2026-01-01 -->" || got[1] != "  one Y" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDeleteBullet(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		i     int
+		want  []string
+	}{
+		{"blank both sides collapses", []string{"a", "", "- x", "", "b"}, 2, []string{"a", "", "b"}},
+		{"wrapped bullet goes whole", []string{"a", "", "- x", "  wrap", "", "b"}, 2, []string{"a", "", "b"}},
+		{"blank only before stays", []string{"a", "", "- x", "b"}, 2, []string{"a", "", "b"}},
+		{"blank only after stays", []string{"a", "- x", "", "b"}, 1, []string{"a", "", "b"}},
+		{"no final newline", []string{"- a", "- x"}, 1, []string{"- a", ""}},
+		{"first line", []string{"- x", "- a"}, 0, []string{"- a"}},
+	}
+	for _, c := range cases {
+		got := DeleteBullet(append([]string(nil), c.lines...), c.i)
+		if strings.Join(got, "\n") != strings.Join(c.want, "\n") {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
 	}
 }

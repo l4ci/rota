@@ -509,9 +509,9 @@ func knHit(fs *flag.FlagSet) RunFunc {
 		if res.PromotionBlocked {
 			c.Warn("skip-auto-promote: %s :: %s has pending contradiction", *topic, *title)
 		}
-		d := jsonx.Obj("topic", *topic, "title", *title, "hits", res.Entry.Hits, "tier", res.Entry.Tier,
+		d := jsonx.Obj("topic", *topic, "title", res.Entry.Title, "hits", res.Entry.Hits, "tier", res.Entry.Tier,
 			"promoted", res.Promoted, "promotionBlocked", res.PromotionBlocked, "changed", res.Changed)
-		text := fmt.Sprintf("hit: %s :: %s (hits=%d, tier=%s)", *topic, *title, res.Entry.Hits, res.Entry.Tier)
+		text := fmt.Sprintf("hit: %s :: %s (hits=%d, tier=%s)", *topic, res.Entry.Title, res.Entry.Hits, res.Entry.Tier)
 		return Result{Data: d, Text: text}, nil
 	}
 }

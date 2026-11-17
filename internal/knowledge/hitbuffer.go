@@ -52,7 +52,7 @@ func bumpHit(sc *Sidecar, h pendingHit, threshold int, contradicted map[[2]strin
 		return e, false, false, err
 	}
 	if e.Tier == Provisional && e.Hits >= threshold {
-		if contradicted[[2]string{h.Topic, h.Title}] {
+		if contradicted[contraKey(h.Topic, h.Title)] {
 			return e, false, true, nil
 		}
 		if err := sc.Promote(h.Topic, h.Title); err != nil {
@@ -71,7 +71,7 @@ func (s Store) contradicted() (map[[2]string]bool, error) {
 	}
 	m := map[[2]string]bool{}
 	for _, c := range list {
-		m[[2]string{c.Topic, c.Title}] = true
+		m[contraKey(c.Topic, c.Title)] = true
 	}
 	return m, nil
 }

@@ -315,17 +315,11 @@ func (c Clone) amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	hit := -1
-	for i, l := range e.lines {
-		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) && !(e.topic.Split && isSubIndexLine(l)) {
-			if hit >= 0 {
-				return WriteResult{}, fmt.Errorf("%w: fragment %q under %q", ErrMultiMatch, in.Fragment, in.Topic)
-			}
-			hit = i
-		}
-	}
-	if hit < 0 {
-		return WriteResult{}, fmt.Errorf("%w: no bullet in %q contains %q", ErrNotFound, in.Topic, in.Fragment)
+	hit, err := e.selectFragment(in.Fragment,
+		fmt.Errorf("%w: fragment %q under %q", ErrMultiMatch, in.Fragment, in.Topic),
+		fmt.Errorf("%w: no bullet in %q contains %q", ErrNotFound, in.Topic, in.Fragment))
+	if err != nil {
+		return WriteResult{}, err
 	}
 	l := e.lines[hit]
 	tail := stampTail.FindString(l)

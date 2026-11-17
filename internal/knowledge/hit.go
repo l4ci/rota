@@ -55,7 +55,8 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 		if err != nil {
 			return err
 		}
-		if err := s.requireBullet(scope, topic, title); err != nil {
+		title, err = s.storedTitle(scope, topic, title)
+		if err != nil {
 			return err
 		}
 		h := pendingHit{Topic: topic, Title: title, Date: s.today()}
@@ -69,22 +70,46 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 	return res, err
 }
 
-// requireBullet refuses a (topic, title) that names no bullet, as the external
-// store's Hit does, so a typo cannot leave an orphan tier record.
-func (s Store) requireBullet(scope, topic, title string) error {
+// storedTitle is the title the one bullet under topic carries, found by the
+// shared title rule (bulletfmt.SelectTitle): it refuses a title that names no
+// bullet, as the external store's Hit does, so a typo cannot leave an orphan
+// tier record, and a title two bullets share up to case. Hit keys its tier and
+// contradiction rows by the stored title, never the typed one.
+func (s Store) storedTitle(scope, topic, title string) (string, error) {
 	target, err := s.KnowledgePath(scope)
 	if err != nil {
-		return err
+		return "", err
 	}
 	content, err := ReadFile(target)
 	if err != nil {
-		return err
+		return "", err
 	}
 	start, end, ok := section.Find(content, topic)
-	if !ok || !bulletfmt.HasTitle(pystr.Splitlines(content[start:end]), strings.TrimSpace(title)) {
-		return notFound("no bullet in %q is titled %q", topic, title)
+	var titles []string
+	if ok {
+		for _, l := range pystr.Splitlines(content[start:end]) {
+			t, _ := bulletfmt.Title(l)
+			titles = append(titles, t)
+		}
 	}
-	return nil
+	hits := bulletfmt.SelectTitle(titles, title)
+	switch len(hits) {
+	case 0:
+		return "", notFound("no bullet in %q is titled %q", topic, title)
+	case 1:
+		return titles[hits[0]], nil
+	}
+	named := make([]string, len(hits))
+	for i, h := range hits {
+		named[i] = "'" + titles[h] + "'"
+	}
+	return "", fmt.Errorf("%w: %d bullets titled %q under %q: %s", ErrMultiMatch, len(hits), title, topic, strings.Join(named, ", "))
+}
+
+// contraKey is how a queue entry and a bullet meet: the topic exactly, the
+// title as bulletfmt.SelectTitle reads it (case and surrounding space ignored).
+func contraKey(topic, title string) [2]string {
+	return [2]string{topic, strings.ToLower(strings.TrimSpace(title))}
 }
 
 // Contradiction is one pending entry of the queue.
@@ -157,7 +182,7 @@ func (s Store) HasContradiction(topic, title string) (bool, error) {
 		return false, err
 	}
 	for _, c := range list {
-		if c.Topic == topic && c.Title == title {
+		if contraKey(c.Topic, c.Title) == contraKey(topic, title) {
 			return true, nil
 		}
 	}
@@ -212,7 +237,7 @@ func (s Store) ClearContradiction(topic, title string) (int, error) {
 		}
 		kept := []any{}
 		for _, p := range pending {
-			if o, ok := p.(*jsonx.Object); ok && entryString(o, "topic") == topic && entryString(o, "title") == title {
+			if o, ok := p.(*jsonx.Object); ok && contraKey(entryString(o, "topic"), entryString(o, "title")) == contraKey(topic, title) {
 				n++
 				continue
 			}

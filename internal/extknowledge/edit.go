@@ -76,14 +76,7 @@ func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	if len(hits) == 0 {
 		return WriteResult{}, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, in.Topic, in.Title)
 	}
-	hit := bs[hits[0]].Line
-	end := bulletfmt.End(e.lines, hit)
-	rest := e.lines[end:]
-	// Removing the only line between two blank lines would leave two in a row.
-	if hit > 0 && e.lines[hit-1] == "" && len(rest) > 0 && rest[0] == "" {
-		rest = rest[1:]
-	}
-	e.lines = append(e.lines[:hit:hit], rest...)
+	e.lines = bulletfmt.DeleteBullet(e.lines, bs[hits[0]].Line)
 	return e.land(ctx, fmt.Sprintf("knowledge: remove %q from %s", strings.TrimSpace(in.Title), in.Topic))
 }
 
@@ -106,30 +99,44 @@ func (c Clone) replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	hit := -1
-	var stamp string
-	for _, b := range e.bullets() {
-		if strings.Contains(strings.TrimSuffix(e.lines[b.Line], b.Stamp), in.Old) {
-			if hit >= 0 {
-				return WriteResult{}, fmt.Errorf("%w: %q is in several bullets of %q; use a longer fragment", ErrMultiMatch, in.Old, in.Topic)
-			}
-			hit, stamp = b.Line, b.Stamp
-		}
+	hit, err := e.selectFragment(in.Old,
+		fmt.Errorf("%w: %q is in several bullets of %q; use a longer fragment", ErrMultiMatch, in.Old, in.Topic),
+		fmt.Errorf("%w: no bullet in %q has %q in its title or body", ErrNotFound, in.Topic, in.Old))
+	if err != nil {
+		return WriteResult{}, err
 	}
-	if hit < 0 {
-		return WriteResult{}, fmt.Errorf("%w: no bullet in %q has %q in its title or body", ErrNotFound, in.Topic, in.Old)
-	}
-	text := strings.ReplaceAll(strings.TrimSuffix(e.lines[hit], stamp), in.Old, in.New)
-	if !strings.HasPrefix(text, "- ") {
+	end := bulletfmt.End(e.lines, hit)
+	edited := bulletfmt.ReplaceIn(e.lines[hit:end], in.Old, in.New)
+	if !strings.HasPrefix(edited[0], "- ") {
 		return WriteResult{}, fmt.Errorf("%w: the replacement would remove the bullet marker", ErrContent)
 	}
-	line := text + stamp
-	if line == e.lines[hit] {
+	if strings.Join(edited, "\n") == strings.Join(e.lines[hit:end], "\n") {
 		pol, err := c.Policy()
 		return WriteResult{Policy: pol}, err
 	}
-	e.lines[hit] = line
+	copy(e.lines[hit:end], edited)
+	text, _ := bulletfmt.SplitStamp(edited[0])
 	return e.land(ctx, fmt.Sprintf("knowledge: replace text in %q of %s", titleOrLine(text), in.Topic))
+}
+
+// selectFragment is the one bullet the shared fragment rule
+// (bulletfmt.SelectFragment) picks in the open file, or the refusal: several
+// when more than one matches, none when nothing does. A split topic's
+// sub-index lines are not bullets.
+func (e *edit) selectFragment(fragment string, several, none error) (int, error) {
+	var hits []int
+	for _, i := range bulletfmt.SelectFragment(e.lines, fragment) {
+		if !(e.topic.Split && isSubIndexLine(e.lines[i])) {
+			hits = append(hits, i)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return -1, none
+	case 1:
+		return hits[0], nil
+	}
+	return -1, several
 }
 
 // titleOrLine is the bold title of a bullet line, else the line itself.
