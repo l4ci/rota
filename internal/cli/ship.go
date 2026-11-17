@@ -142,7 +142,7 @@ func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, err := c.Root()
+	root, cfg, err := c.Project()
 	if err != nil {
 		return Result{}, err
 	}
@@ -151,7 +151,7 @@ func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
 	// staleness to the forge head rather than an absent or stale checkout ref.
 	head := ""
 	if issue, e := issueBackend(c.deps(), root); e == nil && issue {
-		f, e := c.deps().forge(c.Context(), c.deps().Config(root), "", dir)
+		f, e := c.deps().forge(c.Context(), cfg, "", dir)
 		if e == nil {
 			info, e := f.PRView(c.Context(), pr)
 			if e == nil && info.Head == branch {

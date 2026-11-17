@@ -206,14 +206,14 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 0, 0, "issues imported takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := c.Root()
+		root, cfg, err := c.Project()
 		if err != nil {
 			return Result{}, err
 		}
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.NewEnv(c.deps().Config(root), c.deps().trackerBase(), c.deps().IssuesForge)
+			env := issues.NewEnv(cfg, c.deps().trackerBase(), c.deps().IssuesForge)
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {
@@ -292,11 +292,10 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 			}
 			lim = n
 		}
-		root, err := c.Root()
+		root, cfg, err := c.Project()
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := c.deps().Config(root)
 		// Notices are kept until the run's outcome is known: a failure answers
 		// with its error alone, so they go to stderr only.
 		var notices []string

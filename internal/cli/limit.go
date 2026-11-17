@@ -286,11 +286,10 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if *settle <= 0 {
 			return Result{}, Usage("--settle must be more than zero")
 		}
-		root, err := c.Root()
+		root, cfg, err := c.Project()
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := c.deps().Config(root)
 		set, err := limits.LoadSettings(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}
