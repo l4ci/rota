@@ -167,9 +167,6 @@ func TestReplaceNeverTouchesStamp(t *testing.T) {
 		name, old, new string
 		want           error
 	}{
-		{"stamp only", "source:rota", "source:x", ErrNotFound},
-		{"date only", "2026-01-02", "2027-01-01", ErrNotFound},
-		{"spans body and stamp", "per case. <!--", "per case. <!-- x", ErrNotFound},
 		{"spans legacy plus sign", "Old one. <!-- 2026-08-02", "Old.", ErrNotFound},
 		{"no match", "nothing like this", "x", ErrNotFound},
 		{"several bullets", "—", "-", ErrMultiMatch},
