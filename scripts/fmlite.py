@@ -253,23 +253,16 @@ def _parse_lines(lines, path, first):
     return val
 
 
-# A fence line is "---" followed by ASCII space, tab or CR only (so CRLF files
-# work). Not str.rstrip(): that also strips NBSP and other Unicode whitespace,
-# which internal/skills/get.go's stub does not. Both are pinned by the shared
-# fixtures in test/fixtures/frontmatter (TestFrontMatterFixtureTable).
-FENCE_TRAIL = ' \t\r'
-
-
 def load_front_matter(path, text=None):
     """Return (front_matter_dict, body_text) for a markdown file with --- fences."""
     if text is None:
         with open(path, encoding='utf-8') as f:
             text = f.read()
     lines = text.split('\n')
-    if not lines or lines[0].rstrip(FENCE_TRAIL) != '---':
+    if not lines or lines[0].rstrip() != '---':
         raise FmError('%s:1: file does not start with a --- front matter fence' % path)
     for k in range(1, len(lines)):
-        if lines[k].rstrip(FENCE_TRAIL) == '---':
+        if lines[k].rstrip() == '---':
             fm = _parse_lines(lines[1:k], path, 2)
             return fm, '\n'.join(lines[k + 1:])
     raise FmError('%s:1: front matter is not closed by a --- line' % path)
