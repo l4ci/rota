@@ -308,7 +308,7 @@ func (s Store) glossaryWriteLocked(scope string, t Term, touch, notsProvided boo
 
 var aliasMsg = regexp.MustCompile(`alias '([^']+)' on '[^']+' collides with existing term '([^']+)'`)
 
-// aliasMessage words a single-write conflict as the old helper did.
+// aliasMessage words a single-write conflict.
 func aliasMessage(conflict string) string {
 	if m := aliasMsg.FindStringSubmatch(conflict); m != nil {
 		return fmt.Sprintf("alias '%s' is already an alias of term '%s' — refuse to write", m[1], m[2])

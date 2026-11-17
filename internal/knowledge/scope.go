@@ -1,6 +1,6 @@
 // Package knowledge ports the KNOWLEDGE.md helpers (hv-knowledge-*): topic
-// reads, bullet writes, the tier sidecar and the contradiction queue. File
-// formats match bin/hvlib_knowledge.py byte for byte.
+// reads, bullet writes, the tier sidecar and the contradiction queue. It is
+// ported from the earlier shell and Python helpers, which no longer ship.
 package knowledge
 
 import (

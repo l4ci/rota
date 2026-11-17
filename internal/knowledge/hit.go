@@ -211,7 +211,7 @@ func (s Store) AddContradiction(topic, title, text string) (int, error) {
 }
 
 // ClearContradictions empties the queue and returns how many entries it held.
-// Like the old helper it rewrites the file even when the queue was empty.
+// It rewrites the file even when the queue was empty.
 func (s Store) ClearContradictions() (int, error) {
 	n := 0
 	err := fsio.Locked(s.queuePath(), fsio.LockTimeout, func() error {

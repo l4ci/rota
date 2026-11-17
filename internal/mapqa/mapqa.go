@@ -1,4 +1,4 @@
-// Package mapqa ports the .rota/map and .rota/qa helpers (hv-map-*, hv-qa-*):
+// Package mapqa ports the earlier .rota/map and .rota/qa helpers (hv-map-*, hv-qa-*):
 // per-name reads, the managed index blocks and the map size stats.
 package mapqa
 

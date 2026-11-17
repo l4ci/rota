@@ -503,7 +503,7 @@ func (s Store) TierList(scope, tier string) ([]Entry, error) {
 // effectiveBackfilled is effective plus, in memory, a provisional entry for
 // every titled bullet of scope's KNOWLEDGE.md that has none, so bullets written
 // before tiers existed read like new ones. It is the lazy form of the retired
-// hv-knowledge-migrate and the one tier read for every reader (`query`, path
+// hv-knowledge-migrate helper and the one tier read for every reader (`query`, path
 // entries, `tier get`, `tier list`). Nothing is written: a read must not dirty
 // the tracked sidecar.
 func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {

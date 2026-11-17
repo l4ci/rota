@@ -110,7 +110,7 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 		return AddResult{}, notFound("topic '%s' not found in %s", topic, target)
 	}
 	if bulletfmt.HasTitle(pystr.Splitlines(content[start:end]), title) {
-		// Like the old helper, a repeat still registers the title in the
+		// A repeat still registers the title in the
 		// sidecar, so a bullet that predates tiering gets tracked.
 		return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 	}
