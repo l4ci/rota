@@ -89,10 +89,11 @@ func (o observingWorld) FollowUp() roundtick.FollowUpSources {
 	f.Start = func(context.Context, roundtick.FollowUp, string, bool) error { return refuse() }
 	return f
 }
-func (o observingWorld) Audit(roundtick.Action) {}
-func (o observingWorld) Say(line string)        { o.w.Say(line) }
-func (o observingWorld) Warn(message string)    { o.w.Warn(message) }
-func (o observingWorld) Now() time.Time         { return o.w.Now() }
+func (o observingWorld) TestAudit(ctx context.Context) ([]string, error) { return o.w.TestAudit(ctx) }
+func (o observingWorld) Audit(roundtick.Action)                          {}
+func (o observingWorld) Say(line string)                                 { o.w.Say(line) }
+func (o observingWorld) Warn(message string)                             { o.w.Warn(message) }
+func (o observingWorld) Now() time.Time                                  { return o.w.Now() }
 
 // observingReviewer reads the architecture facts without the write the real
 // read does, and refuses to mint.

@@ -2,9 +2,11 @@ package roundtick
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +32,9 @@ type fakeWorld struct {
 	repairs []round.Finding
 	// changed counts the calls that would change the world.
 	assigns, audits int
+	// auditReason is the due test-audit suggestion; auditErr fails its read.
+	auditReason []string
+	auditErr    error
 }
 
 func (w *fakeWorld) reg() worker.Registry {
@@ -71,11 +76,12 @@ func (w *fakeWorld) AssignBundle(context.Context, string, []string) (round.Assig
 	w.assigns++
 	return round.Assigned{}, nil
 }
-func (w *fakeWorld) Review() Reviewer { return nil }
-func (w *fakeWorld) Audit(Action)     { w.audits++ }
-func (w *fakeWorld) Say(string)       {}
-func (w *fakeWorld) Warn(string)      {}
-func (w *fakeWorld) Now() time.Time   { return time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC) }
+func (w *fakeWorld) TestAudit(context.Context) ([]string, error) { return w.auditReason, w.auditErr }
+func (w *fakeWorld) Review() Reviewer                            { return nil }
+func (w *fakeWorld) Audit(Action)                                { w.audits++ }
+func (w *fakeWorld) Say(string)                                  {}
+func (w *fakeWorld) Warn(string)                                 {}
+func (w *fakeWorld) Now() time.Time                              { return time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC) }
 
 func tickWorld(t *testing.T, w *fakeWorld) (Result, []string) {
 	return tickWorldWith(t, w, Config{})
@@ -158,5 +164,57 @@ func TestObserveRunsThePassWithoutMutating(t *testing.T) {
 	}
 	if len(gated) != 0 || w.assigns != 0 || w.audits != 0 || len(r.Did) != 0 {
 		t.Fatalf("observation changed the world: gated %v assigns %d audits %d did %+v", gated, w.assigns, w.audits, r.Did)
+	}
+}
+
+// A due test-audit suggestion is a needs-you item, once per round: the second
+// tick (carrying the first's Reported memory) lists it but does not report it
+// new. The tick takes no action on it.
+func TestTestAuditSuggestionIsNeedsYouOnce(t *testing.T) {
+	w := &fakeWorld{
+		info:        tracker.PRInfo{State: "OPEN", Base: "main", HeadSHA: "abc"},
+		auditReason: []string{"latest full gate 12.000s exceeds 10s"},
+	}
+	r, gated := tickWorld(t, w)
+	var item *Item
+	for i := range r.NeedsYou {
+		if r.NeedsYou[i].Kind == "test-audit" {
+			item = &r.NeedsYou[i]
+		}
+	}
+	if item == nil || !strings.Contains(item.Why, "exceeds 10s") {
+		t.Fatalf("no test-audit needs-you item: %+v", r.NeedsYou)
+	}
+	if len(r.New) == 0 || len(gated) != 0 || len(r.Did) != 0 || w.assigns != 0 {
+		t.Fatalf("the suggestion must be news and trigger no action: new %+v gated %v did %+v", r.New, gated, r.Did)
+	}
+	cfg := Config{Settings: roundcfg.Settings{TrainFill: roundcfg.TrainFill{Max: 4}}, MergeApproval: gate.MergeNone, Base: "main"}
+	e := NewEnv(w, cfg)
+	e.Reported = r.Reported
+	r2, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	news := 0
+	for _, it := range r2.New {
+		if it.Kind == "test-audit" {
+			news++
+		}
+	}
+	if news != 0 {
+		t.Fatalf("the suggestion was reported again: %+v", r2.New)
+	}
+}
+
+// No due suggestion, or a failed read, raises nothing.
+func TestTestAuditQuietWhenNotDueOrUnreadable(t *testing.T) {
+	for _, w := range []*fakeWorld{{}, {auditErr: errors.New("ledger damaged")}} {
+		w.info = tracker.PRInfo{State: "OPEN", Base: "main", HeadSHA: "abc"}
+		r, _ := tickWorld(t, w)
+		for _, it := range r.NeedsYou {
+			if it.Kind == "test-audit" {
+				t.Fatalf("unexpected item %+v", it)
+			}
+		}
 	}
 }

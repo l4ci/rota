@@ -55,6 +55,8 @@ type World interface {
 	// AssignBundle assigns lead with members to one slot (round.autoBundle).
 	AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error)
 	Review() Reviewer
+	// TestAudit lists the reasons a test-maintenance round is due; empty when none is.
+	TestAudit(ctx context.Context) ([]string, error)
 	// Stop reads the round's stored stop value afresh, never a copy taken at
 	// tick entry: stopped is true while the round winds down, reason says why
 	// (StopVerifyFailed, or empty).
@@ -166,6 +168,7 @@ func NewEnv(w World, cfg Config) Env {
 	e.OpenItems = func(context.Context) int { return w.OpenItems() }
 	e.Candidates = w.Candidates
 	e.Review = w.Review()
+	e.TestAudit = w.TestAudit
 	// The follow-up list is a read; observation never calls its Start.
 	e.FollowUp = w.FollowUp()
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
