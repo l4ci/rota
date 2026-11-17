@@ -68,6 +68,44 @@ func migrateLayerFiles(files []*migrationFile, apply bool, plan func([]*migratio
 	return lock(0)
 }
 
+// planLayers is the plan loop the round-key, accounts and merges steps share:
+// it visits every file that holds a document, in layer order (localFirst
+// reverses it), stamps each conflict step returns with the file's name, and
+// hands the collected conflicts to refuse, which resets the step's report and
+// returns its refusal error. Nothing is written by a planner that refuses,
+// because migrateLayerFiles writes only after plan returns nil.
+func planLayers[C any](files []*migrationFile, localFirst bool, setFile func(*C, string),
+	step func(*migrationFile) []C, refuse func([]C) error) error {
+	var all []C
+	for i := range files {
+		f := files[i]
+		if localFirst {
+			f = files[len(files)-1-i]
+		}
+		if f.doc == nil {
+			continue
+		}
+		for _, c := range step(f) {
+			setFile(&c, f.name)
+			all = append(all, c)
+		}
+	}
+	if len(all) > 0 {
+		return refuse(all)
+	}
+	return nil
+}
+
+// renamedView is f's document under the round.* names: the view the accounts
+// and merges steps plan on. The global layer is not renamed.
+func renamedView(f *migrationFile) *jsonx.Object {
+	if f.layer == layerGlobal {
+		return f.doc
+	}
+	view, _, _ := MigrateRoundKeys(f.doc)
+	return view
+}
+
 // layerFiles is the config layers of root, global first when globalDir is set.
 func layerFiles(root, globalDir string, create bool) []*migrationFile {
 	files := []*migrationFile{

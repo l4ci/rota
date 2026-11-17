@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -82,20 +81,13 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 	if err != nil {
 		return nil, sm, rm, err
 	}
-	path := configPath(root)
-	err = fsio.Locked(path, fsio.LockTimeout, func() error {
-		cfg := jsonx.NewObject()
-		raw, err := os.ReadFile(path)
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-		case err != nil:
-			return ErrCorrupt
-		default:
-			obj, ok := decodeObject(raw)
-			if !ok {
-				return ErrCorrupt
-			}
-			cfg = obj
+	// config.json runs through the same lifecycle as the migration steps: lock
+	// (created when missing), read, plan, write only when the plan changed it.
+	target := &migrationFile{name: "config.json", path: configPath(root), layer: layerProject, create: true}
+	err = migrateLayerFiles([]*migrationFile{target}, true, func([]*migrationFile) error {
+		cfg := target.doc
+		if cfg == nil {
+			cfg = jsonx.NewObject()
 		}
 		// Read before the legacy stamp moves: an hv-era stamp predates rota.
 		stale := autonomyStale(cfg)
@@ -128,11 +120,9 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 		if len(filled) == 0 && !moved && !sm.Changed && len(stripped) == 0 && !rewrote && !localRewrote {
 			return nil
 		}
-		return fsio.WriteJSONAtomic(path, cfg)
+		target.doc, target.changed = cfg, true
+		return nil
 	})
-	if err != nil {
-		return nil, sm, rm, err
-	}
 	if _, err := migrateAutonomyGlobal(env); err != nil {
 		return nil, sm, rm, err
 	}

@@ -163,28 +163,21 @@ func MigrateAccountsFiles(root, globalDir string, apply bool) (AccountsMigration
 }
 
 func migrateAccountsPlan(files []*migrationFile, m *AccountsMigration) error {
-	var conflicts []AccountConflict
-	for _, f := range files {
-		if f.doc == nil {
-			continue
-		}
-		if f.layer != layerGlobal {
+	return planLayers(files, false, func(c *AccountConflict, file string) { c.File = file },
+		func(f *migrationFile) []AccountConflict {
 			// The renamed view, as the scope step plans on.
-			f.doc, _, _ = MigrateRoundKeys(f.doc)
-		}
-		out, from, c := migrateAccountsDoc(f.doc)
-		for _, x := range c {
-			x.File = f.name
-			conflicts = append(conflicts, x)
-		}
-		if len(from) > 0 {
-			f.doc, f.changed = out, true
-			m.Changes = append(m.Changes, AccountChange{File: f.name, From: from, N: len(Accounts(f.doc))})
-		}
-	}
-	if len(conflicts) > 0 {
-		*m = AccountsMigration{}
-		return &AccountConflictError{Conflicts: conflicts}
-	}
-	return nil
+			if f.layer != layerGlobal {
+				f.doc = renamedView(f)
+			}
+			out, from, c := migrateAccountsDoc(f.doc)
+			if len(from) > 0 {
+				f.doc, f.changed = out, true
+				m.Changes = append(m.Changes, AccountChange{File: f.name, From: from, N: len(Accounts(f.doc))})
+			}
+			return c
+		},
+		func(all []AccountConflict) error {
+			*m = AccountsMigration{}
+			return &AccountConflictError{Conflicts: all}
+		})
 }
