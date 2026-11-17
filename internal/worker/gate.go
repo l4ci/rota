@@ -1574,22 +1574,19 @@ func (runner gate) stepVerdict(result GateResult, target GateTarget, forged gate
 	// Loaded here, after the gate recovered the PR's reports into the store.
 	store, storeErr := verdict.LoadStrict(g.root)
 	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: store, StoreErr: storeErr, Repo: g.o.VerdictRepo}
-	err := check.BlockGate(g.branch, head)
-	// A cross FAIL recorded at an older commit is relaxed only under an explicit
-	// review:none; a FAIL at head, or one while cross is required, still blocks (#3458).
-	var blocked *verdict.BlockedError
-	// An unreadable head cannot prove a FAIL stale, so the relaxation fails closed.
-	if errors.As(err, &blocked) && blocked.Stale && verdict.StaleCrossFail(blocked.Record, strings.TrimSpace(head)) {
-		res, rerr := g.resolveReview(g.baseRef + "..." + g.headRef)
-		if rerr != nil {
-			return finish(g.broke(rerr.Error()))
-		}
-		if res.CrossOffByLabel() {
-			check.IgnoreStaleCross = true
-			if err = check.BlockGate(g.branch, head); err == nil {
-				g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, blocked.Record.Sha, head, res.CrossWhy))
-			}
-		}
+	var res ReviewDepth
+	var rerr error
+	// Asked only when a stale review-cross FAIL is what blocks; an unreadable
+	// head fails closed inside the verdict rule.
+	relaxed, err := check.BlockGateCrossOff(g.branch, head, func() bool {
+		res, rerr = g.resolveReview(g.baseRef + "..." + g.headRef)
+		return rerr == nil && res.CrossOffByLabel()
+	})
+	if rerr != nil {
+		return finish(g.broke(rerr.Error()))
+	}
+	if relaxed != nil {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, relaxed.Sha, head, res.CrossWhy))
 	}
 	if err != nil {
 		g.res.Verdict = GateVerdictBlocked
