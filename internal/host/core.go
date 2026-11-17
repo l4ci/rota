@@ -171,8 +171,6 @@ func (h *coreHost) caller(ctx context.Context) (*coreConn, coreTerminal, error) 
 }
 func (h *coreHost) Kind() Kind                 { return HerdrCore }
 func (h *coreHost) Capabilities() Capabilities { return kindPolicy(HerdrCore, CapabilitiesOf(h)) }
-func (h *coreHost) RuntimeScopedHandles() bool { return true }
-func (h *coreHost) TreeKillClose() bool        { return true }
 func (h *coreHost) InSession() bool {
 	return h.d.Getenv(envCoreTerm) != "" && h.d.Getenv("HC_TERMINAL_SOCKET") != ""
 }
