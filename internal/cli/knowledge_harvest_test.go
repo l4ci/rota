@@ -270,3 +270,25 @@ func TestKnowledgeHarvestCurrentRoundPrefersRegistryOverLedger(t *testing.T) {
 		t.Fatalf("round 5 is current, so round 3's merge is not harvested: %v", got)
 	}
 }
+
+// A started round (registry round 5) with no ledger rows of its own is the
+// current one: harvest targets round 5, so round 3's merge is not listed even
+// though 3 is the highest round the ledger has (#3599).
+func TestKnowledgeHarvestStartedRoundWithoutLedgerRows(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	deps := trustedDeps(t, issueFixture(), harvestTrust{})
+	body := bodyFile(t, "round 3 learning\n")
+	if c, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "7", "--kind", "learning", "--body-file", body); c != 0 {
+		t.Fatalf("comment add: exit %d: %s", c, stderr)
+	}
+	harvestMerged(t, root, "7", 3)
+	if got := harvestList(t, deps, root); len(got) != 1 {
+		t.Fatalf("no registry round: ledger round 3 is current, want 1 row: %v", got)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(`{"round":5,"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := harvestList(t, deps, root); len(got) != 0 {
+		t.Fatalf("registry round 5 has no merges yet: %v", got)
+	}
+}
