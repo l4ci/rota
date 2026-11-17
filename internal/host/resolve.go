@@ -13,8 +13,8 @@ type herdrPaneFacts struct {
 func detectHerdrPane(d Deps) herdrPaneFacts {
 	_, err := d.LookPath(Herdr.Binary())
 	return herdrPaneFacts{
-		managed:   d.Getenv("HERDR_ENV") == "1",
-		workspace: d.Getenv("HERDR_WORKSPACE_ID") != "",
+		managed:   d.Getenv(envHerdrEnv) == "1",
+		workspace: d.Getenv(envHerdrWorkspace) != "",
 		installed: err == nil,
 	}
 }
@@ -81,8 +81,8 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 	d := Deps{Getenv: getenv, LookPath: lookPath}
 	d.fill()
 	if coreContext(d) || dispatch == HerdrCore {
-		if d.Getenv(envCoreTerm) == "" || d.Getenv("HC_TERMINAL_SOCKET") == "" {
-			return Launch{}, fmt.Errorf("herdr-core needs HC_TERMINAL_ID and HC_TERMINAL_SOCKET from an app project terminal; refusing disconnected runtime")
+		if d.Getenv(envCoreTerm) == "" || d.Getenv(envCoreSocket) == "" {
+			return Launch{}, fmt.Errorf("herdr-core needs %s and %s from an app project terminal; refusing disconnected runtime", envCoreTerm, envCoreSocket)
 		}
 		if dispatch != "" && dispatch != HerdrCore && dispatch != "subagent" {
 			return Launch{}, fmt.Errorf("round.dispatch=%s conflicts with this herdr-core terminal; use herdr-core or automatic detection", dispatch)
@@ -116,5 +116,5 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 // Partial Core markers still select Core so an unavailable endpoint cannot
 // silently launch a disconnected legacy runtime.
 func coreContext(d Deps) bool {
-	return d.Getenv(envCoreTerm) != "" || d.Getenv("HC_TERMINAL_SOCKET") != ""
+	return d.Getenv(envCoreTerm) != "" || d.Getenv(envCoreSocket) != ""
 }

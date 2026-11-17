@@ -222,3 +222,27 @@ func TestEnclosingTempRoot(t *testing.T) {
 		t.Fatalf("the project itself is not inside its temp root: %s", got)
 	}
 }
+
+func TestFindTempRootNamesTheRootWithoutCreatingIt(t *testing.T) {
+	repo := gittest.NewRepo(t, "main")
+	real, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := FindTempRoot(context.Background(), git.Exec, repo); ok {
+		t.Errorf("repo without .rota: FindTempRoot = %q, want no root", got)
+	}
+	if err := os.Mkdir(filepath.Join(repo, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(real, ".rota", "tmp")
+	if got, ok := FindTempRoot(context.Background(), git.Exec, repo); !ok || got != want {
+		t.Errorf("FindTempRoot = %q, %v; want %q", got, ok, want)
+	}
+	if _, err := os.Lstat(want); !os.IsNotExist(err) {
+		t.Errorf("FindTempRoot created the root: %v", err)
+	}
+	if got, ok := FindTempRoot(context.Background(), git.Exec, t.TempDir()); ok {
+		t.Errorf("outside a repo: FindTempRoot = %q, want no root", got)
+	}
+}

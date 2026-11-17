@@ -41,7 +41,7 @@ func (h *herdr) Label(ctx context.Context, slot, handle, title string) {
 
 // LabelWorkspace sets the `round` token on the caller's own workspace.
 func (h *herdr) LabelWorkspace(ctx context.Context, token string) {
-	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
+	ws := h.d.Getenv(envHerdrWorkspace)
 	if ws == "" || token == "" {
 		return
 	}
