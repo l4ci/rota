@@ -188,20 +188,13 @@ func auditTitle(dir, root, title string) TitleAudit {
 	return res
 }
 
-// gitRoot is `git rev-parse --show-toplevel` in dir, or dir itself when it is
-// not in a repo.
-func gitRoot(dir string) string {
-	top, ok, err := gitx.Repo{Dir: dir}.Toplevel(context.Background())
-	if err != nil || !ok {
-		return dir
-	}
-	return pystr.Strip(top)
-}
-
 // Audit runs the audit for each non-blank title in the git repo around dir.
 // Titles without evidence are listed with no hits.
 func Audit(dir string, titles []string) []TitleAudit {
-	root := gitRoot(dir)
+	root := dir // outside a repo the audit runs against dir itself
+	if top, ok, err := (gitx.Repo{Dir: dir}).Toplevel(context.Background()); err == nil && ok {
+		root = pystr.Strip(top)
+	}
 	var out []TitleAudit
 	for _, t := range titles {
 		if pystr.Strip(t) == "" {
