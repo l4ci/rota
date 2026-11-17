@@ -1114,7 +1114,7 @@ no suite and changes no test. A report with no missing evidence records an audit
 Two opt-in thresholds (0, the default, disables each) make `/rota-work` and `/rota-orchestrate`
 suggest a maintenance round in their reconcile step: `test.audit.maxFullGateSeconds` (the latest
 measured `test.full` after the last audit is slower) and `test.audit.prsBetweenAudits` (that many
-merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. Every item a
+merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. `rota round start` runs that check and reports it (`data.testAudit`, plus a `test-audit` text line when due); the autopilot tick raises it once per round as a `needs-you` item and does nothing else with it. Every item a
 maintenance round creates carries two rules in its Out of scope: no assertion is dropped without a note
 in the PR body, and stored refs and the pixel tolerance stay untouched.
 

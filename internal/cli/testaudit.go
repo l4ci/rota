@@ -36,39 +36,10 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		checkpointPath := rotastate.File(common, "test-audit.json")
-		checkpoint, cerr := testaudit.ReadCheckpoint(checkpointPath)
-		threshold := func(key string) (int, error) {
-			v, err := config.Value(cfg, key)
-			if err != nil {
-				return 0, err
-			}
-			n, ok := jsonx.Int(v)
-			if !ok || n < 0 {
-				return 0, Usage("%s must be an integer, 0 or more", key)
-			}
-			return n, nil
-		}
-		seconds, err := threshold("test.audit.maxFullGateSeconds")
-		if err != nil {
-			return Result{}, err
-		}
-		prs, err := threshold("test.audit.prsBetweenAudits")
-		if err != nil {
-			return Result{}, err
-		}
-		// Gate producers use the main checkout for shared round records.
-		recordRoot := root
-		if main, ok := c.MainCheckoutOf(common); ok {
-			recordRoot = main
-		}
 		started := c.deps().Now()
-		telemetry := testaudit.ReadTelemetry(recordRoot, checkpoint, seconds, prs)
-		if cerr != nil {
-			telemetry.Complete = false
-			telemetry.SuggestMaintenance = false
-			telemetry.Reasons = nil
-			telemetry.MergedPRsSinceAudit = nil
-			telemetry.Unavailable = append(telemetry.Unavailable, "audit checkpoint unavailable: "+cerr.Error())
+		telemetry, err := readTestAuditTelemetry(c, root, cfg)
+		if err != nil {
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("telemetry", auditJSON(telemetry))
@@ -153,6 +124,52 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// readTestAuditTelemetry is the read-only check behind `rota test-audit
+// --check` and the `round start` suggestion: recorded thresholds and the
+// checkpoint only, no listing commands and no checkpoint writes. A damaged
+// checkpoint degrades to unavailable evidence; a bad threshold is a usage error.
+func readTestAuditTelemetry(c *Ctx, root string, cfg any) (testaudit.Telemetry, error) {
+	common, err := c.CommonDir(root)
+	if err != nil {
+		return testaudit.Telemetry{}, err
+	}
+	checkpointPath := rotastate.File(common, "test-audit.json")
+	checkpoint, cerr := testaudit.ReadCheckpoint(checkpointPath)
+	threshold := func(key string) (int, error) {
+		v, err := config.Value(cfg, key)
+		if err != nil {
+			return 0, err
+		}
+		n, ok := jsonx.Int(v)
+		if !ok || n < 0 {
+			return 0, Usage("%s must be an integer, 0 or more", key)
+		}
+		return n, nil
+	}
+	seconds, err := threshold("test.audit.maxFullGateSeconds")
+	if err != nil {
+		return testaudit.Telemetry{}, err
+	}
+	prs, err := threshold("test.audit.prsBetweenAudits")
+	if err != nil {
+		return testaudit.Telemetry{}, err
+	}
+	// Gate producers use the main checkout for shared round records.
+	recordRoot := root
+	if main, ok := c.MainCheckoutOf(common); ok {
+		recordRoot = main
+	}
+	telemetry := testaudit.ReadTelemetry(recordRoot, checkpoint, seconds, prs)
+	if cerr != nil {
+		telemetry.Complete = false
+		telemetry.SuggestMaintenance = false
+		telemetry.Reasons = nil
+		telemetry.MergedPRsSinceAudit = nil
+		telemetry.Unavailable = append(telemetry.Unavailable, "audit checkpoint unavailable: "+cerr.Error())
+	}
+	return telemetry, nil
 }
 
 func auditJSON(v any) any { b, _ := json.Marshal(v); o, _ := jsonx.Decode(b); return o }

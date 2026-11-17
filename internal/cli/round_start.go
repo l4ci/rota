@@ -257,6 +257,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			archLine = a.Line()
 		}
 		d.Set("drift", drift)
+		auditLine := startTestAudit(c, root, cfg, d)
 		cwd, _ := c.deps().Getwd()
 		stale, isStale := staleBinary(ctx, c.deps().Git, cwd)
 		if isStale {
@@ -291,8 +292,33 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if archLine != "" {
 			lines = append(lines, "architecture\t"+archLine)
 		}
+		if auditLine != "" {
+			lines = append(lines, auditLine)
+		}
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	})
+}
+
+// startTestAudit reports the read-only test-audit check in d.testAudit and
+// returns the text line, set only when a maintenance suggestion is due. It is
+// a suggestion: a failed read warns and never fails the start.
+func startTestAudit(c *Ctx, root string, cfg any, d *jsonx.Object) string {
+	t, err := readTestAuditTelemetry(c, root, cfg)
+	if err != nil {
+		c.Warn("test audit check skipped: %v", err)
+		return ""
+	}
+	if !t.Complete {
+		c.Warn("test audit evidence unreadable: %s", strings.Join(t.Unavailable, "; "))
+	}
+	o := jsonx.NewObject()
+	o.Set("suggestMaintenance", t.SuggestMaintenance)
+	o.Set("reasons", jsonx.Strings(t.Reasons))
+	d.Set("testAudit", o)
+	if !t.SuggestMaintenance {
+		return ""
+	}
+	return "test-audit\t" + strings.Join(t.Reasons, "; ")
 }
 
 func roundCandidates(fs *flag.FlagSet) RunFunc {
