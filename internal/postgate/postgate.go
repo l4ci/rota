@@ -29,14 +29,29 @@ type Book interface {
 	// A target that does not resolve is left out; an unreadable registry is an
 	// error.
 	Targets(root string, args []string) (map[string]worker.GateTarget, error)
+	// ReleaseSlice drops the claim slot holds on issue and its in-progress label
+	// when the landed PR left the issue open for later slices (#3629). It is a
+	// no-op for any other issue.
+	ReleaseSlice(root, issue, slot string) error
 	// HasOrigin reports whether the repo at root has an origin remote.
 	HasOrigin(ctx context.Context, root string) bool
 }
 
 var _ Book = WorkerBook{}
 
-// WorkerBook adapts a worker.Env to Book.
-type WorkerBook struct{ Env worker.Env }
+// WorkerBook adapts a worker.Env to Book. Release is the tracker side of
+// ReleaseSlice; without it a slice's claim is left for reconcile to repair.
+type WorkerBook struct {
+	Env     worker.Env
+	Release func(root, issue, slot string) error
+}
+
+func (b WorkerBook) ReleaseSlice(root, issue, slot string) error {
+	if b.Release == nil || slot == "" {
+		return nil
+	}
+	return b.Release(root, issue, slot)
+}
 
 func (b WorkerBook) ClearItemStart(root, issue string) error {
 	return worker.ClearItemStart(root, issue)
@@ -84,7 +99,7 @@ func Gate(book Book, root, issue string, r worker.GateResult) error {
 	// already-merged is a retry after the forge merged it but a later step failed.
 	if (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
 		for _, m := range r.IntegrationMembers {
-			if err := landed(book, root, m); err != nil {
+			if err := landed(book, root, m, r.Slot); err != nil {
 				return err
 			}
 		}
@@ -95,7 +110,7 @@ func Gate(book Book, root, issue string, r worker.GateResult) error {
 	}
 	switch m := worker.ClassifyVerdict(r.Verdict); {
 	case r.OK():
-		return landed(book, root, issue)
+		return landed(book, root, issue, r.Slot)
 	case m.Notify:
 		return notify(book, root, r)
 	}
@@ -112,7 +127,7 @@ func Train(book Book, round *worker.RoundMemo, root string, issues map[string]st
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
-			if err := landed(book, root, issue); err != nil {
+			if err := landed(book, root, issue, targets[m.Target].Name); err != nil {
 				fails = append(fails, Failure{m.Target, err})
 			}
 		}
@@ -128,15 +143,19 @@ func Train(book Book, round *worker.RoundMemo, root string, issues map[string]st
 }
 
 // landed ends an item whose PR landed: its wall-clock (round.itemTimeoutMinutes),
-// its best-of record and its bounce count.
-func landed(book Book, root, issue string) error {
+// its best-of record and its bounce count. A slice of a partial-slice issue
+// also gives up its claim, so the next slice is assignable to any slot.
+func landed(book Book, root, issue, slot string) error {
 	if err := book.ClearItemStart(root, issue); err != nil {
 		return err
 	}
 	if err := book.ClearBestOf(root, issue); err != nil {
 		return err
 	}
-	return book.ClearBounces(root, issue)
+	if err := book.ClearBounces(root, issue); err != nil {
+		return err
+	}
+	return book.ReleaseSlice(root, issue, slot)
 }
 
 // notify tells a support machine's worker its PR was sent back, with no count

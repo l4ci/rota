@@ -20,8 +20,10 @@ type Report struct {
 type Env struct {
 	Worker worker.Env
 	// Book defaults to WorkerBook using Worker.
-	Book   Book
-	Report func(context.Context, string, Report) error
+	Book Book
+	// Release is the tracker side of the default Book's ReleaseSlice.
+	Release func(root, issue, slot string) error
+	Report  func(context.Context, string, Report) error
 }
 
 // book is the injected Book, else the production adapter over Worker.
@@ -29,7 +31,7 @@ func (e Env) book() Book {
 	if e.Book != nil {
 		return e.Book
 	}
-	return WorkerBook{e.Worker}
+	return WorkerBook{Env: e.Worker, Release: e.Release}
 }
 
 // Request selects exactly one landing operation. Worker options carry approval

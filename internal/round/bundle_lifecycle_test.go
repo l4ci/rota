@@ -246,3 +246,42 @@ func TestReleasedBundleMembersAreClaimDrift(t *testing.T) {
 		}
 	}
 }
+
+// A landed slice PR on a partial-slice issue parks its slot but leaves the
+// slot's claim on the open issue (#3629): no slot holds it and the claim names
+// a parked slot. Reconcile releases that claim; a claim naming a slot that
+// still holds another issue is left for a person.
+func TestReconcileReleasesLeftoverClaimOfParkedSlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.forge.labels = map[int][]string{12: {"in-progress"}}
+	f.forge.labelled = nil
+	// The slot parked after its slice merged: it holds nothing, 12 keeps ben@1.
+	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task") }); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, filepath.Join(f.root, ".worktrees", "ben"), "checkout", "-q", "park/ben")
+
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Issue == "12" {
+			found = true
+			if fd.Repair == "" {
+				t.Errorf("a leftover claim of a parked slot has a repair: %+v", fd)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing claim-mismatch for the leftover claim: %+v", rep.Findings)
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.held("12"); len(got) != 0 {
+		t.Errorf("claim must be released, still held: %v", got)
+	}
+}

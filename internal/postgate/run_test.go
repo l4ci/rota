@@ -141,7 +141,7 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 		}
 		return "", 0
 	}}}
-	book := &observedBook{Book: WorkerBook{e.Worker}}
+	book := &observedBook{Book: WorkerBook{Env: e.Worker}}
 	e.Book = book
 	e.Report = func(ctx context.Context, _ string, r Report) error {
 		// The report is durable before any clocks or bounce accounting change.
