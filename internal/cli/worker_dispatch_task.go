@@ -60,7 +60,11 @@ func postSupportRelay(c *Ctx, root, slot, bodyFile string, n int, pr string) err
 	if err != nil {
 		return err
 	}
-	issue, body, post, err := round.SupportRelay(root, c.deps().Config(root), slot, n, string(text), pr)
+	set, err := c.deps().roundSettings(root, roundConfigUsage)
+	if err != nil {
+		return err
+	}
+	issue, body, post, err := round.SupportRelay(root, set, slot, n, string(text), pr)
 	if err != nil || !post {
 		return err
 	}

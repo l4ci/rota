@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -76,14 +77,15 @@ func TestSupportRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		name, cfg string
-		post      bool
+		name string
+		set  roundcfg.Settings
+		post bool
 	}{
-		{"support machine", `{"round":{"support":"mac","role":"support"}}`, true},
-		{"main machine", `{"round":{"support":"mac","role":"main"}}`, false},
-		{"no support name", `{"round":{"role":"support"}}`, false},
+		{"support machine", roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}, true},
+		{"main machine", roundcfg.Settings{Support: "mac", Role: roundcfg.RoleMain}, false},
+		{"no support name", roundcfg.Settings{Role: roundcfg.RoleSupport}, false},
 	} {
-		issue, body, post, err := SupportRelay(f.root, cfgOf(t, tc.cfg), "ben", 7, "  hello  ", "")
+		issue, body, post, err := SupportRelay(f.root, tc.set, "ben", 7, "  hello  ", "")
 		if err != nil || post != tc.post {
 			t.Fatalf("%s: post=%v err=%v", tc.name, post, err)
 		}
@@ -91,7 +93,7 @@ func TestSupportRelay(t *testing.T) {
 			t.Errorf("%s: issue %q body %q", tc.name, issue, body)
 		}
 	}
-	if _, _, post, _ := SupportRelay(f.root, cfgOf(t, `{"round":{"support":"mac","role":"support"}}`), "zed", 7, "x", ""); post {
+	if _, _, post, _ := SupportRelay(f.root, roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}, "zed", 7, "x", ""); post {
 		t.Error("slot without a held issue must not post")
 	}
 }
@@ -106,7 +108,7 @@ func TestSupportRelayExplicitPR(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	issue, body, post, err := SupportRelay(f.root, cfgOf(t, `{"round":{"support":"mac","role":"support"}}`), "ben", 7, "hello", "7")
+	issue, body, post, err := SupportRelay(f.root, roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}, "ben", 7, "hello", "7")
 	if err != nil || !post || issue != "11" || body != "<!-- rota:relay round=7 -->\nhello" {
 		t.Fatalf("explicit PR support relay: issue=%q body=%q post=%v err=%v", issue, body, post, err)
 	}
