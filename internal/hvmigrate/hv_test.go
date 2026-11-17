@@ -1,6 +1,7 @@
 package hvmigrate
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -461,5 +463,91 @@ func TestLegacySkillRootsCoverAccountDirs(t *testing.T) {
 	}
 	if len(rep.Skills) != 1 || rep.Skills[0].Path != filepath.Join(acct, "skills") {
 		t.Errorf("skills: %+v", rep.Skills)
+	}
+}
+
+// gitFake wraps a real runner, counts calls and can fail one subcommand.
+type gitFake struct {
+	calls map[string]int
+	fail  string
+}
+
+func (g *gitFake) run(ctx context.Context, dir string, args ...string) (git.Result, error) {
+	if g.calls == nil {
+		g.calls = map[string]int{}
+	}
+	g.calls[args[0]]++
+	if g.fail != "" && args[0] == g.fail {
+		return git.Result{}, errors.New("fake git failure")
+	}
+	return git.Exec(ctx, dir, args...)
+}
+
+func TestRunHvRunsGitThroughTheInjectedRunner(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	hvProject(t, dir)
+	g := &gitFake{}
+	o := hvOpts(t, dir, home)
+	o.Git = g.run
+	if _, err := RunHv(o); err != nil {
+		t.Fatal(err)
+	}
+	for _, sub := range []string{"status", "rev-parse", "for-each-ref"} {
+		if g.calls[sub] == 0 {
+			t.Errorf("git %s did not go through the injected runner: %v", sub, g.calls)
+		}
+	}
+}
+
+func TestRunHvReportsGitErrors(t *testing.T) {
+	for _, sub := range []string{"for-each-ref", "rev-parse"} {
+		dir, home := t.TempDir(), t.TempDir()
+		hvProject(t, dir)
+		g := &gitFake{fail: sub}
+		o := hvOpts(t, dir, home)
+		o.Git = g.run
+		if _, err := RunHv(o); err == nil {
+			t.Errorf("git %s failing was dropped", sub)
+		}
+	}
+}
+
+func TestRunHvReportsUnreadableFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads any file")
+	}
+	dir, home := t.TempDir(), t.TempDir()
+	hvProject(t, dir)
+	p := filepath.Join(dir, ".hv", "BACKLOG.md")
+	if err := os.Chmod(p, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+	if _, err := RunHv(hvOpts(t, dir, home)); err == nil {
+		t.Error("an unreadable file was skipped silently")
+	}
+}
+
+// Apply writes the text the plan holds; it does not convert a second time.
+func TestApplyHvWritesThePlansText(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	hvProject(t, dir)
+	pl, err := planProject(dir, "umbrella", legacyDir, "5.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range pl.edits {
+		if pl.edits[i].rel == filepath.Join(legacyDir, "BACKLOG.md") {
+			pl.edits[i].text = "from the plan\n"
+		}
+	}
+	o := hvOpts(t, dir, home)
+	o.SkipSkills = true
+	rep := &HvReport{Applied: true}
+	if err := applyHv(o, []*hvProj{{dir: dir, scope: "umbrella", plan: pl}}, nil, nil, rep, "5.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(dir, ".rota", "BACKLOG.md")); got != "from the plan\n" {
+		t.Errorf("apply re-converted instead of writing the plan: %q", got)
 	}
 }
