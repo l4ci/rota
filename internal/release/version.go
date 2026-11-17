@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/semver"
 )
 
 // Failure classes of Bump; every other error is a plain read or write failure.
@@ -281,14 +282,6 @@ func checkBump(bump string) error {
 	return nil
 }
 
-func parseSemver(v string) [3]*big.Int {
-	var out [3]*big.Int
-	for i, p := range strings.Split(v, ".") {
-		out[i], _ = new(big.Int).SetString(p, 10)
-	}
-	return out
-}
-
 // NextVersion applies bump (patch, minor, major or an explicit X.Y.Z) to
 // current. An explicit version must be strictly greater (ErrNotGreater).
 func NextVersion(current, bump string) (string, error) {
@@ -298,7 +291,8 @@ func NextVersion(current, bump string) (string, error) {
 	if !IsSemver(current) {
 		return "", fmt.Errorf("current version '%s' is not X.Y.Z semver", current)
 	}
-	cur := parseSemver(current)
+	curV, _ := semver.Strict(current)
+	cur := curV.Parts()
 	one := big.NewInt(1)
 	switch bump {
 	case "patch":
@@ -308,15 +302,8 @@ func NextVersion(current, bump string) (string, error) {
 	case "major":
 		return fmt.Sprintf("%s.0.0", new(big.Int).Add(cur[0], one)), nil
 	}
-	nv := parseSemver(bump)
-	greater := false
-	for i := range nv {
-		if c := nv[i].Cmp(cur[i]); c != 0 {
-			greater = c > 0
-			break
-		}
-	}
-	if !greater {
+	nv, _ := semver.Strict(bump)
+	if nv.Compare(curV) <= 0 {
 		return "", fmt.Errorf("%w: explicit version '%s' must be strictly greater than current '%s'", ErrNotGreater, bump, current)
 	}
 	return bump, nil
