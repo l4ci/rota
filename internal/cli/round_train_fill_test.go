@@ -221,3 +221,17 @@ func TestTrainNudgeImmediateGoesAlone(t *testing.T) {
 		t.Fatalf("want #90 alone then the train of #1 #2, got %v", cmds)
 	}
 }
+
+// A PR the forge shows on another base than the registry records goes to its own
+// gate in the nudge, as the tick sends it (#3411 AC-2).
+func TestTrainNudgeBaseMovedGoesAlone(t *testing.T) {
+	now := time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
+	ns := trainNudgesWithFill([]waitingPR{
+		{PR: "#1", Base: "main", Reviewed: true, ReadySince: now.Add(-time.Minute)},
+		{PR: "#2", Base: "main", Reviewed: true, ReadySince: now.Add(-2 * time.Minute)},
+		{PR: "#91", Base: "main", Reviewed: true, ReadySince: now.Add(-time.Minute), BaseMoved: true},
+	}, roundcfg.TrainFill{Max: 2}, now)
+	if len(ns) != 2 || len(ns[0].PRs) != 1 || ns[0].PRs[0] != "91" || len(ns[1].PRs) != 2 {
+		t.Fatalf("want #91 alone then the train of #1 #2, got %+v", ns)
+	}
+}

@@ -435,6 +435,7 @@ func (g *GitLab) OpenPRs(ctx context.Context) ([]PR, error) {
 		Title           string    `json:"title"`
 		Description     string    `json:"description"`
 		SourceBranch    string    `json:"source_branch"`
+		TargetBranch    string    `json:"target_branch"`
 		WebURL          string    `json:"web_url"`
 		SourceProjectID int       `json:"source_project_id"`
 		TargetProjectID int       `json:"target_project_id"`
@@ -444,7 +445,7 @@ func (g *GitLab) OpenPRs(ctx context.Context) ([]PR, error) {
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, UpdatedAt: d.UpdatedAt, Body: d.Description, SameRepository: d.SourceProjectID > 0 && d.SourceProjectID == d.TargetProjectID})
+		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, Base: d.TargetBranch, URL: d.WebURL, UpdatedAt: d.UpdatedAt, Body: d.Description, SameRepository: d.SourceProjectID > 0 && d.SourceProjectID == d.TargetProjectID})
 	}
 	return out, nil
 }

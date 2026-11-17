@@ -263,6 +263,7 @@ func divergeArgv(provider, op string, argv []string) []string {
 		for i := 0; i+1 < len(out); i++ {
 			if out[i] == "--json" {
 				out[i+1] += ",updatedAt,isCrossRepository"
+				out[i+1] += ",baseRefName" // the target branch, for the train nudge (#3411)
 			}
 		}
 		return out

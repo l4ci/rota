@@ -192,6 +192,8 @@ type PR struct {
 	Branch    string
 	URL       string
 	Body      string
+	// Base is the target branch; set by OpenPRs, "" where a lister omits it.
+	Base string
 	// HeadSHA is the PR's head commit; set by MergedPRs, which callers use to
 	// tell a branch's own PR from an older one that reused the name.
 	HeadSHA string

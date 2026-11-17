@@ -350,16 +350,17 @@ func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok boo
 	return prs, err == nil
 }
 
-// OpenPRNumbers is the set of open PR numbers, ok false when the forge cannot
-// say. A caller that drops PRs absent from it must keep them all when !ok.
-func (e Env) OpenPRNumbers(ctx context.Context, root string) (open map[int]bool, ok bool) {
+// OpenPRBases maps each open PR number to its target branch ("" when the forge
+// lists none), ok false when the forge cannot say. A caller that drops PRs
+// absent from it must keep them all when !ok.
+func (e Env) OpenPRBases(ctx context.Context, root string) (open map[int]string, ok bool) {
 	prs, ok := e.openPRs(ctx, root)
 	if !ok {
 		return nil, false
 	}
-	open = map[int]bool{}
+	open = map[int]string{}
 	for _, p := range prs {
-		open[p.Number] = true
+		open[p.Number] = p.Base
 	}
 	return open, true
 }
