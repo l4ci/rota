@@ -267,12 +267,8 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			var spawn *keepalive.SpawnError
 			switch {
 			case errors.As(err, &held):
-				d := jsonx.NewObject()
-				d.Set("blockedBy", blockedby.LeaseHeld)
-				d.Set("lease", leaseData(held.Lease, held.State))
-				d.Set("changed", false)
-				return Result{Data: d}, &Error{Exit: ExitRefused, Message: held.Error(),
-					Hint: "stop that orchestrator first, or run: rota keepalive status"}
+				return blockedRefusal(nil, blockedby.LeaseHeld, held.Error(),
+					"stop that orchestrator first, or run: rota keepalive status", "lease", leaseData(held.Lease, held.State))
 			case errors.As(err, &spawn):
 				return Result{}, &Error{Exit: ExitUnavailable, Message: fmt.Sprintf("cannot run %s: %v", args[0], spawn.Err)}
 			}

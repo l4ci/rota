@@ -203,11 +203,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			var we *exitcode.Error
 			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 				if held, ok := we.Data.(*roundlease.HeldError); ok {
-					d := jsonx.NewObject()
-					d.Set("blockedBy", blockedby.LeaseHeld)
-					d.Set("lease", leaseData(held.Lease, held.State))
-					d.Set("changed", false)
-					return Result{Data: d}, &Error{Exit: ExitRefused, Message: we.Message}
+					return blockedRefusal(nil, blockedby.LeaseHeld, we.Message, "", "lease", leaseData(held.Lease, held.State))
 				}
 			}
 			return Result{}, err

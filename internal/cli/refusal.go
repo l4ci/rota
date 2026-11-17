@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -44,4 +45,17 @@ func verdictBlocked(vb *verdict.BlockedError, d *jsonx.Object, withVerdict bool)
 	}
 	extra = append(extra, "sha", vb.Record.Sha, "stale", vb.Stale)
 	return blockedRefusal(d, worker.BlockedByVerdict, vb.Error(), "see: rota verdict show "+vb.Branch, extra...)
+}
+
+// blockedReadiness is the envelope for a round.BlockedError: blockedBy, then
+// the readiness checks and any overlaps, then changed false.
+func blockedReadiness(blk *round.BlockedError) *jsonx.Object {
+	var extra []any
+	if blk.Readiness != nil {
+		extra = append(extra, "checks", checkList(blk.Readiness.Checks))
+		if len(blk.Readiness.Overlaps) > 0 {
+			extra = append(extra, "overlaps", overlapList(blk.Readiness.Overlaps))
+		}
+	}
+	return blockedData(nil, blk.By, extra...)
 }

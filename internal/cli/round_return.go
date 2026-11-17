@@ -56,15 +56,7 @@ func moveEnv(c *Ctx, root string) (round.Env, round.Board, error) {
 func moveFailure(err error, changed bool) (Result, error) {
 	var blk *round.BlockedError
 	if errors.As(err, &blk) {
-		f := jsonx.NewObject()
-		f.Set("blockedBy", blk.By)
-		if blk.Readiness != nil {
-			f.Set("checks", checkList(blk.Readiness.Checks))
-			if len(blk.Readiness.Overlaps) > 0 {
-				f.Set("overlaps", overlapList(blk.Readiness.Overlaps))
-			}
-		}
-		f.Set("changed", false)
+		f := blockedReadiness(blk)
 		return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 	}
 	_, ferr := backlogFail(err)

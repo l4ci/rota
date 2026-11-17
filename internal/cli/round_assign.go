@@ -100,15 +100,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		var blk *round.BlockedError
 		switch {
 		case errors.As(err, &blk):
-			f := jsonx.NewObject()
-			f.Set("blockedBy", blk.By)
-			if blk.Readiness != nil {
-				f.Set("checks", checkList(blk.Readiness.Checks))
-				if len(blk.Readiness.Overlaps) > 0 {
-					f.Set("overlaps", overlapList(blk.Readiness.Overlaps))
-				}
-			}
-			f.Set("changed", false)
+			f := blockedReadiness(blk)
 			if blk.By == blockedby.Batch {
 				f.Set("batch", blk.Batch)
 				f.Set("open", blk.Open)
