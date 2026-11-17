@@ -178,17 +178,5 @@ func checkCounters(path string) error {
 }
 
 func updateGitignore(path string) (bool, error) {
-	raw, err := os.ReadFile(path)
-	exists := err == nil
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return false, seedErr("%v", err)
-	}
-	next := MergeGitignore(string(raw), exists)
-	if exists && next == string(raw) {
-		return false, nil
-	}
-	if err := fsio.WriteFileAtomic(path, []byte(next)); err != nil {
-		return false, seedErr("%v", err)
-	}
-	return true, nil
+	return mergeIgnoreFile(path, MergeGitignore)
 }

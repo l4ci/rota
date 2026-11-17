@@ -1,8 +1,12 @@
 package initproj
 
 import (
+	"errors"
+	"io/fs"
+	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -124,4 +128,23 @@ func MissingIgnoreLines(text string) []string {
 		}
 	}
 	return missing
+}
+
+// mergeIgnoreFile is the one read-merge-write of a .gitignore, shared by project
+// and umbrella init. A missing file is created; any other read error refuses with
+// ErrSeed before anything is written. It reports whether it wrote.
+func mergeIgnoreFile(path string, merge func(text string, exists bool) string) (bool, error) {
+	raw, err := os.ReadFile(path)
+	exists := err == nil
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return false, seedErr("%v", err)
+	}
+	next := merge(string(raw), exists)
+	if exists && next == string(raw) {
+		return false, nil
+	}
+	if err := fsio.WriteFileAtomic(path, []byte(next)); err != nil {
+		return false, seedErr("%v", err)
+	}
+	return true, nil
 }
