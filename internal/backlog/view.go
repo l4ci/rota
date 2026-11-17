@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/status"
 )
@@ -367,13 +368,40 @@ type SummaryTopics struct {
 	Shown      []string // the first few topic names
 }
 
-// BuildSummary assembles the summary of the project at root from its items
-// (open and closed). Milestones are read only in file mode; issue mode keeps
-// them in the tracker.
-func BuildSummary(root string, items []Item, fileMode bool) Summary {
+// SummaryInputs is everything BuildSummary counts: the items (open and
+// closed), the in-flight status entries, the milestones and the text of the
+// knowledge, decisions and archive files ("" when a file is absent).
+type SummaryInputs struct {
+	Items                         []Item
+	Active                        []status.Entry
+	Milestones                    []ms.Entry
+	Knowledge, Decisions, Archive string
+}
+
+// LoadSummaryInputs reads the summary inputs of the project at root. Milestones
+// are read only in file mode; issue mode keeps them in the tracker. A missing
+// knowledge, decisions or archive file is an empty input; a milestone listing
+// failure is returned.
+func LoadSummaryInputs(root string, items []Item, fileMode bool) (SummaryInputs, error) {
+	in := SummaryInputs{Items: items, Active: status.Entries(root)}
+	if fileMode {
+		list, err := ms.List(root)
+		if err != nil {
+			return SummaryInputs{}, err
+		}
+		in.Milestones = list
+	}
+	in.Knowledge, _ = fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
+	in.Decisions, _ = fsio.ReadText(rotatree.File(root, rotatree.DecisionsFile))
+	in.Archive, _ = fsio.ReadText(rotatree.File(root, rotatree.ArchiveFile))
+	return in, nil
+}
+
+// BuildSummary counts the summary of in. It reads no files.
+func BuildSummary(in SummaryInputs) Summary {
 	var sm Summary
 	var closed []Item
-	for _, it := range items {
+	for _, it := range in.Items {
 		if it.Closed {
 			closed = append(closed, it)
 			continue
@@ -387,41 +415,32 @@ func BuildSummary(root string, items []Item, fileMode bool) Summary {
 			sm.Tasks++
 		}
 	}
-	for _, e := range status.Entries(root) {
+	for _, e := range in.Active {
 		sm.Active = append(sm.Active, SummaryActive{Items: e.Items, Branch: e.Branch, Worktree: e.Worktree, Repo: e.Repo, Since: first10(e.StartedAt)})
 	}
 	sm.Recent = closed[:min(3, len(closed))]
-	if fileMode {
-		list, _ := ms.List(root)
-		for _, m := range list {
-			if m.Status == "active" {
-				sm.Milestones = append(sm.Milestones, SummaryMilestone{m.ID, m.Title})
-			}
+	for _, m := range in.Milestones {
+		if m.Status == "active" {
+			sm.Milestones = append(sm.Milestones, SummaryMilestone{m.ID, m.Title})
 		}
 	}
-	for _, k := range []struct{ label, file, key string }{{"Knowledge", "KNOWLEDGE.md", "knowledge"}, {"Decisions", "DECISIONS.md", "decisions"}} {
-		if t, ok := summaryTopics(root + "/.rota/" + k.file); ok {
+	for _, k := range []struct{ label, key, text string }{{"Knowledge", "knowledge", in.Knowledge}, {"Decisions", "decisions", in.Decisions}} {
+		if t, ok := summaryTopics(k.text); ok {
 			t.Key, t.Label = k.key, k.label
 			sm.Topics = append(sm.Topics, t)
 		}
 	}
-	if text, err := fsio.ReadText(root + "/.rota/ARCHIVE.md"); err == nil {
-		for _, l := range pystr.Splitlines(text) {
-			if strings.HasPrefix(l, "- ~~") {
-				sm.Archive++
-			}
+	for _, l := range pystr.Splitlines(in.Archive) {
+		if strings.HasPrefix(l, "- ~~") {
+			sm.Archive++
 		}
 	}
 	return sm
 }
 
-// summaryTopics reads the ## sections of path; ok is false for a missing file
-// or one with no topics.
-func summaryTopics(path string) (SummaryTopics, bool) {
-	text, err := fsio.ReadText(path)
-	if err != nil {
-		return SummaryTopics{}, false
-	}
+// summaryTopics lists the ## sections of text; ok is false for empty text or
+// text with no topics.
+func summaryTopics(text string) (SummaryTopics, bool) {
 	var names []string
 	for _, t := range section.Topics(text) {
 		names = append(names, t.Name)
