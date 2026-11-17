@@ -71,11 +71,11 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		}
 		be, wf, _, _, err := itemTrack(c, args[0], "item show", backlog.FileShowHint)
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		st, err := wf.Status(args[0])
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		comments := []any{}
 		var rows []string
@@ -93,7 +93,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		}
 		cover, err := acceptanceCoverage(c, be, wf, args[0], st)
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		tryIt, tryErr := tryItData(st.Body)
 		data := jsonx.Obj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
@@ -355,11 +355,11 @@ func itemNoteShow(fs *flag.FlagSet) RunFunc {
 		}
 		_, wf, id, typ, err := itemTrack(c, args[0], "item note show", backlog.FileNoteHint)
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		body, ok, err := wf.NoteGet(args[0], *kind)
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		return Result{Data: jsonx.Obj("id", id, "type", typ, "kind", *kind, "exists", ok, "body", body), Text: body}, nil
 	}

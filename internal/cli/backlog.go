@@ -27,25 +27,25 @@ import (
 func backlogCommands() []*Command {
 	return []*Command{
 		{Name: "backlog", Summary: "backlog views and upkeep", Subs: []*Command{
-			{Name: "list", Fence: fenceAllowed, Summary: "open items as sorted tables, with clusters", Repo: true, Verb: backlogList, View: backlogView},
-			{Name: "ids", Fence: fenceAllowed, Summary: "IDs of the open items tagged with a milestone", Repo: true, Verb: backlogIDs},
-			{Name: "milestones", Fence: fenceAllowed, Summary: "milestones the given items are tagged with", Repo: true, Verb: backlogMilestones},
-			{Name: "drift", Fence: fenceAllowed, Summary: "open items that commits already mention", Repo: true, Verb: backlogDrift},
+			{Name: "list", Fence: fenceAllowed, ReadOnly: true, Summary: "open items as sorted tables, with clusters", Repo: true, Verb: backlogList, View: backlogView},
+			{Name: "ids", Fence: fenceAllowed, ReadOnly: true, Summary: "IDs of the open items tagged with a milestone", Repo: true, Verb: backlogIDs},
+			{Name: "milestones", Fence: fenceAllowed, ReadOnly: true, Summary: "milestones the given items are tagged with", Repo: true, Verb: backlogMilestones},
+			{Name: "drift", Fence: fenceAllowed, ReadOnly: true, Summary: "open items that commits already mention", Repo: true, Verb: backlogDrift},
 			{Name: "backfill", Fence: fenceRefused, Summary: "stamp Since: on open items that lack it", Repo: true, Verb: backlogBackfill},
 			{Name: "archive", Fence: fenceRefused, Summary: "move old completed items to ARCHIVE.md", Repo: true, Verb: backlogArchive},
-			{Name: "stale", Fence: fenceAllowed, Summary: "stale map, knowledge or backlog entries", Repo: true, Verb: backlogStale},
+			{Name: "stale", Fence: fenceAllowed, ReadOnly: true, Summary: "stale map, knowledge or backlog entries", Repo: true, Verb: backlogStale},
 		}},
-		{Name: "summary", Fence: fenceAllowed, Summary: "compact project state", Repo: true, Verb: summaryVerb},
+		{Name: "summary", Fence: fenceAllowed, ReadOnly: true, Summary: "compact project state", Repo: true, Verb: summaryVerb},
 		{Name: "status", Summary: "active work streams", Subs: []*Command{
 			{Name: "add", Fence: fenceAllowed, Summary: "record an active work stream", Repo: true, Verb: statusAdd},
 			{Name: "rm", Fence: fenceAllowed, Summary: "end a work stream and drop its handoff note", Repo: true, Verb: statusRm},
-			{Name: "show", Fence: fenceAllowed, Summary: "which repo a branch's stream is in", Repo: true, Verb: statusShow},
-			{Name: "handoff", Fence: fenceAllowed, Summary: "path of a branch's handoff note", Repo: true, Verb: statusHandoff},
+			{Name: "show", Fence: fenceAllowed, ReadOnly: true, Summary: "which repo a branch's stream is in", Repo: true, Verb: statusShow},
+			{Name: "handoff", Fence: fenceAllowed, ReadOnly: true, Summary: "path of a branch's handoff note", Repo: true, Verb: statusHandoff},
 		}},
 		{Name: "refactor", Summary: "refactor cycle bookkeeping", Subs: []*Command{
-			{Name: "age", Fence: fenceAllowed, Summary: "features and bugs completed since the last refactor", Repo: true, Verb: refactorAge},
+			{Name: "age", Fence: fenceAllowed, ReadOnly: true, Summary: "features and bugs completed since the last refactor", Repo: true, Verb: refactorAge},
 			{Name: "reset", Fence: fenceRefused, Summary: "zero the since-refactor counters", Repo: true, Verb: refactorReset},
-			{Name: "targets", Fence: fenceAllowed, Summary: "what a refactor can cover", Verb: refactorTargets},
+			{Name: "targets", Fence: fenceAllowed, ReadOnly: true, Summary: "what a refactor can cover", Verb: refactorTargets},
 		}},
 	}
 }
@@ -214,7 +214,7 @@ func backlogDrift(fs *flag.FlagSet) RunFunc {
 		}
 		ops, err := openBacklogFile(c, root, `PRs carry "Closes #N", so the tracker closes shipped issues`)
 		if err != nil {
-			return backlogFailRead(err)
+			return backlogFail(err)
 		}
 		var targets []backlog.Target
 		if registry := repos.Load(root); len(registry) > 0 {

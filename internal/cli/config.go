@@ -27,19 +27,19 @@ import (
 
 func configCommands() []*Command {
 	return []*Command{
-		{Name: "update", Fence: fenceAllowed, Summary: "check for a newer rota release", Verb: updateVerb},
+		{Name: "update", Fence: fenceAllowed, ReadOnly: true, Summary: "check for a newer rota release", Verb: updateVerb},
 		{Name: "config", Summary: "read and write .rota/config.json", UISub: "show", Subs: []*Command{
-			{Name: "show", Fence: fenceAllowed, Summary: "effective value and source of config keys (--global: the global config)", Repo: true, Verb: configShow, View: configView},
+			{Name: "show", Fence: fenceAllowed, ReadOnly: true, Summary: "effective value and source of config keys (--global: the global config)", Repo: true, Verb: configShow, View: configView},
 			{Name: "edit", Fence: fenceInVerb, Summary: "change keys interactively (needs a terminal; --global: the global config)", Repo: true, Verb: configEdit},
 			{Name: "set", Fence: fenceInVerb, Summary: "set one key in .rota/config.json (--global: the global config)", Repo: true, Verb: configSet},
-			{Name: "check", Fence: fenceAllowed, Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
+			{Name: "check", Fence: fenceAllowed, ReadOnly: true, Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
 			{Name: "fill", Fence: fenceRefused, Summary: "write the default of every missing required key", Repo: true, Verb: configFill},
 			{Name: "save-global", Fence: fenceAllowed, Summary: "merge .rota/config.json into the machine-wide global config", Repo: true, Verb: configSaveGlobal},
 		}},
 		{Name: "repo", Summary: "umbrella sub-repo registry", Subs: []*Command{
-			{Name: "which", Fence: fenceAllowed, Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
-			{Name: "resolve", Fence: fenceAllowed, Summary: "names to registered sub-repo paths", Verb: repoResolve},
-			{Name: "umbrella", Fence: fenceAllowed, Summary: "is this an umbrella project", Verb: repoUmbrella},
+			{Name: "which", Fence: fenceAllowed, ReadOnly: true, Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
+			{Name: "resolve", Fence: fenceAllowed, ReadOnly: true, Summary: "names to registered sub-repo paths", Verb: repoResolve},
+			{Name: "umbrella", Fence: fenceAllowed, ReadOnly: true, Summary: "is this an umbrella project", Verb: repoUmbrella},
 			{Name: "add", Fence: fenceAllowed, Summary: "register one sub-repo in the umbrella registry", Verb: repoAdd},
 			{Name: "rm", Fence: fenceAllowed, Summary: "unregister one sub-repo from the umbrella registry", Verb: repoRm},
 		}},

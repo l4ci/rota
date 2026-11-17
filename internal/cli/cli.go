@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"io"
 	"os"
@@ -51,6 +52,20 @@ type Command struct {
 	// Gates is how the pre-verb gates treat the verb and, unless a verb under
 	// it sets its own, the verbs under it. Declared in tree_gates.go; the fence class is the Fence field.
 	Gates Gates
+	// ReadOnly marks a verb whose contract data carries no "changed". The
+	// conventions forbid exit 4 for it, so the dispatcher answers a refusal
+	// (the wrong backend) with exit 1 and the same failure data.
+	ReadOnly bool
+}
+
+// demoteRefusal wraps a ReadOnly verb's run so an exit 4 becomes exit 1 with
+// the same failure data; every other outcome passes through.
+func demoteRefusal(run RunFunc) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		res, err := run(c, args)
+		_, err = translate(err, exitmap.Options{ReadOnly: true})
+		return res, err
+	}
 }
 
 // ViewFunc builds the --ui screen from a verb's Result.
@@ -402,6 +417,9 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 	if cmd.Verb != nil {
 		verbFlags = newFlagSet(c.Path)
 		runVerb = cmd.Verb(verbFlags)
+		if cmd.ReadOnly {
+			runVerb = demoteRefusal(runVerb)
+		}
 		var post globals
 		post.register(verbFlags, false, cmd.Repo)
 		c.verbArgs = stripGlobals(args[i:])
