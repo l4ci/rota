@@ -3,7 +3,6 @@
 package stale
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,17 +26,6 @@ var Kinds = []string{"map", "knowledge", "todo"}
 type Entry struct {
 	Name string
 	Date string // YYYY-MM-DD
-}
-
-// gitMtime is the committer date of the last commit that touched rel
-// (git_mtime), read in dir; ok is false when git fails, the path is untracked
-// or the result is empty.
-func gitMtime(dir, rel string) (time.Time, bool) {
-	out, ok, err := git.Repo{Dir: dir}.LastCommitDate(context.Background(), rel)
-	if err != nil || !ok {
-		return time.Time{}, false
-	}
-	return pystr.ParseDate(out)
 }
 
 // ErrKind is wrapped by the error for an unknown kind.
@@ -81,11 +69,12 @@ func FindReport(root, kind string, days int, today time.Time, todos TodoSource) 
 	var es []Entry
 	var skipped int
 	var err error
+	repo := git.Repo{Dir: root}
 	switch kind {
 	case "map":
-		es = findMap(root, days, today)
+		es = findMap(repo, root, days, today)
 	case "knowledge":
-		es, err = findKnowledge(root, days, today)
+		es, err = findKnowledge(repo, root, days, today)
 	case "todo":
 		es, skipped, err = findTodo(days, today, todos)
 	default:
@@ -96,17 +85,17 @@ func FindReport(root, kind string, days int, today time.Time, todos TodoSource) 
 
 func fmtDate(t time.Time) string { return stamp.Date(t) }
 
-func findMap(root string, days int, today time.Time) []Entry {
+func findMap(repo git.Repo, root string, days int, today time.Time) []Entry {
 	var out []Entry
 	for _, e := range mapqa.Entries(root) {
-		if d, ok := e.Touched(root); ok && isStale(d, today, days) {
+		if d, ok := e.TouchedIn(repo, root); ok && isStale(d, today, days) {
 			out = append(out, Entry{e.Name, fmtDate(d)})
 		}
 	}
 	return out
 }
 
-func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
+func findKnowledge(repo git.Repo, root string, days int, today time.Time) ([]Entry, error) {
 	text, err := fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -114,7 +103,7 @@ func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, ok := gitMtime(root, rotatree.Rel(rotatree.KnowledgeFile))
+	d, ok := mapqa.CommitDate(repo, rotatree.Rel(rotatree.KnowledgeFile))
 	if !ok || !isStale(d, today, days) {
 		return nil, nil
 	}
