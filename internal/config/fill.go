@@ -84,7 +84,8 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 	// config.json runs through the same lifecycle as the migration steps: lock
 	// (created when missing), read, plan, write only when the plan changed it.
 	target := &migrationFile{name: "config.json", path: configPath(root), layer: layerProject, create: true}
-	err = migrateLayerFiles([]*migrationFile{target}, true, func([]*migrationFile) error {
+	err = migrateLayerFiles([]*migrationFile{target}, true, func(files []*migrationFile) error {
+		target := files[0]
 		cfg := target.doc
 		if cfg == nil {
 			cfg = jsonx.NewObject()
@@ -123,6 +124,9 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 		target.doc, target.changed = cfg, true
 		return nil
 	})
+	if err != nil {
+		return nil, sm, rm, err
+	}
 	if _, err := migrateAutonomyGlobal(env); err != nil {
 		return nil, sm, rm, err
 	}
