@@ -63,3 +63,19 @@ func TestSetField(t *testing.T) {
 		})
 	}
 }
+
+// An empty value must not let UpdateField reach the next line's key.
+func TestUpdateFieldEmptyValueKeepsNextKey(t *testing.T) {
+	in := "---\nstatus:\nowner: x\n---\nbody\n"
+	got, ok := UpdateField(in, "status", "DONE")
+	if ok || got != in {
+		t.Fatalf("ok=%v got %q, want untouched and not found", ok, got)
+	}
+	in = "---\nstatus:  \nowner: x\n---\n"
+	if got, ok := UpdateField(in, "status", "DONE"); ok || got != in {
+		t.Fatalf("trailing blanks: ok=%v got %q", ok, got)
+	}
+	if got, ok := UpdateField("---\nstatus: open\nowner: x\n---\n", "status", "DONE"); !ok || got != "---\nstatus: DONE\nowner: x\n---\n" {
+		t.Fatalf("populated: ok=%v got %q", ok, got)
+	}
+}
