@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -310,5 +311,111 @@ func TestSwitchRefusesAnIdleSlot(t *testing.T) {
 	_, err := f.env.Switch(bg, f.root, f.be, SwitchOpts{Slot: "dana", Account: "b"})
 	if by := blockedBy(t, err); by != blockedby.NoSlotHolds {
 		t.Fatalf("blockedBy %q: %v", by, err)
+	}
+}
+
+// AC-1: naming the account the slot already runs on (the resume call) is
+// refused as limited before the checkpoint when that account is at its limit:
+// no commit, no push, nothing dispatched.
+func TestSwitchRepeatCallOnALimitedAccountRefusesBeforeTheCheckpoint(t *testing.T) {
+	f := newSwitchFx(t, map[string]float64{"a": 100, "b": 10})
+	f.dirty(t)
+	head, status := f.git(t, "rev-parse", "HEAD"), f.git(t, "status", "--porcelain")
+	remote := gitIn(t, f.origin, "rev-parse", f.slot("ben").Branch())
+	_, err := f.switchSlot(func(o *SwitchOpts) { o.Account = "a" })
+	if by := blockedBy(t, err); by != blockedby.Limited {
+		t.Fatalf("blockedBy %q, want %q: %v", by, blockedby.Limited, err)
+	}
+	if f.git(t, "rev-parse", "HEAD") != head || f.git(t, "status", "--porcelain") != status {
+		t.Errorf("a refused switch committed or touched the worktree")
+	}
+	if got := gitIn(t, f.origin, "rev-parse", f.slot("ben").Branch()); got != remote {
+		t.Errorf("origin moved to %s, want %s", got, remote)
+	}
+	if len(f.log) != 0 {
+		t.Errorf("host calls %v", f.log)
+	}
+}
+
+// AC-3: a dispatch that fails after the checkpoint leaves the new account on
+// the slot; the repeat call naming it commits nothing, keeps the account and
+// dispatches.
+func TestSwitchResumesAfterAFailedDispatch(t *testing.T) {
+	f := newSwitchFx(t, map[string]float64{"a": 10, "b": 10})
+	f.dirty(t)
+	f.host.sendErr = errors.New("pane gone")
+	res, err := f.switchSlot(func(o *SwitchOpts) { o.Account = "b" })
+	if err == nil || !res.Changed || res.Dispatched || res.Checkpoint == "" || res.ToAccount != "b" {
+		t.Fatalf("first call: result %+v err %v", res, err)
+	}
+	if got := f.slot("ben").Account(); got != "b" {
+		t.Fatalf("slot records %q, want b", got)
+	}
+	head := f.git(t, "rev-parse", "HEAD")
+
+	f.host.sendErr = nil
+	res, err = f.switchSlot(func(o *SwitchOpts) { o.Account = "b" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Checkpoint != "" || !res.Dispatched || res.FromAccount != "b" || res.ToAccount != "b" {
+		t.Errorf("resume result %+v", res)
+	}
+	if got := f.git(t, "rev-parse", "HEAD"); got != head {
+		t.Errorf("the resume committed: HEAD %s, want %s", got, head)
+	}
+	if f.slot("ben").Account() != "b" || !slices.Contains(f.host.env, "CLAUDE_CONFIG_DIR=/cfg-b") {
+		t.Errorf("account %q, env %v", f.slot("ben").Account(), f.host.env)
+	}
+}
+
+// AC-3: a codex slot moves to the other codex account, keeping its harness.
+func TestSwitchCodexToCodexAccount(t *testing.T) {
+	f := newSwitchFx(t, map[string]float64{"c1": 50, "c2": 10})
+	if _, err := f.switchSlot(func(o *SwitchOpts) { o.Kind = harness.Codex }); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.slot("ben").HomeAccount(); got != "c2" {
+		t.Fatalf("first switch landed on %q, want c2", got)
+	}
+	f.used["c1"], f.used["c2"] = 10, 50
+	f.log = nil
+	res, err := f.switchSlot(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := f.slot("ben")
+	if res.FromKind != harness.Codex || res.ToKind != harness.Codex || res.FromAccount != "c2" || res.ToAccount != "c1" {
+		t.Errorf("result %+v", res)
+	}
+	if s.Kind() != harness.Codex || s.HomeAccount() != "c1" {
+		t.Errorf("slot %q/%q, want codex/c1", s.Kind(), s.HomeAccount())
+	}
+	if !slices.Contains(f.host.env, "CODEX_HOME=/h1") || !slices.Equal(f.log, []string{"kill ben", "spawn ben"}) {
+		t.Errorf("env %v log %v", f.host.env, f.log)
+	}
+}
+
+// AC-2: when the push fails and the rollback fails too, the error says the
+// worktree is not as found instead of claiming it is.
+func TestSwitchFailedRollbackIsReported(t *testing.T) {
+	f := newSwitchFx(t, map[string]float64{"a": 100, "b": 10})
+	f.dirty(t)
+	// The pre-push hook fails the push and leaves a stale index lock, so the
+	// rollback's reset cannot take it back.
+	hook := filepath.Join(f.root, ".git", "hooks", "pre-push")
+	script := "#!/bin/sh\ntouch \"$(git rev-parse --git-path index.lock)\"\nexit 1\n"
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.switchSlot(func(o *SwitchOpts) { o.Account = "b" })
+	if err == nil {
+		t.Fatal("a failed push must fail the switch")
+	}
+	if strings.Contains(err.Error(), "left as found") || !strings.Contains(err.Error(), "rollback failed") {
+		t.Errorf("error %q must report the failed rollback", err)
+	}
+	if len(f.log) != 0 {
+		t.Errorf("host calls %v", f.log)
 	}
 }
