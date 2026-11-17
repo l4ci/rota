@@ -172,6 +172,7 @@ func gateCases() []gateCase {
 		}},
 		{gate.BugreportFile, "bugreport file", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			root := trProject(t, gateConfig(t, "", level, nil))
+			t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(root)) // a TMPDIR inside a checkout must not reach its .rota/
 			if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Env{}, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
 				t.Fatal(err)
 			}
