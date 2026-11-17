@@ -39,100 +39,107 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 		return r, err
 	}
 	err = e.withLandLock(ctx, root, "freeze recovery", func(bool) error {
-		p, err := landfreeze.Path(ctx, e.Git, root)
-		if err != nil {
-			return err
-		}
-		r, err = landfreeze.Read(p)
-		readErr := err
-		if readErr != nil {
-			if !o.Clear {
-				return fail(exitcode.ExitRefused, landfreeze.UnreadableLine(readErr))
+		return e.updateFreeze(ctx, root, func(rec *landfreeze.Record, readErr error) (*landfreeze.Record, error) {
+			r = rec
+			out, err := e.freezeRecovery(ctx, root, o, r, readErr)
+			if err == nil {
+				r = out
 			}
-			// Discard the damaged snapshot only through the audited clear path.
-			r = &landfreeze.Record{Active: true, Base: "unknown"}
-		}
-		if r == nil || !r.Active {
-			return fail(exitcode.ExitResolution, "no active landing freeze")
-		}
-		if o.RepairIssue != "" || o.RepairPR != "" {
-			r.RepairIssue, r.RepairPR = o.RepairIssue, o.RepairPR
-			return landfreeze.Save(p, r)
-		}
-		if o.Clear {
-			if strings.TrimSpace(o.Reason) == "" {
-				return fail(exitcode.ExitUsage, "freeze clear requires --reason <text>")
-			}
-			// Prefer the frozen base over an unrelated worktree's HEAD. A
-			// deleted base or damaged record still has an audited escape hatch.
-			sha, code := "", 1
-			if readErr == nil {
-				sha, code = e.runGit(ctx, root, "rev-parse", "--verify", "--end-of-options", r.Base+"^{commit}")
-			}
-			if code != 0 {
-				sha, code = e.runGit(ctx, root, "rev-parse", "HEAD")
-			}
-			if code != 0 {
-				return fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
-			}
-			note := o.Reason
-			if readErr != nil {
-				r.SHA = sha
-				note += "; replaced unreadable record: " + readErr.Error()
-			}
-			if err := gatepolicy.Clear(root, config.AutonomyLevel(e.Config(root)), e.Now(), gatepolicy.FreezeClear, "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {
-				return err
-			}
-			return e.clearFreeze(ctx, root, p, r, sha, o.Reason)
-		}
-		sha, err := e.recoveryHead(ctx, root, r.Base)
-		if err != nil {
-			return err
-		}
-		in, err := e.GateInput(root)
-		if err != nil {
-			return err
-		}
-		if msg := LedgerExpiry(in.ledger, e.Now()); msg != "" {
-			return fail(exitcode.ExitRefused, msg)
-		}
-		verify, onCI, msg, err := e.fullTier(ctx, root, "freeze-recovery", in)
-		if err != nil {
-			return err
-		}
-		if msg != "" {
-			return fail(exitcode.ExitRefused, msg)
-		}
-		if !onCI && len(in.cfg.Full) == 0 {
-			return fail(exitcode.ExitRefused, "freeze recovery requires test.full; skipped verification cannot clear a freeze")
-		}
-		vr, err := verify(root)
-		if err != nil {
-			return err
-		}
-		if !vr.OK() {
-			return fail(exitcode.ExitFailed, "base verification failed; freeze kept\n"+vr.detail())
-		}
-		vr, err = e.runE2E(ctx, in.cfg.E2E, root, in.ledger)
-		if err == nil {
-			err = e.recordFlakes(root, nil, nil, vr)
-		}
-		if err != nil {
-			return err
-		}
-		if !vr.OK() {
-			return fail(exitcode.ExitFailed, "base test.e2e failed; freeze kept\n"+vr.detail())
-		}
-		after, err := e.recoveryHead(ctx, root, r.Base)
-		if err != nil {
-			return err
-		}
-		if after != sha {
-			return fail(exitcode.ExitRefused, "base moved during verification; freeze kept")
-		}
-		return e.clearFreeze(ctx, root, p, r, sha, "verified recovery")
+			return out, err
+		})
 	})
 	return r, err
+}
+
+// freezeRecovery applies one mutation to the freeze record and returns the
+// record to save.
+func (e Env) freezeRecovery(ctx context.Context, root string, o FreezeOpts, r *landfreeze.Record, readErr error) (*landfreeze.Record, error) {
+	if readErr != nil {
+		if !o.Clear {
+			return nil, fail(exitcode.ExitRefused, landfreeze.UnreadableLine(readErr))
+		}
+		// Discard the damaged snapshot only through the audited clear path.
+		r = &landfreeze.Record{Active: true, Base: "unknown"}
+	}
+	if r == nil || !r.Active {
+		return nil, fail(exitcode.ExitResolution, "no active landing freeze")
+	}
+	if o.RepairIssue != "" || o.RepairPR != "" {
+		r.RepairIssue, r.RepairPR = o.RepairIssue, o.RepairPR
+		return r, nil
+	}
+	if o.Clear {
+		if strings.TrimSpace(o.Reason) == "" {
+			return nil, fail(exitcode.ExitUsage, "freeze clear requires --reason <text>")
+		}
+		// Prefer the frozen base over an unrelated worktree's HEAD. A
+		// deleted base or damaged record still has an audited escape hatch.
+		sha, code := "", 1
+		if readErr == nil {
+			sha, code = e.runGit(ctx, root, "rev-parse", "--verify", "--end-of-options", r.Base+"^{commit}")
+		}
+		if code != 0 {
+			sha, code = e.runGit(ctx, root, "rev-parse", "HEAD")
+		}
+		if code != 0 {
+			return nil, fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
+		}
+		note := o.Reason
+		if readErr != nil {
+			r.SHA = sha
+			note += "; replaced unreadable record: " + readErr.Error()
+		}
+		if err := gatepolicy.Clear(root, config.AutonomyLevel(e.Config(root)), e.Now(), gatepolicy.FreezeClear, "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {
+			return nil, err
+		}
+		return e.markCleared(ctx, root, r, sha, o.Reason), nil
+	}
+	sha, err := e.recoveryHead(ctx, root, r.Base)
+	if err != nil {
+		return nil, err
+	}
+	in, err := e.GateInput(root)
+	if err != nil {
+		return nil, err
+	}
+	if msg := LedgerExpiry(in.ledger, e.Now()); msg != "" {
+		return nil, fail(exitcode.ExitRefused, msg)
+	}
+	verify, onCI, msg, err := e.fullTier(ctx, root, "freeze-recovery", in)
+	if err != nil {
+		return nil, err
+	}
+	if msg != "" {
+		return nil, fail(exitcode.ExitRefused, msg)
+	}
+	if !onCI && len(in.cfg.Full) == 0 {
+		return nil, fail(exitcode.ExitRefused, "freeze recovery requires test.full; skipped verification cannot clear a freeze")
+	}
+	vr, err := verify(root)
+	if err != nil {
+		return nil, err
+	}
+	if !vr.OK() {
+		return nil, fail(exitcode.ExitFailed, "base verification failed; freeze kept\n"+vr.detail())
+	}
+	vr, err = e.runE2E(ctx, in.cfg.E2E, root, in.ledger)
+	if err == nil {
+		err = e.recordFlakes(root, nil, nil, vr)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !vr.OK() {
+		return nil, fail(exitcode.ExitFailed, "base test.e2e failed; freeze kept\n"+vr.detail())
+	}
+	after, err := e.recoveryHead(ctx, root, r.Base)
+	if err != nil {
+		return nil, err
+	}
+	if after != sha {
+		return nil, fail(exitcode.ExitRefused, "base moved during verification; freeze kept")
+	}
+	return e.markCleared(ctx, root, r, sha, "verified recovery"), nil
 }
 
 func (e Env) recoveryHead(ctx context.Context, root, base string) (string, error) {
@@ -162,7 +169,8 @@ func (e Env) recoveryHead(ctx context.Context, root, base string) (string, error
 	return sha, nil
 }
 
-func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Record, sha, reason string) error {
+// markCleared stamps r as cleared by the operator; updateFreeze saves it.
+func (e Env) markCleared(ctx context.Context, root string, r *landfreeze.Record, sha, reason string) *landfreeze.Record {
 	who, _ := e.runGit(ctx, root, "config", "user.email")
 	if who == "" {
 		who, _ = e.runGit(ctx, root, "config", "user.name")
@@ -172,7 +180,7 @@ func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Reco
 	}
 	r.Active = false
 	r.ClearedBy, r.ClearedSHA, r.ClearedAt, r.Reason = who, sha, stamp.Format(e.Now()), reason
-	return landfreeze.Save(p, r)
+	return r
 }
 
 func (runner gate) stepFreeze(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
@@ -203,25 +211,22 @@ func (g *gateOperation) freezeFailure(vr VerifyResult) error {
 
 // freezeLandedFailure is called only while the landing lock is held.
 func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, checks []string) error {
-	p, err := landfreeze.Path(ctx, e.Git, root)
-	if err != nil {
-		return err
-	}
-	r, err := landfreeze.Read(p)
-	if err != nil {
-		return err
-	}
-	if r == nil || !r.Active {
-		r = &landfreeze.Record{Base: base, CreatedAt: stamp.Format(e.Now())}
-	}
-	r.Active = true
-	r.SHA, _ = e.runGit(ctx, root, "rev-parse", "HEAD")
-	if r.SHA == "" {
-		return fmt.Errorf("cannot record landing freeze: missing base SHA")
-	}
-	r.PRs = appendNew(r.PRs, prs...)
-	r.Checks = appendNew(r.Checks, checks...)
-	return landfreeze.Save(p, r)
+	return e.updateFreeze(ctx, root, func(r *landfreeze.Record, readErr error) (*landfreeze.Record, error) {
+		if readErr != nil {
+			return nil, readErr
+		}
+		if r == nil || !r.Active {
+			r = &landfreeze.Record{Base: base, CreatedAt: stamp.Format(e.Now())}
+		}
+		r.Active = true
+		r.SHA, _ = e.runGit(ctx, root, "rev-parse", "HEAD")
+		if r.SHA == "" {
+			return nil, fmt.Errorf("cannot record landing freeze: missing base SHA")
+		}
+		r.PRs = appendNew(r.PRs, prs...)
+		r.Checks = appendNew(r.Checks, checks...)
+		return r, nil
+	})
 }
 
 func (runner gate) stepClearFreeze(result GateResult) (struct{}, GateResult, bool, error) {
@@ -236,17 +241,32 @@ func (runner gate) stepClearFreeze(result GateResult) (struct{}, GateResult, boo
 }
 
 func (e Env) clearVerifiedFreeze(ctx context.Context, root, base string) error {
+	return e.updateFreeze(ctx, root, func(r *landfreeze.Record, readErr error) (*landfreeze.Record, error) {
+		if readErr != nil || !r.Binds(base) {
+			return nil, readErr
+		}
+		sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
+		if code != 0 {
+			return nil, fmt.Errorf("cannot resolve verified base SHA")
+		}
+		return e.markCleared(ctx, root, r, sha, "verified repair landing"), nil
+	})
+}
+
+// updateFreeze is the one Path, Read, apply, Save sequence over the freeze
+// record. The caller holds the land lock. fn sees the record (nil when none
+// exists) and the read error, so a caller may tolerate a damaged record. It
+// returns the record to save, or nil to leave the file alone; an unhandled
+// read error is its to return.
+func (e Env) updateFreeze(ctx context.Context, root string, fn func(r *landfreeze.Record, readErr error) (*landfreeze.Record, error)) error {
 	p, err := landfreeze.Path(ctx, e.Git, root)
 	if err != nil {
 		return err
 	}
-	r, err := landfreeze.Read(p)
-	if err != nil || !r.Binds(base) {
+	r, readErr := landfreeze.Read(p)
+	out, err := fn(r, readErr)
+	if err != nil || out == nil {
 		return err
 	}
-	sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
-	if code != 0 {
-		return fmt.Errorf("cannot resolve verified base SHA")
-	}
-	return e.clearFreeze(ctx, root, p, r, sha, "verified repair landing")
+	return landfreeze.Save(p, out)
 }
