@@ -1,5 +1,5 @@
-// Package frontmatter is rota's one frontmatter implementation, byte-compatible
-// with bin/hvlib_frontmatter.py: the flat subset that design, plan, spike,
+// Package frontmatter is rota's one frontmatter implementation, ported from
+// the earlier hvlib_frontmatter helper: the flat subset that design, plan, spike,
 // milestone, map and qa files use. Between `---` lines it understands only
 // `key: value` and inline lists `key: [a, b]`; no nesting, no quoting.
 // LF and CRLF files both parse. Every phase reuses this package.
@@ -16,7 +16,7 @@ func hasFM(text string) bool {
 	return strings.HasPrefix(text, "---\n") || strings.HasPrefix(text, "---\r\n")
 }
 
-// Parse mirrors hvlib_frontmatter.parse_frontmatter: a flat
+// Parse reads a flat
 // `key: value` / `key: [a, b]` subset between `---` lines. Values stay
 // strings; an inline list comes back as []string. It returns (nil, text)
 // when there is no frontmatter, and never fails. Keys keep file order.
@@ -73,8 +73,7 @@ func Str(fm map[string]any, key string) string {
 	return s
 }
 
-// UpdateField mirrors hvlib_frontmatter.update_frontmatter_field:
-// it replaces the first `<field>: <value>` in the frontmatter slice and
+// UpdateField replaces the first `<field>: <value>` in the frontmatter slice and
 // reports whether it found one.
 func UpdateField(content, field, value string) (string, bool) {
 	if !hasFM(content) {

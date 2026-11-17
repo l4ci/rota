@@ -89,7 +89,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 			return "", nil, err
 		}
 		if !fileExists(pairs[0].file) {
-			// Like the old helper: no file, no output and no warnings.
+			// No file: no output and no warnings.
 			return "", nil, nil
 		}
 		all := section.Topics(content)

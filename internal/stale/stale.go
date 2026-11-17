@@ -1,5 +1,5 @@
 // Package stale lists stale entries of the backlog, the knowledge file and the
-// subsystem map, as hv-staleness does.
+// subsystem map; ported from the earlier hv-staleness helper.
 package stale
 
 import (
