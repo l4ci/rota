@@ -263,3 +263,23 @@ func TestStaleCommits(t *testing.T) {
 		})
 	}
 }
+
+// A git that cannot run is an error on the row, not a rewritten branch; a sha
+// git does not know stays a plain nil count with no error.
+func TestStatsCommitsBehindSurfacesGitFailure(t *testing.T) {
+	root := gittest.NewRepo(t, "main")
+	sha := gittest.Run(t, root, "rev-parse", "HEAD")
+	write(t, root, ".rota/map/old.md", "---\nsubsystem: old\nlast_mapped_commit: "+sha+"\n---\nbody\n")
+	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: 0123456789abcdef0123456789abcdef01234567\n---\nbody\n")
+	if got := Stats(root); len(got) != 2 || got[0].CommitsBehindErr != nil || got[1].CommitsBehindErr != nil {
+		t.Fatalf("healthy git: %+v", got)
+	}
+	t.Setenv("PATH", t.TempDir())
+	byName := map[string]Subsystem{}
+	for _, s := range Stats(root) {
+		byName[s.Name] = s
+	}
+	if byName["old"].CommitsBehind != nil || byName["old"].CommitsBehindErr == nil {
+		t.Errorf("old = %+v, want nil count and an error", byName["old"])
+	}
+}

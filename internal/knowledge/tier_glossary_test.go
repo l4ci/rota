@@ -184,3 +184,21 @@ func TestEveryTierOperationSkipsGlossary(t *testing.T) {
 		}
 	})
 }
+
+// Tier reads skip backfill only for a missing KNOWLEDGE.md; an unreadable one fails.
+func TestTierListKnowledgeReadErrors(t *testing.T) {
+	s := lockedStore(t)
+	km, _ := s.KnowledgePath(Umbrella)
+	if err := os.Remove(km); err != nil {
+		t.Fatal(err)
+	}
+	if es, err := s.TierList(Umbrella, ""); err != nil || len(es) != 0 {
+		t.Errorf("missing file: %v, %v", es, err)
+	}
+	if err := os.Mkdir(km, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.TierList(Umbrella, ""); err == nil {
+		t.Error("unreadable KNOWLEDGE.md gave no error")
+	}
+}

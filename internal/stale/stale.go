@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -82,7 +83,7 @@ func FindReport(root, kind string, days int, today time.Time, todos TodoSource) 
 	var err error
 	switch kind {
 	case "map":
-		es, err = findMap(root, days, today)
+		es = findMap(root, days, today)
 	case "knowledge":
 		es, err = findKnowledge(root, days, today)
 	case "todo":
@@ -95,20 +96,23 @@ func FindReport(root, kind string, days int, today time.Time, todos TodoSource) 
 
 func fmtDate(t time.Time) string { return stamp.Date(t) }
 
-func findMap(root string, days int, today time.Time) ([]Entry, error) {
+func findMap(root string, days int, today time.Time) []Entry {
 	var out []Entry
 	for _, e := range mapqa.Entries(root) {
 		if d, ok := e.Touched(root); ok && isStale(d, today, days) {
 			out = append(out, Entry{e.Name, fmtDate(d)})
 		}
 	}
-	return out, nil
+	return out
 }
 
 func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 	text, err := fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	d, ok := gitMtime(root, rotatree.Rel(rotatree.KnowledgeFile))
 	if !ok || !isStale(d, today, days) {
