@@ -224,3 +224,20 @@ func TestSectionRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// A trailing line suffix (:N, :N-M, :N,M) is a position, not part of the path.
+func TestBulletPathsDropsLineSuffix(t *testing.T) {
+	for _, c := range []struct{ name, bullet, want string }{
+		{"single line", "- internal/cli/doctor.go:198", "internal/cli/doctor.go"},
+		{"range", "- internal/cli/doctor.go:116-120", "internal/cli/doctor.go"},
+		{"list", "- internal/cli/doctor.go:28,242", "internal/cli/doctor.go"},
+		{"backticked", "- `internal/cli/doctor.go:116-120` (the loop)", "internal/cli/doctor.go"},
+		{"two files", "- x/a.go:28, :242 and y/b.go:31", "x/a.go,y/b.go"},
+		{"no suffix", "- x/a.go (note)", "x/a.go"},
+		{"glob kept", "- internal/cli/**", "internal/cli/**"},
+	} {
+		if got := strings.Join(BulletPaths(c.bullet+"\n", true), ","); got != c.want {
+			t.Errorf("%s: BulletPaths = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
