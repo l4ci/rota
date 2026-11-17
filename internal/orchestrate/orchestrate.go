@@ -18,7 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/shlex"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // Lookup finds the orchestrator harness by its orchestrator.harness name. The
@@ -160,7 +160,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 	}
 	if d := e.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		for _, a := range accts {
-			if a.Dir != "" && worker.SameConfigDirIn(a.Dir, d, home) {
+			if a.Dir != "" && usagelimit.SameConfigDirIn(a.Dir, d, home) {
 				return a.Name, d
 			}
 		}
@@ -185,7 +185,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 			}
 		}
 	}
-	return pick.Name, worker.ExpandConfigDirIn(pick.Dir, home)
+	return pick.Name, usagelimit.ExpandConfigDirIn(pick.Dir, home)
 }
 
 // sessionName is the tmux session for a project: tmux rejects '.' and ':'.

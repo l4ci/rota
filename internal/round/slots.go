@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"slices"
 	"strings"
 
@@ -43,7 +44,7 @@ func (e Env) SlotLoginProblem(s *worker.Slot) string {
 		return ""
 	}
 	home, _ := e.Worker.Home()
-	return e.Login.Problem(worker.ExpandConfigDirIn(s.ConfigDir(), home))
+	return e.Login.Problem(usagelimit.ExpandConfigDirIn(s.ConfigDir(), home))
 }
 
 // loginHint names the two commands that repair a slot whose account has no login.

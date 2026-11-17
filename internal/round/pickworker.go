@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -139,8 +140,8 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 
 // meterReadings is every reading a pool needs, taken once per placement.
 type meterReadings struct {
-	meters []worker.Meter
-	quotas map[worker.QuotaAccount]worker.Meter
+	meters []usagelimit.Meter
+	quotas map[worker.QuotaAccount]usagelimit.Meter
 	log    []limits.Entry
 	now    time.Time
 }
@@ -184,7 +185,7 @@ func (e Env) poolEntries(ctx context.Context, ms meterReadings, kind string, lis
 	var entries []worker.PoolEntry
 	for _, acct := range list {
 		pe := worker.PoolEntry{Kind: kind, Name: acct.Name, Rank: rank, Order: order + len(entries), Load: load[worker.PoolRef{Kind: kind, Name: acct.Name}],
-			Meter: worker.Meter{Name: acct.Name, ConfigDir: acct.Dir, Verdict: worker.VerdictUnknown}}
+			Meter: usagelimit.Meter{Name: acct.Name, ConfigDir: acct.Dir, Verdict: usagelimit.VerdictUnknown}}
 		if hz.UsageMeter() {
 			for _, m := range ms.meters {
 				if acct.Name != "" && m.Name == acct.Name {
@@ -243,7 +244,7 @@ func noAccount(entries []worker.PoolEntry, restriction string, cfg any) error {
 	keys := map[string]bool{}
 	for _, pe := range entries {
 		switch {
-		case pe.Meter.Verdict == worker.VerdictCooling:
+		case pe.Meter.Verdict == usagelimit.VerdictCooling:
 			cooling = append(cooling, accountLabel(pe.Name))
 			if pe.Meter.ResetsAt != nil {
 				resets = append(resets, *pe.Meter.ResetsAt)

@@ -1,6 +1,41 @@
-package worker
+package usagelimit
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+
+	"github.com/l4ci/rota/internal/config"
+)
+
+// Account verdicts.
+const (
+	VerdictFree    = "free"
+	VerdictCooling = "cooling"
+	VerdictUnknown = "unknown"
+)
+
+// Meter is one configured account with its reading.
+type Meter struct {
+	Name, ConfigDir, Verdict, Reason string
+	FiveHour, SevenDay, Headroom     *float64
+	ResetsAt                         *time.Time
+}
+
+// SameConfigDirIn reports whether two CLAUDE_CONFIG_DIR values name one
+// directory under home: compared after Clean, with a leading ~/ expanded and
+// empty meaning ~/.claude (what Claude Code uses when the variable is unset).
+func SameConfigDirIn(a, b, home string) bool {
+	return ExpandConfigDirIn(a, home) == ExpandConfigDirIn(b, home)
+}
+
+// ExpandConfigDirIn is the cleaned absolute form of a configDir against home.
+// An empty home leaves a leading ~/ unexpanded.
+func ExpandConfigDirIn(d, home string) string {
+	if d == "" {
+		d = "~/.claude"
+	}
+	return config.ExpandDir(d, home)
+}
 
 // AccountSelection supplies the caller's policy to SelectAccount. Meter and
 // limit-log readers both supply Meter rows in configured order. A nil Handoff

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -182,7 +183,7 @@ func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 	if len(entries) == 0 {
 		return
 	}
-	var meters []worker.Meter
+	var meters []usagelimit.Meter
 	fetched := false
 	for i := range rows {
 		r := &rows[i]

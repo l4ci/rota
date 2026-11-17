@@ -144,10 +144,10 @@ func promptsUpgradeReport(root string) (stale []any, lines []string) {
 		return nil, []string{"prompts: " + tui.Sanitize(err.Error(), false)}
 	}
 	for _, v := range views {
-		if v.Status != "changed" && v.Status != "removed" {
+		if v.Status != prompts.StatusChanged && v.Status != prompts.StatusRemoved {
 			continue
 		}
-		stale = append(stale, jsonx.Obj("name", v.Name, "status", v.Status, "revision", v.Revision))
+		stale = append(stale, jsonx.Obj("name", v.Name, "status", string(v.Status), "revision", v.Revision))
 		name := tui.Sanitize(v.Name, false)
 		lines = append(lines, fmt.Sprintf("prompt %s: built-in default %s since revision %d; compare with: rota prompts show %s", name, v.Status, v.Revision, name))
 	}

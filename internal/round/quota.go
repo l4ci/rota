@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -59,7 +60,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 	}
 	meters := e.Worker.Accounts().Meters(ctx, root)
 	for _, m := range meters {
-		if m.Verdict == worker.VerdictCooling && m.ResetsAt != nil {
+		if m.Verdict == usagelimit.VerdictCooling && m.ResetsAt != nil {
 			p.resets = append(p.resets, *m.ResetsAt)
 			p.names = append(p.names, m.Name)
 		}
