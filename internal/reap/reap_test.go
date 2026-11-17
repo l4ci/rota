@@ -868,3 +868,20 @@ func TestNodeModulesPointingIntoWorktreeHoldsIt(t *testing.T) {
 		t.Fatalf("no node_modules should not hold: %+v", res.Candidates)
 	}
 }
+
+// A hand-built branch candidate that owned() rejects is never deleted, even
+// when it is merged and checked out nowhere.
+func TestApplyRefusesAHandBuiltNonOwnedBranch(t *testing.T) {
+	g := repo(nil, []string{"feature/x", "codex/7-adopted"}, "feature/x", "codex/7-adopted")
+	g.resp["branch -D feature/x"] = gitResp{}
+	g.resp["branch -D codex/7-adopted"] = gitResp{}
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/7-adopted": true}
+	out := Apply(bg, in, []Candidate{
+		{ID: "branch:feature/x", Kind: KindBranch, Name: "feature/x"},
+		{ID: "branch:codex/7-adopted", Kind: KindBranch, Name: "codex/7-adopted"},
+	})
+	if len(out.Failed) != 1 || out.Failed[0].ID != "branch:feature/x" || len(out.Reaped) != 1 || g.ran("branch -D feature/x") {
+		t.Errorf("apply = %+v, calls %v", out, g.calls)
+	}
+}

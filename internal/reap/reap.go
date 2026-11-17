@@ -315,6 +315,9 @@ func ScratchCheckout(root, path string) bool {
 	return filepath.Dir(filepath.Clean(path)) == filepath.Join(root, worker.WorktreeRoot)
 }
 
+// git is the probing convention: exit 0 and 1 both succeed (the exit code is
+// the answer, as for merge-base --is-ancestor), and only exit >1 with stderr,
+// or a run error, is an error. Use gitErr for a command that changes state.
 func (s *state) git(ctx context.Context, dir string, args ...string) (string, int, error) {
 	res, err := s.in.Git(ctx, dir, args...)
 	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
@@ -564,6 +567,9 @@ func removeWorktree(ctx context.Context, s *state, c Candidate) error {
 }
 
 func removeBranch(ctx context.Context, s *state, c Candidate) error {
+	if !s.owned(c.Name) {
+		return fmt.Errorf("%s is not a round or adopted branch; left alone", c.Name)
+	}
 	if s.checkedOut[c.Name] || s.live.Branch(c.Name) {
 		return fmt.Errorf("%s is checked out or protected", c.Name)
 	}
@@ -613,6 +619,8 @@ func removeLease(ctx context.Context, s *state, c Candidate) error {
 	return err
 }
 
+// gitErr is the mutation convention: any nonzero exit fails, carrying stderr.
+// Use state.git for a probe whose exit code is an answer.
 func gitErr(errOut string, code int, err error) error {
 	if err != nil {
 		return err
