@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Skill is the embedded SKILL.md of one skill; ok is false for an unknown name.
@@ -95,15 +96,21 @@ func (s *Set) Stubbed() (*Set, error) {
 	return out, nil
 }
 
+// fenceSpace reports the characters Python's str.isspace() accepts: Go's
+// unicode.IsSpace plus the ASCII separators U+001C to U+001F.
+func fenceSpace(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }
+
 func stub(skill string, full []byte) ([]byte, error) {
 	// The fence rule is scripts/fmlite.py's: a first line of "---" and the next
-	// line of "---", each ignoring trailing whitespace, so CRLF files and a
-	// closing fence at end of file are front matter too.
+	// line of "---", each ignoring trailing whitespace as Python's str.rstrip()
+	// does (fenceSpace), so CRLF files, an NBSP after a fence and a closing
+	// fence at end of file are all front matter. The fixtures in
+	// test/fixtures/frontmatter pin both implementations to it.
 	lines := strings.Split(string(full), "\n")
 	end := -1
-	if strings.TrimRight(lines[0], " \t\r") == "---" {
+	if strings.TrimRightFunc(lines[0], fenceSpace) == "---" {
 		for i := 1; i < len(lines); i++ {
-			if strings.TrimRight(lines[i], " \t\r") == "---" {
+			if strings.TrimRightFunc(lines[i], fenceSpace) == "---" {
 				end = i
 				break
 			}
