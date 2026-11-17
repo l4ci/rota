@@ -279,7 +279,7 @@ func CompareWithPrompts(root string, cfg any) ([]Entry, error) {
 	}
 	text := defaultInstructions()
 	for _, v := range views {
-		if v.Status == "removed" {
+		if v.Status == prompts.StatusRemoved {
 			continue
 		}
 		role := strings.TrimSuffix(strings.TrimPrefix(v.Name, "agents."), ".report")

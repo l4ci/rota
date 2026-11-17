@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -143,7 +144,7 @@ func (d *runner) tracker() Check {
 	return pass("tracker", cli+" authenticated ("+line+")")
 }
 
-func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
+func (d *runner) expand(dir string) string { return usagelimit.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
 	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts, d.in.Home); w != "" {
@@ -166,7 +167,7 @@ func (d *runner) accounts() Check {
 			if hint == "" {
 				hint = "set dir for account " + a.Name + " to an absolute path or ~/..."
 			}
-		} else if dir = worker.ExpandConfigDirIn(a.Dir, d.in.Home); !fsio.IsDir(dir) {
+		} else if dir = usagelimit.ExpandConfigDirIn(a.Dir, d.in.Home); !fsio.IsDir(dir) {
 			why = "dir " + dir + " does not exist"
 		} else if p := d.in.Credentials.Problem(dir); p != "" {
 			why = p + " in " + dir

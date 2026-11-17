@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // QuotaAccount identifies a configured login home by harness and account name.
@@ -42,7 +43,7 @@ type meterKey struct {
 }
 
 type cachedMeter struct {
-	m  Meter
+	m  usagelimit.Meter
 	at time.Time
 }
 
@@ -51,7 +52,7 @@ type cachedMeter struct {
 // no configured account) has the name "". A failed or timed-out read is an
 // unknown meter. Readings are cached per account, so one placement batch costs
 // one app-server read per account.
-func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[QuotaAccount]Meter {
+func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[QuotaAccount]usagelimit.Meter {
 	return q.MetersWith(ctx, root, kinds, nil)
 }
 
@@ -59,7 +60,7 @@ func (q *Quotas) Meters(ctx context.Context, root string, kinds []string) map[Qu
 // harness's own account list, such as review.accounts entries (#3315). An
 // extra entry shares the reading of a configured account of the same kind and
 // name.
-func (q *Quotas) MetersWith(ctx context.Context, root string, kinds []string, extra []config.Account) map[QuotaAccount]Meter {
+func (q *Quotas) MetersWith(ctx context.Context, root string, kinds []string, extra []config.Account) map[QuotaAccount]usagelimit.Meter {
 	e := q.Env.WithDefaults()
 	cfg := e.Config(root)
 	home, _ := e.Home()
@@ -97,13 +98,13 @@ func (q *Quotas) MetersWith(ctx context.Context, root string, kinds []string, ex
 			refs, homes[ref] = append(refs, ref), extras[ref].Dir
 		}
 	}
-	out := map[QuotaAccount]Meter{}
+	out := map[QuotaAccount]usagelimit.Meter{}
 	var miss []QuotaAccount
 	q.mu.Lock()
 	for _, ref := range refs {
 		c, ok := q.cache[meterKey{ref, homes[ref]}]
 		ttl := meterTTL
-		if c.m.Verdict == VerdictUnknown {
+		if c.m.Verdict == usagelimit.VerdictUnknown {
 			ttl = meterFailedTTL
 		}
 		if ok && now.Sub(c.at) < ttl {

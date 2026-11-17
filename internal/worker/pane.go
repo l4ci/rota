@@ -2,14 +2,13 @@ package worker
 
 import (
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // Worker slot classification uses pane text, movement and host status.
@@ -67,36 +66,6 @@ const (
 	StateUnverifiable = "UNVERIFIABLE"
 )
 
-// limitPhrases are the usage-limit messages a session prints about itself, as
-// case-insensitive regex sources (no flag prefix). FindLimit is the one reader
-// of them: `worker poll` and the usage-limit watcher (D3) both ask it.
-var limitPhrases = harness.SharedLimitPhrases()
-
-// LimitRegex is the alternation of the limit phrases with the case-insensitive
-// flag written in the regex itself, for engines that take one pattern string
-// (herdr's pane.output_matched). It is a prefilter: it also matches an
-// "Approaching" warning, which FindLimit then rejects, and every kind's own
-// phrases, which FindLimit reads only for a slot of that kind.
-func LimitRegex() string {
-	return "(?i)(?:" + strings.Join(append(append([]string(nil), limitPhrases...), harness.AllPaneLimits()...), "|") + ")"
-}
-
-// FindLimit is the one answer to "does this pane text show a hit limit, and
-// where": the byte span of the first match of the shared phrases and the
-// kind's own (PaneVocab.Limits; "" has none). An "Approaching" warning matches
-// the phrases but is not a limit, so it is skipped here and nowhere else.
-func FindLimit(kind, text string) (start, end int, ok bool) {
-	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), paneRulesFor(kind).limits...) {
-		for _, loc := range re.FindAllStringIndex(text, -1) {
-			if strings.Contains(strings.ToLower(text[loc[0]:loc[1]]), "approaching") {
-				continue
-			}
-			return loc[0], loc[1], true
-		}
-	}
-	return 0, 0, false
-}
-
 var (
 	// A sentinel may follow a reply marker: Claude Code v2.1.288 starts the
 	// first line of every reply with "● " (older versions "⏺ "), Codex
@@ -112,14 +81,10 @@ var (
 	reFunds    = regexp.MustCompile(`Add funds`)
 	reAPIErr   = regexp.MustCompile(`(API Error[^\n]*)`)
 	reResume   = regexp.MustCompile(`Resume this session with`)
-	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
-	// patterns are anchored to phrasing a session emits about ITSELF, not bare
-	// words like "limit" that a worker reading source code would echo.
-	limitPatterns = compileAll(`(?i)`, limitPhrases)
 	// A worker stopped at a permission prompt is STALLED, but looks exactly
 	// like an idle one. Distinct from BLOCKED: the worker is not asking a
 	// design question, it needs an approval.
-	permissionPatterns = compileAll(`(?i)`, []string{
+	permissionPatterns = usagelimit.CompileAll(`(?i)`, []string{
 		`Do you want to (?:proceed|allow|make this edit)`,
 		`and don'?t ask again`,
 		`No, and tell Claude what to do differently`,
@@ -141,62 +106,14 @@ func ParseFindingDone(evidence string) (id string, ok bool) {
 	return m[1], true
 }
 
-func compileAll(prefix string, pats []string) []*regexp.Regexp {
-	out := make([]*regexp.Regexp, len(pats))
-	for i, p := range pats {
-		out[i] = regexp.MustCompile(prefix + p)
-	}
-	return out
-}
-
-// reRelayHead opens an orchestrator relay or brief echoed into the pane in the
-// format that preceded the rota-relay element, bare or after Claude Code's "❯"
-// prompt glyph. isRelayHead reads both formats.
-var reRelayHead = regexp.MustCompile(`^\s*(?:❯\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
-
-// reRelayHeadG is reRelayHead under the gutter.
-var reRelayHeadG = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
-
-// isRelayHead reports the line that opens echoed orchestrator text: a
-// `<rota-relay …>` opening line, or the legacy `--- ORCHESTRATOR (round N) ---`
-// header (under the gutter when the kind has one). tag tells the two apart:
-// text opened by a tag ends at its closing line.
-func isRelayHead(l string, gutter bool) (head, tag bool) {
-	if harness.IsRelayOpen(l) {
-		return true, true
-	}
-	if gutter {
-		return reRelayHeadG.MatchString(l), false
-	}
-	return reRelayHead.MatchString(l), false
-}
-
-// reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
-// is evidence that is only the brief's own placeholder (`<pr-url>`).
-var (
-	reGutter      = regexp.MustCompile(`^\s*┃`)
-	rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
-)
+// rePlaceholder is evidence that is only the brief's own placeholder (`<pr-url>`).
+var rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
 
 // isPlaceholder: evidence that is only the brief's own `<pr-url>`. A real URL
 // written in angle brackets, `<https://...>`, is evidence.
 func isPlaceholder(ev string) bool {
 	return rePlaceholder.MatchString(ev) && !strings.HasPrefix(ev, "<http")
 }
-
-// reEchoIndent is the indent Claude Code gives every line of an echoed prompt
-// after the first; reEchoHead is that first line, behind the "❯" glyph.
-var (
-	reEchoIndent = regexp.MustCompile(`^  `)
-	reEchoHead   = regexp.MustCompile(`^\s*❯`)
-)
-
-// reReplyMarker starts a line of the worker's own output (see reBlocked).
-var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
-
-// reSigLine is the signature trailer `rota worker dispatch` ends a brief or
-// relay with (codex and opencode slots; a claude payload carries none).
-var reSigLine = regexp.MustCompile(`^\s*(?:┃\s*)?--- ROTA-SIG [0-9a-f]+ ---\s*$`)
 
 // staleDoneEvidence is the evidence of a static pane whose only ROTA-DONE
 // predates the last relay sent to the slot.
@@ -221,9 +138,9 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 	if gutter {
 		blockedRe, doneRe = reBlockedG, reDoneG
 	}
-	inRelay := relayMask(lines, gutter, false)
+	inRelay := usagelimit.RelayMask(lines, gutter, false)
 	for i, l := range lines {
-		if head, _ := isRelayHead(l, gutter); head {
+		if head, _ := usagelimit.IsRelayHead(l, gutter); head {
 			if ok && state == StateDone {
 				state, evidence, ok, stale = "", "", false, true
 			} else if ok && state == StateBlocked {
@@ -250,222 +167,6 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 	return
 }
 
-// relayMask marks the lines of echoed orchestrator text: each
-// `<rota-relay …>` opening line and what follows through its closing line, the
-// exact end of the orchestrator's text. Text echoed in the format that
-// preceded the element opens with a `--- ORCHESTRATOR (round N) ---` header and
-// has no end marker, so the span runs to the worker's next reply marker. A
-// relay echoed under OpenCode's "┃" gutter ends where the gutter does, since
-// OpenCode marks the worker's reply with nothing. A brief Claude Code echoes
-// behind "❯" ends at the first non-blank line without the two-space echo
-// indent: a harness banner at column 0. A reply marker inside a tag-opened span
-// is the orchestrator's own text (a "•" bullet), not the worker's reply. With
-// sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
-// closes a legacy span, inclusive (a tag-opened span ends only at its closing
-// line, so a trailer shape quoted in the body cannot end it): what the harness prints after it, a limit banner
-// carrying no reply marker, is the session's own. The trailer straight below a
-// closing line is masked with the span either way.
-func relayMask(lines []string, gutter, sigEnds bool) []bool {
-	mask := make([]bool, len(lines))
-	inRelay, gutterRelay, echoRelay, tagRelay, closed := false, false, false, false, false
-	for i, l := range lines {
-		head, tag := isRelayHead(l, gutter)
-		if head && !tag && inRelay && tagRelay {
-			head = false // a legacy header quoted inside an element is its text
-		}
-		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !head {
-			inRelay, echoRelay, tagRelay = false, false, false
-		}
-		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
-			inRelay, gutterRelay, tagRelay = false, false, false
-		}
-		afterClose := closed
-		closed = false
-		switch {
-		case head:
-			inRelay, gutterRelay, echoRelay, tagRelay = true, gutter && reGutter.MatchString(l), reEchoHead.MatchString(l), tag
-		case reReplyMarker.MatchString(l) && !tagRelay:
-			inRelay, gutterRelay, echoRelay = false, false, false
-		}
-		mask[i] = inRelay || (afterClose && reSigLine.MatchString(l))
-		switch {
-		case inRelay && tagRelay && harness.IsRelayClose(l):
-			inRelay, gutterRelay, echoRelay, tagRelay, closed = false, false, false, false, true
-		case sigEnds && inRelay && !tagRelay && reSigLine.MatchString(l):
-			inRelay, gutterRelay, echoRelay, tagRelay = false, false, false, false
-		}
-	}
-	return mask
-}
-
-// reChrome is a line of the harness's own frame below its dialog: the input
-// prompt, a box border, the permission-mode footer or the shortcut hint.
-var reChrome = regexp.MustCompile(`^\s*(?:[❯>]|[╭╰│─┌└├]|⏵|\? for shortcuts)`)
-
-// reFrameEdge is the input box's bottom edge, in column 0 where reply text
-// never starts; reFooter is the permission-mode footer or shortcut hint. Below
-// the lowest of them sits the status area: a custom statusline, the footer.
-var (
-	reFrameEdge = regexp.MustCompile(`^[╰─]`)
-	reFooter    = regexp.MustCompile(`^\s*(?:⏵|\? for shortcuts)`)
-)
-
-// statusDepth is how many lines up from the bottom the frame edge is looked
-// for: a statusline is a few lines, and a deeper match would be the reply's own.
-const statusDepth = 8
-
-// DialogRegion is the part of a pane the harness itself wrote: the status area
-// under its input box and the blocks directly above the box, below the last
-// reply. The worker's prose, diffs, code and tool output sit inside a reply, so
-// a limit phrase quoted there is not a hit limit (#1212). The walk goes up
-// blank-separated blocks to the last block that opens with a reply marker. The
-// run of blocks straight below it that open indented, other than with "⎿", is
-// that reply's later paragraphs, lists and code; the blocks under that run are
-// dialog. From the marker block, when no such run follows it, its unindented
-// lines count (a banner the harness prints straight after a reply) and, while
-// no spinner or working footer shows, its "⎿" lines (the way Claude Code
-// renders a dialog, and why idle tool output quoting the phrase reads as
-// limited). busy are the kind's working-footer patterns; a spinner is frame,
-// not dialog. A pane without a reply marker is dialog throughout.
-func DialogRegion(text string, busy []*regexp.Regexp) string {
-	lines := pystr.Splitlines(text)
-	isWork := func(l string) bool { return anyMatch(busy, l) || reSpinner.MatchString(l) }
-	end := len(lines)
-	status := end
-	for _, re := range []*regexp.Regexp{reFrameEdge, reFooter} {
-		for k := end - 1; k >= 0 && k >= end-statusDepth && status == end; k-- {
-			if re.MatchString(lines[k]) {
-				status = k
-			}
-		}
-	}
-	working := slices.ContainsFunc(lines[status:], isWork)
-	end = status
-	for end > 0 {
-		l := lines[end-1]
-		w := isWork(l)
-		if !(strings.TrimSpace(l) == "" || reChrome.MatchString(l) || w) {
-			break
-		}
-		working = working || w
-		end--
-	}
-	// Walk up block by block (blank-line separated) to the last reply marker.
-	// cont is the top of the indented run above start, -1 for none.
-	start, from, cont := end, end, -1
-walk:
-	for i := end; i > 0; {
-		j := i
-		for j > 0 && strings.TrimSpace(lines[j-1]) != "" {
-			j--
-		}
-		if j < i {
-			head := lines[j]
-			switch {
-			case reReplyMarker.MatchString(head):
-				from = j + 1
-				if cont >= 0 {
-					from = start
-				}
-				break walk
-			case reIndent.MatchString(head) && !reGutterLine.MatchString(head):
-				cont = j
-			default:
-				start, cont = j, -1
-			}
-		}
-		if j == 0 {
-			if cont >= 0 { // no reply above: the indented run is dialog too
-				start = cont
-			}
-			break
-		}
-		i = j - 1
-	}
-	var kept []string
-	if from < start {
-		for _, l := range lines[from:start] {
-			if strings.TrimSpace(l) != "" && (!reIndent.MatchString(l) || !working && reGutterLine.MatchString(l)) {
-				kept = append(kept, l)
-			}
-		}
-	}
-	kept = append(kept, lines[start:end]...)
-	return strings.Join(append(kept, lines[status:]...), "\n")
-}
-
-// reIndent starts an indented line; reGutterLine is tool output under "⎿".
-var (
-	reIndent     = regexp.MustCompile(`^\s`)
-	reGutterLine = regexp.MustCompile(`^\s*⎿`)
-)
-
-// reSpinner is a working line: an activity glyph, a verb and an ellipsis
-// ("✻ Running tests…").
-var reSpinner = regexp.MustCompile(`^\s*[✻✶✽✢✳·*]\s+\S.*…`)
-
-// StripRelays is text without the echoed orchestrator blocks, the way
-// lastSentinel skips them: a limit phrase a brief or relay quotes is the
-// orchestrator's, not the session's. kind picks the gutter reading.
-func StripRelays(kind, text string) string {
-	lines := pystr.Splitlines(text)
-	mask := relayMask(lines, paneRulesFor(kind).gutter, true)
-	kept := lines[:0:0]
-	for i, l := range lines {
-		if !mask[i] {
-			kept = append(kept, l)
-		}
-	}
-	return strings.Join(kept, "\n")
-}
-
-// paneRules are a kind's PaneVocab compiled.
-type paneRules struct {
-	retry, busy, waiting, background, limits []*regexp.Regexp
-	authDead, badModel                       *regexp.Regexp
-	loggedOut                                *regexp.Regexp
-	gutter                                   bool
-}
-
-var (
-	paneRulesMu    sync.Mutex
-	paneRulesCache = map[string]*paneRules{}
-)
-
-// paneRulesFor is the compiled vocabulary of a kind. The harness resolves an
-// unset kind to its default; a kind that is not a worker harness has no rules.
-func paneRulesFor(kind string) *paneRules {
-	h, known := harness.LookupPane(kind)
-	if known {
-		kind = h.Kind()
-	}
-	paneRulesMu.Lock()
-	defer paneRulesMu.Unlock()
-	if r, ok := paneRulesCache[kind]; ok {
-		return r
-	}
-	r := &paneRules{}
-	if known {
-		v := h.PaneVocab()
-		r.retry, r.busy = compileAll(`(?i)`, v.Retry), compileAll(`(?i)`, v.Busy)
-		r.waiting = compileAll(`(?i)`, v.Waiting)
-		r.background = compileAll(`(?i)`, v.Background)
-		r.limits = compileAll(`(?i)`, v.Limits)
-		if v.AuthDead != "" {
-			r.authDead = regexp.MustCompile(`(?i)` + v.AuthDead)
-		}
-		if v.LoggedOut != "" {
-			r.loggedOut = regexp.MustCompile(`(?i)` + v.LoggedOut)
-		}
-		if v.BadModel != "" {
-			r.badModel = regexp.MustCompile(v.BadModel)
-		}
-		r.gutter = v.Gutter
-	}
-	paneRulesCache[kind] = r
-	return r
-}
-
 func firstMatch(res []*regexp.Regexp, s string) string {
 	for _, re := range res {
 		if m := re.FindString(s); m != "" {
@@ -473,15 +174,6 @@ func firstMatch(res []*regexp.Regexp, s string) string {
 		}
 	}
 	return ""
-}
-
-func anyMatch(res []*regexp.Regexp, s string) bool {
-	for _, re := range res {
-		if re.MatchString(s) {
-			return true
-		}
-	}
-	return false
 }
 
 // Classify decides one slot's state from its pane text using the default
@@ -492,18 +184,11 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 	return ClassifyFor("", text, moved, lines, native)
 }
 
-// DialogFor is DialogRegion with the busy patterns of the given kind's harness,
-// for callers outside poll (the usage-limit watcher) that read a pane's text
-// as the harness wrote it.
-func DialogFor(kind, text string) string {
-	return DialogRegion(text, paneRulesFor(kind).busy)
-}
-
 // ClassifyFor is Classify for a slot of the given kind: its harness's own pane
 // wording (PaneVocab) is read on top of the shared rules, on that kind's panes
 // only.
 func ClassifyFor(kind, text string, moved bool, lines int, native string) (state, evidence string) {
-	rules := paneRulesFor(kind)
+	rules := usagelimit.RulesFor(kind)
 	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines { // [-0:] is the whole list in Python
 		all = all[len(all)-lines:]
@@ -511,33 +196,33 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	tail := strings.Join(all, "\n")
 	// What the session says about its own limit is read outside echoed
 	// orchestrator blocks (#883).
-	own := StripRelays(kind, tail)
+	own := usagelimit.StripRelays(kind, tail)
 
 	// Sentinels win over everything, including movement: a worker that printed
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
 	// The LAST sentinel decides: a ROTA-DONE printed after an answered
 	// ROTA-BLOCKED means the worker moved on.
-	st, ev, ok, staleDone := lastSentinel(all, rules.gutter)
+	st, ev, ok, staleDone := lastSentinel(all, rules.Gutter)
 	if ok {
 		return st, ev
 	}
 	// `Retrying in` is the only positive proof a retry is in flight. Check it
 	// before the DEAD patterns so a live retry is never read as a corpse.
-	if reRetry.MatchString(tail) || anyMatch(rules.retry, tail) {
+	if reRetry.MatchString(tail) || usagelimit.AnyMatch(rules.Retry, tail) {
 		return StateBusy, "retry in flight"
 	}
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
 	// Only the harness's own dialog counts, not text the worker quotes (#1212).
-	dialog := DialogFor(kind, own)
-	if s, e, ok := FindLimit(kind, dialog); ok {
+	dialog := usagelimit.DialogFor(kind, own)
+	if s, e, ok := usagelimit.FindLimit(kind, dialog); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.
 		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
 			return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 		}
-		if rules.authDead != nil && rules.authDead.MatchString(own) {
+		if rules.AuthDead != nil && rules.AuthDead.MatchString(own) {
 			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 		}
 		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[s:e]), 120)
@@ -546,21 +231,21 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if nativeLive.State == LivenessUnverifiable {
 		return StateUnverifiable, nativeLive.Reason
 	}
-	if rules.loggedOut != nil {
-		if m := rules.loggedOut.FindString(dialog); m != "" {
+	if rules.LoggedOut != nil {
+		if m := rules.LoggedOut.FindString(dialog); m != "" {
 			return StateBlocked, "slot is logged out (\"" + strings.TrimSpace(m) + "\"): its account has no login — set round.accounts with this configDir in .rota/config.local.json, or run rota under the logged-in CLAUDE_CONFIG_DIR"
 		}
 	}
 	// A dialog for a tier model the provider does not list: the TUI falls back
 	// to its last-used model once it closes, so nothing else shows the worker
 	// is on the wrong one.
-	if rules.badModel != nil {
-		if m := rules.badModel.FindStringSubmatch(tail); m != nil {
+	if rules.BadModel != nil {
+		if m := rules.BadModel.FindStringSubmatch(tail); m != nil {
 			return StateBlocked, "model " + m[1] + " was refused — fix round.tiers (provider/model ids)"
 		}
 	}
-	if anyMatch(rules.busy, own) {
-		return StateBusy, "pane shows: " + firstMatch(rules.busy, own)
+	if usagelimit.AnyMatch(rules.Busy, own) {
+		return StateBusy, "pane shows: " + firstMatch(rules.Busy, own)
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
@@ -568,7 +253,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if moved {
 		return StateBusy, "pane changed between captures"
 	}
-	waiting := anyMatch(rules.waiting, own)
+	waiting := usagelimit.AnyMatch(rules.Waiting, own)
 	if native == "blocked" && !waiting {
 		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
@@ -598,7 +283,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// The footer outlives a dialog or a crash, so it only turns the final idle
 	// outcome into busy. The count moves as tasks start and end; a fixed
 	// evidence keeps `round wait` from reporting the slot as changed.
-	if anyMatch(rules.background, own) {
+	if usagelimit.AnyMatch(rules.Background, own) {
 		return StateBusy, "pane shows background shells or monitors running"
 	}
 	if staleDone {
@@ -629,7 +314,7 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 	if lines > 0 && len(all) > lines {
 		all = all[len(all)-lines:]
 	}
-	gutter := paneRulesFor(kind).gutter
+	gutter := usagelimit.RulesFor(kind).Gutter
 	mark := -1
 	for i, l := range all {
 		if harness.RelaySequence(l) == strconv.Itoa(k) {
@@ -641,7 +326,7 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 	}
 	start := mark
 	for start > 0 {
-		if head, _ := isRelayHead(all[start], gutter); head {
+		if head, _ := usagelimit.IsRelayHead(all[start], gutter); head {
 			break
 		}
 		start--
@@ -655,5 +340,5 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 // (ClassifyFor) before trusting that snapshot. A kind with no wait wording
 // (or no harness) never does.
 func ReadsWaitPane(kind string) bool {
-	return len(paneRulesFor(kind).waiting) > 0
+	return len(usagelimit.RulesFor(kind).Waiting) > 0
 }

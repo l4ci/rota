@@ -6,19 +6,19 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 type fakeSource struct {
 	logins  []string
-	meters  []worker.Meter
+	meters  []usagelimit.Meter
 	picked  string
 	pickOK  bool
 	exclude []string
 }
 
-func (f *fakeSource) Logins(kind string) []string           { return f.logins }
-func (f *fakeSource) Meters(context.Context) []worker.Meter { return f.meters }
+func (f *fakeSource) Logins(kind string) []string               { return f.logins }
+func (f *fakeSource) Meters(context.Context) []usagelimit.Meter { return f.meters }
 func (f *fakeSource) Pick(_ context.Context, exclude []string) (string, bool) {
 	f.exclude = exclude
 	return f.picked, f.pickOK
@@ -45,7 +45,7 @@ func TestPickAccountLoggedHarnessUsesLoginsAndCooling(t *testing.T) {
 }
 
 func TestMeterReadingMatchesTheAccountByName(t *testing.T) {
-	src := &fakeSource{meters: []worker.Meter{{Name: "a", Verdict: worker.VerdictCooling}, {Name: "b", Verdict: worker.VerdictUnknown}}}
+	src := &fakeSource{meters: []usagelimit.Meter{{Name: "a", Verdict: usagelimit.VerdictCooling}, {Name: "b", Verdict: usagelimit.VerdictUnknown}}}
 	if r := MeterReading(context.Background(), src, "a"); !r.Known || !r.Cooling {
 		t.Fatalf("a: %+v", r)
 	}

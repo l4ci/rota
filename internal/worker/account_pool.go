@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // PoolEntry is one account of the worker pool: every round.accounts entry of
@@ -12,7 +13,7 @@ import (
 // allowed kind with none.
 type PoolEntry struct {
 	Kind, Name string
-	Meter      Meter
+	Meter      usagelimit.Meter
 	// Load is how many slots hold work on this account right now.
 	Load int
 	// Rank is the kind's position in round.harnesses (the tie-break order),
@@ -24,7 +25,7 @@ type PoolEntry struct {
 }
 
 // Usable reports whether the entry can take a new session.
-func (p PoolEntry) Usable() bool { return p.Skip == "" && p.Meter.Verdict != VerdictCooling }
+func (p PoolEntry) Usable() bool { return p.Skip == "" && p.Meter.Verdict != usagelimit.VerdictCooling }
 
 // PoolRef names the account a slot runs under now.
 type PoolRef struct{ Kind, Name string }
@@ -109,8 +110,8 @@ func ChoosePool(entries []PoolEntry, current *PoolRef, margin int) (PoolChoice, 
 // every window the snapshot reports. No readable window (or an unavailable
 // snapshot) is unknown, never 0. A window at 100% with a reset still ahead
 // makes the account cooling.
-func QuotaMeter(s harness.QuotaSnapshot, now time.Time) Meter {
-	m := Meter{Name: s.Name, ConfigDir: s.Home, Verdict: VerdictUnknown, Reason: s.Reason}
+func QuotaMeter(s harness.QuotaSnapshot, now time.Time) usagelimit.Meter {
+	m := usagelimit.Meter{Name: s.Name, ConfigDir: s.Home, Verdict: usagelimit.VerdictUnknown, Reason: s.Reason}
 	if s.Status == "unavailable" {
 		return m
 	}
@@ -122,7 +123,7 @@ func QuotaMeter(s harness.QuotaSnapshot, now time.Time) Meter {
 		}
 		worst = math.Max(worst, *w.UsedPercent)
 		if *w.UsedPercent >= 100 && w.ResetsAt != nil && w.ResetsAt.After(now) {
-			m.Verdict = VerdictCooling
+			m.Verdict = usagelimit.VerdictCooling
 			if m.ResetsAt == nil || w.ResetsAt.After(*m.ResetsAt) {
 				r := *w.ResetsAt
 				m.ResetsAt = &r
@@ -132,8 +133,8 @@ func QuotaMeter(s harness.QuotaSnapshot, now time.Time) Meter {
 	if worst < 0 {
 		return m
 	}
-	if m.Verdict != VerdictCooling {
-		m.Verdict = VerdictFree
+	if m.Verdict != usagelimit.VerdictCooling {
+		m.Verdict = usagelimit.VerdictFree
 	}
 	h := roundTenth(math.Max(0, 100-worst))
 	m.Headroom = &h

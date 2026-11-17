@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/keepstate"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -168,7 +169,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		if ow == nil {
 			return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot watch pane output"}
 		}
-		f, err := limits.NewFeed(ctx, ow, targets, worker.LimitRegex(), tick)
+		f, err := limits.NewFeed(ctx, ow, targets, usagelimit.LimitRegex(), tick)
 		switch {
 		case errors.Is(err, host.ErrUnsupportedHerdr):
 			return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
@@ -240,7 +241,7 @@ func (a accountSource) Logins(kind string) []string {
 	return logins
 }
 
-func (a accountSource) Meters(ctx context.Context) []worker.Meter {
+func (a accountSource) Meters(ctx context.Context) []usagelimit.Meter {
 	return a.c.deps().WorkerAccounts().Meters(ctx, a.root)
 }
 

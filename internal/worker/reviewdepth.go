@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/reviewpolicy"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // ReviewSources is where a branch's review depth is read from. The worker gate
@@ -245,7 +246,7 @@ func StaticCrossPools(c roundcfg.CrossReview) CrossPools {
 	}
 	entry := func(a config.Account, order int) PoolEntry {
 		return PoolEntry{Kind: a.Kind, Name: a.Name, Rank: rank(a.Kind), Order: order,
-			Meter: Meter{Name: a.Name, ConfigDir: a.Dir, Verdict: VerdictUnknown}}
+			Meter: usagelimit.Meter{Name: a.Name, ConfigDir: a.Dir, Verdict: usagelimit.VerdictUnknown}}
 	}
 	var p CrossPools
 	for i, a := range c.Review {

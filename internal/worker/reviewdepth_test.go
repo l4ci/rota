@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
 	"path/filepath"
 	"slices"
@@ -334,8 +335,8 @@ func TestReviewDepthCrossReviewAccounts(t *testing.T) {
 		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}, {Kind: "codex", Name: "r2", Dir: "/r2"}},
 		Main:   []config.Account{{Kind: "claude", Name: "w", Dir: "/w"}, {Kind: "codex", Name: "wc", Dir: "/wc"}}}
 	pools := fakePools{CrossPools{
-		Review: []PoolEntry{pe("codex", "r1", 30, VerdictFree), pe("codex", "r2", 70, VerdictFree)},
-		Main:   []PoolEntry{pe("claude", "w", 90, VerdictFree), pe("codex", "wc", 50, VerdictFree)},
+		Review: []PoolEntry{pe("codex", "r1", 30, usagelimit.VerdictFree), pe("codex", "r2", 70, usagelimit.VerdictFree)},
+		Main:   []PoolEntry{pe("claude", "w", 90, usagelimit.VerdictFree), pe("codex", "wc", 50, usagelimit.VerdictFree)},
 	}}.read
 	major := []string{"size:Major"}
 
@@ -364,9 +365,9 @@ func TestReviewDepthCrossFallsBackAndReportsUnavailable(t *testing.T) {
 	cfg := roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"},
 		Review: []config.Account{{Kind: "codex", Name: "r1", Dir: "/r1"}}}
 	major := []string{"size:Major"}
-	cooling := PoolEntry{Kind: "codex", Name: "r1", Meter: Meter{Name: "r1", ConfigDir: "/r1", Verdict: VerdictCooling}}
+	cooling := PoolEntry{Kind: "codex", Name: "r1", Meter: usagelimit.Meter{Name: "r1", ConfigDir: "/r1", Verdict: usagelimit.VerdictCooling}}
 
-	pools := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("codex", "wc", 40, VerdictFree), pe("claude", "w", 99, VerdictFree)}}}.read
+	pools := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("codex", "wc", 40, usagelimit.VerdictFree), pe("claude", "w", 99, usagelimit.VerdictFree)}}}.read
 	got, _ := ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", pools))
 	if got.Cross != harness.Codex || got.CrossAccount == nil || got.CrossAccount.Name != "wc" || !got.CrossAccount.Fallback {
 		t.Fatalf("fallback: cross %q account %+v, want codex wc as a fallback", got.Cross, got.CrossAccount)
@@ -375,7 +376,7 @@ func TestReviewDepthCrossFallsBackAndReportsUnavailable(t *testing.T) {
 		t.Errorf("why %q must say it fell back from r1 and why", got.CrossWhy)
 	}
 
-	none := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("claude", "w", 99, VerdictFree)}}}.read
+	none := fakePools{CrossPools{Review: []PoolEntry{cooling}, Main: []PoolEntry{pe("claude", "w", 99, usagelimit.VerdictFree)}}}.read
 	got, _ = ResolveReviewDepth(context.Background(), crossSources(t, cfg, major, "claude", none))
 	// /rota-review keys on this form ("; unavailable:"): pin it so the skill and the verb cannot drift.
 	if !strings.Contains(got.CrossWhy, "; unavailable: no account of ") {
