@@ -82,6 +82,65 @@ func (d *runner) forgeLine(r tracker.Resolution) string {
 	return line
 }
 
+// trackerSource is what doctor knows about an HTTP tracker source: the config
+// key naming the project or team, the arguments `rota connect add` needs after
+// --kind, and, for sources whose project or team the key must be able to read,
+// what to check when it cannot. Adding a source is one row.
+type trackerSource struct {
+	key         func(tracker.Settings) string
+	keyName     string // issues.<source>.<key>, as typed to rota config set
+	connectArgs string // after "--kind <source>" in the rota connect add hint
+	probeHint   string // "" when the source has no team probe
+}
+
+var trackerSources = map[string]trackerSource{
+	config.SourceJira: {
+		key:         func(s tracker.Settings) string { return s.JiraProject },
+		keyName:     "issues.jira.project",
+		connectArgs: " ...",
+	},
+	config.SourceLinear: {
+		key:         func(s tracker.Settings) string { return s.LinearTeam },
+		keyName:     "issues.linear.team",
+		connectArgs: " --token-stdin",
+		probeHint:   "check issues.linear.team against the team's key in Linear, and the API key's access",
+	},
+	config.SourceItsaplan: {
+		key:         func(s tracker.Settings) string { return s.ItsaplanProject },
+		keyName:     "issues.itsaplan.project",
+		connectArgs: " --site <url> --token-stdin",
+		probeHint:   "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access",
+	},
+}
+
+// TeamProbeApplies is whether the caller should look up the source's team or
+// project through the connection and set Input.TeamProblem: the source has a
+// probe, its key is set and the named connection works.
+func TeamProbeApplies(s tracker.Settings, connectionOK bool) bool {
+	src, ok := trackerSources[s.Source]
+	return ok && src.probeHint != "" && src.key(s) != "" && s.Connection != "" && connectionOK
+}
+
+// trackerConfig fails a jira, linear or itsaplan source that lacks its project
+// or team, its connection, or (linear, itsaplan) a team the connection can see.
+func (d *runner) trackerConfig() (Check, bool) {
+	source := d.in.Tracker.Source
+	src, ok := trackerSources[source]
+	if !ok {
+		return Check{}, false
+	}
+	pre := "issues.source is " + source + " but "
+	switch {
+	case src.key(d.in.Tracker) == "":
+		return fail("tracker", pre+src.keyName+" is not set", "run: rota config set "+src.keyName+" <KEY>"), true
+	case d.in.Tracker.Connection == "":
+		return fail("tracker", pre+"issues.connection is not set", "run: rota connect add <name> --kind "+source+src.connectArgs+", then rota config set issues.connection <name>"), true
+	case src.probeHint != "" && d.in.TeamProblem != "":
+		return fail("tracker", d.in.TeamProblem, src.probeHint), true
+	}
+	return Check{}, false
+}
+
 // tracker checks the forge and the issue source together: it reports the
 // detected forge (no remote with forge.provider auto is local) and the issue
 // source, fails when issues.source names github or gitlab but the forge is
@@ -91,33 +150,8 @@ func (d *runner) tracker() Check {
 	if d.in.SourceProblem != "" {
 		return fail("tracker", d.in.SourceProblem, "run: rota config set forge.provider auto, and rota config set issues.source file|github|gitlab")
 	}
-	if d.in.Tracker.Source == config.SourceJira {
-		switch {
-		case d.in.Tracker.JiraProject == "":
-			return fail("tracker", "issues.source is jira but issues.jira.project is not set", "run: rota config set issues.jira.project <KEY>")
-		case d.in.Tracker.Connection == "":
-			return fail("tracker", "issues.source is jira but issues.connection is not set", "run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>")
-		}
-	}
-	if d.in.Tracker.Source == config.SourceLinear {
-		switch {
-		case d.in.Tracker.LinearTeam == "":
-			return fail("tracker", "issues.source is linear but issues.linear.team is not set", "run: rota config set issues.linear.team <KEY>")
-		case d.in.Tracker.Connection == "":
-			return fail("tracker", "issues.source is linear but issues.connection is not set", "run: rota connect add <name> --kind linear --token-stdin, then rota config set issues.connection <name>")
-		case d.in.TeamProblem != "":
-			return fail("tracker", d.in.TeamProblem, "check issues.linear.team against the team's key in Linear, and the API key's access")
-		}
-	}
-	if d.in.Tracker.Source == config.SourceItsaplan {
-		switch {
-		case d.in.Tracker.ItsaplanProject == "":
-			return fail("tracker", "issues.source is itsaplan but issues.itsaplan.project is not set", "run: rota config set issues.itsaplan.project <KEY>")
-		case d.in.Tracker.Connection == "":
-			return fail("tracker", "issues.source is itsaplan but issues.connection is not set", "run: rota connect add <name> --kind itsaplan --site <url> --token-stdin, then rota config set issues.connection <name>")
-		case d.in.TeamProblem != "":
-			return fail("tracker", d.in.TeamProblem, "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access")
-		}
+	if c, ok := d.trackerConfig(); ok {
+		return c
 	}
 	r := d.resolveForge()
 	f, line := r.Provider, d.forgeLine(r)
