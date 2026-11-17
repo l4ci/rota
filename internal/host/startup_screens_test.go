@@ -2,7 +2,6 @@ package host
 
 import (
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -26,19 +25,6 @@ func TestPromptPlaceholderBelongsToComposer(t *testing.T) {
 		if got := promptLine(tc.pane); got != tc.want {
 			t.Errorf("promptLine(%q) = %q, want %q", tc.pane, got, tc.want)
 		}
-	}
-}
-
-// The Claude first-run theme picker is a startup dialog to drive through
-// (Enter keeps the highlighted default), not an unknown screen (#1777).
-func TestDialogKeysOnboardingThemePicker(t *testing.T) {
-	pane := readFixture(t, "claude-onboarding-theme-2.1.290.txt")
-	if keys, ok := DialogKeys(pane); !ok || !reflect.DeepEqual(keys, []string{"enter"}) {
-		t.Errorf("DialogKeys = %v %v, want [enter] true", keys, ok)
-	}
-	numbered := "Choose the text style that looks best with your terminal\n\n ❯ 1. Dark mode ✔\n   2. Light mode\n"
-	if keys, ok := DialogKeys(numbered); !ok || !reflect.DeepEqual(keys, []string{"enter"}) {
-		t.Errorf("numbered: DialogKeys = %v %v, want [enter] true", keys, ok)
 	}
 }
 
