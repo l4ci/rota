@@ -13,7 +13,7 @@ func itemTemplate(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "bugs|features|tasks")
 	tag := fs.String("tag", "", "P0..P3 (bugs) or Major|Minor|Cosmetic (features)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "item template takes --kind, no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "item template takes --kind, no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		if !backlog.ValidKind(*kind) {

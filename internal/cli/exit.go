@@ -55,11 +55,6 @@ func Unavailable(format string, a ...any) *Error { return newErr(ExitUnavailable
 // Retry: a transient condition, such as a rate limit or a busy lock (exit 6).
 func Retry(format string, a ...any) *Error { return newErr(ExitRetry, "", format, a...) }
 
-// NotImplemented: the verb is in the tree but not ported yet (exit 71).
-func NotImplemented(path string) *Error {
-	return newErr(ExitNotImplemented, "", "%s is not ported yet", path)
-}
-
 // configFail translates the config errors in the classes c into their exit
 // codes (see internal/exitmap); anything else passes through unchanged. It is
 // the one place the cli decides what a config error exits with.

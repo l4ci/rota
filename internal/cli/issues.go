@@ -109,7 +109,7 @@ func issueJSON(k tracker.IssueKey) any {
 
 func issuesProvider(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "issues provider takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "issues provider takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		_, dir, env, err := issuesScope(c)
@@ -134,7 +134,7 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 	fs.Var(&add, "add", "label to add (repeatable)")
 	fs.Var(&remove, "remove", "label to remove (repeatable)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "issues label takes one issue number or key"); err != nil {
+		if err := argCount(args, 1, 1, "issues label takes one issue number or key"); err != nil {
 			return Result{}, err
 		}
 		if (len(add) > 0) == (len(remove) > 0) {
@@ -203,7 +203,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 	forRepo := fs.String("for-repo", "", "only entries of this Repos: name")
 	openOnly := fs.Bool("open-only", false, "drop issues that are closed upstream")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "issues imported takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "issues imported takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, cfg, err := c.Project()
@@ -248,7 +248,7 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 	commit := fs.String("commit", "", "the commit that shipped the issue")
 	item := fs.String("item", "", "backlog item ID named in the comment")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "issues close takes one issue number or key"); err != nil {
+		if err := argCount(args, 1, 1, "issues close takes one issue number or key"); err != nil {
 			return Result{}, err
 		}
 		if *commit == "" {
@@ -281,7 +281,7 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "do the work; without it only report the plan")
 	limit := fs.String("limit", "", "create at most this many items this run")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "migrate issues takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "migrate issues takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		lim := -1

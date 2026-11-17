@@ -64,7 +64,7 @@ var relatedIDRe = regexp.MustCompile(backlog.IDPattern(1))
 func backlogList(fs *flag.FlagSet) RunFunc {
 	grep := fs.String("grep", "", "keep rows whose bullet contains this, case-insensitively")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog list takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog list takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -149,7 +149,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 func backlogIDs(fs *flag.FlagSet) RunFunc {
 	milestone := fs.String("milestone", "", "milestone ID, such as M01")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog ids takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog ids takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -174,7 +174,7 @@ func backlogIDs(fs *flag.FlagSet) RunFunc {
 
 func backlogMilestones(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, -1, "backlog milestones takes one or more item IDs"); err != nil {
+		if err := argCount(args, 1, -1, "backlog milestones takes one or more item IDs"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -205,7 +205,7 @@ func backlogMilestones(fs *flag.FlagSet) RunFunc {
 
 func backlogDrift(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog drift takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog drift takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -250,7 +250,7 @@ func backlogDrift(fs *flag.FlagSet) RunFunc {
 
 func backlogBackfill(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog backfill takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog backfill takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -276,7 +276,7 @@ func backlogBackfill(fs *flag.FlagSet) RunFunc {
 func backlogArchive(fs *flag.FlagSet) RunFunc {
 	days := fs.Int("days", 5, "move done lines older than this many days")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog archive takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog archive takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -317,7 +317,7 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "map|knowledge|todo")
 	days := fs.Int("days", 90, "list entries this many days old or older")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "backlog stale takes no positional arguments"); err != nil {
+		if err := argCount(args, 0, 0, "backlog stale takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -384,7 +384,7 @@ func topicsText(count int, shown []string) string {
 
 func summaryVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "summary takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "summary takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -491,7 +491,7 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 	worktrees := fs.String("worktrees", "", "worktree paths, comma-separated, one per --repos name")
 	ifAbsent := fs.Bool("if-absent", false, "leave an existing entry alone")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "status add takes one branch"); err != nil {
+		if err := argCount(args, 1, 1, "status add takes one branch"); err != nil {
 			return Result{}, err
 		}
 		branch := args[0]
@@ -563,7 +563,7 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 
 func statusRm(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "status rm takes one branch"); err != nil {
+		if err := argCount(args, 1, 1, "status rm takes one branch"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -592,7 +592,7 @@ func statusRm(fs *flag.FlagSet) RunFunc {
 
 func statusShow(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "status show takes one branch"); err != nil {
+		if err := argCount(args, 1, 1, "status show takes one branch"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -612,7 +612,7 @@ func statusShow(fs *flag.FlagSet) RunFunc {
 func statusHandoff(fs *flag.FlagSet) RunFunc {
 	canonical := fs.Bool("canonical", false, "return the write path without probing")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "status handoff takes one branch"); err != nil {
+		if err := argCount(args, 1, 1, "status handoff takes one branch"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -635,7 +635,7 @@ func statusHandoff(fs *flag.FlagSet) RunFunc {
 
 func refactorAge(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "refactor age takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "refactor age takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -660,7 +660,7 @@ func numText(v any) string {
 
 func refactorReset(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "refactor reset takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "refactor reset takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -678,7 +678,7 @@ func refactorReset(fs *flag.FlagSet) RunFunc {
 
 func refactorTargets(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "refactor targets takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "refactor targets takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		cwd, err := c.deps().Getwd()

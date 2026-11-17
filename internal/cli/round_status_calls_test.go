@@ -249,7 +249,7 @@ func TestRoundOverviewReopenDropsOldPass(t *testing.T) {
 	cmd := first.Init()
 	finished := make(chan error, 1)
 	go func() { finished <- cmd.Async(context.Background()) }()
-	for first.box.cancelSet() == false {
+	for !loadCancelSet(first.box) {
 		time.Sleep(time.Millisecond)
 	}
 	if _, q := press(first, "q"); !q.Quit {
@@ -297,4 +297,11 @@ func TestRoundStatusViewUsesDepsClock(t *testing.T) {
 	if got, want := m.(*roundScreen).now(), r.deps.Now(); !got.Equal(want) {
 		t.Errorf("screen clock = %v, want Deps.Now %v", got, want)
 	}
+}
+
+// loadCancelSet reports whether the pass in flight has registered its cancel.
+func loadCancelSet(b *loadBox) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.cancel != nil
 }

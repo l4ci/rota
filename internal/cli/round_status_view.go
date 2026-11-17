@@ -229,12 +229,6 @@ type loadBox struct {
 	stopped bool
 }
 
-func (b *loadBox) cancelSet() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.cancel != nil
-}
-
 // stop cancels the pass in flight, when there is one: the screen is closing.
 // It also bars passes that have not registered yet.
 func (b *loadBox) stop() {

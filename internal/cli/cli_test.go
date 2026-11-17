@@ -90,7 +90,7 @@ func testTree() *Command {
 				o.Set("changed", true)
 				return Result{Data: o}, fmt.Errorf("gate: %w", context.Canceled)
 			}
-			return Result{}, NotImplemented(c.Path)
+			return Result{}, newErr(ExitNotImplemented, "", "%s is not ported yet", c.Path)
 		})},
 		{Name: "shadow", Summary: "breaks the no-shadow rule", Verb: func(fs *flag.FlagSet) RunFunc {
 			fs.Bool("json", false, "clashes with the global")
