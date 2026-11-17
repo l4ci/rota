@@ -143,22 +143,28 @@ func SecretsFile(dir string) string { return filepath.Join(dir, "secrets.json") 
 
 // FileStore keeps secrets in secrets.json under dir, mode 0600: the fallback
 // where there is no keychain (headless Linux). dir is the data dir, not the
-// config dir, which users sync into dotfiles repos. A secrets.json left in
-// legacyDir (the old location; "" for none) is moved into dir on first use.
-func FileStore(dir, legacyDir string) Store {
-	f := fileStore{path: SecretsFile(dir)}
-	if legacyDir != "" {
-		f.legacy = SecretsFile(legacyDir)
+// config dir, which users sync into dotfiles repos. Get never writes; a
+// secrets.json left in the old location is moved by MigrateLegacy.
+func FileStore(dir string) Store { return fileStore{path: SecretsFile(dir)} }
+
+type fileStore struct{ path string }
+
+// MigrateLegacy is the one explicit migration step: it moves a secrets.json
+// left in legacyDir (the old location; "" for none) into dir when dir has none
+// yet. Machine runs it when the stores are opened.
+func MigrateLegacy(dir, legacyDir string) error {
+	if legacyDir == "" {
+		return nil
 	}
-	return f
+	return migrator{path: SecretsFile(dir), legacy: SecretsFile(legacyDir)}.migrate()
 }
 
-type fileStore struct{ path, legacy string }
+type migrator struct{ path, legacy string }
 
 // ensureDir creates the data dir 0700 and tightens one that already exists:
 // MkdirAll leaves an existing dir's mode alone.
-func (f fileStore) ensureDir() error {
-	dir := filepath.Dir(f.path)
+func ensureDir(path string) error {
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -170,11 +176,11 @@ func (f fileStore) ensureDir() error {
 // result is always mode 0600, whatever the legacy file had; across devices it
 // is copied, then the original removed. A symlink is copied through, then the
 // link removed.
-func (f fileStore) migrate() error {
+func (f migrator) migrate() error {
 	if !f.needsMigration() {
 		return nil
 	}
-	if err := f.ensureDir(); err != nil {
+	if err := ensureDir(f.path); err != nil {
 		return err
 	}
 	return fsio.Locked(f.path, fsio.LockTimeout, f.moveLegacy)
@@ -182,7 +188,7 @@ func (f fileStore) migrate() error {
 
 // needsMigration is the cheap unlocked check: false for no legacy file, or a
 // store file already in place.
-func (f fileStore) needsMigration() bool {
+func (f migrator) needsMigration() bool {
 	if f.legacy == "" || f.legacy == f.path {
 		return false
 	}
@@ -196,7 +202,7 @@ func (f fileStore) needsMigration() bool {
 // regular file. A directory there (or a link to one) is no secrets file, so it
 // is left alone rather than moved into path, where every later read would fail.
 // Other stat errors report true so moveLegacy surfaces them.
-func (f fileStore) legacyIsFile() bool {
+func (f migrator) legacyIsFile() bool {
 	fi, err := os.Stat(f.legacy)
 	if err != nil {
 		return !errors.Is(err, os.ErrNotExist)
@@ -205,7 +211,7 @@ func (f fileStore) legacyIsFile() bool {
 }
 
 // moveLegacy is the migration proper; the caller holds the store's lock.
-func (f fileStore) moveLegacy() error {
+func (f migrator) moveLegacy() error {
 	if _, err := os.Stat(f.path); err == nil {
 		return nil
 	}
@@ -242,9 +248,6 @@ func (f fileStore) moveLegacy() error {
 func (fileStore) Name() string { return StoreFile }
 
 func (f fileStore) Get(_ context.Context, name string) (string, bool, error) {
-	if err := f.migrate(); err != nil {
-		return "", false, err
-	}
 	raw, err := os.ReadFile(f.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", false, nil
@@ -266,9 +269,6 @@ func (f fileStore) Set(_ context.Context, name, secret string) error {
 }
 
 func (f fileStore) Delete(_ context.Context, name string) error {
-	if err := f.migrate(); err != nil {
-		return err
-	}
 	if _, err := os.Stat(f.path); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -277,13 +277,10 @@ func (f fileStore) Delete(_ context.Context, name string) error {
 
 // update is a locked read-modify-write that writes a 0600 file atomically.
 func (f fileStore) update(mutate func(*jsonx.Object)) error {
-	if err := f.ensureDir(); err != nil {
+	if err := ensureDir(f.path); err != nil {
 		return err
 	}
 	return fsio.Locked(f.path, fsio.LockTimeout, func() error {
-		if err := f.moveLegacy(); err != nil {
-			return err
-		}
 		doc := jsonx.NewObject()
 		if raw, err := os.ReadFile(f.path); err == nil {
 			v, derr := jsonx.Decode(raw)
