@@ -14,3 +14,12 @@ func TestParseBulletsTrimsTitlePadding(t *testing.T) {
 		t.Fatalf("got title=%q body=%q date=%q source=%q", b.Title, b.Body, b.Date, b.Source)
 	}
 }
+
+// --match searches the title without its ** even when the title is padded.
+func TestBulletTextStripsPaddedTitleMarkers(t *testing.T) {
+	l := "- ** Foo ** — Body <!-- 2026-01-02 -->"
+	b := parseBullets(l)[0]
+	if got := bulletText(b, []string{l}); got != "foo — body" {
+		t.Fatalf("bulletText = %q", got)
+	}
+}

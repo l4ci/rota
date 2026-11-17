@@ -125,3 +125,17 @@ func TestParseBulletTrimsTitlePadding(t *testing.T) {
 		}
 	}
 }
+
+// An empty-body dated bullet (knowledge add does not refuse an empty body)
+// still parses, and amend appends ahead of the stamp, not after it.
+func TestParseBulletEmptyBody(t *testing.T) {
+	for _, l := range []string{"- **T** —  <!-- 2026-01-02 -->", "- **T** — <!-- 2026-01-02 -->"} {
+		title, body, _, ok := parseBullet(l)
+		if !ok || title != "T" || body != "" {
+			t.Errorf("%q: got %q %q ok=%v", l, title, body, ok)
+		}
+		if got := appendToBullet(l, "more"); got != "- **T** — more <!-- 2026-01-02 -->" && got != "- **T** — more  <!-- 2026-01-02 -->" {
+			t.Errorf("appendToBullet(%q) = %q", l, got)
+		}
+	}
+}

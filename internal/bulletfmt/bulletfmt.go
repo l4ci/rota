@@ -157,7 +157,8 @@ func Parse(line string) Parts {
 	if m := titleRe.FindStringSubmatch(text); m != nil {
 		p.Titled, p.Title = true, strings.TrimSpace(m[1])
 		text = text[len(m[0]):]
-		p.Dashed = strings.HasPrefix(text, " — ")
+		// SplitStamp took the space before the stamp, so an empty body leaves a bare " —".
+		p.Dashed = strings.HasPrefix(text, " — ") || (stamp != "" && text == " —")
 		text = strings.TrimPrefix(strings.TrimSpace(text), "—")
 	} else {
 		text = strings.TrimPrefix(text, "- ")

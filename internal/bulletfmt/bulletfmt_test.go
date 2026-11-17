@@ -148,6 +148,10 @@ func TestParse(t *testing.T) {
 			Parts{"T", "body", "", true, false}},
 		{"untitled", "- plain text <!-- 2026-01-02 -->",
 			Parts{"", "plain text", " <!-- 2026-01-02 -->", false, false}},
+		{"empty body, one space before stamp", "- **T** — <!-- 2026-01-02 -->",
+			Parts{"T", "", " <!-- 2026-01-02 -->", true, true}},
+		{"empty body, double space before stamp", "- **T** —  <!-- 2026-01-02 -->",
+			Parts{"T", "", "  <!-- 2026-01-02 -->", true, true}},
 		{"earlier comment stays in the body", "- **T** — a <!-- x --> b <!-- 2026-01-02 -->",
 			Parts{"T", "a <!-- x --> b", " <!-- 2026-01-02 -->", true, true}},
 	}

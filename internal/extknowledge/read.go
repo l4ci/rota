@@ -482,8 +482,10 @@ func (c Clone) MatchWith(words []string, want []string, project map[string]strin
 func bulletText(b bullet, unit []string) string {
 	s := strings.Join(unit, "\n")
 	s, _ = bulletfmt.SplitStamp(s)
-	if b.Title != "" {
-		s = strings.Replace(s, "**"+b.Title+"**", b.Title, 1)
+	if b.Title != "" && strings.HasPrefix(s, "- **") {
+		if end := strings.Index(s[4:], "**"); end >= 0 { // the padded title too
+			s = s[:2] + b.Title + s[4+end+2:]
+		}
 	}
 	return strings.ToLower(strings.TrimPrefix(s, "- "))
 }
