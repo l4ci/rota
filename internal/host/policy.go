@@ -87,10 +87,15 @@ type SessionAttach func(session, cwd, label, line string) []string
 // The env var each host injects to name the pane a process runs in. This is
 // the one place those names live; adapters and CurrentPane read them here.
 const (
-	envHerdrPane = "HERDR_PANE_ID"
-	envTmuxPane  = "TMUX_PANE"
-	envOrcaPane  = "ORCA_TERMINAL_HANDLE"
-	envCoreTerm  = "HC_TERMINAL_ID"
+	envHerdrPane  = "HERDR_PANE_ID"
+	envTmuxPane   = "TMUX_PANE"
+	envOrcaPane   = "ORCA_TERMINAL_HANDLE"
+	envCoreTerm   = "HC_TERMINAL_ID"
+	envCoreSocket = "HC_TERMINAL_SOCKET"
+	// envHerdrWorkspace names the herdr workspace; envHerdrEnv is the marker
+	// herdr injects (value "1") into every pane it manages.
+	envHerdrWorkspace = "HERDR_WORKSPACE_ID"
+	envHerdrEnv       = "HERDR_ENV"
 )
 
 // paneEnv is the env var naming the current pane under k, "" for Solo and
@@ -114,7 +119,7 @@ func paneEnv(k Kind) string {
 func kindPolicy(k Kind, c Capabilities) Capabilities {
 	switch k {
 	case Herdr:
-		c.InSessionRule = &InSessionRule{Pane: "herdr pane", Env: "HERDR_ENV=1"}
+		c.InSessionRule = &InSessionRule{Pane: "herdr pane", Env: envHerdrEnv + "=1"}
 		c.LaunchKindBound = true
 		c.NoNominalHandle = true
 		c.Harness = harness.HostTraits{CodexHost: true, HerdrIntegration: true}
@@ -151,12 +156,12 @@ func kindPolicy(k Kind, c Capabilities) Capabilities {
 }
 
 func diagnoseCore(p Probe) Health {
-	const hint = "open the associated Herdr App project terminal and check HC_TERMINAL_ID and HC_TERMINAL_SOCKET"
+	const hint = "open the associated Herdr App project terminal and check " + envCoreTerm + " and " + envCoreSocket
 	get := p.Getenv
 	if get == nil {
 		get = func(string) string { return "" }
 	}
-	if get("HC_TERMINAL_ID") == "" || get("HC_TERMINAL_SOCKET") == "" {
+	if get(envCoreTerm) == "" || get(envCoreSocket) == "" {
 		return Health{HealthFail, "Herdr Core terminal identity/endpoint is missing", hint}
 	}
 	h := New(HerdrCore, Deps{Getenv: get, Dial: p.Dial})

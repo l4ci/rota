@@ -54,7 +54,7 @@ func (h *herdr) InSession() bool {
 }
 
 func (h *herdr) Where() string {
-	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
+	ws := h.d.Getenv(envHerdrWorkspace)
 	if ws == "" {
 		ws = "?"
 	}
@@ -263,10 +263,10 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("round.dispatch=herdr launches %s itself; the launch command must run one of them, got: %s", harness.KindList(), o.Launch)
 	}
-	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
+	ws := h.d.Getenv(envHerdrWorkspace)
 	var opened openedWorkspace
 	if o.LinkWorkspace {
-		switch opened, err = h.openLinked(ctx, h.d.Getenv("HERDR_WORKSPACE_ID"), o.Slot, o.Cwd); {
+		switch opened, err = h.openLinked(ctx, h.d.Getenv(envHerdrWorkspace), o.Slot, o.Cwd); {
 		case errors.Is(err, ErrUnsupported):
 			// A herdr without `worktree open`: the slot is a tab, not a failure.
 			fmt.Fprintf(h.d.Stderr, "rota: herdr cannot link workspaces; slot %s stays a tab\n", o.Slot)
