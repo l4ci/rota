@@ -8,9 +8,9 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 )
 
-// MilestoneItems is the open items tagged with mid, in backlog order, as the
+// milestoneItems is the open items tagged with mid, in backlog order, as the
 // milestone's generated Items section lists them.
-func MilestoneItems(rows []Row, mid string) []ms.ItemRef {
+func milestoneItems(rows []Row, mid string) []ms.ItemRef {
 	byID := map[string]Row{}
 	for _, r := range rows {
 		byID[r.ID] = r
@@ -34,7 +34,7 @@ func closedMilestoneItems(text, mid string, seen map[string]bool) []ms.ItemRef {
 			continue
 		}
 		fields := ParseFields(d.Inner)
-		for _, m := range ParseMilestones(fields.Get("milestone")) {
+		for _, m := range ms.IDs(fields.Get("milestone")) {
 			if m != mid {
 				continue
 			}
@@ -98,7 +98,7 @@ func (f *File) milestoneItems(mid string) ([]ms.ItemRef, error) {
 		if err != nil {
 			return err
 		}
-		items = MilestoneItems(rows, mid)
+		items = milestoneItems(rows, mid)
 		seen := map[string]bool{}
 		items = append(items, closedMilestoneItems(sectionBody(d.backlog, "Completed"), mid, seen)...)
 		items = append(items, closedMilestoneItems(d.archive, mid, seen)...)

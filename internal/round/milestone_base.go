@@ -14,7 +14,7 @@ import (
 // none. It reads the tags and the milestone store only: no git, so a caller
 // that polls (the reconcile pass) can compare before it asks origin anything.
 func (e Env) milestoneTarget(root string, be Board, it *backlog.Item) (string, error) {
-	tagged := backlog.ParseMilestones(it.Fields.Get("milestone"))
+	tagged := milestone.IDs(it.Fields.Get("milestone"))
 	if len(tagged) == 0 {
 		return "", nil
 	}
