@@ -186,6 +186,8 @@ func TestGuardDenies(t *testing.T) {
 		"gh api graphql -fquery=@q.gql",
 		"gh api graphql --field=query=\"$Q\"",
 		"gh api graphql -ifquery=@q.gql",
+		"gh api graphql -if query=@q.gql",
+		"gh api repos/o/r/pulls/1/merge -if merge_method=squash",
 		"gh api graphql -F=query=@q.gql",
 		"busybox env sh -c 'git push origin main'",
 		"busybox busybox sh -c 'git push origin main'",

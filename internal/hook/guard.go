@@ -437,7 +437,7 @@ func (g *guard) ghAPI(args []string) {
 			method = strings.ToUpper(strings.TrimPrefix(a, "--method="))
 		case strings.HasPrefix(a, "-X") && len(a) > 2:
 			method = strings.ToUpper(a[2:])
-		case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input":
+		case a == "--input" || ghSplitField(a):
 			fields = true
 			i++
 		case ghJoinedField(a) != "" || strings.HasPrefix(a, "--input="):
@@ -492,7 +492,7 @@ func (g *guard) ghGraphQL(args []string) error {
 		}
 		field := ghJoinedField(a)
 		if field == "" && i > 0 {
-			if prev := args[i-1]; prev == "-f" || prev == "-F" || prev == "--field" || prev == "--raw-field" {
+			if ghSplitField(args[i-1]) {
 				field = a
 			}
 		}
@@ -510,13 +510,24 @@ func (g *guard) ghGraphQL(args []string) error {
 // ghJoinedField returns the key=value of a gh field flag written as one word
 // (--field=k=v, --raw-field=k=v, -Fk=v, -fk=v), or "" for any other word.
 func ghJoinedField(a string) string {
+	v, _ := ghFieldWord(a)
+	return v
+}
+
+// ghFieldWord classifies a gh field flag word: joined is its key=value when
+// written as one word; split reports a flag whose value is the next word
+// (-f, -F, --field, --raw-field, or an -i cluster ending in f/F like -if).
+func ghFieldWord(a string) (joined string, split bool) {
+	if a == "--field" || a == "--raw-field" {
+		return "", true
+	}
 	for _, p := range []string{"--field=", "--raw-field="} {
 		if v, ok := strings.CutPrefix(a, p); ok && v != "" {
-			return v
+			return v, false
 		}
 	}
-	if len(a) < 3 || a[0] != '-' || a[1] == '-' {
-		return ""
+	if len(a) < 2 || a[0] != '-' || a[1] == '-' {
+		return "", false
 	}
 	// A shorthand cluster: skip the boolean -i, then f/F takes the rest of the
 	// word as its value (pflag strips one leading '=').
@@ -524,12 +535,20 @@ func ghJoinedField(a string) string {
 		switch a[i] {
 		case 'i':
 		case 'f', 'F':
-			return strings.TrimPrefix(a[i+1:], "=")
+			if i == len(a)-1 {
+				return "", true
+			}
+			return strings.TrimPrefix(a[i+1:], "="), false
 		default:
-			return ""
+			return "", false
 		}
 	}
-	return ""
+	return "", false
+}
+
+func ghSplitField(a string) bool {
+	_, split := ghFieldWord(a)
+	return split
 }
 
 // gitCall is one git invocation after its global options.
