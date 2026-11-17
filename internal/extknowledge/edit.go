@@ -151,12 +151,11 @@ func titleOrLine(line string) string {
 // date replaces the date, a non-nil seen replaces or drops the seen: field.
 // Every other token (source: and anything else) is kept as it is.
 func editStamp(stamp, date string, seen *Seen) string {
-	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(stamp, "<!--"), "-->"))
 	var toks []string
 	haveDate, haveSeen := false, false
-	for _, t := range strings.Fields(inner) {
+	for _, t := range bulletfmt.StampFields(stamp) {
 		switch {
-		case dateRe.MatchString(t) && date != "":
+		case bulletfmt.IsDate(t) && date != "":
 			if !haveDate {
 				toks = append(toks, date)
 			}

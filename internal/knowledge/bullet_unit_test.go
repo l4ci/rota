@@ -111,3 +111,31 @@ func TestBulletUnitAgreesAcrossOperations(t *testing.T) {
 		}
 	})
 }
+
+// A padded title and a dated bullet read the same here as in extknowledge:
+// both go through bulletfmt.Parse.
+func TestParseBulletTrimsTitlePadding(t *testing.T) {
+	title, body, stamp, ok := parseBullet("- ** Foo ** — the body <!-- 2026-01-02 sha:abc1234 -->")
+	if !ok || title != "Foo" || body != "the body" || stamp != " <!-- 2026-01-02 sha:abc1234 -->" {
+		t.Fatalf("got %q %q %q ok=%v", title, body, stamp, ok)
+	}
+	for _, l := range []string{"- **T** — b", "- **T** b <!-- 2026-01-02 -->", "- **T** — b <!-- note -->"} {
+		if _, _, _, ok := parseBullet(l); ok {
+			t.Errorf("%q must not be a dated bullet", l)
+		}
+	}
+}
+
+// An empty-body dated bullet (knowledge add does not refuse an empty body)
+// still parses, and amend appends ahead of the stamp, not after it.
+func TestParseBulletEmptyBody(t *testing.T) {
+	for _, l := range []string{"- **T** —  <!-- 2026-01-02 -->", "- **T** — <!-- 2026-01-02 -->"} {
+		title, body, _, ok := parseBullet(l)
+		if !ok || title != "T" || body != "" {
+			t.Errorf("%q: got %q %q ok=%v", l, title, body, ok)
+		}
+		if got := appendToBullet(l, "more"); got != "- **T** — more <!-- 2026-01-02 -->" && got != "- **T** — more  <!-- 2026-01-02 -->" {
+			t.Errorf("appendToBullet(%q) = %q", l, got)
+		}
+	}
+}

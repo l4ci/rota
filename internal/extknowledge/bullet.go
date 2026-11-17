@@ -18,7 +18,6 @@ var (
 	seenToolRe    = regexp.MustCompile(`^[a-z0-9][a-z0-9.+-]*$`)
 	seenVersionRe = regexp.MustCompile(`^[0-9a-z][0-9a-z.+-]*$`)
 	seenSplitRe   = regexp.MustCompile(`[,\s]+`)
-	dateRe        = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 )
 
 // ParseSeen parses "tool@version" entries separated by commas or spaces. Tool
@@ -80,21 +79,9 @@ func parseBullets(file string) []bullet {
 		if !strings.HasPrefix(l, "- ") {
 			continue
 		}
-		b := bullet{Line: i}
-		rest := l
-		if tail := stampTail.FindString(l); tail != "" {
-			rest = strings.TrimSuffix(l, tail)
-			b.Stamp = tail
-			parseStamp(&b, strings.TrimSpace(tail))
-		}
-		if title, ok := bulletfmt.Title(rest); ok {
-			b.Title = title
-			rest = strings.TrimPrefix(rest, "- **"+title+"**")
-			rest = strings.TrimPrefix(strings.TrimSpace(rest), "—")
-		} else {
-			rest = strings.TrimPrefix(rest, "- ")
-		}
-		b.Body = strings.TrimSpace(rest)
+		p := bulletfmt.Parse(l)
+		b := bullet{Line: i, Title: p.Title, Body: p.Body, Stamp: p.Stamp}
+		parseStamp(&b, p.Stamp)
 		out = append(out, b)
 	}
 	return out
@@ -102,10 +89,9 @@ func parseBullets(file string) []bullet {
 
 // parseStamp fills date, source and seen from "<!-- date key:value … -->".
 func parseStamp(b *bullet, comment string) {
-	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(comment, "<!--"), "-->"))
-	for _, tok := range strings.Fields(inner) {
+	for _, tok := range bulletfmt.StampFields(comment) {
 		switch {
-		case dateRe.MatchString(tok):
+		case bulletfmt.IsDate(tok):
 			b.Date = tok
 		case strings.HasPrefix(tok, "source:"):
 			b.Source = strings.TrimPrefix(tok, "source:")
