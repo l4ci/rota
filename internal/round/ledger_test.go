@@ -126,7 +126,7 @@ func TestPickAppendsLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindPick)
-	if e == nil || e.Issue != "12" || e.Slot != "ben" || e.PR != "#7" || e.Loser() != "dana" {
+	if e == nil || e.Issue != "12" || e.Slot != "ben" || e.PR != "#7" || detailJSON(t, e.Detail) != detailJSON(t, ledger.PickDetail("dana")) {
 		t.Fatalf("pick entry = %+v", e)
 	}
 }
@@ -352,7 +352,7 @@ func TestWindDownParkRowCarriesTheSessionOrSaysUnavailable(t *testing.T) {
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
 	}
-	if p := parkEntry(t, f); p.SessionID() != "sid-4" || !p.TokensUnavailable() {
+	if p := parkEntry(t, f); !strings.Contains(detailJSON(t, p.Detail), `"sid-4"`) || !strings.Contains(detailJSON(t, p.Detail), ledger.Unavailable) {
 		t.Errorf("park detail %v", p.Detail)
 	}
 }
@@ -392,19 +392,32 @@ func TestWindDownParkRowSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T
 		return calls, parkEntry(t, f), true
 	}
 	n, base, ok := run(0)
-	if !ok || base.SessionID() != "sid-4" {
+	if !ok || !strings.Contains(detailJSON(t, base.Detail), `"sid-4"`) {
 		t.Fatalf("with a readable common dir the park row names the session: %v", base.Detail)
 	}
 	var hit *ledger.Entry
 	for i := 1; i <= n && hit == nil; i++ {
-		if _, p, ok := run(i); ok && p.SessionID() != "sid-4" {
+		if _, p, ok := run(i); ok && !strings.Contains(detailJSON(t, p.Detail), `"sid-4"`) {
 			hit = &p
 		}
 	}
 	if hit == nil {
 		t.Fatalf("no unreadable common dir read changed the park row; the park row's own lookup is not covered (%d reads)", n)
 	}
-	if hit.SessionID() != "unavailable" || hit.TranscriptPath() != "unavailable" || !hit.TokensUnavailable() {
+	want := ledger.ParkDetail(nil)
+	ledger.SetUnavailable(want)
+	if detailJSON(t, hit.Detail) != detailJSON(t, want) {
 		t.Errorf("not every session key says unavailable (%v)", hit.Detail)
 	}
+}
+
+// detailJSON is the compact JSON of a ledger detail, for comparing a row's
+// detail with one the ledger's own constructors build.
+func detailJSON(t *testing.T, o *jsonx.Object) string {
+	t.Helper()
+	b, err := jsonx.MarshalCompact(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

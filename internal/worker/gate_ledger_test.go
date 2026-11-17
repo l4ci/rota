@@ -118,8 +118,8 @@ func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	for _, e := range es {
 		if e.Kind == ledger.KindGate {
 			got[e.Slot] = e.Verdict()
-			if e.Culprit() != "b3" {
-				t.Errorf("member %s entry names culprit %q, want b3", e.Slot, e.Culprit())
+			if want := detailJSON(t, ledger.TrainMemberDetail(e.Verdict(), "b3")); detailJSON(t, e.Detail) != want {
+				t.Errorf("member %s entry detail %v, want %s", e.Slot, e.Detail, want)
 			}
 		}
 		if e.Kind == ledger.KindMerge {

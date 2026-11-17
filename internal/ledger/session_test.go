@@ -71,7 +71,7 @@ func TestSessionDetailUnavailableNeverZero(t *testing.T) {
 		if e.detailStr("session") != wantSession {
 			t.Errorf("%s: session %q, want %q", slot, e.detailStr("session"), wantSession)
 		}
-		if !e.TokensUnavailable() {
+		if !e.tokensUnavailable() {
 			t.Errorf("%s: tokens %v, want unavailable", slot, d)
 		}
 	}
@@ -83,7 +83,7 @@ func TestSessionDetailUnavailableForAHarnessWithoutUsage(t *testing.T) {
 	writeFile(t, tr, "{}\n")
 	RecordSession(cd, Session{Slot: "dana", ID: "s", Transcript: tr, UpdatedAt: sessNow})
 	d := SessionDetail(cd, "dana", "opencode", sessNow.Add(-time.Hour), "", nil)
-	if !(Entry{Detail: d}).TokensUnavailable() {
+	if !(Entry{Detail: d}).tokensUnavailable() {
 		t.Errorf("%v", d)
 	}
 }
@@ -142,7 +142,7 @@ func TestSetUnavailableMarksEverySessionKey(t *testing.T) {
 	d := jsonx.NewObject()
 	SetUnavailable(d)
 	e := Entry{Detail: d}
-	if e.SessionID() != Unavailable || e.TranscriptPath() != Unavailable || !e.TokensUnavailable() {
+	if e.sessionID() != Unavailable || e.transcriptPath() != Unavailable || !e.tokensUnavailable() {
 		t.Errorf("not every session key says unavailable: %v", d)
 	}
 }
@@ -159,7 +159,7 @@ func TestSessionDetailKeepsSubagentsWhenTheMainTranscriptHasNoUsage(t *testing.T
 	if subs, _ := d.Get("subagents"); !reflect.DeepEqual(subs, []any{sub}) {
 		t.Errorf("subagents %v, want [%s]", subs, sub)
 	}
-	if !(Entry{Detail: d}).TokensUnavailable() {
+	if !(Entry{Detail: d}).tokensUnavailable() {
 		t.Errorf("tokens %v, want unavailable", d)
 	}
 }

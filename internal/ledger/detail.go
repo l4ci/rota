@@ -102,8 +102,8 @@ func TrainMemberDetail(verdict, culprit string) *jsonx.Object {
 // MergeRemoteDetail is the detail of a merge row for a PR merged outside rota.
 func MergeRemoteDetail() *jsonx.Object { return detail(keyBy, "remote") }
 
-// MergedBy reads who merged: "remote" for a PR merged outside rota, "" otherwise.
-func (e Entry) MergedBy() string { return e.detailStr(keyBy) }
+// mergedBy reads who merged: "remote" for a PR merged outside rota, "" otherwise.
+func (e Entry) mergedBy() string { return e.detailStr(keyBy) }
 
 // VerificationDetail is the detail of a verification row; prs may be empty.
 func VerificationDetail(tier string, wallSeconds float64, suites any, prs []string) *jsonx.Object {
@@ -159,8 +159,8 @@ func (e Entry) Verdict() string { return e.detailStr(keyVerdict) }
 // Tier reads a gate, train or verification row's tier, "" when absent.
 func (e Entry) Tier() string { return e.detailStr(keyTier) }
 
-// Culprit reads the train member a gate row names as the breaker.
-func (e Entry) Culprit() string { return e.detailStr(keyCulprit) }
+// culprit reads the train member a gate row names as the breaker.
+func (e Entry) culprit() string { return e.detailStr(keyCulprit) }
 
 // IsTrainMember reports whether a gate row was written for a train member.
 func (e Entry) IsTrainMember() bool { return e.Detail != nil && jsonx.Bool(e.Detail, keyTrain) }
@@ -177,8 +177,8 @@ func (e Entry) CapReason() string { return e.detailStr(keyCapReason) }
 // TransferFrom reads the slot a transfer row's issue left.
 func (e Entry) TransferFrom() string { return e.detailStr(keyFrom) }
 
-// Loser reads the slot a pick row closed.
-func (e Entry) Loser() string { return e.detailStr(keyLoser) }
+// loser reads the slot a pick row closed.
+func (e Entry) loser() string { return e.detailStr(keyLoser) }
 
 // CreateTitle reads a create row's normalized title.
 func (e Entry) CreateTitle() string { return e.detailStr(keyTitle) }
@@ -189,21 +189,18 @@ func (e Entry) CreateTarget() string { return e.detailStr(keyTarget) }
 // AdoptedBranch reads an adopt row's branch.
 func (e Entry) AdoptedBranch() string { return e.detailStr(keyBranch) }
 
-// ResetsAt reads a limited row's reset time.
-func (e Entry) ResetsAt() string { return e.detailStr(keyResetsAt) }
+// resetsAt reads a limited row's reset time.
+func (e Entry) resetsAt() string { return e.detailStr(keyResetsAt) }
 
-// SessionID reads the session a done or park row recorded, "unavailable" when
+// sessionID reads the session a done or park row recorded, "unavailable" when
 // it could not be read.
-func (e Entry) SessionID() string { return e.detailStr(keySession) }
+func (e Entry) sessionID() string { return e.detailStr(keySession) }
 
-// TranscriptPath reads the transcript path of a done or park row.
-func (e Entry) TranscriptPath() string { return e.detailStr(keyTranscript) }
+// transcriptPath reads the transcript path of a done or park row.
+func (e Entry) transcriptPath() string { return e.detailStr(keyTranscript) }
 
-// TokensUnavailable reports whether the row's token totals say unavailable.
-func (e Entry) TokensUnavailable() bool { return e.detailStr(keyTokens) == Unavailable }
-
-// TranscriptCopy reads where the transcript was copied, or "failed".
-func (e Entry) TranscriptCopy() string { return e.detailStr(keyTranscriptCopy) }
+// tokensUnavailable reports whether the row's token totals say unavailable.
+func (e Entry) tokensUnavailable() bool { return e.detailStr(keyTokens) == Unavailable }
 
 // detailStr reads a string field of the entry's detail, "" when absent.
 func (e Entry) detailStr(key string) string {

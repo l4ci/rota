@@ -404,10 +404,10 @@ func TestLedgerDoneRecordsTheReportedSession(t *testing.T) {
 	if len(es) != 2 {
 		t.Fatalf("entries %+v", es)
 	}
-	if es[0].SessionID() != "sid-9" || es[0].TranscriptPath() != tr || es[0].TokensUnavailable() {
+	if !strings.Contains(detailJSON(t, es[0].Detail), `"sid-9"`) || !strings.Contains(detailJSON(t, es[0].Detail), tr) || strings.Contains(detailJSON(t, es[0].Detail), ledger.Unavailable) {
 		t.Errorf("first row %v", es[0].Detail)
 	}
-	if es[1].SessionID() != "sid-9" || !es[1].TokensUnavailable() {
+	if !strings.Contains(detailJSON(t, es[1].Detail), `"sid-9"`) || !strings.Contains(detailJSON(t, es[1].Detail), ledger.Unavailable) {
 		t.Errorf("row with the transcript gone %v", es[1].Detail)
 	}
 }
@@ -451,8 +451,20 @@ func TestLedgerSessionSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T) 
 	}}
 	d := jsonx.NewObject()
 	LedgerSession(env, t.TempDir(), ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"}, d)
-	e := ledger.Entry{Detail: d}
-	if e.SessionID() != "unavailable" || e.TranscriptPath() != "unavailable" || !e.TokensUnavailable() {
+	want := jsonx.NewObject()
+	ledger.SetUnavailable(want)
+	if detailJSON(t, d) != detailJSON(t, want) {
 		t.Errorf("not every session key says unavailable: %v", d)
 	}
+}
+
+// detailJSON is the compact JSON of a ledger detail, for comparing a row's
+// detail with one the ledger's own constructors build.
+func detailJSON(t *testing.T, o *jsonx.Object) string {
+	t.Helper()
+	b, err := jsonx.MarshalCompact(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

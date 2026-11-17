@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 )
 
@@ -18,7 +19,7 @@ func TestLimitLedgerLimited(t *testing.T) {
 		t.Fatalf("entries %+v", es)
 	}
 	l := es[0]
-	if l.Slot != "ben" || l.Issue != "67" || l.Account != "a" || l.ResetsAt() != Time(t0.Add(2*time.Hour)) {
+	if l.Slot != "ben" || l.Issue != "67" || l.Account != "a" || jsonOf(l.Detail) != jsonOf(ledger.LimitedDetail(Time(t0.Add(2*time.Hour)), WindowFiveHour)) {
 		t.Errorf("limited = %+v", l)
 	}
 }
@@ -32,4 +33,9 @@ func TestLimitLedgerSleepIsOnlyLimited(t *testing.T) {
 	if len(es) != 1 || es[0].Kind != ledger.KindLimited {
 		t.Fatalf("entries %+v", es)
 	}
+}
+
+func jsonOf(o *jsonx.Object) string {
+	b, _ := jsonx.MarshalCompact(o)
+	return string(b)
 }

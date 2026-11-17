@@ -156,7 +156,7 @@ func copyTranscript(s Session, dir string) (string, error) {
 
 // SetUnavailable marks every session key of detail unavailable.
 func SetUnavailable(detail *jsonx.Object) {
-	for _, k := range []string{"session", "transcript", "tokens"} {
+	for _, k := range []string{keySession, keyTranscript, keyTokens} {
 		detail.Set(k, Unavailable)
 	}
 }
