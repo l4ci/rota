@@ -144,11 +144,8 @@ func (f *File) requireBacklog() error {
 	return nil
 }
 
-// git runs git in the project root and returns trimmed stdout.
-func (f *File) git(args ...string) (string, bool) {
-	res, err := gitx.Repo{Dir: f.Root}.Run(context.Background(), args...)
-	return pystr.Strip(res.Stdout), err == nil && res.ExitCode == 0
-}
+// git is the project root's git repository.
+func (f *File) git() gitx.Repo { return gitx.Repo{Dir: f.Root} }
 
 // Append adds line at the end of a section ("## Bugs" or "Bugs") of
 // BACKLOG.md. A bullet without a Since field gets `Since: <short HEAD>` when
@@ -157,7 +154,7 @@ func (f *File) git(args ...string) (string, bool) {
 func (f *File) Append(sec, line string) error {
 	name := strings.TrimPrefix(sec, "## ")
 	if strings.HasPrefix(line, "- ") && !strings.Contains(line, "Since:") {
-		if head, ok := f.git("rev-parse", "--short", "HEAD"); ok && head != "" {
+		if head, ok, err := f.git().ShortHead(context.Background()); err == nil && ok && head != "" {
 			line = line + " Since: " + head
 		}
 	}
@@ -476,8 +473,8 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 // isRefactor is whether the commit's subject is a `refactor:` form; a hash git
 // cannot resolve is not.
 func (f *File) isRefactor(hash string) bool {
-	subj, ok := f.git("log", "-1", "--format=%s", hash)
-	return ok && refactorSubject.MatchString(subj)
+	subj, ok, err := f.git().Output(context.Background(), "log", "-1", "--format=%s", hash)
+	return err == nil && ok && refactorSubject.MatchString(subj)
 }
 
 // bumpSinceRefactor adds delta to counters.json since_refactor[key], never
@@ -626,7 +623,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 	// Mirror Complete's bump in reverse; tasks and refactor commits carry no
 	// count, and a hash git cannot resolve is skipped.
 	if t, _ := TypeByKind(dirName); t.Countable {
-		if subj, ok := f.git("log", "-1", "--format=%s", doneHash); ok && !refactorSubject.MatchString(subj) {
+		if subj, ok, err := f.git().Output(context.Background(), "log", "-1", "--format=%s", doneHash); err == nil && ok && !refactorSubject.MatchString(subj) {
 			if err := f.bumpSinceRefactor(dirName, -1); err != nil {
 				return true, err
 			}
