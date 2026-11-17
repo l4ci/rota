@@ -22,7 +22,6 @@ type fakeKeychain struct {
 	fail error // Set fails with it, as a headless Linux box does
 }
 
-func (*fakeKeychain) Name() string { return connections.StoreKeychain }
 func (k *fakeKeychain) Get(_ context.Context, n string) (string, bool, error) {
 	v, ok := k.vals[n]
 	return v, ok, nil

@@ -121,12 +121,6 @@ func AppendDependsOn(body []byte, refs []string) []byte {
 	return appendBullets(body, "Depends on", refs)
 }
 
-// AppendFiles adds a "## Files" section, one bullet per path or glob, after
-// body.
-func AppendFiles(body []byte, paths []string) []byte {
-	return appendBullets(body, "Files", paths)
-}
-
 func appendBullets(body []byte, heading string, items []string) []byte {
 	var b strings.Builder
 	if t := strings.TrimRight(string(body), "\n"); t != "" {

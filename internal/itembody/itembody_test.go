@@ -83,8 +83,6 @@ func TestAppend(t *testing.T) {
 		want string
 	}{
 		{"depends on empty body", AppendDependsOn, "", []string{"#1", "#2"}, "## Depends on\n\n- #1\n- #2\n"},
-		{"files after body", AppendFiles, "Body text\n\n\n", []string{"a.go", "b/*.go"}, "Body text\n\n## Files\n\n- a.go\n- b/*.go\n"},
-		{"no items", AppendFiles, "x", nil, "x\n\n## Files\n\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

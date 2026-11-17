@@ -692,11 +692,6 @@ func WithTimeout(d time.Duration) Option {
 	return func(c *CLI) { c.Timeout = d }
 }
 
-// WithSleep replaces the rate-limit wait.
-func WithSleep(sleep func(time.Duration)) Option {
-	return func(c *CLI) { c.Sleep = sleep }
-}
-
 // base holds what both adapters share.
 type base struct {
 	cli          *CLI

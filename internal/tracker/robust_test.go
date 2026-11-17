@@ -32,7 +32,7 @@ func (s *scripted) exec(_ context.Context, _, name string, args []string, _ []by
 func newAdapter(t *testing.T, provider string, s *scripted) Adapter {
 	t.Helper()
 	a, err := New(context.Background(), Settings{Provider: provider, NotPlannedLabel: "not-planned"}, "", "/repo",
-		WithExec(s.exec, func(string) (string, error) { return "/fake", nil }), WithSleep(func(time.Duration) {}))
+		WithExec(s.exec, func(string) (string, error) { return "/fake", nil }), noSleep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,3 +561,6 @@ func TestGitHubOldGhNoStateReason(t *testing.T) {
 		t.Fatalf("get should skip the rejected field, calls %q", s.calls)
 	}
 }
+
+// noSleep skips the rate-limit wait.
+func noSleep(c *CLI) { c.Sleep = func(time.Duration) {} }

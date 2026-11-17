@@ -507,7 +507,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 func TestItemBodyRoundTrip(t *testing.T) {
 	body := []byte("## Goal\nx\n\n### Depends on is not a dependency here\n")
 	body = itembody.AppendDependsOn(body, []string{"#57", "B07"})
-	body = itembody.AppendFiles(body, []string{"internal/cli/item.go", "internal/new/*.go"})
+	body = append(body, "\n## Files\n\n- internal/cli/item.go\n- internal/new/*.go\n"...)
 	refs, bad := dependencies(string(body), "")
 	if !reflect.DeepEqual(refs, []string{"57", "B07"}) || bad != nil {
 		t.Errorf("depends read back %v %v", refs, bad)

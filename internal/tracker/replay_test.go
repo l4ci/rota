@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 // The fixtures in testdata/ are the retired M07 Python adapters recorded
@@ -83,7 +82,7 @@ func replay(t *testing.T, path string) {
 	found := func(string) (string, error) { return "/fake", nil }
 	ctx := context.Background()
 	a, err := New(ctx, Settings{Provider: rec.Provider, NotPlannedLabel: "not-planned"}, "", "",
-		WithExec(x, found), WithSleep(func(time.Duration) {}))
+		WithExec(x, found), noSleep)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -57,7 +57,7 @@ func useForge(t *testing.T, f *forge) *Deps {
 		return "/fake/" + name, nil
 	}
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), tracker.WithSleep(func(time.Duration) {})}
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), func(c *tracker.CLI) { c.Sleep = func(time.Duration) {} }}
 	return d
 }
 

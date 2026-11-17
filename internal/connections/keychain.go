@@ -28,8 +28,6 @@ type osKeychain struct {
 	goos string
 }
 
-func (osKeychain) Name() string { return StoreKeychain }
-
 func (k osKeychain) call(ctx context.Context, stdin string, args ...string) (proc.Result, error) {
 	c := proc.Cmd{Name: "security", Args: args}
 	if k.goos == "linux" {
