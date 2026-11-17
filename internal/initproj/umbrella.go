@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -207,18 +206,13 @@ func sortedUnion(a, b []string) []string {
 // that is missing, through the same merge as project init. It reports whether
 // it wrote.
 func ignoreBlock(root string, names []string) (bool, error) {
-	path := filepath.Join(root, ".gitignore")
-	raw, err := os.ReadFile(path)
-	text := string(raw)
 	wanted := []string{".claude/", rotatree.RelPrefix}
 	for _, n := range names {
 		wanted = append(wanted, "/"+n+"/")
 	}
-	next := mergeIgnore(text, err == nil, umbrellaHeader, wanted)
-	if err == nil && next == text {
-		return false, nil
-	}
-	return true, fsio.WriteFileAtomic(path, []byte(next))
+	return mergeIgnoreFile(filepath.Join(root, ".gitignore"), func(text string, exists bool) string {
+		return mergeIgnore(text, exists, umbrellaHeader, wanted)
+	})
 }
 
 // snapshot is `find .rota .gitignore`: every path under .rota and the .gitignore,

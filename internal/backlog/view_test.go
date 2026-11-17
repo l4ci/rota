@@ -86,15 +86,6 @@ func TestOpenRowsIssues(t *testing.T) {
 	}
 }
 
-func TestParseMilestones(t *testing.T) {
-	if got := ParseMilestones("M01, M3 and m5 and M١٢"); !reflect.DeepEqual(got, []string{"M01", "M3", "M١٢"}) {
-		t.Errorf("ParseMilestones = %q", got)
-	}
-	if got := ParseMilestones(""); got != nil {
-		t.Errorf("empty = %q", got)
-	}
-}
-
 func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 	rows, _, _, _ := OpenRows(fileBackend(t, viewBacklog))
 	if got := IDsByMilestone(rows, "M02"); !reflect.DeepEqual(got, []string{"B01", "F01"}) {

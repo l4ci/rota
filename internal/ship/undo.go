@@ -127,7 +127,10 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 		return UndoPlan{}, err
 	}
 
-	post, _ := out(g, "log", "--first-parent", "--oneline", merge+".."+base)
+	post, err := out(g, "log", "--first-parent", "--oneline", merge+".."+base)
+	if err != nil {
+		return UndoPlan{}, err
+	}
 	if post != "" {
 		p.PostCount = len(strings.Split(post, "\n"))
 	}
@@ -137,13 +140,20 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 	}
 
 	// A remote ref at the cycle tip means the cycle went through a PR.
-	if refs, _ := out(g, "for-each-ref", "--format=%(refname:short)", "--points-at", tip, "refs/remotes/"); refs != "" {
+	refs, err := out(g, "for-each-ref", "--format=%(refname:short)", "--points-at", tip, "refs/remotes/")
+	if err != nil {
+		return UndoPlan{}, err
+	}
+	if refs != "" {
 		return UndoPlan{}, &Refusal{By: blockedby.PRMode, Msg: fmt.Sprintf("PR-mode cycle: rolling back upstream PRs is manual (gh pr close / git revert); remote ref(s) at the cycle tip: %s",
 			strings.Join(strings.Split(refs, "\n"), ", "))}
 	}
 
 	hashes := map[string]bool{}
-	hs, _ := out(g, "log", "--pretty=%h", merge+"^1.."+merge+"^2")
+	hs, err := out(g, "log", "--pretty=%h", merge+"^1.."+merge+"^2")
+	if err != nil {
+		return UndoPlan{}, err
+	}
 	for _, h := range strings.Split(hs, "\n") {
 		if h = pystr.Strip(h); h != "" {
 			hashes[h] = true

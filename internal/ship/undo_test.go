@@ -82,6 +82,14 @@ func TestPlanUndoGuards(t *testing.T) {
 			edit: func(f *fakeGit) {
 				f.out["for-each-ref --format=%(refname:short) --points-at T refs/remotes/"] = "origin/x\norigin/y"
 			}},
+		{name: "post-merge log fails", cur: "main", wantKind: "git",
+			edit: func(f *fakeGit) { f.fail["log --first-parent --oneline M..main"] = true }},
+		{name: "remote refs read fails", cur: "main", wantKind: "git",
+			edit: func(f *fakeGit) {
+				f.fail["for-each-ref --format=%(refname:short) --points-at T refs/remotes/"] = true
+			}},
+		{name: "cycle hashes read fails", cur: "main", wantKind: "git",
+			edit: func(f *fakeGit) { f.fail["log --pretty=%h M^1..M^2"] = true }},
 		{name: "rev-parse fails", cur: "main", wantKind: "git",
 			edit: func(f *fakeGit) { f.fail["rev-parse --short M"] = true }},
 		{name: "cycle is not a commit", cur: "main", opts: UndoOpts{Cycle: "zzz"}, wantKind: "notfound", wantMsg: "--cycle hash 'zzz' is not a valid commit"},

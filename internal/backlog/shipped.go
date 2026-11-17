@@ -133,8 +133,8 @@ type commitHit struct {
 	tokens  []string
 }
 
-// AuditTitle gathers the evidence for one title in the git repo at dir.
-func AuditTitle(dir, root, title string) TitleAudit {
+// auditTitle gathers the evidence for one title in the git repo at dir.
+func auditTitle(dir, root, title string) TitleAudit {
 	distinctive, common := extractTokens(title)
 	var paths []Hit
 	for _, tok := range distinctive {
@@ -188,9 +188,9 @@ func AuditTitle(dir, root, title string) TitleAudit {
 	return res
 }
 
-// GitRoot is `git rev-parse --show-toplevel` in dir, or dir itself when it is
+// gitRoot is `git rev-parse --show-toplevel` in dir, or dir itself when it is
 // not in a repo.
-func GitRoot(dir string) string {
+func gitRoot(dir string) string {
 	top, ok, err := gitx.Repo{Dir: dir}.Toplevel(context.Background())
 	if err != nil || !ok {
 		return dir
@@ -201,13 +201,13 @@ func GitRoot(dir string) string {
 // Audit runs the audit for each non-blank title in the git repo around dir.
 // Titles without evidence are listed with no hits.
 func Audit(dir string, titles []string) []TitleAudit {
-	root := GitRoot(dir)
+	root := gitRoot(dir)
 	var out []TitleAudit
 	for _, t := range titles {
 		if pystr.Strip(t) == "" {
 			continue
 		}
-		out = append(out, AuditTitle(dir, root, t))
+		out = append(out, auditTitle(dir, root, t))
 	}
 	return out
 }

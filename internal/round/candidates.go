@@ -197,7 +197,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if err != nil {
 			return nil, err
 		}
-		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
+		ms := milestone.IDs(it.Fields.Get("milestone"))
 		scopes, src := ItemScopeSource(be, it.ID)
 		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Tag: it.Tag, Scopes: scopes, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
 		if src == SourceTouches {
@@ -331,7 +331,7 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 			want[id] = true
 		}
 		return func(it backlog.Item) bool {
-			for _, m := range backlog.ParseMilestones(it.Fields.Get("milestone")) {
+			for _, m := range milestone.IDs(it.Fields.Get("milestone")) {
 				if want[m] {
 					return true
 				}

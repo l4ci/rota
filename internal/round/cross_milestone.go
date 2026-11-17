@@ -34,7 +34,7 @@ func activeMilestoneIDs(be backlog.Backend) ([]string, error) {
 // activeTags is the active milestones an item is tagged to.
 func activeTags(it backlog.Item, active []string) []string {
 	var out []string
-	for _, m := range backlog.ParseMilestones(it.Fields.Get("milestone")) {
+	for _, m := range milestone.IDs(it.Fields.Get("milestone")) {
 		if slices.Contains(active, m) {
 			out = append(out, m)
 		}
@@ -131,7 +131,7 @@ func (c *crossMilestones) check(it backlog.Item) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		tags := backlog.ParseMilestones(dep.Fields.Get("milestone"))
+		tags := milestone.IDs(dep.Fields.Get("milestone"))
 		state := "open"
 		if dep.Closed {
 			tags = nil
@@ -151,7 +151,7 @@ func (c *crossMilestones) check(it backlog.Item) ([]string, error) {
 		}
 	}
 	myScopes := body.scopes
-	if len(myScopes) == 0 || len(backlog.ParseMilestones(it.Fields.Get("milestone"))) == 0 {
+	if len(myScopes) == 0 || len(milestone.IDs(it.Fields.Get("milestone"))) == 0 {
 		return out, nil
 	}
 	if err := c.loadActive(); err != nil {
@@ -171,7 +171,7 @@ func (c *crossMilestones) check(it backlog.Item) ([]string, error) {
 		if worker.NormID(x.ID) == worker.NormID(it.ID) {
 			continue
 		}
-		tags, err := other(backlog.ParseMilestones(x.Fields.Get("milestone")))
+		tags, err := other(milestone.IDs(x.Fields.Get("milestone")))
 		if err != nil {
 			return nil, err
 		}
