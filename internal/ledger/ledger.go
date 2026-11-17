@@ -46,6 +46,10 @@ const (
 	KindReviewReply = "review-reply"
 	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
 	KindAdopt = "adopt"
+	// KindSwitch records `rota round switch`: the slot keeps its issue and runs
+	// under account/harness from now on; detail names the ones it left and the
+	// checkpoint sha7.
+	KindSwitch = "switch"
 )
 
 // Cap reasons: why an item at round.maxBounces (or round.freshAt) left its slot. They are the

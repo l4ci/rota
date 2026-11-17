@@ -226,6 +226,23 @@ func (m limitMover) Transfer(ctx context.Context, issue, to string) error {
 	return err
 }
 
+// Switch moves the limited slot itself to the account, keeping its issue,
+// when no idle slot can take the issue.
+func (m limitMover) Switch(ctx context.Context, slot, account string) error {
+	env, be, err := moveEnv(m.c, m.root)
+	if err != nil {
+		return err
+	}
+	env.HolderPID = m.holderPID
+	// Finished once begun, like the transfer: a checkpoint pushed and a
+	// session killed with no relaunch is what a cut would leave.
+	_, err = env.Switch(context.WithoutCancel(ctx), m.root, be, round.SwitchOpts{
+		Slot: slot, Account: account,
+		Note: "The slot's account hit its usage limit and no idle slot was free; rota limit watch switched this slot to another account in place.",
+	})
+	return err
+}
+
 // accountSource adapts the worker accounts and the harness config to
 // limits.AccountSource.
 type accountSource struct {
