@@ -1,8 +1,10 @@
 package postgate
 
 import (
+	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/worker"
@@ -13,7 +15,10 @@ type fakeBook struct {
 	calls []string
 	posts []post
 	// failOn names a call that returns an error.
-	failOn string
+	failOn     string
+	targets    map[string]worker.GateTarget
+	targetsErr error
+	origin     bool
 }
 
 type post struct{ branch, pr, head, why string }
@@ -34,6 +39,13 @@ func (b *fakeBook) PostReviewBounce(_, branch, pr, head, why string) error {
 	b.posts = append(b.posts, post{branch, pr, head, why})
 	return nil
 }
+
+func (b *fakeBook) Targets(root string, args []string) (map[string]worker.GateTarget, error) {
+	b.calls = append(b.calls, "targets:"+strings.Join(args, ","))
+	return b.targets, b.targetsErr
+}
+
+func (b *fakeBook) HasOrigin(context.Context, string) bool { return b.origin }
 
 func landedCalls(issue string) []string {
 	return []string{"start:" + issue, "bestof:" + issue, "bounces:" + issue}
