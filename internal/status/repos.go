@@ -25,7 +25,7 @@ func Missing(registry []repos.Repo, names []string) []string {
 }
 
 // HasCode is whether dir holds anything besides the umbrella's own files and
-// the top-level directories of the given sub-repos (hv-refactor-targets).
+// the top-level directories of the given sub-repos (the retired refactor-targets helper).
 func HasCode(dir string, registry []repos.Repo) bool {
 	real := repos.Realpath(dir)
 	sub := map[string]bool{}

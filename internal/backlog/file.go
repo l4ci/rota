@@ -17,7 +17,7 @@ import (
 )
 
 // File is the backlog kept in .rota/BACKLOG.md, with finished items in
-// .rota/ARCHIVE.md (FileBackend in hvlib_backend.py).
+// .rota/ARCHIVE.md (ported from the retired Python FileBackend).
 type File struct {
 	Root string // project root, the directory that holds .rota/
 	// CountProof counts the proof rows in an item's detail text. The row format

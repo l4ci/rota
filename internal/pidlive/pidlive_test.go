@@ -127,7 +127,7 @@ func TestProcStatCurrentPid(t *testing.T) {
 	}
 	ppid, start, ok := (Real{}).Stat(os.Getpid())
 	if !ok {
-		t.Fatal("ProcStat(self) not ok")
+		t.Fatal("procStat(self) not ok")
 	}
 	if ppid != os.Getppid() {
 		t.Errorf("ppid = %d, want %d", ppid, os.Getppid())

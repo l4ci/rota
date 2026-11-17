@@ -1,4 +1,4 @@
-// Package milestone ports the hv-vision-* helpers for file mode: milestone
+// Package milestone ports the retired vision helpers for file mode: milestone
 // detail files under .rota/milestones/<MNN>.md, the overview in
 // .rota/MILESTONES.md and the managed vision block in the instructions file.
 package milestone
@@ -27,7 +27,7 @@ import (
 var Statuses = []string{"planned", "active", "shipped", "archived"}
 
 // fmBlock and fmID are private on purpose. Put's id check mirrors
-// hvlib_backend.milestone_put exactly: a `---` block at the very start (LF or
+// the retired Python milestone_put exactly: a `---` block at the very start (LF or
 // CRLF), then the first `id:` line inside it, taken as typed. The shared
 // frontmatter parser keeps the last of a repeated key and trims values, so it
 // could accept a text the old helper refused; it is not used here.
@@ -318,7 +318,7 @@ func fileHistory(ms string) bool {
 	return err == nil && historyStatusRe.MatchString(text)
 }
 
-// updateStatusLine is hvlib_repos.update_milestone_status_line: the first
+// updateStatusLine is the retired Python update_milestone_status_line: the first
 // "### <id> — <title>\n\n**Status:** <status>" gets the new status.
 func updateStatusLine(content, id, status string) string {
 	re := regexp.MustCompile(`(### ` + regexp.QuoteMeta(id) + ` — [^\n]+\n\n\*\*Status:\*\* )(?:planned|active|shipped|archived)`)
@@ -341,7 +341,7 @@ func Index(root string) (changed bool, err error) {
 }
 
 // seed is the MILESTONES.md an issue-mode index starts from when there is none
-// (hv-bootstrap's text).
+// (the retired bootstrap helper's text).
 const seed = "# Milestones\n\n_(no vision yet \u2014 run `/rota-vision` to brainstorm milestones)_\n\n" +
 	"## Active milestones\n\n_(none active \u2014 set with `/rota-vision`)_\n\n## Milestones\n"
 
