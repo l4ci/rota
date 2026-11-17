@@ -226,8 +226,16 @@ rota round switch ben --account work2   # a named account; refused as `limited` 
 rota round switch ben --kind codex      # move ben to the other harness
 ```
 
+The checkpoint is pushed: the branch, and any open PR on it, now shows a `wip: checkpoint before switch` head,
+and it is pushed even when nothing was uncommitted. To drop it, `git revert` it; never reset and force-push.
+
 Without `--kind` the harness stays. A refusal (an account at its limit, a gate running on the slot) changes
-nothing. A failed push takes the checkpoint back and leaves the worktree as it was.
+nothing and comes before the checkpoint. A failed push takes the checkpoint back and leaves the worktree as it
+was; if that rollback fails too, the error says so and the commit stays on the branch.
+
+If the dispatch fails after the checkpoint (exit 5), the slot already records the new account. Run the same
+verb again with `--account <the new account>`: nothing new is committed, the account is not picked again, and
+the dispatch retries. A new account that is at its limit is refused (exit 4) before anything is written.
 
 ### The slot cap
 

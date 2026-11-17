@@ -35,6 +35,9 @@ func roundSwitch(fs *flag.FlagSet) RunFunc {
 			r, ferr := moveFailure(err, res.Changed)
 			if res.Changed {
 				r.Data = switchData(res)
+				if !res.Dispatched && res.ToAccount != "" {
+					c.Warn("the checkpoint is pushed and the slot records %s, but no new session started: retry with `rota round switch %s --account %s`", accountText(res.ToAccount), res.Slot, res.ToAccount)
+				}
 			}
 			return r, ferr
 		}
@@ -45,6 +48,7 @@ func roundSwitch(fs *flag.FlagSet) RunFunc {
 		if res.Checkpoint != "" {
 			cp = "checkpoint " + res.Checkpoint
 		}
+		cp += ", pushed to the branch (a recorded PR now shows it)"
 		return Result{Data: switchData(res), Text: fmt.Sprintf("switched %s (%s) from %s/%s to %s/%s, %s",
 			res.Slot, res.Issue, res.FromKind, accountText(res.FromAccount), res.ToKind, accountText(res.ToAccount), cp)}, nil
 	})
