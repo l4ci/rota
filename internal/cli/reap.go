@@ -75,11 +75,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
 		}
 		in.ProcessUses = c.deps().ProcessUses
-		if cd, err := rotastate.CommonDirVia(ctx, c.deps().Git, root); err == nil {
-			if tr, ok := rotastate.TempRoot(cd); ok {
-				in.TempRoot = tr
-			}
-		}
+		in.TempRoot, _ = rotastate.FindTempRoot(ctx, c.deps().Git, root)
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

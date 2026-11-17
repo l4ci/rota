@@ -11,10 +11,11 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
-const reviewWorkspacePrefix = "rota-review-"
+const reviewWorkspacePrefix = reap.ReviewWorkspacePrefix
 const reviewWorkspaceMarker = "workspace.json"
 
 type reviewWorkspace struct {

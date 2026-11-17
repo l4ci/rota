@@ -126,6 +126,9 @@ type Input struct {
 // leaked: a younger one may belong to a run still going.
 const LeftoverAge = time.Hour
 
+// ReviewWorkspacePrefix names the dirs `rota review prepare` makes in the system temp dir.
+const ReviewWorkspacePrefix = "rota-review-"
+
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
 // before its `rota skills get` extraction counts as killed.
 const extractMaxAge = LeftoverAge
