@@ -18,6 +18,8 @@ project_tmp() {
   if [ ! -d "$root" ]; then
     (umask 077 && mkdir -p "$root") || return 1
   fi
+  # An existing root must be ours and goes back to 0700, as ensureTempRoot does.
+  [ -O "$root" ] && chmod 700 "$root" || return 1
   [ -e "$root/.gitignore" ] || [ -L "$root/.gitignore" ] || printf '*\n' > "$root/.gitignore" || return 1
   printf '%s\n' "$root"
 }
