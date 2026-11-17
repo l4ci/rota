@@ -19,7 +19,7 @@ import (
 // a `harvested` comment on the same issue naming the learning's comment id.
 func knHarvest(fs *flag.FlagSet) RunFunc {
 	mark := fs.String("mark", "", "mark the learning comment `id` harvested")
-	round := fs.Int("round", -1, "the round number; default is the lease's round, else the highest in the ledger")
+	round := fs.Int("round", -1, "the round number; default is the live lease's round, else the registry's, else the highest in the ledger")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
@@ -176,6 +176,10 @@ func mergedIssues(entries []ledger.Entry, round int) []string {
 
 // currentRound is the round worker.CurrentRound names from the lease, the
 // registry and the ledger, including supplied rounds identified in damaged events.
+// The registry outranks the ledger on purpose (#3593): a round that was started
+// but has no ledger rows yet, or a registry that moved past the ledger, is still
+// the round the maintainer is in, so summary and harvest target it instead of
+// falling back to the last round that happens to have rows.
 func currentRound(c *Ctx, root string, entries []ledger.Entry, knownRounds ...int) int {
 	var src worker.RoundSources
 	src.Registry, src.HasRegistry = worker.LoadRegistryTolerant(root).Round()

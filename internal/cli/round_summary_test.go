@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -267,5 +268,20 @@ func TestRoundSummaryUnknownRoundExits3(t *testing.T) {
 	seedLedger(t, dir)
 	if code, _, _ := rotaInWith(t, deps, dir, "round", "summary", "--round", "9"); code != 3 {
 		t.Errorf("exit %d, want 3", code)
+	}
+}
+
+// A started round (registry round 5) with no ledger rows for it still names the
+// round: the registry outranks the ledger's highest round (2), so the summary
+// does not fall back to the last round that has rows (#3599).
+func TestRoundSummaryRegistryRoundOutranksLedger(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	seedLedger(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"round":5,"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ := rotaInWith(t, testDeps(), dir, "round", "summary", "--json")
+	if code != 0 || data(t, out)["round"] != float64(5) {
+		t.Fatalf("registry round 5 must win over ledger round 2: exit %d: %s", code, out)
 	}
 }

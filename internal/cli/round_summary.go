@@ -11,10 +11,11 @@ import (
 
 // roundSummaryVerb folds a round's ledger and the gate audit log into the table the
 // orchestrator reads at wind-down: a row per issue, totals per slot and per
-// account. The round is the lease's, else the highest in the ledger; --round
+// account. The round is the live lease's, else the registry's, else the highest in
+// the ledger; --round
 // picks another. No ledger yet is not an error.
 func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
-	want := fs.Int("round", -1, "the round number; default is the lease's round, else the highest in the ledger")
+	want := fs.Int("round", -1, "the round number; default is the live lease's round, else the registry's, else the highest in the ledger")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
