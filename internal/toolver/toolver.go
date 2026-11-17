@@ -220,6 +220,11 @@ func searchDirs(dir, root string) []string {
 // Newer reports whether project is a newer major.minor than seen. Only the
 // leading segments both versions have count, up to two, so "4" vs "4.2" and
 // patch differences are not newer. Unparseable versions are never newer.
+//
+// This does not use internal/semver: that package orders release versions of
+// rota itself by a full X.Y.Z core, while this compares tool versions a
+// knowledge entry was written against, where a missing segment means "any" and
+// patch never counts, and r-prefixed or two-segment versions are normal.
 func Newer(seen, project string) bool {
 	s, p := segments(seen), segments(project)
 	n := min(len(s), len(p), 2)
