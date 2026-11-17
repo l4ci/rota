@@ -52,8 +52,8 @@ type Entry struct{ ID, Title, Status, Created string }
 
 // List reads .rota/designs/*.md in name order; files without frontmatter are
 // skipped. status defaults to draft and id to the file stem.
-func List(root string) ([]Entry, error) {
-	docs, err := artifact.ListDocs(rotatree.File(root, rotatree.DesignsDir))
+func (s files) List() ([]Entry, error) {
+	docs, err := artifact.ListDocs(rotatree.File(s.root, rotatree.DesignsDir))
 	if err != nil {
 		return nil, err
 	}

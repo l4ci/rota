@@ -159,33 +159,22 @@ func MigrateMergesFiles(root, globalDir string, apply bool) (MergesMigration, er
 }
 
 func migrateMergesPlan(files []*migrationFile, m *MergesMigration) error {
-	var conflicts []MergeConflict
 	var below []any
-	for _, f := range files {
-		if f.doc == nil {
-			continue
-		}
-		view := f.doc
-		if f.layer != layerGlobal {
+	return planLayers(files, false, func(c *MergeConflict, file string) { c.File = file },
+		func(f *migrationFile) []MergeConflict {
 			// The renamed view, as the accounts step plans on.
-			view, _, _ = MigrateRoundKeys(f.doc)
-		}
-		out, from, c := migrateMergesDoc(view, below)
-		for _, x := range c {
-			x.File = f.name
-			conflicts = append(conflicts, x)
-		}
-		if len(from) > 0 && len(c) == 0 {
-			f.doc, f.changed = out, true
-			m.Changes = append(m.Changes, MergeChange{File: f.name, From: from})
-		}
-		if h, _ := lookupPresent(f.doc, []string{"round", "harnesses"}); len(asList(h)) > 0 {
-			below = asList(h)
-		}
-	}
-	if len(conflicts) > 0 {
-		*m = MergesMigration{}
-		return &MergeConflictError{Conflicts: conflicts}
-	}
-	return nil
+			out, from, c := migrateMergesDoc(renamedView(f), below)
+			if len(from) > 0 && len(c) == 0 {
+				f.doc, f.changed = out, true
+				m.Changes = append(m.Changes, MergeChange{File: f.name, From: from})
+			}
+			if h, _ := lookupPresent(f.doc, []string{"round", "harnesses"}); len(asList(h)) > 0 {
+				below = asList(h)
+			}
+			return c
+		},
+		func(all []MergeConflict) error {
+			*m = MergesMigration{}
+			return &MergeConflictError{Conflicts: all}
+		})
 }

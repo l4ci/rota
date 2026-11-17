@@ -445,3 +445,23 @@ func TestAutoBundleDefaultsFromAutonomyLevel(t *testing.T) {
 		}
 	}
 }
+
+// A failure inside fill's locked section (here: no lock file can be created in
+// an unwritable .rota) must surface, never read as "nothing to fill".
+func TestFillReturnsLockedSectionError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory modes")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, ".rota")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	if _, err := Fill(cfgdir.OSEnv(), root); err == nil {
+		t.Fatal("Fill returned nil with an unwritable .rota and no config.json")
+	}
+}

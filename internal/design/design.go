@@ -5,10 +5,10 @@
 package design
 
 import (
-	"errors"
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/section"
@@ -29,6 +29,9 @@ type Store interface {
 	// Update rewrites an existing design from its stored text; changed is
 	// false when fn returns the text it was given. fn's error aborts the write.
 	Update(id string, fn func(old string) (string, error)) (changed bool, err error)
+	// List is the stored designs in ID order. A notes store cannot list: designs
+	// live on their issues, so it warns and returns none.
+	List() ([]Entry, error)
 }
 
 // Add creates the design stub, dated by today; an existing design is exit 4.
@@ -39,35 +42,19 @@ func Add(s Store, id, title string, today func() time.Time) error {
 	return s.Create(id, stubText(normID(id), title, stamp.Date(today())))
 }
 
-// Show is the stored design.
-func Show(s Store, id string) (string, error) {
-	if err := s.CheckID(id); err != nil {
-		return "", err
-	}
-	return s.Read(id)
+func verbs(s Store) artifact.Verbs {
+	return artifact.Verbs{Kind: "design", Store: s, Check: s.CheckID}
 }
+
+// Show is the stored design.
+func Show(s Store, id string) (string, error) { return verbs(s).Show(id) }
 
 // Put replaces an existing design's text; changed is false when the text is
 // already identical.
-func Put(s Store, id, text string) (bool, error) {
-	if err := s.CheckID(id); err != nil {
-		return false, err
-	}
-	changed, err := s.Replace(id, text)
-	var ae *exitcode.Error
-	if errors.As(err, &ae) && ae.Exit == exitcode.ExitResolution {
-		ae.WithHint("rota design add " + id + " --title <text>")
-	}
-	return changed, err
-}
+func Put(s Store, id, text string) (bool, error) { return verbs(s).Put(id, text) }
 
 // Rm deletes a design; a missing one is exit 3, never a no-op.
-func Rm(s Store, id string) error {
-	if err := s.CheckID(id); err != nil {
-		return err
-	}
-	return s.Remove(id)
-}
+func Rm(s Store, id string) error { return verbs(s).Rm(id) }
 
 // normID is the item reference in its one spelling: no "#", upper case. The
 // stub carries it too, since a "#" would turn the front-matter id into a YAML
