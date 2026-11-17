@@ -2,6 +2,7 @@ package repoconfig
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 func newRepo(t *testing.T) string {
@@ -118,5 +120,12 @@ func TestBaselineRecordedSilencesRisky(t *testing.T) {
 	d, _ := Check(ctx, runner, dir)
 	if len(d.Risky) != 0 {
 		t.Fatalf("risky with a baseline: %v", d.Risky)
+	}
+}
+
+func TestNotARepoSharesRotastateError(t *testing.T) {
+	_, err := Check(context.Background(), runner, t.TempDir())
+	if !errors.Is(err, rotastate.ErrNotRepo) {
+		t.Fatalf("Check outside a repo = %v, want rotastate.ErrNotRepo", err)
 	}
 }

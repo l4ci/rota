@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // Result and Runner are the git layer's own types.
@@ -26,8 +26,8 @@ type Result = git.Result
 
 type Runner = git.Runner
 
-// baselineRel is the baseline file, relative to the git common dir.
-var baselineRel = filepath.Join("rota", "repo-config-baseline")
+// baselineName is the baseline file's name under the rotastate directory.
+const baselineName = "repo-config-baseline"
 
 // Drift is how the repo-scope config differs from the recorded baseline.
 type Drift struct {
@@ -91,14 +91,11 @@ func read(ctx context.Context, run Runner, dir string) (map[string]string, error
 }
 
 func baselinePath(ctx context.Context, run Runner, dir string) (string, error) {
-	common, ok, err := git.CommonDirVia(ctx, run, dir)
+	common, err := rotastate.CommonDirVia(ctx, run, dir)
 	if err != nil {
 		return "", err
 	}
-	if !ok {
-		return "", errors.New("not in a git repository")
-	}
-	return filepath.Join(common, baselineRel), nil
+	return rotastate.File(common, baselineName), nil
 }
 
 // Record writes the current repo-scope config as the baseline.
