@@ -36,18 +36,32 @@ type Revision struct {
 	Override       *string `json:"override"`
 }
 
+// SectionStatus says how a section's saved revision relates to the installed builtin.
+type SectionStatus string
+
+const (
+	// StatusDefault: nothing saved; the builtin applies.
+	StatusDefault SectionStatus = "default"
+	// StatusUnchanged: saved revision is current against the builtin.
+	StatusUnchanged SectionStatus = "unchanged"
+	// StatusChanged: the builtin default moved since the saved revision.
+	StatusChanged SectionStatus = "changed"
+	// StatusRemoved: the builtin no longer exists; only history remains.
+	StatusRemoved SectionStatus = "removed"
+)
+
 // View combines saved history with the currently installed builtin.
 type View struct {
-	Name           string     `json:"name"`
-	Revision       int        `json:"revision"`
-	Status         string     `json:"status"`
-	Baseline       string     `json:"baseline"`
-	BaselineDigest string     `json:"baselineDigest"`
-	Default        string     `json:"default"`
-	Template       string     `json:"template"`
-	Override       *string    `json:"override"`
-	Effective      string     `json:"effective"`
-	History        []Revision `json:"history"`
+	Name           string        `json:"name"`
+	Revision       int           `json:"revision"`
+	Status         SectionStatus `json:"status"`
+	Baseline       string        `json:"baseline"`
+	BaselineDigest string        `json:"baselineDigest"`
+	Default        string        `json:"default"`
+	Template       string        `json:"template"`
+	Override       *string       `json:"override"`
+	Effective      string        `json:"effective"`
+	History        []Revision    `json:"history"`
 }
 
 // document is schema version 1. The reader rejects unknown fields, so every
@@ -174,7 +188,7 @@ func (s Store) view(name string, d document) (View, error) {
 	if !ok && len(h) == 0 {
 		return View{}, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
-	v := View{Name: name, Status: "default", Default: expand(sec.Default, sec), Template: sec.Default, History: append([]Revision{}, h...)}
+	v := View{Name: name, Status: StatusDefault, Default: expand(sec.Default, sec), Template: sec.Default, History: append([]Revision{}, h...)}
 	if ok {
 		v.Baseline = expand(sec.Default, sec)
 		v.BaselineDigest = digest(v.Baseline)
@@ -186,11 +200,11 @@ func (s Store) view(name string, d document) (View, error) {
 		v.Baseline = r.Baseline
 		v.BaselineDigest = r.BaselineDigest
 		v.Override = r.Override
-		v.Status = "unchanged"
+		v.Status = StatusUnchanged
 		if !ok {
-			v.Status = "removed"
+			v.Status = StatusRemoved
 		} else if r.Override != nil && digest(expand(sec.Default, sec)) != r.BaselineDigest {
-			v.Status = "changed"
+			v.Status = StatusChanged
 		}
 		if ok && r.Override != nil {
 			v.Effective = expand(*r.Override, sec)
