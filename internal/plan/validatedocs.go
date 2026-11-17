@@ -33,7 +33,7 @@ var (
 )
 
 // ValidateDocs checks the doc-by-path deliverables in a plan's Files: bullets
-// against each target repo's docs home, as hv-plan-validate-docs did. Text is
+// against each target repo's docs home, as the retired plan-validate-docs helper did. Text is
 // the old helper's stdout ("" when clean).
 func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err error) {
 	if _, err = Files(root).Resolve(key); err != nil {

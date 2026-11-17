@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 )
 
-// The duplicate-shipped audit behind `rota item shipped` (bin/hv-capture-audit):
+// The duplicate-shipped audit behind `rota item shipped` (ported from the retired capture-audit helper):
 // cheap heuristics only, distinctive tokens grepped against git log subjects
 // plus filesystem path checks.
 

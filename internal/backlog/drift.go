@@ -58,7 +58,7 @@ func reachable(dir, since string) map[string]bool {
 	return set
 }
 
-// Drift is hv-todo-drift: it finds open items that commits already mention
+// Drift is the todo-drift check: it finds open items that commits already mention
 // (commit subjects carrying [B07] and the like, newer than the item's Since
 // anchor when it has one) and open, Since-anchored items whose described
 // symbols appeared in the tree after capture. A missing BACKLOG.md, or one
@@ -251,7 +251,7 @@ func findAllFolded(re *regexp.Regexp, text string, ph byte) []string {
 	return out
 }
 
-// ExtractSymbols is extract_symbols of hv-todo-drift: up to eight distinctive
+// ExtractSymbols is extract_symbols of the todo-drift check: up to eight distinctive
 // code symbols (backtick spans, CamelCase, snake_case, rota-* names, paths and
 // file names) from a bullet's title and description, never its trailing fields.
 func ExtractSymbols(bullet, id string) []string {
