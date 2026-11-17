@@ -191,6 +191,12 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 			return guardErr("a shell reading its script from stdin")
 		}
 		return nil
+	case prog == "source" || prog == ".":
+		// `source /dev/stdin` runs a script the parser never sees (#3530).
+		if len(rest) > 0 && isStdinPath(rest[0]) && mentionsGit.MatchString(g.line) {
+			return guardErr("a shell reading its script from stdin")
+		}
+		return nil
 	case prog == "git":
 		return g.git(rest, sc)
 	case prog == "gh":
@@ -274,9 +280,12 @@ func shellScript(args []string) (string, bool) {
 func shellReadsStdin(args []string) bool {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if a == "-" {
+			return true // a lone - reads the script from stdin
+		}
 		isOpt := (strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+")) && len(a) > 1
 		if !isOpt {
-			return false // a script file
+			return isStdinPath(a) // a script file, unless it is stdin itself
 		}
 		switch {
 		case strings.HasPrefix(a, "--"):
@@ -290,6 +299,15 @@ func shellReadsStdin(args []string) bool {
 		}
 	}
 	return true
+}
+
+// isStdinPath reports a path that names the process's standard input.
+func isStdinPath(p string) bool {
+	switch p {
+	case "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0":
+		return true
+	}
+	return false
 }
 
 // pushd: options come before the directory and end at `--`. -n leaves the
@@ -423,7 +441,9 @@ func (g *guard) ghAPI(args []string) {
 func (g *guard) ghGraphQL(args []string) {
 	graphql := false
 	for _, a := range args {
-		if a == "graphql" {
+		// the endpoint may carry a leading slash, a trailing one or the full URL
+		a = strings.TrimSuffix(strings.TrimPrefix(a, "https://api.github.com"), "/")
+		if a == "graphql" || a == "/graphql" {
 			graphql = true
 			break
 		}
