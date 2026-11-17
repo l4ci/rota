@@ -173,8 +173,10 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	}
 	prog := filepath.Base(words[0])
 	rest := words[1:]
-	if multiCall[prog] && len(rest) > 0 && shells[filepath.Base(rest[0])] {
-		prog, rest = filepath.Base(rest[0]), rest[1:]
+	if multiCall[prog] && len(rest) > 0 {
+		// The applet is the real command: shell, wrapper (env, xargs), git, or
+		// another multi-call binary.
+		return g.command(rest, depth+1, sc)
 	}
 	switch {
 	case prog == "cd":
@@ -513,8 +515,19 @@ func ghJoinedField(a string) string {
 			return v
 		}
 	}
-	if len(a) > 2 && (strings.HasPrefix(a, "-f") || strings.HasPrefix(a, "-F")) && a[2] != '-' {
-		return a[2:]
+	if len(a) < 3 || a[0] != '-' || a[1] == '-' {
+		return ""
+	}
+	// A shorthand cluster: skip the boolean -i, then f/F takes the rest of the
+	// word as its value (pflag strips one leading '=').
+	for i := 1; i < len(a); i++ {
+		switch a[i] {
+		case 'i':
+		case 'f', 'F':
+			return strings.TrimPrefix(a[i+1:], "=")
+		default:
+			return ""
+		}
 	}
 	return ""
 }

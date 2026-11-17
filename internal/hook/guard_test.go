@@ -185,6 +185,11 @@ func TestGuardDenies(t *testing.T) {
 		"gh api graphql -Fquery=@q.gql",
 		"gh api graphql -fquery=@q.gql",
 		"gh api graphql --field=query=\"$Q\"",
+		"gh api graphql -ifquery=@q.gql",
+		"gh api graphql -F=query=@q.gql",
+		"busybox env sh -c 'git push origin main'",
+		"busybox busybox sh -c 'git push origin main'",
+		"busybox env git push origin main",
 		// #3580 bounce: busybox/toybox shell applets.
 		"busybox sh -c 'git push origin main'",
 		"/usr/bin/busybox sh -c 'git push origin main'",
