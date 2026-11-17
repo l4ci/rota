@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
 )
@@ -104,7 +105,7 @@ func openItemsOf(c *Ctx, root, repo string) ([]string, error) {
 	}
 	var ids []string
 	for _, r := range rows {
-		for _, n := range status.ParseReposCSV(r.Fields.Repos) {
+		for _, n := range pystr.SplitCSV(r.Fields.Repos) {
 			if n == repo {
 				ids = append(ids, r.ID)
 			}

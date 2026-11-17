@@ -1,7 +1,8 @@
 // Package status owns .rota/status.json, the record of active work streams and
-// the loop timestamp, and the sub-repo registry in .rota/repos.json. It matches
-// hv-status-add, hv-status-remove, hv-status-repo-for, hv-resolve-handoff,
-// hv-loop-stamp and hvlib_repos.load_repos.
+// the loop timestamp. It matches hv-status-add, hv-status-remove,
+// hv-status-repo-for, hv-resolve-handoff and hv-loop-stamp. The sub-repo
+// registry in .rota/repos.json is owned by package repos; this package only
+// holds helpers that compare names against it (Missing, HasCode).
 //
 // status.json is read and written as a jsonx tree, so keys the helpers do not
 // know and the order of the ones they do survive a round trip, and a file rota

@@ -9,13 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
-func TestParseReposCSVAndMissing(t *testing.T) {
-	if got := ParseReposCSV(" web, api ,,web , "); !reflect.DeepEqual(got, []string{"web", "api", "web"}) {
-		t.Errorf("ParseReposCSV = %q", got)
-	}
-	if got := ParseReposCSV(" , "); got != nil {
-		t.Errorf("ParseReposCSV blank = %q", got)
-	}
+func TestMissing(t *testing.T) {
 	registry := []repos.Repo{{Name: "web", Path: "/w"}}
 	if got := Missing(registry, []string{"web", "nope", "x"}); !reflect.DeepEqual(got, []string{"nope", "x"}) {
 		t.Errorf("Missing = %q", got)

@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -551,7 +552,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 
 func repoResolve(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		names := status.ParseReposCSV(strings.Join(args, ","))
+		names := pystr.SplitCSV(strings.Join(args, ","))
 		if len(names) == 0 {
 			return Result{Data: jsonx.Obj("repos", []any{})}, nil
 		}
