@@ -406,7 +406,7 @@ func branchIsFollowUp(c *Ctx, root, branch string) bool {
 // review-missing. It is empty for other kinds, when nothing is missing, or when
 // the depth cannot be read (the record is already written; the gate will say).
 func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) string {
-	if kind != verdict.ReviewSpec && kind != verdict.ReviewQuality {
+	if !verdict.IsCoreReview(kind) {
 		return ""
 	}
 	bt, err := resolveBranch(c, args)

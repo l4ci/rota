@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -21,12 +22,16 @@ const MaxReasks = 1
 // gate fix their own bodies, and the cross-harness reviewer is a one-shot
 // external run (`--no-session-persistence`), so none of them has a session to
 // re-ask.
-func Reasked(kind string) bool {
-	switch kind {
-	case ReviewSpec, ReviewQuality, ReviewSecurity, ReviewPerf, ReviewUX, SecondOpinion:
-		return true
-	}
-	return false
+func Reasked(kind string) bool { return slices.Contains(reaskedKinds, kind) }
+
+var reaskedKinds = reaskKinds(LensKinds)
+
+// reaskKinds is the re-asked set: the core reviews, every lens and the second
+// opinion. A new lens is re-asked without a second list to edit.
+func reaskKinds(lenses []string) []string {
+	out := slices.Clone(coreReviewKinds)
+	out = append(out, lenses...)
+	return append(out, SecondOpinion)
 }
 
 // ReaskPath is the per-developer count of rejected blocks, keyed by branch and
