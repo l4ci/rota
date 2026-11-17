@@ -176,7 +176,7 @@ func (r Real) State(pid int) (string, bool) {
 // Stat reads ppid and start time from /proc/<pid>/stat (clock ticks since
 // boot), or through ps where there is no /proc (unix seconds of lstart).
 func (r Real) Stat(pid int) (ppid int, start uint64, ok bool) {
-	if pp, st, ok := ProcStat(pid); ok {
+	if pp, st, ok := procStat(pid); ok {
 		return pp, st, true
 	}
 	return r.psStat(pid)
@@ -204,7 +204,7 @@ func (r Real) Cwd(pid int) string {
 	if err != nil {
 		return ""
 	}
-	return ParseLsofCwd(res.Stdout)
+	return parseLsofCwd(res.Stdout)
 }
 
 // Parents lists every pid with its parent through ps.
@@ -250,8 +250,8 @@ func (r Real) psStat(pid int) (ppid int, start uint64, ok bool) {
 	return pp, uint64(t.Unix()), true
 }
 
-// ParseLsofCwd reads `lsof -a -p PID -d cwd -Fn` output: the directory, or "".
-func ParseLsofCwd(out string) string {
+// parseLsofCwd reads `lsof -a -p PID -d cwd -Fn` output: the directory, or "".
+func parseLsofCwd(out string) string {
 	for _, line := range strings.Split(out, "\n") {
 		if strings.HasPrefix(line, "n") {
 			return line[1:]
@@ -260,11 +260,11 @@ func ParseLsofCwd(out string) string {
 	return ""
 }
 
-// ProcStat reads the parent pid and start time (clock ticks since boot) of pid
+// procStat reads the parent pid and start time (clock ticks since boot) of pid
 // from /proc/<pid>/stat. ok is false where /proc is absent or unreadable. It is
 // the one parser of that file: the comm field may hold spaces and parentheses,
 // so the fields after it are found from the last ")".
-func ProcStat(pid int) (ppid int, start uint64, ok bool) {
+func procStat(pid int) (ppid int, start uint64, ok bool) {
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
 		return 0, 0, false
@@ -272,7 +272,7 @@ func ProcStat(pid int) (ppid int, start uint64, ok bool) {
 	return parseProcStat(string(b))
 }
 
-// parseProcStat is ProcStat's parser over one /proc/<pid>/stat line.
+// parseProcStat is procStat's parser over one /proc/<pid>/stat line.
 func parseProcStat(s string) (ppid int, start uint64, ok bool) {
 	i := strings.LastIndex(s, ")")
 	if i < 0 {

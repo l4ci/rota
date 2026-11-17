@@ -127,7 +127,7 @@ func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error
 	if res.ExitCode != 0 {
 		return 0, &ExitError{"diff --numstat " + span, res.ExitCode, res.Stderr}
 	}
-	return CountLines(res.Stdout), nil
+	return countLines(res.Stdout), nil
 }
 
 // ChangedLinesCounted is ChangedLines that says when the count is not the whole
@@ -147,12 +147,12 @@ func ChangedLinesCounted(ctx context.Context, run Runner, dir, span string) (lin
 			counted = false
 		}
 	}
-	return CountLines(res.Stdout), counted, nil
+	return countLines(res.Stdout), counted, nil
 }
 
-// CountLines sums the added and deleted lines of `git diff --numstat` output.
+// countLines sums the added and deleted lines of `git diff --numstat` output.
 // Binary files, which numstat marks with dashes, count for nothing.
-func CountLines(numstat string) int {
+func countLines(numstat string) int {
 	total := 0
 	for _, l := range strings.Split(numstat, "\n") {
 		f := strings.Fields(l)
