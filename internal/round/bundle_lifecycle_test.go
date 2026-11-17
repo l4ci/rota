@@ -257,7 +257,7 @@ func TestReconcileReleasesLeftoverClaimOfParkedSlot(t *testing.T) {
 	f.forge.labels = map[int][]string{12: {"in-progress"}}
 	f.forge.labelled = nil
 	// The slot parked after its slice merged: it holds nothing, 12 keeps ben@1.
-	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task") }); err != nil {
+	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task"); s.Set("branch", "park/ben") }); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Run(t, filepath.Join(f.root, ".worktrees", "ben"), "checkout", "-q", "park/ben")
