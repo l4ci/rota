@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -175,19 +174,19 @@ func mergedIssues(entries []ledger.Entry, round int) []string {
 	return out
 }
 
-// currentRound is the lease's round while one is live or foreign, else the
-// highest round in the ledger, including supplied rounds identified in damaged events.
+// currentRound is the round worker.CurrentRound names from the lease, the
+// registry and the ledger, including supplied rounds identified in damaged events.
 func currentRound(c *Ctx, root string, entries []ledger.Entry, knownRounds ...int) int {
-	n := 0
+	var src worker.RoundSources
+	src.Registry, src.HasRegistry = worker.LoadRegistryTolerant(root).Round()
 	for _, e := range entries {
-		n = max(n, e.Round)
+		src.LedgerRound = max(src.LedgerRound, e.Round)
 	}
 	for _, round := range knownRounds {
-		n = max(n, round)
+		src.LedgerRound = max(src.LedgerRound, round)
 	}
-	env := c.deps().baseRoundEnv()
-	if l, st, err := env.ReadLease(c.Context(), root); err == nil && (st == roundlease.Live || st == roundlease.Foreign) {
-		n = l.Round
+	if l, st, err := c.deps().baseRoundEnv().ReadLease(c.Context(), root); err == nil {
+		src.Lease, src.LeaseState = l, st
 	}
-	return n
+	return worker.CurrentRound(src)
 }

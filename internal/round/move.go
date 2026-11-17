@@ -58,9 +58,15 @@ func wrap(err error) error {
 	return out
 }
 
-func registryRound(root string) int {
-	n, _ := worker.LoadRegistryTolerant(root).Round() // no error return; the verbs read the registry strictly themselves
-	return n
+// currentRound is worker.CurrentRound over the lease e reads and the registry
+// (read tolerantly: the verbs read it strictly themselves).
+func (e Env) currentRound(ctx context.Context, root string) int {
+	var src worker.RoundSources
+	src.Registry, src.HasRegistry = worker.LoadRegistryTolerant(root).Round()
+	if l, st, err := e.ReadLease(ctx, root); err == nil {
+		src.Lease, src.LeaseState = l, st
+	}
+	return worker.CurrentRound(src)
 }
 
 // holdsLease: this process is the orchestrator the lease names.
@@ -372,7 +378,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 		res.Issue = it.ID
 	}
 
-	rnd := registryRound(root)
+	rnd := e.currentRound(ctx, root)
 	var out released
 	err = runSteps(e.releaseSteps(ctx, slotRelease{
 		root: root, be: be, slot: o.Slot, id: id, verb: "return", round: rnd,
@@ -577,7 +583,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 			}
 		}
 	}
-	rnd := registryRound(root)
+	rnd := e.currentRound(ctx, root)
 	var out released
 	err = runSteps(e.releaseSteps(ctx, slotRelease{
 		root: root, be: be, slot: o.Slot, id: h.Issue, verb: "reclaim", round: rnd,
@@ -840,7 +846,7 @@ func (e Env) planTransferRun(ctx context.Context, root string, be Board, o Trans
 	if !ok {
 		return nil, blocked(blockedby.NoRound, "this process holds no round lease: run rota round start first")
 	}
-	run := &transferRun{it: it, id: id, toHuman: toHuman, reason: reason, decisions: decisions, rnd: registryRound(root)}
+	run := &transferRun{it: it, id: id, toHuman: toHuman, reason: reason, decisions: decisions, rnd: e.currentRound(ctx, root)}
 	rnd := run.rnd
 
 	// Who holds it. A receiver that already holds it and was never dispatched

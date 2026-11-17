@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -248,5 +250,23 @@ func TestKnowledgeHarvestFetchesCommentsOncePerIssue(t *testing.T) {
 	}
 	if n := ct.reads[tracker.NumKey(9).String()]; n != 0 {
 		t.Errorf("--mark read the issue after the match %d times, want 0", n)
+	}
+}
+
+// Which round is current follows the authority order lease, registry, ledger:
+// a registry round of 5 outranks a ledger whose highest round is 3.
+func TestKnowledgeHarvestCurrentRoundPrefersRegistryOverLedger(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	deps := trustedDeps(t, issueFixture(), harvestTrust{})
+	body := bodyFile(t, "stale round learning\n")
+	if c, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "7", "--kind", "learning", "--body-file", body); c != 0 {
+		t.Fatalf("comment add: exit %d: %s", c, stderr)
+	}
+	harvestMerged(t, root, "7", 3)
+	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(`{"round":5,"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := harvestList(t, deps, root); len(got) != 0 {
+		t.Fatalf("round 5 is current, so round 3's merge is not harvested: %v", got)
 	}
 }

@@ -34,7 +34,7 @@ func (f *moveFx) assignPlan(t *testing.T, id, agent string) []step {
 	if err != nil || stop {
 		t.Fatalf("plan: stop=%v err=%v", stop, err)
 	}
-	steps, _, err := f.env.assignSteps(bg, f.root, f.be, o, it, run, registryRound(f.root), res)
+	steps, _, err := f.env.assignSteps(bg, f.root, f.be, o, it, run, f.env.currentRound(bg, f.root), res)
 	if err != nil {
 		t.Fatal(err)
 	}
