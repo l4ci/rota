@@ -97,8 +97,10 @@ func (s *Set) Stubbed() (*Set, error) {
 
 func stub(skill string, full []byte) ([]byte, error) {
 	// The fence rule is scripts/fmlite.py's: a first line of "---" and the next
-	// line of "---", each ignoring trailing whitespace, so CRLF files and a
-	// closing fence at end of file are front matter too.
+	// line of "---", each ignoring trailing ASCII space, tab and CR (nothing
+	// else: an NBSP after a fence makes it plain text in both), so CRLF files
+	// and a closing fence at end of file are front matter too. The fixtures in
+	// test/fixtures/frontmatter pin both implementations to it.
 	lines := strings.Split(string(full), "\n")
 	end := -1
 	if strings.TrimRight(lines[0], " \t\r") == "---" {
