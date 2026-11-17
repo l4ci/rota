@@ -40,7 +40,10 @@ type Input struct {
 	Files     []string
 	PRBody    string
 	IssueBody string
-	Tier      change.Tier
+	// IssueBodyUnknown: the issue body was never read (no issue source, no
+	// issue key), so "" in IssueBody means unread, not "declares no files".
+	IssueBodyUnknown bool
+	Tier             change.Tier
 	// Risky: a change.riskyPaths glob matched a changed file.
 	Risky bool
 }
@@ -50,6 +53,9 @@ type Decision struct {
 	Depth  config.ReviewDepth
 	Signal string
 	Why    string
+	// DriftUnchecked is set when the scope-drift rule applied but the issue body
+	// was unknown, so drift was not checked. It is not a "no drift" result.
+	DriftUnchecked string
 }
 
 // Decide picks the depth for a branch and says which signal decided it. A label
@@ -70,17 +76,17 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 	driftCap := config.DepthFull
 	switch {
 	case in.Tier == change.TierDocs && !labelled:
-		base = Decision{config.DepthNone, SignalTier, "docs-only change (tier docs)"}
+		base = Decision{Depth: config.DepthNone, Signal: SignalTier, Why: "docs-only change (tier docs)"}
 	case in.Tier == change.TierSmall:
 		driftCap = config.DepthLight
 		if !labelled && base.Depth.Outranks(config.DepthLight) {
-			base = Decision{config.DepthLight, SignalTier, "small change (tier small)"}
+			base = Decision{Depth: config.DepthLight, Signal: SignalTier, Why: "small change (tier small)"}
 		}
 	}
 	best := base
 	raise := func(d config.ReviewDepth, signal, why string) {
 		if d.Outranks(best.Depth) {
-			best = Decision{d, signal, why}
+			best = Decision{Depth: d, Signal: signal, Why: why}
 		}
 	}
 	if config.DoorOneWay(in.PRBody) {
@@ -89,7 +95,10 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 	if in.Risky {
 		raise(config.DepthFull, SignalRisky, "diff touches change.riskyPaths")
 	}
-	if !p.NoScopeDrift && in.Tier != change.TierDocs {
+	unchecked := ""
+	if !p.NoScopeDrift && in.Tier != change.TierDocs && in.IssueBodyUnknown {
+		unchecked = "issue body not read, so scope drift was not checked"
+	} else if !p.NoScopeDrift && in.Tier != change.TierDocs {
 		if drift := scopeDrift(in.IssueBody, in.Files, p.EffectiveSupportPaths()); len(drift) > 0 {
 			d := config.DepthFull
 			if d.Outranks(driftCap) {
@@ -111,6 +120,7 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 			}
 		}
 	}
+	best.DriftUnchecked = unchecked
 	return best
 }
 
@@ -130,15 +140,15 @@ func baseDecision(p config.ReviewPolicy, changed int, labels []string) Decision 
 				best = l
 			}
 		}
-		return Decision{p.Labels[best], SignalLabel, fmt.Sprintf("label %s", best)}
+		return Decision{Depth: p.Labels[best], Signal: SignalLabel, Why: fmt.Sprintf("label %s", best)}
 	}
 	if p.Default == config.DepthFull && p.LightBelow > 0 && changed >= 0 && changed < p.LightBelow {
-		return Decision{config.DepthLight, SignalSize, fmt.Sprintf("%d changed lines, under lightBelow %d", changed, p.LightBelow)}
+		return Decision{Depth: config.DepthLight, Signal: SignalSize, Why: fmt.Sprintf("%d changed lines, under lightBelow %d", changed, p.LightBelow)}
 	}
 	if p.Legacy() != "" {
-		return Decision{p.Default, SignalDefault, fmt.Sprintf("ship.review is %s", p.Legacy())}
+		return Decision{Depth: p.Default, Signal: SignalDefault, Why: fmt.Sprintf("ship.review is %s", p.Legacy())}
 	}
-	return Decision{p.Default, SignalDefault, "default depth"}
+	return Decision{Depth: p.Default, Signal: SignalDefault, Why: "default depth"}
 }
 
 // sitsBesideDeclared reports whether a _test.go file lives in the directory of
