@@ -141,3 +141,19 @@ func TestBlockedDataKeyOrderAndErrVariant(t *testing.T) {
 		t.Fatalf("data = %v", res.Data)
 	}
 }
+
+// The unfinished-milestone refusal keeps blockedBy, changed, open, unticked in
+// that order: blockedData first, the audit lists after.
+func TestBlockedDataKeepsMilestoneKeyOrder(t *testing.T) {
+	d := blockedData(nil, "unfinished-milestone")
+	d.Set("open", jsonx.Strings([]string{"#1"}))
+	d.Set("unticked", jsonx.Strings([]string{"AC-1"}))
+	got, err := jsonx.MarshalCompact(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"blockedBy": "unfinished-milestone", "changed": false, "open": ["#1"], "unticked": ["AC-1"]}`
+	if string(got) != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+}

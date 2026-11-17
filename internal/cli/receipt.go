@@ -109,11 +109,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			var mm *receipt.Mismatch
 			switch {
 			case errors.As(err, &mm):
-				d := jsonx.NewObject()
-				d.Set("blockedBy", blockedby.RequestID)
-				d.Set("requestId", id)
-				d.Set("changed", false)
-				return Result{Data: d}, Refused("%s", err)
+				return blockedRefusalErr(nil, blockedby.RequestID, Refused("%s", err), "requestId", id)
 			case err != nil:
 				return Result{}, err
 			case out.Replayed:

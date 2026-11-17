@@ -79,17 +79,11 @@ func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, e
 	var r *gate.Refused
 	switch {
 	case errors.As(err, &r):
-		d := extra
-		if d == nil {
-			d = jsonx.NewObject()
-		}
-		d.Set("blockedBy", blockedby.ManualGate)
-		d.Set("gate", r.Gate)
+		pairs := []any{"gate", r.Gate}
 		if name == gate.MergeApproval {
-			d.Set("paths", jsonx.Strings(r.Paths))
+			pairs = append(pairs, "paths", jsonx.Strings(r.Paths))
 		}
-		d.Set("changed", false)
-		return Result{Data: d}, Refused("%s", r.Error()).WithHint(r.Hint())
+		return blockedRefusal(extra, blockedby.ManualGate, r.Error(), r.Hint(), pairs...)
 	case err != nil:
 		return Result{}, err
 	}

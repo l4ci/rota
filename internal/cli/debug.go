@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -193,13 +194,9 @@ func ironLaw(c *Ctx, bug string) (Result, error) {
 	if failed < verdict.IronLaw {
 		return Result{}, nil
 	}
-	d := jsonx.NewObject()
-	d.Set("blockedBy", blockedby.IronLaw)
-	d.Set("bugId", bug)
-	d.Set("failedFixes", failed)
-	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s has %d failed fixes; the Iron Law halts the session", bug, failed).
-		WithHint("rota debug reset " + bug)
+	return blockedRefusal(nil, blockedby.IronLaw,
+		fmt.Sprintf("%s has %d failed fixes; the Iron Law halts the session", bug, failed),
+		"rota debug reset "+bug, "bugId", bug, "failedFixes", failed)
 }
 
 func runCounterInit(c *Ctx, args []string) (Result, error) {

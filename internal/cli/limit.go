@@ -351,10 +351,7 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
 	refuse := func(by, msg, hint string) (Result, error) {
-		d := jsonx.NewObject()
-		d.Set("blockedBy", by)
-		d.Set("changed", false)
-		return Result{Data: d}, &Error{Exit: ExitRefused, Message: msg, Hint: hint}
+		return blockedRefusal(nil, by, msg, hint)
 	}
 	if ks, found, _ := keepstate.ReadState(keepstate.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
 		return refuse(blockedby.Supervised, fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
