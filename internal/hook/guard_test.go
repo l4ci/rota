@@ -202,6 +202,8 @@ func TestGuardDenies(t *testing.T) {
 		"busybox su -c 'git push origin main'",
 		"script --command='git push origin main'",
 		"flock /tmp/l gh pr merge 1",
+		"flock /tmp/git git push origin main",
+		"awk 'BEGIN{system(\"git push origin main\")}'",
 		"busybox env sh -c 'git push origin main'",
 		"busybox busybox sh -c 'git push origin main'",
 		"busybox env git push origin main",

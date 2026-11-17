@@ -220,11 +220,11 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	return g.opaque(words, depth, sc)
 }
 
-// dataPrograms print or search their arguments: git or gh inside them is text.
+// dataPrograms print or search their arguments and cannot run one (not sed, awk,
+// man or less, which can): git or gh inside them is text.
 var dataPrograms = map[string]bool{
 	"echo": true, "printf": true, "grep": true, "egrep": true, "fgrep": true, "rg": true,
-	"cat": true, "man": true, "which": true, "type": true, "whereis": true, "less": true,
-	"more": true, "head": true, "tail": true, "sed": true, "awk": true, "diff": true,
+	"cat": true, "which": true, "type": true, "whereis": true, "head": true, "tail": true,
 }
 
 // opaque handles a program the guard does not know. Any program can run its
@@ -242,7 +242,9 @@ func (g *guard) opaque(words []string, depth int, sc scope) error {
 		}
 		if i > 0 {
 			if b := filepath.Base(w); b == "git" || b == "gh" {
-				return g.command(words[i:], depth+1, sc)
+				if err := g.command(words[i:], depth+1, sc); err != nil {
+					return err
+				}
 			}
 		}
 		if !strings.ContainsAny(w, " \t\n") || !mentionsGit.MatchString(w) {
