@@ -25,7 +25,6 @@ var ErrUnavailable = errors.New("keychain unavailable")
 
 // Store holds secrets by connection name.
 type Store interface {
-	Name() string
 	// Get is the secret, and whether there was one.
 	Get(ctx context.Context, name string) (string, bool, error)
 	Set(ctx context.Context, name, secret string) error
@@ -244,8 +243,6 @@ func (f migrator) moveLegacy() error {
 	}
 	return os.Remove(f.legacy)
 }
-
-func (fileStore) Name() string { return StoreFile }
 
 func (f fileStore) Get(_ context.Context, name string) (string, bool, error) {
 	raw, err := os.ReadFile(f.path)

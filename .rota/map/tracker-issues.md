@@ -24,7 +24,7 @@ Depends on: tracker -> cfgdir, config, connections, git, labels, marker, proc, p
 - internal/issues/ — issues.go (provider, label, close, open-only filter)
 - internal/labels/ — registry.go, diff.go, refpage.go; genref/ is a command rendering the label reference
 - internal/marker/ — marker.go (all marker kinds, writers and parsers), note.go (note splitting), visible.go
-- internal/itembody/ — itembody.go (section and entry grammar, `AppendDependsOn`, `AppendFiles`), template.go (per-kind), change.go, tryit.go
+- internal/itembody/ — itembody.go (section and entry grammar, `AppendDependsOn`), template.go (per-kind), change.go, tryit.go
 - internal/connections/ — connections.go (`connections.json`), secrets.go, keychain.go, machine.go, check.go
 - internal/bugreport/ — bugreport.go (Record, redaction, Draft)
 

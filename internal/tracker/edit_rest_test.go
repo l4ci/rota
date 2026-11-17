@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 // editRig answers an issue-edit exchange from a mutable REST issue and keeps
@@ -36,7 +35,7 @@ func (r *editRig) exec(_ context.Context, _, name string, args []string, stdin [
 func (r *editRig) adapter(t *testing.T) Adapter {
 	t.Helper()
 	a, err := New(context.Background(), Settings{Provider: "github"}, "", "/repo",
-		WithExec(r.exec, func(string) (string, error) { return "/fake", nil }), WithSleep(func(time.Duration) {}))
+		WithExec(r.exec, func(string) (string, error) { return "/fake", nil }), noSleep)
 	if err != nil {
 		t.Fatal(err)
 	}

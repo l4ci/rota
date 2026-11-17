@@ -25,7 +25,6 @@ type memStore struct {
 
 func newMem(name string) *memStore { return &memStore{name: name, vals: map[string]string{}} }
 
-func (m *memStore) Name() string { return m.name }
 func (m *memStore) Get(_ context.Context, n string) (string, bool, error) {
 	if m.failGet != nil {
 		return "", false, m.failGet
