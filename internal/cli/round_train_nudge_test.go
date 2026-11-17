@@ -427,3 +427,46 @@ func TestNudgeAndTickAgreeOnReadiness(t *testing.T) {
 		t.Errorf("reviewed PR #11 must be ready in both, unreviewed #13 in neither: nudge %+v tick %+v", nudge, tick)
 	}
 }
+
+// A review-cross FAIL at an older commit keeps a PR out of the train unless its
+// issue says review:none, the rule the gate applies (#3458): otherwise the
+// train breaks on that PR every tick and holds the others (#3479).
+func TestWaitingPRsStaleCrossFailFollowsTheGate(t *testing.T) {
+	dir := nudgeProject(t, []string{"a/1-x", "b/2-y", "c/3-z"}, []string{"a/1-x", "b/2-y", "c/3-z"})
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"),
+		[]byte(`{"forge":{"provider":"github"},"issues":{"source":"github"},"round":{"harnesses":["claude","codex"]}}`), 0o644)
+	for _, b := range []string{"a/1-x", "b/2-y"} {
+		rec := verdict.NewRecord(verdict.ReviewCross, "FAIL", "aaaaaaa", verdict.Body{}, nudgeReviewedAt)
+		if _, err := verdict.AddBranch(dir, verdict.BranchKey("", b), rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addRegistryRows(t, dir, map[string][]map[string]any{"slots": {
+		{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11"},
+		{"name": "b", "state": "done", "branch": "b/2-y", "pr": "#12"},
+		{"name": "c", "state": "done", "branch": "c/3-z", "pr": "#13"},
+	}})
+	labels := map[string]string{"1": `{"name":"size:Major"},{"name":"review:none"}`, "2": `{"name":"size:Major"}`, "3": `{"name":"size:Major"}`}
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" {
+			return []byte(`{"number":` + args[2] + `,"title":"t","state":"OPEN","labels":[` + labels[args[2]] + `]}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	got := waitingPRs(&Ctx{Deps: deps, ctx: context.Background()}, dir)
+	ready := map[string]bool{}
+	for _, w := range got {
+		ready[w.PR] = w.Reviewed
+	}
+	want := map[string]bool{"#11": true, "#12": false, "#13": true}
+	for pr, w := range want {
+		if ready[pr] != w {
+			t.Errorf("%s reviewed = %v, want %v (%+v)", pr, ready[pr], w, got)
+		}
+	}
+	ns := trainNudges(got)
+	if len(ns) != 1 || len(ns[0].PRs) != 2 || ns[0].PRs[0] != "11" || ns[0].PRs[1] != "13" {
+		t.Fatalf("nudges = %+v, want one train of #11 and #13 without the refused #12", ns)
+	}
+}

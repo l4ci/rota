@@ -90,3 +90,54 @@ func TestTrainBlocked(t *testing.T) {
 		}
 	}
 }
+
+// A review-cross FAIL at another commit keeps the PR out of a train unless the
+// resolved depth says cross is off because of review:none: the gate's rule
+// (#3458), so a PR the gate would refuse is never trained (#3479).
+func TestReadinessStaleCrossFail(t *testing.T) {
+	const head = "bbbbbbb1234"
+	at := time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC)
+	rec := func(kind, v, sha string) verdict.Record {
+		return verdict.Record{Kind: kind, Verdict: v, Sha: sha, RecordedAt: at.Format(time.RFC3339)}
+	}
+	crossNone := func(none bool, asked *int) func() bool {
+		return func() bool { *asked++; return none }
+	}
+	for name, tc := range map[string]struct {
+		head      string
+		cross     verdict.Record
+		none      bool
+		noResolve bool
+		ready     bool
+		asked     int
+	}{
+		"stale FAIL, review:none":           {head: head, cross: rec(verdict.ReviewCross, verdict.Fail, "aaaaaaa"), none: true, ready: true, asked: 1},
+		"stale FAIL, cross required":        {head: head, cross: rec(verdict.ReviewCross, verdict.Fail, "aaaaaaa"), asked: 1},
+		"stale FAIL, no resolver":           {head: head, cross: rec(verdict.ReviewCross, verdict.Fail, "aaaaaaa"), noResolve: true},
+		"FAIL at head, review:none":         {head: head, cross: rec(verdict.ReviewCross, verdict.Fail, head), none: true},
+		"stale FAIL, unreadable head stays": {head: "", cross: rec(verdict.ReviewCross, verdict.Fail, "aaaaaaa"), none: true},
+		"stale CONCERNS clean, no lookup":   {head: head, cross: rec(verdict.ReviewCross, verdict.Concerns, "aaaaaaa"), ready: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var asked int
+			in := ReadinessInput{Head: tc.head, PR: "#7", ReviewOff: true,
+				Records: []verdict.Record{rec(verdict.ReviewCross, tc.cross.Verdict, tc.cross.Sha)}}
+			if !tc.noResolve {
+				in.CrossNone = crossNone(tc.none, &asked)
+			}
+			if got := ReadinessOf(in).Ready; got != tc.ready {
+				t.Errorf("ready = %v, want %v", got, tc.ready)
+			}
+			if asked != tc.asked {
+				t.Errorf("resolver asked %d times, want %d", asked, tc.asked)
+			}
+		})
+	}
+	t.Run("another stale blocker still blocks", func(t *testing.T) {
+		in := ReadinessInput{Head: head, PR: "#7", ReviewOff: true, CrossNone: func() bool { return true },
+			Records: []verdict.Record{rec(verdict.ReviewCross, verdict.Fail, "aaaaaaa"), rec(verdict.ReviewSecurity, verdict.Fail, "aaaaaaa")}}
+		if ReadinessOf(in).Ready {
+			t.Error("a security FAIL must keep blocking when only the cross FAIL is relaxed")
+		}
+	})
+}

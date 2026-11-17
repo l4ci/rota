@@ -1579,12 +1579,12 @@ func (runner gate) stepVerdict(result GateResult, target GateTarget, forged gate
 	// review:none; a FAIL at head, or one while cross is required, still blocks (#3458).
 	var blocked *verdict.BlockedError
 	// An unreadable head cannot prove a FAIL stale, so the relaxation fails closed.
-	if errors.As(err, &blocked) && blocked.Stale && strings.TrimSpace(head) != "" && blocked.Record.Kind == verdict.ReviewCross && blocked.Record.Verdict == verdict.Fail {
+	if errors.As(err, &blocked) && blocked.Stale && verdict.StaleCrossFail(blocked.Record, strings.TrimSpace(head)) {
 		res, rerr := g.resolveReview(g.baseRef + "..." + g.headRef)
 		if rerr != nil {
 			return finish(g.broke(rerr.Error()))
 		}
-		if res.CrossWhy == crossWhyReviewNone {
+		if res.CrossOffByLabel() {
 			check.IgnoreStaleCross = true
 			if err = check.BlockGate(g.branch, head); err == nil {
 				g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, blocked.Record.Sha, head, res.CrossWhy))

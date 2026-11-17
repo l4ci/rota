@@ -1,7 +1,6 @@
 package verdict
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -86,9 +85,7 @@ func (v Check) BlockAt(branch, head string) error {
 	}
 	list = ForHead(list, head)
 	if v.IgnoreStaleCross {
-		list = slices.DeleteFunc(slices.Clone(list), func(r Record) bool {
-			return r.Kind == ReviewCross && !AtHead(r, head)
-		})
+		list = DropStaleCross(list, head)
 	}
 	r, ok = Blocking(list)
 	if !ok {
