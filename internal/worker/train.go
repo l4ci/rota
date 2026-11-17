@@ -827,7 +827,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		done, err := trainBrokeResult(res, brokeMsg)
 		return p.trainPlan, p.res, done, err
 	}
-	if merr != nil && p.integration == nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
+	if merr != nil && p.integration == nil && autoOrder && failed >= nIso && failed > 0 && land.Classify(merr).Kind == land.FailConflict {
 		// A shared-path member conflicts with the ones before it. Git's pairwise
 		// conflicts do not depend on merge order, so no other order is tried.
 		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
@@ -836,9 +836,8 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
 		return p.trainPlan, p.res, true, nil
 	}
-	var ce *land.ConflictError
-	if merr != nil && p.integration != nil && errors.As(merr, &ce) {
-		done, err := t.integrationConflict(&p, failed, conflictPaths(ce.Out))
+	if merr != nil && p.integration != nil && land.Classify(merr).Kind == land.FailConflict {
+		done, err := t.integrationConflict(&p, failed, land.Classify(merr).Paths)
 		return p.trainPlan, p.res, done, err
 	}
 	if merr != nil {
@@ -846,7 +845,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		res.Culprit = m.Target
 		res.Members[failed].Culprit = true
 		res.Verdict = GateMergeFailed
-		res.Err, res.Hint = mergeRefusal(merr, mergeWords{
+		res.Err, res.Hint = land.Classify(merr).Refusal(land.Words{
 			Failed:       fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed", m.Target, m.Branch),
 			Conflict:     fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed),
 			ConflictHint: fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base),
@@ -876,15 +875,12 @@ func (t *trainRun) syncBase(p *trainPlanning) (bool, error) {
 	}
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
 	if err := land.MergeLocal(run, sha, land.SyncSubject(o.SyncBase, o.Base), land.RecoveryGit(ctx, e.Git, p.scratch)); err != nil {
-		var ce *land.ConflictError
-		if errors.As(err, &ce) {
-			res.Verdict = GateMergeFailed
-			res.Err = fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s conflicts in: %s; nothing pushed", o.SyncBase, o.Base, strings.Join(conflictPaths(ce.Out), ", "))
-			res.Hint = fmt.Sprintf("merge %s into %s by hand, or file a fix issue tagged to the milestone, then re-run the train", o.SyncBase, o.Base)
-			return true, nil
-		}
 		res.Verdict = GateMergeFailed
-		res.Err, res.Hint = mergeRefusal(err, mergeWords{Failed: fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s in the scratch tree failed", o.SyncBase, o.Base)})
+		res.Err, res.Hint = land.Classify(err).Refusal(land.Words{
+			Failed:       fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s in the scratch tree failed", o.SyncBase, o.Base),
+			Conflict:     fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s conflicts in: {paths}; nothing pushed", o.SyncBase, o.Base),
+			ConflictHint: fmt.Sprintf("merge %s into %s by hand, or file a fix issue tagged to the milestone, then re-run the train", o.SyncBase, o.Base),
+		})
 		return true, nil
 	}
 	tip, code := e.git(p.scratch, "rev-parse", "HEAD")
@@ -896,25 +892,6 @@ func (t *trainRun) syncBase(p *trainPlanning) (bool, error) {
 		t.cache.retainBase(tip)
 	}
 	return false, nil
-}
-
-// conflictPaths lists the paths git named in a merge's "CONFLICT (...)" lines.
-func conflictPaths(out string) []string {
-	var paths []string
-	for _, l := range strings.Split(out, "\n") {
-		if !strings.HasPrefix(l, "CONFLICT") {
-			continue
-		}
-		if i := strings.LastIndex(l, " in "); i >= 0 && strings.Contains(l, "Merge conflict") {
-			paths = append(paths, strings.TrimSpace(l[i+4:]))
-		} else if i := strings.Index(l, "): "); i >= 0 { // modify/delete, rename and add/add forms
-			paths = append(paths, strings.TrimSpace(l[i+3:]))
-		}
-	}
-	if len(paths) == 0 {
-		return []string{"(see git merge output)"}
-	}
-	return paths
 }
 
 // pushSync lands the verified sync merge on the milestone Base ahead of the

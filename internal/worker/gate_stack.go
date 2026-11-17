@@ -191,11 +191,11 @@ func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec Integratio
 	defer cleanup()
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
 	if err := land.MergeLocal(run, base, land.SyncSubject(rec.OntoBase, rec.Branch), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
-		var ce *land.ConflictError
-		if errors.As(err, &ce) {
-			return "", fmt.Errorf("merging %s into %s conflicts in: %s", rec.OntoBase, rec.Branch, strings.Join(conflictPaths(ce.Out), ", "))
-		}
-		return "", fmt.Errorf("merging %s into %s failed: %w", rec.OntoBase, rec.Branch, err)
+		msg, _ := land.Classify(err).Refusal(land.Words{
+			Failed:   fmt.Sprintf("merging %s into %s failed", rec.OntoBase, rec.Branch),
+			Conflict: fmt.Sprintf("merging %s into %s conflicts in: {paths}", rec.OntoBase, rec.Branch),
+		})
+		return "", errors.New(msg)
 	}
 	merged, code := e.git(scratch, "rev-parse", "HEAD")
 	if code != 0 {
