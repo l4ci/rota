@@ -310,16 +310,16 @@ type Capabilities struct {
 	Snapshotter        Snapshotter
 	WorkspaceCloser    WorkspaceCloser
 	LinkedLayouter     LinkedLayouter
-	// RuntimeScopedHandles: a recorded handle dies with the host runtime while
-	// the agent may live on, so a handle missing from the live list proves
-	// nothing about the agent (Orca).
-	RuntimeScopedHandles bool
-	// TreeKillClose: closing the session must kill the agent's process tree
-	// and prove it gone, even after a positive exit poll (Orca).
-	TreeKillClose bool
 
 	// Policy below is data per Kind (policy.go), not an optional side.
 
+	// RuntimeScopedHandles: a recorded handle dies with the host runtime while
+	// the agent may live on, so a handle missing from the live list proves
+	// nothing about the agent (Orca, Core).
+	RuntimeScopedHandles bool
+	// TreeKillClose: closing the session must kill the agent's process tree
+	// and prove it gone, even after a positive exit poll (Orca, Core).
+	TreeKillClose bool
 	// InSessionRule is non-nil for a host that only works from inside one of
 	// its own panes (herdr).
 	InSessionRule *InSessionRule
@@ -341,14 +341,6 @@ type Capabilities struct {
 	// Diagnose checks the host is installed and usable (rota doctor).
 	Diagnose func(Probe) Health
 }
-
-// RuntimeScoped is implemented by hosts whose handles do not outlive the host
-// runtime; see Capabilities.RuntimeScopedHandles.
-type RuntimeScoped interface{ RuntimeScopedHandles() bool }
-
-// TreeKiller is implemented by hosts whose close needs a process-tree kill;
-// see Capabilities.TreeKillClose.
-type TreeKiller interface{ TreeKillClose() bool }
 
 // CapabilitiesForKind is the capabilities of the adapter for k, read without
 // building it, so it always agrees with New(k, ...).Capabilities(). Solo and
@@ -399,12 +391,6 @@ func CapabilitiesOf(h any) Capabilities {
 	c.OutputWatcher, _ = h.(OutputWatcher)
 	c.Operator, _ = h.(Operator)
 	c.Snapshotter, _ = h.(Snapshotter)
-	if r, ok := h.(RuntimeScoped); ok {
-		c.RuntimeScopedHandles = r.RuntimeScopedHandles()
-	}
-	if t, ok := h.(TreeKiller); ok {
-		c.TreeKillClose = t.TreeKillClose()
-	}
 	return c
 }
 

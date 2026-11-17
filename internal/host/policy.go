@@ -126,6 +126,8 @@ func kindPolicy(k Kind, c Capabilities) Capabilities {
 	case HerdrCore:
 		c.NoNominalHandle = true
 		c.InPlace = true
+		c.RuntimeScopedHandles = true
+		c.TreeKillClose = true
 		c.Harness = harness.HostTraits{CodexHost: true, CoreIdentity: true}
 		c.Diagnose = diagnoseCore
 	case Tmux:
@@ -137,6 +139,10 @@ func kindPolicy(k Kind, c Capabilities) Capabilities {
 		}
 		c.Diagnose = diagnoseTmux
 	case Orca:
+		// An Orca runtime restart orphans handles whose processes survive,
+		// and its terminals own agents that can outlive the handle.
+		c.RuntimeScopedHandles = true
+		c.TreeKillClose = true
 		c.NoNominalHandle = true
 		c.Harness = harness.HostTraits{CodexHost: true}
 		c.Diagnose = diagnoseOrca
