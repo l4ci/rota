@@ -44,7 +44,7 @@ func openDesign(c *Ctx, id string) (design.Store, *who, error) {
 	}
 	w := &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
-		return design.NewNotes(itemNotes(c, id, w)), w, nil
+		return design.NewNotes(itemNotes(c, id, w), func(msg string) { c.Warn("%s", msg) }), w, nil
 	}
 	return design.Files(root), w, nil
 }

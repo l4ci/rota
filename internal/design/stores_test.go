@@ -22,12 +22,36 @@ func stores(t *testing.T) map[string]struct {
 		id string
 	}{
 		"files": {Files(project(t)), "B07"},
-		"notes": {NewNotes(func() (artifact.Notes, error) { return notes, nil }), "B7"},
+		"notes": {NewNotes(func() (artifact.Notes, error) { return notes, nil }, nil), "B7"},
 	}
 }
 
 // Both stores answer the verbs the same way: same exits, same hints, same
 // changed flags.
+// Listing goes through the Store in both modes: the file store reads its
+// designs, the notes store cannot enumerate them, so it warns once and lists
+// none.
+func TestStoresListThroughTheSeam(t *testing.T) {
+	var warned []string
+	notes := artifacttest.NewNotes()
+	fileSt := Files(project(t))
+	noteSt := NewNotes(func() (artifact.Notes, error) { return notes, nil }, func(m string) { warned = append(warned, m) })
+	if err := Add(fileSt, "B07", "T", testDay); err != nil {
+		t.Fatal(err)
+	}
+	if err := Add(noteSt, "B7", "T", testDay); err != nil {
+		t.Fatal(err)
+	}
+	list, err := fileSt.List()
+	if err != nil || len(list) != 1 || list[0].ID != "B07" || list[0].Title != "T" || list[0].Status != "draft" {
+		t.Errorf("file list = %+v %v", list, err)
+	}
+	list, err = noteSt.List()
+	if err != nil || len(list) != 0 || list == nil || len(warned) != 1 {
+		t.Errorf("notes list = %+v %v, warned %v; want empty, one warning", list, err, warned)
+	}
+}
+
 func TestStoresShareTheVerbs(t *testing.T) {
 	for name, s := range stores(t) {
 		t.Run(name, func(t *testing.T) {
@@ -96,7 +120,7 @@ func TestNotesStoreItemRefs(t *testing.T) {
 	} {
 		t.Run(c.id, func(t *testing.T) {
 			notes := artifacttest.NewNotes()
-			st := NewNotes(func() (artifact.Notes, error) { return notes, nil })
+			st := NewNotes(func() (artifact.Notes, error) { return notes, nil }, nil)
 			if err := Add(st, c.id, "T", testDay); err != nil {
 				t.Fatalf("add: %v", err)
 			}
@@ -126,7 +150,7 @@ func TestNotesStoreRejectsMalformedBeforeTracker(t *testing.T) {
 	st := NewNotes(func() (artifact.Notes, error) {
 		t.Fatal("tracker reached")
 		return nil, nil
-	})
+	}, nil)
 	for _, id := range []string{"", "#", "S01", "#B7", "x/y", "233x", "PROJ-", "-123", "PROJ-12-3", " 42", "42 ", "PROJ 123", "M01-B07"} {
 		if err := Add(st, id, "T", testDay); exitOf(err) != 2 {
 			t.Errorf("add %q: %v, want exit 2", id, err)

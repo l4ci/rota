@@ -11,11 +11,24 @@ import (
 // notes keeps each design as the `design` note of the item's issue.
 type notes struct {
 	open func() (artifact.Notes, error)
+	warn func(string)
 }
 
 // NewNotes is the issue-mode store. open resolves the item's notes on first
-// use, so an ID the module rejects never reaches the tracker.
-func NewNotes(open func() (artifact.Notes, error)) Store { return notes{open} }
+// use, so an ID the module rejects never reaches the tracker. warn receives
+// notices, for example that List cannot list designs from a tracker.
+func NewNotes(open func() (artifact.Notes, error), warn func(string)) Store {
+	return notes{open, warn}
+}
+
+// List warns and returns no designs: they live on their issues and the notes
+// seam cannot enumerate them.
+func (s notes) List() ([]Entry, error) {
+	if s.warn != nil {
+		s.warn("designs live on their issues (issues.source is a tracker) and cannot be listed from one")
+	}
+	return []Entry{}, nil
+}
 
 // CheckID: the item references the issue backend resolves, a number, a lettered
 // number or a tracker key.
