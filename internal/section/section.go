@@ -37,7 +37,7 @@ func Find(content, name string) (start, end int, ok bool) {
 		s := p + len(head)
 		runEnd := s
 		for runEnd < len(content) {
-			r, n := decode(content[runEnd:])
+			r, n := utf8.DecodeRuneInString(content[runEnd:])
 			if !pystr.IsSpace(r) {
 				break
 			}
@@ -141,8 +141,6 @@ func Topics(content string) []Topic {
 	}
 	return out
 }
-
-func decode(s string) (rune, int) { return utf8.DecodeRuneInString(s) }
 
 // InstructionsFile is the project-instructions file under root that holds the
 // managed rota blocks: AGENTS.md when it exists, else CLAUDE.md (which may not

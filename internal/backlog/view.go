@@ -101,16 +101,12 @@ func (r Row) IssueMatches(wanted map[string]bool) bool {
 	return wanted[n] || wanted[r.Repo+":"+r.Key] || wanted[r.Repo+":#"+n] || wanted[r.Repo+"#"+n]
 }
 
-// ParseMilestones is parse_milestones: every milestone ID (M01, M3) in text,
-// in order, duplicates kept.
-func ParseMilestones(text string) []string { return ms.IDs(text) }
-
 // IDsByMilestone is hv-todo-by-milestone: the open items tagged with mid, in
 // backlog order. A multi-valued "Milestone: M01, M03" matches either.
 func IDsByMilestone(rows []Row, mid string) []string {
 	ids := []string{}
 	for _, r := range rows {
-		for _, m := range ParseMilestones(r.Fields.Get("milestone")) {
+		for _, m := range ms.IDs(r.Fields.Get("milestone")) {
 			if m == mid {
 				ids = append(ids, r.ID)
 				break
@@ -129,7 +125,7 @@ func MilestonesFor(rows []Row, match func(Row) bool) []string {
 		if !match(r) {
 			continue
 		}
-		for _, m := range ParseMilestones(r.Fields.Get("milestone")) {
+		for _, m := range ms.IDs(r.Fields.Get("milestone")) {
 			set[m] = true
 		}
 	}
@@ -233,7 +229,7 @@ func BuildListing(rows []Row, md string, active []Active, grep string) *Listing 
 			continue
 		}
 		lr := ListRow{Row: r, Related: strings.TrimRight(r.Fields.Get("related"), "."),
-			Milestone: strings.Join(ParseMilestones(r.Fields.Get("milestone")), ", ")}
+			Milestone: strings.Join(ms.IDs(r.Fields.Get("milestone")), ", ")}
 		switch r.Section {
 		case "Bugs":
 			l.Bugs = append(l.Bugs, lr)

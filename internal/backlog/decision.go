@@ -46,7 +46,7 @@ func LogDecision(be Backend, it *Item, ref, gist string) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	mids := ParseMilestones(it.Fields.Get("milestone"))
+	mids := ms.IDs(it.Fields.Get("milestone"))
 	if len(mids) == 0 {
 		return "", nil
 	}
