@@ -745,15 +745,17 @@ func (r Record) ItemFailed() bool {
 
 // Failing reports whether r gives a bounce something to relay: a FAIL
 // verdict, a blocking finding or a failed item. It is the bounce rule, wider
-// than the narrow FailingRecords on purpose: a CONCERNS review can still carry a blocking
+// than the narrow RelayFailing on purpose: a CONCERNS review can still carry a blocking
 // finding or a failed item, and a bounce relays those, while a relay or ship
 // block follows the effective verdict alone.
 func (r Record) Failing() bool {
 	return r.Verdict == Fail || HasBlocking(r.Findings) || r.ItemFailed()
 }
 
-// FailScope selects which records FailingRecords judges.
-type FailScope struct {
+// failScope selects which records failingRecords judges. It is private: callers
+// ask for a consumer's rule by name (Blocking, BlockingAtHead, BlockingAnyHead,
+// RelayFailing, BounceFailing) and never pick flags.
+type failScope struct {
 	// Head, when AtHead is set, limits the set to records at Head. Recovered
 	// reports then obey ForHead, the rule the gate applies.
 	Head   string
@@ -765,14 +767,14 @@ type FailScope struct {
 	SecondOpinion bool
 }
 
-// FailingRecords is the one rule for which records fail a branch, in blocking
+// failingRecords is the one rule for which records fail a branch, in blocking
 // order: the review (spec, quality), cross, then each lens, then second opinion
 // when asked. Across heads the review is the effective one (EffectiveReview)
 // and a stale record still counts, so only a newer record of the same kind
 // clears it. At a head each of spec and quality is its own latest record at that
 // head. CONCERNS and QA never fail unless Wide finds a blocking finding. Blocking,
 // BlockingAtHead, BlockingAnyHead, the relay and the bounce derive from it.
-func FailingRecords(list []Record, s FailScope) []Record {
+func failingRecords(list []Record, s failScope) []Record {
 	var cands []Record
 	if s.AtHead {
 		kinds := bounceReviewKinds
@@ -798,18 +800,33 @@ func FailingRecords(list []Record, s FailScope) []Record {
 	})
 }
 
-func firstFailing(list []Record, s FailScope) (Record, bool) {
-	if fails := FailingRecords(list, s); len(fails) > 0 {
+func firstFailing(list []Record, s failScope) (Record, bool) {
+	if fails := failingRecords(list, s); len(fails) > 0 {
 		return fails[0], true
 	}
 	return Record{}, false
+}
+
+// RelayFailing is the relay rule: the FAIL records a review relay carries, the
+// effective review, cross and each lens, across heads and without second
+// opinion. A blocking finding under CONCERNS does not count; BounceFailing
+// is the wider rule.
+func RelayFailing(list []Record) []Record {
+	return failingRecords(list, failScope{})
+}
+
+// BounceFailing is the bounce rule at head: the records a bounce would relay,
+// a FAIL, a blocking finding or a failed item recorded at head. BlockingAtHead
+// is its first record, which the merge gate applies.
+func BounceFailing(list []Record, head string) []Record {
+	return failingRecords(list, failScope{Head: head, AtHead: true, Wide: true})
 }
 
 // Blocking is the record that blocks a ship (B3): the first of the effective
 // review, cross, lens and second-opinion records whose verdict is FAIL,
 // whatever head or runner. CONCERNS and QA never block.
 func Blocking(list []Record) (Record, bool) {
-	return firstFailing(list, FailScope{SecondOpinion: true})
+	return firstFailing(list, failScope{SecondOpinion: true})
 }
 
 // BlockingAtHead is the first review record (spec, quality, cross, then the
@@ -818,7 +835,10 @@ func Blocking(list []Record) (Record, bool) {
 // bounce would relay is not merged. Unlike Blocking it ignores a record at
 // another commit, and a CONCERNS review can trip it. Ship does not use it.
 func BlockingAtHead(list []Record, head string) (Record, bool) {
-	return firstFailing(list, FailScope{Head: head, AtHead: true, Wide: true})
+	if fails := BounceFailing(list, head); len(fails) > 0 {
+		return fails[0], true
+	}
+	return Record{}, false
 }
 
 // BlockingAnyHead is the bounce rule without head scoping, the set a nudged
@@ -829,7 +849,7 @@ func BlockingAnyHead(list []Record) (Record, bool) {
 	if r, ok := Blocking(list); ok {
 		return r, true
 	}
-	return firstFailing(list, FailScope{Wide: true})
+	return firstFailing(list, failScope{Wide: true})
 }
 
 // staleCrossFail is true when r is a review-cross FAIL recorded at a commit

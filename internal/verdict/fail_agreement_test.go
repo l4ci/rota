@@ -19,10 +19,7 @@ func TestGateAndBounceAgreeOnRecoveredReport(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, gate := BlockingAtHead(ForHead(tc.list, head), head)
-			bounce := false
-			for _, r := range BounceReviewsAtHead(tc.list, head) {
-				bounce = bounce || r.Failing()
-			}
+			bounce := len(BounceFailing(tc.list, head)) > 0
 			if gate != tc.want || bounce != tc.want {
 				t.Fatalf("gate=%v bounce=%v, want both %v", gate, bounce, tc.want)
 			}

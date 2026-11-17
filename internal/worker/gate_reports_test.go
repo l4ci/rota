@@ -142,7 +142,7 @@ func TestGateObserveReadsWithoutFetchOrRecovery(t *testing.T) {
 
 // One recovered FAIL must reach every reader the umbrella key feeds: the gate
 // refuses on it, and the bounce count and the review relay read the same list
-// (noBlockingFindings reads BounceReviewsAtHead, failVerdict reads FailingRecords).
+// (noBlockingFindings reads BounceReviewsAtHead, failVerdict reads RelayFailing).
 func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
 	w := newWorld(t, "7")
 	w.setConfig(`{"ship":{"review":"full"},"test":{"full":["true"]}}`)
@@ -164,7 +164,7 @@ func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
 	if got := verdict.BounceReviewsAtHead(list, head); len(got) == 0 || !got[0].Failing() {
 		t.Fatalf("bounce reader sees no failing review at head: %+v", got)
 	}
-	if len(verdict.FailingRecords(list, verdict.FailScope{})) == 0 {
+	if len(verdict.RelayFailing(list)) == 0 {
 		t.Fatal("relay reader sees no effective FAIL")
 	}
 	if len(store.Branch("", "w1")) != 0 {

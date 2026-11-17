@@ -462,16 +462,16 @@ func TestFailingVersusNarrowFailing(t *testing.T) {
 		if got := c.r.Failing(); got != c.failing {
 			t.Errorf("%s: Failing = %v, want %v", c.name, got, c.failing)
 		}
-		if got := len(FailingRecords([]Record{c.r}, FailScope{})) > 0; got != c.effectFails {
-			t.Errorf("%s: narrow FailingRecords = %v, want %v", c.name, got, c.effectFails)
+		if got := len(RelayFailing([]Record{c.r})) > 0; got != c.effectFails {
+			t.Errorf("%s: RelayFailing = %v, want %v", c.name, got, c.effectFails)
 		}
 	}
 	// the combined verdict of a quality record decides, not its own Verdict
 	q := Record{Kind: ReviewQuality, Verdict: Pass, Combined: Fail}
-	if r, ok := firstFailing([]Record{q}, FailScope{}); !ok || r.Verdict != Fail {
-		t.Errorf("combined FAIL: %+v %v", r, ok)
+	if fails := RelayFailing([]Record{q}); len(fails) != 1 || fails[0].Verdict != Fail {
+		t.Errorf("combined FAIL: %+v", fails)
 	}
-	if _, ok := firstFailing(nil, FailScope{}); ok {
+	if fails := RelayFailing(nil); len(fails) != 0 {
 		t.Error("no records must not fail")
 	}
 }

@@ -131,7 +131,7 @@ func branchVerdicts(c *Ctx, root, branch string) []verdict.Record {
 // failRecords are branch's FAIL verdicts a relay carries: the effective review,
 // the cross-harness review (#1612) and each lens review (#2064).
 func failRecords(list []verdict.Record) []verdict.Record {
-	return verdict.FailingRecords(list, verdict.FailScope{})
+	return verdict.RelayFailing(list)
 }
 
 // openFindings are the findings of branch's FAIL reviews: after a re-review

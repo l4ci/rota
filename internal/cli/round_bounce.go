@@ -156,7 +156,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		head = strings.TrimSpace(out)
 	}
 	list := branchVerdicts(c, root, branch)
-	if len(verdict.FailingRecords(list, verdict.FailScope{Head: head, AtHead: true, Wide: true})) > 0 {
+	if len(verdict.BounceFailing(list, head)) > 0 {
 		return nil
 	}
 	if len(verdict.BounceReviewsAtHead(list, head)) == 0 {
