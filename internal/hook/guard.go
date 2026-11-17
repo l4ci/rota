@@ -239,6 +239,8 @@ var rotaProseFlags = map[string]bool{
 // ripgrep runs a program; the rest of rg is a data program.
 func (g *guard) rgPre(args []string, depth int, sc scope) error {
 	for i, a := range args {
+		// No stop at `--`: it can be the value of `-e` or `-g`, and a stray
+		// `--pre` pattern after it is a rarer miss than a hidden command.
 		var v string
 		switch {
 		case a == "--pre" && i+1 < len(args):
@@ -248,7 +250,9 @@ func (g *guard) rgPre(args []string, depth int, sc scope) error {
 		default:
 			continue
 		}
-		return g.command(strings.Fields(v), depth+1, sc)
+		if err := g.command(strings.Fields(v), depth+1, sc); err != nil {
+			return err
+		}
 	}
 	return nil
 }

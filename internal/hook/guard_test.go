@@ -57,6 +57,8 @@ func TestGuardDenies(t *testing.T) {
 		"git push origin HEAD:refs/heads/main",
 		"git push -u origin " + gBranch + ":main",
 		"rg --pre 'git push origin main' x .",
+		"rg --pre cat --pre 'git push origin main' x .",
+		"rg -e -- --pre 'git push origin main' x .",
 		"rg --pre='git push origin main' x .",
 		"rg --pre 'git push origin main'",
 		"git -C /repo push origin HEAD",
