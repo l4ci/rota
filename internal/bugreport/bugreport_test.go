@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,10 +40,47 @@ func TestPathUsesRunner(t *testing.T) {
 func project(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+	// A TMPDIR inside a checkout would let git resolve root to that checkout's .rota/.
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(root))
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// TestProjectIgnoresACheckoutAboveTMPDIR runs with TMPDIR inside a fake checkout
+// that holds .rota/, as a worker slot's does, and asserts the checkout's log stays untouched.
+func TestProjectIgnoresACheckoutAboveTMPDIR(t *testing.T) {
+	fake, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", fake, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	if err := os.MkdirAll(filepath.Join(fake, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	slotTmp := filepath.Join(fake, ".rota", "tmp", "slots", "x")
+	if err := os.MkdirAll(slotTmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", slotTmp)
+	// A test's TempDir parent is made on its first call, so project needs a fresh t.
+	t.Run("project", func(t *testing.T) {
+		root := project(t)
+		addAndCheck(t, fake, root)
+	})
+}
+
+func addAndCheck(t *testing.T, fake, root string) {
+	t.Helper()
+	if _, err := Add(context.Background(), git.Exec, root, Env{}, Record{Source: SourceAgent, Summary: "fixture"}, t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(fake, ".rota", File)); !os.IsNotExist(err) {
+		t.Fatalf("fake checkout log written: %v", err)
+	}
 }
 
 func TestAddLoadRoundTrip(t *testing.T) {
