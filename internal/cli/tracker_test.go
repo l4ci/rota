@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -350,5 +351,15 @@ func TestMigrateTrackerInvalidConfig(t *testing.T) {
 		if _, err := d.MigrateTracker(context.Background(), t.TempDir(), cfg); !tracker.IsKind(err, tracker.KindInternal) {
 			t.Errorf("%s: err = %v, want KindInternal", raw, err)
 		}
+	}
+}
+
+// A coded error wrapped by fmt.Errorf reaches trackerErr unchanged by
+// exitmap.Translate, so it is not itself an *Error; its code must survive.
+func TestTrackerErrKeepsCodeOfWrappedCodedError(t *testing.T) {
+	wrapped := fmt.Errorf("listing labels: %w", Refused("blocked"))
+	got := trackerErr(wrapped)
+	if got == nil || got.Exit != ExitRefused {
+		t.Fatalf("trackerErr(wrapped refused) = %+v, want exit %d", got, ExitRefused)
 	}
 }

@@ -596,7 +596,7 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 // (blockedBy forge for an origin naming no forge) lifted onto the error where
 // failData reads it.
 func trackerRefusal(err error) error {
-	data, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Tracker})
+	data, out := translate(err, exitmap.Options{Classes: exitmap.Tracker})
 	var e *Error
 	if errors.As(out, &e) {
 		e.Data = data

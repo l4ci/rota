@@ -142,7 +142,7 @@ func renameList(rs []config.Rename) []any {
 // and new names refuse (exit 4, both values listed), a malformed layer is
 // exit 5 naming the file.
 func roundMigrationFail(err error) (Result, error) {
-	data, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.ConfigRefusal | exitmap.ConfigCorrupt})
+	data, out := translate(err, exitmap.Options{Classes: exitmap.ConfigRefusal | exitmap.ConfigCorrupt})
 	if data != nil {
 		return Result{Data: data}, out
 	}

@@ -67,7 +67,7 @@ func markReadOnly(cmds []*Command, prefix string) {
 				run := verb(fs)
 				return func(c *Ctx, args []string) (Result, error) {
 					res, err := run(c, args)
-					_, err = exitmap.Translate(err, exitmap.Options{ReadOnly: true})
+					_, err = translate(err, exitmap.Options{ReadOnly: true})
 					return res, err
 				}
 			}
@@ -127,14 +127,14 @@ func argCount(c *Ctx, args []string, min, max int, usage string) error {
 // backlogFail maps a backlog error to a verb failure and, for a refusal, its
 // failure data. An unclassified error passes through.
 func backlogFail(err error) (Result, error) {
-	data, ferr := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Backlog})
+	data, ferr := translate(err, exitmap.Options{Classes: exitmap.Backlog})
 	return Result{Data: data}, ferr
 }
 
 // backlogFailRead is backlogFail for a read-only verb: the conventions forbid exit 4
 // there, so a refusal (the wrong backend) becomes exit 1 with the same data.
 func backlogFailRead(err error) (Result, error) {
-	data, ferr := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Backlog, ReadOnly: true})
+	data, ferr := translate(err, exitmap.Options{Classes: exitmap.Backlog, ReadOnly: true})
 	return Result{Data: data}, ferr
 }
 
