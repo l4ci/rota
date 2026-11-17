@@ -67,6 +67,20 @@ type HvOptions struct {
 	Milestone func(dir string) func() (bool, error)
 	// Now stamps the backup folder; nil is the wall clock.
 	Now func() time.Time
+	// Git runs every git call; nil is git.Exec. Ctx bounds them; nil is
+	// context.Background.
+	Git git.Runner
+	Ctx context.Context
+}
+
+// repo is the git repo at dir on the injected runner (git.Exec when unset).
+func (o HvOptions) repo(dir string) git.Repo { return git.Repo{Dir: dir, Runner: o.Git} }
+
+func (o HvOptions) ctx() context.Context {
+	if o.Ctx == nil {
+		return context.Background()
+	}
+	return o.Ctx
 }
 
 // HvProject is what the run does to one project: the root or a sub-repo.
@@ -424,11 +438,20 @@ type hvPlan struct {
 	dir, scope string
 	state      string // ".hv" while unmoved, else ".rota"
 	move       bool
-	edits      []hvEdit // project files
+	edits      []hvEdit // project files, at the state folder's current name
+	stamps     []hvEdit // configs with rota.version written last, after the edits
 	blocks     bool
 	stamp      bool
 	manual     []string
 	accounts   []string // configDirs from work.accounts
+}
+
+// atNewName is rel at the state folder's new name.
+func atNewName(rel string) string {
+	if r, ok := strings.CutPrefix(rel, legacyDir+string(filepath.Separator)); ok {
+		return filepath.Join(stateDir, r)
+	}
+	return rel
 }
 
 func (p *hvPlan) pending() bool {
@@ -442,13 +465,20 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 	add := func(rel, orig, text string) {
 		p.edits = append(p.edits, hvEdit{abs: filepath.Join(dir, rel), rel: rel, orig: orig, text: text})
 	}
+	var readErr error
 	read := func(rel string) (string, bool) {
 		abs := filepath.Join(dir, rel)
 		if fi, err := os.Lstat(abs); err != nil || !fi.Mode().IsRegular() {
 			return "", false
 		}
 		b, err := os.ReadFile(abs)
-		if err != nil || !utf8.Valid(b) {
+		if err != nil {
+			if readErr == nil {
+				readErr = err
+			}
+			return "", false
+		}
+		if !utf8.Valid(b) {
 			return "", false
 		}
 		return string(b), true
@@ -479,9 +509,9 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 	// State folder: tracked markdown and the configs.
 	root := filepath.Join(dir, state)
 	skip := map[string]bool{"migrate-backup": true, "qa-runs": true, "bin": true, "worktrees": true}
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			if path != root && skip[d.Name()] {
@@ -521,12 +551,27 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 		if ch {
 			add(rel, raw, string(moved))
 		}
-		if _, ch, _ := convertConfig([]byte(raw), true, want); ch && !p.stamp {
+		// The stamp goes on the moved text, as the last write.
+		cur := raw
+		if ch {
+			cur = string(moved)
+		}
+		stamped, sch, _ := convertConfig([]byte(cur), true, want)
+		if sch {
+			p.stamps = append(p.stamps, hvEdit{abs: filepath.Join(dir, rel), rel: rel, orig: cur, text: string(stamped)})
+		}
+		if ch || sch {
 			p.stamp = true
 		}
 		if name == "config.json" {
 			p.accounts = accountDirs(raw)
 		}
+	}
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	if readErr != nil {
+		return nil, readErr
 	}
 	sort.Slice(p.edits, func(i, j int) bool { return p.edits[i].rel < p.edits[j].rel })
 	return p, nil
@@ -572,11 +617,11 @@ func accountDirs(raw string) []string {
 // ---- checks ----------------------------------------------------------------
 
 // checkProject is the refusal set of one project, before any write.
-func checkProject(dir, state string, hasRepos bool) error {
+func checkProject(o HvOptions, dir, state string, hasRepos bool) error {
 	if fsio.IsDir(filepath.Join(dir, legacyDir)) && fsio.IsDir(filepath.Join(dir, stateDir)) {
 		return refuse(blockedby.BothDirs, "%s holds both .hv/ and .rota/: that is ambiguous and rota does not merge them.\nKeep the one that is current and remove the other (or move it away), then re-run rota migrate hv.", dir)
 	}
-	if err := gitClean(dir, hasRepos); err != nil {
+	if err := gitClean(o, dir, hasRepos); err != nil {
 		return err
 	}
 	return heldLock(filepath.Join(dir, state))
@@ -584,17 +629,20 @@ func checkProject(dir, state string, hasRepos bool) error {
 
 // gitClean refuses uncommitted changes in the project outside .hv/ and .rota/.
 // An umbrella root with no git of its own has nothing to check.
-func gitClean(dir string, umbrella bool) error {
+func gitClean(o HvOptions, dir string, umbrella bool) error {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil && umbrella {
 		return nil
 	}
-	repo := git.Repo{Dir: dir}
-	st, err := repo.Run(context.Background(), "status", "--porcelain")
+	repo, ctx := o.repo(dir), o.ctx()
+	st, err := repo.Run(ctx, "status", "--porcelain")
 	if err != nil || st.ExitCode != 0 {
 		return fmt.Errorf("%w: not inside a git repo (or git unavailable)", ErrGit)
 	}
 	out := st.Stdout
-	pc, _ := repo.Run(context.Background(), "rev-parse", "--show-prefix")
+	pc, err := repo.Run(ctx, "rev-parse", "--show-prefix")
+	if err != nil || pc.ExitCode != 0 {
+		return fmt.Errorf("%w: git rev-parse --show-prefix failed in %s", ErrGit, dir)
+	}
 	prefix := strings.TrimSpace(pc.Stdout)
 	var dirty []string
 	for _, line := range strings.Split(out, "\n") {
@@ -701,7 +749,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 		for _, e := range pl.edits {
 			rel := e.rel
 			if pl.move {
-				rel = strings.Replace(rel, legacyDir+string(filepath.Separator), stateDir+string(filepath.Separator), 1)
+				rel = atNewName(rel)
 			}
 			hp.Files = append(hp.Files, rel)
 			if o.Verbose {
@@ -711,7 +759,11 @@ func RunHv(o HvOptions) (*HvReport, error) {
 		rep.ManualReview = append(rep.ManualReview, pl.manual...)
 		accounts = append(accounts, pl.accounts...)
 		rep.Projects = append(rep.Projects, hp)
-		for _, b := range workerBranches(p.dir) {
+		branches, err := workerBranches(o, p.dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range branches {
 			if sr := scopeRel(p.scope); sr != "" {
 				b = sr + ": " + b
 			}
@@ -725,7 +777,10 @@ func RunHv(o HvOptions) (*HvReport, error) {
 	// Old skills installs.
 	var legacyRoots []skills.Root
 	if !o.SkipSkills {
-		legacyRoots = legacySkillRoots(o, projs)
+		var err error
+		if legacyRoots, err = legacySkillRoots(o, projs); err != nil {
+			return nil, err
+		}
 		work = work || len(legacyRoots) > 0
 	}
 	// Settings written by `hv hook install`.
@@ -749,7 +804,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 		if !p.plan.pending() {
 			continue // only skills or settings left: the project tree is not touched
 		}
-		if err := checkProject(p.dir, p.plan.state, len(subs) > 0 && p.dir == rootDir); err != nil {
+		if err := checkProject(o, p.dir, p.plan.state, len(subs) > 0 && p.dir == rootDir); err != nil {
 			return nil, err
 		}
 	}
@@ -798,13 +853,9 @@ func applyHv(o HvOptions, projs []*hvProj, legacyRoots []skills.Root, settingsEd
 				rootBackup = bk
 			}
 		}
-		// Re-plan at the new location, then write.
-		np, err := planProject(p.dir, p.scope, stateDir, want)
-		if err != nil {
-			return err
-		}
-		for _, e := range np.edits {
-			if err := fsio.WriteFileAtomic(e.abs, []byte(e.text)); err != nil {
+		// Write what the plan holds, at the new location.
+		for _, e := range pl.edits {
+			if err := fsio.WriteFileAtomic(filepath.Join(p.dir, atNewName(e.rel)), []byte(e.text)); err != nil {
 				return err
 			}
 		}
@@ -862,21 +913,12 @@ func applyHv(o HvOptions, projs []*hvProj, legacyRoots []skills.Root, settingsEd
 
 	// Stamp last: a failed run leaves the old version in place.
 	for _, p := range projs {
-		for _, name := range []string{"config.json", "config.local.json"} {
-			path := filepath.Join(p.dir, stateDir, name)
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				continue
-			}
-			out, ch, err := convertConfig(raw, true, want)
-			if err != nil || !ch {
-				continue
-			}
-			if err := fsio.WriteFileAtomic(path, out); err != nil {
+		for _, e := range p.plan.stamps {
+			if err := fsio.WriteFileAtomic(filepath.Join(p.dir, atNewName(e.rel)), []byte(e.text)); err != nil {
 				return err
 			}
-			if name == "config.json" && p.scope == "umbrella" {
-				v, _ := jsonx.Decode(out)
+			if filepath.Base(e.rel) == "config.json" && p.scope == "umbrella" {
+				v, _ := jsonx.Decode([]byte(e.text))
 				if obj, ok := v.(*jsonx.Object); ok {
 					r, _ := getObj(obj, "rota")
 					rep.VersionStamp = getString(r, "version")
@@ -892,7 +934,7 @@ func applyHv(o HvOptions, projs []*hvProj, legacyRoots []skills.Root, settingsEd
 
 // legacySkillRoots lists the user and project skill roots that hold an hv
 // manifest, each once.
-func legacySkillRoots(o HvOptions, projs []*hvProj) []skills.Root {
+func legacySkillRoots(o HvOptions, projs []*hvProj) ([]skills.Root, error) {
 	seen := map[string]bool{}
 	var out []skills.Root
 	collect := func(roots []skills.Root) {
@@ -919,17 +961,24 @@ func legacySkillRoots(o HvOptions, projs []*hvProj) []skills.Root {
 		collect(user)
 	}
 	for _, p := range projs {
-		if proj, err := skills.Roots(skills.Project, "all", o.Home, dirs, projectTop(p.dir)); err == nil {
+		top, err := projectTop(o, p.dir)
+		if err != nil {
+			return nil, err
+		}
+		if proj, err := skills.Roots(skills.Project, "all", o.Home, dirs, top); err == nil {
 			collect(proj)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // projectTop is the git toplevel of dir, "" outside a work tree.
-func projectTop(dir string) string {
-	top, _, _ := git.Repo{Dir: dir}.Toplevel(context.Background())
-	return top
+func projectTop(o HvOptions, dir string) (string, error) {
+	top, _, err := o.repo(dir).Toplevel(o.ctx())
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrGit, err)
+	}
+	return top, nil
 }
 
 type legacyManifestFile struct {
@@ -994,15 +1043,7 @@ func removeLegacyInstall(root string) (removed int, kept []string, err error) {
 		removed++
 		gone = append(gone, p)
 	}
-	for _, p := range gone {
-		dir := filepath.Dir(filepath.Join(root, filepath.FromSlash(p)))
-		for dir != root && strings.HasPrefix(dir, root) {
-			if os.Remove(dir) != nil {
-				break
-			}
-			dir = filepath.Dir(dir)
-		}
-	}
+	skills.PruneEmpty(root, gone)
 	return removed, kept, fsio.RemoveWithLock(mp)
 }
 
@@ -1103,7 +1144,10 @@ func legacyRepos(dir, state string) []legacyRepo {
 }
 
 // workerBranches lists the local hv-worker/* branches of the repo at dir.
-func workerBranches(dir string) []string {
-	b, _, _ := git.Repo{Dir: dir}.ForEachRef(context.Background(), "refs/heads/hv-worker/")
-	return b
+func workerBranches(o HvOptions, dir string) ([]string, error) {
+	b, _, err := o.repo(dir).ForEachRef(o.ctx(), "refs/heads/hv-worker/")
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGit, err)
+	}
+	return b, nil
 }

@@ -34,8 +34,7 @@ func trackerSettings(c *Ctx) (tracker.Settings, error) {
 
 // trackerErr maps a tracker failure onto the exit table through its kind.
 func trackerErr(err error) *Error {
-	_, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Tracker, Default: ExitInternal})
-	return out.(*Error)
+	return translateAs(err, exitmap.Options{Classes: exitmap.Tracker, Default: ExitInternal})
 }
 
 func trCall(fs *flag.FlagSet) RunFunc {

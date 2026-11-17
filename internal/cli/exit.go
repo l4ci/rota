@@ -64,8 +64,27 @@ func NotImplemented(path string) *Error {
 // codes (see internal/exitmap); anything else passes through unchanged. It is
 // the one place the cli decides what a config error exits with.
 func configFail(err error, c exitmap.Class) error {
-	_, out := exitmap.Translate(err, exitmap.Options{Classes: c})
+	_, out := translate(err, exitmap.Options{Classes: c})
 	return out
+}
+
+// translate is the cli's one entry to exitmap.Translate: the failure data a
+// refusal carries and the error to return under o.
+func translate(err error, o exitmap.Options) (data any, out error) {
+	return exitmap.Translate(err, o)
+}
+
+// translateAs is translate reduced to the *Error out holds, found through
+// errors.As because Translate returns an already-coded error by identity (a
+// wrapper around an *Error, or a read-only demotion), never necessarily an
+// *Error itself. Nil when out carries none.
+func translateAs(err error, o exitmap.Options) *Error {
+	_, out := translate(err, o)
+	var e *Error
+	if errors.As(out, &e) {
+		return e
+	}
+	return nil
 }
 
 // asError maps any error to an *Error: lock timeouts become retry, an unreadable state file is unavailable
@@ -75,10 +94,8 @@ func asError(err error) *Error {
 	if errors.As(err, &e) {
 		return e
 	}
-	if _, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Lock | exitmap.Unreadable}); out != nil {
-		if errors.As(out, &e) {
-			return e
-		}
+	if e := translateAs(err, exitmap.Options{Classes: exitmap.Lock | exitmap.Unreadable}); e != nil {
+		return e
 	}
 	return &Error{Exit: ExitInternal, Message: err.Error(), Hint: "this is a bug in rota; please report it"}
 }

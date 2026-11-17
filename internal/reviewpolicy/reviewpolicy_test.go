@@ -288,3 +288,23 @@ func TestPathEntrySemantics(t *testing.T) {
 		}
 	}
 }
+
+// An unread issue body is not an issue that declares no files: drift is
+// unchecked, and the decision says so (#3555).
+func TestDecideUnknownIssueBodyIsReported(t *testing.T) {
+	p, err := config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []string{"anything.go"}
+	if got := Decide(p, Input{Changed: 3, Files: files, IssueBodyUnknown: true}); got.DriftUnchecked == "" || got.Depth != config.DepthLight {
+		t.Errorf("unknown body: %+v, want depth light with DriftUnchecked set", got)
+	}
+	if got := Decide(p, Input{Changed: 3, Files: files, IssueBody: ""}); got.DriftUnchecked != "" {
+		t.Errorf("empty read body: %+v, want no DriftUnchecked", got)
+	}
+	off, _ := config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50,"scopeDrift":false}}}`))
+	if got := Decide(off, Input{Changed: 3, Files: files, IssueBodyUnknown: true}); got.DriftUnchecked != "" {
+		t.Errorf("scopeDrift off: %+v, want no DriftUnchecked", got)
+	}
+}
