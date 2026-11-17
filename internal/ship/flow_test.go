@@ -346,45 +346,29 @@ func TestClosesLines(t *testing.T) {
 }
 
 type fakeReopener struct {
-	name    string
-	changed bool
-	active  map[string]bool
+	state   string
+	changed map[string]bool
 	opened  []string
 }
 
-func (f *fakeReopener) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{IssueIDs: f.name != "file"}
-}
-func (f *fakeReopener) Active(id string) bool { return f.active[id] }
+func (f *fakeReopener) State() string { return f.state }
 func (f *fakeReopener) Reopen(id string) (bool, error) {
 	f.opened = append(f.opened, id)
-	return f.changed, nil
+	return f.changed[id], nil
 }
 
-// Restore decides through the port alone: no BACKLOG.md exists under the root.
+// Restore decides through the port alone: it reopens every id and words each
+// no-op with the backend's own state, never naming a backlog file itself.
 func TestRestore(t *testing.T) {
 	var warn strings.Builder
-	r := &fakeReopener{name: "file", changed: true, active: map[string]bool{"B01": true}}
+	r := &fakeReopener{state: "open on the tracker", changed: map[string]bool{"B02": true}}
 	if err := Restore(r, t.TempDir(), []string{"B01", "B02"}, &warn); err != nil {
 		t.Fatal(err)
 	}
-	// B01 is already active in a file backlog: no reopen, a noop line.
-	if len(r.opened) != 1 || r.opened[0] != "B02" {
+	if len(r.opened) != 2 {
 		t.Errorf("opened %v", r.opened)
 	}
-	if want := "noop: [B01] already active in BACKLOG.md\n"; warn.String() != want {
-		t.Errorf("warn %q", warn.String())
-	}
-}
-
-// A tracker-backed refusal names the tracker, never BACKLOG.md.
-func TestRestoreTrackerNoopNamesTracker(t *testing.T) {
-	var warn strings.Builder
-	r := &fakeReopener{name: "issues", changed: false}
-	if err := Restore(r, t.TempDir(), []string{"42"}, &warn); err != nil {
-		t.Fatal(err)
-	}
-	if want := "noop: [42] already open on the tracker\n"; warn.String() != want {
+	if want := "noop: [B01] already open on the tracker\n"; warn.String() != want {
 		t.Errorf("warn %q", warn.String())
 	}
 }

@@ -602,7 +602,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return err
 			}
-			return ship.Restore(fileActive{b, root}, root, ids, c.Stderr)
+			return ship.Restore(restoreBackend{b, root}, root, ids, c.Stderr)
 		}); err != nil {
 			return shipErr(err)
 		}
@@ -653,11 +653,24 @@ func shipPlan(short, subject, base string, postCount int, ids []string, apply bo
 	return b.String()
 }
 
-// fileActive gives a backend the Active lookup Restore decides through: the
-// file backlog's open bullets under root.
-type fileActive struct {
+// restoreBackend adapts a backlog backend to ship.Reopener. A file backlog
+// skips Reopen for an item already active, so the no-op leaves no lock
+// sidecar; a tracker always reopens, and words its no-op after the tracker.
+type restoreBackend struct {
 	backlog.Backend
 	root string
 }
 
-func (f fileActive) Active(id string) bool { return backlog.IsActive(f.root, id) }
+func (r restoreBackend) Reopen(id string) (bool, error) {
+	if !r.Capabilities().IssueIDs && backlog.IsActive(r.root, id) {
+		return false, nil
+	}
+	return r.Backend.Reopen(id)
+}
+
+func (r restoreBackend) State() string {
+	if r.Capabilities().IssueIDs {
+		return "open on the tracker"
+	}
+	return "active in BACKLOG.md"
+}
