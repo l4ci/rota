@@ -2067,7 +2067,7 @@ func (g *gateOperation) mergeLocal(dir string) (done bool) {
 	if err == nil {
 		return false
 	}
-	msg, hint := mergeRefusal(err, mergeWords{
+	msg, hint := land.Classify(err).Refusal(land.Words{
 		Failed:   fmt.Sprintf("error: merge of %s into %s failed", g.branch, g.o.Base),
 		Conflict: fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base),
 	})

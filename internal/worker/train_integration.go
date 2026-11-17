@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -206,12 +205,10 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	before := p.tips[len(p.tips)-1]
 	if err := land.MergeLocal(run, p.baseSHA, land.SyncSubject(o.Base, it.Branch), land.RecoveryGit(ctx, e.Git, p.scratch)); err != nil {
 		res.Verdict = GateMergeFailed
-		var ce *land.ConflictError
-		if errors.As(err, &ce) {
-			res.Err = fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s conflicts in: %s", o.Base, it.Branch, strings.Join(conflictPaths(ce.Out), ", "))
-			return true, nil
-		}
-		res.Err, res.Hint = mergeRefusal(err, mergeWords{Failed: fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s in the scratch tree failed", o.Base, it.Branch)})
+		res.Err, res.Hint = land.Classify(err).Refusal(land.Words{
+			Failed:   fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s in the scratch tree failed", o.Base, it.Branch),
+			Conflict: fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s conflicts in: {paths}", o.Base, it.Branch),
+		})
 		return true, nil
 	}
 	tip, code := e.git(p.scratch, "rev-parse", "HEAD")

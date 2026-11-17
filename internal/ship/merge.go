@@ -87,18 +87,15 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if recover == nil {
 		recover = p.Git.Run
 	}
-	switch err := land.MergeLocal(p.Git.Run, head, msg, recover); {
-	case err == nil:
-	case errors.As(err, new(*land.CleanupError)):
-		return "", err
-	case errors.As(err, new(*land.ConflictError)):
-		return "", &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
-	default:
-		var me *land.MergeError
-		if errors.As(err, &me) {
-			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(me.Out)}
+	if err := land.MergeLocal(p.Git.Run, head, msg, recover); err != nil {
+		switch f := land.Classify(err); f.Kind {
+		case land.FailConflict:
+			return "", &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
+		case land.FailMerge:
+			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(f.Out)}
+		default:
+			return "", err
 		}
-		return "", err
 	}
 	postMerge := func(sha string, err error) error {
 		return &PostMergeError{Pinned: head, Base: base, MergeSHA: sha, Err: err}

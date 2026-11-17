@@ -1,13 +1,10 @@
 package worker
 
 import (
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/testledger"
 )
 
@@ -22,7 +19,7 @@ import (
 // Both run the sequence through premergeRun.run, the gate at its stepPremerge
 // and the train before its scratch merge. What differs between them is only the
 // wording, carried by a premergeSubject, and the inputs each has. A merge
-// failure maps to a message in mergeRefusal.
+// failure maps to a message in land.Failure.Refusal.
 
 // premergeSubject words the refusals for whoever runs the checks.
 type premergeSubject struct {
@@ -134,30 +131,4 @@ func (p premergeRun) run() (r *premergeRefusal, approval bool, ref *exitcode.Ref
 		}
 	}
 	return nil, false, nil, nil
-}
-
-// mergeWords is how a caller words a failed merge.
-type mergeWords struct {
-	// Failed leads a failure message; the exit code and output follow it.
-	Failed string
-	// Conflict and ConflictHint are the message and hint for a real conflict.
-	Conflict, ConflictHint string
-}
-
-// mergeRefusal maps a land.MergeLocal error to its message and hint. Only a
-// real conflict is called one: anything else (no committer identity, a hook, a
-// locked index) is reported in git's own words, so it is not mistaken for work
-// to resolve with the slot.
-func mergeRefusal(err error, w mergeWords) (msg, hint string) {
-	var me *land.MergeError
-	switch {
-	case errors.As(err, new(*land.CleanupError)):
-		return fmt.Sprintf("%s: %s", w.Failed, err), ""
-	case errors.As(err, new(*land.ConflictError)):
-		return w.Conflict, w.ConflictHint
-	case errors.As(err, &me):
-		return fmt.Sprintf("%s (exit %d): %s", w.Failed, me.Code, strings.TrimSpace(me.Out)), ""
-	default:
-		return fmt.Sprintf("%s (exit 127): %s", w.Failed, err), ""
-	}
 }
