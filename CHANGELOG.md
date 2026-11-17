@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.35.1 — 2026-11-17
+
+Worker-guard hardening, read errors that no longer vanish, and the round 62 cleanup sweep.
+
+### Fixed
+
+- **Worker guard.** Closes several ways a worker could still push the base or merge: stdin-fed shells (`bash -`, `/dev/stdin`, `/dev/fd/N`), busybox and toybox shell applets, `gh api graphql` merge mutations (any endpoint spelling, joined field flags, queries read from a file or variable), `git branch -f`/`-C` onto the base, `git push --prune`, and refspec globs or brace expansion. (#3530, #3531, #3580)
+- **Read errors surface.** Knowledge read paths, ship undo planning, umbrella init and config fill used to treat a failed read as "absent" and carry on. They now stop with the error. An unreadable `.gitignore` is refused instead of overwritten. (#3547, #3533, #3510, #3511)
+- **Item sections.** A `### Setup` inside `## Try it` no longer cuts the section short, so the behaviour run is no longer skipped. (#3585)
+- **Frontmatter.** Updating an empty field no longer overwrites the next key. (#3543)
+- **Reap.** Branch removal re-checks that the branch belongs to a round or an adopted worker. (#3521)
+- **Connection secrets.** Reading a secret no longer migrates legacy files as a side effect; the move happens once when the secret stores open. (#3587)
+- **Trains.** The autopilot no longer trains a PR the gate would refuse on a stale cross-review FAIL under `review:none`, and the train nudge sends a PR whose base moved to its own gate, as the tick does. (#3479, #3411, #3558)
+- **Knowledge.** Remove, Replace, Amend and Hit pick a bullet by one rule in both stores; a hit typed in another case bumps the stored bullet. (#3396, #3476, #3549)
+- A wrapped refusal reaching the tracker error path no longer panics. (#3506)
+- Tests run under a worker slot's TMPDIR no longer write the real `.rota/`. (#3478, #3508)
+
+### Changed
+
+About 30 refactors from the round 62 architecture review. Semver comparison, the current round number, exit-4 refusal envelopes, read-only verb declaration and the verdict blocking rules each have one owner now. Usage-limit detection moved to `internal/usagelimit` and the Stop-hook digest to `internal/roundhook`.
+
+## Stats
+137 commits, 331 files changed, +6027 −3209 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.35.0...v0.35.1
+
 ## v0.35.0 — 2026-11-16
 
 Safer merges and transfers, a per-project temp root, and review accounts for cross-harness review.
