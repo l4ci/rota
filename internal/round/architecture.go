@@ -472,7 +472,7 @@ func refactorCmd(area string) string {
 	return "/rota-refactor " + area
 }
 
-// Current is the round number the registry last recorded, 0 before a start.
-func Current(root string) int {
-	return registryRound(root)
+// CurrentRound is the round number worker.CurrentRound names for root, 0 before a start.
+func (e Env) CurrentRound(ctx context.Context, root string) int {
+	return e.currentRound(ctx, root)
 }

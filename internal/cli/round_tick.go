@@ -294,7 +294,7 @@ func (r reviewAdapter) Facts(ctx context.Context) (round.Architecture, bool, err
 }
 
 func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string, error) {
-	return r.renv.MintReview(ctx, r.root, r.board, a, round.Current(r.root))
+	return r.renv.MintReview(ctx, r.root, r.board, a, r.renv.CurrentRound(ctx, r.root))
 }
 
 // placementLine is the warning a tick prints when an assign moved a slot to

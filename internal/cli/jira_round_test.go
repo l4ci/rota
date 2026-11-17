@@ -119,7 +119,7 @@ func TestJiraRoundAssignClaimsByProperty(t *testing.T) {
 	if s := worker.LoadRegistryTolerant(f.root).Slot("dana"); s.Task() != "PROJ-1" {
 		t.Errorf("slot task %q", s.Task())
 	}
-	if cs, err := f.claims("PROJ-1"); err != nil || !slices.Equal(cs, []string{"dana@0"}) {
+	if cs, err := f.claims("PROJ-1"); err != nil || !slices.Equal(cs, []string{"dana@1"}) {
 		t.Errorf("claims %v, %v; requests:\n%s", cs, err, strings.Join(f.s.Requests(), "\n"))
 	}
 	is, err := f.it.Get(context.Background(), "PROJ-1", false)

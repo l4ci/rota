@@ -169,7 +169,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		return first, nil
 	}
 
-	rnd := registryRound(root)
+	rnd := e.currentRound(ctx, root)
 	var attempts []worker.BestOfAttempt
 	for i, s := range slots {
 		attempts = append(attempts, worker.BestOfAttempt{Slot: s.Name(), Branch: branches[i], ClaimID: s.Name() + "@" + strconv.Itoa(rnd)})

@@ -42,7 +42,7 @@ func TestItsaplanRoundAssignClaims(t *testing.T) {
 	if task := worker.LoadRegistryTolerant(fx.root).Slot("dana").Task(); task != "MKT-1" {
 		t.Errorf("slot task %q", task)
 	}
-	if cs, err := it.(tracker.ClaimStore).Claims(context.Background(), "MKT-1"); err != nil || !slices.Equal(cs, []string{"dana@0"}) {
+	if cs, err := it.(tracker.ClaimStore).Claims(context.Background(), "MKT-1"); err != nil || !slices.Equal(cs, []string{"dana@1"}) {
 		t.Errorf("claims %v, %v; requests %v", cs, err, s.Requests())
 	}
 	if !slices.Contains(s.Labels("MKT-1"), "in-progress") || !s.Assigned("MKT-1") {

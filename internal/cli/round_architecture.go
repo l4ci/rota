@@ -85,7 +85,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 		}
 		env := accountedRoundEnv(c, ctx, root)
-		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
+		ids, err := env.MintReview(ctx, root, be, a, env.CurrentRound(ctx, root))
 		if err != nil {
 			_, ferr := backlogFail(err)
 			d.Set("minted", jsonx.Strings(ids))

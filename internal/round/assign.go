@@ -457,7 +457,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	// The marks and the dispatch run as compensating steps (saga.go): a
 	// failure before dispatch undoes the claim and state; the dispatch itself
 	// keeps them, because the pane may already hold the brief.
-	rnd := registryRound(root)
+	rnd := e.currentRound(ctx, root)
 	steps, d, err := e.assignSteps(ctx, root, be, o, it, run, rnd, &res)
 	if err != nil {
 		return res, err
