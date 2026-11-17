@@ -3,6 +3,7 @@ package testiso
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -91,3 +92,39 @@ func TestTripwireCloseRestoresPathAndTmpdir(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// TestGitCeilingStopsAtTMPDIR re-runs this binary with TMPDIR inside a fake
+// checkout, as a worker slot's is (#3508). The child's init sets the ceiling; a
+// git lookup from a temp dir must not walk up into that checkout.
+func TestGitCeilingStopsAtTMPDIR(t *testing.T) {
+	if os.Getenv("TESTISO_CEILING_CHILD") == "1" {
+		d, err := os.MkdirTemp("", "ceiling-probe")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(d)
+		cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+		cmd.Dir = d
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Fatalf("git resolved a checkout above TMPDIR: %s", out)
+		}
+		return
+	}
+	fake, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", fake, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	slotTmp := filepath.Join(fake, ".rota", "tmp", "slots", "x")
+	if err := os.MkdirAll(slotTmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestGitCeilingStopsAtTMPDIR$")
+	cmd.Env = append(os.Environ(), "TESTISO_CEILING_CHILD=1", "TMPDIR="+slotTmp)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("child: %v\n%s", err, out)
+	}
+}
