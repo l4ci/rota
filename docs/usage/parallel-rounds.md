@@ -698,8 +698,17 @@ Install it in `project` or `user` scope (`rota hook install --scope project`): a
 not read the untracked `.claude/settings.local.json`. `install` warns when the guard sits only there, and
 `rota doctor` fails its `guard-hook` check.
 
-Limits: this is a guardrail against a mistaken agent, not a security boundary. A script or `python -c`
-that calls git, or a binary that shells out, is not seen. Codex
+It does not keep a list of wrapper programs. For a program it does not know (`flock`, `watch`, `su -c`,
+`chroot`, `script -c`, `python -c '…os.system("git …")'`), a later `git` or `gh` word counts as a command and an
+argument with spaces that mentions `git` or `gh` is parsed as a script. Programs that only print or search their
+arguments (`echo`, `printf`, `grep`, `cat`, …) are skipped. `eval "$(…)"` and `bash -c "$(…)"` build their script at
+run time, so a line with a substitution that mentions `git` or `gh` is refused.
+
+Limits: this is a guardrail against a mistaken agent, not a security boundary. It reads command lines, not
+programs: a script file that calls git, a program that builds the command from pieces
+(`python -c 'os.system("g"+"it push origin main")'`), or a binary that shells out is not seen. A harder stop
+belongs on the git or forge side (a pre-push hook, or branch protection that refuses base pushes from worker
+credentials). Codex
 workers have no guard (`doctor` warns when Codex tiers are set); a Codex guard is a separate piece of work.
 
 ## Layout

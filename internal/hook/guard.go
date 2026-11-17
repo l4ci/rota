@@ -189,10 +189,10 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 		g.cwd = "" // the stack is not tracked
 		return nil
 	case prog == "eval":
-		return g.script(strings.Join(rest, " "), depth+1)
+		return g.nestedScript(strings.Join(rest, " "), depth)
 	case shells[prog]:
 		if s, ok := shellScript(rest); ok {
-			return g.script(s, depth+1)
+			return g.nestedScript(s, depth)
 		}
 		// A shell that reads its script from stdin (here-string, heredoc, pipe)
 		// hides the commands from the parser (#3530).
@@ -217,7 +217,59 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	if w, ok := wrappers[prog]; ok {
 		return g.command(g.skipWrapped(rest, w.withArg, w.pos, w.chdir, &sc), depth+1, sc)
 	}
+	return g.opaque(words, depth, sc)
+}
+
+// dataPrograms print or search their arguments: git or gh inside them is text.
+var dataPrograms = map[string]bool{
+	"echo": true, "printf": true, "grep": true, "egrep": true, "fgrep": true, "rg": true,
+	"cat": true, "man": true, "which": true, "type": true, "whereis": true, "less": true,
+	"more": true, "head": true, "tail": true, "sed": true, "awk": true, "diff": true,
+}
+
+// opaque handles a program the guard does not know. Any program can run its
+// arguments as a command (flock, watch, su -c, chroot, script -c, python -c
+// os.system), and a list of those would never be complete (#3626). So it reads
+// the arguments instead: a git or gh word is a command from there on, and an
+// argument with spaces that mentions git or gh is parsed as a script.
+func (g *guard) opaque(words []string, depth int, sc scope) error {
+	if dataPrograms[filepath.Base(words[0])] {
+		return nil
+	}
+	for i, w := range words {
+		if g.reason != "" {
+			return nil
+		}
+		if i > 0 {
+			if b := filepath.Base(w); b == "git" || b == "gh" {
+				return g.command(words[i:], depth+1, sc)
+			}
+		}
+		if !strings.ContainsAny(w, " \t\n") || !mentionsGit.MatchString(w) {
+			continue
+		}
+		if err := g.script(w, depth+1); err != nil {
+			return err
+		}
+		// `--command=git push ...`: the script follows the first =.
+		if _, v, ok := strings.Cut(w, "="); ok && g.reason == "" {
+			if err := g.script(v, depth+1); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+// nestedScript runs the guard over a script given as an argument. A script
+// built by substitution (`eval "$(...)"`, `bash -c "$(...)"`) is produced at
+// run time, and the scanner drops the substitution's text from the word, so the
+// line is refused when it has a substitution and mentions git.
+func (g *guard) nestedScript(s string, depth int) error {
+	if (strings.Contains(g.line, "$(") || strings.Contains(g.line, "`")) && mentionsGit.MatchString(g.line) {
+		return guardErr("a shell script built by command substitution")
+	}
+	return g.script(s, depth+1)
 }
 
 // skipWrapped drops a wrapper's own options (and assignments, for env) so the

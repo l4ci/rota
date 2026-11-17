@@ -189,6 +189,19 @@ func TestGuardDenies(t *testing.T) {
 		"gh api graphql -if query=@q.gql",
 		"gh api repos/o/r/pulls/1/merge -if merge_method=squash",
 		"gh api graphql -F=query=@q.gql",
+		// #3626: programs that run their arguments as a command.
+		"flock /tmp/l git push origin main",
+		"watch -n1 git push origin main",
+		"su -c 'git push origin main'",
+		"chroot / git push origin main",
+		"script -c 'git push origin main'",
+		`python -c 'import os; os.system("git push origin main")'`,
+		`eval "$(echo git push origin main)"`,
+		`bash -c "$(echo git push origin main)"`,
+		"busybox flock /tmp/l git push origin main",
+		"busybox su -c 'git push origin main'",
+		"script --command='git push origin main'",
+		"flock /tmp/l gh pr merge 1",
 		"busybox env sh -c 'git push origin main'",
 		"busybox busybox sh -c 'git push origin main'",
 		"busybox env git push origin main",
@@ -236,6 +249,17 @@ func TestGuardDenies(t *testing.T) {
 
 func TestGuardAllows(t *testing.T) {
 	for _, line := range []string{
+		// #3626: ordinary worker commands, and text that only mentions git.
+		"flock /tmp/l git push -u origin " + gBranch,
+		"gh pr create --title t --body 'git push origin main is forbidden'",
+		"gh api repos/o/r/pulls",
+		"bash script.sh",
+		"echo git push origin main",
+		"printf 'git push origin main'",
+		"grep 'git push origin main' notes.md",
+		"watch -n1 git status",
+		`eval "$(ssh-agent)"`,
+		"cat > f.sh <<'EOF'\ngit push origin main\nEOF",
 		"gh api repos/o/r/pulls/1/merge",
 		"gh api -X GET repos/o/r/pulls/1/merge",
 		"gh api -X PUT repos/o/r/issues/1/labels",
