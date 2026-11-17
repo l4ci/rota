@@ -3,12 +3,12 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/semver"
 )
 
 // AutonomyLevel is autonomy.level as the manual-gate audit records it: the
@@ -81,7 +81,7 @@ func autonomyStale(cfg *jsonx.Object) bool {
 	}
 	v, _ := walk(cfg, VersionKey)
 	s, _ := v.(string)
-	return versionBefore(s, AutonomyLevelsSince)
+	return semver.Before(s, AutonomyLevelsSince)
 }
 
 // LowersGatedStamp is whether stamping installed over stamped would lower a
@@ -89,43 +89,7 @@ func autonomyStale(cfg *jsonx.Object) bool {
 // (VERSION below the gate) must not do that: the lowered stamp makes the next
 // fill rewrite a deliberate auto to roundtrip (#1489).
 func LowersGatedStamp(stamped, installed string) bool {
-	return stamped != "" && !versionBefore(stamped, AutonomyLevelsSince) && versionBefore(installed, stamped)
-}
-
-// versionBefore is whether the numeric core of v (a leading "v" and any
-// "-pre" or "+build" suffix dropped) sorts before min. An unparseable v does.
-func versionBefore(v, min string) bool {
-	a, ok := versionCore(v)
-	if !ok {
-		return true
-	}
-	b, _ := versionCore(min)
-	for i := range a {
-		if a[i] != b[i] {
-			return a[i] < b[i]
-		}
-	}
-	return false
-}
-
-func versionCore(v string) ([3]int, bool) {
-	var out [3]int
-	v = strings.TrimPrefix(v, "v")
-	if i := strings.IndexAny(v, "-+"); i >= 0 {
-		v = v[:i]
-	}
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return out, false
-	}
-	for i, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil || n < 0 {
-			return out, false
-		}
-		out[i] = n
-	}
-	return out, true
+	return stamped != "" && !semver.Before(stamped, AutonomyLevelsSince) && semver.Before(installed, stamped)
 }
 
 func isAuto(o *jsonx.Object) bool {
@@ -214,7 +178,7 @@ func globalStale(dir string) bool {
 	if err != nil {
 		return true
 	}
-	return versionBefore(strings.TrimSpace(string(b)), AutonomyLevelsSince)
+	return semver.Before(strings.TrimSpace(string(b)), AutonomyLevelsSince)
 }
 
 // GlobalAutoStale is whether vals, the global config's values under dir, hold

@@ -5,14 +5,13 @@ package update
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/semver"
 )
 
 // Repo is the GitHub repository whose latest release rota update asks about.
@@ -86,7 +85,7 @@ func Check(e Env) Result {
 	}
 	r.Status = "unknown"
 	if r.LatestVersion != "" && stamped(r.CurrentVersion) {
-		switch c := Compare(r.CurrentVersion, r.LatestVersion); {
+		switch c := semver.CompareLenient(r.CurrentVersion, r.LatestVersion); {
 		case c < 0:
 			r.Status = "behind"
 		case c > 0:
@@ -147,38 +146,4 @@ func detect(e Env) string {
 		return Dev
 	}
 	return Script
-}
-
-var digits = regexp.MustCompile(`[0-9]+`)
-
-// runs is tuple(int(p) for p in re.findall(r"\d+", v)).
-func runs(v string) []*big.Int {
-	var out []*big.Int
-	for _, m := range digits.FindAllString(v, -1) {
-		n, _ := new(big.Int).SetString(m, 10)
-		out = append(out, n)
-	}
-	return out
-}
-
-// Compare is cmp_semver: the first three numeric runs of each version, zero
-// padded to three, compared as numbers. It returns -1, 0 or 1.
-func Compare(a, b string) int {
-	three := func(v string) []*big.Int {
-		p := runs(v)
-		if len(p) > 3 {
-			p = p[:3]
-		}
-		for len(p) < 3 {
-			p = append(p, new(big.Int))
-		}
-		return p
-	}
-	pa, pb := three(a), three(b)
-	for i := range pa {
-		if c := pa[i].Cmp(pb[i]); c != 0 {
-			return c
-		}
-	}
-	return 0
 }
