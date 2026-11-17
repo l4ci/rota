@@ -43,7 +43,7 @@ func (w workItem) obj() *jsonx.Object {
 func workStart(fs *flag.FlagSet) RunFunc {
 	branchFlag := fs.String("branch", "", "branch name (default rota/<id>-<slug of the title>)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "work start takes one item ID or a comma-separated list"); err != nil {
+		if err := argCount(args, 1, 1, "work start takes one item ID or a comma-separated list"); err != nil {
 			return Result{}, err
 		}
 		refs := pystr.SplitCSV(args[0])

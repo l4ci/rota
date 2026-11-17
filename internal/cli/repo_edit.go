@@ -17,7 +17,7 @@ import (
 func repoAdd(fs *flag.FlagSet) RunFunc {
 	name := fs.String("name", "", "registered `name` (default: the directory's name)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "repo add takes one <path>"); err != nil {
+		if err := argCount(args, 1, 1, "repo add takes one <path>"); err != nil {
 			return Result{}, err
 		}
 		root, err := c.Root()
@@ -48,7 +48,7 @@ func repoAdd(fs *flag.FlagSet) RunFunc {
 
 func repoRm(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "repo rm takes one <name>"); err != nil {
+		if err := argCount(args, 1, 1, "repo rm takes one <name>"); err != nil {
 			return Result{}, err
 		}
 		root, err := c.Root()

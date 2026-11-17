@@ -79,13 +79,6 @@ func oneArg(args []string, what string) (string, error) {
 	return "", Usage("expected one %s, got %d arguments", what, len(args))
 }
 
-func noArgs(args []string) error {
-	if len(args) > 0 {
-		return Usage("unexpected argument %q", args[0])
-	}
-	return nil
-}
-
 // ---- debug session
 
 func debugSessionPut(fs *flag.FlagSet) RunFunc {

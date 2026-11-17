@@ -50,7 +50,7 @@ func configCommands() []*Command {
 
 func updateVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "update takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "update takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		env := c.deps().UpdateEnv()
@@ -95,7 +95,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 	global := fs.Bool("global", false, "show the global config's own values instead of the project's")
 	local := fs.Bool("local", false, "show .rota/config.local.json's own values instead of the merged ones")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 1, "config show takes at most one key"); err != nil {
+		if err := argCount(args, 0, 1, "config show takes at most one key"); err != nil {
 			return Result{}, err
 		}
 		if *global && *local {
@@ -207,7 +207,7 @@ func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []str
 // into the global config, the runtime layer under every project.
 func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "config save-global takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "config save-global takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -238,7 +238,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 	local := fs.Bool("local", false, "write .rota/config.local.json, this machine only (the default for a machine key)")
 	project := fs.Bool("project", false, "write the tracked .rota/config.json (the default for a project or taste key)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 2, 2, "config set takes a key and a value"); err != nil {
+		if err := argCount(args, 2, 2, "config set takes a key and a value"); err != nil {
 			return Result{}, err
 		}
 		if (*global && *local) || (*global && *project) || (*local && *project) {
@@ -345,7 +345,7 @@ func globalCorruptLine(gerr error) string {
 
 func configCheck(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "config check takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "config check takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -436,7 +436,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 // missing keys get their schema defaults.
 func configFill(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "config fill takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "config fill takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := backlogScope(c)
@@ -525,7 +525,7 @@ func autonomyLines(am config.AutonomyMigration) []string {
 
 func repoWhich(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "repo which takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "repo which takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		cwd, err := c.deps().Getwd()
@@ -584,7 +584,7 @@ func repoResolve(fs *flag.FlagSet) RunFunc {
 
 func repoUmbrella(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 0, 0, "repo umbrella takes no arguments"); err != nil {
+		if err := argCount(args, 0, 0, "repo umbrella takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		on := false
