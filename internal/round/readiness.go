@@ -165,16 +165,11 @@ func dependencies(text, project string) (refs, unverifiable []string) {
 	return refs, unverifiable
 }
 
-// Footprint is the set of repo paths an item says it touches: its `## Files`
+// footprint is the set of repo paths an item says it touches: its `## Files`
 // section when present (one path or glob per bullet), otherwise every token of
-// text that is a tracked file or the directory (two or more segments) of one.
-// Directories end in "/". shared globs are dropped.
-func Footprint(text string, tracked, shared []string) []string {
-	return footprint(text, "", tracked, shared)
-}
-
-// footprint is Footprint where extra (an item's comments) feeds only the
-// inference fallback: the `## Files` section is read from body alone, so a
+// body that is a tracked file or the directory (two or more segments) of one.
+// Directories end in "/". shared globs are dropped. extra (an item's comments)
+// feeds only the inference fallback: the `## Files` section is read from body alone, so a
 // comment cannot become part of the last section.
 func footprint(body, extra string, tracked, shared []string) []string {
 	var out []string

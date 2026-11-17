@@ -66,14 +66,14 @@ var tracked = []string{"internal/cli/tree.go", "internal/cli/round.go", "interna
 
 func TestFootprint(t *testing.T) {
 	text := "Touches `internal/cli/round.go` and internal/worker/. Also docs/ (too coarse), README.md and made/up/path.go."
-	got := Footprint(text, tracked, nil)
+	got := footprint(text, "", tracked, nil)
 	want := []string{"README.md", "internal/cli/round.go", "internal/worker/"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("inferred %v want %v", got, want)
 	}
 	// An explicit ## Files section wins over inference, and shared paths drop out.
 	explicit := "mentions internal/cli/tree.go in prose\n\n## Files\n- `internal/worker/pool.go`\n- docs/contributing/contract/README.md\n- internal/new/*.go\n"
-	got = Footprint(explicit, tracked, []string{"docs/contributing/contract/README.md"})
+	got = footprint(explicit, "", tracked, []string{"docs/contributing/contract/README.md"})
 	if !reflect.DeepEqual(got, []string{"internal/new/*.go", "internal/worker/pool.go"}) {
 		t.Errorf("explicit %v", got)
 	}
@@ -82,7 +82,7 @@ func TestFootprint(t *testing.T) {
 // TestFootprintStripsDotSlash: a `./` entry in ## Files must come out in the
 // same shape as an inferred one, or it misses a real clash in overlap.Paths.
 func TestFootprintStripsDotSlash(t *testing.T) {
-	got := Footprint("## Files\n- `./internal/cli/round.go`\n- ././internal/worker/\n- ./\n", tracked, nil)
+	got := footprint("## Files\n- `./internal/cli/round.go`\n- ././internal/worker/\n- ./\n", "", tracked, nil)
 	want := []string{"internal/cli/round.go", "internal/worker/"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v want %v", got, want)
@@ -515,7 +515,7 @@ func TestItemBodyRoundTrip(t *testing.T) {
 	if !itembody.HasDependsOn(body) {
 		t.Error("HasDependsOn misses the written heading")
 	}
-	got := Footprint(string(body), tracked, nil)
+	got := footprint(string(body), "", tracked, nil)
 	if !reflect.DeepEqual(got, []string{"internal/cli/item.go", "internal/new/*.go"}) {
 		t.Errorf("files read back %v", got)
 	}

@@ -126,7 +126,7 @@ func reserve(env Env, root string, o SendOpts) (Entry, error) {
 			return
 		}
 		op := hex.EncodeToString(token)
-		e = Entry{ID: NextID(list), Kind: kindOf(o.PR), Number: o.Number, Slot: o.Slot, Title: o.Title, Status: StatusPending, Options: append([]string(nil), o.Options...), Recommend: o.Recommend, Cost: o.Cost}
+		e = Entry{ID: nextID(list), Kind: kindOf(o.PR), Number: o.Number, Slot: o.Slot, Title: o.Title, Status: StatusPending, Options: append([]string(nil), o.Options...), Recommend: o.Recommend, Cost: o.Cost}
 		if !o.PR {
 			e.Number = 0
 			if n, ok := o.issueKey().Number(); ok {
@@ -135,10 +135,10 @@ func reserve(env Env, root string, o SendOpts) (Entry, error) {
 				e.Key = o.issueKey().String()
 			}
 		}
-		body := Compose(e.ID, o.Title, o.Body, o.Choice)
+		body := compose(e.ID, o.Title, o.Body, o.Choice)
 		pos := strings.IndexByte(body, '\n')
 		body = body[:pos+1] + deliveryReference(op) + "\n" + body[pos+1:]
-		e.Delivery = &Delivery{OperationID: op, RequestID: o.RequestID, Fingerprint: o.Fingerprint, InputHash: hash, Body: body, CreatedAt: Time(env.Now()), State: DeliveryReady, Timeout: o.Timeout}
+		e.Delivery = &Delivery{OperationID: op, RequestID: o.RequestID, Fingerprint: o.Fingerprint, InputHash: hash, Body: body, CreatedAt: stamp.Format(env.Now()), State: DeliveryReady, Timeout: o.Timeout}
 		list = append(list, e)
 		Section.Write(doc, list)
 	})
@@ -184,10 +184,10 @@ func failure(root string, e Entry, now time.Time, cause error, count bool) (Send
 		if d.Attempts < int(^uint(0)>>1) {
 			d.Attempts++
 		}
-		d.LastAttemptAt = Time(now)
+		d.LastAttemptAt = stamp.Format(now)
 	}
 	d.LastError = cause.Error()
-	d.NextAttemptAt = Time(now.Add(retryDelay(d.Attempts)))
+	d.NextAttemptAt = stamp.Format(now.Add(retryDelay(d.Attempts)))
 	if err := saveEntry(root, e); err != nil {
 		cause = fmt.Errorf("%v; recovery record could not be written: %w", cause, err)
 	}
@@ -313,9 +313,9 @@ func deliver(ctx context.Context, env Env, root string, entry Entry, allowCreate
 				if d.Attempts < int(^uint(0)>>1) {
 					d.Attempts++
 				}
-				d.LastAttemptAt = Time(env.Now())
+				d.LastAttemptAt = stamp.Format(env.Now())
 				d.CreateAttemptAt = d.LastAttemptAt
-				d.NextAttemptAt = Time(env.Now().Add(retryDelay(d.Attempts)))
+				d.NextAttemptAt = stamp.Format(env.Now().Add(retryDelay(d.Attempts)))
 				d.LastError = "create outcome may be unknown after interruption"
 				if err := saveEntry(root, e); err != nil {
 					d.State = DeliveryReady
@@ -345,9 +345,9 @@ func deliver(ctx context.Context, env Env, root string, entry Entry, allowCreate
 					sent, _ = stamp.Parse(d.CreatedAt)
 				}
 			}
-			e.SentAt = Time(sent)
+			e.SentAt = stamp.Format(sent)
 			if d.Timeout > 0 && e.Deadline == "" {
-				e.Deadline = Time(sent.Add(d.Timeout))
+				e.Deadline = stamp.Format(sent.Add(d.Timeout))
 			}
 			d.State = DeliveryDelivered
 			d.LastError = ""

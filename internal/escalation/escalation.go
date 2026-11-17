@@ -76,16 +76,13 @@ func (e Env) withDefaults() Env {
 	return e
 }
 
-// Time renders t as RFC 3339 UTC.
-func Time(t time.Time) string { return stamp.Format(t) }
-
 // Load reads the escalations list; a missing or malformed list reads as empty.
 // It tolerates a corrupt registry: it feeds display and the tick's passive
 // reads, and Send refuses a corrupt registry itself.
 func Load(root string) []Entry { return FromRegistry(worker.LoadRegistryTolerant(root)) }
 
-// NextID is e<N>, N one more than the highest in the list.
-func NextID(list []Entry) string {
+// nextID is e<N>, N one more than the highest in the list.
+func nextID(list []Entry) string {
 	highest := 0
 	for _, e := range list {
 		if n, err := strconv.Atoi(strings.TrimPrefix(e.ID, "e")); err == nil && n > highest {
@@ -141,14 +138,14 @@ func PendingOn(list []Entry, kind, ref string) (Entry, bool) {
 	return Entry{}, false
 }
 
-// Marker is the line every escalation comment ends with.
-func Marker(id string) string { return marker.Line("escalation", id) }
+// markerLine is the line every escalation comment ends with.
+func markerLine(id string) string { return marker.Line("escalation", id) }
 
-// Compose is the comment rota posts: heading, the body, the options when there
+// compose is the comment rota posts: heading, the body, the options when there
 // are any, the ask, the marker.
-func Compose(id, title, body string, c Choice) string {
+func compose(id, title, body string, c Choice) string {
 	return fmt.Sprintf("**rota escalation %s**: %s\n\n%s\n\n%sAnswer in a new comment on this thread.\n\n%s\n",
-		id, title, strings.Trim(body, "\n"), c.render(), Marker(id))
+		id, title, strings.Trim(body, "\n"), c.render(), markerLine(id))
 }
 
 func kindOf(pr bool) string {
@@ -334,7 +331,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 			continue
 		}
 		if ok {
-			ans := Answer{CommentID: a.ID, Author: a.Author, Body: a.Body, SeenAt: Time(env.Now()),
+			ans := Answer{CommentID: a.ID, Author: a.Author, Body: a.Body, SeenAt: stamp.Format(env.Now()),
 				Option: ResolveOption(e.Options, e.Recommend, a.Body)}
 			found[e.ID] = ans
 			targets[i].Status, targets[i].Answer = StatusAnswered, &ans

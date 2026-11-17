@@ -85,7 +85,7 @@ func TestTrainBlocked(t *testing.T) {
 		"ux concerns with a major":       {[]verdict.Record{with(verdict.ReviewUX, verdict.Concerns, major)}, true},
 		"perf pass":                      {[]verdict.Record{rec(verdict.ReviewPerf, verdict.Pass, "a")}, false},
 	} {
-		if got := TrainBlocked(tc.recs); got != tc.want {
+		if got := trainBlocked(ReadinessInput{Records: tc.recs}); got != tc.want {
 			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
 		}
 	}

@@ -36,16 +36,16 @@ func TestDerivedStatus(t *testing.T) {
 }
 
 func TestNextID(t *testing.T) {
-	if got := NextID(nil); got != "e1" {
+	if got := nextID(nil); got != "e1" {
 		t.Errorf("empty: %s", got)
 	}
-	if got := NextID([]Entry{{ID: "e2"}, {ID: "e10"}, {ID: "e3"}, {ID: "junk"}}); got != "e11" {
+	if got := nextID([]Entry{{ID: "e2"}, {ID: "e10"}, {ID: "e3"}, {ID: "junk"}}); got != "e11" {
 		t.Errorf("highest wins: %s", got)
 	}
 }
 
 func TestComposeEndsWithMarker(t *testing.T) {
-	got := Compose("e4", "Pick", "\nbody line\n\n", Choice{})
+	got := compose("e4", "Pick", "\nbody line\n\n", Choice{})
 	want := "**rota escalation e4**: Pick\n\nbody line\n\nAnswer in a new comment on this thread.\n\n<!-- rota:escalation e4 -->\n"
 	if got != want {
 		t.Errorf("got:\n%q\nwant:\n%q", got, want)

@@ -73,16 +73,10 @@ func ReadinessOf(in ReadinessInput) Readiness {
 	return Readiness{Ready: ready, Since: reviewReadySince(in.Records, in.Head)}
 }
 
-// TrainBlocked is true when the recorded verdicts would block the gate or
+// trainBlocked is true when the recorded verdicts would block the gate or
 // bounce the PR: a FAIL (review or second opinion) or a review with a
 // blocking finding keeps it out of a train, a clean CONCERNS and PASS let it in.
-func TrainBlocked(records []verdict.Record) bool {
-	_, blocked := verdict.BlockingAnyHead(records)
-	return blocked
-}
-
-// trainBlocked is TrainBlocked plus the gate's stale-cross relaxation (#3458),
-// decided by verdict.BlockingCrossOff so the train never holds a PR the gate
+// It adds the gate's stale-cross relaxation (#3458), decided by verdict.BlockingCrossOff so the train never holds a PR the gate
 // would let through.
 func trainBlocked(in ReadinessInput) bool {
 	_, blocked, _ := verdict.BlockingCrossOff(in.Records, in.Head, verdict.BlockingAnyHead, in.CrossNone)
