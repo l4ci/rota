@@ -832,19 +832,45 @@ func BlockingAnyHead(list []Record) (Record, bool) {
 	return firstFailing(list, FailScope{Wide: true})
 }
 
-// StaleCrossFail is true when r is a review-cross FAIL recorded at a commit
+// staleCrossFail is true when r is a review-cross FAIL recorded at a commit
 // other than head. An unreadable head ("") proves nothing stale, so it is false
 // then: a relaxation built on it fails closed.
-func StaleCrossFail(r Record, head string) bool {
+func staleCrossFail(r Record, head string) bool {
 	return head != "" && r.Kind == ReviewCross && r.Verdict == Fail && !AtHead(r, head)
 }
 
-// DropStaleCross returns list without its review-cross records recorded at a
+// dropStaleCross returns list without its review-cross records recorded at a
 // commit other than head. Callers apply it only when review:none switches the
 // cross review off, so an old cross FAIL no longer blocks (#3458). It never
 // edits list.
-func DropStaleCross(list []Record, head string) []Record {
+func dropStaleCross(list []Record, head string) []Record {
 	return slices.DeleteFunc(slices.Clone(list), func(r Record) bool {
 		return r.Kind == ReviewCross && !AtHead(r, head)
 	})
+}
+
+// crossOffRelaxes is the one test for the stale-cross relaxation (#3458): r is
+// a review-cross FAIL at a commit other than head and the caller's crossOff
+// says the PR's depth skips cross because of review:none. crossOff is asked
+// only when r is such a FAIL, since resolving the depth reads the issue; nil
+// reads as false.
+func crossOffRelaxes(r Record, head string, crossOff func() bool) bool {
+	return crossOff != nil && staleCrossFail(r, head) && crossOff()
+}
+
+// BlockingCrossOff is rule (BlockingAnyHead for the train tick) plus the stale-cross
+// relaxation: when a review-cross FAIL at another commit is what blocks and
+// crossOff reports cross review is off, that record is dropped and the rest are
+// judged again. relaxed is the dropped FAIL when the relaxation applied and
+// the PR is no longer blocked by it. Check.BlockGateCrossOff is the same
+// decision for the merge gate.
+func BlockingCrossOff(list []Record, head string, rule func([]Record) (Record, bool), crossOff func() bool) (blocking Record, blocked bool, relaxed *Record) {
+	r, blocked := rule(list)
+	if !blocked || !crossOffRelaxes(r, head, crossOff) {
+		return r, blocked, nil
+	}
+	if again, still := rule(dropStaleCross(list, head)); still {
+		return again, true, nil
+	}
+	return Record{}, false, &r
 }
