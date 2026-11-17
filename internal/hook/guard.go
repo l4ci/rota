@@ -155,7 +155,11 @@ func (s *scope) setDir(base, d string) {
 	s.chdir, s.dir = true, resolveDir(base, d)
 }
 
-var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
+var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "ash": true, "hush": true}
+
+// multiCall names the multi-call binaries whose first argument is an applet:
+// `busybox sh -c ...` is a shell like `sh -c ...`.
+var multiCall = map[string]bool{"busybox": true, "toybox": true}
 
 func (g *guard) command(words []string, depth int, sc scope) error {
 	for len(words) > 0 && (envAssign.MatchString(words[0]) || shellKeywords[words[0]]) {
@@ -169,6 +173,9 @@ func (g *guard) command(words []string, depth int, sc scope) error {
 	}
 	prog := filepath.Base(words[0])
 	rest := words[1:]
+	if multiCall[prog] && len(rest) > 0 && shells[filepath.Base(rest[0])] {
+		prog, rest = filepath.Base(rest[0]), rest[1:]
+	}
 	switch {
 	case prog == "cd":
 		g.cd(rest)
@@ -431,6 +438,8 @@ func (g *guard) ghAPI(args []string) {
 		case a == "-f" || a == "-F" || a == "--field" || a == "--raw-field" || a == "--input":
 			fields = true
 			i++
+		case ghJoinedField(a) != "" || strings.HasPrefix(a, "--input="):
+			fields = true
 		case a == "-R" || a == "--repo" || a == "--hostname" || a == "-H" || a == "--header" || a == "-q" || a == "--jq" || a == "-t" || a == "--template" || a == "--cache":
 			i++
 		case strings.HasPrefix(a, "-"):
@@ -479,18 +488,35 @@ func (g *guard) ghGraphQL(args []string) error {
 		if a == "--input" || strings.HasPrefix(a, "--input=") {
 			return guardErr("gh api graphql --input reads a query the guard cannot see")
 		}
-		if i == 0 {
+		field := ghJoinedField(a)
+		if field == "" && i > 0 {
+			if prev := args[i-1]; prev == "-f" || prev == "-F" || prev == "--field" || prev == "--raw-field" {
+				field = a
+			}
+		}
+		if field == "" {
 			continue
 		}
-		prev := args[i-1]
-		if prev != "-f" && prev != "-F" && prev != "--field" && prev != "--raw-field" {
-			continue
-		}
+		a = field
 		if v, ok := strings.CutPrefix(a, "query="); ok && (v == "" || strings.ContainsAny(v[:1], "@$`")) {
 			return guardErr("gh api graphql query " + a + " is not a literal")
 		}
 	}
 	return nil
+}
+
+// ghJoinedField returns the key=value of a gh field flag written as one word
+// (--field=k=v, --raw-field=k=v, -Fk=v, -fk=v), or "" for any other word.
+func ghJoinedField(a string) string {
+	for _, p := range []string{"--field=", "--raw-field="} {
+		if v, ok := strings.CutPrefix(a, p); ok && v != "" {
+			return v
+		}
+	}
+	if len(a) > 2 && (strings.HasPrefix(a, "-f") || strings.HasPrefix(a, "-F")) && a[2] != '-' {
+		return a[2:]
+	}
+	return ""
 }
 
 // gitCall is one git invocation after its global options.
