@@ -3,7 +3,7 @@ package limits
 import (
 	"time"
 
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // Cooling are the accounts of the harness kind whose limit has not reset yet,
@@ -33,14 +33,14 @@ func Cooling(entries []Entry, kind string, now time.Time) map[string]time.Time {
 // not excluded and not cooling, in configured order.
 func LoggedPick(entries []Entry, kind string, logins []string, exclude string, now time.Time) (string, bool) {
 	cooling := Cooling(entries, kind, now)
-	meters := make([]worker.Meter, 0, len(logins))
+	meters := make([]usagelimit.Meter, 0, len(logins))
 	for _, l := range logins {
-		verdict := worker.VerdictUnknown
+		verdict := usagelimit.VerdictUnknown
 		if _, spent := cooling[l]; spent {
-			verdict = worker.VerdictCooling
+			verdict = usagelimit.VerdictCooling
 		}
-		meters = append(meters, worker.Meter{Name: l, Verdict: verdict})
+		meters = append(meters, usagelimit.Meter{Name: l, Verdict: verdict})
 	}
-	m, ok, _ := worker.SelectAccount(meters, worker.AccountSelection{Exclude: []string{exclude}})
+	m, ok, _ := usagelimit.SelectAccount(meters, usagelimit.AccountSelection{Exclude: []string{exclude}})
 	return m.Name, ok
 }

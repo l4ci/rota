@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // AccountSource is what the account pick and the meter lookup read: the
 // configured logins of a harness, the metered accounts and the metered pick.
 type AccountSource interface {
 	Logins(kind string) []string
-	Meters(ctx context.Context) []worker.Meter
+	Meters(ctx context.Context) []usagelimit.Meter
 	Pick(ctx context.Context, exclude []string) (string, bool)
 }
 

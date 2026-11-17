@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -284,7 +285,7 @@ type obs struct {
 // findLimit looks for a limit message at the end of the pane text. Only what
 // follows the last occurrence of the resume prompt counts, so the message a
 // resume already answered cannot start another cycle. "Approaching" warnings
-// are not limits (worker.FindLimit decides, reading the slot kind's own
+// are not limits (usagelimit.FindLimit decides, reading the slot kind's own
 // phrases too), and reads only the harness's dialog region. It returns the matched line
 // and the text from it on (for the reset time).
 func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
@@ -301,8 +302,8 @@ func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
 	}
 	// Only the harness's own dialog counts, not text the worker quotes (#1246),
 	// the same region poll reads (#1212).
-	tail := worker.DialogFor(kind, worker.StripRelays(kind, strings.Join(lines, "\n")))
-	loc0, _, ok := worker.FindLimit(kind, tail)
+	tail := usagelimit.DialogFor(kind, usagelimit.StripRelays(kind, strings.Join(lines, "\n")))
+	loc0, _, ok := usagelimit.FindLimit(kind, tail)
 	if !ok {
 		return "", "", false
 	}
@@ -580,8 +581,8 @@ func (w *Watcher) fail(e *Entry, now time.Time, why string) {
 
 // ReadingOf maps an account meter to a Reading: a window at or past 100% is
 // spent, the seven-day one first.
-func ReadingOf(m worker.Meter) Reading {
-	r := Reading{Known: m.Verdict != worker.VerdictUnknown, Cooling: m.Verdict == worker.VerdictCooling, Window: WindowUnknown}
+func ReadingOf(m usagelimit.Meter) Reading {
+	r := Reading{Known: m.Verdict != usagelimit.VerdictUnknown, Cooling: m.Verdict == usagelimit.VerdictCooling, Window: WindowUnknown}
 	if m.ResetsAt != nil {
 		r.ResetsAt = m.ResetsAt.UTC()
 	}

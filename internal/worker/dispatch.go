@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.
@@ -431,7 +432,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	if configDir != "" {
 		// A slot cached by an older rota may hold the path as written.
 		home, _ := e.Home()
-		configDir = ExpandConfigDirIn(configDir, home)
+		configDir = usagelimit.ExpandConfigDirIn(configDir, home)
 	}
 	acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
 	// No account configured for the slot: it runs under the orchestrator's.

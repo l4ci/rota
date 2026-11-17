@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/usagelimit"
 	"io"
 	"math"
 	"net/http"
@@ -54,20 +55,6 @@ import (
 // `unknown`. Refreshing would mutate state a live Claude Code session owns.
 
 const usageURL = "https://api.anthropic.com/api/oauth/usage"
-
-// Account verdicts.
-const (
-	VerdictFree    = "free"
-	VerdictCooling = "cooling"
-	VerdictUnknown = "unknown"
-)
-
-// Meter is one configured account with its reading.
-type Meter struct {
-	Name, ConfigDir, Verdict, Reason string
-	FiveHour, SevenDay, Headroom     *float64
-	ResetsAt                         *time.Time
-}
 
 // Fetcher returns the usage payload for an account, or a reason it has none.
 type Fetcher func(ctx context.Context, name, configDir string) (payload *jsonx.Object, reason string)
@@ -132,7 +119,7 @@ func (a *Accounts) home() string {
 }
 
 // expand is ExpandConfigDir against Env's home.
-func (a *Accounts) expand(d string) string { return ExpandConfigDirIn(d, a.home()) }
+func (a *Accounts) expand(d string) string { return usagelimit.ExpandConfigDirIn(d, a.home()) }
 
 // same is SameConfigDir against Env's home.
 func (a *Accounts) same(x, y string) bool { return a.expand(x) == a.expand(y) }
@@ -174,18 +161,18 @@ func (a *Accounts) Configured(root string) []acct {
 }
 
 // Meters reads every configured account.
-func (a *Accounts) Meters(ctx context.Context, root string) []Meter {
+func (a *Accounts) Meters(ctx context.Context, root string) []usagelimit.Meter {
 	return a.MetersWith(ctx, root, nil)
 }
 
 // MetersWith is Meters that also reads the Claude entries of extra (such as
 // review.accounts, #3315) that round.accounts does not already list by name.
-func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.Account) []Meter {
+func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.Account) []usagelimit.Meter {
 	fetch := a.Fetch
 	if fetch == nil {
 		fetch = a.defaultFetch
 	}
-	var rows []Meter
+	var rows []usagelimit.Meter
 	list := a.Configured(root)
 	for _, x := range extra {
 		if x.Kind != config.KindClaude || x.Name == "" || slices.ContainsFunc(list, func(c acct) bool { return c.name == x.Name }) {
@@ -203,7 +190,7 @@ func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.A
 		}
 		payload, why := fetch(ctx, ac.name, ac.configDir)
 		if payload == nil {
-			rows = append(rows, Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: VerdictUnknown, Reason: why})
+			rows = append(rows, usagelimit.Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: usagelimit.VerdictUnknown, Reason: why})
 			continue
 		}
 		rows = append(rows, a.classify(ac, payload))
@@ -211,7 +198,7 @@ func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.A
 	return rows
 }
 
-func (a *Accounts) classify(ac acct, payload *jsonx.Object) Meter {
+func (a *Accounts) classify(ac acct, payload *jsonx.Object) usagelimit.Meter {
 	five, fiveReset := window(payload, "five_hour")
 	seven, sevenReset := window(payload, "seven_day")
 	extra, _ := payload.Get("extra_usage")
@@ -222,7 +209,7 @@ func (a *Accounts) classify(ac acct, payload *jsonx.Object) Meter {
 		lim, _ := eo.Get("spend_limit_reached")
 		extraLive = jsonx.Truthy(en) && !jsonx.Truthy(lim)
 	}
-	m := Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: VerdictFree, FiveHour: five, SevenDay: seven}
+	m := usagelimit.Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: usagelimit.VerdictFree, FiveHour: five, SevenDay: seven}
 	var binding []float64
 	for _, w := range []struct {
 		label string
@@ -248,7 +235,7 @@ func (a *Accounts) classify(ac acct, payload *jsonx.Object) Meter {
 		if w.reset == nil || !w.reset.After(a.now()) {
 			continue
 		}
-		m.Verdict = VerdictCooling
+		m.Verdict = usagelimit.VerdictCooling
 		if m.ResetsAt == nil || w.reset.After(*m.ResetsAt) {
 			r := *w.reset
 			m.ResetsAt = &r
@@ -633,10 +620,10 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 // PickFrom is Pick over one Meters reading, so a caller that already holds the
 // meters (account list) names the account assign would take without reading
 // them again.
-func (a *Accounts) PickFrom(meters []Meter, exclude []string) (name string, ok bool) {
-	m, ok, _ := SelectAccount(meters, AccountSelection{
+func (a *Accounts) PickFrom(meters []usagelimit.Meter, exclude []string) (name string, ok bool) {
+	m, ok, _ := usagelimit.SelectAccount(meters, usagelimit.AccountSelection{
 		Exclude: exclude,
-		LoginProblem: func(m Meter) string {
+		LoginProblem: func(m usagelimit.Meter) string {
 			return a.login().Problem(a.expand(m.ConfigDir))
 		},
 	})
@@ -658,7 +645,7 @@ func (a *Accounts) NoPickReason(ctx context.Context, root string, exclude []stri
 		if skip[m.Name] {
 			continue
 		}
-		if m.Verdict == VerdictCooling {
+		if m.Verdict == usagelimit.VerdictCooling {
 			cooling = true
 			continue
 		}
@@ -676,22 +663,6 @@ func (a *Accounts) NoPickReason(ctx context.Context, root string, exclude []stri
 	return lead + strings.Join(loginless, ", ")
 }
 
-// SameConfigDirIn reports whether two CLAUDE_CONFIG_DIR values name one
-// directory under home: compared after Clean, with a leading ~/ expanded and
-// empty meaning ~/.claude (what Claude Code uses when the variable is unset).
-func SameConfigDirIn(a, b, home string) bool {
-	return ExpandConfigDirIn(a, home) == ExpandConfigDirIn(b, home)
-}
-
-// ExpandConfigDirIn is the cleaned absolute form of a configDir against home.
-// An empty home leaves a leading ~/ unexpanded.
-func ExpandConfigDirIn(d, home string) string {
-	if d == "" {
-		d = "~/.claude"
-	}
-	return config.ExpandDir(d, home)
-}
-
 // ConfigDirMismatch is the warning for an orchestrator running under
 // orchDir (its CLAUDE_CONFIG_DIR) when round.accounts is set and names no such
 // dir: slots take the configured accounts, so they would not run under the
@@ -702,7 +673,7 @@ func ConfigDirMismatch(orchDir string, accts []config.Account, home string) stri
 		return ""
 	}
 	for _, a := range accts {
-		if a.Dir != "" && SameConfigDirIn(a.Dir, orchDir, home) {
+		if a.Dir != "" && usagelimit.SameConfigDirIn(a.Dir, orchDir, home) {
 			return ""
 		}
 	}
@@ -727,9 +698,9 @@ func (a *Accounts) AccountOf(root, dir string) string {
 // not a candidate, since a wrong guess costs a whole handoff cycle. The most
 // headroom wins, ties by config order. others describes every account that
 // was not taken, for the log.
-func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir string, threshold int) (m Meter, ok bool, others []string) {
-	return SelectAccount(a.Meters(ctx, root), AccountSelection{
-		Handoff: &AccountHandoff{CurrentDir: currentDir, Home: a.home(), Threshold: threshold},
+func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir string, threshold int) (m usagelimit.Meter, ok bool, others []string) {
+	return usagelimit.SelectAccount(a.Meters(ctx, root), usagelimit.AccountSelection{
+		Handoff: &usagelimit.AccountHandoff{CurrentDir: currentDir, Home: a.home(), Threshold: threshold},
 	})
 }
 
@@ -793,7 +764,7 @@ func (e Env) accountLimited(ctx context.Context, root string, hz harness.Account
 		return ""
 	}
 	for _, m := range e.Accounts.Meters(ctx, root) {
-		if m.Name == name && m.Verdict == VerdictCooling {
+		if m.Name == name && m.Verdict == usagelimit.VerdictCooling {
 			why := "account " + name + " is at its usage limit"
 			if m.ResetsAt != nil {
 				why += "; it resets at " + stamp.ISO(*m.ResetsAt)
@@ -815,7 +786,7 @@ func (a *Accounts) Headroom(ctx context.Context, root, account string) *float64 
 
 // HeadroomOf picks the account's headroom out of one Meters reading, so a
 // caller with several slots fetches once.
-func HeadroomOf(ms []Meter, account string) *float64 {
+func HeadroomOf(ms []usagelimit.Meter, account string) *float64 {
 	for _, m := range ms {
 		if m.Name == account {
 			return m.Headroom

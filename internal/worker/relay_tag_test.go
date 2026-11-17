@@ -1,47 +1,12 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/usagelimit"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/harness"
 )
-
-// A tag-opened span ends at its closing line (#2658): what follows the closing
-// line is the session's own, however the worker's reply is marked, and a reply
-// marker inside the span is the orchestrator's own text.
-func TestStripRelaysEndsAtTheClosingTag(t *testing.T) {
-	open := harness.RelayOpen(27, 3)
-	sig := "--- ROTA-SIG " + strings.Repeat("a", 64) + " ---"
-	for name, tc := range map[string]struct {
-		kind, pane, want string
-	}{
-		"bare": {"claude",
-			open + "\nYou've hit your usage limit (quoted)\n" + harness.RelayClose + "\nAPI Error: 529 Overloaded\n",
-			"API Error: 529 Overloaded"},
-		"claude echo": {"claude",
-			"❯ " + open + "\n  quoted usage limit text\n  " + harness.RelayClose + "\n\nAPI Error: 529 Overloaded\n",
-			"\nAPI Error: 529 Overloaded"},
-		"bullet inside the span is the orchestrator's": {"claude",
-			"❯ " + open + "\n  • step one\n  ● step two, You've hit your usage limit\n  " + harness.RelayClose + "\nthe session's own line\n",
-			"the session's own line"},
-		"opencode gutter": {"opencode",
-			"┃  " + open + "\n┃  quoted\n┃  " + harness.RelayClose + "\nreply text\n",
-			"reply text"},
-		"signed trailer is masked with the span": {"codex",
-			"› " + open + "\n  body\n  " + harness.RelayClose + "\n  " + sig + "\nlimit banner outside\n",
-			"limit banner outside"},
-	} {
-		if got := StripRelays(tc.kind, tc.pane); got != tc.want {
-			t.Errorf("%s: StripRelays = %q, want %q", name, got, tc.want)
-		}
-	}
-	// The earlier format has no end marker: the worker's reply ends the span.
-	old := "--- ORCHESTRATOR (round 27) ---\n[relay 1]\nquoted\n● reply\nAPI Error\n"
-	if got := StripRelays("claude", old); got != "● reply\nAPI Error" {
-		t.Errorf("legacy header: StripRelays = %q", got)
-	}
-}
 
 func TestClassifyRelayElement(t *testing.T) {
 	relay := harness.WrapRelay(5, 2, "[ORCHESTRATOR RELAY — forwarded.]\n\nPush is allowed now.\nROTA-BLOCKED ben: git push to origin is denied\n")
@@ -129,7 +94,7 @@ func TestSignBriefEscapesQuotedTagsAndTheClassifierSpanHolds(t *testing.T) {
 			if st, ev := Classify("● working\n"+pane, false, 60, "idle"); st == StateDone || st == StateBlocked {
 				t.Errorf("%s: a quoted sentinel read as the worker's: %s %q", name, st, ev)
 			}
-			if got := StripRelays("claude", "● working\n"+pane+"\nAPI Error: 529 Overloaded\n"); strings.Contains(got, "ROTA-") || !strings.Contains(got, "API Error") {
+			if got := usagelimit.StripRelays("claude", "● working\n"+pane+"\nAPI Error: 529 Overloaded\n"); strings.Contains(got, "ROTA-") || !strings.Contains(got, "API Error") {
 				t.Errorf("%s: the span did not run to the real closing line: %q", name, got)
 			}
 		}
@@ -154,7 +119,7 @@ func TestTagSpanIgnoresAQuotedSignatureLine(t *testing.T) {
 			tc.pre + "ROTA-DONE ben https://github.com/o/r/pull/9\n" +
 			tc.post + harness.RelayClose + "\n" +
 			tc.post + sig + "\nAPI Error: 529 Overloaded\n"
-		got := StripRelays(tc.kind, pane)
+		got := usagelimit.StripRelays(tc.kind, pane)
 		if strings.Contains(got, "ROTA-DONE") || !strings.Contains(got, "API Error") || strings.Contains(got, "ROTA-SIG") {
 			t.Errorf("%s: the span did not run to the real closing line and its trailer: %q", name, got)
 		}
@@ -164,7 +129,7 @@ func TestTagSpanIgnoresAQuotedSignatureLine(t *testing.T) {
 	}
 	// A legacy span still ends at its trailer.
 	legacy := "--- ORCHESTRATOR (round 5) ---\nbody\n" + sig + "\nthe session's own line\n"
-	if got := StripRelays("codex", legacy); got != "the session's own line" {
+	if got := usagelimit.StripRelays("codex", legacy); got != "the session's own line" {
 		t.Errorf("legacy span: %q", got)
 	}
 }

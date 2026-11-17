@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/usagelimit"
 	"testing"
 	"time"
 
@@ -10,16 +11,16 @@ import (
 func fp(v float64) *float64 { return &v }
 
 func entry(kind, name string, h *float64, load int) PoolEntry {
-	v := VerdictFree
+	v := usagelimit.VerdictFree
 	if h == nil {
-		v = VerdictUnknown
+		v = usagelimit.VerdictUnknown
 	}
-	return PoolEntry{Kind: kind, Name: name, Meter: Meter{Name: name, Verdict: v, Headroom: h}, Load: load}
+	return PoolEntry{Kind: kind, Name: name, Meter: usagelimit.Meter{Name: name, Verdict: v, Headroom: h}, Load: load}
 }
 
 func TestChoosePool(t *testing.T) {
 	cooling := entry("claude", "hot", fp(0), 0)
-	cooling.Meter.Verdict = VerdictCooling
+	cooling.Meter.Verdict = usagelimit.VerdictCooling
 	for _, tc := range []struct {
 		name    string
 		entries []PoolEntry
@@ -83,14 +84,14 @@ func TestQuotaMeterHeadroom(t *testing.T) {
 		verdict string
 		head    *float64
 	}{
-		{"weekly only", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(10080, 40, &future, "available")}}, VerdictFree, fp(60)},
-		{"the tightest window binds", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 70, &future, "available"), win(10080, 11, &future, "available")}}, VerdictFree, fp(30)},
-		{"spent 5h with a free week is cooling", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 100, &future, "available"), win(10080, 11, &future, "available")}}, VerdictCooling, fp(0)},
-		{"spent window with no future reset is not cooling", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 100, &past, "stale"), win(10080, 20, &future, "available")}}, VerdictFree, fp(80)},
-		{"partial window counts", harness.QuotaSnapshot{Status: "partial", Windows: []harness.QuotaWindow{win(10080, 25.04, nil, "partial")}}, VerdictFree, fp(75)},
-		{"unavailable is unknown, never 0", harness.QuotaSnapshot{Status: "unavailable", Reason: "Codex binary unavailable"}, VerdictUnknown, nil},
-		{"unavailable status with windows is unknown", harness.QuotaSnapshot{Status: "unavailable", Windows: []harness.QuotaWindow{win(300, 10, &future, "available")}}, VerdictUnknown, nil},
-		{"no windows is unknown", harness.QuotaSnapshot{Status: "available"}, VerdictUnknown, nil},
+		{"weekly only", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(10080, 40, &future, "available")}}, usagelimit.VerdictFree, fp(60)},
+		{"the tightest window binds", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 70, &future, "available"), win(10080, 11, &future, "available")}}, usagelimit.VerdictFree, fp(30)},
+		{"spent 5h with a free week is cooling", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 100, &future, "available"), win(10080, 11, &future, "available")}}, usagelimit.VerdictCooling, fp(0)},
+		{"spent window with no future reset is not cooling", harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{win(300, 100, &past, "stale"), win(10080, 20, &future, "available")}}, usagelimit.VerdictFree, fp(80)},
+		{"partial window counts", harness.QuotaSnapshot{Status: "partial", Windows: []harness.QuotaWindow{win(10080, 25.04, nil, "partial")}}, usagelimit.VerdictFree, fp(75)},
+		{"unavailable is unknown, never 0", harness.QuotaSnapshot{Status: "unavailable", Reason: "Codex binary unavailable"}, usagelimit.VerdictUnknown, nil},
+		{"unavailable status with windows is unknown", harness.QuotaSnapshot{Status: "unavailable", Windows: []harness.QuotaWindow{win(300, 10, &future, "available")}}, usagelimit.VerdictUnknown, nil},
+		{"no windows is unknown", harness.QuotaSnapshot{Status: "available"}, usagelimit.VerdictUnknown, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := QuotaMeter(tc.snap, now)
