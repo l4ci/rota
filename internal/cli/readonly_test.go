@@ -1,12 +1,11 @@
 package cli
 
 import (
-	"errors"
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -16,8 +15,21 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
+// readOnlyPaths collects every verb path whose Command declares ReadOnly.
+func readOnlyPaths(cmds []*Command, prefix string, out map[string]bool) {
+	for _, cmd := range cmds {
+		path := strings.TrimSpace(prefix + " " + cmd.Name)
+		if cmd.ReadOnly {
+			out[path] = true
+		}
+		readOnlyPaths(cmd.Subs, path, out)
+	}
+}
+
 // The read-only set is the contract's: a tracker verb whose data line has no
-// "changed" (rota version is not one of them).
+// "changed" (rota version is not one of them). The contract is checked against
+// the tree and the tree against the contract, so a renamed verb fails here
+// instead of silently losing its exit-1 demotion.
 func TestReadOnlySetMatchesContract(t *testing.T) {
 	// The contract covers these verbs in two group files: version/config/repo and backlog.
 	var doc string
@@ -28,10 +40,9 @@ func TestReadOnlySetMatchesContract(t *testing.T) {
 		}
 		doc += "\n" + string(raw)
 	}
-	start, end := 0, len(doc)
 	entry := regexp.MustCompile(`(?m)^### rota ([a-z -]+)\n(?:.*\n)*?data: (.*)$`)
 	want := map[string]bool{}
-	for _, m := range entry.FindAllStringSubmatch(doc[start:end], -1) {
+	for _, m := range entry.FindAllStringSubmatch(doc, -1) {
 		verb := strings.TrimSpace(m[1])
 		if verb != "version" && !strings.Contains(m[2], `"changed"`) {
 			want[verb] = true
@@ -40,13 +51,21 @@ func TestReadOnlySetMatchesContract(t *testing.T) {
 	if len(want) == 0 {
 		t.Fatal("parsed no read-only verbs")
 	}
+	root := Tree()
+	for v := range want {
+		if cmd := findVerb(root, strings.Fields(v)); cmd == nil || cmd.Verb == nil {
+			t.Errorf("contract names read-only verb %q, which is not a verb in the tree", v)
+		}
+	}
+	got := map[string]bool{}
+	readOnlyPaths(root.Subs, "", got)
 	var missing, extra []string
 	for v := range want {
-		if !readOnlyVerbs[v] {
+		if !got[v] {
 			missing = append(missing, v)
 		}
 	}
-	for v := range readOnlyVerbs {
+	for v := range got {
 		if !want[v] {
 			extra = append(extra, v)
 		}
@@ -54,7 +73,7 @@ func TestReadOnlySetMatchesContract(t *testing.T) {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	if len(missing)+len(extra) > 0 {
-		t.Fatalf("readOnlyVerbs drifted from the contract: missing %v, extra %v", missing, extra)
+		t.Fatalf("ReadOnly declarations drifted from the contract: missing %v, extra %v", missing, extra)
 	}
 }
 
@@ -106,86 +125,55 @@ func TestWrongBackendRefusals(t *testing.T) {
 			if code != c.exit || get(d, "blockedBy") != "backend" || get(d, "changed") != false {
 				t.Fatalf("exit %d (want %d), data %v, stderr %s", code, c.exit, env["data"], stderr)
 			}
-			if readOnlyVerbs[strings.TrimSuffix(strings.TrimSuffix(c.name, " --raw-file"), " --name detail")] != (c.exit == ExitFailed) {
+			declared := map[string]bool{}
+			readOnlyPaths(Tree().Subs, "", declared)
+			if declared[strings.TrimSuffix(strings.TrimSuffix(c.name, " --raw-file"), " --name detail")] != (c.exit == ExitFailed) {
 				t.Fatalf("%s: read-only set and expected exit disagree", c.name)
 			}
 		})
 	}
 }
 
-// Registration must preserve a shared failure for later ordinary commands.
-func TestRegisteredReadOnlyPreservesSharedFailure(t *testing.T) {
-	for _, wrapped := range []bool{false, true} {
-		t.Run(fmt.Sprintf("wrapped=%t", wrapped), func(t *testing.T) {
-			sentinel := errors.New("backend unavailable")
-			cause := &os.PathError{Op: "read", Path: "config", Err: sentinel}
-			data := jsonx.Obj("blockedBy", "backend", "changed", false)
-			original := Refused("shared refusal").WithHint("try again")
-			original.Data, original.Cause = data, cause
-			before := *original
-			var supplied error = original
-			if wrapped {
-				supplied = fmt.Errorf("outer: %w", original)
-			}
-			wantResult := Result{Text: "answer", Data: data, Source: cause}
-			verb := func(*flag.FlagSet) RunFunc {
-				return func(*Ctx, []string) (Result, error) { return wantResult, supplied }
-			}
-			cmds := withReadOnly([]*Command{{Name: "config", Subs: []*Command{
-				{Name: "show", Verb: verb}, {Name: "set", Verb: verb},
-			}}})
-			// Repeated read-only calls must not affect ordinary reuse in either order.
-			for _, index := range []int{1, 0, 1, 0, 1} {
-				cmd := cmds[0].Subs[index]
-				res, err := cmd.Verb(newFlagSet(cmd.Name))(&Ctx{}, nil)
-				wantExit := ExitRefused
-				if index == 0 {
-					wantExit = ExitFailed
-				} else if err != supplied {
-					t.Error("ordinary command lost error identity")
-				}
-				coded := asError(err)
-				if coded.Exit != wantExit {
-					t.Errorf("%s exit = %d, want %d", cmd.Name, coded.Exit, wantExit)
-				}
-				if !reflect.DeepEqual(res, wantResult) {
-					t.Errorf("%s result = %#v, want %#v", cmd.Name, res, wantResult)
-				}
-				if *original != before {
-					t.Errorf("%s changed supplied failure: %#v; want %#v", cmd.Name, original, before)
-				}
-				if err.Error() != supplied.Error() || coded.Message != before.Message || coded.Hint != before.Hint || coded.Data != data || coded.Cause != cause {
-					t.Errorf("%s lost failure fields: %v / %#v", cmd.Name, err, coded)
-				}
-				var detail *os.PathError
-				if !errors.Is(err, supplied) || !errors.Is(err, original) || !errors.Is(err, sentinel) || !errors.As(err, &detail) || detail != cause {
-					t.Errorf("%s lost original error chain: %v", cmd.Name, err)
-				}
-			}
-		})
-	}
-}
-
-func TestRegisteredReadOnlyPassthrough(t *testing.T) {
-	coded := Unavailable("offline").WithHint("retry later")
+// The dispatcher demotes a refusal (exit 4) of a ReadOnly verb to exit 1 with
+// the same failure data, and leaves every other outcome and every verb that
+// does not declare ReadOnly alone.
+func TestDispatcherDemotesReadOnlyRefusal(t *testing.T) {
+	data := jsonx.Obj("blockedBy", "backend", "changed", false)
+	refused := Refused("shared refusal").WithHint("try again")
+	refused.Data = data
+	before := *refused
 	for _, tc := range []struct {
-		name string
-		err  error
+		name     string
+		readOnly bool
+		err      error
+		want     int
 	}{
-		{"success", nil},
-		{"unclassified", errors.New("plain failure")},
-		{"domain refusal", backlog.ErrWrongBackend},
-		{"other classification", coded},
-		{"wrapped classification", fmt.Errorf("outer: %w", coded)},
+		{"read-only refusal", true, refused, ExitFailed},
+		{"read-only wrapped refusal", true, fmt.Errorf("outer: %w", refused), ExitFailed},
+		{"read-only unclassified", true, backlog.ErrWrongBackend, ExitInternal},
+		{"read-only unavailable", true, Unavailable("offline"), ExitUnavailable},
+		{"read-only success", true, nil, ExitOK},
+		{"mutating refusal", false, refused, ExitRefused},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := Result{Text: "answer", Data: jsonx.Obj("changed", false)}
-			cmds := withReadOnly([]*Command{{Name: "config", Subs: []*Command{{Name: "show", Verb: func(*flag.FlagSet) RunFunc {
-				return func(*Ctx, []string) (Result, error) { return want, tc.err }
-			}}}}})
-			got, err := cmds[0].Subs[0].Verb(newFlagSet("show"))(&Ctx{}, nil)
-			if err != tc.err || !reflect.DeepEqual(got, want) {
-				t.Fatalf("got (%#v, %v), want unchanged (%#v, %v)", got, err, want, tc.err)
+			verb := func(*flag.FlagSet) RunFunc {
+				return func(*Ctx, []string) (Result, error) {
+					return Result{Text: "answer", Data: data}, tc.err
+				}
+			}
+			root := &Command{Name: "rota", Subs: []*Command{{Name: "probe", Fence: fenceAllowed, ReadOnly: tc.readOnly, Verb: verb}}}
+			for range 2 { // a repeated call must see the same, unmutated failure
+				var out, errb bytes.Buffer
+				code := run(root, testDeps(), []string{"--json", "probe"}, strings.NewReader(""), &out, &errb)
+				if code != tc.want {
+					t.Fatalf("exit %d, want %d; stdout %s stderr %s", code, tc.want, out.String(), errb.String())
+				}
+				if tc.err == error(refused) && tc.want != ExitOK && !strings.Contains(out.String(), `"blockedBy"`) {
+					t.Errorf("failure data lost: %s", out.String())
+				}
+				if *refused != before {
+					t.Fatalf("supplied failure mutated: %#v; want %#v", *refused, before)
+				}
 			}
 		})
 	}

@@ -30,52 +30,6 @@ import (
 // through: the gh or glab adapter for the project's origin, configured by
 // issues.*. Deps.NewTracker builds it, so unit tests inject a fake.
 
-// withReadOnly joins the tracker groups and wraps their read-only verbs.
-func withReadOnly(groups ...[]*Command) []*Command {
-	var cmds []*Command
-	for _, g := range groups {
-		cmds = append(cmds, g...)
-	}
-	markReadOnly(cmds, "")
-	return cmds
-}
-
-// readOnlyVerbs are the tracker verbs whose contract data carries no "changed".
-// The conventions forbid exit 4 for them, so a refusal (the wrong backend)
-// answers exit 1 with the same failure data (contract: backend). A test checks
-// this set against docs/contributing/contract/.
-var readOnlyVerbs = map[string]bool{
-	"update": true, "config show": true, "config check": true,
-	"repo which": true, "repo resolve": true, "repo umbrella": true,
-	"item show": true, "item ready": true, "item template": true, "item comment list": true, "item note show": true,
-	"item field get": true, "item field list": true, "item shipped": true,
-	"backlog list": true, "backlog ids": true, "backlog milestones": true, "backlog drift": true,
-	"backlog stale": true, "summary": true,
-	"issues imported": true, "issues provider": true,
-	"status show": true, "status handoff": true,
-	"refactor age": true, "refactor targets": true,
-}
-
-// markReadOnly wraps every verb in readOnlyVerbs under cmds so an exit 4
-// becomes exit 1; prefix is the command path above cmds.
-func markReadOnly(cmds []*Command, prefix string) {
-	for _, cmd := range cmds {
-		path := strings.TrimSpace(prefix + " " + cmd.Name)
-		if cmd.Verb != nil && readOnlyVerbs[path] {
-			verb := cmd.Verb
-			cmd.Verb = func(fs *flag.FlagSet) RunFunc {
-				run := verb(fs)
-				return func(c *Ctx, args []string) (Result, error) {
-					res, err := run(c, args)
-					_, err = translate(err, exitmap.Options{ReadOnly: true})
-					return res, err
-				}
-			}
-		}
-		markReadOnly(cmd.Subs, path)
-	}
-}
-
 func itemCommands() []*Command {
 	return []*Command{
 		{Name: "id", Summary: "mint item and milestone IDs", Subs: []*Command{
@@ -83,11 +37,11 @@ func itemCommands() []*Command {
 		}},
 		{Name: "item", Summary: "backlog items", Subs: []*Command{
 			{Name: "create", Fence: fenceAllowed, Summary: "capture one item", Repo: true, Verb: itemCreate},
-			{Name: "template", Fence: fenceAllowed, Summary: "print the body template for an item kind", Verb: itemTemplate},
+			{Name: "template", Fence: fenceAllowed, ReadOnly: true, Summary: "print the body template for an item kind", Verb: itemTemplate},
 			{Name: "field", Summary: "read and write item fields", Subs: []*Command{
-				{Name: "get", Fence: fenceAllowed, Summary: "print one field of an item", Repo: true, Verb: itemFieldGet},
+				{Name: "get", Fence: fenceAllowed, ReadOnly: true, Summary: "print one field of an item", Repo: true, Verb: itemFieldGet},
 				{Name: "set", Fence: fenceAllowed, Summary: "set, replace or clear a field of an open item", Repo: true, Verb: itemFieldSet},
-				{Name: "list", Fence: fenceAllowed, Summary: "every field of an item", Repo: true, Verb: itemFieldList},
+				{Name: "list", Fence: fenceAllowed, ReadOnly: true, Summary: "every field of an item", Repo: true, Verb: itemFieldList},
 			}},
 			{Name: "section", Summary: "edit one body section of an item", Subs: []*Command{
 				{Name: "set", Fence: fenceAllowed, Summary: "replace or add one ## section of an issue-mode body", Repo: true, Verb: itemSectionSet},
@@ -95,20 +49,20 @@ func itemCommands() []*Command {
 			{Name: "complete", Fence: fenceAllowed, Summary: "close an item", Repo: true, Verb: itemComplete},
 			{Name: "reopen", Fence: fenceAllowed, Summary: "restore a completed item", Repo: true, Verb: itemReopen},
 			{Name: "rm", Fence: fenceAllowed, Summary: "remove items with their cross-references and files", Repo: true, Verb: itemRm},
-			{Name: "shipped", Fence: fenceAllowed, Summary: "look for evidence that titles already shipped", Repo: true, Verb: itemShipped},
-			{Name: "ready", Fence: fenceAllowed, Summary: "is the item specified well enough to start", Repo: true, Verb: itemReady},
-			{Name: "show", Fence: fenceAllowed, Summary: "status block of an issue-mode item", Repo: true, Verb: itemShow},
+			{Name: "shipped", Fence: fenceAllowed, ReadOnly: true, Summary: "look for evidence that titles already shipped", Repo: true, Verb: itemShipped},
+			{Name: "ready", Fence: fenceAllowed, ReadOnly: true, Summary: "is the item specified well enough to start", Repo: true, Verb: itemReady},
+			{Name: "show", Fence: fenceAllowed, ReadOnly: true, Summary: "status block of an issue-mode item", Repo: true, Verb: itemShow},
 			{Name: "claim", Fence: fenceAllowed, Summary: "take an item so two agents never work it at once", Repo: true, Verb: itemClaim},
 			{Name: "release", Fence: fenceAllowed, Summary: "give a claimed item back", Repo: true, Verb: itemRelease},
 			{Name: "state", Fence: fenceAllowed, Summary: "set the workflow state label of an item", Repo: true, Verb: itemState},
 			{Name: "note", Summary: "durable item notes (issue mode)", Subs: []*Command{
 				{Name: "add", Fence: fenceAllowed, Summary: "write a note", Repo: true, Verb: itemNoteAdd},
-				{Name: "show", Fence: fenceAllowed, Summary: "print a note", Repo: true, Verb: itemNoteShow},
+				{Name: "show", Fence: fenceAllowed, ReadOnly: true, Summary: "print a note", Repo: true, Verb: itemNoteShow},
 				{Name: "rm", Fence: fenceAllowed, Summary: "delete a note", Repo: true, Verb: itemNoteRm},
 			}},
 			{Name: "comment", Summary: "item comments", Subs: []*Command{
 				{Name: "add", Fence: fenceAllowed, Summary: "append a comment", Repo: true, Verb: itemCommentAdd},
-				{Name: "list", Fence: fenceAllowed, Summary: "list comments", Repo: true, Verb: itemCommentList},
+				{Name: "list", Fence: fenceAllowed, ReadOnly: true, Summary: "list comments", Repo: true, Verb: itemCommentList},
 			}},
 		}},
 	}
