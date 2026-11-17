@@ -7,7 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// Milestones at an umbrella root (hvlib_backend.UmbrellaIssueBackend): the
+// Milestones at an umbrella root (the retired Python UmbrellaIssueBackend): the
 // tracking issue, the milestone plan and its slice plans live on the home
 // sub-repo, and every sub-repo that uses a milestone has its own native
 // milestone "MNN — <title>". IDs are minted over the native milestones of all

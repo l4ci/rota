@@ -13,7 +13,7 @@ import (
 )
 
 // Imported is one upstream issue a backlog item points at through a
-// `GH: #N` or `GL: #N` cross-reference (an entry of hv-issues-imported).
+// `GH: #N` or `GL: #N` cross-reference (an entry of the imported-issues list).
 type Imported struct {
 	Provider string // github | gitlab
 	Repo     string // the Repos: entry the item names; "" when it has none

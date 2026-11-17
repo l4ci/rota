@@ -1,4 +1,4 @@
-// Package spike ports hv-spike-add, -finish, -list and -show: the spike
+// Package spike ports the retired spike-add, -finish, -list and -show helpers: the spike
 // files under .rota/spikes/ and their spike/<name> branches.
 package spike
 
