@@ -265,3 +265,20 @@ func TestMigrateSeenPRModeFailureRestoresBranch(t *testing.T) {
 		t.Fatalf("a PR was opened after the failed push: %v", f.prs())
 	}
 }
+
+func TestMigrateSeenMalformedExistingStampErrors(t *testing.T) {
+	body := "# Go\n\n" +
+		"- **Good** — A. (seen on Swift 6) <!-- 2026-10-01 source:x -->\n" +
+		"- **Bad** — B. (seen on Godot 4.6) <!-- 2026-10-01 source:x seen:godot -->\n"
+	f := migrateFixture(t, "", body)
+	n := commitCount(t, f)
+	for _, apply := range []bool{false, true} {
+		_, err := f.clone().MigrateSeen(context.Background(), apply)
+		if err == nil || !strings.Contains(err.Error(), "bad seen stamp") || !strings.Contains(err.Error(), "Bad") {
+			t.Fatalf("apply=%v err = %v", apply, err)
+		}
+	}
+	if commitCount(t, f) != n || goFile(t, f) != body {
+		t.Fatalf("wrote despite malformed stamp: %q", goFile(t, f))
+	}
+}
