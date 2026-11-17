@@ -81,6 +81,9 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		return out, nil
 	}
 
+	// Each requested topic is rendered once, whatever the scope: empty and
+	// repeated requests (compared trimmed and case-folded) are dropped here.
+	topics = uniqueTopics(topics)
 	var b strings.Builder
 	matched := map[string]bool{}
 	if !hybrid {
@@ -138,10 +141,15 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 			}
 		}
 		first := true
+		done := map[string]bool{}
 		for _, w := range topics {
 			wl := strings.ToLower(strings.TrimSpace(w))
 			for _, hl := range topicmatch.Headings(w, names) {
 				matched[wl] = true
+				if done[hl] {
+					continue
+				}
+				done[hl] = true
 				printed := false
 				for i, p := range pairs {
 					if !exists[i] {
@@ -175,15 +183,28 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		}
 	}
 
-	seen := map[string]bool{}
 	for _, orig := range topics {
-		k := strings.ToLower(strings.TrimSpace(orig))
-		if k != "" && !matched[k] && !seen[k] {
-			seen[k] = true
+		if !matched[strings.ToLower(strings.TrimSpace(orig))] {
 			missing = append(missing, orig)
 		}
 	}
 	return b.String(), missing, nil
+}
+
+// uniqueTopics drops empty requests and repeats of one (trimmed, case-folded),
+// keeping the first spelling and the argument order.
+func uniqueTopics(topics []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, t := range topics {
+		k := strings.ToLower(strings.TrimSpace(t))
+		if k == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, t)
+	}
+	return out
 }
 
 // Stat is one topic's size.
