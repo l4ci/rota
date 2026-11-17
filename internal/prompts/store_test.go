@@ -110,7 +110,7 @@ func TestExpandedBaselineTracksContractChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != "changed" || got.Baseline != "Default OLD STATUS END" || got.Default != "Default NEW STATUS END" || got.Effective != "Team NEW STATUS END" {
+	if got.Status != StatusChanged || got.Baseline != "Default OLD STATUS END" || got.Default != "Default NEW STATUS END" || got.Effective != "Team NEW STATUS END" {
 		t.Fatalf("updated contract view: %+v", got)
 	}
 }
@@ -144,6 +144,15 @@ func TestMalformedStoreNeverOverwritten(t *testing.T) {
 	}
 }
 
+// The status strings are the JSON wire vocabulary; pin them.
+func TestSectionStatusWireValues(t *testing.T) {
+	for c, w := range map[SectionStatus]string{StatusDefault: "default", StatusUnchanged: "unchanged", StatusChanged: "changed", StatusRemoved: "removed"} {
+		if string(c) != w {
+			t.Errorf("status %q, want %q", c, w)
+		}
+	}
+}
+
 func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	root := t.TempDir()
 	v1 := Open(root, map[string]Section{
@@ -166,19 +175,23 @@ func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string][3]string{ // status, baseline, effective
-		"modified":  {"changed", "Old S C", "Team modified S C"},
-		"unchanged": {"unchanged", "Same S C", "Team unchanged S C"},
-		"removed":   {"removed", "Gone S C", ""},
-		"untouched": {"default", "Plain v2 S C", "Plain v2 S C"},
+	type wantView struct {
+		status              SectionStatus
+		baseline, effective string
+	}
+	want := map[string]wantView{
+		"modified":  {StatusChanged, "Old S C", "Team modified S C"},
+		"unchanged": {StatusUnchanged, "Same S C", "Team unchanged S C"},
+		"removed":   {StatusRemoved, "Gone S C", ""},
+		"untouched": {StatusDefault, "Plain v2 S C", "Plain v2 S C"},
 	}
 	if len(views) != len(want) {
 		t.Fatalf("views: %+v", views)
 	}
 	for _, v := range views {
 		w := want[v.Name]
-		if v.Status != w[0] || v.Baseline != w[1] || v.Effective != w[2] {
-			t.Errorf("%s: status %q baseline %q effective %q, want %q", v.Name, v.Status, v.Baseline, v.Effective, w)
+		if v.Status != w.status || v.Baseline != w.baseline || v.Effective != w.effective {
+			t.Errorf("%s: status %q baseline %q effective %q, want %+v", v.Name, v.Status, v.Baseline, v.Effective, w)
 		}
 	}
 	if m := views[0]; m.Name != "modified" || m.Default != "New S C" || *m.Override != "Team modified {{status}} {{closing}}" {
@@ -203,7 +216,7 @@ func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted.Revision != 2 || adopted.Override != nil || adopted.Effective != "New S C" || adopted.Status != "unchanged" {
+	if adopted.Revision != 2 || adopted.Override != nil || adopted.Effective != "New S C" || adopted.Status != StatusUnchanged {
 		t.Fatalf("adopted: %+v", adopted)
 	}
 	if _, err := v2.Restore("modified", 1, 1); !errors.Is(err, ErrConflict) {
@@ -216,7 +229,7 @@ func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.Revision != 3 || restored.Effective != "Team modified S C" || restored.Baseline != "Old S C" || restored.Status != "changed" || len(restored.History) != 3 {
+	if restored.Revision != 3 || restored.Effective != "Team modified S C" || restored.Baseline != "Old S C" || restored.Status != StatusChanged || len(restored.History) != 3 {
 		t.Fatalf("restored: %+v", restored)
 	}
 	// Retaining the text against the new default is a re-save; it rebaselines.
@@ -224,7 +237,7 @@ func TestUpgradeAdoptRestoreAcrossCatalogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kept.Status != "unchanged" || kept.Baseline != "New S C" || kept.Effective != "Team modified S C" {
+	if kept.Status != StatusUnchanged || kept.Baseline != "New S C" || kept.Effective != "Team modified S C" {
 		t.Fatalf("retained: %+v", kept)
 	}
 }
@@ -243,7 +256,7 @@ func TestAdoptedSectionFollowsLaterUpstreamChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != "unchanged" || got.Effective != "Two S C" {
+	if got.Status != StatusUnchanged || got.Effective != "Two S C" {
 		t.Fatalf("adopted after upstream change: status %q effective %q, want unchanged / Two S C", got.Status, got.Effective)
 	}
 }
