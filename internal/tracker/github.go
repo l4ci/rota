@@ -728,15 +728,16 @@ func (g *GitHub) OpenPRs(ctx context.Context) ([]PR, error) {
 		Title             string    `json:"title"`
 		Body              string    `json:"body"`
 		HeadRefName       string    `json:"headRefName"`
+		BaseRefName       string    `json:"baseRefName"`
 		URL               string    `json:"url"`
 		IsCrossRepository *bool     `json:"isCrossRepository"`
 	}
-	if err := g.list(ctx, []string{"pr", "list", "--state", "open", "--json", "number,title,body,headRefName,url,updatedAt,isCrossRepository"}, ghLimit, ghPaging, &raw); err != nil {
+	if err := g.list(ctx, []string{"pr", "list", "--state", "open", "--json", "number,title,body,headRefName,url,updatedAt,isCrossRepository,baseRefName"}, ghLimit, ghPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, UpdatedAt: d.UpdatedAt, Body: d.Body, SameRepository: d.IsCrossRepository != nil && !*d.IsCrossRepository})
+		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, Base: d.BaseRefName, URL: d.URL, UpdatedAt: d.UpdatedAt, Body: d.Body, SameRepository: d.IsCrossRepository != nil && !*d.IsCrossRepository})
 	}
 	return out, nil
 }

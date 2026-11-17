@@ -263,14 +263,15 @@ func TestRoundWaitCarriesTheTrainNudge(t *testing.T) {
 // openPRForge is a forge whose open PR list is fixed.
 type openPRForge struct {
 	worker.Forge
-	open []int
-	err  error
+	open  []int
+	bases map[int]string
+	err   error
 }
 
 func (f openPRForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	var out []tracker.PR
 	for _, n := range f.open {
-		out = append(out, tracker.PR{Number: n})
+		out = append(out, tracker.PR{Number: n, Base: f.bases[n]})
 	}
 	return out, f.err
 }
@@ -303,6 +304,30 @@ func TestWaitingPRsDropsMergedPRs(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: waiting = %v, want %v", name, got, tc.want)
 		}
+	}
+}
+
+// waitingPRs reads each PR's base from the forge's open listing and flags one
+// whose base differs from the recorded (or default) base.
+func TestWaitingPRsFlagsMovedBase(t *testing.T) {
+	dir := nudgeProject(t, []string{"a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
+	gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+	addRegistryRows(t, dir, map[string][]map[string]any{
+		"slots": {{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11", "base": "main"}},
+		"prs":   {{"branch": "b/2-y", "pr": "#12", "base": "main"}},
+	})
+	deps := testDeps()
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {
+			return openPRForge{open: []int{11, 12}, bases: map[int]string{11: "main", 12: "release"}}, nil
+		}}
+	}
+	moved := map[string]bool{}
+	for _, w := range waitingPRs(&Ctx{Deps: deps, ctx: context.Background()}, dir) {
+		moved[w.PR] = w.BaseMoved
+	}
+	if moved["#11"] || !moved["#12"] {
+		t.Errorf("BaseMoved = %v, want only #12", moved)
 	}
 }
 

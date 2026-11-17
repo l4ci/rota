@@ -27,6 +27,9 @@ type waitingPR struct {
 	Reviewed   bool
 	ReadySince time.Time
 	Immediate  bool
+	// BaseMoved is set when the forge shows the PR on another base than the one
+	// recorded: the tick sends it to its own gate, so the nudge does too.
+	BaseMoved bool
 }
 
 // trainNudge is a base whose reviewed PRs are due for landing: a train, or a
@@ -283,8 +286,8 @@ func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.
 
 // fillPRs is the reviewed waiting PRs, one per PR number, as the shared fill
 // grouping takes them: the tick feeds the same shape. A PR the forge no longer
-// lists as open is dropped by openOnly before this; the nudge has no read of a
-// PR's base, so only Immediate bypasses here.
+// lists as open is dropped by openOnly before this, which also flags BaseMoved;
+// Immediate and BaseMoved bypass here as they do in the tick.
 func fillPRs(waiting []waitingPR) []roundcfg.FillPR {
 	var out []roundcfg.FillPR
 	seen := map[int]bool{}
@@ -294,7 +297,7 @@ func fillPRs(waiting []waitingPR) []roundcfg.FillPR {
 			continue
 		}
 		seen[n] = true
-		out = append(out, roundcfg.FillPR{ID: fmt.Sprint(n), Base: w.Base, Ready: w.ReadySince, Bypass: w.Immediate})
+		out = append(out, roundcfg.FillPR{ID: fmt.Sprint(n), Base: w.Base, Ready: w.ReadySince, Bypass: w.Immediate || w.BaseMoved})
 	}
 	return out
 }
@@ -360,25 +363,31 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 			out = append(out, waitingPR{PR: q.PR, Branch: q.Branch, Base: q.Base, Reviewed: rd.Ready, ReadySince: rd.Since, Immediate: rd.Immediate})
 		}
 	}
-	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
+	return openOnly(c, root, fillDefaultBase(out, defaultBase(c, root)))
 }
 
 // openOnly drops the PRs the forge no longer lists as open: gate and train
-// merge a PR without clearing its registry row at once. A forge that cannot
-// answer (or a PR number that does not parse) keeps the row, since the nudge is
-// advice and a stale name beats a missing one.
+// merge a PR without clearing its registry row at once. It also flags BaseMoved
+// on a PR the forge shows on another base than the one the row names (defaults
+// already filled), the tick's own test. A forge that cannot answer (or a PR
+// number that does not parse) keeps the row, since the nudge is advice and a
+// stale name beats a missing one.
 func openOnly(c *Ctx, root string, waiting []waitingPR) []waitingPR {
 	if len(waiting) == 0 {
 		return waiting
 	}
-	open, ok := c.deps().workerEnv().OpenPRNumbers(c.Context(), root)
+	open, ok := c.deps().workerEnv().OpenPRBases(c.Context(), root)
 	if !ok {
 		return waiting
 	}
 	var out []waitingPR
 	for _, w := range waiting {
-		if n, parsed := worker.PRRefNumber(w.PR); parsed && !open[n] {
-			continue
+		if n, parsed := worker.PRRefNumber(w.PR); parsed {
+			forgeBase, listed := open[n]
+			if !listed {
+				continue
+			}
+			w.BaseMoved = forgeBase != "" && w.Base != "" && forgeBase != w.Base
 		}
 		out = append(out, w)
 	}
