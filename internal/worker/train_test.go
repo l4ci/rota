@@ -651,8 +651,8 @@ func TestTrainCachesPassingVerdicts(t *testing.T) {
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("re-run: %+v %v", res, err)
 	}
-	// the red full tree and b2's alone-run run again; only the green prefix hits
-	if got := runs(t, counter); got != first+2 {
+	// the red full tree, its re-run and b2's alone-run run again; only the green prefix hits
+	if got := runs(t, counter); got != first+3 {
 		t.Errorf("a red re-verifies, a pass is reused: %d runs, then %d", first, got)
 	}
 	if len(res.CacheHits) != 1 || !strings.Contains(res.CacheHits[0], "first 1 member") {
@@ -692,9 +692,9 @@ func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
 
 func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
-	// b2 fails the first two times it is verified in a tree (the train and its
-	// alone-run, so it is blamed), then passes: a flaky test
-	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %[1]s; exit 1; }", seen)
+	// b2 fails the first three times it is verified in a tree (the train, its
+	// re-run and its alone-run, so it is blamed), then passes: a flaky test
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 3 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
@@ -719,7 +719,7 @@ func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 // culprit must not forgive it: no TRANSIENT note, and the culprit record stays.
 func TestTrainNoVerifyDoesNotForgiveCulprit(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
-	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %[1]s; exit 1; }", seen)
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 3 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
@@ -1570,11 +1570,12 @@ func TestTrainAloneRunUsesVacuousTemplate(t *testing.T) {
 	}
 	b, _ := os.ReadFile(log)
 	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
-	if len(lines) != 2 || lines[0] != "ex.com/p ^(TestPair)$" {
-		t.Fatalf("want two template runs selecting TestPair in ex.com/p, got %q", lines)
+	// the re-run of the red tree, then the two alone-runs
+	if len(lines) != 3 || lines[0] != "ex.com/p ^(TestPair)$" {
+		t.Fatalf("want three template runs selecting TestPair in ex.com/p, got %q", lines)
 	}
-	if res.DiagnoseTime < 600*time.Millisecond {
-		t.Errorf("the two alone-runs take 0.6s, diagnosis counted %v", res.DiagnoseTime)
+	if res.DiagnoseTime < 900*time.Millisecond {
+		t.Errorf("the re-run and the two alone-runs take 0.9s, diagnosis counted %v", res.DiagnoseTime)
 	}
 }
 
@@ -1610,13 +1611,50 @@ func TestTrainFlakeSkipsAloneRun(t *testing.T) {
 	}
 }
 
+// A red train is re-run once on the same tree before any bisect: green on the
+// re-run is a flake, so no prefix or alone run starts, nobody is blamed, the
+// failure lands in the flake ledger and nothing lands (#3647).
+func TestTrainRedRerunGreenSkipsBisect(t *testing.T) {
+	n := filepath.Join(t.TempDir(), "n")
+	// with b2 merged, the train and its in-tree retry fail; the re-run passes
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %s; %s; }",
+		n, n, goFail("TestRare", "ex.com/p"))
+	w := trainWorld(t, "", "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`, cmd, ": {packages} {tests}; "+cmd))
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Say: func(s string) { said = append(said, s) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateVerifyFailed || !res.Unreproduced || res.Culprit != "" || len(res.Landed) != 0 {
+		t.Fatalf("want a flaky red with nobody blamed and nothing landed, got %+v", res)
+	}
+	for _, s := range said {
+		if strings.Contains(s, "diagnose") || strings.Contains(s, "classify") {
+			t.Errorf("a bisect step ran after a green re-run: %q", s)
+		}
+	}
+	if len(res.Flaky) != 1 || !strings.Contains(strings.Join(res.Flaky[0].Tests, ","), "TestRare") {
+		t.Errorf("want the flake recorded for TestRare, got %+v", res.Flaky)
+	}
+	if b, _ := os.ReadFile(filepath.Join(w.dir, ".rota", "flakes.jsonl")); !strings.Contains(string(b), "TestRare") {
+		t.Errorf("flake ledger lacks the failure: %q", b)
+	}
+	if notes := strings.Join(res.Notes, "\n"); !strings.Contains(notes, "FLAKY") || !strings.Contains(notes, "TestRare") {
+		t.Errorf("notes %q: want a FLAKY note naming the test", notes)
+	}
+	if !strings.HasPrefix(res.Err, "TRAIN-FAIL flaky") {
+		t.Errorf("message: %s", res.Err)
+	}
+}
+
 // A red that survives the in-tree retry but passes on the member alone and on
 // a rerun of the red prefix does not reproduce: a flake. Nobody is blamed and
 // the note names the tests (#3095).
 func TestTrainUnreproducedRedBlamesNobody(t *testing.T) {
 	n := filepath.Join(t.TempDir(), "n")
-	// with b2 merged, the first two runs (the train and its in-tree retry) fail
-	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %s 2>/dev/null | wc -c) -ge 2 ] || { printf x >> %s; %s; }",
+	// with b2 merged, the first three runs (the train, its in-tree retry and the re-run) fail
+	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %s 2>/dev/null | wc -c) -ge 3 ] || { printf x >> %s; %s; }",
 		n, n, goFail("TestRare", "ex.com/p"))
 	w := trainWorld(t, "", "b1", "b2")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`, cmd, ": {packages} {tests}; "+cmd))
@@ -1641,5 +1679,16 @@ func TestTrainUnreproducedRedBlamesNobody(t *testing.T) {
 	notes := strings.Join(res.Notes, "\n")
 	if !strings.Contains(notes, "TestRare") || strings.Contains(notes, "TRAIN-UNCLASSIFIED") {
 		t.Errorf("notes %q: want the failing test named, no UNCLASSIFIED", notes)
+	}
+}
+
+// The bisect announces its cost before it starts (#3647 AC-3): the run count
+// for the train's size and the last verify's duration as the unit.
+func TestDiagnoseEstimateNamesRunsAndVerifyTime(t *testing.T) {
+	got := diagnoseEstimate(5, 4*time.Minute)
+	for _, want := range []string{"up to 7 run(s)", "4m0s", "--on-fail stop"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("estimate %q lacks %q", got, want)
+		}
 	}
 }
