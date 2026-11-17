@@ -6,7 +6,7 @@ import (
 )
 
 func TestComposeListsOptionsRecommendationAndCost(t *testing.T) {
-	got := Compose("e1", "Keep the flag?", "Body text.", Choice{
+	got := compose("e1", "Keep the flag?", "Body text.", Choice{
 		Options: []string{"keep it", "drop it", "deprecate"}, Recommend: 3, Cost: "a second breaking release",
 	})
 	for _, want := range []string{
@@ -28,7 +28,7 @@ func TestComposeListsOptionsRecommendationAndCost(t *testing.T) {
 }
 
 func TestComposeWithoutChoiceKeepsTheOldShape(t *testing.T) {
-	got := Compose("e1", "t", "b", Choice{})
+	got := compose("e1", "t", "b", Choice{})
 	if strings.Contains(got, "Cost if wrong") || strings.Contains(got, "1)") {
 		t.Errorf("a choiceless escalation lists nothing:\n%s", got)
 	}

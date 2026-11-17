@@ -16,7 +16,7 @@ type Choice struct {
 	Cost      string
 }
 
-// render is the block Compose puts between the body and the ask; empty for a
+// render is the block compose puts between the body and the ask; empty for a
 // question without options.
 func (c Choice) render() string {
 	if len(c.Options) == 0 {

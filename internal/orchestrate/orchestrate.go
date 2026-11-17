@@ -21,11 +21,11 @@ import (
 	"github.com/l4ci/rota/internal/usagelimit"
 )
 
-// Lookup finds the orchestrator harness by its orchestrator.harness name. The
+// lookup finds the orchestrator harness by its orchestrator.harness name. The
 // table is internal/harness's: the orchestrator set (claude, codex, hermes,
 // opencode) is wider than the worker set, and each adapter owns its launch
 // line and how it is told to start the skill.
-func Lookup(name string) (harness.Orchestrator, error) {
+func lookup(name string) (harness.Orchestrator, error) {
 	var names []string
 	for _, h := range harness.Orchestrators() {
 		if h.Name() == name {
@@ -36,11 +36,11 @@ func Lookup(name string) (harness.Orchestrator, error) {
 	return nil, fmt.Errorf("orchestrator.harness %q is not one of: %s", name, strings.Join(names, ", "))
 }
 
-// DefaultHarness is the value of orchestrator.harness when unset.
-const DefaultHarness = harness.DefaultOrchestrator
+// defaultHarness is the value of orchestrator.harness when unset.
+const defaultHarness = harness.DefaultOrchestrator
 
-// Label names the orchestrator's tab or window.
-const Label = layout.Label
+// label names the orchestrator's tab or window.
+const label = layout.Label
 
 // Modes of a launch.
 const (
@@ -97,9 +97,9 @@ type Env struct {
 func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	name := config.StringIfSet(cfg, "orchestrator.harness")
 	if name == "" {
-		name = DefaultHarness
+		name = defaultHarness
 	}
-	h, err := Lookup(name)
+	h, err := lookup(name)
 	if err != nil {
 		return Plan{}, &Error{Code: "config", Msg: err.Error(), Hint: "fix it with: rota config set orchestrator.harness claude"}
 	}
@@ -220,7 +220,7 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 		if o == nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot open a tab"}
 		}
-		tab, err := o.OpenTab(ctx, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line})
+		tab, err := o.OpenTab(ctx, host.TabOpts{Label: label, Cwd: p.Cwd, Command: line})
 		if err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
 		}
@@ -232,14 +232,14 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 			if st == nil {
 				return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot start a session"}
 			}
-			if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line}); err != nil {
+			if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: label, Cwd: p.Cwd, Command: line}); err != nil {
 				return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
 			}
 		}
 		if caps.Attach == nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot attach a session"}
 		}
-		argv := caps.Attach(p.Session, p.Cwd, Label, line)
+		argv := caps.Attach(p.Session, p.Cwd, label, line)
 		bin, err := e.LookPath(argv[0])
 		if err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: argv[0] + " is not installed"}
