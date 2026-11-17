@@ -1,9 +1,13 @@
 package config
 
 import (
+	"errors"
+	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/cfgdir"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // Migration is every step of `rota migrate config`, in the order they run.
@@ -128,4 +132,133 @@ func Diagnose(env cfgdir.Env, root string, cfg any) Diagnosis {
 		d.Retired = Retired(env, root)
 	}
 	return d
+}
+
+// Verdicts of Check.
+const (
+	UpToDate = "upToDate"
+	Fresh    = "fresh"
+	Stale    = "stale"
+	Corrupt  = "corrupt"
+)
+
+// Check is hv-config-schema-check: the state of .rota/config.json against the
+// required schema keys. Missing lists, in schema order, the required keys that
+// are absent or null, then LegacyVerifyKey when it still holds commands that
+// test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
+func Check(env cfgdir.Env, root string) (status string, missing []string) {
+	missing = []string{}
+	raw, err := os.ReadFile(configPath(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return Fresh, missing
+	}
+	if err != nil {
+		return Corrupt, missing
+	}
+	doc, ok := decodeObject(raw)
+	if !ok {
+		return Corrupt, missing
+	}
+	global := globalLayer(env)
+	local := fsio.LoadJSON(localPath(root), nil)
+	for _, k := range Keys {
+		if k.Required && !requiredKeyPresent(k.Name, doc, global, local) {
+			missing = append(missing, k.Name)
+		}
+	}
+	if legacyVerifyPending(doc) {
+		missing = append(missing, LegacyVerifyKey)
+	}
+	if len(missing) > 0 {
+		return Stale, missing
+	}
+	return UpToDate, missing
+}
+
+// legacyVerifyPending reports whether doc holds commands at LegacyVerifyKey
+// while test.full holds none: the case `config fill` moves and the merge gate
+// only runs with a deprecation warning.
+func legacyVerifyPending(doc *jsonx.Object) bool {
+	old, _ := walk(doc, LegacyVerifyKey)
+	if len(asList(old)) == 0 {
+		return false
+	}
+	cur, _ := walk(doc, TestFullKey)
+	return len(asList(cur)) == 0
+}
+
+// Retired lists the config values rota no longer supports, one message each.
+// `config check` fails on them rather than let a skill quietly ignore the
+// value. autonomy.level takes only off, roundtrip and auto: "loop" went with
+// loop autonomy (#70), and anything else is no level. It also holds a
+// malformed ship.review policy, which would otherwise read as the default, and
+// an account dir that is neither absolute nor ~-prefixed.
+func Retired(env cfgdir.Env, root string) []string {
+	out := []string{}
+	cfg := Load(env, root)
+	if v, _ := Value(cfg, "autonomy.level"); validateEnum("autonomy.level", v) != nil {
+		b, _ := jsonx.MarshalCompact(v)
+		msg := "autonomy.level " + string(b) + " is not a level: set it to off, roundtrip or auto"
+		if v == "loop" {
+			msg = `autonomy.level "loop" was removed: set it to off, roundtrip or auto (rounds and automatic reviews cover unattended work)`
+		}
+		out = append(out, msg)
+	}
+	if v, _ := Value(cfg, ReviewKey); v != nil {
+		if _, err := ParseReviewPolicy(v); err != nil {
+			out = append(out, err.Error())
+		}
+	}
+	if v, _ := Value(cfg, LensesKey); v != nil {
+		if _, err := ParseLenses(v); err != nil {
+			out = append(out, err.Error())
+		}
+	}
+	out = append(out, changeProblems(cfg)...)
+	out = append(out, AccountDirProblems(cfg)...)
+	return out
+}
+
+// LocalMark tags a Removed entry held only by .rota/config.local.json.
+const LocalMark = " (config.local.json)"
+
+// Removed lists the RemovedKeys that .rota/config.json still holds, in
+// RemovedKeys order, then those config.local.json holds, each suffixed with
+// LocalMark. They are inert: `config check` names them, `config fill`
+// deletes them from both files, and no verb fails on them.
+func Removed(root string) []string {
+	out := []string{}
+	for _, f := range []struct{ path, mark string }{{configPath(root), ""}, {localPath(root), LocalMark}} {
+		doc := readObject(f.path)
+		if doc == nil {
+			continue
+		}
+		for _, k := range RemovedKeys {
+			if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+				out = append(out, k+f.mark)
+			}
+		}
+	}
+	return out
+}
+
+// Legacy lists the LegacyKeys that .rota/config.json still holds. They still
+// mean something until `rota migrate source` (or `config fill`) rewrites them
+// into issues.source and forge.provider; `config check` names them.
+func Legacy(root string) []string {
+	out := []string{}
+	raw, err := os.ReadFile(configPath(root))
+	if err != nil {
+		return out
+	}
+	doc, ok := decodeObject(raw)
+	if !ok {
+		return out
+	}
+	for _, k := range LegacyKeys {
+		if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+			out = append(out, k)
+		}
+	}
+	return out
 }
