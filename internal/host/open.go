@@ -35,7 +35,7 @@ const paneRetries = 5
 // a supervisor (`rota keepalive run`), not the agent binary, and a person is
 // there to answer a first-run trust dialog.
 func (h *herdr) OpenTab(ctx context.Context, o TabOpts) (string, error) {
-	r := h.herdr(ctx, "tab", "create", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
+	r := h.herdr(ctx, "tab", "create", "--workspace", h.d.Getenv(envHerdrWorkspace),
 		"--cwd", o.Cwd, "--label", o.Label, "--focus")
 	if r.ExitCode != 0 {
 		return "", fmt.Errorf("herdr tab create failed: %s", strings.TrimSpace(r.Stderr))

@@ -3,10 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,10 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
 )
-
-// leakAge is how old a temp dir must be before doctor calls it leaked: a run
-// that is still going owns a younger one.
-const leakAge = reap.LeftoverAge
 
 func statDisk(dir string) *doctor.Disk {
 	var st syscall.Statfs_t
@@ -33,65 +26,21 @@ func statDisk(dir string) *doctor.Disk {
 
 // doctorLeftovers names what rota left behind that would give disk back: temp
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
-// It only runs once the disk is low, because sizing the temp dirs walks them.
+// reap.TakeCensus does the counting, so the numbers match `rota reap`. It only
+// runs once the disk is low, because sizing the temp dirs walks them.
 func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot string, now time.Time) []string {
+	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, TempRoot: tempRoot, Git: run, Now: now})
 	var out []string
-	if n, size := leakedTempDirs(temp, now.Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, temp, strutil.HumanBytes(uint64(size))))
+	if c.LeakedTemp.N > 0 {
+		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size))))
 	}
-	if n, size := reap.StaleTmp(tempRoot, now); n > 0 {
-		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", n, tempRoot, strutil.HumanBytes(uint64(size))))
+	if c.StaleTmp.N > 0 {
+		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", c.StaleTmp.N, tempRoot, strutil.HumanBytes(uint64(c.StaleTmp.Size))))
 	}
-	if root != "" {
-		if n := prunableWorktrees(ctx, run, root); n > 0 {
-			out = append(out, fmt.Sprintf("%d stale scratch worktrees (run: git worktree prune; rota reap lists the rest)", n))
-		}
+	if c.Prunable.N > 0 {
+		out = append(out, fmt.Sprintf("%d stale scratch worktrees (run: git worktree prune; rota reap lists the rest)", c.Prunable.N))
 	}
 	return out
-}
-
-// leakedTempDirs counts the smoke run dirs (rota-smoke.*), gate dirs
-// (rota-gate-*) and review dirs (rota-review-*) in dir last modified before cutoff, and their total size.
-func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, 0
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-") || strings.HasPrefix(name, reviewWorkspacePrefix)) {
-			continue
-		}
-		if fi, err := e.Info(); err != nil || !fi.ModTime().Before(cutoff) {
-			continue
-		}
-		n++
-		filepath.WalkDir(filepath.Join(dir, name), func(_ string, d fs.DirEntry, err error) error {
-			if err == nil && !d.IsDir() {
-				if fi, err := d.Info(); err == nil {
-					size += fi.Size()
-				}
-			}
-			return nil
-		})
-	}
-	return n, size
-}
-
-// prunableWorktrees counts the .worktrees/ checkouts git marks prunable
-// (directory gone): the ones `rota reap` lists.
-func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
-	res, err := run(ctx, root, "worktree", "list", "--porcelain")
-	if err != nil || res.ExitCode != 0 {
-		return 0
-	}
-	n := 0
-	for _, w := range git.ParseWorktrees(res.Stdout) {
-		if w.Prunable && reap.ScratchCheckout(root, w.Path) {
-			n++
-		}
-	}
-	return n
 }
 
 // doctorDiskInput fills the disk fields of in: the threshold from config
@@ -111,9 +60,7 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 	now := d.Now()
 	var tempRoot string
 	if root != "" {
-		if cd, err := rotastate.CommonDirVia(ctx, d.Git, root); err == nil {
-			tempRoot, _ = rotastate.TempRoot(cd)
-		}
+		tempRoot, _ = rotastate.FindTempRoot(ctx, d.Git, root)
 	}
 	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), tempRoot, now) }
 }
