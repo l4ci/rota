@@ -24,6 +24,14 @@ type Env struct {
 	Report func(context.Context, string, Report) error
 }
 
+// book is the injected Book, else the production adapter over Worker.
+func (e Env) book() Book {
+	if e.Book != nil {
+		return e.Book
+	}
+	return WorkerBook{e.Worker}
+}
+
 // Request selects exactly one landing operation. Worker options carry approval
 // and input adapters; lifecycle policy belongs to Run.
 type Request struct {
@@ -64,10 +72,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		err := fmt.Errorf("postgate: select exactly one gate or train")
 		return Result{Gate: GateRun{Err: err}, Train: TrainRun{Err: err}}
 	}
-	book := e.Book
-	if book == nil {
-		book = WorkerBook{e.Worker}
-	}
+	book := e.book()
 	if req.Gate != nil {
 		r, err := e.Worker.Gate(ctx, root, *req.Gate)
 		run := GateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
@@ -85,17 +90,13 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		o.Round = &worker.RoundMemo{}
 	}
 	// Landing can drop queued records, so retain the item identities first.
-	issues := make(map[string]string, len(o.Targets))
-	targets := make(map[string]worker.GateTarget, len(o.Targets))
-	reg, err := worker.LoadRegistry(root)
+	targets, err := book.Targets(root, o.Targets)
 	if err != nil {
 		return Result{Train: TrainRun{Err: fmt.Errorf("postgate: load train targets: %w", err)}}
 	}
-	for _, target := range o.Targets {
-		if gt, err := reg.GateTargetAny(target); err == nil {
-			issues[target] = gt.Issue
-			targets[target] = gt
-		}
+	issues := make(map[string]string, len(targets))
+	for target, gt := range targets {
+		issues[target] = gt.Issue
 	}
 	r, err := e.Worker.Train(ctx, root, o)
 	if r.Verdict == worker.GateCancelled {
@@ -205,11 +206,8 @@ func trainCulprit(issues map[string]string, targets map[string]worker.GateTarget
 func (e Env) resolveHead(ctx context.Context, root string, r worker.GateResult) (worker.GateResult, string, bool) {
 	repo := git.Repo{Dir: root, Runner: e.Worker.Git}
 	// A recorded PR without origin must never cause forge traffic.
-	if r.PR != "" {
-		res, err := repo.Run(ctx, "remote", "get-url", "origin")
-		if err != nil || res.ExitCode != 0 {
-			return r, "", false
-		}
+	if r.PR != "" && !e.book().HasOrigin(ctx, root) {
+		return r, "", false
 	}
 	ref := r.Branch
 	if ok, _ := repo.Verify(ctx, "refs/heads/"+ref); !ok {

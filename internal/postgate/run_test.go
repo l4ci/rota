@@ -9,32 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-func TestRunReturnsRegistryErrorBeforeStartingTrain(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Dir(worker.RegistryPath(root)), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(worker.RegistryPath(root), []byte(`{"slots":`), 0644); err != nil {
-		t.Fatal(err)
-	}
-	called := false
-	e := Env{Worker: worker.Env{Git: func(context.Context, string, ...string) (git.Result, error) {
-		called = true
-		return git.Result{}, errors.New("train should not start")
-	}}}
-	run := e.Run(context.Background(), root, Request{Train: &worker.TrainOpts{Targets: []string{"kit"}}}).Train
-	if !errors.Is(run.Err, fsio.ErrUnreadable) || !strings.Contains(run.Err.Error(), "postgate: load train targets") || called {
-		t.Fatalf("want registry error before train starts; got err=%v, git called=%v", run.Err, called)
-	}
-}
 
 // The gate's process boundary is fake: this exercises Run's bookkeeping port
 // without creating a git repository or running git. The worker still reads its
@@ -246,4 +226,23 @@ func TestRunRecordedPRWithoutOriginNeverReachesForge(t *testing.T) {
 
 func bounces(root, issue string) int {
 	return worker.LoadRegistryTolerant(root).Bounces(issue)
+}
+
+// Train bookkeeping reads its targets through the Book port, so no registry
+// file is needed on disk.
+func TestRunTrainLoadsTargetsThroughBook(t *testing.T) {
+	root := t.TempDir() // no workers.json
+	want := errors.New("book: registry down")
+	b := &fakeBook{targetsErr: want}
+	e := Env{Book: b, Worker: worker.Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+		t.Fatal("train must not start when targets fail to load")
+		return git.Result{}, nil
+	}}}
+	run := e.Run(context.Background(), root, Request{Train: &worker.TrainOpts{Targets: []string{"kit"}}}).Train
+	if !errors.Is(run.Err, want) || !strings.Contains(run.Err.Error(), "postgate: load train targets") {
+		t.Fatalf("want the Book's error wrapped; got %v", run.Err)
+	}
+	if len(b.calls) != 1 || b.calls[0] != "targets:kit" {
+		t.Fatalf("book calls = %v", b.calls)
+	}
 }

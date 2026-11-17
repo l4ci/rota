@@ -7,6 +7,9 @@
 package postgate
 
 import (
+	"context"
+
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -22,6 +25,12 @@ type Book interface {
 	// PostReviewBounce tells a support machine's worker its PR was sent back.
 	// It is a no-op for any other branch.
 	PostReviewBounce(root, branch, pr, head, why string) error
+	// Targets resolves the gate targets a train names, by the argument given.
+	// A target that does not resolve is left out; an unreadable registry is an
+	// error.
+	Targets(root string, args []string) (map[string]worker.GateTarget, error)
+	// HasOrigin reports whether the repo at root has an origin remote.
+	HasOrigin(ctx context.Context, root string) bool
 }
 
 var _ Book = WorkerBook{}
@@ -45,6 +54,15 @@ func (b WorkerBook) ClearBounces(root, issue string) error {
 func (b WorkerBook) PostReviewBounce(root, branch, pr, head, why string) error {
 	_, err := b.Env.PostReviewBounce(root, branch, pr, head, why)
 	return err
+}
+
+func (b WorkerBook) Targets(root string, args []string) (map[string]worker.GateTarget, error) {
+	return worker.ResolveGateTargets(root, args)
+}
+
+func (b WorkerBook) HasOrigin(ctx context.Context, root string) bool {
+	res, err := git.Repo{Dir: root, Runner: b.Env.Git}.Run(ctx, "remote", "get-url", "origin")
+	return err == nil && res.ExitCode == 0
 }
 
 // Failure is a bookkeeping step that failed for one target. The verdict stands;

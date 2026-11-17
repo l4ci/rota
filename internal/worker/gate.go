@@ -389,6 +389,23 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
+// ResolveGateTargets loads the registry at root and resolves each arg as
+// GateTargetAny does. An arg that does not resolve is left out of the map; an
+// unreadable registry is an error.
+func ResolveGateTargets(root string, args []string) (map[string]GateTarget, error) {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]GateTarget, len(args))
+	for _, a := range args {
+		if gt, err := reg.GateTargetAny(a); err == nil {
+			out[a] = gt
+		}
+	}
+	return out, nil
+}
+
 // GateTargetAny resolves targets for the gate and train, which also gate any
 // open PR of the repo: a PR argument that no slot or review record owns resolves
 // to an External target instead of being refused. A slot name still must exist.
