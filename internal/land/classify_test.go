@@ -22,6 +22,7 @@ func TestClassifyRefusal(t *testing.T) {
 		{"wrapped conflict", fmt.Errorf("w: %w", &ConflictError{Out: "x"}), FailConflict, "conflicts in: (see git merge output)", "fix (see git merge output)", []string{"(see git merge output)"}},
 		{"merge", &MergeError{Code: 128, Out: " no identity \n"}, FailMerge, "merge failed (exit 128): no identity", "", nil},
 		{"cleanup", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}, FailCleanup, "merge failed: " + (&CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}).Error(), "", nil},
+		{"wrapped cleanup over conflict", fmt.Errorf("w: %w", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}), FailCleanup, "merge failed: " + fmt.Errorf("w: %w", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}).Error(), "", nil},
 		{"other", ErrUnpinned, FailOther, "merge failed (exit 127): " + ErrUnpinned.Error(), "", nil},
 	}
 	for _, tc := range cases {

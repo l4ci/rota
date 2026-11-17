@@ -308,3 +308,17 @@ func TestDecideUnknownIssueBodyIsReported(t *testing.T) {
 		t.Errorf("scopeDrift off: %+v, want no DriftUnchecked", got)
 	}
 }
+
+// Pointers written with line suffixes name the file, so a diff touching only
+// those files is not drift (#3652).
+func TestScopeDriftLineSuffixPointers(t *testing.T) {
+	issue := "## Pointers\n\n- internal/cli/doctor.go:116-120\n- internal/cli/review.go:198\n- internal/git/run.go:28,242\n"
+	p, err := config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := Decide(p, Input{Changed: 3, IssueBody: issue, Files: []string{"internal/cli/doctor.go", "internal/cli/review.go", "internal/git/run.go"}})
+	if d.Signal == SignalScopeDrift {
+		t.Errorf("Decide = %+v, want no scope drift", d)
+	}
+}

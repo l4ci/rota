@@ -16,7 +16,7 @@
 // `*.md` as a pattern.
 //
 // Every entry goes through Clean first: leading `./` (repeated) is dropped,
-// in Shared, Paths, Dirs and round.Footprint alike. One rule differs on
+// in Shared, Paths, Dirs and round's footprint alike. One rule differs on
 // purpose. Shared takes a configured entry (round.sharedPaths), where a
 // slashless entry is also a directory, so a trailing `/` is optional. Paths
 // and Dirs take item footprints, where only a trailing `/` marks a directory

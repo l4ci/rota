@@ -41,8 +41,8 @@ type FollowUp struct {
 // and GitLab's project and group bot users ("project_12_bot_9f2c").
 var botLogin = regexp.MustCompile(`\[bot\]$|^(project|group)_\d+_bot(_[0-9a-z]+)?$`)
 
-// IsBotLogin says whether a forge login is a service account rather than a person.
-func IsBotLogin(login string) bool { return botLogin.MatchString(strings.ToLower(login)) }
+// isBotLogin says whether a forge login is a service account rather than a person.
+func isBotLogin(login string) bool { return botLogin.MatchString(strings.ToLower(login)) }
 
 // FollowUps lists the queued PRs a person asked to continue, oldest request
 // first. A person is a login with write access (the forge's CanPush) that is
@@ -85,7 +85,7 @@ func (e Env) FollowUps(ctx context.Context, root string, f ReviewForge) ([]Follo
 		u := FollowUp{Issue: q.Issue, PR: q.PR, From: q.From, Head: info.HeadSHA, Seen: q.ReviewSeen, Batch: b}
 		for _, it := range b.Items {
 			// A marked comment is rota's own post, whatever login it came from.
-			if it.Author == "" || IsBotLogin(it.Author) || marker.Has(it.Body) {
+			if it.Author == "" || isBotLogin(it.Author) || marker.Has(it.Body) {
 				continue
 			}
 			w, err := trust.Writer(it.Author)

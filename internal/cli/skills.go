@@ -540,8 +540,9 @@ func skillsLayout(fs *flag.FlagSet) RunFunc {
 
 // skillsFiles lists what skills.Load ships from a skills source tree, one
 // "<skill>/<path>" per line: each skill's own files plus the references it
-// reaches. scripts/codex-plugin.sh copies exactly this list, so the Codex
-// bundle and the Claude install cannot disagree on a skill's reference set.
+// reaches, each with its source path under the tree (text: path, TAB, source).
+// scripts/codex-plugin.sh copies exactly these pairs and holds no layout rule,
+// so the Codex bundle and the Claude install cannot disagree.
 func skillsFiles(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
@@ -552,7 +553,13 @@ func skillsFiles(fs *flag.FlagSet) RunFunc {
 			return Result{}, Failed("%v", err)
 		}
 		files := set.Paths()
-		return Result{Data: jsonx.Obj("files", jsonx.Strings(files)), Text: strings.Join(files, "\n")}, nil
+		pairs := make([]any, 0, len(files))
+		lines := make([]string, 0, len(files))
+		for _, f := range files {
+			pairs = append(pairs, jsonx.Obj("path", f, "source", set.Source(f)))
+			lines = append(lines, f+"\t"+set.Source(f))
+		}
+		return Result{Data: jsonx.Obj("files", jsonx.Strings(files), "pairs", pairs), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 

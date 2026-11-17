@@ -93,9 +93,9 @@ note: read-only. Lists what a source `skills/` tree holds under each `rota-*/` f
 ### rota skills files
 rota skills files <skills-dir>
 repo: none
-data: {"files": []string}
+data: {"files": []string, "pairs": [{"path": string, "source": string}]}
 exit: 1 when the tree cannot be read; 2 without a directory
-note: read-only. Lists what `skills.Load` ships from a source `skills/` tree, as `<skill>/<path>`: each skill's own files plus the references it reaches (the install closure). `scripts/codex-plugin.sh` copies exactly this list, so the Codex bundle and the Claude install agree on each skill's reference set; the script fails when the listing fails or is empty. Text mode prints one path per line.
+note: read-only. Lists what `skills.Load` ships from a source `skills/` tree, as `<skill>/<path>`: each skill's own files plus the references it reaches (the install closure). `scripts/codex-plugin.sh` copies exactly these pairs, so the Codex bundle and the Claude install agree on each skill's reference set; the script fails when the listing fails or is empty. `pairs` gives each path its source under that tree (`references/<name>` for a reference, else the same path); the script holds no layout rule. Text mode prints `<path>`, a TAB and the source, one pair per line.
 
 ### rota skills links
 rota skills links <file>...

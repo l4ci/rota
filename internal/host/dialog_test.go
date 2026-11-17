@@ -23,7 +23,6 @@ func TestDialogKeys(t *testing.T) {
 		{"no cursor defaults to 1", noCursor, []string{"enter"}, true},
 		// Both startup dialogs initially select "No, exit".
 		{"bypass cursor on No, exit", "WARNING: Claude Code running in Bypass Permissions mode\n ❯ 1. No, exit\n   2. Yes, I accept\n", []string{"down", "enter"}, true},
-		{"trust dialog", trust, []string{"down", "enter"}, true},
 		{"unknown dialog", "Pick a colour\n ❯ 1. Red\n   2. Blue\n", nil, false},
 		{"unknown", "1. Something else\n2. Other\n", nil, false},
 		// Claude Code v2.1.288 dropped the numbers (#209).
@@ -31,6 +30,11 @@ func TestDialogKeys(t *testing.T) {
 		{"unnumbered, cursor on yes", " Quick safety check\n\n   No, exit\n ❯ Yes, I trust this folder\n", []string{"enter"}, true},
 		{"unnumbered unknown", " ❯ Red\n   Blue\n", nil, false},
 		{"empty", "", nil, false},
+		// Narrowing pins (#3640): the accepter never widens past the old grammar.
+		{"paren-numbered block, no cursor", "   1) Yes, proceed\n   2) No, exit\n", nil, false},
+		{"theme cursor on Light mode", "   1. Dark mode\n ❯ 2. Light mode\n", nil, false},
+		{"Dark modern is not a theme", " ❯ Dark modern\n   Light mode\n", nil, false},
+		{"Light modern is not a theme", " ❯ Dark mode\n   Light modern\n", nil, false},
 	}
 	for _, c := range cases {
 		got, ok := DialogKeys(c.pane)
@@ -93,16 +97,15 @@ func TestReadDialogUnknownHasNoDismissal(t *testing.T) {
 	}
 }
 
-// Every startup dialog fixture goes through the one grammar: the folder-trust
-// and theme dialogs are read by ReadDialog on the prompt line and accepted by
-// DialogKeys, and the autocompact picker is read but never accepted.
+// The theme and autocompact fixtures go through the one grammar (the trust
+// dialog is pinned by TestDialogKeysRealTrustDialog): the theme dialog is
+// accepted by DialogKeys, the autocompact picker is read but never accepted.
 func TestDialogFixturesCrossOneGrammar(t *testing.T) {
 	for _, c := range []struct {
 		file    string
 		keys    []string
 		accepts bool
 	}{
-		{"trust-dialog-2.1.288.txt", []string{"down", "enter"}, true},
 		{"claude-onboarding-theme-2.1.290.txt", []string{"enter"}, true},
 		{"autocompact-picker-2.1.290.txt", nil, false},
 	} {
@@ -111,5 +114,16 @@ func TestDialogFixturesCrossOneGrammar(t *testing.T) {
 		if ok != c.accepts || !reflect.DeepEqual(keys, c.keys) {
 			t.Errorf("%s: DialogKeys = %v %v, want %v %v", c.file, keys, ok, c.keys, c.accepts)
 		}
+	}
+}
+
+// A numbered block on the prompt line reads as a dialog with `)` (as before)
+// but a `> 1.` row is a typed quote, not a dialog (#3640).
+func TestReadDialogNumberedRows(t *testing.T) {
+	if _, ok := ReadDialog("⏺ done\n❯ 1) Red\n  2) Blue\n"); !ok {
+		t.Error("1) row not read as a dialog")
+	}
+	if _, ok := ReadDialog("⏺ done\n❯ > 1. Red\n"); ok {
+		t.Error("> 1. row read as a dialog")
 	}
 }

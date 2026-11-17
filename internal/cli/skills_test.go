@@ -628,6 +628,30 @@ func TestSkillsFilesListsLoadClosure(t *testing.T) {
 	if got := fmt.Sprint(skData(env)["files"]); got != want {
 		t.Errorf("files = %s, want %s", got, want)
 	}
+	// Each file also names its source under the skills dir: a reference lives
+	// in the shared references/ folder, so the build script only copies.
+	wantPairs := "[rota-a/SKILL.md=rota-a/SKILL.md rota-a/agents/openai.yaml=rota-a/agents/openai.yaml rota-a/references/shared.md=references/shared.md rota-a/topic.md=rota-a/topic.md]"
+	var pairs []string
+	rows, ok := skData(env)["pairs"].([]any)
+	if !ok {
+		t.Fatalf("files data lacks pairs: %v", skData(env))
+	}
+	for _, p := range rows {
+		o := p.(map[string]any)
+		pairs = append(pairs, fmt.Sprint(o["path"])+"="+fmt.Sprint(o["source"]))
+	}
+	if got := "[" + strings.Join(pairs, " ") + "]"; got != wantPairs {
+		t.Errorf("pairs = %s, want %s", got, wantPairs)
+	}
+	old, _ := os.Getwd()
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	_, textOut, _ := runMainWith(testDeps(), "skills", "files", "skills")
+	os.Chdir(old)
+	if !strings.Contains(textOut, "rota-a/references/shared.md\treferences/shared.md\n") {
+		t.Errorf("text mode lacks the dest<TAB>source pair: %q", textOut)
+	}
 	if code, _, _ = skillsRun(t, home, work, "skills", "files"); code == 0 {
 		t.Error("files without a dir exited 0")
 	}

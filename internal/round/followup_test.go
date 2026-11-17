@@ -151,8 +151,8 @@ func TestIsBotLogin(t *testing.T) {
 		"dependabot[bot]": true, "github-actions[bot]": true, "project_12_bot_9f2c": true,
 		"group_7_bot": true, "alice": false, "robot": false, "bot": false, "": false,
 	} {
-		if got := IsBotLogin(login); got != want {
-			t.Errorf("IsBotLogin(%q) = %v, want %v", login, got, want)
+		if got := isBotLogin(login); got != want {
+			t.Errorf("isBotLogin(%q) = %v, want %v", login, got, want)
 		}
 	}
 }
