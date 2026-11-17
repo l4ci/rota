@@ -206,7 +206,10 @@ func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
 			}
 			return err
 		}
-		file, rows := markRecheck(name, string(body), opts.Project)
+		file, rows, err := markRecheck(name, string(body), opts.Project)
+		if err != nil {
+			return err
+		}
 		res.Recheck = append(res.Recheck, rows...)
 		parts = append(parts, "## "+heading+"\n"+sectionBody(file))
 		return nil
@@ -244,13 +247,16 @@ func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
 
 // markRecheck inserts the recheck marker before the stamp of every bullet of
 // file that was seen on an older version than project's, and lists them.
-func markRecheck(topic, file string, project map[string]string) (string, []Recheck) {
+func markRecheck(topic, file string, project map[string]string) (string, []Recheck, error) {
 	if len(project) == 0 {
-		return file, nil
+		return file, nil, nil
 	}
 	lines := strings.Split(file, "\n")
 	var rows []Recheck
 	for _, b := range parseBullets(file) {
+		if b.SeenErr != nil {
+			return "", nil, fmt.Errorf("topic %s bullet %q: bad seen stamp: %w", topic, b.Title, b.SeenErr)
+		}
 		var notes []string
 		for _, tv := range b.Seen {
 			if pv, ok := project[tv.Tool]; ok && toolver.Newer(tv.Version, pv) {
@@ -264,7 +270,7 @@ func markRecheck(topic, file string, project map[string]string) (string, []Reche
 		l := lines[b.Line]
 		lines[b.Line] = strings.TrimSuffix(l, b.Stamp) + " (" + strings.Join(notes, "; ") + ": recheck)" + strings.TrimRight(b.Stamp, " \t\r")
 	}
-	return strings.Join(lines, "\n"), rows
+	return strings.Join(lines, "\n"), rows, nil
 }
 
 // sectionBody is a topic file without its "# Name" title line, trimmed, with
@@ -412,7 +418,10 @@ func (c Clone) MatchWith(words []string, want []string, project map[string]strin
 			return err
 		}
 		file := string(raw)
-		marked, _ := markRecheck(name, file, project)
+		marked, _, err := markRecheck(name, file, project)
+		if err != nil {
+			return err
+		}
 		orig, out := strings.Split(file, "\n"), strings.Split(marked, "\n")
 		var lines []string
 		for _, b := range parseBullets(file) {

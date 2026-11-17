@@ -513,10 +513,14 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 	}
 	km, err := s.KnowledgePath(scope)
 	if err != nil {
-		return sc, nil
+		return nil, err
 	}
+	// ReadFile gives "" for a missing file; any other error is a real failure.
 	content, err := ReadFile(km)
-	if err != nil || content == "" {
+	if err != nil {
+		return nil, err
+	}
+	if content == "" {
 		return sc, nil
 	}
 	for _, t := range section.Topics(content) {

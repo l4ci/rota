@@ -140,3 +140,15 @@ func TestQueryMarkerNamesEveryOutgrownTool(t *testing.T) {
 		t.Errorf("recheck rows for the bullet = %d, want 2 (%+v)", n, res.Recheck)
 	}
 }
+
+// A malformed seen: stamp is an error on a recheck read, not an unseen bullet.
+func TestQueryMalformedSeenIsAnError(t *testing.T) {
+	f := newFixture(t, "")
+	gittest.Write(t, f.a, IndexFile, seedIndex+"- [Godot](topics/godot.md) — engine quirks\n")
+	gittest.Write(t, f.a, "topics/godot.md", "# Godot\n\n- **Bad** — x. <!-- 2026-09-01 seen:Godot@4.6 -->\n")
+	c := f.clone()
+	_, err := c.QueryWith([]string{"godot"}, QueryOpts{Project: map[string]string{"godot": "4.8"}})
+	if err == nil || !strings.Contains(err.Error(), "uppercase") {
+		t.Errorf("err = %v, want the ParseSeen error", err)
+	}
+}

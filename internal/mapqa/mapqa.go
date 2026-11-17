@@ -152,6 +152,9 @@ type Subsystem struct {
 	// CommitsBehind is how many commits HEAD is past the file's
 	// last_mapped_commit; nil when the file has none or git cannot count.
 	CommitsBehind *int
+	// CommitsBehindErr is set when git could not run to count them, so a
+	// failure is not reported like a rewritten branch (nil CommitsBehind).
+	CommitsBehindErr error
 }
 
 var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
@@ -176,7 +179,8 @@ func Stats(root string) []Subsystem {
 				broken++
 			}
 		}
-		out = append(out, Subsystem{e.Name, fi.Size(), touched, len(refs), broken, commitsBehind(root, frontmatter.Str(e.FM, "last_mapped_commit"))})
+		n, nerr := commitsBehind(root, frontmatter.Str(e.FM, "last_mapped_commit"))
+		out = append(out, Subsystem{Name: e.Name, Bytes: fi.Size(), Touched: touched, EntryPoints: len(refs), BrokenRefs: broken, CommitsBehind: n, CommitsBehindErr: nerr})
 	}
 	return out
 }
@@ -184,16 +188,20 @@ func Stats(root string) []Subsystem {
 var shaRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
 
 // commitsBehind counts the commits past sha; nil when sha is empty, not a hash
-// or not in this history (a rewritten branch), so the subsystem is skipped.
-func commitsBehind(root, sha string) *int {
+// or not in this history (a rewritten branch), so the subsystem is skipped. A
+// git that cannot run is the error, never a nil count.
+func commitsBehind(root, sha string) (*int, error) {
 	if !shaRe.MatchString(sha) {
-		return nil
+		return nil, nil
 	}
-	n, ok, _ := git.Repo{Dir: root}.CommitsSince(context.Background(), sha)
+	n, ok, err := git.Repo{Dir: root}.CommitsSince(context.Background(), sha)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	return &n
+	return &n, nil
 }
 
 func refBroken(root, file, line string) bool {

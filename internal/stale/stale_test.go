@@ -170,3 +170,18 @@ func TestFindMapAgreesWithMapStatsOnUnparseableTouched(t *testing.T) {
 		t.Errorf("FindReport = %v (%v), Stats = %+v", got, err, st)
 	}
 }
+
+// Only a missing knowledge file gives no entries; an unreadable one is an error.
+func TestFindKnowledgeReadErrors(t *testing.T) {
+	root := project(t, nil)
+	got, err := FindReport(root, "knowledge", 0, date(t, "2999-01-01"), nil)
+	if err != nil || len(got.Entries) != 0 {
+		t.Errorf("missing file: %v, %v", got, err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".rota", "KNOWLEDGE.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FindReport(root, "knowledge", 0, date(t, "2999-01-01"), nil); err == nil {
+		t.Error("unreadable KNOWLEDGE.md gave no error")
+	}
+}
