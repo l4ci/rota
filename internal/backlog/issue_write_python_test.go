@@ -14,7 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// wStep is one backend call; recorded as golden input; the Python IssueBackend ran it.
+// wStep is one backend call; recorded as golden input; the retired Python IssueBackend ran it.
 type wStep struct {
 	Op      string      `json:"op"`
 	Ref     string      `json:"ref"`

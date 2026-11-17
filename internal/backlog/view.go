@@ -15,8 +15,8 @@ import (
 	"github.com/l4ci/rota/internal/status"
 )
 
-// Row is one open item as the listing views (hv-backlog, hv-todo-by-milestone,
-// hv-find-milestone-for-items) read it.
+// Row is one open item as the listing views (the backlog, todo-by-milestone and
+// find-milestone-for-items views) read it.
 type Row struct {
 	ID      string // data spelling: "B07" in file mode, "12" in issue mode, "repo:12" in umbrella issue mode
 	Key     string // identity inside Related cells: "B07", and "F12" for issue 12
@@ -102,7 +102,7 @@ func (r Row) IssueMatches(wanted map[string]bool) bool {
 	return wanted[n] || wanted[r.Repo+":"+r.Key] || wanted[r.Repo+":#"+n] || wanted[r.Repo+"#"+n]
 }
 
-// IDsByMilestone is hv-todo-by-milestone: the open items tagged with mid, in
+// IDsByMilestone is the todo-by-milestone view: the open items tagged with mid, in
 // backlog order. A multi-valued "Milestone: M01, M03" matches either.
 func IDsByMilestone(rows []Row, mid string) []string {
 	ids := []string{}
@@ -117,7 +117,7 @@ func IDsByMilestone(rows []Row, mid string) []string {
 	return ids
 }
 
-// MilestonesFor is hv-find-milestone-for-items: the milestones the wanted
+// MilestonesFor is the find-milestone-for-items view: the milestones the wanted
 // items are tagged with, unique and numerically sorted. match says whether a
 // row is one of the wanted items. Unknown or untagged items add nothing.
 func MilestonesFor(rows []Row, match func(Row) bool) []string {
@@ -146,7 +146,7 @@ func MilestonesFor(rows []Row, match func(Row) bool) []string {
 
 // ---- rota backlog list -----------------------------------------------------------
 
-// Active is one active stream, as hv-backlog reads status.json.
+// Active is one active stream, as the backlog view reads status.json.
 type Active struct {
 	Branch    string
 	Repo      string
@@ -185,7 +185,7 @@ var (
 	idInRelatedRe   = BracketedIDRe
 )
 
-// titleOf is hv-backlog's title_of: the text between the ID and the first "."
+// titleOf is the backlog view's title_of: the text between the ID and the first "."
 // of the item's bullet, which keeps the [tag] of a tagged item; "?" when the
 // ID has no bullet or no ".".
 func titleOf(md, id string) string {
@@ -336,7 +336,7 @@ func (l *Listing) cluster(rows []Row, match func(Row) bool) {
 	}
 }
 
-// Text is hv-backlog's Markdown, byte for byte.
+// Text is the backlog view's Markdown, byte for byte.
 func (l *Listing) Text() string { return l.text }
 
 // Summary is the data behind `rota summary`: counts, active work, recent
@@ -459,7 +459,7 @@ func first10(s string) string {
 	return string(r)
 }
 
-// render builds the Markdown hv-backlog prints, line by line as the helper
+// render builds the Markdown the backlog view prints, line by line as the helper
 // does: each out entry is one joined segment, and a heading carries its own
 // trailing newline.
 func (l *Listing) render(md string, active []Active, grep string) {

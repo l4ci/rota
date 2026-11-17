@@ -18,8 +18,8 @@ import (
 )
 
 // This file holds the file-backend maintenance verbs: archive, Since backfill
-// and the refactor counters (hv-archive-old, hv-backfill-since,
-// hv-refactor-age, hv-refactor-reset).
+// and the refactor counters (archive-old, backfill-since,
+// refactor-age and refactor-reset).
 
 // ErrBadDate is wrapped by the error for a done line whose date is not a
 // calendar date; the Python helper crashes on it before writing anything.
@@ -234,7 +234,7 @@ func sinceRefactor(d *jsonx.Object) (feat, bugs any, err error) {
 	return feat, bugs, nil
 }
 
-// RefactorAge is hv-refactor-age: the features and bugs completed since the
+// RefactorAge is refactor-age: the features and bugs completed since the
 // last refactor, from counters.json since_refactor; 0 for a missing file or
 // key. The values are the stored JSON numbers.
 func (f *File) RefactorAge() (features, bugs any, err error) {
@@ -253,7 +253,7 @@ func nonZero(v any) bool {
 	return v != nil && v != false && v != ""
 }
 
-// RefactorReset is hv-refactor-reset: it zeroes since_refactor to
+// RefactorReset is refactor-reset: it zeroes since_refactor to
 // {"features": 0, "bugs": 0}. counters.json is rewritten even when it already
 // holds zeros, and created when missing. changed is whether either count was
 // non-zero.

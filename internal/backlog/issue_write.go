@@ -22,7 +22,7 @@ import (
 
 // The issue backend's lifecycle side: IssueBackend.create, set_field,
 // complete, uncomplete, claim/release/set_state, notes, comments, status and
-// ready_reasons in bin/hvlib_backend.py. The tracker calls happen in the order
+// ready_reasons of the retired Python backend. The tracker calls happen in the order
 // the Python makes them.
 
 // stateRoles are the label roles status reports (_STATE_ROLES).

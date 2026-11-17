@@ -24,7 +24,7 @@ import (
 )
 
 // The write side of the file backend: FileBackend.append, create,
-// set_field, complete and uncomplete in bin/hvlib_backend.py.
+// set_field, complete and uncomplete in the retired Python backend.
 
 // Field is one Name=Value pair for CreateInput, in the order it is written.
 type Field struct{ Name, Value string }
@@ -676,7 +676,7 @@ func activeBullets(content, ref string) [][]int {
 }
 
 // IsActive reports whether BACKLOG.md under root holds id as an active bullet
-// outside ## Completed, the no-op case of hv-uncomplete. It reads unlocked so
+// outside ## Completed, the no-op case of uncomplete. It reads unlocked so
 // the no-op leaves no .lock sidecar, which would dirty a tree that does not
 // ignore it.
 func IsActive(root, id string) bool {

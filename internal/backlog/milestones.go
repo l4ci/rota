@@ -19,7 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// Milestones in issue mode (hvlib_backend.IssueBackend's milestone block): a
+// Milestones in issue mode (ported from the retired Python IssueBackend's milestone block): a
 // milestone is a native milestone plus a tracking issue labelled
 // milestone-tracker, whose body is the milestone plan, whose status:<s>
 // label is the milestone status, and whose comments carry the slice plans
