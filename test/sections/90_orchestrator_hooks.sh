@@ -41,7 +41,7 @@ dump_pct() { # dump_pct <pct> [<now>]: one statusline refresh at that context pe
     | env ROTA_TEST_NOW="${2:-$NOW}" "$ROTA_BIN" statusline dump || fail "dump exited non-zero"
 }
 stop_in() { printf '{"session_id":"s1","cwd":"%s","stop_hook_active":%s}' "$P" "$1"; }
-sj() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$SESS" "$1"; }
+sj() { python3 -c 'import functools,json,sys; print(functools.reduce(lambda v,k: v[k], sys.argv[2].split("."), json.load(open(sys.argv[1]))))' "$SESS" "$1"; }
 
 # --- state file ---------------------------------------------------------------
 dump_pct 10 "2026-10-03T11:58:00Z"
@@ -80,7 +80,7 @@ for pct in 74 75 99; do
   python3 - "$SESS" <<'PY'
 import json, sys
 p = sys.argv[1]; s = json.load(open(p))
-for k in ("handoffBlocks", "blockedAt", "handoffFailed"): s.pop(k, None)
+s.pop("orchestratorHandoff", None)
 json.dump(s, open(p, "w"))
 PY
 done
@@ -105,7 +105,7 @@ pass "D1: Stop blocks at 75 and 99, passes at 74, for workers, without a lease, 
 python3 - "$SESS" <<'PY'
 import json, sys
 p = sys.argv[1]; s = json.load(open(p))
-for k in ("handoffBlocks", "blockedAt", "handoffFailed"): s.pop(k, None)
+s.pop("orchestratorHandoff", None)
 json.dump(s, open(p, "w"))
 PY
 dump_pct 90
@@ -121,7 +121,7 @@ for i in 1 2; do
 done
 OUT="$(stop_in true | oh "$ORCH" hook stop)"
 [ -z "$OUT" ] || fail "D1: past the block cap (2) the hook must pass: $OUT"
-[ "$(sj handoffFailed)" = "True" ] || fail "D1: handoffFailed should be recorded"
+[ "$(sj orchestratorHandoff.handoffFailed)" = "True" ] || fail "D1: handoffFailed should be recorded"
 OUT="$(stop_in false | oh "$ORCH" hook stop)"
 [ -z "$OUT" ] || fail "D1: a failed session must not be held again: $OUT"
 pass "D1: loop prevention passes on a new handoff, caps the re-blocks and records handoffFailed"

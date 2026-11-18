@@ -142,12 +142,56 @@ func TestHookStopNoLeasePasses(t *testing.T) {
 	}
 }
 
-func TestHookStopBadConfigPasses(t *testing.T) {
-	dir := orchProject(t, true)
-	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"orchestrator":{"handoffThreshold":500}}`), 0o644)
-	dumpAt(t, dir, 99)
-	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
-		t.Errorf("%d %q", code, out)
+func TestHookStopBadSettingsKeepWatch(t *testing.T) {
+	for _, bad := range []string{
+		`"handoffThreshold":0`,
+		`"handoffThreshold":101`,
+		`"handoffThreshold":"x"`,
+		`"switchOnUsage":true,"usageThreshold":0`,
+		`"switchOnUsage":"bad"`,
+	} {
+		t.Run(bad, func(t *testing.T) {
+			dir := orchProject(t, true)
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"orchestrator":{`+bad+`}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			dumpAt(t, dir, 99)
+			// No active round: malformed handoff settings still fail open.
+			if code, out, errOut := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" || errOut != "" {
+				t.Fatalf("handoff must pass: %d %q %q", code, out, errOut)
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"host":"tmux","slots":[{"name":"ben","state":"busy"}]}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if code, out, errOut := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || !strings.Contains(out, `"decision":"block"`) || !strings.Contains(out, "No `rota round watch`") || errOut != "" {
+				t.Fatalf("watch must still block: %d %q %q", code, out, errOut)
+			}
+			if code, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); code != 0 || out != "" {
+				t.Fatalf("re-entered watch must pass: %d %q", code, out)
+			}
+		})
+	}
+}
+
+func TestHookStopGuardOnlyReadsContextSettings(t *testing.T) {
+	for _, tc := range []struct {
+		bad   string
+		block bool
+	}{
+		{`"handoffThreshold":500`, false},
+		{`"switchOnUsage":true,"usageThreshold":0`, true},
+	} {
+		t.Run(tc.bad, func(t *testing.T) {
+			dir := orchProject(t, false)
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"contextGuard":"auto"},"orchestrator":{`+tc.bad+`}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			dumpAt(t, dir, 99)
+			code, out, errOut := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop")
+			if code != 0 || strings.Contains(out, `"decision":"block"`) != tc.block || errOut != "" {
+				t.Fatalf("context guard: %d %q %q", code, out, errOut)
+			}
+		})
 	}
 }
 
@@ -436,16 +480,25 @@ func TestHookGuard(t *testing.T) {
 	}
 }
 
-func TestHookInstallWarnsWhenGuardOnlyProjectLocal(t *testing.T) {
-	dir := orchProject(t, false)
-	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	code, out, errOut := rotaIn(t, dir, "hook", "install", "--json")
-	if code != 0 || !strings.Contains(errOut, "worker guard") || !strings.Contains(out, "PreToolUse") {
-		t.Fatalf("project-local: %d %s | %s", code, out, errOut)
-	}
-	code, _, errOut = rotaIn(t, dir, "hook", "install", "--scope", "project", "--json")
-	if code != 0 || strings.Contains(errOut, "worker guard") {
-		t.Fatalf("project scope warned: %d %s", code, errOut)
+func TestHookInstallReportsWorkerGuardReach(t *testing.T) {
+	for _, scope := range []string{"project-local", "project", "user"} {
+		t.Run(scope, func(t *testing.T) {
+			dir := orchProject(t, false)
+			t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+			for _, installScope := range []string{scope, "project-local"} {
+				code, out, errOut := rotaIn(t, dir, "hook", "install", "--scope", installScope, "--json")
+				var env struct {
+					Data map[string]any `json:"data"`
+				}
+				if err := json.Unmarshal([]byte(out), &env); err != nil {
+					t.Fatal(err)
+				}
+				want := scope != "project-local"
+				if code != 0 || env.Data["guardReachesWorkers"] != want || strings.Contains(errOut, "worker guard") == want {
+					t.Fatalf("scope %s after %s: want reach %v; exit %d %s | %s", installScope, scope, want, code, out, errOut)
+				}
+			}
+		})
 	}
 }
 

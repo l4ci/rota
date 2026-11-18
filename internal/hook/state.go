@@ -37,20 +37,50 @@ type State struct {
 	RateLimits      json.RawMessage `json:"rateLimits,omitempty"`
 	Raw             json.RawMessage `json:"raw"`
 
-	// Written by the Stop hook, kept across statusline refreshes.
-	HandoffBlocks int    `json:"handoffBlocks,omitempty"`
-	BlockedAt     string `json:"blockedAt,omitempty"`
-	HandoffFailed bool   `json:"handoffFailed,omitempty"`
+	// Each Stop rule owns its handoff budget, preserved across refreshes.
+	OrchestratorHandoff HandoffState `json:"orchestratorHandoff"`
+	GuardHandoff        HandoffState `json:"guardHandoff"`
 
-	// The context guard for a non-orchestrator session reuses HandoffBlocks,
-	// BlockedAt and HandoffFailed above as its block counters.
-	//
 	// GuardWarned is set once the context guard has warned a non-orchestrator
 	// session, and cleared when the reading falls below the threshold.
 	GuardWarned bool `json:"guardWarned,omitempty"`
 
 	// UsageHandoff is set when the last Stop block was for usage (D4).
 	UsageHandoff *keepstate.UsageHandoff `json:"usageHandoff,omitempty"`
+}
+
+// HandoffState is one role's block history. Orchestrators count re-entered
+// stops for the session; guards count every block in a threshold crossing.
+type HandoffState struct {
+	HandoffBlocks int    `json:"handoffBlocks,omitempty"`
+	BlockedAt     string `json:"blockedAt,omitempty"`
+	HandoffFailed bool   `json:"handoffFailed,omitempty"`
+}
+
+// UnmarshalJSON also accepts the old unowned, top-level counters. Their role
+// was not recorded, so seed both budgets to preserve the active role's history.
+// New records take precedence and subsequent writes store only owned budgets.
+func (s *State) UnmarshalJSON(data []byte) error {
+	type state State // avoid invoking this method recursively
+	var wire struct {
+		state
+		HandoffState
+		OrchestratorHandoff *HandoffState `json:"orchestratorHandoff"`
+		GuardHandoff        *HandoffState `json:"guardHandoff"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	next := State(wire.state)
+	next.OrchestratorHandoff, next.GuardHandoff = wire.HandoffState, wire.HandoffState
+	if wire.OrchestratorHandoff != nil {
+		next.OrchestratorHandoff = *wire.OrchestratorHandoff
+	}
+	if wire.GuardHandoff != nil {
+		next.GuardHandoff = *wire.GuardHandoff
+	}
+	*s = next
+	return nil
 }
 
 var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)

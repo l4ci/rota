@@ -77,20 +77,26 @@ func DecideGuardStop(st State, set Settings, ho keepstate.Handoff, now time.Time
 		return d
 	}
 	if pct < float64(set.Threshold) {
-		if st.HandoffBlocks != 0 || st.HandoffFailed || st.BlockedAt != "" {
-			d.State.HandoffBlocks, d.State.HandoffFailed, d.State.BlockedAt = 0, false, ""
+		if st.GuardHandoff != (HandoffState{}) {
+			d.State.GuardHandoff = HandoffState{}
 			d.Persist = true
 		}
 		return d
 	}
-	if st.HandoffFailed {
+	if st.GuardHandoff.HandoffFailed {
 		return d
 	}
-	if !holdForHandoff(&d, set, ho, now, handoffRule{countAll: true}) {
+	if !holdForHandoff(&d, &d.State.GuardHandoff, set, ho, now, handoffRule{countAll: true}) {
 		return d
 	}
 	d.Reason = fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. "+
 		"Finish the current task step, then run /rota-pause at the next task boundary before you stop.",
 		trimPct(pct), set.Threshold)
 	return d
+}
+
+// mergeGuardStop carries only the context guard's handoff budget.
+func mergeGuardStop(cur, decided State) State {
+	cur.GuardHandoff = decided.GuardHandoff
+	return cur
 }
