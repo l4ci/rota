@@ -370,6 +370,26 @@ func TestHostUnavailableFailsClosed(t *testing.T) {
 	}
 }
 
+// A nil report proves no liveness, so the host must count as unavailable:
+// no .worktrees/ checkout is listed, and Apply's refresh returning (nil, nil)
+// removes nothing.
+func TestNilReportFailsClosed(t *testing.T) {
+	g := repo([]wt{{"done", "kit/1-a", ""}}, nil)
+	g.clean("done")
+	in := input(g, nil, nil, nil)
+	in.Report = nil
+	res := find(t, in, KindWorktree)
+	if got := ids(res.Candidates); len(got) != 0 {
+		t.Errorf("nil report listed worktrees %v", got)
+	}
+	in.Refresh = func(context.Context) (*round.Report, error) { return nil, nil }
+	cand := Candidate{ID: "worktree:done", Kind: KindWorktree, Name: "done", Path: "/r/.worktrees/done"}
+	out := Apply(bg, in, []Candidate{cand})
+	if len(out.Reaped) != 0 || g.ran("worktree remove") {
+		t.Errorf("nil refresh removed a checkout: reaped = %v, apply = %+v", out.Reaped, out)
+	}
+}
+
 func TestTabsErrorDropsTabsWithWarning(t *testing.T) {
 	g := repo(nil, nil)
 	h := &fakeHost{tabsErr: fmt.Errorf("boom")}
