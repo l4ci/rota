@@ -186,8 +186,6 @@ type archiveBullet struct {
 	ID, Section, Line string
 }
 
-var archiveBulletRe = regexp.MustCompile(`\A- (?:~~)?\*\*\[(` + AnyTypeIDPattern + `)\]`)
-
 // archiveBullets reads the flat document Archive writes, including bullets
 // appended to existing sectioned archives. Headings label entries but do not
 // gate recognition; lookup and reference cleanup use the same grammar.

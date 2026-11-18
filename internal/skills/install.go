@@ -98,7 +98,8 @@ func InstalledRoots(home string, claudeDirs []string, top string) []string {
 // roots <top>/.claude/skills and <top>/.agents/skills. top is the git
 // toplevel, "" outside a work tree: project roots are then skipped for scope
 // "" and an error for scope "project". A user root whose base is unknown (no
-// claudeDirs for Claude, no home for Codex) is ErrNoHome.
+// claudeDirs for Claude, no home for Codex) is ErrNoHome, unless agent is "all"
+// and only the Codex base is unknown: then the Codex root is left out.
 func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, error) {
 	var out []Root
 	for _, sc := range []string{User, Project} {
@@ -113,6 +114,11 @@ func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, 
 		}
 		for _, ag := range []struct{ name, dir string }{{Claude, ".claude"}, {Codex, ".agents"}} {
 			if agent != "" && agent != "all" && agent != ag.name {
+				continue
+			}
+			// A Codex user root with no known base is skipped while Claude's
+			// roots stand, so "all" degrades per agent; status reports it.
+			if ag.name == Codex && home == "" && sc == User && agent != Codex && len(claudeDirs) > 0 {
 				continue
 			}
 			var paths []string
@@ -590,6 +596,9 @@ func (r Report) NeedsUpdate() bool {
 			continue
 		}
 		installed++
+		if st.Plugin {
+			continue
+		}
 		if st.Mode != ModeStub || st.Damaged() {
 			return true
 		}

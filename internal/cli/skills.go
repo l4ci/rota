@@ -349,6 +349,8 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	home, _, _ := skillsDirs(c, a)
+	codexOff := home == "" && (a.agent == "" || a.agent == "all") && (a.scope == "" || a.scope == skills.User)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return Result{}, skillsErr(err)
@@ -394,6 +396,10 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		rootsData = append(rootsData, o)
 	}
 	data := jsonx.Obj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
+	if codexOff {
+		data.Set("unavailable", jsonx.Strings([]string{skills.Codex}))
+		text = append(text, skills.Codex+": unavailable (HOME unset, so no Codex user root)")
+	}
 	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
 }
 

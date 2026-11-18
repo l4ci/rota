@@ -420,6 +420,14 @@ func TestRoots(t *testing.T) {
 	if _, err = Roots("", "claude", "", nil, "/p"); err != ErrNoHome {
 		t.Errorf("no home, both scopes: %v", err)
 	}
+	// Codex base unknown but Claude base known: "all" keeps the Claude roots,
+	// "codex" alone still needs its base.
+	if rs, err = Roots(User, "all", "", []string{"/cfg"}, ""); err != nil || len(rs) != 1 || rs[0].Path != "/cfg/skills" || rs[0].Agent != Claude {
+		t.Errorf("all without codex base: %v %v", rs, err)
+	}
+	if _, err = Roots(User, "codex", "", []string{"/cfg"}, ""); err != ErrNoHome {
+		t.Errorf("codex without base: %v", err)
+	}
 	if rs, err = Roots(User, "claude", "", []string{"/cfg"}, ""); err != nil || len(rs) != 1 {
 		t.Errorf("claude root needs no HOME when CLAUDE_CONFIG_DIR is set: %v %v", rs, err)
 	}
