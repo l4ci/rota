@@ -195,8 +195,11 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	tail := strings.Join(all, "\n")
 	// What the session says about its own limit is read outside echoed
-	// orchestrator blocks (#883).
-	own := usagelimit.StripRelays(kind, tail)
+	// orchestrator blocks (#883), and only the harness's own dialog counts,
+	// not text the worker quotes (#1212): usagelimit.Detect decides. tail is
+	// already scoped to lines, so no further scope is passed.
+	hit, limited := usagelimit.Detect(kind, tail, usagelimit.Scope{})
+	own, dialog := hit.Own, hit.Dialog
 
 	// Sentinels win over everything, including movement: a worker that printed
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
@@ -214,9 +217,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	// Only the harness's own dialog counts, not text the worker quotes (#1212).
-	dialog := usagelimit.DialogFor(kind, own)
-	if s, e, ok := usagelimit.FindLimit(kind, dialog); ok {
+	if limited {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.
 		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
@@ -225,7 +226,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		if rules.AuthDead != nil && rules.AuthDead.MatchString(own) {
 			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 		}
-		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[s:e]), 120)
+		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[hit.Start:hit.End]), 120)
 	}
 	nativeLive := JudgeLiveness(LivenessEvidence{Native: native})
 	if nativeLive.State == LivenessUnverifiable {
