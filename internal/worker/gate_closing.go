@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -16,7 +17,7 @@ import (
 // changes here and is tested without a gate fixture. The gate methods at the
 // bottom only feed them from the gate and apply the outcome.
 
-const GateUnmetAcceptance = "unmet acceptance"
+const GateUnmetAcceptance = landing.GateUnmetAcceptance
 
 // stepOutcome is what a closing-family check decided. The zero value passes.
 // Verdict (with Msg and Hint) refuses the PR; Broke reports a check that could
@@ -266,7 +267,7 @@ func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKe
 // stepCloses runs checkCloses on the slot's PR. It runs under CheckOnly too,
 // so a train member is refused before anything merges. A slot with no PR, or
 // holding no numeric issue (file backend), has nothing to check.
-func (runner gate) stepCloses(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepCloses(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef = headRef
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
@@ -302,7 +303,7 @@ func (runner gate) stepCloses(result GateResult, target GateTarget, forged gateF
 }
 
 // stepClaim runs checkClaim on the slot's recorded claim.
-func (runner gate) stepClaim(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepClaim(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
@@ -317,7 +318,7 @@ func (runner gate) stepClaim(result GateResult, target GateTarget, forged gateFo
 
 // apply records a step outcome on the gate result and reports whether the gate
 // stops.
-func (g *gateOperation) apply(out stepOutcome) (bool, error) {
+func (g *gateRun) apply(out stepOutcome) (bool, error) {
 	g.res.Notes = append(g.res.Notes, out.Notes...)
 	switch {
 	case out.Broke != "":
@@ -332,7 +333,7 @@ func (g *gateOperation) apply(out stepOutcome) (bool, error) {
 // releaseClaimLabels releases the claim labels of every issue the merged PR
 // closes: the numbers its body closes, plus a key-based tracker's issue named
 // in the branch or title instead of a keyword.
-func (g *gateOperation) releaseClaimLabels(src tracker.ClosingSource) {
+func (g *gateRun) releaseClaimLabels(src tracker.ClosingSource) {
 	if len(g.closedLabels) == 0 || g.issues == nil {
 		return
 	}
@@ -350,7 +351,7 @@ func (g *gateOperation) releaseClaimLabels(src tracker.ClosingSource) {
 
 // bundleKeys is the lead issue of the target followed by its bundle members,
 // as keys: nil when the target holds no issue, unparsable members skipped.
-func (g *gateOperation) bundleKeys() []tracker.IssueKey {
+func (g *gateRun) bundleKeys() []tracker.IssueKey {
 	lead, ok := tracker.ParseKey(g.target.Issue)
 	if !ok {
 		return nil

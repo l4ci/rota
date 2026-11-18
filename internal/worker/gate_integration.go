@@ -270,7 +270,7 @@ func (e Env) integrationReviewed(root string, rec Integration, list []verdict.Re
 // stepIntegrationBase refuses to land an interaction item's fix anywhere but
 // its integration branch: on the base it would skip the branch's review, and
 // on a member branch it would change a reviewed member.
-func (runner gate) stepIntegrationBase(result GateResult, target GateTarget) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepIntegrationBase(result GateResult, target GateTarget) (struct{}, GateResult, bool, error) {
 	if target.Issue == "" {
 		return struct{}{}, result, false, nil
 	}

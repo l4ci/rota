@@ -29,8 +29,8 @@ func TestGateRemoteStage(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
 				return git.Result{ExitCode: c.exit}, c.err
-			}}.WithDefaults()
-			run := gate{e: e, ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
+			}}
+			run := gateRun{e: e, ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
 			original := GateResult{Slot: "w1", Base: "main", PR: ghURL}
 			out, result, done, err := run.stepRemote(original, ghURL)
 			if err != nil || done == c.remote || out != c.remote {
@@ -55,7 +55,7 @@ func TestGateRemoteStage(t *testing.T) {
 func TestGateSlotHeadStageOwnsNotes(t *testing.T) {
 	backing := []string{"existing", "caller-owned"}
 	answer := GateResult{Notes: backing[:1]}
-	run := gate{e: Env{}.WithDefaults(), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "kit", CheckOnly: true}}
+	run := gateRun{ctx: bg, o: GateOpts{Slot: "kit", CheckOnly: true}}
 	target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first", PR: ghURL}
 	forged := gateForgeResult{forge: stagePRForge{info: tracker.PRInfo{State: "OPEN", Head: "kit/5-second"}}}
 	out, result, done, err := run.stepSlotHead(answer, target, forged, true, nil)
@@ -82,7 +82,7 @@ func TestGatePRMatchesSuppliedHead(t *testing.T) {
 	dir := gittest.NewRepo(t, "main")
 	gittest.Commit(t, dir, "head", "work.txt", "work")
 	head := gittest.Run(t, dir, "rev-parse", "HEAD")
-	run := gate{e: Env{Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
+	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
 	for _, c := range []struct{ name, branch, base, verdict string }{
 		{"matching", "kit/5-second", "main", ""},
 		{"another branch", "kit/6-other", "main", GatePRMismatch},
@@ -112,7 +112,7 @@ func TestGateReferenceStage(t *testing.T) {
 	gittest.Run(t, dir, "checkout", "-q", "-b", "worker")
 	gittest.Commit(t, dir, "worker", "worker.txt", "worker")
 	head := gittest.Run(t, dir, "rev-parse", "HEAD")
-	run := gate{e: Env{Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: GateOpts{Slot: "worker", Base: "main"}}
+	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "worker", Base: "main"}}
 	answer := GateResult{Slot: "worker", Base: "main"}
 	out, result, done, err := run.stepRefs(answer, "worker", false)
 	if err != nil || done || result.Verdict != "" {

@@ -138,7 +138,7 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.Head = k.head
 	e.RunGate = func(ctx context.Context, target, base string) GateRun {
-		env, req, err := w.Landing(ctx, postgate.Request{Gate: &worker.GateOpts{Slot: target, Base: base, NoWait: true}})
+		env, req, err := w.Landing(ctx, postgate.Request{Gate: &postgate.GateOpts{Slot: target, Base: base, NoWait: true}})
 		if err != nil {
 			return GateRun{Err: err}
 		}
@@ -154,7 +154,7 @@ func NewEnv(w World, cfg Config) Env {
 		return why
 	}
 	e.RunTrain = func(ctx context.Context, targets []string, base string) TrainRun {
-		env, req, err := w.Landing(ctx, postgate.Request{Train: &worker.TrainOpts{Targets: targets, Base: base, NoWait: true}})
+		env, req, err := w.Landing(ctx, postgate.Request{Train: &postgate.TrainOpts{Targets: targets, Base: base, NoWait: true}})
 		if err != nil {
 			return TrainRun{Err: err}
 		}

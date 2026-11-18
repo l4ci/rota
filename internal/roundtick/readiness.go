@@ -73,14 +73,14 @@ func ReadinessOf(in ReadinessInput) Readiness {
 	return Readiness{Ready: ready, Since: reviewReadySince(in.Records, in.Head)}
 }
 
-// trainBlocked is true when the recorded verdicts would block the gate or
-// bounce the PR: a FAIL (review or second opinion) or a review with a
-// blocking finding keeps it out of a train, a clean CONCERNS and PASS let it in.
-// It adds the gate's stale-cross relaxation (#3458), decided by verdict.BlockingCrossOff so the train never holds a PR the gate
-// would let through.
+// trainBlocked uses the gate's rule, including its stale-cross relaxation.
+// Resolve review:none only when the shared decision asks for it.
 func trainBlocked(in ReadinessInput) bool {
-	_, blocked, _ := verdict.BlockingCrossOff(in.Records, in.Head, verdict.BlockingAnyHead, in.CrossNone)
-	return blocked
+	d := verdict.BlockingGate(in.Records, in.Head, false)
+	if d.NeedsCrossOff && in.CrossNone != nil {
+		d = verdict.BlockingGate(in.Records, in.Head, in.CrossNone())
+	}
+	return d.Blocked
 }
 
 // reviewReadySince uses the last current-head review prerequisite, so an old
