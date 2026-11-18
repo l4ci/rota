@@ -119,7 +119,7 @@ func (b *Issues) SyncClaimLabels(ref string) (changed bool, err error) {
 
 // ClaimLabelTracker is the tracker surface needed to clean up a closed issue.
 type ClaimLabelTracker interface {
-	ClaimReader
+	tracker.ClaimReader
 	RemoveLabels(context.Context, tracker.IssueKey, []string) error
 }
 

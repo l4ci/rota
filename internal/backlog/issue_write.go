@@ -636,16 +636,6 @@ func commentRows(comments []tracker.Comment, kind string) []Comment {
 
 // ---- claim, release, state, status ------------------------------------------
 
-// openClaims is the claim ids with no later release, in claim order; the
-// earliest holds (_open_claims).
-func openClaims(comments []tracker.Comment) []string {
-	bodies := make([]string, 0, len(comments))
-	for _, c := range comments {
-		bodies = append(bodies, c.Body)
-	}
-	return marker.OpenClaims(bodies)
-}
-
 func indexOf(list []string, s string) int {
 	for i, x := range list {
 		if x == s {
@@ -683,8 +673,8 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 	return true, b.Tracker.Edit(b.ctx(), is.Key, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop})
 }
 
-// Claim takes the item: it posts a claim marker (on a tracker.ClaimStore, its
-// claim record), re-reads the claims, and the earliest open claim wins
+// Claim takes the item: it posts a claim marker (on a tracker with a claim
+// store, its claim record), re-reads the claims, and the earliest open claim wins
 // (IssueBackend.claim). A loser posts its release
 // marker and changes no labels; the winner gets the in-progress label and the
 // assignment plus its derived claimed:<agent>@<machine> label (best effort).
@@ -769,30 +759,17 @@ func (b *Issues) undoPostedClaim(ref, claimID string, posted bool, cause error) 
 	return cause
 }
 
-// heldClaims is the open claims, earliest first: a tracker.ClaimStore's own
-// records, else the claim and release marker comments.
+// heldClaims is the open claims, earliest first, as the tracker keeps them.
 func (b *Issues) heldClaims(n tracker.IssueKey) ([]string, error) {
-	return HeldClaims(b.ctx(), b.Tracker, n)
+	return tracker.HeldClaims(b.ctx(), b.Tracker, n)
 }
 
 func (b *Issues) putClaim(n tracker.IssueKey, claimID string) error {
-	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
-		return cs.PutClaim(b.ctx(), n, claimID)
-	}
-	_, err := b.Tracker.AddComment(b.ctx(), n, marker.Claim(claimID)+"\nClaimed by "+claimID)
-	return err
+	return tracker.ClaimsOf(b.Tracker).PutClaim(b.ctx(), n, claimID)
 }
 
 func (b *Issues) dropClaim(n tracker.IssueKey, claimID string, byHand bool) error {
-	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
-		return cs.DropClaim(b.ctx(), n, claimID, byHand)
-	}
-	body := marker.Release(claimID)
-	if byHand {
-		body = marker.HandRelease(claimID)
-	}
-	_, err := b.Tracker.AddComment(b.ctx(), n, body)
-	return err
+	return tracker.ClaimsOf(b.Tracker).DropClaim(b.ctx(), n, claimID, byHand)
 }
 
 // Release posts the release marker (on a tracker.ClaimStore, drops its claim
@@ -987,11 +964,9 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			state = append(state, l)
 		}
 	}
-	held := openClaims(comments)
-	if _, ok := b.Tracker.(tracker.ClaimStore); ok {
-		if held, err = b.heldClaims(is.Key); err != nil {
-			return nil, err
-		}
+	held, err := tracker.HeldClaimsIn(b.ctx(), b.Tracker, is.Key, comments)
+	if err != nil {
+		return nil, err
 	}
 	notes := []string{}
 	for _, c := range comments {
@@ -1005,22 +980,20 @@ func (b *Issues) Status(ref string) (*Status, error) {
 		title = "(untitled)"
 	}
 	var claimedAt map[string]time.Time
-	if _, stored := b.Tracker.(tracker.ClaimStore); !stored {
-		for _, c := range comments {
-			verb, id, ok := marker.ParseClaim(c.Body)
-			if !ok {
-				continue
+	for _, c := range comments {
+		verb, id, ok := marker.ParseClaim(c.Body)
+		if !ok {
+			continue
+		}
+		if verb == marker.KindClaim {
+			if claimedAt == nil {
+				claimedAt = map[string]time.Time{}
 			}
-			if verb == marker.KindClaim {
-				if claimedAt == nil {
-					claimedAt = map[string]time.Time{}
-				}
-				if _, exists := claimedAt[id]; !exists {
-					claimedAt[id] = c.CreatedAt
-				}
-			} else {
-				delete(claimedAt, id)
+			if _, exists := claimedAt[id]; !exists {
+				claimedAt[id] = c.CreatedAt
 			}
+		} else {
+			delete(claimedAt, id)
 		}
 	}
 	var handReleased []string

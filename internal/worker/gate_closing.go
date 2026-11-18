@@ -205,7 +205,7 @@ func checkClaim(ctx context.Context, in claimInput) stepOutcome {
 		return out
 	}
 	for _, key := range in.Keys {
-		held, err := backlog.HeldClaims(ctx, in.Issues, key)
+		held, err := tracker.HeldClaims(ctx, in.Issues, key)
 		if err != nil {
 			out.Notes = append(out.Notes, fmt.Sprintf("CLAIMS-UNKNOWN %s — could not read claims on %s: %v; the claim check is skipped", in.Slot, key.Ref(), err))
 			continue
