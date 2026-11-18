@@ -340,7 +340,7 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 			}
 			todos = be
 		}
-		rep, err := stale.FindReport(root, *kind, *days, today, todos)
+		rep, err := stale.FindReport(c.deps().Repo(root), root, *kind, *days, today, todos)
 		if err != nil {
 			return backlogFail(err)
 		}
