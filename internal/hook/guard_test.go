@@ -424,6 +424,31 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 
 // A command substitution runs where its enclosing command runs, so it is judged
 // against the directory in effect at that point of the line (#3730).
+func TestGuardNestedArithmeticAndEscapedBackticks(t *testing.T) {
+	cases := []struct {
+		line string
+		deny bool
+	}{
+		{"echo $((1+$(git -C " + gOther + " reset --hard)))", true},
+		{"echo $(( 1 + $((2+$(git -C " + gOther + " reset --hard))) ))", true},
+		{"echo $((1+`git -C " + gOther + " reset --hard`))", true},
+		{"echo \"$((1+$(git -C " + gOther + " reset --hard)))\"", true},
+		{"echo `echo \\`git -C " + gOther + " reset --hard\\``", true},
+		{"echo $((1+2))", false},
+		{"echo $((1+$(echo 2)))", false},
+		{"echo `echo \\`echo hi\\``", false},
+	}
+	for _, c := range cases {
+		got := Guard(c.line, guardEnv())
+		if c.deny && got == "" {
+			t.Errorf("allowed %q, want a denial", c.line)
+		}
+		if !c.deny && got != "" {
+			t.Errorf("denied %q: %s", c.line, got)
+		}
+	}
+}
+
 func TestGuardSubstitutionFollowsCd(t *testing.T) {
 	cases := []struct {
 		line string
