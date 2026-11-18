@@ -79,10 +79,11 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 	stale := t0.Add(-48 * time.Hour)
 	os.Chtimes(old, stale, stale)
 	Dump(cd, mustPayload(t, []byte(`{"session_id":"s2"}`)), t0.Add(sweepEvery+time.Minute))
-	for _, f := range []string{old, old + ".lock"} {
-		if _, err := os.Stat(f); !os.IsNotExist(err) {
-			t.Fatalf("%s should be swept: %v", f, err)
-		}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("old state should be swept: %v", err)
+	}
+	if _, err := os.Stat(old + ".lock"); err != nil {
+		t.Fatalf("sweep must retain the lock sidecar: %v", err)
 	}
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("fresh state swept: %v", err)
