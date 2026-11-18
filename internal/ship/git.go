@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -16,9 +17,7 @@ type Git interface {
 
 // GitError is a git call that exited non-zero where the rules needed it to
 // succeed.
-type GitError struct{ Msg string }
-
-func (e *GitError) Error() string { return e.Msg }
+type GitError = land.GitError
 
 // out runs git and returns stdout without trailing newlines; a non-zero exit
 // is a *GitError.

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -202,17 +203,18 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	merges := append([]string{}, p.tips[1:]...)
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
 	before := p.tips[len(p.tips)-1]
-	if err := land.MergeLocal(run, p.baseSHA, land.SyncSubject(o.Base, it.Branch), land.RecoveryGit(ctx, e.Git, p.scratch)); err != nil {
+	tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, p.scratch)},
+		land.LocalRequest{Head: p.baseSHA, Base: "scratch tree", Message: land.SyncSubject(o.Base, it.Branch)})
+	if err != nil {
+		if errors.As(err, new(*land.PostMergeError)) {
+			return trainBrokeResult(res, err.Error())
+		}
 		res.Verdict = GateMergeFailed
 		res.Err, res.Hint = land.Classify(err).Refusal(land.Words{
 			Failed:   fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s in the scratch tree failed", o.Base, it.Branch),
 			Conflict: fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s conflicts in: {paths}", o.Base, it.Branch),
 		})
 		return true, nil
-	}
-	tip, code := e.git(p.scratch, "rev-parse", "HEAD")
-	if code != 0 {
-		return trainBrokeResult(res, "git rev-parse HEAD failed in the scratch tree")
 	}
 	if tip != before {
 		merges = append(merges, tip)

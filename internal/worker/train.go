@@ -718,7 +718,12 @@ func (t *trainRun) syncBase(p *trainPlanning) (bool, error) {
 		return trainBrokeResult(res, fmt.Sprintf("git rev-parse %s exited %d", from, code))
 	}
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
-	if err := land.MergeLocal(run, sha, land.SyncSubject(o.SyncBase, o.Base), land.RecoveryGit(ctx, e.Git, p.scratch)); err != nil {
+	tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, p.scratch)},
+		land.LocalRequest{Head: sha, Base: "scratch tree", Message: land.SyncSubject(o.SyncBase, o.Base)})
+	if err != nil {
+		if errors.As(err, new(*land.PostMergeError)) {
+			return trainBrokeResult(res, err.Error())
+		}
 		res.Verdict = GateMergeFailed
 		res.Err, res.Hint = land.Classify(err).Refusal(land.Words{
 			Failed:       fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s in the scratch tree failed", o.SyncBase, o.Base),
@@ -726,10 +731,6 @@ func (t *trainRun) syncBase(p *trainPlanning) (bool, error) {
 			ConflictHint: fmt.Sprintf("merge %s into %s by hand, or file a fix issue tagged to the milestone, then re-run the train", o.SyncBase, o.Base),
 		})
 		return true, nil
-	}
-	tip, code := e.git(p.scratch, "rev-parse", "HEAD")
-	if code != 0 {
-		return trainBrokeResult(res, "git rev-parse HEAD failed in the scratch tree")
 	}
 	if tip != p.baseSHA {
 		p.syncSHA = tip
@@ -1286,13 +1287,15 @@ func (e Env) mergeTrain(ctx context.Context, scratch, base string, ms []TrainMem
 	tips[0], _ = e.git(scratch, "rev-parse", "HEAD")
 	for i, m := range ms {
 		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-		if err := land.MergeLocal(run, heads[i], land.TrainSubject(m.Branch, base), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
+		tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
+			land.LocalRequest{Head: heads[i], Base: "scratch tree", Message: land.TrainSubject(m.Branch, base)})
+		if err != nil {
+			if errors.As(err, new(*land.PostMergeError)) {
+				return tips, 0, nil, err.Error()
+			}
 			return tips, i, err, ""
 		}
-		var code int
-		if tips[i+1], code = e.git(scratch, "rev-parse", "HEAD"); code != 0 {
-			return tips, 0, nil, "git rev-parse HEAD failed in the scratch tree"
-		}
+		tips[i+1] = tip
 	}
 	return tips, 0, nil, ""
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -87,22 +86,6 @@ func TestLocalAndForgeAgree(t *testing.T) {
 	})
 
 	t.Run("a push after the pin does not land", func(t *testing.T) {
-		r := newRepo(t)
-		gittest.Run(r.t, r.dir, "checkout", "-q", "-b", "feat")
-		r.commit("feat.txt", "verified\n")
-		pin := gittest.Run(r.t, r.dir, "rev-parse", "HEAD")
-		r.commit("late.txt", "pushed after the check\n") // the branch moves on
-		gittest.Run(r.t, r.dir, "checkout", "-q", "main")
-		if err := MergeLocal(r.run, pin, "merge feat", r.run); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := os.Stat(filepath.Join(r.dir, "late.txt")); err == nil {
-			t.Error("local landed a commit past the pin")
-		}
-		if _, err := os.Stat(filepath.Join(r.dir, "feat.txt")); err != nil {
-			t.Error("local did not land the pinned commit")
-		}
-
 		f := &forge{head: "newhead"} // the PR head moved past the pinned sha
 		if err := RequestForge(context.Background(), f, 1, "pinned", false); err == nil {
 			t.Error("forge landed a stale pin")

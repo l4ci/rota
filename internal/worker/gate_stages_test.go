@@ -122,3 +122,19 @@ func TestGateReferenceStage(t *testing.T) {
 		t.Fatalf("refs head=%q base=%q verified=%q, want worker/main/%s", out.head, out.base, out.localHead, head)
 	}
 }
+
+// A successful merge followed by a failed read-back has already changed base.
+// It must not look like a successful gate or invite another merge attempt.
+func TestGateLocalStageReadbackFailure(t *testing.T) {
+	e := Env{Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+		if args[0] == "rev-parse" {
+			return git.Result{ExitCode: 128, Stderr: "cannot read landed commit"}, nil
+		}
+		return git.Result{}, nil
+	}}
+	run := gateRun{e: e, ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "kit", Base: "main"}}
+	_, result, done, err := run.stepMerge(GateResult{}, GateTarget{Branch: "kit/5-work"}, gateForgeResult{}, false, gateRefsResult{}, "verified")
+	if err != nil || !done || result.Verdict != GateCheckBroke || !result.Changed || !strings.Contains(result.Err, "Do not retry the merge") {
+		t.Fatalf("read-back failure lost: result=%+v done=%v err=%v", result, done, err)
+	}
+}

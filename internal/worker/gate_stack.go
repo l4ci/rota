@@ -190,12 +190,13 @@ func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec Integratio
 	}
 	defer cleanup()
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-	if err := land.MergeLocal(run, base, land.SyncSubject(rec.OntoBase, rec.Branch), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
+	merged, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
+		land.LocalRequest{Head: base, Base: "scratch tree", Message: land.SyncSubject(rec.OntoBase, rec.Branch)})
+	if err != nil {
+		if errors.As(err, new(*land.PostMergeError)) {
+			return "", err
+		}
 		return "", mergeBaseError(rec, err)
-	}
-	merged, code := e.git(scratch, "rev-parse", "HEAD")
-	if code != 0 {
-		return "", errors.New("git rev-parse HEAD failed in the scratch tree")
 	}
 	if merged == tip {
 		return tip, nil
