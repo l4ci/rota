@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -119,14 +120,11 @@ func (s Store) path() string { return rotatree.Prompts(s.root) }
 // safe refuses symlinks for reads as well as writes, including the lock sidecar.
 func (s Store) safe() error {
 	for _, p := range []string{rotatree.Dir(s.root), s.path(), fsio.LockPath(s.path())} {
-		fi, err := os.Lstat(p)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
+		link, err := fsio.SymlinkIn(filepath.Dir(p), filepath.Base(p))
 		if err != nil {
 			return err
 		}
-		if fi.Mode()&os.ModeSymlink != 0 {
+		if link != "" {
 			return fmt.Errorf("%w: %s is a symlink", ErrCorrupt, p)
 		}
 	}
