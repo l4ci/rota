@@ -1,4 +1,5 @@
 echo "no piped grep -q in the smoke harness"
+# lint-trigger: test/sections/* test/lib.sh test/runner.sh
 # Sections run under `set -euo pipefail`. A producer piped into grep -q lets grep exit
 # on the first match, the producer then dies of SIGPIPE (141), and pipefail turns
 # a MATCH into a failed pipeline. Read from a here-string or file instead:
