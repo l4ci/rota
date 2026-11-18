@@ -30,7 +30,7 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 	if err != nil {
 		return o, cleanup, Resolution("body file not found: %s", o.BodyFile)
 	}
-	text, rebuilt, err := roundEnv(c, ctx, root).RecoveryBrief(ctx, root, board, c.deps().Config(root), o, string(notes))
+	text, rebuilt, err := roundEnv(c, ctx, root).RecoveryBrief(ctx, root, board, c.projectConfig(root), o, string(notes))
 	if err != nil {
 		var b *round.BlockedError
 		var ce *round.ConfigError

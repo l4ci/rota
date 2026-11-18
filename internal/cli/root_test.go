@@ -139,3 +139,27 @@ func TestCtxProjectMissingRoot(t *testing.T) {
 		t.Errorf("Config called %d times for a missing root", calls)
 	}
 }
+
+// Verbs whose root comes from a helper read config through projectConfig: it
+// shares the value Project loaded for the same root and reloads for another.
+func TestCtxProjectConfigSharedAcrossRoots(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	var seen []string
+	d.Config = func(r string) any { seen = append(seen, r); return map[string]any{"k": r} }
+	c := &Ctx{Deps: d}
+	if _, _, err := c.Project(); err != nil {
+		t.Fatal(err)
+	}
+	c.projectConfig(top)
+	c.projectConfig(top)
+	if len(seen) != 1 {
+		t.Fatalf("Config calls for one root = %v, want 1", seen)
+	}
+	c.projectConfig("/other")
+	if len(seen) != 2 || seen[1] != "/other" {
+		t.Errorf("Config calls = %v, want a reload for the second root", seen)
+	}
+}

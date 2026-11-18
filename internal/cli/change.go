@@ -54,7 +54,7 @@ func branchChange(c *Ctx, t branchTarget) change.Result {
 		src.PolicyErr = err
 		return worker.ClassifyChange(c.Context(), src)
 	}
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	src.Policy, src.PolicyErr = config.ChangePolicyOf(cfg)
 	f, err := c.deps().forge(c.Context(), cfg, "", root)
 	switch {

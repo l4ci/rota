@@ -618,7 +618,7 @@ func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot, pr string, thro
 	if s == nil || s.PR() == "" {
 		return Resolution("slot '%s' has no PR whose review input a relay could carry", slot)
 	}
-	fg, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
+	fg, err := c.deps().forge(ctx, c.projectConfig(root), "", root)
 	if err != nil {
 		return err
 	}

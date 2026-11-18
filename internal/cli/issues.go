@@ -57,7 +57,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.NewEnv(c.deps().Config(root), c.deps().trackerBase(), c.deps().IssuesForge)
+	env = issues.NewEnv(c.projectConfig(root), c.deps().trackerBase(), c.deps().IssuesForge)
 	return
 }
 
@@ -164,7 +164,7 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		auto, _ := config.Value(c.deps().Config(root), "issues.autoCreateLabel")
+		auto, _ := config.Value(c.projectConfig(root), "issues.autoCreateLabel")
 		action := labelAction(isAdd)
 		var done []any
 		var lines []string

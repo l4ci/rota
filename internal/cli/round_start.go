@@ -181,7 +181,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--slots must be a positive integer")
 		}
 		ctx := c.Context()
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 		env := roundEnv(c, ctx, root)
 		// Warn about drift since the last baseline, then take a fresh one: the
 		// round's own changes are what the next status should compare against.

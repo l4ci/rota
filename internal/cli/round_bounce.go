@@ -221,7 +221,7 @@ func noPRHint(issue, slot, head string, force bool) string {
 // its PR (#1827), with the support split active only. The post on the PR
 // already went out, so a failure here is a warning.
 func postSupportPointer(c *Ctx, root, issue, kind, url string) {
-	if roundcfg.SupportName(c.deps().Config(root)) == "" {
+	if roundcfg.SupportName(c.projectConfig(root)) == "" {
 		return
 	}
 	env, be, err := moveEnv(c, root)
