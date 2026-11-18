@@ -1,0 +1,74 @@
+[
+  {
+    "name": "fresh opening above prompt",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "› <rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "before": "› \n",
+    "herdr": true,
+    "core": "picked-up"
+  },
+  {
+    "name": "wrapped queue opening above prompt",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "• Queued follow-up inputs\n  ↳ <hc from=\"t1\"><rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "before": "› \n",
+    "herdr": true,
+    "core": "queued"
+  },
+  {
+    "name": "opening still on composer",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "› <rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n",
+    "before": "› \n",
+    "herdr": false,
+    "core": ""
+  },
+  {
+    "name": "earlier relay in queue",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "• Queued follow-up inputs\n  ↳ <rota-relay n=\"8\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "before": "› \n",
+    "herdr": false,
+    "core": ""
+  },
+  {
+    "name": "opening quoted in prose",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "The earlier response quoted <rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "before": "› \n",
+    "herdr": false,
+    "core": ""
+  },
+  {
+    "name": "old opening is not fresh Core evidence",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>",
+    "screen": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "before": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\n› \n",
+    "herdr": true,
+    "core": ""
+  },
+  {
+    "name": "legacy bare marker needs a queue on Core",
+    "text": "--- ORCHESTRATOR ---\n[relay 9]\nRead this relay.",
+    "screen": "[relay 9]\n› \n",
+    "before": "› \n",
+    "herdr": true,
+    "core": ""
+  },
+  {
+    "name": "plain brief tail is herdr evidence",
+    "text": "task\nlast line\n",
+    "screen": "last line\n› \n",
+    "before": "› \n",
+    "herdr": true,
+    "core": ""
+  },
+  {
+    "name": "clipped signed pickup",
+    "text": "<rota-relay n=\"9\" round=\"50\" from=\"orchestrator\">\nRead this relay.\n</rota-relay>\n--- ROTA-SIG bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ---",
+    "screen": "history clipped\n--- ROTA-SIG\n  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ---\n› \n",
+    "before": "› \n",
+    "herdr": true,
+    "core": "picked-up"
+  }
+]
