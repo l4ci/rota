@@ -33,7 +33,7 @@ type StopDecision struct {
 // appears in the block reason.
 func DecideStop(in StopIn, st State, set Settings, ho keepstate.Handoff, handoffPath string, now time.Time) StopDecision {
 	d := StopDecision{State: st}
-	if st.HandoffFailed {
+	if st.OrchestratorHandoff.HandoffFailed {
 		return d // gave up already: never hold the session again
 	}
 	at, err := stamp.Parse(st.UpdatedAt)
@@ -50,7 +50,7 @@ func DecideStop(in StopIn, st State, set Settings, ho keepstate.Handoff, handoff
 	if !ctxTrip && usage == nil {
 		return d
 	}
-	if !holdForHandoff(&d, set, ho, now, handoffRule{reentered: in.StopHookActive}) {
+	if !holdForHandoff(&d, &d.State.OrchestratorHandoff, set, ho, now, handoffRule{reentered: in.StopHookActive}) {
 		return d
 	}
 	if usage != nil {
@@ -76,13 +76,12 @@ type handoffRule struct {
 
 // holdForHandoff is the block rule both Stop deciders share, run once their
 // own trip condition has fired. It passes when the handoff is written, latches
-// HandoffFailed at the cap, and otherwise stamps the block into d.State and
-// returns true; the caller then sets Reason. d.Persist is set whenever d.State
-// changed.
-func holdForHandoff(d *StopDecision, set Settings, ho keepstate.Handoff, now time.Time, r handoffRule) bool {
+// HandoffFailed at the cap, and otherwise stamps the owned budget and returns
+// true; the caller then sets Reason. d.Persist is set whenever d.State changed.
+func holdForHandoff(d *StopDecision, budget *HandoffState, set Settings, ho keepstate.Handoff, now time.Time, r handoffRule) bool {
 	var blockedAt time.Time
-	if d.State.BlockedAt != "" {
-		blockedAt, _ = stamp.Parse(d.State.BlockedAt)
+	if budget.BlockedAt != "" {
+		blockedAt, _ = stamp.Parse(budget.BlockedAt)
 	}
 	if ho.Exists {
 		newer := !ho.ModTime.Before(blockedAt)
@@ -92,28 +91,22 @@ func holdForHandoff(d *StopDecision, set Settings, ho keepstate.Handoff, now tim
 		}
 	}
 	if r.reentered || r.countAll {
-		if d.State.HandoffBlocks >= set.HandoffMaxBlks {
-			d.State.HandoffFailed = true
+		if budget.HandoffBlocks >= set.HandoffMaxBlks {
+			budget.HandoffFailed = true
 			d.Persist = true
 			return false
 		}
-		d.State.HandoffBlocks++
+		budget.HandoffBlocks++
 	}
-	d.State.BlockedAt = stamp.Format(now)
+	budget.BlockedAt = stamp.Format(now)
 	d.Persist = true
 	d.Block = true
 	return true
 }
 
-// mergeHandoffBlock carries the block counters holdForHandoff writes onto cur.
-func mergeHandoffBlock(cur, decided State) State {
-	cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = decided.HandoffBlocks, decided.BlockedAt, decided.HandoffFailed
-	return cur
-}
-
-// mergeStop is DecideStop's merge: the block counters plus the usage handoff.
+// mergeStop carries only the orchestrator's counters and usage handoff.
 func mergeStop(cur, decided State) State {
-	cur = mergeHandoffBlock(cur, decided)
+	cur.OrchestratorHandoff = decided.OrchestratorHandoff
 	cur.UsageHandoff = decided.UsageHandoff
 	return cur
 }
