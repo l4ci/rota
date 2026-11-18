@@ -11,7 +11,8 @@ type Scanner struct {
 	S string
 	I int
 	// Nested collects the script text of every command substitution and
-	// backtick the scan passed, in order. $((...)) arithmetic is not a script.
+	// backtick the scan passed, in order. $((...)) arithmetic is not a script, but
+	// the substitutions inside it are collected.
 	Nested []string
 }
 
@@ -116,13 +117,54 @@ func (sc *Scanner) Backtick() error {
 	if j >= len(sc.S) {
 		return ErrUnbalanced
 	}
-	sc.Nested = append(sc.Nested, sc.S[sc.I+1:j])
+	sc.Nested = append(sc.Nested, unescapeBacktick(sc.S[sc.I+1:j]))
 	sc.I = j + 1
 	return nil
 }
 
+// unescapeBacktick undoes the escapes bash removes from a backtick body before
+// running it: \` , \\ and \$ lose their backslash. Without this an escaped
+// nested backtick stays literal and the command inside it is never collected.
+func unescapeBacktick(body string) string {
+	if !strings.Contains(body, "\\") {
+		return body
+	}
+	var b strings.Builder
+	for i := 0; i < len(body); i++ {
+		if body[i] == '\\' && i+1 < len(body) && strings.IndexByte("`\\$", body[i+1]) >= 0 {
+			i++
+		}
+		b.WriteByte(body[i])
+	}
+	return b.String()
+}
+
+// collectInner records the substitutions inside text that is not itself a
+// script, such as the body of $((...)) arithmetic.
+func (sc *Scanner) collectInner(text string) error {
+	sub := &Scanner{S: text}
+	for sub.I < len(sub.S) {
+		switch {
+		case sub.S[sub.I] == '\\':
+			sub.I += 2
+		case sub.S[sub.I] == '`':
+			if err := sub.Backtick(); err != nil {
+				return err
+			}
+		case sub.S[sub.I] == '$' && sub.Peek(1) == '(':
+			if err := sub.Substitution(); err != nil {
+				return err
+			}
+		default:
+			sub.I++
+		}
+	}
+	sc.Nested = append(sc.Nested, sub.Nested...)
+	return nil
+}
+
 // Substitution consumes `$(...)` at the cursor and records its body; `$((...))`
-// arithmetic is consumed but not recorded, since it is not a script.
+// arithmetic is consumed and only the substitutions inside it are recorded.
 // Parentheses inside quotes do not count.
 func (sc *Scanner) Substitution() error {
 	arith := sc.Peek(2) == '('
@@ -152,7 +194,11 @@ func (sc *Scanner) Substitution() error {
 	if depth > 0 {
 		return ErrUnbalanced
 	}
-	if !arith {
+	if arith {
+		if err := sc.collectInner(sc.S[start : j-1]); err != nil {
+			return err
+		}
+	} else {
 		sc.Nested = append(sc.Nested, sc.S[start:j-1])
 	}
 	sc.I = j
