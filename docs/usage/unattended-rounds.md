@@ -66,8 +66,12 @@ This path is the orchestrator's. Every other session gets the lighter `work.cont
    (default 75) or more, the Stop hook blocks. It tells the orchestrator to write
    `.rota/handoff/<base>.md` and run `/exit`.
 3. If the hook blocked 2 more times after the first block and still
-   found no handoff, it gives up and records `handoffFailed` in the
+   found no handoff, it gives up and records `orchestratorHandoff.handoffFailed` in the
    state, so a session that cannot write a handoff is not held forever.
+
+Invalid handoff settings let the handoff rule pass; the orchestrator still gets the
+watch reminder when workers are active without a watch. The context guard reads
+only its context settings, so an invalid usage threshold does not disable it.
 
 The percentage comes from `context_window.used_percentage`, else from `current_usage` over
 `context_window_size`.

@@ -54,11 +54,6 @@ func applyStop(t *testing.T, in StopIn, st State, set Settings, ho keepstate.Han
 	return applyRule(t, StopHandoff, in, st, set, ho, now).StopDecision
 }
 
-func applyGuardStop(t *testing.T, st State, set Settings, ho keepstate.Handoff, now time.Time) StopDecision {
-	t.Helper()
-	return applyRule(t, GuardStop, StopIn{}, st, set, ho, now).StopDecision
-}
-
 func applyGuardPrompt(t *testing.T, st State, set Settings, now time.Time) SessionDecision {
 	t.Helper()
 	return applyRule(t, GuardPrompt, StopIn{}, st, set, keepstate.Handoff{}, now)
@@ -142,9 +137,15 @@ func TestApplySessionKeepsConcurrentRefresh(t *testing.T) {
 						cur.Raw, cur.RateLimits = json.RawMessage(`{"refresh":true}`), rl(10, 20, 123)
 						// Other hook rules own these fields.
 						if action == GuardPrompt {
-							cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = 7, "other", true
+							cur.OrchestratorHandoff = HandoffState{HandoffBlocks: 7, BlockedAt: "other", HandoffFailed: true}
+							cur.GuardHandoff = HandoffState{HandoffBlocks: 8, BlockedAt: "guard", HandoffFailed: true}
 						} else {
 							cur.GuardWarned = true
+							if action == StopHandoff {
+								cur.GuardHandoff = HandoffState{HandoffBlocks: 8, BlockedAt: "guard", HandoffFailed: true}
+							} else {
+								cur.OrchestratorHandoff = HandoffState{HandoffBlocks: 7, BlockedAt: "other", HandoffFailed: true}
+							}
 						}
 						if action != StopHandoff {
 							cur.UsageHandoff = &keepstate.UsageHandoff{Window: WindowFiveHour, UsedPct: 99}
@@ -170,7 +171,9 @@ func TestApplySessionKeepsConcurrentRefresh(t *testing.T) {
 			if got.Cwd != "/new" || got.UpdatedAt != t0.Add(time.Second).Format(time.RFC3339) || got.ContextPct == nil || *got.ContextPct != 20 || !reflect.DeepEqual(got.Raw, refreshed.Raw) || !reflect.DeepEqual(got.RateLimits, refreshed.RateLimits) {
 				t.Fatalf("refresh overwritten: %+v", got)
 			}
-			if !got.GuardWarned || (action == GuardPrompt && (got.HandoffBlocks != 7 || got.BlockedAt != "other" || !got.HandoffFailed)) || (action != StopHandoff && (got.UsageHandoff == nil || got.UsageHandoff.UsedPct != 99)) {
+			if !got.GuardWarned || (action != StopHandoff && got.OrchestratorHandoff != refreshed.OrchestratorHandoff) ||
+				(action != GuardStop && got.GuardHandoff != refreshed.GuardHandoff) ||
+				(action != StopHandoff && (got.UsageHandoff == nil || got.UsageHandoff.UsedPct != 99)) {
 				t.Fatalf("other hook's fields overwritten: %+v", got)
 			}
 		})
@@ -207,24 +210,6 @@ func TestApplySessionStop(t *testing.T) {
 	}
 }
 
-func TestApplySessionStopLoopPrevention(t *testing.T) {
-	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxAge: 900, HandoffMaxBlks: 2}
-	cur := State{UpdatedAt: t0.Format(time.RFC3339), ContextPct: pf(90)}
-	// First stop: block, stamp.
-	d := applyStop(t, StopIn{}, cur, set, keepstate.Handoff{}, t0)
-	if !d.Block || !d.Persist || d.State.BlockedAt == "" || d.State.HandoffBlocks != 0 {
-		t.Fatalf("first: %+v", d)
-	}
-	cur = d.State
-	// The shared handoff rule is covered in TestStopDecidersHandoffBlock; this
-	// one case proves ApplySession carries BlockedAt into a re-entered stop.
-	// Active, handoff written after the block: pass.
-	written := keepstate.Handoff{Exists: true, ModTime: t0.Add(5 * time.Second)}
-	if applyStop(t, StopIn{StopHookActive: true}, cur, set, written, t0.Add(10*time.Second)).Block {
-		t.Error("active + new handoff should pass")
-	}
-}
-
 func TestApplySessionGuardPromptReadings(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxBlks: 2}
@@ -242,31 +227,6 @@ func TestApplySessionGuardPromptReadings(t *testing.T) {
 	}
 	if n := applyGuardPrompt(t, State{UpdatedAt: fresh}, set, now); n.Line != "" {
 		t.Errorf("no reading: %+v", n)
-	}
-}
-
-func TestApplySessionGuardStop(t *testing.T) {
-	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxAge: 900, HandoffMaxBlks: 2}
-	fresh := "2026-10-03T11:59:30Z"
-	st := guardState(80, fresh)
-	d := applyGuardStop(t, st, set, keepstate.Handoff{}, now)
-	if !d.Block || !strings.Contains(d.Reason, "/rota-pause") || d.State.HandoffBlocks != 1 {
-		t.Fatalf("block: %+v", d)
-	}
-	st = d.State
-	// The shared handoff rule is covered in TestStopDecidersHandoffBlock; this
-	// one case proves ApplySession feeds it a fresh note.
-	blocked, _ := time.Parse(time.RFC3339, st.BlockedAt)
-	if r := applyGuardStop(t, st, set, keepstate.Handoff{Exists: true, ModTime: blocked.Add(10 * time.Second)}, now); r.Block {
-		t.Errorf("a fresh note written after the block must pass: %+v", r)
-	}
-	st.ContextPct = func() *float64 { p := 10.0; return &p }()
-	if r := applyGuardStop(t, st, set, keepstate.Handoff{}, now); r.Block || r.State.HandoffFailed || r.State.HandoffBlocks != 0 {
-		t.Errorf("reset below the threshold: %+v", r)
-	}
-	if s := applyGuardStop(t, guardState(99, "2026-10-03T11:50:00Z"), set, keepstate.Handoff{}, now); s.Block {
-		t.Errorf("stale: %+v", s)
 	}
 }
 

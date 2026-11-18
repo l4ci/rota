@@ -38,22 +38,26 @@ const StateMaxAgeSeconds = 120
 // handoff before it lets the session end.
 const HandoffMaxBlocks = 2
 
-// LoadSettings reads and validates the orchestrator.* keys from a merged
-// config. The hooks treat an error as a pass; doctor and verbs report it.
-func LoadSettings(cfg any) (Settings, error) {
-	var s Settings
-	get := func(key string, min, max int) (int, error) { return config.Int(cfg, key, min, max) }
+// LoadContextSettings validates only the settings used by the context guard.
+func LoadContextSettings(cfg any) (Settings, error) {
+	s := Settings{StateMaxAge: StateMaxAgeSeconds, HandoffMaxAge: config.HandoffMaxAgeSeconds, HandoffMaxBlks: HandoffMaxBlocks}
 	var err error
-	if s.Threshold, err = get("orchestrator.handoffThreshold", 1, 100); err != nil {
+	s.Threshold, err = config.Int(cfg, "orchestrator.handoffThreshold", 1, 100)
+	return s, err
+}
+
+// LoadSettings validates the orchestrator handoff's context and usage settings.
+// A caller fails open for that rule on error, leaving unrelated rules available.
+func LoadSettings(cfg any) (Settings, error) {
+	s, err := LoadContextSettings(cfg)
+	if err != nil {
 		return s, err
 	}
-	s.StateMaxAge, s.HandoffMaxAge, s.HandoffMaxBlks = StateMaxAgeSeconds, config.HandoffMaxAgeSeconds, HandoffMaxBlocks
 	if s.SwitchOnUsage, err = config.SwitchOnUsage(cfg); err != nil {
 		return s, err
 	}
 	if s.SwitchOnUsage {
-		// Read only when on: a bad threshold must not disable the context
-		// handoff of a project that never opted in.
+		// An unused usage threshold cannot disable context handoff.
 		s.UsageThreshold, err = config.UsageThreshold(cfg)
 	}
 	return s, err
@@ -82,6 +86,23 @@ func (s Scope) rank() int {
 		}
 	}
 	return -1
+}
+
+// ReachesWorkers reports whether this scope is read in worker worktrees.
+// Project-local settings are untracked and do not travel to those worktrees.
+func (s Scope) ReachesWorkers() bool { return s == ScopeProject || s == ScopeUser }
+
+// GuardReachesWorkers reports whether a marked guard is installed in a scope
+// workers read. Missing or unreadable scopes provide no evidence of a guard.
+func GuardReachesWorkers(files map[Scope]*jsonx.Object) bool {
+	for _, scope := range Scopes {
+		if scope.ReachesWorkers() {
+			if _, ok := MarkedEvents(files[scope])[EventGuard]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SettingsPath is the settings file for scope under base: the project root
