@@ -7,9 +7,9 @@ import (
 )
 
 // The key-based trackers (Jira, Linear, It's a Plan) keep the hidden fields
-// block that ends an issue body outside the description. splitBody and
-// joinBody are the one place that cuts it off on write and puts it back on
-// read; an adapter supplies only where the block is stored.
+// block that ends an issue body outside the description. These helpers adapt
+// that tracker-specific representation. marker owns the block framing, while
+// backlog parses and renders the fields used by rota items.
 
 type fieldsProp struct {
 	Block string `json:"block"`
