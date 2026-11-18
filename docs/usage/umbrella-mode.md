@@ -97,6 +97,8 @@ KNOWLEDGE.md is hybrid in umbrella projects:
 
 The Glossary topic follows the same hybrid scoping. Scope resolves in this order: an explicit `--repo umbrella|<name>` flag wins; otherwise the cwd auto-resolves (inside a registered sub-repo it resolves to that repo, at the umbrella root to the umbrella). Single-repo projects always resolve to `umbrella` and behave byte-identically to before. The knowledge verbs (`rota knowledge add`, `query`, `tier`, `amend`) and the glossary verbs (`rota glossary write`, `read`, `import`) all take `--repo`; readers (`rota knowledge query`, `rota glossary read`) merge umbrella + sub-repo content with a `> from: <path>` provenance line per source when scope is a sub-repo. Tier sidecars split per file (`.rota/knowledge-tier.json` umbrella, `.rota/knowledge/<name>/knowledge-tier.json` per sub-repo).
 
+`rota knowledge query` keeps a matched topic's heading and source labels even when the topic is empty or tier filtering hides all its bullets. Only a topic with no matching heading is reported as missing.
+
 DECISIONS.md stays umbrella-only. Hard boundaries are inherently cross-repo. A repo-local "decision" is really a learning; capture it with `/rota-learn`. Full model and rationale: [`references/persistence-skills.md`](../../skills/references/persistence-skills.md#umbrella-scoping), governed by the `.rota/DECISIONS.md` *"Persistence-trio scoping under umbrella mode"* boundary.
 
 ## Resolvers: `rota repo umbrella` and `rota repo which`
