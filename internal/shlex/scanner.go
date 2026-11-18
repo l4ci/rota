@@ -165,12 +165,13 @@ func (sc *Scanner) collectInner(text string) error {
 
 // Substitution consumes `$(...)` at the cursor and records its body; `$((...))`
 // arithmetic is consumed and only the substitutions inside it are recorded,
-// unless its body looks like Bash's command-substitution fallback. Parentheses
+// unless the arithmetic opener closes before the final `))`. Parentheses
 // inside quotes do not count.
 func (sc *Scanner) Substitution() error {
 	arith := sc.Peek(2) == '('
 	start := sc.I + 2
 	depth, j := 1, start
+	arithOpenClose := -1
 	for j < len(sc.S) && depth > 0 {
 		switch sc.S[j] {
 		case '\\':
@@ -188,6 +189,12 @@ func (sc *Scanner) Substitution() error {
 		case '(':
 			depth++
 		case ')':
+			if arith && depth == 2 && arithOpenClose == -1 {
+				// This closes the parenthesis immediately after `$(`. Bash
+				// treats the body as command substitution if it closes before
+				// the final two closing parentheses.
+				arithOpenClose = j
+			}
 			depth--
 		}
 		j++
@@ -197,8 +204,7 @@ func (sc *Scanner) Substitution() error {
 	}
 	if arith {
 		body := sc.S[start : j-1]
-		closedArith := j >= 2 && sc.S[j-2:j] == "))"
-		if !closedArith || arithmeticLooksLikeScript(body) {
+		if arithOpenClose != j-2 {
 			sc.Nested = append(sc.Nested, body)
 		} else {
 			if err := sc.collectInner(body); err != nil {
@@ -210,34 +216,4 @@ func (sc *Scanner) Substitution() error {
 	}
 	sc.I = j
 	return nil
-}
-
-// arithmeticLooksLikeScript catches command-looking text that Bash may treat
-// as its command-substitution fallback when arithmetic parsing fails. Keep
-// ordinary spaced arithmetic such as `1 + 2` and `a * b` out of Nested.
-func arithmeticLooksLikeScript(body string) bool {
-	if strings.ContainsAny(body, ";\n") {
-		return true
-	}
-	body = strings.TrimSpace(body)
-	body = strings.TrimSpace(strings.TrimPrefix(body, "("))
-	body = strings.TrimSpace(strings.TrimSuffix(body, ")"))
-	fields := strings.Fields(body)
-	if len(fields) < 2 {
-		return false
-	}
-	first := fields[0]
-	if first == "" || !isShellNameStart(first[0]) {
-		return false
-	}
-	switch fields[1] {
-	case "+", "-", "*", "/", "%", "**", "<<", ">>", "&", "|", "^", "=", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "?", ":", ",":
-		return false
-	default:
-		return true
-	}
-}
-
-func isShellNameStart(c byte) bool {
-	return c == '_' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
 }
