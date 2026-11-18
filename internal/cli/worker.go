@@ -828,8 +828,24 @@ func gateData(r worker.GateResult) *jsonx.Object {
 		d.Set("flaky", flakyData(r.Flaky))
 	}
 	d.Set("changed", r.Changed)
+	if len(r.Gaps) > 1 {
+		d.Set("gaps", gapsData(r.Gaps))
+	}
 	setLedgerData(d, r.Excluded, r.Expired)
 	return d
+}
+
+// gapsData is the list of record gaps a refusal found, in check order.
+func gapsData(gaps []worker.GateGap) []any {
+	out := []any{}
+	for _, g := range gaps {
+		o := jsonx.NewObject()
+		o.Set("blockedBy", g.BlockedBy)
+		o.Set("message", g.Msg)
+		o.Set("hint", g.Hint)
+		out = append(out, o)
+	}
+	return out
 }
 
 // verdictRefusal turns a gate or train verdict that worker classifies as a

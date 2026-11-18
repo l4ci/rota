@@ -44,6 +44,9 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 			c.Set("target", culprit.Target)
 			c.Set("pr", culprit.PR)
 			c.Set("blockedBy", culprit.BlockedBy)
+			if len(culprit.Gate.Gaps) > 1 {
+				c.Set("gaps", gapsData(culprit.Gate.Gaps))
+			}
 			cs = append(cs, c)
 		}
 		d.Set("culprits", cs)

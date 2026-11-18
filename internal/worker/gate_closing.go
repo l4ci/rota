@@ -293,6 +293,11 @@ func (runner gate) stepCloses(result GateResult, target GateTarget, forged gateF
 	if out.Verdict == GateNotClosing {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	}
+	if out.Verdict == GateUnmetAcceptance {
+		g.res.Notes = append(g.res.Notes, out.Notes...)
+		g.gap(out.Verdict, out.Msg, out.Hint)
+		return finish(false, nil)
+	}
 	return finish(g.apply(out))
 }
 

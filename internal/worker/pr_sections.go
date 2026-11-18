@@ -43,19 +43,29 @@ func prSectionHeadings(body string) map[string]bool {
 // checkRequiredPRSections uses the same successful PR read as provenance.
 // A gate without a remote PR, or a missing forge CLI, has no body to check.
 func (g *gateOperation) checkRequiredPRSections() (bool, error) {
-	if g.sectionBody == nil {
+	v, msg, hint := g.requiredSectionsGap()
+	if v == "" {
 		return false, nil
+	}
+	g.verdict(v, msg, hint)
+	return true, nil
+}
+
+// requiredSectionsGap is the refusal for a PR body missing a required section,
+// "" when it has them or there is no body to read.
+func (g *gateOperation) requiredSectionsGap() (verdict, msg, hint string) {
+	if g.sectionBody == nil {
+		return "", "", ""
 	}
 	verdict, heading := requiredPRSection(*g.sectionBody)
 	if verdict == "" {
-		return false, nil
+		return "", "", ""
 	}
 	if g.headRef != "" {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	}
-	g.verdict(verdict, fmt.Sprintf("GATE %s refused — PR %s is missing %s; nothing landed", g.o.Slot, g.pr, heading),
-		fmt.Sprintf("add %s to the PR body (None is allowed), then retry", heading))
-	return true, nil
+	return verdict, fmt.Sprintf("GATE %s refused — PR %s is missing %s; nothing landed", g.o.Slot, g.pr, heading),
+		fmt.Sprintf("add %s to the PR body (None is allowed), then retry", heading)
 }
 
 func missingPRSection(verdict string) bool {

@@ -280,6 +280,9 @@ type GateResult struct {
 	Round *RoundMemo
 	Err   string
 	Hint  string
+	// Gaps lists every record gap the gate found, in check order, when more than
+	// one refused the PR; Verdict, Err and Hint stay the first gap's.
+	Gaps []GateGap
 	// Refusal is the approval gate's refusal, set with verdict approval-required
 	// when it refused rather than failed to run.
 	Refusal *exitcode.Refusal
@@ -294,6 +297,13 @@ type GateResult struct {
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
+}
+
+// GateGap is one record gap of a refused gate: the blockedBy key, the message
+// and the fix hint of the check that found it.
+type GateGap struct {
+	BlockedBy, Msg, Hint string
+	verdict              string
 }
 
 // OK reports a successful verdict.
@@ -700,7 +710,10 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 	depth := runGateStage(verdict, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepReviewDepth(result, followed.Value.target, forged.Value, refs.Value, matched.Value)
 	})
-	checked := runGateStage(depth, func(result GateResult) (struct{}, GateResult, bool, error) {
+	listed := runGateStage(depth, func(result GateResult) (struct{}, GateResult, bool, error) {
+		return g.stepGaps(result, followed.Value.target, forged.Value)
+	})
+	checked := runGateStage(listed, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepCheckOnly(result, followed.Value.target, forged.Value, remote.Value, refs.Value, matched.Value)
 	})
 	onBase := runGateStage(checked, func(result GateResult) (struct{}, GateResult, bool, error) {
@@ -727,7 +740,21 @@ func (g gate) runGate(target GateTarget, result GateResult) (GateResult, error) 
 	confirmed := runGateStage(merged, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepVerify(result, followed.Value.target, forged.Value, remote.Value, refs.Value, matched.Value, verified.Value, merged.Value)
 	})
-	return confirmed.Result, confirmed.Err
+	return gapsFirst(confirmed.Result, confirmed.Err)
+}
+
+// gapsFirst keeps a record gap ahead of a refusal a later check raised: the
+// gate used to stop at the gap, so the later check never ran. A hard refusal
+// that is itself a gap's verdict, or a success, passes through.
+func gapsFirst(res GateResult, err error) (GateResult, error) {
+	if len(res.Gaps) == 0 || res.Verdict == res.Gaps[0].verdict {
+		return res, err
+	}
+	if err != nil && res.Verdict != GateVerdictBlocked {
+		return res, err // a failed read, not a refusal
+	}
+	res.refuseGaps()
+	return res, nil
 }
 
 func (g gate) runReviews(target GateTarget, result GateResult) (GateResult, error) {
@@ -765,7 +792,10 @@ func (g gate) runReviews(target GateTarget, result GateResult) (GateResult, erro
 	depth := runGateStage(reports, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepReviewDepth(result, followed.Value.target, forged.Value, refs.Value, matched.Value)
 	})
-	checked := runGateStage(depth, func(result GateResult) (struct{}, GateResult, bool, error) {
+	listed := runGateStage(depth, func(result GateResult) (struct{}, GateResult, bool, error) {
+		return g.stepGaps(result, followed.Value.target, forged.Value)
+	})
+	checked := runGateStage(listed, func(result GateResult) (struct{}, GateResult, bool, error) {
 		return g.stepCheckOnly(result, followed.Value.target, forged.Value, remote.Value, refs.Value, matched.Value)
 	})
 	return checked.Result, checked.Err
@@ -1210,9 +1240,9 @@ func (runner gate) stepOutcome(result GateResult, target GateTarget, forged gate
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("AUDIT-FAILED %s — could not record the lifted partial, so it stays refused: %v", g.o.Slot, err))
 		}
 	}
-	g.verdict(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
+	g.gap(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
 		fmt.Sprintf("read the summary (`rota round status`), then relay slot %s to finish the rest or `rota round transfer` it; a later `worker done --outcome done` lifts this", g.o.Slot))
-	return finish(true, nil)
+	return finish(false, nil)
 }
 
 // stepFreshness is stage 1. Three-way on the exit code: `&& FRESH || STALE`
@@ -1353,10 +1383,44 @@ func (runner gate) stepProvenance(result GateResult, target GateTarget, forged g
 	}
 	if failMsg != "" {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-		g.verdict(GateProvenanceFail, failMsg, "")
-		return finish(true, nil)
+		g.gap(GateProvenanceFail, failMsg, provenanceHint)
 	}
-	return finish(g.checkRequiredPRSections())
+	if v, msg, hint := g.requiredSectionsGap(); v != "" {
+		g.gap(v, msg, hint)
+	}
+	return finish(false, nil)
+}
+
+// provenanceHint is the fix for a provenance-fail gap; the message names the line.
+const provenanceHint = "fix the PR's `## Approvals` lines: cite `orchestrator relay round N` only for a relay logged for that round, never call it the maintainer, or write `settled in brief: <what>`"
+
+// stepGaps ends the record checks: when any of them found a gap, the gate
+// refuses once, listing every one of them.
+func (runner gate) stepGaps(result GateResult, target GateTarget, forged gateForgeResult) (struct{}, GateResult, bool, error) {
+	if len(result.Gaps) == 0 {
+		return struct{}{}, result, false, nil
+	}
+	result.refuseGaps()
+	return struct{}{}, result, true, nil
+}
+
+// refuseGaps sets the refusal from the recorded gaps. Verdict and Hint are the
+// first gap's, so a caller of one gap sees what it always saw; Err appends each
+// further gap with its own hint.
+func (r *GateResult) refuseGaps() {
+	first := r.Gaps[0]
+	r.Verdict, r.Err, r.Hint = first.verdict, first.Msg, first.Hint
+	if len(r.Gaps) > 1 {
+		var b strings.Builder
+		b.WriteString(first.Msg)
+		fmt.Fprintf(&b, "\n%d record gaps in all; fix every one before the next gate run:", len(r.Gaps))
+		for _, g := range r.Gaps {
+			fmt.Fprintf(&b, "\n  - %s: %s (fix: %s)", g.BlockedBy, g.Msg, g.Hint)
+		}
+		r.Err = b.String()
+	} else {
+		r.Gaps = nil
+	}
 }
 
 // stepBestOf refuses an attempt of a best-of:2 issue until a `rota round pick`
@@ -1552,8 +1616,8 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		needs = append(needs, "the review lenses need a recorded "+strings.Join(lensMissing, " and "))
 		hint += fmt.Sprintf("; the review lenses need a reviewer per triggered lens recorded by /rota-review on %s, or a looser review.lenses", g.branch)
 	}
-	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
-	return finish(true, nil)
+	g.gap(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
+	return finish(false, nil)
 }
 
 // resolveReview resolves the review depth of the gate's branch over span.
@@ -2324,6 +2388,12 @@ func (g gate) operation(result GateResult, target GateTarget, forged gateForgeRe
 // verdict records a non-success verdict.
 func (g *gateOperation) verdict(v, msg, hint string) {
 	g.res.Verdict, g.res.Err, g.res.Hint = v, msg, hint
+}
+
+// gap records a record gap without ending the gate: the record checks all run,
+// and stepGaps refuses once with every gap listed.
+func (g *gateOperation) gap(v, msg, hint string) {
+	g.res.Gaps = append(g.res.Gaps, GateGap{BlockedBy: cmp.Or(ClassifyVerdict(v).BlockedBy, v), Msg: msg, Hint: hint, verdict: v})
 }
 
 func (g *gateOperation) broke(msg string) (bool, error) {
