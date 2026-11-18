@@ -252,8 +252,8 @@ func defaultDeps() *Deps {
 		if err != nil {
 			return nil, err
 		}
-		if s.Source == config.SourceItsaplan {
-			return tracker.NewIssueTracker(ctx, s, config.SourceItsaplan, root, d.trackerOptions()...)
+		if tracker.MigratesToOwnTracker(s.Source) {
+			return tracker.NewIssueTracker(ctx, s, s.Source, root, d.trackerOptions()...)
 		}
 		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
 	}

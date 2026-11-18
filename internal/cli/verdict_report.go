@@ -32,7 +32,7 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 	var dst reportTargets
 	cfg := c.deps().Config(t.root)
 	source, _ := config.IssueSource(cfg)
-	keySource := source == "jira" || source == "linear" || source == "itsaplan"
+	keySource := tracker.IsOwnSource(source)
 	add := func(id string) {
 		if key, ok := tracker.ParseKey(id); ok {
 			id = key.String()

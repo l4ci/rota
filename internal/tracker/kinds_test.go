@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
@@ -31,11 +32,57 @@ func TestOwnKindsAreComplete(t *testing.T) {
 			t.Errorf("ownKindFor(%q) missed a registered kind", k.source)
 		}
 	}
-	for _, src := range []string{config.SourceJira, config.SourceLinear, config.SourceItsaplan} {
-		if !seen[src] {
+}
+
+// Each registered kind is wired everywhere else a kind appears: its source is
+// an issues.source choice, its project/team key and the connection kind are
+// known to config and connections, and doctor has a label for it. The reverse
+// holds too, so a kind added to config or connections alone fails here.
+func TestOwnKindsWiredEverywhere(t *testing.T) {
+	sourceKey, ok := config.SchemaKey("issues.source")
+	if !ok {
+		t.Fatal("issues.source is not a schema key")
+	}
+	byConn := map[string]bool{}
+	for _, k := range OwnKinds() {
+		byConn[k.ConnectionKind] = true
+		if !slices.Contains(sourceKey.Choices, k.Source) {
+			t.Errorf("%s: not an issues.source choice", k.Source)
+		}
+		if _, ok := config.SchemaKey(k.KeyName); !ok {
+			t.Errorf("%s: config key %q is not in the schema", k.Source, k.KeyName)
+		}
+		if !slices.Contains(connections.Kinds, k.ConnectionKind) {
+			t.Errorf("%s: connection kind %q is not in connections.Kinds", k.Source, k.ConnectionKind)
+		}
+		if k.ConnectArgs == "" || k.Key == nil || k.KeyName == "" {
+			t.Errorf("%s: missing doctor label (connect args or key)", k.Source)
+		}
+		var s Settings
+		*ownKindMust(t, k.Source).field(&s) = "X"
+		if k.Key(s) != "X" {
+			t.Errorf("%s: Key does not read the Settings field SettingsFromConfig fills", k.Source)
+		}
+	}
+	for _, kind := range connections.Kinds {
+		if !byConn[kind] {
+			t.Errorf("connection kind %q has no registered tracker kind", kind)
+		}
+	}
+	for _, src := range sourceKey.Choices {
+		if _, own := ownKindFor(src); !own && !slices.Contains([]string{config.SourceFile, config.SourceGitHub, config.SourceGitLab, config.SourceForge}, src) {
 			t.Errorf("issues.source %q is not registered", src)
 		}
 	}
+}
+
+func ownKindMust(t *testing.T, source string) ownKind {
+	t.Helper()
+	k, ok := ownKindFor(source)
+	if !ok {
+		t.Fatalf("no kind %q", source)
+	}
+	return k
 }
 
 // A provider no forge claims is refused, not built as GitLab.
@@ -47,6 +94,26 @@ func TestAdapterForRefusesUnknownProvider(t *testing.T) {
 	for _, p := range []string{"github", "gitlab"} {
 		if a, err := adapterFor(&CLI{Provider: p}, Settings{}); err != nil || a == nil {
 			t.Errorf("adapterFor(%s) = %v, %v", p, a, err)
+		}
+	}
+}
+
+// The cli sites that name kinds read the registry: key-addressed issues for
+// every own source, and the own-tracker migrate target for itsaplan only.
+func TestOwnSourceHelpers(t *testing.T) {
+	for _, k := range OwnKinds() {
+		if !IsOwnSource(k.Source) {
+			t.Errorf("IsOwnSource(%q) = false for a registered kind", k.Source)
+		}
+	}
+	for _, src := range []string{config.SourceFile, config.SourceGitHub, config.SourceGitLab, config.SourceForge, config.SourceIssues} {
+		if IsOwnSource(src) || MigratesToOwnTracker(src) {
+			t.Errorf("%q is not an own kind", src)
+		}
+	}
+	for src, want := range map[string]bool{config.SourceJira: false, config.SourceLinear: false, config.SourceItsaplan: true} {
+		if MigratesToOwnTracker(src) != want {
+			t.Errorf("MigratesToOwnTracker(%q) = %v, want %v", src, !want, want)
 		}
 	}
 }
