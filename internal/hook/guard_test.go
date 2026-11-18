@@ -421,3 +421,32 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 		})
 	}
 }
+
+// A command substitution runs where its enclosing command runs, so it is judged
+// against the directory in effect at that point of the line (#3730).
+func TestGuardSubstitutionFollowsCd(t *testing.T) {
+	cases := []struct {
+		line string
+		deny bool
+	}{
+		{"cd /elsewhere && echo $(git reset --hard)", true},
+		{"cd /elsewhere && echo `git reset --hard`", true},
+		{"cd /elsewhere; echo \"$(git reset --hard)\"", true},
+		{"cd " + gOther + " && echo $(git push -f origin " + gOtherBranch + ")", true},
+		{"cd /elsewhere && cd " + gWork + " && echo $(git reset --hard)", false},
+		{"echo $(git reset --hard) && cd /elsewhere", false},
+		{"echo $(git reset --hard); cd /elsewhere; echo done", false},
+		{"cd /elsewhere && echo $(cd " + gWork + ") && git reset --hard", true},
+		{"echo $(cd /elsewhere) && git reset --hard", false},
+		{"cd /elsewhere <<EOF\n$(git reset --hard)\nEOF", false},
+	}
+	for _, c := range cases {
+		got := Guard(c.line, guardEnv())
+		if c.deny && got == "" {
+			t.Errorf("allowed %q, want a denial", c.line)
+		}
+		if !c.deny && got != "" {
+			t.Errorf("denied %q: %s", c.line, got)
+		}
+	}
+}
