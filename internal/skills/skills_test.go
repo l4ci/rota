@@ -513,13 +513,13 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 	untouched(target)
 }
 
-func TestUninstallRemovesLockSidecar(t *testing.T) {
+func TestUninstallPreservesLockSidecar(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
 	s.Install(roots, Options{Mode: ModeFull})
 	Uninstall(roots, Options{Mode: ModeFull})
-	if _, err := os.Stat(filepath.Join(roots[0].Path, ManifestName+".lock")); err == nil {
-		t.Error("lock sidecar left behind")
+	if _, err := os.Stat(filepath.Join(roots[0].Path, ManifestName+".lock")); err != nil {
+		t.Errorf("stable lock sidecar removed: %v", err)
 	}
 }
 
