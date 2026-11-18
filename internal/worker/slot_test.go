@@ -134,8 +134,8 @@ func TestSlotAccountAccessorsPickTheKindsKey(t *testing.T) {
 		kind, key string
 		wantJSON  string
 	}{
-		{harness.Claude, "account", `{"configDir":"/w","account":"work"}`},
-		{harness.Codex, "codexAccount", `{"codexAccount":"work"}`},
+		{harness.Claude, "account", `{"configDir": "/w", "account": "work"}`},
+		{harness.Codex, "codexAccount", `{"codexAccount": "work"}`},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			s := &Slot{o: jsonx.NewObject()}
