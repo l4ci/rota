@@ -1648,6 +1648,19 @@ func TestTrainRedRerunGreenSkipsBisect(t *testing.T) {
 	}
 }
 
+// A real red (red again on the re-run) is no flake: nothing reaches the flake
+// ledger and the bisect names the culprit (#3647).
+func TestTrainRedOnRerunWritesNoFlakeEntry(t *testing.T) {
+	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || res.Unreproduced || len(res.Flaky) != 0 {
+		t.Fatalf("want b2 named culprit, no flake: %+v %v", res, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(w.dir, ".rota", "flakes.jsonl")); len(b) != 0 {
+		t.Errorf("a real red wrote a flake entry: %q", b)
+	}
+}
+
 // A red that survives the in-tree retry but passes on the member alone and on
 // a rerun of the red prefix does not reproduce: a flake. Nobody is blamed and
 // the note names the tests (#3095).
