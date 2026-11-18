@@ -117,7 +117,10 @@ func (f *File) Ready(ref string) ([]string, error) {
 	if _, _, ok := FindOrigin(f.Corpus(), ref); !ok {
 		return nil, errf(ErrNotFound, "[%s] not found in BACKLOG.md or ARCHIVE.md", ref)
 	}
-	text, _, _ := f.Detail(ref)
+	text, _, err := f.Detail(ref)
+	if err != nil {
+		return nil, err
+	}
 	return readyReasons(hasCriteria(text), f.hasNote(ref)), nil
 }
 
@@ -185,7 +188,10 @@ func (f *File) Comments(ref, kind string) ([]Comment, error) {
 	if _, _, ok := FindOrigin(f.Corpus(), ref); !ok {
 		return nil, errf(ErrNotFound, "[%s] not found in BACKLOG.md or ARCHIVE.md", ref)
 	}
-	content, _, _ := f.Detail(ref)
+	content, _, err := f.Detail(ref)
+	if err != nil {
+		return nil, err
+	}
 	out := []Comment{}
 	s, e, ok := section.Find(content, "Log")
 	if content == "" || !ok {

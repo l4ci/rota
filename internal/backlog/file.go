@@ -176,8 +176,8 @@ func (f *File) Markdown(int) (string, error) {
 }
 
 // Detail returns the content of the item's detail file,
-// .rota/<kind>/<ID>.md. ok is false when the ID has no type, the file is
-// missing or it cannot be read.
+// .rota/<kind>/<ID>.md. ok is false when the ID has no type or the file is
+// missing; any other read failure is returned as the error.
 func (f *File) Detail(ref string) (string, bool, error) {
 	if ref == "" {
 		return "", false, nil
@@ -188,8 +188,11 @@ func (f *File) Detail(ref string) (string, bool, error) {
 		return "", false, nil
 	}
 	text, err := fsio.ReadText(f.rota(t.Kind, ref+".md"))
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
 	}
 	return text, true, nil
 }
