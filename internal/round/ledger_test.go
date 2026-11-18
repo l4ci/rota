@@ -47,7 +47,7 @@ func TestAssignAppendsLedger(t *testing.T) {
 	if e.Issue != "12" || e.Slot != "ben" || e.Harness != harness.Claude || e.Round != 1 || e.TS.IsZero() {
 		t.Errorf("entry = %+v", e)
 	}
-	if _, ok := e.DetailFloat("headroom"); ok {
+	if _, ok := e.Headroom(); ok {
 		t.Error("no meter configured: headroom must be absent, not 0")
 	}
 	// A repeated assign resumes the same item and is not a second assignment.
@@ -114,7 +114,7 @@ func TestTransferAppendsLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindTransfer)
-	if e == nil || e.Issue != "12" || e.Slot != "dana" || e.DetailStr("from") != "ben" {
+	if e == nil || e.Issue != "12" || e.Slot != "dana" || e.TransferFrom() != "ben" {
 		t.Fatalf("transfer entry = %+v", e)
 	}
 }
@@ -126,7 +126,7 @@ func TestPickAppendsLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindPick)
-	if e == nil || e.Issue != "12" || e.Slot != "ben" || e.PR != "#7" || e.DetailStr("loser") != "dana" {
+	if e == nil || e.Issue != "12" || e.Slot != "ben" || e.PR != "#7" || detailJSON(t, e.Detail) != detailJSON(t, ledger.PickDetail("dana")) {
 		t.Fatalf("pick entry = %+v", e)
 	}
 }
@@ -198,7 +198,7 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 		t.Errorf("the meter fetch did not get the caller's context: %v", seen)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindDone)
-	if h, ok := e.DetailFloat("headroom"); e == nil || !ok || h != 75 {
+	if h, ok := e.Headroom(); e == nil || !ok || h != 75 {
 		t.Fatalf("done entry = %+v headroom %v %v, want 75", e, h, ok)
 	}
 }
@@ -352,7 +352,7 @@ func TestWindDownParkRowCarriesTheSessionOrSaysUnavailable(t *testing.T) {
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
 	}
-	if p := parkEntry(t, f); p.DetailStr("session") != "sid-4" || p.DetailStr("tokens") != "unavailable" {
+	if p := parkEntry(t, f); !strings.Contains(detailJSON(t, p.Detail), `"sid-4"`) || !strings.Contains(detailJSON(t, p.Detail), ledger.Unavailable) {
 		t.Errorf("park detail %v", p.Detail)
 	}
 }
@@ -392,21 +392,32 @@ func TestWindDownParkRowSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T
 		return calls, parkEntry(t, f), true
 	}
 	n, base, ok := run(0)
-	if !ok || base.DetailStr("session") != "sid-4" {
+	if !ok || !strings.Contains(detailJSON(t, base.Detail), `"sid-4"`) {
 		t.Fatalf("with a readable common dir the park row names the session: %v", base.Detail)
 	}
 	var hit *ledger.Entry
 	for i := 1; i <= n && hit == nil; i++ {
-		if _, p, ok := run(i); ok && p.DetailStr("session") != "sid-4" {
+		if _, p, ok := run(i); ok && !strings.Contains(detailJSON(t, p.Detail), `"sid-4"`) {
 			hit = &p
 		}
 	}
 	if hit == nil {
 		t.Fatalf("no unreadable common dir read changed the park row; the park row's own lookup is not covered (%d reads)", n)
 	}
-	for _, k := range []string{"session", "transcript", "tokens"} {
-		if hit.DetailStr(k) != "unavailable" {
-			t.Errorf("%s = %q, want unavailable (%v)", k, hit.DetailStr(k), hit.Detail)
-		}
+	want := ledger.ParkDetail(nil)
+	ledger.SetUnavailable(want)
+	if detailJSON(t, hit.Detail) != detailJSON(t, want) {
+		t.Errorf("not every session key says unavailable (%v)", hit.Detail)
 	}
+}
+
+// detailJSON is the compact JSON of a ledger detail, for comparing a row's
+// detail with one the ledger's own constructors build.
+func detailJSON(t *testing.T, o *jsonx.Object) string {
+	t.Helper()
+	b, err := jsonx.MarshalCompact(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

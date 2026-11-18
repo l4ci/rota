@@ -15,7 +15,7 @@ import (
 func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
 	defer func() {
 		if err == nil && counted {
-			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
+			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.BounceDetail(n)})
 		}
 	}()
 	err = Update(root, func(d *Doc) {

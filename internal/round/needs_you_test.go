@@ -83,11 +83,11 @@ func TestNeedsYouSources(t *testing.T) {
 	stamp := func(s string) time.Time { at, _ := time.Parse(time.RFC3339, s); return at }
 	for _, entry := range []ledger.Entry{
 		{TS: stamp("2026-10-03T09:00:00Z"), Kind: ledger.KindTransfer, Issue: "99", Slot: "human"},
-		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#8", Detail: ledger.Detail("verdict", worker.GateApprovalRequired)},
-		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#9", Detail: ledger.Detail("verdict", worker.GateApprovalRequired)},
-		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#10", Detail: ledger.Detail("verdict", worker.GateApprovalRequired)},
+		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#8", Detail: ledger.GateDetail(worker.GateApprovalRequired, "", nil)},
+		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#9", Detail: ledger.GateDetail(worker.GateApprovalRequired, "", nil)},
+		{TS: stamp("2026-10-03T10:00:00Z"), Kind: ledger.KindGate, PR: "#10", Detail: ledger.GateDetail(worker.GateApprovalRequired, "", nil)},
 		{TS: stamp("2026-10-03T10:15:00Z"), Kind: ledger.KindBounce, Issue: "12"},
-		{TS: stamp("2026-10-03T11:00:00Z"), Kind: ledger.KindGate, PR: "#9", Detail: ledger.Detail("verdict", worker.GatePass)},
+		{TS: stamp("2026-10-03T11:00:00Z"), Kind: ledger.KindGate, PR: "#9", Detail: ledger.GateDetail(worker.GatePass, "", nil)},
 	} {
 		if err := ledger.Append(root, entry); err != nil {
 			t.Fatal(err)

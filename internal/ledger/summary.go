@@ -229,11 +229,11 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 		case KindAssign:
 			if r.AssignedAt == nil {
 				r.AssignedAt = &ts
-				r.HeadroomStart = floatPtr(e, "headroom")
+				r.HeadroomStart = floatPtr(e)
 			}
 		case KindDone:
 			r.DoneAt = &ts
-			r.HeadroomEnd = floatPtr(e, "headroom")
+			r.HeadroomEnd = floatPtr(e)
 			r.Outcome = ""
 		case KindBlocked:
 			if !r.Merged {
@@ -242,7 +242,7 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 		case KindBounce:
 			r.Bounces++
 		case KindTransfer:
-			switch e.DetailStr("capReason") {
+			switch e.CapReason() {
 			case CapAmbiguousCriteria:
 				s.CapReasons.AmbiguousCriteria++
 			case CapTier:
@@ -250,7 +250,7 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 			case CapFresh:
 				s.CapReasons.Fresh++
 			}
-			if from := e.DetailStr("from"); from != "" {
+			if from := e.TransferFrom(); from != "" {
 				for _, o := range f.rows {
 					if o.Issue == e.Issue && o.Slot == from && !o.Merged {
 						o.Outcome = OutcomeTransferred
@@ -267,12 +267,12 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 				}
 			}
 		case KindPark:
-			if e.Detail != nil && jsonx.Bool(e.Detail, "merged") {
+			if e.Detail != nil && jsonx.Bool(e.Detail, keyMerged) {
 				r.Merged, r.Outcome = true, OutcomeMerged
 			}
 		case KindGate:
-			v := e.DetailStr("verdict")
-			if v != "" || jsonx.Bool(e.Detail, "train") { // a train member that passed has none, and drops an earlier gate's
+			v := e.Verdict()
+			if v != "" || e.IsTrainMember() { // a train member that passed has none, and drops an earlier gate's
 				r.Gate = v
 			}
 		case KindMerge:
@@ -310,8 +310,8 @@ func Fold(entries []Entry, audit []gate.Record, round int) Summary {
 	return s
 }
 
-func floatPtr(e Entry, key string) *float64 {
-	if v, ok := e.DetailFloat(key); ok {
+func floatPtr(e Entry) *float64 {
+	if v, ok := e.Headroom(); ok {
 		return &v
 	}
 	return nil

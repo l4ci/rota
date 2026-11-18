@@ -89,23 +89,6 @@ func tokensObject(t Tokens) *jsonx.Object {
 	return o
 }
 
-// DetailTokens reads the entry's token totals; ok is false for a row without
-// them or one that says unavailable.
-func (e Entry) DetailTokens() (Tokens, bool) {
-	if e.Detail == nil {
-		return Tokens{}, false
-	}
-	v, _ := e.Detail.Get("tokens")
-	o, ok := v.(*jsonx.Object)
-	if !ok {
-		return Tokens{}, false
-	}
-	n := func(k string) int64 { x, _ := jsonx.Int(mustGet(o, k)); return int64(x) }
-	return Tokens{Input: n("input"), Output: n("output"), CacheRead: n("cacheRead"), CacheWrite: n("cacheWrite")}, true
-}
-
-func mustGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
-
 // SessionDetail is the session part of a done or park row for slot: session
 // id, transcript path, subagent transcripts and token totals. A session the
 // harness reported before since belongs to an earlier assignment and counts as
@@ -119,30 +102,30 @@ func SessionDetail(commonDir, slot, kind string, since time.Time, copyDir string
 		SetUnavailable(d)
 		return d
 	}
-	d.Set("session", s.ID)
-	d.Set("transcript", cmpOr(s.Transcript, Unavailable))
+	d.Set(keySession, s.ID)
+	d.Set(keyTranscript, cmpOr(s.Transcript, Unavailable))
 	tok, subs, err := harness.TranscriptUsage(kind, s.Transcript)
 	if err != nil {
-		d.Set("tokens", Unavailable)
+		d.Set(keyTokens, Unavailable)
 	} else {
-		d.Set("tokens", tokensObject(tok))
+		d.Set(keyTokens, tokensObject(tok))
 	}
 	if len(subs) > 0 {
 		l := make([]any, len(subs))
 		for i, p := range subs {
 			l[i] = p
 		}
-		d.Set("subagents", l)
+		d.Set(keySubagents, l)
 	}
 	if copyDir != "" && s.Transcript != "" {
 		cp, err := copyTranscript(s, copyDir)
 		if err != nil {
-			d.Set("transcriptCopy", "failed")
+			d.Set(keyTranscriptCopy, "failed")
 			if warn != nil {
 				warn(fmt.Sprintf("rota: transcript of session %s not copied: %v", s.ID, err))
 			}
 		} else {
-			d.Set("transcriptCopy", cp)
+			d.Set(keyTranscriptCopy, cp)
 		}
 	}
 	return d
@@ -173,7 +156,7 @@ func copyTranscript(s Session, dir string) (string, error) {
 
 // SetUnavailable marks every session key of detail unavailable.
 func SetUnavailable(detail *jsonx.Object) {
-	for _, k := range []string{"session", "transcript", "tokens"} {
+	for _, k := range []string{keySession, keyTranscript, keyTokens} {
 		detail.Set(k, Unavailable)
 	}
 }

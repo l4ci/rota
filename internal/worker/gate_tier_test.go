@@ -80,7 +80,7 @@ func TestGateTier(t *testing.T) {
 			var tier string
 			for _, e := range es {
 				if e.Kind == ledger.KindGate {
-					tier = e.DetailStr("tier")
+					tier = e.Tier()
 				}
 			}
 			if tier != c.tier {

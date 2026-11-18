@@ -197,7 +197,7 @@ func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 		if !harness.ResolveAccounts(last.Harness).UsageMeter() {
 			continue
 		}
-		start, ok := last.DetailFloat("headroom")
+		start, ok := last.Headroom()
 		if !ok {
 			continue
 		}

@@ -212,7 +212,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			}
 			if !wasParked {
 				pe := ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
-					Detail: ledger.Detail("merged", so.Merged)}
+					Detail: ledger.ParkDetail(so.Merged)}
 				pe.Harness = kind
 				if cd, err := e.commonDir(ctx, root); err != nil {
 					ledger.SetUnavailable(pe.Detail)

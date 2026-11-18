@@ -49,11 +49,11 @@ func TestSessionDetailReportsIdPathTokensAndSubagents(t *testing.T) {
 	RecordSession(cd, Session{Slot: "dana", ID: "sid-1", Transcript: tr, UpdatedAt: sessNow})
 	d := SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), "", nil)
 	e := Entry{Detail: d}
-	if e.DetailStr("session") != "sid-1" || e.DetailStr("transcript") != tr {
+	if e.detailStr("session") != "sid-1" || e.detailStr("transcript") != tr {
 		t.Errorf("detail %v", d)
 	}
-	if tok, ok := e.DetailTokens(); !ok || tok != (Tokens{Input: 2, Output: 4, CacheRead: 6, CacheWrite: 8}) {
-		t.Errorf("tokens %+v %v", tok, ok)
+	if tok, _ := d.Get(keyTokens); !reflect.DeepEqual(tok, tokensObject(Tokens{Input: 2, Output: 4, CacheRead: 6, CacheWrite: 8})) {
+		t.Errorf("tokens %v", tok)
 	}
 	if subs, _ := d.Get("subagents"); !reflect.DeepEqual(subs, []any{sub}) {
 		t.Errorf("subagents %v, want [%s]", subs, sub)
@@ -68,10 +68,10 @@ func TestSessionDetailUnavailableNeverZero(t *testing.T) {
 	for slot, wantSession := range map[string]string{"none": "unavailable", "old": "unavailable", "gone": "s2"} {
 		d := SessionDetail(cd, slot, "claude", sessNow.Add(-time.Hour), "", nil)
 		e := Entry{Detail: d}
-		if e.DetailStr("session") != wantSession {
-			t.Errorf("%s: session %q, want %q", slot, e.DetailStr("session"), wantSession)
+		if e.detailStr("session") != wantSession {
+			t.Errorf("%s: session %q, want %q", slot, e.detailStr("session"), wantSession)
 		}
-		if e.DetailStr("tokens") != "unavailable" {
+		if !e.tokensUnavailable() {
 			t.Errorf("%s: tokens %v, want unavailable", slot, d)
 		}
 	}
@@ -83,7 +83,7 @@ func TestSessionDetailUnavailableForAHarnessWithoutUsage(t *testing.T) {
 	writeFile(t, tr, "{}\n")
 	RecordSession(cd, Session{Slot: "dana", ID: "s", Transcript: tr, UpdatedAt: sessNow})
 	d := SessionDetail(cd, "dana", "opencode", sessNow.Add(-time.Hour), "", nil)
-	if (Entry{Detail: d}).DetailStr("tokens") != "unavailable" {
+	if !(Entry{Detail: d}).tokensUnavailable() {
 		t.Errorf("%v", d)
 	}
 }
@@ -95,7 +95,7 @@ func TestSessionDetailCopiesOnlyWhenAsked(t *testing.T) {
 	writeFile(t, tr, usageLine)
 	RecordSession(cd, Session{Slot: "dana", ID: "sid-1", Transcript: tr, UpdatedAt: sessNow})
 	d := SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), "", nil)
-	if (Entry{Detail: d}).DetailStr("transcriptCopy") != "" {
+	if (Entry{Detail: d}).detailStr("transcriptCopy") != "" {
 		t.Error("copy must be off by default")
 	}
 	var copies []string
@@ -109,7 +109,7 @@ func TestSessionDetailCopiesOnlyWhenAsked(t *testing.T) {
 		t.Errorf("copying off, yet transcripts written under the state dir: %v", copies)
 	}
 	d = SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), out, nil)
-	cp := (Entry{Detail: d}).DetailStr("transcriptCopy")
+	cp := (Entry{Detail: d}).detailStr("transcriptCopy")
 	if cp != filepath.Join(out, "sid-1.jsonl") {
 		t.Fatalf("copy recorded as %q: %v", cp, d)
 	}
@@ -130,7 +130,7 @@ func TestSessionDetailSaysSoWhenTheCopyFails(t *testing.T) {
 	RecordSession(cd, Session{Slot: "dana", ID: "sid-1", Transcript: filepath.Join(t.TempDir(), "gone.jsonl"), UpdatedAt: sessNow})
 	var warned []string
 	d := SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), out, func(m string) { warned = append(warned, m) })
-	if got := (Entry{Detail: d}).DetailStr("transcriptCopy"); got != "failed" {
+	if got := (Entry{Detail: d}).detailStr("transcriptCopy"); got != "failed" {
 		t.Errorf("transcriptCopy %q, want failed", got)
 	}
 	if len(warned) != 1 || !strings.Contains(warned[0], "sid-1") {
@@ -142,10 +142,8 @@ func TestSetUnavailableMarksEverySessionKey(t *testing.T) {
 	d := jsonx.NewObject()
 	SetUnavailable(d)
 	e := Entry{Detail: d}
-	for _, k := range []string{"session", "transcript", "tokens"} {
-		if e.DetailStr(k) != Unavailable {
-			t.Errorf("%s = %q", k, e.DetailStr(k))
-		}
+	if e.sessionID() != Unavailable || e.transcriptPath() != Unavailable || !e.tokensUnavailable() {
+		t.Errorf("not every session key says unavailable: %v", d)
 	}
 }
 
@@ -161,7 +159,7 @@ func TestSessionDetailKeepsSubagentsWhenTheMainTranscriptHasNoUsage(t *testing.T
 	if subs, _ := d.Get("subagents"); !reflect.DeepEqual(subs, []any{sub}) {
 		t.Errorf("subagents %v, want [%s]", subs, sub)
 	}
-	if (Entry{Detail: d}).DetailStr("tokens") != Unavailable {
+	if !(Entry{Detail: d}).tokensUnavailable() {
 		t.Errorf("tokens %v, want unavailable", d)
 	}
 }
