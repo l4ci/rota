@@ -22,11 +22,11 @@ func TestIsCoversEveryPrefix(t *testing.T) {
 }
 
 // The shell harness reads the prefixes from this file; it must match the Go
-// list. Regenerate with: go test ./internal/hostenv -update-prefixes
+// list. Regenerate with: go run ./internal/hostenv/gen > test/lib/host-env-prefixes
 func TestShellPrefixFileMatchesList(t *testing.T) {
 	want := strings.Join(Prefixes, "\n") + "\n"
 	got, err := os.ReadFile(prefixFile)
 	if err != nil || string(got) != want {
-		t.Fatalf("%s is stale or missing (%v); run: go run ./internal/hostenv/gen > %s", prefixFile, err, prefixFile)
+		t.Fatalf("%s is stale or missing (%v); from the repo root run: go run ./internal/hostenv/gen > test/lib/host-env-prefixes", prefixFile, err)
 	}
 }

@@ -785,24 +785,9 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) string {
 	output, q := coreEvidenceRegions(screen)
 	old, oldQueue := coreEvidenceRegions(before)
-	marker := ""
-	for _, line := range strings.Split(text, "\n") {
-		if seq := harness.RelaySequence(line); seq != "" {
-			marker = seq
-			break
-		}
-	}
-	seenMarker := func(s string) bool {
-		for _, line := range strings.Split(s, "\n") {
-			if harness.RelaySequence(line) == marker && marker != "" {
-				return true
-			}
-		}
-		return false
-	}
 	// Only actual pending-input preview sections establish queue delivery. A
 	// working native status plus a normal prompt echo is pickup, never a queue.
-	if q >= 0 && seenMarker(output[q:]) && (oldQueue < 0 || !seenMarker(old[oldQueue:])) {
+	if q >= 0 && relayDeliveryEvidence(output[q:], text).Sequence && (oldQueue < 0 || !relayDeliveryEvidence(old[oldQueue:], text).Sequence) {
 		return "queued"
 	}
 	// A signed trailer uniquely identifies the submitted payload even when a
@@ -818,35 +803,11 @@ func coreDeliveryEvidence(screen, text string, t coreTerminal, before string) st
 	// one. Match the sent opening (including its round and sequence), never a
 	// task brief or a legacy bare marker. It must be absent from the entire
 	// pre-send screen, including its queue previews.
-	opening := ""
-	for _, line := range strings.Split(text, "\n") {
-		if harness.IsRelayOpen(line) && harness.RelaySequence(line) != "" {
-			opening = strings.TrimSpace(line)
-			break
-		}
-	}
-	seenOpening := func(s string) bool {
-		for _, line := range strings.Split(s, "\n") {
-			if harness.IsRelayOpen(line) && strings.HasSuffix(strings.TrimSpace(line), opening) {
-				return true
-			}
-		}
-		return false
-	}
-	if opening != "" && seenOpening(output) && !seenOpening(before) {
+	echo := relayDeliveryEvidence(output, text)
+	if echo.Opening && !relayDeliveryEvidence(before, text).Opening {
 		return "picked-up"
 	}
-	signature := ""
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "--- ROTA-SIG ") && strings.HasSuffix(line, " ---") {
-			digest := strings.TrimSuffix(strings.TrimPrefix(line, "--- ROTA-SIG "), " ---")
-			if b, e := hex.DecodeString(digest); e == nil && len(b) == 32 {
-				signature = line
-			}
-		}
-	}
-	if signature != "" && strings.Contains(squeeze(output), squeeze(signature)) && !strings.Contains(squeeze(old), squeeze(signature)) {
+	if echo.Signature && !relayDeliveryEvidence(old, text).Signature {
 		return "picked-up"
 	}
 	return ""

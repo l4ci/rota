@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"errors"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
 	"slices"

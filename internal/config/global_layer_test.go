@@ -5,6 +5,7 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
 	"strings"

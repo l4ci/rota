@@ -1,6 +1,7 @@
 package projects
 
 import (
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
 	"testing"
