@@ -31,10 +31,6 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 	if e.Round.AdoptPattern == "" {
 		return
 	}
-	if _, err := path.Match(e.Round.AdoptPattern, ""); err != nil {
-		rep.Warnings = append(rep.Warnings, fmt.Sprintf("round.adoptPattern: %v", err))
-		return
-	}
 	res, err := e.Git(ctx, root, "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes/origin")
 	if err != nil || res.ExitCode != 0 {
 		return
@@ -48,6 +44,9 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 		if support != "" && strings.HasPrefix(name, support) {
 			continue
 		}
+		// Branch globs deliberately use path.Match: `*` matches one branch
+		// segment, and does not cross `/`. pathglob.Valid checks the configured
+		// syntax without changing this branch-name matching rule.
 		if ok, _ := path.Match(e.Round.AdoptPattern, name); !ok {
 			continue
 		}
