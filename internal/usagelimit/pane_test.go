@@ -115,3 +115,33 @@ func TestStripRelaysEndsAtTheClosingTag(t *testing.T) {
 		t.Errorf("legacy header: StripRelays = %q", got)
 	}
 }
+
+func TestDetect(t *testing.T) {
+	const msg = "You've reached your usage limit · resets at 5pm"
+	for _, tc := range []struct {
+		name, pane string
+		sc         Scope
+		want       bool
+		line       string
+	}{
+		{"bare phrase", msg + "\n", Scope{}, true, msg},
+		{"approaching", "Approaching your usage limit\n", Scope{}, false, ""},
+		{"echoed brief", "--- ORCHESTRATOR (round 24) ---\nThe session says: " + msg + "\n\n", Scope{}, false, ""},
+		{"after reply marker", "--- ORCHESTRATOR (round 24) ---\nquote " + msg + "\n\n● working\n" + msg + "\n", Scope{}, true, msg},
+		{"quoted in reply", "● Here is the change:\n\n  - old: \"" + msg + "\"\n\n❯ \n", Scope{}, false, ""},
+		{"dialog below reply", "● done\n\n" + msg + "\n❯ \n", Scope{}, true, msg},
+		{"answered before prompt", msg + "\ncontinue please\nidle\n", Scope{Prompt: "continue please"}, false, ""},
+		{"prompt wrapped", msg + "\ncontinue\nplease\n" + msg + "\n", Scope{Prompt: "continue please"}, true, msg},
+		{"scrolled out of tail", msg + "\n" + strings.Repeat("x\n", 30), Scope{TailLines: 25}, false, ""},
+		{"inside tail", msg + "\n" + strings.Repeat("x\n", 10), Scope{TailLines: 25}, true, msg},
+	} {
+		h, ok := Detect("", tc.pane, tc.sc)
+		if ok != tc.want || h.Line != tc.line {
+			t.Errorf("%s: ok=%v line=%q, want %v %q", tc.name, ok, h.Line, tc.want, tc.line)
+		}
+	}
+	h, ok := Detect("", "● done\n\nplain dialog\n❯ \n", Scope{})
+	if ok || !strings.Contains(h.Dialog, "plain dialog") {
+		t.Errorf("dialog not returned without a limit: ok=%v %q", ok, h.Dialog)
+	}
+}

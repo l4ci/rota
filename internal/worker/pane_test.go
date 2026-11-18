@@ -372,9 +372,6 @@ func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 	if st, _ := Classify(brief, true, 60, ""); st != StateBusy {
 		t.Errorf("moving pane under an echoed brief: %s", st)
 	}
-	if _, _, ok := usagelimit.FindLimit("", usagelimit.StripRelays("", brief)); ok {
-		t.Error("StripRelays left the echoed phrase in")
-	}
 	own := brief + "● working\nYou've reached your usage limit\nAdd funds to continue\n"
 	st, ev = Classify(own, false, 60, "idle")
 	if st != StateLimited || !strings.Contains(ev, "Add funds") {

@@ -7,7 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/usagelimit"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -285,59 +284,12 @@ type obs struct {
 
 // ---- limit text -------------------------------------------------------------
 
-// findLimit looks for a limit message at the end of the pane text. Only what
-// follows the last occurrence of the resume prompt counts, so the message a
-// resume already answered cannot start another cycle. "Approaching" warnings
-// are not limits (usagelimit.FindLimit decides, reading the slot kind's own
-// phrases too), and reads only the harness's dialog region. It returns the matched line
-// and the text from it on (for the reset time).
+// findLimit looks for a limit message at the end of the pane text, scoped by
+// the resume prompt and tailLines: usagelimit.Detect decides what counts. It
+// returns the matched line and the text from it on (for the reset time).
 func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
-	if prompt != "" {
-		if re := promptRe(prompt); re != nil {
-			if locs := re.FindAllStringIndex(text, -1); len(locs) > 0 {
-				text = text[locs[len(locs)-1][1]:]
-			}
-		}
-	}
-	lines := strings.Split(strings.TrimRight(text, "\n \t"), "\n")
-	if len(lines) > tailLines {
-		lines = lines[len(lines)-tailLines:]
-	}
-	// Only the harness's own dialog counts, not text the worker quotes (#1246),
-	// the same region poll reads (#1212).
-	tail := usagelimit.DialogFor(kind, usagelimit.StripRelays(kind, strings.Join(lines, "\n")))
-	loc0, _, ok := usagelimit.FindLimit(kind, tail)
-	if !ok {
-		return "", "", false
-	}
-	start := strings.LastIndex(tail[:loc0], "\n") + 1
-	end := strings.Index(tail[loc0:], "\n")
-	if end < 0 {
-		end = len(tail)
-	} else {
-		end += loc0
-	}
-	rest = tail[start:]
-	if len(rest) > 400 {
-		rest = rest[:400]
-	}
-	return strings.TrimSpace(tail[start:end]), rest, true
-}
-
-// promptRe matches the prompt as a terminal may have wrapped it.
-func promptRe(prompt string) *regexp.Regexp {
-	words := strings.Fields(prompt)
-	if len(words) == 0 {
-		return nil
-	}
-	for i, w := range words {
-		words[i] = regexp.QuoteMeta(w)
-	}
-	re, err := regexp.Compile(strings.Join(words, `\s+`))
-	if err != nil {
-		return nil
-	}
-	return re
+	h, ok := usagelimit.Detect(kind, text, usagelimit.Scope{Prompt: prompt, TailLines: tailLines})
+	return h.Line, h.Rest, ok
 }
 
 // text handles one pane text.
