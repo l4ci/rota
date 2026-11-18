@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -1009,6 +1010,9 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			handReleased = append(handReleased, id)
 		}
 	}
+	// Only a claim the tracker holds has an age: a stray marker comment on a
+	// claim-store tracker is not claim state.
+	maps.DeleteFunc(claimedAt, func(id string, _ time.Time) bool { return !slices.Contains(held, id) })
 	// Unknown timestamps carry no activity evidence and keep legacy output stable.
 	for id, at := range claimedAt {
 		if at.IsZero() {
