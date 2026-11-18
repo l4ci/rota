@@ -341,7 +341,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 }
 
 // shipForge maps the forge's failures onto the exit table.
-type shipForge struct{ ship.Forge }
+type shipForge struct{ tracker.Forge }
 
 func (f shipForge) PRCreate(ctx context.Context, s tracker.PRSpec) (string, error) {
 	url, err := f.Forge.PRCreate(ctx, s)

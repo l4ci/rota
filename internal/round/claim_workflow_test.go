@@ -28,6 +28,11 @@ type workflowForge struct {
 	info   tracker.PRInfo
 }
 
+func (f *workflowForge) ClosingRefs(context.Context, int) ([]int, bool, error) {
+	return nil, false, nil
+}
+func (f *workflowForge) PRSetBody(context.Context, int, string) error { return nil }
+
 func (f *workflowForge) PRView(context.Context, int) (tracker.PRInfo, error) {
 	return f.info, nil
 }

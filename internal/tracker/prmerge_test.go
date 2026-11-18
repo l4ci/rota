@@ -113,3 +113,29 @@ func TestGitHubClosingRefs(t *testing.T) {
 		t.Errorf("an unknown PR must fail, got %v", err)
 	}
 }
+
+// Every Forge adapter declares ClosingRefs and PRSetBody (#3778): GitLab reports
+// closing refs as unknown, never as a missing method, and rewrites a MR
+// description through glab.
+func TestForgeDeclaresClosingRefsAndPRSetBody(t *testing.T) {
+	type declared interface {
+		ClosingRefs(ctx context.Context, pr int) ([]int, bool, error)
+		PRSetBody(ctx context.Context, pr int, body string) error
+	}
+	for _, p := range []string{"github", "gitlab"} {
+		s := &scripted{answer: func(string, []string) (string, string, int) {
+			return `{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[]}}}}}`, "", 0
+		}}
+		d, ok := newAdapter(t, p, s).(declared)
+		if !ok {
+			t.Fatalf("%s adapter does not declare ClosingRefs and PRSetBody", p)
+		}
+		if p != "gitlab" {
+			continue
+		}
+		nums, known, err := d.ClosingRefs(context.Background(), 7)
+		if err != nil || known || len(nums) != 0 {
+			t.Errorf("gitlab ClosingRefs = %v %v %v, want none, unknown, no error", nums, known, err)
+		}
+	}
+}

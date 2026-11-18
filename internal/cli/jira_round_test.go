@@ -179,6 +179,8 @@ func (prForge) PRMergeable(context.Context, int) (tracker.Mergeability, error) {
 
 func (prForge) ClosedNumbers(string) []int { return nil }
 
+func (prForge) ClosingRefs(context.Context, int) ([]int, bool, error) { return nil, false, nil }
+
 // AC-2: `worker gate` builds its issue side from issues.source jira. A PR
 // that does not name the key is refused through the Jira issue (its
 // partial-slice label is read there); naming the key in the title passes.

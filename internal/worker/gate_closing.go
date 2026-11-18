@@ -39,7 +39,7 @@ type closesInput struct {
 	Source     tracker.ClosingSource
 	FinalSlice bool
 	Issues     Issues
-	Forge      closingReporter // nil for a forge that cannot report closing refs
+	Forge      Forge // nil when there is no forge
 }
 
 // checkCloses refuses a PR whose body does not close the slot's issue (a
@@ -285,9 +285,7 @@ func (runner gateRun) stepCloses(result landing.GateResult, target GateTarget, f
 	}
 	in := closesInput{Slot: g.o.Slot, PR: g.pr, Keys: keys, FinalSlice: g.o.FinalSlice, Issues: g.issues,
 		Source: tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}}
-	if rep, ok := g.forge.(closingReporter); ok {
-		in.Forge = rep
-	}
+	in.Forge = g.forge
 	out := checkCloses(g.ctx, in)
 	if out.Verdict == landing.GateNotClosing {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)

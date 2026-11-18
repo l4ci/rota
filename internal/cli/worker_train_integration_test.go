@@ -111,8 +111,9 @@ func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 }
 
 type prSpy struct {
-	specs  []tracker.PRSpec
-	bodies map[int]string
+	tracker.Forge // only the PR calls below are answered
+	specs         []tracker.PRSpec
+	bodies        map[int]string
 }
 
 func (*prSpy) Provider() string  { return "github" }
