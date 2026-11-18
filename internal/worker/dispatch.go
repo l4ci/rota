@@ -568,7 +568,7 @@ func (e Env) awaitInput(ctx context.Context, t *dispatchTarget, slot string) err
 		switch {
 		case bootingStatus(st):
 			sawBooting = true
-		case st == "unknown" && sawBooting && !host.PaneBooted(t.h.Capture(ctx, slot, t.handle, 40)):
+		case st == "unknown" && sawBooting && !host.PaneBooted(readText(ctx, t.h, slot, t.handle, 40)):
 			// A flicker between booting states: keep waiting.
 		default:
 			return nil
@@ -909,4 +909,11 @@ func RecordWorkspaces(ctx context.Context, l host.Layouter, root, cli string) er
 			s.SetWorkspaceID(ws)
 		}
 	})
+}
+
+// readText is a slot's pane text for a check that treats an unreadable pane
+// as an empty one.
+func readText(ctx context.Context, h host.Host, slot, handle string, lines int) string {
+	text, _ := h.ReadPane(ctx, slot, handle, lines)
+	return text
 }

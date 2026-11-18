@@ -734,7 +734,7 @@ func TestCoreAdapterPendingCreationCleanup(t *testing.T) {
 	if !strings.HasPrefix(h.Status(context.Background(), "dana", s), UnverifiablePrefix) {
 		t.Fatal("pending create was classified ready")
 	}
-	if _, e := h.Capabilities().PaneReader.ReadPane(context.Background(), "dana", s, 0); e == nil {
+	if _, e := h.ReadPane(context.Background(), "dana", s, 0); e == nil {
 		t.Fatal("pending handle read as normal agent")
 	}
 	if e := h.Send(context.Background(), "dana", s, coreBrief(t, "task")); e == nil || f.sends != 0 {

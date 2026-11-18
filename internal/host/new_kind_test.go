@@ -34,8 +34,8 @@ func TestNewRefusesSoloAndUnknownKinds(t *testing.T) {
 			if err := h.Kill(context.Background(), "ben", "h"); !errors.Is(err, ErrUnknownKind) {
 				t.Fatalf("Kill error = %v, want ErrUnknownKind", err)
 			}
-			if got := h.Capture(context.Background(), "ben", "h", 5); got != "" {
-				t.Fatalf("Capture = %q, want empty", got)
+			if got, err := h.ReadPane(context.Background(), "ben", "h", 5); got != "" || !errors.Is(err, ErrUnknownKind) {
+				t.Fatalf("ReadPane = %q, %v, want empty and ErrUnknownKind", got, err)
 			}
 			if got := h.Status(context.Background(), "ben", "h"); got != "" {
 				t.Fatalf("Status = %q, want empty", got)

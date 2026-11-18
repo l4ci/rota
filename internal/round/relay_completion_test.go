@@ -96,13 +96,13 @@ func TestStatusDrivenCompletionRejectsNewerWork(t *testing.T) {
 	}
 }
 
-func (h *relayRoundHost) Capture(context.Context, string, string, int) string {
+func (h *relayRoundHost) ReadPane(context.Context, string, string, int) (string, error) {
 	if len(h.panes) == 0 {
-		return h.capture
+		return h.capture, nil
 	}
 	pane := h.panes[0]
 	h.panes = h.panes[1:]
-	return pane
+	return pane, nil
 }
 
 func TestRelayCompletionWithoutCommitAllowsNextAssignment(t *testing.T) {

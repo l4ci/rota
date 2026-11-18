@@ -9,15 +9,9 @@ import (
 	"strings"
 )
 
-// Capture prints recent pane text with soft wraps joined (the herdr twin of
-// capture-pane -J).
-func (h *herdr) Capture(ctx context.Context, slot, handle string, lines int) string {
-	text, _ := h.ReadPane(ctx, slot, handle, lines)
-	return text
-}
-
-// ReadPane is Capture that says when the read failed, so a pane that could not
-// be read is not taken for an empty one.
+// ReadPane prints recent pane text with soft wraps joined (the herdr twin of
+// capture-pane -J). herdr's own agent_not_found is the proof of a gone pane,
+// as in Status; any other failure is just unreadable.
 func (h *herdr) ReadPane(ctx context.Context, slot, handle string, lines int) (string, error) {
 	if handle == "" {
 		return "", nil
@@ -25,7 +19,11 @@ func (h *herdr) ReadPane(ctx context.Context, slot, handle string, lines int) (s
 	r := h.herdr(ctx, "agent", "read", AgentName(slot, handle), "--source", "recent-unwrapped",
 		"--lines", strconv.Itoa(lines), "--format", "text")
 	if r.ExitCode != 0 {
-		return "", fmt.Errorf("herdr agent read failed (exit %d): %s", r.ExitCode, strings.TrimSpace(r.Stderr))
+		err := fmt.Errorf("herdr agent read failed (exit %d): %s", r.ExitCode, strings.TrimSpace(r.Stderr))
+		if jget(r.Stderr, "error.code") == "agent_not_found" {
+			err = fmt.Errorf("%w: %w", ErrPaneGone, err)
+		}
+		return "", err
 	}
 	return paneText(r), nil
 }

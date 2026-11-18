@@ -292,10 +292,10 @@ func TestTmuxSendPasteFails(t *testing.T) {
 func TestTmuxCaptureEmptyHandle(t *testing.T) {
 	f := &fake{handler: func(string, []string) Result { return Result{Stdout: "CALLER PANE"} }}
 	h := New("tmux", deps(f, nil, &clock{}))
-	if h.Capture(bg, "w1", "", 40) != "" || len(f.calls) != 0 {
+	if got, err := h.ReadPane(bg, "w1", "", 40); got != "" || err != nil || len(f.calls) != 0 {
 		t.Error("an empty handle would capture the caller's pane; must return nothing and run nothing")
 	}
-	if h.Capture(bg, "w1", "rota:w1", 40) != "CALLER PANE" || !strings.Contains(f.log(), "capture-pane -pJ -t rota:w1") {
+	if got, err := h.ReadPane(bg, "w1", "rota:w1", 40); got != "CALLER PANE" || err != nil || !strings.Contains(f.log(), "capture-pane -pJ -t rota:w1") {
 		t.Errorf("capture call wrong: %s", f.log())
 	}
 	if h.Status(bg, "w1", "rota:w1") != "" {
@@ -928,8 +928,8 @@ func TestHerdrCaptureAndStatus(t *testing.T) {
 		return Result{}
 	}}
 	h := New("herdr", deps(f, herdrEnv, &clock{}))
-	if got := h.Capture(bg, "w1", "w9:t7", 60); got != "line1\nline2\n" {
-		t.Errorf("Capture = %q", got)
+	if got, err := h.ReadPane(bg, "w1", "w9:t7", 60); got != "line1\nline2\n" || err != nil {
+		t.Errorf("ReadPane = %q, %v", got, err)
 	}
 	if !strings.Contains(f.log(), "herdr agent read rota-w1-w9-t7 --source recent-unwrapped --lines 60 --format text") {
 		t.Errorf("read call wrong: %s", f.log())
@@ -937,7 +937,7 @@ func TestHerdrCaptureAndStatus(t *testing.T) {
 	if got := h.Status(bg, "w1", "w9:t7"); got != "working" {
 		t.Errorf("Status = %q", got)
 	}
-	if h.Capture(bg, "w1", "", 60) != "" || h.Status(bg, "w1", "") != "" {
+	if got, err := h.ReadPane(bg, "w1", "", 60); got != "" || err != nil || h.Status(bg, "w1", "") != "" {
 		t.Error("a never-dispatched slot has no capture or status")
 	}
 	f.handler = func(string, []string) Result { return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")} }

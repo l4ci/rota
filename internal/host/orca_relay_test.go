@@ -193,7 +193,7 @@ func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
 		}
 		return Result{ExitCode: 1}, nil
 	}})
-	if _, e := h.Capabilities().PaneReader.ReadPane(context.Background(), "ben", handle, 1); e == nil || errors.Is(e, ErrPaneGone) {
+	if _, e := h.ReadPane(context.Background(), "ben", handle, 1); e == nil || errors.Is(e, ErrPaneGone) {
 		t.Fatalf("missing native handle must be unverifiable: %v", e)
 	}
 	if e := h.Kill(context.Background(), "ben", handle); e == nil || closed {

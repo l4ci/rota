@@ -73,7 +73,7 @@ func buildRoundEnv(ctx context.Context, root string, d *Deps, withForge bool, w 
 			e.HostErr = err.Error()
 		} else if s := h.Capabilities().Snapshotter; s != nil {
 			e.Snapshot, e.HostName = s.Snapshot, h.Kind()
-			e.Capture = h.Capture
+			e.ReadPane = h.ReadPane
 			if tf := h.Capabilities().TabFollower; tf != nil {
 				e.FollowTab = tf.FollowTab
 			}

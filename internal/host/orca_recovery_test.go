@@ -257,7 +257,7 @@ func TestOrcaRecoveryPollingRetainsNewDescendants(t *testing.T) {
 		t.Fatal(err)
 	}
 	later, f.alive[789] = true, true
-	if _, err = adapter.Capabilities().PaneReader.ReadPane(context.Background(), "ben", h, 0); err != nil {
+	if _, err = adapter.ReadPane(context.Background(), "ben", h, 0); err != nil {
 		t.Fatal(err)
 	}
 	f.alive[123] = false

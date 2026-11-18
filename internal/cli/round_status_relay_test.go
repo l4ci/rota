@@ -88,11 +88,11 @@ func TestWorkerPollRejectsSupersededCompletionInTextAndJSON(t *testing.T) {
 }
 
 func (h *statusRelayHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
-func (h *statusRelayHost) Capture(context.Context, string, string, int) string {
+func (h *statusRelayHost) ReadPane(context.Context, string, string, int) (string, error) {
 	if len(h.captures) > 0 {
 		h.pane, h.captures = h.captures[0], h.captures[1:]
 	}
-	return h.pane
+	return h.pane, nil
 }
 func (h *statusRelayHost) Status(context.Context, string, string) string { return h.native }
 func (h *statusRelayHost) Send(ctx context.Context, slot, handle, file string) error {

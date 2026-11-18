@@ -221,14 +221,8 @@ type Explainer interface {
 
 // ErrPaneGone is what ReadPane returns when the host says the pane or its
 // window no longer exists (or its server is gone): positive proof, unlike a
-// capture that fails on a window that is still there.
+// read that fails on a window that is still there.
 var ErrPaneGone = errors.New("pane gone")
-
-// PaneReader is implemented by a host that can tell a pane it could not read
-// from one with no text. Capture returns "" for both.
-type PaneReader interface {
-	ReadPane(ctx context.Context, slot, handle string, lines int) (string, error)
-}
 
 // Labeler is implemented by a host that can show display-only text beside a
 // slot's pane and the round's workspace (herdr's sidebar). It is cosmetic and
@@ -299,7 +293,6 @@ type Capabilities struct {
 	DeliveryReconciler DeliveryReconciler
 	Resubmitter        Resubmitter
 	Explainer          Explainer
-	PaneReader         PaneReader
 	Labeler            Labeler
 	Notifier           Notifier
 	TurnReader         TurnReader
@@ -380,7 +373,6 @@ func CapabilitiesOf(h any) Capabilities {
 	c.DeliveryReconciler, _ = h.(DeliveryReconciler)
 	c.Resubmitter, _ = h.(Resubmitter)
 	c.Explainer, _ = h.(Explainer)
-	c.PaneReader, _ = h.(PaneReader)
 	c.Labeler, _ = h.(Labeler)
 	c.Notifier, _ = h.(Notifier)
 	c.TurnReader, _ = h.(TurnReader)
@@ -422,8 +414,13 @@ type Host interface {
 	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrDialogOpen,
 	// or another failure.
 	Send(ctx context.Context, slot, handle, file string) error
-	// Capture returns recent pane text, "" for a slot without a handle.
-	Capture(ctx context.Context, slot, handle string, lines int) string
+	// ReadPane is the one pane read. It returns the recent pane text with soft
+	// wraps joined; "" and a nil error for a slot without a handle or a pane
+	// with no text. The error rule is the same on every backend: an error
+	// wrapping ErrPaneGone proves the pane or its window is gone; any other
+	// error says only that the read failed, which is not proof of anything.
+	// Text is "" whenever the error is non-nil.
+	ReadPane(ctx context.Context, slot, handle string, lines int) (string, error)
 	// Status is the backend's native agent state, "" when it has none.
 	Status(ctx context.Context, slot, handle string) string
 	// Kill destroys the slot's session and proves it gone.
@@ -468,10 +465,12 @@ func (r refused) Where() string              { return "" }
 func (r refused) Spawn(context.Context, SpawnOpts) (string, error) {
 	return "", r.err()
 }
-func (r refused) Send(context.Context, string, string, string) error  { return r.err() }
-func (r refused) Capture(context.Context, string, string, int) string { return "" }
-func (r refused) Status(context.Context, string, string) string       { return "" }
-func (r refused) Kill(context.Context, string, string) error          { return r.err() }
+func (r refused) Send(context.Context, string, string, string) error { return r.err() }
+func (r refused) ReadPane(context.Context, string, string, int) (string, error) {
+	return "", r.err()
+}
+func (r refused) Status(context.Context, string, string) string { return "" }
+func (r refused) Kill(context.Context, string, string) error    { return r.err() }
 
 // presence is what a host query says about a target. Only presentGone proves
 // cleanup; presentUnknown (transport, execution or unreadable-response

@@ -174,7 +174,7 @@ func TestOrcaStaleNativeHandleIsNeverReplacedByTitle(t *testing.T) {
 	ts := []orcaTerminal{{ID: "different", Title: "r:ben", Cwd: f.cwd, Branch: f.branch}}
 	f.list = &ts
 	host := New(Orca, f.deps())
-	if _, e := host.Capabilities().PaneReader.ReadPane(context.Background(), "ben", h, 2); e == nil || errors.Is(e, ErrPaneGone) {
+	if _, e := host.ReadPane(context.Background(), "ben", h, 2); e == nil || errors.Is(e, ErrPaneGone) {
 		t.Fatalf("stale handle inferred gone: %v", e)
 	}
 	if e := host.Send(context.Background(), "ben", h, orcaBrief(t, "work")); e == nil || f.sends != 0 {
@@ -267,7 +267,7 @@ func TestOrcaFailClosedMalformedAndMissingProof(t *testing.T) {
 		t.Run(reply, func(t *testing.T) {
 			f := newOrcaFake(t)
 			f.readReply = reply
-			_, e := New(Orca, f.deps()).Capabilities().PaneReader.ReadPane(context.Background(), "ben", f.handle(t), 2)
+			_, e := New(Orca, f.deps()).ReadPane(context.Background(), "ben", f.handle(t), 2)
 			if e == nil || errors.Is(e, ErrPaneGone) {
 				t.Fatalf("malformed read: %v", e)
 			}

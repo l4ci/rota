@@ -172,16 +172,9 @@ func (t *tmux) rawPaste(ctx context.Context, handle string) bool {
 	return ok && h.RawPaste()
 }
 
-// Capture: an empty target would capture the CALLER's pane, so a slot with
+// ReadPane: an empty target would capture the CALLER's pane, so a slot with
 // no handle yields nothing. lines is unused: capture-pane takes the visible
 // pane without requesting scrollback.
-func (t *tmux) Capture(ctx context.Context, slot, handle string, lines int) string {
-	text, _ := t.ReadPane(ctx, slot, handle, lines)
-	return text
-}
-
-// ReadPane is Capture that says when the read failed, so a pane that could not
-// be read is not taken for an empty one.
 func (t *tmux) ReadPane(ctx context.Context, slot, handle string, lines int) (string, error) {
 	if handle == "" {
 		return "", nil

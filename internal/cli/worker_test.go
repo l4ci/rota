@@ -243,8 +243,10 @@ func (h *cliHost) Send(_ context.Context, slot, handle, file string) error {
 	h.calls = append(h.calls, "send:"+string(b))
 	return h.sendErr
 }
-func (h *cliHost) Capture(context.Context, string, string, int) string { return "static\n" }
-func (h *cliHost) Status(context.Context, string, string) string       { return "" }
+func (h *cliHost) ReadPane(context.Context, string, string, int) (string, error) {
+	return "static\n", nil
+}
+func (h *cliHost) Status(context.Context, string, string) string { return "" }
 func (h *cliHost) Kill(context.Context, string, string) error {
 	h.calls = append(h.calls, "kill")
 	return nil
