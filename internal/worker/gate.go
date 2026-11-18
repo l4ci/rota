@@ -1555,6 +1555,19 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 			}
 			return true
 		}
+		// What a covering review needs, named once for the refusal. Nothing
+		// at depth none (no cross review, no lens): the fixes need no verdict.
+		need := verdict.MissingReviews(depth, res.HasSpec, nil)
+		if NeedsCross(res, depth) {
+			need = append(need, "cross-harness review")
+		}
+		for _, l := range res.Lenses {
+			need = append(need, verdict.LensKind(l.Name))
+		}
+		if len(need) == 0 {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("INTEGRATION-REVIEW %s — review depth %s (%s); the fix commits need no verdict", g.branch, depth, why))
+			return finish(false, nil)
+		}
 		ok, note, err := g.e.integrationReviewed(g.root, intRec, list, intHead, covered)
 		if err != nil {
 			return finish(g.broke(err.Error()))
@@ -1564,7 +1577,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 			return finish(false, nil)
 		}
 		g.res.SHA = strutil.ShortSHA(intHead)
-		g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(verdict.MissingReviews(depth, res.HasSpec, nil), " and ")),
+		g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(need, " and ")),
 			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it", g.branch))
 		return finish(true, nil)
 	}

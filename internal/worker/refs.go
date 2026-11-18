@@ -178,6 +178,11 @@ func (e Env) Refs(ctx context.Context, root string, o RefsOpts) (RefsResult, err
 	if out, code := e.runGit(ctx, dir, "push", "-q", rem, commit+":refs/heads/"+rec.Branch); code != 0 {
 		return res, fmt.Errorf("pushing %s to %s/%s failed: %s", strutil.ShortSHA(commit), rem, rec.Branch, strings.TrimSpace(out))
 	}
+	// The renewal is rota's own commit on the branch, not a fix: the look at
+	// the tip before it stays the approval the gate needs.
+	if err := UpdateIntegration(root, rec.Branch, func(it *Integration) { it.RotaMerges = append(it.RotaMerges, commit) }); err != nil {
+		return res, fmt.Errorf("recording the renewal commit %s: %w", strutil.ShortSHA(commit), err)
+	}
 	res.Verdict, res.Commit, res.Files = RefsRenewed, commit, files
 	res.Message = fmt.Sprintf("renewed %d reference file(s) on %s in %s", len(files), rec.Branch, strutil.ShortSHA(commit))
 	return res, nil

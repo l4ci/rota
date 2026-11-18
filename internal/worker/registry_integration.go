@@ -32,8 +32,9 @@ type Integration struct {
 	Start string `json:"start"`
 	// Assembled is the tip after rota's own merges, before any fix commit.
 	Assembled string `json:"assembled"`
-	// RotaMerges are the first-parent merges rota made cleanly: member merges
-	// and merges of the base. Every other first-parent commit is a fix.
+	// RotaMerges are the first-parent commits rota made itself: member merges,
+	// merges of the base and `rota worker refs` renewal commits. Every other
+	// first-parent commit is a fix.
 	RotaMerges []string `json:"rotaMerges"`
 	// VerifiedTip is the tip the last green train verified, VerifiedBase the
 	// base commit merged into it.
