@@ -436,6 +436,8 @@ func TestGuardSubstitutionFollowsCd(t *testing.T) {
 		{"cd /elsewhere && cd " + gWork + " && echo $(git reset --hard)", false},
 		{"echo $(git reset --hard) && cd /elsewhere", false},
 		{"echo $(git reset --hard); cd /elsewhere; echo done", false},
+		{"cd /elsewhere && echo $(cd " + gWork + ") && git reset --hard", true},
+		{"echo $(cd /elsewhere) && git reset --hard", false},
 		{"cd /elsewhere <<EOF\n$(git reset --hard)\nEOF", false},
 	}
 	for _, c := range cases {

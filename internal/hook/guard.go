@@ -83,7 +83,11 @@ func (g *guard) script(s string, depth int) error {
 	// commands before them left (#3730).
 	subs := func(n int) error {
 		for ; done < n && g.reason == ""; done++ {
-			if err := g.script(p.nested[done], depth+1); err != nil {
+			// A substitution is a subshell: its cd does not move the line.
+			saved := g.cwd
+			err := g.script(p.nested[done], depth+1)
+			g.cwd = saved
+			if err != nil {
 				return err
 			}
 		}
