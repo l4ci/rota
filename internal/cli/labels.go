@@ -34,7 +34,7 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 		if !issue {
 			return Result{}, Resolution("labels sync requires an issue tracker; issues.source is file")
 		}
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 		entries, err := config.ResolvedLabels(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}

@@ -973,14 +973,14 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 			text = marker.RelayLine(n) + "\n" + text
 			// The stamp goes last so the relay marker stays the first line and
 			// the summary the gate reads stays the relayed text (#1869).
-			if cfg := c.deps().Config(root); roundcfg.SupportName(cfg) != "" {
+			if cfg := c.projectConfig(root); roundcfg.SupportName(cfg) != "" {
 				role, _ := roundcfg.MachineRole(cfg)
 				text = strings.TrimRight(text, "\n") + "\n" + marker.FromLine(role)
 			}
 		} else if *kind != "harvested" {
 			// With the support split active the other machine's watch has to tell
 			// whose comment this is (#1827).
-			cfg := c.deps().Config(root)
+			cfg := c.projectConfig(root)
 			if roundcfg.SupportName(cfg) != "" {
 				role, _ := roundcfg.MachineRole(cfg)
 				text = marker.FromLine(role) + "\n" + text

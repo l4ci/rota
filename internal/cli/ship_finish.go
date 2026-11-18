@@ -121,7 +121,7 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		done := removed > 0 || swept || len(completed.([]string)) > 0
 
 		sig := cycle.Signals{Items: len(info.IDs), Files: len(info.Files), DebugCycles: finishDebugCycles(c, info.IDs)}
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 		learn := finishGate(cycle.Gate(sig), done)
 		learnObj := jsonx.NewObject()
 		learnObj.Set("action", learn.Action)

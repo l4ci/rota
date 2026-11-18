@@ -59,7 +59,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 // escalation path.
 func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.ReviewOpts, error) {
 	ctx := c.Context()
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	fg, err := c.deps().forge(ctx, cfg, "", root)
 	if err != nil {
 		return round.ReviewOpts{}, trackerErr(err)

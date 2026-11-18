@@ -146,7 +146,7 @@ func (f shipForge) PRSetBody(ctx context.Context, pr int, body string) error {
 // openIntegrationPRVia opens the PR through the project's forge, under the
 // integration lock so two trains of one integration publish one after the other.
 func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, error) {
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	provider, err := actorForge(c, cfg, root)
 	if err != nil {
 		return "", err
