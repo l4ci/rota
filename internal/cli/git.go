@@ -108,7 +108,7 @@ func resolveBaseFor(c *Ctx, dir string) (string, bool, error) {
 // slotMilestoneBase is the milestone branch the calling worker slot is routed
 // to, "" when there is none (not a slot, no registry, or on the round base).
 func slotMilestoneBase(c *Ctx) string {
-	slot := c.deps().Getenv("ROTA_SLOT")
+	slot := c.WorkerSlot()
 	if slot == "" {
 		return ""
 	}

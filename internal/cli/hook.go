@@ -129,7 +129,7 @@ func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 // round ledger can name it when the issue ends. Only a slot's own session
 // (ROTA_SLOT set) is recorded; a failure is silent, the hook never blocks.
 func noteSlotSession(c *Ctx, commonDir string, p hook.Payload, now time.Time) {
-	slot := c.deps().Getenv("ROTA_SLOT")
+	slot := c.WorkerSlot()
 	if slot == "" || p.SessionID == "" {
 		return
 	}
@@ -404,7 +404,7 @@ func hookGuard(c *Ctx, args []string) (Result, error) {
 			"hookEventName": "PreToolUse", "additionalContext": context,
 		}}), nil
 	}
-	slot := c.deps().Getenv("ROTA_SLOT")
+	slot := c.WorkerSlot()
 	if slot == "" {
 		return Result{}, nil
 	}
@@ -432,7 +432,7 @@ func hookGuard(c *Ctx, args []string) (Result, error) {
 // unanswered record is offered again by the next session. A round worker stays
 // silent (wind-down offers for the round).
 func bugreportStopOffer(c *Ctx, root, sid string) string {
-	if c.deps().Getenv("ROTA_SLOT") != "" {
+	if c.WorkerSlot() != "" {
 		return ""
 	}
 	if sid == "" {
