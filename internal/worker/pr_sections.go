@@ -85,9 +85,13 @@ func excludeTrainMember(res *TrainResult, target string, gr GateResult) bool {
 	if !missingPRSection(gr.Verdict) && gr.Verdict != GateReviewMissing {
 		return false
 	}
+	skipTrainMember(res, target, gr)
+	return true
+}
+
+func skipTrainMember(res *TrainResult, target string, gr GateResult) {
 	res.Culprits = append(res.Culprits, TrainCulprit{Target: target, PR: gr.PR, BlockedBy: gr.Verdict, Gate: gr})
 	res.Notes = append(res.Notes, fmt.Sprintf("TRAIN-SKIP %s (%s) — blockedBy: %s; %s", target, gr.PR, gr.Verdict, gr.Err))
-	return true
 }
 
 // filterPRSections reads every PR body before the ordinary member checks.
@@ -104,6 +108,15 @@ func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry
 		if err != nil {
 			return nil, true, err
 		}
+		if missingPRSection(gr.Verdict) {
+			// The prefilter decides the skip; the full check only widens its gap list.
+			gr, err = t.fullGaps(in, target, gr)
+			if err != nil {
+				return nil, true, err
+			}
+			skipTrainMember(res, target, gr)
+			continue
+		}
 		if excludeTrainMember(res, target, gr) {
 			continue
 		}
@@ -114,6 +127,21 @@ func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry
 		kept = append(kept, target)
 	}
 	return kept, false, nil
+}
+
+// fullGaps runs the member's ordinary check so a section-dropped member lists
+// every record gap, in the order `rota worker gate` does. It keeps the
+// prefilter's result when the check found no further gap.
+func (t *trainRun) fullGaps(in gateInput, target string, dropped GateResult) (GateResult, error) {
+	full, err := t.e.Gate(t.ctx, t.root, t.memberCheckOpts(target, in))
+	if err != nil && full.Verdict != GateVerdictBlocked {
+		return dropped, err
+	}
+	if len(full.Gaps) < 2 {
+		return dropped, nil
+	}
+	full.Notes = appendNew(dropped.Notes, full.Notes...)
+	return full, nil
 }
 
 func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (GateResult, error) {
