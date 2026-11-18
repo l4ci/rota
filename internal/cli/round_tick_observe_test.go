@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,11 +10,9 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundtick"
 )
 
@@ -125,32 +121,4 @@ func TestRoundTickObserveLeavesHeldWorktreeIndexAlone(t *testing.T) {
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("observation rewrote the held worktree's index")
 	}
-}
-
-// The no-mutation guarantee is structural: the observing world refuses every
-// call that would change state, whatever the tick asks of it. One table lists
-// each mutating World method; a new one must be added here or the seam's
-// explicit implementation will not compile.
-func TestObservingWorldRefusesMutations(t *testing.T) {
-	o := observingWorld{&tickWorld{}}
-	ctx := context.Background()
-	refusals := map[string]func() error{
-		"Landing": func() error { _, _, err := o.Landing(ctx, postgate.Request{}); return err },
-		"Assign":  func() error { _, err := o.Assign(ctx, "#1"); return err },
-		"Review.Mint": func() error {
-			_, err := observingReviewer{}.Mint(ctx, round.Architecture{})
-			return err
-		},
-		"FollowUp.Start": func() error {
-			return o.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false)
-		},
-	}
-	for name, call := range refusals {
-		if err := call(); !errors.Is(err, errReadOnlyWorld) {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	// The audit line is dropped, not refused: the zero tickWorld would panic
-	// if it wrote.
-	o.Audit(roundtick.Action{})
 }

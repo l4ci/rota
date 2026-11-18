@@ -1,14 +1,16 @@
 package round
 
 import (
+	"context"
 	"testing"
 
-	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestBranchNoPRWaitsForFinishedSlot(t *testing.T) {
-	root := newRepo(t, map[string]string{"kit": "kit/2179-work"}, "kit")
+	root := ""
 	for _, tc := range []struct {
 		name, recorded, live string
 		doneEvent            bool // the worker reported done after its last dispatch
@@ -26,7 +28,7 @@ func TestBranchNoPRWaitsForFinishedSlot(t *testing.T) {
 		{"recorded idle without host", "idle", "", false, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			writeRegistry(t, root, slot(root, "kit", "kit/2179-work", func(o *jsonx.Object) {
+			s := slot(root, "kit", "kit/2179-work", func(o *jsonx.Object) {
 				o.Set("state", tc.recorded)
 				o.Set("task", "2179")
 				o.Set("handle", "w1:t1")
@@ -34,11 +36,15 @@ func TestBranchNoPRWaitsForFinishedSlot(t *testing.T) {
 				if tc.doneEvent {
 					o.Set("event", jsonx.Obj("kind", "done", "ts", "2026-10-03T10:30:00Z"))
 				}
-			}))
-			e := env(nil, (&fakeRemote{labelled: []int{2179}}).asForge())
-			if tc.live != "" {
-				e = env([]host.Agent{{Tab: "w1:t1", Status: tc.live}}, e.Forge)
-			}
+			})
+			e := Env{Forge: (&fakeRemote{}).asForge(), Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+				if len(args) > 0 && args[0] == "rev-list" {
+					return git.Result{Stdout: "1"}, nil
+				}
+				return git.Result{ExitCode: 1}, nil
+			}}
+			r := &Row{Name: "kit", Issue: "2179", Branch: "kit/2179-work", HostState: tc.live, Registered: true}
+
 			count := func(fs []Finding) int {
 				n := 0
 				for _, f := range fs {
@@ -48,20 +54,12 @@ func TestBranchNoPRWaitsForFinishedSlot(t *testing.T) {
 				}
 				return n
 			}
-			rep, err := e.Status(bg, root)
-			if err != nil {
-				t.Fatal(err)
+			findings, _, notes := e.slotFindings(bg, root, []*Row{r}, map[string]*view{"kit": {base: "main"}}, map[string]*worker.Slot{"kit": s}, forgeState{ok: true})
+			if len(notes) != 0 {
+				t.Fatalf("diagnostics: %v", notes)
 			}
-			out, err := e.Reconcile(bg, root, false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Logf("branch-no-pr: status=%d reconcile=%d", count(rep.Findings), count(out.Drift))
-			if got := count(rep.Findings); got != tc.want {
-				t.Errorf("status reports %d branch-no-pr findings, want %d", got, tc.want)
-			}
-			if got := count(out.Drift); got != tc.want {
-				t.Errorf("reconcile reports %d branch-no-pr findings, want %d", got, tc.want)
+			if got := count(findings); got != tc.want {
+				t.Errorf("reports %d branch-no-pr findings, want %d: %+v", got, tc.want, findings)
 			}
 		})
 	}

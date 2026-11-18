@@ -23,7 +23,6 @@
     "./internal/agents/TestPromptsExplicitActivation": "Reads generated agent files and .rota/prompts.json in a temporary test project; does not inspect repository source/docs.",
     "./internal/agents/TestWriteIdempotentAndCheck": "Reads generated agent Markdown from a temporary project.",
     "./internal/agents/TestWriteRefusesForeignFile": "Reads a planted foreign agent file in a temporary project to verify overwrite refusal.",
-    "./internal/agents/TestWriteRefusesSymlinkedDir": "Enumerates an empty temporary outside directory to verify symlink protection.",
     "./internal/artifact/TestFileDocsCreate": "Writes and reads plan Markdown in a temporary artifact fixture.",
     "./internal/artifact/TestFileDocsUpdate": "Rewrites and reads design Markdown in a temporary artifact fixture.",
     "./internal/artifact/TestFileDocsVerbs":"Reads generated plan Markdown in a temporary artifact fixture.",
