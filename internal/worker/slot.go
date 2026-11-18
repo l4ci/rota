@@ -142,9 +142,10 @@ func (s *Slot) SetBriefContext(settledAnswers string, siblings []string) {
 
 func (s *Slot) PR() string { return jsonx.Str(s.o, "pr") }
 
-// account is the registry's metered (Claude) account key. Callers go through
-// AccountFor and SetAccountFor, which pick the key for the kind.
-func (s *Slot) account() string { return jsonx.Str(s.o, "account") }
+// MeteredAccount is the account of the usage-metered harness (Claude): the
+// concern Assign and the done ledger name explicitly, whatever the slot's own
+// kind is. Everything else goes through AccountFor and SetAccountFor.
+func (s *Slot) MeteredAccount() string { return jsonx.Str(s.o, "account") }
 
 // Attempt is the id minted for the slot's current assignment, "" for none. A
 // worker's done and report carry the id from its brief; one that does not match
@@ -207,7 +208,7 @@ func (s *Slot) AccountFor(kind string) string {
 	if s.homeKeyed(&kind) {
 		return s.homeAccount()
 	}
-	return s.account()
+	return s.MeteredAccount()
 }
 
 // homeKeyed resolves kind ("" is the slot's own) in place and reports whether
@@ -230,7 +231,7 @@ func (s *Slot) SetAccountFor(kind, account, configDir string) {
 		s.setHomeAccount(account)
 		return
 	}
-	s.setAccount(account, configDir)
+	s.SetMeteredAccount(account, configDir)
 }
 
 func (s *Slot) setHomeAccount(name string) {
@@ -457,7 +458,8 @@ func (s *Slot) AppendRelay(entry *jsonx.Object) {
 	s.AppendRelays([]any{entry})
 }
 
-func (s *Slot) setAccount(account, configDir string) {
+// SetMeteredAccount records the metered account and its config dir.
+func (s *Slot) SetMeteredAccount(account, configDir string) {
 	if configDir == "" {
 		s.o.Set("configDir", nil)
 	} else {
