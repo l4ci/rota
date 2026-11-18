@@ -402,10 +402,16 @@ func (n *handoffNote) line() string {
 	return l + "\tread it before choosing the slate, then rerun with --consume-handoff"
 }
 
-// warnRepoConfigDrift warns when repo-scope git config moved since the
-// recorded baseline, naming the keys. It says nothing without a baseline.
+// warnRepoConfigDrift warns when repo-scope git config differs from the
+// recorded baseline, or risky keys stand unbaselined, naming the keys. A failed
+// check is a warning too, not silence.
 func warnRepoConfigDrift(c *Ctx, ctx context.Context, root string) {
-	if dr, err := repoconfig.Check(ctx, c.deps().Git, root); err == nil && !dr.Clean() {
-		c.Warn("repo-scope git config changed since the baseline (%s); linked worktrees share .git/config", dr.Summary())
+	dr, err := repoconfig.Check(ctx, c.deps().Git, root)
+	if err != nil {
+		c.Warn("repo-scope git config could not be checked: %v", err)
+		return
+	}
+	if !dr.Clean() {
+		c.Warn("%s; linked worktrees share .git/config", dr.Message())
 	}
 }

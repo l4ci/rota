@@ -89,7 +89,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	} else {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
-	in.RepoConfig = doctorRepoConfig(ctx, d.Git, in.Dir)
+	// Outside a git repository there is no repo config to check: stay silent.
+	if d.Toplevel(ctx) != "" {
+		in.RepoConfig, in.RepoConfigErr = doctorRepoConfig(ctx, d.Git, in.Dir)
+	}
 	root, _ := findRoot(in.Dir, false)
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
@@ -167,14 +170,17 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 }
 
 // doctorRepoConfig reports drift from the baseline round start recorded, or
-// the risky keys present when there is none. It never writes. nil outside a
-// repository, on a git failure, or when nothing is to report.
-func doctorRepoConfig(ctx context.Context, run git.Runner, dir string) *repoconfig.Drift {
+// the risky keys present when there is none, and the error when the check
+// fails. It never writes. Both are nil when nothing is to report.
+func doctorRepoConfig(ctx context.Context, run git.Runner, dir string) (*repoconfig.Drift, error) {
 	dr, err := repoconfig.Check(ctx, run, dir)
-	if err != nil || dr.Clean() {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return &dr
+	if dr.Clean() {
+		return nil, nil
+	}
+	return &dr, nil
 }
 
 // staleBinary asks whether the running rota is behind the rota source checkout
