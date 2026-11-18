@@ -7,6 +7,8 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/l4ci/rota/internal/harness"
 )
@@ -16,22 +18,126 @@ import (
 // Capabilities()) and reads a field.
 //
 // New-host registration checklist, in addition to the adapter and its tests:
-//   - host.go: Kind constant, KindOf, Binary (if it has an executable),
-//     CapabilitiesForKind and New.
-//   - policy.go: PaneKinds, paneEnv and kindPolicy.
-//   - resolve.go: Resolve's explicit kinds and detection; ResolveLaunch's
-//     in-session and outside-session selection rules.
+//   - host.go: Kind constant and KindOf.
+//   - policy.go: one kindSpecs entry (binary, pane env, pickup policy, build,
+//     policy overlay). Everything below reads it; no other switch on Kind.
+//   - resolve.go: ResolveLaunch's in-session and outside-session selection
+//     rules (cross-kind precedence, so not in the descriptor).
 //   - panes.go: CurrentPaneAny, if the host supports detection without a kind.
-//   - pickup.go: pickupPolicies, if the adapter calls confirmPickup (Core uses
-//     its own delivery protocol instead).
 //   - internal/config/keys.go: round.dispatch choices; internal/config/schema.go:
 //     setup help for that choice. Regenerate the config reference and update
 //     the public configuration docs when adding the choice.
 //   - internal/hostenv/hostenv.go: session environment prefixes; regenerate
 //     test/lib/host-env-prefixes via internal/hostenv/gen when adding a prefix.
 
+// kindSpec is one pane host kind's descriptor: the facts that used to be a
+// switch on Kind in host.go, policy.go, pickup.go and resolve.go.
+type kindSpec struct {
+	kind    Kind
+	binary  string // executable; "" when the kind has none
+	paneEnv string // env var naming the pane a process runs in; "" for none
+	pickup  pickupPolicy
+	// build returns the adapter. It never reads d's defaults; New fills them.
+	build func(d Deps) Host
+	// policy overlays the kind's fields that no optional interface carries.
+	policy func(c Capabilities) Capabilities
+}
+
+// kindSpecs are the pane kinds in resolution order. It is built in init, not
+// a var literal: Diagnose calls New, which reads this table, and a literal
+// would make that an initialization cycle. Solo is not here: it has no
+// adapter, and KindOf accepts it on its own.
+var kindSpecs []kindSpec
+
 // PaneKinds are the host kinds that have panes, in resolution order.
-var PaneKinds = []Kind{Herdr, HerdrCore, Tmux, Orca}
+var PaneKinds []Kind
+
+func init() {
+	kindSpecs = []kindSpec{
+		{
+			kind:    Herdr,
+			binary:  "herdr",
+			paneEnv: envHerdrPane,
+			pickup:  pickupPolicy{attempts: 3, probeFirst: true, probeTimeout: 10 * time.Second},
+			build:   func(d Deps) Host { return &herdr{d: d, noted: new(atomic.Bool)} },
+			policy: func(c Capabilities) Capabilities {
+				c.InSessionRule = &InSessionRule{Pane: "herdr pane", Env: envHerdrEnv + "=1"}
+				c.LaunchKindBound = true
+				c.NoNominalHandle = true
+				c.Harness = harness.HostTraits{CodexHost: true, HerdrIntegration: true}
+				c.Server = ServerProc{Comm: Herdr.Binary()}
+				c.Attach = func(session, _, _, _ string) []string {
+					return []string{Herdr.Binary(), "session", "attach", session}
+				}
+				c.Diagnose = diagnoseHerdr
+				return c
+			},
+		},
+		{
+			kind:    HerdrCore,
+			paneEnv: envCoreTerm,
+			build:   func(d Deps) Host { return &coreHost{d: d} },
+			policy: func(c Capabilities) Capabilities {
+				c.NoNominalHandle = true
+				c.InPlace = true
+				c.RuntimeScopedHandles = true
+				c.TreeKillClose = true
+				c.Harness = harness.HostTraits{CodexHost: true, CoreIdentity: true}
+				c.Diagnose = diagnoseCore
+				return c
+			},
+		},
+		{
+			kind:    Tmux,
+			binary:  "tmux",
+			paneEnv: envTmuxPane,
+			pickup:  pickupPolicy{attempts: 4, beforeNudge: time.Second, beforeProbe: 2 * time.Second},
+			build:   func(d Deps) Host { return &tmux{d: d} },
+			policy: func(c Capabilities) Capabilities {
+				c.Server = ServerProc{Comm: Tmux.Binary(), Renames: true}
+				// -A attaches when the session exists; its command is then ignored.
+				// The shell after the command keeps a failure message on screen.
+				c.Attach = func(session, cwd, label, line string) []string {
+					return []string{Tmux.Binary(), "new-session", "-A", "-s", session, "-c", cwd, "-n", label, line + `; exec "${SHELL:-sh}"`}
+				}
+				c.Diagnose = diagnoseTmux
+				return c
+			},
+		},
+		{
+			kind:    Orca,
+			binary:  "orca",
+			paneEnv: envOrcaPane,
+			// Orca only polls: no beforeNudge, no probe-first.
+			pickup: pickupPolicy{attempts: 4, beforeProbe: time.Second},
+			build:  func(d Deps) Host { return &orca{d: d} },
+			policy: func(c Capabilities) Capabilities {
+				// An Orca runtime restart orphans handles whose processes survive,
+				// and its terminals own agents that can outlive the handle.
+				c.RuntimeScopedHandles = true
+				c.TreeKillClose = true
+				c.NoNominalHandle = true
+				c.Harness = harness.HostTraits{CodexHost: true}
+				c.Diagnose = diagnoseOrca
+				return c
+			},
+		},
+	}
+	PaneKinds = make([]Kind, 0, len(kindSpecs))
+	for _, s := range kindSpecs {
+		PaneKinds = append(PaneKinds, s.kind)
+	}
+}
+
+// specOf is the descriptor for a pane kind; false for Solo and unknown kinds.
+func specOf(k Kind) (kindSpec, bool) {
+	for _, s := range kindSpecs {
+		if s.kind == k {
+			return s, true
+		}
+	}
+	return kindSpec{}, false
+}
 
 // InSessionRule is a host that only works from inside one of its own panes.
 type InSessionRule struct {
@@ -101,15 +207,8 @@ const (
 // paneEnv is the env var naming the current pane under k, "" for Solo and
 // unknown kinds (no pane to name).
 func paneEnv(k Kind) string {
-	switch k {
-	case Herdr:
-		return envHerdrPane
-	case HerdrCore:
-		return envCoreTerm
-	case Tmux:
-		return envTmuxPane
-	case Orca:
-		return envOrcaPane
+	if s, ok := specOf(k); ok {
+		return s.paneEnv
 	}
 	return ""
 }
@@ -117,40 +216,8 @@ func paneEnv(k Kind) string {
 // kindPolicy overlays k's policy on c: the fields no optional interface
 // carries. Solo and unknown kinds have none.
 func kindPolicy(k Kind, c Capabilities) Capabilities {
-	switch k {
-	case Herdr:
-		c.InSessionRule = &InSessionRule{Pane: "herdr pane", Env: envHerdrEnv + "=1"}
-		c.LaunchKindBound = true
-		c.NoNominalHandle = true
-		c.Harness = harness.HostTraits{CodexHost: true, HerdrIntegration: true}
-		c.Server = ServerProc{Comm: Herdr.Binary()}
-		c.Attach = func(session, _, _, _ string) []string {
-			return []string{Herdr.Binary(), "session", "attach", session}
-		}
-		c.Diagnose = diagnoseHerdr
-	case HerdrCore:
-		c.NoNominalHandle = true
-		c.InPlace = true
-		c.RuntimeScopedHandles = true
-		c.TreeKillClose = true
-		c.Harness = harness.HostTraits{CodexHost: true, CoreIdentity: true}
-		c.Diagnose = diagnoseCore
-	case Tmux:
-		c.Server = ServerProc{Comm: Tmux.Binary(), Renames: true}
-		// -A attaches when the session exists; its command is then ignored.
-		// The shell after the command keeps a failure message on screen.
-		c.Attach = func(session, cwd, label, line string) []string {
-			return []string{Tmux.Binary(), "new-session", "-A", "-s", session, "-c", cwd, "-n", label, line + `; exec "${SHELL:-sh}"`}
-		}
-		c.Diagnose = diagnoseTmux
-	case Orca:
-		// An Orca runtime restart orphans handles whose processes survive,
-		// and its terminals own agents that can outlive the handle.
-		c.RuntimeScopedHandles = true
-		c.TreeKillClose = true
-		c.NoNominalHandle = true
-		c.Harness = harness.HostTraits{CodexHost: true}
-		c.Diagnose = diagnoseOrca
+	if s, ok := specOf(k); ok {
+		return s.policy(c)
 	}
 	return c
 }
