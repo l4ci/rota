@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,9 +20,9 @@ func TestGateReportFileOutcomes(t *testing.T) {
 		checkOnly             bool
 		code                  int
 	}{
-		{name: "merged", checks: `["test -f feature.txt"]`, verdict: worker.GatePass},
-		{name: "refused", checks: `[]`, verdict: worker.GateNoVerify, code: 4},
-		{name: "check only", checks: `["test -f feature.txt"]`, verdict: worker.GateFresh, checkOnly: true},
+		{name: "merged", checks: `["test -f feature.txt"]`, verdict: landing.GatePass},
+		{name: "refused", checks: `[]`, verdict: landing.GateNoVerify, code: 4},
+		{name: "check only", checks: `["test -f feature.txt"]`, verdict: landing.GateFresh, checkOnly: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := workerProject(t, fmt.Sprintf(`{"ship":{"review":"none"},"test":{"full":%s}}`, tc.checks))
@@ -64,7 +65,7 @@ func TestGateReportFileOutcomes(t *testing.T) {
 			if strings.Count(text, marker) != 1 || !strings.Contains(text, "## Reports\n") || !strings.Contains(text, "Outcome: **"+tc.verdict+"**") {
 				t.Fatalf("gate did not leave one marked outcome report:\n%s", text)
 			}
-			if tc.verdict == worker.GatePass {
+			if tc.verdict == landing.GatePass {
 				if !strings.Contains(text, "`test -f feature.txt`") {
 					t.Fatalf("merge report omitted the check that ran:\n%s", text)
 				}

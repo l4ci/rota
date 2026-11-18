@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strconv"
 	"strings"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // shipCommands is the `rota ship` group (#52). The flow itself is
@@ -510,8 +510,8 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			} else if res, err := shipPRVerdict(c, pr, branch); err != nil {
 				return refusalOf(res, err)
 			}
-			req.Thread = func() (worker.ApprovalThread, error) {
-				return worker.ApprovalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
+			req.Thread = func() (landing.ApprovalThread, error) {
+				return landing.ApprovalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
 			}
 			return clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonx.Obj("pr", pr))
 		}

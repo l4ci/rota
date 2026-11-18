@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"os"
@@ -237,7 +238,7 @@ func TestAssignRefusedWhileGateHoldsLandLock(t *testing.T) {
 	f := newAssignFixture(t)
 	holdLandLock(t, f.root, func() {
 		_, err := f.assign("12", "ben", nil)
-		if by := blockedBy(t, err); by != worker.GateRunning || !strings.Contains(err.Error(), "exits") {
+		if by := blockedBy(t, err); by != landing.GateRunning || !strings.Contains(err.Error(), "exits") {
 			t.Errorf("lock held: %v", err)
 		}
 		if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.host.spawned) != 0 {
@@ -1618,7 +1619,7 @@ func TestAssignWhileGateHoldsAnotherSlot(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err := f.assign("12", "ben", nil)
-		if by := blockedBy(t, err); by != worker.GateRunning {
+		if by := blockedBy(t, err); by != landing.GateRunning {
 			t.Errorf("lock held for ben: %v", err)
 		}
 		if err := os.WriteFile(holder, []byte("#999"), 0o644); err != nil {
@@ -1668,7 +1669,7 @@ func TestAssignQueuedOriginMovedOnWhileGateHolds(t *testing.T) {
 				}
 				_, err := f.assign("12", "ben", nil)
 				if tc.gated {
-					if by := blockedBy(t, err); by != worker.GateRunning {
+					if by := blockedBy(t, err); by != landing.GateRunning {
 						t.Errorf("want gate-running, got %v", err)
 					} else if tc.holder != "" && !strings.Contains(err.Error(), tc.holder) {
 						t.Errorf("refusal should name the guarded %s: %v", tc.holder, err)

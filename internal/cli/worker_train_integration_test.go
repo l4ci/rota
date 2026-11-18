@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,13 +43,13 @@ func TestWorkerTrainIntegrationFilesItem(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
-		Members: []worker.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6", Pending: true, Conflicts: []string{"work.txt"}}}}
+	it := landing.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
+		Members: []landing.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6", Pending: true, Conflicts: []string{"work.txt"}}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
 		t.Fatal(err)
 	}
 	be := &backlog.File{Root: dir}
-	r := worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it,
+	r := landing.TrainResult{Verdict: landing.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it,
 		Err: "TRAIN-INTERACTION 8, 7 — w2 does not merge onto integration/r55-a"}
 	id, filed, err := fileInteractionItem(be, dir, r)
 	if err != nil || !filed || id == "" {
@@ -92,8 +93,8 @@ func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
-		Members: []worker.IntegrationMember{{Target: "7", Issue: "5"}, {Target: "8", Issue: "6"}}}
+	it := landing.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
+		Members: []landing.IntegrationMember{{Target: "7", Issue: "5"}, {Target: "8", Issue: "6"}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestWorkerTrainIntegrationIgnoresTitleTwin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it, Err: "TRAIN-INTERACTION"}
+	r := landing.TrainResult{Verdict: landing.GateInteraction, Interaction: []string{"8", "7"}, Integration: &it, Err: "TRAIN-INTERACTION"}
 	id, filed, err := fileInteractionItem(be, dir, r)
 	if err != nil || !filed || id == twin.ID {
 		t.Fatalf("adopted the title twin %s: %q %v %v", twin.ID, id, filed, err)
@@ -130,8 +131,8 @@ func (p *prSpy) PRSetBody(_ context.Context, pr int, body string) error {
 
 func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["true"]}}`)
-	it := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", VerifiedTip: "abc",
-		Members: []worker.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "#6"}}}
+	it := landing.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", VerifiedTip: "abc",
+		Members: []landing.IntegrationMember{{Target: "7", PR: "https://github.com/o/r/pull/7", Issue: "5"}, {Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "#6"}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestWorkerTrainIntegrationOpensPR(t *testing.T) {
 	}
 	// A rerun keeps the PR (it follows the branch) but writes the body again,
 	// so a member the rerun added gets its Closes line.
-	rec.Members = append(rec.Members, worker.IntegrationMember{Target: "10", PR: "https://github.com/o/r/pull/10", Issue: "12"})
+	rec.Members = append(rec.Members, landing.IntegrationMember{Target: "10", PR: "https://github.com/o/r/pull/10", Issue: "12"})
 	if err := worker.RecordIntegration(dir, rec); err != nil {
 		t.Fatal(err)
 	}
@@ -178,8 +179,8 @@ func TestWorkerTrainOntoNeedsIntegration(t *testing.T) {
 // its rerun command carries --onto and the base it lands on afterwards.
 func TestWorkerTrainStackedPRTargetsBranchUnder(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["true"]}}`)
-	it := worker.Integration{Name: "b", Branch: "integration/r55-b", Round: 55, Base: "integration/r55-a", Onto: "integration/r55-a", OntoBase: "main",
-		Members: []worker.IntegrationMember{{Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6"}}}
+	it := landing.Integration{Name: "b", Branch: "integration/r55-b", Round: 55, Base: "integration/r55-a", Onto: "integration/r55-a", OntoBase: "main",
+		Members: []landing.IntegrationMember{{Target: "8", PR: "https://github.com/o/r/pull/8", Issue: "6"}}}
 	if err := worker.RecordIntegration(dir, it); err != nil {
 		t.Fatal(err)
 	}
@@ -198,13 +199,13 @@ func TestWorkerTrainStackedPRTargetsBranchUnder(t *testing.T) {
 func TestOpenIntegrationPRPublishesFreshRecord(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["true"]}}`)
 	pr := func(n string) string { return "https://github.com/o/r/pull/" + n }
-	stale := worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", PR: pr("9"),
-		Members: []worker.IntegrationMember{{Target: "7", PR: pr("7"), Issue: "5"}, {Target: "8", PR: pr("8"), Issue: "6"}}}
+	stale := landing.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main", PR: pr("9"),
+		Members: []landing.IntegrationMember{{Target: "7", PR: pr("7"), Issue: "5"}, {Target: "8", PR: pr("8"), Issue: "6"}}}
 	if err := worker.RecordIntegration(dir, stale); err != nil {
 		t.Fatal(err)
 	}
 	fresh := stale
-	fresh.Members = append(slices.Clone(stale.Members), worker.IntegrationMember{Target: "10", PR: pr("10"), Issue: "12"})
+	fresh.Members = append(slices.Clone(stale.Members), landing.IntegrationMember{Target: "10", PR: pr("10"), Issue: "12"})
 	if err := worker.RecordIntegration(dir, fresh); err != nil {
 		t.Fatal(err)
 	}

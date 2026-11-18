@@ -2,10 +2,10 @@ package roundtick
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"testing"
 
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // spy counts every call into an adapter that can change the world.
@@ -121,7 +121,7 @@ func TestObserveFirstActionMatchesExecution(t *testing.T) {
 func TestExecutionAfterObservationStillGates(t *testing.T) {
 	f := &fake{
 		slots:   []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}},
-		gateOut: func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: worker.GateVerifyFailed}} },
+		gateOut: func(string) GateRun { return GateRun{Result: landing.GateResult{Verdict: landing.GateVerifyFailed}} },
 	}
 	obs, err := Run(context.Background(), observed(f, &spy{}, nil))
 	if err != nil {

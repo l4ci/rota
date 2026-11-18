@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,25 +54,25 @@ func TestGateRefusesACommitFromASupersededAttempt(t *testing.T) {
 		check bool
 		want  string
 	}{
-		{"stale stamp", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot(cur, "") }, false, GateStaleAttempt},
-		{"stale stamp under check-only", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot(cur, "") }, true, GateStaleAttempt},
-		{"own stamp", func(w *world) { w.pushStamped("a.txt", cur); w.setAttemptSlot(cur, "") }, false, GatePass},
-		{"no stamp", func(w *world) { w.pushStamped("a.txt", ""); w.setAttemptSlot(cur, "") }, false, GatePass},
-		{"slot has no attempt", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot("", "") }, false, GatePass},
+		{"stale stamp", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot(cur, "") }, false, landing.GateStaleAttempt},
+		{"stale stamp under check-only", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot(cur, "") }, true, landing.GateStaleAttempt},
+		{"own stamp", func(w *world) { w.pushStamped("a.txt", cur); w.setAttemptSlot(cur, "") }, false, landing.GatePass},
+		{"no stamp", func(w *world) { w.pushStamped("a.txt", ""); w.setAttemptSlot(cur, "") }, false, landing.GatePass},
+		{"slot has no attempt", func(w *world) { w.pushStamped("a.txt", old); w.setAttemptSlot("", "") }, false, landing.GatePass},
 		{"inherited commits are the new holder's to keep", func(w *world) {
 			base := w.pushStamped("a.txt", old)
 			w.pushStamped("b.txt", cur)
 			w.setAttemptSlot(cur, base)
-		}, false, GatePass},
+		}, false, landing.GatePass},
 		{"inherited tip, nothing pushed yet", func(w *world) {
 			base := w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, base)
-		}, false, GatePass},
+		}, false, landing.GatePass},
 		{"stale push after the inherited tip", func(w *world) {
 			base := w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, base)
 			w.pushStamped("b.txt", old)
-		}, false, GateStaleAttempt},
+		}, false, landing.GateStaleAttempt},
 		{"commits merged in from the base are not judged", func(w *world) {
 			base := w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, base)
@@ -82,24 +83,24 @@ func TestGateRefusesACommitFromASupersededAttempt(t *testing.T) {
 			gittest.Run(w.t, w.worker, "fetch", "-q", "origin")
 			gittest.Run(w.t, w.worker, "merge", "-q", "--no-edit", "origin/main")
 			w.pushStamped("b.txt", cur)
-		}, true, GateFresh},
+		}, true, landing.GateFresh},
 		{"inherited tip no longer an ancestor is not judged", func(w *world) {
 			w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, strings.Repeat("0", 40))
-		}, false, GatePass},
+		}, false, landing.GatePass},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			c.setup(w)
 			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
-			if c.check && c.want == GatePass {
-				c.want = GateFresh
+			if c.check && c.want == landing.GatePass {
+				c.want = landing.GateFresh
 			}
 			if err != nil || res.Verdict != c.want {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.want, res)
 			}
-			if c.want != GateStaleAttempt {
+			if c.want != landing.GateStaleAttempt {
 				return
 			}
 			if res.Changed || w.onMain("a.txt") {

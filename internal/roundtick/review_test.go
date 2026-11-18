@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 	"testing"
@@ -283,21 +284,21 @@ func TestWaitingForReviewIsAPlainLine(t *testing.T) {
 func TestReviewReadinessOfMapsEveryVerdict(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
-		r        worker.GateResult
+		r        landing.GateResult
 		err      error
 		wantWhy  string // substring; "" means exactly empty
 		wantGate bool
 	}{
-		{"stale", worker.GateResult{Verdict: worker.GateStale}, nil, "", true},
-		{"pr mismatch", worker.GateResult{Verdict: worker.GatePRMismatch}, nil, "", true},
-		{"already merged", worker.GateResult{Verdict: worker.GateAlreadyMerged}, nil, "", true},
-		{"merged remotely", worker.GateResult{Verdict: worker.GateMergedRemotely}, nil, "", true},
-		{"review missing", worker.GateResult{Verdict: worker.GateReviewMissing, Err: "x — no review at head; nothing landed", Branch: "ben/1-x"}, nil, "waiting for review verdicts at head (no review at head); run /rota-review on ben/1-x", false},
-		{"review missing falls back to the slot", worker.GateResult{Verdict: worker.GateReviewMissing, Err: "gone"}, nil, "run /rota-review on ben", false},
-		{"fresh", worker.GateResult{Verdict: worker.GateFresh}, nil, "", false},
-		{"other verdict", worker.GateResult{Verdict: worker.GateRunning, Err: "busy\nmore"}, nil, "cannot confirm review verdicts at head: busy", false},
-		{"other verdict without a message", worker.GateResult{Verdict: worker.GateRunning}, nil, "cannot confirm review verdicts at head: " + worker.GateRunning, false},
-		{"read error", worker.GateResult{Verdict: worker.GateFresh}, errors.New("boom\nx"), "cannot confirm review verdicts at head: boom", false},
+		{"stale", landing.GateResult{Verdict: landing.GateStale}, nil, "", true},
+		{"pr mismatch", landing.GateResult{Verdict: landing.GatePRMismatch}, nil, "", true},
+		{"already merged", landing.GateResult{Verdict: landing.GateAlreadyMerged}, nil, "", true},
+		{"merged remotely", landing.GateResult{Verdict: landing.GateMergedRemotely}, nil, "", true},
+		{"review missing", landing.GateResult{Verdict: landing.GateReviewMissing, Err: "x — no review at head; nothing landed", Branch: "ben/1-x"}, nil, "waiting for review verdicts at head (no review at head); run /rota-review on ben/1-x", false},
+		{"review missing falls back to the slot", landing.GateResult{Verdict: landing.GateReviewMissing, Err: "gone"}, nil, "run /rota-review on ben", false},
+		{"fresh", landing.GateResult{Verdict: landing.GateFresh}, nil, "", false},
+		{"other verdict", landing.GateResult{Verdict: landing.GateRunning, Err: "busy\nmore"}, nil, "cannot confirm review verdicts at head: busy", false},
+		{"other verdict without a message", landing.GateResult{Verdict: landing.GateRunning}, nil, "cannot confirm review verdicts at head: " + landing.GateRunning, false},
+		{"read error", landing.GateResult{Verdict: landing.GateFresh}, errors.New("boom\nx"), "cannot confirm review verdicts at head: boom", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			why, now := ReviewReadinessOf(tc.r, tc.err, "ben")

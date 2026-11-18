@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -278,7 +279,7 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots .
 	if h != "" {
 		forHolder = " for " + holderPRs(root, h)
 	}
-	return blocked(worker.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
+	return blocked(landing.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
 }
 
 // gatedSlots resolves a land-lock holder (a slot, a PR or a train's

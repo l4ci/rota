@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"strings"
 	"testing"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 func runCancelled(t *testing.T, ctx context.Context, dir string, args ...string) (int, string, string) {
@@ -89,7 +89,7 @@ func TestWorkerContextSignalMarksInterrupt(t *testing.T) {
 
 // A cancelled gate keeps its data; any other failure drops it.
 func TestGateErrResultKeepsDataOnCancel(t *testing.T) {
-	r := worker.GateResult{Slot: "s", Changed: true}
+	r := landing.GateResult{Slot: "s", Changed: true}
 	res, err := gateErrResult(r, fmt.Errorf("gate: %w", context.Canceled))
 	if err == nil || res.Data == nil {
 		t.Fatalf("cancelled: res %+v err %v; want data kept", res, err)

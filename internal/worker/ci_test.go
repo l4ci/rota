@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,7 @@ func (w *world) ciEnv() Env {
 	}.withForge(func(provider, dir string) Forge { return &fakeForge{w: w, provider: provider} }, false)
 }
 
-func (w *world) ciGate(o GateOpts) (GateResult, error) {
+func (w *world) ciGate(o GateOpts) (landing.GateResult, error) {
 	o.Slot, o.Base = "w1", "main"
 	return w.ciEnv().Gate(bg, w.dir, o)
 }
@@ -50,10 +51,10 @@ func TestGateCIPR(t *testing.T) {
 		errHas         []string
 		hintHas        string
 	}{
-		{name: "green", verdict: GatePass, merged: true},
-		{name: "red", fail: "work.txt", verdict: GateVerifyFailed, errHas: []string{"nothing landed", "ci/test"}},
-		{name: "none", ci: "none", verdict: GateCINotRun, hintHas: "rota/ci/"},
-		{name: "pending", ci: "pending", verdict: GateVerifyTimeout},
+		{name: "green", verdict: landing.GatePass, merged: true},
+		{name: "red", fail: "work.txt", verdict: landing.GateVerifyFailed, errHas: []string{"nothing landed", "ci/test"}},
+		{name: "none", ci: "none", verdict: landing.GateCINotRun, hintHas: "rota/ci/"},
+		{name: "pending", ci: "pending", verdict: landing.GateVerifyTimeout},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -102,7 +103,7 @@ func TestGateCINoPR(t *testing.T) {
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(ciCfg)
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if len(res.Verified) != 1 || res.Verified[0] != "ci/test" {
@@ -114,7 +115,7 @@ func TestGateCINoVerifySkipsCI(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(ciCfg)
 	res, err := w.ciGate(GateOpts{NoVerify: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if strings.Contains(w.logText(), "CommitChecks") {
@@ -139,7 +140,7 @@ func TestGateCINoOrigin(t *testing.T) {
 	gittest.Run(t, w.dir, "remote", "remove", "origin")
 	w.setConfig(ciCfg)
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "origin") {
+	if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "origin") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if w.onMain("work.txt") {
@@ -147,7 +148,7 @@ func TestGateCINoOrigin(t *testing.T) {
 	}
 }
 
-func ciTrain(t *testing.T, ci, fail string, branches ...string) (*world, TrainResult) {
+func ciTrain(t *testing.T, ci, fail string, branches ...string) (*world, landing.TrainResult) {
 	t.Helper()
 	w := trainWorld(t, "false", branches...)
 	w.setConfig(ciCfg)
@@ -162,7 +163,7 @@ func ciTrain(t *testing.T, ci, fail string, branches ...string) (*world, TrainRe
 
 func TestTrainCIRed(t *testing.T) {
 	w, res := ciTrain(t, "", "b3.txt", "b1", "b2", "b3", "b4")
-	if res.Verdict != GateVerifyFailed || res.Culprit != "b3" || !strings.Contains(res.Err, "ci/test") || len(res.Landed) != 0 {
+	if res.Verdict != landing.GateVerifyFailed || res.Culprit != "b3" || !strings.Contains(res.Err, "ci/test") || len(res.Landed) != 0 {
 		t.Fatalf("%+v", res)
 	}
 	for _, f := range []string{"b1.txt", "b2.txt", "b3.txt", "b4.txt"} {
@@ -174,7 +175,7 @@ func TestTrainCIRed(t *testing.T) {
 
 func TestTrainCIGreen(t *testing.T) {
 	w, res := ciTrain(t, "", "", "b1", "b2")
-	if res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b1.txt") || !w.onMain("b2.txt") {
+	if res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b1.txt") || !w.onMain("b2.txt") {
 		t.Fatalf("%+v", res)
 	}
 	// One CI run: green, then the same checks green again to settle.
@@ -185,7 +186,7 @@ func TestTrainCIGreen(t *testing.T) {
 
 // ciScriptGate runs the gate against scripted checks (see fakeForge.CommitChecks)
 // with the start window and timeout left open, so only the script ends it.
-func ciScriptGate(t *testing.T, cfg, script string) (*world, GateResult, error) {
+func ciScriptGate(t *testing.T, cfg, script string) (*world, landing.GateResult, error) {
 	t.Helper()
 	w := newWorld(t, ghURL)
 	w.setConfig(cfg)
@@ -203,7 +204,7 @@ func ciScriptGate(t *testing.T, cfg, script string) (*world, GateResult, error) 
 func TestGateCIWaitsForListedChecks(t *testing.T) {
 	cfg := `{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test","ci/e2e"]}}`
 	w, res, err := ciScriptGate(t, cfg, "lint=success|lint=success|lint=success,ci/test=success,ci/e2e=pending|lint=success,ci/test=success,ci/e2e=pending|lint=success,ci/test=success,ci/e2e=success")
-	if err != nil || res.Verdict != GatePass || !w.onOriginMain("work.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !w.onOriginMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if n := strings.Count(w.logText(), "CommitChecks"); n != 6 {
@@ -219,10 +220,10 @@ func TestGateCIListedChecks(t *testing.T) {
 		name, script, verdict string
 		errHas                []string
 	}{
-		{name: "listed fails", script: "lint=success,ci/test=failure", verdict: GateVerifyFailed, errHas: []string{"failure ci/test"}},
-		{name: "unlisted fails", script: "lint=failure,ci/test=success", verdict: GateVerifyFailed, errHas: []string{"failure lint"}},
-		{name: "listed skipped", script: "ci/test=skipped", verdict: GateVerifyFailed, errHas: []string{"ci/test skipped"}},
-		{name: "unlisted pending", script: "slow=pending,ci/test=success", verdict: GatePass},
+		{name: "listed fails", script: "lint=success,ci/test=failure", verdict: landing.GateVerifyFailed, errHas: []string{"failure ci/test"}},
+		{name: "unlisted fails", script: "lint=failure,ci/test=success", verdict: landing.GateVerifyFailed, errHas: []string{"failure lint"}},
+		{name: "listed skipped", script: "ci/test=skipped", verdict: landing.GateVerifyFailed, errHas: []string{"ci/test skipped"}},
+		{name: "unlisted pending", script: "slow=pending,ci/test=success", verdict: landing.GatePass},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -230,8 +231,8 @@ func TestGateCIListedChecks(t *testing.T) {
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("%+v %v", res, err)
 			}
-			if w.onOriginMain("work.txt") != (c.verdict == GatePass) {
-				t.Errorf("work.txt on origin/main = %v", !(c.verdict == GatePass))
+			if w.onOriginMain("work.txt") != (c.verdict == landing.GatePass) {
+				t.Errorf("work.txt on origin/main = %v", !(c.verdict == landing.GatePass))
 			}
 			for _, s := range c.errHas {
 				if !strings.Contains(res.Err, s) {
@@ -249,7 +250,7 @@ func TestGateCIMissingListedCheck(t *testing.T) {
 	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test","ci/typo"]}}`)
 	w.forge("ciScript", "lint=success,ci/test=success")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateCINotRun || !strings.Contains(res.Err, "ci/typo") || strings.Contains(res.Err, "ci/test,") {
+	if err != nil || res.Verdict != landing.GateCINotRun || !strings.Contains(res.Err, "ci/typo") || strings.Contains(res.Err, "ci/test,") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Hint, "test.ciChecks") || w.onOriginMain("work.txt") {
@@ -264,7 +265,7 @@ func TestGateCIMissingWhileRunning(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("ciScript", "suite GitHub Actions=pending,lint=success")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyTimeout || !strings.Contains(res.Err, "ci/test") {
+	if err != nil || res.Verdict != landing.GateVerifyTimeout || !strings.Contains(res.Err, "ci/test") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -304,7 +305,7 @@ func TestCIChecksRequired(t *testing.T) {
 
 func TestTrainCINotRun(t *testing.T) {
 	w, res := ciTrain(t, "none", "", "b1", "b2")
-	if res.Verdict != GateCINotRun || len(res.Landed) != 0 || len(res.Members) != 2 || w.onMain("b1.txt") || w.onMain("b2.txt") {
+	if res.Verdict != landing.GateCINotRun || len(res.Landed) != 0 || len(res.Members) != 2 || w.onMain("b1.txt") || w.onMain("b2.txt") {
 		t.Fatalf("%+v", res)
 	}
 }
@@ -361,7 +362,7 @@ func TestGateCILateCheck(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("ci", "late")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "ci/late") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "ci/late") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -372,7 +373,7 @@ func TestGateCIAllSkipped(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("ci", "skipped")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "nothing landed") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "nothing landed") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -388,7 +389,7 @@ func TestGateCIConfigChanged(t *testing.T) {
 	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
 	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateCIConfigChanged || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, ".github/workflows/ci.yml") {
+	if err != nil || res.Verdict != landing.GateCIConfigChanged || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, ".github/workflows/ci.yml") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if strings.Contains(w.logText(), "CommitChecks") {
@@ -403,7 +404,7 @@ func TestTrainCIConfigChanged(t *testing.T) {
 	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	w.setConfig(ciCfg)
 	res, err := w.ciEnv().Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
-	if err != nil || res.Verdict != GateCIConfigChanged || len(res.Landed) != 0 || !strings.Contains(res.Err, ".gitlab-ci.yml") {
+	if err != nil || res.Verdict != landing.GateCIConfigChanged || len(res.Landed) != 0 || !strings.Contains(res.Err, ".gitlab-ci.yml") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -441,7 +442,7 @@ func TestGateCIConfigRenamedOrQuoted(t *testing.T) {
 			w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 			w.setConfig(ciCfg)
 			res, err := w.ciGate(GateOpts{})
-			if err != nil || res.Verdict != GateCIConfigChanged || !strings.Contains(res.Err, c.want) {
+			if err != nil || res.Verdict != landing.GateCIConfigChanged || !strings.Contains(res.Err, c.want) {
 				t.Fatalf("%+v %v", res, err)
 			}
 		})
@@ -477,7 +478,7 @@ func TestGateCIBaseMovedAfterCI(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("ciMoveBase", "other.txt")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "while CI verified; nothing landed") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || !strings.Contains(res.Err, "while CI verified; nothing landed") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if w.forgeWord("state") != "OPEN" || w.onOriginMain("work.txt") || res.Changed {
@@ -495,7 +496,7 @@ func TestGateCILandedTreeMismatch(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("pushBeforeMerge", "other.txt")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "differs from the tree CI verified") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || !strings.Contains(res.Err, "differs from the tree CI verified") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !res.Changed || !w.onOriginMain("work.txt") {
@@ -510,7 +511,7 @@ func TestGateCIPushAfterMerge(t *testing.T) {
 	w.setConfig(ciCfg)
 	w.forge("pushAfterMerge", "later.txt")
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !w.onOriginMain("later.txt") || !w.onOriginMain("work.txt") {
@@ -561,8 +562,8 @@ func TestGateCICancelCleansUp(t *testing.T) {
 // included, and its scratch worktree.
 func TestTrainCICleansUp(t *testing.T) {
 	for _, c := range []struct{ name, ci, fail, verdict string }{
-		{"red", "", "b2.txt", GateVerifyFailed},
-		{"timeout", "pending", "", GateVerifyTimeout},
+		{"red", "", "b2.txt", landing.GateVerifyFailed},
+		{"timeout", "pending", "", landing.GateVerifyTimeout},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w, res := ciTrain(t, c.ci, c.fail, "b1", "b2", "b3")
@@ -584,7 +585,7 @@ func TestGateCIRunsE2ELocally(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test"],"e2e":["false"]}}`)
 	res, err := w.ciGate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || !res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 }

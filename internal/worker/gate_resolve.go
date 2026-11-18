@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/tracker"
 	"slices"
 	"strconv"
@@ -11,9 +12,9 @@ import (
 )
 
 // stepForge picks the provider and opens its forge.
-func (runner gateRun) stepForge(result GateResult, target GateTarget) (gateForgeResult, GateResult, bool, error) {
+func (runner gateRun) stepForge(result landing.GateResult, target GateTarget) (gateForgeResult, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, gateForgeResult{})
-	finish := func(done bool, err error) (gateForgeResult, GateResult, bool, error) {
+	finish := func(done bool, err error) (gateForgeResult, landing.GateResult, bool, error) {
 		return gateForgeResult{provider: g.provider, forge: g.forge, issues: g.issues, local: g.local, cliName: g.cliName, closedLabels: g.closedLabels}, *g.res, done, err
 	}
 
@@ -27,7 +28,7 @@ func (runner gateRun) stepForge(result GateResult, target GateTarget) (gateForge
 	var refusal *forgeOpenRefusal
 	g.forge, g.provider, refusal = g.e.openForge(g.ctx, g.root, g.pr, g.in.cfg, tracker.ForgeActor)
 	if refusal != nil && refusal.reason == forgeOpenProvider {
-		g.verdict(GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, refusal.err),
+		g.verdict(landing.GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, refusal.err),
 			"set forge.provider to the forge that holds the PR, or to local to merge directly")
 		return finish(true, nil)
 	}
@@ -55,9 +56,9 @@ func (runner gateRun) stepForge(result GateResult, target GateTarget) (gateForge
 // the later steps judge it like a slot's: freshness, identity, provenance,
 // approval, verify and land. Its issue, for the closes check, is the one its
 // branch name leads with (HeldID), else the first its body closes.
-func (runner gateRun) stepExternal(result GateResult, target GateTarget, forged gateForgeResult) (GateTarget, GateResult, bool, error) {
+func (runner gateRun) stepExternal(result landing.GateResult, target GateTarget, forged gateForgeResult) (GateTarget, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
-	finish := func(done bool, err error) (GateTarget, GateResult, bool, error) {
+	finish := func(done bool, err error) (GateTarget, landing.GateResult, bool, error) {
 		return g.target, *g.res, done, err
 	}
 
@@ -110,9 +111,9 @@ func (g *gateRun) unrecordedSlotRelays(head string) []any {
 // open its PR without the slot recording it. A local merge would then land on
 // the local base only, leave the PR open and still report a pass, so look the
 // PR up by head before taking that path.
-func (runner gateRun) stepAdoptPR(result GateResult, target GateTarget, forged gateForgeResult) (GateTarget, GateResult, bool, error) {
+func (runner gateRun) stepAdoptPR(result landing.GateResult, target GateTarget, forged gateForgeResult) (GateTarget, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
-	finish := func(done bool, err error) (GateTarget, GateResult, bool, error) {
+	finish := func(done bool, err error) (GateTarget, landing.GateResult, bool, error) {
 		return g.target, *g.res, done, err
 	}
 
@@ -140,11 +141,11 @@ func (runner gateRun) stepAdoptPR(result GateResult, target GateTarget, forged g
 // it leads with the issue the slot holds, so a PR of another issue's branch
 // stays a mismatch. A real gate records it on the slot, so the next one starts
 // from the right branch.
-func (runner gateRun) stepSlotHead(result GateResult, target GateTarget, forged gateForgeResult, remote bool, viewed *tracker.PRInfo) (gateSlotHeadResult, GateResult, bool, error) {
+func (runner gateRun) stepSlotHead(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, viewed *tracker.PRInfo) (gateSlotHeadResult, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.viewed = viewed
-	finish := func(done bool, err error) (gateSlotHeadResult, GateResult, bool, error) {
+	finish := func(done bool, err error) (gateSlotHeadResult, landing.GateResult, bool, error) {
 		return gateSlotHeadResult{target: g.target, viewed: g.viewed}, *g.res, done, err
 	}
 
@@ -180,9 +181,9 @@ func (runner gateRun) stepSlotHead(result GateResult, target GateTarget, forged 
 // right ones. A recorded PR with no origin remote is refused: a local merge
 // would leave the PR open and bypass its review, CI and branch protection while
 // reporting MERGED.
-func (runner gateRun) stepRemote(result GateResult, pr string) (bool, GateResult, bool, error) {
+func (runner gateRun) stepRemote(result landing.GateResult, pr string) (bool, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{PR: pr}, gateForgeResult{})
-	finish := func(done bool, err error) (bool, GateResult, bool, error) {
+	finish := func(done bool, err error) (bool, landing.GateResult, bool, error) {
 		return g.remote, *g.res, done, err
 	}
 
@@ -212,11 +213,11 @@ func (runner gateRun) stepRemote(result GateResult, pr string) (bool, GateResult
 // stepAlreadyMerged reads the PR before judging its head, including check-only
 // train members. It may have merged before this run or while waiting for the
 // land lock; the branch may already be deleted.
-func (runner gateRun) stepAlreadyMerged(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (*tracker.PRInfo, GateResult, bool, error) {
+func (runner gateRun) stepAlreadyMerged(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool) (*tracker.PRInfo, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	var viewed *tracker.PRInfo
-	finish := func(done bool, err error) (*tracker.PRInfo, GateResult, bool, error) {
+	finish := func(done bool, err error) (*tracker.PRInfo, landing.GateResult, bool, error) {
 		return viewed, *g.res, done, err
 	}
 
@@ -231,7 +232,7 @@ func (runner gateRun) stepAlreadyMerged(result GateResult, target GateTarget, fo
 	if info.State == "MERGED" && info.Base == g.o.Base {
 		g.res.Branch = info.Head
 		g.res.AlreadyMerged = true
-		g.verdict(GateAlreadyMerged, fmt.Sprintf("ALREADY-MERGED %s — PR %s already merged into %s; nothing to merge", g.o.Slot, g.pr, g.o.Base), "")
+		g.verdict(landing.GateAlreadyMerged, fmt.Sprintf("ALREADY-MERGED %s — PR %s already merged into %s; nothing to merge", g.o.Slot, g.pr, g.o.Base), "")
 		return finish(true, nil)
 	}
 	return finish(false, nil)
@@ -239,10 +240,10 @@ func (runner gateRun) stepAlreadyMerged(result GateResult, target GateTarget, fo
 
 // stepRefs resolves the refs the later steps judge: fetched origin refs for a
 // remote gate, the local branch otherwise.
-func (runner gateRun) stepRefs(result GateResult, branch string, remote bool) (gateRefsResult, GateResult, bool, error) {
+func (runner gateRun) stepRefs(result landing.GateResult, branch string, remote bool) (gateRefsResult, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{Branch: branch}, gateForgeResult{})
 	g.remote = remote
-	finish := func(done bool, err error) (gateRefsResult, GateResult, bool, error) {
+	finish := func(done bool, err error) (gateRefsResult, landing.GateResult, bool, error) {
 		return gateRefsResult{head: g.headRef, base: g.baseRef, localHead: g.verified}, *g.res, done, err
 	}
 

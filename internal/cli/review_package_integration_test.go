@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func TestReviewPackageIntegrationDefaultsSince(t *testing.T) {
 	gittest.Run(t, plain, "add", "fix.txt")
 	gittest.Run(t, plain, "commit", "-q", "-m", "Fix the interaction")
 	gittest.Run(t, plain, "checkout", "-q", "main")
-	if err := worker.RecordIntegration(plain, worker.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
+	if err := worker.RecordIntegration(plain, landing.Integration{Name: "a", Branch: "integration/r55-a", Round: 55, Base: "main",
 		Start: start, Assembled: merged, RotaMerges: []string{merged}}); err != nil {
 		t.Fatal(err)
 	}

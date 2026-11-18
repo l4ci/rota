@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/roundlease"
 	"os"
 	"path/filepath"
@@ -150,7 +151,7 @@ func (w *world) env(brokenMergeBase bool) Env {
 	}.withForge(func(provider, dir string) Forge { return &fakeForge{w: w, provider: provider} }, brokenMergeBase)
 }
 
-func (w *world) gate(brokenMergeBase bool, o GateOpts) (GateResult, error) {
+func (w *world) gate(brokenMergeBase bool, o GateOpts) (landing.GateResult, error) {
 	o.Slot = "w1"
 	if o.Base == "" {
 		o.Base = "main"
@@ -162,11 +163,11 @@ func (w *world) gate(brokenMergeBase bool, o GateOpts) (GateResult, error) {
 // port may report: contract rule, old 3 is split by message, old 4, 5 and 6 are
 // verdicts.
 var oldExitVerdicts = map[int][]string{
-	0: {GateFresh, GatePass, GateAlreadyMerged},
-	3: {GateStale, GatePRMismatch, GateMergeFailed},
-	4: {GateProvenanceFail, GateNotMerged, GateNotOnBase, GateVerifyFailed},
-	5: {GateCheckBroke},
-	6: {GateMergedRemotely},
+	0: {landing.GateFresh, landing.GatePass, landing.GateAlreadyMerged},
+	3: {landing.GateStale, landing.GatePRMismatch, landing.GateMergeFailed},
+	4: {landing.GateProvenanceFail, landing.GateNotMerged, landing.GateNotOnBase, landing.GateVerifyFailed},
+	5: {landing.GateCheckBroke},
+	6: {landing.GateMergedRemotely},
 }
 
 func inList(v string, l []string) bool {
@@ -284,7 +285,7 @@ func advanceMainOn(w *world, file string) {
 
 func TestGate(t *testing.T) {
 	cases := []gateCase{
-		{name: "a: stale on pushed refs even though local w1 merged main", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateStale,
+		{name: "a: stale on pushed refs even though local w1 merged main", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateStale,
 			setup: func(w *world) {
 				advanceMainOn(w, "work.txt") // conflicts with w1's work.txt, so it is bounced
 				gittest.Run(t, w.dir, "fetch", "-q", "origin")
@@ -292,54 +293,54 @@ func TestGate(t *testing.T) {
 				gittest.Run(t, w.dir, "merge", "-q", "-X", "ours", "origin/main", "-m", "sync")
 				gittest.Run(t, w.dir, "checkout", "-q", "main")
 			}},
-		{name: "b: a merge-base that dies is check-broke, not stale", pr: ghURL, opts: GateOpts{CheckOnly: true}, broken: true, verdict: GateCheckBroke},
-		{name: "b2: a failed fetch is check-broke", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateCheckBroke,
+		{name: "b: a merge-base that dies is check-broke, not stale", pr: ghURL, opts: GateOpts{CheckOnly: true}, broken: true, verdict: landing.GateCheckBroke},
+		{name: "b2: a failed fetch is check-broke", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateCheckBroke,
 			setup: func(w *world) {
 				gittest.Run(t, w.dir, "remote", "set-url", "origin", filepath.Join(filepath.Dir(w.dir), "nope.git"))
 			}},
-		{name: "c: matching PR is fresh", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateFresh},
-		{name: "c: head sha moved", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: matching PR is fresh", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateFresh},
+		{name: "c: head sha moved", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GatePRMismatch,
 			setup: func(w *world) { w.forge("sha", strings.Repeat("0", 40)) }},
-		{name: "c: forge lags the push, then catches up", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateFresh,
+		{name: "c: forge lags the push, then catches up", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateFresh,
 			setup: func(w *world) { w.forge("staleHeadFor", "3") }},
-		{name: "c: forge never catches up", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: forge never catches up", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GatePRMismatch,
 			setup: func(w *world) { w.forge("staleHeadFor", "99") }},
-		{name: "c: stacked PR", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: stacked PR", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GatePRMismatch,
 			setup: func(w *world) { w.forge("base", "stack") }},
-		{name: "c: wrong head branch", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: wrong head branch", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GatePRMismatch,
 			setup: func(w *world) { w.forge("head", "other") }},
-		{name: "c: PR already merged", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateAlreadyMerged,
+		{name: "c: PR already merged", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateAlreadyMerged,
 			setup: func(w *world) { w.forge("state", "MERGED") }},
-		{name: "c: PR closed without merging", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+		{name: "c: PR closed without merging", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GatePRMismatch,
 			setup: func(w *world) { w.forge("state", "CLOSED") }},
-		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
+		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: landing.GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["test -f work.txt"]}}`) }},
-		{name: "d: no verify commands", pr: ghURL, verdict: GateNoVerify, noFiles: []string{"work.txt"},
+		{name: "d: no verify commands", pr: ghURL, verdict: landing.GateNoVerify, noFiles: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
-		{name: "d: no verify commands with --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
+		{name: "d: no verify commands with --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: landing.GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
-		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
+		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: landing.GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["false"]}}`) }},
-		{name: "d: verify fails on the scratch merge, nothing lands", pr: ghURL, verdict: GateVerifyFailed, noFiles: []string{"work.txt"},
+		{name: "d: verify fails on the scratch merge, nothing lands", pr: ghURL, verdict: landing.GateVerifyFailed, noFiles: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["true","false"]}}`) }},
-		{name: "e: merge that merged nothing", pr: glURL, mode: "noop", verdict: GateNotMerged, noFiles: []string{"work.txt"}},
-		{name: "e: merge into another branch", pr: ghURL, mode: "elsewhere", verdict: GateNotOnBase, noFiles: []string{"work.txt"}},
-		{name: "e: refused merge shows the CLI output", pr: ghURL, mode: "fail", verdict: GateMergeFailed, noFiles: []string{"work.txt"}},
-		{name: "e: a push after the check is refused by the pin", pr: ghURL, mode: "race", verdict: GateMergeFailed, noFiles: []string{"work.txt"}},
-		{name: "f: gitlab squash falls back to squash_commit_sha", pr: glURL, mode: "squash", verdict: GatePass, changed: true, files: []string{"work.txt"}},
-		{name: "f: gitlab fast-forward merge has no merge commit", pr: glURL, mode: "ff", verdict: GatePass, changed: true, files: []string{"work.txt"}},
-		{name: "f2: gitlab provenance reads the MR description", pr: glURL, opts: GateOpts{CheckOnly: true}, verdict: GateProvenanceFail,
+		{name: "e: merge that merged nothing", pr: glURL, mode: "noop", verdict: landing.GateNotMerged, noFiles: []string{"work.txt"}},
+		{name: "e: merge into another branch", pr: ghURL, mode: "elsewhere", verdict: landing.GateNotOnBase, noFiles: []string{"work.txt"}},
+		{name: "e: refused merge shows the CLI output", pr: ghURL, mode: "fail", verdict: landing.GateMergeFailed, noFiles: []string{"work.txt"}},
+		{name: "e: a push after the check is refused by the pin", pr: ghURL, mode: "race", verdict: landing.GateMergeFailed, noFiles: []string{"work.txt"}},
+		{name: "f: gitlab squash falls back to squash_commit_sha", pr: glURL, mode: "squash", verdict: landing.GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "f: gitlab fast-forward merge has no merge commit", pr: glURL, mode: "ff", verdict: landing.GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "f2: gitlab provenance reads the MR description", pr: glURL, opts: GateOpts{CheckOnly: true}, verdict: landing.GateProvenanceFail,
 			setup: func(w *world) {
 				w.setPRBody("## Approvals\n- x: orchestrator relay round 2\n")
 				w.setSlot(glURL, "[]")
 			}},
-		{name: "g: PR without an origin remote is refused, never merged locally", pr: ghURL, verdict: GateCheckBroke, noFiles: []string{"work.txt"},
+		{name: "g: PR without an origin remote is refused, never merged locally", pr: ghURL, verdict: landing.GateCheckBroke, noFiles: []string{"work.txt"},
 			setup: func(w *world) { gittest.Run(t, w.dir, "remote", "remove", "origin") }},
-		{name: "h: local merge without a PR", pr: "", verdict: GatePass, changed: true, files: []string{"work.txt"},
+		{name: "h: local merge without a PR", pr: "", verdict: landing.GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
-		{name: "h: no PR means no provenance to read", pr: "", opts: GateOpts{CheckOnly: true}, verdict: GateFresh,
+		{name: "h: no PR means no provenance to read", pr: "", opts: GateOpts{CheckOnly: true}, verdict: landing.GateFresh,
 			setup: func(w *world) { gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
-		{name: "i: merged on origin but local base diverged", pr: ghURL, verdict: GateMergedRemotely, changed: true,
+		{name: "i: merged on origin but local base diverged", pr: ghURL, verdict: landing.GateMergedRemotely, changed: true,
 			setup: func(w *world) {
 				os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
 				gittest.Run(t, w.dir, "add", "local.txt")
@@ -356,18 +357,18 @@ func TestGateProvenance(t *testing.T) {
 		name, body, relays string
 		verdict            string
 	}{
-		{"no section, no relays", "just a body", "[]", GateFresh},
-		{"no section while relays exist", "just a body", relay, GateProvenanceFail},
-		{"relay cited and logged", "## Approvals\n- x: orchestrator relay round 2\n", relay, GateFresh},
-		{"relay round never sent", "## Approvals\n- x: orchestrator relay round 5\n", relay, GateProvenanceFail},
-		{"relay cited with no number but none logged", "## Approvals\n- orchestrator relay said so\n", "[]", GateProvenanceFail},
-		{"relay cited with no number, one logged", "## Approvals\n- orchestrator relay said so\n", relay, GateFresh},
-		{"relayed text cited as the maintainer", "## Approvals\n- the maintainer: use the shared cache for the lookup\n", relay, GateProvenanceFail},
-		{"maintainer line with different text", "## Approvals\n- the maintainer approved the naming in my pane\n", relay, GateFresh},
-		{"short summary is not matched", "## Approvals\n- the maintainer: ok\n", `[{"round":1,"summary":"ok"}]`, GateFresh},
-		{"section ends at the next heading", "## Approvals\n- orchestrator relay round 2\n## Notes\n- the maintainer: use the shared cache for the lookup\n", relay, GateFresh},
-		{"heading is case-insensitive", "## approvals\n- x: orchestrator relay round 9\n", relay, GateProvenanceFail},
-		{"only one section counts: ### is not a new heading", "## Approvals\n### detail\n- orchestrator relay round 9\n", relay, GateProvenanceFail},
+		{"no section, no relays", "just a body", "[]", landing.GateFresh},
+		{"no section while relays exist", "just a body", relay, landing.GateProvenanceFail},
+		{"relay cited and logged", "## Approvals\n- x: orchestrator relay round 2\n", relay, landing.GateFresh},
+		{"relay round never sent", "## Approvals\n- x: orchestrator relay round 5\n", relay, landing.GateProvenanceFail},
+		{"relay cited with no number but none logged", "## Approvals\n- orchestrator relay said so\n", "[]", landing.GateProvenanceFail},
+		{"relay cited with no number, one logged", "## Approvals\n- orchestrator relay said so\n", relay, landing.GateFresh},
+		{"relayed text cited as the maintainer", "## Approvals\n- the maintainer: use the shared cache for the lookup\n", relay, landing.GateProvenanceFail},
+		{"maintainer line with different text", "## Approvals\n- the maintainer approved the naming in my pane\n", relay, landing.GateFresh},
+		{"short summary is not matched", "## Approvals\n- the maintainer: ok\n", `[{"round":1,"summary":"ok"}]`, landing.GateFresh},
+		{"section ends at the next heading", "## Approvals\n- orchestrator relay round 2\n## Notes\n- the maintainer: use the shared cache for the lookup\n", relay, landing.GateFresh},
+		{"heading is case-insensitive", "## approvals\n- x: orchestrator relay round 9\n", relay, landing.GateProvenanceFail},
+		{"only one section counts: ### is not a new heading", "## Approvals\n### detail\n- orchestrator relay round 9\n", relay, landing.GateProvenanceFail},
 	} {
 		c := c
 		cases = append(cases, gateCase{name: c.name, pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: c.verdict, body: c.body, relays: c.relays,
@@ -406,7 +407,7 @@ func TestGateResolutionFailures(t *testing.T) {
 		t.Errorf("wrong checkout: %v", err)
 	}
 	// --check-only does not need it
-	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh {
 		t.Errorf("check-only off-base: %+v %v", res, err)
 	}
 }
@@ -418,7 +419,7 @@ func TestGateResultShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GatePass || strings.Join(res.Verified, "|") != "true|echo hi" || res.VerifySkipped || !res.Changed ||
+	if res.Verdict != landing.GatePass || strings.Join(res.Verified, "|") != "true|echo hi" || res.VerifySkipped || !res.Changed ||
 		res.PR != ghURL || res.Branch != "w1" || res.Base != "main" || len(res.SHA) < 7 {
 		t.Errorf("%+v", res)
 	}
@@ -485,7 +486,7 @@ func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
 		return inner(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateMergeFailed || !strings.Contains(res.Err, "merge of w1 into main conflicted") || res.Changed {
+	if err != nil || res.Verdict != landing.GateMergeFailed || !strings.Contains(res.Err, "merge of w1 into main conflicted") || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(strings.Join(seen, "\n"), "merge --abort") {
@@ -517,7 +518,7 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 				return tc.wrap(f), err
 			}
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if err != nil || res.Verdict != GateCheckBroke || res.Changed {
+			if err != nil || res.Verdict != landing.GateCheckBroke || res.Changed {
 				t.Fatalf("%+v %v", res, err)
 			}
 			if _, err := os.Stat(filepath.Join(w.dir, "work.txt")); err == nil {
@@ -538,7 +539,7 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 		return &flakyForge{Forge: f, from: 1, err: &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, CLIMissing: true, Message: "gh is not installed"}}, err
 	}
 	res, _ := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
-	if res.Verdict != GateCheckBroke {
+	if res.Verdict != landing.GateCheckBroke {
 		t.Errorf("PR info needs the CLI too: %+v", res)
 	}
 }
@@ -567,7 +568,7 @@ func TestGateRevParseFailureIsCheckBroke(t *testing.T) {
 		return git.Exec(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "git rev-parse origin/w1 failed") {
+	if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "git rev-parse origin/w1 failed") {
 		t.Errorf("%+v %v", res, err)
 	}
 	if strings.Contains(w.logText(), "PRRequestMerge") {
@@ -602,7 +603,7 @@ func TestGateShellRunsUnderTheContext(t *testing.T) {
 	}()
 	start := time.Now()
 	res, err := e.Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateVerifyFailed || time.Since(start) > 10*time.Second {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || time.Since(start) > 10*time.Second {
 		t.Errorf("a cancelled context must stop the verify command: %+v %v after %v", res, err, time.Since(start))
 	}
 }
@@ -621,7 +622,7 @@ func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 		return inner(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateMergeFailed || strings.Contains(res.Err, "conflicted") ||
+	if err != nil || res.Verdict != landing.GateMergeFailed || strings.Contains(res.Err, "conflicted") ||
 		!strings.Contains(res.Err, "fatal: unable to auto-detect email address") ||
 		!strings.Contains(res.Err, "git merge --abort failed") {
 		t.Errorf("%+v %v", res, err)
@@ -643,12 +644,12 @@ func TestGateStaleMerge(t *testing.T) {
 		note    bool
 		noteHas string
 	}{
-		{name: "disjoint files merge clean", setup: func(w *world) { advanceMainOn(w, "more.txt") }, verdict: GatePass, changed: true, note: true},
-		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: GateFresh, note: true},
-		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"test":{"full":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
-		{name: "a shared file with a clean merge lands after verify", setup: func(w *world) { sharedFile(t, w) }, verdict: GatePass, changed: true, note: true, noteHas: "both sides changed seed.txt"},
-		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"test":{"full":["true"]},"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
-		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale, errHas: "the merge conflicts"},
+		{name: "disjoint files merge clean", setup: func(w *world) { advanceMainOn(w, "more.txt") }, verdict: landing.GatePass, changed: true, note: true},
+		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: landing.GateFresh, note: true},
+		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"test":{"full":["test -f more.txt && test -f work.txt"]}}`, verdict: landing.GatePass, changed: true, note: true},
+		{name: "a shared file with a clean merge lands after verify", setup: func(w *world) { sharedFile(t, w) }, verdict: landing.GatePass, changed: true, note: true, noteHas: "both sides changed seed.txt"},
+		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"test":{"full":["true"]},"round":{"sharedPaths":["seed.txt"]}}`, verdict: landing.GatePass, changed: true, note: true},
+		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: landing.GateStale, errHas: "the merge conflicts"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -792,7 +793,7 @@ func TestGateVerifyCommandsComeFromBeforeTheMerge(t *testing.T) {
 	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateVerifyFailed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Errorf("verify must use the base's commands, got %+v %v", res, err)
 	}
 }
@@ -804,7 +805,7 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GatePass || res.PR != ghURL {
+	if err != nil || res.Verdict != landing.GatePass || res.PR != ghURL {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(w.logText(), "PRRequestMerge 7") {
@@ -827,7 +828,7 @@ func TestGateApprovalSeesTheAdoptedPR(t *testing.T) {
 		Answers: fakeAnswers{entries: map[string]ApprovalEntry{"e1": answeredOn("pr", 7, "approve")}},
 		Clear:   func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, nil },
 	}})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	// the escalation sits on PR #7: only the adopted PR's thread accepts it
@@ -841,8 +842,8 @@ func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
 	w.forge("head", "dana/5-x")
 	w.setPRBody("Adds the thing.\n")
 	res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if res.Issue != "5" || res.Verdict != GateNotClosing {
-		t.Errorf("issue %q verdict %q, want 5 and %s: %+v", res.Issue, res.Verdict, GateNotClosing, res)
+	if res.Issue != "5" || res.Verdict != landing.GateNotClosing {
+		t.Errorf("issue %q verdict %q, want 5 and %s: %+v", res.Issue, res.Verdict, landing.GateNotClosing, res)
 	}
 }
 
@@ -885,7 +886,7 @@ func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != GateFresh || res.PR != ghURL {
+	if err != nil || res.Verdict != landing.GateFresh || res.PR != ghURL {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1").PR(); got != "" {
@@ -899,7 +900,7 @@ func TestGateWithoutARecordedPRIsCheckBrokeWhenThePRsCannotBeListed(t *testing.T
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.forge("listError", "simulated: rate limited")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateCheckBroke || res.Changed {
+	if err != nil || res.Verdict != landing.GateCheckBroke || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if _, serr := os.Stat(filepath.Join(w.dir, "work.txt")); serr == nil {
@@ -929,7 +930,7 @@ func TestGateReleasesTheClaimLabelOfClosedIssues(t *testing.T) {
 			w.forge("removeErr", c.remErr)
 			w.forge("issueErr", c.getErr)
 			res, err := w.gate(false, GateOpts{})
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("a failed release must not fail the merged gate: %+v %v", res, err)
 			}
 			if got := strings.Contains(w.logText(), "RemoveLabels 5 in-progress"); got != c.removed && c.remErr == "" {
@@ -954,7 +955,7 @@ func TestGateMergeDropsClaimLabel(t *testing.T) {
 				w.forge("issueState", state)
 				w.forge("issueLabels", labels)
 				res, err := w.gate(false, GateOpts{})
-				if err != nil || res.Verdict != GatePass {
+				if err != nil || res.Verdict != landing.GatePass {
 					t.Fatalf("gate: %+v %v", res, err)
 				}
 				want := labels
@@ -985,7 +986,7 @@ func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
 		return git.Exec(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateMergeFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateMergeFailed || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	for _, want := range []string{"CONFLICT", "index.lock exists", "git merge --abort", "git status"} {
@@ -1000,7 +1001,7 @@ func TestGateRunsE2EAfterFull(t *testing.T) {
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":["true"],"e2e":["test -f work.txt"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GatePass || res.VerifySkipped {
+	if err != nil || res.Verdict != landing.GatePass || res.VerifySkipped {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -1010,7 +1011,7 @@ func TestGateRunsE2EWhenFullIsEmpty(t *testing.T) {
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[],"e2e":["false"]}}`)
 	res, _ := w.gate(false, GateOpts{})
-	if res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
+	if res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
 		t.Fatalf("e2e must gate even without test.full: %+v", res)
 	}
 }
@@ -1020,7 +1021,7 @@ func TestGateE2ERedFails(t *testing.T) {
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":["true"],"e2e":["false"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -1031,7 +1032,7 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	ran := filepath.Join(t.TempDir(), "e2e-ran.txt") // outside the scratch tree the verify runs in
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["false"],"e2e":["echo ran >> %s"]}}`, ran))
 	res, _ := w.gate(false, GateOpts{})
-	if res.Verdict != GateVerifyFailed || strings.Contains(res.Err, "test.e2e") {
+	if res.Verdict != landing.GateVerifyFailed || strings.Contains(res.Err, "test.e2e") {
 		t.Fatalf("%+v", res)
 	}
 	if _, err := os.Stat(ran); err == nil {
@@ -1049,7 +1050,7 @@ func TestGateVerdictFromStore(t *testing.T) {
 		}
 		res, err := w.gate(false, GateOpts{CheckOnly: check})
 		var vb *verdict.BlockedError
-		if !errors.As(err, &vb) || res.Verdict != GateVerdictBlocked || w.onMain("work.txt") {
+		if !errors.As(err, &vb) || res.Verdict != landing.GateVerdictBlocked || w.onMain("work.txt") {
 			t.Fatalf("check=%v: %+v %v", check, res, err)
 		}
 	}
@@ -1089,14 +1090,14 @@ func TestGateRefusesEmptyTestFull(t *testing.T) {
 	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateNoVerify || res.Changed || w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GateNoVerify || res.Changed || w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {
 		t.Errorf("refusal must name the key and the way out: %q / %q", res.Err, res.Hint)
 	}
 	res, err = w.gate(false, GateOpts{NoVerify: true})
-	if err != nil || res.Verdict != GatePass || !res.VerifySkipped || !strings.Contains(strings.Join(res.Notes, "\n"), "NO-VERIFY") {
+	if err != nil || res.Verdict != landing.GatePass || !res.VerifySkipped || !strings.Contains(strings.Join(res.Notes, "\n"), "NO-VERIFY") {
 		t.Fatalf("--no-verify: %+v %v", res, err)
 	}
 }
@@ -1109,13 +1110,13 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 		check              bool
 		verdict            string
 	}{
-		{name: "no keyword", body: "Adds the thing.\n", verdict: GateNotClosing},
-		{name: "refs is not closing", body: "Refs #5\n", verdict: GateNotClosing},
-		{name: "another issue", body: "Closes #6\n", verdict: GateNotClosing},
-		{name: "no keyword under check-only", body: "x", check: true, verdict: GateNotClosing},
-		{name: "closes", body: "Closes #5\n", verdict: GatePass},
-		{name: "fixes", body: "Fixes #5\n", verdict: GatePass},
-		{name: "partial slice", body: "Refs #5\n", labels: "in-progress," + PartialSliceLabel, verdict: GatePass},
+		{name: "no keyword", body: "Adds the thing.\n", verdict: landing.GateNotClosing},
+		{name: "refs is not closing", body: "Refs #5\n", verdict: landing.GateNotClosing},
+		{name: "another issue", body: "Closes #6\n", verdict: landing.GateNotClosing},
+		{name: "no keyword under check-only", body: "x", check: true, verdict: landing.GateNotClosing},
+		{name: "closes", body: "Closes #5\n", verdict: landing.GatePass},
+		{name: "fixes", body: "Fixes #5\n", verdict: landing.GatePass},
+		{name: "partial slice", body: "Refs #5\n", labels: "in-progress," + PartialSliceLabel, verdict: landing.GatePass},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1126,13 +1127,13 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 			w.forge("issueLabels", c.labels)
 			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
 			want := c.verdict
-			if c.check && want == GatePass {
-				want = GateFresh
+			if c.check && want == landing.GatePass {
+				want = landing.GateFresh
 			}
 			if err != nil || res.Verdict != want {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, want, res)
 			}
-			if c.verdict == GateNotClosing {
+			if c.verdict == landing.GateNotClosing {
 				if res.Changed || w.onMain("work.txt") {
 					t.Errorf("nothing may land: %+v", res)
 				}
@@ -1156,12 +1157,12 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 		verdict    string
 		note       bool
 	}{
-		{name: "forge says it closes", refs: "5", verdict: GateNotClosing},
-		{name: "forge lists another issue", refs: "6", verdict: GatePass},
-		{name: "forge lists none", refs: "none", verdict: GatePass},
-		{name: "final slice may close", refs: "5", final: true, verdict: GatePass},
-		{name: "forge cannot report", refs: "", verdict: GatePass, note: true},
-		{name: "forge errors on the read", refs: "error", verdict: GatePass, note: true},
+		{name: "forge says it closes", refs: "5", verdict: landing.GateNotClosing},
+		{name: "forge lists another issue", refs: "6", verdict: landing.GatePass},
+		{name: "forge lists none", refs: "none", verdict: landing.GatePass},
+		{name: "final slice may close", refs: "5", final: true, verdict: landing.GatePass},
+		{name: "forge cannot report", refs: "", verdict: landing.GatePass, note: true},
+		{name: "forge errors on the read", refs: "error", verdict: landing.GatePass, note: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1175,7 +1176,7 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
 			}
-			if c.verdict == GateNotClosing {
+			if c.verdict == landing.GateNotClosing {
 				if res.Changed || w.onMain("work.txt") {
 					t.Errorf("nothing may land: %+v", res)
 				}
@@ -1200,10 +1201,10 @@ func TestGateAnUnrecordedPR(t *testing.T) {
 		setup   func(w *world)
 		verdict string
 	}{
-		{name: "fresh PR lands", arg: "7", verdict: GatePass},
-		{name: "hash ref lands", arg: "#7", verdict: GatePass},
-		{name: "url lands", arg: ghURL, verdict: GatePass},
-		{name: "conflicting PR is refused", arg: "7", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale},
+		{name: "fresh PR lands", arg: "7", verdict: landing.GatePass},
+		{name: "hash ref lands", arg: "#7", verdict: landing.GatePass},
+		{name: "url lands", arg: ghURL, verdict: landing.GatePass},
+		{name: "conflicting PR is refused", arg: "7", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: landing.GateStale},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, "")
@@ -1215,7 +1216,7 @@ func TestGateAnUnrecordedPR(t *testing.T) {
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
 			}
-			landed := c.verdict == GatePass
+			landed := c.verdict == landing.GatePass
 			if res.Changed != landed || w.onMain("work.txt") != landed {
 				t.Errorf("landed = %v, want %v: %+v", res.Changed, landed, res)
 			}
@@ -1236,7 +1237,7 @@ func TestGateStalePRHintNamesOwner(t *testing.T) {
 			w := newWorld(t, pr)
 			advanceMainOn(w, "work.txt")
 			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-			if err != nil || res.Verdict != GateStale {
+			if err != nil || res.Verdict != landing.GateStale {
 				t.Fatalf("stale PR: %+v, %v", res, err)
 			}
 			if !strings.Contains(res.Hint, owner) || strings.Contains(res.Hint, "slot 7") || !strings.Contains(res.Hint, "git merge main") {
@@ -1253,7 +1254,7 @@ func TestGateAlreadyMergedPRTarget(t *testing.T) {
 			w.forge("state", "MERGED")
 			gittest.Run(t, w.dir, "push", "-q", "origin", ":w1")
 			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: checkOnly})
-			if err != nil || res.Verdict != GateAlreadyMerged || !res.AlreadyMerged || res.Changed {
+			if err != nil || res.Verdict != landing.GateAlreadyMerged || !res.AlreadyMerged || res.Changed {
 				t.Fatalf("already-merged PR: %+v, %v", res, err)
 			}
 			if res.Hint != "" || !strings.Contains(res.Err, "already merged into main") || strings.Contains(res.Err, "STALE") {
@@ -1288,7 +1289,7 @@ func TestGateMergedRemotelyCause(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Verdict != GateMergedRemotely || !res.Changed || !res.VerifySkipped {
+			if res.Verdict != landing.GateMergedRemotely || !res.Changed || !res.VerifySkipped {
 				t.Fatalf("verdict=%s changed=%v verifySkipped=%v: %s", res.Verdict, res.Changed, res.VerifySkipped, res.Err)
 			}
 			if !strings.Contains(res.Err, c.want) || !strings.Contains(res.Hint, "NOT verified") {
@@ -1306,13 +1307,13 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 		check   bool
 		verdict string
 	}{
-		{name: "unpicked", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, verdict: GateBestOfUnpicked},
-		{name: "unpicked under check-only", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, check: true, verdict: GateBestOfUnpicked},
-		{name: "pick names another PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#8","round":1}}`, verdict: GateBestOfUnpicked},
-		{name: "pick names this PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#7","round":1}}`, verdict: GatePass},
-		{name: "picked by URL", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"` + ghURL + `","round":1}}`, check: true, verdict: GateFresh},
-		{name: "another issue is best-of", bestOf: `{"6":{"attempts":[],"pick":"","round":1}}`, verdict: GatePass},
-		{name: "not best-of", verdict: GatePass},
+		{name: "unpicked", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, verdict: landing.GateBestOfUnpicked},
+		{name: "unpicked under check-only", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, check: true, verdict: landing.GateBestOfUnpicked},
+		{name: "pick names another PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#8","round":1}}`, verdict: landing.GateBestOfUnpicked},
+		{name: "pick names this PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#7","round":1}}`, verdict: landing.GatePass},
+		{name: "picked by URL", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"` + ghURL + `","round":1}}`, check: true, verdict: landing.GateFresh},
+		{name: "another issue is best-of", bestOf: `{"6":{"attempts":[],"pick":"","round":1}}`, verdict: landing.GatePass},
+		{name: "not best-of", verdict: landing.GatePass},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1328,7 +1329,7 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
 			}
-			if c.verdict != GateBestOfUnpicked {
+			if c.verdict != landing.GateBestOfUnpicked {
 				return
 			}
 			if res.Changed || w.onMain("work.txt") {
@@ -1378,10 +1379,10 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused == "" {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("%+v", res)
 				}
-			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") || res.Changed {
+			} else if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") || res.Changed {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
@@ -1425,10 +1426,10 @@ func TestGateReviewDepthSignals(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused == "" {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("%+v", res)
 				}
-			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
+			} else if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
@@ -1457,7 +1458,7 @@ func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
 			w.forge("issueBody", c.issueBody)
 			w.record("dana/5-x", "", spec)
 			res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true, CheckReviews: true})
-			if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+quality+" verdict") {
+			if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+quality+" verdict") {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s: %+v", res.Verdict, res.Err, quality, res)
 			}
 			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
@@ -1489,10 +1490,10 @@ func TestGateLightWithoutAnIssueNeedsStandards(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused == "" {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("%+v", res)
 				}
-			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
+			} else if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 		})
@@ -1508,11 +1509,11 @@ func TestGateReviewDepthUnresolvable(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 	w.setPRBody("Closes #5\n")
-	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh {
 		t.Fatalf("no port: %+v %v", res, err)
 	}
 	w.setConfig(`{"ship":{"review":{"default":"deep"}},"test":{"full":["true"]}}`)
-	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateCheckBroke {
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateCheckBroke {
 		t.Errorf("malformed policy: %+v %v", res, err)
 	}
 }
@@ -1532,7 +1533,7 @@ func TestGateReviewDepthLabelReadFailureIsCheckBroke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
+	if res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
 		t.Errorf("label read failure: %s (%s)", res.Verdict, res.Err)
 	}
 }
@@ -1552,7 +1553,7 @@ func TestGateReviewDepthCrossIssueReadFailureIsCheckBroke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
+	if res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
 		t.Errorf("issue read failure: %s (%s)", res.Verdict, res.Err)
 	}
 }
@@ -1580,7 +1581,7 @@ func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not diff") {
+	if res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "could not diff") {
 		t.Errorf("diff read failure: %s (%s)", res.Verdict, res.Err)
 	}
 }
@@ -1599,7 +1600,7 @@ func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateReviewMissing {
+	if res.Verdict != landing.GateReviewMissing {
 		t.Errorf("a stale verdict must not pass: %+v", res)
 	}
 }
@@ -1641,7 +1642,7 @@ func TestGateSecondPROfASplitIssueUsesTheSlotsRelays(t *testing.T) {
 		t.Run(arg, func(t *testing.T) {
 			w := secondPR(t, "dana/5-second-slice")
 			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: arg, Base: "main"})
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 			}
 			if res.Branch != "dana/5-second-slice" || !w.onMain("work.txt") {
@@ -1653,13 +1654,13 @@ func TestGateSecondPROfASplitIssueUsesTheSlotsRelays(t *testing.T) {
 
 func TestGateRecordsTheHeadBranchOfTheSecondPR(t *testing.T) {
 	w := secondPR(t, "dana/5-second-slice")
-	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1").Branch(); got != "dana/5-first-slice" {
 		t.Errorf("check-only recorded %q", got)
 	}
-	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != GatePass {
+	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1").Branch(); got != "dana/5-second-slice" {
@@ -1674,7 +1675,7 @@ func TestGateKeepsRefusingAPRFromAnotherIssuesBranch(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != GatePRMismatch {
+	if err != nil || res.Verdict != landing.GatePRMismatch {
 		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 }
@@ -1688,8 +1689,8 @@ func TestGatePRHeadLagHintNamesTheRerun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GatePRMismatch {
-		t.Fatalf("verdict = %s, want %s", res.Verdict, GatePRMismatch)
+	if res.Verdict != landing.GatePRMismatch {
+		t.Fatalf("verdict = %s, want %s", res.Verdict, landing.GatePRMismatch)
 	}
 	if want := "rota worker gate " + res.Slot; !strings.Contains(res.Hint, want) {
 		t.Errorf("hint = %q, want it to name %q", res.Hint, want)
@@ -1766,10 +1767,10 @@ func TestGateRequiresCrossReview(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused == "" {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("%+v", res)
 				}
-			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
+			} else if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 			notes := strings.Join(res.Notes, "\n")
@@ -1822,10 +1823,10 @@ func TestGateCrossRequirementSurvivesTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused {
-				if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+				if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
 					t.Fatalf("verdict %s (%s), want review-missing naming claude", res.Verdict, res.Err)
 				}
-			} else if res.Verdict != GateFresh {
+			} else if res.Verdict != landing.GateFresh {
 				t.Fatalf("verdict %s (%s), want a pass", res.Verdict, res.Err)
 			}
 		})
@@ -1845,7 +1846,7 @@ func TestGateCrossFailAtHeadSurvivesPassAtAnotherCommit(t *testing.T) {
 	w.recordCrossV("w1", "", "codex", verdict.Fail)
 	w.recordCrossV("w1", gittest.Run(t, w.worker, "rev-parse", "HEAD~1"), "codex", verdict.Pass)
 	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
-	if err == nil && res.Verdict == GateFresh {
+	if err == nil && res.Verdict == landing.GateFresh {
 		t.Fatalf("verdict %s, want a refusal: the codex FAIL at head stands", res.Verdict)
 	}
 }
@@ -1876,7 +1877,7 @@ func TestGateCrossAuthorFirstRowWithoutHarness(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Slot claude authors, so codex reviews: the later codex row must not make it claude.
-		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
+		if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
 			t.Fatalf("verdict %s (%s), want review-missing naming codex", res.Verdict, res.Err)
 		}
 	})
@@ -1939,10 +1940,10 @@ func TestGateRequiresLensReview(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.refused == "" {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("%+v", res)
 				}
-			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
+			} else if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 			if notes := strings.Join(res.Notes, "\n"); c.note != "" && !strings.Contains(notes, c.note) {
@@ -1963,8 +1964,8 @@ func TestGateReviewsOnlyIgnoresFreshness(t *testing.T) {
 		recorded []string
 		verdict  string
 	}{
-		{"no verdicts", nil, GateReviewMissing},
-		{"verdicts recorded", []string{spec, quality}, GateFresh},
+		{"no verdicts", nil, landing.GateReviewMissing},
+		{"verdicts recorded", []string{spec, quality}, landing.GateFresh},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -1976,7 +1977,7 @@ func TestGateReviewsOnlyIgnoresFreshness(t *testing.T) {
 			w.record("w1", "", c.recorded...)
 			advanceMainOn(w, "work.txt") // the branch now conflicts with the base
 			stale, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
-			if err != nil || stale.Verdict != GateStale {
+			if err != nil || stale.Verdict != landing.GateStale {
 				t.Fatalf("a plain check must still call the conflict stale: %+v %v", stale, err)
 			}
 			res, err := w.gate(false, GateOpts{ReviewsOnly: true})
@@ -2024,7 +2025,7 @@ func TestGateStaleCrossFail(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || res.Verdict != GateFresh {
+			if err != nil || res.Verdict != landing.GateFresh {
 				t.Fatalf("verdict %s err %v (%s)", res.Verdict, err, res.Err)
 			}
 			if notes := strings.Join(res.Notes, "\n"); !strings.Contains(notes, "review-cross FAIL") || !strings.Contains(notes, "review:none") {

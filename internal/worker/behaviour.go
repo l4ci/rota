@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,7 +180,7 @@ func (g *gateRun) behaviourRun(dir string) (bool, error) {
 	steps, ok, err := itembody.ParseTryIt(body)
 	switch {
 	case err != nil:
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the ## Try it section of %s is malformed: %v; nothing landed", o.Slot, ref, err),
+		g.verdict(landing.GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the ## Try it section of %s is malformed: %v; nothing landed", o.Slot, ref, err),
 			"fix the issue body, then re-gate")
 		return true, nil
 	case !ok:
@@ -217,7 +218,7 @@ func (g *gateRun) behaviourRun(dir string) (bool, error) {
 		return false, nil
 	}
 	st, r := steps[failedAt], results[failedAt]
-	g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s fails Try it step %d (issue line %d) `%s`: %s; nothing landed\n%s\nfull transcript: %s",
+	g.verdict(landing.GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s fails Try it step %d (issue line %d) `%s`: %s; nothing landed\n%s\nfull transcript: %s",
 		o.Slot, g.branch, o.Base, failedAt+1, st.Line, st.Run, r.reason(), indentTail(r.output, 20), path),
 		fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 	return true, nil

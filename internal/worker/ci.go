@@ -27,15 +27,6 @@ import (
 // the pushed commit within the start window is verdict ci-not-run, before
 // anything lands.
 
-// CI verdicts, all exit 1 with nothing landed: CI did not start on the pushed
-// commit, did not finish within test.ciTimeoutMinutes, or would have run a CI
-// definition the merge itself changes.
-const (
-	GateCINotRun        = landing.GateCINotRun
-	GateVerifyTimeout   = landing.GateVerifyTimeout
-	GateCIConfigChanged = landing.GateCIConfigChanged
-)
-
 // ciConfigPaths define a project's CI: GitHub workflows and local actions,
 // GitLab's default pipeline file and its usual include directory. CI runs the
 // definition in the pushed tree, so a merge that changes one would choose its
@@ -265,10 +256,10 @@ func checkLog(checks []tracker.CheckRun) string {
 func (r VerifyResult) stopVerdict(who string) (verdict, msg, hint string) {
 	switch {
 	case r.NotRun:
-		return GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — listed CI check(s) never ran on %s (%s): %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.Join(r.Missing, ", ")),
+		return landing.GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — listed CI check(s) never ran on %s (%s): %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.Join(r.Missing, ", ")),
 			"make the project's CI run on pushes to " + ciRefPrefix + "** branches and check that test.ciChecks matches its check names, or set test.fullWhere to local"
 	case r.TimedOut:
-		return GateVerifyTimeout, fmt.Sprintf("VERIFY-TIMEOUT %s — CI on %s (%s) did not finish in time: %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.TrimSpace(r.Log)),
+		return landing.GateVerifyTimeout, fmt.Sprintf("VERIFY-TIMEOUT %s — CI on %s (%s) did not finish in time: %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.TrimSpace(r.Log)),
 			"re-run when CI has caught up, or raise test.ciTimeoutMinutes"
 	}
 	return "", "", ""

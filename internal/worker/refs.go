@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"regexp"
 	"strings"
 
@@ -180,7 +181,7 @@ func (e Env) Refs(ctx context.Context, root string, o RefsOpts) (RefsResult, err
 	}
 	// The renewal is rota's own commit on the branch, not a fix: the look at
 	// the tip before it stays the approval the gate needs.
-	if err := UpdateIntegration(root, rec.Branch, func(it *Integration) { it.RotaMerges = append(it.RotaMerges, commit) }); err != nil {
+	if err := UpdateIntegration(root, rec.Branch, func(it *landing.Integration) { it.RotaMerges = append(it.RotaMerges, commit) }); err != nil {
 		return res, fmt.Errorf("the renewal commit %s is pushed but unrecorded, so the gate will count it as a fix commit: %w", strutil.ShortSHA(commit), err)
 	}
 	res.Verdict, res.Commit, res.Files = RefsRenewed, commit, files

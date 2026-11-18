@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ func TestGateRetriesAssertionOnce(t *testing.T) {
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	t.Logf("checks=%d verdict=%s", calls, res.Verdict)
-	if err != nil || res.Verdict != GatePass || !res.Changed || calls != 2 || !strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY check") {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed || calls != 2 || !strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY check") {
 		t.Fatalf("one assertion failure followed by a pass must land green with a marker: %+v calls=%d err=%v", res, calls, err)
 	}
 }
@@ -59,7 +60,7 @@ func TestGateRetryEligibility(t *testing.T) {
 			e.Shell = func(context.Context, string, string) (string, int) { calls++; return tc.output, tc.code }
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 			t.Logf("checks=%d verdict=%s", calls, res.Verdict)
-			if err != nil || res.Verdict != GateVerifyFailed || res.Changed || calls != tc.calls || strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY") {
+			if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed || calls != tc.calls || strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY") {
 				t.Fatalf("%+v calls=%d err=%v", res, calls, err)
 			}
 			if _, err := os.Stat(flakeledger.Path(w.dir)); !os.IsNotExist(err) {
@@ -87,7 +88,7 @@ func TestGateRetryRequiresSameCleanTree(t *testing.T) {
 			return "ok\n", 0
 		}
 		res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-		if err != nil || res.Verdict != GateVerifyFailed || res.Changed || calls != mutateAt {
+		if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed || calls != mutateAt {
 			t.Fatalf("mutation on run %d: %+v calls=%d err=%v", mutateAt, res, calls, err)
 		}
 	}
@@ -112,7 +113,7 @@ func TestGateFlakeLedgerRecordsBothRuns(t *testing.T) {
 		return "ok example/pkg\n", 0
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	rows, err := flakeledger.Load(w.dir)
@@ -146,7 +147,7 @@ func TestTrainRetriesAssertionOnce(t *testing.T) {
 		return "ok\n", 0
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
-	if err != nil || res.Verdict != GatePass || len(res.Landed) != 2 || calls != 2 || !strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY check") {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Landed) != 2 || calls != 2 || !strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY check") {
 		t.Fatalf("%+v calls=%d err=%v", res, calls, err)
 	}
 }
@@ -214,7 +215,7 @@ func TestGateAndTrainRetryE2E(t *testing.T) {
 			verdict = r.Verdict
 		}
 		rows, err := flakeledger.Load(w.dir)
-		if verdict != GatePass || calls != 2 || err != nil || len(rows) != 1 || rows[0].Check != "e2e" {
+		if verdict != landing.GatePass || calls != 2 || err != nil || len(rows) != 1 || rows[0].Check != "e2e" {
 			t.Fatalf("train=%v verdict=%s calls=%d rows=%+v err=%v", train, verdict, calls, rows, err)
 		}
 	}
@@ -235,7 +236,7 @@ func TestGateDoesNotLandWhenFlakeLedgerCannotBeWritten(t *testing.T) {
 		return "ok\n", 0
 	}
 	r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if (err == nil && r.Verdict == GatePass) || r.Changed || w.onOriginMain("work.txt") {
+	if (err == nil && r.Verdict == landing.GatePass) || r.Changed || w.onOriginMain("work.txt") {
 		t.Fatalf("recovery without a durable record must not land: %+v %v", r, err)
 	}
 }
@@ -276,7 +277,7 @@ func TestGateRetryReportsDurationAndTests(t *testing.T) {
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	want := "FLAKY check — tests: TestUnderLoad, TestOther; rerun: 1.250s"
-	if err != nil || res.Verdict != GatePass || !strings.Contains(strings.Join(res.Notes, "\n"), want) {
+	if err != nil || res.Verdict != landing.GatePass || !strings.Contains(strings.Join(res.Notes, "\n"), want) {
 		t.Fatalf("missing rerun diagnostics: %+v %v", res, err)
 	}
 }
@@ -296,7 +297,7 @@ func TestTrainRetryReportsDurationAndTests(t *testing.T) {
 		return "ok\n", 0
 	}
 	r, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1"}, Base: "main"})
-	if err != nil || r.Verdict != GatePass || len(r.Flaky) != 1 || r.Flaky[0].Retry.WallSeconds != 2.5 || !strings.Contains(strings.Join(r.Notes, "\n"), "tests: TestLoad; rerun: 2.500s") {
+	if err != nil || r.Verdict != landing.GatePass || len(r.Flaky) != 1 || r.Flaky[0].Retry.WallSeconds != 2.5 || !strings.Contains(strings.Join(r.Notes, "\n"), "tests: TestLoad; rerun: 2.500s") {
 		t.Fatalf("%+v %v", r, err)
 	}
 	rows, err := flakeledger.Load(w.dir)

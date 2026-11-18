@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ func TestGateFreezeAfterLandedFailure(t *testing.T) {
 	w.setConfig(`{"test":{"full":["test ! -f other.txt"]}}`)
 	w.forge("pushBeforeMerge", "other.txt")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !res.Changed {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	b, err := os.ReadFile(filepath.Join(w.dir, ".git", "rota", "freeze.json"))
@@ -78,7 +79,7 @@ func TestGateFreezeRepairCanLandAndClear(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GatePass || !res.Changed {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed {
 		t.Fatalf("repair gate: %+v %v", res, err)
 	}
 	b, _ := os.ReadFile(p)
@@ -98,7 +99,7 @@ func TestGateFreezeScratchFailureDoesNotFreeze(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["false"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed {
 		t.Fatalf("scratch gate: %+v %v", res, err)
 	}
 	if _, err := os.Stat(filepath.Join(w.dir, ".git", "rota", "freeze.json")); !os.IsNotExist(err) {
@@ -111,7 +112,7 @@ func TestTrainFreezeAfterLandedFailure(t *testing.T) {
 	w.setConfig(`{"test":{"full":["test ! -f other.txt"]}}`)
 	w.forge("pushBeforeMerge", "other.txt")
 	res, err := w.train(TrainOpts{Targets: []string{"w1"}})
-	if err != nil || res.Verdict != GateVerifyFailed || !res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !res.Changed {
 		t.Fatalf("landed train: %+v %v", res, err)
 	}
 	b, err := os.ReadFile(filepath.Join(w.dir, ".git", "rota", "freeze.json"))
@@ -144,12 +145,12 @@ func TestTrainFreezeRepairClearsOnlyWithVerification(t *testing.T) {
 			}
 			if skip {
 				res, err := w.gate(false, GateOpts{NoVerify: true})
-				if err != nil || res.Verdict != GatePass {
+				if err != nil || res.Verdict != landing.GatePass {
 					t.Fatalf("skipped repair: %+v %v", res, err)
 				}
 			} else {
 				res, err := w.train(TrainOpts{Targets: []string{"w1"}})
-				if err != nil || res.Verdict != GatePass {
+				if err != nil || res.Verdict != landing.GatePass {
 					t.Fatalf("train repair: %+v %v", res, err)
 				}
 			}
@@ -192,9 +193,9 @@ func TestTrainFreezeIncompleteCIVerification(t *testing.T) {
 				return landedIncompleteForge{fakeForge: &fakeForge{w: w, provider: provider}, notRun: notRun}
 			}, false)
 			res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"w1"}, Base: "main"})
-			want := GateVerifyTimeout
+			want := landing.GateVerifyTimeout
 			if notRun {
-				want = GateCINotRun
+				want = landing.GateCINotRun
 			}
 			if err != nil || res.Verdict != want || !res.Changed || !w.onOriginMain("work.txt") {
 				t.Fatalf("incomplete landed CI must stop with %s: %+v %v", want, res, err)

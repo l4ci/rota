@@ -2,13 +2,14 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/verdict"
 	"strings"
 	"testing"
 )
 
 // gapKinds is the blockedBy keys of a refusal's gaps, in order.
-func gapKinds(r GateResult) []string {
+func gapKinds(r landing.GateResult) []string {
 	var out []string
 	for _, g := range r.Gaps {
 		out = append(out, g.BlockedBy)
@@ -25,8 +26,8 @@ func TestGateListsEveryRecordGap(t *testing.T) {
 		body      string
 		wantKinds []string
 	}{
-		{"two gaps", "partial", "Closes #5\n", []string{GateOutcomeOpen, GateAssumptionsMissing}},
-		{"three gaps", "failed", "Closes #5\n\n## Approvals\n- orchestrator relay round 9: go\n", []string{GateOutcomeOpen, GateProvenanceFail, GateAssumptionsMissing}},
+		{"two gaps", "partial", "Closes #5\n", []string{landing.GateOutcomeOpen, landing.GateAssumptionsMissing}},
+		{"three gaps", "failed", "Closes #5\n\n## Approvals\n- orchestrator relay round 9: go\n", []string{landing.GateOutcomeOpen, landing.GateProvenanceFail, landing.GateAssumptionsMissing}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -62,7 +63,7 @@ func TestGateSingleGapUnchanged(t *testing.T) {
 	w.setOutcomeSlot("")
 	w.forge("body", "Closes #5\n")
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != GateAssumptionsMissing {
+	if err != nil || res.Verdict != landing.GateAssumptionsMissing {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if len(res.Gaps) > 1 || strings.Contains(res.Err, "also") {
@@ -80,10 +81,10 @@ func TestTrainMemberListsEveryGap(t *testing.T) {
 	w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"]}}`)
 	w.record("w1", gittest.Run(t, w.worker, "rev-parse", "w1"), verdict.ReviewQuality)
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2"}, CheckReviews: true})
-	if err != nil || res.Verdict != GateProvenanceFail || res.Culprit != "w2" {
+	if err != nil || res.Verdict != landing.GateProvenanceFail || res.Culprit != "w2" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if got := gapKinds(res.CulpritGate); strings.Join(got, ",") != GateProvenanceFail+","+GateReviewMissing {
+	if got := gapKinds(res.CulpritGate); strings.Join(got, ",") != landing.GateProvenanceFail+","+landing.GateReviewMissing {
 		t.Fatalf("gaps = %v: %+v", got, res.CulpritGate)
 	}
 	if !strings.Contains(res.Err, "review-quality verdict") || !strings.Contains(res.Err, "orchestrator relay round 9") {
@@ -111,10 +112,10 @@ func TestGateKeepsFirstGapAheadOfALaterRefusal(t *testing.T) {
 		want    string // the first gap, which must stay the verdict
 		later   string // the refusal that would have won without gapsFirst
 	}{
-		{"outcome-open before stale", "partial", "Closes #5\n", func(w *world) { advanceMainOn(w, "work.txt") }, GateOutcomeOpen, GateStale},
-		{"outcome-open before pr-mismatch", "partial", "Closes #5\n", func(w *world) { w.forge("sha", strings.Repeat("0", 40)) }, GateOutcomeOpen, GatePRMismatch},
-		{"outcome-open before verdict-blocked", "partial", "Closes #5\n", failVerdict, GateOutcomeOpen, GateVerdictBlocked},
-		{"provenance before verdict-blocked", "", badRelay, failVerdict, GateProvenanceFail, GateVerdictBlocked},
+		{"outcome-open before stale", "partial", "Closes #5\n", func(w *world) { advanceMainOn(w, "work.txt") }, landing.GateOutcomeOpen, landing.GateStale},
+		{"outcome-open before pr-mismatch", "partial", "Closes #5\n", func(w *world) { w.forge("sha", strings.Repeat("0", 40)) }, landing.GateOutcomeOpen, landing.GatePRMismatch},
+		{"outcome-open before verdict-blocked", "partial", "Closes #5\n", failVerdict, landing.GateOutcomeOpen, landing.GateVerdictBlocked},
+		{"provenance before verdict-blocked", "", badRelay, failVerdict, landing.GateProvenanceFail, landing.GateVerdictBlocked},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)

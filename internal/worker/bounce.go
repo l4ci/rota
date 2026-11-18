@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -34,7 +35,7 @@ type BounceStore interface {
 	// Record counts one bounce at head unless the item already holds limit (0 =
 	// no cap). slot names the slot holding the bounced PR, for the ledger row; ""
 	// falls back to the first slot holding the issue.
-	Record(m *RoundMemo, issue, slot, head string, limit int) (BounceRecord, error)
+	Record(m *landing.RoundMemo, issue, slot, head string, limit int) (BounceRecord, error)
 	// Clear forgets the item's count: its PR merged, it was picked.
 	Clear(issue string) error
 }
@@ -84,7 +85,7 @@ func (r BounceResult) Err() error { return errors.Join(r.NotifyErr, r.UndoErr) }
 // a failed undo still reaches whoever must learn of the bounce; it must be
 // idempotent per head. The caller keeps its cap policy: a Capped result ran no
 // notify and counted nothing.
-func Bounce(store BounceStore, m *RoundMemo, issue, slot, head string, limit int, notify func(BounceRecord) error) (BounceResult, error) {
+func Bounce(store BounceStore, m *landing.RoundMemo, issue, slot, head string, limit int, notify func(BounceRecord) error) (BounceResult, error) {
 	rec, err := store.Record(m, issue, slot, head, limit)
 	if err != nil {
 		return BounceResult{}, err
@@ -229,7 +230,7 @@ func (s registryBounces) Count(issue string) (int, string, error) {
 	return reg.Bounces(issue), reg.BounceHead(issue), nil
 }
 
-func (s registryBounces) Record(m *RoundMemo, issue, slot, head string, limit int) (BounceRecord, error) {
+func (s registryBounces) Record(m *landing.RoundMemo, issue, slot, head string, limit int) (BounceRecord, error) {
 	prev := LoadRegistryTolerant(s.root)
 	n, counted, capped, err := recordBounce(s.e, m, s.root, issue, slot, head, limit)
 	return BounceRecord{N: n, Counted: counted, Capped: capped, undo: func() error { return UnrecordBounce(s.root, issue, head, prev) }}, err
@@ -317,7 +318,7 @@ func (s issueBounces) Count(issue string) (int, string, error) {
 	return len(t.heads), t.last(), err
 }
 
-func (s issueBounces) Record(m *RoundMemo, issue, slot, head string, limit int) (BounceRecord, error) {
+func (s issueBounces) Record(m *landing.RoundMemo, issue, slot, head string, limit int) (BounceRecord, error) {
 	k, t, err := s.tally(issue)
 	if err != nil {
 		return BounceRecord{}, err

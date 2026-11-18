@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/flakeledger"
@@ -85,7 +86,7 @@ func (e Env) runE2E(ctx context.Context, cmds []string, dir string, led testledg
 	return e.runGateVerify(ctx, cmds, dir, led)
 }
 
-func (e Env) recordFlakes(root string, round *RoundMemo, prs []string, vr VerifyResult) error {
+func (e Env) recordFlakes(root string, round *landing.RoundMemo, prs []string, vr VerifyResult) error {
 	for _, f := range vr.Flaky {
 		f.PRs = append([]string{}, prs...)
 		f.Round = round.Round(e, root)

@@ -1,11 +1,11 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // A conflict path is exact bytes; the TAB-separated nudge must render it
@@ -16,8 +16,8 @@ func TestTrainNudgeQuotesUnsafeConflictPath(t *testing.T) {
 		{PR: "#10", Base: "main", Reviewed: true},
 	})
 	odd := "a\tb\nc.go"
-	n := ns[0].withPlan(&worker.TrainPlan{
-		Conflicts: []worker.TrainConflict{{A: "9", B: "10", Paths: []string{odd, "plain.go"}}},
+	n := ns[0].withPlan(&landing.TrainPlan{
+		Conflicts: []landing.TrainConflict{{A: "9", B: "10", Paths: []string{odd, "plain.go"}}},
 		Landable:  []string{"9"},
 	})
 	lines := strings.Split(n.Text(), "\n")
