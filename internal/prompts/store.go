@@ -52,6 +52,8 @@ const (
 )
 
 // View combines saved history with the currently installed builtin.
+// Effective contains the expanded reporting section; agents wrap it with the
+// fixed role duty and quotation rule.
 type View struct {
 	Name           string        `json:"name"`
 	Revision       int           `json:"revision"`
