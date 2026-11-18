@@ -331,23 +331,25 @@ func TestWorkerGateIntegrationReplaysUnsettledCleanup(t *testing.T) {
 	}
 }
 
-// A refs renewal commit is rota's own: the look recorded before it stays the
-// approval, and no review is asked for it (#3686).
+// A refs renewal commit is rota's own: the review recorded at the fix before
+// it stays the approval, and no review is asked for the renewal (#3686). The
+// fix keeps the depth at light, so the exemption is what lets the gate pass.
 func TestIntegrationRefsRenewalIsNotAFixCommit(t *testing.T) {
 	w := reviewWorld(t)
-	tip := integrationPR(t, w)
+	integrationPR(t, w)
 	w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"],"refs":["mkdir -p refs && echo new > refs/a.png"],"refsPattern":"^refs/.*\\.png$"}}`)
-	w.record(intBranch, tip, verdict.Look)
+	fix := w.pushFix("fix.txt")
+	w.record(intBranch, fix, verdict.ReviewSpec, verdict.Look)
 	if res, err := w.refs(); err != nil || res.Verdict != RefsRenewed {
 		t.Fatalf("renew: %+v %v", res, err)
 	}
 	w.pointPR9()
 	res, err := w.gateCheck("9")
 	if err != nil || !res.OK() {
-		t.Fatalf("a refs renewal commit after the look must not need a review: %+v %v", res, err)
+		t.Fatalf("a refs renewal commit after a reviewed fix must not need a review: %+v %v", res, err)
 	}
 	// A real fix after the renewal still does.
-	w.pushFix("fix.txt")
+	w.pushFix("fix2.txt")
 	w.pointPR9()
 	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
 		t.Fatalf("a fix after the renewal slipped through: %+v", res)

@@ -1559,7 +1559,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		// at depth none (no cross review, no lens): the fixes need no verdict.
 		need := verdict.MissingReviews(depth, res.HasSpec, nil)
 		if NeedsCross(res, depth) {
-			need = append(need, "cross-harness review")
+			need = append(need, verdict.ReviewCross)
 		}
 		for _, l := range res.Lenses {
 			need = append(need, verdict.LensKind(l.Name))
@@ -1578,7 +1578,7 @@ func (runner gate) stepReviewDepth(result GateResult, target GateTarget, forged 
 		}
 		g.res.SHA = strutil.ShortSHA(intHead)
 		g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(need, " and ")),
-			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it", g.branch))
+			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it, or loosen ship.review", g.branch))
 		return finish(true, nil)
 	}
 	// stepPRMatches resolved the head when the slot has a remote; otherwise resolve it here
