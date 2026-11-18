@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 const orcaEmptyReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› "
@@ -55,7 +57,20 @@ func (f *orcaFake) deps() Deps {
 			return []int{p, 456}
 		}
 		return []int{p}
-	}, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Run: f.run}
+	}, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Run: f.run, Git: gitFrom(f.run)}
+}
+
+// gitFrom is run as a git.Runner: the call a fake Runner answers for "git".
+func gitFrom(run Runner) git.Runner {
+	return func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		return run(ctx, "git", append([]string{"-C", dir}, args...))
+	}
+}
+
+// withGit routes d's git calls through its fake Run.
+func withGit(d Deps) Deps {
+	d.Git = gitFrom(d.Run)
+	return d
 }
 func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, error) {
 	f.calls++
@@ -296,9 +311,6 @@ func TestOrcaCreateUncertaintyRetainsCleanupHandle(t *testing.T) {
 			f := newOrcaFake(t)
 			d := f.deps()
 			d.Run = func(ctx context.Context, name string, a []string) (Result, error) {
-				if name == "git" {
-					return f.run(ctx, name, a)
-				}
 				return reply, nil
 			}
 			h, e := New(Orca, d).Spawn(context.Background(), SpawnOpts{Slot: "ben", Session: "r", Cwd: f.cwd, Launch: "codex", BootTimeout: 2})

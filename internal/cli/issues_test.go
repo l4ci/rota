@@ -28,9 +28,6 @@ func issuesForge(t *testing.T, deps *Deps, origin string, reply map[string]strin
 	t.Helper()
 	var calls []string
 	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if name == "git" {
-			return []byte(origin + "\n"), nil, 0, nil
-		}
 		line := strings.Join(args, " ")
 		calls = append(calls, name+" "+line)
 		for p, out := range reply {
@@ -40,7 +37,7 @@ func issuesForge(t *testing.T, deps *Deps, origin string, reply map[string]strin
 		}
 		return nil, nil, 0, nil
 	}
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil }), tracker.WithGit(originGit(origin))}
 	return &calls
 }
 
@@ -262,16 +259,13 @@ func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 		"HTTP 500: server error": ExitUnavailable,
 	} {
 		exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			if name == "git" {
-				return []byte("https://github.com/o/r.git\n"), nil, 0, nil
-			}
 			if len(args) > 0 && args[0] == "api" {
 				return nil, []byte(stderr), 1, nil
 			}
 			return nil, nil, 0, nil
 		}
 		deps := testDeps()
-		deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
+		deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil }), tracker.WithGit(originGit("https://github.com/o/r.git"))}
 		code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "99", "--remove", "x")
 		if code != want {
 			t.Errorf("%q: exit %d, want %d: %v", stderr, code, want, env)

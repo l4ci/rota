@@ -183,7 +183,7 @@ func (d *Deps) originProvider(ctx context.Context, dir string) func() string {
 			o(cl)
 		}
 		of := func(dir string) string {
-			p := tracker.ProviderFromURL(tracker.OriginURL(ctx, dir, cl.Exec))
+			p := tracker.ProviderFromURL(tracker.OriginURL(ctx, dir, cl.Git))
 			if p == tracker.ProviderUnknown {
 				return ""
 			}

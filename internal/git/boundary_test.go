@@ -10,8 +10,32 @@ import (
 )
 
 // gitExec matches code that starts the git binary itself: exec.Command or
-// exec.CommandContext with a "git" program, or a LookPath("git") probe.
-var gitExec = regexp.MustCompile(`exec\.(Command|CommandContext)\(\s*(\w+,\s*)?"git"|LookPath\("git"\)`)
+// exec.CommandContext with a "git" program, a LookPath("git") probe, a
+// proc.Cmd naming git, or a process runner (proc.Run, a Deps.Run or an Exec
+// seam) handed a "git" program literal. Each skips Run's timeout, C locale and
+// ErrNoGit mapping.
+var gitExec = regexp.MustCompile(`exec\.(Command|CommandContext)\(\s*(\w+,\s*)?"git"|LookPath\("git"\)|Cmd\{\s*Name:\s*"git"|\b(Run|Exec|exec)(\(\))?\([^()\n]*"git"`)
+
+// TestGitExecPattern pins what the boundary pattern catches and what it lets
+// by, so a loosened regex cannot quietly stop seeing a bypass.
+func TestGitExecPattern(t *testing.T) {
+	for src, want := range map[string]bool{
+		`exec.Command("git", "status")`:                       true,
+		`exec.LookPath("git")`:                                true,
+		`proc.Run(ctx, proc.Cmd{Name: "git", Args: a})`:       true,
+		`o.d.Run(ctx, "git", []string{"-C", cwd})`:            true,
+		`c.exec()(ctx, c.Dir, "git", args, nil)`:              true,
+		`run(ctx, dir, "git", args)`:                          false,
+		`d.in.Look("git")`:                                    false,
+		`fail("git", "git not found on PATH", "install git")`: false,
+		`r.Run(ctx, "rev-parse", "--verify", ref)`:            false,
+		`errors.New("git")`:                                   false,
+	} {
+		if got := gitExec.MatchString(src); got != want {
+			t.Errorf("%s: match = %v, want %v", src, got, want)
+		}
+	}
+}
 
 // TestNoDirectGitExec holds the line that internal/git is the one place git
 // is run: a timeout, a context and ErrNoGit come with it.

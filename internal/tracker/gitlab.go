@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -588,23 +589,19 @@ func (g *GitLab) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, erro
 
 // onBase checks a fast-forwarded MR's head is on origin/<target>.
 func (g *GitLab) onBase(ctx context.Context, pr int, sha, target string) error {
-	x := func(args ...string) ([]byte, []byte, int, error) {
-		actx, cancel := context.WithTimeout(ctx, g.cli.timeout())
-		defer cancel()
-		return g.cli.exec()(actx, g.cli.Dir, "git", args, nil)
-	}
-	if _, errb, code, err := x("fetch", "-q", "origin"); err != nil || code != 0 {
-		return failed("MR %d merged without a merge commit, and git fetch origin failed: %s", pr, strings.TrimSpace(string(errb)))
+	repo := git.Repo{Dir: g.cli.Dir, Runner: g.cli.git()}
+	if res, err := repo.Run(ctx, "fetch", "-q", "origin"); err != nil || res.ExitCode != 0 {
+		return failed("MR %d merged without a merge commit, and git fetch origin failed: %s", pr, strings.TrimSpace(res.Stderr))
 	}
 	ref := "origin/" + target
-	_, errb, code, err := x("merge-base", "--is-ancestor", sha, ref)
+	res, err := repo.Run(ctx, "merge-base", "--is-ancestor", sha, ref)
 	switch {
-	case err == nil && code == 0:
+	case err == nil && res.ExitCode == 0:
 		return nil
-	case err == nil && code == 1:
+	case err == nil && res.ExitCode == 1:
 		return failed("MR %d is merged, but its head %s is not on %s", pr, sha, ref)
 	}
-	return failed("MR %d merged without a merge commit, and git merge-base --is-ancestor %s %s failed: %s", pr, sha, ref, strings.TrimSpace(string(errb)))
+	return failed("MR %d merged without a merge commit, and git merge-base --is-ancestor %s %s failed: %s", pr, sha, ref, strings.TrimSpace(res.Stderr))
 }
 
 // PRFiles lets the CLI paginate the MR diffs API. A renamed file counts

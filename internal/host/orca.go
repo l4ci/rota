@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/shlex"
 	"path/filepath"
 	"strings"
@@ -379,7 +380,7 @@ func (o *orca) CapturePane(ctx context.Context, pane string, lines int) string {
 }
 
 func (o *orca) gitBranch(ctx context.Context, cwd string) (string, error) {
-	r, e := o.d.Run(ctx, "git", []string{"-C", cwd, "symbolic-ref", "--quiet", "--short", "HEAD"})
+	r, e := git.Repo{Dir: cwd, Runner: o.d.Git}.Run(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
 	branch := strings.TrimSpace(r.Stdout)
 	if e != nil || r.ExitCode != 0 || branch == "" || strings.ContainsAny(branch, "\r\n") {
 		return "", fmt.Errorf("cannot verify Orca worktree symbolic branch in %s", cwd)

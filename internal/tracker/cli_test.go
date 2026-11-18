@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -260,12 +261,12 @@ func TestRunMissingCLI(t *testing.T) {
 // kinds; an origin naming no forge refuses an actor and is an announced github
 // for a reader.
 func TestResolveProvider(t *testing.T) {
-	origin := func(url string, code int) Exec {
-		return func(_ context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			if name != "git" || strings.Join(args, " ") != "remote get-url origin" || dir != "/repo" {
-				return nil, nil, 0, fmt.Errorf("unexpected %s %q in %q", name, args, dir)
+	origin := func(url string, code int) git.Runner {
+		return func(_ context.Context, dir string, args ...string) (git.Result, error) {
+			if strings.Join(args, " ") != "remote get-url origin" || dir != "/repo" {
+				return git.Result{}, fmt.Errorf("unexpected git %q in %q", args, dir)
 			}
-			return []byte(url + "\n"), nil, code, nil
+			return git.Result{Stdout: url + "\n", ExitCode: code}, nil
 		}
 	}
 	gh := origin("git@github.com:o/r.git", 0)
@@ -273,7 +274,7 @@ func TestResolveProvider(t *testing.T) {
 	for _, c := range []struct {
 		kind             ForgeKind
 		want, configured string
-		x                Exec
+		x                git.Runner
 		out, how         string
 	}{
 		{ForgeActor, "gitlab", "github", gh, "gitlab", HowFlag},
@@ -426,9 +427,14 @@ func TestPagesConcatenates(t *testing.T) {
 // origin (no remote is local), the issue tracker from issues.source.
 func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	origin := func(url string, code int) Option {
-		return WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			return []byte(url + "\n"), nil, code, nil
-		}, func(string) (string, error) { return "/bin/x", nil })
+		return func(c *CLI) {
+			WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+				return nil, nil, 0, nil
+			}, func(string) (string, error) { return "/bin/x", nil })(c)
+			WithGit(func(context.Context, string, ...string) (git.Result, error) {
+				return git.Result{Stdout: url + "\n", ExitCode: code}, nil
+			})(c)
+		}
 	}
 	ctx := context.Background()
 
@@ -492,13 +498,10 @@ func TestForgeIssueTrackerReadsAssumedGitHubAndRefusesWrites(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
 	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if name == "git" {
-			return []byte("https://git.example.com/o/r.git\n"), nil, 0, nil
-		}
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		return []byte("[]"), nil, 0, nil
 	}
-	it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }))
+	it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }), WithGit(originGit("https://git.example.com/o/r.git")))
 	if err != nil || it.Provider() != "github" {
 		t.Fatalf("forge source, unknown origin: %v, %v", it, err)
 	}

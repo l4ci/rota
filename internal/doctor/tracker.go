@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/usagelimit"
@@ -54,10 +55,22 @@ func (d *runner) trackerExec() tracker.Exec {
 	}
 }
 
+// gitRunner adapts the injected Exec and Look to a git.Runner, so the origin
+// read runs through doctor's test seam.
+func (d *runner) gitRunner() git.Runner {
+	return func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		bin, ok := d.in.Look("git")
+		if !ok {
+			return git.Result{}, git.ErrNoGit
+		}
+		return d.in.Exec(ctx, bin, args, []string{"LC_ALL=C", "LANGUAGE=C"}, dir)
+	}
+}
+
 // resolveForge is the forge doctor resolves, as a reader
 // (tracker.ResolveProvider): an origin naming no forge is an assumed github.
 func (d *runner) resolveForge() tracker.Resolution {
-	r, _ := tracker.ResolveProvider(d.ctx, tracker.ForgeReader, "", d.in.Tracker.Provider, d.in.Dir, d.trackerExec())
+	r, _ := tracker.ResolveProvider(d.ctx, tracker.ForgeReader, "", d.in.Tracker.Provider, d.in.Dir, d.gitRunner())
 	return r
 }
 

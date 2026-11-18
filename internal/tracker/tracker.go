@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
@@ -685,6 +686,11 @@ type Option func(*CLI)
 // the CLI binary with lookPath.
 func WithExec(x Exec, lookPath func(string) (string, error)) Option {
 	return func(c *CLI) { c.Exec, c.LookPath = x, lookPath }
+}
+
+// WithGit routes the adapter's git calls through r (tests fake it).
+func WithGit(r git.Runner) Option {
+	return func(c *CLI) { c.Git = r }
 }
 
 // WithTimeout sets the per-attempt timeout (CLI.Timeout).

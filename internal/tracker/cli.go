@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os/exec"
 	"regexp"
@@ -49,6 +48,8 @@ type CLI struct {
 	Exec     Exec
 	LookPath func(string) (string, error)
 	Sleep    func(time.Duration)
+	// Git runs the git the adapter reads (origin, merge-base); nil is git.Exec.
+	Git git.Runner
 
 	// Cache, when set, serves repeated reads and is dropped by any other call.
 	Cache *ReadCache
@@ -64,6 +65,15 @@ var (
 	reLimitGH = regexp.MustCompile(`^-L\d+$`)
 	reLimitGL = regexp.MustCompile(`^-P\d+$`)
 )
+
+// git is the runner for the adapter's git calls: Git, else git.Exec, which
+// carries the one git policy (timeout, C locale, ErrNoGit).
+func (c *CLI) git() git.Runner {
+	if c.Git != nil {
+		return c.Git
+	}
+	return git.Exec
+}
 
 func (c *CLI) exec() Exec {
 	if c.Exec != nil {
@@ -159,8 +169,8 @@ func (r Resolution) Note() string {
 //     (the message names the origin; the CLI refuses with exit 4, blockedBy
 //     forge), and github for a ForgeReader, with How HowAssumed so the verb
 //     prints Note.
-func ResolveProvider(ctx context.Context, kind ForgeKind, want, configured, dir string, x Exec) (Resolution, error) {
-	c := &CLI{Dir: dir, Exec: x}
+func ResolveProvider(ctx context.Context, kind ForgeKind, want, configured, dir string, g git.Runner) (Resolution, error) {
+	c := &CLI{Dir: dir, Git: g}
 	return c.resolveForge(ctx, kind, want, configured)
 }
 
@@ -236,36 +246,18 @@ func RemoteHost(url string) string {
 	return strings.ToLower(url)
 }
 
-// GitExec is r as an Exec, for a caller whose origin read goes through its own
-// git seam (a git.Runner a test fakes) rather than the forge executor. It runs
-// git only.
-func GitExec(r git.Runner) Exec {
-	return func(ctx context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if name != "git" {
-			return nil, nil, 0, fmt.Errorf("tracker: GitExec runs git, not %s", name)
-		}
-		res, err := r(ctx, dir, args...)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
-	}
-}
-
 // OriginURL is dir's origin remote URL, "" when git fails or has no origin.
-func OriginURL(ctx context.Context, dir string, x Exec) string {
-	c := &CLI{Dir: dir, Exec: x}
+func OriginURL(ctx context.Context, dir string, g git.Runner) string {
+	c := &CLI{Dir: dir, Git: g}
 	return c.originURL(ctx)
 }
 
 func (c *CLI) originURL(ctx context.Context) string {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout())
-	defer cancel()
-	out, _, code, err := c.exec()(ctx, c.Dir, "git", []string{"remote", "get-url", "origin"}, nil)
-	if err != nil || code != 0 {
+	res, err := git.Repo{Dir: c.Dir, Runner: c.git()}.Run(ctx, "remote", "get-url", "origin")
+	if err != nil || res.ExitCode != 0 {
 		return ""
 	}
-	return strings.TrimRight(string(out), "\n")
+	return strings.TrimRight(res.Stdout, "\n")
 }
 
 // CLIName is the forge CLI binary for provider: glab for "gitlab", gh otherwise.

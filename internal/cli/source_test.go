@@ -9,20 +9,28 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
 // originDeps answers `git remote get-url origin` with origin (an empty origin
 // is a repo with no remote) and nothing else.
+// originGit answers `git remote get-url origin` with origin (empty: no remote).
+func originGit(origin string) git.Runner {
+	return func(_ context.Context, _ string, args ...string) (git.Result, error) {
+		if strings.Join(args, " ") != "remote get-url origin" {
+			return git.Result{ExitCode: 1}, nil
+		}
+		if origin == "" {
+			return git.Result{ExitCode: 2}, nil
+		}
+		return git.Result{Stdout: origin + "\n"}, nil
+	}
+}
+
 func originDeps(origin string) *Deps {
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if name == "git" {
-			if origin == "" {
-				return nil, nil, 2, nil
-			}
-			return []byte(origin + "\n"), nil, 0, nil
-		}
+	d.TrackerOptions = []tracker.Option{tracker.WithGit(originGit(origin)), tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
 		return nil, nil, 1, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	return d
@@ -159,16 +167,22 @@ func TestInitWritesAnExplicitIssueSource(t *testing.T) {
 // origin agrees on, "forge" when they differ (a mixed GitHub/GitLab umbrella
 // keeps each tracker on its own repo's forge), and none when a sub-repo has no
 // recognizable origin.
+// byDirGit answers the origin read with the URL of the repo's directory name
+// (no entry: no remote).
+func byDirGit(urls map[string]string) git.Runner {
+	return func(_ context.Context, dir string, _ ...string) (git.Result, error) {
+		if u := urls[filepath.Base(dir)]; u != "" {
+			return git.Result{Stdout: u + "\n"}, nil
+		}
+		return git.Result{ExitCode: 2}, nil
+	}
+}
+
 func TestOriginProviderOfAnUmbrella(t *testing.T) {
 	root := umbrella(t) // sub-repos svc, web (and a registered ghost with no checkout)
 	byDir := func(urls map[string]string) *Deps {
 		d := testDeps()
-		d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			if u := urls[filepath.Base(dir)]; u != "" {
-				return []byte(u + "\n"), nil, 0, nil
-			}
-			return nil, nil, 2, nil
-		}, func(n string) (string, error) { return "/fake/" + n, nil })}
+		d.TrackerOptions = []tracker.Option{tracker.WithGit(byDirGit(urls))}
 		return d
 	}
 	ctx := context.Background()
@@ -194,12 +208,7 @@ func TestMigrateSourceMixedUmbrellaIsForge(t *testing.T) {
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"},"issues":{"provider":"auto"}}`)
 	urls := map[string]string{"svc": "git@github.com:o/a.git", "web": "https://gitlab.com/o/b", "ghost": "git@github.com:o/c.git"}
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, dir, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
-		if u := urls[filepath.Base(dir)]; u != "" {
-			return []byte(u + "\n"), nil, 0, nil
-		}
-		return nil, nil, 2, nil
-	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	d.TrackerOptions = []tracker.Option{tracker.WithGit(byDirGit(urls))}
 	code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "migrate", "source", "--apply")
 	if code != 0 || get(dataOf(env), "source") != "forge" || get(dataOf(env), "unresolved") != false {
 		t.Fatalf("%d %v", code, env)

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -57,7 +58,11 @@ func useForge(t *testing.T, f *forge) *Deps {
 		return "/fake/" + name, nil
 	}
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), func(c *tracker.CLI) { c.Sleep = func(time.Duration) {} }}
+	gitSeam := func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		out, errs, code, err := x(ctx, dir, "git", args, nil)
+		return git.Result{Stdout: string(out), Stderr: string(errs), ExitCode: code}, err
+	}
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), tracker.WithGit(gitSeam), func(c *tracker.CLI) { c.Sleep = func(time.Duration) {} }}
 	return d
 }
 

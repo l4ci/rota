@@ -6,19 +6,29 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 )
 
-// execOrigin answers every git call with origin ("" is no origin remote).
+// execOrigin answers every git call with origin ("" is no origin remote), and
+// every forge CLI call with nothing.
 func execOrigin(origin string) Option {
-	return WithExec(func(_ context.Context, _ string, name string, _ []string, _ []byte) ([]byte, []byte, int, error) {
-		if name == "git" {
-			if origin == "" {
-				return nil, []byte("fatal: no origin"), 2, nil
-			}
-			return []byte(origin + "\n"), nil, 0, nil
+	return func(c *CLI) {
+		WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+			return nil, nil, 0, nil
+		}, func(n string) (string, error) { return "/fake/" + n, nil })(c)
+		WithGit(originGit(origin))(c)
+	}
+}
+
+// originGit is a git seam that answers every call with origin ("" is no origin
+// remote).
+func originGit(origin string) git.Runner {
+	return func(context.Context, string, ...string) (git.Result, error) {
+		if origin == "" {
+			return git.Result{Stderr: "fatal: no origin", ExitCode: 2}, nil
 		}
-		return nil, nil, 0, nil
-	}, func(n string) (string, error) { return "/fake/" + n, nil })
+		return git.Result{Stdout: origin + "\n"}, nil
+	}
 }
 
 // The one source-to-tracker decision: named sources outright, anything else

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 // scripted is an executor that answers by argv; it is safe for concurrent use.
@@ -29,10 +31,17 @@ func (s *scripted) exec(_ context.Context, _, name string, args []string, _ []by
 	return []byte(out), []byte(errs), code, nil
 }
 
+// git is the git seam: the same script and call log, for the git calls an
+// adapter makes outside its forge CLI.
+func (s *scripted) git(_ context.Context, _ string, args ...string) (git.Result, error) {
+	out, errs, code, _ := s.exec(context.Background(), "", "git", args, nil)
+	return git.Result{Stdout: string(out), Stderr: string(errs), ExitCode: code}, nil
+}
+
 func newAdapter(t *testing.T, provider string, s *scripted) Adapter {
 	t.Helper()
 	a, err := New(context.Background(), Settings{Provider: provider, NotPlannedLabel: "not-planned"}, "", "/repo",
-		WithExec(s.exec, func(string) (string, error) { return "/fake", nil }), noSleep)
+		WithExec(s.exec, func(string) (string, error) { return "/fake", nil }), WithGit(s.git), noSleep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,34 +472,6 @@ func TestGitLabGetNotesOptionalAndErrorsPropagate(t *testing.T) {
 				t.Fatalf("Get without comments should succeed without loading notes: %+v, %v", is, err)
 			}
 		})
-	}
-}
-
-func TestGitLabMergeGitCallsTimeOut(t *testing.T) {
-	a, err := New(context.Background(), Settings{Provider: "gitlab"}, "", "/repo",
-		WithTimeout(20*time.Millisecond),
-		WithExec(func(ctx context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			switch {
-			case name == "git":
-				<-ctx.Done()
-				return nil, nil, 0, ctx.Err()
-			case args[1] == "view":
-				return []byte(`{"state":"merged","sha":"aaaa","target_branch":"main"}`), nil, 0, nil
-			}
-			return nil, nil, 0, nil
-		}, func(string) (string, error) { return "/fake", nil }))
-	if err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { _, err := a.PRMerge(context.Background(), 4, MergeOpts{DeleteBranch: true}); done <- err }()
-	select {
-	case err := <-done:
-		if !IsKind(err, KindFailed) || !strings.Contains(err.Error(), "git fetch origin failed") {
-			t.Fatalf("got %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("git fetch ran without the per-attempt timeout")
 	}
 }
 
