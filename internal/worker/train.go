@@ -1126,6 +1126,7 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 		}
 		return true, err
 	}
+	var lastVerify time.Duration // the last full-tree verify, the diagnose estimate's unit
 	// cached answers a verify of the base plus its first k members from the
 	// cache when the same tier ran on the same base and heads before.
 	cached := func(tier string, run func() (VerifyResult, error)) func(int) (VerifyResult, error) {
@@ -1150,6 +1151,7 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 				res.DiagnoseTime += time.Since(began)
 			} else {
 				res.VerifyTime += time.Since(began)
+				lastVerify = time.Since(began)
 			}
 			if err == nil && ctx.Err() != nil && !r.OK() {
 				// A command the cancel stopped is no finding: keep its log, run no
@@ -1207,6 +1209,12 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
 		}
+		// A red the same tree does not show twice is a flake, not a culprit: re-run
+		// before paying for a bisect (#3647).
+		if done, err := t.rerunRed(p, res, tier, failed); done || err != nil {
+			return done, err
+		}
+		t.phase("%s", diagnoseEstimate(n, lastVerify))
 		classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed) }
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, classify, failed, o.LandGreen)
 		if ctx.Err() == nil {
@@ -1465,6 +1473,70 @@ func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, erro
 	res.Err = fmt.Sprintf("BASE-MOVED train — %s; landed %d of %d member(s): %s", msg, len(res.Landed), len(res.Members), strings.Join(res.Landed, ", "))
 	res.Hint = fmt.Sprintf("landed %d of %d member(s); re-run the train for the rest on the new base", len(res.Landed), len(res.Members))
 	return res, nil
+}
+
+// diagnoseEstimate is the line printed before a bisect starts: how many runs
+// the diagnosis needs for an n-member train and what they cost at the last
+// verify's duration. A bisect takes ceil(log2 n) prefix runs plus the base
+// check; the red classify reruns only the failing tests, at most a few runs.
+func diagnoseEstimate(n int, verify time.Duration) string {
+	prefix := bits.Len(uint(max(n-1, 0)))
+	if n > 1 {
+		prefix++ // the base check when no prefix is green
+	}
+	runs := prefix + 3 // classify: alone, pairs, red prefix
+	return fmt.Sprintf("diagnose estimate: up to %d run(s) (%d prefix + up to 3 classify), last verify took %s each; --on-fail stop skips diagnosis",
+		runs, prefix, verify.Round(time.Second))
+}
+
+// rerunRed re-runs the failed commands of a red tier once on the same merged
+// tree before any bisect. A green re-run means the red is a flake: it is
+// recorded in the flake ledger, reported as FLAKY naming the checks, no member
+// is blamed and nothing lands. A second red returns done false and the bisect
+// goes on with its culprit attribution. A CI train re-runs nothing locally.
+func (t *trainRun) rerunRed(p trainPlan, res *TrainResult, tier string, failed VerifyResult) (bool, error) {
+	if p.onCI || len(failed.Failed) == 0 {
+		return false, nil
+	}
+	e, ctx, scratch := t.e, t.ctx, p.scratch
+	if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[len(res.Members)]); code != 0 {
+		return false, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[len(res.Members)])
+	}
+	tree := e.cleanVerifyTree(ctx, scratch)
+	cmds := rerunCommands(failed, p.verifyCfg().rerunTemplate)
+	t.phase("rerun %s: the red tree once before any bisect, %d command(s)", tier, len(cmds))
+	began := time.Now()
+	red, err := t.rerunIn(scratch, cmds)
+	elapsed := time.Since(began)
+	res.DiagnoseTime += elapsed
+	if err != nil || red {
+		return false, err
+	}
+	prs := []string{}
+	for _, m := range res.Members {
+		if m.PR != "" {
+			prs = append(prs, m.PR)
+		}
+	}
+	var entries []flakeledger.Entry
+	for _, c := range failed.Failed {
+		out := logSection(failed.Log, c)
+		tests, _ := testledger.FailingTests(out)
+		entry := flakeledger.NewEntry(c, tests, tree, e.Now(),
+			flakeledger.Run{Output: out, ExitCode: 1},
+			flakeledger.Run{ExitCode: 0, WallSeconds: elapsed.Seconds()})
+		entries = append(entries, entry)
+		res.Flaky = append(res.Flaky, entry)
+		res.Notes = append(res.Notes, flakeNote(entry))
+	}
+	if err := e.recordFlakes(t.root, t.o.Round, prs, VerifyResult{Flaky: entries}); err != nil {
+		return false, err
+	}
+	res.Verdict, res.Unreproduced = GateVerifyFailed, true
+	res.Err = fmt.Sprintf("TRAIN-FAIL flaky — the train failed %s, then passed on a re-run of the same tree (%s); a flake, no bisect, no culprit, nothing landed\n%s",
+		tier, strings.Join(failed.Failed, "; "), failed.detail())
+	res.Hint = "nobody is blamed: re-run the train; if the same tests fail again the re-run goes red and the bisect names the culprit (see the FLAKY notes)"
+	return true, nil
 }
 
 // stopTrain ends a red tier without diagnosis (OnFailStop): no prefix verify
