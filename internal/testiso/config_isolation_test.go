@@ -8,10 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+var configDirReference = regexp.MustCompile(`\b(ROTA_CONFIG_DIR|XDG_CONFIG_HOME)\b`)
 
 // configIsolationFailures is a file-level guard, not proof that every test path
 // is isolated. Keep the requirement local so copying a test into another package
@@ -55,7 +58,7 @@ func configIsolationFailures(root string) ([]string, error) {
 			}
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
-			if s := literal(n); s == "ROTA_CONFIG_DIR" || s == "XDG_CONFIG_HOME" {
+			if configDirReference.MatchString(literal(n)) {
 				referencesConfig = true
 			}
 			return true
@@ -130,6 +133,9 @@ func TestConfigIsolationGuardFixture(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
 		"unsafe_test.go":     `package example; import "os"; var value = os.Getenv("ROTA_CONFIG_DIR")`,
+		"embedded_test.go":   `package example; var command = "echo $XDG_CONFIG_HOME"`,
+		"assignment_test.go": `package example; var env = "ROTA_CONFIG_DIR=/fixture"`,
+		"near_miss_test.go":  `package example; var value = "NOT_ROTA_CONFIG_DIR"`,
 		"unsafe_xdg_test.go": "package example; var value = `XDG_CONFIG_HOME`",
 		"imported_test.go":   `package example; import _ "github.com/l4ci/rota/internal/testiso"; var value = "ROTA_CONFIG_DIR"`,
 		"home_test.go":       `package example; import "testing"; func TestEnv(t *testing.T) { t.Setenv("HOME", t.TempDir()); _ = "ROTA_CONFIG_DIR" }`,
@@ -145,7 +151,7 @@ func TestConfigIsolationGuardFixture(t *testing.T) {
 		}
 	}
 	got, err := configIsolationFailures(root)
-	want := []string{"fake_test.go", "override_test.go", "unsafe_test.go", "unsafe_xdg_test.go"}
+	want := []string{"assignment_test.go", "embedded_test.go", "fake_test.go", "override_test.go", "unsafe_test.go", "unsafe_xdg_test.go"}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("guard = %v, %v; want %v", got, err, want)
 	}
@@ -156,7 +162,7 @@ func TestConfigIsolationGuardFixture(t *testing.T) {
 		}
 	}
 	got, err = configIsolationFailures(root)
-	if err != nil || !reflect.DeepEqual(got, []string{"fake_test.go"}) {
-		t.Fatalf("single-file guard = %v, %v; want [fake_test.go]", got, err)
+	if err != nil || !reflect.DeepEqual(got, []string{"assignment_test.go"}) {
+		t.Fatalf("single-file guard = %v, %v; want [assignment_test.go]", got, err)
 	}
 }
