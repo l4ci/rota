@@ -135,15 +135,18 @@ func Load(fsys fs.FS) (*Set, error) {
 	}
 	sort.Strings(s.paths)
 	sort.Strings(s.skills)
-	s.digest = digestOf(s.paths, s.files)
+	s.digest = digestOf(s.paths, s.File)
 	return s, nil
 }
 
 // digestOf is the sha256 of the sorted "path NUL sha256(content) NL" lines.
-func digestOf(paths []string, files map[string][]byte) string {
+// file supplies each path's content; unavailable files contribute no line.
+func digestOf(paths []string, file func(string) ([]byte, bool)) string {
 	h := sha256.New()
 	for _, p := range paths {
-		fmt.Fprintf(h, "%s\x00%s\n", p, hashBytes(files[p]))
+		if b, ok := file(p); ok {
+			fmt.Fprintf(h, "%s\x00%s\n", p, hashBytes(b))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

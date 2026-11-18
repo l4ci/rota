@@ -1,11 +1,8 @@
 package skills
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -111,15 +108,12 @@ func (s *Set) pluginStatus(st *RootStatus) {
 			st.Version = m.Version
 		}
 	}
-	h := sha256.New()
-	for _, p := range s.paths {
+	st.Digest = digestOf(s.paths, func(p string) ([]byte, bool) {
 		b, err := os.ReadFile(filepath.Join(st.Path, filepath.FromSlash(p)))
 		if err != nil {
 			st.Missing = append(st.Missing, p)
-			continue
 		}
-		fmt.Fprintf(h, "%s\x00%s\n", p, hashBytes(b))
-	}
-	st.Digest = hex.EncodeToString(h.Sum(nil))
+		return b, err == nil
+	})
 	st.Current = st.Digest == s.digest
 }
