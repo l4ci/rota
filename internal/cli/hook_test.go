@@ -822,3 +822,43 @@ func TestHookGuardWithoutProject(t *testing.T) {
 		})
 	}
 }
+
+func TestHookSessionStartRoutedWorkerUsesConfiguredProjectBase(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		t.Run(strconv.FormatBool(nested), func(t *testing.T) {
+			root := orchProject(t, false)
+			cwd := root
+			if nested {
+				cwd = newRepo(t, root, "subrepo", "main")
+			}
+			slot := worker.NewSlot("dana", "dana/3815-handoff", root, "feat/x", "")
+			slot.RouteBase("milestone/M01")
+			if err := worker.Update(root, func(doc *worker.Doc) { doc.SetSlots([]*worker.Slot{slot}) }); err != nil {
+				t.Fatal(err)
+			}
+			note := filepath.Join(root, ".rota", "handoff", "feat", "x.md")
+			knWrite(t, note, hookHandoffBody)
+			fresh := time.Date(2026, 10, 3, 11, 59, 0, 0, time.UTC)
+			if err := os.Chtimes(note, fresh, fresh); err != nil {
+				t.Fatal(err)
+			}
+			d := depsIn(root)
+			d.Getwd = func() (string, error) { return cwd, nil }
+			d.Getenv = func(key string) string {
+				if key == "ROTA_SLOT" {
+					return "dana"
+				}
+				return ""
+			}
+			var out, errOut bytes.Buffer
+			input := `{"session_id":"routed","cwd":"` + cwd + `","source":"startup"}`
+			code := mainWith(d, []string{"hook", "session-start"}, strings.NewReader(input), &out, &errOut)
+			if code != 0 || !strings.Contains(out.String(), "body") {
+				t.Fatalf("configured project handoff not consumed: exit %d %q %q", code, out.String(), errOut.String())
+			}
+			if _, err := os.Stat(note + ".consumed"); err != nil {
+				t.Fatalf("configured project handoff not moved: %v", err)
+			}
+		})
+	}
+}

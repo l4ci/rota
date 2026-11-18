@@ -253,14 +253,15 @@ type FoldResult struct {
 
 // claim renames the live buffer to a uniquely named claimed file, so hits
 // appended from here on land in a fresh buffer instead of being removed with
-// the folded one. It returns "" when there is no live buffer.
+// the folded one. Claiming must stay atomic: a rename failure leaves the
+// live buffer in place. It returns "" when there is no live buffer.
 func claim(hp string) (string, error) {
 	var nonce [6]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", err
 	}
 	dst := hp + "." + hex.EncodeToString(nonce[:]) + claimedSuffix
-	if err := fsio.MoveFilePreserveMode(hp, dst); os.IsNotExist(err) {
+	if err := os.Rename(hp, dst); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {
 		return "", err
