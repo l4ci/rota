@@ -31,8 +31,7 @@ func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(
 	if registry != "" {
 		return registry
 	}
-	switch dispatch {
-	case Herdr, HerdrCore, Tmux, Orca:
+	if _, ok := specOf(dispatch); ok {
 		return dispatch
 	}
 	d := Deps{Getenv: getenv, LookPath: lookPath}

@@ -164,11 +164,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	rig := &limitRig{Cancel: func() {}}
 
 	var feed *limits.Feed
-	if host.CapabilitiesForKind(kind).OutputWatcher != nil {
-		ow := h.Capabilities().OutputWatcher
-		if ow == nil {
-			return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot watch pane output"}
-		}
+	// One read of the watcher capability: a host without one (tmux) polls.
+	if ow := h.Capabilities().OutputWatcher; ow != nil {
 		f, err := limits.NewFeed(ctx, ow, targets, usagelimit.LimitRegex(), tick)
 		switch {
 		case errors.Is(err, host.ErrUnsupportedHerdr):

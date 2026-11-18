@@ -1,35 +1,25 @@
 package host
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
-// CapabilitiesForKind is the kind-path twin of New(k).Capabilities(): every
-// field, optional side and policy value alike, must agree for every kind, so
-// a new kind or field cannot drift between the two.
-func TestCapabilitiesForKindParity(t *testing.T) {
-	for _, k := range append(append([]Kind(nil), PaneKinds...), Solo, "") {
-		byKind := reflect.ValueOf(CapabilitiesForKind(k))
-		var built Capabilities
-		if k != Solo && k != "" {
-			built = New(k, Deps{}).Capabilities()
+// Every pane kind's descriptor is complete: a kind added without its build,
+// policy overlay or pane env var fails here, not at a nil call later.
+// CapabilitiesForKind and New both read the descriptor, so they cannot drift.
+func TestKindSpecsComplete(t *testing.T) {
+	for _, k := range PaneKinds {
+		s, ok := specOf(k)
+		if !ok || s.build == nil || s.policy == nil {
+			t.Fatalf("%q: descriptor missing build or policy", k)
 		}
-		got := reflect.ValueOf(built)
-		for i := 0; i < got.NumField(); i++ {
-			name := got.Type().Field(i).Name
-			a, b := byKind.Field(i), got.Field(i)
-			switch a.Kind() {
-			case reflect.Interface, reflect.Func:
-				if a.IsNil() != b.IsNil() {
-					t.Errorf("%q: %s nil-ness differs: kind path %v, built host %v", k, name, a.IsNil(), b.IsNil())
-				}
-			default:
-				if !reflect.DeepEqual(a.Interface(), b.Interface()) {
-					t.Errorf("%q: %s = %v, built host %v", k, name, a.Interface(), b.Interface())
-				}
-			}
+		if got := New(k, Deps{}).Kind(); got != k {
+			t.Errorf("%q: build returns kind %q", k, got)
 		}
+		if k != HerdrCore && (s.paneEnv == "" || s.binary == "" || s.pickup.attempts == 0) {
+			t.Errorf("%q: pane env, binary or pickup policy unset", k)
+		}
+	}
+	if _, ok := specOf(Solo); ok {
+		t.Error("Solo must have no adapter descriptor")
 	}
 }
 

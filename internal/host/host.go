@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
@@ -46,8 +45,8 @@ const (
 // KindOf is the kind a config or registry string names: "herdr", "herdr-core", "tmux", "orca" and "solo",
 // anything else (including "subagent" and "") the zero Kind.
 func KindOf(s string) Kind {
-	switch k := Kind(s); k {
-	case Herdr, HerdrCore, Tmux, Orca, Solo:
+	k := Kind(s)
+	if _, ok := specOf(k); ok || k == Solo {
 		return k
 	}
 	return ""
@@ -58,8 +57,8 @@ func (k Kind) String() string { return string(k) }
 
 // Binary is the executable that runs the kind ("" for Solo).
 func (k Kind) Binary() string {
-	if k == Herdr || k == Tmux || k == Orca {
-		return string(k)
+	if s, ok := specOf(k); ok {
+		return s.binary
 	}
 	return ""
 }
@@ -352,15 +351,8 @@ type Capabilities struct {
 // building it, so it always agrees with New(k, ...).Capabilities(). Solo and
 // unknown kinds have none.
 func CapabilitiesForKind(k Kind) Capabilities {
-	switch k {
-	case Herdr:
-		return (&herdr{}).Capabilities()
-	case HerdrCore:
-		return (&coreHost{}).Capabilities()
-	case Tmux:
-		return (&tmux{}).Capabilities()
-	case Orca:
-		return (&orca{}).Capabilities()
+	if s, ok := specOf(k); ok {
+		return s.build(Deps{}).Capabilities()
 	}
 	return Capabilities{}
 }
@@ -439,17 +431,8 @@ var ErrUnknownKind = errors.New("no terminal host for this kind")
 // its cause instead of driving tmux.
 func New(kind Kind, d Deps) Host {
 	d.fill()
-	if kind == HerdrCore {
-		return &coreHost{d: d}
-	}
-	if kind == Orca {
-		return &orca{d: d}
-	}
-	if kind == Herdr {
-		return &herdr{d: d, noted: new(atomic.Bool)}
-	}
-	if kind == Tmux {
-		return &tmux{d: d}
+	if s, ok := specOf(kind); ok {
+		return s.build(d)
 	}
 	return refused{kind: kind}
 }
