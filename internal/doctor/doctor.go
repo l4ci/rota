@@ -88,10 +88,11 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch     string           // round.dispatch
-	RegistrySolo bool             // the recorded round runs on the solo host (worker.IsSolo)
-	RoundHost    host.Kind        // the host the round's verbs drive (worker.ResolveHost), resolved with no project too
-	Tracker      tracker.Settings // tracker.SettingsFromConfig over the project config
+	Dispatch       string           // round.dispatch
+	RegistrySolo   bool             // the recorded round runs on the solo host (worker.IsSolo)
+	RoundHost      host.Kind        // the host the round's verbs drive (worker.ResolveHost), resolved with no project too
+	SupportedHerdr string           // optional host version override, used by focused checks
+	Tracker        tracker.Settings // tracker.SettingsFromConfig over the project config
 	// Tracker.Source is issues.source, "" outside a rota project (an unmigrated
 	// legacy config reads as config.SourceIssues). SourceProblem is the reason
 	// forge.provider or issues.source holds an invalid value ("" when valid);
