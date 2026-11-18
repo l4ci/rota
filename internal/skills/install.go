@@ -178,15 +178,10 @@ func ReadManifest(root string) (m Manifest, ok bool) {
 // unsafe is whether a directory between root and the file p is a symlink, so
 // that touching p would reach outside what rota installed.
 func unsafe(root, p string) bool {
-	parts := strings.Split(p, "/")
-	dir := root
-	for _, part := range parts[:len(parts)-1] {
-		dir = filepath.Join(dir, part)
-		if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return true
-		}
-	}
-	return false
+	// Keep the parent spelling: cleaning it could erase a symlink before "..".
+	parent := p[:max(0, strings.LastIndex(p, "/"))]
+	link, _ := fsio.SymlinkIn(root, parent)
+	return link != ""
 }
 
 // readState fills the disk side of st for path p under root: Unsafe first, and

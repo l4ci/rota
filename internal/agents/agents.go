@@ -240,14 +240,8 @@ func writeEntries(root string, es []Entry, keep func(path string) bool) ([]Entry
 // symlink, "" when none is, so a checked-in link cannot send a write outside
 // the project.
 func symlinkIn(root, rel string) string {
-	cur := root
-	for _, part := range strings.Split(rel, "/") {
-		cur = filepath.Join(cur, part)
-		if fi, err := os.Lstat(cur); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return filepath.ToSlash(strings.TrimPrefix(cur, root+string(filepath.Separator)))
-		}
-	}
-	return ""
+	link, _ := fsio.SymlinkIn(root, rel)
+	return filepath.ToSlash(strings.TrimPrefix(link, root+string(filepath.Separator)))
 }
 
 // ProblemsOnly lists the files that are missing or have drifted, as one line
