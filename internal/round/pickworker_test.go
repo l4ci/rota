@@ -226,8 +226,8 @@ func TestAssignMovesTheSlotToCodex(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
-	if s.Kind() != harness.Codex || s.HomeAccount() != "c1" {
-		t.Errorf("slot kind %q home account %q", s.Kind(), s.HomeAccount())
+	if s.Kind() != harness.Codex || s.AccountFor("") != "c1" {
+		t.Errorf("slot kind %q home account %q", s.Kind(), s.AccountFor(""))
 	}
 	if f.be.items["12"].Labels != nil && len(f.be.items["12"].Labels) > 0 {
 		for _, l := range f.be.items["12"].Labels {
@@ -414,7 +414,7 @@ func TestAmbientPlacementClearsTheSlotAccount(t *testing.T) {
 	f.env.Login = worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
 	}}
-	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("old", "/old/dir") })
+	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "old", "/old/dir") })
 	pf, err := f.place(t, func(in *preflightIn) { in.SlotKind, in.SlotAccount = harness.Claude, "old" })
 	if err != nil || pf.Placement == nil || pf.Placement.Account != "" || pf.Kind != harness.Claude {
 		t.Fatalf("%v %+v", err, pf)
@@ -426,8 +426,8 @@ func TestAmbientPlacementClearsTheSlotAccount(t *testing.T) {
 	if res.Kind != harness.Claude || res.Account != "" {
 		t.Fatalf("%+v", res)
 	}
-	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Account() != "" || s.ConfigDir() != "" || s.HomeAccount() != "" {
-		t.Errorf("slot still records %q %q %q", s.Account(), s.ConfigDir(), s.HomeAccount())
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.AccountFor(harness.Claude) != "" || s.ConfigDir() != "" || s.AccountFor(harness.Codex) != "" {
+		t.Errorf("slot still records %q %q %q", s.AccountFor(harness.Claude), s.ConfigDir(), s.AccountFor(harness.Codex))
 	}
 }
 
@@ -470,7 +470,7 @@ func TestAssignPlacesOffALoggedOutPreviousAccount(t *testing.T) {
 	f := newAssignFixture(t)
 	f.pool(t, poolCfg, map[string]float64{"a": 90, "c1": 1, "c2": 40})
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true, badHomes: []string{"/h1"}}).install(f)
-	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex"); s.SetHomeAccount("c1") })
+	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex"); s.SetAccountFor("", "c1", "") })
 	f.labelled("12", "harness:codex")
 	res, err := f.assign("12", "ben", nil)
 	if err != nil {
@@ -479,8 +479,8 @@ func TestAssignPlacesOffALoggedOutPreviousAccount(t *testing.T) {
 	if res.Kind != harness.Codex || res.Account != "c2" {
 		t.Fatalf("%+v", res)
 	}
-	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.HomeAccount() != "c2" {
-		t.Errorf("slot account %q", s.HomeAccount())
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.AccountFor("") != "c2" {
+		t.Errorf("slot account %q", s.AccountFor(""))
 	}
 }
 

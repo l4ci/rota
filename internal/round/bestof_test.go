@@ -120,7 +120,7 @@ func TestAssignBestOfSkipsSlotWithoutLogin(t *testing.T) {
 	if _, err := f.env.Start(bg, f.root, o); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	res, err := f.assign("12", "", nil)
@@ -139,7 +139,7 @@ func TestAssignBestOfSkipsSlotWithoutLogin(t *testing.T) {
 // refusal still carries the skipped-slots warning.
 func TestAssignBestOfRefusalKeepsNoLoginWarning(t *testing.T) {
 	f := bestOfFixture(t)
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	res, err := f.assign("12", "", nil)

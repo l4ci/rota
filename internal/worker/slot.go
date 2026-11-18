@@ -140,8 +140,11 @@ func (s *Slot) SetBriefContext(settledAnswers string, siblings []string) {
 	setStrList(s.o, "briefSiblings", siblings)
 }
 
-func (s *Slot) PR() string      { return jsonx.Str(s.o, "pr") }
-func (s *Slot) Account() string { return jsonx.Str(s.o, "account") }
+func (s *Slot) PR() string { return jsonx.Str(s.o, "pr") }
+
+// account is the registry's metered (Claude) account key. Callers go through
+// AccountFor and SetAccountFor, which pick the key for the kind.
+func (s *Slot) account() string { return jsonx.Str(s.o, "account") }
 
 // Attempt is the id minted for the slot's current assignment, "" for none. A
 // worker's done and report carry the id from its brief; one that does not match
@@ -190,27 +193,47 @@ func (s *Slot) SmokeSection() int {
 }
 func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 
-// HomeAccount is the account entry (a codex or opencode entry of round.accounts)
+// homeAccount is the account entry (a codex or opencode entry of round.accounts)
 // the slot last ran a worker under ("" on the kind's default home). The JSON
 // key stays codexAccount so existing registries read.
-func (s *Slot) HomeAccount() string { return jsonx.Str(s.o, "codexAccount") }
+func (s *Slot) homeAccount() string { return jsonx.Str(s.o, "codexAccount") }
 
 // AccountFor is the account the slot runs a kind ("" for the slot's own
-// kind) under: the home account for a harness without a usage meter (codex,
-// "" for its default home), the Claude account otherwise. The legacy Claude
+// kind) under, the one reader of a slot's account: the home account for a
+// harness without a usage meter (codex, "" for its default home), the Claude
+// account otherwise. The legacy Claude
 // account must never stand in for a codex one (#2638).
 func (s *Slot) AccountFor(kind string) string {
-	if kind == "" {
-		kind = s.Kind()
+	if s.homeKeyed(&kind) {
+		return s.homeAccount()
 	}
-	if !harness.ResolveAccounts(kind).UsageMeter() {
-		return s.HomeAccount()
-	}
-	return s.Account()
+	return s.account()
 }
 
-// SetHomeAccount records the account; "" removes it.
-func (s *Slot) SetHomeAccount(name string) {
+// homeKeyed resolves kind ("" is the slot's own) in place and reports whether
+// it keeps its account under the home key. The kind-to-key rule, once.
+func (s *Slot) homeKeyed(kind *string) bool {
+	if *kind == "" {
+		*kind = s.Kind()
+	}
+	return !harness.ResolveAccounts(*kind).UsageMeter()
+}
+
+// SetAccountFor records the account a slot runs a kind ("" for the slot's own
+// kind) under, in the key AccountFor reads for that kind: the home account for
+// a harness without a usage meter (configDir is ignored: its home is the
+// account), else the Claude account and its config dir. "" removes the
+// account. The key choice lives here and in AccountFor only; the other kind's
+// key is left alone.
+func (s *Slot) SetAccountFor(kind, account, configDir string) {
+	if s.homeKeyed(&kind) {
+		s.setHomeAccount(account)
+		return
+	}
+	s.setAccount(account, configDir)
+}
+
+func (s *Slot) setHomeAccount(name string) {
 	if name == "" {
 		s.o.Delete("codexAccount")
 		return
@@ -434,8 +457,7 @@ func (s *Slot) AppendRelay(entry *jsonx.Object) {
 	s.AppendRelays([]any{entry})
 }
 
-// SetAccount records the account the slot runs under and its config dir.
-func (s *Slot) SetAccount(account, configDir string) {
+func (s *Slot) setAccount(account, configDir string) {
 	if configDir == "" {
 		s.o.Set("configDir", nil)
 	} else {

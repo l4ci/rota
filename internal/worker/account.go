@@ -737,10 +737,10 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 		return "", false, fail(exitcode.ExitResolution, fmt.Sprintf("account '%s' is not in round.accounts", account))
 	}
 	found, err := UpdateSlot(root, slot, func(s *Slot) {
-		if s.Account() != account || s.ConfigDir() != match.configDir {
+		if s.AccountFor("") != account || s.ConfigDir() != match.configDir {
 			changed = true
 		}
-		s.SetAccount(account, match.configDir)
+		s.SetAccountFor("", account, match.configDir)
 	})
 	if err != nil {
 		return "", false, err

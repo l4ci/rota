@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -121,5 +122,41 @@ func TestSlotParkClearsFinding(t *testing.T) {
 	s.Park(false)
 	if s.Finding() != "" {
 		t.Errorf("a parked slot keeps no finding: %s", render(t, s))
+	}
+}
+
+// SetAccountFor and AccountFor are the one place a kind picks its registry
+// key: claude uses account+configDir, a kind without a usage meter uses
+// codexAccount, and neither reads the other's (#2638). The key names and the
+// bytes written stay as they were.
+func TestSlotAccountAccessorsPickTheKindsKey(t *testing.T) {
+	for _, tc := range []struct {
+		kind, key string
+		wantJSON  string
+	}{
+		{harness.Claude, "account", `{"configDir":"/w","account":"work"}`},
+		{harness.Codex, "codexAccount", `{"codexAccount":"work"}`},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			s := &Slot{o: jsonx.NewObject()}
+			s.SetAccountFor(tc.kind, "work", "/w")
+			if got := render(t, s); got != tc.wantJSON {
+				t.Fatalf("registry bytes %s, want %s", got, tc.wantJSON)
+			}
+			if got := s.AccountFor(tc.kind); got != "work" {
+				t.Fatalf("AccountFor(%s) = %q", tc.kind, got)
+			}
+			other := harness.Codex
+			if tc.kind == harness.Codex {
+				other = harness.Claude
+			}
+			if got := s.AccountFor(other); got != "" {
+				t.Fatalf("AccountFor(%s) read the %s key: %q", other, tc.kind, got)
+			}
+			s.SetAccountFor(tc.kind, "", "")
+			if got := s.AccountFor(tc.kind); got != "" {
+				t.Fatalf("not cleared: %q", got)
+			}
+		})
 	}
 }

@@ -166,11 +166,7 @@ func (e Env) applyPlacement(ctx context.Context, root, slot string, hz harness.A
 		// The orchestrator's own login: drop the account the slot recorded, or
 		// dispatch would still launch under it.
 		return "", editSlot(root, slot, func(s *worker.Slot) error {
-			if hz.WorkAccounts() {
-				s.SetAccount("", "")
-			} else {
-				s.SetHomeAccount("")
-			}
+			s.SetAccountFor(hz.Kind(), "", "")
 			return nil
 		})
 	}
@@ -180,5 +176,5 @@ func (e Env) applyPlacement(ctx context.Context, root, slot string, hz harness.A
 		}
 		return p.Account, nil
 	}
-	return p.Account, editSlot(root, slot, func(s *worker.Slot) error { s.SetHomeAccount(p.Account); return nil })
+	return p.Account, editSlot(root, slot, func(s *worker.Slot) error { s.SetAccountFor(hz.Kind(), p.Account, ""); return nil })
 }

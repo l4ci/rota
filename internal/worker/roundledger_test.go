@@ -177,7 +177,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccount("work", "/w") }); err != nil {
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccountFor("", "work", "/w") }); err != nil {
 		t.Fatal(err)
 	}
 	f.panes["w1"] = []string{"x\n", "x\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}

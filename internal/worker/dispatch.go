@@ -425,7 +425,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	if !accounts.WorkAccounts() {
 		configDir = "" // a codex slot's account is its home, not a claude config dir
 		account := setup.Account
-		if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHomeAccount(account) }); err != nil {
+		if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetAccountFor(kind, account, "") }); err != nil {
 			return res, err
 		}
 	}

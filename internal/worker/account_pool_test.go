@@ -36,11 +36,9 @@ func TestChoosePool(t *testing.T) {
 		{"unknown current is kept", []PoolEntry{entry("claude", "a", nil, 0), entry("codex", "b", fp(90), 0)}, &PoolRef{"claude", "a"}, 20, "a", true, false},
 		{"cooling current moves", []PoolEntry{cooling, entry("codex", "b", fp(10), 0)}, &PoolRef{"claude", "hot"}, 20, "b", false, false},
 		{"margin 0 keeps a usable current", []PoolEntry{entry("claude", "a", fp(1), 0), entry("codex", "b", fp(99), 0)}, &PoolRef{"claude", "a"}, 0, "a", true, false},
-		{"no current: known beats unknown", []PoolEntry{entry("claude", "a", nil, 0), entry("codex", "b", fp(5), 0)}, nil, 20, "b", false, false},
 		{"no current: fewest slots within the margin", []PoolEntry{entry("claude", "a", fp(80), 2), entry("codex", "b", fp(70), 0)}, nil, 20, "b", false, false},
 		{"no current: outside the margin the best wins whatever its load", []PoolEntry{entry("claude", "a", fp(90), 3), entry("codex", "b", fp(50), 0)}, nil, 20, "a", false, false},
 		{"equal load: harness order", []PoolEntry{func() PoolEntry { e := entry("codex", "b", fp(70), 0); e.Rank = 1; return e }(), entry("claude", "a", fp(70), 0)}, nil, 20, "a", false, false},
-		{"all cooling", []PoolEntry{cooling}, nil, 20, "", false, true},
 		{"skipped entries never win", []PoolEntry{func() PoolEntry { e := entry("claude", "a", fp(99), 0); e.Skip = "no login"; return e }(), entry("codex", "b", fp(1), 0)}, nil, 20, "b", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

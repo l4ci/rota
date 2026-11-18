@@ -181,7 +181,7 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.config(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", "/w") }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", "/w") }); err != nil {
 		t.Fatal(err)
 	}
 	var seen any
@@ -310,8 +310,8 @@ func TestReportRecordsTheCodexAccount(t *testing.T) {
 	}
 	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
 		s.Dispatch(s.Handle(), s.Task(), harness.Codex, "2026-11-04T10:00:00Z")
-		s.SetAccount("personal", "")
-		s.SetHomeAccount("cx-home")
+		s.SetAccountFor(harness.Claude, "personal", "")
+		s.SetAccountFor(harness.Codex, "cx-home", "")
 	}); err != nil {
 		t.Fatal(err)
 	}

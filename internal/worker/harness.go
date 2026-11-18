@@ -144,24 +144,27 @@ func (e Env) PreflightAs(ctx context.Context, root, slot string, lp LaunchPlan, 
 		return harness.Setup{}, err
 	}
 	if s := reg.Slot(slot); s != nil {
-		wt, current = s.Worktree(), s.HomeAccount()
-	}
-	if account != nil {
-		current = *account
+		wt = s.Worktree()
 	}
 	var accts []harness.HomeAccount
 	load := map[string]int{}
 	accounts := harness.ResolveAccounts(h.Kind())
 	if !accounts.WorkAccounts() {
+		if s := reg.Slot(slot); s != nil {
+			current = s.AccountFor(h.Kind())
+		}
 		home, _ := e.Home()
 		for _, a := range accounts.Accounts(harness.ConfigFor(e.Config(root), h.Kind())).In(home).Entries {
 			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {
-			if s.Name() != slot && s.Kind() == h.Kind() && s.HomeAccount() != "" {
-				load[s.HomeAccount()]++
+			if s.Name() != slot && s.Kind() == h.Kind() && s.AccountFor("") != "" {
+				load[s.AccountFor("")]++
 			}
 		}
+	}
+	if account != nil {
+		current = *account
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
 		Slot: slot, Launch: lp.Line, Host: host.CapabilitiesForKind(e.hostKind(root)).Harness, Worktree: wt,
