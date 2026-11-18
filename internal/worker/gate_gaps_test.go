@@ -90,3 +90,45 @@ func TestTrainMemberListsEveryGap(t *testing.T) {
 		t.Errorf("train error must carry every gap: %q", res.Err)
 	}
 }
+
+// A record gap stays the refusal's first verdict when a later check refuses
+// too (gapsFirst): the gate used to stop at the gap, so the later refusal
+// never showed. Only a gap recorded before the later check can pair with it:
+// outcome-open runs ahead of staleness and the PR match, provenance only ahead
+// of the verdict check.
+func TestGateKeepsFirstGapAheadOfALaterRefusal(t *testing.T) {
+	const badRelay = "Closes #5\n\n## Approvals\n- orchestrator relay round 9: go\n"
+	failVerdict := func(w *world) {
+		if _, err := verdict.AddBranch(w.dir, "w1", verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abc1234"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		outcome string
+		body    string
+		setup   func(*world)
+		want    string // the first gap, which must stay the verdict
+		later   string // the refusal that would have won without gapsFirst
+	}{
+		{"outcome-open before stale", "partial", "Closes #5\n", func(w *world) { advanceMainOn(w, "work.txt") }, GateOutcomeOpen, GateStale},
+		{"outcome-open before pr-mismatch", "partial", "Closes #5\n", func(w *world) { w.forge("sha", strings.Repeat("0", 40)) }, GateOutcomeOpen, GatePRMismatch},
+		{"outcome-open before verdict-blocked", "partial", "Closes #5\n", failVerdict, GateOutcomeOpen, GateVerdictBlocked},
+		{"provenance before verdict-blocked", "", badRelay, failVerdict, GateProvenanceFail, GateVerdictBlocked},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.pushStamped("a.txt", "")
+			w.setOutcomeSlot(tc.outcome)
+			w.forge("body", tc.body)
+			tc.setup(w)
+			res, err := w.gate(false, GateOpts{CheckOnly: true})
+			if err != nil || res.Changed {
+				t.Fatalf("a record gap is a refusal, not an error: %+v %v", res, err)
+			}
+			if res.Verdict != tc.want {
+				t.Fatalf("verdict = %q, want the first gap %q (not %q): %+v", res.Verdict, tc.want, tc.later, res)
+			}
+		})
+	}
+}
