@@ -3,7 +3,10 @@ package host
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 func TestDialogKeys(t *testing.T) {
@@ -54,6 +57,26 @@ func TestDialogKeysRealTrustDialog(t *testing.T) {
 	}
 	if keys, ok := DialogKeys(string(b)); !ok || !reflect.DeepEqual(keys, []string{"down", "enter"}) {
 		t.Errorf("DialogKeys = %v %v, want [down enter] true", keys, ok)
+	}
+}
+
+func TestTrustDialogFixtureMatchesRecoveryHint(t *testing.T) {
+	pane := readFixture(t, "trust-dialog-2.1.288.txt")
+	hint := harness.StartupDialogRecovery(harness.Claude, "t2")
+	for _, text := range []string{harness.ClaudeTrustDecline, harness.ClaudeTrustAccept} {
+		found := false
+		for _, line := range strings.Split(pane, "\n") {
+			_, _, row, ok := option(line)
+			if ok && row == text {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("captured trust dialog has no option exactly %q", text)
+		}
+		if !strings.Contains(hint, `"`+text+`"`) {
+			t.Errorf("recovery hint %q does not quote option %q", hint, text)
+		}
 	}
 }
 

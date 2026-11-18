@@ -218,8 +218,15 @@ func (claude) InputSyntax() InputSyntax {
 // CoreStatusApp is Claude Code's native OSC 7501 reporting identity.
 func (claude) CoreStatusApp() string { return "claude-code" }
 
+// ClaudeTrustAccept and ClaudeTrustDecline are the folder-trust dialog's option
+// text, shared by startup-dialog recognition and the operator recovery hint.
+const (
+	ClaudeTrustAccept  = "Yes, I trust this folder"
+	ClaudeTrustDecline = "No, exit"
+)
+
 func (claude) StartupDialogRecovery(terminal string) string {
-	return fmt.Sprintf("for Claude folder trust (once per slot worktree), select \"Yes, I trust this folder\" in the worker terminal; the dialog defaults to \"No, exit\" (Down, then Enter, or `hc keys %s down` then `hc keys %s enter` from another terminal)", terminal, terminal)
+	return fmt.Sprintf("for Claude folder trust (once per slot worktree), select %q in the worker terminal; the dialog defaults to %q (Down, then Enter, or `hc keys %s down` then `hc keys %s enter` from another terminal)", ClaudeTrustAccept, ClaudeTrustDecline, terminal, terminal)
 }
 
 // CoreSkipsComposerCheck: rota does not guard a half-typed human draft in a
