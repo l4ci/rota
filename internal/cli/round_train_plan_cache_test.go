@@ -2,10 +2,10 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // fakeHeads answers rev-parse from a map of ref to SHA; unknown refs exit 1.
@@ -24,12 +24,12 @@ func TestPlanNudgesCachesByHeads(t *testing.T) {
 	heads := map[string]string{"main": "b1", "origin/main": "b1", "ben/9": "h9", "dana/10": "h10"}
 	c := &Ctx{Deps: &Deps{Git: fakeHeads(heads)}}
 	calls := 0
-	c.Deps.TrainPlan = func(*Ctx, string, string, []string) (*worker.TrainPlan, error) {
+	c.Deps.TrainPlan = func(*Ctx, string, string, []string) (*landing.TrainPlan, error) {
 		calls++
-		return &worker.TrainPlan{
+		return &landing.TrainPlan{
 			Landable:  []string{"9"},
-			Conflicts: []worker.TrainConflict{{A: "9", B: "10"}},
-			Blocked:   []worker.TrainBlocked{{Target: "10", By: []string{"9"}}},
+			Conflicts: []landing.TrainConflict{{A: "9", B: "10"}},
+			Blocked:   []landing.TrainBlocked{{Target: "10", By: []string{"9"}}},
 		}, nil
 	}
 	root := t.TempDir()

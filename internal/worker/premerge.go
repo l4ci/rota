@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -56,7 +57,7 @@ func ledgerRefusal(s premergeSubject, led testledger.Ledger, now time.Time) *pre
 		return nil
 	}
 	return &premergeRefusal{
-		Verdict: GateVerifyFailed,
+		Verdict: landing.GateVerifyFailed,
 		Err:     fmt.Sprintf("%s %s; nothing landed", s.Fail, msg),
 		Hint:    "fix the test or renew the entry in .rota/test-ledger.json, then " + s.Retry,
 		Expired: led.Expired(now),
@@ -70,7 +71,7 @@ func noVerifyRefusalFor(s premergeSubject, in gateInput) *premergeRefusal {
 		return nil
 	}
 	msg, hint := noVerifyRefusal(s.What)
-	return &premergeRefusal{Verdict: GateNoVerify, Err: msg, Hint: hint}
+	return &premergeRefusal{Verdict: landing.GateNoVerify, Err: msg, Hint: hint}
 }
 
 // ciConfigCheck refuses a merge that changes the CI definition, or returns nil.
@@ -79,7 +80,7 @@ func ciConfigCheck(s premergeSubject, changed []string) *premergeRefusal {
 	if msg == "" {
 		return nil
 	}
-	return &premergeRefusal{Verdict: GateCIConfigChanged, Err: msg, Hint: hint}
+	return &premergeRefusal{Verdict: landing.GateCIConfigChanged, Err: msg, Hint: hint}
 }
 
 // premergeRun is one run of the shared pre-merge sequence.

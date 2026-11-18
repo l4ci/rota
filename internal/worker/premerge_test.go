@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
@@ -16,11 +17,11 @@ func TestGateAndTrainRefuseTheSameInput(t *testing.T) {
 		name, config, ledger, want string
 		approve                    bool
 	}{
-		{name: "no-verify", config: `{"test":{"full":[]}}`, want: GateNoVerify},
-		{name: "expired ledger", config: `{"test":{"full":["true"]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: GateVerifyFailed},
+		{name: "no-verify", config: `{"test":{"full":[]}}`, want: landing.GateNoVerify},
+		{name: "expired ledger", config: `{"test":{"full":["true"]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: landing.GateVerifyFailed},
 		// Both rules fire: the ledger is checked first by both.
-		{name: "expired ledger before no-verify", config: `{"test":{"full":[]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: GateVerifyFailed},
-		{name: "approval required", config: `{"test":{"full":["true"]}}`, want: GateApprovalRequired, approve: true},
+		{name: "expired ledger before no-verify", config: `{"test":{"full":[]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: landing.GateVerifyFailed},
+		{name: "approval required", config: `{"test":{"full":["true"]}}`, want: landing.GateApprovalRequired, approve: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

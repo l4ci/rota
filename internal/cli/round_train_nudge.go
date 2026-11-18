@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"io"
 	"slices"
 	"sort"
@@ -46,8 +47,8 @@ type trainNudge struct {
 	// Conflicts and Blocked come from the `worker train --plan` preview: the
 	// reviewed pairs that conflict and the PRs left out of Landable because of
 	// them. Empty when the preview was skipped or found none.
-	Conflicts []worker.TrainConflict
-	Blocked   []worker.TrainBlocked
+	Conflicts []landing.TrainConflict
+	Blocked   []landing.TrainBlocked
 }
 
 // Command is the train to run, the PR numbers as `rota worker train` takes them.
@@ -74,7 +75,7 @@ func (n trainNudge) Text() string {
 
 // conflictLine warns of two reviewed PRs that conflict before a train is
 // started, with the way out: land the first, then bring its base into the other.
-func (n trainNudge) conflictLine(c worker.TrainConflict) string {
+func (n trainNudge) conflictLine(c landing.TrainConflict) string {
 	first, second := c.A, c.B
 	if slices.Contains(n.PRs, second) && !slices.Contains(n.PRs, first) {
 		first, second = second, first
@@ -129,7 +130,7 @@ func (n trainNudge) blockedNote() string {
 // withPlan narrows a nudge to the largest conflict-free landable set of a train
 // preview and records the pairs and PRs it left out. A preview that finds no
 // conflict leaves the nudge as it was.
-func (n trainNudge) withPlan(p *worker.TrainPlan) trainNudge {
+func (n trainNudge) withPlan(p *landing.TrainPlan) trainNudge {
 	if p == nil || len(p.Landable) == 0 || len(p.Conflicts) == 0 {
 		return n
 	}
@@ -140,7 +141,7 @@ func (n trainNudge) withPlan(p *worker.TrainPlan) trainNudge {
 
 // planTrainNudge runs the `worker train --plan` preview quietly: it maps
 // conflicts with git merge-tree, runs no tests and pushes nothing.
-func planTrainNudge(c *Ctx, root, base string, prs []string) (*worker.TrainPlan, error) {
+func planTrainNudge(c *Ctx, root, base string, prs []string) (*landing.TrainPlan, error) {
 	quiet := *c
 	quiet.Stderr = io.Discard
 	run := runTrain(&quiet, root, trainRunOpts{Targets: prs, Base: base, Plan: true})
@@ -159,7 +160,7 @@ var trainPlanMemo = struct {
 }{m: map[string]trainPlanMemoEntry{}}
 
 type trainPlanMemoEntry struct {
-	plan *worker.TrainPlan
+	plan *landing.TrainPlan
 	err  error
 }
 

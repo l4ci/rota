@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func TestGateLocalRedVerifyLandsNothing(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["true","false"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "nothing landed") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, "nothing landed") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if res.Changed || w.forgeWord("state") != "OPEN" || w.onOriginMain("work.txt") {
@@ -50,7 +51,7 @@ func TestGateLocalRedVerifyKeepsTheReviewRecord(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"next"}],"prs":[{"pr":%q,"branch":"w1","base":"main","from":"w1","issue":"7"}]}`, ghURL)), 0o644)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "#7", Base: "main"})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if LoadRegistryTolerant(w.dir).QueuedPR(ghURL) == nil {
@@ -65,7 +66,7 @@ func TestGateLocalVerifiesInAScratchMerge(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "where")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["test -f work.txt && pwd >> %[1]s"],"e2e":["test -f work.txt && pwd >> %[1]s"]}}`, out))
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GatePass || !res.Changed || len(res.Verified) != 1 {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed || len(res.Verified) != 1 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	b, _ := os.ReadFile(out)
@@ -88,7 +89,7 @@ func TestGateLocalRedE2ELandsNothing(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["true"],"e2e":["false"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if w.forgeWord("state") != "OPEN" || w.onOriginMain("work.txt") {
@@ -107,7 +108,7 @@ func TestGateLocalBaseMovedWhileVerifying(t *testing.T) {
 	gittest.Run(t, mover, "commit", "-q", "-m", "lands while the gate verifies")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["git -C %s push -q origin HEAD:main"]}}`, mover))
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "nothing landed") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || !strings.Contains(res.Err, "nothing landed") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if res.Changed || w.forgeWord("state") != "OPEN" || w.onOriginMain("work.txt") {
@@ -121,8 +122,8 @@ func TestGateLocalLandedTreeDiffersIsVerifiedAgain(t *testing.T) {
 	for _, c := range []struct {
 		name, full, verdict string
 	}{
-		{"green", `test -f work.txt`, GatePass},
-		{"red", `test ! -f other.txt`, GateVerifyFailed}, // green on the scratch merge, red once other.txt landed too
+		{"green", `test -f work.txt`, landing.GatePass},
+		{"red", `test ! -f other.txt`, landing.GateVerifyFailed}, // green on the scratch merge, red once other.txt landed too
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -135,7 +136,7 @@ func TestGateLocalLandedTreeDiffersIsVerifiedAgain(t *testing.T) {
 			if !strings.Contains(strings.Join(res.Notes, "\n"), "VERIFY-AGAIN") {
 				t.Errorf("no VERIFY-AGAIN note: %v", res.Notes)
 			}
-			if c.verdict == GateVerifyFailed && !strings.Contains(res.Hint, "fix forward") {
+			if c.verdict == landing.GateVerifyFailed && !strings.Contains(res.Hint, "fix forward") {
 				t.Errorf("a red verify of the landed tree must say it landed: %q", res.Hint)
 			}
 		})
@@ -150,7 +151,7 @@ func TestGateLocalLandedTreeRedE2EFailsForward(t *testing.T) {
 	w.setConfig(`{"test":{"full":["test -f work.txt"],"e2e":["test ! -f other.txt"]}}`)
 	w.forge("pushBeforeMerge", "other.txt")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "VERIFY-AGAIN") {
@@ -167,7 +168,7 @@ func TestGateLocalNoVerifyMakesNoScratchTree(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "ran")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["touch %s"]}}`, out))
 	res, err := w.gate(false, GateOpts{NoVerify: true})
-	if err != nil || res.Verdict != GatePass || !res.VerifySkipped {
+	if err != nil || res.Verdict != landing.GatePass || !res.VerifySkipped {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if _, err := os.Stat(out); err == nil {

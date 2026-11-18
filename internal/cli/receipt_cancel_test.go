@@ -2,11 +2,11 @@ package cli
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/receipt"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // A cancelled train settles its receipt once as cancelled, not as done or
@@ -14,7 +14,7 @@ import (
 // (#2751, AC-4).
 func TestReceiptCancelledVerdictSettlesAsCancelled(t *testing.T) {
 	dir := workerProject(t, `{}`)
-	f := &fakeVerb{verdict: worker.GateCancelled, fail: Failed("CANCELLED train")}
+	f := &fakeVerb{verdict: landing.GateCancelled, fail: Failed("CANCELLED train")}
 	if _, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "42"); err == nil {
 		t.Fatal("a cancelled train is not a success")
 	}

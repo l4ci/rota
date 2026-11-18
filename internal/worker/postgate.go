@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/postgate"
 )
 
@@ -14,12 +15,55 @@ func (e Env) Landing(release func(root, issue, slot string) error) postgate.Env 
 
 type landingRunner struct{ env Env }
 
-func (a landingRunner) Gate(ctx context.Context, root string, o postgate.GateOpts) (GateResult, error) {
-	return a.env.Gate(ctx, root, GateOpts{NoWait: o.NoWait, Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Round: o.Round, Approval: o.Approval, VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews, ItemBody: o.ItemBody})
+func (a landingRunner) Gate(ctx context.Context, root string, o postgate.GateOpts) (landing.GateResult, error) {
+	return a.env.Gate(ctx, root, gateOptions(o))
 }
 
-func (a landingRunner) Train(ctx context.Context, root string, o postgate.TrainOpts) (TrainResult, error) {
-	return a.env.Train(ctx, root, TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Round: o.Round, Base: o.Base, SyncBase: o.SyncBase, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: o.Approve, VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews, Order: o.Order, Say: o.Say, Plan: o.Plan, ItemBody: o.ItemBody, Integration: o.Integration, Onto: o.Onto, RequestID: o.RequestID})
+// gateOptions is the sole postgate-to-worker gate option conversion.
+func gateOptions(o postgate.GateOpts) GateOpts {
+	return GateOpts{
+		NoWait:       o.NoWait,
+		Slot:         o.Slot,
+		Base:         o.Base,
+		CheckOnly:    o.CheckOnly,
+		NoVerify:     o.NoVerify,
+		FinalSlice:   o.FinalSlice,
+		Prune:        o.Prune,
+		Round:        o.Round,
+		Approval:     o.Approval,
+		VerdictRepo:  o.VerdictRepo,
+		CheckReviews: o.CheckReviews,
+		ItemBody:     o.ItemBody,
+	}
+}
+
+func (a landingRunner) Train(ctx context.Context, root string, o postgate.TrainOpts) (landing.TrainResult, error) {
+	return a.env.Train(ctx, root, trainOptions(o))
+}
+
+// trainOptions is the sole postgate-to-worker train option conversion.
+func trainOptions(o postgate.TrainOpts) TrainOpts {
+	return TrainOpts{
+		NoWait:       o.NoWait,
+		Targets:      o.Targets,
+		Round:        o.Round,
+		Base:         o.Base,
+		SyncBase:     o.SyncBase,
+		LandGreen:    o.LandGreen,
+		OnFail:       o.OnFail,
+		NoVerify:     o.NoVerify,
+		FinalSlice:   o.FinalSlice,
+		Approve:      o.Approve,
+		VerdictRepo:  o.VerdictRepo,
+		CheckReviews: o.CheckReviews,
+		Order:        o.Order,
+		Say:          o.Say,
+		Plan:         o.Plan,
+		ItemBody:     o.ItemBody,
+		Integration:  o.Integration,
+		Onto:         o.Onto,
+		RequestID:    o.RequestID,
+	}
 }
 
 type landingBook struct {

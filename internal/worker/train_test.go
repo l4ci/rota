@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"os"
@@ -48,7 +49,7 @@ func (w *world) onMain(file string) bool {
 	return err == nil
 }
 
-func (w *world) train(o TrainOpts) (TrainResult, error) {
+func (w *world) train(o TrainOpts) (landing.TrainResult, error) {
 	o.Base = "main"
 	return w.env(false).Train(bg, w.dir, o)
 }
@@ -56,7 +57,7 @@ func (w *world) train(o TrainOpts) (TrainResult, error) {
 func TestTrainLandsAll(t *testing.T) {
 	w := trainWorld(t, "test -f b1.txt && test -f b2.txt && test -f b3.txt", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2,b3" || !res.Changed {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2,b3" || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if len(res.Verified) != 1 {
@@ -90,11 +91,11 @@ func TestTrainSkipsMissingReview(t *testing.T) {
 			}
 			res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w2", "w1"}, Order: []string{"8", "7"}, CheckReviews: true})
 			t.Logf("AC-1: excluded=%d landed=%d verified=%d", len(res.Culprits), len(res.Landed), len(res.Verified))
-			if err != nil || res.Verdict != GatePass || !res.Changed || !slices.Equal(res.Landed, []string{"w1"}) || len(res.Members) != 1 || len(res.Culprits) != 1 || len(res.Verified) != 1 || w.onMain("work2.txt") || !w.onMain("work.txt") {
+			if err != nil || res.Verdict != landing.GatePass || !res.Changed || !slices.Equal(res.Landed, []string{"w1"}) || len(res.Members) != 1 || len(res.Culprits) != 1 || len(res.Verified) != 1 || w.onMain("work2.txt") || !w.onMain("work.txt") {
 				t.Fatalf("a missing or stale review must exclude only its PR: %+v %v", res, err)
 			}
 			c := res.Culprits[0]
-			if c.Target != "w2" || c.PR != "https://github.com/o/r/pull/8" || c.BlockedBy != GateReviewMissing || !strings.Contains(c.Gate.Err, "review-quality verdict") || !strings.Contains(strings.Join(res.Notes, "\n"), "TRAIN-SKIP w2") {
+			if c.Target != "w2" || c.PR != "https://github.com/o/r/pull/8" || c.BlockedBy != landing.GateReviewMissing || !strings.Contains(c.Gate.Err, "review-quality verdict") || !strings.Contains(strings.Join(res.Notes, "\n"), "TRAIN-SKIP w2") {
 				t.Fatalf("excluded member must carry its missing-review reason: %+v", res)
 			}
 		})
@@ -105,9 +106,9 @@ func TestTrainAllMembersExcluded(t *testing.T) {
 	for _, sectionMissing := range []bool{false, true} {
 		t.Run(fmt.Sprintf("sectionMissing=%t", sectionMissing), func(t *testing.T) {
 			body := completePRSections
-			want := GateReviewMissing
+			want := landing.GateReviewMissing
 			if sectionMissing {
-				body, want = "", GateAssumptionsMissing
+				body, want = "", landing.GateAssumptionsMissing
 			}
 			w, e := sectionTrainWorld(t, []string{body, completePRSections})
 			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["false"]}}`)
@@ -117,7 +118,7 @@ func TestTrainAllMembersExcluded(t *testing.T) {
 			if err != nil || !res.Refused(err) || res.Verdict != want || res.Changed || len(res.Members) != 0 || len(res.Landed) != 0 || len(res.Verified) != 0 || len(res.Culprits) != 2 {
 				t.Fatalf("all exclusions must refuse, naming every member without verifying or landing: %+v %v", res, err)
 			}
-			for i, reason := range []string{want, GateReviewMissing} {
+			for i, reason := range []string{want, landing.GateReviewMissing} {
 				c := res.Culprits[i]
 				if c.Target != fmt.Sprintf("w%d", i+1) || c.BlockedBy != reason || !strings.Contains(strings.Join(res.Notes, "\n"), "TRAIN-SKIP "+c.Target) {
 					t.Errorf("excluded member %d: %+v", i, c)
@@ -130,7 +131,7 @@ func TestTrainAllMembersExcluded(t *testing.T) {
 func TestTrainBisectsToTheCulprit(t *testing.T) {
 	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2", "b3", "b4")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || res.Changed || len(res.Landed) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || res.Changed || len(res.Landed) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "the first 1 member(s) pass") {
@@ -152,7 +153,7 @@ func TestTrainInteractionPair(t *testing.T) {
 			w := trainWorld(t, fmt.Sprintf("! (test -f %s.txt && test -f %s.txt)", pair[0], pair[1]), "b1", "b2", "b3")
 			res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 			want := pair[0] + "," + pair[1]
-			if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != want {
+			if err != nil || res.Verdict != landing.GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != want {
 				t.Fatalf("want the interaction of exactly %s: %+v %v", want, res, err)
 			}
 			if !strings.Contains(res.Err, "TRAIN-INTERACTION "+pair[0]+", "+pair[1]) {
@@ -166,7 +167,7 @@ func TestTrainInteractionPair(t *testing.T) {
 func TestTrainInteractionOfThree(t *testing.T) {
 	w := trainWorld(t, "! (test -f b1.txt && test -f b2.txt && test -f b3.txt)", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2,b3" {
+	if err != nil || res.Verdict != landing.GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2,b3" {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -176,7 +177,7 @@ func TestTrainInteractionOfThree(t *testing.T) {
 func TestTrainInteractionLandGreen(t *testing.T) {
 	w := trainWorld(t, "! (test -f b2.txt && test -f b3.txt)", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
-	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Landed, ",") != "b1,b2" || strings.Join(res.Interaction, ",") != "b2,b3" {
+	if err != nil || res.Verdict != landing.GateInteraction || strings.Join(res.Landed, ",") != "b1,b2" || strings.Join(res.Interaction, ",") != "b2,b3" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !w.onMain("b2.txt") || w.onMain("b3.txt") {
@@ -187,7 +188,7 @@ func TestTrainInteractionLandGreen(t *testing.T) {
 func TestTrainLandGreen(t *testing.T) {
 	w := trainWorld(t, "test ! -f b3.txt", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b3" || strings.Join(res.Landed, ",") != "b1,b2" || !res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b3" || strings.Join(res.Landed, ",") != "b1,b2" || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !w.onMain("b1.txt") || !w.onMain("b2.txt") || w.onMain("b3.txt") {
@@ -204,7 +205,7 @@ func TestTrainConflict(t *testing.T) {
 	}
 	// An order the caller chose is not retried: the conflict names the member.
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Order: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateMergeFailed || res.Culprit != "b2" || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -213,7 +214,7 @@ func TestTrainRefusesBeforeMerging(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	trainWrite(t, w, "b2.txt", "main") // b2 and main both add b2.txt: the branch is stale on a conflict
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateStale || res.Culprit != "b2" || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateStale || res.Culprit != "b2" || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -229,7 +230,7 @@ func TestTrainAlreadyMergedPRTargets(t *testing.T) {
 	w.setPRBody("")
 	w.setConfig(`{"test":{"full":["false"]}}`) // no verification is needed
 	res, err := w.env(false).Train(bg, w.dir, TrainOpts{Targets: []string{"7", "8"}, Base: "main"})
-	if err != nil || res.Verdict != GatePass || res.Changed || len(res.Landed) != 0 || len(res.Verified) != 0 {
+	if err != nil || res.Verdict != landing.GatePass || res.Changed || len(res.Landed) != 0 || len(res.Verified) != 0 {
 		t.Fatalf("already-merged train: %+v, %v", res, err)
 	}
 	text := strings.Join(res.Notes, "\n") + res.Err + res.Hint
@@ -273,7 +274,7 @@ func TestTrainSkipsMergedPRAndLandsOpenPR(t *testing.T) {
 		return alreadyMergedForge{Forge: f, Issues: f.(Issues)}, err
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"7", "8"}, Base: "main", Order: []string{"8", "7"}, FinalSlice: []string{"8"}})
-	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"8"}) || !res.Changed || !w.onMain("work2.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !slices.Equal(res.Landed, []string{"8"}) || !res.Changed || !w.onMain("work2.txt") {
 		t.Fatalf("mixed merged/open train: %+v, %v", res, err)
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "ALREADY-MERGED 7") {
@@ -285,7 +286,7 @@ func TestTrainPlanAlreadyMergedPRTarget(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("state", "MERGED")
 	res, err := w.env(false).Train(bg, w.dir, TrainOpts{Targets: []string{"7"}, Base: "main", Plan: true})
-	if err != nil || res.Verdict != GatePlan || res.Plan == nil || len(res.Plan.Landable) != 0 || res.Changed {
+	if err != nil || res.Verdict != landing.GatePlan || res.Plan == nil || len(res.Plan.Landable) != 0 || res.Changed {
 		t.Fatalf("already-merged preview: %+v, %v", res, err)
 	}
 }
@@ -302,7 +303,7 @@ func TestTrainSharedFileCleanMerge(t *testing.T) {
 	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	trainWrite(t, w, "shared.txt", strings.TrimSuffix(lines[:len(lines)-2]+"Z\n", "\n"))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b2.txt") {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b2.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -313,7 +314,7 @@ func TestTrainBaseMoved(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, strings.Replace(cmd, "WDIR", w.dir, 1)))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateBaseMoved || len(res.Landed) != 0 || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -326,7 +327,7 @@ func TestTrainApprovalFailsBeforeVerify(t *testing.T) {
 		files, _ = f()
 		return nil, want
 	}})
-	if err != want || res.Verdict != GateApprovalRequired || strings.Join(files, ",") != "b1.txt,b2.txt" {
+	if err != want || res.Verdict != landing.GateApprovalRequired || strings.Join(files, ",") != "b1.txt,b2.txt" {
 		t.Fatalf("%+v %v files=%v", res, err, files)
 	}
 	if w.onMain("b1.txt") {
@@ -358,7 +359,7 @@ func TestTrainSecondLandingFails(t *testing.T) {
 	// hooks are shared with the train's scratch worktree: act in the checkout only
 	w.hook(t, "pre-merge-commit", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ -f b2.txt ] && [ ! -f b3.txt ] && exit 1; exit 0`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" || !res.Changed {
+	if err != nil || res.Verdict != landing.GateMergeFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Hint, "landed 1 of 3") {
@@ -374,7 +375,7 @@ func TestTrainForeignCommitBetweenLandings(t *testing.T) {
 	// a foreign commit lands on main right after the first landing
 	w.hook(t, "post-merge", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ ! -f foreign.txt ] && { echo x > foreign.txt && git add foreign.txt && git commit -q -m foreign; }; exit 0`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateBaseMoved || strings.Join(res.Landed, ",") != "b1" || res.Culprit != "b2" {
+	if err != nil || res.Verdict != landing.GateBaseMoved || strings.Join(res.Landed, ",") != "b1" || res.Culprit != "b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Hint, "landed 1 of 3") || w.onMain("b2.txt") {
@@ -386,7 +387,7 @@ func TestTrainRedBase(t *testing.T) {
 	// the base itself fails verification: no member is to blame
 	w := trainWorld(t, "false", "b1", "b2")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "" || !strings.Contains(res.Err, "fails verification on its own") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "" || !strings.Contains(res.Err, "fails verification on its own") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -421,7 +422,7 @@ func TestTrainExternalPRTargets(t *testing.T) {
 			w.record("w2", w.forgeWord("sha#8"), verdict.ReviewQuality)
 			for _, target := range c.targets {
 				res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: target, Base: "main", CheckOnly: true, CheckReviews: true})
-				if err != nil || res.Verdict != GateFresh {
+				if err != nil || res.Verdict != landing.GateFresh {
 					t.Fatalf("gate check %s: %+v %v", target, res, err)
 				}
 			}
@@ -430,10 +431,10 @@ func TestTrainExternalPRTargets(t *testing.T) {
 				t.Fatalf("train of gate-accepted external PRs: %+v %v", res, err)
 			}
 			if c.plan {
-				if res.Verdict != GatePlan || res.Plan == nil || !slices.Equal(res.Plan.Landable, c.targets) || res.Changed {
+				if res.Verdict != landing.GatePlan || res.Plan == nil || !slices.Equal(res.Plan.Landable, c.targets) || res.Changed {
 					t.Fatalf("external PR plan: %+v", res)
 				}
-			} else if res.Verdict != GatePass || !slices.Equal(res.Landed, c.targets) || !w.onMain("work.txt") || len(res.Verified) != 1 {
+			} else if res.Verdict != landing.GatePass || !slices.Equal(res.Landed, c.targets) || !w.onMain("work.txt") || len(res.Verified) != 1 {
 				t.Fatalf("external PR landing: %+v", res)
 			}
 		})
@@ -477,7 +478,7 @@ func TestTrainReportsFailedRecovery(t *testing.T) {
 		return git.Exec(ctx, dir, args...)
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1"}, Base: "main"})
-	if err != nil || res.Verdict != GateMergeFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateMergeFailed || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	for _, want := range []string{"CONFLICT", "index.lock exists", "git merge --abort", "git status"} {
@@ -498,7 +499,7 @@ func e2eWorld(t *testing.T, full, e2e string, branches ...string) *world {
 func TestTrainRunsE2EAfterFull(t *testing.T) {
 	w := e2eWorld(t, "true", "test -f b1.txt && test -f b2.txt", "b1", "b2")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if len(res.Verified) != 1 || len(res.E2EVerified) != 1 {
@@ -509,7 +510,7 @@ func TestTrainRunsE2EAfterFull(t *testing.T) {
 func TestTrainBisectsE2E(t *testing.T) {
 	w := e2eWorld(t, "true", "test ! -f b2.txt", "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Landed) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || len(res.Landed) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "test.e2e") || !strings.Contains(res.Err, "the first 1 member(s) pass") {
@@ -557,7 +558,7 @@ func TestTrainLocalVerifyErrorIsError(t *testing.T) {
 		return r, err
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1"}})
-	if err == nil || res.Verdict == GateCheckBroke {
+	if err == nil || res.Verdict == landing.GateCheckBroke {
 		t.Fatalf("want an error, got %+v %v", res, err)
 	}
 	if w.onMain("b1.txt") {
@@ -569,7 +570,7 @@ func TestTrainApprovalRefusalIsTyped(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: BlockData{BlockedBy: "manual gate"}}
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(func() ([]string, error)) (*exitcode.Refusal, error) { return want, nil }})
-	if res.Verdict != GateApprovalRequired {
+	if res.Verdict != landing.GateApprovalRequired {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
 	if res.Refusal != want || err != want.Err || !res.Refused(err) {
@@ -585,8 +586,8 @@ func TestTrainAndGateSerialize(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "verify.log")
 	verify := fmt.Sprintf(`echo start >> %[1]s; n=$(git worktree list | wc -l); echo "worktrees $n" >> %[1]s; sleep 1; echo end >> %[1]s`, log)
 	w := trainWorld(t, verify, "b1", "b2", "b3")
-	var tres TrainResult
-	var gres GateResult
+	var tres landing.TrainResult
+	var gres landing.GateResult
 	var terr, gerr error
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -599,10 +600,10 @@ func TestTrainAndGateSerialize(t *testing.T) {
 		gres, gerr = w.env(false).Gate(bg, w.dir, GateOpts{Slot: "b3", Base: "main"})
 	}()
 	wg.Wait()
-	if terr != nil || tres.Verdict != GatePass {
+	if terr != nil || tres.Verdict != landing.GatePass {
 		t.Errorf("train: %+v %v", tres, terr)
 	}
-	if gerr != nil || gres.Verdict != GatePass {
+	if gerr != nil || gres.Verdict != landing.GatePass {
 		t.Errorf("gate: %+v %v", gres, gerr)
 	}
 	data, _ := os.ReadFile(log)
@@ -643,12 +644,12 @@ func TestTrainCachesPassingVerdicts(t *testing.T) {
 	// a red train lands nothing, so base and heads stay put for the re-run
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b2.txt"))
 	res, err := w.train(TrainOpts{Targets: targets})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.CacheHits) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || len(res.CacheHits) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	first := runs(t, counter)
 	res, err = w.train(TrainOpts{Targets: targets})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("re-run: %+v %v", res, err)
 	}
 	// the red full tree, its re-run and b2's alone-run run again; only the green prefix hits
@@ -665,7 +666,7 @@ func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	targets := []string{"b1", "b2", "b3"}
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b3.txt"))
-	if res, _ := w.train(TrainOpts{Targets: targets}); res.Verdict != GateVerifyFailed {
+	if res, _ := w.train(TrainOpts{Targets: targets}); res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("%+v", res)
 	}
 	before := runs(t, counter)
@@ -697,11 +698,11 @@ func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 3 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("first train: %+v %v", res, err)
 	}
 	res, err = w.train(TrainOpts{Targets: []string{"b2", "b3"}}) // different key, contains b2
-	if err != nil || res.Verdict != GatePass || res.Culprit != "" {
+	if err != nil || res.Verdict != landing.GatePass || res.Culprit != "" {
 		t.Fatalf("second train: %+v %v", res, err)
 	}
 	if strings.Join(res.Transient, ",") != "b2" {
@@ -722,12 +723,12 @@ func TestTrainNoVerifyDoesNotForgiveCulprit(t *testing.T) {
 	cmd := fmt.Sprintf("test ! -f b2.txt || [ $(cat %[1]s 2>/dev/null | wc -c) -ge 3 ] || { printf x >> %[1]s; exit 1; }", seen)
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("first train: %+v %v", res, err)
 	}
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err = w.train(TrainOpts{Targets: []string{"b2", "b3"}, NoVerify: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("no-verify train: %+v %v", res, err)
 	}
 	if len(res.Transient) != 0 || strings.Contains(strings.Join(res.Notes, "\n"), "TRANSIENT") {
@@ -745,7 +746,7 @@ func TestTrainVerdictRefusal(t *testing.T) {
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	var vb *verdict.BlockedError
-	if !errors.As(err, &vb) || res.Verdict != GateVerdictBlocked || res.Culprit != "b2" {
+	if !errors.As(err, &vb) || res.Verdict != landing.GateVerdictBlocked || res.Culprit != "b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if w.onMain("b1.txt") || w.onMain("b2.txt") {
@@ -759,14 +760,14 @@ func TestTrainRefusesEmptyTestFull(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateNoVerify || res.Changed || len(res.Landed) != 0 || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateNoVerify || res.Changed || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {
 		t.Errorf("refusal must name the key and the way out: %q / %q", res.Err, res.Hint)
 	}
 	res, err = w.train(TrainOpts{Targets: []string{"b1", "b2"}, NoVerify: true})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("--no-verify: %+v %v", res, err)
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "NO-VERIFY") {
@@ -793,7 +794,7 @@ func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Fatalf("the train never reached the scratch merge: %+v %v", res, err)
 	}
-	if res.Verdict == GatePass {
+	if res.Verdict == landing.GatePass {
 		t.Fatalf("a cancelled train passed: %+v", res)
 	}
 	if extra := w.scratchTrees(); len(extra) != 0 {
@@ -819,7 +820,7 @@ func orderWorld(t *testing.T) *world {
 	return w
 }
 
-func memberOrder(res TrainResult) string {
+func memberOrder(res landing.TrainResult) string {
 	var ts []string
 	for _, m := range res.Members {
 		ts = append(ts, m.Target)
@@ -831,7 +832,7 @@ func TestTrainOrdersIsolatedFirstThenSmallestDiff(t *testing.T) {
 	w := orderWorld(t)
 	var said []string
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Say: func(s string) { said = append(said, s) }})
-	if err != nil || res.Verdict != GatePass || memberOrder(res) != "b3,b2,b1" || strings.Join(res.Landed, ",") != "b3,b2,b1" {
+	if err != nil || res.Verdict != landing.GatePass || memberOrder(res) != "b3,b2,b1" || strings.Join(res.Landed, ",") != "b3,b2,b1" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	all := strings.Join(said, "\n")
@@ -848,7 +849,7 @@ func TestTrainOrdersIsolatedFirstThenSmallestDiff(t *testing.T) {
 func TestTrainOrderFlagOverrides(t *testing.T) {
 	w := orderWorld(t)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Order: []string{"b1", "b3", "b2"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b3,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b3,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -875,13 +876,13 @@ func TestTrainSharedPathConflictStopsBeforeLanding(t *testing.T) {
 		gittest.Run(t, w.dir, "checkout", "-q", "main")
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateOrder || res.Changed || w.onMain("b1.txt") || !strings.Contains(res.Err, "b1") || !strings.Contains(res.Err, "b2") {
+	if err != nil || res.Verdict != landing.GateOrder || res.Changed || w.onMain("b1.txt") || !strings.Contains(res.Err, "b1") || !strings.Contains(res.Err, "b2") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
 
-func prMembers() ([]TrainMember, []trainFoot) {
-	ms := []TrainMember{
+func prMembers() ([]landing.TrainMember, []trainFoot) {
+	ms := []landing.TrainMember{
 		{Target: "s9", Branch: "x/9", PR: "https://github.com/o/r/pull/9"},
 		{Target: "s12", Branch: "x/12", PR: "https://github.com/o/r/pull/12"},
 		{Target: "s15", Branch: "x/15", PR: "https://github.com/o/r/pull/15"},
@@ -898,7 +899,7 @@ func prMembers() ([]TrainMember, []trainFoot) {
 	return ms, foots
 }
 
-func orderedLabels(ms []TrainMember, perm []int) string {
+func orderedLabels(ms []landing.TrainMember, perm []int) string {
 	var ls []string
 	for _, i := range perm {
 		ls = append(ls, memberLabel(ms[i]))
@@ -968,7 +969,7 @@ func TestTrainDropsLandedQueuedPR(t *testing.T) {
 		t.Fatalf("setup: %d queued record(s)", n)
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"#7"}})
-	if err != nil || res.Verdict != GatePass || len(res.Landed) != 1 {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Landed) != 1 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 0 {
@@ -1015,7 +1016,7 @@ func TestTrainFinalSliceExemptsOnlyTheNamedMember(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := slicePRTrain(t)
 			res, err := w.train(TrainOpts{Targets: c.targets, FinalSlice: c.final})
-			if err != nil || res.Verdict != GateNotClosing || res.Culprit != c.culprit || res.Changed {
+			if err != nil || res.Verdict != landing.GateNotClosing || res.Culprit != c.culprit || res.Changed {
 				t.Fatalf("verdict %q culprit %q (want %q), changed %v: %v", res.Verdict, res.Culprit, c.culprit, res.Changed, err)
 			}
 		})
@@ -1030,7 +1031,7 @@ func TestTrainNotesClosingRefsUnknownOnce(t *testing.T) {
 	w.setPRBody("Refs #5\n")
 	w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
 	res, err := w.train(TrainOpts{Targets: []string{"#7"}})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if got := strings.Count(strings.Join(res.Notes, "\n"), "CLOSING-REFS-UNKNOWN"); got != 1 {
@@ -1078,7 +1079,7 @@ func TestTrainPlanNamesLargestConflictFreeSubset(t *testing.T) {
 
 func TestTrainPlanTakesNoLandLock(t *testing.T) {
 	w := planWorld(t)
-	var res TrainResult
+	var res landing.TrainResult
 	var perr error
 	lockErr := w.env(false).WithDefaults().withLandLock(bg, w.dir, "", func(bool) error { // would block a train that tried the lock
 		ctx, cancel := context.WithTimeout(bg, 10*time.Second)
@@ -1120,7 +1121,7 @@ func TestTrainPlanNoVerifyMirrorsRefusal(t *testing.T) {
 			w := trainWorld(t, "false", "b1")
 			w.setConfig(c.config)
 			res, err := w.train(TrainOpts{Targets: []string{"b1"}, Plan: true, NoVerify: c.noVerify})
-			if err != nil || res.Verdict != GatePlan || res.Plan == nil {
+			if err != nil || res.Verdict != landing.GatePlan || res.Plan == nil {
 				t.Fatalf("%+v %v", res, err)
 			}
 			if res.Plan.NoVerify != c.want {
@@ -1137,7 +1138,7 @@ func TestTrainWithoutPlanStillStopsOnOrderConflict(t *testing.T) {
 	w := planWorld(t)
 	w.setConfig(`{"test":{"full":["true"]}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
-	if err != nil || res.Verdict != GateOrder || res.Plan != nil || res.Changed {
+	if err != nil || res.Verdict != landing.GateOrder || res.Plan != nil || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -1170,7 +1171,7 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 				res, runErr := e.Gate(bg, w.dir, GateOpts{Base: "main", Slot: "b1", CheckOnly: true})
 				verdict, message, changed, err = res.Verdict, res.Err, res.Changed, runErr
 			}
-			if err != nil || verdict != GateCheckBroke || changed || !strings.Contains(message, wantMessage) {
+			if err != nil || verdict != landing.GateCheckBroke || changed || !strings.Contains(message, wantMessage) {
 				t.Fatalf("verdict=%s changed=%v message=%q err=%v", verdict, changed, message, err)
 			}
 			if after := gittest.Run(t, w.dir, "rev-parse", "main"); after != before {
@@ -1192,7 +1193,7 @@ func syncWorld(t *testing.T, verify string, branches ...string) *world {
 	return w
 }
 
-func (w *world) milestoneTrain(o TrainOpts) (TrainResult, error) {
+func (w *world) milestoneTrain(o TrainOpts) (landing.TrainResult, error) {
 	o.Base, o.SyncBase = "milestone/M01", "main"
 	return w.env(false).Train(bg, w.dir, o)
 }
@@ -1200,7 +1201,7 @@ func (w *world) milestoneTrain(o TrainOpts) (TrainResult, error) {
 func TestTrainSyncsTheBaseIntoTheMilestone(t *testing.T) {
 	w := syncWorld(t, "test -f main2.txt && test -f b1.txt", "b1")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	for _, f := range []string{"main2.txt", "b1.txt"} {
@@ -1217,7 +1218,7 @@ func TestTrainSyncRedLeavesTheMilestoneUnchanged(t *testing.T) {
 	w := syncWorld(t, "false", "b1")
 	before := gittest.Run(t, w.dir, "rev-parse", "milestone/M01")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
-	if err != nil || res.Verdict != GateVerifyFailed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if after := gittest.Run(t, w.dir, "rev-parse", "milestone/M01"); after != before {
@@ -1233,7 +1234,7 @@ func TestTrainSyncConflictNamesMilestoneAndPaths(t *testing.T) {
 	gittest.Run(t, w.dir, "checkout", "-q", "milestone/M01")
 	before := gittest.Run(t, w.dir, "rev-parse", "milestone/M01")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
-	if err != nil || res.Verdict != GateMergeFailed {
+	if err != nil || res.Verdict != landing.GateMergeFailed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "milestone/M01") || !strings.Contains(res.Err, "seed.txt") || !strings.Contains(res.Err, "main") {
@@ -1277,7 +1278,7 @@ func (w *world) originHas(ref, file string) bool {
 func TestTrainSyncPushesTheBaseIntoOriginMilestoneForPRs(t *testing.T) {
 	w := syncPRWorld(t, "test -f main2.txt && test -f work.txt")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"#7"}})
-	if err != nil || res.Verdict != GatePass || !res.Changed {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !w.originHas("milestone/M01", "main2.txt") {
@@ -1292,7 +1293,7 @@ func TestTrainSyncRedPushesNothingToOriginForPRs(t *testing.T) {
 	w := syncPRWorld(t, "false")
 	before := w.originRev("milestone/M01")
 	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"#7"}})
-	if err != nil || res.Verdict != GateVerifyFailed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if after := w.originRev("milestone/M01"); after != before {
@@ -1330,7 +1331,7 @@ func TestTrainOnFailStopEndsWithoutPrefixVerifies(t *testing.T) {
 	cmd, counter := stopCountingVerify(t)
 	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}, OnFail: OnFailStop})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed || len(res.Landed) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed || len(res.Landed) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if n := verifyRuns(t, counter); n != 1 {
@@ -1388,7 +1389,7 @@ func TestTrainOnFailStopNamesTestsAndBlamesNobody(t *testing.T) {
 	cmd := `test ! -f b2.txt || { printf -- '--- FAIL: TestWidget (0.00s)\nFAIL\n'; exit 1; }`
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, OnFail: OnFailStop, LandGreen: true})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Stop == nil {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Stop == nil {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if strings.Join(res.Stop.Tests, ",") != "TestWidget" {
@@ -1489,11 +1490,11 @@ func TestTrainDiagnosticOnlyPrefixIsNotCulprit(t *testing.T) {
 
 // onlyIn compares commands when either run names no test (#2753).
 func TestTrainFailureOnlyInCommand(t *testing.T) {
-	orig := TrainFailure{Command: "go test ./...", Tests: []string{"TestA"}}
-	if got := (TrainFailure{Command: "go vet ./..."}).OnlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
+	orig := landing.TrainFailure{Command: "go test ./...", Tests: []string{"TestA"}}
+	if got := (landing.TrainFailure{Command: "go vet ./..."}).OnlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
 		t.Errorf("different command, no tests: %q", got)
 	}
-	if got := (TrainFailure{Command: "go test ./..."}).OnlyIn(orig); len(got) != 0 {
+	if got := (landing.TrainFailure{Command: "go test ./..."}).OnlyIn(orig); len(got) != 0 {
 		t.Errorf("same command, no tests: %q", got)
 	}
 }
@@ -1525,7 +1526,7 @@ func TestTrainInteraction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "b1,b2" {
+	if res.Verdict != landing.GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "b1,b2" {
 		t.Fatalf("want an interaction of b1 and b2, got verdict %q culprit %q interaction %q", res.Verdict, res.Culprit, res.Interaction)
 	}
 	if !strings.HasPrefix(res.Err, "TRAIN-INTERACTION") || len(res.Landed) != 0 || res.Changed || w.onMain("b1.txt") {
@@ -1545,7 +1546,7 @@ func TestTrainInteraction(t *testing.T) {
 func TestTrainInteractionKeepsAloneCulprit(t *testing.T) {
 	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Interaction) != 0 || res.Unreproduced {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || len(res.Interaction) != 0 || res.Unreproduced {
 		t.Fatalf("b2 fails alone, so it is the culprit: %+v %v", res, err)
 	}
 }
@@ -1565,7 +1566,7 @@ func TestTrainAloneRunUsesVacuousTemplate(t *testing.T) {
 		"! ("+both+") || "+goFail("TestPair/sub", "ex.com/p"),
 		"sleep 0.3; echo {packages} {tests} >> "+log+"; ! ("+both+")"))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GateInteraction || strings.Join(res.Interaction, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	b, _ := os.ReadFile(log)
@@ -1586,7 +1587,7 @@ func TestTrainAloneRunFallsBackToCommand(t *testing.T) {
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`,
 		"! (test -f b1.txt && test -f b2.txt)", "echo {tests} >> "+log+"; false"))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateInteraction {
+	if err != nil || res.Verdict != landing.GateInteraction {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if b, _ := os.ReadFile(log); len(b) != 0 {
@@ -1603,7 +1604,7 @@ func TestTrainFlakeSkipsAloneRun(t *testing.T) {
 		"test ! -f b2.txt || test -f "+seen+" || { touch "+seen+"; "+goFail("TestFlaky", "ex.com/p")+"; }",
 		"echo {tests} >> "+log))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || len(res.Flaky) != 1 {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Flaky) != 1 {
 		t.Fatalf("the retry recovers the flake and the train lands: %+v %v", res, err)
 	}
 	if b, _ := os.ReadFile(log); len(b) != 0 {
@@ -1626,7 +1627,7 @@ func TestTrainRedRerunGreenSkipsBisect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateVerifyFailed || !res.Unreproduced || res.Culprit != "" || len(res.Landed) != 0 {
+	if res.Verdict != landing.GateVerifyFailed || !res.Unreproduced || res.Culprit != "" || len(res.Landed) != 0 {
 		t.Fatalf("want a flaky red with nobody blamed and nothing landed, got %+v", res)
 	}
 	for _, s := range said {
@@ -1653,7 +1654,7 @@ func TestTrainRedRerunGreenSkipsBisect(t *testing.T) {
 func TestTrainRedOnRerunWritesNoFlakeEntry(t *testing.T) {
 	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2")
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || res.Unreproduced || len(res.Flaky) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || res.Unreproduced || len(res.Flaky) != 0 {
 		t.Fatalf("want b2 named culprit, no flake: %+v %v", res, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(w.dir, ".rota", "flakes.jsonl")); len(b) != 0 {
@@ -1675,7 +1676,7 @@ func TestTrainUnreproducedRedBlamesNobody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateVerifyFailed || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 || !res.Unreproduced {
+	if res.Verdict != landing.GateVerifyFailed || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 || !res.Unreproduced {
 		t.Fatalf("want a red train with nobody blamed, got verdict %q culprit %q interaction %q landed %q unreproduced %v", res.Verdict, res.Culprit, res.Interaction, res.Landed, res.Unreproduced)
 	}
 	for _, m := range res.Members {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -202,7 +203,7 @@ func TestApprovalThreadForKeyIssue(t *testing.T) {
 	}
 
 	// --approval: pending, then answered
-	confirm := func(th worker.ApprovalThread) (gate.Confirm, *exitcode.Refusal, error) {
+	confirm := func(th landing.ApprovalThread) (gate.Confirm, *exitcode.Refusal, error) {
 		return mergeApproval(c, gate.MergePolicy{Mode: gate.MergeAll}, gate.Confirm{}, approvalReq{}, nil).Confirmation("e1", th)
 	}
 	if conf, ref, err := confirm(th); err != nil || ref == nil || conf.Given {

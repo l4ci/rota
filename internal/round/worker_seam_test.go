@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func TestRefuseWhileGateRunsReadsTheWorkerSeam(t *testing.T) {
 		wantErr string
 	}{
 		{"free", &fakeWorker{}, ""},
-		{"held", &fakeWorker{locked: true}, worker.GateRunning},
+		{"held", &fakeWorker{locked: true}, landing.GateRunning},
 		{"unreadable", &fakeWorker{lockErr: errors.New("boom")}, "boom"},
 	}
 	for _, tc := range cases {
@@ -73,10 +74,10 @@ func TestRefuseWhileGateRunsReadsTheWorkerSeam(t *testing.T) {
 			case tc.wantErr == "":
 			case err == nil:
 				t.Fatalf("err = nil, want %q", tc.wantErr)
-			case tc.wantErr == worker.GateRunning:
+			case tc.wantErr == landing.GateRunning:
 				var be *BlockedError
-				if !errors.As(err, &be) || be.By != worker.GateRunning {
-					t.Fatalf("err = %v, want blockedBy %s", err, worker.GateRunning)
+				if !errors.As(err, &be) || be.By != landing.GateRunning {
+					t.Fatalf("err = %v, want blockedBy %s", err, landing.GateRunning)
 				}
 			case err.Error() != tc.wantErr:
 				t.Fatalf("err = %v, want %q", err, tc.wantErr)
@@ -164,7 +165,7 @@ func TestRefuseWhileGateRunsOnlyForGatedSlots(t *testing.T) {
 	for _, tc := range cases {
 		err := Env{Worker: &fakeWorker{locked: true, holder: tc.holder}}.refuseWhileGateRuns(bg, root, "assign", tc.slots...)
 		var be *BlockedError
-		got := errors.As(err, &be) && be.By == worker.GateRunning
+		got := errors.As(err, &be) && be.By == landing.GateRunning
 		if got != tc.refuse || (!tc.refuse && err != nil) {
 			t.Errorf("holder %q slots %v: err = %v, want refuse=%v", tc.holder, tc.slots, err, tc.refuse)
 		}

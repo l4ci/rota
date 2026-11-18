@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -45,7 +46,7 @@ func TestGateClosesALinearIssueAfterTheMerge(t *testing.T) {
 			e := w.env(false)
 			e.Issues = func(string, tracker.Settings) (Issues, error) { return l, nil }
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 			}
 			if got := s.StateType("ENG-1"); got != c.wantType {
@@ -81,7 +82,7 @@ func TestGateKeepsTheClaimWhenTheLinearCloseFails(t *testing.T) {
 	e.Issues = func(string, tracker.Settings) (Issues, error) { return l, nil }
 	s.ErrorOn("IssueUpdate", "FORBIDDEN", "no workflow access")
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ENG-1") {

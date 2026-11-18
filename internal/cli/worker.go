@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"os/signal"
 	"strconv"
@@ -799,7 +800,7 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func gateData(r worker.GateResult) *jsonx.Object {
+func gateData(r landing.GateResult) *jsonx.Object {
 	d := jsonx.NewObject()
 	d.Set("slot", r.Slot)
 	d.Set("verdict", r.Verdict)
@@ -836,7 +837,7 @@ func gateData(r worker.GateResult) *jsonx.Object {
 }
 
 // gapsData is the list of record gaps a refusal found, in check order.
-func gapsData(gaps []worker.GateGap) []any {
+func gapsData(gaps []landing.GateGap) []any {
 	out := []any{}
 	for _, g := range gaps {
 		o := jsonx.NewObject()
@@ -852,15 +853,15 @@ func gapsData(gaps []worker.GateGap) []any {
 // refusal into its exit-4 envelope. The caller has checked the run was refused
 // (GateResult.Refused); ref is the approval gate's refusal, when it was one.
 func verdictRefusal(verdict string, ref *exitcode.Refusal, err error, msg, hint string, d *jsonx.Object) (Result, error) {
-	m := worker.ClassifyVerdict(verdict)
+	m := landing.ClassifyVerdict(verdict)
 	var res Result
 	var rerr error
 	switch {
-	case m.BlockedBy == worker.BlockedByVerdict:
+	case m.BlockedBy == landing.BlockedByVerdict:
 		res, rerr = recordedFailRefusal(err, d)
 	case m.ViaError:
 		res, rerr = gateRefusal(ref, err, d)
-	case m.BlockedBy == worker.GateNoVerify:
+	case m.BlockedBy == landing.GateNoVerify:
 		res, rerr = noVerifyRefusal(msg, hint, d)
 	default:
 		res, rerr = blockedRefusal(d, m.BlockedBy, msg, hint)
@@ -879,7 +880,7 @@ func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 	// An unreadable store refuses the same way, with no record to report.
 	var ee *exitcode.Error
 	if errors.As(err, &ee) && ee.Exit == exitcode.ExitRefused {
-		return blockedRefusal(d, worker.BlockedByVerdict, ee.Message, ee.Hint)
+		return blockedRefusal(d, landing.BlockedByVerdict, ee.Message, ee.Hint)
 	}
 	return Result{}, err
 }
@@ -887,7 +888,7 @@ func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 // noVerifyRefusal is the exit-4 envelope for an empty test.full: d plus
 // blockedBy no-verify, nothing landed.
 func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	return blockedRefusal(d, worker.GateNoVerify, msg, hint, "key", config.TestFullKey)
+	return blockedRefusal(d, landing.GateNoVerify, msg, hint, "key", config.TestFullKey)
 }
 
 // gateRunOpts is what one gate run needs: the verb's flags, without the verb.
@@ -993,15 +994,15 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
 			}
 		}
-		if !*check && (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 { // landed now, or before a retry (#3096)
+		if !*check && (r.OK() || r.Verdict == landing.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 { // landed now, or before a retry (#3096)
 			parkIntegrationMembers(c, root, r.PR, run.BookErr == nil)
 		}
-		if r.Verdict == worker.GateAlreadyMerged {
+		if r.Verdict == landing.GateAlreadyMerged {
 			res.Text = r.Err
 			return res, nil
 		}
 		if r.OK() {
-			if r.Verdict == worker.GateFresh {
+			if r.Verdict == landing.GateFresh {
 				res.Text = fmt.Sprintf("fresh: %s %s", slot, r.Branch)
 			} else {
 				res.Text = fmt.Sprintf("pass: %s %s -> %s (%s)", slot, r.Branch, r.Base, r.SHA)
@@ -1019,7 +1020,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 
 // gateErrResult is a failed gate's answer. A cancelled gate keeps what it
 // already knew (changed, verdict) so an interrupt still reports it.
-func gateErrResult(r worker.GateResult, err error) (Result, error) {
+func gateErrResult(r landing.GateResult, err error) (Result, error) {
 	if errors.Is(err, context.Canceled) {
 		return Result{Data: gateData(r)}, err
 	}

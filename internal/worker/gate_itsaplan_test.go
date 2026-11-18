@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,7 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker/itsaplantest"
 )
 
-func itsaplanGate(t *testing.T, labels []string, title string, prep func(*itsaplantest.Server, *tracker.Itsaplan)) (*itsaplantest.Server, GateResult, error) {
+func itsaplanGate(t *testing.T, labels []string, title string, prep func(*itsaplantest.Server, *tracker.Itsaplan)) (*itsaplantest.Server, landing.GateResult, error) {
 	t.Helper()
 	s := itsaplantest.New(t, itsaplantest.Options{})
 	it := tracker.NewItsaplan(connections.Connection{Name: "plan", Kind: connections.KindItsaplan, Site: s.URL}, s.Key(), "MKT")
@@ -52,7 +53,7 @@ func TestGateClosesAnItsaplanIssueAfterTheMerge(t *testing.T) {
 				labels = append(labels, PartialSliceLabel)
 			}
 			s, res, err := itsaplanGate(t, labels, c.title, nil)
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 			}
 			if got := s.Column("MKT-1"); got != c.wantColumn {
@@ -77,7 +78,7 @@ func TestGateItsaplanAlreadyClosedNoop(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if err != nil || res.Verdict != GatePass || len(res.Warnings) != 0 {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Warnings) != 0 {
 		t.Fatalf("%q %v %+v", res.Verdict, err, res)
 	}
 	if s.Column("MKT-1") != 4 || len(s.CommentBodies("MKT-1")) != 0 {
@@ -92,7 +93,7 @@ func TestGateKeepsTheClaimWhenTheItsaplanCloseFails(t *testing.T) {
 	s, res, err := itsaplanGate(t, []string{"in-progress"}, "MKT-1 widen the seam", func(s *itsaplantest.Server, _ *tracker.Itsaplan) {
 		s.Fail("PATCH /issues/1", 403)
 	})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%q %v %+v", res.Verdict, err, res)
 	}
 	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "MKT-1") {

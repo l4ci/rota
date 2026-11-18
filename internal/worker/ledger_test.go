@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestGateLedgerUnexpiredEntryExcludesAndIsListed(t *testing.T) {
 	w := gateLedgerWorld(t, failFlaky)
 	w.setLedger(ledgerEntry("TestFlaky", futureDay))
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GatePass || len(res.Excluded) != 1 || res.Excluded[0].Test != "TestFlaky" || res.Excluded[0].Receipt != "#378" {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Excluded) != 1 || res.Excluded[0].Test != "TestFlaky" || res.Excluded[0].Receipt != "#378" {
 		t.Fatalf("an unexpired entry should excuse the failing test and list it: %+v %v", res, err)
 	}
 }
@@ -50,7 +51,7 @@ func TestGateLedgerNoEntryStillFails(t *testing.T) {
 	w := gateLedgerWorld(t, failFlaky)
 	w.setLedger(ledgerEntry("TestOther", futureDay))
 	res, _ := w.gate(false, GateOpts{})
-	if res.Verdict != GateVerifyFailed || len(res.Excluded) != 0 {
+	if res.Verdict != landing.GateVerifyFailed || len(res.Excluded) != 0 {
 		t.Fatalf("a failing test with no entry must fail: %+v", res)
 	}
 }
@@ -59,7 +60,7 @@ func TestGateLedgerExpiredEntryFailsAndIsNamed(t *testing.T) {
 	w := gateLedgerWorld(t, "true")
 	w.setLedger(ledgerEntry("TestFlaky", pastDay))
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed {
 		t.Fatalf("an expired entry fails the gate before anything merges: %+v %v", res, err)
 	}
 	for _, want := range []string{"TestFlaky", "dana", "#378"} {
@@ -74,12 +75,12 @@ func TestGateLedgerExpiredEntryFailsAndIsNamed(t *testing.T) {
 
 func TestGateLedgerEmptyOrMissingIsNoOp(t *testing.T) {
 	w := gateLedgerWorld(t, "true")
-	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != GatePass || len(res.Excluded)+len(res.Expired) != 0 {
+	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != landing.GatePass || len(res.Excluded)+len(res.Expired) != 0 {
 		t.Fatalf("missing ledger: %+v %v", res, err)
 	}
 	w = gateLedgerWorld(t, failFlaky)
 	w.setLedger("[]")
-	if res, _ := w.gate(false, GateOpts{}); res.Verdict != GateVerifyFailed {
+	if res, _ := w.gate(false, GateOpts{}); res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("an empty ledger excludes nothing: %+v", res)
 	}
 }
@@ -97,21 +98,21 @@ func TestTrainLedgerExcludesExpiredFailsAndNoEntryFails(t *testing.T) {
 	w := trainWorld(t, failFlaky, "b1", "b2")
 	w.setLedger(ledgerEntry("TestFlaky", futureDay))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || len(res.Excluded) != 1 || res.Excluded[0].Test != "TestFlaky" {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Excluded) != 1 || res.Excluded[0].Test != "TestFlaky" {
 		t.Fatalf("unexpired entry should excuse the train: %+v %v", res, err)
 	}
 
 	w = trainWorld(t, failFlaky, "b1")
 	w.setLedger(ledgerEntry("TestFlaky", pastDay))
 	res, err = w.train(TrainOpts{Targets: []string{"b1"}})
-	if err != nil || res.Verdict != GateVerifyFailed || len(res.Expired) != 1 || len(res.Landed) != 0 ||
+	if err != nil || res.Verdict != landing.GateVerifyFailed || len(res.Expired) != 1 || len(res.Landed) != 0 ||
 		!strings.Contains(res.Err, "TestFlaky") || !strings.Contains(res.Err, "dana") || !strings.Contains(res.Err, "#378") {
 		t.Fatalf("an expired entry fails the train and is named: %+v %v", res, err)
 	}
 
 	w = trainWorld(t, failFlaky, "b1")
 	res, _ = w.train(TrainOpts{Targets: []string{"b1"}})
-	if res.Verdict != GateVerifyFailed || w.onMain("b1.txt") {
+	if res.Verdict != landing.GateVerifyFailed || w.onMain("b1.txt") {
 		t.Fatalf("no entry: the train must fail and land nothing: %+v", res)
 	}
 }
@@ -122,7 +123,7 @@ func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("state", "MERGED")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateAlreadyMerged {
+	if err != nil || res.Verdict != landing.GateAlreadyMerged {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	var merges []ledger.Entry
@@ -144,7 +145,7 @@ func TestGateOfAPRMergedRemotelyRecordsTheMerge(t *testing.T) {
 	advanceMainOn(w, "work.txt")
 	w.forge("state", "MERGED")
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateAlreadyMerged || res.Hint != "" {
+	if err != nil || res.Verdict != landing.GateAlreadyMerged || res.Hint != "" {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	for i := 0; i < 2; i++ { // gating it again adds no second entry
@@ -173,7 +174,7 @@ func TestGateVerbWithABounceReadsTheLeaseOnce(t *testing.T) {
 	env := fakeLeaseEnv(100)
 	w.lease = func() roundlease.Env { reads++; return env }
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateStale {
+	if err != nil || res.Verdict != landing.GateStale {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	if _, _, _, err := recordBounceCappedVia(w.env(false), res.Round, w.dir, "12", "w1", res.SHA, 0); err != nil {

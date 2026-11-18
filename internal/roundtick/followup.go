@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -103,7 +104,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 			pending(f, "the transfer to "+slot+" did not start: "+strutil.FirstLine(err.Error()))
 			// A gate or train holds the land lock: every later start would wait on it too.
 			var blk *round.BlockedError
-			if errors.As(err, &blk) && blk.By == worker.GateRunning {
+			if errors.As(err, &blk) && blk.By == landing.GateRunning {
 				r.Deferred = "gate running, deferred: " + blk.Msg
 				return started, taken, nil
 			}
