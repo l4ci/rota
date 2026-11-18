@@ -150,7 +150,7 @@ func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
 	// PR merges can run on a clone with no local head branch. Bind recovery and
 	// staleness to the forge head rather than an absent or stale checkout ref.
 	head := ""
-	if issue, e := issueBackend(c.deps(), root); e == nil && issue {
+	if issue, e := c.issueBackend(root); e == nil && issue {
 		f, e := c.deps().forge(c.Context(), cfg, "", dir)
 		if e == nil {
 			info, e := f.PRView(c.Context(), pr)
@@ -245,7 +245,7 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 // tracker in issue mode (an unresolvable ID has none), else through the file
 // corpus.
 func shipTitles(c *Ctx, root string) (func(id string) (line, title string, ok bool), error) {
-	issue, err := issueBackend(c.deps(), root)
+	issue, err := c.issueBackend(root)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if len(ids) == 0 {
 		return "", nil
 	}
-	caps, _, err := backendMode(c.deps(), root)
+	caps, _, err := c.backendMode(root)
 	if err != nil {
 		return "", err
 	}

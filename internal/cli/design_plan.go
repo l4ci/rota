@@ -51,7 +51,7 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	if err != nil {
 		return "", Result{}, err
 	}
-	issue, err := issueBackend(c.deps(), root)
+	issue, err := c.issueBackend(root)
 	if err != nil {
 		return "", Result{}, err
 	}

@@ -25,7 +25,17 @@ import (
 // backend can do (IssueIDs is the tracker test) and the loaded config. An invalid value is a corrupt
 // config (contract, shared definitions): exit 70, never a quiet fall back.
 func backendMode(d *Deps, root string) (caps backlog.Capabilities, cfg any, err error) {
-	cfg = d.Config(root)
+	return modeOf(d.Config(root))
+}
+
+// backendMode is the package backendMode on the invocation's memoized config
+// (Ctx.Project), so a verb and preflight read issues.source from one load.
+func (c *Ctx) backendMode(root string) (backlog.Capabilities, any, error) {
+	return modeOf(c.projectConfig(root))
+}
+
+// modeOf judges a loaded config: the backend's capabilities and a valid forge.
+func modeOf(cfg any) (caps backlog.Capabilities, _ any, err error) {
 	caps, err = backlog.CapabilitiesFor(cfg)
 	if err == nil {
 		_, err = config.ForgeProvider(cfg)
@@ -45,13 +55,22 @@ func issueBackend(d *Deps, root string) (bool, error) {
 	return caps.IssueIDs, nil
 }
 
+// issueBackend is the package issueBackend on the memoized config.
+func (c *Ctx) issueBackend(root string) (bool, error) {
+	caps, _, err := c.backendMode(root)
+	if err != nil {
+		return false, err
+	}
+	return caps.IssueIDs, nil
+}
+
 // modeRoot is the project root and whether issues.source is a tracker.
 func modeRoot(c *Ctx) (root string, issue bool, err error) {
 	root, err = c.Root()
 	if err != nil {
 		return "", false, err
 	}
-	issue, err = issueBackend(c.deps(), root)
+	issue, err = c.issueBackend(root)
 	if err != nil {
 		return "", false, err
 	}
@@ -84,7 +103,7 @@ func backlogScope(c *Ctx) (string, error) {
 // capture target, and a capture with none goes to the sub-repo the working
 // directory is in.
 func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
-	caps, cfg, err := backendMode(c.deps(), root)
+	caps, cfg, err := c.backendMode(root)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +157,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if err != nil {
 		return nil, err
 	}
-	caps, _, err := backendMode(c.deps(), root)
+	caps, _, err := c.backendMode(root)
 	if err != nil {
 		return nil, err
 	}

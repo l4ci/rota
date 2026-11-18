@@ -188,3 +188,27 @@ func TestMapStatsCapLoadsConfigOnce(t *testing.T) {
 		t.Errorf("Config called %d times, want 1", calls)
 	}
 }
+
+// backendMode and issueBackend on the Ctx read the memoized config: with
+// Project and preflight-style reads mixed, Config loads once.
+func TestCtxBackendModeLoadsConfigOnce(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	calls := 0
+	d.Config = func(string) any { calls++; return map[string]any{} }
+	c := &Ctx{Deps: d}
+	if _, _, err := c.Project(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.backendMode(top); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.issueBackend(top); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Errorf("Config called %d times, want 1", calls)
+	}
+}

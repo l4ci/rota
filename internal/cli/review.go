@@ -109,7 +109,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if err != nil {
 		return info, err
 	}
-	issue, err := issueBackend(c.deps(), t.CorpusRoot)
+	issue, err := c.issueBackend(t.CorpusRoot)
 	if err != nil {
 		return info, err
 	}
