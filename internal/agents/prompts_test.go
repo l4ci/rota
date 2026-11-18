@@ -11,6 +11,33 @@ import (
 	"github.com/l4ci/rota/internal/prompts"
 )
 
+func TestPromptsEqualOverrideMatchesDefault(t *testing.T) {
+	root := project(t, `{"round":{"commands":{"codex":"codex","opencode":"opencode"}}}`)
+	cfg := config.Load(cfgdir.OSEnv(), root)
+	want, err := Write(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := prompts.Open(root, prompts.Catalog())
+	for name, section := range prompts.Catalog() {
+		if _, err := store.Save(name, section.Default, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := CompareWithPrompts(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("override rendered %d files, default rendered %d", len(got), len(want))
+	}
+	for i, entry := range got {
+		if entry.File != want[i].File || entry.Status != StatusCurrent {
+			t.Errorf("equal override differs from default for %s:\ngot %s\nwant %s", entry.Path, entry.Content, want[i].Content)
+		}
+	}
+}
+
 func TestPromptsExplicitActivation(t *testing.T) {
 	root := project(t, "")
 	cfg := config.Load(cfgdir.OSEnv(), root)

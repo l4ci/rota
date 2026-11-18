@@ -165,7 +165,7 @@ rota skills uninstall    # removes what rota installed
 brew uninstall rota      # Homebrew; otherwise delete the rota binary
 ```
 
-Your projects' `.rota/` folders are untouched.
+`rota skills uninstall` keeps files you edited and leaves the empty `.rota-manifest.json.lock` in each root so concurrent installs and uninstalls stay serialized. Your projects' `.rota/` folders are untouched.
 
 ## Coming from hv-skills
 
