@@ -151,7 +151,17 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 
 Jira and Linear keep note markers outside the text people see. If saving that
 state fails, rota removes a newly posted comment or restores an edited comment's
-previous text. If restoring the text also fails, rota reports both errors.
+previous text. If the cleanup also fails, rota reports both errors: for an edit
+that is the restore of the shown text, for a new comment the deletion of the
+half-made one, on both backends.
+
+Jira spreads a body over 30 KB across several properties. A write or drop that
+fails part-way puts the old properties back, so the shown text and the stored
+body stay old/old. If putting them back fails too, the error says so. The
+restored shown text is the visible part of the stored source, not a markdown
+round trip. A comment with no stored body (a person's, or one without a marker)
+is restored from the text Jira lists, which can lose formatting. An edit made by
+someone else between rota's read and its restore is overwritten.
 
 ### Claim lock and state labels
 

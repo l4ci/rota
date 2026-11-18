@@ -92,6 +92,12 @@ type Server struct {
 	retryAfter  string
 	failN       int
 	failStatus  int
+	failReqs    []failReq
+}
+
+type failReq struct {
+	match  string
+	status int
 }
 
 type obj = map[string]any
@@ -139,6 +145,15 @@ func (s *Server) FailNext(n, status int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failN, s.failStatus = n, status
+}
+
+// FailRequest makes the first not-yet-failed request whose method is the
+// first word of match and whose path contains the rest answer status (use a 4xx: a 5xx is retried) before it reaches
+// any handler; each call arms one request, so a repeat arms a later one.
+func (s *Server) FailRequest(match string, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failReqs = append(s.failReqs, failReq{match, status})
 }
 
 // Version is the API version the fake speaks: 3 (Cloud) or 2 (Data Center).
@@ -276,6 +291,14 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.failN--
 		write(w, s.failStatus, obj{"errorMessages": []string{"server error"}})
 		return
+	}
+	for i, f := range s.failReqs {
+		method, sub, _ := strings.Cut(f.match, " ")
+		if r.Method == method && strings.Contains(r.URL.Path, sub) {
+			s.failReqs = slices.Delete(s.failReqs, i, i+1)
+			write(w, f.status, obj{"errorMessages": []string{"injected failure"}})
+			return
+		}
 	}
 	if r.Header.Get("Authorization") != s.auth() {
 		write(w, 401, obj{"errorMessages": []string{"unauthorized"}})
