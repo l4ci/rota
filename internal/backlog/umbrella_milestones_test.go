@@ -132,3 +132,28 @@ func TestUmbrellaMilestoneListReadyFollowsAggregatedStatus(t *testing.T) {
 		t.Errorf("M01 still open in api: rows = %+v", rows)
 	}
 }
+
+// Umbrella returns the home sub-repo's changed value unchanged: a native
+// milestone it opens on another sub-repo does not flip it.
+func TestUmbrellaMilestoneStatusPassesHomeChangedThrough(t *testing.T) {
+	u, fakes := msUmbrella(t, nil, nil)
+	if _, err := u.MilestoneAdd("", "Alpha", "First", nil, "delivery", "2026-10-02"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.MilestoneStatus("M01", "planned"); err != nil {
+		t.Fatal(err)
+	}
+	closed := "closed"
+	if _, err := fakes["api"].CreateMilestone(nil, "M01 — Alpha", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakes["api"].EditMilestone(nil, 1, tracker.MilestoneEdit{State: &closed}); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := u.MilestoneStatus("M01", "planned"); err != nil || changed {
+		t.Fatalf("home unchanged, api reopened = %v %v; want false", changed, err)
+	}
+	if fakes["api"].Native[0].State != "open" {
+		t.Fatalf("api native not reopened: %+v", fakes["api"].Native)
+	}
+}
