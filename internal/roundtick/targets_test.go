@@ -3,6 +3,7 @@ package roundtick
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"reflect"
 	"slices"
 	"testing"
@@ -23,7 +24,7 @@ func TestTickUsesTargetFactsAndRawGateRun(t *testing.T) {
 		if target != "ben" || base != "cycle" {
 			t.Errorf("gate %q into %q, want ben into cycle", target, base)
 		}
-		return GateRun{Result: worker.GateResult{Verdict: worker.GateBestOfUnpicked, Err: "pick an attempt\nmore"}, Refused: true}
+		return GateRun{Result: landing.GateResult{Verdict: landing.GateBestOfUnpicked, Err: "pick an attempt\nmore"}, Refused: true}
 	}
 	r, err := Run(context.Background(), e)
 	if err != nil {
@@ -80,11 +81,11 @@ func TestTickInterpretsGateRuns(t *testing.T) {
 		why    string
 		say    []string
 	}{
-		{name: "pass with bookkeeping failure", run: GateRun{Result: worker.GateResult{Verdict: worker.GatePass}, BookErr: bookErr}, landed: true, say: []string{"BOUNCE-COUNT ben — tracker down\nretry later"}},
-		{name: "fresh", run: GateRun{Result: worker.GateResult{Verdict: worker.GateFresh}}, landed: true},
-		{name: "failed check", run: GateRun{Result: worker.GateResult{Verdict: worker.GateVerifyFailed, Err: "tests red\nmore"}, BookErr: bookErr}, why: "verify-failed: tests red", say: []string{"BOUNCE-COUNT ben — tracker down\nretry later"}},
-		{name: "refusal", run: GateRun{Result: worker.GateResult{Verdict: worker.GateBestOfUnpicked, Err: "result detail"}, Err: errors.New("choose one\nmore"), Refused: true, BookErr: bookErr}, why: "best-of-unpicked: choose one"},
-		{name: "unexpected error discards pass", run: GateRun{Result: worker.GateResult{Verdict: worker.GatePass, Err: "result detail"}, Err: errors.New("git failed\nmore"), BookErr: bookErr}, why: "gate-error: git failed"},
+		{name: "pass with bookkeeping failure", run: GateRun{Result: landing.GateResult{Verdict: landing.GatePass}, BookErr: bookErr}, landed: true, say: []string{"BOUNCE-COUNT ben — tracker down\nretry later"}},
+		{name: "fresh", run: GateRun{Result: landing.GateResult{Verdict: landing.GateFresh}}, landed: true},
+		{name: "failed check", run: GateRun{Result: landing.GateResult{Verdict: landing.GateVerifyFailed, Err: "tests red\nmore"}, BookErr: bookErr}, why: "verify-failed: tests red", say: []string{"BOUNCE-COUNT ben — tracker down\nretry later"}},
+		{name: "refusal", run: GateRun{Result: landing.GateResult{Verdict: landing.GateBestOfUnpicked, Err: "result detail"}, Err: errors.New("choose one\nmore"), Refused: true, BookErr: bookErr}, why: "best-of-unpicked: choose one"},
+		{name: "unexpected error discards pass", run: GateRun{Result: landing.GateResult{Verdict: landing.GatePass, Err: "result detail"}, Err: errors.New("git failed\nmore"), BookErr: bookErr}, why: "gate-error: git failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#7"}}}
@@ -121,26 +122,26 @@ func TestTickInterpretsTrainRuns(t *testing.T) {
 	}{
 		{
 			name: "whole train pass",
-			run:  TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass}, Book: book},
+			run:  TrainRun{Result: landing.TrainResult{Verdict: landing.GatePass}, Book: book},
 			did:  []Action{{Action: "merge", Target: "ben", Detail: "train into main"}, {Action: "merge", Target: "dana", Detail: "train into main"}},
 			say:  []string{"BOUNCE-COUNT ben — book one\nmore", "BOUNCE-COUNT dana — book two"},
 		},
 		{
 			name: "partial landing before refusal",
-			run:  TrainRun{Result: worker.TrainResult{Verdict: worker.GateBestOfUnpicked, Culprit: "dana", Err: "result detail", Members: []worker.TrainMember{{Target: "ben", Landed: true}}}, Err: errors.New("choose one\nmore"), Refused: true, Book: book},
+			run:  TrainRun{Result: landing.TrainResult{Verdict: landing.GateBestOfUnpicked, Culprit: "dana", Err: "result detail", Members: []landing.TrainMember{{Target: "ben", Landed: true}}}, Err: errors.New("choose one\nmore"), Refused: true, Book: book},
 			did:  []Action{{Action: "merge", Target: "ben", Detail: "train into main"}},
 			need: []Item{{Kind: "gate-failed", Target: "dana", Why: "best-of-unpicked: choose one"}},
 		},
 		{
 			name: "failed check with partial landing",
-			run:  TrainRun{Result: worker.TrainResult{Verdict: worker.GateVerifyFailed, Culprit: "dana", Err: "tests red\nmore", Members: []worker.TrainMember{{Target: "ben", Landed: true}}}, Book: book},
+			run:  TrainRun{Result: landing.TrainResult{Verdict: landing.GateVerifyFailed, Culprit: "dana", Err: "tests red\nmore", Members: []landing.TrainMember{{Target: "ben", Landed: true}}}, Book: book},
 			did:  []Action{{Action: "merge", Target: "ben", Detail: "train into main"}},
 			need: []Item{{Kind: "gate-failed", Target: "dana", Why: "verify-failed: tests red"}},
 			say:  []string{"BOUNCE-COUNT ben — book one\nmore", "BOUNCE-COUNT dana — book two"},
 		},
 		{
 			name: "unexpected error discards members and culprit",
-			run:  TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass, Culprit: "dana", Members: []worker.TrainMember{{Target: "ben", Landed: true}}}, Err: errors.New("git failed\nmore"), Book: book},
+			run:  TrainRun{Result: landing.TrainResult{Verdict: landing.GatePass, Culprit: "dana", Members: []landing.TrainMember{{Target: "ben", Landed: true}}}, Err: errors.New("git failed\nmore"), Book: book},
 			need: []Item{{Kind: "gate-failed", Target: "ben", Why: "train-error: git failed"}, {Kind: "gate-failed", Target: "dana", Why: "train-error: git failed"}},
 		},
 	} {

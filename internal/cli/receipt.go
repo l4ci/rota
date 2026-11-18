@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"sort"
 	"strings"
 
@@ -90,7 +91,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 					switch {
 					case errors.As(runErr, &se):
 						e.FailedStage, e.Residual = se.Stage, se.Residual
-					case ae.Exit == ExitFailed && verdictOf(res.Data) == worker.GateCancelled:
+					case ae.Exit == ExitFailed && verdictOf(res.Data) == landing.GateCancelled:
 						e.Status = receipt.Cancelled // settled once; resuming a cancelled train is out of scope
 					case ae.Exit == ExitFailed && hasVerdict(res.Data):
 						e.Status = receipt.Done // a verdict is the run's answer, not an interrupted run

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"time"
 
@@ -84,7 +85,7 @@ type recordingBackend struct {
 	c    *Ctx
 	root string
 	// memo reads the round lease once for a batch; nil reads it per entry.
-	memo *worker.RoundMemo
+	memo *landing.RoundMemo
 }
 
 func (r recordingBackend) Create(in backlog.CreateInput) (backlog.CreateResult, error) {

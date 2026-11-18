@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,11 +59,11 @@ func TestTransferRecordsTheInheritedTipAndTheGateKeepsTheReceiversPR(t *testing.
 	if dana.Attempt() == "" || dana.Attempt() == benAttempt || dana.AttemptBase() != tip {
 		t.Fatalf("dana attempt %q base %q, want a new attempt and base %s", dana.Attempt(), dana.AttemptBase(), tip)
 	}
-	gate := func() worker.GateResult {
+	gate := func() landing.GateResult {
 		res, _ := f.ws.Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
 		return res
 	}
-	if res := gate(); res.Verdict == worker.GateStaleAttempt {
+	if res := gate(); res.Verdict == landing.GateStaleAttempt {
 		t.Fatalf("dispatch half done, the receiver's PR is refused: %+v", res)
 	}
 	f.wire(func(w *worker.Env) {
@@ -74,15 +75,15 @@ func TestTransferRecordsTheInheritedTipAndTheGateKeepsTheReceiversPR(t *testing.
 	if d := f.slot("dana"); d.Attempt() != dana.Attempt() || d.AttemptBase() != tip {
 		t.Errorf("the resume keeps the attempt and its base: %q %q", d.Attempt(), d.AttemptBase())
 	}
-	if res := gate(); res.Verdict == worker.GateStaleAttempt {
+	if res := gate(); res.Verdict == landing.GateStaleAttempt {
 		t.Fatalf("after the transfer the receiver's PR is refused: %+v", res)
 	}
 	f.stamped(t, "dana", "own.txt", f.slot("dana").Attempt())
-	if res := gate(); res.Verdict == worker.GateStaleAttempt {
+	if res := gate(); res.Verdict == landing.GateStaleAttempt {
 		t.Fatalf("the receiver's own commit is refused: %+v", res)
 	}
 	f.stamped(t, "dana", "late.txt", benAttempt)
-	if res := gate(); res.Verdict != worker.GateStaleAttempt || !strings.Contains(res.Err, benAttempt) {
+	if res := gate(); res.Verdict != landing.GateStaleAttempt || !strings.Contains(res.Err, benAttempt) {
 		t.Fatalf("a commit from the sender's attempt after the transfer must be refused: %+v", res)
 	}
 }
@@ -154,15 +155,15 @@ func TestFreshRelayKeepsTheReceiversPR(t *testing.T) {
 	if dana.AttemptBase() == "" || dana.Attempt() == benAttempt {
 		t.Fatalf("attempt %q base %q", dana.Attempt(), dana.AttemptBase())
 	}
-	gate := func() worker.GateResult {
+	gate := func() landing.GateResult {
 		res, _ := f.ws.Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
 		return res
 	}
-	if res := gate(); res.Verdict == worker.GateStaleAttempt {
+	if res := gate(); res.Verdict == landing.GateStaleAttempt {
 		t.Fatalf("the fresh holder's PR is refused: %+v", res)
 	}
 	f.stamped(t, "dana", "late.txt", benAttempt)
-	if res := gate(); res.Verdict != worker.GateStaleAttempt {
+	if res := gate(); res.Verdict != landing.GateStaleAttempt {
 		t.Fatalf("a later sender push must be refused: %+v", res)
 	}
 }

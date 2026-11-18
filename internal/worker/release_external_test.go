@@ -3,6 +3,7 @@ package worker
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +29,7 @@ func adoptedWorld(t *testing.T, body string) (*world, string) {
 	return w, wt
 }
 
-func (w *world) gateExt(o GateOpts) (GateResult, error) {
+func (w *world) gateExt(o GateOpts) (landing.GateResult, error) {
 	o.Slot, o.Base = "ext-1", "main"
 	return w.env(false).Gate(bg, w.dir, o)
 }
@@ -45,7 +46,7 @@ func TestGateAdoptedSlotProvenance(t *testing.T) {
 		t.Errorf("target of an adopted slot: %+v", tg)
 	}
 	res, err := w.gateExt(GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != GateFresh {
+	if err != nil || res.Verdict != landing.GateFresh {
 		t.Fatalf("verdict %q (%v): %+v", res.Verdict, err, res)
 	}
 }
@@ -53,7 +54,7 @@ func TestGateAdoptedSlotProvenance(t *testing.T) {
 func TestGateReleasesAnAdoptedSlotAndKeepsItsCheckout(t *testing.T) {
 	w, wt := adoptedWorld(t, "## Approvals\nNone\n")
 	res, err := w.gateExt(GateOpts{})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("verdict %q (%v): %+v", res.Verdict, err, res)
 	}
 	if LoadRegistryTolerant(w.dir).Slot("ext-1") != nil {
@@ -77,7 +78,7 @@ func TestGateCheckOnlyKeepsAnAdoptedSlot(t *testing.T) {
 func TestGatePruneRemovesAnAdoptedCheckout(t *testing.T) {
 	w, wt := adoptedWorld(t, "")
 	res, err := w.gateExt(GateOpts{Prune: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("verdict %q (%v)", res.Verdict, err)
 	}
 	if exists(wt) || gittest.Run(t, w.dir, "branch", "--list", "w1") != "" {

@@ -17,8 +17,6 @@ import (
 // changes here and is tested without a gate fixture. The gate methods at the
 // bottom only feed them from the gate and apply the outcome.
 
-const GateUnmetAcceptance = landing.GateUnmetAcceptance
-
 // stepOutcome is what a closing-family check decided. The zero value passes.
 // Verdict (with Msg and Hint) refuses the PR; Broke reports a check that could
 // not run; Notes are non-fatal and kept whichever way the step ends.
@@ -94,11 +92,11 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 			}
 			lines = "the lines " + strings.Join(each, ", ")
 		}
-		return stepOutcome{Verdict: GateNotClosing, Notes: out.Notes,
+		return stepOutcome{Verdict: landing.GateNotClosing, Notes: out.Notes,
 			Msg:  fmt.Sprintf("GATE %s refused — the body of %s does not close %s, so the merge would leave %s open and claimed; nothing landed", in.Slot, in.PR, refs, them),
 			Hint: fmt.Sprintf("add %s to the PR body, or label %s %s if this PR lands only part of %s", lines, refs, PartialSliceLabel, them)}
 	}
-	return stepOutcome{Verdict: GateNotClosing, Notes: out.Notes,
+	return stepOutcome{Verdict: landing.GateNotClosing, Notes: out.Notes,
 		Msg:  fmt.Sprintf("GATE %s refused — the branch and title of %s do not name %s, so the merge would leave %s open and claimed; nothing landed", in.Slot, in.PR, refs, them),
 		Hint: fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of %s", refs, refs, PartialSliceLabel, them)}
 }
@@ -160,7 +158,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 			}
 			if len(unmet) > 0 {
 				refusal := backlog.AcceptanceRefusal(key.String(), unmet)
-				return stepOutcome{Verdict: GateUnmetAcceptance, Msg: fmt.Sprintf("GATE %s refused — %s; nothing landed", in.Slot, refusal.Msg), Hint: refusal.Hint}
+				return stepOutcome{Verdict: landing.GateUnmetAcceptance, Msg: fmt.Sprintf("GATE %s refused — %s; nothing landed", in.Slot, refusal.Msg), Hint: refusal.Hint}
 			}
 		}
 		if numbered && (!known || forgeCloses) && !in.FinalSlice && slices.Contains(is.Labels, PartialSliceLabel) {
@@ -183,7 +181,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 		return stepOutcome{}
 	}
 	refs := refList(leaks)
-	return stepOutcome{Verdict: GateNotClosing,
+	return stepOutcome{Verdict: landing.GateNotClosing,
 		Msg:  fmt.Sprintf("GATE %s refused — the forge says %s closes %s, a %s issue with slices still to come; nothing landed", in.Slot, in.PR, refs, PartialSliceLabel),
 		Hint: fmt.Sprintf("drop the closing keyword for %s from the PR body (use `Refs`), or pass --final-slice if this is the last slice", refs)}
 }
@@ -214,7 +212,7 @@ func checkClaim(ctx context.Context, in claimInput) stepOutcome {
 		if len(held) == 0 || slices.Contains(held, in.ClaimID) {
 			continue
 		}
-		out.Verdict = GateClaimLost
+		out.Verdict = landing.GateClaimLost
 		out.Msg = fmt.Sprintf("GATE %s refused — claim %s no longer holds %s; %s does; nothing landed", in.Slot, in.ClaimID, key.Ref(), strings.Join(held, ", "))
 		out.Hint = "the issue was reclaimed: stop the old holder and use the current holder's PR"
 		return out
@@ -267,10 +265,10 @@ func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKe
 // stepCloses runs checkCloses on the slot's PR. It runs under CheckOnly too,
 // so a train member is refused before anything merges. A slot with no PR, or
 // holding no numeric issue (file backend), has nothing to check.
-func (runner gateRun) stepCloses(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepCloses(result landing.GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef = headRef
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -291,10 +289,10 @@ func (runner gateRun) stepCloses(result GateResult, target GateTarget, forged ga
 		in.Forge = rep
 	}
 	out := checkCloses(g.ctx, in)
-	if out.Verdict == GateNotClosing {
+	if out.Verdict == landing.GateNotClosing {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	}
-	if out.Verdict == GateUnmetAcceptance {
+	if out.Verdict == landing.GateUnmetAcceptance {
 		g.res.Notes = append(g.res.Notes, out.Notes...)
 		g.gap(out.Verdict, out.Msg, out.Hint)
 		return finish(false, nil)
@@ -303,10 +301,10 @@ func (runner gateRun) stepCloses(result GateResult, target GateTarget, forged ga
 }
 
 // stepClaim runs checkClaim on the slot's recorded claim.
-func (runner gateRun) stepClaim(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepClaim(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 

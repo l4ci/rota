@@ -5,6 +5,7 @@ import (
 	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -14,9 +15,9 @@ import (
 )
 
 // stepOnBase refuses a gate run with another branch than the base checked out.
-func (runner gateRun) stepOnBase(result GateResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepOnBase(result landing.GateResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{}, gateForgeResult{})
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -28,9 +29,9 @@ func (runner gateRun) stepOnBase(result GateResult) (struct{}, GateResult, bool,
 }
 
 // stepCIVerifier builds the CI verifier of a test.fullWhere ci gate.
-func (runner gateRun) stepCIVerifier(result GateResult, forged gateForgeResult) (*ciVerifier, GateResult, bool, error) {
+func (runner gateRun) stepCIVerifier(result landing.GateResult, forged gateForgeResult) (*ciVerifier, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{}, forged)
-	finish := func(done bool, err error) (*ciVerifier, GateResult, bool, error) {
+	finish := func(done bool, err error) (*ciVerifier, landing.GateResult, bool, error) {
 		return g.ci, *g.res, done, err
 	}
 
@@ -47,12 +48,12 @@ func (runner gateRun) stepCIVerifier(result GateResult, forged gateForgeResult) 
 
 // stepPremerge runs the pre-merge sequence the train shares (premerge.go):
 // ledger expiry, no-verify, CI-config and the merge-approval gate (B1).
-func (runner gateRun) stepPremerge(result GateResult, target GateTarget, refs gateRefsResult, verified string, ci *ciVerifier) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepPremerge(result landing.GateResult, target GateTarget, refs gateRefsResult, verified string, ci *ciVerifier) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, gateForgeResult{})
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
 	g.ci = ci
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -71,7 +72,7 @@ func (runner gateRun) stepPremerge(result GateResult, target GateTarget, refs ga
 	}
 	if g.o.Approval != nil {
 		run.Approve = func(files func() ([]string, error)) (*exitcode.Refusal, error) {
-			return g.o.Approval.Check(g.o.Slot+" into "+g.o.Base, files, func() (ApprovalThread, error) {
+			return g.o.Approval.Check(g.o.Slot+" into "+g.o.Base, files, func() (landing.ApprovalThread, error) {
 				return TargetApprovalThread(g.target)
 			})
 		}
@@ -79,7 +80,7 @@ func (runner gateRun) stepPremerge(result GateResult, target GateTarget, refs ga
 	r, approval, ref, err := run.run()
 	switch {
 	case approval:
-		g.res.Verdict = GateApprovalRequired
+		g.res.Verdict = landing.GateApprovalRequired
 		g.res.Refusal = ref
 		if ref != nil {
 			err = ref.Err
@@ -96,10 +97,10 @@ func (runner gateRun) stepPremerge(result GateResult, target GateTarget, refs ga
 }
 
 // stepForgeMergeable asks the forge about mergeability before the scratch verify.
-func (runner gateRun) stepForgeMergeable(result GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepForgeMergeable(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -114,12 +115,12 @@ func (runner gateRun) stepForgeMergeable(result GateResult, target GateTarget, f
 // when that list is set. It runs after stepPremerge, so the NO-VERIFY refusal
 // still reads test.full, and it fails closed: anything ClassifyChange cannot
 // read is full. Under test.fullWhere ci the tier is recorded, not applied.
-func (runner gateRun) stepTier(result GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult, verified string, ci *ciVerifier) (*GateConfig, GateResult, bool, error) {
+func (runner gateRun) stepTier(result landing.GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult, verified string, ci *ciVerifier) (*GateConfig, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
 	g.ci = ci
-	finish := func(done bool, err error) (*GateConfig, GateResult, bool, error) {
+	finish := func(done bool, err error) (*GateConfig, landing.GateResult, bool, error) {
 		return g.tierCfg, *g.res, done, err
 	}
 
@@ -165,14 +166,14 @@ func (g *gateRun) classify(span string) change.Result {
 
 // stepVerifyFirst verifies the merge result in a scratch tree, before anything
 // lands (stage 2).
-func (runner gateRun) stepVerifyFirst(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string, ci *ciVerifier, tierCfg *GateConfig) (gateVerification, GateResult, bool, error) {
+func (runner gateRun) stepVerifyFirst(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string, ci *ciVerifier, tierCfg *GateConfig) (gateVerification, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
 	g.ci = ci
 	g.tierCfg = tierCfg
-	finish := func(done bool, err error) (gateVerification, GateResult, bool, error) {
+	finish := func(done bool, err error) (gateVerification, landing.GateResult, bool, error) {
 		return gateVerification{tree: g.verifiedTree, ciRun: g.ciRun}, *g.res, done, err
 	}
 
@@ -212,7 +213,7 @@ func (g *gateRun) forgeRefuses() (done bool) {
 			if why == "" {
 				why = "the merge commit cannot be cleanly created"
 			}
-			g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s reports it is not mergeable (%s); nothing was verified", g.cliName, g.pr, g.provider, why), "")
+			g.verdict(landing.GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s reports it is not mergeable (%s); nothing was verified", g.cliName, g.pr, g.provider, why), "")
 			return true
 		case tracker.MergeUnknown:
 			if i < gateMergeableTries-1 {
@@ -269,7 +270,7 @@ func (g *gateRun) verifyFirst(what string, check func(dir, sha string) (bool, er
 		}
 	}
 	if cur, _ := g.git(g.root, "rev-parse", g.baseRef); cur != baseSHA {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur), what),
+		g.verdict(landing.GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur), what),
 			"re-run the gate on the new base")
 		return true, nil
 	}
@@ -285,7 +286,7 @@ func (g *gateRun) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 		return g.broke(err.Error())
 	}
 	w := g.tierWalk(nil, func(string, VerifyResult) (bool, error) {
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge result of %s does not pass CI; nothing landed\n%s", o.Slot, g.branch, vr.detail()),
+		g.verdict(landing.GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge result of %s does not pass CI; nothing landed\n%s", o.Slot, g.branch, vr.detail()),
 			fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 		return true, nil
 	})
@@ -373,7 +374,7 @@ func (g *gateRun) landedTree() string {
 // a mismatch. false ends the gate with the verdict set.
 func (g *gateRun) confirmCITree() bool {
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
+		g.verdict(landing.GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
 		return false
 	}
@@ -391,20 +392,20 @@ func (g *gateRun) changedFiles() ([]string, error) {
 // run again on the landed base, so the gate never claims a verify it did not
 // do. Under test.fullWhere ci a mismatch is base-moved, and test.e2e runs here
 // on the landed tree.
-func (runner gateRun) stepVerify(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string, verification gateVerification, landed string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepVerify(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string, verification gateVerification, landed string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
 	g.verifiedTree, g.ciRun = verification.tree, verification.ciRun
 	g.landed = landed
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
 	res, o := g.res, g.o
 	if o.skipsVerify() {
-		res.Verdict, res.VerifySkipped = GatePass, true
+		res.Verdict, res.VerifySkipped = landing.GatePass, true
 		if !o.LandVerified {
 			res.Notes = append(res.Notes, noVerifyFlagNote(o.Slot))
 		}
@@ -417,7 +418,7 @@ func (runner gateRun) stepVerify(result GateResult, target GateTarget, forged ga
 		if done, err := g.verifyTiers(g.in.cfg, tierE2E, g.root, true); done || err != nil {
 			return finish(true, err)
 		}
-		res.Verdict = GatePass
+		res.Verdict = landing.GatePass
 		return finish(true, nil)
 	}
 	if tree := g.landedTree(); tree != g.verifiedTree {
@@ -429,7 +430,7 @@ func (runner gateRun) stepVerify(result GateResult, target GateTarget, forged ga
 			return finish(true, err)
 		}
 	}
-	res.Verdict = GatePass
+	res.Verdict = landing.GatePass
 	return finish(true, nil)
 }
 
@@ -452,11 +453,11 @@ func (g *gateRun) redTier(landed bool) func(string, VerifyResult) (bool, error) 
 			if err := g.freezeFailure(vr); err != nil {
 				return true, err
 			}
-			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass %s at %s\n%s", o.Slot, what, res.SHA, detail),
+			g.verdict(landing.GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass %s at %s\n%s", o.Slot, what, res.SHA, detail),
 				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
 			return true, nil
 		}
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s does not pass %s at %s; nothing landed\n%s", o.Slot, g.branch, o.Base, what, res.SHA, detail),
+		g.verdict(landing.GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s does not pass %s at %s; nothing landed\n%s", o.Slot, g.branch, o.Base, what, res.SHA, detail),
 			fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 		return true, nil
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -18,7 +19,7 @@ func TestGateRequiresPRSections(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("body", "## Rulings\nNone\n")
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != "assumptions-missing" || !res.Refused(err) || ClassifyVerdict(res.Verdict).BlockedBy != blockedby.AssumptionsMissing || !strings.Contains(res.Err, "## Assumptions") || res.Changed {
+	if err != nil || res.Verdict != "assumptions-missing" || !res.Refused(err) || landing.ClassifyVerdict(res.Verdict).BlockedBy != blockedby.AssumptionsMissing || !strings.Contains(res.Err, "## Assumptions") || res.Changed {
 		t.Fatalf("missing Assumptions must refuse without landing: %+v %v", res, err)
 	}
 }
@@ -37,7 +38,7 @@ func TestGateReportsAllMissingPRSections(t *testing.T) {
 		}
 	}
 	t.Logf("AC-3 gate: missing headings named=%d", named)
-	if err != nil || res.Verdict != GateAssumptionsMissing || !res.Refused(err) || res.Changed {
+	if err != nil || res.Verdict != landing.GateAssumptionsMissing || !res.Refused(err) || res.Changed {
 		t.Fatalf("all missing sections must refuse without landing: %+v %v", res, err)
 	}
 }
@@ -48,11 +49,11 @@ func TestGatePRSectionPresence(t *testing.T) {
 	for _, tc := range []struct{ name, body, want string }{
 		{"rulings missing", "## Assumptions\nNone\n", "rulings-missing"},
 		{"both missing", "An ordinary description", "assumptions-missing"},
-		{"None", completePRSections, GateFresh},
-		{"empty content", "## Assumptions\n## Rulings\n", GateFresh},
+		{"None", completePRSections, landing.GateFresh},
+		{"empty content", "## Assumptions\n## Rulings\n", landing.GateFresh},
 		{"wrong heading depth", "### Assumptions\n### Rulings\n", "assumptions-missing"},
 		{"mentions only", "We discussed ## Assumptions and ## Rulings.", "assumptions-missing"},
-		{"case and whitespace", "  ## assumptions  \r\n## RULINGS\r\n", GateFresh},
+		{"case and whitespace", "  ## assumptions  \r\n## RULINGS\r\n", landing.GateFresh},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -120,7 +121,7 @@ func TestTrainPRSectionsFiltersBeforeVerify(t *testing.T) {
 	w, e := sectionTrainWorld(t, []string{completePRSections, "## Rulings\nNone\n", completePRSections})
 	w.setConfig(`{"test":{"full":["test -f work.txt && test ! -f work2.txt && test -f work3.txt"]}}`)
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}})
-	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"w1", "w3"}) || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" || res.Culprits[0].BlockedBy != blockedby.AssumptionsMissing || len(res.Verified) != 1 || w.onMain("work2.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !slices.Equal(res.Landed, []string{"w1", "w3"}) || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" || res.Culprits[0].BlockedBy != blockedby.AssumptionsMissing || len(res.Verified) != 1 || w.onMain("work2.txt") {
 		t.Fatalf("a missing section must exclude only its PR before verification: %+v %v", res, err)
 	}
 }
@@ -129,7 +130,7 @@ func TestTrainPRSectionsAllMissing(t *testing.T) {
 	w, e := sectionTrainWorld(t, []string{"## Rulings\nNone\n", "## Assumptions\nNone\n", ""})
 	w.setConfig(`{"test":{"full":["false"]}}`)
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}})
-	if err != nil || !res.Refused(err) || res.Verdict != GateAssumptionsMissing || res.Changed || len(res.Landed) != 0 || len(res.Verified) != 0 || len(res.Culprits) != 3 {
+	if err != nil || !res.Refused(err) || res.Verdict != landing.GateAssumptionsMissing || res.Changed || len(res.Landed) != 0 || len(res.Verified) != 0 || len(res.Culprits) != 3 {
 		t.Fatalf("all section culprits must land and verify nothing: %+v %v", res, err)
 	}
 	for i, want := range []string{blockedby.AssumptionsMissing, blockedby.RulingsMissing, blockedby.AssumptionsMissing} {
@@ -154,7 +155,7 @@ func TestTrainPRSectionsAllMissing(t *testing.T) {
 func TestTrainPRSectionsExplicitOrder(t *testing.T) {
 	w, e := sectionTrainWorld(t, []string{completePRSections, "## Rulings\nNone\n", completePRSections})
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}, Order: []string{"9", "8", "7"}})
-	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"w3", "w1"}) || len(res.Culprits) != 1 {
+	if err != nil || res.Verdict != landing.GatePass || !slices.Equal(res.Landed, []string{"w3", "w1"}) || len(res.Culprits) != 1 {
 		t.Fatalf("filter must preserve the explicit order of the remaining PRs: %+v %v", res, err)
 	}
 }
@@ -169,7 +170,7 @@ func TestTrainPRSectionsPrecedesOtherChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}})
-	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"w1", "w3"}) || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" {
+	if err != nil || res.Verdict != landing.GatePass || !slices.Equal(res.Landed, []string{"w1", "w3"}) || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" {
 		t.Fatalf("static section filter must precede provenance: %+v %v", res, err)
 	}
 }
@@ -195,7 +196,7 @@ func TestTrainPRSectionsSkipListsEveryGap(t *testing.T) {
 		t.Fatalf("w2 must be skipped alone: %+v %v", res, err)
 	}
 	c := res.Culprits[0]
-	if got := gapKinds(c.Gate); strings.Join(got, ",") != GateOutcomeOpen+","+GateAssumptionsMissing {
+	if got := gapKinds(c.Gate); strings.Join(got, ",") != landing.GateOutcomeOpen+","+landing.GateAssumptionsMissing {
 		t.Fatalf("culprit gaps = %v, want outcome-open then assumptions-missing", got)
 	}
 	var skip string

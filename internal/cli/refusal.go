@@ -3,9 +3,9 @@ package cli
 import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/verdict"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // blockedRefusal is the one place the exit-4 refusal envelope is built: d (a
@@ -52,7 +52,7 @@ func verdictBlocked(vb *verdict.BlockedError, d *jsonx.Object, withVerdict bool)
 		extra = append(extra, "verdict", vb.Record.Verdict)
 	}
 	extra = append(extra, "sha", vb.Record.Sha, "stale", vb.Stale)
-	return blockedRefusal(d, worker.BlockedByVerdict, vb.Error(), "see: rota verdict show "+vb.Branch, extra...)
+	return blockedRefusal(d, landing.BlockedByVerdict, vb.Error(), "see: rota verdict show "+vb.Branch, extra...)
 }
 
 // blockedReadiness is the envelope for a round.BlockedError: blockedBy, then

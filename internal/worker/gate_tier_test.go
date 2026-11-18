@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -47,15 +48,15 @@ func TestGateTier(t *testing.T) {
 		skipped []string
 		note    string // a substring of the GATE-TIER note, "" for none
 	}{
-		{"docs runs test.docs only", readme, `{"test":{"full":["false"],"e2e":["false"],"docs":["true"]}}`, "", GatePass, "docs", []string{"test.full", "test.e2e"}, "GATE-TIER w1 — docs (docs-only change: README.md); ran test.docs; skipped test.full, test.e2e"},
-		{"docs still fails on test.docs", readme, `{"test":{"full":["true"],"docs":["false"]}}`, "", GateVerifyFailed, "docs", []string{"test.full"}, "ran test.docs"},
-		{"empty test.docs runs test.full", readme, `{"test":{"full":["false"]}}`, "", GateVerifyFailed, "docs", nil, ""},
-		{"one-way door runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]}}`, "Door: one-way. Blast radius: x.", GateVerifyFailed, "full", nil, ""},
-		{"risky path runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"riskyPaths":["README.md"]}}`, "", GateVerifyFailed, "full", nil, ""},
-		{"code runs test.full", code, `{"test":{"full":["false"],"docs":["true"],"small":["true"]}}`, "", GateVerifyFailed, "full", nil, ""},
-		{"small runs test.small with files", code, `{"test":{"full":["false"],"e2e":["false"],"small":["test {files} = x.go"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", GatePass, "small", []string{"test.full", "test.e2e"}, "ran test.small"},
-		{"small quotes file names", map[string]string{"it's here.go": "package x"}, `{"test":{"full":["false"],"small":["test {files} = \"it's here.go\""]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", GatePass, "small", []string{"test.full"}, "ran test.small"},
-		{"bad change config runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"smallBelow":-1}}`, "", GateVerifyFailed, "full", nil, ""},
+		{"docs runs test.docs only", readme, `{"test":{"full":["false"],"e2e":["false"],"docs":["true"]}}`, "", landing.GatePass, "docs", []string{"test.full", "test.e2e"}, "GATE-TIER w1 — docs (docs-only change: README.md); ran test.docs; skipped test.full, test.e2e"},
+		{"docs still fails on test.docs", readme, `{"test":{"full":["true"],"docs":["false"]}}`, "", landing.GateVerifyFailed, "docs", []string{"test.full"}, "ran test.docs"},
+		{"empty test.docs runs test.full", readme, `{"test":{"full":["false"]}}`, "", landing.GateVerifyFailed, "docs", nil, ""},
+		{"one-way door runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]}}`, "Door: one-way. Blast radius: x.", landing.GateVerifyFailed, "full", nil, ""},
+		{"risky path runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"riskyPaths":["README.md"]}}`, "", landing.GateVerifyFailed, "full", nil, ""},
+		{"code runs test.full", code, `{"test":{"full":["false"],"docs":["true"],"small":["true"]}}`, "", landing.GateVerifyFailed, "full", nil, ""},
+		{"small runs test.small with files", code, `{"test":{"full":["false"],"e2e":["false"],"small":["test {files} = x.go"]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", landing.GatePass, "small", []string{"test.full", "test.e2e"}, "ran test.small"},
+		{"small quotes file names", map[string]string{"it's here.go": "package x"}, `{"test":{"full":["false"],"small":["test {files} = \"it's here.go\""]},"change":{"smallBelow":100,"smallPaths":["*.go"]}}`, "", landing.GatePass, "small", []string{"test.full"}, "ran test.small"},
+		{"bad change config runs test.full", readme, `{"test":{"full":["false"],"docs":["true"]},"change":{"smallBelow":-1}}`, "", landing.GateVerifyFailed, "full", nil, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

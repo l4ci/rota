@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -84,12 +85,12 @@ func TestMilestoneMergeFailuresKeepTheClaim(t *testing.T) {
 			e := w.env(false)
 			e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
 			res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"#7"}, Base: "milestone/M01", SyncBase: "main"})
-			want := GatePass
+			want := landing.GatePass
 			if failure == "verify" {
-				want = GateVerifyFailed
+				want = landing.GateVerifyFailed
 			}
 			if failure == "merge" {
-				want = GateMergeFailed
+				want = landing.GateMergeFailed
 			}
 			if err != nil || res.Verdict != want {
 				t.Fatalf("train: %+v %v", res, err)
@@ -138,7 +139,7 @@ func TestGateMilestonePartialSliceAndDefaultBranch(t *testing.T) {
 			e := w.env(false)
 			e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: c.base, FinalSlice: c.final})
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("gate: %+v %v", res, err)
 			}
 			if (m.state == "closed") != c.closed || slices.Contains(m.labels, "on-milestone/M01") != c.closed {
@@ -172,7 +173,7 @@ func TestGateMilestoneMixedFailureReleasesClosedClaims(t *testing.T) {
 			e := w.env(false)
 			e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "milestone/M01"})
-			if err != nil || res.Verdict != GatePass {
+			if err != nil || res.Verdict != landing.GatePass {
 				t.Fatalf("gate: %+v %v", res, err)
 			}
 			for _, key := range []tracker.IssueKey{"5", "6", "7"} {
@@ -212,7 +213,7 @@ func TestGateMilestoneClosesBundleAndOtherLinkedIssues(t *testing.T) {
 	e := w.env(false)
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "milestone/M01"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
 	for _, key := range []tracker.IssueKey{"5", "6", "8", "9"} {
@@ -233,7 +234,7 @@ func TestTrainMilestoneClosesAndLabelsIssue(t *testing.T) {
 	e := w.env(false)
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
 	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"#7"}, Base: "milestone/M01", SyncBase: "main"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("train: %+v %v", res, err)
 	}
 	if m.state != "closed" || !slices.Equal(m.labels, []string{"on-milestone/M01"}) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-func trainData(r worker.TrainResult) *jsonx.Object {
+func trainData(r landing.TrainResult) *jsonx.Object {
 	d := jsonx.NewObject()
 	d.Set("base", r.Base)
 	d.Set("verdict", r.Verdict)
@@ -119,7 +120,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 
 // integrationData is the integration branch a train assembled: its branch,
 // the tip it pushed and verified, its members and its PR.
-func integrationData(it worker.Integration) *jsonx.Object {
+func integrationData(it landing.Integration) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("name", it.Name)
 	o.Set("branch", it.Branch)
@@ -143,14 +144,14 @@ func integrationData(it worker.Integration) *jsonx.Object {
 	return o
 }
 
-func trainTimingData(r worker.TrainResult) *jsonx.Object {
+func trainTimingData(r landing.TrainResult) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("verifyMs", r.VerifyTime.Milliseconds())
 	o.Set("diagnoseMs", r.DiagnoseTime.Milliseconds())
 	return o
 }
 
-func failureData(f worker.TrainFailure) *jsonx.Object {
+func failureData(f landing.TrainFailure) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("tier", f.Tier)
 	o.Set("command", f.Command)
@@ -163,7 +164,7 @@ func failureData(f worker.TrainFailure) *jsonx.Object {
 
 // trainSummary is the closing line of a train's text: what was spent verifying
 // versus diagnosing and whether anything landed (#2753).
-func trainSummary(r worker.TrainResult) string {
+func trainSummary(r landing.TrainResult) string {
 	landed := "nothing landed"
 	if len(r.Landed) > 0 {
 		landed = fmt.Sprintf("landed %d of %d member(s)", len(r.Landed), len(r.Members))
@@ -173,14 +174,14 @@ func trainSummary(r worker.TrainResult) string {
 
 // trainFailText is the failed train's message, with the timing summary only
 // when verify or diagnose ran: a refusal before verify has none to report.
-func trainFailText(r worker.TrainResult) string {
+func trainFailText(r landing.TrainResult) string {
 	if r.VerifyTime == 0 && r.DiagnoseTime == 0 {
 		return r.Err
 	}
 	return r.Err + "\n" + trainSummary(r)
 }
 
-func planData(p *worker.TrainPlan) *jsonx.Object {
+func planData(p *landing.TrainPlan) *jsonx.Object {
 	o := jsonx.NewObject()
 	cs := []any{}
 	for _, c := range p.Conflicts {
@@ -207,7 +208,7 @@ func planData(p *worker.TrainPlan) *jsonx.Object {
 
 // planText is the human plan: the conflicting pairs, the subset, the rest, and
 // the line that lands the subset.
-func planText(p *worker.TrainPlan) string {
+func planText(p *landing.TrainPlan) string {
 	var b strings.Builder
 	if len(p.Conflicts) == 0 {
 		b.WriteString("plan: no member pair conflicts; the whole train is landable")
@@ -258,7 +259,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 	}
 	approve := func(files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
-		req.Thread = func() (worker.ApprovalThread, error) { return worker.SlotApprovalThread(root, o.Targets[0]) }
+		req.Thread = func() (landing.ApprovalThread, error) { return worker.SlotApprovalThread(root, o.Targets[0]) }
 		return clearMerge(c, policy, "train "+strings.Join(o.Targets, ", ")+" into "+o.Base, o.Confirm, req, files, nil)
 	}
 	syncBase, err := milestoneSyncBase(c, ctx, root, o.Base)
@@ -368,7 +369,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for _, f := range run.Book {
 			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
 		}
-		if r.Verdict == worker.GateInteraction && r.Integration != nil {
+		if r.Verdict == landing.GateInteraction && r.Integration != nil {
 			if _, ferr := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 				id, filed, err := fileInteractionItem(be, root, r)
 				if err != nil {
@@ -415,7 +416,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s\n%s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "), trainSummary(r))
 			return res, nil
 		}
-		if r.Verdict == worker.GateCancelled {
+		if r.Verdict == landing.GateCancelled {
 			res.Text = cancelledText(r)
 		}
 		if len(r.Landed) > 0 {
@@ -428,7 +429,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 }
 
 // landedMemberIssues is the issues of the members this train really landed.
-func landedMemberIssues(r worker.TrainResult) []string {
+func landedMemberIssues(r landing.TrainResult) []string {
 	var out []string
 	for _, m := range r.Members {
 		if m.Landed {
@@ -440,7 +441,7 @@ func landedMemberIssues(r worker.TrainResult) []string {
 
 // cancelledText is the text answer of a cancelled train: what landed and
 // where the verify log was kept.
-func cancelledText(r worker.TrainResult) string {
+func cancelledText(r landing.TrainResult) string {
 	t := fmt.Sprintf("cancelled: train -> %s; landed %d of %d", r.Base, len(r.Landed), len(r.Members))
 	if len(r.Landed) > 0 {
 		t += ": " + strings.Join(r.Landed, ", ")

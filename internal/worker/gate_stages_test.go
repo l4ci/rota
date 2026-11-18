@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestGateRemoteStage(t *testing.T) {
 				return git.Result{ExitCode: c.exit}, c.err
 			}}
 			run := gateRun{e: e, ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
-			original := GateResult{Slot: "w1", Base: "main", PR: ghURL}
+			original := landing.GateResult{Slot: "w1", Base: "main", PR: ghURL}
 			out, result, done, err := run.stepRemote(original, ghURL)
 			if err != nil || done == c.remote || out != c.remote {
 				t.Fatalf("remote=%v done=%v err=%v result=%+v", out, done, err, result)
@@ -40,7 +41,7 @@ func TestGateRemoteStage(t *testing.T) {
 				if result.Verdict != "" {
 					t.Fatalf("remote output: %+v result=%+v", out, result)
 				}
-			} else if result.Verdict != GateCheckBroke || !strings.Contains(result.Err, c.message) {
+			} else if result.Verdict != landing.GateCheckBroke || !strings.Contains(result.Err, c.message) {
 				t.Fatalf("verdict=%q message=%q; want check-broke containing %q", result.Verdict, result.Err, c.message)
 			}
 			if original.Verdict != "" {
@@ -54,7 +55,7 @@ func TestGateRemoteStage(t *testing.T) {
 // overwrite notes owned by that caller, even when its slice has spare capacity.
 func TestGateSlotHeadStageOwnsNotes(t *testing.T) {
 	backing := []string{"existing", "caller-owned"}
-	answer := GateResult{Notes: backing[:1]}
+	answer := landing.GateResult{Notes: backing[:1]}
 	run := gateRun{ctx: bg, o: GateOpts{Slot: "kit", CheckOnly: true}}
 	target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first", PR: ghURL}
 	forged := gateForgeResult{forge: stagePRForge{info: tracker.PRInfo{State: "OPEN", Head: "kit/5-second"}}}
@@ -85,14 +86,14 @@ func TestGatePRMatchesSuppliedHead(t *testing.T) {
 	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
 	for _, c := range []struct{ name, branch, base, verdict string }{
 		{"matching", "kit/5-second", "main", ""},
-		{"another branch", "kit/6-other", "main", GatePRMismatch},
-		{"stacked", "kit/5-second", "kit/5-first", GatePRMismatch},
+		{"another branch", "kit/6-other", "main", landing.GatePRMismatch},
+		{"stacked", "kit/5-second", "kit/5-first", landing.GatePRMismatch},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			target := GateTarget{Branch: "kit/5-second", PR: ghURL}
 			info := tracker.PRInfo{State: "OPEN", Head: c.branch, Base: c.base, HeadSHA: head}
 			// A nil forge makes an unintended re-read fail instead of hiding it.
-			verified, result, done, err := run.stepPRMatches(GateResult{}, target,
+			verified, result, done, err := run.stepPRMatches(landing.GateResult{}, target,
 				gateForgeResult{provider: "github"}, true, gateRefsResult{head: "HEAD"}, &info)
 			if err != nil || verified != head || result.Verdict != c.verdict || done != (c.verdict != "") {
 				t.Fatalf("verified=%q result=%+v done=%v err=%v", verified, result, done, err)
@@ -113,7 +114,7 @@ func TestGateReferenceStage(t *testing.T) {
 	gittest.Commit(t, dir, "worker", "worker.txt", "worker")
 	head := gittest.Run(t, dir, "rev-parse", "HEAD")
 	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "worker", Base: "main"}}
-	answer := GateResult{Slot: "worker", Base: "main"}
+	answer := landing.GateResult{Slot: "worker", Base: "main"}
 	out, result, done, err := run.stepRefs(answer, "worker", false)
 	if err != nil || done || result.Verdict != "" {
 		t.Fatalf("refs result=%+v done=%v err=%v", result, done, err)

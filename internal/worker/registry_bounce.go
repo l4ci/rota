@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/landing"
 	"strconv"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -12,7 +13,7 @@ import (
 // dedupe across callers (review-relay and bounce both reach it), so it is not a
 // request-id receipt: a retry mints a fresh id, yet must still count once. It
 // stays here, and receiptedVerbs in internal/cli leaves round bounce out.
-func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
+func recordBounce(env Env, m *landing.RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
 	defer func() {
 		if err == nil && counted {
 			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.BounceDetail(n)})

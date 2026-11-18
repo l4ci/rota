@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func (w *world) setQueued() {
 }
 
 func TestGateQueuedPR(t *testing.T) {
-	gateAs := func(w *world, arg string, o GateOpts) (GateResult, error) {
+	gateAs := func(w *world, arg string, o GateOpts) (landing.GateResult, error) {
 		o.Slot, o.Base = arg, "main"
 		return w.env(false).Gate(bg, w.dir, o)
 	}
@@ -30,14 +31,14 @@ func TestGateQueuedPR(t *testing.T) {
 		w := newWorld(t, "")
 		w.setQueued()
 		w.setPRBody("Closes #5\n")
-		if res, err := gateAs(w, arg, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh || res.Branch != "w1" || res.PR != ghURL {
+		if res, err := gateAs(w, arg, GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh || res.Branch != "w1" || res.PR != ghURL {
 			t.Fatalf("%s check-only: %+v %v", arg, res, err)
 		}
 		if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 1 {
 			t.Fatalf("%s: a check keeps the record, have %d", arg, n)
 		}
 		res, err := gateAs(w, arg, GateOpts{})
-		if err != nil || res.Verdict != GatePass {
+		if err != nil || res.Verdict != landing.GatePass {
 			t.Fatalf("%s: %+v %v", arg, res, err)
 		}
 		if res.Issue != "5" {
@@ -62,12 +63,12 @@ func TestGateQueuedPR(t *testing.T) {
 	if _, err := LoadRegistryTolerant(w.dir).GateTarget("#99"); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown PR: %v", err)
 	}
-	if res, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+	if res, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh {
 		t.Errorf("unrecorded PR gated by number: %+v %v", res, err)
 	}
 	// A slot recording the PR is found by its number when nothing is queued.
 	w2 := newWorld(t, ghURL)
-	if res, err := gateAs(w2, "#7", GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+	if res, err := gateAs(w2, "#7", GateOpts{CheckOnly: true}); err != nil || res.Verdict != landing.GateFresh {
 		t.Errorf("slot by PR: %+v %v", res, err)
 	}
 }
@@ -117,7 +118,7 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Verdict != GateMergedRemotely || !res.Changed {
+			if res.Verdict != landing.GateMergedRemotely || !res.Changed {
 				t.Fatalf("verdict=%s changed=%v: %s", res.Verdict, res.Changed, res.Err)
 			}
 			if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 0 {
@@ -157,7 +158,7 @@ func TestGateLandingQueuedPRLeavesReassignedSlot(t *testing.T) {
 // assign ledger entry (#3328): a Codex-built PR needs a claude cross review, not
 // codex, even after a later assignment on a claude slot.
 func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
-	run := func(t *testing.T, labels string, entries ...ledger.Entry) GateResult {
+	run := func(t *testing.T, labels string, entries ...ledger.Entry) landing.GateResult {
 		t.Helper()
 		w := newWorld(t, "")
 		w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
@@ -182,19 +183,19 @@ func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "ben", Harness: "codex"},
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "9", Slot: "kit", Harness: "claude"},
 			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "w2", Harness: "claude"})
-		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+		if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
 			t.Fatalf("%s (%s), want review-missing naming claude", res.Verdict, res.Err)
 		}
 	})
 	t.Run("no entry falls back to the default order", func(t *testing.T) {
 		res := run(t, "")
-		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
+		if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
 			t.Fatalf("%s (%s), want review-missing naming codex", res.Verdict, res.Err)
 		}
 	})
 	t.Run("no entry falls back to the issue label", func(t *testing.T) {
 		res := run(t, ",harness:codex")
-		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+		if res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
 			t.Fatalf("%s (%s), want review-missing naming claude", res.Verdict, res.Err)
 		}
 	})

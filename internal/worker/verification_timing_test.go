@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,7 +109,7 @@ func TestVerificationEventsMatchLocalTierRuns(t *testing.T) {
 				verdict = r.Verdict
 			}
 			events := verificationEvents(t, w.dir)
-			if verdict != GatePass || calls < 2 || len(events) != calls {
+			if verdict != landing.GatePass || calls < 2 || len(events) != calls {
 				t.Fatalf("one observation per executed tier: verdict=%s calls=%d events=%+v", verdict, calls, events)
 			}
 			for i, event := range events {
@@ -167,7 +168,7 @@ func TestTrainVerificationDoesNotReplayCachedTiming(t *testing.T) {
 	}
 	for i := 0; i < 2; i++ {
 		r, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
-		if err != nil || r.Verdict != GateVerifyFailed || r.Culprit != "b2" {
+		if err != nil || r.Verdict != landing.GateVerifyFailed || r.Culprit != "b2" {
 			t.Fatalf("%+v %v", r, err)
 		}
 		if i == 1 && len(r.CacheHits) != 1 {
@@ -194,7 +195,7 @@ func TestVerificationUnavailableForCIAndEmptyTiers(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(ciCfg)
 	r, err := w.ciGate(GateOpts{})
-	if err != nil || r.Verdict != GatePass {
+	if err != nil || r.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if events := verificationEvents(t, w.dir); len(events) != 0 {

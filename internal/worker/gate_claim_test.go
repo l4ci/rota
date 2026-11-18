@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +86,7 @@ func TestGateClaimPasses(t *testing.T) {
 				return &claimIssues{bodies: c.bodies, readErr: c.readErr}, nil
 			}
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
-			if err != nil || res.Verdict != GateFresh {
+			if err != nil || res.Verdict != landing.GateFresh {
 				t.Fatalf("verdict %q (%v), want fresh: %+v", res.Verdict, err, res)
 			}
 			if c.readErr != nil && !strings.Contains(strings.Join(res.Notes, "\n"), "CLAIMS-UNKNOWN") {
@@ -105,7 +106,7 @@ func TestGateRecordedClaimDoesNotFallBackToAgent(t *testing.T) {
 		return &claimIssues{bodies: []string{"<!-- rota:claim w1@5 -->"}}, nil
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateClaimLost {
+	if err != nil || res.Verdict != landing.GateClaimLost {
 		t.Fatalf("old claim passed same-agent reclaim: %+v %v", res, err)
 	}
 }
@@ -152,10 +153,10 @@ func TestGateClaimStore(t *testing.T) {
 		err  error
 		want string
 	}{
-		{name: "another holder", held: []string{"dana@5"}, want: GateClaimLost},
-		{name: "recorded holder", held: []string{"ben@3"}, want: GateFresh},
-		{name: "no holders", want: GateFresh},
-		{name: "read fails", err: fmt.Errorf("offline"), want: GateFresh},
+		{name: "another holder", held: []string{"dana@5"}, want: landing.GateClaimLost},
+		{name: "recorded holder", held: []string{"ben@3"}, want: landing.GateFresh},
+		{name: "no holders", want: landing.GateFresh},
+		{name: "read fails", err: fmt.Errorf("offline"), want: landing.GateFresh},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -189,7 +190,7 @@ func TestGateClaimSkipsWithoutPR(t *testing.T) {
 	if src.commentReads != 0 {
 		t.Fatalf("local gate read claims from forge %d times", src.commentReads)
 	}
-	if err != nil || res.Verdict != GateFresh || res.PR != "" {
+	if err != nil || res.Verdict != landing.GateFresh || res.PR != "" {
 		t.Fatalf("local gate should pass: %+v %v", res, err)
 	}
 }
@@ -216,7 +217,7 @@ func TestGateClaimSkipsUnrecordedClaim(t *testing.T) {
 			e := w.env(false)
 			e.Issues = func(string, tracker.Settings) (Issues, error) { return src, nil }
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: c.arg, Base: "main", CheckOnly: true})
-			if err != nil || res.Verdict != GateFresh {
+			if err != nil || res.Verdict != landing.GateFresh {
 				t.Fatalf("unrecorded claim was fenced: %+v %v", res, err)
 			}
 			if src.commentReads != 0 {

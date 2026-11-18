@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -18,7 +19,7 @@ import (
 
 // Regression tests for the review findings of round 55 on #3096.
 
-func intRecord(t *testing.T, w *world) Integration {
+func intRecord(t *testing.T, w *world) landing.Integration {
 	t.Helper()
 	reg, err := LoadRegistry(w.dir)
 	if err != nil {
@@ -32,8 +33,8 @@ func intRecord(t *testing.T, w *world) Integration {
 }
 
 func TestIntegrationPRBodyHasDecisionSections(t *testing.T) {
-	body := IntegrationPRBody(Integration{Branch: intBranch, Round: 55, Base: "main",
-		Members: []IntegrationMember{{Target: "7", PR: "p7", Issue: "5"}, {Target: "8", PR: "p8", Issue: "#6"}}})
+	body := IntegrationPRBody(landing.Integration{Branch: intBranch, Round: 55, Base: "main",
+		Members: []landing.IntegrationMember{{Target: "7", PR: "p7", Issue: "5"}, {Target: "8", PR: "p8", Issue: "#6"}}})
 	if got, _ := requiredPRSection(body); got != "" {
 		t.Fatalf("the body rota writes is refused: %s\n%s", got, body)
 	}
@@ -48,7 +49,7 @@ func TestTrainIntegrationNoVerifyRecordsNoTip(t *testing.T) {
 	w.forge("head#7", "w1")
 	w.forge("sha#7", w.forgeWord("sha"))
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", NoVerify: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("no-verify train: %+v %v", res, err)
 	}
 	if rec := intRecord(t, w); rec.VerifiedTip != "" || rec.VerifiedBase != "" {
@@ -63,7 +64,7 @@ func TestWorkerGateIntegrationPendingRefusesWithoutRemote(t *testing.T) {
 	w := integrationWorld(t)
 	integrationPR(t, w)
 	setPending := func(on bool) {
-		if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) {
+		if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) {
 			it.Members[1].Pending, it.Members[1].Conflicts = on, []string{"work2.txt"}
 		}); err != nil {
 			t.Fatal(err)
@@ -72,12 +73,12 @@ func TestWorkerGateIntegrationPendingRefusesWithoutRemote(t *testing.T) {
 	setPending(true)
 	gittest.Run(t, w.dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateStale || !strings.Contains(res.Err, "does not merge yet") {
+	if err != nil || res.Verdict != landing.GateStale || !strings.Contains(res.Err, "does not merge yet") {
 		t.Fatalf("a pending member must refuse before any fetch: %+v %v", res, err)
 	}
 	setPending(false)
 	res, err = w.landPR9()
-	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "git fetch origin failed") {
+	if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "git fetch origin failed") {
 		t.Fatalf("a failed fetch must refuse as check-broke: %+v %v", res, err)
 	}
 }
@@ -87,7 +88,7 @@ func TestWorkerGateIntegrationRefusesGoneMember(t *testing.T) {
 	integrationPR(t, w)
 	gittest.Run(t, w.origin, "branch", "-D", "w2")
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateStale || !strings.Contains(res.Err, "is gone from origin") {
+	if err != nil || res.Verdict != landing.GateStale || !strings.Contains(res.Err, "is gone from origin") {
 		t.Fatalf("a member branch gone from the remote must refuse: %+v %v", res, err)
 	}
 	if w.onMain("work.txt") {
@@ -112,7 +113,7 @@ func TestTrainIntegrationPinsCheckedHead(t *testing.T) {
 		gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", Say: say})
-	if err != nil || res.Verdict != GatePass || !pushed {
+	if err != nil || res.Verdict != landing.GatePass || !pushed {
 		t.Fatalf("train: %+v %v (pushed %v)", res, err, pushed)
 	}
 	if m, _ := intRecord(t, w).Member("8"); m.Head != checked {
@@ -130,7 +131,7 @@ func TestWorkerGateIntegrationVerifiedBaseBindsMerge(t *testing.T) {
 	w := integrationWorld(t)
 	tip := integrationPR(t, w)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "9", Base: "main", LandVerified: true, LandVerifiedTip: tip, LandVerifiedBase: strings.Repeat("e", 40)})
-	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "main moved from") || w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || !strings.Contains(res.Err, "main moved from") || w.onMain("work.txt") {
 		t.Fatalf("a base other than the verified one landed: %+v %v", res, err)
 	}
 }
@@ -164,7 +165,7 @@ func TestIntegrationFixReviewBlockedAtCoveringCommit(t *testing.T) {
 	// main moves and a rerun merges it, so the head is past the failing review.
 	trainWrite(t, w, "later.txt", "later")
 	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
-	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("rerun: %+v %v", res, err)
 	}
 	w.pointPR9()
@@ -188,7 +189,7 @@ func TestWorkerGateIntegrationRereadsRecordUnderLock(t *testing.T) {
 	}()
 	<-held
 	type out struct {
-		res GateResult
+		res landing.GateResult
 		err error
 	}
 	gated := make(chan out, 1)
@@ -214,7 +215,7 @@ func TestWorkerGateIntegrationRereadsRecordUnderLock(t *testing.T) {
 	<-locking
 	// Only now, with the record read and the gate at the lock, a train
 	// records member 8 as pending.
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) {
 		it.Members[1].Pending, it.Members[1].Conflicts = true, []string{"work2.txt"}
 	}); err != nil {
 		t.Fatal(err)
@@ -224,18 +225,18 @@ func TestWorkerGateIntegrationRereadsRecordUnderLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := <-gated
-	if g.err != nil || g.res.Verdict != GateStale || !strings.Contains(g.res.Err, "does not merge yet") {
+	if g.err != nil || g.res.Verdict != landing.GateStale || !strings.Contains(g.res.Err, "does not merge yet") {
 		t.Fatalf("the gate landed on the record it read before the lock: %+v %v", g.res, g.err)
 	}
 }
 
 func TestRecordIntegrationKeepsLaterPRAndItems(t *testing.T) {
 	w := integrationWorld(t)
-	stale := Integration{Name: "a", Branch: intBranch, Round: 55, Base: "main"}
+	stale := landing.Integration{Name: "a", Branch: intBranch, Round: 55, Base: "main"}
 	if err := RecordIntegration(w.dir, stale); err != nil {
 		t.Fatal(err)
 	}
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) {
 		it.PR, it.Items = "https://github.com/o/r/pull/9", []string{"40"}
 	}); err != nil {
 		t.Fatal(err)
@@ -250,7 +251,7 @@ func TestRecordIntegrationKeepsLaterPRAndItems(t *testing.T) {
 }
 
 func TestMemberIssueOfExternalPR(t *testing.T) {
-	if got := memberIssue(Registry{}, TrainMember{Target: "12", PR: "https://github.com/o/r/pull/12", ResolvedIssue: "44"}); got != "44" {
+	if got := memberIssue(Registry{}, landing.TrainMember{Target: "12", PR: "https://github.com/o/r/pull/12", ResolvedIssue: "44"}); got != "44" {
 		t.Fatalf("issue = %q, want the one the check gate resolved", got)
 	}
 }
@@ -260,7 +261,7 @@ func TestWorkerGateIntegrationAlreadyMergedEndsMembers(t *testing.T) {
 	integrationPR(t, w)
 	w.forge("state", "MERGED")
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateAlreadyMerged {
+	if err != nil || res.Verdict != landing.GateAlreadyMerged {
 		t.Fatalf("retry after a forge merge: %+v %v", res, err)
 	}
 	if strings.Join(res.IntegrationMembers, ",") != "#5,#6" && strings.Join(res.IntegrationMembers, ",") != "5,6" {
@@ -301,7 +302,7 @@ func TestTrainIntegrationMergesReviewedHeadWhenRefMoves(t *testing.T) {
 	if err := exec.Command("git", "-C", w.origin, "cat-file", "-e", intBranch+":late.txt").Run(); err == nil {
 		t.Fatalf("the unreviewed commit was merged: %+v", res)
 	}
-	if err == nil && res.Verdict == GatePass {
+	if err == nil && res.Verdict == landing.GatePass {
 		if m, _ := intRecord(t, w).Member("8"); m.Head != reviewed {
 			t.Fatalf("merged %s, not the reviewed %s", m.Head, reviewed)
 		}
