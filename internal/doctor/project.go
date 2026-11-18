@@ -91,6 +91,15 @@ func (d *runner) verify() (Check, bool) {
 	return Check{Name: "verify", Status: Warn, Detail: "test.full and test.e2e are both empty: the merge gate will refuse until test.full is set", Hint: "run: rota config set test.full '[...]'"}, true
 }
 
+// trainFill: round.trainMax with round.trainFillMinutes at 0 can leave a lone
+// ready PR waiting indefinitely (docs/usage/configuration.md); every other pair is silent.
+func (d *runner) trainFill() (Check, bool) {
+	if d.in.TrainMax <= 0 || d.in.TrainFillMinutes != 0 {
+		return Check{}, false
+	}
+	return Check{Name: "train fill", Status: Warn, Detail: fmt.Sprintf("round.trainMax is %d and round.trainFillMinutes is 0: a lone ready PR can wait indefinitely for a train", d.in.TrainMax), Hint: "run: rota config set round.trainFillMinutes <minutes>, or set round.trainMax back to 0"}, true
+}
+
 func (d *runner) testLock() (Check, bool) {
 	if d.in.TestSlots <= 0 {
 		return Check{}, false

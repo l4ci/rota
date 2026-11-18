@@ -441,6 +441,10 @@ def prose_rules():
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     for key in ("round.dispatch", "round.slots", "round.commands"):
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
+    # round-boundary handoff (#3667): wind-down ends with a pause and a fresh session
+    r += [has(sk("orchestrate"), "run `/rota-pause`", "wind-down must end with a /rota-pause handoff"),
+          has(sk("orchestrate"), "rota round start --consume-handoff", "wind-down handoff must name the consume-handoff resume")]
+    r += [has("skills/rota-pause/SKILL.md", "just run `rota round wind-down`", "Step 1 must route a just-wound-down orchestrator to orchestrator-pause.md")]
     # multi-repo flow (M03)
     r += [has("skills/rota-capture/umbrella-tagging.md", "**Selection:** multiple", "Step 4.6 must allow multiple selections for the Repos question"),
           has("skills/rota-capture/umbrella-tagging.md", "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
