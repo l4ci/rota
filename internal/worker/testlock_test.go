@@ -122,6 +122,111 @@ func TestTestLockWaiterStopsWithContext(t *testing.T) {
 	}
 }
 
+// waitersWait starts WithTestLock on its own goroutine and returns once the run
+// has printed its waiting notice, so the next start is strictly later.
+func waitersWait(t *testing.T, env Env, repo string, name string, order *[]string, mu *sync.Mutex, done chan<- error) {
+	t.Helper()
+	var errBuf syncBuf
+	go func() {
+		done <- env.WithTestLock(bg, repo, 1, name, &errBuf, func() error {
+			mu.Lock()
+			*order = append(*order, name)
+			mu.Unlock()
+			return nil
+		})
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(errBuf.String(), "waiting for the test lock") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(errBuf.String(), "waiting for the test lock (held by ") {
+		t.Fatalf("%s never queued: stderr %q", name, errBuf.String())
+	}
+}
+
+func TestTestLockServesWaitersInArrivalOrder(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	holding, release := make(chan struct{}), make(chan struct{})
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- env.WithTestLock(bg, repo, 1, "gate", &syncBuf{}, func() error { close(holding); <-release; return nil })
+	}()
+	<-holding
+
+	var (
+		mu    sync.Mutex
+		order []string
+	)
+	done := make(chan error, 3)
+	names := []string{"first", "second", "third"}
+	t0 := time.Now()
+	for _, n := range names {
+		waitersWait(t, env, repo, n, &order, &mu, done)
+		time.Sleep(60 * time.Millisecond) // stagger so the pollers' phases differ from arrival order
+	}
+	// Release just after a later arrival's poll: a free-for-all poll loop would
+	// hand the slot to it, so only a real queue yields arrival order.
+	time.Sleep(time.Until(t0.Add(305 * time.Millisecond)))
+	close(release)
+	if err := <-holderDone; err != nil {
+		t.Fatal(err)
+	}
+	for range names {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(order, ",") != "first,second,third" {
+		t.Fatalf("ran in order %v; want arrival order %v", order, names)
+	}
+}
+
+func TestTestLockDropsKilledWaiterTicket(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	holding, release := make(chan struct{}), make(chan struct{})
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- env.WithTestLock(bg, repo, 1, "gate", &syncBuf{}, func() error { close(holding); <-release; return nil })
+	}()
+	<-holding
+
+	// An earlier waiter that is cancelled while queued must not block the next.
+	ctx, cancel := context.WithCancel(bg)
+	var errBuf syncBuf
+	cancelled := make(chan error, 1)
+	go func() {
+		cancelled <- env.WithTestLock(ctx, repo, 1, "doomed", &errBuf, func() error { t.Error("cancelled waiter entered"); return nil })
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(errBuf.String(), "waiting for the test lock") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	var (
+		mu    sync.Mutex
+		order []string
+	)
+	done := make(chan error, 1)
+	waitersWait(t, env, repo, "next", &order, &mu, done)
+	cancel()
+	if err := <-cancelled; err == nil {
+		t.Fatal("cancelled waiter should return the context error")
+	}
+	close(release)
+	<-holderDone
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiter stuck behind a cancelled ticket")
+	}
+}
+
 func TestDefaultSmokeShards(t *testing.T) {
 	for cpus, want := range map[int]int{1: 1, 2: 1, 3: 1, 4: 2, 8: 4, 16: 4, 64: 4} {
 		if got := DefaultSmokeShards(cpus); got != want {
