@@ -574,9 +574,5 @@ func RenderFieldsBlock(text string, names []string, values map[string]string) st
 	if len(lines) == 0 {
 		return text
 	}
-	block := marker.FieldsBlock(lines)
-	if text == "" {
-		return block
-	}
-	return text + "\n\n" + block
+	return marker.JoinFields(text, marker.FieldsBlock(lines))
 }
