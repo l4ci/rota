@@ -89,7 +89,8 @@ type Env struct {
 	Stop func() error
 	// Observe runs the same pass over a read-only world: Reconcile,
 	// ReviewLoop, AwaitingReview and Review.Facts inspect without writing, and
-	// every action is proposed instead of taken. The adapters that execute
+	// every action is proposed instead of taken. NewEnv derives this from World
+	// and guards execution adapters at that seam. The adapters that execute
 	// (RunGate, RunTrain, Assign, Review.Mint, FollowUp.Start, Audit) are
 	// never called.
 	Observe bool

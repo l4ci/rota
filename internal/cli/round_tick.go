@@ -115,9 +115,9 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state, commonDir: cd, round: lease.Round}
 	var world roundtick.World = w
 	if observe {
-		world = observingWorld{w}
+		world = inspectingWorld{w}
 	}
-	e := roundtick.NewEnv(world, roundtick.Config{Observe: observe, Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
+	e := roundtick.NewEnv(world, roundtick.Config{Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
 	state.Apply(&e)
 	r, err := roundtick.Run(ctx, e)
 	if err != nil {
@@ -317,6 +317,8 @@ type tickWorld struct {
 	commonDir string
 	round     int
 }
+
+func (w *tickWorld) Observing() bool { return false }
 
 func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegistryTolerant(w.root) }
 func (w *tickWorld) Registry() (worker.Registry, error) { return worker.LoadRegistry(w.root) }

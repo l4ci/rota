@@ -33,42 +33,6 @@ func observed(f *fake, s *spy, review *round.Architecture) Env {
 	return e
 }
 
-func TestObserveInvokesNoMutationAdapter(t *testing.T) {
-	f := &fake{
-		slots:    []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "idle"}},
-		queued:   []string{"#11"},
-		repaired: []Finding{{"slot-stuck", "dana"}},
-		cands:    []round.Candidate{cand("#2", true), cand("#3", false)},
-	}
-	s := &spy{}
-	r, err := Run(context.Background(), observed(f, s, &round.Architecture{Every: 3, Count: 3}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(s.calls) != 0 {
-		t.Fatalf("observation called mutation adapters: %v", s.calls)
-	}
-	if len(r.Did) != 0 {
-		t.Fatalf("observation reports completed actions: %+v", r.Did)
-	}
-	var kinds []string
-	for _, p := range r.Proposed {
-		kinds = append(kinds, p.Action.Action+" "+p.Target)
-	}
-	want := []string{"reconcile slot-stuck dana", "train ben,#11", "mint ", "assign #2"}
-	if len(kinds) != len(want) {
-		t.Fatalf("proposed %q, want %q", kinds, want)
-	}
-	for i := range want {
-		if kinds[i] != want[i] {
-			t.Fatalf("proposed %q, want %q", kinds, want)
-		}
-	}
-	if !hasItem(r.NeedsYou, "candidate-hold", "#3") {
-		t.Errorf("an unready candidate must say why it is held: %+v", r.NeedsYou)
-	}
-}
-
 // AC-4: the first proposal stands on the snapshot; every later one depends on
 // earlier hypothetical actions, and unknown checks are named, not verified.
 func TestObserveLabelsConditionalAndUnknown(t *testing.T) {

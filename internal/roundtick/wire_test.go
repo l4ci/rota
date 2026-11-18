@@ -23,19 +23,25 @@ import (
 // fakeWorld is a World over in-memory values. Its registry holds one done slot
 // with PR #11; prs answers PRView.
 type fakeWorld struct {
-	root    string
-	info    tracker.PRInfo
-	waiting []ReadyPR
-	waits   int
-	gated   []string
+	observing bool
+	root      string
+	info      tracker.PRInfo
+	waiting   []ReadyPR
+	waits     int
+	gated     []string
 	// repairs is what a read-only Reconcile reports as eligible.
 	repairs []round.Finding
 	// changed counts the calls that would change the world.
-	assigns, audits int
+	assigns, audits, landings int
+	cands                     []round.Candidate
+	reviewer                  Reviewer
+	followUp                  FollowUpSources
 	// auditReason is the due test-audit suggestion; auditErr fails its read.
 	auditReason []string
 	auditErr    error
 }
+
+func (w *fakeWorld) Observing() bool { return w.observing }
 
 func (w *fakeWorld) reg() worker.Registry {
 	r, err := worker.LoadRegistry(w.root)
@@ -54,6 +60,7 @@ func (w *fakeWorld) Reconcile(context.Context) (round.Outcome, error) {
 }
 func (w *fakeWorld) Root() string { return w.root }
 func (w *fakeWorld) Landing(_ context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
+	w.landings++
 	if req.Gate != nil {
 		w.gated = append(w.gated, req.Gate.Base+":"+req.Gate.Slot)
 	}
@@ -63,10 +70,10 @@ func (w *fakeWorld) ReviewReadiness(string, string) (string, bool) { return "", 
 func (w *fakeWorld) ReviewLoop(string) ReviewOutcome               { return ReviewOutcome{} }
 func (w *fakeWorld) Stop() (bool, string)                          { return false, "" }
 func (w *fakeWorld) Capped(context.Context) string                 { return "" }
-func (w *fakeWorld) FollowUp() FollowUpSources                     { return FollowUpSources{} }
+func (w *fakeWorld) FollowUp() FollowUpSources                     { return w.followUp }
 func (w *fakeWorld) OpenItems() int                                { return 0 }
 func (w *fakeWorld) Candidates(context.Context) ([]round.Candidate, error) {
-	return nil, nil
+	return w.cands, nil
 }
 func (w *fakeWorld) Assign(context.Context, string) (round.Assigned, error) {
 	w.assigns++
@@ -77,7 +84,7 @@ func (w *fakeWorld) AssignBundle(context.Context, string, []string) (round.Assig
 	return round.Assigned{}, nil
 }
 func (w *fakeWorld) TestAudit(context.Context) ([]string, error) { return w.auditReason, w.auditErr }
-func (w *fakeWorld) Review() Reviewer                            { return nil }
+func (w *fakeWorld) Review() Reviewer                            { return w.reviewer }
 func (w *fakeWorld) Audit(Action)                                { w.audits++ }
 func (w *fakeWorld) Say(string)                                  {}
 func (w *fakeWorld) Warn(string)                                 {}
@@ -94,11 +101,11 @@ func tickWorldWith(t *testing.T, w *fakeWorld, cfg Config) (Result, []string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	reg := `{"round":1,"slots":[{"name":"ben","branch":"ben/1-x","base":"main","state":"done","pr":"#11"}]}`
+	reg := `{"round":1,"slots":[{"name":"ben","branch":"ben/1-x","base":"main","state":"done","pr":"#11"},{"name":"dana","state":"idle"}]}`
 	if err := os.WriteFile(path, []byte(reg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg.Settings = roundcfg.Settings{TrainFill: roundcfg.TrainFill{Max: 4}}
+	cfg.Settings = roundcfg.Settings{Roster: []string{"ben", "dana"}, TrainFill: roundcfg.TrainFill{Max: 4}}
 	cfg.MergeApproval = gate.MergeNone
 	cfg.Base = "main"
 	r, err := Run(context.Background(), NewEnv(w, cfg))
@@ -143,15 +150,19 @@ func TestWaitingReadOncePerTick(t *testing.T) {
 	}
 }
 
-// The same pass serves tick and observe: with Config.Observe the world's reads
+// The same pass serves tick and observe: the observing world's reads
 // feed proposals through the same Env fields, and nothing that changes the
 // world (landing, assigning, auditing) is called.
 func TestObserveRunsThePassWithoutMutating(t *testing.T) {
+	mints := 0
 	w := &fakeWorld{
-		info:    tracker.PRInfo{State: "CLOSED", Base: "main"}, // goes straight to the gate
-		repairs: []round.Finding{{Kind: "slot-stuck", Slot: "ben"}},
+		observing: true,
+		info:      tracker.PRInfo{State: "CLOSED", Base: "main"}, // goes straight to the gate
+		repairs:   []round.Finding{{Kind: "slot-stuck", Slot: "ben"}},
+		cands:     []round.Candidate{cand("#2", true), cand("#3", false)},
+		reviewer:  fakeReview{due: true, mint: func() ([]string, error) { mints++; return nil, nil }},
 	}
-	r, gated := tickWorldWith(t, w, Config{Observe: true})
+	r, gated := tickWorldWith(t, w, Config{})
 	if !r.Observed {
 		t.Fatalf("not an observation: %+v", r)
 	}
@@ -159,12 +170,17 @@ func TestObserveRunsThePassWithoutMutating(t *testing.T) {
 	for _, p := range r.Proposed {
 		got = append(got, p.Action.Action)
 	}
-	if !reflect.DeepEqual(got, []string{"reconcile", "gate"}) {
+	if !reflect.DeepEqual(got, []string{"reconcile", "gate", "mint", "assign"}) {
 		t.Fatalf("proposed %v, want the world's repair then the landing", got)
 	}
-	if len(gated) != 0 || w.assigns != 0 || w.audits != 0 || len(r.Did) != 0 {
+	if len(gated) != 0 || w.assigns != 0 || w.audits != 0 || w.landings != 0 || mints != 0 || len(r.Did) != 0 {
+		t.Logf("landing writes %d, mint writes %d", w.landings, mints)
 		t.Fatalf("observation changed the world: gated %v assigns %d audits %d did %+v", gated, w.assigns, w.audits, r.Did)
 	}
+	if !hasItem(r.NeedsYou, "candidate-hold", "#3") {
+		t.Errorf("unready candidate hold missing: %+v", r.NeedsYou)
+	}
+	t.Logf("write calls: assign=%d landing=%d mint=%d audit=%d", w.assigns, w.landings, mints, w.audits)
 }
 
 // A due test-audit suggestion is a needs-you item, once per round: the second
@@ -216,5 +232,44 @@ func TestTestAuditQuietWhenNotDueOrUnreadable(t *testing.T) {
 				t.Fatalf("unexpected item %+v", it)
 			}
 		}
+	}
+}
+
+// Observation comes from the world supplying read-only reads, rather than a
+// second configuration switch that can disagree with it.
+func TestObserveDerivedFromWorld(t *testing.T) {
+	w := &fakeWorld{observing: true}
+	e := NewEnv(w, Config{})
+	if !e.Observe {
+		t.Fatal("observing World produced a writable Env")
+	}
+}
+
+// Even a caller that reaches an execution adapter directly cannot bypass the
+// observation seam. Every nested write port is covered as well as World writes.
+func TestObserveWorldRefusesExecutionAdapters(t *testing.T) {
+	ctx := context.Background()
+	writes := 0
+	w := &fakeWorld{observing: true,
+		reviewer: fakeReview{facts: &round.Architecture{}, mint: func() ([]string, error) { writes++; return nil, nil }},
+		followUp: FollowUpSources{Start: func(context.Context, FollowUp, string, bool) error { writes++; return nil }},
+	}
+	e := NewEnv(w, Config{})
+	checks := map[string]func() error{
+		"gate":      func() error { return e.RunGate(ctx, "ben", "main").Err },
+		"train":     func() error { return e.RunTrain(ctx, []string{"ben"}, "main").Err },
+		"assign":    func() error { _, err := e.Assign(ctx, "#1"); return err },
+		"bundle":    func() error { _, err := e.AssignBundle(ctx, "#1", []string{"#2"}); return err },
+		"mint":      func() error { _, err := e.Review.Mint(ctx, round.Architecture{}); return err },
+		"follow-up": func() error { return e.FollowUp.Start(ctx, FollowUp{}, "ben", false) },
+	}
+	for name, call := range checks {
+		if err := call(); !errors.Is(err, errReadOnlyWorld) {
+			t.Errorf("%s: got %v, want read-only refusal", name, err)
+		}
+	}
+	e.Audit(Action{})
+	if got := writes + w.assigns + w.audits + w.landings; got != 0 {
+		t.Fatalf("observation leaked %d writes", got)
 	}
 }
