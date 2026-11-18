@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -13,8 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/stamp"
 )
-
-const GateFreeze = "freeze"
 
 // FreezeOpts chooses one mutation. With none, Freeze returns the latest record.
 type FreezeOpts struct {
@@ -183,25 +182,25 @@ func (e Env) markCleared(ctx context.Context, root string, r *landfreeze.Record,
 	return r
 }
 
-func (runner gate) stepFreeze(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepFreeze(result landing.GateResult, issue, pr string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{Issue: issue, PR: pr}, gateForgeResult{})
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
 	r, err := landfreeze.Load(g.ctx, g.e.Git, g.root)
 	if err != nil {
-		g.verdict(GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
+		g.verdict(landing.GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
 		return finish(true, nil)
 	}
 	if r.Allows(g.target.Issue, g.pr) && (!r.Frozen() || r.Binds(g.o.Base)) {
 		return finish(false, nil)
 	}
-	g.verdict(GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
+	g.verdict(landing.GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
 	return finish(true, nil)
 }
 
-func (g *gateOperation) freezeFailure(vr VerifyResult) error {
+func (g *gateRun) freezeFailure(vr VerifyResult) error {
 	pr := g.pr
 	if pr == "" {
 		pr = g.branch
@@ -229,12 +228,12 @@ func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, ch
 	})
 }
 
-func (runner gate) stepClearFreeze(result GateResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepClearFreeze(result landing.GateResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{}, gateForgeResult{})
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
-	if g.o.CheckOnly || g.o.skipsVerify() || g.res.Verdict != GatePass || g.res.VerifySkipped {
+	if g.o.CheckOnly || g.o.skipsVerify() || g.res.Verdict != landing.GatePass || g.res.VerifySkipped {
 		return finish(false, nil)
 	}
 	return finish(false, g.e.clearVerifiedFreeze(g.ctx, g.root, g.o.Base))

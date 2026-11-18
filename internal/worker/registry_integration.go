@@ -3,6 +3,7 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -10,104 +11,15 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 )
 
-// Integration is one integration branch of a round (`integrations` in the
-// registry, keyed by branch): the members `worker train --integration` merged
-// into it, the merges rota made itself, what the last green verify covered and
-// the PR that lands it on the base.
-type Integration struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Round  int    `json:"round"`
-	Base   string `json:"base"`
-	// Onto is the open integration branch this one is stacked on: it is then
-	// Base, and OntoBase is where Base returns when Onto lands. Both are empty
-	// for a branch on a plain base, and again once Onto has landed.
-	Onto     string `json:"onto,omitempty"`
-	OntoBase string `json:"ontoBase,omitempty"`
-	// Members are the PRs merged into the branch, in merge order; Head is the
-	// member head the last merge took.
-	Members []IntegrationMember `json:"members"`
-	// Start is the base commit the branch was first assembled on: every
-	// first-parent commit after it is a rota merge or a fix.
-	Start string `json:"start"`
-	// Assembled is the tip after rota's own merges, before any fix commit.
-	Assembled string `json:"assembled"`
-	// RotaMerges are the first-parent commits rota made itself: member merges,
-	// merges of the base and `rota worker refs` renewal commits. Every other
-	// first-parent commit is a fix.
-	RotaMerges []string `json:"rotaMerges"`
-	// VerifiedTip is the tip the last green train verified, VerifiedBase the
-	// base commit merged into it.
-	VerifiedTip  string `json:"verifiedTip,omitempty"`
-	VerifiedBase string `json:"verifiedBase,omitempty"`
-	PR           string `json:"pr,omitempty"`
-	// Items are the interaction items filed for this branch.
-	Items []string `json:"items,omitempty"`
-	// Landed says the forge merged the PR and the registry knows it. Settled
-	// says the caller's cleanup after it (the member bookkeeping and parking the
-	// member slots) finished: until then every gate of the PR replays it.
-	Landed  bool `json:"landed,omitempty"`
-	Settled bool `json:"settled,omitempty"`
-}
-
-// IntegrationMember is one member PR of an integration branch.
-type IntegrationMember struct {
-	Target string `json:"target"`
-	PR     string `json:"pr"`
-	Branch string `json:"branch,omitempty"`
-	Issue  string `json:"issue,omitempty"`
-	Head   string `json:"head"`
-	// Pending is a member whose merge conflicted: an interaction item resolves
-	// it on the branch, and Conflicts are the paths git named.
-	Pending   bool     `json:"pending,omitempty"`
-	Conflicts []string `json:"conflicts,omitempty"`
-}
-
 // IntegrationBranch names the integration branch of a round.
 func IntegrationBranch(round int, name string) string {
 	return fmt.Sprintf("integration/r%d-%s", round, name)
 }
 
-// OntoName is the name of the integration branch this one is stacked on.
-func (it Integration) OntoName() string {
-	return strings.TrimPrefix(it.Onto, fmt.Sprintf("integration/r%d-", it.Round))
-}
-
-// LandBase is the branch the integration finally lands on: its own base, or
-// what a stacked one returns to when the branch under it lands.
-func (it Integration) LandBase() string {
-	if it.Onto != "" {
-		return it.OntoBase
-	}
-	return it.Base
-}
-
-// TrainFlags are the flags that run this integration's train again.
-func (it Integration) TrainFlags() string {
-	onto := ""
-	if it.Onto != "" {
-		onto = " --onto " + it.OntoName()
-	}
-	return fmt.Sprintf("--integration %s%s --base %s", it.Name, onto, it.LandBase())
-}
-
-// Member is the member recorded for target, false when there is none.
-func (it Integration) Member(target string) (IntegrationMember, bool) {
-	for _, m := range it.Members {
-		if m.Target == target {
-			return m, true
-		}
-	}
-	return IntegrationMember{}, false
-}
-
-// IsRotaMerge reports whether sha is a merge rota made on the branch.
-func (it Integration) IsRotaMerge(sha string) bool { return slices.Contains(it.RotaMerges, sha) }
-
 // RecordIntegration writes it under its branch, replacing the earlier record
 // but for what the CLI adds after a train released the integration lock: the
 // PR and the interaction items stored since it was read are kept.
-func RecordIntegration(root string, it Integration) error {
+func RecordIntegration(root string, it landing.Integration) error {
 	var ferr error
 	err := Update(root, func(d *Doc) {
 		m := integrationsOf(d.doc)
@@ -139,7 +51,7 @@ func RecordIntegration(root string, it Integration) error {
 
 // UpdateIntegration changes the record of branch under the registry lock; it
 // is a no-op when the branch has no record.
-func UpdateIntegration(root, branch string, mutate func(*Integration)) error {
+func UpdateIntegration(root, branch string, mutate func(*landing.Integration)) error {
 	var ferr error
 	err := Update(root, func(d *Doc) {
 		m := integrationsOf(d.doc)
@@ -170,13 +82,13 @@ func UpdateIntegration(root, branch string, mutate func(*Integration)) error {
 // SettleIntegration marks the post-landing cleanup of branch complete, so the
 // next gate of its PR no longer replays it.
 func SettleIntegration(root, branch string) error {
-	return UpdateIntegration(root, branch, func(it *Integration) { it.Settled = true })
+	return UpdateIntegration(root, branch, func(it *landing.Integration) { it.Settled = true })
 }
 
 // Integrations lists every recorded integration branch, in record order.
-func (r Registry) Integrations() []Integration {
+func (r Registry) Integrations() []landing.Integration {
 	m := integrationsOf(r.doc)
-	var out []Integration
+	var out []landing.Integration
 	for _, k := range m.Keys() {
 		raw, _ := m.Get(k)
 		if it, err := decodeIntegration(raw); err == nil {
@@ -187,33 +99,33 @@ func (r Registry) Integrations() []Integration {
 }
 
 // IntegrationByBranch is the record of an integration branch.
-func (r Registry) IntegrationByBranch(branch string) (Integration, bool) {
-	return r.findIntegration(func(it Integration) bool { return it.Branch == branch })
+func (r Registry) IntegrationByBranch(branch string) (landing.Integration, bool) {
+	return r.findIntegration(func(it landing.Integration) bool { return it.Branch == branch })
 }
 
 // IntegrationByPR is the integration whose PR is pr (compared by number).
-func (r Registry) IntegrationByPR(pr string) (Integration, bool) {
+func (r Registry) IntegrationByPR(pr string) (landing.Integration, bool) {
 	if prNumText(pr) == "" {
-		return Integration{}, false
+		return landing.Integration{}, false
 	}
-	return r.findIntegration(func(it Integration) bool { return it.PR != "" && prNumText(it.PR) == prNumText(pr) })
+	return r.findIntegration(func(it landing.Integration) bool { return it.PR != "" && prNumText(it.PR) == prNumText(pr) })
 }
 
 // IntegrationForItem is the open integration an interaction item was filed for.
-func (r Registry) IntegrationForItem(id string) (Integration, bool) {
+func (r Registry) IntegrationForItem(id string) (landing.Integration, bool) {
 	id = strings.TrimPrefix(id, "#")
-	return r.findIntegration(func(it Integration) bool {
+	return r.findIntegration(func(it landing.Integration) bool {
 		return !it.Landed && slices.ContainsFunc(it.Items, func(x string) bool { return strings.TrimPrefix(x, "#") == id })
 	})
 }
 
-func (r Registry) findIntegration(match func(Integration) bool) (Integration, bool) {
+func (r Registry) findIntegration(match func(landing.Integration) bool) (landing.Integration, bool) {
 	for _, it := range r.Integrations() {
 		if match(it) {
 			return it, true
 		}
 	}
-	return Integration{}, false
+	return landing.Integration{}, false
 }
 
 func integrationsOf(doc *jsonx.Object) *jsonx.Object {
@@ -225,7 +137,7 @@ func integrationsOf(doc *jsonx.Object) *jsonx.Object {
 	return jsonx.NewObject()
 }
 
-func integrationValue(it Integration) (any, error) {
+func integrationValue(it landing.Integration) (any, error) {
 	b, err := json.Marshal(it)
 	if err != nil {
 		return nil, err
@@ -233,8 +145,8 @@ func integrationValue(it Integration) (any, error) {
 	return jsonx.Decode(b)
 }
 
-func decodeIntegration(raw any) (Integration, error) {
-	var it Integration
+func decodeIntegration(raw any) (landing.Integration, error) {
+	var it landing.Integration
 	b, err := jsonx.MarshalCompact(raw)
 	if err != nil {
 		return it, err
@@ -246,7 +158,7 @@ func decodeIntegration(raw any) (Integration, error) {
 // IntegrationPRBody is the body of the PR that lands an integration branch:
 // its members, the required decision sections, and one Closes line per member
 // issue, so landing the one PR ends them all.
-func IntegrationPRBody(it Integration) string {
+func IntegrationPRBody(it landing.Integration) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Integration branch `%s` of round %d: lands these reviewed PRs on `%s` together.\n\n", it.Branch, it.Round, it.Base)
 	for _, m := range it.Members {

@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 // behaviourTrain is a trainWorld whose slot bN holds item N, with bodies[N-1]
 // as that item's Try it text.
-func behaviourTrain(t *testing.T, bodies ...string) (*world, func(TrainOpts) (TrainResult, error)) {
+func behaviourTrain(t *testing.T, bodies ...string) (*world, func(TrainOpts) (landing.TrainResult, error)) {
 	t.Helper()
 	var branches, slots []string
 	for i := range bodies {
@@ -27,7 +28,7 @@ func behaviourTrain(t *testing.T, bodies ...string) (*world, func(TrainOpts) (Tr
 	w := trainWorld(t, "true", branches...)
 	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
-	return w, func(o TrainOpts) (TrainResult, error) {
+	return w, func(o TrainOpts) (landing.TrainResult, error) {
 		o.Targets = branches
 		if o.ItemBody != nil {
 			return w.train(o)
@@ -43,7 +44,7 @@ func behaviourTrain(t *testing.T, bodies ...string) (*world, func(TrainOpts) (Tr
 	}
 }
 
-func trainHasNote(res TrainResult, sub string) bool {
+func trainHasNote(res landing.TrainResult, sub string) bool {
 	for _, n := range res.Notes {
 		if strings.Contains(n, sub) {
 			return true
@@ -58,7 +59,7 @@ func TestTrainBehaviourRunsEachMemberInTheScratchTree(t *testing.T) {
 		"## Try it\n\n- test -f b1.txt && test -f b2.txt && ! test -f b3.txt\n",
 		"## Try it\n\n- test -f b1.txt && test -f b2.txt && test -f b3.txt\n")
 	res, err := train(TrainOpts{})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2,b3" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2,b3" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	for _, slot := range []string{"b1", "b2", "b3"} {
@@ -78,7 +79,7 @@ func TestTrainBehaviourFailureNamesTheCulpritAndLandsNothing(t *testing.T) {
 		"## Try it\n\n- echo boom; exit 3\n",
 		"## Try it\n\n- echo fine\n")
 	res, err := train(TrainOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Landed) != 0 || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || len(res.Landed) != 0 || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "fails Try it step 1") || w.onMain("b1.txt") {
@@ -102,7 +103,7 @@ func TestTrainBehaviourLandGreenLandsOnlyTheMembersBeforeTheCulprit(t *testing.T
 		"## Try it\n\n- echo boom; exit 3\n",
 		"## Try it\n\n- echo fine\n")
 	res, err := train(TrainOpts{LandGreen: true})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !w.onMain("b1.txt") || w.onMain("b2.txt") || w.onMain("b3.txt") {
@@ -115,7 +116,7 @@ func TestTrainBehaviourFirstMemberFailingLandsNothingUnderLandGreen(t *testing.T
 		"## Try it\n\n- exit 1\n",
 		"## Try it\n\n- echo fine\n")
 	res, err := train(TrainOpts{LandGreen: true})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b1" || len(res.Landed) != 0 || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b1" || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -146,7 +147,7 @@ func TestTrainBehaviourStepFilesDoNotReachTheNextMember(t *testing.T) {
 		"## Try it\n\n- touch leak.txt\n",
 		"## Try it\n\n- test ! -f leak.txt\n")
 	res, err := train(TrainOpts{})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -167,7 +168,7 @@ func TestTrainBehaviourHeadMovedBeforeTheRunEndsTheTrain(t *testing.T) {
 		}
 		return "## Try it\n\n- echo fine\n", true, nil
 	}})
-	if err != nil || res.Verdict != GateBaseMoved || res.Culprit != "b2" || len(res.Landed) != 0 || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || res.Culprit != "b2" || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }

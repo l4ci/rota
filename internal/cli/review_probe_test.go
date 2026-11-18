@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
 	"strings"

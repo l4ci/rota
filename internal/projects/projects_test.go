@@ -1,6 +1,7 @@
 package projects
 
 import (
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
 	"testing"
@@ -224,10 +225,11 @@ func TestListMigratesTheConfigDirRegistry(t *testing.T) {
 	if err != nil || len(ps) != 1 || ps[0].Path != proj {
 		t.Fatalf("%+v %v", ps, err)
 	}
-	for _, f := range []string{old, old + ".lock"} {
-		if _, err := os.Stat(f); err == nil {
-			t.Errorf("%s must be gone", f)
-		}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("old data must be gone: %v", err)
+	}
+	if _, err := os.Stat(old + ".lock"); err != nil {
+		t.Errorf("old lock sidecar must remain: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
 		t.Error(err)
@@ -251,10 +253,11 @@ func TestListMigrationPreservesRegistryMode(t *testing.T) {
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Errorf("migrated registry mode = %04o, want 0600", got)
 	}
-	for _, f := range []string{old, old + ".lock"} {
-		if _, err := os.Stat(f); !os.IsNotExist(err) {
-			t.Errorf("%s must be gone, got %v", f, err)
-		}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("old data must be gone: %v", err)
+	}
+	if _, err := os.Stat(old + ".lock"); err != nil {
+		t.Errorf("old lock sidecar must remain: %v", err)
 	}
 }
 
@@ -269,10 +272,11 @@ func TestMigrationKeepsTheStateRegistryWhenBothExist(t *testing.T) {
 	if len(ps) != 1 || ps[0].Path != repos.Realpath(proj) {
 		t.Fatalf("state file must win: %+v", ps)
 	}
-	for _, f := range []string{old, old + ".lock"} {
-		if _, err := os.Stat(f); err == nil {
-			t.Errorf("%s must be removed", f)
-		}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Errorf("old data must be gone: %v", err)
+	}
+	if _, err := os.Stat(old + ".lock"); err != nil {
+		t.Errorf("old lock sidecar must remain: %v", err)
 	}
 }
 

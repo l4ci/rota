@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -109,7 +110,7 @@ func (e Env) checkVacuous(ctx context.Context, root, before, after string, c vac
 		return vacuousResult{}, ctx.Err()
 	}
 	if code != 0 {
-		return vacuousResult{verdict: GateVerifyFailed, detail: fmt.Sprintf("selected tests fail on the merge: %s\n%s", names, indentTail(out, 20))}, nil
+		return vacuousResult{verdict: landing.GateVerifyFailed, detail: fmt.Sprintf("selected tests fail on the merge: %s\n%s", names, indentTail(out, 20))}, nil
 	}
 	goDefault := c.command == config.String(nil, "test.vacuousCommand")
 	if goDefault && !vacuousGoTestsRan(out) {
@@ -133,7 +134,7 @@ func (e Env) checkVacuous(ctx context.Context, root, before, after string, c vac
 		if goDefault && !vacuousGoTestsRan(out) {
 			return vacuousResult{note: "VACUOUS-SKIP — inconclusive: no selected Go tests completed without skipping with non-test changes reverted: " + names}, nil
 		}
-		return vacuousResult{verdict: GateVacuousTests, detail: "tests still pass with non-test changes reverted: " + names}, nil
+		return vacuousResult{verdict: landing.GateVacuousTests, detail: "tests still pass with non-test changes reverted: " + names}, nil
 	}
 	return vacuousResult{note: "VACUOUS-PASS — tests fail with non-test changes reverted: " + names}, nil
 }
@@ -200,7 +201,7 @@ func expandTestTemplate(template string, files, packages, names []string) string
 	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template)
 }
 
-func (g *gateOperation) vacuousRun(before, after string) (bool, error) {
+func (g *gateRun) vacuousRun(before, after string) (bool, error) {
 	r, err := g.e.checkVacuous(g.ctx, g.root, before, after, g.in.cfg.vacuous)
 	if err != nil {
 		return g.broke(err.Error())
@@ -212,7 +213,7 @@ func (g *gateOperation) vacuousRun(before, after string) (bool, error) {
 		return false, nil
 	}
 	hint := "fix the selected tests, then re-gate"
-	if r.verdict == GateVacuousTests {
+	if r.verdict == landing.GateVacuousTests {
 		hint = "add an assertion that fails with non-test changes reverted, then re-gate; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
 	}
 	g.verdict(r.verdict, r.detail+"; nothing landed", hint)
@@ -221,8 +222,8 @@ func (g *gateOperation) vacuousRun(before, after string) (bool, error) {
 
 // vacuousStage checks each train member independently of later members and
 // never reuses the full-tier cache. A failure names the owning member.
-func (t *trainRun) vacuousStage(p trainPlan, result TrainResult, prefix trainVerified) (struct{}, TrainResult, bool, error) {
-	result = result.owned()
+func (t *trainRun) vacuousStage(p trainPlan, result landing.TrainResult, prefix trainVerified) (struct{}, landing.TrainResult, bool, error) {
+	result = cloneTrainResult(result)
 
 	if t.o.NoVerify {
 		return struct{}{}, result, false, nil
@@ -246,7 +247,7 @@ func (t *trainRun) vacuousStage(p trainPlan, result TrainResult, prefix trainVer
 		result.Culprit = result.Members[i].Target
 		result.Verdict, result.Err = r.verdict, r.detail+"; nothing landed"
 		result.Hint = "fix the selected tests, then re-run the train"
-		if r.verdict == GateVacuousTests {
+		if r.verdict == landing.GateVacuousTests {
 			result.Hint = "add an assertion that fails with non-test changes reverted, then re-run the train; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
 		}
 		// Unlike tier bisection this check has not verified the earlier prefix on

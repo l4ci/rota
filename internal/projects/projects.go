@@ -67,7 +67,8 @@ func file(env cfgdir.Env) (string, error) {
 	return path, nil
 }
 
-// migrate moves the pre-#1184 registry old to path, with its lock. A registry
+// migrate moves the pre-#1184 registry old to path. The old lock sidecar stays:
+// another process may still hold or wait on it during the upgrade. A registry
 // already in the state dir wins: the old copy is just removed. A failure
 // leaves the old file in place and the move is retried on the next call.
 func migrate(old, path string) {
@@ -75,7 +76,7 @@ func migrate(old, path string) {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		fsio.RemoveWithLock(old)
+		os.Remove(old)
 		return
 	}
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
@@ -84,7 +85,6 @@ func migrate(old, path string) {
 	if fsio.MoveFilePreserveMode(old, path) != nil {
 		return
 	}
-	fsio.RemoveWithLock(old)
 }
 
 // Register adds root to the registry, or refreshes its lastSeen when it is

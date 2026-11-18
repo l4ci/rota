@@ -66,19 +66,20 @@ func TestOverrides(t *testing.T) {
 
 func TestInvalid(t *testing.T) {
 	for cfg, want := range map[string]string{
-		`{"round":{"role":"support"}}`:   "round.support",
-		`{"round":{"scope":"all"}}`:      "round.scope",
-		`{"round":{"roster":["a","a"]}}`: "twice",
-		`{"round":{"roster":["Ann"]}}`:   "branch",
-		`{"round":{"roster":["a/b"]}}`:   "branch",
-		`{"round":{"roster":[]}}`:        "empty",
-		`{"round":{"roster":"ben"}}`:     "list",
-		`{"round":{"sharedPaths":[1]}}`:  "list of strings",
-		`{"round":{"stallMinutes":-1}}`:  "stallMinutes",
-		`{"round":{"stallMinutes":"x"}}`: "stallMinutes",
-		`{"round":{"maxBounces":-1}}`:    "maxBounces",
-		`{"round":{"maxBounces":"x"}}`:   "maxBounces",
-		`{"work":{"tdd":"yes"}}`:         "work.tdd",
+		`{"round":{"role":"support"}}`:                 "round.support",
+		`{"round":{"scope":"all"}}`:                    "round.scope",
+		`{"round":{"roster":["a","a"]}}`:               "twice",
+		`{"round":{"roster":["Ann"]}}`:                 "branch",
+		`{"round":{"roster":["a/b"]}}`:                 "branch",
+		`{"round":{"roster":[]}}`:                      "empty",
+		`{"round":{"roster":"ben"}}`:                   "list",
+		`{"round":{"sharedPaths":[1]}}`:                "list of strings",
+		`{"round":{"adoptPattern":"codex/{foo,bar}"}}`: `round.adoptPattern "codex/{foo,bar}": glob "codex/{foo,bar}" uses braces`,
+		`{"round":{"stallMinutes":-1}}`:                "stallMinutes",
+		`{"round":{"stallMinutes":"x"}}`:               "stallMinutes",
+		`{"round":{"maxBounces":-1}}`:                  "maxBounces",
+		`{"round":{"maxBounces":"x"}}`:                 "maxBounces",
+		`{"work":{"tdd":"yes"}}`:                       "work.tdd",
 	} {
 		_, err := Load(project(t, cfg))
 		if err == nil || !strings.Contains(err.Error(), want) {

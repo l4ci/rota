@@ -143,25 +143,6 @@ func returnRoot(c *Ctx, slot string) (string, error) {
 	if err != nil {
 		return root, err
 	}
-	reg, err := worker.LoadRegistry(root)
-	if err != nil {
-		return root, err
-	}
-	if reg.Slot(slot) != nil {
-		return root, nil
-	}
-	main, ok := c.MainCheckout(root)
-	if !ok {
-		return root, nil
-	}
-	if main != root {
-		mreg, err := worker.LoadRegistry(main)
-		if err != nil {
-			return root, err
-		}
-		if mreg.Slot(slot) != nil {
-			return main, nil
-		}
-	}
-	return root, nil
+	root, _, err = resolveSlotBase(c, root, "", slot)
+	return root, err
 }

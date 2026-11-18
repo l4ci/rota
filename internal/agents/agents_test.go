@@ -151,6 +151,22 @@ func TestWriteRefusesForeignFile(t *testing.T) {
 	}
 }
 
+func TestWriteRefusesSymlinkedParent(t *testing.T) {
+	root := project(t, "")
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, ".claude")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	_, err := Write(root, config.Load(cfgdir.OSEnv(), root))
+	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), ".claude") {
+		t.Fatalf("got %v, want refusal for symlinked parent", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "agents", "rota-explorer.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("wrote through symlinked parent: stat error %v", err)
+	}
+}
+
 func TestBadRoleConfig(t *testing.T) {
 	for cfg, want := range map[string]string{
 		`{"roles":{"explorer":{"tier":"giant"}}}`:  "roles.explorer.tier",
@@ -159,19 +175,6 @@ func TestBadRoleConfig(t *testing.T) {
 		if _, err := load(t, project(t, cfg)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: got %v", cfg, err)
 		}
-	}
-}
-
-func TestWriteRefusesSymlinkedDir(t *testing.T) {
-	root := project(t, "")
-	outside := t.TempDir()
-	os.Symlink(outside, filepath.Join(root, ".claude"))
-	_, err := Write(root, config.Load(cfgdir.OSEnv(), root))
-	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "symlink") {
-		t.Fatalf("got %v", err)
-	}
-	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
-		t.Fatalf("wrote through the link: %v", ents)
 	}
 }
 

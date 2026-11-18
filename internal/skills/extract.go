@@ -82,6 +82,8 @@ func Extract(s *Set, version, base string) (string, error) {
 			}
 		}
 	}
+	// Publish the staged directory atomically. fsio.MoveFile is for regular
+	// files; an EXDEV copy fallback could expose a half-written cache tree.
 	if err := os.Rename(tmp, target); err != nil {
 		if fi, serr := os.Stat(target); serr == nil && fi.IsDir() {
 			return target, nil // another process won the race

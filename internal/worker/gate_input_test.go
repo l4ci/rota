@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,7 @@ func TestGateTakesItsInputFromTheEnvSeam(t *testing.T) {
 		name    string
 		code    int
 		verdict string
-	}{{"green", 0, GatePass}, {"red", 1, GateVerifyFailed}} {
+	}{{"green", 0, landing.GatePass}, {"red", 1, landing.GateVerifyFailed}} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, "")
 			if err := os.Remove(filepath.Join(w.dir, ".rota", "config.json")); err != nil {
@@ -110,7 +111,7 @@ func TestTrainLoadsGateInputOnce(t *testing.T) {
 		return in, err
 	}
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(w.dir, cfgPath)); string(got) != edited {

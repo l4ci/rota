@@ -147,10 +147,12 @@ func hookPrint(v any) Result {
 	return Result{Text: strings.TrimSuffix(b.String(), "\n")}
 }
 
-// hookContext is what both hooks need: who the session is relative to the
-// lease, the config of the lease's project and the handoff path.
+// hookContext is one hook call's resolved session project and identity.
 type hookContext struct {
 	payload   hook.Payload
+	cwd       string
+	slot      string
+	base      string
 	commonDir string
 	who       hookWho
 	root      string
@@ -171,37 +173,58 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 // not the orchestrator (the context guard), using the project root found from
 // its cwd. The caller tells the two apart by hc.who.Orchestrator.
 func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bool) {
-	var err error
-	if hc.payload, err = hook.ParsePayload(readInput(c)); err != nil {
+	hc, ok = hookReadContext(c)
+	if !ok || hc.commonDir == "" || hc.root == "" {
 		return hc, false
 	}
-	wd, _ := c.deps().Getwd()
-	cwd := hc.payload.CwdOr(wd)
-	cd, err := c.CommonDir(cwd)
-	if err != nil {
+	if !hc.who.Orchestrator && !anySession && !(needLeaseFree && hc.who.LeaseFree) {
 		return hc, false
 	}
-	hc.commonDir = cd
-	hc.now = c.deps().Now
-	hc.lease = c.deps().LeaseEnv()
-	hc.who = hookIdentify(hc.lease, c.deps().HolderPID(), c.deps().Getenv, cd)
-	switch {
-	case hc.who.Orchestrator:
-		hc.root = hc.who.Lease.Root
-	case anySession || (needLeaseFree && hc.who.LeaseFree):
-		hc.root, _ = findRoot(cwd, false)
-	}
-	if hc.root == "" {
-		return hc, false
-	}
-	hc.cfg = c.deps().Config(hc.root)
 	switch {
 	case hc.who.Orchestrator || !anySession:
 		hc.handoff = handoffFile(c.deps(), hc.root, hc.cfg)
 	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
 		// A work session pauses to .rota/handoff/<its branch>.md, where
 		// /rota-pause writes it; only the auto guard reads it.
-		hc.handoff = branchHandoffFile(c.deps(), hc.root, cwd)
+		hc.handoff = branchHandoffFile(c.deps(), hc.root, hc.cwd)
+	}
+	return hc, true
+}
+
+// hookReadContext is shared by the handoff hooks and the tool guard. Missing
+// project or git state stays in the value: Bash must still guard a worker's
+// commands outside an initialized project. Only unreadable payloads fail.
+func hookReadContext(c *Ctx) (hc hookContext, ok bool) {
+	var err error
+	if hc.payload, err = hook.ParsePayload(readInput(c)); err != nil {
+		return hc, false
+	}
+	hc.cwd = hc.payload.Cwd
+	if hc.cwd == "" {
+		hc.cwd, _ = c.deps().Getwd()
+	}
+	hc.slot = c.WorkerSlot()
+	hc.commonDir, _ = c.CommonDir(hc.cwd)
+	hc.now = c.deps().Now
+	hc.lease = c.deps().LeaseEnv()
+	if hc.commonDir != "" {
+		hc.who = hookIdentify(hc.lease, c.deps().HolderPID(), c.deps().Getenv, hc.commonDir)
+	}
+	if hc.who.Orchestrator {
+		hc.root = hc.who.Lease.Root
+	} else {
+		hc.root, _ = findRoot(hc.cwd, false)
+	}
+	if hc.root != "" {
+		hc.cfg = c.deps().Config(hc.root)
+	}
+	// Resolve from this payload's snapshot, including a registry in the main
+	// checkout when the session runs in a worker worktree.
+	if hc.slot != "" {
+		_, hc.base, _ = resolveSlotBase(c, hc.root, hc.commonDir, hc.slot)
+	}
+	if hc.base == "" {
+		hc.base = hookBase(c.deps(), hc.cwd, hc.cfg)
 	}
 	return hc, true
 }
@@ -233,15 +256,23 @@ func noHandoffBaseMsg(cfg any) string {
 // resolves, so a caller reads no note rather than one filed under a guessed
 // branch.
 func handoffFile(d *Deps, root string, cfg any) string {
+	base := hookBase(d, root, cfg)
+	if base == "" {
+		return ""
+	}
+	return hook.NotePath(root, base)
+}
+
+func hookBase(d *Deps, dir string, cfg any) string {
 	configured := ""
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
 		configured, _ = v.(string)
 	}
-	base, ok, _ := d.Repo(root).Base(context.Background(), configured)
+	base, ok, _ := d.Repo(dir).Base(context.Background(), configured)
 	if !ok {
 		return ""
 	}
-	return hook.NotePath(root, base)
+	return base
 }
 
 func hookStop(c *Ctx, args []string) (Result, error) {
@@ -387,23 +418,31 @@ func hookSessionStart(c *Ctx, args []string) (Result, error) {
 // For Bash it exits 2 when a worker runs a command its contract forbids (#702).
 // Unreadable payloads pass silently.
 func hookGuard(c *Ctx, args []string) (Result, error) {
-	payload, err := hook.ParsePayload(readInput(c))
-	if err != nil {
+	hc, ok := hookReadContext(c)
+	if !ok {
 		return Result{}, nil
 	}
-	wd, _ := c.deps().Getwd()
-	if tool := payload.String("tool_name"); tool == "Edit" || tool == "Write" {
+	return hookGuardFor(c, hc)
+}
+
+// hookGuardFor consumes the setup snapshot without re-reading cwd or identity.
+func hookGuardFor(c *Ctx, hc hookContext) (Result, error) {
+	if tool := hc.payload.String("tool_name"); tool == "Edit" || tool == "Write" {
+		if hc.root == "" || hc.commonDir == "" {
+			return Result{}, nil
+		}
+		st := knowledge.Store{Root: hc.root, Repos: repos.Paths(hc.root), Config: func(root string) any {
+			if root == hc.root {
+				return hc.cfg
+			}
+			return c.deps().Config(root)
+		}}
 		context := hook.DecideRecall(hook.RecallRequest{
-			Payload: payload, DefaultCwd: wd,
-			Entries: func(cwd, file string) ([]knowledge.PathEntry, error) {
-				root, err := findRoot(cwd, false)
-				if err != nil {
-					return nil, err
-				}
-				st := knowledge.Store{Root: root, Repos: repos.Paths(root), Config: c.deps().Config}
+			Payload: hc.payload, DefaultCwd: hc.cwd,
+			Entries: func(_, file string) ([]knowledge.PathEntry, error) {
 				return st.PathEntries(file)
 			},
-			CommonDir: c.CommonDir, Now: c.deps().Now,
+			CommonDir: func(string) (string, error) { return hc.commonDir, nil }, Now: hc.now,
 		})
 		if context == "" {
 			return Result{}, nil
@@ -412,8 +451,7 @@ func hookGuard(c *Ctx, args []string) (Result, error) {
 			"hookEventName": "PreToolUse", "additionalContext": context,
 		}}), nil
 	}
-	slot := c.WorkerSlot()
-	if slot == "" {
+	if hc.slot == "" {
 		return Result{}, nil
 	}
 	gitOut := func(dir string, a ...string) (string, error) {
@@ -428,8 +466,7 @@ func hookGuard(c *Ctx, args []string) (Result, error) {
 	}
 	// An unresolved base ("") leaves only main/master guarded: the guard never
 	// blocks on its own malfunction.
-	base, _, _ := resolveBaseFor(c, payload.CwdOr(wd))
-	if reason := hook.DecideGuard(hook.GuardRequest{Payload: payload, Slot: slot, DefaultCwd: wd, Base: base, Git: gitOut}); reason != "" {
+	if reason := hook.DecideGuard(hook.GuardRequest{Payload: hc.payload, Slot: hc.slot, DefaultCwd: hc.cwd, Base: hc.base, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil

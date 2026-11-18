@@ -2,10 +2,10 @@ package roundtick
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/strutil"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // GateRun is the gate result and the bookkeeping that followed it. Refused
@@ -36,7 +36,7 @@ type trainOutcome struct {
 	Done bool
 	// Excluded are members the pre-filter dropped (a missing PR section):
 	// the train passed without them and they did not merge.
-	Excluded []worker.TrainCulprit
+	Excluded []landing.TrainCulprit
 	// Interaction names the members that are red only together (#3095).
 	Interaction []string
 	// Unreproduced is a red that reproduced nowhere: a flake (#3113).

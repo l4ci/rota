@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/marker"
 )
 
 // Linear is the issue tracker of issues.source linear: one team of a Linear
@@ -505,7 +506,7 @@ func (l *Linear) norm(d linearIssue) Issue {
 	body := d.Description
 	if f, ok := d.state()[linearStateURL+"fields"]; ok {
 		if block, known := f.Metadata.body(); known {
-			body = joinBody(body, block)
+			body = marker.JoinFields(body, block)
 		}
 	}
 	is := Issue{Key: IssueKey(d.Identifier), Title: d.Title, Body: body, Labels: []string{}, State: "open",
@@ -623,7 +624,7 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 	if err != nil {
 		return "", err
 	}
-	text, fields := splitBody(body)
+	text, fields := fieldsProperty(body)
 	if err := stateFits("fields", fields.Block); err != nil {
 		return "", err
 	}
@@ -678,7 +679,7 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	var fields fieldsProp
 	if e.Body != nil {
 		var text string
-		text, fields = splitBody(*e.Body)
+		text, fields = fieldsProperty(*e.Body)
 		in["description"] = text
 	}
 	add, err := l.labelIDs(ctx, e.AddLabels, true)

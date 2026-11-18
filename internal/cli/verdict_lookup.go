@@ -9,7 +9,7 @@ import (
 // lookupVerdicts preserves file mode and recovers only from a same-repository
 // PR. Read failures leave the local verdict rules in force and are visible.
 func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
-	cfg := c.deps().Config(t.root)
+	cfg := c.projectConfig(t.root)
 	if issue, err := issueBackend(c.deps(), t.root); err != nil || !issue {
 		return verdict.Load(t.root).Branches[t.key]
 	}

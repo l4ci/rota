@@ -3,7 +3,6 @@ package ship
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -27,32 +26,10 @@ type MergePorts struct {
 	Checkout Checkout // where the merge runs; scopes worktree cleanup
 }
 
-// BranchMovedError reports a landed pin whose branch must be kept because its
-// current tip differs. MergeBranch returns the merge hash alongside this error.
-type BranchMovedError struct{ Branch, Base, Pinned, Tip, MergeSHA string }
-
-func (e *BranchMovedError) Error() string {
-	return fmt.Sprintf("pinned commit %s landed on %s as merge %s. Branch %s moved to %s; that tip was not gated or merged by this operation; branch kept. Commits added after the pin need their own review and merge", e.Pinned, e.Base, e.MergeSHA, e.Branch, e.Tip)
-}
-
-// PostMergeError preserves the landed commit when later Git work fails.
-// MergeSHA is empty only when both the normal and recovery reads failed.
-type PostMergeError struct {
-	Pinned, Base, MergeSHA string
-	Err                    error
-}
-
-func (e *PostMergeError) Error() string {
-	landing := fmt.Sprintf("pinned commit %s landed on %s", e.Pinned, e.Base)
-	if e.MergeSHA != "" {
-		landing += " as merge " + e.MergeSHA
-	} else {
-		landing += "; merge SHA could not be read"
-	}
-	return landing + ". Post-merge cleanup failed: " + e.Err.Error() + ". Do not retry the merge"
-}
-
-func (e *PostMergeError) Unwrap() error { return e.Err }
+// BranchMovedError and PostMergeError preserve the ship API while local
+// landing owns the pin and its post-merge read-back.
+type BranchMovedError = land.BranchMovedError
+type PostMergeError = land.PostMergeError
 
 // MergeBranch merges branch into base with --no-ff and deletes it if its tip
 // still matches the pin, returning the merge commit's short hash. A moved tip
@@ -63,72 +40,29 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if base == branch {
 		return "", &Refusal{By: blockedby.BaseBranch, Msg: "'" + branch + "' is the base branch"}
 	}
-	// The commit the gates judge is the commit that lands: a push to the
-	// branch after this point cannot ride in.
-	head, err := outAs(p.Git, "rev-parse "+branch, "rev-parse", "--verify", "-q", branch+"^{commit}")
+	sha, err := land.LandLocal(land.LocalPorts{
+		Git: p.Git.Run, Recover: p.Recover,
+		Verify: func(head string) error {
+			if err := p.Verdict(branch, head); err != nil {
+				return err
+			}
+			if ref, err := p.Approve(head); ref != nil {
+				return &GateRefusedError{Ref: ref}
+			} else {
+				return err
+			}
+		},
+		Prepare: func() error { return ClearWorktree(p.Git, branch, p.Checkout) },
+	}, land.LocalRequest{Branch: branch, Base: base, Message: msg, Checkout: base, DeleteBranch: true, ShortSHA: true})
 	if err != nil {
-		return "", err
-	}
-	if err := p.Verdict(branch, head); err != nil {
-		return "", err
-	}
-	if ref, err := p.Approve(head); ref != nil {
-		return "", &GateRefusedError{Ref: ref}
-	} else if err != nil {
-		return "", err
-	}
-	if err := ClearWorktree(p.Git, branch, p.Checkout); err != nil {
-		return "", err
-	}
-	if _, err := outAs(p.Git, "checkout "+base, "checkout", "-q", base); err != nil {
-		return "", err
-	}
-	recover := p.Recover
-	if recover == nil {
-		recover = p.Git.Run
-	}
-	if err := land.MergeLocal(p.Git.Run, head, msg, recover); err != nil {
 		switch f := land.Classify(err); f.Kind {
 		case land.FailConflict:
 			return "", &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
 		case land.FailMerge:
 			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(f.Out)}
-		default:
-			return "", err
 		}
 	}
-	postMerge := func(sha string, err error) error {
-		return &PostMergeError{Pinned: head, Base: base, MergeSHA: sha, Err: err}
-	}
-	sha, err := p.Git.Run("log", "-1", "--format=%h")
-	if err != nil || sha.ExitCode != 0 || line(sha.Stdout) == "" {
-		if err == nil {
-			err = &GitError{Msg: "git log -1 --format=%h: " + strutil.FirstLine(sha.Stderr)}
-		}
-		// The caller's context may have been cancelled after the merge. Read
-		// the base through the bounded recovery runner before reporting it.
-		read, readErr := recover("rev-parse", "--short", base)
-		if readErr != nil {
-			err = errors.Join(err, readErr)
-		} else if read.ExitCode == 0 && line(read.Stdout) != "" {
-			return line(read.Stdout), postMerge(line(read.Stdout), err)
-		} else {
-			err = errors.Join(err, &GitError{Msg: "git rev-parse --short " + base + ": " + strutil.FirstLine(read.Stderr)})
-		}
-		return "", postMerge("", err)
-	}
-	mergedSHA := line(sha.Stdout)
-	current, err := outAs(p.Git, "rev-parse "+branch, "rev-parse", "--verify", "-q", branch+"^{commit}")
-	if err != nil {
-		return mergedSHA, postMerge(mergedSHA, err)
-	}
-	if current != head {
-		return mergedSHA, &BranchMovedError{Branch: branch, Base: base, Pinned: head, Tip: current, MergeSHA: mergedSHA}
-	}
-	if _, err := outAs(p.Git, "branch -d "+branch, "branch", "-d", branch); err != nil {
-		return mergedSHA, postMerge(mergedSHA, err)
-	}
-	return mergedSHA, nil
+	return sha, err
 }
 
 // ChangedFiles lists the files a merge range changes, for the merge-approval

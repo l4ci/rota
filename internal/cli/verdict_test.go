@@ -513,3 +513,25 @@ func TestVerdictAddResolvesARemoteOnlyBranch(t *testing.T) {
 		t.Fatalf("a branch nowhere is exit 3, got %d", code)
 	}
 }
+
+// verdict route reads the project config through the invocation memo: the
+// verdict lookup and the routing reuse the preflight load (#3503).
+func TestVerdictRouteLoadsConfigOnce(t *testing.T) {
+	dir := verdictRepo(t)
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json"); code != 0 {
+		t.Fatalf("add: %d", code)
+	}
+	calls := 0
+	pinDir(t, dir, func(d *Deps) {
+		inner := d.Config
+		d.Config = func(root string) any { calls++; return inner(root) }
+	})
+	if code, _, _ := rotaIn(t, dir, "verdict", "route", "--for", "ship-review", "--json"); code != 0 {
+		t.Fatalf("route: %d", code)
+	}
+	// Preflight, configuredBase (masking lookup, kept) and backendMode (a Deps
+	// helper) each read once; route itself adds none beyond the shared memo.
+	if calls != 3 {
+		t.Errorf("Config called %d times, want 3", calls)
+	}
+}

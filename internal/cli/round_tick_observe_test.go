@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,13 +11,112 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/postgate"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/worker"
 )
+
+// Exercise a repair that calls the host and rewrites the registry. An empty
+// round cannot distinguish InspectReconcile from an applying Reconcile.
+func TestRoundTickObserveReconcileDoesNotRepair(t *testing.T) {
+	for _, mode := range []string{"adapter", "tick"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newScopeFx(t, "warn", "")
+			if err := worker.Update(f.root, func(d *worker.Doc) { d.Slot("ben").SetHandle("w1:t1") }); err != nil {
+				t.Fatal(err)
+			}
+			var repairs int
+			build := f.deps.RoundEnv
+			f.deps.RoundEnv = func(ctx context.Context, root string, opts RoundOpts) round.Env {
+				e := build(ctx, root, opts)
+				e.HostName = host.Herdr
+				e.Snapshot = func(context.Context) ([]host.Agent, error) {
+					return []host.Agent{{Name: host.AgentName("ben", "w1:t1"), Tab: "w2:t2", Status: "working"}}, nil
+				}
+				e.FollowTab = func(context.Context, string, string, string) error {
+					repairs++
+					return nil
+				}
+				return e
+			}
+			before, err := os.ReadFile(rotatree.Workers(f.root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			w := &tickWorld{root: f.root, renv: f.deps.roundEnv(ctx, f.root)}
+			if mode == "adapter" {
+				out, err := (inspectingWorld{w}).Reconcile(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				hasMovedTab := func(f round.Finding) bool { return f.Kind == round.TabMoved && f.Slot == "ben" }
+				if !slices.ContainsFunc(out.Proposed, hasMovedTab) || !slices.ContainsFunc(out.Drift, hasMovedTab) || len(out.Repaired) != 0 {
+					t.Errorf("inspection must propose the repair and retain drift without applying: %+v", out)
+				}
+			} else {
+				code, out, stderr := rotaInWith(t, f.deps, f.root, "--json", "round", "tick", "--observe", "--holder-pid", "4242")
+				if code != 0 {
+					t.Fatalf("observe exit %d: %s %s", code, out, stderr)
+				}
+				proposals, _ := data(t, out)["proposed"].([]any)
+				if !slices.ContainsFunc(proposals, func(p any) bool {
+					m := p.(map[string]any)
+					return m["action"] == "reconcile" && m["target"] == "tab-moved ben"
+				}) {
+					t.Errorf("observation did not propose the moved-tab repair: %s", out)
+				}
+			}
+			after, err := os.ReadFile(rotatree.Workers(f.root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if repairs != 0 || string(before) != string(after) {
+				t.Fatalf("observation applied a repair: host repairs=%d, registry changed=%v", repairs, string(before) != string(after))
+			}
+			// Positive control: the same drift really does reach the applying
+			// adapter when execution is requested.
+			applied, err := w.Reconcile(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if repairs != 1 || !slices.ContainsFunc(applied.Repaired, func(f round.Finding) bool { return f.Kind == round.TabMoved && f.Slot == "ben" }) {
+				t.Fatalf("execution did not exercise the repair adapter: repairs=%d outcome=%+v", repairs, applied)
+			}
+		})
+	}
+}
+
+func TestRoundTickObserveReviewLoopDoesNotRelay(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}}
+	c, root, _ := reviewCtx(t, f)
+	h := &cliHost{inSession: true}
+	useHost(c.Deps, h)
+	if err := worker.Update(root, func(d *worker.Doc) { d.Slot("nia").SetHandle("w1:t1") }); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(rotatree.Workers(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &tickWorld{c: c, root: root, set: roundcfg.Settings{ReviewLoop: roundcfg.ReviewLoopAuto, MaxBounces: 3}}
+	got := (inspectingWorld{w}).ReviewLoop("nia")
+	if !got.Proposed || got.Relayed || got.Detail != "1 from rev "+prURL {
+		t.Errorf("observation must report pending input as a proposal: %+v", got)
+	}
+	after, err := os.ReadFile(rotatree.Workers(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.calls) != 0 || len(f.posted) != 0 || string(before) != string(after) {
+		t.Fatalf("observation relayed review input: host=%v posted=%v registry changed=%v", h.calls, f.posted, string(before) != string(after))
+	}
+}
 
 func TestRoundTickObserveWithoutAuto(t *testing.T) {
 	for _, level := range []string{"off", "roundtrip", "auto"} {
@@ -125,32 +223,4 @@ func TestRoundTickObserveLeavesHeldWorktreeIndexAlone(t *testing.T) {
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("observation rewrote the held worktree's index")
 	}
-}
-
-// The no-mutation guarantee is structural: the observing world refuses every
-// call that would change state, whatever the tick asks of it. One table lists
-// each mutating World method; a new one must be added here or the seam's
-// explicit implementation will not compile.
-func TestObservingWorldRefusesMutations(t *testing.T) {
-	o := observingWorld{&tickWorld{}}
-	ctx := context.Background()
-	refusals := map[string]func() error{
-		"Landing": func() error { _, _, err := o.Landing(ctx, postgate.Request{}); return err },
-		"Assign":  func() error { _, err := o.Assign(ctx, "#1"); return err },
-		"Review.Mint": func() error {
-			_, err := observingReviewer{}.Mint(ctx, round.Architecture{})
-			return err
-		},
-		"FollowUp.Start": func() error {
-			return o.FollowUp().Start(ctx, roundtick.FollowUp{}, "ben", false)
-		},
-	}
-	for name, call := range refusals {
-		if err := call(); !errors.Is(err, errReadOnlyWorld) {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	// The audit line is dropped, not refused: the zero tickWorld would panic
-	// if it wrote.
-	o.Audit(roundtick.Action{})
 }

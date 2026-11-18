@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -62,13 +63,13 @@ func TestGateVacuousOutcomes(t *testing.T) {
 		name, body, cfg, verdict, note string
 		removeWork                     bool
 	}{
-		{name: "dependent", body: "test -f work.txt", verdict: GatePass, note: "VACUOUS-PASS"},
-		{name: "already red", body: "false", verdict: GateVerifyFailed},
-		{name: "disabled", body: "true", cfg: `{"test":{"full":["true"]}}`, verdict: GatePass},
-		{name: "no test changes", verdict: GatePass, note: "VACUOUS-SKIP"},
-		{name: "only tests", body: "true", removeWork: true, verdict: GatePass, note: "VACUOUS-SKIP — no non-test changes to revert"},
-		{name: "docs and skills only", removeWork: true, verdict: GatePass, note: "VACUOUS-SKIP"},
-		{name: "bad pattern", body: "true", cfg: `{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"["}}`, verdict: GateCheckBroke},
+		{name: "dependent", body: "test -f work.txt", verdict: landing.GatePass, note: "VACUOUS-PASS"},
+		{name: "already red", body: "false", verdict: landing.GateVerifyFailed},
+		{name: "disabled", body: "true", cfg: `{"test":{"full":["true"]}}`, verdict: landing.GatePass},
+		{name: "no test changes", verdict: landing.GatePass, note: "VACUOUS-SKIP"},
+		{name: "only tests", body: "true", removeWork: true, verdict: landing.GatePass, note: "VACUOUS-SKIP — no non-test changes to revert"},
+		{name: "docs and skills only", removeWork: true, verdict: landing.GatePass, note: "VACUOUS-SKIP"},
+		{name: "bad pattern", body: "true", cfg: `{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"["}}`, verdict: landing.GateCheckBroke},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -108,10 +109,10 @@ func TestGateVacuousOutcomes(t *testing.T) {
 			if tc.note != "" && !strings.Contains(strings.Join(res.Notes, "\n"), tc.note) {
 				t.Fatalf("missing %s in %v", tc.note, res.Notes)
 			}
-			if tc.verdict != GatePass && (res.Changed || w.forgeWord("state") != "OPEN") {
+			if tc.verdict != landing.GatePass && (res.Changed || w.forgeWord("state") != "OPEN") {
 				t.Fatal("failing check landed")
 			}
-			if tc.verdict == GatePass && !res.Changed {
+			if tc.verdict == landing.GatePass && !res.Changed {
 				t.Fatal("passing check did not land")
 			}
 			if trees := w.scratchTrees(); len(trees) != 0 {
@@ -151,9 +152,9 @@ func TestGateVacuousGoDefaultRunsSelectedTests(t *testing.T) {
 			w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 			w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true}}`)
 			res, err := w.gate(false, GateOpts{})
-			want := GateVacuousTests
+			want := landing.GateVacuousTests
 			if dependent {
-				want = GatePass
+				want = landing.GatePass
 			}
 			if err != nil || res.Verdict != want {
 				t.Fatalf("%+v %v", res, err)
@@ -194,7 +195,7 @@ func TestGateVacuousGoDefaultInconclusiveWhenNoTestsRun(t *testing.T) {
 			w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 			w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true}}`)
 			res, err := w.gate(false, GateOpts{})
-			if err != nil || res.Verdict != GatePass || !res.Changed {
+			if err != nil || res.Verdict != landing.GatePass || !res.Changed {
 				t.Fatalf("unavailable tests must not refuse the PR: %+v, %v", res, err)
 			}
 			notes := strings.Join(res.Notes, "\n")
@@ -237,7 +238,7 @@ func TestGateVacuousRestoresModifiedDeletedAndRenamedFiles(t *testing.T) {
 			w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 			w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`)
 			res, err := w.gate(false, GateOpts{})
-			if err != nil || res.Verdict != GatePass || !res.Changed || !strings.Contains(strings.Join(res.Notes, "\n"), "VACUOUS-PASS") {
+			if err != nil || res.Verdict != landing.GatePass || !res.Changed || !strings.Contains(strings.Join(res.Notes, "\n"), "VACUOUS-PASS") {
 				t.Fatalf("%+v %v", res, err)
 			}
 		})
@@ -251,7 +252,7 @@ func TestTrainVacuousDependentMemberPasses(t *testing.T) {
 	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Order: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "b2: VACUOUS-PASS") {
@@ -266,7 +267,7 @@ func TestTrainNoVerifySkipsVacuousCheck(t *testing.T) {
 	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1"}, NoVerify: true})
-	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1" {
+	if err != nil || res.Verdict != landing.GatePass || strings.Join(res.Landed, ",") != "b1" {
 		t.Fatalf("--no-verify must skip vacuity and land b1: %+v, %v", res, err)
 	}
 	if strings.Contains(strings.Join(res.Notes, "\n"), "VACUOUS") {

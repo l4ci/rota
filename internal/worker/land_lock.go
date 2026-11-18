@@ -43,9 +43,9 @@ func (e Env) withLandLockMode(ctx context.Context, root, holder string, noWait b
 	// truth, so a stale holder file only matters while the lock is held.
 	held := func(waited bool) func() error {
 		return func() error {
-			// best effort: the holder only sharpens a refusal. WriteFile truncates;
+			// Best effort: the holder only sharpens a refusal. Publish it atomically;
 			// a failed write drops the file so a previous holder's name never lingers.
-			if os.WriteFile(path+LandHolderSuffix, []byte(holder), 0o644) != nil {
+			if fsio.WriteFileAtomicMode(path+LandHolderSuffix, []byte(holder), 0o644) != nil {
 				os.Remove(path + LandHolderSuffix)
 			}
 			defer os.Remove(path + LandHolderSuffix)

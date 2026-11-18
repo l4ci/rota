@@ -90,6 +90,15 @@ fixtures carries an explicit reason there and stays out of the tier. A fixture e
 test that no longer exists, or without a reason, fails validation. Tests of tooling behavior
 against mutated fixture trees run with their package rather than on every fast run.
 Run `go run ./test/treescan --check` to validate the registry without executing its tests.
+
+The source guards also check config environment isolation. Each `_test.go` file
+that spells `ROTA_CONFIG_DIR` or `XDG_CONFIG_HOME` must import `internal/testiso`
+or set `HOME` or `XDG_CONFIG_HOME` with `t.Setenv`. Tests in `internal/testiso`
+are exempt because they run the isolation init themselves. This is a file-level
+check; it does not prove every test path is isolated. Host-session scrubbing uses
+`internal/hostenv` in Go and its generated `test/lib/host-env-prefixes` list in
+shell. After changing the prefixes, regenerate the file from the repo root with
+`go run ./internal/hostenv/gen > test/lib/host-env-prefixes`.
 The fast-tier wiring test runs for scanner changes and in smoke section 175 at the merge gate.
 
 Round 50 measured `go run ./test/treescan` on base `9c89bab1` and the scan changes
@@ -128,8 +137,11 @@ tests that call `golden.Check`: `go test ./internal/<pkg> -run '^TestX$' -update
 rewrites the changed outputs if the rest of the test passes, and the JSON diff is the review.
 
 Gate and train steps share `runLandingStage` for stopping and error propagation.
-Their run functions wire named outputs into each step's explicit arguments; mutable
-helper state stays inside one step. Test a step with supplied inputs before adding a
+Their run functions wire named outputs into each step's explicit arguments. Gate
+steps and helpers use one `gateRun` type; each step gets its own answer and scratch
+fields, so mutable helper state stays inside that step. The gate source is split
+into target resolution, record checks, freshness, verification, merge and
+bookkeeping stages. Test a step with supplied inputs before adding a
 whole gate or train fixture, and check that it leaves the caller's answer unchanged.
 
 There are no servers and no ports in this repo.

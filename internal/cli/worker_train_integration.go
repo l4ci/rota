@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 
 // interactionTitle is the title of the interaction item of an integration
 // branch; a rerun that hits the same interaction finds the open item by it.
-func interactionTitle(it worker.Integration, members []string) string {
+func interactionTitle(it landing.Integration, members []string) string {
 	return fmt.Sprintf("Interaction on %s: %s", it.Branch, strings.Join(members, ", "))
 }
 
@@ -24,7 +25,7 @@ func interactionTitle(it worker.Integration, members []string) string {
 // item rather than filing another. Only an item rota recorded on the branch
 // is reused: one matched by title alone could be anyone's, and the record
 // decides which slot is cut from the branch and whose review it defers.
-func fileInteractionItem(be backlog.Backend, root string, r worker.TrainResult) (id string, filed bool, err error) {
+func fileInteractionItem(be backlog.Backend, root string, r landing.TrainResult) (id string, filed bool, err error) {
 	it := *r.Integration
 	title := interactionTitle(it, r.Interaction)
 	for _, rid := range it.Items {
@@ -56,7 +57,7 @@ func fileInteractionItem(be backlog.Backend, root string, r worker.TrainResult) 
 	if slices.Contains(it.Items, id) {
 		return id, filed, nil
 	}
-	return id, filed, worker.UpdateIntegration(root, it.Branch, func(rec *worker.Integration) {
+	return id, filed, worker.UpdateIntegration(root, it.Branch, func(rec *landing.Integration) {
 		if !slices.Contains(rec.Items, id) {
 			rec.Items = append(rec.Items, id)
 		}
@@ -64,7 +65,7 @@ func fileInteractionItem(be backlog.Backend, root string, r worker.TrainResult) 
 }
 
 // interactionBody says what broke and where the fix goes.
-func interactionBody(it worker.Integration, r worker.TrainResult) string {
+func interactionBody(it landing.Integration, r landing.TrainResult) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Problem\n\n%s\n\n", strings.TrimSpace(strings.SplitN(r.Err, "\n", 2)[0]))
 	for _, m := range it.Members {
@@ -84,7 +85,7 @@ func interactionBody(it worker.Integration, r worker.TrainResult) string {
 	return b.String()
 }
 
-func memberTargets(it worker.Integration) []string {
+func memberTargets(it landing.Integration) []string {
 	var out []string
 	for _, m := range it.Members {
 		out = append(out, m.Target)
@@ -104,7 +105,7 @@ type prBodySetter interface {
 // from the one the caller read earlier: another train may have added members
 // since, and writing the older list would drop their Closes lines. Callers hold
 // the integration lock (openIntegrationPRVia), so no train changes it meanwhile.
-func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it worker.Integration) (string, error) {
+func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it landing.Integration) (string, error) {
 	if reg, err := worker.LoadRegistry(root); err == nil {
 		if fresh, ok := reg.IntegrationByBranch(it.Branch); ok {
 			it = fresh
@@ -129,7 +130,7 @@ func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it worker
 		return "", err
 	}
 	url = strings.TrimSpace(url)
-	return url, worker.UpdateIntegration(root, it.Branch, func(rec *worker.Integration) { rec.PR = url })
+	return url, worker.UpdateIntegration(root, it.Branch, func(rec *landing.Integration) { rec.PR = url })
 }
 
 // PRSetBody passes a body rewrite to a forge that can make one; on any other
@@ -145,7 +146,7 @@ func (f shipForge) PRSetBody(ctx context.Context, pr int, body string) error {
 
 // openIntegrationPRVia opens the PR through the project's forge, under the
 // integration lock so two trains of one integration publish one after the other.
-func openIntegrationPRVia(c *Ctx, root string, it worker.Integration) (string, error) {
+func openIntegrationPRVia(c *Ctx, root string, it landing.Integration) (string, error) {
 	cfg := c.projectConfig(root)
 	provider, err := actorForge(c, cfg, root)
 	if err != nil {
@@ -197,6 +198,6 @@ func parkIntegrationMembers(c *Ctx, root, pr string, bookOK bool) {
 }
 
 // integrationRerun is the train command that runs an integration again.
-func integrationRerun(it worker.Integration, targets []string) string {
+func integrationRerun(it landing.Integration, targets []string) string {
 	return fmt.Sprintf("`rota worker train %s %s`", strings.Join(targets, " "), it.TrainFlags())
 }

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestAncestryErrorOutcomes(t *testing.T) {
 	t.Run("train refuses an unreadable integration tip", func(t *testing.T) {
 		start := func(code int) error {
 			run := &trainRun{e: ancestryEnv(code), ctx: bg, root: t.TempDir()}
-			p := &trainPlanning{trainPlan: trainPlan{integration: &Integration{Branch: "int", Assembled: "abc1234"}}}
+			p := &trainPlanning{trainPlan: trainPlan{integration: &landing.Integration{Branch: "int", Assembled: "abc1234"}}}
 			_, _, err := run.integrationStart(p)
 			return err
 		}
@@ -51,16 +52,16 @@ func TestAncestryErrorOutcomes(t *testing.T) {
 	})
 	t.Run("gate reports check-broke", func(t *testing.T) {
 		verdict := func(code int) string {
-			g := gate{e: ancestryEnv(code), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
-			op := g.operation(GateResult{Slot: "w1", Base: "main"}, GateTarget{}, gateForgeResult{})
+			g := gateRun{e: ancestryEnv(code), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
+			op := g.operation(landing.GateResult{Slot: "w1", Base: "main"}, GateTarget{}, gateForgeResult{})
 			op.baseRef = "origin/main"
 			op.confirmLanded("deadbeef")
 			return string(op.res.Verdict)
 		}
-		if got := verdict(128); got != string(GateCheckBroke) {
+		if got := verdict(128); got != string(landing.GateCheckBroke) {
 			t.Fatalf("exit 128: verdict %q", got)
 		}
-		if got := verdict(1); got != string(GateNotOnBase) {
+		if got := verdict(1); got != string(landing.GateNotOnBase) {
 			t.Fatalf("exit 1: verdict %q", got)
 		}
 	})

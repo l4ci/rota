@@ -11,7 +11,6 @@ type ruleCase struct {
 	list     []Record
 	blocking bool // Blocking: ship, any head, FAIL verdicts, second opinion counts
 	atHead   bool // BlockingAtHead: merge gate, at head, wide
-	anyHead  bool // BlockingAnyHead: train, any head, wide, no second opinion
 	relay    bool // RelayFailing: relay, any head, FAIL verdicts only
 	bounce   bool // BounceFailing: bounce, at head, wide
 }
@@ -27,23 +26,23 @@ func ruleCases() []ruleCase {
 	}
 	lens := LensKinds[0]
 	return []ruleCase{
-		{"review FAIL at head", head, []Record{rev(ReviewQuality, Fail, head, nil)}, true, true, true, true, true},
-		{"review FAIL at another head", head, []Record{rev(ReviewQuality, Fail, other, nil)}, true, false, true, true, false},
-		{"review CONCERNS with blocking finding at head", head, []Record{rev(ReviewQuality, Concerns, head, blocker)}, false, true, true, false, true},
-		{"review CONCERNS clean", head, []Record{rev(ReviewQuality, Concerns, head, nil)}, false, false, false, false, false},
-		{"review PASS", head, []Record{rev(ReviewQuality, Pass, head, nil)}, false, false, false, false, false},
-		{"failed item under PASS at head", head, []Record{{Kind: ReviewSpec, Verdict: Pass, Combined: Pass, Sha: head, Items: []ItemVerdict{{"B07", Fail}}}}, false, true, true, false, true},
-		{"cross FAIL at head", head, []Record{cross(Fail, head, "hx-a")}, true, true, true, true, true},
-		{"cross FAIL at another head", head, []Record{cross(Fail, other, "hx-a")}, true, false, true, true, false},
+		{"review FAIL at head", head, []Record{rev(ReviewQuality, Fail, head, nil)}, true, true, true, true},
+		{"review FAIL at another head", head, []Record{rev(ReviewQuality, Fail, other, nil)}, true, false, true, false},
+		{"review CONCERNS with blocking finding at head", head, []Record{rev(ReviewQuality, Concerns, head, blocker)}, false, true, false, true},
+		{"review CONCERNS clean", head, []Record{rev(ReviewQuality, Concerns, head, nil)}, false, false, false, false},
+		{"review PASS", head, []Record{rev(ReviewQuality, Pass, head, nil)}, false, false, false, false},
+		{"failed item under PASS at head", head, []Record{{Kind: ReviewSpec, Verdict: Pass, Combined: Pass, Sha: head, Items: []ItemVerdict{{"B07", Fail}}}}, false, true, false, true},
+		{"cross FAIL at head", head, []Record{cross(Fail, head, "hx-a")}, true, true, true, true},
+		{"cross FAIL at another head", head, []Record{cross(Fail, other, "hx-a")}, true, false, true, false},
 		{"cross FAIL under newer PASS from another harness at head", head,
-			[]Record{cross(Fail, head, "hx-a"), cross(Pass, head, "hx-b")}, false, true, false, false, true},
+			[]Record{cross(Fail, head, "hx-a"), cross(Pass, head, "hx-b")}, false, true, false, true},
 		{"newer cross PASS at a later head clears an older FAIL", other,
-			[]Record{cross(Fail, head, "hx-b"), cross(Pass, other, "hx-a")}, false, false, false, false, false},
-		{"lens FAIL at head", head, []Record{rev(lens, Fail, head, nil)}, true, true, true, true, true},
-		{"lens FAIL at another head", head, []Record{rev(lens, Fail, other, nil)}, true, false, true, true, false},
-		{"lens CONCERNS with blocking finding at head", head, []Record{rev(lens, Concerns, head, blocker)}, false, true, true, false, true},
-		{"second opinion FAIL", head, []Record{{Kind: SecondOpinion, Verdict: Fail, Sha: other}}, true, false, true, false, false},
-		{"second opinion CONCERNS with blocking finding", head, []Record{{Kind: SecondOpinion, Verdict: Concerns, Sha: head, Findings: blocker}}, false, false, false, false, false},
+			[]Record{cross(Fail, head, "hx-b"), cross(Pass, other, "hx-a")}, false, false, false, false},
+		{"lens FAIL at head", head, []Record{rev(lens, Fail, head, nil)}, true, true, true, true},
+		{"lens FAIL at another head", head, []Record{rev(lens, Fail, other, nil)}, true, false, true, false},
+		{"lens CONCERNS with blocking finding at head", head, []Record{rev(lens, Concerns, head, blocker)}, false, true, false, true},
+		{"second opinion FAIL", head, []Record{{Kind: SecondOpinion, Verdict: Fail, Sha: other}}, true, false, false, false},
+		{"second opinion CONCERNS with blocking finding", head, []Record{{Kind: SecondOpinion, Verdict: Concerns, Sha: head, Findings: blocker}}, false, false, false, false},
 	}
 }
 
@@ -64,11 +63,6 @@ func TestBlockingRule(t *testing.T) {
 func TestBlockingAtHeadRule(t *testing.T) {
 	checkRule(t, "BlockingAtHead", func(c ruleCase) bool { return c.atHead },
 		func(c ruleCase) bool { _, ok := BlockingAtHead(c.list, c.head); return ok })
-}
-
-func TestBlockingAnyHeadRule(t *testing.T) {
-	checkRule(t, "BlockingAnyHead", func(c ruleCase) bool { return c.anyHead },
-		func(c ruleCase) bool { _, ok := BlockingAnyHead(c.list); return ok })
 }
 
 func TestRelayFailingRule(t *testing.T) {

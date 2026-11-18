@@ -2,15 +2,11 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
-)
-
-const (
-	GateAssumptionsMissing = "assumptions-missing"
-	GateRulingsMissing     = "rulings-missing"
 )
 
 // requiredPRSection checks headings only. Empty sections and None both pass;
@@ -19,8 +15,8 @@ func requiredPRSection(body string) (verdict, headings string) {
 	found := prSectionHeadings(body)
 	var missing []string
 	for _, section := range []struct{ verdict, heading string }{
-		{GateAssumptionsMissing, "## Assumptions"},
-		{GateRulingsMissing, "## Rulings"},
+		{landing.GateAssumptionsMissing, "## Assumptions"},
+		{landing.GateRulingsMissing, "## Rulings"},
 	} {
 		if !found[strings.ToLower(section.heading)] {
 			if verdict == "" {
@@ -42,7 +38,7 @@ func prSectionHeadings(body string) map[string]bool {
 
 // checkRequiredPRSections uses the same successful PR read as provenance.
 // A gate without a remote PR, or a missing forge CLI, has no body to check.
-func (g *gateOperation) checkRequiredPRSections() (bool, error) {
+func (g *gateRun) checkRequiredPRSections() (bool, error) {
 	v, msg, hint := g.requiredSectionsGap()
 	if v == "" {
 		return false, nil
@@ -53,7 +49,7 @@ func (g *gateOperation) checkRequiredPRSections() (bool, error) {
 
 // requiredSectionsGap is the refusal for a PR body missing a required section,
 // "" when it has them or there is no body to read.
-func (g *gateOperation) requiredSectionsGap() (verdict, msg, hint string) {
+func (g *gateRun) requiredSectionsGap() (verdict, msg, hint string) {
 	if g.sectionBody == nil {
 		return "", "", ""
 	}
@@ -69,34 +65,25 @@ func (g *gateOperation) requiredSectionsGap() (verdict, msg, hint string) {
 }
 
 func missingPRSection(verdict string) bool {
-	return verdict == GateAssumptionsMissing || verdict == GateRulingsMissing
+	return verdict == landing.GateAssumptionsMissing || verdict == landing.GateRulingsMissing
 }
 
-// TrainCulprit is a member excluded for missing PR sections or review verdicts
-// before the train builds or verifies its merge. Remaining members train normally.
-type TrainCulprit struct {
-	Target    string
-	PR        string
-	BlockedBy string
-	Gate      GateResult
-}
-
-func excludeTrainMember(res *TrainResult, target string, gr GateResult) bool {
-	if !missingPRSection(gr.Verdict) && gr.Verdict != GateReviewMissing {
+func excludeTrainMember(res *landing.TrainResult, target string, gr landing.GateResult) bool {
+	if !missingPRSection(gr.Verdict) && gr.Verdict != landing.GateReviewMissing {
 		return false
 	}
 	skipTrainMember(res, target, gr)
 	return true
 }
 
-func skipTrainMember(res *TrainResult, target string, gr GateResult) {
-	res.Culprits = append(res.Culprits, TrainCulprit{Target: target, PR: gr.PR, BlockedBy: gr.Verdict, Gate: gr})
+func skipTrainMember(res *landing.TrainResult, target string, gr landing.GateResult) {
+	res.Culprits = append(res.Culprits, landing.TrainCulprit{Target: target, PR: gr.PR, BlockedBy: gr.Verdict, Gate: gr})
 	res.Notes = append(res.Notes, fmt.Sprintf("TRAIN-SKIP %s (%s) — blockedBy: %s; %s", target, gr.PR, gr.Verdict, gr.Err))
 }
 
 // filterPRSections reads every PR body before the ordinary member checks.
 // It does not fetch, merge, run provenance/review checks, or verify code.
-func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry, targets []string) ([]string, bool, error) {
+func (t *trainRun) filterPRSections(res *landing.TrainResult, in gateInput, reg Registry, targets []string) ([]string, bool, error) {
 	var kept []string
 	for _, target := range targets {
 		gt, err := reg.GateTargetAny(target)
@@ -132,9 +119,9 @@ func (t *trainRun) filterPRSections(res *TrainResult, in gateInput, reg Registry
 // fullGaps runs the member's ordinary check so a section-dropped member lists
 // every record gap, in the order `rota worker gate` does. It keeps the
 // prefilter's result when the check found no further gap.
-func (t *trainRun) fullGaps(in gateInput, target string, dropped GateResult) (GateResult, error) {
+func (t *trainRun) fullGaps(in gateInput, target string, dropped landing.GateResult) (landing.GateResult, error) {
 	full, err := t.e.Gate(t.ctx, t.root, t.memberCheckOpts(target, in))
-	if err != nil && full.Verdict != GateVerdictBlocked {
+	if err != nil && full.Verdict != landing.GateVerdictBlocked {
 		return dropped, err
 	}
 	if len(full.Gaps) < 2 {
@@ -144,17 +131,17 @@ func (t *trainRun) fullGaps(in gateInput, target string, dropped GateResult) (Ga
 	return full, nil
 }
 
-func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (GateResult, error) {
-	gr := GateResult{Slot: target, Base: t.o.Base, TargetSlot: gt.Name, Issue: gt.Issue}
-	g := gate{e: t.e, ctx: t.ctx, root: t.root, in: in, resolved: gt, o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true, NoVerdict: true}}
-	first := landingStageResult[struct{}, GateResult]{Result: gr}
-	forged := runGateStage(first, func(result GateResult) (gateForgeResult, GateResult, bool, error) {
+func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (landing.GateResult, error) {
+	gr := landing.GateResult{Slot: target, Base: t.o.Base, TargetSlot: gt.Name, Issue: gt.Issue}
+	g := gateRun{e: t.e, ctx: t.ctx, root: t.root, in: in, resolved: gt, o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true, NoVerdict: true}}
+	first := landingStageResult[struct{}, landing.GateResult]{Result: gr}
+	forged := runGateStage(first, func(result landing.GateResult) (gateForgeResult, landing.GateResult, bool, error) {
 		return g.stepForge(result, gt)
 	})
-	adopted := runGateStage(forged, func(result GateResult) (GateTarget, GateResult, bool, error) {
+	adopted := runGateStage(forged, func(result landing.GateResult) (GateTarget, landing.GateResult, bool, error) {
 		return g.stepAdoptPR(result, gt, forged.Value)
 	})
-	remote := runGateStage(adopted, func(result GateResult) (bool, GateResult, bool, error) {
+	remote := runGateStage(adopted, func(result landing.GateResult) (bool, landing.GateResult, bool, error) {
 		return g.stepRemote(result, adopted.Value.PR)
 	})
 	if remote.Done || remote.Err != nil {
@@ -163,7 +150,7 @@ func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (Ga
 	state := g.operation(remote.Result, adopted.Value, forged.Value)
 	gr = *state.res
 	state.res = &gr
-	gr.Verdict = GateFresh
+	gr.Verdict = landing.GateFresh
 	if !remote.Value {
 		return gr, nil
 	}
@@ -189,13 +176,13 @@ func (t *trainRun) prSectionGate(in gateInput, target string, gt GateTarget) (Ga
 
 // Validate --order against the original membership, then remove the excluded
 // culprits and already-merged PRs. Invalid or duplicate tokens still fail.
-func filterSectionOrder(res TrainResult, o *TrainOpts, merged []TrainMember) error {
+func filterSectionOrder(res landing.TrainResult, o *TrainOpts, merged []landing.TrainMember) error {
 	if (len(res.Culprits) == 0 && len(merged) == 0) || len(o.Order) == 0 {
 		return nil
 	}
-	all := append([]TrainMember{}, res.Members...)
+	all := append([]landing.TrainMember{}, res.Members...)
 	for _, c := range res.Culprits {
-		all = append(all, TrainMember{Target: c.Target, Branch: c.Gate.Branch, PR: c.PR})
+		all = append(all, landing.TrainMember{Target: c.Target, Branch: c.Gate.Branch, PR: c.PR})
 	}
 	all = append(all, merged...)
 	perm, _, _, err := orderTrain(all, make([]trainFoot, len(all)), o.Order)

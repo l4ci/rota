@@ -187,18 +187,34 @@ func HasHandoff(body string) bool {
 // `Name: value` per line and closes with `-->`.
 const FieldsOpen = Prefix + KindFields
 
-// FieldsBlock renders the block around the already-joined lines.
+// FieldsBlock renders a fields marker around the already-joined lines.
 func FieldsBlock(lines []string) string {
 	return FieldsOpen + "\n" + strings.Join(lines, "\n") + "\n-->"
 }
 
-// SplitFields cuts the trailing fields block off a body (LF line endings): text
-// is what precedes it, lines the block's inner text. Without a block ok is
-// false.
+// JoinFields appends a rendered fields block to text, with one blank line
+// between them. An empty block leaves text as it is.
+func JoinFields(text, block string) string {
+	if strings.TrimSpace(block) == "" {
+		return text
+	}
+	block = strings.TrimLeft(block, "\n")
+	text = strings.TrimRight(text, "\n")
+	if text == "" {
+		return block
+	}
+	return text + "\n\n" + block
+}
+
+// SplitFields cuts the trailing fields block off a body. It accepts LF and
+// CRLF delimiters. Without a block it returns the body unchanged and ok is
+// false; with a block, text and lines use LF endings.
 func SplitFields(body string) (text, lines string, ok bool) {
+	original := body
+	body = strings.ReplaceAll(body, "\r\n", "\n")
 	loc := fieldsRe.FindStringSubmatchIndex(body)
 	if loc == nil {
-		return body, "", false
+		return original, "", false
 	}
 	return body[:loc[0]], body[loc[2]:loc[3]], true
 }

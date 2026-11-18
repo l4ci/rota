@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"encoding/json"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"os/exec"
 	"path/filepath"

@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -42,21 +42,7 @@ func LedgerRound(env Env, root string) int {
 	return CurrentRound(RoundSources{Lease: l, LeaseState: st}) // lease alone: see CurrentRound
 }
 
-// RoundMemo reads the round lease once for a verb: the verb makes one and hands
-// it to every ledger write it triggers. A nil memo reads the lease each time.
-type RoundMemo struct {
-	once sync.Once
-	n    int
-}
-
-// Round is the lease's round, read on the first call only.
-func (m *RoundMemo) Round(env Env, root string) int {
-	if m == nil {
-		return LedgerRound(env, root)
-	}
-	m.once.Do(func() { m.n = LedgerRound(env, root) })
-	return m.n
-}
+func (env Env) LedgerRound(root string) int { return LedgerRound(env, root) }
 
 // Ledger is the recorder of the round ledger: entries are stamped with the
 // lease's round unless they name one, and with env's clock unless they carry a
@@ -67,7 +53,7 @@ func (env Env) Ledger() *ledger.Recorder { return env.ledgerIn(nil) }
 
 // ledgerIn is Ledger reading the round through m, so a verb that writes
 // several entries reads the lease once.
-func (env Env) ledgerIn(m *RoundMemo) *ledger.Recorder {
+func (env Env) ledgerIn(m *landing.RoundMemo) *ledger.Recorder {
 	env = env.WithDefaults()
 	return &ledger.Recorder{
 		Round: func(root string) int { return m.Round(env, root) },
@@ -85,7 +71,7 @@ func (env Env) ledgerIn(m *RoundMemo) *ledger.Recorder {
 }
 
 // LedgerNoteIn appends e through env's Recorder, reading the round through m.
-func LedgerNoteIn(env Env, m *RoundMemo, root string, e ledger.Entry) {
+func LedgerNoteIn(env Env, m *landing.RoundMemo, root string, e ledger.Entry) {
 	env.ledgerIn(m).Note(root, e)
 }
 
@@ -107,7 +93,7 @@ func LedgerDone(env Env, ctx context.Context, a *Accounts, root string, e ledger
 }
 
 // LedgerDoneIn is LedgerDone reading the round through m.
-func LedgerDoneIn(env Env, m *RoundMemo, ctx context.Context, a *Accounts, root string, e ledger.Entry) {
+func LedgerDoneIn(env Env, m *landing.RoundMemo, ctx context.Context, a *Accounts, root string, e ledger.Entry) {
 	e.Kind = ledger.KindDone
 	e.Detail = ledger.HeadroomDetail(LedgerHeadroom(ctx, a, root, e.Harness, e.Account))
 	LedgerSession(env, root, e, e.Detail)
@@ -127,12 +113,12 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // gateLedger records a gate run: one gate entry with the verdict, and a merge
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
-func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult) {
+func gateLedger(env Env, m *landing.RoundMemo, root string, t GateTarget, res landing.GateResult) {
 	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.GateDetail(res.Verdict, res.Tier, tierSkipped(res.Skipped))}
 	rec := env.ledgerIn(m)
 	rec.Note(root, e)
 	switch {
-	case res.Verdict == GatePass:
+	case res.Verdict == landing.GatePass:
 		e.Kind, e.Detail = ledger.KindMerge, nil
 		rec.Note(root, e)
 	case res.AlreadyMerged && !mergeRecorded(root, e):
@@ -169,7 +155,7 @@ func mergeRecorded(root string, e ledger.Entry) bool {
 // whose landing gate failed, were recorded by that gate. Only the culprit, or
 // the members of an interaction, carry the train's verdict; the others name the
 // culprit.
-func trainLedger(env Env, m *RoundMemo, root, requestID string, res TrainResult, gated map[string]bool) {
+func trainLedger(env Env, m *landing.RoundMemo, root, requestID string, res landing.TrainResult, gated map[string]bool) {
 	if res.Verdict == "" {
 		return
 	}
@@ -231,7 +217,7 @@ func AdoptedBranches(root string) (map[string]bool, error) {
 
 // recordVerification notes a fresh local tier execution once. Cached and CI
 // answers carry no measurements; replaying a verdict must not invent elapsed time.
-func (env Env) recordVerification(root string, m *RoundMemo, tier string, target GateTarget, prs []string, vr VerifyResult) {
+func (env Env) recordVerification(root string, m *landing.RoundMemo, tier string, target GateTarget, prs []string, vr VerifyResult) {
 	if vr.CI || vr.Cached || vr.WallSeconds == nil || len(vr.Suites) == 0 {
 		return
 	}

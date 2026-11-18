@@ -122,6 +122,50 @@ func TestFieldsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSplitFieldsAcceptsCRLF(t *testing.T) {
+	text, lines, ok := SplitFields("Body text\r\n\r\n<!-- rota:fields\r\nSize: M\r\n-->")
+	if !ok || text != "Body text" || lines != "Size: M" {
+		t.Fatalf("SplitFields with CRLF = %q %q %v", text, lines, ok)
+	}
+}
+
+func TestFieldsBlockRoundTripForCallers(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{"tracker no block", "just text", "just text"},
+		{"tracker block", "text\n\n<!-- rota:fields\nPriority: P1\nSize: M\n-->", "text\n\n<!-- rota:fields\nPriority: P1\nSize: M\n-->"},
+		{"tracker CRLF", "text\r\n\r\n<!-- rota:fields\r\nA: 1\r\n-->", "text\n\n<!-- rota:fields\nA: 1\n-->"},
+		{"tracker block only", "<!-- rota:fields\nA: 1\n-->", "<!-- rota:fields\nA: 1\n-->"},
+		{"backlog legacy marker", "Body.\n\n<!-- hv:fields\nRelated: B9\n-->", "Body.\n\n<!-- rota:fields\nRelated: B9\n-->"},
+		{"backlog duplicate and blank fields", "t\n<!-- rota:fields\nA: 1\nA: 2\nB:\n-->", "t\n\n<!-- rota:fields\nA: 1\nA: 2\nB:\n-->"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			text, lines, ok := SplitFields(c.body)
+			block := ""
+			if ok {
+				block = FieldsBlock(strings.Split(lines, "\n"))
+			}
+			if got := JoinFields(text, block); got != c.want {
+				t.Fatalf("round trip = %q; want %q", got, c.want)
+			}
+		})
+	}
+
+	// SetSection keeps the existing marker bytes (including legacy markers and
+	// trailing newlines) while using the shared body join.
+	old := "old\n\n<!-- hv:fields\nA: 1\n-->\n"
+	text, _, ok := SplitFields(old)
+	if !ok {
+		t.Fatal("SetSection input has no fields block")
+	}
+	rest := strings.TrimLeft(old[len(text):], "\n")
+	if got, want := JoinFields("new", rest), "new\n\n<!-- hv:fields\nA: 1\n-->\n"; got != want {
+		t.Fatalf("SetSection join = %q; want %q", got, want)
+	}
+}
+
 func TestParseBounce(t *testing.T) {
 	for _, c := range []struct {
 		name, body string

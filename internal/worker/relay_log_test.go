@@ -2,6 +2,7 @@ package worker
 
 import (
 	"bytes"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,7 @@ func TestDispatchRelayExplicitPRSurvivesReassignment(t *testing.T) {
 	}
 	w.setPRBody("Closes #5\n\n## Approvals\n- orchestrator relay round 1\n")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateFresh {
+	if err != nil || res.Verdict != landing.GateFresh {
 		t.Fatalf("explicit PR relay must pass its gate: %+v (%v)", res, err)
 	}
 	reg := LoadRegistryTolerant(w.dir)
@@ -174,7 +175,7 @@ func TestGateByPRNumberUsesRelaysOfTheSlotThatNeverRecordedIt(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"w1","branch":"dana/5-x","task":"#5","relays":`+relays+`}]}`), 0o644)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict == GateProvenanceFail {
+	if err != nil || res.Verdict == landing.GateProvenanceFail {
 		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 }
@@ -191,8 +192,8 @@ func TestGateByPRNumberDoesNotInheritRelaysOfAnotherBranchWithTheSameIssue(t *te
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"w1","branch":"nia/5-y","task":"#5","relays":`+relays+`}]}`), 0o644)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateProvenanceFail {
-		t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, GateProvenanceFail, res)
+	if err != nil || res.Verdict != landing.GateProvenanceFail {
+		t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, landing.GateProvenanceFail, res)
 	}
 }
 
@@ -279,12 +280,12 @@ func TestRequeuedPRKeepsItsRelayAfterReassignment(t *testing.T) {
 	}
 	w.setPRBody("Closes #5\n\n## Approvals\n- orchestrator relay round 1\n")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateFresh {
+	if err != nil || res.Verdict != landing.GateFresh {
 		t.Fatalf("requeued PR lost its real relay: %+v (%v)", res, err)
 	}
 	w.setPRBody("Closes #5\n\n## Approvals\n- orchestrator relay round 99\n")
 	res, err = w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
-	if err != nil || res.Verdict != GateProvenanceFail {
+	if err != nil || res.Verdict != landing.GateProvenanceFail {
 		t.Fatalf("unsent relay round passed: %+v (%v)", res, err)
 	}
 }
@@ -324,10 +325,10 @@ func testRelaySurvivesParkingAndReassignment(t *testing.T, pr string) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ head, issue, round, want string }{
-		{"w1", "5", "1", GateFresh},
-		{"w1", "5", "99", GateProvenanceFail},
-		{"other/5-sibling", "5", "1", GateProvenanceFail},
-		{"next/6-task", "6", "1", GateProvenanceFail},
+		{"w1", "5", "1", landing.GateFresh},
+		{"w1", "5", "99", landing.GateProvenanceFail},
+		{"other/5-sibling", "5", "1", landing.GateProvenanceFail},
+		{"next/6-task", "6", "1", landing.GateProvenanceFail},
 	} {
 		t.Run(tc.head+"/"+tc.round, func(t *testing.T) {
 			if tc.head != "w1" {

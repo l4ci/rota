@@ -3,7 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"github.com/l4ci/rota/internal/flakeledger"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,7 +130,7 @@ func TestFlakeLedgerMissingIsUnavailable(t *testing.T) {
 
 func TestFlakyDataIncludesRerunDurationAndTests(t *testing.T) {
 	entries := []flakeledger.Entry{{Check: "check", Tests: []string{"TestA", "TestB"}, Retry: flakeledger.Run{WallSeconds: 1.25}}}
-	for _, obj := range []*jsonx.Object{gateData(worker.GateResult{Flaky: entries}), trainData(worker.TrainResult{Flaky: entries})} {
+	for _, obj := range []*jsonx.Object{gateData(landing.GateResult{Flaky: entries}), trainData(landing.TrainResult{Flaky: entries})} {
 		raw, err := jsonx.MarshalCompact(obj)
 		if err != nil {
 			t.Fatal(err)

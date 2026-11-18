@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -10,12 +11,12 @@ import (
 
 // stepVerdictReports runs only after the PR and its pushed head were validated.
 // Both the blocking check and review-depth lookup then see the recovered cache.
-func (runner gate) stepVerdictReports(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepVerdictReports(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 

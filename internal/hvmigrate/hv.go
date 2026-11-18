@@ -1044,19 +1044,16 @@ func removeLegacyInstall(root string) (removed int, kept []string, err error) {
 		gone = append(gone, p)
 	}
 	skills.PruneEmpty(root, gone)
-	return removed, kept, fsio.RemoveWithLock(mp)
+	// An old helper may still hold or wait on the manifest lock during the
+	// upgrade. Keep its sidecar so newcomers cannot lock a different inode.
+	return removed, kept, os.Remove(mp)
 }
 
 func symlinkedDir(root, p string) bool {
-	parts := strings.Split(p, "/")
-	dir := root
-	for _, part := range parts[:len(parts)-1] {
-		dir = filepath.Join(dir, part)
-		if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return true
-		}
-	}
-	return false
+	// Keep the parent spelling: cleaning it could erase a symlink before "..".
+	parent := p[:max(0, strings.LastIndex(p, "/"))]
+	link, _ := fsio.SymlinkIn(root, parent)
+	return link != ""
 }
 
 // ---- settings --------------------------------------------------------------

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,11 +20,11 @@ func TestTrainSummaryCountsInvocations(t *testing.T) {
 	if _, err := w.train(TrainOpts{}); err == nil {
 		t.Fatal("empty train should be a usage error")
 	}
-	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != GateVerifyFailed {
+	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("red train: %+v, %v", res, err)
 	}
 	w.setConfig(`{"test":{"full":["true"]}}`)
-	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("green train: %+v, %v", res, err)
 	}
 	es, err := ledger.Load(w.dir)
@@ -67,11 +68,11 @@ func gateKinds(t *testing.T, w *world) (verdicts []string, merges int) {
 
 func TestGateAppendsVerdict(t *testing.T) {
 	w := newWorld(t, ghURL)
-	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != GatePass {
+	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("gate = %+v, %v", res, err)
 	}
 	verdicts, merges := gateKinds(t, w)
-	if len(verdicts) != 1 || verdicts[0] != GatePass || merges != 1 {
+	if len(verdicts) != 1 || verdicts[0] != landing.GatePass || merges != 1 {
 		t.Fatalf("verdicts %v merges %d", verdicts, merges)
 	}
 	es, _ := ledger.Load(w.dir)
@@ -83,11 +84,11 @@ func TestGateAppendsVerdict(t *testing.T) {
 func TestGateLedgerBlockedMergesNothing(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["true","false"]}}`)
-	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != GateVerifyFailed {
+	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("gate = %+v, %v", res, err)
 	}
 	verdicts, merges := gateKinds(t, w)
-	if len(verdicts) != 1 || verdicts[0] != GateVerifyFailed || merges != 0 {
+	if len(verdicts) != 1 || verdicts[0] != landing.GateVerifyFailed || merges != 0 {
 		t.Fatalf("verdicts %v merges %d", verdicts, merges)
 	}
 }
@@ -107,7 +108,7 @@ func TestGateLedgerSkipsCheckOnly(t *testing.T) {
 // the others name it.
 func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	w, res := ciTrain(t, "", "b3.txt", "b1", "b2", "b3", "b4")
-	if res.Verdict != GateVerifyFailed || res.Culprit != "b3" {
+	if res.Verdict != landing.GateVerifyFailed || res.Culprit != "b3" {
 		t.Fatalf("%+v", res)
 	}
 	es, err := ledger.Load(w.dir)
@@ -129,7 +130,7 @@ func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	for _, s := range []string{"b1", "b2", "b3", "b4"} {
 		want := ""
 		if s == "b3" {
-			want = GateVerifyFailed
+			want = landing.GateVerifyFailed
 		}
 		if v, ok := got[s]; !ok || v != want {
 			t.Errorf("member %s verdict %q (recorded %v), want %q (all: %v)", s, v, ok, want, got)
@@ -149,7 +150,7 @@ func TestGateLedgerExternalPRKeepsResolvedTarget(t *testing.T) {
 	w.forge("head", "dana/7-x")
 	w.setPRBody("Closes #7")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: ghURL, Base: "main", NoVerify: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("gate = %+v, %v", res, err)
 	}
 	es, err := ledger.Load(w.dir)

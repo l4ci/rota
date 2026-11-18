@@ -1,5 +1,7 @@
 package worker
 
+import "github.com/l4ci/rota/internal/landing"
+
 import "fmt"
 
 // landingStageResult carries either a typed handoff to the next stage or the
@@ -21,10 +23,10 @@ func runLandingStage[I, O, R any](previous landingStageResult[I, R], stage func(
 	return landingStageResult[O, R]{Value: value, Result: result, Done: done, Err: err}
 }
 
-// runGateStage supplies the public answer independently from the named stage
-// outputs captured by the caller. The shared landing runner owns short-circuiting.
-func runGateStage[P, O any](previous landingStageResult[P, GateResult], stage func(GateResult) (O, GateResult, bool, error)) landingStageResult[O, GateResult] {
-	return runLandingStage(previous, func(P) (O, GateResult, bool, error) {
+// runGateStage wires the gateRun steps: the public answer travels independently
+// from the named stage outputs captured by the caller. The shared landing runner owns short-circuiting.
+func runGateStage[P, O any](previous landingStageResult[P, landing.GateResult], stage func(landing.GateResult) (O, landing.GateResult, bool, error)) landingStageResult[O, landing.GateResult] {
+	return runLandingStage(previous, func(P) (O, landing.GateResult, bool, error) {
 		return stage(previous.Result)
 	})
 }

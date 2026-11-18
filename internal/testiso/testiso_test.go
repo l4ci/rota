@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -15,7 +17,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 		t.Setenv(k, "x")
 	}
 	t.Setenv("ROTA_KEEP_ME", "x")
-	scrubHostEnv()
+	hostenv.Scrub()
 	for _, kv := range os.Environ() {
 		if hostenv.IsKV(kv) {
 			t.Errorf("host variable survived the scrub: %s", kv)
@@ -126,5 +128,56 @@ func TestGitCeilingStopsAtTMPDIR(t *testing.T) {
 	cmd.Env = append(os.Environ(), "TESTISO_CEILING_CHILD=1", "TMPDIR="+slotTmp)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("child: %v\n%s", err, out)
+	}
+}
+
+// Compare the real shell entry point with the tripwire's Go scrub on a fixed
+// environment. The explicit survivors also catch both paths dropping too much.
+func TestHostEnvScrubMatchesShell(t *testing.T) {
+	env := []string{
+		"HERDR_PANE_ID=one", "HERDR_FUTURE=two", "HC_SESSION=three",
+		"HC_=four", "ORCA_HANDLE=five", "TMUX=six", "TMUX_PANE=seven", "TMUXFUTURE=eight",
+		"HERDR=keep", "HC=keep", "HCX=keep", "ORCA=keep", "XHERDR_X=keep", "herdr_x=keep", "ROTA_KEEP_ME=keep",
+	}
+	var keys []string
+	for _, kv := range env {
+		key, value, _ := strings.Cut(kv, "=")
+		keys = append(keys, key)
+		t.Setenv(key, value)
+	}
+	hostenv.Scrub()
+	var goKept []string
+	for _, key := range keys {
+		if value, ok := os.LookupEnv(key); ok {
+			goKept = append(goKept, key+"="+value)
+		}
+	}
+	want := []string{"HC=keep", "HCX=keep", "HERDR=keep", "ORCA=keep", "ROTA_KEEP_ME=keep", "XHERDR_X=keep", "herdr_x=keep"}
+	sort.Strings(goKept)
+	if !reflect.DeepEqual(goKept, want) {
+		t.Fatalf("Go survivors = %v, want %v", goKept, want)
+	}
+	script, err := filepath.Abs("../../test/lib/isolate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", `set -euo pipefail; source "$1"; isolate_env "$2"; env`, "scrub-parity", script, t.TempDir())
+	cmd.Env = append(env, "PATH="+os.Getenv("PATH"), "GOCACHE="+t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("shell scrub: %v\n%s", err, out)
+	}
+	var shellKept []string
+	for _, kv := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		key, _, _ := strings.Cut(kv, "=")
+		for _, candidate := range keys {
+			if key == candidate {
+				shellKept = append(shellKept, kv)
+			}
+		}
+	}
+	sort.Strings(shellKept)
+	if !reflect.DeepEqual(shellKept, want) {
+		t.Fatalf("shell survivors = %v, want %v (Go survivors %v)", shellKept, want, goKept)
 	}
 }

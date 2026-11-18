@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -159,7 +160,7 @@ func TestLandingQueuedManualRunDefersNoWaitGateAndTrain(t *testing.T) {
 					{"train", func() landingAnswer { return landingTrain(probe, w.dir, "b3", true, false) }},
 				} {
 					got := landingCall(t, run.fn)
-					if got.err != nil || got.verdict != GateRunning || got.changed {
+					if got.err != nil || got.verdict != landing.GateRunning || got.changed {
 						t.Errorf("NoWait %s: %+v", run.name, got)
 					}
 				}
@@ -176,14 +177,14 @@ func TestLandingQueuedManualRunDefersNoWaitGateAndTrain(t *testing.T) {
 			assertBusy()
 			resume()
 			got := landingAwait(t, done)
-			if got.err != nil || got.verdict != GatePass || !got.changed || !w.onMain("b1.txt") {
+			if got.err != nil || got.verdict != landing.GatePass || !got.changed || !w.onMain("b1.txt") {
 				t.Fatalf("manual %s after release: %+v", manual, got)
 			}
 			for _, retry := range []func() landingAnswer{
 				func() landingAnswer { return landingGate(e, w.dir, "b2", true, false) },
 				func() landingAnswer { return landingTrain(e, w.dir, "b3", true, false) },
 			} {
-				if got := landingCall(t, retry); got.err != nil || got.verdict != GatePass || !got.changed {
+				if got := landingCall(t, retry); got.err != nil || got.verdict != landing.GatePass || !got.changed {
 					t.Fatalf("retry after manual completion: %+v", got)
 				}
 			}
@@ -212,12 +213,12 @@ func TestLandingNoWaitRefusesUnmarkedLandLock(t *testing.T) {
 		func() landingAnswer { return landingGate(e, w.dir, "b1", true, false) },
 		func() landingAnswer { return landingTrain(e, w.dir, "b1", true, false) },
 	} {
-		if got := landingCall(t, fn); got.err != nil || got.verdict != GateRunning || got.changed {
+		if got := landingCall(t, fn); got.err != nil || got.verdict != landing.GateRunning || got.changed {
 			t.Errorf("unmarked holder: %+v", got)
 		}
 	}
 	unlock()
-	if got := landingCall(t, func() landingAnswer { return landingTrain(e, w.dir, "b1", true, false) }); got.err != nil || got.verdict != GatePass || !got.changed {
+	if got := landingCall(t, func() landingAnswer { return landingTrain(e, w.dir, "b1", true, false) }); got.err != nil || got.verdict != landing.GatePass || !got.changed {
 		t.Fatalf("retry after unmarked holder: %+v", got)
 	}
 }
@@ -253,7 +254,7 @@ func TestLandingAbandonedIntentDoesNotWedgeRuns(t *testing.T) {
 					}
 					return landingTrain(e, w.dir, "b1", true, false)
 				})
-				if got.err != nil || got.verdict != GatePass || !got.changed || !w.onMain("b1.txt") {
+				if got.err != nil || got.verdict != landing.GatePass || !got.changed || !w.onMain("b1.txt") {
 					t.Fatalf("abandoned %s marker blocked %s: %+v", stale, verb, got)
 				}
 				if paths := landingMarkers(t, common); len(paths) != 0 {
@@ -283,8 +284,8 @@ func TestLandingReadOnlyGateAndTrainBypassIntentAndLock(t *testing.T) {
 		want string
 		fn   func() landingAnswer
 	}{
-		{GateFresh, func() landingAnswer { return landingGate(e, w.dir, "b1", true, true) }},
-		{GatePlan, func() landingAnswer { return landingTrain(e, w.dir, "b1", true, true) }},
+		{landing.GateFresh, func() landingAnswer { return landingGate(e, w.dir, "b1", true, true) }},
+		{landing.GatePlan, func() landingAnswer { return landingTrain(e, w.dir, "b1", true, true) }},
 	} {
 		if got := landingCall(t, preview.fn); got.err != nil || got.verdict != preview.want || got.changed {
 			t.Errorf("read-only run: %+v; want %s", got, preview.want)

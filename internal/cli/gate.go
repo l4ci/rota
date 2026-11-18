@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"time"
 
@@ -122,7 +123,7 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 type approvalReq struct {
 	ID       string
 	Escalate bool
-	Thread   func() (worker.ApprovalThread, error)
+	Thread   func() (landing.ApprovalThread, error)
 }
 
 // approvalFlags defines --approval and --escalate next to --confirm and
@@ -186,7 +187,7 @@ func (approvalAnswers) Approves(answer string) bool { return escalation.Approves
 // request: the worker.ApprovalEscalator the cli wires.
 type approvalForge struct{ c *Ctx }
 
-func (f approvalForge) Pending(th worker.ApprovalThread) (any, bool, error) {
+func (f approvalForge) Pending(th landing.ApprovalThread) (any, bool, error) {
 	root, err := f.c.Root()
 	if err != nil {
 		return nil, false, err
@@ -226,7 +227,7 @@ func (f approvalForge) Pending(th worker.ApprovalThread) (any, bool, error) {
 	return e.Object(), true, nil
 }
 
-func (f approvalForge) Send(th worker.ApprovalThread, body string) (any, []string, error) {
+func (f approvalForge) Send(th landing.ApprovalThread, body string) (any, []string, error) {
 	root, err := f.c.Root()
 	if err != nil {
 		return nil, nil, err

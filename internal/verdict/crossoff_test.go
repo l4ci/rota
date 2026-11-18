@@ -1,87 +1,77 @@
 package verdict
 
-import "testing"
+import (
+	"errors"
+	"reflect"
+	"testing"
+)
 
-// The one block/not-block decision with the stale-cross relaxation (#3458),
-// shared by the merge gate and the train tick (#3558).
-func TestBlockingCrossOff(t *testing.T) {
+// Both callers use BlockingGate. This table pins the gate's across-head rule
+// and its stale-cross relaxation in one place, including the #3740 divergence.
+func TestBlockingGate(t *testing.T) {
+	for _, c := range ruleCases() {
+		t.Run(c.name, func(t *testing.T) {
+			got := BlockingGate(c.list, c.head, false)
+			if want := c.blocking || c.atHead; got.Blocked != want {
+				t.Fatalf("blocked = %v, want %v", got.Blocked, want)
+			}
+		})
+	}
 	const head = "bbbbbbb1234"
 	rec := func(kind, v, sha string) Record {
 		return Record{Kind: kind, Verdict: v, Sha: sha, Harness: "hx", Model: "m"}
 	}
+	finding := func(sha string) Record {
+		r := rec(ReviewQuality, Concerns, sha)
+		r.Findings = []Finding{{Severity: "major", Title: "unresolved"}}
+		return r
+	}
 	staleFail := rec(ReviewCross, Fail, "aaaaaaa")
 	for name, tc := range map[string]struct {
-		list    []Record
-		head    string
-		off     bool
-		noFn    bool
-		blocked bool
-		relaxed bool
-		asked   int
+		list                                 []Record
+		head                                 string
+		off, blocked, relaxed, needsCrossOff bool
+		stale                                bool
+		finding                              string
 	}{
-		"FAIL at head, cross off":            {list: []Record{rec(ReviewCross, Fail, head)}, head: head, off: true, blocked: true},
-		"stale cross FAIL, cross off":        {list: []Record{staleFail}, head: head, off: true, relaxed: true, asked: 1},
-		"stale cross FAIL, cross required":   {list: []Record{staleFail}, head: head, blocked: true, asked: 1},
-		"stale cross FAIL, no cross lookup":  {list: []Record{staleFail}, head: head, noFn: true, blocked: true},
-		"stale cross FAIL, unreadable head":  {list: []Record{staleFail}, head: "", off: true, blocked: true},
-		"stale cross CONCERNS, no lookup":    {list: []Record{rec(ReviewCross, Concerns, "aaaaaaa")}, head: head},
-		"another stale blocker still blocks": {list: []Record{staleFail, rec(ReviewSecurity, Fail, "aaaaaaa")}, head: head, off: true, blocked: true, asked: 1},
+		"second-opinion PASS":                                {list: []Record{rec(SecondOpinion, Pass, head)}, head: head},
+		"CONCERNS with minor finding":                        {list: []Record{{Kind: ReviewQuality, Verdict: Concerns, Sha: head, Findings: []Finding{{Severity: "minor", Title: "nonblocking"}}}}, head: head},
+		"no records":                                         {head: head},
+		"FAIL at head, cross off":                            {list: []Record{rec(ReviewCross, Fail, head)}, head: head, off: true, blocked: true},
+		"stale cross FAIL, cross off":                        {list: []Record{staleFail}, head: head, off: true, relaxed: true},
+		"stale cross FAIL, cross required":                   {list: []Record{staleFail}, head: head, blocked: true, needsCrossOff: true, stale: true},
+		"stale cross FAIL, unreadable head":                  {list: []Record{staleFail}, off: true, blocked: true, stale: true},
+		"stale CONCERNS with blocking finding":               {list: []Record{finding("aaaaaaa")}, head: head},
+		"current CONCERNS with blocking finding":             {list: []Record{finding(head)}, head: head, blocked: true, finding: "unresolved"},
+		"stale cross CONCERNS, no lookup":                    {list: []Record{rec(ReviewCross, Concerns, "aaaaaaa")}, head: head},
+		"another stale blocker still blocks":                 {list: []Record{staleFail, rec(ReviewSecurity, Fail, "aaaaaaa")}, head: head, off: true, blocked: true, stale: true},
+		"current finding survives cross relaxation":          {list: []Record{staleFail, finding(head)}, head: head, off: true, blocked: true, finding: "unresolved"},
+		"stale finding does not survive cross relaxation":    {list: []Record{staleFail, finding("aaaaaaa")}, head: head, off: true, relaxed: true},
+		"current cross FAIL survives stale cross relaxation": {list: []Record{rec(ReviewCross, Fail, head), staleFail}, head: head, off: true, blocked: true},
+		"stale report ignored":                               {list: []Record{{Kind: ReviewCross, Verdict: Fail, Sha: "aaaaaaa", FromReport: true}}, head: head},
+		"current report still blocks":                        {list: []Record{{Kind: ReviewCross, Verdict: Fail, Sha: "bbbbbbb", FromReport: true}}, head: head, off: true, blocked: true},
+		"newer review clears stale FAIL":                     {list: []Record{rec(ReviewSpec, Fail, "aaaaaaa"), rec(ReviewSpec, Pass, head)}, head: head},
+		"newer cross clears finding":                         {list: []Record{{Kind: ReviewCross, Verdict: Concerns, Sha: head, Harness: "hx", Model: "m", Findings: []Finding{{Severity: "major", Title: "x"}}}, rec(ReviewCross, Pass, head)}, head: head},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var asked int
-			var off func() bool
-			if !tc.noFn {
-				off = func() bool { asked++; return tc.off }
+			before := append([]Record(nil), tc.list...)
+			got := BlockingGate(tc.list, tc.head, tc.off)
+			if got.Blocked != tc.blocked || (got.Relaxed != nil) != tc.relaxed || got.NeedsCrossOff != tc.needsCrossOff || got.Stale != tc.stale || got.Finding != tc.finding {
+				t.Fatalf("decision = %+v, want blocked=%v relaxed=%v needsCrossOff=%v stale=%v finding=%q", got, tc.blocked, tc.relaxed, tc.needsCrossOff, tc.stale, tc.finding)
 			}
-			_, blocked, relaxed := BlockingCrossOff(tc.list, tc.head, BlockingAnyHead, off)
-			if blocked != tc.blocked {
-				t.Errorf("blocked = %v, want %v", blocked, tc.blocked)
+			if got.Relaxed != nil && got.Relaxed.Sha != "aaaaaaa" {
+				t.Fatalf("relaxed wrong record: %+v", got.Relaxed)
 			}
-			if (relaxed != nil) != tc.relaxed {
-				t.Errorf("relaxed = %v, want %v", relaxed, tc.relaxed)
+			err := got.Err("branch")
+			var blocked *BlockedError
+			if errors.As(err, &blocked) != tc.blocked {
+				t.Fatalf("error = %v, want blocked %v", err, tc.blocked)
 			}
-			if relaxed != nil && relaxed.Sha != "aaaaaaa" {
-				t.Errorf("relaxed record sha = %q, want the dropped stale FAIL", relaxed.Sha)
+			if blocked != nil && (blocked.Branch != "branch" || blocked.Stale != tc.stale || blocked.Finding != tc.finding) {
+				t.Fatalf("refusal changed: %+v", blocked)
 			}
-			if asked != tc.asked {
-				t.Errorf("crossOff asked %d times, want %d", asked, tc.asked)
-			}
-		})
-	}
-}
-
-// The gate's side of the same decision: FAIL at head, stale cross FAIL with
-// cross off, and stale cross FAIL with cross required.
-func TestBlockGateCrossOff(t *testing.T) {
-	const head = "bbbbbbb1234"
-	spec := Record{Kind: ReviewSpec, Verdict: Pass, Sha: head}
-	quality := Record{Kind: ReviewQuality, Verdict: Pass, Sha: head}
-	cross := func(sha string) Record {
-		return Record{Kind: ReviewCross, Verdict: Fail, Sha: sha, Harness: "hx", Model: "m"}
-	}
-	for name, tc := range map[string]struct {
-		cross   Record
-		off     bool
-		blocked bool
-		relaxed bool
-		asked   int
-	}{
-		"FAIL at head, cross off":          {cross: cross(head), off: true, blocked: true},
-		"stale cross FAIL, cross off":      {cross: cross("aaaaaaa"), off: true, relaxed: true, asked: 1},
-		"stale cross FAIL, cross required": {cross: cross("aaaaaaa"), blocked: true, asked: 1},
-	} {
-		t.Run(name, func(t *testing.T) {
-			var asked int
-			check := Check{Store: Store{Branches: map[string][]Record{"b": {spec, quality, tc.cross}}}}
-			relaxed, err := check.BlockGateCrossOff("b", head, func() bool { asked++; return tc.off })
-			if (err != nil) != tc.blocked {
-				t.Errorf("err = %v, want blocked %v", err, tc.blocked)
-			}
-			if (relaxed != nil) != tc.relaxed {
-				t.Errorf("relaxed = %v, want %v", relaxed, tc.relaxed)
-			}
-			if asked != tc.asked {
-				t.Errorf("crossOff asked %d times, want %d", asked, tc.asked)
+			if !reflect.DeepEqual(tc.list, before) {
+				t.Fatal("decision mutated the records")
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,9 +24,9 @@ import (
 // it finished (rota worker train cancel, SIGINT or SIGTERM): verdict cancelled,
 // whatever stage it stopped in. A cancel is no finding about any member, so
 // every culprit is cleared; the members that landed before it stay landed.
-func cancelledTrain(res TrainResult) TrainResult {
-	res = res.owned()
-	res.Verdict, res.Culprit, res.Culprits, res.CulpritGate, res.Interaction = GateCancelled, "", nil, GateResult{}, nil
+func cancelledTrain(res landing.TrainResult) landing.TrainResult {
+	res = cloneTrainResult(res)
+	res.Verdict, res.Culprit, res.Culprits, res.CulpritGate, res.Interaction = landing.GateCancelled, "", nil, landing.GateResult{}, nil
 	for i := range res.Members {
 		res.Members[i].Culprit = false
 	}
@@ -45,10 +46,10 @@ func cancelledTrain(res TrainResult) TrainResult {
 
 // membersOf is the member list of a train that stopped before it resolved its
 // targets (cancelled while queued): each target, in the order given.
-func membersOf(targets []string) []TrainMember {
-	ms := make([]TrainMember, len(targets))
+func membersOf(targets []string) []landing.TrainMember {
+	ms := make([]landing.TrainMember, len(targets))
 	for i, t := range targets {
-		ms[i] = TrainMember{Target: t}
+		ms[i] = landing.TrainMember{Target: t}
 	}
 	return ms
 }

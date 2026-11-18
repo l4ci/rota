@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 	err := env.withLandLock(bg, w.dir, "", func(bool) error {
 		go func() {
 			res, err := w.gate(false, GateOpts{LandVerified: true})
-			if err == nil && res.Verdict != GatePass {
+			if err == nil && res.Verdict != landing.GatePass {
 				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
 			}
 			done <- err
@@ -54,7 +55,7 @@ func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	err := env.withLandLock(bg, w.dir, "", func(bool) error {
 		go func() {
 			res, err := w.gate(false, GateOpts{LandVerified: true, HoldsLandLock: true})
-			if err == nil && res.Verdict != GatePass {
+			if err == nil && res.Verdict != landing.GatePass {
 				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
 			}
 			done <- err
@@ -81,7 +82,7 @@ func TestGateLandVerifiedLandsWithoutFreshnessOrNoVerifyNote(t *testing.T) {
 	w := newWorld(t, ghURL)
 	advanceMainOn(w, "more.txt") // the branch is behind the base, as after an earlier train member landed
 	res, err := w.gate(false, GateOpts{LandVerified: true, HoldsLandLock: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("verdict %q err %v: %s", res.Verdict, err, res.Err)
 	}
 	for _, n := range res.Notes {
@@ -100,11 +101,11 @@ func TestGateLandVerifiedSkipsTheFreshnessRefusal(t *testing.T) {
 	w := newWorld(t, ghURL)
 	advanceMainOn(w, "work.txt") // conflicts with the branch's work.txt
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != GateStale {
+	if err != nil || res.Verdict != landing.GateStale {
 		t.Fatalf("control: want stale, got %q err %v", res.Verdict, err)
 	}
 	res, err = w.gate(false, GateOpts{CheckOnly: true, LandVerified: true})
-	if res.Verdict == GateStale {
+	if res.Verdict == landing.GateStale {
 		t.Errorf("a landing gate must not run the freshness check: %q (%v)", res.Err, err)
 	}
 }

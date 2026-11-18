@@ -92,7 +92,7 @@ func (s *Set) Stubbed() (*Set, error) {
 		out.paths = append(out.paths, p)
 	}
 	sort.Strings(out.paths)
-	out.digest = digestOf(out.paths, out.files)
+	out.digest = digestOf(out.paths, out.File)
 	return out, nil
 }
 

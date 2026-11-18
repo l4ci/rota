@@ -99,18 +99,8 @@ func hasRelayMarker(text string) bool {
 // relayQueued reports whether output, the pane text above the prompt line,
 // shows this relay: its opening-line marker, or the brief's tail.
 func relayQueued(output, text string) bool {
-	for _, line := range strings.Split(text, "\n") {
-		if seq := harness.RelaySequence(line); seq != "" {
-			for _, echoed := range strings.Split(output, "\n") {
-				if harness.RelaySequence(echoed) == seq {
-					return true
-				}
-			}
-			break // only this relay's marker can acknowledge pickup
-		}
-	}
-	tail := briefTail(text)
-	return tail != "" && strings.Contains(squeeze(output), tail)
+	echo := relayDeliveryEvidence(output, text)
+	return echo.Sequence || echo.Tail
 }
 
 // SubmitPending is the resend path: when the file's text is already on the

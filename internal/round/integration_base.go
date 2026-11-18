@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/worker"
@@ -28,7 +29,7 @@ func integrationBase(root string, it *backlog.Item) string {
 // merged: the landing marks every member merged, so a later reconcile finds
 // nothing to repair. A slot that cannot be parked (busy, dirty) is named in
 // the error and left as it is.
-func (e Env) ParkIntegrationMembers(ctx context.Context, root string, rec worker.Integration) ([]string, error) {
+func (e Env) ParkIntegrationMembers(ctx context.Context, root string, rec landing.Integration) ([]string, error) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return nil, err

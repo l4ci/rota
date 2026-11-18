@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // orchProject is a git project with .rota/ where this test process holds the
@@ -698,13 +700,165 @@ func TestSlotSessionIsReportedByStatuslineAndPromptCheck(t *testing.T) {
 }
 
 // The guard protects the configured base branch, not only main/master (#3384).
-func TestHookGuardProtectsConfiguredBase(t *testing.T) {
-	dir := orchProject(t, false) // git.baseBranch = feat/x
-	t.Setenv("ROTA_SLOT", "dana")
-	if code, _, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push origin HEAD:feat/x"), "hook", "guard"); code != 2 {
-		t.Fatalf("push to the configured base: exit %d %q, want 2", code, errOut)
+func TestHookGuardUsesSessionProject(t *testing.T) {
+	for _, lease := range []bool{false, true} {
+		t.Run(strconv.FormatBool(lease), func(t *testing.T) {
+			dir := orchProject(t, lease) // git.baseBranch = feat/x
+			cwd := dir
+			if lease {
+				cwd = filepath.Join(dir, "nested")
+				knWrite(t, filepath.Join(cwd, ".rota", "config.json"), `{"git":{"baseBranch":"main"}}`)
+			}
+			knWrite(t, filepath.Join(dir, ".rota", "KNOWLEDGE.md"), `# Knowledge
+## Architecture
+- **Session project tip** — Use the session project. <!-- paths: ["**/*.go"] --> <!-- 2026-01-01 -->
+`)
+			pinDir(t, cwd, func(d *Deps) {
+				pinHolder(d, os.Getpid())
+				d.Getenv = func(key string) string {
+					if key == "ROTA_SLOT" {
+						return "dana"
+					}
+					return ""
+				}
+			})
+			if code, _, errOut := rotaStdin(t, cwd, guardPayload(cwd, "Bash", "git push origin HEAD:feat/x"), "hook", "guard"); code != 2 {
+				t.Fatalf("push to the session project's base: exit %d %q, want 2", code, errOut)
+			}
+			if code, _, errOut := rotaStdin(t, cwd, guardPayload(cwd, "Bash", "git push origin HEAD:feat/y"), "hook", "guard"); code != 0 {
+				t.Fatalf("push to another branch: exit %d %q, want 0", code, errOut)
+			}
+			payload, _ := json.Marshal(map[string]any{"session_id": "same-project", "cwd": cwd, "tool_name": "Edit", "tool_input": map[string]string{"file_path": "internal/x.go"}})
+			if code, out, errOut := rotaStdin(t, cwd, string(payload), "hook", "guard"); code != 0 || !strings.Contains(out, "Session project tip") {
+				t.Fatalf("Edit in the session project: exit %d %q %q", code, out, errOut)
+			}
+		})
 	}
-	if code, _, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push origin HEAD:feat/y"), "hook", "guard"); code != 0 {
-		t.Fatalf("push to another branch: exit %d %q, want 0", code, errOut)
+}
+
+func TestHookGuardUsesSetupSnapshot(t *testing.T) {
+	dir := orchProject(t, false)
+	knWrite(t, filepath.Join(dir, ".rota", "KNOWLEDGE.md"), `# Knowledge
+## Architecture
+- **Snapshot tip** — Keep the resolved project. <!-- paths: ["internal/*.go"] --> <!-- 2026-01-01 -->
+`)
+	d := depsIn(dir)
+	d.Getwd = func() (string, error) { return dir, nil }
+	d.Getenv = func(key string) string {
+		if key == "ROTA_SLOT" {
+			return "dana"
+		}
+		return ""
+	}
+	c := &Ctx{Deps: d, Stdin: strings.NewReader(`{"session_id":"snapshot"}`)}
+	hc, ok := hookSetupFor(c, false, true)
+	if !ok {
+		t.Fatal("session setup failed")
+	}
+	// Neither tool may consult these process inputs after setup.
+	d.Getwd = func() (string, error) { t.Fatal("cwd re-read"); return "", nil }
+	d.Getenv = func(string) string { t.Fatal("environment re-read"); return "" }
+	d.Config = func(string) any { t.Fatal("project config re-read"); return nil }
+	for _, tool := range []string{"Bash", "Edit"} {
+		input, _ := json.Marshal(map[string]any{"session_id": "snapshot", "tool_name": tool,
+			"tool_input": map[string]string{"command": "git push origin HEAD:feat/x", "file_path": "internal/x.go"}})
+		hc.payload, _ = hook.ParsePayload(input)
+		result, err := hookGuardFor(c, hc)
+		if tool == "Bash" {
+			if e, ok := err.(*Error); !ok || e.Exit != ExitUsage || !strings.Contains(e.Message, "feat/x") {
+				t.Fatalf("snapshot base and slot: %v", err)
+			}
+		} else if err != nil || !strings.Contains(result.Text, "Snapshot tip") {
+			t.Fatalf("snapshot project recall: %q %v", result.Text, err)
+		}
+	}
+}
+
+func TestHookGuardKeepsMilestoneBaseInWorktree(t *testing.T) {
+	dir := orchProject(t, false)
+	worktree := filepath.Join(dir, ".worktrees", "dana")
+	gittest.Run(t, dir, "worktree", "add", "-q", "-b", "dana/3733-root", worktree)
+	knWrite(t, filepath.Join(worktree, ".rota", "config.json"), `{"git":{"baseBranch":"feat/x"}}`)
+	slot := worker.NewSlot("dana", "dana/3733-root", worktree, "feat/x", "")
+	slot.RouteBase("milestone/M01")
+	if err := worker.Update(dir, func(doc *worker.Doc) { doc.SetSlots([]*worker.Slot{slot}) }); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps()
+	d.Getwd = func() (string, error) { return worktree, nil }
+	d.Getenv = func(key string) string {
+		if key == "ROTA_SLOT" {
+			return "dana"
+		}
+		return ""
+	}
+	var out, errOut bytes.Buffer
+	code := mainWith(d, []string{"hook", "guard"}, strings.NewReader(guardPayload(worktree, "Bash", "git push origin HEAD:milestone/M01")), &out, &errOut)
+	if code != 2 || !strings.Contains(errOut.String(), "milestone/M01") {
+		t.Fatalf("routed base in main checkout's registry: exit %d %q %q", code, out.String(), errOut.String())
+	}
+}
+
+func TestHookGuardWithoutProject(t *testing.T) {
+	for _, withGit := range []bool{false, true} {
+		t.Run(strconv.FormatBool(withGit), func(t *testing.T) {
+			dir := t.TempDir()
+			if withGit {
+				gittest.Init(t, dir, "work")
+			}
+			d := testDeps()
+			d.Getwd = func() (string, error) { return dir, nil }
+			d.Getenv = func(key string) string {
+				if key == "ROTA_SLOT" {
+					return "dana"
+				}
+				return ""
+			}
+			var out, errOut bytes.Buffer
+			code := mainWith(d, []string{"hook", "guard"}, strings.NewReader(guardPayload(dir, "Bash", "git add -A")), &out, &errOut)
+			if code != 2 || !strings.Contains(errOut.String(), "git add") {
+				t.Fatalf("guard without project: exit %d %q %q", code, out.String(), errOut.String())
+			}
+		})
+	}
+}
+
+func TestHookSessionStartRoutedWorkerUsesConfiguredProjectBase(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		t.Run(strconv.FormatBool(nested), func(t *testing.T) {
+			root := orchProject(t, false)
+			cwd := root
+			if nested {
+				cwd = newRepo(t, root, "subrepo", "main")
+			}
+			slot := worker.NewSlot("dana", "dana/3815-handoff", root, "feat/x", "")
+			slot.RouteBase("milestone/M01")
+			if err := worker.Update(root, func(doc *worker.Doc) { doc.SetSlots([]*worker.Slot{slot}) }); err != nil {
+				t.Fatal(err)
+			}
+			note := filepath.Join(root, ".rota", "handoff", "feat", "x.md")
+			knWrite(t, note, hookHandoffBody)
+			fresh := time.Date(2026, 10, 3, 11, 59, 0, 0, time.UTC)
+			if err := os.Chtimes(note, fresh, fresh); err != nil {
+				t.Fatal(err)
+			}
+			d := depsIn(root)
+			d.Getwd = func() (string, error) { return cwd, nil }
+			d.Getenv = func(key string) string {
+				if key == "ROTA_SLOT" {
+					return "dana"
+				}
+				return ""
+			}
+			var out, errOut bytes.Buffer
+			input := `{"session_id":"routed","cwd":"` + cwd + `","source":"startup"}`
+			code := mainWith(d, []string{"hook", "session-start"}, strings.NewReader(input), &out, &errOut)
+			if code != 0 || !strings.Contains(out.String(), "body") {
+				t.Fatalf("configured project handoff not consumed: exit %d %q %q", code, out.String(), errOut.String())
+			}
+			if _, err := os.Stat(note + ".consumed"); err != nil {
+				t.Fatalf("configured project handoff not moved: %v", err)
+			}
+		})
 	}
 }

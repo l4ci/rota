@@ -2,23 +2,23 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // The train result carries verify and diagnose time apart, the original
 // failure apart from diagnostic-only ones, and whether anything landed (#2753).
 func TestTrainDataTimingAndFailureOrigin(t *testing.T) {
-	r := worker.TrainResult{
-		Members:      []worker.TrainMember{{Target: "a"}, {Target: "b"}},
+	r := landing.TrainResult{
+		Members:      []landing.TrainMember{{Target: "a"}, {Target: "b"}},
 		VerifyTime:   3 * time.Second,
 		DiagnoseTime: 7 * time.Second,
-		Original:     &worker.TrainFailure{Tier: "test.full", Command: "go test", Tests: []string{"TestA"}, Members: 2, Tip: "abc1234"},
-		Diagnostic:   []worker.TrainFailure{{Tier: "test.full", Members: 1, Tip: "def5678", Tests: []string{"TestA", "TestB"}, OnlyInDiagnostic: []string{"TestB"}}},
+		Original:     &landing.TrainFailure{Tier: "test.full", Command: "go test", Tests: []string{"TestA"}, Members: 2, Tip: "abc1234"},
+		Diagnostic:   []landing.TrainFailure{{Tier: "test.full", Members: 1, Tip: "def5678", Tests: []string{"TestA", "TestB"}, OnlyInDiagnostic: []string{"TestB"}}},
 	}
 	raw, err := jsonx.Marshal(trainData(r))
 	if err != nil {
@@ -48,10 +48,10 @@ func TestTrainDataTimingAndFailureOrigin(t *testing.T) {
 
 // A train refused before verify carries no timing summary in its message.
 func TestTrainFailTextSummaryOnlyAfterVerify(t *testing.T) {
-	if got := trainFailText(worker.TrainResult{Err: "refused"}); got != "refused" {
+	if got := trainFailText(landing.TrainResult{Err: "refused"}); got != "refused" {
 		t.Errorf("refusal: %q", got)
 	}
-	if got := trainFailText(worker.TrainResult{Err: "red", VerifyTime: time.Second}); !strings.Contains(got, "verify 1s") {
+	if got := trainFailText(landing.TrainResult{Err: "red", VerifyTime: time.Second}); !strings.Contains(got, "verify 1s") {
 		t.Errorf("after verify: %q", got)
 	}
 }

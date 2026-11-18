@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -79,10 +80,11 @@ func TestDumpKeepsCountersAndSweeps(t *testing.T) {
 	stale := t0.Add(-48 * time.Hour)
 	os.Chtimes(old, stale, stale)
 	Dump(cd, mustPayload(t, []byte(`{"session_id":"s2"}`)), t0.Add(sweepEvery+time.Minute))
-	for _, f := range []string{old, old + ".lock"} {
-		if _, err := os.Stat(f); !os.IsNotExist(err) {
-			t.Fatalf("%s should be swept: %v", f, err)
-		}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("old state should be swept: %v", err)
+	}
+	if _, err := os.Stat(old + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("old session lock sidecar should be swept: %v", err)
 	}
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("fresh state swept: %v", err)
@@ -472,4 +474,61 @@ func TestReadOrchestratorNote(t *testing.T) {
 			t.Fatalf("got %+v %q", n, w)
 		}
 	})
+}
+
+func TestSweepSessionSidecars(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		fresh, held bool
+	}{
+		{name: "expired"},
+		{name: "held", held: true},
+		{name: "fresh", fresh: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cd := t.TempDir()
+			if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"old"}`)), t0); err != nil {
+				t.Fatal(err)
+			}
+			path, _ := StatePath(cd, "old")
+			mtime := t0.Add(-48 * time.Hour)
+			if tc.fresh {
+				mtime = t0
+			}
+			if err := os.Chtimes(path, mtime, mtime); err != nil {
+				t.Fatal(err)
+			}
+			var release func()
+			if tc.held {
+				var ok bool
+				var err error
+				release, ok, err = fsio.TryLock(fsio.LockPath(path))
+				if err != nil || !ok {
+					t.Fatalf("hold session lock: %v %v", ok, err)
+				}
+				t.Cleanup(release)
+			}
+			now := t0.Add(sweepEvery + time.Minute)
+			if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), now); err != nil {
+				t.Fatal(err)
+			}
+			wantGone := !tc.fresh && !tc.held
+			for _, p := range []string{path, fsio.LockPath(path)} {
+				if _, err := os.Stat(p); os.IsNotExist(err) != wantGone || (err != nil && !os.IsNotExist(err)) {
+					t.Errorf("%s: want removed=%v, stat=%v", p, wantGone, err)
+				}
+			}
+			if release != nil {
+				release()
+				if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), now.Add(sweepEvery+time.Minute)); err != nil {
+					t.Fatal(err)
+				}
+				for _, p := range []string{path, fsio.LockPath(path)} {
+					if _, err := os.Stat(p); !os.IsNotExist(err) {
+						t.Errorf("released expired session not swept: %s: %v", p, err)
+					}
+				}
+			}
+		})
+	}
 }
