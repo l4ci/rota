@@ -4,19 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"github.com/l4ci/rota/internal/hostenv"
 )
-
-// scrubHostEnv unsets every host-session variable (see hostenv.Prefixes).
-func scrubHostEnv() {
-	for _, kv := range os.Environ() {
-		if hostenv.IsKV(kv) {
-			os.Unsetenv(kv[:strings.IndexByte(kv, '=')])
-		}
-	}
-}
 
 // Tripwire is a dir of fake host binaries put first on PATH. Each one logs its
 // call to Hit and exits 99, so a test that reaches a real herdr, tmux or forge

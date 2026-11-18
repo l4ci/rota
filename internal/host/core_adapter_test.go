@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"io"
 	"net"
 	"os"

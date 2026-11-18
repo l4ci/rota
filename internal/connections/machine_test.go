@@ -2,6 +2,7 @@ package connections
 
 import (
 	"context"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"testing"
 
 	"github.com/l4ci/rota/internal/cfgdir"
