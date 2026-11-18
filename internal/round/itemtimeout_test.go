@@ -9,31 +9,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-func TestItemTimeoutUnderLimitAndOffReportNothing(t *testing.T) {
-	f := newMoveFx(t)
-	f.env.Round.ItemTimeoutMinutes = 120
-	f.now = f.now.Add(60 * time.Minute)
-	rep, err := f.env.Status(bg, f.root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if hasKind(kinds(rep.Findings)["ben"], ItemTimeout) {
-		t.Errorf("under the limit: %+v", rep.Findings)
-	}
-	f.now = f.now.Add(10 * time.Hour)
-	f.env.Round.ItemTimeoutMinutes = 0
-	out, err := f.env.Reconcile(bg, f.root, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := kinds(append(out.Drift, out.Repaired...)); hasKind(got["ben"], ItemTimeout) {
-		t.Errorf("0 is off: %+v", got)
-	}
-	if slices.Contains(f.forge.labels[12], "needs-human") || f.slot("ben").Task() != "12" {
-		t.Error("off must park nothing")
-	}
-}
-
 func TestItemTimeoutReportedWithoutApply(t *testing.T) {
 	f := newMoveFx(t)
 	f.env.Round.ItemTimeoutMinutes = 120

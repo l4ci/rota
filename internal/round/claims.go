@@ -16,7 +16,7 @@ import (
 // reClaimID is a claim `assign` takes: `<agent>@<round>`.
 var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 
-// claimFindings adds claim-label-drift from the authoritative claims for held
+// claimFindings returns claim-label-drift from the authoritative claims for held
 // issues and open issues carrying in-progress or claimed labels. It also adds
 // claim-mismatch drift: the tracker and the registry
 // disagree about who holds an issue. Two shapes: a slot's claimId is not the
@@ -29,15 +29,15 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // issue's first two. A bundle's members count as held by its lead's slot (or
 // queued PR); their claims are not compared. Needs the Board and, for the second shape, the labelled
 // issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled, claimLabelled map[tracker.IssueKey]bool, labelsOK bool) {
-	if e.Board == nil {
+func claimFindings(ctx context.Context, board Board, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled, claimLabelled map[tracker.IssueKey]bool, labelsOK bool) (findings []Finding, warnings []string) {
+	if board == nil {
 		return
 	}
 	status := func(ref string) (*backlog.Status, bool) {
-		st, err := statusOf(e.Board, ref)
+		st, err := statusOf(board, ref)
 		if err != nil {
 			if !errors.Is(err, backlog.ErrWrongBackend) {
-				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim check %s: %v", tracker.RefOf(ref), err))
+				warnings = append(warnings, fmt.Sprintf("claim check %s: %v", tracker.RefOf(ref), err))
 			}
 			return nil, false
 		}
@@ -70,13 +70,13 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		switch {
 		case st.Claim == want, bestOfClaim(r.Issue, r.Name, want, st):
 		case st.Claim == "" && slices.Contains(st.HandReleased, want):
-			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
+			findings = append(findings, Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on %s, which was released on purpose", want, tracker.RefOf(r.Issue))})
 		case st.Claim == "":
-			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
+			findings = append(findings, Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on %s, which has no open claim", want, tracker.RefOf(r.Issue)), Repair: "re-post claim"})
 		default:
-			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
+			findings = append(findings, Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on %s, which %s holds", want, tracker.RefOf(r.Issue), st.Claim)})
 		}
 	}
@@ -102,17 +102,17 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		switch {
 		case st.Claim == want, bestOfClaim(id, q.From, want, st):
 		case st.Claim == "":
-			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
+			findings = append(findings, Finding{Kind: ClaimMismatch, Issue: id,
 				Detail: fmt.Sprintf("PR in review records claim %s on %s, which has no open claim", want, tracker.RefOf(id))})
 		default:
-			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
+			findings = append(findings, Finding{Kind: ClaimMismatch, Issue: id,
 				Detail: fmt.Sprintf("PR in review records claim %s on %s, which %s holds", want, tracker.RefOf(id), st.Claim)})
 		}
 	}
 	if !labelsOK {
 		return
 	}
-	if syncer, ok := backlog.Optional[backlog.ClaimLabelSyncer](e.Board, func(c backlog.Capabilities) bool { return c.ClaimLabels }); ok {
+	if syncer, ok := backlog.Optional[backlog.ClaimLabelSyncer](board, func(c backlog.Capabilities) bool { return c.ClaimLabels }); ok {
 		refs := map[string]bool{}
 		for id := range held {
 			refs[id] = true
@@ -131,11 +131,11 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		for _, ref := range sorted {
 			add, remove, err := syncer.ClaimLabelDrift(ref)
 			if err != nil {
-				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim label check %s: %v", tracker.RefOf(ref), err))
+				warnings = append(warnings, fmt.Sprintf("claim label check %s: %v", tracker.RefOf(ref), err))
 				continue
 			}
 			if len(add)+len(remove) > 0 {
-				rep.add(Finding{Kind: ClaimLabelDrift, Issue: ref,
+				findings = append(findings, Finding{Kind: ClaimLabelDrift, Issue: ref,
 					Detail: fmt.Sprintf("%s claim labels disagree with comment claims: add %v, remove %v", tracker.RefOf(ref), add, remove), Repair: "sync claim labels"})
 			}
 		}
@@ -163,8 +163,9 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		if slotObj[m[1]].HeldID() == "" {
 			f.Repair = repairReleaseClaim
 		}
-		rep.add(f)
+		findings = append(findings, f)
 	}
+	return
 }
 
 // repairReleaseClaim is the Repair of a claim-mismatch whose claim names a

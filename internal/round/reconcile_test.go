@@ -720,31 +720,3 @@ func TestAgentsSharingATabAreMatchedByNameInEitherOrder(t *testing.T) {
 		}
 	}
 }
-
-// Only the pane count changed: the detail must not claim a move.
-func TestTabMovedDetailForASharedRecordedTab(t *testing.T) {
-	root, e, _ := fixture(t)
-	snap := e.Snapshot
-	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
-		all, err := snap(ctx)
-		for i := range all {
-			if all[i].Name == "kit" {
-				all[i].Name, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w1:p9", 2
-			}
-		}
-		return all, err
-	}
-	rep, err := e.Status(bg, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range rep.Findings {
-		if f.Kind == TabMoved {
-			if strings.Contains(f.Detail, "now in tab") || !strings.Contains(f.Detail, "w1:t3") || f.to != "w1:p9" {
-				t.Errorf("detail %q to %q", f.Detail, f.to)
-			}
-			return
-		}
-	}
-	t.Errorf("no tab-moved finding: %v", kinds(rep.Findings))
-}

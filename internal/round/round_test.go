@@ -125,16 +125,25 @@ func TestEachDriftKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string][]string{
-		"ben":   {DeadTab},
-		"dana":  {BranchNoPR, LabelMissing, UnregisteredWorktree},
-		"kit":   {PRUnrecorded},
-		"finn":  {PRStale},
-		"ghost": {UnclaimedTab},
-		"":      {LabelOrphan},
+	want := []Finding{
+		{Kind: DeadTab, Slot: "ben", Detail: "host has no live agent for tab w1:t1", Repair: "clear handle, set state dead"},
+		{Kind: UnclaimedTab, Slot: "ghost", Detail: "live agent in " + filepath.Join(root, ".worktrees", "ghost") + " matches no slot"},
+		{Kind: PRUnrecorded, Slot: "kit", Issue: "56", Detail: "open PR #12 has branch kit/56-bar as head, slot records none", Repair: "record pr"},
+		{Kind: PRStale, Slot: "finn", Issue: "57", Detail: "PR #9 is merged and the slot still holds finn/57-baz", Repair: "park the slot"},
+		{Kind: UnregisteredWorktree, Slot: "dana", Detail: filepath.Join(root, ".worktrees", "dana") + " has no slot in .rota/workers.json", Repair: "register the slot"},
+		{Kind: BranchNoPR, Slot: "dana", Issue: "58", Detail: "dana/58-foo is 1 commit(s) ahead of main with no PR"},
+		{Kind: LabelMissing, Slot: "dana", Issue: "58", Detail: "slot holds #58, which lacks ", Repair: "add "},
+		{Kind: LabelOrphan, Issue: "99", Detail: "#99 has  and no slot holds it"},
 	}
-	if got := kinds(rep.Findings); !reflect.DeepEqual(got, want) {
-		t.Errorf("findings\n got %v\nwant %v", got, want)
+	if !reflect.DeepEqual(rep.Findings, want) {
+		t.Errorf("findings\n got %+v\nwant %+v", rep.Findings, want)
+	}
+	var keys []string
+	for _, f := range rep.Findings {
+		keys = append(keys, f.Key())
+	}
+	if want := []string{"ben", "ghost", "kit", "finn", "dana", "dana", "dana", "#99"}; !reflect.DeepEqual(keys, want) {
+		t.Errorf("finding keys = %v, want %v", keys, want)
 	}
 	if len(rep.Unavailable) != 0 {
 		t.Errorf("unavailable = %v", rep.Unavailable)
