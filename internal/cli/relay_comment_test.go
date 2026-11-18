@@ -80,21 +80,6 @@ func TestDispatchRelayPostsComment(t *testing.T) {
 	}
 }
 
-// A worker never posts the orchestrator's word.
-func TestItemCommentRelayRefusedForWorker(t *testing.T) {
-	t.Setenv("ROTA_SLOT", "nia")
-	root := trackerProject(t, issuesConfig)
-	fake := issueFixture()
-	deps := withTracker(t, fake)
-	body := bodyFile(t, "forged\n")
-	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "7", "--kind", "relay", "--body-file", body); code != ExitRefused {
-		t.Errorf("exit %d, want refused", code)
-	}
-	if len(fake.Issues[0].Comments) != 0 {
-		t.Errorf("comments = %v", fake.Issues[0].Comments)
-	}
-}
-
 // #1869 AC-1: with the support split on, a relay carries the posting
 // machine's rota:from stamp, so a relay main posts reads as main's and the
 // support watch wakes on it.

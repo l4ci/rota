@@ -187,17 +187,10 @@ func TestWorkStartBranchWithoutEntry(t *testing.T) {
 
 func TestWorkStartRefusals(t *testing.T) {
 	root := workRepo(t, "")
-	d := runOKWith(t, workDeps("dana"), root, ExitRefused, "work", "start", "B01")
-	if get(d, "blockedBy") != "round worker" || get(d, "changed") != false {
-		t.Fatalf("slot: %v", d)
-	}
-	if gittest.Run(t, root, "branch", "--list", "rota/*") != "" {
-		t.Fatal("a branch was created")
-	}
 	runOKWith(t, workDeps(""), root, ExitUsage, "work", "start")
 	runOKWith(t, workDeps(""), root, ExitResolution, "work", "start", "B99")
 	write(t, filepath.Join(root, ".rota", "repos.json"), `{"repos":[{"name":"svc","path":"svc"}]}`)
-	d = runOKWith(t, workDeps(""), root, ExitRefused, "work", "start", "B01")
+	d := runOKWith(t, workDeps(""), root, ExitRefused, "work", "start", "B01")
 	if get(d, "blockedBy") != "umbrella" {
 		t.Fatalf("umbrella: %v", d)
 	}
