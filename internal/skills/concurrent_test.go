@@ -34,6 +34,15 @@ func TestTwoProcessInstallUninstall(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		if os.Getenv("ROTA_SKILLS_RACE_OP") == "install" {
+			// Finish with an install after the parent has observed uninstall exit.
+			if _, err := io.ReadFull(os.Stdin, make([]byte, 1)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
+				t.Fatal(err)
+			}
+		}
 		return
 	}
 	s := loadFake(t, nil)
@@ -93,9 +102,17 @@ func TestTwoProcessInstallUninstall(t *testing.T) {
 		if _, err := c.input.Write([]byte("x")); err != nil {
 			t.Fatal(err)
 		}
-		c.input.Close()
 	}
-	for _, c := range children {
+	// The installer remains alive until the uninstaller finishes, then makes
+	// the final manifest deterministic while still using only two processes.
+	for _, i := range []int{1, 0} {
+		c := children[i]
+		if i == 0 {
+			if _, err := c.input.Write([]byte("f")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		c.input.Close()
 		err := c.cmd.Wait()
 		<-c.drained
 		if err != nil {
@@ -107,20 +124,11 @@ func TestTwoProcessInstallUninstall(t *testing.T) {
 		t.Fatalf("install/uninstall replaced the serialization inode: %v", err)
 	}
 	m, installed := ReadManifest(roots[0].Path)
-	if _, err := os.Stat(manifestPath(roots[0].Path)); err == nil && !installed {
-		t.Fatal("manifest exists but cannot be read")
-	}
-	if installed && (len(m.Files) != len(s.Paths()) || m.Digest != s.Digest()) {
-		t.Fatalf("incomplete manifest: %+v", m)
+	if !installed || len(m.Files) != len(s.Paths()) || m.Digest != s.Digest() {
+		t.Fatalf("missing or incomplete manifest: %+v", m)
 	}
 	for _, p := range s.Paths() {
 		b, err := os.ReadFile(filepath.Join(roots[0].Path, filepath.FromSlash(p)))
-		if !installed {
-			if !os.IsNotExist(err) {
-				t.Errorf("orphaned managed file %s: %v", p, err)
-			}
-			continue
-		}
 		want, _ := s.File(p)
 		if err != nil || !bytes.Equal(b, want) || m.Files[p] != hashBytes(want) {
 			t.Errorf("manifest/file mismatch %s: %v", p, err)
