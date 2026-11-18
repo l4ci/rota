@@ -64,7 +64,7 @@ func (w *fakeWorld) Landing(_ context.Context, req postgate.Request) (postgate.E
 	if req.Gate != nil {
 		w.gated = append(w.gated, req.Gate.Base+":"+req.Gate.Slot)
 	}
-	return postgate.Env{Worker: worker.Env{}}, req, nil
+	return worker.Env{}.Landing(nil), req, nil
 }
 func (w *fakeWorld) ReviewReadiness(string, string) (string, bool) { return "", false }
 func (w *fakeWorld) ReviewLoop(string) ReviewOutcome               { return ReviewOutcome{} }

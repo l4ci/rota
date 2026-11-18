@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -14,7 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 )
 
-const GateFreeze = "freeze"
+const GateFreeze = landing.GateFreeze
 
 // FreezeOpts chooses one mutation. With none, Freeze returns the latest record.
 type FreezeOpts struct {
@@ -183,7 +184,7 @@ func (e Env) markCleared(ctx context.Context, root string, r *landfreeze.Record,
 	return r
 }
 
-func (runner gate) stepFreeze(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepFreeze(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{Issue: issue, PR: pr}, gateForgeResult{})
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
@@ -201,7 +202,7 @@ func (runner gate) stepFreeze(result GateResult, issue, pr string) (struct{}, Ga
 	return finish(true, nil)
 }
 
-func (g *gateOperation) freezeFailure(vr VerifyResult) error {
+func (g *gateRun) freezeFailure(vr VerifyResult) error {
 	pr := g.pr
 	if pr == "" {
 		pr = g.branch
@@ -229,7 +230,7 @@ func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, ch
 	})
 }
 
-func (runner gate) stepClearFreeze(result GateResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepClearFreeze(result GateResult) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{}, gateForgeResult{})
 	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err

@@ -24,7 +24,7 @@ import (
 // whatever stage it stopped in. A cancel is no finding about any member, so
 // every culprit is cleared; the members that landed before it stay landed.
 func cancelledTrain(res TrainResult) TrainResult {
-	res = res.owned()
+	res = cloneTrainResult(res)
 	res.Verdict, res.Culprit, res.Culprits, res.CulpritGate, res.Interaction = GateCancelled, "", nil, GateResult{}, nil
 	for i := range res.Members {
 		res.Members[i].Culprit = false

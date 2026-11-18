@@ -9,12 +9,11 @@ package postgate
 import (
 	"context"
 
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/landing"
 )
 
 // Book is the item bookkeeping a landing leaves behind. Run, Gate and Train
-// share this port; WorkerBook is the production adapter.
+// share this port; the worker adapter supplies the production implementation.
 type Book interface {
 	// ClearItemStart ends the item's wall-clock (round.itemTimeoutMinutes).
 	ClearItemStart(root, issue string) error
@@ -28,56 +27,13 @@ type Book interface {
 	// Targets resolves the gate targets a train names, by the argument given.
 	// A target that does not resolve is left out; an unreadable registry is an
 	// error.
-	Targets(root string, args []string) (map[string]worker.GateTarget, error)
+	Targets(root string, args []string) (map[string]GateTarget, error)
 	// ReleaseSlice drops the claim slot holds on issue and its in-progress label
 	// when the landed PR left the issue open for later slices (#3629). It is a
 	// no-op for any other issue.
 	ReleaseSlice(root, issue, slot string) error
 	// HasOrigin reports whether the repo at root has an origin remote.
 	HasOrigin(ctx context.Context, root string) bool
-}
-
-var _ Book = WorkerBook{}
-
-// WorkerBook adapts a worker.Env to Book. Release is the tracker side of
-// ReleaseSlice; without it a slice's claim is left for reconcile to repair.
-type WorkerBook struct {
-	Env     worker.Env
-	Release func(root, issue, slot string) error
-}
-
-func (b WorkerBook) ReleaseSlice(root, issue, slot string) error {
-	if b.Release == nil || slot == "" {
-		return nil
-	}
-	return b.Release(root, issue, slot)
-}
-
-func (b WorkerBook) ClearItemStart(root, issue string) error {
-	return worker.ClearItemStart(root, issue)
-}
-func (b WorkerBook) ClearBestOf(root, issue string) error { return worker.ClearBestOf(root, issue) }
-
-func (b WorkerBook) ClearBounces(root, issue string) error {
-	store, err := b.Env.BounceStore(root)
-	if err != nil {
-		return err
-	}
-	return store.Clear(issue)
-}
-
-func (b WorkerBook) PostReviewBounce(root, branch, pr, head, why string) error {
-	_, err := b.Env.PostReviewBounce(root, branch, pr, head, why)
-	return err
-}
-
-func (b WorkerBook) Targets(root string, args []string) (map[string]worker.GateTarget, error) {
-	return worker.ResolveGateTargets(root, args)
-}
-
-func (b WorkerBook) HasOrigin(ctx context.Context, root string) bool {
-	res, err := git.Repo{Dir: root, Runner: b.Env.Git}.Run(ctx, "remote", "get-url", "origin")
-	return err == nil && res.ExitCode == 0
 }
 
 // Failure is a bookkeeping step that failed for one target. The verdict stands;
@@ -90,14 +46,14 @@ type Failure struct {
 // Gate does the item bookkeeping after a real gate run (never --check-only:
 // that would post on a peek). A pass forgets the item's bounce count and ends
 // its clocks. A stale merge and a provenance failure are bookkeeping the worker
-// repairs (worker.verdictMeanings): they count nothing and never park the item,
+// repairs (landing.verdictMeanings): they count nothing and never park the item,
 // but a support machine's worker is still told on its PR.
 //
 // A landed integration PR (#3096) ends every member issue it carried, as a
 // train ends each member it landed.
-func Gate(book Book, root, issue string, r worker.GateResult) error {
+func Gate(book Book, root, issue string, r landing.GateResult) error {
 	// already-merged is a retry after the forge merged it but a later step failed.
-	if (r.OK() || r.Verdict == worker.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
+	if (r.OK() || r.Verdict == landing.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
 		for _, m := range r.IntegrationMembers {
 			if err := landed(book, root, m, r.Slot); err != nil {
 				return err
@@ -108,7 +64,7 @@ func Gate(book Book, root, issue string, r worker.GateResult) error {
 	if issue == "" {
 		return nil
 	}
-	switch m := worker.ClassifyVerdict(r.Verdict); {
+	switch m := landing.ClassifyVerdict(r.Verdict); {
 	case r.OK():
 		return landed(book, root, issue, r.Slot)
 	case m.Notify:
@@ -123,7 +79,7 @@ func Gate(book Book, root, issue string, r worker.GateResult) error {
 // the result carries neither (a failure before any member gate ran), so Train
 // notifies the right PR without Run having patched the result first. A landed member ends its item's clocks and count. A
 // culprit whose verdict notifies is told on its PR.
-func Train(book Book, round *worker.RoundMemo, root string, issues map[string]string, targets map[string]worker.GateTarget, r worker.TrainResult) []Failure {
+func Train(book Book, root string, issues map[string]string, targets map[string]GateTarget, r landing.TrainResult) []Failure {
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
@@ -132,9 +88,9 @@ func Train(book Book, round *worker.RoundMemo, root string, issues map[string]st
 			}
 		}
 	}
-	if issue := issues[r.Culprit]; issue != "" && worker.ClassifyVerdict(r.Verdict).Notify {
+	if issue := issues[r.Culprit]; issue != "" && landing.ClassifyVerdict(r.Verdict).Notify {
 		g := trainCulprit(issues, targets, r)
-		g.Slot, g.Round = r.Culprit, round
+		g.Slot = r.Culprit
 		if err := notify(book, root, g); err != nil {
 			fails = append(fails, Failure{r.Culprit, err})
 		}
@@ -161,6 +117,6 @@ func landed(book Book, root, issue, slot string) error {
 // notify tells a support machine's worker its PR was sent back, with no count
 // and no park. The post is idempotent per head, so a tick that gates the same
 // head again posts nothing new.
-func notify(book Book, root string, r worker.GateResult) error {
+func notify(book Book, root string, r landing.GateResult) error {
 	return book.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
 }

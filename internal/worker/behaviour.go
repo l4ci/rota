@@ -144,7 +144,7 @@ func (s behaviourStep) reason() string {
 
 // behaviourRun runs the Try it steps of the gate's item in dir. done is true
 // when it ends the gate with a verdict. A gate without ItemBody runs nothing.
-func (g *gateOperation) behaviourRun(dir string) (bool, error) {
+func (g *gateRun) behaviourRun(dir string) (bool, error) {
 	if g.o.ItemBody == nil {
 		return false, nil
 	}
@@ -225,7 +225,7 @@ func (g *gateOperation) behaviourRun(dir string) (bool, error) {
 
 // behaviourHome makes the empty HOME of one behaviour run, under
 // .rota/qa-runs/behaviour/. The caller removes it however the run ends.
-func (g *gateOperation) behaviourHome() (string, error) {
+func (g *gateRun) behaviourHome() (string, error) {
 	parent := rotatree.File(g.root, rotatree.QARunsDir, "behaviour")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return "", err
@@ -244,7 +244,7 @@ func (g *gateOperation) behaviourHome() (string, error) {
 // ~ through passwd, so the gate user's ~/.ssh stays readable;
 // /proc/$PPID/environ shows the gate's environment; and the step runs as the
 // gate's OS user, so a file that user can read is readable by absolute path.
-func (g *gateOperation) behaviourEnviron(home string) []string {
+func (g *gateRun) behaviourEnviron(home string) []string {
 	environ := []string{}
 	if v := g.e.Getenv("PATH"); v != "" {
 		environ = append(environ, "PATH="+v)
@@ -285,7 +285,7 @@ func (g *gateOperation) behaviourEnviron(home string) []string {
 
 // goEnv is GOCACHE, GOMODCACHE and GOPATH as the gate host's go reports them;
 // a variable it cannot report is left out.
-func (g *gateOperation) goEnv() []string {
+func (g *gateRun) goEnv() []string {
 	res, err := g.e.Run(g.ctx, "go", []string{"env", "GOCACHE", "GOMODCACHE", "GOPATH"}, nil)
 	if err != nil || res.ExitCode != 0 {
 		return nil
@@ -299,7 +299,7 @@ func (g *gateOperation) goEnv() []string {
 	return out
 }
 
-func (g *gateOperation) runBehaviourStep(dir string, environ []string, st itembody.TryStep) behaviourStep {
+func (g *gateRun) runBehaviourStep(dir string, environ []string, st itembody.TryStep) behaviourStep {
 	ctx, cancel := context.WithTimeout(g.ctx, behaviourStepTimeout)
 	defer cancel()
 	out, code := g.e.ShellEnv(ctx, dir, st.Run, environ)
@@ -345,7 +345,7 @@ func behaviourTranscript(steps []itembody.TryStep, results []behaviourStep) stri
 // writeBehaviourTranscript saves the transcript and returns its path relative
 // to the root. A write error leaves the path in the messages all the same; the
 // gate's verdict does not depend on the file.
-func (g *gateOperation) writeBehaviourTranscript(text string) string {
+func (g *gateRun) writeBehaviourTranscript(text string) string {
 	rel := filepath.Join(rotatree.DirName, rotatree.QARunsDir, "behaviour",
 		fmt.Sprintf("%s-%s.txt", notFileName.ReplaceAllString(g.branch, "_"), strutil.ShortSHA(g.verified)))
 	abs := filepath.Join(g.root, rel)
@@ -360,7 +360,7 @@ func (g *gateOperation) writeBehaviourTranscript(text string) string {
 }
 
 // recordBehaviour stores the behaviour verdict at the PR head.
-func (g *gateOperation) recordBehaviour(steps []itembody.TryStep, results []behaviourStep, failedAt int, path string) {
+func (g *gateRun) recordBehaviour(steps []itembody.TryStep, results []behaviourStep, failedAt int, path string) {
 	v, summary := "PASS", fmt.Sprintf("%d step(s) passed", len(steps))
 	if failedAt >= 0 {
 		v = "FAIL"
@@ -374,7 +374,7 @@ func (g *gateOperation) recordBehaviour(steps []itembody.TryStep, results []beha
 }
 
 // commentBehaviour posts the transcript on the PR; a failure is a warning.
-func (g *gateOperation) commentBehaviour(ref string, pass bool, n int, transcript, path string) {
+func (g *gateRun) commentBehaviour(ref string, pass bool, n int, transcript, path string) {
 	if g.forge == nil || g.prNum == "" {
 		return
 	}

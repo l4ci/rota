@@ -3,6 +3,7 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -10,99 +11,13 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 )
 
-// Integration is one integration branch of a round (`integrations` in the
-// registry, keyed by branch): the members `worker train --integration` merged
-// into it, the merges rota made itself, what the last green verify covered and
-// the PR that lands it on the base.
-type Integration struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Round  int    `json:"round"`
-	Base   string `json:"base"`
-	// Onto is the open integration branch this one is stacked on: it is then
-	// Base, and OntoBase is where Base returns when Onto lands. Both are empty
-	// for a branch on a plain base, and again once Onto has landed.
-	Onto     string `json:"onto,omitempty"`
-	OntoBase string `json:"ontoBase,omitempty"`
-	// Members are the PRs merged into the branch, in merge order; Head is the
-	// member head the last merge took.
-	Members []IntegrationMember `json:"members"`
-	// Start is the base commit the branch was first assembled on: every
-	// first-parent commit after it is a rota merge or a fix.
-	Start string `json:"start"`
-	// Assembled is the tip after rota's own merges, before any fix commit.
-	Assembled string `json:"assembled"`
-	// RotaMerges are the first-parent commits rota made itself: member merges,
-	// merges of the base and `rota worker refs` renewal commits. Every other
-	// first-parent commit is a fix.
-	RotaMerges []string `json:"rotaMerges"`
-	// VerifiedTip is the tip the last green train verified, VerifiedBase the
-	// base commit merged into it.
-	VerifiedTip  string `json:"verifiedTip,omitempty"`
-	VerifiedBase string `json:"verifiedBase,omitempty"`
-	PR           string `json:"pr,omitempty"`
-	// Items are the interaction items filed for this branch.
-	Items []string `json:"items,omitempty"`
-	// Landed says the forge merged the PR and the registry knows it. Settled
-	// says the caller's cleanup after it (the member bookkeeping and parking the
-	// member slots) finished: until then every gate of the PR replays it.
-	Landed  bool `json:"landed,omitempty"`
-	Settled bool `json:"settled,omitempty"`
-}
-
-// IntegrationMember is one member PR of an integration branch.
-type IntegrationMember struct {
-	Target string `json:"target"`
-	PR     string `json:"pr"`
-	Branch string `json:"branch,omitempty"`
-	Issue  string `json:"issue,omitempty"`
-	Head   string `json:"head"`
-	// Pending is a member whose merge conflicted: an interaction item resolves
-	// it on the branch, and Conflicts are the paths git named.
-	Pending   bool     `json:"pending,omitempty"`
-	Conflicts []string `json:"conflicts,omitempty"`
-}
+type Integration = landing.Integration
+type IntegrationMember = landing.IntegrationMember
 
 // IntegrationBranch names the integration branch of a round.
 func IntegrationBranch(round int, name string) string {
 	return fmt.Sprintf("integration/r%d-%s", round, name)
 }
-
-// OntoName is the name of the integration branch this one is stacked on.
-func (it Integration) OntoName() string {
-	return strings.TrimPrefix(it.Onto, fmt.Sprintf("integration/r%d-", it.Round))
-}
-
-// LandBase is the branch the integration finally lands on: its own base, or
-// what a stacked one returns to when the branch under it lands.
-func (it Integration) LandBase() string {
-	if it.Onto != "" {
-		return it.OntoBase
-	}
-	return it.Base
-}
-
-// TrainFlags are the flags that run this integration's train again.
-func (it Integration) TrainFlags() string {
-	onto := ""
-	if it.Onto != "" {
-		onto = " --onto " + it.OntoName()
-	}
-	return fmt.Sprintf("--integration %s%s --base %s", it.Name, onto, it.LandBase())
-}
-
-// Member is the member recorded for target, false when there is none.
-func (it Integration) Member(target string) (IntegrationMember, bool) {
-	for _, m := range it.Members {
-		if m.Target == target {
-			return m, true
-		}
-	}
-	return IntegrationMember{}, false
-}
-
-// IsRotaMerge reports whether sha is a merge rota made on the branch.
-func (it Integration) IsRotaMerge(sha string) bool { return slices.Contains(it.RotaMerges, sha) }
 
 // RecordIntegration writes it under its branch, replacing the earlier record
 // but for what the CLI adds after a train released the integration lock: the

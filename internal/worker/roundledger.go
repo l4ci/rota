@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -42,21 +42,9 @@ func LedgerRound(env Env, root string) int {
 	return CurrentRound(RoundSources{Lease: l, LeaseState: st}) // lease alone: see CurrentRound
 }
 
-// RoundMemo reads the round lease once for a verb: the verb makes one and hands
-// it to every ledger write it triggers. A nil memo reads the lease each time.
-type RoundMemo struct {
-	once sync.Once
-	n    int
-}
+type RoundMemo = landing.RoundMemo
 
-// Round is the lease's round, read on the first call only.
-func (m *RoundMemo) Round(env Env, root string) int {
-	if m == nil {
-		return LedgerRound(env, root)
-	}
-	m.once.Do(func() { m.n = LedgerRound(env, root) })
-	return m.n
-}
+func (env Env) LedgerRound(root string) int { return LedgerRound(env, root) }
 
 // Ledger is the recorder of the round ledger: entries are stamped with the
 // lease's round unless they name one, and with env's clock unless they carry a

@@ -20,9 +20,8 @@
 # A non-test .go file (or embed asset) in a package also runs every package that
 # imports it in production or tests, transitively (go list -test .Deps), so an
 # internal/fsio change runs dependents and the internal/cli goldens (#1303).
-# A path-to-check table follows
-# the loop: internal/config runs TestFrozenConfig, internal/doctor smoke 83,
-# internal/host and internal/worker/dispatch.go smoke 51.
+# A path-to-section table above the loop maps internal/doctor to smoke 83 and
+# host/dispatch to smoke 51; internal/config runs TestFrozenConfig.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
 # test/sections/120_fast_mapping.sh asserts the mapping through it.
 set -euo pipefail
@@ -36,6 +35,19 @@ pkgs=()
 src_pkgs=()
 sections=()
 frozen=0
+
+# Explicit path-to-section policy. Keep one path pattern per row so the mapping
+# smoke test can exercise every row independently.
+FAST_SECTION_MAP=(
+  'internal/doctor/*|83_doctor.sh'
+  'internal/host/*|51_herdr_dispatch.sh'
+  'internal/worker/dispatch.go|51_herdr_dispatch.sh'
+)
+
+if [ "${FAST_PRINT_SECTION_MAP:-}" = 1 ]; then
+  printf '%s\n' "${FAST_SECTION_MAP[@]}"
+  exit 0
+fi
 
 add_pkg() {
   local p="$1" q
@@ -91,10 +103,12 @@ for f in "$@"; do
   case "$f" in
     internal/config/*) frozen=1 ;;
   esac
-  case "$f" in
-    internal/doctor/*) add_section 83_doctor.sh ;;
-    internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
-  esac
+  for mapping in "${FAST_SECTION_MAP[@]}"; do
+    IFS='|' read -r pattern section <<<"$mapping"
+    case "$f" in
+      $pattern) add_section "$section" ;;
+    esac
+  done
   case "$f" in
     test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate-*.txt|internal/flakeledger/infrastructure-markers.txt|test/py-tests.*|test/*_test.py|test/fast.sh) infra=1 ;;
     test/treescan/*) infra=1; add_pkg ./test/treescan ;;

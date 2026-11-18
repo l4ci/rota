@@ -250,7 +250,7 @@ func TestRecordIntegrationKeepsLaterPRAndItems(t *testing.T) {
 }
 
 func TestMemberIssueOfExternalPR(t *testing.T) {
-	if got := memberIssue(Registry{}, TrainMember{Target: "12", PR: "https://github.com/o/r/pull/12", issue: "44"}); got != "44" {
+	if got := memberIssue(Registry{}, TrainMember{Target: "12", PR: "https://github.com/o/r/pull/12", ResolvedIssue: "44"}); got != "44" {
 		t.Fatalf("issue = %q, want the one the check gate resolved", got)
 	}
 }

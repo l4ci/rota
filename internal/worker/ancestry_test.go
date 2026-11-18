@@ -51,7 +51,7 @@ func TestAncestryErrorOutcomes(t *testing.T) {
 	})
 	t.Run("gate reports check-broke", func(t *testing.T) {
 		verdict := func(code int) string {
-			g := gate{e: ancestryEnv(code), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
+			g := gateRun{e: ancestryEnv(code), ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
 			op := g.operation(GateResult{Slot: "w1", Base: "main"}, GateTarget{}, gateForgeResult{})
 			op.baseRef = "origin/main"
 			op.confirmLanded("deadbeef")

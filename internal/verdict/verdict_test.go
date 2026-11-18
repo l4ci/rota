@@ -649,7 +649,7 @@ func TestCheckPassesMissingStore(t *testing.T) {
 	if err != nil || len(store.Branches) != 0 {
 		t.Fatalf("a missing store must read as empty: %v %v", store, err)
 	}
-	if err := (Check{Store: store, StoreErr: err}).BlockGate("b", "abc1234"); err != nil {
+	if err := BlockingGate(store.Branch("", "b"), "abc1234", false).Err("b"); err != nil {
 		t.Fatalf("a missing store must not block: %v", err)
 	}
 }
