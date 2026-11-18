@@ -735,16 +735,13 @@ func TestSwitchCheck(t *testing.T) {
 
 func one(a []config.Account) []config.Account { return a[:1] }
 
-// The herdr pin lives in host.SupportedHerdr: doctor's verdict follows it.
-func TestHostFollowsSupportedHerdr(t *testing.T) {
-	old := host.SupportedHerdr
-	t.Cleanup(func() { host.SupportedHerdr = old })
-	host.SupportedHerdr = "0.10"
+// The doctor passes its injected herdr pin through to the host diagnosis.
+func TestHostFollowsInjectedSupportedHerdr(t *testing.T) {
 	f := &fake{
 		have:  map[string]bool{"herdr": true},
 		reply: map[string]Result{"herdr --version": {Stdout: "herdr 0.10.1\n"}},
 	}
-	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, Exec: f.exec, Look: f.look}
+	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, SupportedHerdr: "0.10", Exec: f.exec, Look: f.look}
 	if c := statusOf(Run(context.Background(), in), "host"); c.Status != Pass || !strings.Contains(c.Detail, "0.10.1") {
 		t.Errorf("0.10.1 under pin 0.10: %+v", c)
 	}
