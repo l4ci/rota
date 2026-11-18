@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -23,7 +26,8 @@ const testLockPoll = 100 * time.Millisecond
 // `rota test run`, `rota proof record`) queue here so several of them do not
 // starve each other of CPU. A busy lock is never a failure and has no timeout:
 // the waiter says so once on stderr, naming the holder, and polls until a slot
-// frees or ctx ends. The land lock is separate and taken independently.
+// frees or ctx ends. Waiters are served in arrival order: a ticket queue keeps
+// a later arrival from taking a slot freed while an earlier waiter is queued. The land lock is separate and taken independently.
 func (e Env) WithTestLock(ctx context.Context, root string, width int, verb string, stderr io.Writer, fn func() error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.WithDefaults().Git, root)
 	if err != nil {
@@ -39,13 +43,19 @@ func (e Env) WithTestLock(ctx context.Context, root string, width int, verb stri
 	for i := range paths {
 		paths[i] = rotastate.File(common, fmt.Sprintf("test-%d.lock", i))
 	}
+	q, err := joinTestQueue(ctx, rotastate.File(common, "test-queue"))
+	if err != nil {
+		return err
+	}
+	defer q.leave()
 	told := false
 	for {
-		slot, release, err := tryTestSlot(paths)
+		slot, release, err := q.tryTurn(ctx, paths)
 		if err != nil {
 			return err
 		}
 		if release != nil {
+			q.leave() // a held slot is not a place in line: width > 1 waiters behind us go on
 			defer release()
 			os.WriteFile(slot, fmt.Appendf(nil, "%d %s", os.Getpid(), verb), 0o644)
 			defer os.Truncate(slot, 0)
@@ -61,6 +71,114 @@ func (e Env) WithTestLock(ctx context.Context, root string, width int, verb stri
 		case <-time.After(testLockPoll):
 		}
 	}
+}
+
+// testQueueGuardWait bounds the wait for the queue's short guard lock, held
+// only for a directory scan.
+const testQueueGuardWait = 30 * time.Second
+
+// testQueue is a waiter's place in the arrival-ordered line for the test lock.
+// Each waiter owns a ticket file <dir>/<seq> and holds a flock on it for as
+// long as it waits, so a killed or cancelled waiter's ticket is detectable
+// (its flock is free) and dropped by the next waiter that scans. Tickets are
+// numbered under the guard lock <dir>.lock, so arrival order is a strict
+// sequence, and only the lowest live ticket may take a freed slot.
+type testQueue struct {
+	dir     string
+	name    string
+	release func()
+	once    sync.Once
+}
+
+// joinTestQueue takes the next ticket in dir.
+func joinTestQueue(ctx context.Context, dir string) (*testQueue, error) {
+	q := &testQueue{dir: dir}
+	err := fsio.LockedCtx(ctx, dir, testQueueGuardWait, func() error {
+		if err := os.MkdirAll(dir, 0o777); err != nil {
+			return err
+		}
+		seqs, err := ticketSeqs(dir)
+		if err != nil {
+			return err
+		}
+		next := 1
+		if len(seqs) > 0 {
+			next = seqs[len(seqs)-1] + 1
+		}
+		q.name = fmt.Sprintf("%012d", next)
+		rel, ok, err := fsio.TryLock(filepath.Join(dir, q.name))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("test queue ticket %s is already locked", q.name)
+		}
+		q.release = rel
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return q, nil
+}
+
+// leave gives up the ticket: the file goes first, then the flock.
+func (q *testQueue) leave() {
+	q.once.Do(func() {
+		_ = fsio.LockedCtx(context.Background(), q.dir, testQueueGuardWait, func() error {
+			os.Remove(filepath.Join(q.dir, q.name))
+			return nil
+		})
+		q.release()
+	})
+}
+
+// tryTurn takes a free slot only when no live ticket precedes this one; tickets
+// whose waiter is gone are removed on the way. A nil release means keep waiting.
+func (q *testQueue) tryTurn(ctx context.Context, paths []string) (string, func(), error) {
+	var slot string
+	var release func()
+	err := fsio.LockedCtx(ctx, q.dir, testQueueGuardWait, func() error {
+		seqs, err := ticketSeqs(q.dir)
+		if err != nil {
+			return err
+		}
+		for _, n := range seqs {
+			name := fmt.Sprintf("%012d", n)
+			if name >= q.name {
+				break
+			}
+			p := filepath.Join(q.dir, name)
+			rel, ok, err := fsio.TryLock(p)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil // a live waiter is ahead
+			}
+			os.Remove(p) // its waiter died: drop the ticket
+			rel()
+		}
+		slot, release, err = tryTestSlot(paths)
+		return err
+	})
+	return slot, release, err
+}
+
+// ticketSeqs lists the ticket numbers in dir, ascending.
+func ticketSeqs(dir string) ([]int, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var seqs []int
+	for _, e := range ents {
+		if n, err := strconv.Atoi(e.Name()); err == nil {
+			seqs = append(seqs, n)
+		}
+	}
+	sort.Ints(seqs)
+	return seqs, nil
 }
 
 // tryTestSlot locks the first free slot file without blocking and returns its
