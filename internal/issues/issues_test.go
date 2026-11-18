@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tracker/itsaplantest"
@@ -35,12 +36,6 @@ type reply struct {
 func (f *forge) env(t *testing.T) Env {
 	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
 		line := strings.Join(args, " ")
-		if name == "git" {
-			if f.origin == "" {
-				return nil, []byte("fatal: no origin"), 2, nil
-			}
-			return []byte(f.origin + "\n"), nil, 0, nil
-		}
 		f.calls = append(f.calls, name+" "+line)
 		for prefix, r := range f.reply {
 			if strings.HasPrefix(line, prefix) {
@@ -50,7 +45,13 @@ func (f *forge) env(t *testing.T) Env {
 		return nil, nil, 0, nil
 	}
 	look := func(n string) (string, error) { return "/fake/" + n, nil }
-	return Env{Opts: []tracker.Option{tracker.WithExec(exe, look)}}
+	gitSeam := func(context.Context, string, ...string) (git.Result, error) {
+		if f.origin == "" {
+			return git.Result{Stderr: "fatal: no origin", ExitCode: 2}, nil
+		}
+		return git.Result{Stdout: f.origin + "\n"}, nil
+	}
+	return Env{Opts: []tracker.Option{tracker.WithExec(exe, look), tracker.WithGit(gitSeam)}}
 }
 
 func (f *forge) did(prefix string) bool {

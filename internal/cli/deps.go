@@ -552,6 +552,17 @@ func (d *Deps) trackerExec() tracker.Exec {
 	return cl.Exec
 }
 
+// trackerGit is the git seam TrackerOptions install (Deps.Git unless a test
+// swapped it for the tracker alone), for a verb that reads the origin through
+// tracker.ResolveProvider.
+func (d *Deps) trackerGit() git.Runner {
+	cl := &tracker.CLI{}
+	for _, o := range d.trackerOptions() {
+		o(cl)
+	}
+	return cl.Git
+}
+
 // freshReads drops the invocation's cached forge reads. A loop that reads the
 // forge again inside one process (round watch, the autopilot) calls it at the
 // start of each pass, so a pass sees what changed since the last one.
@@ -564,7 +575,7 @@ func (d *Deps) freshReads() {
 // trackerBase is TrackerOptions plus the machine the default connection lookup
 // reads: Deps' own env and keychain. A test's WithConnections still wins.
 func (d *Deps) trackerBase() []tracker.Option {
-	return append([]tracker.Option{tracker.WithMachine(d.projectsEnv(), d.Keychain)}, d.TrackerOptions...)
+	return append([]tracker.Option{tracker.WithMachine(d.projectsEnv(), d.Keychain), tracker.WithGit(d.Git)}, d.TrackerOptions...)
 }
 
 // trackerOptions is trackerBase plus the invocation's read cache.
@@ -585,7 +596,7 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 	if err != nil {
 		return "", trackerErr(err)
 	}
-	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", s.Provider, dir, tracker.GitExec(c.deps().Git))
+	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", s.Provider, dir, c.deps().Git)
 	if err != nil {
 		return "", trackerRefusal(err)
 	}

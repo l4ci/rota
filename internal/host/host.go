@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
@@ -83,7 +84,9 @@ func ExecRunner(ctx context.Context, name string, args []string) (Result, error)
 // Deps is everything a host touches outside its own memory. Tests fill every
 // field with fakes; New fills the zero fields with production values.
 type Deps struct {
-	Run    Runner
+	Run Runner
+	// Git runs the git an adapter reads (Orca's worktree branch); nil is git.Exec.
+	Git    git.Runner
 	Getenv func(string) string
 	Sleep  func(time.Duration)
 	// FS owns brief files and persistent Core/Orca identity and process evidence.
@@ -119,6 +122,9 @@ func (d *Deps) fill() {
 	}
 	if d.Run == nil {
 		d.Run = ExecRunner
+	}
+	if d.Git == nil {
+		d.Git = git.Exec
 	}
 	if d.Getenv == nil {
 		d.Getenv = os.Getenv

@@ -73,7 +73,7 @@ func TestOrcaRelayCreateCapturesBranchAndHandle(t *testing.T) {
 	cwd := orcaWorktree(t)
 	gitBeforeCreate := false
 	created := false
-	h := New(Orca, Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, name string, a []string) (Result, error) {
+	h := New(Orca, withGit(Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, name string, a []string) (Result, error) {
 		if name == "git" {
 			if strings.Join(a, " ") != "-C "+cwd+" symbolic-ref --quiet --short HEAD" {
 				t.Fatalf("unexpected branch probe: %v", a)
@@ -98,7 +98,7 @@ func TestOrcaRelayCreateCapturesBranchAndHandle(t *testing.T) {
 			return Result{Stdout: string(b)}, nil
 		}
 		return Result{ExitCode: 1}, nil
-	}})
+	}}))
 	handle, e := h.Spawn(context.Background(), SpawnOpts{Session: "r", Slot: "ben", Cwd: cwd, Launch: "codex", BootTimeout: 2})
 	if e != nil {
 		t.Fatal(e)
@@ -132,7 +132,7 @@ func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "brief")
 			os.WriteFile(file, []byte("do work"), 0600)
 			sends := 0
-			h := New(Orca, Deps{Sleep: func(time.Duration) {}, Run: func(_ context.Context, name string, a []string) (Result, error) {
+			h := New(Orca, withGit(Deps{Sleep: func(time.Duration) {}, Run: func(_ context.Context, name string, a []string) (Result, error) {
 				if name == "git" {
 					return Result{Stdout: tc.gitBranch + "\n"}, nil
 				}
@@ -152,7 +152,7 @@ func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 					return Result{Stdout: string(b)}, nil
 				}
 				return Result{ExitCode: 1}, nil
-			}})
+			}}))
 			e := h.Send(context.Background(), "ben", handle, file)
 			if tc.want == "" {
 				if e != nil {

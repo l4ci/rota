@@ -53,6 +53,6 @@ func (e Env) detectProvider(ctx context.Context, root, pr, configured string, ki
 	if p, ok := tracker.ParsePRURL(pr); ok {
 		return p.Provider, nil
 	}
-	r, err := tracker.ResolveProvider(ctx, kind, "", configured, root, tracker.GitExec(e.Git))
+	r, err := tracker.ResolveProvider(ctx, kind, "", configured, root, e.Git)
 	return r.Provider, err
 }

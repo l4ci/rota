@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/extknowledge"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
@@ -44,13 +45,12 @@ func TestKnowledgeExternalPRUsesCloneForge(t *testing.T) {
 				if dir != clone {
 					t.Fatalf("forge ran in %q, want knowledge clone %q", dir, clone)
 				}
-				if name == "git" {
-					// Keep git transfers local; only forge detection sees the hosted origin.
-					return []byte("https://" + tc.provider + ".com/fake/repo.git\n"), nil, 0, nil
-				}
 				r, err := proc.Run(ctx, proc.Cmd{Name: name, Dir: dir, Args: args, Stdin: stdin})
 				return []byte(r.Stdout), []byte(r.Stderr), r.ExitCode, err
-			}, nil)}
+			}, nil), tracker.WithGit(func(context.Context, string, ...string) (git.Result, error) {
+				// Keep git transfers local; only forge detection sees the hosted origin.
+				return git.Result{Stdout: "https://" + tc.provider + ".com/fake/repo.git\n"}, nil
+			})}
 			var stdout, stderr bytes.Buffer
 			rc := mainWith(d, []string{"knowledge", "add", "--external", "--topic", "Go", "--title", "Via Forge", "--body-file", "-"}, strings.NewReader("body"), &stdout, &stderr)
 			if rc != 0 || !strings.Contains(stdout.String(), tc.url) {
