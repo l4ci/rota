@@ -82,7 +82,7 @@ func TestStatusPluginRoot(t *testing.T) {
 		}
 		return rep.Roots[0]
 	}
-	if st := status(); !st.Installed || !st.Current || st.Version != "0.14.0" || len(st.Missing) != 0 || len(st.Edited) != 0 {
+	if st := status(); !st.Installed || !st.Current || st.Digest != set.Digest() || st.Version != "0.14.0" || len(st.Missing) != 0 || len(st.Edited) != 0 {
 		t.Errorf("clean: %+v", st)
 	}
 	p := set.Paths()[0]

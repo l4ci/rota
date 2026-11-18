@@ -283,7 +283,7 @@ func (e Env) ExternalState(ctx context.Context, root string, forgeOK bool, base 
 // merged PR its branch headed. That PR opened and merged between two looks at
 // the open list, so only a branch lookup finds it; the row then carries it and
 // the merged-external finding releases the slot.
-func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *view, r *Row) (int, bool) {
+func (e Env) adoptedPRNumber(ctx context.Context, root string, notes *statusNotes, v *view, r *Row) (int, bool) {
 	if n, ok := worker.PRRefNumber(r.PR); ok {
 		return n, true
 	}
@@ -292,7 +292,7 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 	}
 	merged, err := e.Forge.MergedPRs(ctx, r.Branch)
 	if err != nil {
-		rep.Warnings = append(rep.Warnings, fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
+		notes.warn(fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
 		v.prErr = true
 		return 0, false
 	}
@@ -311,13 +311,13 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 // missing PR is the normal state). A merge commit leaves the branch tip inside
 // base, so how far ahead the branch is cannot gate the lookup; a failed lookup
 // warns and sets v.prErr, so --apply skips the repair.
-func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v *view, r *Row, so *worker.Slot) *tracker.PR {
+func (e Env) unrecordedMergedPR(ctx context.Context, root string, notes *statusNotes, v *view, r *Row, so *worker.Slot) *tracker.PR {
 	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || !slotFinished(r, so) {
 		return nil
 	}
 	m, err := e.mergedBranchPR(ctx, root, r.Branch, v.base)
 	if err != nil {
-		rep.Warnings = append(rep.Warnings, fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
+		notes.warn(fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
 		v.prErr = true
 	}
 	return m
@@ -518,72 +518,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 
 	agents, hostOK := e.readHost(ctx, rep)
-	claimed := map[int]bool{}
-	alive := map[string]bool{}       // slots the host shows an agent or window for
-	sameSession := map[string]bool{} // a completion belongs to this exact host session
-	for _, r := range rows {
-		if !hostOK {
-			break
-		}
-		if r.HostState == ExternalHost { // adopted work has no agent in the host
-			continue
-		}
-		wt := rep.views[r.Name].worktree
-		// A parked slot owns no agent: one still running in its worktree is a
-		// leftover, reported as unclaimed rather than absorbed by the slot.
-		if r.Tab == "" && (r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name)) {
-			wt = ""
-		}
-		if i := matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
-			claimed[i] = true
-			alive[r.Name] = true
-			if s := slotObj[r.Name]; s != nil {
-				sameSession[r.Name] = s.PaneHandle() != "" && s.PaneHandle() == agents[i].Handle()
-			}
-			r.Agent, r.HostState = agents[i].Name, agents[i].Status
-			if v := worker.JudgeLiveness(worker.LivenessEvidence{Native: r.HostState}); v.State == worker.LivenessUnverifiable {
-				r.HostState, r.Evidence = v.State, v.Reason
-			}
-			// An internal tool wait can look blocked to the host. Only
-			// harnesses with that vocabulary need a pane read; ordinary
-			// snapshots and other harnesses keep their existing state.
-			if r.HostState == "blocked" && e.ReadPane != nil && worker.ReadsWaitPane(r.Kind) {
-				pane, _ := e.ReadPane(ctx, r.Name, agents[i].Handle(), 60)
-				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState); st == worker.StateBusy {
-					r.HostState, r.Evidence = "working", ev
-				}
-			}
-			if r.Tab == "" {
-				r.Tab = agents[i].Tab
-			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
-				// Found by the name it was started under, under a handle that
-				// is not the recorded one: the pane was moved.
-				detail := fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab)
-				if agents[i].Tab == r.Tab {
-					detail = fmt.Sprintf("recorded tab %s now holds other panes; pane %s is not alone in it", r.Tab, agents[i].Pane)
-				}
-				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: detail, Repair: "record " + cur, from: r.Tab, to: cur})
-			}
-		} else if r.Registered && r.Tab != "" {
-			// A runtime restart can orphan Orca handles while their processes
-			// survive. Never offer the destructive dead-tab repair for absence.
-			if v := e.absence(slotObj[r.Name]); v.State == worker.LivenessUnverifiable {
-				r.HostState, r.Evidence = v.State, v.Reason
-				continue
-			}
-			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})
-		}
-	}
-	if hostOK {
-		for i, a := range agents {
-			if claimed[i] || !inWorktreeRoot(root, a.Cwd) || inExternal(rows, rep.views, a.Cwd) {
-				continue
-			}
-			name := strutil.FirstNonEmpty(a.Name, a.Tab)
-			rows = append(rows, &Row{Name: name, Agent: a.Name, Tab: a.Tab, HostState: a.Status})
-			rep.add(Finding{Kind: UnclaimedTab, Slot: name, Detail: fmt.Sprintf("live agent in %s matches no slot", a.Cwd)})
-		}
-	}
+	rows, findings, alive, sameSession := e.hostFindings(ctx, root, rows, rep.views, slotObj, agents, hostOK)
+	rep.Findings = append(rep.Findings, findings...)
 
 	fs := e.readForge(ctx, rep)
 	prs, labelled, stale, forgeOK, labelsOK := fs.prs, fs.labelled, fs.stale, fs.ok, fs.labelsOK
@@ -592,134 +528,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		e.issueBounces(root, rows, rep)
 	}
 
-	held := map[string]bool{}
-	for _, r := range rows {
-		v := rep.views[r.Name]
-		if v == nil { // unclaimed tab
-			continue
-		}
-		parked := r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name) || r.Branch == v.base
-		if r.Issue != "" {
-			held[worker.NormID(r.Issue)] = true
-		}
-		if so := slotObj[r.Name]; so != nil { // a bundled slot holds its members too
-			for _, m := range so.Bundle() {
-				held[worker.NormID(m)] = true
-			}
-		}
-		if !r.Registered {
-			rep.add(Finding{Kind: UnregisteredWorktree, Slot: r.Name, Detail: fmt.Sprintf("%s has no slot in .rota/workers.json", v.worktree), Repair: "register the slot"})
-		}
-		if forgeOK && !parked {
-			if pr := prs[r.Branch]; pr != nil {
-				v.openPR = pr
-				r.PRTitle = pr.Title
-				r.PRState = "open"
-				if r.PR == "" {
-					r.PR = pr.URL
-					if r.Registered {
-						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
-					}
-				} else if n, ok := worker.PRRefNumber(r.PR); ok && n != pr.Number {
-					// An open PR for the branch does not prove the recorded one
-					// was superseded: a merged PR must keep its record.
-					st, err := e.Forge.PRState(ctx, n)
-					if err != nil {
-						v.prErr = true
-						rep.unavailable(SourceForge, fmt.Sprintf("PR #%d state: %v", n, err))
-					} else if st == "closed" {
-						rep.add(Finding{Kind: PRSuperseded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot records closed unmerged PR #%d; open PR #%d has branch %s as head", n, pr.Number, r.Branch), Repair: "record open pr"})
-					}
-				}
-			} else if n, ok := e.adoptedPRNumber(ctx, root, rep, v, r); ok {
-				st, err := e.Forge.PRState(ctx, n)
-				if err != nil {
-					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
-					v.prErr = true
-				} else {
-					r.PRState = st
-					if st == "merged" && r.HostState == ExternalHost { // the gate releases it; so does reconcile --apply
-						rep.add(Finding{Kind: MergedExternal, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is merged and the adopted slot is still registered", n), Repair: "release the slot"})
-					}
-					if (st == "merged" || st == "closed") && r.HostState != ExternalHost { // release, not park, ends an external slot
-						f := Finding{Kind: PRStale, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is %s and the slot still holds %s", n, st, r.Branch)}
-						if st == "merged" && r.Registered { // a closed PR may hold unmerged work: report only
-							f.Repair = "park the slot"
-						}
-						rep.add(f)
-					}
-				}
-			} else {
-				ahead := e.ahead(ctx, root, v.base, r.Branch)
-				if m := e.unrecordedMergedPR(ctx, root, rep, v, r, slotObj[r.Name]); m != nil {
-					v.mergedPR = m
-					r.PR = m.URL
-					rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})
-				} else if ahead > 0 && slotFinished(r, slotObj[r.Name]) {
-					rep.add(Finding{Kind: BranchNoPR, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("%s is %d commit(s) ahead of %s with no PR", r.Branch, ahead, v.base)})
-				}
-			}
-		}
-		if forgeOK && parked && r.PRState == "" {
-			// A parked slot (the transfer to the human parks it) still records
-			// its PR: read its state so the watch can mark a merged one.
-			if n, ok := worker.PRRefNumber(r.PR); ok {
-				if st, err := e.Forge.PRState(ctx, n); err != nil {
-					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
-					v.prErr = true
-				} else {
-					r.PRState = st
-				}
-			}
-		}
-		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
-			if n, ok := tracker.ParseKey(r.Issue); ok && !labelled[n] && !e.issueClosed(ctx, rep, n) {
-				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds %s, which lacks %s", n.Ref(), e.Label), Repair: "add " + e.Label})
-			}
-		}
-	}
-	for _, q := range reg.PRs() {
-		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From, Bundle: q.Bundle})
-		if id := queuedIssue(q); id != "" {
-			held[worker.NormID(id)] = true
-		}
-		for _, m := range q.Bundle {
-			held[worker.NormID(m)] = true
-		}
-		if n, ok := worker.PRRefNumber(q.PR); ok && forgeOK {
-			st, err := e.Forge.PRState(ctx, n)
-			if err == nil {
-				rep.Queued[len(rep.Queued)-1].State = st
-			}
-			switch {
-			case err != nil:
-				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
-			case st == "merged" || st == "closed":
-				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review", pr: q.PR})
-			case q.Branch != "":
-				// A record can pair a PR with another issue's branch (#648); the gate would read the wrong head.
-				if info, err := e.Forge.PRView(ctx, n); err == nil && info.Head != "" && info.Head != q.Branch {
-					rep.add(Finding{Kind: QueuedBranchMismatch, Issue: q.Issue, Detail: fmt.Sprintf("queued record names branch %s but PR #%d is headed by %s; drop the record and re-queue it with the right branch", q.Branch, n, info.Head)})
-				}
-			}
-		}
-	}
-	tracker.SortKeys(stale)
-	for _, n := range stale {
-		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s or claimed: labels", n.Ref(), e.Label), Repair: "remove workflow and claim labels"})
-	}
-	if labelsOK {
-		var orphans []tracker.IssueKey
-		for n := range labelled {
-			if !held[n.String()] {
-				orphans = append(orphans, n)
-			}
-		}
-		tracker.SortKeys(orphans)
-		for _, n := range orphans {
-			rep.add(Finding{Kind: LabelOrphan, Issue: n.String(), Detail: fmt.Sprintf("%s has %s and no slot holds it", n.Ref(), e.Label)})
-		}
-	}
+	findings, held, notes := e.slotFindings(ctx, root, rows, rep.views, slotObj, fs)
+	rep.Findings = append(rep.Findings, findings...)
+	rep.applyStatusNotes(notes)
+
+	rep.Queued, findings, notes = queuedFindings(ctx, e.Forge, forgeOK, reg.PRs(), held)
+	rep.Findings = append(rep.Findings, findings...)
+	rep.applyStatusNotes(notes)
+
+	rep.Findings = append(rep.Findings, workflowLabelFindings(e.Label, stale, labelled, labelsOK, held)...)
 
 	now := e.Worker.Now
 	waiting := map[string]bool{}
@@ -728,47 +545,13 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			waiting[x.Slot] = true
 		}
 	}
-	if hostOK {
-		for _, r := range rows {
-			s := slotObj[r.Name]
-			// Alive as Health counts it: a tmux window carries no agent name.
-			if s == nil || r.Issue == "" || !alive[r.Name] {
-				continue
-			}
-			// A done report that is not older than the last state change is the
-			// worker waiting on the orchestrator, not a worker that stopped.
-			if ev := s.Event(); ev != nil && ev.Kind == worker.EventDone && !evBefore(ev.TS, s.ActiveAt()) {
-				continue
-			}
-			// A finished slot (done or idle) has handed its PR over and waits on review.
-			if slotFinished(r, s) {
-				continue
-			}
-			v := rep.views[r.Name]
-			st := e.Stalled(ctx, StallInput{
-				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
-				Escalated: waiting[r.Name], ActiveAt: s.LastAlive(), Minutes: e.Round.StallMinutes,
-			}, now())
-			if st.Stalled {
-				rep.add(Finding{Kind: StalledSlot, Slot: r.Name, Issue: r.Issue,
-					Detail: fmt.Sprintf("nothing moved for %d min (last: %s)", int(st.Idle.Minutes()), st.Signal)})
-			}
-		}
-	}
-	if e.Round.ItemTimeoutMinutes > 0 {
-		limit := time.Duration(e.Round.ItemTimeoutMinutes) * time.Minute
-		for _, r := range rows {
-			if r.Issue == "" || !r.Registered || r.HostState == ExternalHost {
-				continue
-			}
-			if at, ok := reg.ItemStart(r.Issue); ok && now().Sub(at) >= limit {
-				rep.add(Finding{Kind: ItemTimeout, Slot: r.Name, Issue: r.Issue,
-					Detail: fmt.Sprintf("running %d min since first assignment (round.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.Round.ItemTimeoutMinutes),
-					Repair: "park as needs-human"})
-			}
-		}
-	}
-	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
+	rep.Findings = append(rep.Findings, e.stalledFindings(ctx, rows, rep.views, slotObj, hostOK, alive, waiting)...)
+
+	rep.Findings = append(rep.Findings, itemTimeoutFindings(rows, e.Round.ItemTimeoutMinutes, reg.ItemStart, e.Worker.Now)...)
+
+	findings, warnings := claimFindings(ctx, e.Board, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
+	rep.Findings = append(rep.Findings, findings...)
+	rep.Warnings = append(rep.Warnings, warnings...)
 	if e.Board != nil && forgeOK && (e.Round.ClaimStaleMinutes > 0 || e.Round.ClaimStaleMinutesMajor > 0) {
 		snapshot := make([]tracker.PR, 0, len(prs))
 		for _, pr := range prs {
@@ -787,14 +570,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 		staleClaims, warnings := e.staleClaims(ctx, root, e.Board, claimedItems, snapshot)
 		rep.Warnings = append(rep.Warnings, warnings...)
-		for _, claim := range staleClaims {
-			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), stamp.Format(claim.Last))
-			detail += fmt.Sprintf(" (%s > %s)", e.now().Sub(claim.Last).Truncate(time.Minute), claim.Threshold)
-			rep.add(Finding{Kind: StaleClaimKind, Issue: claim.Issue, Detail: detail})
-		}
+		rep.Findings = append(rep.Findings, staleClaimFindings(staleClaims, e.Worker.Now)...)
 	}
 
-	e.leaseFinding(ctx, root, rep)
+	lease, leaseState, leaseErr := e.ReadLease(ctx, root)
+	rep.Findings = append(rep.Findings, leaseFindings(lease, leaseState, leaseErr)...)
 
 	// Host and forge reads can outlast a relay or a session replacement. Re-read
 	// without writing: a missing/unreadable registry cannot vouch for completion.
@@ -1119,10 +899,10 @@ func (e Env) ahead(ctx context.Context, root, base, branch string) int {
 // finished work, so it is neither missing its label nor worth relabelling. A
 // lookup that fails counts as open and leaves a warning: the drift stays
 // visible rather than hiding behind a flaky forge.
-func (e Env) issueClosed(ctx context.Context, rep *Report, n tracker.IssueKey) bool {
+func (e Env) issueClosed(ctx context.Context, notes *statusNotes, n tracker.IssueKey) bool {
 	is, err := e.Forge.Get(ctx, n, false)
 	if err != nil {
-		rep.Warnings = append(rep.Warnings, fmt.Sprintf("issue %s state: %v", n.Ref(), err))
+		notes.warn(fmt.Sprintf("issue %s state: %v", n.Ref(), err))
 		return false
 	}
 	return is.State == "closed"
