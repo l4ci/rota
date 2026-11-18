@@ -56,4 +56,12 @@ func (v *View) InScope() []File { return append(v.Project(), v.Users...) }
 
 // Worktree is the files a worker worktree reads: settings.local.json is
 // untracked, so it never gets there.
-func (v *View) Worktree() []File { return append([]File{v.Shared}, v.Users...) }
+func (v *View) Worktree() []File {
+	var files []File
+	for _, f := range v.InScope() {
+		if f.Scope.ReachesWorkers() {
+			files = append(files, f)
+		}
+	}
+	return files
+}
