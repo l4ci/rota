@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"math"
 	"os"
 	"path/filepath"

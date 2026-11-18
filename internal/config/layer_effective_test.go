@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"reflect"
 	"testing"
