@@ -13,10 +13,14 @@ import (
 // an argument is never a command; only argv[0] positions are.
 
 // parsed is one script: its simple commands in order and the scripts nested
-// inside it (command substitutions).
+// inside it (command substitutions). nestedBy[i] is how many of nested were
+// found by the end of cmds[i]: the substitutions of command i are
+// nested[nestedBy[i-1]:nestedBy[i]], and they run before it, in the directory
+// the commands before it left.
 type parsed struct {
-	cmds   [][]string
-	nested []string
+	cmds     [][]string
+	nested   []string
+	nestedBy []int
 }
 
 type scanner struct {
@@ -39,6 +43,7 @@ func parseScript(s string) (parsed, error) {
 	flush := func() {
 		if len(cur) > 0 {
 			p.cmds = append(p.cmds, cur)
+			p.nestedBy = append(p.nestedBy, len(sc.Nested))
 		}
 		cur = nil
 	}
@@ -49,10 +54,12 @@ func parseScript(s string) (parsed, error) {
 			sc.I++
 		case c == '\n':
 			sc.I++
-			flush()
+			// The body's substitutions expand before the command that owns the
+			// heredoc runs, so they are collected ahead of its flush.
 			if err := sc.skipHeredocs(); err != nil {
 				return p, err
 			}
+			flush()
 		case c == ';' || c == '(' || c == ')':
 			sc.I++
 			flush()

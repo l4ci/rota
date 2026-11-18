@@ -78,12 +78,25 @@ func (g *guard) script(s string, depth int) error {
 	if err != nil {
 		return err
 	}
-	for _, n := range p.nested {
-		if err := g.script(n, depth+1); err != nil {
+	done := 0 // substitutions already judged
+	// subs judges the substitutions found up to index n, in the directory the
+	// commands before them left (#3730).
+	subs := func(n int) error {
+		for ; done < n && g.reason == ""; done++ {
+			if err := g.script(p.nested[done], depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for i, w := range p.cmds {
+		// A substitution runs before its command.
+		if err := subs(p.nestedBy[i]); err != nil {
 			return err
 		}
-	}
-	for _, w := range p.cmds {
+		if g.reason != "" {
+			return nil
+		}
 		if err := g.command(w, depth, scope{}); err != nil {
 			return err
 		}
@@ -91,7 +104,8 @@ func (g *guard) script(s string, depth int) error {
 			return nil
 		}
 	}
-	return nil
+	// What follows the last command (a redirect target) runs where the line ends.
+	return subs(len(p.nested))
 }
 
 var envAssign = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
