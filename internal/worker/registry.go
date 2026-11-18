@@ -254,7 +254,21 @@ func (r Registry) PRs() []QueuedPR {
 	return out
 }
 
-func (r Registry) queued() []*jsonx.Object { return r.objects("prs") }
+func (r Registry) queued() []*jsonx.Object { return queueSection.Read(r) }
+
+// queueSection and relayLogSection are the registry's `prs` and `relayLog`
+// lists on the typed seam. Entries stay raw objects: records carry fields
+// beyond QueuedPR and the relay-log shapes differ (by PR, by issue+branch), so
+// an identity codec keeps the file byte-identical across a rewrite.
+var (
+	queueSection    = rawList("prs")
+	relayLogSection = rawList("relayLog")
+)
+
+func rawList(key string) ListSection[*jsonx.Object] {
+	same := func(o *jsonx.Object) *jsonx.Object { return o }
+	return ListSection[*jsonx.Object]{Key: key, Decode: same, Encode: same}
+}
 
 // QueuedPR finds a queued record by PR ref (`#N`, `N` or a PR URL), matching
 // on the PR number.
@@ -319,7 +333,7 @@ func (d *Doc) QueuePR(rec QueuedPR) {
 		}
 		return true
 	})
-	d.doc.Set("prs", append(d.list("prs"), rec.object()))
+	queueSection.Edit(d, func(l []*jsonx.Object) []*jsonx.Object { return append(l, rec.object()) })
 }
 
 // QueuedFrom is the newest queued record sent from a slot, nil when none.
@@ -356,21 +370,18 @@ func (d *Doc) DropQueued(match func(QueuedPR) bool) {
 }
 
 func (d *Doc) dropQueued(match func(*jsonx.Object) bool) {
-	list := d.list("prs")
-	if len(list) == 0 {
+	if len(d.queued()) == 0 {
 		return
 	}
-	var keep []any
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok && match(o) {
-			continue
+	queueSection.Edit(d, func(list []*jsonx.Object) []*jsonx.Object {
+		keep := []*jsonx.Object{}
+		for _, o := range list {
+			if !match(o) {
+				keep = append(keep, o)
+			}
 		}
-		keep = append(keep, e)
-	}
-	if keep == nil {
-		keep = []any{}
-	}
-	d.doc.Set("prs", keep)
+		return keep
+	})
 }
 
 // RetargetQueued renames the issue of every queued record to what issue
@@ -402,19 +413,19 @@ func (d *Doc) LogRelays(pr string, relays []any) {
 	if !ok || len(relays) == 0 {
 		return
 	}
-	var keep []any
-	for _, e := range d.list("relayLog") {
-		if o, ok := e.(*jsonx.Object); ok {
+	relayLogSection.Edit(d, func(list []*jsonx.Object) []*jsonx.Object {
+		var keep []*jsonx.Object
+		for _, o := range list {
 			if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
 				continue
 			}
+			keep = append(keep, o)
 		}
-		keep = append(keep, e)
-	}
-	o := jsonx.NewObject()
-	o.Set("pr", pr)
-	o.Set("relays", slices.Clone(relays))
-	d.doc.Set("relayLog", append(keep, o))
+		o := jsonx.NewObject()
+		o.Set("pr", pr)
+		o.Set("relays", slices.Clone(relays))
+		return append(keep, o)
+	})
 }
 
 // KeepRelays saves a slot's relay log before its next task resets it, so a PR
@@ -428,21 +439,21 @@ func (d *Doc) KeepRelays(pr string, relays []any) {
 	if !ok || len(relays) == 0 {
 		return
 	}
-	merged := slices.Clone(relays)
-	var keep []any
-	for _, e := range d.list("relayLog") {
-		if o, ok := e.(*jsonx.Object); ok {
+	relayLogSection.Edit(d, func(list []*jsonx.Object) []*jsonx.Object {
+		merged := slices.Clone(relays)
+		var keep []*jsonx.Object
+		for _, o := range list {
 			if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
 				merged = append(listOf(o, "relays"), merged...)
 				continue
 			}
+			keep = append(keep, o)
 		}
-		keep = append(keep, e)
-	}
-	o := jsonx.NewObject()
-	o.Set("pr", pr)
-	o.Set("relays", dedupeRelays(merged))
-	d.doc.Set("relayLog", append(keep, o))
+		o := jsonx.NewObject()
+		o.Set("pr", pr)
+		o.Set("relays", dedupeRelays(merged))
+		return append(keep, o)
+	})
 }
 
 // dedupeRelays drops a relay entry equal to an earlier one (same round, time and summary).
@@ -465,7 +476,7 @@ func dedupeRelays(in []any) []any {
 }
 
 // ClearRelayLog drops every kept relay log, at wind-down.
-func (d *Doc) ClearRelayLog() { d.doc.Delete("relayLog") }
+func (d *Doc) ClearRelayLog() { d.doc.Delete(relayLogSection.Key) }
 
 // LoggedRelays is the relay log kept for a PR ref by LogRelays, nil when none.
 func (r Registry) LoggedRelays(ref string) []any {
@@ -474,7 +485,7 @@ func (r Registry) LoggedRelays(ref string) []any {
 		return nil
 	}
 	var out []any
-	for _, o := range r.objects("relayLog") {
+	for _, o := range relayLogSection.Read(r) {
 		if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
 			out = append(out, listOf(o, "relays")...)
 		}
@@ -499,17 +510,19 @@ func (d *Doc) keepTaskRelays(issue, branch string, relays []any) {
 	if issue == "" || branch == "" || strings.HasPrefix(branch, "park/") || len(relays) == 0 {
 		return
 	}
-	for _, o := range d.objects("relayLog") {
-		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
-			o.Set("relays", dedupeRelays(append(slices.Clone(listOf(o, "relays")), relays...)))
-			return
+	relayLogSection.Edit(d, func(list []*jsonx.Object) []*jsonx.Object {
+		for _, o := range list {
+			if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
+				o.Set("relays", dedupeRelays(append(slices.Clone(listOf(o, "relays")), relays...)))
+				return list
+			}
 		}
-	}
-	o := jsonx.NewObject()
-	o.Set("issue", issue)
-	o.Set("branch", branch)
-	o.Set("relays", slices.Clone(relays))
-	d.doc.Set("relayLog", append(d.list("relayLog"), o))
+		o := jsonx.NewObject()
+		o.Set("issue", issue)
+		o.Set("branch", branch)
+		o.Set("relays", slices.Clone(relays))
+		return append(list, o)
+	})
 }
 
 func (r Registry) taskRelays(issue, branch string) []any {
@@ -518,7 +531,7 @@ func (r Registry) taskRelays(issue, branch string) []any {
 		return nil
 	}
 	var out []any
-	for _, o := range r.objects("relayLog") {
+	for _, o := range relayLogSection.Read(r) {
 		if NormID(jsonx.Str(o, "issue")) == issue && jsonx.Str(o, "branch") == branch {
 			out = append(out, listOf(o, "relays")...)
 		}

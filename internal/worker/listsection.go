@@ -30,8 +30,14 @@ func (s ListSection[T]) Write(d *Doc, list []T) {
 	d.SetSection(s.Key, out)
 }
 
+// Edit rewrites the list inside an Update that already holds the registry
+// lock: mutate gets the list as it is and returns the new one.
+func (s ListSection[T]) Edit(d *Doc, mutate func(list []T) []T) {
+	s.Write(d, mutate(s.Read(d.Registry)))
+}
+
 // Update edits the list under the registry lock: mutate gets the list as it is
 // and returns the new one.
 func (s ListSection[T]) Update(root string, mutate func(list []T) []T) error {
-	return Update(root, func(d *Doc) { s.Write(d, mutate(s.Read(d.Registry))) })
+	return Update(root, func(d *Doc) { s.Edit(d, mutate) })
 }
