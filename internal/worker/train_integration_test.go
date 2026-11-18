@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -170,5 +171,105 @@ func TestTrainIntegrationInteractionKeepsBranch(t *testing.T) {
 	reg, _ := LoadRegistry(w.dir)
 	if rec, _ := reg.IntegrationByBranch(branch); rec.VerifiedTip != "" || rec.Assembled == "" {
 		t.Fatalf("a red tip is not verified: %+v", rec)
+	}
+}
+
+// redWork2Full is a test.full that counts its runs in count and fails one
+// test once the second member's file is merged in.
+func redWork2Full(t *testing.T, w *world) string {
+	t.Helper()
+	count := filepath.Join(t.TempDir(), "count")
+	w.setConfig(`{"test":{"full":["echo x >> ` + count + `; if test -f work2.txt; then echo '--- FAIL: TestWidget (0.00s)'; echo FAIL; exit 1; fi"]}}`)
+	return count
+}
+
+// --on-fail stop is accepted with --integration (#3687): a red verify names
+// the failed tests and ends, with no prefix verify and no culprit.
+func TestTrainIntegrationOnFailStopSkipsDiagnose(t *testing.T) {
+	w := integrationWorld(t)
+	redWork2Full(t, w)
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", OnFail: OnFailStop, Say: func(s string) { said = append(said, s) }})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Stop == nil {
+		t.Fatalf("on-fail stop with --integration: %+v %v", res, err)
+	}
+	if strings.Join(res.Stop.Tests, ",") != "TestWidget" || !strings.Contains(res.Err, "failing tests: TestWidget") {
+		t.Errorf("stop tests %v, text:\n%s", res.Stop.Tests, res.Err)
+	}
+	// The verify may re-run its own failed test; the train adds no re-run, no
+	// prefix verify and no estimate.
+	for _, l := range said {
+		if strings.Contains(l, "diagnose") || strings.Contains(l, "rerun") || strings.Contains(l, "classify") {
+			t.Errorf("stop must diagnose nothing, said %q", l)
+		}
+	}
+	if res.Culprit != "" || len(res.Diagnostic) != 0 {
+		t.Errorf("stop blames nobody: %+v", res)
+	}
+}
+
+// Without --on-fail stop a red integration verify prints the failed tests
+// and the diagnose budget before any diagnose run starts (#3687).
+func TestTrainIntegrationRedPrintsFailuresBeforeDiagnose(t *testing.T) {
+	w := integrationWorld(t)
+	redWork2Full(t, w)
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", Say: func(s string) { said = append(said, s) }})
+	if err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("red integration train: %+v %v", res, err)
+	}
+	at := func(sub string) int {
+		return slices.IndexFunc(said, func(l string) bool { return strings.Contains(l, sub) })
+	}
+	failed, budget, diagnose := at("verify failed: TestWidget"), at("diagnose estimate: up to"), at("PHASE diagnose ")
+	if failed < 0 || budget < 0 || diagnose < 0 {
+		t.Fatalf("want failed-test, budget and diagnose lines, got %d %d %d in %q", failed, budget, diagnose, said)
+	}
+	if failed > budget || budget > diagnose {
+		t.Errorf("order: failed tests %d, budget %d, first diagnose run %d: %q", failed, budget, diagnose, said)
+	}
+}
+
+// --no-verify builds and pushes the branch without running test.full, even
+// when one is configured (#3683); the gate then verifies the tip itself and
+// refuses it when that verify is red.
+func TestTrainIntegrationNoVerifySkipsConfiguredVerify(t *testing.T) {
+	w := integrationWorld(t)
+	count := redWork2Full(t, w)
+	w.forge("head#7", "w1")
+	w.forge("sha#7", w.forgeWord("sha"))
+	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", NoVerify: true})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("no-verify integration train: %+v %v", res, err)
+	}
+	if n := intRuns(count); n != 0 {
+		t.Errorf("--no-verify ran test.full %d time(s)", n)
+	}
+	if !strings.Contains(strings.Join(res.Notes, "\n"), "INTEGRATION-UNVERIFIED") {
+		t.Errorf("notes: %v", res.Notes)
+	}
+	if rec := intRecord(t, w); rec.VerifiedTip != "" || rec.Assembled == "" {
+		t.Fatalf("record: %+v", rec)
+	}
+	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := LoadRegistry(w.dir)
+	rec, _ := reg.IntegrationByBranch(intBranch)
+	w.forge("body#9", IntegrationPRBody(rec))
+	w.pointPR9()
+	g, err := w.landPR9()
+	if err != nil || g.Verdict != GateVerifyFailed {
+		t.Fatalf("the gate landed an unverified tip whose verify is red: %+v %v", g, err)
+	}
+	if intRuns(count) == 0 {
+		t.Errorf("the gate must verify the unverified tip itself, runs %d", intRuns(count))
+	}
+	if w.onMain("work.txt") || w.onMain("work2.txt") {
+		t.Fatal("an unverified tip reached main")
 	}
 }

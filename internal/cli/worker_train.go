@@ -301,7 +301,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
 	onFail := fs.String("on-fail", worker.OnFailBisect, "what a red tier does: bisect (name the culprit by re-verifying prefixes) or stop (end now, no attribution)")
-	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
+	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise); with --integration, skip the verify: the branch is built and pushed, INTEGRATION-UNVERIFIED is recorded and the gate verifies the tip")
 	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
 	integration := fs.String("integration", "", "merge the members into the round's pushed integration/r<round>-<name> branch and verify it, landing nothing on --base")
@@ -328,8 +328,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if *onFail != worker.OnFailStop && *onFail != worker.OnFailBisect {
 			return Result{}, Usage("--on-fail takes stop or bisect, got %q", *onFail)
 		}
-		if *integration != "" && (*plan || *landGreen || *onFail == worker.OnFailStop) {
-			return Result{}, Usage("--integration cannot be combined with --plan, --land-green or --on-fail stop")
+		if *integration != "" && (*plan || *landGreen) {
+			return Result{}, Usage("--integration cannot be combined with --plan or --land-green")
 		}
 		if *plan && *order != "" {
 			return Result{}, Usage("--plan previews the computed order; it cannot be combined with --order")

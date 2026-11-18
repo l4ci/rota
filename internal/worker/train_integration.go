@@ -29,8 +29,7 @@ import (
 var integrationNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // integrationOpts refuses the train options an integration train has no
-// meaning for: it lands nothing, so it has no green prefix to land and no
-// stop-without-diagnosis; a preview pushes nothing, so it has no branch.
+// meaning for: it lands nothing, so it has no green prefix to land; a preview pushes nothing, so it has no branch.
 func integrationOpts(o TrainOpts) error {
 	if o.Integration == "" {
 		if o.Onto != "" {
@@ -49,7 +48,7 @@ func integrationOpts(o TrainOpts) error {
 	if !integrationNameRe.MatchString(o.Integration) {
 		return fail(exitcode.ExitUsage, fmt.Sprintf("--integration %q is not a valid branch name component", o.Integration))
 	}
-	for flag, set := range map[string]bool{"--land-green": o.LandGreen, "--on-fail stop": o.OnFail == OnFailStop, "--plan": o.Plan} {
+	for flag, set := range map[string]bool{"--land-green": o.LandGreen, "--plan": o.Plan} {
 		if set {
 			return fail(exitcode.ExitUsage, "--integration cannot be combined with "+flag)
 		}
@@ -295,7 +294,7 @@ func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix train
 	// Only a verify that ran records the tip: a --no-verify run (or one with
 	// an empty test.full) checked nothing, so the gate must verify it itself.
 	if len(res.Verified) == 0 {
-		res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATION-UNVERIFIED %s — no test.full command ran; landing verifies the tip", branch))
+		res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATION-UNVERIFIED %s — no test.full command ran; the gate verifies the final tip before it lands", branch))
 	} else if err := UpdateIntegration(t.root, branch, func(it *Integration) {
 		it.VerifiedTip, it.VerifiedBase = p.intTip, p.baseSHA
 	}); err != nil {
