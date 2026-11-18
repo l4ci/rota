@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/marker"
 )
 
 // Linear is the issue tracker of issues.source linear: one team of a Linear

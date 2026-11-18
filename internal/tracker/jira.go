@@ -18,6 +18,7 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/marker"
 )
 
 // Jira is the issue tracker of issues.source jira, over the REST API of a

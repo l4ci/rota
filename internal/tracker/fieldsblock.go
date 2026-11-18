@@ -1,10 +1,6 @@
 package tracker
 
-import (
-	"strings"
-
-	"github.com/l4ci/rota/internal/marker"
-)
+import "github.com/l4ci/rota/internal/marker"
 
 // The key-based trackers (Jira, Linear, It's a Plan) keep the hidden fields
 // block outside the description. This type adapts the marker-owned block to
