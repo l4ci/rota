@@ -78,8 +78,8 @@ func TestHerdrPaneMoveCommands(t *testing.T) {
 
 func TestFormatRatio(t *testing.T) {
 	for in, want := range map[float64]string{0.5: "0.5", 1.0 / 3: "0.3333", 0.25: "0.25", 1.0 / 7: "0.1429", 1: "1"} {
-		if got := FormatRatio(in); got != want {
-			t.Errorf("FormatRatio(%v) = %s, want %s", in, got, want)
+		if got := formatRatio(in); got != want {
+			t.Errorf("formatRatio(%v) = %s, want %s", in, got, want)
 		}
 	}
 }
