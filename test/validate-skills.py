@@ -483,7 +483,8 @@ def prose_rules():
               "reviewer brief must forbid worktree add/remove, checkout and switch in the repo"),
           has(RB, "If preparation failed or the workspace is unavailable, stop and report it. No fallback", "reviewer brief must refuse unavailable workspaces"),
           has(RB, "scratch cwd is not an OS sandbox", "reviewer brief must retain absolute-path access limitations"),
-          has(RB, "set `ROTA_BIN`", "reviewer brief must say to set ROTA_BIN for smoke sections")]
+          has(RB, "set `ROTA_BIN`", "reviewer brief must say to set ROTA_BIN for smoke sections"),
+          has(RB, "record keeping or process", "reviewer brief must grade record-keeping and process findings as minor, non-blocking (#3663)")]
     # --retro reads the session transcript for evidence
     RR = "skills/references/learn-rare-modes.md"
     r += [has(RR, "~/.codex/sessions/", "--retro Step 1 must locate the Codex transcript"),

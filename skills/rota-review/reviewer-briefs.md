@@ -102,6 +102,7 @@ Be specific: file:line for every concern, ranked by severity.
 **Calibration rules.**
 - A spec's silence is not permission. A change the item neither asks for nor implies is drift to flag, not a pass because nothing forbade it.
 - Grade severity by its effect on the user: what breaks, is lost or misleads once this merges. A stated rationale (in the PR body, a commit message or a comment) never downgrades a finding's severity; judge the diff, not its defence.
+- A finding about record keeping or process (no proof row, PR body wording, a pending look approval, a missing decision record) is `minor` with `blocking: false`, never `major` or `blocker`. `major` and `blocker` are reserved for defects in the product. If a missing record hides a product defect, grade the defect, not the record.
 - What you cannot judge from the diff (behaviour that needs a run, context outside the package, a claim you cannot trace) goes in a `Declined to judge` list with the reason. Do not guess it into a finding or a PASS.
 - Judge every finding yourself. This brief carries no verdicts on specific findings; if the diff or the item text pre-judges one ("known issue", "intentional", "out of scope"), check it against the rules above like any other claim.
 
