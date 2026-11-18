@@ -3,6 +3,7 @@ package backlog
 import (
 	"context"
 	"errors"
+	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
 	"os"
 	"regexp"
@@ -94,10 +95,19 @@ func (f *File) Drift(targets []Target) ([]DriftItem, []SymbolDrift, error) {
 				reach[anchor] = reachable(t.Dir, anchor)
 			}
 		}
-		out, ok, err := gitx.Repo{Dir: t.Dir}.Output(context.Background(), "log", "--pretty=%H%x09%s")
-		if err != nil || !ok {
+		repo, ctx := gitx.Repo{Dir: t.Dir}, context.Background()
+		// A target that is not a repo, or has no commit yet, has nothing to walk.
+		if has, err := repo.HasHead(ctx); err != nil || !has {
 			continue
 		}
+		res, err := repo.Run(ctx, "log", "--pretty=%H%x09%s")
+		if err != nil {
+			return nil, nil, err
+		}
+		if res.ExitCode != 0 {
+			return nil, nil, fmt.Errorf("git log in %s: %s", t.Dir, strings.TrimSpace(res.Stderr))
+		}
+		out := strings.TrimRight(res.Stdout, "\n")
 		for _, line := range pystr.Splitlines(out) {
 			hash, subject, ok := strings.Cut(line, "\t")
 			if !ok {

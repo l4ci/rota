@@ -654,7 +654,11 @@ type DetailWriter interface {
 
 // SetDetail rewrites the item's detail file; the item must already have one.
 func (f *File) SetDetail(ref, text string) error {
-	if _, ok, _ := f.Detail(ref); !ok {
+	_, ok, err := f.Detail(ref)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return errf(ErrNotFound, "[%s] has no detail file to rewrite", ref)
 	}
 	r, _ := utf8.DecodeRuneInString(ref)

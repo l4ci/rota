@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	ms "github.com/l4ci/rota/internal/milestone"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -380,8 +381,8 @@ type SummaryInputs struct {
 
 // LoadSummaryInputs reads the summary inputs of the project at root. Milestones
 // are read only in file mode; issue mode keeps them in the tracker. A missing
-// knowledge, decisions or archive file is an empty input; a milestone listing
-// failure is returned.
+// knowledge, decisions or archive file is an empty input; an unreadable one
+// and a milestone listing failure are returned.
 func LoadSummaryInputs(root string, items []Item, fileMode bool) (SummaryInputs, error) {
 	in := SummaryInputs{Items: items, Active: status.Entries(root)}
 	if fileMode {
@@ -391,9 +392,16 @@ func LoadSummaryInputs(root string, items []Item, fileMode bool) (SummaryInputs,
 		}
 		in.Milestones = list
 	}
-	in.Knowledge, _ = fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
-	in.Decisions, _ = fsio.ReadText(rotatree.File(root, rotatree.DecisionsFile))
-	in.Archive, _ = fsio.ReadText(rotatree.File(root, rotatree.ArchiveFile))
+	for _, r := range []struct {
+		name string
+		dst  *string
+	}{{rotatree.KnowledgeFile, &in.Knowledge}, {rotatree.DecisionsFile, &in.Decisions}, {rotatree.ArchiveFile, &in.Archive}} {
+		text, err := fsio.ReadText(rotatree.File(root, r.name))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return SummaryInputs{}, err
+		}
+		*r.dst = text
+	}
 	return in, nil
 }
 
