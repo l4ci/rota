@@ -55,3 +55,43 @@ func TestFileRefLocator(t *testing.T) {
 		t.Fatalf("SetField B10 touched B1:\n%s", got)
 	}
 }
+
+// TestBulletGrammarMatchers pins which of the line grammars (OpenRe, doneRe,
+// archiveBulletRe) accepts each bullet shape. The grammars are line-based, so
+// a bullet inside a code fence reads as a plain line.
+func TestBulletGrammarMatchers(t *testing.T) {
+	const doneBase = "- ~~**[B07] x**~~ Done 2026-01-01 [`abc1234`]"
+	rows := []struct {
+		name               string
+		line               string
+		open, done, archiv bool
+	}{
+		{"open", "- **[B07] x**", true, false, true},
+		{"open tagged", "- **[B07] [P1] Title.** rest", true, false, true},
+		{"done", doneBase, false, true, true},
+		{"done dropped with note", doneBase + " (dropped: note)", false, true, true},
+		{"done handed-off", doneBase + " (handed-off)", false, true, true},
+		{"done unknown reason", doneBase + " (parked)", false, false, true},
+		{"struck archive prefix", "- ~~**[B07]", false, false, true},
+		{"plain archive prefix", "- **[B07]", false, false, true},
+		{"slice id archive", "- **[S1] x**", false, false, true},
+		{"indented bullet", "  - **[B07] x**", false, false, false},
+		{"fenced bullet reads as plain line", "- **[B07] x**", true, false, true},
+		{"code fence marker", "```", false, false, false},
+		{"non-id bold bullet", "- **[note] x**", false, false, false},
+		{"plain bullet", "- B07 x", false, false, false},
+	}
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			if got := OpenRe.MatchString(r.line); got != r.open {
+				t.Errorf("OpenRe(%q) = %v, want %v", r.line, got, r.open)
+			}
+			if got := doneRe.MatchString(r.line); got != r.done {
+				t.Errorf("doneRe(%q) = %v, want %v", r.line, got, r.done)
+			}
+			if got := archiveBulletRe.MatchString(r.line); got != r.archiv {
+				t.Errorf("archiveBulletRe(%q) = %v, want %v", r.line, got, r.archiv)
+			}
+		})
+	}
+}
