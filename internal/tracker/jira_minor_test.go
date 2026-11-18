@@ -75,7 +75,11 @@ func TestJiraDeploymentPicksTheAPI(t *testing.T) {
 	ctx := context.Background()
 	s := jiratest.New(t, jiratest.Options{Version: 2})
 	dc := connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me", Deployment: connections.DeploymentDataCenter}
-	if err := NewJira(dc, "tok", "PROJ", "").CheckAuth(ctx); err != nil {
+	j, err := NewJira(dc, "tok", "PROJ", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := j.CheckAuth(ctx); err != nil {
 		t.Errorf("data center with a user: %v", err)
 	}
 	if err := (JiraTester{}).Test(ctx, dc, "tok"); err != nil {
@@ -83,7 +87,7 @@ func TestJiraDeploymentPicksTheAPI(t *testing.T) {
 	}
 	unsaid := connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me"}
 	resolve := WithConnections(func(context.Context, string) (connections.Connection, string, error) { return unsaid, "tok", nil })
-	_, err := NewIssueTracker(ctx, Settings{Source: "jira", Connection: "work", JiraProject: "PROJ"}, "", "/repo", resolve)
+	_, err = NewIssueTracker(ctx, Settings{Source: "jira", Connection: "work", JiraProject: "PROJ"}, "", "/repo", resolve)
 	if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "--deployment") {
 		t.Errorf("a connection that does not say its deployment: %v", err)
 	}

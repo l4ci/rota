@@ -27,28 +27,28 @@ type ownKind struct {
 	// rather than the host forge: the kind cannot be told from the origin remote.
 	ownMigrate bool
 	// build never returns a nil pointer inside a non-nil IssueTracker.
-	build  func(context.Context, *CLI, Settings) (IssueTracker, error)
+	build  func(context.Context, restDeps, Settings) (IssueTracker, error)
 	tester connections.Tester
 }
 
 // ownKinds is the registry of trackers that name themselves in issues.source.
 var ownKinds = []ownKind{
-	{config.SourceJira, jiraSpec, "issues.jira.project", func(s *Settings) *string { return &s.JiraProject }, " ...", "", false, func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newJiraTracker(ctx, c, s)
+	{config.SourceJira, jiraSpec, "issues.jira.project", func(s *Settings) *string { return &s.JiraProject }, " ...", "", false, func(ctx context.Context, d restDeps, s Settings) (IssueTracker, error) {
+		t, err := newJiraTracker(ctx, d, s)
 		if err != nil {
 			return nil, err
 		}
 		return t, nil
 	}, JiraTester{}},
-	{config.SourceLinear, linearSpec, "issues.linear.team", func(s *Settings) *string { return &s.LinearTeam }, " --token-stdin", "check issues.linear.team against the team's key in Linear, and the API key's access", false, func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newLinearTracker(ctx, c, s)
+	{config.SourceLinear, linearSpec, "issues.linear.team", func(s *Settings) *string { return &s.LinearTeam }, " --token-stdin", "check issues.linear.team against the team's key in Linear, and the API key's access", false, func(ctx context.Context, d restDeps, s Settings) (IssueTracker, error) {
+		t, err := newLinearTracker(ctx, d, s)
 		if err != nil {
 			return nil, err
 		}
 		return t, nil
 	}, LinearTester{}},
-	{config.SourceItsaplan, itsaplanSpec, "issues.itsaplan.project", func(s *Settings) *string { return &s.ItsaplanProject }, " --site <url> --token-stdin", "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access", true, func(ctx context.Context, c *CLI, s Settings) (IssueTracker, error) {
-		t, err := newItsaplanTracker(ctx, c, s)
+	{config.SourceItsaplan, itsaplanSpec, "issues.itsaplan.project", func(s *Settings) *string { return &s.ItsaplanProject }, " --site <url> --token-stdin", "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access", true, func(ctx context.Context, d restDeps, s Settings) (IssueTracker, error) {
+		t, err := newItsaplanTracker(ctx, d, s)
 		if err != nil {
 			return nil, err
 		}
