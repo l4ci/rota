@@ -474,7 +474,7 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("no verdict recorded for %s that %s reads", t.branch, *consumer).
 				WithHint("record one with: rota verdict add")
 		}
-		cfg := c.deps().Config(t.root)
+		cfg := c.projectConfig(t.root)
 		s := verdict.Settings{
 			QAGate: config.String(cfg, "qa.gate"),
 		}

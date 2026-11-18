@@ -30,7 +30,7 @@ type reportTargets struct {
 
 func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdict.ItemVerdict) reportTargets {
 	var dst reportTargets
-	cfg := c.deps().Config(t.root)
+	cfg := c.projectConfig(t.root)
 	source, _ := config.IssueSource(cfg)
 	keySource := tracker.IsOwnSource(source)
 	add := func(id string) {
