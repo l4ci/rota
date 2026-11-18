@@ -2,10 +2,12 @@ package ledger
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -74,5 +76,30 @@ func TestDetailRoundTripKeepsTheOnDiskKeys(t *testing.T) {
 	}
 	if es[13].resetsAt() != "2026-10-03T12:00:00Z" {
 		t.Errorf("limited row %v", es[13].Detail)
+	}
+}
+
+// The on-disk spelling of the session keys is a contract older rows and
+// readers depend on: pin the literals, not the keyTokens constant.
+func TestSessionDetailOnDiskKeys(t *testing.T) {
+	d := SessionDetail(t.TempDir(), "dana", "claude", time.Time{}, "", nil) // no session reported
+	b, err := jsonx.MarshalCompact(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"session": "unavailable"`, `"transcript": "unavailable"`, `"tokens": "unavailable"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("session row %s lacks %s", b, want)
+		}
+	}
+	cd := t.TempDir()
+	tr := filepath.Join(t.TempDir(), "s.jsonl")
+	writeFile(t, tr, usageLine)
+	if err := RecordSession(cd, Session{Slot: "dana", ID: "sid-1", Transcript: tr, UpdatedAt: sessNow}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = jsonx.MarshalCompact(SessionDetail(cd, "dana", "claude", sessNow.Add(-time.Hour), "", nil))
+	if !strings.Contains(string(b), `"tokens": {"input": 1, "output": 2, "cacheRead": 3, "cacheWrite": 4}`) {
+		t.Errorf("session row %s lacks the literal tokens object", b)
 	}
 }

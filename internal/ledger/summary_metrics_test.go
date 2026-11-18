@@ -166,3 +166,113 @@ func TestSummaryMetricEvidence(t *testing.T) {
 		}
 	})
 }
+
+func suite(exit int) any {
+	return jsonx.Obj("command", "bash test/gate.sh", "wallSeconds", 1.0, "exitCode", exit)
+}
+
+func verif(min int, issue string, wall float64, exit int) Entry {
+	return Entry{TS: at(min), Round: 2, Kind: KindVerification, Issue: issue, Slot: "ben",
+		Detail: VerificationDetail("test.full", wall, []any{suite(exit)}, nil)}
+}
+
+func rework(min int, kind, issue string) Entry {
+	return Entry{TS: at(min), Round: 2, Kind: kind, Issue: issue, Slot: "ben"}
+}
+
+func verifMetric(t *testing.T, es []Entry) *jsonx.Object {
+	t.Helper()
+	return metricObject(t, Fold(es, nil, 2), "verifications")
+}
+
+func TestVerificationMetricsCountRunsWallAndRed(t *testing.T) {
+	m := verifMetric(t, []Entry{
+		verif(1, "7", 100, 0),
+		verif(2, "8", 50.5, 1),
+		{TS: at(3), Round: 2, Kind: KindVerification, Detail: VerificationDetail("test.e2e", 9, []any{suite(1)}, nil)}, // not a full run
+		{TS: at(3), Round: 1, Kind: KindVerification, Issue: "9", Detail: VerificationDetail("test.full", 9, []any{suite(1)}, nil)},
+	})
+	metricValue(t, m, "unavailable", nil)
+	metricValue(t, m, "runs", 2)
+	metricValue(t, m, "wallSeconds", 150) // whole seconds of 100 + 50.5
+	metricValue(t, m, "red", 1)
+}
+
+func TestVerificationRedThenPassWithoutRework(t *testing.T) {
+	m := verifMetric(t, []Entry{
+		verif(1, "7", 10, 1),
+		verif(2, "7", 10, 0), // green rerun, nothing between
+	})
+	metricValue(t, m, "red", 1)
+	metricValue(t, m, "redPassedWithoutRework", 1)
+}
+
+func TestVerificationRedThenReworkIsNotCounted(t *testing.T) {
+	for _, kind := range []string{KindAssign, KindDone, KindBounce, KindTransfer} {
+		m := verifMetric(t, []Entry{
+			verif(1, "7", 10, 1),
+			rework(2, kind, "7"),
+			verif(3, "7", 10, 0),
+		})
+		metricValue(t, m, "red", 1)
+		metricValue(t, m, "redPassedWithoutRework", 0)
+	}
+	// Another issue's row in between is no rework of this one.
+	m := verifMetric(t, []Entry{verif(1, "7", 10, 1), rework(2, KindDone, "8"), verif(3, "7", 10, 0)})
+	metricValue(t, m, "redPassedWithoutRework", 1)
+	// A red never followed by a pass counts for nothing.
+	m = verifMetric(t, []Entry{verif(1, "7", 10, 1), verif(2, "7", 10, 1)})
+	metricValue(t, m, "red", 2)
+	metricValue(t, m, "redPassedWithoutRework", 0)
+}
+
+func TestVerificationMetricsUnavailableWithoutRows(t *testing.T) {
+	m := verifMetric(t, []Entry{rework(1, KindAssign, "7")})
+	if jsonx.Str(m, "unavailable") == "" {
+		t.Error("no verification rows must say unavailable")
+	}
+	for _, k := range []string{"runs", "wallSeconds", "red", "redPassedWithoutRework"} {
+		metricValue(t, m, k, nil)
+	}
+}
+
+func TestGateRefusalsByVerdict(t *testing.T) {
+	gate := func(v string, member bool) Entry {
+		d := detail("verdict", v)
+		if member {
+			d.Set("train", true)
+		}
+		return Entry{TS: at(1), Round: 2, Kind: KindGate, Issue: "7", Slot: "ben", Detail: d}
+	}
+	s := Fold([]Entry{gate("pass", false), gate("verify-failed", false), gate("verify-failed", false), gate("approval-required", false), gate("", true)}, nil, 2)
+	m := metricObject(t, s, "gateRefusals")
+	metricValue(t, m, "unavailable", nil)
+	metricValue(t, m, "total", 3)
+	by, _ := m.Get("byVerdict")
+	o, ok := by.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("byVerdict = %v", by)
+	}
+	metricValue(t, o, "verify-failed", 2)
+	metricValue(t, o, "approval-required", 1)
+	if _, has := o.Get("pass"); has {
+		t.Error("a pass is no refusal")
+	}
+	// A round with no gate rows has no evidence, not zero refusals.
+	m = metricObject(t, Fold([]Entry{rework(1, KindAssign, "7")}, nil, 2), "gateRefusals")
+	if jsonx.Str(m, "unavailable") == "" {
+		t.Error("no gate rows must say unavailable")
+	}
+}
+
+func TestVerificationTextShowsMetricsAndUnavailable(t *testing.T) {
+	txt := Fold([]Entry{verif(1, "7", 10, 1), verif(2, "7", 10, 0)}, nil, 2).Text()
+	for _, want := range []string{"Full verifications: 2 runs", "1 red", "1 red passed without rework"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("text lacks %q:\n%s", want, txt)
+		}
+	}
+	if txt := Fold([]Entry{rework(1, KindAssign, "7")}, nil, 2).Text(); !strings.Contains(txt, "Full verifications: unavailable (") {
+		t.Errorf("unavailable text missing:\n%s", txt)
+	}
+}
