@@ -131,6 +131,17 @@ func TestRewriteSettingsDropsHvHookNextToRotaOne(t *testing.T) {
 	}
 }
 
+func TestSymlinkedDirFindsSymlinkedParent(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "skills")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if !symlinkedDir(root, "skills/hv-work/SKILL.md") {
+		t.Fatal("symlinkedDir did not flag the symlinked parent")
+	}
+}
+
 // ---- end to end ------------------------------------------------------------
 
 func write(t *testing.T, path, text string) {
