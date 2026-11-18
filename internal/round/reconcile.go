@@ -205,6 +205,9 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		_, err := e.Transfer(ctx, root, e.Board, TransferOpts{Issue: f.Issue, To: HumanTarget, Note: note})
 		return err
 	case ClaimMismatch:
+		if f.Repair == repairReleaseClaim {
+			return e.releaseLeftoverClaim(f)
+		}
 		return e.rearmClaim(root, f)
 	case ClaimLabelDrift:
 		syncer, ok := backlog.Optional[backlog.ClaimLabelSyncer](e.Board, func(c backlog.Capabilities) bool { return c.ClaimLabels })
@@ -312,6 +315,22 @@ func registerSlot(root string, row Row, v *view) error {
 		}
 		doc.AppendSlot(s)
 	})
+}
+
+// releaseLeftoverClaim releases the open claim a parked slot left on an issue
+// no slot holds (a landed slice of a partial-slice issue), which also drops the
+// issue's in-progress label once no claim remains. A claim that is gone or
+// belongs to another holder by now is left alone.
+func (e Env) releaseLeftoverClaim(f Finding) error {
+	if e.Board == nil {
+		return fmt.Errorf("no backlog to release %s on", f.Issue)
+	}
+	claim := openClaimWith(e.Board, f.Issue, f.Slot+"@")
+	if claim == "" {
+		return nil
+	}
+	_, err := e.Board.Release(f.Issue, claim)
+	return err
 }
 
 // rearmClaim repairs a slot whose claim is gone from the tracker (a release

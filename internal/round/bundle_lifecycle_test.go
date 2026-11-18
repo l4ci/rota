@@ -246,3 +246,78 @@ func TestReleasedBundleMembersAreClaimDrift(t *testing.T) {
 		}
 	}
 }
+
+// A landed slice PR on a partial-slice issue parks its slot but leaves the
+// slot's claim on the open issue (#3629): no slot holds it and the claim names
+// a parked slot. Reconcile releases that claim; a claim naming a slot that
+// still holds another issue is left for a person.
+func TestReconcileReleasesLeftoverClaimOfParkedSlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.forge.labels = map[int][]string{12: {"in-progress"}}
+	f.forge.labelled = nil
+	// The slot parked after its slice merged: it holds nothing, 12 keeps ben@1.
+	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task"); s.Set("branch", "park/ben") }); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, filepath.Join(f.root, ".worktrees", "ben"), "checkout", "-q", "park/ben")
+
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Issue == "12" {
+			found = true
+			if fd.Repair == "" {
+				t.Errorf("a leftover claim of a parked slot has a repair: %+v", fd)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing claim-mismatch for the leftover claim: %+v", rep.Findings)
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.held("12"); len(got) != 0 {
+		t.Errorf("claim must be released, still held: %v", got)
+	}
+}
+
+// A claim naming a slot that is busy on another issue is drift for a person:
+// reconcile reports it, offers no repair and leaves the claim held.
+func TestReconcileKeepsClaimOfBusySlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.be.add("17", "Stray", "M01", false, "## Acceptance\n- [ ] ok\n")
+	if ok, _, err := f.be.Claim("17", "ben@1"); err != nil || !ok {
+		t.Fatalf("claim 17: %v %v", ok, err)
+	}
+	f.forge.labels = map[int][]string{12: {"in-progress"}, 17: {"in-progress"}}
+	f.forge.labelled = nil
+
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Issue == "17" {
+			found = true
+			if fd.Repair != "" {
+				t.Errorf("a busy slot's claim must not be repaired: %+v", fd)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing claim-mismatch for the stray claim: %+v", rep.Findings)
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.held("17"); len(got) != 1 {
+		t.Errorf("a live slot's claim must survive reconcile, held: %v", got)
+	}
+}

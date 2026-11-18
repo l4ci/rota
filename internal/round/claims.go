@@ -156,10 +156,20 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		if m == nil || slotObj[m[1]] == nil {
 			continue
 		}
-		rep.add(Finding{Kind: ClaimMismatch, Slot: m[1], Issue: n.String(),
-			Detail: fmt.Sprintf("open claim %s on %s names slot %s, which does not hold it", st.Claim, n.Ref(), m[1])})
+		f := Finding{Kind: ClaimMismatch, Slot: m[1], Issue: n.String(),
+			Detail: fmt.Sprintf("open claim %s on %s names slot %s, which does not hold it", st.Claim, n.Ref(), m[1])}
+		// A slot that holds nothing is parked: its claim is what a landed slice
+		// left behind (#3629). A slot busy on another issue is a person's call.
+		if slotObj[m[1]].HeldID() == "" {
+			f.Repair = repairReleaseClaim
+		}
+		rep.add(f)
 	}
 }
+
+// repairReleaseClaim is the Repair of a claim-mismatch whose claim names a
+// parked slot: the repair releases that claim.
+const repairReleaseClaim = "release claim"
 
 // firstClaims is the first n open claims of a status, earliest first; a
 // backend that fills only Claim has the one.
