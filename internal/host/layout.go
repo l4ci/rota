@@ -142,7 +142,7 @@ func (h *herdr) PaneRects(ctx context.Context, pane string) (map[string]Rect, er
 // user's keyboard where it was.
 func (h *herdr) SplitInto(ctx context.Context, pane, tab, target, dir string, keep float64) error {
 	r := h.herdr(ctx, "pane", "move", pane, "--tab", tab, "--split", dir,
-		"--target-pane", target, "--ratio", FormatRatio(keep), "--no-focus")
+		"--target-pane", target, "--ratio", formatRatio(keep), "--no-focus")
 	if r.ExitCode != 0 {
 		return fmt.Errorf("herdr pane move %s failed: %s", pane, strings.TrimSpace(r.Stderr))
 	}
@@ -178,8 +178,8 @@ func (h *herdr) RenamePane(ctx context.Context, pane, label string) error {
 	return nil
 }
 
-// FormatRatio prints a share with at most four decimals: 0.5, 0.3333.
-func FormatRatio(f float64) string {
+// formatRatio prints a share with at most four decimals: 0.5, 0.3333.
+func formatRatio(f float64) string {
 	return strconv.FormatFloat(math.Round(f*1e4)/1e4, 'f', -1, 64)
 }
 
