@@ -96,7 +96,7 @@ func (s Store) KnowledgePath(scope string) (string, error) {
 	if err := s.check(scope); err != nil {
 		return "", err
 	}
-	return filepath.Join(s.dir(scope), "KNOWLEDGE.md"), nil
+	return filepath.Join(s.dir(scope), rotatree.KnowledgeFile), nil
 }
 
 // TierPath is the knowledge-tier.json sidecar of scope.
