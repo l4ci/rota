@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,5 +163,28 @@ func TestCtxProjectConfigSharedAcrossRoots(t *testing.T) {
 	c.projectConfig("/other")
 	if len(seen) != 2 || seen[1] != "/other" {
 		t.Errorf("Config calls = %v, want a reload for the second root", seen)
+	}
+}
+
+// map stats --cap reads config for the stale limit and the cap: one load per
+// invocation, however many readers the verb has.
+func TestMapStatsCapLoadsConfigOnce(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	calls := 0
+	d.Config = func(string) any { calls++; return map[string]any{} }
+	c := &Ctx{Deps: d, Stdout: io.Discard, Stderr: io.Discard}
+	fs := flag.NewFlagSet("stats", flag.ContinueOnError)
+	run := mapStats(fs)
+	if err := fs.Parse([]string{"--cap"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(c, fs.Args()); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Errorf("Config called %d times, want 1", calls)
 	}
 }
