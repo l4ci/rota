@@ -94,12 +94,18 @@ var duties = map[string]string{
 
 const quotationRules = " Quote code, paths and errors verbatim; cut the prose around them."
 
+// reportingInstructions wraps an expanded reporting section with the fixed
+// role duty and quotation rule, for built-in defaults and saved overrides alike.
+func reportingInstructions(role, report string) string {
+	return duties[role] + report + quotationRules
+}
+
 func defaultInstructions() map[string]string {
 	text := make(map[string]string, len(duties))
 	catalog := prompts.Catalog()
-	for role, duty := range duties {
+	for role := range duties {
 		sec := catalog["agents."+role+".report"]
-		text[role] = duty + sec.Report(sec.Default) + quotationRules
+		text[role] = reportingInstructions(role, sec.Report(sec.Default))
 	}
 	return text
 }
@@ -283,11 +289,11 @@ func CompareWithPrompts(root string, cfg any) ([]Entry, error) {
 			continue
 		}
 		role := strings.TrimSuffix(strings.TrimPrefix(v.Name, "agents."), ".report")
-		duty, ok := duties[role]
+		_, ok := duties[role]
 		if !ok {
 			continue
 		}
-		text[role] = duty + v.Effective + quotationRules
+		text[role] = reportingInstructions(role, v.Effective)
 	}
 	files, err := renderInstructions(sp, text)
 	if err != nil {

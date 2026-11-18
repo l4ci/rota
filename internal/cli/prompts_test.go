@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -21,6 +22,114 @@ func promptCommand(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("%v: expected success, got exit %d: %s %s", args, code, out, stderr)
 	}
 	return out
+}
+
+func TestPromptsEffectiveSectionMatchesAgent(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		t.Run(fmt.Sprint(custom), func(t *testing.T) {
+			dir := agentsProject(t, `{}`)
+			if custom {
+				saveTeamPrompt(t, dir, "agents.explorer.report")
+			}
+			shown := promptCommand(t, dir, "prompts", "show", "agents.explorer.report")
+			_, block, ok := strings.Cut(shown, "\nEffective (expanded reporting section):\n  ")
+			if !ok {
+				t.Fatalf("show must label the reporting section without claiming it is the full agent instructions: %s", shown)
+			}
+			block, _, _ = strings.Cut(block, "\n\nHistory:")
+			block = strings.ReplaceAll(strings.TrimSuffix(block, "\n"), "\n  ", "\n")
+			promptCommand(t, dir, "agents", "write")
+			file, err := os.ReadFile(filepath.Join(dir, ".claude", "agents", "rota-explorer"+agentExt))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, instructions, ok := strings.Cut(string(file), "say plainly what you could not find. ")
+			if !ok {
+				t.Fatalf("agent duty missing: %s", file)
+			}
+			report, _, ok := strings.Cut(instructions, " Quote code, paths and errors verbatim; cut the prose around them.")
+			if !ok || report != block {
+				t.Fatalf("show reporting section %q differs from agent reporting section %q (quotation rule present: %t)", block, report, ok)
+			}
+		})
+	}
+}
+
+func TestPromptsJSONShapes(t *testing.T) {
+	dir := agentsProject(t, `{}`)
+	draft := filepath.Join(t.TempDir(), "draft.md")
+	if err := os.WriteFile(draft, []byte("Team {{status}} {{closing}}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		verb, keys string
+		flags      []string
+		revision   int
+	}{
+		{"list", "sections", nil, 0},
+		{"show", "baseline,baselineDigest,default,effective,history,name,override,revision,status,template", nil, 0},
+		{"save", "changed,section", []string{"--expect", "0", "--body-file", draft}, 1},
+		{"adopt", "changed,section", []string{"--expect", "1"}, 2},
+		{"restore", "changed,section", []string{"--expect", "2", "--revision", "1"}, 3},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			args := []string{"prompts", tc.verb, "--json"}
+			if tc.verb != "list" {
+				args = append(args, "agents.explorer.report")
+			}
+			args = append(args, tc.flags...)
+			out := promptCommand(t, dir, args...)
+			var envelope struct {
+				OK   bool            `json:"ok"`
+				Data json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(out), &envelope); err != nil || !envelope.OK {
+				t.Fatalf("invalid success envelope: %v %s", err, out)
+			}
+			var data map[string]json.RawMessage
+			if err := json.Unmarshal(envelope.Data, &data); err != nil {
+				t.Fatal(err)
+			}
+			var keys []string
+			for key := range data {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			if strings.Join(keys, ",") != tc.keys {
+				t.Fatalf("data keys %v, want %s", keys, tc.keys)
+			}
+			var view prompts.View
+			switch tc.verb {
+			case "list":
+				var views []prompts.View
+				if err := json.Unmarshal(data["sections"], &views); err != nil || len(views) != 3 {
+					t.Fatalf("sections must be a View array: %v %s", err, out)
+				}
+				view = views[0]
+			case "show":
+				if err := json.Unmarshal(envelope.Data, &view); err != nil {
+					t.Fatal(err)
+				}
+			default:
+				if string(data["changed"]) != "true" {
+					t.Fatalf("mutation must report changed=true: %s", out)
+				}
+				if err := json.Unmarshal(data["section"], &view); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if view.Name != "agents.explorer.report" || view.Revision != tc.revision || view.Effective == "" {
+				t.Fatalf("missing or incorrect View: %+v", view)
+			}
+		})
+	}
+}
+
+func TestPromptsShowHelpDocumentsJSONShape(t *testing.T) {
+	code, out, stderr := rotaIn(t, t.TempDir(), "prompts", "show", "--help")
+	if code != 0 || !strings.Contains(out+stderr, "--json data: bare View") || !strings.Contains(out+stderr, "save/adopt/restore use {section, changed}") {
+		t.Fatalf("help must document show's JSON exception: %d %s %s", code, out, stderr)
+	}
 }
 
 func TestPromptsSaveActivate(t *testing.T) {
