@@ -14,9 +14,9 @@ type fieldsProp struct {
 	Block string `json:"block"`
 }
 
-// fieldsForBody keeps the marker-owned block in the key-based tracker property
-// shape. A body without a block comes back whole with an empty property.
-func fieldsForBody(body string) (string, fieldsProp) {
+// fieldsProperty maps a body onto the key-based tracker description and
+// property shape. A body without a block comes back whole with an empty property.
+func fieldsProperty(body string) (string, fieldsProp) {
 	text, lines, ok := marker.SplitFields(body)
 	if !ok {
 		return body, fieldsProp{}

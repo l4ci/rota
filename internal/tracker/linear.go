@@ -623,7 +623,7 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 	if err != nil {
 		return "", err
 	}
-	text, fields := fieldsForBody(body)
+	text, fields := fieldsProperty(body)
 	if err := stateFits("fields", fields.Block); err != nil {
 		return "", err
 	}
@@ -678,7 +678,7 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	var fields fieldsProp
 	if e.Body != nil {
 		var text string
-		text, fields = fieldsForBody(*e.Body)
+		text, fields = fieldsProperty(*e.Body)
 		in["description"] = text
 	}
 	add, err := l.labelIDs(ctx, e.AddLabels, true)

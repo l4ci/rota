@@ -382,7 +382,7 @@ func (j *Jira) Create(ctx context.Context, title, body string, labels []string, 
 	if err != nil {
 		return "", err
 	}
-	text, fields := fieldsForBody(body)
+	text, fields := fieldsProperty(body)
 	f := map[string]any{"project": map[string]string{"key": j.project}, "summary": title,
 		"issuetype": map[string]string{"id": typ}, "labels": uniqOrEmpty(labels)}
 	if text != "" {
@@ -432,7 +432,7 @@ func (j *Jira) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		f["summary"] = *e.Title
 	}
 	if e.Body != nil {
-		text, fields := fieldsForBody(*e.Body)
+		text, fields := fieldsProperty(*e.Body)
 		f["description"] = nil
 		if text != "" {
 			f["description"] = j.wire(text)

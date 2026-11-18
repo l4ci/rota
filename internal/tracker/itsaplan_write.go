@@ -120,7 +120,7 @@ func (t *Itsaplan) Create(ctx context.Context, title, body string, labels []stri
 	if err != nil {
 		return "", err
 	}
-	text, fields := fieldsForBody(body)
+	text, fields := fieldsProperty(body)
 	if fields.Block != "" {
 		// fail before the issue exists when the field cannot be had
 		if _, err := t.fieldID(ctx); err != nil {
@@ -168,7 +168,7 @@ func (t *Itsaplan) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	var fields fieldsProp
 	if e.Body != nil {
 		var text string
-		text, fields = fieldsForBody(*e.Body)
+		text, fields = fieldsProperty(*e.Body)
 		in["description"] = text
 		if fields.Block != "" {
 			// fail before any write when the field cannot be had, so a refused
