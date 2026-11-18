@@ -330,3 +330,82 @@ func DialogFor(kind, text string) string {
 
 // reGutter starts a line of OpenCode's user-message gutter.
 var reGutter = regexp.MustCompile(`^\s*┃`)
+
+// Scope narrows which part of a pane Detect reads.
+type Scope struct {
+	// Prompt, when set, keeps only what follows its last occurrence (matched
+	// across terminal wrapping), so a message a resume already answered does
+	// not count again.
+	Prompt string
+	// TailLines, when positive, keeps only that many lines from the end.
+	TailLines int
+}
+
+// Hit is Detect's answer.
+type Hit struct {
+	// Own is the scoped pane without echoed relays: what the session said
+	// about itself. Dialog is its harness-written region. Both are set whether
+	// or not a limit was found.
+	Own, Dialog string
+	// Start and End are the byte span of the limit phrase inside Dialog.
+	Start, End int
+	// Line is the dialog line holding the phrase, trimmed.
+	Line string
+	// Rest is Dialog from the start of that line, at most 400 bytes.
+	Rest string
+}
+
+// Detect is the one chain that decides what a usage limit is: scope the pane,
+// strip echoed relays, keep the harness's dialog region, find the limit
+// phrase. The worker classifier and the limits watcher both call it.
+func Detect(kind, text string, sc Scope) (Hit, bool) {
+	if re := promptRe(sc.Prompt); re != nil {
+		if locs := re.FindAllStringIndex(text, -1); len(locs) > 0 {
+			text = text[locs[len(locs)-1][1]:]
+		}
+	}
+	if sc.TailLines > 0 {
+		lines := strings.Split(strings.TrimRight(text, "\n \t"), "\n")
+		if len(lines) > sc.TailLines {
+			lines = lines[len(lines)-sc.TailLines:]
+		}
+		text = strings.Join(lines, "\n")
+	}
+	var h Hit
+	h.Own = StripRelays(kind, text)
+	h.Dialog = DialogFor(kind, h.Own)
+	var ok bool
+	if h.Start, h.End, ok = FindLimit(kind, h.Dialog); !ok {
+		return h, false
+	}
+	d := h.Dialog
+	from := strings.LastIndex(d[:h.Start], "\n") + 1
+	to := strings.Index(d[h.Start:], "\n")
+	if to < 0 {
+		to = len(d)
+	} else {
+		to += h.Start
+	}
+	h.Rest = d[from:]
+	if len(h.Rest) > 400 {
+		h.Rest = h.Rest[:400]
+	}
+	h.Line = strings.TrimSpace(d[from:to])
+	return h, true
+}
+
+// promptRe matches the prompt as a terminal may have wrapped it; nil for none.
+func promptRe(prompt string) *regexp.Regexp {
+	words := strings.Fields(prompt)
+	if len(words) == 0 {
+		return nil
+	}
+	for i, w := range words {
+		words[i] = regexp.QuoteMeta(w)
+	}
+	re, err := regexp.Compile(strings.Join(words, `\s+`))
+	if err != nil {
+		return nil
+	}
+	return re
+}
