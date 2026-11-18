@@ -149,6 +149,10 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 - **Notes** are marker comments on the issue, edited in place: `proof`, `design`, `plan`, `acceptance`. Read them with `rota item note show <ID> --kind design`, `rota design show`, `rota plan show`.
 - **Comments** record `question`, `answer`, `decision` and `feedback`. Decisions are binding for later sessions.
 
+Jira and Linear keep note markers outside the text people see. If saving that
+state fails, rota removes a newly posted comment or restores an edited comment's
+previous text. If restoring the text also fails, rota reports both errors.
+
 ### Claim lock and state labels
 
 `rota item claim <ref> --as <claim-id>` takes an item: claim comment, `in-progress` label, assignee. The earliest unreleased claim wins; a loser gets exit 4 and picks another item. State labels are one of `in-progress`, `needs-review`, `changes-requested` at a time, cleared on close.

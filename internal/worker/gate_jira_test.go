@@ -28,7 +28,10 @@ func TestGateClosesAJiraIssueAfterTheMerge(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := jiratest.New(t, jiratest.Options{})
-			j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+			j, err := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+			if err != nil {
+				t.Fatal(err)
+			}
 			labels := []string{"in-progress"}
 			if c.partial {
 				labels = append(labels, PartialSliceLabel)
@@ -71,7 +74,10 @@ func TestGateKeepsTheClaimWhenTheJiraCloseFails(t *testing.T) {
 		{ID: "1", Name: "To Do", Category: "new"},
 		{ID: "2", Name: "In Progress", Category: "indeterminate"},
 	}})
-	j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+	j, err := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	key, err := j.Create(bg, "Widen", "", []string{"in-progress"}, "")
 	if err != nil || key != "PROJ-1" {
 		t.Fatal(key, err)

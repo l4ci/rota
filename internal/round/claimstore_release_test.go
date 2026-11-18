@@ -18,7 +18,10 @@ import (
 func TestClaimStoreHandReleaseSurvivesReconcile(t *testing.T) {
 	t.Run("Jira", func(t *testing.T) {
 		s := jiratest.New(t, jiratest.Options{})
-		tr := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+		tr, err := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+		if err != nil {
+			t.Fatal(err)
+		}
 		testClaimStoreHandRelease(t, tr)
 	})
 	t.Run("Linear", func(t *testing.T) {

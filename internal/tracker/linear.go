@@ -68,12 +68,12 @@ const linearStateMax = 64 << 10
 const linearPage = 50
 
 // newLinearTracker is NewIssueTracker for issues.source linear.
-func newLinearTracker(ctx context.Context, c *CLI, s Settings) (*Linear, error) {
+func newLinearTracker(ctx context.Context, d restDeps, s Settings) (*Linear, error) {
 	missing := ""
 	if s.LinearTeam == "" {
 		missing = "issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)"
 	}
-	conn, secret, wire, err := c.restConn(ctx, s, linearSpec, missing)
+	conn, secret, wire, err := d.restConn(ctx, s, linearSpec, missing)
 	if err != nil {
 		return nil, err
 	}
@@ -949,6 +949,18 @@ func (l *Linear) comments(ctx context.Context, issueID string, state map[string]
 // rota comment lives in an attachment on the issue.
 func (l *Linear) marked(key IssueKey, issueID string) markedComments {
 	return markedComments{
+		read: func(ctx context.Context, id string) (string, error) {
+			comments, err := l.comments(ctx, issueID, nil)
+			if err != nil {
+				return "", err
+			}
+			for _, c := range comments {
+				if c.ID == id {
+					return c.Body, nil
+				}
+			}
+			return "", &Error{Kind: KindNotFound, Code: 1, Message: "Linear comment " + id + " not found"}
+		},
 		post: func(ctx context.Context, shown string) (string, error) {
 			var d struct {
 				CommentCreate struct {

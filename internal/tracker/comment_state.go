@@ -2,16 +2,20 @@ package tracker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/l4ci/rota/internal/marker"
 )
 
 // markedComments is the rule Jira and Linear share for a comment that carries
 // a rota marker: people see marker.Visible(body), the full body is kept out of
-// band, a store that fails takes the half-made comment back down, and an edit
-// that drops the marker drops the stored body too. The adapter binds the issue
+// band, a store that fails undoes the shown-text change, and an edit that drops
+// the marker drops the stored body too. The adapter binds the issue
 // into each primitive and supplies only the storage calls.
 type markedComments struct {
+	// read returns the shown text before an edit, for rollback on store failure.
+	read func(ctx context.Context, id string) (string, error)
 	// post creates a comment showing shown and returns its id; edit replaces
 	// the shown text; remove deletes the comment (the rollback).
 	post   func(ctx context.Context, shown string) (string, error)
@@ -65,7 +69,8 @@ func (m markedComments) Add(ctx context.Context, body string) (string, error) {
 }
 
 // Edit replaces the comment's text, then stores body whole when it carries a
-// marker or drops the stored body when it does not.
+// marker or drops the stored body when it does not. As with Add, a failed store
+// write undoes the shown-text change; an edit restores the previous text.
 func (m markedComments) Edit(ctx context.Context, id, body string) error {
 	marked := marker.Has(body)
 	if marked && m.fits != nil {
@@ -73,13 +78,24 @@ func (m markedComments) Edit(ctx context.Context, id, body string) error {
 			return err
 		}
 	}
+	previous, err := m.read(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := m.edit(ctx, id, shownText(body)); err != nil {
 		return err
 	}
-	if !marked {
-		return m.drop(ctx, id)
+	if marked {
+		err = m.put(ctx, id, body, true)
+	} else {
+		err = m.drop(ctx, id)
 	}
-	return m.put(ctx, id, body, true)
+	if err != nil {
+		if rollbackErr := m.edit(ctx, id, previous); rollbackErr != nil {
+			return errors.Join(err, fmt.Errorf("restoring shown text of comment %s also failed: %w", id, rollbackErr))
+		}
+	}
+	return err
 }
 
 // Body is the full body for comment id: the stored one when there is one, else
