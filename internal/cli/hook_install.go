@@ -101,27 +101,17 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 			}
 		}
-		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "hooks", out.Hooks, "statusline", out.Statusline, "changed", out.Changed)
+		guardReach := hook.GuardReachesWorkers(files)
+		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "hooks", out.Hooks, "statusline", out.Statusline, "changed", out.Changed, "guardReachesWorkers", guardReach)
 		text := fmt.Sprintf("%s: hooks %s, statusline %s", path, strings.Join(out.Hooks, ", "), out.Statusline)
 		if !out.Changed {
 			text = path + ": already installed"
 		}
-		if !guardReachesWorkers(files) {
+		if !guardReach {
 			c.Warn("the worker guard (PreToolUse) sits only in project-local scope, which worker worktrees do not read: run rota hook install --scope project (or --scope user)")
 		}
 		return Result{Data: d, Text: text}, nil
 	}
-}
-
-// guardReachesWorkers reports whether a marked PreToolUse entry sits in a scope
-// a worker worktree reads: project or user. Project-local is untracked.
-func guardReachesWorkers(files map[hook.Scope]*jsonx.Object) bool {
-	for _, sc := range []hook.Scope{hook.ScopeProject, hook.ScopeUser} {
-		if _, ok := hook.MarkedEvents(files[sc])[hook.EventGuard]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func hookUninstall(fs *flag.FlagSet) RunFunc {

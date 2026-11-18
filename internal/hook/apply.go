@@ -51,7 +51,7 @@ func ApplySession(in SessionIn) (d SessionDecision, ok bool) {
 		merge = mergeStop
 	case GuardStop:
 		d.StopDecision = DecideGuardStop(st, in.Settings, StatHandoff(in.HandoffPath), now)
-		merge = mergeHandoffBlock
+		merge = mergeGuardStop
 	case GuardPrompt:
 		p := DecideGuardPrompt(st, in.Settings, now)
 		d.State, d.Persist, d.Line = p.State, p.Persist, p.Line
