@@ -586,9 +586,12 @@ When a returned slot is `done` with a PR and a candidate is ready, `round wait` 
 `assign before you gate` line with the candidate and its `rota round assign` command (`assignNudge` in
 JSON), so the slot works while you review. When two or more reviewed PRs wait on one base they add a
 `nudge train` line with the PR numbers and the `rota worker train` command (`trainNudge` in JSON). A PR
-is left out when it has a recorded FAIL review or second-opinion verdict, when its review has a
-blocking finding, when the gate sent it back at its current head (a push clears that), or when
-it is already merged or closed. The autopilot assigns by itself, so
+is left out when it has a recorded FAIL review or second-opinion verdict, when a review at its
+current head has a blocking finding or failed item, when the gate sent it back at its current
+head (a push clears that), or when it is already merged or closed. The tick and gate share this
+rule: stale CONCERNS findings alone do not block, while a stale FAIL still does. A stale cross-review
+FAIL is ignored only when the issue's `review:none` label switches cross review off; a cross FAIL
+at the current head still blocks. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
 
 When the preview finds two of the waiting PRs conflicting, the nudge says so before any train starts:
