@@ -21,17 +21,29 @@ func (s ListSection[T]) Read(r Registry) []T {
 	return out
 }
 
-// Write replaces the list. Call it inside Update, under the registry lock.
+// Write replaces the list, leaving any non-object entry in place. Call it inside Update, under the registry lock.
 func (s ListSection[T]) Write(d *Doc, list []T) {
 	out := make([]any, 0, len(list))
+	// Entries that are not objects are not ours to drop: they stay, ahead of the list.
+	for _, e := range d.list(s.Key) {
+		if _, ok := e.(*jsonx.Object); !ok {
+			out = append(out, e)
+		}
+	}
 	for _, v := range list {
 		out = append(out, s.Encode(v))
 	}
 	d.SetSection(s.Key, out)
 }
 
+// Edit rewrites the list inside an Update that already holds the registry
+// lock: mutate gets the list as it is and returns the new one.
+func (s ListSection[T]) Edit(d *Doc, mutate func(list []T) []T) {
+	s.Write(d, mutate(s.Read(d.Registry)))
+}
+
 // Update edits the list under the registry lock: mutate gets the list as it is
 // and returns the new one.
 func (s ListSection[T]) Update(root string, mutate func(list []T) []T) error {
-	return Update(root, func(d *Doc) { s.Write(d, mutate(s.Read(d.Registry))) })
+	return Update(root, func(d *Doc) { s.Edit(d, mutate) })
 }
