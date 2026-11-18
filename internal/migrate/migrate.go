@@ -1,3 +1,27 @@
+// Package migrate provides one-shot migrations of file-backed project state to
+// tracker issues, alongside migrations of legacy labels and milestone bodies.
+// Run moves the open backlog and planned or active milestones, including their
+// notes, plans and references. Without Options.Apply it only previews the work;
+// the tracker adapter is built lazily on the first write, never during preview.
+// Apply saves progress in the issue map so interrupted runs can resume, then
+// freezes the backlog once migration completes.
+//
+// Run returns ErrNothingToMigrate for a missing backlog (CLI exit 3), and
+// ErrUmbrellaMigrate for a project registering sub-repos (CLI exit 4), and
+// ErrBadMap for an issue map that is not a JSON object (CLI exit 70). Tracker
+// and filesystem errors propagate with any progress already made.
+//
+// The dependencies follow the state being converted: backlog parses file items
+// and supplies the issue backend; tracker supplies issue keys, errors and remote
+// operations; config resolves label names; repos detects umbrella projects;
+// rotatree locates project files; fsio reads and atomically writes them; jsonx
+// preserves the ordered issue map; frontmatter reads milestone metadata;
+// section extracts proof sections; milestone supplies IDs and the milestone
+// store; pystr preserves legacy whitespace and token rules; and stamp formats
+// the backlog freeze date. worker remaps active slot tasks and queued PR issue
+// IDs after migration, so a round can continue with tracker IDs. roundcfg
+// recognizes machine pins when migrating the retired support label, preventing
+// conflicting pins from being rewritten.
 package migrate
 
 import (
@@ -22,11 +46,6 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-// `rota migrate issues` (bin/hv-migrate-issues): move a file-backend project's
-// open backlog and its planned or active milestones onto the issue tracker.
-// The map .rota/issue-map.json is written after every successful write, so a
-// run that stops (a tracker error, a rate limit, --limit) resumes from it.
 
 // Migration refusals; the verb maps them to exits 3 and 4.
 var (
