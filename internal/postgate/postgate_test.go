@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/landing"
 )
 
 // fakeBook records the bookkeeping calls, in memory.
@@ -16,7 +16,7 @@ type fakeBook struct {
 	posts []post
 	// failOn names a call that returns an error.
 	failOn     string
-	targets    map[string]worker.GateTarget
+	targets    map[string]GateTarget
 	targetsErr error
 	origin     bool
 	releases   []string
@@ -41,7 +41,7 @@ func (b *fakeBook) PostReviewBounce(_, branch, pr, head, why string) error {
 	return nil
 }
 
-func (b *fakeBook) Targets(root string, args []string) (map[string]worker.GateTarget, error) {
+func (b *fakeBook) Targets(root string, args []string) (map[string]GateTarget, error) {
 	b.calls = append(b.calls, "targets:"+strings.Join(args, ","))
 	return b.targets, b.targetsErr
 }
@@ -60,9 +60,9 @@ func landedCalls(issue string) []string {
 // A stale merge and a provenance failure are repaired by the worker: they clear
 // nothing and park nothing (#2072). They only tell a support worker on its PR.
 func TestStaleAndProvenanceFailClearNothingAndPostOnce(t *testing.T) {
-	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail} {
+	for _, v := range []string{landing.GateStale, landing.GateProvenanceFail} {
 		b := &fakeBook{}
-		res := worker.GateResult{Verdict: v, Slot: "ext-1", SHA: "a1b2c3d", Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: v + ": fix it"}
+		res := landing.GateResult{Verdict: v, Slot: "ext-1", SHA: "a1b2c3d", Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: v + ": fix it"}
 		if err := Gate(b, "root", "7", res); err != nil {
 			t.Fatalf("%s: %v", v, err)
 		}
@@ -79,10 +79,10 @@ func TestStaleAndProvenanceFailClearNothingAndPostOnce(t *testing.T) {
 func TestGatePassEndsTheItemClockBestOfAndBounces(t *testing.T) {
 	b := &fakeBook{}
 	// A verdict nobody bounces or lands on keeps the item running.
-	if err := Gate(b, "root", "12", worker.GateResult{Verdict: "other"}); err != nil || len(b.calls) != 0 || len(b.posts) != 0 {
+	if err := Gate(b, "root", "12", landing.GateResult{Verdict: "other"}); err != nil || len(b.calls) != 0 || len(b.posts) != 0 {
 		t.Fatalf("other verdict: err %v calls %v posts %v", err, b.calls, b.posts)
 	}
-	if err := Gate(b, "root", "12", worker.GateResult{Verdict: worker.GatePass}); err != nil {
+	if err := Gate(b, "root", "12", landing.GateResult{Verdict: landing.GatePass}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(b.calls, landedCalls("12")) {
@@ -95,14 +95,14 @@ func TestGatePassEndsTheItemClockBestOfAndBounces(t *testing.T) {
 
 func TestGateWithoutIssueDoesNothing(t *testing.T) {
 	b := &fakeBook{}
-	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GatePass}); err != nil || len(b.calls) != 0 {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GatePass}); err != nil || len(b.calls) != 0 {
 		t.Fatalf("err %v calls %v", err, b.calls)
 	}
 }
 
 func TestLandedStopsAtTheFirstFailure(t *testing.T) {
 	b := &fakeBook{failOn: "bestof"}
-	if err := Gate(b, "root", "12", worker.GateResult{Verdict: worker.GatePass}); err == nil {
+	if err := Gate(b, "root", "12", landing.GateResult{Verdict: landing.GatePass}); err == nil {
 		t.Fatal("want the bookkeeping error")
 	}
 	if want := []string{"start:12", "bestof:12"}; !reflect.DeepEqual(b.calls, want) {
@@ -112,16 +112,16 @@ func TestLandedStopsAtTheFirstFailure(t *testing.T) {
 
 func TestTrainLandsMembersAndNotifiesTheCulprit(t *testing.T) {
 	b := &fakeBook{}
-	r := worker.TrainResult{
-		Verdict: worker.GateStale,
+	r := landing.TrainResult{
+		Verdict: landing.GateStale,
 		Culprit: "kit",
-		Members: []worker.TrainMember{
+		Members: []landing.TrainMember{
 			{Target: "good", Landed: true},
 			{Target: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"},
 			{Target: "noissue", Landed: true},
 		},
 	}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"good": "1", "kit": "2"}, nil, r)
+	fails := Train(b, "root", map[string]string{"good": "1", "kit": "2"}, nil, r)
 	if len(fails) != 0 {
 		t.Fatalf("failures %+v", fails)
 	}
@@ -135,8 +135,8 @@ func TestTrainLandsMembersAndNotifiesTheCulprit(t *testing.T) {
 
 func TestTrainReportsFailuresPerTarget(t *testing.T) {
 	b := &fakeBook{failOn: "start"}
-	r := worker.TrainResult{Members: []worker.TrainMember{{Target: "a", Landed: true}, {Target: "b", Landed: true}}}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"a": "1", "b": "2"}, nil, r)
+	r := landing.TrainResult{Members: []landing.TrainMember{{Target: "a", Landed: true}, {Target: "b", Landed: true}}}
+	fails := Train(b, "root", map[string]string{"a": "1", "b": "2"}, nil, r)
 	if len(fails) != 2 || fails[0].Target != "a" || fails[1].Target != "b" {
 		t.Errorf("failures %+v", fails)
 	}
@@ -144,9 +144,9 @@ func TestTrainReportsFailuresPerTarget(t *testing.T) {
 
 func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
 	b := &fakeBook{}
-	r := worker.TrainResult{Verdict: worker.GateStale, Culprit: "kit"}
-	targets := map[string]worker.GateTarget{"kit": {Name: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"}}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"kit": "2"}, targets, r)
+	r := landing.TrainResult{Verdict: landing.GateStale, Culprit: "kit"}
+	targets := map[string]GateTarget{"kit": {Name: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"}}
+	fails := Train(b, "root", map[string]string{"kit": "2"}, targets, r)
 	if len(fails) != 0 {
 		t.Fatalf("failures %+v", fails)
 	}
@@ -159,7 +159,7 @@ func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
 // target (the integration PR) has none.
 func TestGateIntegrationLandsMembers(t *testing.T) {
 	b := &fakeBook{}
-	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GatePass, IntegrationMembers: []string{"5", "6"}}); err != nil {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GatePass, IntegrationMembers: []string{"5", "6"}}); err != nil {
 		t.Fatal(err)
 	}
 	if want := append(landedCalls("5"), landedCalls("6")...); !reflect.DeepEqual(b.calls, want) {
@@ -167,12 +167,12 @@ func TestGateIntegrationLandsMembers(t *testing.T) {
 	}
 	// A retry after the forge merged it ends them too.
 	b = &fakeBook{}
-	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateAlreadyMerged, IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateAlreadyMerged, IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
 		t.Fatalf("already-merged retry: %v %v", err, b.calls)
 	}
 	// A refused integration landing ends nothing.
 	b = &fakeBook{}
-	if err := Gate(b, "root", "", worker.GateResult{Verdict: worker.GateStale, IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateStale, IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 {
 		t.Fatalf("refused landing: %v %v", err, b.calls)
 	}
 }
@@ -182,7 +182,7 @@ func TestGateIntegrationLandsMembers(t *testing.T) {
 // bounced gate releases nothing.
 func TestLandedPRReleasesTheSlotsSliceClaim(t *testing.T) {
 	b := &fakeBook{}
-	if err := Gate(b, "root", "7", worker.GateResult{Verdict: worker.GatePass, Slot: "ben"}); err != nil {
+	if err := Gate(b, "root", "7", landing.GateResult{Verdict: landing.GatePass, Slot: "ben"}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(b.releases, []string{"7@ben"}) {
@@ -190,15 +190,15 @@ func TestLandedPRReleasesTheSlotsSliceClaim(t *testing.T) {
 	}
 
 	b = &fakeBook{}
-	r := worker.TrainResult{Members: []worker.TrainMember{{Target: "t1", Landed: true}, {Target: "t2"}}}
-	fails := Train(b, &worker.RoundMemo{}, "root", map[string]string{"t1": "8", "t2": "9"},
-		map[string]worker.GateTarget{"t1": {Name: "dana"}, "t2": {Name: "kit"}}, r)
+	r := landing.TrainResult{Members: []landing.TrainMember{{Target: "t1", Landed: true}, {Target: "t2"}}}
+	fails := Train(b, "root", map[string]string{"t1": "8", "t2": "9"},
+		map[string]GateTarget{"t1": {Name: "dana"}, "t2": {Name: "kit"}}, r)
 	if len(fails) != 0 || !reflect.DeepEqual(b.releases, []string{"8@dana"}) {
 		t.Errorf("train release = %v, fails %v", b.releases, fails)
 	}
 
 	b = &fakeBook{}
-	_ = Gate(b, "root", "7", worker.GateResult{Verdict: worker.GateStale, Slot: "ben"})
+	_ = Gate(b, "root", "7", landing.GateResult{Verdict: landing.GateStale, Slot: "ben"})
 	if len(b.releases) != 0 {
 		t.Errorf("a stale gate released %v", b.releases)
 	}

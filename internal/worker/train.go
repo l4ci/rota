@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landfreeze"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"math/bits"
@@ -50,15 +51,15 @@ import (
 
 // GateBaseMoved: the base or a member's head moved while the train verified, so
 // the verified tree is no longer what would land. Nothing landed.
-const GateBaseMoved = "base-moved"
+const GateBaseMoved = landing.GateBaseMoved
 
 // GateOrder: a shared-path member conflicts with the members before it; the CLI
 // exits 4 with it, blockedBy order. Nothing was pushed.
-const GateOrder = "order"
+const GateOrder = landing.GateOrder
 
 // GatePlan: the verdict of a --plan answer. Nothing was verified or landed;
 // the CLI exits 0 with the conflict map.
-const GatePlan = "plan"
+const GatePlan = landing.GatePlan
 
 // The values of TrainOpts.OnFail.
 const (
@@ -125,8 +126,17 @@ type TrainOpts struct {
 	RequestID string
 }
 
-// owned gives a stage its own writable slices, including member flags.
-func (r TrainResult) owned() TrainResult {
+type TrainResult = landing.TrainResult
+type TrainMember = landing.TrainMember
+type TrainFailure = landing.TrainFailure
+type TrainStop = landing.TrainStop
+type TrainStopMember = landing.TrainStopMember
+type TrainPlan = landing.TrainPlan
+type TrainConflict = landing.TrainConflict
+type TrainBlocked = landing.TrainBlocked
+
+// cloneTrainResult gives a stage its own writable slices, including member flags.
+func cloneTrainResult(r TrainResult) TrainResult {
 	r.Skipped = slices.Clone(r.Skipped)
 	r.Members = slices.Clone(r.Members)
 	r.Culprits = slices.Clone(r.Culprits)
@@ -145,148 +155,6 @@ func (r TrainResult) owned() TrainResult {
 	r.Expired = slices.Clone(r.Expired)
 	return r
 }
-
-// TrainMember is one target of the train, in order.
-type TrainMember struct {
-	Target  string
-	Branch  string
-	PR      string
-	Tier    string // the change tier its check-only gate put it in
-	Landed  bool
-	Culprit bool
-	// checked is the head its check-only gate reviewed; an integration train
-	// merges it, never a head pushed after the check. issue is the item that
-	// gate resolved, also for an external PR no slot holds.
-	checked, issue string
-}
-
-// Issue is the item the member's check-only gate resolved, "" when unknown.
-func (m TrainMember) Issue() string { return m.issue }
-
-// TrainResult is the train's answer. Verdict is pass, or the verdict of the
-// step that refused: a member's check verdict (stale, pr-mismatch,
-// provenance-fail, ...), merge-failed, verify-failed, approval-required,
-// base-moved. Culprit names the member the verdict is about, when one.
-type TrainResult struct {
-	Base    string
-	Verdict string
-	// Tier is the highest change tier of the members, which the train verified
-	// by (#2348); Skipped are the test tiers it ran a cheaper list in place of.
-	Tier    string
-	Skipped []string
-	Members []TrainMember
-	Culprit string
-	// Interaction names the members whose merge together makes a red test that
-	// passes on each of them alone (verdict interaction); empty otherwise.
-	Interaction []string
-	// Unreproduced is true when the red did not reproduce on any member alone,
-	// any pair or a rerun of the red prefix: a flake that blames no member.
-	Unreproduced bool
-	// Culprits lists members excluded for missing PR sections or review verdicts.
-	Culprits []TrainCulprit
-	// CulpritGate is the gate result that named the culprit, for the bookkeeping
-	// that follows (its head SHA, PR and branch). Zero when none did.
-	CulpritGate GateResult
-	Verified    []string            // test.full commands that passed
-	Flaky       []flakeledger.Entry // commands recovered on one sequential retry
-	E2EVerified []string            // test.e2e commands that passed
-	Landed      []string
-	// AlreadyMerged lists members whose PR was on the base before this run
-	// (an earlier train or a hand merge): this run landed nothing for them.
-	AlreadyMerged []string
-	Changed       bool
-	SHA           string
-	Err           string
-	Hint          string
-	// Refusal is the approval gate's refusal, set with verdict approval-required.
-	Refusal *exitcode.Refusal
-	Notes   []string
-	Order   []string // one line per member, in merge order, with the reason
-	// CacheHits names each verify answered from the verdict cache instead of
-	// being run; Transient the members earlier named culprit that this train
-	// passed with (#400).
-	CacheHits []string
-	Transient []string
-	// Excluded lists the test-ledger entries that excused a failing command;
-	// Expired the entries past their expiry, which fail the train.
-	Excluded, Expired []testledger.Entry
-	// Plan is the conflict map of a --plan run; nil otherwise.
-	Plan *TrainPlan
-	// Stop is the evidence of a red tier under OnFailStop; nil otherwise.
-	Stop *TrainStop
-	// Log is the verify log a cancelled train kept on disk; "" otherwise.
-	Log string
-	// Integration is the integration branch's record after the run; nil for a
-	// plain train.
-	Integration *Integration
-	// VerifyTime is the time spent verifying the whole train; DiagnoseTime the
-	// time spent on prefix runs that look for the culprit (#2753).
-	VerifyTime, DiagnoseTime time.Duration
-	// Original is the failure of the full-train run that started a diagnosis;
-	// Diagnostic lists the prefix runs that failed after it. Nil/empty when no
-	// tier failed.
-	Original   *TrainFailure
-	Diagnostic []TrainFailure
-}
-
-// TrainFailure is one failed verify run: the tier, the failed command, the
-// failing tests its output names and the tree under test.
-type TrainFailure struct {
-	Tier    string
-	Command string
-	Tests   []string
-	Members int    // members merged on the base for this run
-	Tip     string // tip SHA of the tree under test
-	// OnlyInDiagnostic names the tests (or, when none are named, the commands)
-	// that failed here but not in the original run. Such a failure is not
-	// confirmed as a cause: it needs a passing-alone check.
-	OnlyInDiagnostic []string
-}
-
-// TrainStop is what a train that stopped on a red tier (OnFailStop) hands the
-// orchestrator in place of a culprit: the failed command, the failing tests
-// when its output names them, the scratch tree and the SHAs that were tested.
-type TrainStop struct {
-	Tier    string
-	Command string   // the failed command (CI: the failed check)
-	Tests   []string // go test's `--- FAIL:` names; empty when the output names none
-	Scratch string   // the scratch tree path; removed when the train exits
-	Base    string   // the base SHA the members were merged onto
-	Members []TrainStopMember
-}
-
-// TrainStopMember is one tested member head.
-type TrainStopMember struct{ Target, SHA string }
-
-// TrainPlan is a train's dry-run answer: which member pairs conflict, the
-// largest conflict-free subset in merge order and the members left out.
-type TrainPlan struct {
-	Conflicts []TrainConflict
-	// Landable lists the targets of the largest conflict-free subset, in merge order.
-	Landable []string
-	Blocked  []TrainBlocked
-	// Command is the train line that lands exactly Landable.
-	Command string
-	// NoVerify mirrors the no-verify refusal: local verification with both
-	// test.full and test.e2e empty. Command carries --no-verify when it is true.
-	NoVerify bool
-}
-
-// TrainConflict is a pair of members whose merge conflicts.
-type TrainConflict struct {
-	A, B  string // targets
-	Paths []string
-}
-
-// TrainBlocked is a member left out of the landable subset, with the landable
-// members it conflicts with.
-type TrainBlocked struct {
-	Target string
-	By     []string // targets
-}
-
-// OK reports a train that verified and landed every member left by the pre-filter.
-func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
@@ -419,41 +287,6 @@ func failureOf(tier string, vr VerifyResult, members int, tip string) TrainFailu
 	f := TrainFailure{Tier: tier, Command: strings.Join(vr.Failed, "; "), Members: members, Tip: tip}
 	f.Tests, _ = testledger.FailingTests(vr.Log)
 	return f
-}
-
-// onlyIn lists what f shows failing that orig does not: its tests, or, when
-// either run names no test, its failed commands.
-func (f TrainFailure) onlyIn(orig TrainFailure) []string {
-	mine, theirs := f.Tests, orig.Tests
-	if len(mine) == 0 || len(theirs) == 0 {
-		mine, theirs = f.commands(), orig.commands()
-	}
-	var out []string
-	for _, x := range mine {
-		if !slices.Contains(theirs, x) {
-			out = append(out, x)
-		}
-	}
-	return out
-}
-
-// commands splits the joined failed commands back into a list.
-func (f TrainFailure) commands() []string {
-	if f.Command == "" {
-		return nil
-	}
-	return strings.Split(f.Command, "; ")
-}
-
-// reproduces reports whether f shows any failure of orig: a run whose every
-// failure is diagnostic-only does not, so it cannot pin the original failure
-// on a member.
-func (f TrainFailure) reproduces(orig TrainFailure) bool {
-	mine := f.Tests
-	if len(mine) == 0 || len(orig.Tests) == 0 {
-		mine = f.commands()
-	}
-	return len(mine) == 0 || len(f.OnlyInDiagnostic) < len(mine)
 }
 
 func (p trainPlan) rem() string { return p.in.cfg.RemoteName() }
@@ -653,7 +486,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return p.trainPlan, p.res, true, nil
 		}
-		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier, checked: gr.CheckedHead, issue: gr.Issue})
+		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier, CheckedHead: gr.CheckedHead, ResolvedIssue: gr.Issue})
 		p.remote = p.remote || gr.PR != ""
 	}
 	if err := filterSectionOrder(*res, &o, merged); err != nil {
@@ -800,9 +633,9 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 		// An integration branch trusts rota's member merges without a review of
 		// their own, so it merges the head the member's review was checked at:
 		// one pushed since is merged by a rerun, after its own review.
-		if p.integration != nil && m.checked != "" && p.heads[i] != m.checked {
-			res.Notes = append(res.Notes, fmt.Sprintf("PINNED %s — %s moved to %s after its check; merging the checked %s", m.Target, m.Branch, strutil.ShortSHA(p.heads[i]), strutil.ShortSHA(m.checked)))
-			p.heads[i] = m.checked
+		if p.integration != nil && m.CheckedHead != "" && p.heads[i] != m.CheckedHead {
+			res.Notes = append(res.Notes, fmt.Sprintf("PINNED %s — %s moved to %s after its check; merging the checked %s", m.Target, m.Branch, strutil.ShortSHA(p.heads[i]), strutil.ShortSHA(m.CheckedHead)))
+			p.heads[i] = m.CheckedHead
 		}
 	}
 	p = t.pickTier(p)
@@ -1114,7 +947,7 @@ func (t *trainRun) pickTier(p trainPlanning) trainPlanning {
 // a result means, the note text) is tierOutcomeOf's; this stage owns the cache
 // and the bisect.
 func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, TrainResult, bool, error) {
-	result = result.owned()
+	result = cloneTrainResult(result)
 	v := trainVerified{passing: len(result.Members)}
 
 	e, ctx, o, res, scratch, tips, heads := t.e, t.ctx, t.o, &result, p.scratch, p.tips, p.heads
@@ -1303,7 +1136,7 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 // member is the culprit: nothing lands, or under LandGreen the members before
 // it do. It lowers the returned passing prefix; it is a no-op without ItemBody.
 func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerified) (trainVerified, TrainResult, bool, error) {
-	result = result.owned()
+	result = cloneTrainResult(result)
 
 	e, ctx, root, o, res := t.e, t.ctx, t.root, t.o, &result
 	if o.ItemBody == nil {
@@ -1360,7 +1193,7 @@ func (t *trainRun) behaviourStage(p trainPlan, result TrainResult, v trainVerifi
 // land is stage 5. The tree that was verified must still be the one that lands.
 func (t *trainRun) land(p trainPlan, result TrainResult, prefix trainVerified) (TrainResult, error) {
 	e, ctx, root, o, tips, heads := t.e, t.ctx, t.root, t.o, p.tips, p.heads
-	res, baseRef, baseSHA, headRef, passing := result.owned(), p.baseRef, p.baseSHA, p.headRef, prefix.passing
+	res, baseRef, baseSHA, headRef, passing := cloneTrainResult(result), p.baseRef, p.baseSHA, p.headRef, prefix.passing
 	n := len(res.Members)
 	if p.remote {
 		if _, code := e.git(root, "fetch", p.rem(), "-q"); code != 0 {
@@ -1633,7 +1466,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		}
 		// A prefix failing only on what the original run never showed does not
 		// reproduce it: keep looking later, the evidence stays the earlier run.
-		if f := recordDiagnostic(res, tier, pr, mid, tips[mid]); res.Original != nil && !f.reproduces(*res.Original) {
+		if f := recordDiagnostic(res, tier, pr, mid, tips[mid]); res.Original != nil && !f.Reproduces(*res.Original) {
 			os.Remove(pr.LogPath)
 			lo = mid
 			continue
@@ -1702,7 +1535,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 func recordDiagnostic(res *TrainResult, tier string, vr VerifyResult, members int, tip string) TrainFailure {
 	f := failureOf(tier, vr, members, tip)
 	if res.Original != nil {
-		f.OnlyInDiagnostic = f.onlyIn(*res.Original)
+		f.OnlyInDiagnostic = f.OnlyIn(*res.Original)
 	}
 	res.Diagnostic = append(res.Diagnostic, f)
 	return f

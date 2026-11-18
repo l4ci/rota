@@ -4,13 +4,13 @@ package roundcfg
 import (
 	"errors"
 	"fmt"
-	"path"
 	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/pathglob"
 )
 
 // Scope values of round.scope: which issues a round may take.
@@ -306,8 +306,10 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	s.ReviewLoop = config.String(cfg, config.RoundReviewLoopKey)
 	s.AdoptPattern = strings.TrimSpace(config.String(cfg, config.RoundAdoptPatternKey))
-	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
-		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
+	if s.AdoptPattern != "" {
+		if err := pathglob.Valid(s.AdoptPattern); err != nil {
+			return s, fmt.Errorf("round.adoptPattern %q: %w", s.AdoptPattern, err)
+		}
 	}
 	s.Support = SupportName(cfg)
 	s.LegacySupportLabel = LegacySupportLabel(cfg)

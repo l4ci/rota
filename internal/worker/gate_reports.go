@@ -10,7 +10,7 @@ import (
 
 // stepVerdictReports runs only after the PR and its pushed head were validated.
 // Both the blocking check and review-depth lookup then see the recovered cache.
-func (runner gate) stepVerdictReports(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepVerdictReports(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead

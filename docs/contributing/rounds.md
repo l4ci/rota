@@ -128,8 +128,11 @@ tests that call `golden.Check`: `go test ./internal/<pkg> -run '^TestX$' -update
 rewrites the changed outputs if the rest of the test passes, and the JSON diff is the review.
 
 Gate and train steps share `runLandingStage` for stopping and error propagation.
-Their run functions wire named outputs into each step's explicit arguments; mutable
-helper state stays inside one step. Test a step with supplied inputs before adding a
+Their run functions wire named outputs into each step's explicit arguments. Gate
+steps and helpers use one `gateRun` type; each step gets its own answer and scratch
+fields, so mutable helper state stays inside that step. The gate source is split
+into target resolution, record checks, freshness, verification, merge and
+bookkeeping stages. Test a step with supplied inputs before adding a
 whole gate or train fixture, and check that it leaves the caller's answer unchanged.
 
 There are no servers and no ports in this repo.

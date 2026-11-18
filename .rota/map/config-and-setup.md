@@ -60,7 +60,6 @@ Go 1.22, standard library; JSON files read and written through `jsonx` and `fsio
 - Regenerate the config reference page: `go run ./internal/config/genref <output file>` (`-` prints to stdout)
 
 ## Concerns
-- `internal/migrate` has no package doc comment.
 - `config` no longer imports `projects`: both read the environment through `cfgdir`. `projects` imports `repos` and `tui`.
 - `rotastate.FindTempRoot` and `TempRoot` create nothing; a symlinked or foreign `.rota/tmp` is no root, so callers fall back to the system temp dir.
 - `hvmigrate` imports `hook` and `skills`, so the one-shot migration reaches into two live subsystems.

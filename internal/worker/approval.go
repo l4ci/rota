@@ -2,7 +2,6 @@ package worker
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -10,17 +9,11 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// ApprovalThread is the forge thread a merge's approval request lives on (C5).
-type ApprovalThread struct {
-	Kind   string           // pr | issue
-	Number int              // the PR, or a numbered issue
-	Key    tracker.IssueKey // a key-based tracker's issue; empty for a numbered one
-	Slot   string
-	Title  string
-}
+type ApprovalThread = landing.ApprovalThread
 
 // MergeApproval holds the merge policy and the adapters needed to enforce it.
 // Worker owns the order; callers supply confirmation, audit and forge I/O.
@@ -144,14 +137,6 @@ func (a MergeApproval) refuse(msg string, fields ...any) *exitcode.Refusal {
 	}
 	d.Set("changed", false)
 	return &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: msg}, Data: d}
-}
-
-// Ref is the thread's number as users read it: `#12`, or the key PROJ-123.
-func (t ApprovalThread) Ref() string {
-	if t.Key != "" {
-		return t.Key.Ref()
-	}
-	return "#" + strconv.Itoa(t.Number)
 }
 
 // TargetApprovalThread is the approval thread of a resolved gate target: its

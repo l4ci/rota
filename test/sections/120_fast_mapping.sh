@@ -3,6 +3,21 @@ echo "fast.sh: maps changed files to checks (#381)"
 fast_plan() { FAST_DRY_RUN=1 bash "$TESTDIR/fast.sh" "$@"; }
 GOLD="internal/cli/testdata/golden/TestGlossaryWriteMatchGolden__alias_collision_refuses.json"
 
+# Every fast section mapping row must point at an existing section and be
+# exercised here. The table output is a test seam from fast.sh itself.
+MAP=$(FAST_PRINT_SECTION_MAP=1 bash "$TESTDIR/fast.sh")
+[ -n "$MAP" ] || fail "fast.sh should expose its section mapping table"
+while IFS='|' read -r pattern section; do
+  [ -n "$pattern" ] && [ -n "$section" ] || fail "invalid section mapping row: $pattern|$section"
+  [ -f "$TESTDIR/sections/$section" ] || fail "mapped section does not exist: $section"
+  MATCHES=$(compgen -G "$REPO/$pattern" || true)
+  [ -n "$MATCHES" ] || fail "mapping pattern has no fixture path: $pattern"
+  fixture="${MATCHES%%$'\n'*}"
+  fixture="${fixture#"$REPO/"}"
+  OUT=$(fast_plan "$fixture")
+  grep -qx "plan: section test/sections/$section" <<<"$OUT" || fail "$pattern should select section $section using $fixture: $OUT"
+done <<<"$MAP"
+
 OUT=$(fast_plan internal/knowledge/instructions.go)
 [ "$(head -1 <<<"$OUT")" = "plan: go ./internal/knowledge" ] || fail "a .go file should select its package first: $OUT"
 
