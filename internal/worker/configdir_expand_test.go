@@ -36,7 +36,7 @@ func TestAccountAssignCachesTheExpandedConfigDir(t *testing.T) {
 func TestDispatchExpandsACachedTildeConfigDir(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccount("a", "~/.claude-personal") })
+	UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccountFor("", "a", "~/.claude-personal") })
 	f := tmuxFake()
 	e := envWith(f)
 	e.Home = homeAt("/home/u")

@@ -2,6 +2,7 @@ package usagelimit
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
@@ -55,40 +56,62 @@ type AccountHandoff struct {
 	Threshold        int
 }
 
-// SelectAccount decides eligibility and order for every account selection path.
-// Known headroom beats unknown, greater headroom wins, and ties keep configured
-// order. Others retains traversal order, including a previously chosen account
-// when a better one displaces it, for the orchestrator's decision log.
-func SelectAccount(meters []Meter, p AccountSelection) (chosen Meter, ok bool, others []string) {
-	skip := make(map[string]bool, len(p.Exclude))
-	for _, name := range p.Exclude {
-		skip[name] = true
+// Ineligible says why an account cannot take a session under p, "" when it can.
+// It is the one eligibility rule: SelectAccount (dispatch, orchestrator
+// handoff, logged logins) and worker.ChoosePool (the pool's usable test) both
+// ask it, so a new rule (cooling, login failure) lands here once. A reason
+// is checked in a fixed order and LoginProblem runs last, only for an account
+// that passed every other check.
+func Ineligible(m Meter, p AccountSelection) string {
+	h := p.Handoff
+	why := ""
+	switch {
+	case h != nil && m.ConfigDir == "":
+		why = "no configDir"
+	case h != nil && SameConfigDirIn(m.ConfigDir, h.CurrentDir, h.Home):
+		why = "current account"
+	case slices.Contains(p.Exclude, m.Name):
+		why = "excluded"
+	case m.Verdict == VerdictCooling || h != nil && m.Verdict != VerdictFree:
+		why = m.Verdict
+	case h != nil && m.Headroom == nil:
+		why = "no reading"
+	case h != nil && *m.Headroom <= float64(100-h.Threshold):
+		why = fmt.Sprintf("%g%% headroom", *m.Headroom)
 	}
+	if why == "" && p.LoginProblem != nil {
+		why = p.LoginProblem(m)
+	}
+	return why
+}
+
+// MoreHeadroom is the one ordering rule: a known reading beats an unknown one
+// and the greater headroom wins. Equal readings are not more, so the earlier
+// account keeps a tie.
+func MoreHeadroom(candidate, incumbent *float64) bool {
+	return candidate != nil && (incumbent == nil || *candidate > *incumbent)
+}
+
+// SelectAccount picks the account for a first choice: dispatch (Accounts.Pick),
+// an orchestrator handoff (OrchestratorTarget, Handoff set) and a logged login
+// of a kind with no meter (limits.LoggedPick); the orchestrate launch
+// (orchestrate.Env.account) reaches it through PickAccount. Eligibility is Ineligible and
+// order is MoreHeadroom; ties keep configured order. Others retains traversal
+// order, including a previously chosen account when a better one displaces it,
+// for the orchestrator's decision log.
+//
+// worker.ChoosePool does not call it: it picks among a pool of several harness
+// kinds and layers stickiness to the current account, a switch margin and load
+// spreading on top, but it takes its usable test from Ineligible and its best
+// reading from MoreHeadroom. With no current account, margin 0 and equal load
+// it chooses what SelectAccount chooses (pinned by TestAccountChoiceTable).
+func SelectAccount(meters []Meter, p AccountSelection) (chosen Meter, ok bool, others []string) {
 	for _, m := range meters {
-		why := ""
-		h := p.Handoff
-		switch {
-		case h != nil && m.ConfigDir == "":
-			why = "no configDir"
-		case h != nil && SameConfigDirIn(m.ConfigDir, h.CurrentDir, h.Home):
-			why = "current account"
-		case skip[m.Name]:
-			why = "excluded"
-		case m.Verdict == VerdictCooling || h != nil && m.Verdict != VerdictFree:
-			why = m.Verdict
-		case h != nil && m.Headroom == nil:
-			why = "no reading"
-		case h != nil && *m.Headroom <= float64(100-h.Threshold):
-			why = fmt.Sprintf("%g%% headroom", *m.Headroom)
-		}
-		if why == "" && p.LoginProblem != nil {
-			why = p.LoginProblem(m)
-		}
-		if why != "" {
+		if why := Ineligible(m, p); why != "" {
 			others = append(others, m.Name+": "+why)
 			continue
 		}
-		if !ok || m.Headroom != nil && (chosen.Headroom == nil || *m.Headroom > *chosen.Headroom) {
+		if !ok || MoreHeadroom(m.Headroom, chosen.Headroom) {
 			if ok {
 				others = append(others, chosen.Name+": less headroom")
 			}

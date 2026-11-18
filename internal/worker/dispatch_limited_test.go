@@ -21,7 +21,7 @@ func limitedDispatch(t *testing.T, pct int) (error, *fakeHost) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccount("a", "/nowhere/a") }); err != nil {
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccountFor("", "a", "/nowhere/a") }); err != nil {
 		t.Fatal(err)
 	}
 	h := tmuxFake()

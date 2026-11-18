@@ -1361,7 +1361,7 @@ func TestAssignAfterReclaimMintsANewAttempt(t *testing.T) {
 func noLoginFixture(t *testing.T) *assignFixture {
 	t.Helper()
 	f := newAssignFixture(t)
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -1399,7 +1399,7 @@ func TestAssignResumingHolderWithoutLoginRefuses(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	_, err := f.assign("12", "", nil)
@@ -1411,7 +1411,7 @@ func TestAssignResumingHolderWithoutLoginRefuses(t *testing.T) {
 func TestAssignRefusesWhenEveryFreeSlotHasNoLogin(t *testing.T) {
 	f := newAssignFixture(t)
 	for _, name := range []string{"ben", "dana"} {
-		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1455,7 +1455,7 @@ func TestStatusSkipsLoginCheckForDrainingSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"nia", "dana"} {
-		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 			t.Fatal(err)
 		}
 	}

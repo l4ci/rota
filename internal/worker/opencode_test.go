@@ -80,7 +80,7 @@ func TestDispatchOpenCodeGuardsTheSession(t *testing.T) {
 	if !slices.Contains(f.spawnOpts.Env, "OPENCODE_CONFIG_DIR=/cfg/a") || accountEnv(f.spawnOpts) != "OPENCODE_CONFIG_DIR=/cfg/a" {
 		t.Errorf("the account reaches the pane as its config dir: %v", f.spawnOpts.Env)
 	}
-	if got := LoadRegistryTolerant(dir).Slot("w1").HomeAccount(); got != "a" {
+	if got := LoadRegistryTolerant(dir).Slot("w1").AccountFor(""); got != "a" {
 		t.Errorf("account recorded = %q", got)
 	}
 	key, err := harness.LoadPromptKey(filepath.Join(slotDir, harness.PromptKeyFile))

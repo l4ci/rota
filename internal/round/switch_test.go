@@ -66,8 +66,8 @@ func newSwitchFx(t *testing.T, used map[string]float64, mod ...func(*AssignOpts)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if s := f.slot("ben"); s.Account() != "a" {
-		t.Fatalf("ben starts on %q, want a", s.Account())
+	if s := f.slot("ben"); s.AccountFor("") != "a" {
+		t.Fatalf("ben starts on %q, want a", s.AccountFor(""))
 	}
 	clear(f.used)
 	for k, v := range used {
@@ -153,8 +153,8 @@ func TestSwitchCheckpointsAndRelaunchesOnAnotherAccount(t *testing.T) {
 		t.Errorf("binding moved: before %s/%s/%s/%s after %s/%s/%s/%s", before.Task(), before.ClaimID(), before.Attempt(), before.Branch(),
 			after.Task(), after.ClaimID(), after.Attempt(), after.Branch())
 	}
-	if after.Account() != "b" || after.Kind() != harness.Claude {
-		t.Errorf("slot on %s/%q, want claude/b", after.Kind(), after.Account())
+	if after.AccountFor("") != "b" || after.Kind() != harness.Claude {
+		t.Errorf("slot on %s/%q, want claude/b", after.Kind(), after.AccountFor(""))
 	}
 	if res.FromAccount != "a" || res.ToAccount != "b" || res.ToKind != harness.Claude || !res.Dispatched || !res.Changed {
 		t.Errorf("result %+v", res)
@@ -186,8 +186,8 @@ func TestSwitchKindMovesTheSlotToTheOtherHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := f.slot("ben")
-	if s.Kind() != harness.Codex || s.HomeAccount() != "c2" || s.Account() != "" || s.Model() != "c-s" {
-		t.Errorf("slot kind %q home %q claude %q model %q", s.Kind(), s.HomeAccount(), s.Account(), s.Model())
+	if s.Kind() != harness.Codex || s.AccountFor("") != "c2" || s.AccountFor(harness.Claude) != "" || s.Model() != "c-s" {
+		t.Errorf("slot kind %q home %q claude %q model %q", s.Kind(), s.AccountFor(""), s.AccountFor(harness.Claude), s.Model())
 	}
 	if res.Checkpoint != "" {
 		t.Errorf("a clean worktree made checkpoint %s", res.Checkpoint)
@@ -236,8 +236,8 @@ func TestSwitchRefusesALimitedAccount(t *testing.T) {
 			if f.git(t, "rev-parse", "HEAD") != head || f.git(t, "status", "--porcelain") != status || len(f.log) != 0 {
 				t.Errorf("a refused switch touched the slot: log %v", f.log)
 			}
-			if s := f.slot("ben"); s.Account() != "a" {
-				t.Errorf("account %q", s.Account())
+			if s := f.slot("ben"); s.AccountFor("") != "a" {
+				t.Errorf("account %q", s.AccountFor(""))
 			}
 		})
 	}
@@ -263,8 +263,8 @@ func TestSwitchFailedPushLeavesTheWorktreeAsFound(t *testing.T) {
 	if got := f.git(t, "status", "--porcelain"); got != status {
 		t.Errorf("status %q, want %q", got, status)
 	}
-	if len(f.log) != 0 || f.slot("ben").Account() != "a" {
-		t.Errorf("log %v account %q", f.log, f.slot("ben").Account())
+	if len(f.log) != 0 || f.slot("ben").AccountFor("") != "a" {
+		t.Errorf("log %v account %q", f.log, f.slot("ben").AccountFor(""))
 	}
 }
 
@@ -348,7 +348,7 @@ func TestSwitchResumesAfterAFailedDispatch(t *testing.T) {
 	if err == nil || !res.Changed || res.Dispatched || res.Checkpoint == "" || res.ToAccount != "b" {
 		t.Fatalf("first call: result %+v err %v", res, err)
 	}
-	if got := f.slot("ben").Account(); got != "b" {
+	if got := f.slot("ben").AccountFor(""); got != "b" {
 		t.Fatalf("slot records %q, want b", got)
 	}
 	head := f.git(t, "rev-parse", "HEAD")
@@ -364,8 +364,8 @@ func TestSwitchResumesAfterAFailedDispatch(t *testing.T) {
 	if got := f.git(t, "rev-parse", "HEAD"); got != head {
 		t.Errorf("the resume committed: HEAD %s, want %s", got, head)
 	}
-	if f.slot("ben").Account() != "b" || !slices.Contains(f.host.env, "CLAUDE_CONFIG_DIR=/cfg-b") {
-		t.Errorf("account %q, env %v", f.slot("ben").Account(), f.host.env)
+	if f.slot("ben").AccountFor("") != "b" || !slices.Contains(f.host.env, "CLAUDE_CONFIG_DIR=/cfg-b") {
+		t.Errorf("account %q, env %v", f.slot("ben").AccountFor(""), f.host.env)
 	}
 }
 
@@ -375,7 +375,7 @@ func TestSwitchCodexToCodexAccount(t *testing.T) {
 	if _, err := f.switchSlot(func(o *SwitchOpts) { o.Kind = harness.Codex }); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.slot("ben").HomeAccount(); got != "c2" {
+	if got := f.slot("ben").AccountFor(""); got != "c2" {
 		t.Fatalf("first switch landed on %q, want c2", got)
 	}
 	f.used["c1"], f.used["c2"] = 10, 50
@@ -388,8 +388,8 @@ func TestSwitchCodexToCodexAccount(t *testing.T) {
 	if res.FromKind != harness.Codex || res.ToKind != harness.Codex || res.FromAccount != "c2" || res.ToAccount != "c1" {
 		t.Errorf("result %+v", res)
 	}
-	if s.Kind() != harness.Codex || s.HomeAccount() != "c1" {
-		t.Errorf("slot %q/%q, want codex/c1", s.Kind(), s.HomeAccount())
+	if s.Kind() != harness.Codex || s.AccountFor("") != "c1" {
+		t.Errorf("slot %q/%q, want codex/c1", s.Kind(), s.AccountFor(""))
 	}
 	if !slices.Contains(f.host.env, "CODEX_HOME=/h1") || !slices.Equal(f.log, []string{"kill ben", "spawn ben"}) {
 		t.Errorf("env %v log %v", f.host.env, f.log)

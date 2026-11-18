@@ -633,7 +633,7 @@ func TestAssignSkipsParkableSlotWithoutLogin(t *testing.T) {
 	if _, err := f.assign("13", "dana"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	f.be.add("16", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/other2.go")

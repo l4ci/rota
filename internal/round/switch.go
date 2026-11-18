@@ -328,11 +328,7 @@ func (e Env) switchAccount(ctx context.Context, root, slot, fromKind, toKind, mo
 			return err
 		}
 		if err := editSlot(root, slot, func(s *worker.Slot) error {
-			if fromHz.WorkAccounts() {
-				s.SetAccount("", "")
-			} else {
-				s.SetHomeAccount("")
-			}
+			s.SetAccountFor(fromHz.Kind(), "", "")
 			return nil
 		}); err != nil {
 			return err

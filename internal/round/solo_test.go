@@ -168,7 +168,7 @@ func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)
 	}
-	if v := worker.LoadRegistryTolerant(f.root).Slot("ben").Account(); v != "" {
+	if v := worker.LoadRegistryTolerant(f.root).Slot("ben").AccountFor(""); v != "" {
 		t.Errorf("account = %q", v)
 	}
 }

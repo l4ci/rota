@@ -24,8 +24,13 @@ type PoolEntry struct {
 	Skip string
 }
 
-// Usable reports whether the entry can take a new session.
-func (p PoolEntry) Usable() bool { return p.Skip == "" && p.Meter.Verdict != usagelimit.VerdictCooling }
+// Usable reports whether the entry can take a new session: the shared
+// eligibility rule (usagelimit.Ineligible) with Skip as its login check.
+func (p PoolEntry) Usable() bool {
+	return usagelimit.Ineligible(p.Meter, usagelimit.AccountSelection{
+		LoginProblem: func(usagelimit.Meter) string { return p.Skip },
+	}) == ""
+}
 
 // PoolRef names the account a slot runs under now.
 type PoolRef struct{ Kind, Name string }
@@ -54,7 +59,7 @@ func ChoosePool(entries []PoolEntry, current *PoolRef, margin int) (PoolChoice, 
 			continue
 		}
 		usable = append(usable, e)
-		if h := e.Meter.Headroom; h != nil && (best == nil || *h > *best) {
+		if h := e.Meter.Headroom; usagelimit.MoreHeadroom(h, best) {
 			best = h
 		}
 	}

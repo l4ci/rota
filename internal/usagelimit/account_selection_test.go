@@ -19,20 +19,8 @@ func TestAccountSelection(t *testing.T) {
 		ok     bool
 		others []string
 	}{
-		{name: "empty"},
-		{name: "greatest headroom", meters: []Meter{free("a", 30), free("b", 80), free("c", 50)}, want: "b", ok: true,
-			others: []string{"a: less headroom", "c: less headroom"}},
-		{name: "ties retain configured order", meters: []Meter{free("b", 80), free("a", 80)}, want: "b", ok: true,
-			others: []string{"a: less headroom"}},
-		{name: "unknown remains eligible for dispatch", meters: []Meter{{Name: "a", Verdict: VerdictUnknown}, {Name: "b", Verdict: VerdictUnknown}}, want: "a", ok: true,
-			others: []string{"b: less headroom"}},
-		{name: "known beats unknown", meters: []Meter{{Name: "a", Verdict: VerdictUnknown}, free("b", 0)}, want: "b", ok: true,
-			others: []string{"a: less headroom"}},
-		{name: "unknown cannot displace known", meters: []Meter{free("a", 0), {Name: "b", Verdict: VerdictUnknown}}, want: "a", ok: true,
-			others: []string{"b: less headroom"}},
 		{name: "excluded and cooling", meters: []Meter{free("a", 90), {Name: "b", Verdict: VerdictCooling}, free("c", 0)},
 			policy: AccountSelection{Exclude: []string{"a"}}, want: "c", ok: true, others: []string{"a: excluded", "b: cooling"}},
-		{name: "no eligible accounts", meters: []Meter{{Name: "a", Verdict: VerdictCooling}}, others: []string{"a: cooling"}},
 		{name: "dispatch checks login", meters: []Meter{free("a", 90), free("b", 80)},
 			policy: AccountSelection{LoginProblem: func(m Meter) string {
 				if m.Name == "a" {

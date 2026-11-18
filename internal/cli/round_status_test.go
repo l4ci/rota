@@ -332,7 +332,7 @@ func TestRoundStatusShowsNoLoginSlot(t *testing.T) {
 	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
 		t.Fatalf("reconcile exit %d: %s", code, out)
 	}
-	if _, err := worker.UpdateSlot(root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+	if _, err := worker.UpdateSlot(root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
 		t.Fatal(err)
 	}
 	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")

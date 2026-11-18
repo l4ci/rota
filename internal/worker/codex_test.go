@@ -154,7 +154,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 			t.Fatal(err)
 		}
 		// dispatch records the account; do the same here.
-		UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("kind", "codex"); s.SetHomeAccount(set.Account) })
+		UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("kind", "codex"); s.SetAccountFor("", set.Account, "") })
 		return set
 	}
 	if got := pick("w1"); got.Account != "a" || got.Home != "/h/a" {
@@ -173,7 +173,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 		t.Errorf("login is checked per configured home: %v", rig.calls)
 	}
 	// An account that left the config is replaced.
-	UpdateSlot(dir, "w1", func(s *Slot) { s.SetHomeAccount("gone") })
+	UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccountFor("", "gone", "") })
 	if got := pick("w1"); got.Account == "gone" || got.Account == "" {
 		t.Errorf("a stale account is re-picked: %+v", got)
 	}
@@ -529,8 +529,8 @@ func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
 	if _, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(f.spawnOpts.Env, "CODEX_HOME=/h/a") || LoadRegistryTolerant(dir).Slot("w1").HomeAccount() != "a" {
-		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistryTolerant(dir).Slot("w1").HomeAccount())
+	if !slices.Contains(f.spawnOpts.Env, "CODEX_HOME=/h/a") || LoadRegistryTolerant(dir).Slot("w1").AccountFor("") != "a" {
+		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistryTolerant(dir).Slot("w1").AccountFor(""))
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git", "rota", "codex", "w1", harness.PromptKeyFile)); err != nil {
 		t.Errorf("the prompt key lives in the slot state dir: %v", err)
