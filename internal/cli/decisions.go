@@ -145,7 +145,7 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		}
 		list := []any{}
 		var lines []string
-		staleLimit := mapqa.StaleCommits(c.deps().Config(st.Root))
+		staleLimit := mapqa.StaleCommits(c.projectConfig(st.Root))
 		var stale []string
 		for _, s := range subs {
 			row := jsonx.Obj("name", s.Name, "bytes", s.Bytes, "touched", s.Touched, "entryPoints", s.EntryPoints, "brokenRefs", s.BrokenRefs)
@@ -163,7 +163,7 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		data := jsonx.Obj("subsystems", list, "count", len(subs))
 		text := strings.Join(lines, "\n")
 		if *capFlag {
-			limit := mapqa.SoftCap(c.deps().Config(st.Root))
+			limit := mapqa.SoftCap(c.projectConfig(st.Root))
 			over := len(subs) >= limit
 			data.Set("cap", limit)
 			data.Set("overCap", over)
