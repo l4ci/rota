@@ -392,6 +392,13 @@ type trainPlan struct {
 
 // phase reports the stage the train is in on o.Say, one PHASE line per change
 // (#2753), so an operator watching a long train sees where it is.
+// memberCheckOpts is the read-only gate check a train member passes before it
+// is built, the one collector of the member's record gaps.
+func (t *trainRun) memberCheckOpts(target string, in gateInput) GateOpts {
+	o := t.o
+	return GateOpts{Slot: target, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews, in: &in}
+}
+
 func (t *trainRun) phase(format string, args ...any) {
 	if t.o.Say != nil {
 		t.o.Say("PHASE " + fmt.Sprintf(format, args...))
@@ -625,7 +632,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result TrainResult, stopped 
 	}
 	var merged []TrainMember
 	for _, tg := range targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews, in: &in})
+		gr, err := e.Gate(ctx, root, t.memberCheckOpts(tg, in))
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
