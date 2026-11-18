@@ -27,7 +27,7 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		caps, cfg, err := backendMode(c.deps(), root)
+		caps, cfg, err := c.backendMode(root)
 		if err != nil {
 			return Result{}, err
 		}

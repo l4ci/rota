@@ -99,7 +99,7 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 	if set.Support == "" && set.Role != roundcfg.RoleSupport {
 		return Result{}, nil
 	}
-	issue, err := issueBackend(c.deps(), root)
+	issue, err := c.issueBackend(root)
 	if err != nil {
 		return Result{}, err
 	}

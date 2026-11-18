@@ -50,6 +50,7 @@ func roundSupportEnable(fs *flag.FlagSet) RunFunc {
 		}
 		// Quoted, so a name such as "true" stays a string.
 		res, err := config.Set(root, config.RoundSupportKey, strconv.Quote(name))
+		c.configWritten()
 		if err != nil {
 			return Result{}, err
 		}
@@ -75,6 +76,7 @@ func roundSupportDisable(fs *flag.FlagSet) RunFunc {
 		}
 		name := roundcfg.SupportName(config.Project(root))
 		removed, err := config.Unset(root, config.RoundSupportKey, config.LayerProject)
+		c.configWritten()
 		if err != nil {
 			return Result{}, err
 		}

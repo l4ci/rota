@@ -529,9 +529,9 @@ func TestVerdictRouteLoadsConfigOnce(t *testing.T) {
 	if code, _, _ := rotaIn(t, dir, "verdict", "route", "--for", "ship-review", "--json"); code != 0 {
 		t.Fatalf("route: %d", code)
 	}
-	// Preflight, configuredBase (masking lookup, kept) and backendMode (a Deps
-	// helper) each read once; route itself adds none beyond the shared memo.
-	if calls != 3 {
-		t.Errorf("Config called %d times, want 3", calls)
+	// Preflight and configuredBase (masking lookup, kept) each read once;
+	// backendMode and route share the preflight memo and add none.
+	if calls != 2 {
+		t.Errorf("Config called %d times, want 2", calls)
 	}
 }

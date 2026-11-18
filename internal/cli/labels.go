@@ -27,7 +27,7 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		issue, err := issueBackend(c.deps(), root)
+		issue, err := c.issueBackend(root)
 		if err != nil {
 			return Result{}, err
 		}

@@ -186,6 +186,11 @@ func (c *Ctx) Project() (string, any, error) {
 	return root, c.projectConfig(root), nil
 }
 
+// configWritten drops the memoized config: a verb calls it right after it
+// writes config (even a failed write may have hit disk), so the next memo
+// read sees the new value instead of preflight's.
+func (c *Ctx) configWritten() { c.cfgDone = false }
+
 // projectConfig is the merged config of root, loaded on first use.
 func (c *Ctx) projectConfig(root string) any {
 	if !c.cfgDone || c.cfgRoot != root {

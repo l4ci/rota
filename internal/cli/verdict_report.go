@@ -41,7 +41,7 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 			dst.ids = append(dst.ids, id)
 		}
 	}
-	issue, err := issueBackend(c.deps(), t.root)
+	issue, err := c.issueBackend(t.root)
 	if err != nil {
 		dst.pending = append(dst.pending, err)
 		return dst

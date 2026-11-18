@@ -202,7 +202,7 @@ func finishItems(c *Ctx, root string, ids []string, commit string) (*jsonx.Objec
 		o.Set("unknown", unknown)
 		o.Set("skipped", skipped)
 	}
-	issue, err := issueBackend(c.deps(), root)
+	issue, err := c.issueBackend(root)
 	if err != nil {
 		return nil, nil, err
 	}

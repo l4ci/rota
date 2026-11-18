@@ -29,7 +29,7 @@ func harvestHintLine(c *Ctx, root string, issues []string) string {
 	if len(ids) == 0 {
 		return ""
 	}
-	if issue, err := issueBackend(c.deps(), root); err != nil || !issue {
+	if issue, err := c.issueBackend(root); err != nil || !issue {
 		return ""
 	}
 	trust, err := c.deps().workerEnv().WriterTrust(root)

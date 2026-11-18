@@ -252,7 +252,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			if fileRoot, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
-			if f := config.StringIfSet(c.deps().Config(fileRoot), "review.fileDeferred"); f != "" {
+			if f := config.StringIfSet(c.projectConfig(fileRoot), "review.fileDeferred"); f != "" {
 				floor = f
 			}
 			if floor != verdict.FloorMinor && floor != verdict.FloorMajor && floor != verdict.FloorOff {

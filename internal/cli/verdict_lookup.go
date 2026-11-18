@@ -10,7 +10,7 @@ import (
 // PR. Read failures leave the local verdict rules in force and are visible.
 func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
 	cfg := c.projectConfig(t.root)
-	if issue, err := issueBackend(c.deps(), t.root); err != nil || !issue {
+	if issue, err := c.issueBackend(t.root); err != nil || !issue {
 		return verdict.Load(t.root).Branches[t.key]
 	}
 	f, err := c.deps().forge(c.Context(), cfg, "", t.dir)

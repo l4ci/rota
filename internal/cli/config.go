@@ -273,7 +273,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 				}
 			}
 			if supportKeyNonDefault(args[0], args[1]) && config.Validate(args[0], args[1]) == nil {
-				issue, ierr := issueBackend(c.deps(), root)
+				issue, ierr := c.issueBackend(root)
 				if ierr != nil {
 					return Result{}, ierr
 				}
@@ -288,6 +288,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 				pinned = true
 			}
 			res, err = config.SetIn(root, args[0], args[1], layer)
+			c.configWritten()
 		}
 		if err != nil {
 			// A failed set may follow a rewrite that already hit disk (#1524).
