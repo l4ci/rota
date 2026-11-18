@@ -65,7 +65,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := c.deps().roundSettings(root, roundConfigUsage)
+		set, err := c.roundSettings(root, roundConfigUsage)
 		if err != nil {
 			return Result{}, err
 		}

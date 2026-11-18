@@ -110,3 +110,26 @@ func TestSupportRoleWithoutNameRefuses(t *testing.T) {
 		t.Fatalf("support without name: exit %d output %v %s; want blockedBy config", code, env, stderr)
 	}
 }
+
+// Wind-down reads the project root and its round settings after Project has
+// already loaded the config for this invocation: the settings must come from
+// that memo, not a second load.
+func TestCtxRoundSettingsLoadsConfigOnce(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	calls := 0
+	d.Config = func(string) any { calls++; return map[string]any{} }
+	c := &Ctx{Deps: d}
+	root, _, err := c.Project()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.roundSettings(root, roundConfigUsage); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Errorf("Config called %d times, want 1", calls)
+	}
+}

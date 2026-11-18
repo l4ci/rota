@@ -20,7 +20,13 @@ const (
 // roundSettings is the CLI's round config load and error-to-exit mapping.
 // Keep the parser's message intact: it already names the invalid key.
 func (d *Deps) roundSettings(root string, policy roundConfigPolicy) (roundcfg.Settings, error) {
-	set, err := roundcfg.FromConfig(d.Config(root))
+	return roundSettingsOf(d.Config(root), policy)
+}
+
+// roundSettingsOf maps a loaded config to round settings, refusing a bad one
+// with the exit code the policy names.
+func roundSettingsOf(cfg any, policy roundConfigPolicy) (roundcfg.Settings, error) {
+	set, err := roundcfg.FromConfig(cfg)
 	if err == nil {
 		return set, nil
 	}
@@ -62,4 +68,10 @@ func (p *preflight) roundMachine() (Result, error) {
 		}
 	}
 	return Result{}, nil
+}
+
+// roundSettings is the Ctx form of Deps.roundSettings for a verb: it reads the
+// config through projectConfig, so it shares the value preflight loaded.
+func (c *Ctx) roundSettings(root string, policy roundConfigPolicy) (roundcfg.Settings, error) {
+	return roundSettingsOf(c.projectConfig(root), policy)
 }
