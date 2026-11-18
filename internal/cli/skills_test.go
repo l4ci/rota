@@ -219,6 +219,25 @@ func TestSkillsNoHome(t *testing.T) {
 	}
 }
 
+// With HOME unset and only CLAUDE_CONFIG_DIR known, status reports the Claude
+// root and marks Codex unavailable instead of failing whole.
+func TestSkillsStatusCodexUnavailable(t *testing.T) {
+	work := t.TempDir()
+	t.Setenv("HOME", "")
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	old, _ := os.Getwd()
+	os.Chdir(work)
+	defer os.Chdir(old)
+	code, out, errOut := runMain("skills", "status")
+	if code != 0 {
+		t.Fatalf("status %d %s", code, errOut)
+	}
+	if !strings.Contains(out, filepath.Join(cfg, "skills")) || !strings.Contains(out, "codex: unavailable") {
+		t.Errorf("status output: %s", out)
+	}
+}
+
 // accountProject is a rota project whose round.accounts name two existing
 // config dirs and one that does not exist.
 func accountProject(t *testing.T, home string) (proj, a, b, gone string) {

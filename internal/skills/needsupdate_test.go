@@ -32,6 +32,14 @@ func TestNeedsUpdate(t *testing.T) {
 			t.Error("want true")
 		}
 	})
+	// Plugin roots never carry a Mode and are updated by Claude Code, so they
+	// never need a rota skills update, damaged or not.
+	t.Run("installed plugin root ignored", func(t *testing.T) {
+		plug := RootStatus{Root: Root{Plugin: true}, Installed: true}
+		if (Report{Roots: []RootStatus{plug}}).NeedsUpdate() {
+			t.Error("want false for a plugin root")
+		}
+	})
 	t.Run("uninstalled root ignored", func(t *testing.T) {
 		if (Report{Roots: []RootStatus{ok, {}}}).NeedsUpdate() {
 			t.Error("want false")
