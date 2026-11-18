@@ -1,27 +1,25 @@
-// Package migrate provides one-shot migrations of file-backed project state to
-// tracker issues, alongside migrations of legacy labels and milestone bodies.
-// Run moves the open backlog and planned or active milestones, including their
-// notes, plans and references. Without Options.Apply it only previews the work;
-// the tracker adapter is built lazily on the first write, never during preview.
-// Apply saves progress in the issue map so interrupted runs can resume, then
-// freezes the backlog once migration completes.
+// Package migrate moves file-backed project data to tracker issues and also
+// migrates legacy labels and milestone bodies. Run plans the open backlog and
+// planned or active milestones, including notes, plans, references and proof
+// sections. Without Options.Apply it only previews the work; the tracker
+// adapter is built lazily on the first write. An apply saves progress in the
+// issue map so interrupted runs can resume, then freezes the backlog when
+// migration completes.
 //
-// Run returns ErrNothingToMigrate for a missing backlog (CLI exit 3), and
-// ErrUmbrellaMigrate for a project registering sub-repos (CLI exit 4), and
-// ErrBadMap for an issue map that is not a JSON object (CLI exit 70). Tracker
-// and filesystem errors propagate with any progress already made.
+// Run returns ErrNothingToMigrate when the backlog is missing (CLI exit 3),
+// ErrUmbrellaMigrate when the project registers sub-repos (CLI exit 4), and
+// ErrBadMap when the issue map is not a JSON object (CLI exit 70). Tracker and
+// filesystem errors propagate with any progress already made.
 //
-// The dependencies follow the state being converted: backlog parses file items
-// and supplies the issue backend; tracker supplies issue keys, errors and remote
-// operations; config resolves label names; repos detects umbrella projects;
-// rotatree locates project files; fsio reads and atomically writes them; jsonx
-// preserves the ordered issue map; frontmatter reads milestone metadata;
-// section extracts proof sections; milestone supplies IDs and the milestone
-// store; pystr preserves legacy whitespace and token rules; and stamp formats
-// the backlog freeze date. worker remaps active slot tasks and queued PR issue
-// IDs after migration, so a round can continue with tracker IDs. roundcfg
-// recognizes machine pins when migrating the retired support label, preventing
-// conflicting pins from being rewritten.
+// The dependencies follow the data being converted: backlog parses file items
+// and provides the issue backend; config resolves label names; frontmatter
+// reads milestone metadata; milestone supplies milestone IDs and storage;
+// section extracts proof sections; tracker supplies issue keys, errors and
+// remote operations; worker retargets active tasks and queued PRs after issue
+// creation; roundcfg recognizes machine pins while labels migrate. fsio reads
+// and atomically writes project files, jsonx handles the issue map, repos
+// detects umbrella projects, rotatree locates project files, pystr preserves
+// legacy text rules, and stamp formats the backlog freeze date.
 package migrate
 
 import (
@@ -47,7 +45,7 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// Migration refusals; the verb maps them to exits 3 and 4.
+// Migration errors; the verb maps them to exits 3, 4 and 70.
 var (
 	// ErrNothingToMigrate: .rota/BACKLOG.md does not exist.
 	ErrNothingToMigrate = errors.New("nothing to migrate")
