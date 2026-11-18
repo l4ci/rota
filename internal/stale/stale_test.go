@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -189,12 +190,44 @@ func TestFindKnowledgeReadErrors(t *testing.T) {
 }
 
 func TestFindKnowledgeDatesThroughTheSuppliedRunner(t *testing.T) {
-	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n"})
+	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n\n## Beta\ny\n"})
+	const sha = "0123456789012345678901234567890123456789"
+	blame := sha + " 1 1 5\nauthor A\ncommitter-time 1577923200\ncommitter-tz +0000\n\t# K\n" +
+		sha + " 2 2\n\tx\n" + sha + " 3 3\n\t## Alpha\n" + sha + " 4 4\n\tx\n" + sha + " 5 5\n\t\n"
+	beta := "fedcba9876543210fedcba9876543210fedcba98"
+	blame += beta + " 6 6 2\nauthor B\ncommitter-time 1793404800\ncommitter-tz +0000\n\t## Beta\n" +
+		beta + " 7 7\n\ty\n"
 	repo := git.Repo{Runner: func(_ context.Context, _ string, _ ...string) (git.Result, error) {
-		return git.Result{Stdout: "2020-01-02\n"}, nil
+		return git.Result{Stdout: blame}, nil
 	}}
-	got, err := findKnowledge(repo, root, 90, date(t, "2021-01-01"))
-	if err != nil || len(got) != 1 || got[0].Date != "2020-01-02" {
+	got, err := findKnowledge(repo, root, 90, date(t, "2026-11-18"))
+	if err != nil || len(got) != 1 || got[0].Name != "Alpha" || got[0].Date != "2020-01-02" {
 		t.Fatalf("findKnowledge = %v %v", got, err)
+	}
+}
+
+// A topic untouched past the window is stale even when a sibling changed
+// recently, and a topic edited recently is not stale.
+func TestFindKnowledgeDatesEachTopicByItsOwnHistory(t *testing.T) {
+	root := t.TempDir()
+	gittest.Init(t, root, "main")
+	dated := func(day string) gittest.Runner {
+		env := append(slices.Clone(gittest.Identity), os.Environ()...)
+		env = append(env, "GIT_AUTHOR_DATE="+day+"T12:00:00Z", "GIT_COMMITTER_DATE="+day+"T12:00:00Z",
+			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		return gittest.Runner{Env: env}
+	}
+	knowledge := filepath.Join(root, ".rota", "KNOWLEDGE.md")
+	os.MkdirAll(filepath.Dir(knowledge), 0o755)
+	os.WriteFile(knowledge, []byte("# K\n\n## Alpha\nold\n\n## Beta\nold\n"), 0o644)
+	dated("2020-01-02").Run(t, root, "add", "-A")
+	dated("2020-01-02").Run(t, root, "commit", "-q", "-m", "old")
+	os.WriteFile(knowledge, []byte("# K\n\n## Alpha\nold\n\n## Beta\nnew\n"), 0o644)
+	dated("2026-11-10").Run(t, root, "add", "-A")
+	dated("2026-11-10").Run(t, root, "commit", "-q", "-m", "touch beta")
+
+	got, err := FindReport(root, "knowledge", 90, date(t, "2026-11-18"), nil)
+	if want := []string{"Alpha 2020-01-02"}; err != nil || !reflect.DeepEqual(names(got.Entries), want) {
+		t.Errorf("knowledge = %v %v, want %v", names(got.Entries), err, want)
 	}
 }
