@@ -174,11 +174,7 @@ func (e Env) refreshStackedBody(ctx context.Context, root string, cfg GateConfig
 	if refusal != nil {
 		return
 	}
-	if s, ok := f.(interface {
-		PRSetBody(ctx context.Context, pr int, body string) error
-	}); ok {
-		_ = s.PRSetBody(ctx, prNumberOf(rec.PR), IntegrationPRBody(rec))
-	}
+	_ = f.PRSetBody(ctx, prNumberOf(rec.PR), IntegrationPRBody(rec))
 }
 
 // mergeBaseInto merges base into the integration branch's tip in a scratch

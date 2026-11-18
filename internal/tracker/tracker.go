@@ -397,6 +397,11 @@ type Forge interface {
 	// closing keyword, in order of first appearance. It parses the forge's
 	// keyword syntax; reading the issues it names is the issue source's job.
 	ClosedNumbers(body string) []int
+	// ClosingRefs lists the issue numbers merging PR pr closes, as the forge
+	// itself resolves them (a closing keyword anywhere in the body counts).
+	// known is false when the forge cannot report it (GitLab): the declared
+	// unsupported result, and callers fall back to the PR text.
+	ClosingRefs(ctx context.Context, pr int) (nums []int, known bool, err error)
 	OpenPRs(ctx context.Context) ([]PR, error)
 	// MergedPRs lists the merged PRs headed by branch, for a branch whose PR
 	// opened and merged between two looks at the open list.
@@ -415,6 +420,8 @@ type Forge interface {
 	PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error
 	// PRSetBase retargets PR pr onto branch base; its head and diff stay.
 	PRSetBase(ctx context.Context, pr int, base string) error
+	// PRSetBody replaces the body (GitLab: the description) of PR pr.
+	PRSetBody(ctx context.Context, pr int, body string) error
 	// PRMerge is PRRequestMerge plus the confirmation: it returns the merge
 	// commit sha, or fails when nothing landed.
 	PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error)

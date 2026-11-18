@@ -314,14 +314,11 @@ type Forge interface {
 	CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error)
 	// AddMRNote posts a comment on the PR (the behaviour run's transcript).
 	AddMRNote(ctx context.Context, number int, body string) (string, error)
-}
-
-// closingReporter is the optional Forge capability of reading what the forge
-// itself says merging a PR closes (GitHub closingIssuesReferences), which sees
-// a closing keyword anywhere in the body. known is false for a forge that
-// cannot report it.
-type closingReporter interface {
+	// ClosingRefs reads what the forge says merging the PR closes; known is
+	// false for a forge that cannot report it (GitLab).
 	ClosingRefs(ctx context.Context, pr int) (nums []int, known bool, err error)
+	// PRSetBody rewrites the PR body (the stacked-branch refresh).
+	PRSetBody(ctx context.Context, pr int, body string) error
 }
 
 // Issues is the part of tracker.IssueTracker the gate reads: the issue a PR

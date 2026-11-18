@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -93,11 +92,6 @@ func memberTargets(it landing.Integration) []string {
 	return out
 }
 
-// prBodySetter is a forge that can rewrite a PR's body (GitHub, GitLab).
-type prBodySetter interface {
-	PRSetBody(ctx context.Context, pr int, body string) error
-}
-
 // openIntegrationPR opens the one PR from a verified integration branch to
 // its base and records it. A branch that has a PR keeps it (the PR follows
 // the branch), but its body is written again, so a member a rerun added gets
@@ -105,7 +99,7 @@ type prBodySetter interface {
 // from the one the caller read earlier: another train may have added members
 // since, and writing the older list would drop their Closes lines. Callers hold
 // the integration lock (openIntegrationPRVia), so no train changes it meanwhile.
-func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it landing.Integration) (string, error) {
+func openIntegrationPR(ctx context.Context, f tracker.Forge, root string, it landing.Integration) (string, error) {
 	if reg, err := worker.LoadRegistry(root); err == nil {
 		if fresh, ok := reg.IntegrationByBranch(it.Branch); ok {
 			it = fresh
@@ -117,10 +111,8 @@ func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it landin
 		if !ok {
 			return it.PR, fmt.Errorf("integration PR %q has no number", it.PR)
 		}
-		if s, ok := f.(prBodySetter); ok {
-			if err := s.PRSetBody(ctx, n, body); err != nil {
-				return it.PR, fmt.Errorf("updating the body of %s: %w", it.PR, err)
-			}
+		if err := f.PRSetBody(ctx, n, body); err != nil {
+			return it.PR, fmt.Errorf("updating the body of %s: %w", it.PR, err)
 		}
 		return it.PR, nil
 	}
@@ -133,13 +125,10 @@ func openIntegrationPR(ctx context.Context, f ship.Forge, root string, it landin
 	return url, worker.UpdateIntegration(root, it.Branch, func(rec *landing.Integration) { rec.PR = url })
 }
 
-// PRSetBody passes a body rewrite to a forge that can make one; on any other
-// it changes nothing.
+// PRSetBody maps the forge's failure onto the exit table.
 func (f shipForge) PRSetBody(ctx context.Context, pr int, body string) error {
-	if s, ok := f.Forge.(prBodySetter); ok {
-		if err := s.PRSetBody(ctx, pr, body); err != nil {
-			return trackerErr(err)
-		}
+	if err := f.Forge.PRSetBody(ctx, pr, body); err != nil {
+		return trackerErr(err)
 	}
 	return nil
 }

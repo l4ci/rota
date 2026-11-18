@@ -47,6 +47,7 @@ func (s *seamIssues) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) 
 }
 
 type seamReporter struct {
+	Forge // only ClosingRefs is answered
 	nums  []int
 	known bool
 	err   error

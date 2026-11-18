@@ -40,7 +40,12 @@ type Identity interface {
 	AuthenticatedUser(ctx context.Context) (string, error)
 }
 
+// Forge capabilities (ClosingRefs, PRSetBody) are declared on Forge itself, with
+// GitLab answering them explicitly; the trust set above is the issue-side
+// capability set, taken by callers as these interfaces and never redeclared.
 var (
+	_ Forge      = (*GitHub)(nil)
+	_ Forge      = (*GitLab)(nil)
 	_ IssueTrust = (*GitHub)(nil)
 	_ Identity   = (*GitHub)(nil)
 	_ Identity   = (*GitLab)(nil)

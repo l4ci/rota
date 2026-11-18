@@ -529,6 +529,12 @@ func (g *GitLab) PRMergeable(ctx context.Context, pr int) (Mergeability, error) 
 	return m, nil
 }
 
+// ClosingRefs is the declared unsupported result: glab has no closing-issue
+// query, so known is false and the gate judges the MR text instead.
+func (g *GitLab) ClosingRefs(context.Context, int) ([]int, bool, error) {
+	return nil, false, nil
+}
+
 // PRSetBody replaces the description of MR pr.
 func (g *GitLab) PRSetBody(ctx context.Context, pr int, body string) error {
 	_, err := g.run(ctx, []string{"mr", "update", strconv.Itoa(pr), "--description", body}, "")
