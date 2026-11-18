@@ -215,7 +215,9 @@ func LockPath(path string) string { return path + lockSuffix }
 // sits on a sibling file because the atomic rename swaps the data file's
 // inode. A busy lock is retried every 50 ms until timeout. The kernel drops
 // the lock if the process dies; the empty .lock file stays in place.
-// Callers taking multiple locks must use a consistent order across operations.
+// Acquisition retries if the sidecar was replaced after opening it. Callers
+// must keep it in place while holding the lock, and use a consistent order
+// when taking multiple locks.
 func Locked(path string, timeout time.Duration, fn func() error) error {
 	return LockedCtx(context.Background(), path, timeout, fn)
 }
@@ -228,18 +230,35 @@ func LockedCtx(ctx context.Context, path string, timeout time.Duration, fn func(
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o777); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close() // closing the fd releases the flock
+	var f *os.File
+	defer func() {
+		if f != nil {
+			f.Close() // closing the fd releases the flock
+		}
+	}()
 	deadline := time.Now().Add(timeout)
 	for {
+		if f == nil {
+			var err error
+			f, err = os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0o644)
+			if err != nil {
+				return err
+			}
+		}
 		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
-			break
-		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
+			current, err := lockFileCurrent(f, lockPath)
+			if err != nil {
+				return err
+			}
+			if current {
+				break
+			}
+			// A waiter may have opened a sidecar that was since removed or
+			// replaced. Release that inode and reopen the current path.
+			f.Close()
+			f = nil
+		} else if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
 			return err
 		}
 		if !time.Now().Before(deadline) {
@@ -253,6 +272,23 @@ func LockedCtx(ctx context.Context, path string, timeout time.Duration, fn func(
 		}
 	}
 	return fn()
+}
+
+// lockFileCurrent rejects a flock on an inode no longer named by path.
+// Callers must still keep sidecars in place throughout their critical section.
+func lockFileCurrent(f *os.File, path string) (bool, error) {
+	opened, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	current, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(opened, current), nil
 }
 
 // WriteMarker writes v as indented JSON to path under the path's lock. guard,
@@ -353,13 +389,11 @@ func SameDir(a, b string) bool {
 	return norm(a) == norm(b)
 }
 
-// RemoveWithLock removes path and its lock sidecar. The sidecar goes first, so
-// a caller inside Locked(path) drops both while still holding the lock. That
-// is not safe against waiters: Locked does not re-check the inode after it
-// takes the flock, so a waiter already holding the old inode and a newcomer
-// that creates a fresh sidecar can both hold the lock. Use it only where no
-// concurrent locker is expected. A missing sidecar is not an error; the result
-// is path's own Remove error.
+// RemoveWithLock removes path and its lock sidecar. Use it only where no
+// concurrent locker is expected: removing a held sidecar lets a newcomer
+// acquire another inode before the holder finishes. The acquisition inode
+// check fences waiters on the old file, not an already running callback.
+// A missing sidecar is not an error; the result is path's own Remove error.
 func RemoveWithLock(path string) error {
 	os.Remove(path + lockSuffix)
 	return os.Remove(path)
@@ -415,23 +449,35 @@ func HeldLockUnder(root string, skip func(path string, d fs.DirEntry) bool) stri
 // is idempotent. Unlike Locked, the lock sits on path itself, so use it for a
 // file that is only a lock, never an atomically replaced data file.
 func TryLock(path string) (release func(), ok bool, err error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return nil, false, err
-	}
+	var f *os.File
 	for {
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if errors.Is(err, syscall.EINTR) {
-			continue
+		var err error
+		f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+		if err != nil {
+			return nil, false, err
 		}
-		break
-	}
-	if err != nil {
+		for {
+			err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+			if !errors.Is(err, syscall.EINTR) {
+				break
+			}
+		}
+		if err != nil {
+			f.Close()
+			if errors.Is(err, syscall.EWOULDBLOCK) {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+		current, err := lockFileCurrent(f, path)
+		if err != nil {
+			f.Close()
+			return nil, false, err
+		}
+		if current {
+			break
+		}
 		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, false, nil
-		}
-		return nil, false, err
 	}
 	var once sync.Once
 	return func() { once.Do(func() { f.Close() }) }, true, nil // closing the fd releases the flock
