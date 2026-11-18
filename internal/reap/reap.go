@@ -277,7 +277,8 @@ func newState(ctx context.Context, in Input) (*state, error) {
 	if real, err := filepath.EvalSymlinks(in.Root); err == nil {
 		s.root = real
 	}
-	s.hostOK = true
+	// A nil report proves no live set, so it counts as an unreadable host.
+	s.hostOK = in.Report != nil
 	if in.Report != nil {
 		for _, u := range in.Report.Unavailable {
 			if u == round.SourceHost {

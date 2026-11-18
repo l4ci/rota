@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/round"
 )
 
 func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
@@ -55,7 +56,8 @@ func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
 		t.Errorf("Prunable = %+v, want 1", got.Prunable)
 	}
 	// reap lists the same checkouts, and the same tmp entries before age.
-	res, err := Find(context.Background(), Input{Root: root, Base: "main", Git: run, TempRoot: tempRoot}, []string{KindTmp, KindWorktree})
+	// The round always supplies a report; a nil one now fails closed.
+	res, err := Find(context.Background(), Input{Root: root, Base: "main", Git: run, TempRoot: tempRoot, Report: &round.Report{}}, []string{KindTmp, KindWorktree})
 	if err != nil {
 		t.Fatal(err)
 	}
