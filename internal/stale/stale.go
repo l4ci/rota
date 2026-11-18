@@ -68,11 +68,10 @@ type Report struct {
 // (the caller's selected backend; nil lists none) are dated by their Captured
 // field. SkippedUndated counts items without a usable
 // Captured date (always 0 for the map and knowledge kinds).
-func FindReport(root, kind string, days int, today time.Time, todos TodoSource) (Report, error) {
+func FindReport(repo git.Repo, root, kind string, days int, today time.Time, todos TodoSource) (Report, error) {
 	var es []Entry
 	var skipped int
 	var err error
-	repo := git.Repo{Dir: root}
 	switch kind {
 	case "map":
 		es = findMap(repo, root, days, today)
