@@ -155,7 +155,6 @@ type hookContext struct {
 	who       hookWho
 	root      string
 	cfg       any
-	set       hook.Settings
 	handoff   string // absolute path
 	now       func() time.Time
 	lease     roundlease.Env
@@ -196,9 +195,6 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 		return hc, false
 	}
 	hc.cfg = c.deps().Config(hc.root)
-	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
-		return hc, false // a bad value is a pass, never a block
-	}
 	switch {
 	case hc.who.Orchestrator || !anySession:
 		hc.handoff = handoffFile(c.deps(), hc.root, hc.cfg)
@@ -280,12 +276,16 @@ func hookStop(c *Ctx, args []string) (Result, error) {
 
 // stopHandoff applies the orchestrator's context/usage handoff rule.
 func stopHandoff(hc hookContext, sid string, active bool) (hook.SessionDecision, bool) {
+	set, err := hook.LoadSettings(hc.cfg)
+	if err != nil {
+		return hook.SessionDecision{}, false // fail open for handoff only
+	}
 	in := hook.StopIn{StopHookActive: active}
-	if hc.set.SwitchOnUsage {
+	if set.SwitchOnUsage {
 		in.Supervised, in.HoldUntil = keepstate.SupervisedHold(hc.lease, hc.commonDir, hc.now())
 	}
 	return hook.ApplySession(hook.SessionIn{Action: hook.StopHandoff, CommonDir: hc.commonDir, SessionID: sid,
-		Settings: hc.set, HandoffPath: hc.handoff, Stop: in, Now: hc.now})
+		Settings: set, HandoffPath: hc.handoff, Stop: in, Now: hc.now})
 }
 
 // guardStop applies the auto context guard to a non-orchestrator session.
@@ -293,8 +293,12 @@ func guardStop(hc hookContext, sid string) (hook.SessionDecision, bool) {
 	if config.ContextGuard(hc.cfg) != hook.GuardAuto {
 		return hook.SessionDecision{}, false
 	}
+	set, err := hook.LoadContextSettings(hc.cfg)
+	if err != nil {
+		return hook.SessionDecision{}, false
+	}
 	return hook.ApplySession(hook.SessionIn{Action: hook.GuardStop, CommonDir: hc.commonDir, SessionID: sid,
-		Settings: hc.set, HandoffPath: hc.handoff, Now: hc.now})
+		Settings: set, HandoffPath: hc.handoff, Now: hc.now})
 }
 
 // guardPrompt applies the warn context guard to a non-orchestrator session.
@@ -302,8 +306,12 @@ func guardPrompt(hc hookContext, sid string) string {
 	if config.ContextGuard(hc.cfg) != hook.GuardWarn {
 		return ""
 	}
+	set, err := hook.LoadContextSettings(hc.cfg)
+	if err != nil {
+		return ""
+	}
 	d, _ := hook.ApplySession(hook.SessionIn{Action: hook.GuardPrompt, CommonDir: hc.commonDir, SessionID: sid,
-		Settings: hc.set, Now: hc.now})
+		Settings: set, Now: hc.now})
 	return d.Line
 }
 
@@ -360,7 +368,7 @@ func hookSessionStart(c *Ctx, args []string) (Result, error) {
 	if err != nil || !note.Exists {
 		return Result{}, nil
 	}
-	maxAge := time.Duration(hc.set.HandoffMaxAge) * time.Second
+	maxAge := time.Duration(config.HandoffMaxAgeSeconds) * time.Second
 	if !hook.ShouldInject(source, hc.who.Orchestrator, hc.who.LeaseFree, note, maxAge, hc.now()) {
 		return Result{}, nil
 	}
