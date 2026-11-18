@@ -159,9 +159,12 @@ Jira spreads a body over 30 KB across several properties. A write or drop that
 fails part-way puts the old properties back, so the shown text and the stored
 body stay old/old. If putting them back fails too, the error says so. The
 restored shown text is the visible part of the stored source, not a markdown
-round trip. A comment with no stored body (a person's, or one without a marker)
-is restored from the text Jira lists, which can lose formatting. An edit made by
-someone else between rota's read and its restore is overwritten.
+round trip. That also means a rollback reverts any edit a person made in Jira
+to the shown text since rota last stored it, not only one made between rota's
+read and its restore. When the stored body cannot be read, rota changes nothing
+and reports the read error. A comment with no stored body (a person's, or one
+without a marker) is restored from the text Jira lists, which can lose
+formatting.
 
 ### Claim lock and state labels
 

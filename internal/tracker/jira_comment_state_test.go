@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -100,10 +101,11 @@ func TestJiraAddRollbackFailureReportsBoth(t *testing.T) {
 }
 
 // The shown text a failed edit restores is the stored source, not the
-// markdown the tracker lists back.
+// markdown the tracker lists back. Only Cloud (ADF) round-trips lossily.
 func TestJiraEditRestoresStoredSource(t *testing.T) {
 	ctx := context.Background()
-	old := "<!-- rota:proof -->\n| a | b |\n|---|---|\n| 1 | 2 |\n\n* nested\n    * deeper\n\n`code` and **bold**"
+	// a code span holding a backtick: the listed markdown breaks it, so a restore from the listing differs
+	old := "<!-- rota:proof -->\nproof row\n\n`` a`b ``"
 	eachJira(t, jiratest.Options{}, func(t *testing.T, j *Jira, s *jiratest.Server) {
 		k := mustCreate(t, j, "t", "", nil, "")
 		id, err := j.AddComment(ctx, k, old)
@@ -111,12 +113,44 @@ func TestJiraEditRestoresStoredSource(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := s.CommentBodies(string(k))
+		if j.cloud {
+			listed := j.text(json.RawMessage(before[0]))
+			if listed == shownText(old) {
+				t.Fatal("sample survives the markdown round trip: the test cannot tell the stored source from the listed text")
+			}
+		}
 		s.FailRequest("PUT /issue/"+string(k)+"/properties/", 400)
 		if err := j.EditComment(ctx, k, id, "<!-- rota:proof -->\nnew"); err == nil {
 			t.Fatal("edit succeeded")
 		}
 		if got := s.CommentBodies(string(k)); strings.Join(got, "|") != strings.Join(before, "|") {
 			t.Errorf("restored text differs from the original:\n got %v\nwant %v", got, before)
+		}
+	})
+}
+
+// When the old stored body cannot be read, nothing is written: a failed write
+// could not be undone and the stored body must survive.
+func TestJiraUnreadableOldStateIsNotOverwritten(t *testing.T) {
+	ctx := context.Background()
+	oldBody := "<!-- rota:proof -->\nOLD " + strings.Repeat("alpha ", 12000)
+	newBody := "<!-- rota:proof -->\nNEW " + strings.Repeat("omega ", 12000)
+	eachJira(t, jiratest.Options{}, func(t *testing.T, j *Jira, s *jiratest.Server) {
+		k := mustCreate(t, j, "t", "", nil, "")
+		id, err := j.AddComment(ctx, k, oldBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// the edit reads the old state twice: for the text to restore, then for the write
+		s.FailRequest("GET /issue/"+string(k)+"/properties/"+commentProp(id, 1), 400)
+		s.FailRequest("GET /issue/"+string(k)+"/properties/"+commentProp(id, 1), 400)
+		s.FailRequest("PUT /issue/"+string(k)+"/properties/", 400)
+		if err := j.EditComment(ctx, k, id, newBody); err == nil {
+			t.Fatal("edit succeeded")
+		}
+		cs, err := j.Comments(ctx, k)
+		if err != nil || len(cs) != 1 || cs[0].Body != oldBody {
+			t.Fatalf("stored body lost: err %v, %d comments", err, len(cs))
 		}
 	})
 }

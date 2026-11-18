@@ -718,7 +718,11 @@ func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComm
 				if old, err = j.stateParts(ctx, key, id); err != nil {
 					return err
 				}
-				prev, ok, _ = j.loadState(ctx, key, id) // unreadable old state: clear on failure
+				// No write while the old state cannot be read: a failed write could
+				// not be undone, and clearing blind would lose the stored body.
+				if prev, ok, err = j.loadState(ctx, key, id); err != nil {
+					return err
+				}
 			}
 			return j.restoreOnFail(ctx, key, id, prev, ok, max(old, len(chunks(body))), func() error {
 				return j.putState(ctx, key, id, body, old)
@@ -729,7 +733,10 @@ func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComm
 			if err != nil || old == 0 {
 				return err
 			}
-			prev, ok, _ := j.loadState(ctx, key, id)
+			prev, ok, err := j.loadState(ctx, key, id)
+			if err != nil {
+				return err
+			}
 			return j.restoreOnFail(ctx, key, id, prev, ok, old, func() error {
 				return j.dropState(ctx, key, id, 0, old)
 			})
