@@ -806,6 +806,10 @@ After an upgrade, a saved override whose built-in default moved shows `changed`,
 
 A removed section stays readable through `show` but takes no new revision.
 
+The Effective block is the expanded reporting section. The generated agent instructions add the fixed role duty before it and the quotation rule after it.
+
+With `--json`, all prompt verbs use the standard `{ok, data}` envelope. Inside `data`, `list` returns `{sections: [View]}`; `show` deliberately returns a bare View; `save`, `adopt` and `restore` return `{section: View, changed: true}`. A View contains the expanded report in `effective`, alongside the baseline, default, override and revision history.
+
 ## orchestrator keys
 
 Settings for the orchestrator handoff (`rota hook stop`, `rota hook session-start`; see [unattended rounds](unattended-rounds.md)) and its restart (`rota keepalive run`; see [unattended rounds](unattended-rounds.md)). All are silent defaults; none is written by `rota init`.
