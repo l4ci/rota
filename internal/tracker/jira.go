@@ -16,7 +16,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/connections"
 )
 
@@ -48,73 +47,30 @@ type Jira struct {
 
 var _ IssueTracker = (*Jira)(nil)
 
-// ConnResolver finds a named connection and its secret. Tests swap it in
-// with WithConnections; the default reads the machine's connections.
-type ConnResolver func(ctx context.Context, name string) (connections.Connection, string, error)
-
-// WithConnections replaces the connection lookup of an HTTP tracker.
-func WithConnections(r ConnResolver) Option {
-	return func(c *CLI) { c.Conn = r }
-}
-
-// WithMachine points the default connection lookup at env and the keychain of
-// the machine `rota connect` writes to. Without it (or WithConnections) a
-// connection cannot be resolved.
-func WithMachine(env cfgdir.Env, keychain func() connections.Store) Option {
-	return func(c *CLI) { c.Env, c.Keychain = env, keychain }
-}
-
-// resolver is the connection lookup of c: the injected one, else the machine's.
-func (c *CLI) resolver() ConnResolver {
-	if c.Conn != nil {
-		return c.Conn
-	}
-	return c.machineConn
-}
-
-// machineConn is the connection lookup of `rota connect`: connections.json
-// under the global config dir, the secret from ROTA_<NAME>_TOKEN, the
-// keychain or the file store.
-func (c *CLI) machineConn(ctx context.Context, name string) (connections.Connection, string, error) {
-	if c.Env.Getenv == nil || c.Env.Home == nil {
-		return connections.Connection{}, "", fmt.Errorf("no machine environment to find connection %q in", name)
-	}
-	dir, sec, err := connections.Machine(c.Env, c.Keychain)
-	if err != nil {
-		return connections.Connection{}, "", err
-	}
-	conn, ok, err := connections.Get(dir, name)
-	if err != nil {
-		return connections.Connection{}, "", err
-	}
-	if !ok {
-		return connections.Connection{}, "", fmt.Errorf("connection %q is not defined on this machine (run: rota connect add %s --kind jira|linear|itsaplan ...)", name, name)
-	}
-	secret, _, err := sec.Resolve(ctx, name)
-	if err != nil {
-		return connections.Connection{}, "", fmt.Errorf("reading the secret of connection %q: %v", name, err)
-	}
-	return conn, secret, nil
-}
-
 // newJiraTracker is NewIssueTracker for issues.source jira.
-func newJiraTracker(ctx context.Context, c *CLI, s Settings) (*Jira, error) {
+func newJiraTracker(ctx context.Context, d restDeps, s Settings) (*Jira, error) {
 	missing := ""
 	if s.JiraProject == "" {
 		missing = "issues.source is jira but issues.jira.project is not set (run: rota config set issues.jira.project <KEY>)"
 	}
-	conn, secret, wire, err := c.restConn(ctx, s, jiraSpec, missing)
+	conn, secret, wire, err := d.restConn(ctx, s, jiraSpec, missing)
 	if err != nil {
 		return nil, err
 	}
-	j := NewJira(conn, secret, s.JiraProject, s.NotPlannedLabel)
+	j, err := NewJira(conn, secret, s.JiraProject, s.NotPlannedLabel)
+	if err != nil {
+		return nil, err
+	}
 	wire(j.rest)
 	return j, nil
 }
 
 // NewJira is the adapter for project on connection c, authenticated by secret.
-// The connection's deployment (cloud unless it says datacenter) picks the API.
-func NewJira(c connections.Connection, secret, project, notPlannedLabel string) *Jira {
+// The validated connection's deployment picks the API.
+func NewJira(c connections.Connection, secret, project, notPlannedLabel string) (*Jira, error) {
+	if err := validateRESTConnection(c, secret, jiraSpec); err != nil {
+		return nil, err
+	}
 	site := strings.TrimRight(c.Site, "/")
 	cloud := c.WithDefaults().Deployment != connections.DeploymentDataCenter
 	j := &Jira{site: site, project: strings.ToUpper(project), cloud: cloud, notPlanned: notPlannedLabel}
@@ -124,17 +80,18 @@ func NewJira(c connections.Connection, secret, project, notPlannedLabel string) 
 		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(c.User+":"+secret))
 	}
 	j.rest = &REST{Base: site + "/rest/api/" + version, Auth: func(r *http.Request) { r.Header.Set("Authorization", auth) }}
-	return j
+	return j, nil
 }
 
 // JiraTester is the connections.Tester of kind jira: one GET /myself.
 type JiraTester struct{}
 
 func (JiraTester) Test(ctx context.Context, c connections.Connection, secret string) error {
-	if err := c.Validate(); err != nil {
+	j, err := NewJira(c, secret, "", "")
+	if err != nil {
 		return err
 	}
-	return NewJira(c, secret, "", "").CheckAuth(ctx)
+	return j.CheckAuth(ctx)
 }
 
 func (j *Jira) Provider() string { return "jira" }
@@ -708,6 +665,18 @@ func (j *Jira) comments(ctx context.Context, key IssueKey, props map[string]json
 // properties a read prefers the stored body from; writes pass none.
 func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComments {
 	return markedComments{
+		read: func(ctx context.Context, id string) (string, error) {
+			comments, err := j.comments(ctx, key, nil)
+			if err != nil {
+				return "", err
+			}
+			for _, c := range comments {
+				if c.ID == id {
+					return c.Body, nil
+				}
+			}
+			return "", &Error{Kind: KindNotFound, Code: 1, Message: "Jira comment " + id + " not found"}
+		},
 		post: func(ctx context.Context, shown string) (string, error) {
 			p, err := j.path(key, "/comment")
 			if err != nil {

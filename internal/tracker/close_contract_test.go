@@ -109,7 +109,10 @@ func closeFixtures(t *testing.T) map[string]func(*testing.T) closeFixture {
 			if version == 2 {
 				c.User, c.Deployment = "", connections.DeploymentDataCenter
 			}
-			j := NewJira(c, "tok", s.Project(), config.Label(nil, "notPlanned"))
+			j, err := NewJira(c, "tok", s.Project(), config.Label(nil, "notPlanned"))
+			if err != nil {
+				t.Fatal(err)
+			}
 			return finish(t, j, fail)
 		}
 	}

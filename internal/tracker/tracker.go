@@ -598,7 +598,7 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	}
 	provider := source
 	if k, ok := ownKindFor(source); ok {
-		return k.build(ctx, newCLI(s, dir, opts...), s)
+		return k.build(ctx, newCLI(s, dir, opts...).restDeps(), s)
 	}
 	switch source {
 	case config.SourceFile, "":
@@ -991,7 +991,7 @@ type IssueActor struct {
 func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Option) (IssueActor, error) {
 	if k, ok := ownKindFor(s.Source); ok {
 		return IssueActor{Source: s.Source, build: func(ctx context.Context) (IssueTracker, error) {
-			return k.build(ctx, newCLI(s, dir, opts...), s)
+			return k.build(ctx, newCLI(s, dir, opts...).restDeps(), s)
 		}}, nil
 	}
 	r, err := IssueProvider(ctx, s, ForgeActor, dir, opts...)

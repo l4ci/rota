@@ -518,3 +518,19 @@ func anyMatch(args []string, re *regexp.Regexp) bool {
 	}
 	return false
 }
+
+// ConnResolver finds a named connection and its secret. Tests swap it in
+// with WithConnections; the default reads the machine's connections.
+type ConnResolver func(ctx context.Context, name string) (connections.Connection, string, error)
+
+// WithConnections replaces the connection lookup of an HTTP tracker.
+func WithConnections(r ConnResolver) Option {
+	return func(c *CLI) { c.Conn = r }
+}
+
+// WithMachine points the default connection lookup at env and the keychain of
+// the machine `rota connect` writes to. Without it (or WithConnections) a
+// connection cannot be resolved.
+func WithMachine(env cfgdir.Env, keychain func() connections.Store) Option {
+	return func(c *CLI) { c.Env, c.Keychain = env, keychain }
+}

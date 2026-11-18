@@ -26,7 +26,10 @@ func TestRESTTrackersRefuseABadConnection(t *testing.T) {
 				t.Fatal(err)
 			}
 			res := WithConnections(func(context.Context, string) (connections.Connection, string, error) { return conn, secret, rerr })
-			_, err = NewIssueTrackerFromConfig(context.Background(), cfg, t.TempDir(), res)
+			tr, err := NewIssueTrackerFromConfig(context.Background(), cfg, t.TempDir(), res)
+			if err != nil && tr != nil {
+				t.Fatalf("failed construction returned non-nil tracker: %v", tr)
+			}
 			return err
 		}
 		good := connections.Connection{Name: "c", Kind: k.kind, Site: k.site, User: "me@example.com"}
@@ -64,11 +67,11 @@ func TestRESTTrackersRefuseABadConnection(t *testing.T) {
 	}
 }
 
-// The sleep step wraps c.Sleep once for every adapter and reports a cancelled
+// The sleep step wraps the injected sleep once for every adapter and reports a cancelled
 // context after the wait.
 func TestRestConnWiresSleep(t *testing.T) {
 	var slept []time.Duration
-	c := &CLI{Sleep: func(d time.Duration) { slept = append(slept, d) }, Conn: func(context.Context, string) (connections.Connection, string, error) {
+	c := restDeps{Sleep: func(d time.Duration) { slept = append(slept, d) }, Conn: func(context.Context, string) (connections.Connection, string, error) {
 		return connections.Connection{Name: "c", Kind: connections.KindLinear}, "s", nil
 	}}
 	_, _, wire, err := c.restConn(context.Background(), Settings{Connection: "c"}, linearSpec, "")
@@ -93,6 +96,15 @@ func TestRestConnWiresSleep(t *testing.T) {
 	}()
 	wire2(r)
 	if r.Sleep != nil {
-		t.Error("no CLI sleep must leave the REST default")
+		t.Error("no injected sleep must leave the REST default")
+	}
+}
+
+// Direct construction must refuse ambiguous Jira deployments just as config construction does.
+func TestNewJiraRefusesInvalidConnection(t *testing.T) {
+	c := connections.Connection{Name: "work", Kind: connections.KindJira, Site: "https://jira.example.com", User: "me"}
+	j, err := NewJira(c, "tok", "PROJ", "")
+	if j != nil || !IsKind(err, KindUnavailable) || !strings.Contains(fmt.Sprint(err), "--deployment") {
+		t.Fatalf("NewJira = %v, %v; want nil and unavailable deployment error", j, err)
 	}
 }

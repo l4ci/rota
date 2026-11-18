@@ -20,7 +20,10 @@ func fakeJira(t *testing.T, o jiratest.Options) (*Jira, *jiratest.Server) {
 	if s.Version() == 2 {
 		c.User, c.Deployment = "", connections.DeploymentDataCenter
 	}
-	j := NewJira(c, "tok", s.Project(), config.Label(nil, "notPlanned"))
+	j, err := NewJira(c, "tok", s.Project(), config.Label(nil, "notPlanned"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	j.rest.Sleep = func(context.Context, time.Duration) error { return nil }
 	return j, s
 }
@@ -73,7 +76,10 @@ func TestJiraClaimsArePlainComments(t *testing.T) {
 func TestJiraClaimRetryKeepsServerOrder(t *testing.T) {
 	ctx := context.Background()
 	a, s := fakeJira(t, jiratest.Options{})
-	b := NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", s.Project(), "")
+	b, err := NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", s.Project(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	key, err := a.Create(ctx, "raced", "", nil, "")
 	if err != nil {
 		t.Fatal(err)

@@ -56,12 +56,12 @@ var (
 const itsaplanFieldName = "rota"
 
 // newItsaplanTracker is NewIssueTracker for issues.source itsaplan.
-func newItsaplanTracker(ctx context.Context, c *CLI, s Settings) (*Itsaplan, error) {
+func newItsaplanTracker(ctx context.Context, d restDeps, s Settings) (*Itsaplan, error) {
 	missing := ""
 	if s.ItsaplanProject == "" {
 		missing = "issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)"
 	}
-	conn, secret, wire, err := c.restConn(ctx, s, itsaplanSpec, missing)
+	conn, secret, wire, err := d.restConn(ctx, s, itsaplanSpec, missing)
 	if err != nil {
 		return nil, err
 	}
