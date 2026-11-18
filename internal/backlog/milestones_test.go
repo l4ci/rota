@@ -421,3 +421,32 @@ func TestHighestMilestoneNumber(t *testing.T) {
 		t.Fatalf("highest of none = %d, want 0", got)
 	}
 }
+
+// MilestoneStatus reports changed for any write it makes, not only for a
+// status label that moved: here the label already reads active and only the
+// native milestone is closed, so the call reopens it and must say so.
+func TestMilestoneStatusChangedWhenOnlyNativeWritten(t *testing.T) {
+	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
+		{Key: tracker.NumKey(3), Title: "M01 — x", Labels: []string{"milestone-tracker", msStatusPrefix + "active"}, State: "open"},
+	}}, Native: []tracker.Milestone{{Number: 1, Title: "M01 — x", State: "closed"}}}
+	changed, err := msIssues(f).MilestoneStatus("M01", "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Native[0].State != "open" {
+		t.Fatalf("native not reopened: %+v", f.Native)
+	}
+	if !changed {
+		t.Error("changed = false although the native milestone was written")
+	}
+}
+
+// Nothing to write: label, issue, body and native milestone already agree.
+func TestMilestoneStatusUnchangedWhenNothingWritten(t *testing.T) {
+	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
+		{Key: tracker.NumKey(3), Title: "M01 — x", Labels: []string{"milestone-tracker", msStatusPrefix + "active"}, State: "open"},
+	}}, Native: []tracker.Milestone{{Number: 1, Title: "M01 — x", State: "open"}}}
+	if changed, err := msIssues(f).MilestoneStatus("M01", "active"); err != nil || changed {
+		t.Errorf("changed = %v, %v; want false", changed, err)
+	}
+}

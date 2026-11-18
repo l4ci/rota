@@ -313,7 +313,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	changed := msStatusOf(is) != status
+	changed := false
 	summary := ""
 	if status == "shipped" && (is.State != "closed" || is.StateReason != tracker.CloseCompleted) {
 		children, err := mt.List(b.ctx(), tracker.ListFilter{State: "closed", Milestone: is.Milestone})
@@ -341,11 +341,13 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return false, err
 		}
+		changed = true
 	}
 	if len(stale) > 0 {
 		if err := mt.RemoveLabels(b.ctx(), n, stale); err != nil {
 			return false, err
 		}
+		changed = true
 	}
 	text, block, order := ParseFieldsBlock(is.Body)
 	if newText, _ := frontmatter.UpdateField(text, "status", status); newText != text {
@@ -353,6 +355,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		if err := mt.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
 			return false, err
 		}
+		changed = true
 	}
 	want := nativeStateOf(status)
 	wantClosed := want == "closed"
@@ -365,11 +368,13 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 			return false, err
 		}
 		is.State = "open"
+		changed = true
 	}
 	if wantClosed && is.State == "open" {
 		if err := mt.Close(b.ctx(), n, reason, summary); err != nil {
 			return false, err
 		}
+		changed = true
 	}
 	nm, err := b.nativeMilestone(mt, mid, is)
 	if err != nil {
@@ -379,6 +384,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		if err := mt.EditMilestone(b.ctx(), nm.Number, tracker.MilestoneEdit{State: &want}); err != nil {
 			return false, err
 		}
+		changed = true
 	}
 	return changed, nil
 }
