@@ -14,7 +14,9 @@
 # test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
 # files, py_compile on the python ones, and the Python harness tests (test/py-tests.sh).
 # A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
-# (the piped grep -q lint), which scans all of them.
+# (the piped grep -q lint) and section 164 (printf into head), which scan all of
+# them. Each lint section declares its own trigger paths in a `# lint-trigger:`
+# line (#3771); fast.sh reads those tags rather than naming lints here.
 # A non-test .go file (or embed asset) in a package also runs every package that
 # imports it in production or tests, transitively (go list -test .Deps), so an
 # internal/fsio change runs dependents and the internal/cli goldens (#1303).
@@ -30,7 +32,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 go_all=0
 docs=0
 infra=0
-pipe_lint=0
 pkgs=()
 src_pkgs=()
 sections=()
@@ -104,9 +105,6 @@ for f in "$@"; do
   case "$f" in
     test/sections/*.sh) [ -f "$f" ] && sections+=("$f") ;;
   esac
-  case "$f" in
-    test/sections/*|test/lib.sh|test/runner.sh) pipe_lint=1 ;;
-  esac
 done
 
 # Dependents of a changed source package: every package whose production or test
@@ -144,14 +142,22 @@ if [ "${#src_pkgs[@]}" -gt 0 ]; then
   fi
 fi
 
-# Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
-# change under those paths runs it (#459) instead of leaving it to the gate.
-if [ "$pipe_lint" = 1 ]; then
-  lint=test/sections/71_no_pipe_grep_q.sh
-  have=0
-  for s in ${sections[@]+"${sections[@]}"}; do [ "$s" = "$lint" ] && have=1; done
-  [ "$have" = 1 ] || sections+=("$lint")
-fi
+# Section lints declare their own triggers: a test/sections/*.sh file with a
+# `# lint-trigger: <glob>...` line runs whenever a changed file matches one glob
+# (71: piped grep -q, #459; 164: printf into head, #1242, #3771). A new lint
+# needs only its tag. Globs are read into an array so they are not expanded here.
+for lf in test/sections/*.sh; do
+  [ -f "$lf" ] || continue
+  read -r -a lint_globs <<<"$(sed -n 's/^# lint-trigger: //p' "$lf")" || true
+  [ "${#lint_globs[@]}" -gt 0 ] || continue
+  for f in "$@"; do
+    hit=0
+    for g in "${lint_globs[@]}"; do
+      case "$f" in $g) hit=1; break ;; esac
+    done
+    if [ "$hit" = 1 ]; then add_section "$(basename "$lf")"; break; fi
+  done
+done
 
 if [ "${FAST_DRY_RUN:-}" = 1 ]; then
   [ "$go_all" = 1 ] && echo "plan: go-all"

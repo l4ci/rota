@@ -1,4 +1,5 @@
 echo "no section reads a first line through a pipe into head under pipefail (#1242)"
+# lint-trigger: test/sections/*
 # `printf '%s\n' "$X" | head -1` exits 141 when head closes the pipe before printf has written
 # everything (output over one stdio buffer); the runner's set -eo pipefail then kills the shard
 # with no FAIL line. About 1 run in 1500 on an 8 KB payload, so a section that passes alone dies
