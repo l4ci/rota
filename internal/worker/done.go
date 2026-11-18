@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/stamp"
@@ -374,7 +375,7 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 		return mailErr
 	}
 	if changed {
-		LedgerDone(env, env.Ctx, dp.Accounts, req.PoolRoot, ledger.Entry{Issue: id, Slot: req.Slot, Account: snap.AccountFor(""), Harness: snap.Kind(), PR: snap.PR()})
+		LedgerDone(env, env.Ctx, dp.Accounts, req.PoolRoot, ledger.Entry{Issue: id, Slot: req.Slot, Account: snap.AccountFor(harness.Claude), Harness: snap.Kind(), PR: snap.PR()})
 	}
 	res.Changed = changed
 	return nil

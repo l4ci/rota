@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -502,5 +503,33 @@ func TestAccountsLoginReadsWithEnvClock(t *testing.T) {
 	acc := &Accounts{Login: kc, Env: Env{Now: func() time.Time { return later }}}
 	if why := acc.login().Problem(dir); why != "" || *reads != 1 {
 		t.Errorf("Problem = %q after %d Keychain reads, want usable through one read", why, *reads)
+	}
+}
+
+// Assign always picks from round.accounts, which are Claude accounts: on a
+// codex slot it still writes the Claude keys (account+configDir) and leaves the
+// codex home key alone, as it did before SetAccountFor existed.
+func TestAccountAssignOnACodexSlotWritesTheClaudeKeys(t *testing.T) {
+	b := newProject(t, acctConfig)
+	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
+	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.Raw().Set("kind", "codex") }); err != nil {
+		t.Fatal(err)
+	}
+	usage := usageDir(t)
+	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
+		if k == "ROTA_ACCOUNT_USAGE_DIR" {
+			return usage
+		}
+		return ""
+	}}}
+	if _, changed, err := acc.Assign(bg, b, "w1", "beta"); err != nil || !changed {
+		t.Fatalf("assign: changed=%v err=%v", changed, err)
+	}
+	s := LoadRegistryTolerant(b).Slot("w1")
+	if s.AccountFor(harness.Claude) != "beta" || s.ConfigDir() == "" || s.AccountFor(harness.Codex) != "" {
+		t.Fatalf("claude %q dir %q codex %q", s.AccountFor(harness.Claude), s.ConfigDir(), s.AccountFor(harness.Codex))
+	}
+	if _, changed, _ := acc.Assign(bg, b, "w1", "beta"); changed {
+		t.Error("same account again must report changed=false")
 	}
 }
