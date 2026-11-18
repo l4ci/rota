@@ -43,7 +43,7 @@ func (f *fakeHerdr) PaneRects(context.Context, string) (map[string]host.Rect, er
 }
 
 func (f *fakeHerdr) SplitInto(_ context.Context, pane, tab, target, dir string, keep float64) error {
-	f.log = append(f.log, fmt.Sprintf("pane move %s --tab %s --split %s --target-pane %s --ratio %s --no-focus", pane, tab, dir, target, host.FormatRatio(keep)))
+	f.log = append(f.log, fmt.Sprintf("pane move %s --tab %s --split %s --target-pane %s --ratio %g --no-focus", pane, tab, dir, target, keep))
 	f.tab[pane] = tab
 	return nil
 }
@@ -113,7 +113,7 @@ func TestSplitCommandSequence(t *testing.T) {
 			mv("p2", "down", "p1", "0.5"), mv("p4", "down", "p3", "0.5")},
 	}
 	// Three worker columns: the second pane keeps a third of the 60%.
-	cases[5][1] = mv("p3", "right", "p1", "0.3333")
+	cases[5][1] = mv("p3", "right", "p1", "0.3333333333333333")
 	for n, want := range cases {
 		f, panes, ws := round(n)
 		res, err := ToSplit(bg, f, state(t, f, panes, ws, ""))

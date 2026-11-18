@@ -46,9 +46,10 @@ func (d *runner) roundHost() host.Kind { return d.in.RoundHost }
 func (d *runner) host() Check {
 	if diagnose := host.CapabilitiesForKind(d.roundHost()).Diagnose; diagnose != nil {
 		h := diagnose(host.Probe{
-			Getenv: d.in.Getenv,
-			Dial:   d.in.Dial,
-			Look:   d.in.Look,
+			Getenv:         d.in.Getenv,
+			Dial:           d.in.Dial,
+			Look:           d.in.Look,
+			SupportedHerdr: d.in.SupportedHerdr,
 			Exec: func(_ context.Context, bin string, args []string) (host.Result, error) {
 				return d.in.Exec(d.ctx, bin, args, nil, d.in.Dir)
 			},

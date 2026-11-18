@@ -167,6 +167,9 @@ type Probe struct {
 	Look   func(name string) (string, bool)
 	Exec   func(ctx context.Context, bin string, args []string) (Result, error)
 	Dial   func(ctx context.Context, path string) (net.Conn, error)
+	// SupportedHerdr overrides the default version for callers that need a
+	// controlled probe (for example, doctor tests).
+	SupportedHerdr string
 }
 
 // HealthStatus is the outcome of a host's Diagnose.
@@ -247,14 +250,18 @@ func diagnoseCore(p Probe) Health {
 }
 
 func diagnoseHerdr(p Probe) Health {
-	want := SupportedHerdr + ".x"
+	supported := p.SupportedHerdr
+	if supported == "" {
+		supported = supportedHerdr
+	}
+	want := supported + ".x"
 	bin, ok := p.Look(Herdr.Binary())
 	if !ok {
 		return Health{HealthFail, "herdr not found on PATH", "install herdr " + want + " (https://herdr.dev)"}
 	}
 	r, err := p.Exec(context.Background(), bin, []string{"--version"})
 	out := strings.TrimSpace(r.Stdout + " " + r.Stderr)
-	v, verr := HerdrVersion(out)
+	v, verr := herdrVersion(out, supported)
 	if err != nil || r.ExitCode != 0 || v == "" {
 		return Health{HealthFail, "herdr version unreadable", "reinstall herdr " + want + " (https://herdr.dev)"}
 	}
