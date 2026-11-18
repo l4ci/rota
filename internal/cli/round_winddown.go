@@ -13,7 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/roundtick"
 )
 
 // The C3 verb `rota round wind-down`; the steps are round.Env.WindDown.
@@ -76,48 +75,17 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			board, _ = round.BoardOf(raw)
 		}
 		env := roundEnv(c, ctx, root)
-		// An autopilot watch must not assign or merge while the base is being
-		// re-verified; a kept lease lets it resume, a failed verify keeps it stopped.
-		var cd string
-		var rnd int
-		var priorStopped bool
-		var priorReason string
-		if d, ok := c.CommonDirOK(root); ok {
-			if l, _, err := c.deps().LeaseEnv().Read(d); err == nil {
-				cd, rnd = d, l.Round
-				ps := roundtick.LoadState(cd, rnd)
-				priorStopped, priorReason = ps.Stopped, ps.StoppedReason
-				_ = roundtick.SetStopped(cd, rnd, true)
-			}
-		}
 		res, err := env.WindDown(ctx, root, board, round.WindDownOpts{
 			NoVerify: *noVerify, Prune: *prune, Settings: set,
 		})
-		// The autopilot stays stopped from a red verify until a wind-down
-		// verifies green. A failed verify stops it whatever else went wrong; a
-		// call that did not verify (error before the verify, or --no-verify)
-		// restores what it found; a green verify with work still held resumes
-		// it; a finished round clears the state.
 		verifyRed := res.Verdict == round.VerdictVerifyFailed
-		if cd != "" {
-			switch {
-			case verifyRed:
-				_ = roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed)
-			case err != nil || (res.VerifySkipped && !res.Over()):
-				_ = roundtick.SetStop(cd, rnd, priorStopped, priorReason)
-			case !res.Over():
-				_ = roundtick.SetStopped(cd, rnd, false)
-			default:
-				roundtick.ClearState(cd)
-			}
-		}
 		stoppedLine := "autopilot\tstays stopped; fix the base, then run `rota round wind-down` again (plain `rota round watch` still works)"
 		// Warnings first: a refusal must not hide the buffered-hits fold command.
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
 		if err != nil {
-			if verifyRed && cd != "" {
+			if verifyRed && res.StopErr == nil {
 				c.Warn("%s", strings.Replace(stoppedLine, "\t", " ", 1))
 			}
 			return Result{}, err
@@ -147,7 +115,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("%s\t%s\t%s", s.Name, s.Outcome, dash(s.Issue)))
 		}
 		lines = append(lines, "verdict\t"+res.Verdict)
-		if verifyRed && cd != "" {
+		if verifyRed && res.StopErr == nil {
 			d.Set("autopilotStopped", true)
 			lines = append(lines, stoppedLine)
 		}

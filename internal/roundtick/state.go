@@ -96,5 +96,10 @@ func SetStop(commonDir string, round int, stopped bool, reason string) error {
 	return update(commonDir, round, func(s *State) { s.Stopped, s.StoppedReason = stopped, reason })
 }
 
-// ClearState removes the state when the round is over.
-func ClearState(commonDir string) { _ = os.Remove(statePath(commonDir)) }
+// ClearState removes the state when the round is over; a missing file is fine.
+func ClearState(commonDir string) error {
+	if err := os.Remove(statePath(commonDir)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

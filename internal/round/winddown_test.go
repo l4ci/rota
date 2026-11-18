@@ -426,3 +426,99 @@ func TestWindDownNamesFoldPerScopeBuffer(t *testing.T) {
 		t.Errorf("warnings = %v, want the sub-repo sidecar path to commit", res.Warnings)
 	}
 }
+
+// memStop is an in-memory AutopilotStop that records its writes.
+type memStop struct {
+	stopped, cleared bool
+	reason           string
+	failSet          error
+}
+
+func (m *memStop) Load(string, int) (bool, string) { return m.stopped, m.reason }
+func (m *memStop) Set(_ string, _ int, stopped bool, reason string) error {
+	if m.failSet != nil {
+		return m.failSet
+	}
+	m.stopped, m.reason = stopped, reason
+	return nil
+}
+func (m *memStop) Clear(string) error { m.cleared = true; m.stopped, m.reason = false, ""; return nil }
+
+func TestWindDownRedVerifyLeavesAutopilotStoppedWithReason(t *testing.T) {
+	f := newAssignFixture(t)
+	st := &memStop{}
+	f.env.Stop = st
+	f.verifyWith(t, `["exit 3"]`)
+	res, err := f.windDown(nil)
+	if err != nil || res.Verdict != VerdictVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !st.stopped || st.reason != StopVerifyFailed || st.cleared {
+		t.Errorf("red verify must leave the stop with its reason: %+v", st)
+	}
+}
+
+func TestWindDownGreenVerifyWithHeldWorkResumesAndKeepsState(t *testing.T) {
+	f := newAssignFixture(t)
+	st := &memStop{stopped: true, reason: StopVerifyFailed}
+	f.env.Stop = st
+	f.verifyWith(t, `["true"]`)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, ".worktrees", "ben", "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.windDown(nil)
+	if err != nil || !res.Retained {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if st.stopped || st.reason != "" || st.cleared {
+		t.Errorf("green verify with held work must resume without clearing: %+v", st)
+	}
+}
+
+func TestWindDownNoVerifyRestoresPriorStop(t *testing.T) {
+	f := newAssignFixture(t)
+	st := &memStop{stopped: true, reason: StopVerifyFailed}
+	f.env.Stop = st
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, ".worktrees", "ben", "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.windDown(func(o *WindDownOpts) { o.NoVerify = true }); err != nil {
+		t.Fatal(err)
+	}
+	if !st.stopped || st.reason != StopVerifyFailed {
+		t.Errorf("--no-verify must restore the prior stop: %+v", st)
+	}
+}
+
+func TestWindDownFinishedRoundClearsStopState(t *testing.T) {
+	f := newAssignFixture(t)
+	st := &memStop{}
+	f.env.Stop = st
+	f.verifyWith(t, `["true"]`)
+	if res, err := f.windDown(nil); err != nil || res.Verdict != VerdictClean {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !st.cleared {
+		t.Errorf("a finished round must clear the state: %+v", st)
+	}
+}
+
+func TestWindDownReportsStopWriteFailure(t *testing.T) {
+	f := newAssignFixture(t)
+	st := &memStop{failSet: errors.New("read-only common dir")}
+	f.env.Stop = st
+	f.verifyWith(t, `["exit 3"]`)
+	res, err := f.windDown(nil)
+	if err != nil || res.Verdict != VerdictVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if res.StopErr == nil || !strings.Contains(res.StopErr.Error(), "read-only common dir") {
+		t.Errorf("the stop write failure must be in the result: %v", res.StopErr)
+	}
+}
