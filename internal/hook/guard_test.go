@@ -422,6 +422,35 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 	}
 }
 
+func TestGuardAmbiguousArithmeticFallback(t *testing.T) {
+	cases := []struct {
+		line string
+		cwd  string
+	}{
+		{line: "echo $((true) | (git add -A))"},
+		{line: "echo $((true) && (git add -A))"},
+		{line: "echo $((:) && (git add -A))"},
+		{line: "echo $((true) && (git push --force origin main))"},
+		{line: "echo $( echo $((false) || (git reset --hard)) )", cwd: "/repo"},
+		{line: `"$((true) && (git add -A))"`},
+		{line: "`echo $((true) && (git add -A))`"},
+	}
+	for _, tc := range cases {
+		env := guardEnv()
+		if tc.cwd != "" {
+			env.Cwd = tc.cwd
+		}
+		if got := Guard(tc.line, env); got == "" {
+			t.Errorf("allowed ambiguous arithmetic command substitution %q", tc.line)
+		}
+	}
+	for _, line := range []string{"echo $((1+2))", "echo $(( (1+2)*3 ))"} {
+		if got := Guard(line, guardEnv()); got != "" {
+			t.Errorf("denied arithmetic expression %q: %s", line, got)
+		}
+	}
+}
+
 // A command substitution runs where its enclosing command runs, so it is judged
 // against the directory in effect at that point of the line (#3730).
 func TestGuardNestedArithmeticAndEscapedBackticks(t *testing.T) {
