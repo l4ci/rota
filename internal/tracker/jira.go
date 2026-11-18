@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/strutil"
 	"net/http"
@@ -672,9 +673,16 @@ func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComm
 				return "", err
 			}
 			for _, c := range comments {
-				if c.ID == id {
-					return c.Body, nil
+				if c.ID != id {
+					continue
 				}
+				// A rota comment's shown text is the visible part of the body kept
+				// in its properties: restoring that source avoids the lossy
+				// ADF-to-markdown round trip the listing went through.
+				if full, ok, err := j.loadState(ctx, key, id); err == nil && ok {
+					return shownText(full), nil
+				}
+				return c.Body, nil
 			}
 			return "", &Error{Kind: KindNotFound, Code: 1, Message: "Jira comment " + id + " not found"}
 		},
@@ -704,21 +712,37 @@ func (j *Jira) marked(key IssueKey, props map[string]json.RawMessage) markedComm
 			return j.rest.Do(ctx, "DELETE", p, nil, nil)
 		},
 		put: func(ctx context.Context, id, body string, replace bool) error {
-			old := 0
+			old, prev, ok := 0, "", false
 			if replace {
 				var err error
 				if old, err = j.stateParts(ctx, key, id); err != nil {
 					return err
 				}
+				// No write while the old state cannot be read: a failed write could
+				// not be undone, and clearing blind would lose the stored body.
+				if prev, ok, err = j.loadState(ctx, key, id); err != nil {
+					return err
+				}
 			}
-			return j.putState(ctx, key, id, body, old)
+			return j.restoreOnFail(ctx, key, id, prev, ok, max(old, len(chunks(body))), func() error {
+				return j.putState(ctx, key, id, body, old)
+			})
 		},
 		drop: func(ctx context.Context, id string) error {
 			old, err := j.stateParts(ctx, key, id)
+			if err != nil || old == 0 {
+				return err
+			}
+			prev, ok, err := j.loadState(ctx, key, id)
 			if err != nil {
 				return err
 			}
-			return j.dropState(ctx, key, id, 0, old)
+			return j.restoreOnFail(ctx, key, id, prev, ok, old, func() error {
+				return j.dropState(ctx, key, id, 0, old)
+			})
+		},
+		rollbackFailed: func(id string, putErr, removeErr error) error {
+			return failed("%v; deleting the half-made comment %s on %s also failed (%v): delete it in Jira", putErr, id, key, removeErr)
 		},
 		stored: func(id string) (string, bool) { return stateBody(props, id) },
 	}
@@ -774,6 +798,58 @@ func (j *Jira) putState(ctx context.Context, key IssueKey, id, body string, old 
 		}
 	}
 	return j.dropState(ctx, key, id, len(parts), old)
+}
+
+// partsOf is how many properties a stored body spans; 0 for none.
+func partsOf(body string, ok bool) int {
+	if !ok {
+		return 0
+	}
+	return len(chunks(body))
+}
+
+// loadState reads the full body stored for comment id; ok is false when none is.
+// A head whose later parts are missing or unreadable is reported as an error:
+// state that cannot be restored must not be overwritten blind.
+func (j *Jira) loadState(ctx context.Context, key IssueKey, id string) (string, bool, error) {
+	n, err := j.stateParts(ctx, key, id)
+	if err != nil || n == 0 {
+		return "", false, err
+	}
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		p, _ := j.path(key, "/properties/"+url.PathEscape(commentProp(id, i)))
+		var got struct {
+			Value propPart `json:"value"`
+		}
+		if err := j.rest.Do(ctx, "GET", p, nil, &got); err != nil {
+			return "", false, err
+		}
+		b.WriteString(got.Value.Body)
+	}
+	return b.String(), true, nil
+}
+
+// restoreOnFail runs a multi-property change; when it fails part-way the
+// properties are put back to prev (or cleared when none was stored), so a
+// failed write leaves the old state whole instead of a torn mix. written is
+// how many parts the change may have touched; a restore that fails too is
+// reported with the original error.
+func (j *Jira) restoreOnFail(ctx context.Context, key IssueKey, id, prev string, had bool, written int, change func() error) error {
+	err := change()
+	if err == nil {
+		return nil
+	}
+	var rerr error
+	if had {
+		rerr = j.putState(ctx, key, id, prev, max(written, partsOf(prev, had)))
+	} else {
+		rerr = j.dropState(ctx, key, id, 0, written)
+	}
+	if rerr != nil {
+		return errors.Join(err, fmt.Errorf("restoring the stored state of comment %s also failed: %w", id, rerr))
+	}
+	return err
 }
 
 // stateParts is how many properties the comment's state spans; 0 for none.
