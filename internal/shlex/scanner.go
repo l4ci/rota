@@ -164,12 +164,14 @@ func (sc *Scanner) collectInner(text string) error {
 }
 
 // Substitution consumes `$(...)` at the cursor and records its body; `$((...))`
-// arithmetic is consumed and only the substitutions inside it are recorded.
-// Parentheses inside quotes do not count.
+// arithmetic is consumed and only the substitutions inside it are recorded,
+// unless the arithmetic opener closes before the final `))`. Parentheses
+// inside quotes do not count.
 func (sc *Scanner) Substitution() error {
 	arith := sc.Peek(2) == '('
 	start := sc.I + 2
 	depth, j := 1, start
+	arithOpenClose := -1
 	for j < len(sc.S) && depth > 0 {
 		switch sc.S[j] {
 		case '\\':
@@ -187,6 +189,12 @@ func (sc *Scanner) Substitution() error {
 		case '(':
 			depth++
 		case ')':
+			if arith && depth == 2 && arithOpenClose == -1 {
+				// This closes the parenthesis immediately after `$(`. Bash
+				// treats the body as command substitution if it closes before
+				// the final two closing parentheses.
+				arithOpenClose = j
+			}
 			depth--
 		}
 		j++
@@ -195,8 +203,13 @@ func (sc *Scanner) Substitution() error {
 		return ErrUnbalanced
 	}
 	if arith {
-		if err := sc.collectInner(sc.S[start : j-1]); err != nil {
-			return err
+		body := sc.S[start : j-1]
+		if arithOpenClose != j-2 {
+			sc.Nested = append(sc.Nested, body)
+		} else {
+			if err := sc.collectInner(body); err != nil {
+				return err
+			}
 		}
 	} else {
 		sc.Nested = append(sc.Nested, sc.S[start:j-1])
