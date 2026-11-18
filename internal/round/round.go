@@ -98,9 +98,9 @@ type Env struct {
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
-	// Capture reads a pane when the harness can distinguish an internal tool
+	// ReadPane reads a pane when the harness can distinguish an internal tool
 	// wait from the host's blocked status. Nil leaves the snapshot unchanged.
-	Capture func(ctx context.Context, slot, handle string, lines int) string
+	ReadPane func(ctx context.Context, slot, handle string, lines int) (string, error)
 	// FollowTab renames a slot's agent for the tab its pane moved to; nil
 	// where the host has no such name (tmux).
 	FollowTab func(ctx context.Context, slot, from, to string) error
@@ -547,8 +547,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			// An internal tool wait can look blocked to the host. Only
 			// harnesses with that vocabulary need a pane read; ordinary
 			// snapshots and other harnesses keep their existing state.
-			if r.HostState == "blocked" && e.Capture != nil && worker.ReadsWaitPane(r.Kind) {
-				pane := e.Capture(ctx, r.Name, agents[i].Handle(), 60)
+			if r.HostState == "blocked" && e.ReadPane != nil && worker.ReadsWaitPane(r.Kind) {
+				pane, _ := e.ReadPane(ctx, r.Name, agents[i].Handle(), 60)
 				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState); st == worker.StateBusy {
 					r.HostState, r.Evidence = "working", ev
 				}
@@ -811,8 +811,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		// is the last turn's, unless the pane shows this turn finished.
 		if r.State == "" && alive[r.Name] && worker.NativeDoneIsStale(slotObj[r.Name], r.HostState) {
 			done := false
-			if e.Capture != nil {
-				st, _ := worker.ClassifyFor(r.Kind, e.Capture(ctx, r.Name, r.Tab, 60), false, 60, r.HostState)
+			if e.ReadPane != nil {
+				pane, _ := e.ReadPane(ctx, r.Name, r.Tab, 60)
+				st, _ := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState)
 				done = st == worker.StateDone
 			}
 			if !done {

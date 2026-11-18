@@ -36,13 +36,13 @@ type waitHost struct {
 	onCapture func(slot string)
 }
 
-func (h *waitHost) Capture(_ context.Context, slot, _ string, _ int) string {
+func (h *waitHost) ReadPane(_ context.Context, slot, _ string, _ int) (string, error) {
 	if h.onCapture != nil {
 		h.onCapture(slot)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.text[slot]
+	return h.text[slot], nil
 }
 
 func (h *waitHost) Status(_ context.Context, slot, _ string) string {

@@ -729,13 +729,10 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 	return rows, settling, slept
 }
 
-// readPane captures a slot's pane. err says the read failed, which is not the
-// same as a pane with no text. A host that cannot tell reads as readable.
+// readPane reads a slot's pane. err says the read failed, which is not the
+// same as a pane with no text.
 func readPane(ctx context.Context, h host.Host, t pollTarget, lines int) (text string, err error) {
-	if r := h.Capabilities().PaneReader; r != nil && t.handle != "" {
-		return r.ReadPane(ctx, t.name, t.handle, lines)
-	}
-	return h.Capture(ctx, t.name, t.handle, lines), nil
+	return h.ReadPane(ctx, t.name, t.handle, lines)
 }
 
 // withReadFailure folds a failed pane read into the host's native status. A

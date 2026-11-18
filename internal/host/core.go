@@ -468,7 +468,22 @@ func (h *coreHost) terminal(ctx context.Context, s string) (coreHandle, *coreCon
 	}
 	return v, c, t, nil
 }
+
+// coreMissing says Core answered not_found: the terminal no longer exists.
+func coreMissing(e error) bool {
+	var rpc *coreRPCError
+	return errors.As(e, &rpc) && rpc.Data.Kind == "not_found"
+}
+
+// ReadPane maps Core's not_found to ErrPaneGone, as every backend does.
 func (h *coreHost) ReadPane(ctx context.Context, slot, s string, lines int) (string, error) {
+	text, e := h.readPane(ctx, s, lines)
+	if coreMissing(e) {
+		e = fmt.Errorf("%w: %w", ErrPaneGone, e)
+	}
+	return text, e
+}
+func (h *coreHost) readPane(ctx context.Context, s string, lines int) (string, error) {
 	v, c, t, e := h.terminal(ctx, s)
 	if e != nil {
 		return "", e
@@ -480,10 +495,6 @@ func (h *coreHost) ReadPane(ctx context.Context, slot, s string, lines int) (str
 	var r struct{ Text string }
 	e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": max(0, lines)}, &r)
 	return r.Text, e
-}
-func (h *coreHost) Capture(ctx context.Context, slot, s string, lines int) string {
-	v, _ := h.ReadPane(ctx, slot, s, lines)
-	return v
 }
 func (h *coreHost) Status(ctx context.Context, slot, s string) string {
 	if s == "" {
@@ -861,8 +872,7 @@ func (h *coreHost) Kill(ctx context.Context, slot, s string) error {
 	}
 	var t coreTerminal
 	e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t)
-	var rpc *coreRPCError
-	missing := errors.As(e, &rpc) && rpc.Data.Kind == "not_found"
+	missing := coreMissing(e)
 	if e != nil && !missing {
 		c.Close()
 		return e

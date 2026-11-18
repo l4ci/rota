@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// D3 (#67): the pane-addressed side of a host. Host.Send and Host.Capture are
+// D3 (#67): the pane-addressed side of a host. Host.Send and Host.ReadPane are
 // slot-addressed; the usage-limit watcher also needs the orchestrator's own
 // pane, which is no slot, so it speaks in pane ids: a herdr pane id
 // (`w1:p3`, from HERDR_PANE_ID or an agent's pane_id) or a tmux target (a
@@ -191,10 +191,8 @@ func (t *tmux) PaneOf(ctx context.Context, slot, handle string) string { return 
 // CapturePane captures the visible pane with soft wraps joined; lines is
 // unused, as in Capture.
 func (t *tmux) CapturePane(ctx context.Context, pane string, lines int) string {
-	if pane == "" {
-		return ""
-	}
-	return t.pane(ctx, pane)
+	text, _ := t.ReadPane(ctx, "", pane, lines)
+	return text
 }
 
 // SendPane types the text literally and presses enter.

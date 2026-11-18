@@ -40,11 +40,11 @@ func TestStatusCodexTerminalWait(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				e.Capture = func(context.Context, string, string, int) string { return string(pane) }
+				e.ReadPane = func(context.Context, string, string, int) (string, error) { return string(pane), nil }
 			} else if c.name != "capture unavailable" {
-				e.Capture = func(context.Context, string, string, int) string {
+				e.ReadPane = func(context.Context, string, string, int) (string, error) {
 					t.Fatal("snapshot-only status must not read this pane")
-					return ""
+					return "", nil
 				}
 			}
 			rep, err := e.Status(context.Background(), root)

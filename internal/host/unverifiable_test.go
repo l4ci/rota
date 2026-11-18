@@ -35,12 +35,7 @@ func TestReadPaneReportsFailureApartFromEmptyText(t *testing.T) {
 		ok := &fake{handler: func(string, []string) Result { return Result{} }}
 		bad := &fake{handler: func(string, []string) Result { return Result{ExitCode: 1, Stderr: "boom"} }}
 		for name, f := range map[string]*fake{"empty": ok, "failing": bad} {
-			r := New(kind, deps(f, herdrEnv, &clock{})).Capabilities().PaneReader
-			if r == nil {
-				t.Errorf("%s host has no ReadPane", kind)
-				continue
-			}
-			text, err := r.ReadPane(bg, "w1", "rota:w1", 40)
+			text, err := New(kind, deps(f, herdrEnv, &clock{})).ReadPane(bg, "w1", "rota:w1", 40)
 			if (err != nil) != (name == "failing") || strings.TrimSpace(text) != "" {
 				t.Errorf("%s %s: ReadPane = %q, %v", kind, name, text, err)
 			}
@@ -59,7 +54,7 @@ func TestTmuxReadPaneTellsAGonePaneFromAnUnreadableOne(t *testing.T) {
 		"capture-pane: out of memory":                                            false,
 	} {
 		f := &fake{handler: func(string, []string) Result { return Result{ExitCode: 1, Stderr: stderr} }}
-		_, err := New(Tmux, deps(f, nil, &clock{})).Capabilities().PaneReader.ReadPane(bg, "w1", "rota:w1", 40)
+		_, err := New(Tmux, deps(f, nil, &clock{})).ReadPane(bg, "w1", "rota:w1", 40)
 		if err == nil || errors.Is(err, ErrPaneGone) != gone {
 			t.Errorf("%q: err = %v, want gone=%v", stderr, err, gone)
 		}

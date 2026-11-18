@@ -184,8 +184,8 @@ func TestRoundWaitNudgesToAssignBeforeGating(t *testing.T) {
 // doneHost's pane ends on the worker's done sentinel with a PR URL.
 type doneHost struct{ cliHost }
 
-func (h *doneHost) Capture(context.Context, string, string, int) string {
-	return "ROTA-DONE w1 https://github.com/o/r/pull/11\n"
+func (h *doneHost) ReadPane(context.Context, string, string, int) (string, error) {
+	return "ROTA-DONE w1 https://github.com/o/r/pull/11\n", nil
 }
 
 func (h *doneHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }

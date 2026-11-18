@@ -224,11 +224,6 @@ func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, 
 	return p, nil
 }
 
-func (o *orca) Capture(ctx context.Context, s, h string, n int) string {
-	p, _ := o.ReadPane(ctx, s, h, n)
-	return p
-}
-
 func (o *orca) Status(context.Context, string, string) string { return "" }
 
 func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {

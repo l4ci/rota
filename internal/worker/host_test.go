@@ -75,14 +75,14 @@ func (f *fakeHost) Send(_ context.Context, slot, handle, file string) error {
 	}
 	return f.sendErr
 }
-func (f *fakeHost) Capture(_ context.Context, slot, handle string, _ int) string {
+func (f *fakeHost) ReadPane(_ context.Context, slot, handle string, _ int) (string, error) {
 	f.calls = append(f.calls, "capture "+slot)
 	q := f.panes[slot]
 	if len(q) == 0 {
-		return ""
+		return "", nil
 	}
 	f.panes[slot] = q[1:]
-	return q[0]
+	return q[0], nil
 }
 func (f *fakeHost) Status(_ context.Context, slot, handle string) string {
 	f.statusPolls++

@@ -73,9 +73,9 @@ type movingHost struct {
 	n int
 }
 
-func (h *movingHost) Capture(context.Context, string, string, int) string {
+func (h *movingHost) ReadPane(context.Context, string, string, int) (string, error) {
 	h.n++
-	return string(rune('a' + h.n%26))
+	return string(rune('a' + h.n%26)), nil
 }
 
 func (h *movingHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
