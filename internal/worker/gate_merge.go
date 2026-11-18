@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
@@ -40,32 +41,51 @@ func (runner gateRun) stepMerge(result landing.GateResult, target GateTarget, fo
 		if g.mergeRemote() {
 			return finish(true, nil)
 		}
-	} else if done := g.mergeLocal(g.root); done {
-		return finish(true, nil)
+	} else {
+		var done bool
+		g.landed, done = g.mergeLocal(g.root)
+		if done {
+			return finish(true, nil)
+		}
 	}
 	g.res.Changed = true
-	if !g.remote {
-		g.landed, _ = g.git(g.root, "rev-parse", "HEAD")
+	if g.remote {
+		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", "HEAD")
+	} else {
+		g.res.SHA = strutil.ShortSHA(g.landed)
 	}
-	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", "HEAD")
 	return finish(false, nil)
 }
 
 // mergeLocal merges the verified head into the base checked out in dir: the
 // gate checkout, or a scratch tree. done is true when it ends the gate with a
 // verdict.
-func (g *gateRun) mergeLocal(dir string) (done bool) {
+func (g *gateRun) mergeLocal(dir string) (sha string, done bool) {
 	run := func(args ...string) (git.Result, error) { return g.e.Git(g.ctx, dir, args...) }
-	err := land.MergeLocal(run, g.verified, land.MergeSubject(g.branch, g.o.Base), land.RecoveryGit(g.ctx, g.e.Git, dir))
+	base := g.o.Base
+	if dir != g.root {
+		base = "scratch tree"
+	}
+	sha, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(g.ctx, g.e.Git, dir)},
+		land.LocalRequest{Head: g.verified, Base: base, Message: land.MergeSubject(g.branch, g.o.Base)})
 	if err == nil {
-		return false
+		return sha, false
+	}
+	var post *land.PostMergeError
+	if errors.As(err, &post) {
+		if dir == g.root {
+			g.res.Changed = true
+			g.res.SHA = strutil.ShortSHA(sha)
+		}
+		g.broke(err.Error())
+		return sha, true
 	}
 	msg, hint := land.Classify(err).Refusal(land.Words{
 		Failed:   fmt.Sprintf("error: merge of %s into %s failed", g.branch, g.o.Base),
 		Conflict: fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base),
 	})
 	g.verdict(landing.GateMergeFailed, msg, hint)
-	return true
+	return sha, true
 }
 
 // noteMergedRemotely marks the result when the forge says the PR is merged: a

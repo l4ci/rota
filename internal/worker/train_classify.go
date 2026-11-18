@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
 	"regexp"
@@ -59,7 +60,11 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 		for _, i := range members {
 			m := res.Members[i]
 			run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-			if err := land.MergeLocal(run, p.heads[i], land.TrainSubject(m.Branch, t.o.Base), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
+			if _, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
+				land.LocalRequest{Head: p.heads[i], Base: "scratch tree", Message: land.TrainSubject(m.Branch, t.o.Base)}); err != nil {
+				if errors.As(err, new(*land.PostMergeError)) {
+					return false, false, err
+				}
 				if ctx.Err() != nil {
 					return false, false, ctx.Err()
 				}

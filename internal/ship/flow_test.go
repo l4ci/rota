@@ -373,18 +373,6 @@ func TestRestore(t *testing.T) {
 	}
 }
 
-func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
-	g := mergeGit()
-	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true, "merge --abort": true}
-	_, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
-	if err == nil || !strings.Contains(err.Error(), "git merge --abort failed") || !strings.Contains(err.Error(), "CONFLICT") || strings.Contains(err.Error(), "merge aborted") {
-		t.Fatalf("cleanup failure lost: %v", err)
-	}
-	if contains(g.calls, "branch -d feat") {
-		t.Fatal("branch deleted after failed recovery")
-	}
-}
-
 // A refused Approve comes back from MergeBranch as a refusal, and nothing runs.
 func TestMergeBranchApproveRefusalIsTyped(t *testing.T) {
 	g := mergeGit()

@@ -249,10 +249,10 @@ func (g *gateRun) verifyFirst(what string, check func(dir, sha string) (bool, er
 		return g.broke(err.Error())
 	}
 	defer cleanup()
-	if g.mergeLocal(dir) {
+	sha, done := g.mergeLocal(dir)
+	if done {
 		return true, nil
 	}
-	sha, _ := g.git(dir, "rev-parse", "HEAD")
 	tree, _ := g.git(dir, "rev-parse", "HEAD^{tree}")
 	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
