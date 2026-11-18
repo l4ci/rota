@@ -14,7 +14,8 @@
 # test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
 # files, py_compile on the python ones, and the Python harness tests (test/py-tests.sh).
 # A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
-# (the piped grep -q lint), which scans all of them.
+# (the piped grep -q lint), which scans all of them; a change under test/sections/
+# also runs section 164 (the printf-into-head lint, #3771).
 # A non-test .go file (or embed asset) in a package also runs every package that
 # imports it in production or tests, transitively (go list -test .Deps), so an
 # internal/fsio change runs dependents and the internal/cli goldens (#1303).
@@ -31,6 +32,7 @@ go_all=0
 docs=0
 infra=0
 pipe_lint=0
+section_lint=0
 pkgs=()
 src_pkgs=()
 sections=()
@@ -107,6 +109,9 @@ for f in "$@"; do
   case "$f" in
     test/sections/*|test/lib.sh|test/runner.sh) pipe_lint=1 ;;
   esac
+  case "$f" in
+    test/sections/*) section_lint=1 ;;
+  esac
 done
 
 # Dependents of a changed source package: every package whose production or test
@@ -147,10 +152,12 @@ fi
 # Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
 # change under those paths runs it (#459) instead of leaving it to the gate.
 if [ "$pipe_lint" = 1 ]; then
-  lint=test/sections/71_no_pipe_grep_q.sh
-  have=0
-  for s in ${sections[@]+"${sections[@]}"}; do [ "$s" = "$lint" ] && have=1; done
-  [ "$have" = 1 ] || sections+=("$lint")
+  add_section 71_no_pipe_grep_q.sh
+fi
+# Section 164 lints test/sections/*.sh for printf piped into head (#1242), so a
+# section change runs it here too rather than failing only at merge (#3771).
+if [ "$section_lint" = 1 ]; then
+  add_section 164_no_pipe_head_in_sections.sh
 fi
 
 if [ "${FAST_DRY_RUN:-}" = 1 ]; then
