@@ -34,6 +34,21 @@ const (
 	OutcomeOpen = "open"
 )
 
+// StopVerifyFailed is the autopilot stop reason a red wind-down verify leaves
+// behind: only a wind-down that verifies green clears it.
+const StopVerifyFailed = "verify-failed"
+
+// AutopilotStop is the autopilot's stop state for one round, held next to the
+// round lease. WindDown owns the protocol; the implementation only stores it.
+type AutopilotStop interface {
+	// Load returns the stop state stored for the round (zero when none).
+	Load(commonDir string, round int) (stopped bool, reason string)
+	// Set stops or resumes the round's autopilot, recording the reason.
+	Set(commonDir string, round int, stopped bool, reason string) error
+	// Clear removes the state of a finished round.
+	Clear(commonDir string) error
+}
+
 // WindDownOpts are the flags of `rota round wind-down`.
 type WindDownOpts struct {
 	NoVerify bool
@@ -62,6 +77,9 @@ type WoundDown struct {
 	Changed       bool
 	Warnings      []string
 	VerifyLog     string
+	// StopErr joins every autopilot stop-state write that failed: a red verify
+	// may then have left the autopilot running.
+	StopErr error
 }
 
 // Over reports whether the round is finished: the base verified green and no
@@ -91,6 +109,9 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
 	}
 	res.Round = lease.Round
+	// An autopilot watch must not assign or merge while the base is being
+	// re-verified: stop it first, and settle its state once the outcome is known.
+	defer e.stopAutopilot(cd, &res, &err)()
 
 	// What each slot held, before parking clears it.
 	before := map[string]SlotOutcome{}
@@ -285,6 +306,39 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	l := lease
 	res.Lease = &l
 	return res, nil
+}
+
+// stopAutopilot stops the round's autopilot for the verify and returns a
+// deferred settle on the caller (WindDown's named results): a failed verify
+// keeps it stopped whatever else went wrong; a call that did not verify (an
+// error, or --no-verify with work held) restores what it found; a green verify
+// with work still held resumes it; a finished round clears the state. Write
+// failures land in res.StopErr and Warnings, never silently.
+func (e Env) stopAutopilot(cd string, res *WoundDown, errp *error) (settle func()) {
+	if e.Stop == nil {
+		return func() {}
+	}
+	rnd := res.Round
+	priorStopped, priorReason := e.Stop.Load(cd, rnd)
+	fail := func(err error) {
+		if err != nil {
+			res.StopErr = errors.Join(res.StopErr, err)
+			res.Warnings = append(res.Warnings, "autopilot stop state not written: "+err.Error())
+		}
+	}
+	fail(e.Stop.Set(cd, rnd, true, ""))
+	return func() {
+		switch {
+		case res.Verdict == VerdictVerifyFailed:
+			fail(e.Stop.Set(cd, rnd, true, StopVerifyFailed))
+		case *errp != nil || (res.VerifySkipped && !res.Over()):
+			fail(e.Stop.Set(cd, rnd, priorStopped, priorReason))
+		case !res.Over():
+			fail(e.Stop.Set(cd, rnd, false, ""))
+		default:
+			fail(e.Stop.Clear(cd))
+		}
+	}
 }
 
 // requireBase refuses unless the project root is on the base with no tracked

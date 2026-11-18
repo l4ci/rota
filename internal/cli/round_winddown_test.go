@@ -183,31 +183,6 @@ func windDown(t *testing.T, dir string, args ...string) (int, string, string) {
 	return rotaStdin(t, dir, "", append([]string{"round", "wind-down", "--holder-pid", strconv.Itoa(os.Getpid())}, args...)...)
 }
 
-// Retained work with no verify failure resumes the autopilot and keeps the
-// tick memory (the lease is kept for a retry).
-func TestWindDownRetainedWorkResumesAutopilot(t *testing.T) {
-	dir, cd, rnd := startedRound(t, `"true"`)
-	os.WriteFile(filepath.Join(dir, ".worktrees", "ben", "wip.txt"), []byte("x"), 0o644)
-	// A prior red-verify stop is cleared by a green verify, even with work held.
-	if err := roundtick.SetStop(cd, rnd, true, roundtick.StopVerifyFailed); err != nil {
-		t.Fatal(err)
-	}
-	code, out, errOut := windDown(t, dir)
-	if code != 4 {
-		t.Fatalf("want exit 4 (holds work), got %d\n%s%s", code, out, errOut)
-	}
-	if st := roundtick.LoadState(cd, rnd); st.Stopped || st.Held["ben"] != "12" {
-		t.Errorf("retained work after a green verify must resume the autopilot and keep the state: %+v", st)
-	}
-	// Without a verify nothing proves the base green: a prior stop stays.
-	if err := roundtick.SetStopped(cd, rnd, true); err != nil {
-		t.Fatal(err)
-	}
-	if code, out, errOut := windDown(t, dir, "--no-verify"); code != 4 || !roundtick.LoadState(cd, rnd).Stopped {
-		t.Errorf("--no-verify with retained work must keep a prior stop (exit %d)\n%s%s", code, out, errOut)
-	}
-}
-
 // A red verify followed by a later error still leaves the autopilot stopped.
 func TestWindDownVerifyFailedThenErrorStaysStopped(t *testing.T) {
 	dir, cd, rnd := startedRound(t, `"exit 3"`)

@@ -118,6 +118,9 @@ type Env struct {
 	// BaseErr is why Base is unusable: git.baseBranch is set but does not
 	// resolve. The verbs that cut or compare against Base refuse on it.
 	BaseErr string
+	// Stop is the autopilot's stop state, which WindDown sets, restores or
+	// clears; nil leaves the autopilot alone.
+	Stop AutopilotStop
 	// Lease reads the orchestrator lease; the zero value is the real process
 	// table and host name.
 	Lease roundlease.Env
