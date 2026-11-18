@@ -112,15 +112,46 @@ func slotMilestoneBase(c *Ctx) string {
 	if slot == "" {
 		return ""
 	}
-	root, err := returnRoot(c, slot)
+	root, err := c.Root()
 	if err != nil {
 		return ""
 	}
-	s := worker.LoadRegistryTolerant(root).Slot(slot)
-	if s == nil || s.HomeBase() == "" {
-		return ""
+	_, base, _ := resolveSlotBase(c, root, "", slot)
+	return base
+}
+
+// resolveSlotBase finds the slot's registry and routed milestone base. Hooks
+// supply their resolved project and common dir so payload cwd stays authoritative;
+// other callers can leave commonDir empty. Registry errors remain strict here:
+// probes may ignore them, while return and registry commands propagate them.
+func resolveSlotBase(c *Ctx, root, commonDir, slot string) (string, string, error) {
+	if root == "" {
+		return root, "", nil
 	}
-	return s.Base()
+	poolRoot := root
+	for {
+		reg, err := worker.LoadRegistry(poolRoot)
+		if err != nil {
+			return root, "", err
+		}
+		if s := reg.Slot(slot); s != nil {
+			if s.HomeBase() != "" {
+				return poolRoot, s.Base(), nil
+			}
+			return poolRoot, "", nil
+		}
+		if poolRoot != root {
+			return root, "", nil
+		}
+		if commonDir == "" {
+			commonDir, _ = c.CommonDir(root)
+		}
+		main, ok := c.MainCheckoutOf(commonDir)
+		if !ok || main == root {
+			return root, "", nil
+		}
+		poolRoot = main
+	}
 }
 
 func gitBase(c *Ctx, args []string) (Result, error) {
