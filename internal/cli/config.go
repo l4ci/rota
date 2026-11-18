@@ -153,7 +153,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
 		rows, lines := showRows(entries)
-		annotateTierModels(c.deps().Config(root), entries, rows, lines)
+		annotateTierModels(c.projectConfig(root), entries, rows, lines)
 		return Result{Data: jsonx.Obj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -355,7 +355,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if err := config.CheckLayer(root, config.LayerLocal); err != nil {
 			return Result{}, configFail(err, exitmap.ConfigInternal)
 		}
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 		diag := config.Diagnose(c.deps().projectsEnv(), root, cfg)
 		status, missing := diag.Status, diag.Missing
 		data := jsonx.Obj("status", status, "upToDate", status == config.UpToDate, "missing", jsonx.Strings(missing))
