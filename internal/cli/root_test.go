@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -210,5 +211,31 @@ func TestCtxBackendModeLoadsConfigOnce(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("Config called %d times, want 1", calls)
+	}
+}
+
+// A verb that writes config must see the write through the memo afterwards:
+// init writes issues.source after preflight loaded the config, and its next
+// memo-backed read (milestone index) has to see it.
+func TestCtxMemoSeesConfigWrittenInVerb(t *testing.T) {
+	top, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(top, ".rota", "x"), "")
+	d := testDeps()
+	d.Getwd = func() (string, error) { return top, nil }
+	c := &Ctx{Deps: d}
+	if _, cfg, err := c.Project(); err != nil {
+		t.Fatal(err)
+	} else if _, set := config.Lookup(cfg, "issues.source"); set {
+		t.Fatal("fixture already sets issues.source")
+	}
+	if err := initIssueSource(c, top); err != nil {
+		t.Fatal(err)
+	}
+	_, cfg, err := c.Project()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, set := config.Lookup(cfg, "issues.source"); !set {
+		t.Error("memo-backed read after the write still misses issues.source")
 	}
 }

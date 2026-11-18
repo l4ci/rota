@@ -188,7 +188,9 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if layer == config.LayerLocal {
 				where = " (config.local.json, this machine only)"
 			}
-			if _, err := config.SetIn(dir, p.Key, v, layer); err != nil {
+			_, err := config.SetIn(dir, p.Key, v, layer)
+			c.configWritten()
+			if err != nil {
 				return Result{}, err
 			}
 			out.Set(p.Key, config.Coerce(v))

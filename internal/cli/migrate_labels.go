@@ -32,7 +32,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		if !issue {
 			return supportFileModeStop()
 		}
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 		support := roundcfg.SupportName(cfg)
 		if err := roundcfg.CheckMachineName(support, roundcfg.RoleMain); err != nil {
 			return blockedRefusal(nil, blockedby.Config, err.Error(), "set round.support before migrating labels")
@@ -85,6 +85,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		}
 		if *apply && merr == nil {
 			removed, e := config.Unset(root, "issues.labels.support", config.LayerProject)
+			c.configWritten()
 			if e != nil {
 				merr = e
 			}

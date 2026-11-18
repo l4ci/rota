@@ -218,7 +218,7 @@ func planNudges(c *Ctx, root string, ns []trainNudge) []trainNudge {
 func readyTrainNudges(c *Ctx, root string) []trainNudge {
 	// An invalid train key is refused as the tick refuses it; an unrelated
 	// invalid round key must not hide legacy nudges, so read only these keys.
-	fill, err := roundcfg.TrainFillFromConfig(c.deps().Config(root))
+	fill, err := roundcfg.TrainFillFromConfig(c.projectConfig(root))
 	if err != nil {
 		return nil
 	}
@@ -235,7 +235,7 @@ func readyTrainNudges(c *Ctx, root string) []trainNudge {
 // trainHoldingLines reads current progress without consuming changed-only
 // notices or running a tick. Status can show elapsed time while watch sleeps.
 func trainHoldingLines(c *Ctx, root string) []string {
-	fill, err := roundcfg.TrainFillFromConfig(c.deps().Config(root))
+	fill, err := roundcfg.TrainFillFromConfig(c.projectConfig(root))
 	if err != nil || !fill.Enabled() {
 		return nil
 	}
@@ -318,7 +318,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 
 func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	policy, _ := config.ReviewPolicyOf(cfg)
 	fill, _ := roundcfg.TrainFillFromConfig(cfg) // callers refuse a bad value before this
 	reviewOff := fill.Enabled() && policy.Default == config.DepthNone

@@ -251,7 +251,9 @@ func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	if v := c.deps().InstalledVersion(); v != "" {
 		stamped := config.StampedVersion(c.deps().Config(root))
 		if stamped != v && !config.LowersGatedStamp(stamped, v) {
-			if _, err := config.Set(root, config.VersionKey, v); err != nil {
+			_, err := config.Set(root, config.VersionKey, v)
+			c.configWritten()
+			if err != nil {
 				return r, err
 			}
 			r.stamped = v
@@ -324,5 +326,6 @@ func initIssueSource(c *Ctx, root string) error {
 		}
 	}
 	_, err := config.Set(root, "issues.source", source)
+	c.configWritten()
 	return err
 }
