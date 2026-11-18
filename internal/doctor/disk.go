@@ -63,14 +63,15 @@ func (d *runner) cacheDisk() (Check, bool) {
 // baseline, naming the keys (never their values). With no baseline yet it
 // lists the program-running and identity keys already set. Read-only.
 func (d *runner) repoConfig() (Check, bool) {
+	if err := d.in.RepoConfigErr; err != nil {
+		return Check{Name: "repo config", Status: Warn,
+			Detail: "repo-scope git config could not be checked: " + err.Error(),
+			Hint:   "run: git config --local --list; rota cannot compare it with the baseline"}, true
+	}
 	dr := d.in.RepoConfig
 	if dr == nil || dr.Clean() {
 		return Check{}, false
 	}
-	detail := "repo-scope git config changed since the baseline (" + dr.Summary() + ")"
-	if !dr.HasBaseline {
-		detail = "repo-scope git config has no baseline yet; risky keys present (" + dr.Summary() + ")"
-	}
-	return Check{Name: "repo config", Status: Warn, Detail: detail,
+	return Check{Name: "repo config", Status: Warn, Detail: dr.Message(),
 		Hint: "linked worktrees share .git/config: inspect with git config --local --list; keys such as core.hooksPath run programs in rota's git calls; the next round start records the baseline"}, true
 }

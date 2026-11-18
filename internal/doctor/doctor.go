@@ -169,6 +169,9 @@ type Input struct {
 	// RepoConfig is how the repo-scope git config differs from the baseline a
 	// round recorded; nil adds no line, as does a clean or missing baseline.
 	RepoConfig *repoconfig.Drift
+	// RepoConfigErr is set when the repo-scope config could not be checked; it
+	// adds a warning line in place of the drift.
+	RepoConfigErr error
 
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.

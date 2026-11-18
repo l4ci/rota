@@ -43,6 +43,15 @@ func (d Drift) Clean() bool {
 	return len(d.Added)+len(d.Changed)+len(d.Removed)+len(d.Risky) == 0
 }
 
+// Message is the one wording for drift, shared by doctor and round start. It
+// is for a non-Clean Drift only.
+func (d Drift) Message() string {
+	if !d.HasBaseline {
+		return "repo-scope git config has no baseline yet; risky keys present (" + d.Summary() + ")"
+	}
+	return "repo-scope git config changed since the baseline (" + d.Summary() + ")"
+}
+
 // Summary names the moved keys: "added: a, b; changed: c; removed: d".
 func (d Drift) Summary() string {
 	if len(d.Risky) > 0 {
