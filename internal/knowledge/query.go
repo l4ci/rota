@@ -51,6 +51,110 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		pairs = append(pairs, pair{f, t, rotatree.Rel(rotatree.KnowledgeDir, scope, rotatree.KnowledgeFile)})
 	}
 
+	// Each requested topic is rendered once, whatever the scope: empty and
+	// repeated requests (compared trimmed and case-folded) are dropped here.
+	topics = uniqueTopics(topics)
+	var ordered []queryTopic
+	matched := map[string]bool{}
+	if !hybrid {
+		content, err := ReadFile(pairs[0].file)
+		if err != nil {
+			return "", nil, err
+		}
+		if !fileExists(pairs[0].file) {
+			// No file: no output and no warnings.
+			return "", nil, nil
+		}
+		all := section.Topics(content)
+		names := headingNames(all)
+		wanted := map[string]bool{}
+		for _, t := range topics {
+			hit := topicmatch.Headings(t, names)
+			for _, n := range hit {
+				wanted[n] = true
+			}
+			if len(hit) > 0 {
+				matched[strings.ToLower(strings.TrimSpace(t))] = true
+			}
+		}
+		for _, t := range all {
+			if wanted[strings.ToLower(t.Name)] {
+				ordered = append(ordered, queryTopic{t.Name, []querySource{{t, pairs[0].tiers, ""}}})
+			}
+		}
+	} else {
+		contents := make([]string, len(pairs))
+		exists := make([]bool, len(pairs))
+		for i, p := range pairs {
+			exists[i] = fileExists(p.file)
+			if exists[i] {
+				if contents[i], err = ReadFile(p.file); err != nil {
+					return "", nil, err
+				}
+			}
+		}
+		var names []string
+		for i := range pairs {
+			if exists[i] {
+				names = append(names, headingNames(section.Topics(contents[i]))...)
+			}
+		}
+		done := map[string]bool{}
+		for _, w := range topics {
+			wl := strings.ToLower(strings.TrimSpace(w))
+			for _, hl := range topicmatch.Headings(w, names) {
+				matched[wl] = true
+				if done[hl] {
+					continue
+				}
+				done[hl] = true
+				var selected queryTopic
+				for i, p := range pairs {
+					if !exists[i] {
+						continue
+					}
+					for _, t := range section.Topics(contents[i]) {
+						if strings.ToLower(t.Name) != hl {
+							continue
+						}
+						if selected.name == "" {
+							selected.name = t.Name
+						}
+						selected.sources = append(selected.sources, querySource{t, p.tiers, p.label})
+						break
+					}
+				}
+				ordered = append(ordered, selected)
+			}
+		}
+	}
+
+	for _, orig := range topics {
+		if !matched[strings.ToLower(strings.TrimSpace(orig))] {
+			missing = append(missing, orig)
+		}
+	}
+	text, err = renderQuery(ordered, o)
+	if err != nil {
+		return "", nil, err
+	}
+	return text, missing, nil
+}
+
+// The selectors own ordering and file scope; rendering owns headers, source
+// labels and tier filtering, including matched topics with empty bodies.
+type queryTopic struct {
+	name    string
+	sources []querySource
+}
+
+type querySource struct {
+	topic section.Topic
+	tiers *Sidecar
+	label string
+}
+
+func renderQuery(topics []queryTopic, o QueryOpts) (string, error) {
 	filter := func(body, name string, tiers *Sidecar) ([]string, error) {
 		var out []string
 		for _, line := range pystr.Splitlines(body) {
@@ -81,114 +185,24 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 		return out, nil
 	}
 
-	// Each requested topic is rendered once, whatever the scope: empty and
-	// repeated requests (compared trimmed and case-folded) are dropped here.
-	topics = uniqueTopics(topics)
 	var b strings.Builder
-	matched := map[string]bool{}
-	if !hybrid {
-		content, err := ReadFile(pairs[0].file)
-		if err != nil {
-			return "", nil, err
+	for i, topic := range topics {
+		if i > 0 {
+			b.WriteString("\n")
 		}
-		if !fileExists(pairs[0].file) {
-			// No file: no output and no warnings.
-			return "", nil, nil
-		}
-		all := section.Topics(content)
-		names := headingNames(all)
-		wanted := map[string]bool{}
-		for _, t := range topics {
-			hit := topicmatch.Headings(t, names)
-			for _, n := range hit {
-				wanted[n] = true
-			}
-			if len(hit) > 0 {
-				matched[strings.ToLower(strings.TrimSpace(t))] = true
-			}
-		}
-		first := true
-		for _, t := range all {
-			if !wanted[strings.ToLower(t.Name)] {
-				continue
-			}
-			if !first {
-				b.WriteString("\n")
-			}
-			b.WriteString("## " + t.Name + "\n")
-			lines, err := filter(t.Body, t.Name, pairs[0].tiers)
+		b.WriteString("## " + topic.name + "\n")
+		for _, source := range topic.sources {
+			lines, err := filter(source.topic.Body, source.topic.Name, source.tiers)
 			if err != nil {
-				return "", nil, err
+				return "", err
+			}
+			if source.label != "" {
+				b.WriteString("> from: " + source.label + "\n")
 			}
 			b.WriteString(strings.TrimRight(strings.Join(lines, "\n"), " \t\n\r\f\v") + "\n")
-			first = false
-		}
-	} else {
-		contents := make([]string, len(pairs))
-		exists := make([]bool, len(pairs))
-		for i, p := range pairs {
-			exists[i] = fileExists(p.file)
-			if exists[i] {
-				if contents[i], err = ReadFile(p.file); err != nil {
-					return "", nil, err
-				}
-			}
-		}
-		var names []string
-		for i := range pairs {
-			if exists[i] {
-				names = append(names, headingNames(section.Topics(contents[i]))...)
-			}
-		}
-		first := true
-		done := map[string]bool{}
-		for _, w := range topics {
-			wl := strings.ToLower(strings.TrimSpace(w))
-			for _, hl := range topicmatch.Headings(w, names) {
-				matched[wl] = true
-				if done[hl] {
-					continue
-				}
-				done[hl] = true
-				printed := false
-				for i, p := range pairs {
-					if !exists[i] {
-						continue
-					}
-					for _, t := range section.Topics(contents[i]) {
-						if strings.ToLower(t.Name) != hl {
-							continue
-						}
-						lines, err := filter(t.Body, t.Name, p.tiers)
-						if err != nil {
-							return "", nil, err
-						}
-						if len(lines) == 0 {
-							break
-						}
-						if !printed {
-							if !first {
-								b.WriteString("\n")
-							}
-							b.WriteString("## " + t.Name + "\n")
-							first = false
-							printed = true
-						}
-						b.WriteString("> from: " + p.label + "\n")
-						b.WriteString(strings.TrimRight(strings.Join(lines, "\n"), " \t\n\r\f\v") + "\n")
-						break
-					}
-				}
-			}
 		}
 	}
-
-	for _, orig := range topics {
-		if !matched[strings.ToLower(strings.TrimSpace(orig))] {
-			missing = append(missing, orig)
-		}
-	}
-	return b.String(), missing, nil
+	return b.String(), nil
 }
 
 // uniqueTopics drops empty requests and repeats of one (trimmed, case-folded),

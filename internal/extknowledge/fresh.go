@@ -137,25 +137,19 @@ func (c Clone) Freshen(ctx context.Context) string {
 }
 
 func (c Clone) freshen(ctx context.Context) string {
-	if c.fresh() || !c.hasRemote(ctx) {
+	if c.fresh() {
 		return ""
 	}
-	if _, err := c.out(ctx, "fetch", "--quiet"); err != nil {
-		return "reading stale copy: " + err.Error()
-	}
-	c.stamp()
-	ahead, behind, ok := c.divergence(ctx)
-	if !ok || behind == 0 {
-		return ""
-	}
-	if ahead > 0 {
+	r := c.fetchAndFastForward(ctx, false)
+	switch r.problem {
+	case refreshOffline:
+		return "reading stale copy: " + r.err.Error()
+	case refreshDiverged:
 		return "clone has diverged from its remote; not touching it, reading as-is"
-	}
-	if d, err := c.dirty(ctx); err != nil || d {
+	case refreshDirty:
 		return "clone has uncommitted changes and the remote is ahead; not fast-forwarding, reading as-is"
-	}
-	if _, err := c.out(ctx, "merge", "--ff-only", "--quiet", "@{u}"); err != nil {
-		return "fast-forward failed, reading as-is: " + err.Error()
+	case refreshMergeFailed:
+		return "fast-forward failed, reading as-is: " + r.err.Error()
 	}
 	return ""
 }
@@ -171,20 +165,56 @@ func (c Clone) syncForWrite(ctx context.Context) error {
 	if d {
 		return fmt.Errorf("%w: commit or discard them in %s first", ErrDirty, c.Dir)
 	}
+	r := c.fetchAndFastForward(ctx, true)
+	switch r.problem {
+	case refreshOffline:
+		return fmt.Errorf("%w: %v", ErrOffline, r.err)
+	case refreshDiverged:
+		return fmt.Errorf("%w: reconcile %s by hand first", ErrDiverged, c.Dir)
+	}
+	return r.err
+}
+
+type refreshProblem uint8
+
+const (
+	refreshOK refreshProblem = iota
+	refreshOffline
+	refreshDiverged
+	refreshDirty
+	refreshMergeFailed
+)
+
+type refreshResult struct {
+	problem refreshProblem
+	err     error
+}
+
+// fetchAndFastForward owns the remote update sequence. A write has already
+// checked cleanliness before fetching; a read checks only when it would move
+// HEAD. The caller owns the checkout reservation and maps facts to its policy.
+func (c Clone) fetchAndFastForward(ctx context.Context, cleanChecked bool) refreshResult {
 	if !c.hasRemote(ctx) {
-		return nil
+		return refreshResult{}
 	}
 	if _, err := c.out(ctx, "fetch", "--quiet"); err != nil {
-		return fmt.Errorf("%w: %v", ErrOffline, err)
+		return refreshResult{refreshOffline, err}
 	}
 	c.stamp()
 	ahead, behind, ok := c.divergence(ctx)
 	if !ok || behind == 0 {
-		return nil
+		return refreshResult{}
 	}
 	if ahead > 0 {
-		return fmt.Errorf("%w: reconcile %s by hand first", ErrDiverged, c.Dir)
+		return refreshResult{problem: refreshDiverged}
 	}
-	_, err = c.out(ctx, "merge", "--ff-only", "--quiet", "@{u}")
-	return err
+	if !cleanChecked {
+		if d, err := c.dirty(ctx); err != nil || d {
+			return refreshResult{refreshDirty, err}
+		}
+	}
+	if _, err := c.out(ctx, "merge", "--ff-only", "--quiet", "@{u}"); err != nil {
+		return refreshResult{refreshMergeFailed, err}
+	}
+	return refreshResult{}
 }
