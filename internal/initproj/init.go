@@ -54,13 +54,13 @@ var seedFiles = []struct {
 	name, text string
 	required   bool
 }{
-	{"DECISIONS.md", decisionsSeed, true},
+	{rotatree.DecisionsFile, decisionsSeed, true},
 	{rotatree.BacklogFile, backlogSeed, true},
-	{"KNOWLEDGE.md", knowledgeSeed, true},
-	{"MILESTONES.md", milestonesSeed, true},
+	{rotatree.KnowledgeFile, knowledgeSeed, true},
+	{rotatree.MilestonesFile, milestonesSeed, true},
 	{rotatree.CountersFile, countersSeed, true},
-	{"config.json", "", true}, // text is drawn per project: see configSeed
-	{"status.json", statusSeed, true},
+	{rotatree.ConfigFile, "", true}, // text is drawn per project: see configSeed
+	{rotatree.StatusFile, statusSeed, true},
 	{"MAP.md", mapSeed, false},
 	{rotatree.ReposFile, reposSeed, false},
 }
@@ -93,13 +93,13 @@ func initWith(root string, perm func(int) []int) (Result, error) {
 
 	for _, f := range seedFiles {
 		text := f.text
-		if f.name == "config.json" {
+		if f.name == rotatree.ConfigFile {
 			text = configSeed(pickRoster(perm)) // used only when the file is absent
 		}
 		if err := seedFile(filepath.Join(rota, f.name), text); err != nil {
 			return res, err
 		}
-		if f.name == "MILESTONES.md" {
+		if f.name == rotatree.MilestonesFile {
 			if err := step(migrateMilestonesHeading(filepath.Join(rota, f.name))); err != nil {
 				return res, err
 			}
