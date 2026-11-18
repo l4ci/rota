@@ -7,6 +7,16 @@ With two or more reviewed PRs waiting, merge them as one train, the default; a s
 **Choosing the train.** A train needs the same base, a fresh review at each exact head and the focused passes that PR calls for. Beyond those, you assess three things yourself: behavioral overlap (two PRs can touch different files and still change the same behavior), dependencies between members, and test stability (a member that edits or leans on a test `rota test flakes` ranks). Prefer small, low-risk batches over the largest conflict-free set; a red seven-PR train costs seven re-verifies. `round.trainMax` bounds only the train the nudge proposes and the autopilot builds. An explicit `rota worker train` with more PRs is allowed; record the rationale for exceeding it (a line in your round notes or the PR thread). After repeated red trains, or when `rota test flakes` shows a known flake in the checks, stop repeating the broad train and land the PRs with sequential `rota worker gate` runs.
 
 
+**Batch landing through an integration branch.** Land through `rota worker train <PR>... --base <branch> --integration <name>` when the batch should be verified and reviewed as one PR instead of merged member by member: the maintainer wants a look at the combined result, or members interact and need a fix commit. It lands nothing on the base: it merges each reviewed member `--no-ff` into `integration/r<round>-<name>`, pushes it and opens one PR to the base with a `Closes #N` per member. The flag cannot go with `--plan`, `--land-green` or `--on-fail stop` (`--on-fail stop` ends a plain train at the first red, with no re-run and no bisect; an integration train has no culprit to name, so it refuses all three). Steps, from [`docs/usage/parallel-rounds.md`](../../docs/usage/parallel-rounds.md) (*Integration branch*):
+
+1. Train the reviewed PRs into the branch: `rota worker train 41 42 43 --base main --integration ui`.
+2. On an `interaction` verdict, assign the item it filed (`INTERACTION-ITEM <id>`): `rota round assign <id>`.
+3. Land that fix PR into the branch: `rota worker gate <slot> --base integration/r<round>-ui` (no review of its own, `REVIEW-DEFERRED`).
+4. Run the same train command again: it skips merged members, merges the base, verifies the tip and opens (or updates) the one PR to `main`.
+5. Review the fix commits: `rota review package integration/r<round>-ui`, then `/rota-review` on it.
+6. Land everything with `rota worker gate <PR> --base main`, never the merge button.
+
+
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths):
 
 - **Unattended:** pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, once however often you re-gate; `data.escalation.id` names it. Note the id against the slot and keep working other slots. `rota ship merge` has no thread and keeps `--confirm`.

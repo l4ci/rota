@@ -1,5 +1,7 @@
 # Pausing an orchestrator
 
+**After `wind-down`** (the round-boundary handoff `/rota-orchestrate` ends with) the lease is already released and every slot parked, so there is no round to leave running. Skip the Slots, Review queue and lease lines and record in the note: the next slate (`rota round candidates` picks), open maintainer questions, and anything not merged (PRs still open, retained slots, drift left for `rota round reconcile`). The next session resumes through `rota round start --consume-handoff`.
+
 Workers keep running after the session ends. A pause records the round and leaves it running; it never winds down (`rota round wind-down` re-verifies, parks every slot and releases the lease: the end of a round), merges, reclaims or reassigns.
 
 1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the next session must decide the slate.

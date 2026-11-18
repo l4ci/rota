@@ -133,6 +133,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.StaleClaims, in.StaleClaimWarnings, in.Labels = scan.StaleClaims, scan.Warnings, scan.Labels
 	}
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
+	if fill, err := roundcfg.TrainFillFromConfig(cfg); err == nil {
+		in.TrainMax, in.TrainFillMinutes = fill.Max, fill.Minutes
+	}
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
 		in.SmokeShards, in.SmokeShardsSource = worker.SmokeShards(d.Getenv("ROTA_SMOKE_SHARDS"), runtime.NumCPU())

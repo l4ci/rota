@@ -1546,6 +1546,8 @@ parked anyway, so fix the slot and run it again. It deletes no branch and clears
 `drift` count says what `rota round reconcile` and `rota reap` still have to do. After a round, run
 `rota reap` ([doctor and reap](doctor-and-reap.md)).
 
+The orchestrator then runs `/rota-pause` to record the next slate, open maintainer questions and anything not merged, and the maintainer continues in a fresh session, which reads the note through `rota round start --consume-handoff`.
+
 ## Solo mode
 
 `rota round start` resolves the round's host once and records it in `.rota/workers.json`. With

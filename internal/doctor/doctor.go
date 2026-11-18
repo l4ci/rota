@@ -178,6 +178,10 @@ type Input struct {
 	// local verify, so the merge gate would refuse; false adds no line.
 	NothingToVerify bool
 
+	// TrainMax and TrainFillMinutes are round.trainMax and
+	// round.trainFillMinutes; trainFill warns on a count with no age.
+	TrainMax, TrainFillMinutes int
+
 	// TestSlots is test.slots, the width of the test lock; 0 (no project)
 	// skips the test line. SmokeShards is the shard count test/gate.sh would
 	// use on this machine, SmokeShardsSource what decided it.
@@ -261,6 +265,7 @@ func (d *runner) checkTable() []checkEntry {
 		{"repo config", optional(d.repoConfig), false},
 		{"stale binary", optional(d.staleBinary), false},
 		{"verify", optional(d.verify), false},
+		{"train fill", optional(d.trainFill), false},
 		{"test lock", optional(d.testLock), false},
 		{"state dir", optional(d.stateDir), false},
 	}
