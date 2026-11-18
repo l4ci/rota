@@ -912,10 +912,7 @@ func (b *Issues) SetSection(ref, name, content string) (bool, error) {
 	if strings.EqualFold(name, "acceptance") {
 		text, _ = acceptance.Number(text)
 	}
-	if rest != "" {
-		text = strings.TrimRight(text, "\n") + "\n\n"
-	}
-	body := text + rest
+	body := marker.JoinFields(text, rest)
 	if is.Body == body {
 		return false, nil
 	}

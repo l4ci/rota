@@ -258,7 +258,7 @@ func joinProps(text string, props map[string]json.RawMessage) string {
 	if raw, ok := props[propFields]; !ok || json.Unmarshal(raw, &f) != nil {
 		return text
 	}
-	return joinBody(text, f.Block)
+	return marker.JoinFields(text, f.Block)
 }
 
 type jiraProperty struct {
@@ -382,7 +382,7 @@ func (j *Jira) Create(ctx context.Context, title, body string, labels []string, 
 	if err != nil {
 		return "", err
 	}
-	text, fields := splitBody(body)
+	text, fields := fieldsForBody(body)
 	f := map[string]any{"project": map[string]string{"key": j.project}, "summary": title,
 		"issuetype": map[string]string{"id": typ}, "labels": uniqOrEmpty(labels)}
 	if text != "" {
@@ -432,7 +432,7 @@ func (j *Jira) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		f["summary"] = *e.Title
 	}
 	if e.Body != nil {
-		text, fields := splitBody(*e.Body)
+		text, fields := fieldsForBody(*e.Body)
 		f["description"] = nil
 		if text != "" {
 			f["description"] = j.wire(text)

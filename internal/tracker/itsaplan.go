@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -290,7 +291,7 @@ func (t *Itsaplan) norm(m *itsaplanMeta, d itsaplanIssue) Issue {
 	body := d.Description
 	if f := m.field(); f != nil {
 		if block, ok := d.fieldValue(f.ID); ok {
-			body = joinBody(body, block)
+			body = marker.JoinFields(body, block)
 		}
 	}
 	key := strutil.FirstNonEmpty(d.Identifier, t.project+"-"+strconv.Itoa(d.SequenceNumber))
