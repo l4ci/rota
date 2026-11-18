@@ -1195,3 +1195,16 @@ func TestPortsContainmentResolvesSymlinks(t *testing.T) {
 		t.Errorf("ports line = %+v, want none: the cwd is inside the symlinked worktree", c)
 	}
 }
+
+// The check must stay in the registered table, not only exist as a method.
+func TestRunReportsTrainFill(t *testing.T) {
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	rep := Run(context.Background(), Input{Exec: f.exec, Look: f.look, TrainMax: 3})
+	if c := statusOf(rep, "train fill"); c.Status != Warn {
+		t.Errorf("train fill = %+v, want warn", c)
+	}
+	rep = Run(context.Background(), Input{Exec: f.exec, Look: f.look, TrainMax: 3, TrainFillMinutes: 20})
+	if c := statusOf(rep, "train fill"); c.Name != "" {
+		t.Errorf("train fill = %+v, want no line", c)
+	}
+}

@@ -1,6 +1,6 @@
 ---
 name: rota-pause
-description: Use when the session is approaching a context limit, the work must be handed off, a long /rota-work cycle should stop cleanly, or an orchestrator must stop mid-round.
+description: Use when the session is approaching a context limit, the work must be handed off, a long /rota-work cycle should stop cleanly, an orchestrator must stop mid-round, or an orchestrator has just wound a round down.
 ---
 
 # rota-pause — Graceful Session Pause
@@ -18,7 +18,7 @@ description: Use when the session is approaching a context limit, the work must 
 - Work complete → `/rota-ship`
 - You can finish in this session
 - No active branch, no `/rota-work` running and no round
-- Round finished → `rota round wind-down`
+- Round finished → `rota round wind-down`, then `/rota-pause` for the handoff
 
 Copy this checklist and track your progress:
 ```
@@ -32,7 +32,7 @@ Copy this checklist and track your progress:
 
 ## Step 1 — Is a Round Running?
 
-Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If in flight, read [`orchestrator-pause.md`](orchestrator-pause.md) and follow it; Steps 2-5 do not apply (the orchestrator sits on the base branch). Otherwise continue with Step 2.
+Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round, except when you are the orchestrator that has just run `rota round wind-down` (the lease was released by it): that is the round-boundary handoff, so treat it as in flight whatever the slots and review list say. If in flight or just wound down, read [`orchestrator-pause.md`](orchestrator-pause.md) and follow it; Steps 2-5 do not apply (the orchestrator sits on the base branch). Otherwise continue with Step 2.
 
 ## Step 2 — Resolve the Pause Set
 
@@ -111,7 +111,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 
 ## References
 
-- [`orchestrator-pause.md`](orchestrator-pause.md): pausing an orchestrator mid-round; read from Step 1 when a round is in flight.
+- [`orchestrator-pause.md`](orchestrator-pause.md): pausing an orchestrator, mid-round or just after `wind-down`; read from Step 1 when a round is in flight or was just wound down.
 - [`umbrella-wave.md`](umbrella-wave.md): multi-repo wave pauses; read from Steps 2 and 4.
 - [`session-report.md`](session-report.md): `--report` session report; read from Step 4.
 - [`references/task-ledger.md`](references/task-ledger.md): `Task:` commit trailer; read for the handoff note's Stage and Next planned step.
