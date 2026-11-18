@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // syncBuf is a bytes.Buffer safe to read while a waiter writes it.
@@ -224,6 +227,34 @@ func TestTestLockDropsKilledWaiterTicket(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("waiter stuck behind a cancelled ticket")
+	}
+}
+
+// A waiter that died before leave() leaves its ticket file behind with no flock
+// on it. The next waiter must treat that ticket as stale, drop it and run.
+func TestTestLockRunsPastStaleTicket(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	common, err := rotastate.CommonDirVia(bg, env.Git, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := rotastate.File(common, "test-queue")
+	if err := os.MkdirAll(queue, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(queue, "000000000001"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(bg, 5*time.Second)
+	defer cancel()
+	entered := false
+	err = env.WithTestLock(ctx, repo, 1, "test run", &syncBuf{}, func() error { entered = true; return nil })
+	if err != nil {
+		t.Fatalf("waiter behind a stale ticket: %v; want it to run", err)
+	}
+	if !entered {
+		t.Fatal("waiter returned without running fn")
 	}
 }
 
