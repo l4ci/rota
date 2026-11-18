@@ -5,11 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/postgate"
 )
 
 func TestLandingAdapterEndsLandedItem(t *testing.T) {
 	w := newWorld(t, "")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	// A local branch is enough to exercise the real gate and registry bookkeeping.
 	if _, err := UpdateSlot(w.dir, "w1", func(s *Slot) { s.SetTask("12") }); err != nil {
 		t.Fatal(err)
