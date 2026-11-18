@@ -97,3 +97,23 @@ func TestAdapterForRefusesUnknownProvider(t *testing.T) {
 		}
 	}
 }
+
+// The cli sites that name kinds read the registry: key-addressed issues for
+// every own source, and the own-tracker migrate target for itsaplan only.
+func TestOwnSourceHelpers(t *testing.T) {
+	for _, k := range OwnKinds() {
+		if !IsOwnSource(k.Source) {
+			t.Errorf("IsOwnSource(%q) = false for a registered kind", k.Source)
+		}
+	}
+	for _, src := range []string{config.SourceFile, config.SourceGitHub, config.SourceGitLab, config.SourceForge, config.SourceIssues} {
+		if IsOwnSource(src) || MigratesToOwnTracker(src) {
+			t.Errorf("%q is not an own kind", src)
+		}
+	}
+	for src, want := range map[string]bool{config.SourceJira: false, config.SourceLinear: false, config.SourceItsaplan: true} {
+		if MigratesToOwnTracker(src) != want {
+			t.Errorf("MigratesToOwnTracker(%q) = %v, want %v", src, !want, want)
+		}
+	}
+}
