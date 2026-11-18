@@ -330,3 +330,56 @@ func TestWorkerGateIntegrationReplaysUnsettledCleanup(t *testing.T) {
 		t.Fatalf("a settled landing replays nothing: %+v %v", res, err)
 	}
 }
+
+// A refs renewal commit is rota's own: the review recorded at the fix before
+// it stays the approval, and no review is asked for the renewal (#3686). The
+// fix keeps the depth at light, so the exemption is what lets the gate pass.
+func TestIntegrationRefsRenewalIsNotAFixCommit(t *testing.T) {
+	w := reviewWorld(t)
+	integrationPR(t, w)
+	w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"],"refs":["mkdir -p refs && echo new > refs/a.png"],"refsPattern":"^refs/.*\\.png$"}}`)
+	fix := w.pushFix("fix.txt")
+	w.record(intBranch, fix, verdict.ReviewSpec, verdict.Look)
+	if res, err := w.refs(); err != nil || res.Verdict != RefsRenewed {
+		t.Fatalf("renew: %+v %v", res, err)
+	}
+	w.pointPR9()
+	res, err := w.gateCheck("9")
+	if err != nil || !res.OK() {
+		t.Fatalf("a refs renewal commit after a reviewed fix must not need a review: %+v %v", res, err)
+	}
+	// A real fix after the renewal still does.
+	w.pushFix("fix2.txt")
+	w.pointPR9()
+	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+		t.Fatalf("a fix after the renewal slipped through: %+v", res)
+	}
+}
+
+// The refusal for a real fix names each missing verdict kind, never an empty one.
+func TestIntegrationReviewMissingNamesKinds(t *testing.T) {
+	w := reviewWorld(t)
+	integrationPR(t, w)
+	w.pushFix("fix.txt")
+	w.pointPR9()
+	res, err := w.gateCheck("9")
+	if err != nil || res.Verdict != GateReviewMissing {
+		t.Fatalf("an unreviewed fix must refuse: %+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "needs a recorded review-spec verdict") || strings.Contains(res.Err, "  ") {
+		t.Errorf("the refusal must name the missing kinds without a blank one: %q", res.Err)
+	}
+}
+
+// At depth none there is nothing to review: a fix commit neither refuses nor
+// asks for a verdict.
+func TestIntegrationDepthNoneFixAsksForNoVerdict(t *testing.T) {
+	w := reviewWorld(t)
+	integrationPR(t, w)
+	w.pushFix("notes.md")
+	w.pointPR9()
+	res, err := w.gateCheck("9")
+	if err != nil || strings.Contains(res.Err, "needs a recorded") {
+		t.Fatalf("depth none must not ask for a verdict: %+v %v", res, err)
+	}
+}
