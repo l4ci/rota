@@ -1,5 +1,66 @@
 # Changelog
 
+## v0.36.0 — 2026-11-18
+
+A safer merge gate and worker guard, `rota round switch`, and a large cleanup of round, gate and tracker internals.
+
+### New
+
+- `rota round switch` moves a slot that hit a usage limit to another account or harness in place: it checkpoints, pushes and relaunches the worker. It refuses before the checkpoint when the move cannot work. If the relaunch fails after the checkpoint, the pushed checkpoint and the new account stay; rerun `rota round switch <slot> --account <new-account>` to resume.
+- Integration trains accept `--on-fail stop` and `--no-verify`.
+- The round summary reports full verifications and gate refusals.
+
+### Fixed
+
+- **Worker guard.** It now catches destructive git commands hidden in `$((…` bodies that Bash runs as command substitutions. It also reads the arguments of unknown programs, checks every `rg --pre`, and judges nested substitutions in the directory where they run. Prose flags of rota's own verbs no longer trigger false denials.
+- **Merge gate and landing.**
+  - The gate and the autopilot tick share one blocking rule.
+  - A gate whose head cannot be resolved now refuses instead of judging verdicts against an empty head.
+  - Local landing now has one owner across ship, gate, train, integration and stacks, and a failed post-merge read-back stops the gate instead of passing as success.
+  - A red train re-runs once before it bisects.
+  - A gate refusal lists every missing record at once.
+- **Tracker comments.** An edited Jira or Linear comment is restored when its out-of-band store write fails. A Jira write whose old stored body cannot be read is refused instead of deleting that body.
+- **Config.** Verbs read root and config through one cached lookup. `rota init` and `setup` drop that cache after writing config, so they no longer act on a stale `issues.source`.
+- **Hooks.** SessionStart handoffs use the configured base again. Expired session state and its lock are swept together, and hit-buffer claims are rename-only.
+- **Locks.** Lock sidecars are kept instead of unlinked, which closes a race where a newcomer could lock a fresh inode.
+- **Other fixes.**
+  - `round adopt` patterns are validated in one place.
+  - Reap fails closed on a missing live-status report.
+  - Landed slices release their claims.
+  - Test-lock waiters are served in arrival order.
+
+### Changed
+
+- The merge gate (`internal/worker/gate.go`, about 2,700 lines) is split by stage around one run type. Gate and train result types moved to a new `internal/landing` package, and postgate no longer imports worker.
+- Forge capabilities (`ClosingRefs`, `PRSetBody`) are declared once on `tracker.Forge`. Tracker REST dependencies are injected, and pane reading, dialog text and relay-delivery evidence each have one owner across host backends.
+- Tests that touch config must import `internal/testiso` (enforced), and host-environment scrubbing has one source.
+- Many test-only and dead exports were removed. The bullet grammars, the fields block and the symlink guard each have one implementation.
+
+### Output and exit-code changes
+
+- New JSON fields:
+  - gate results and train culprits: `gaps`
+  - `skills files`: `pairs` (its text output is now tab-separated path and source)
+  - `hook install`: `guardReachesWorkers`
+  - `round start`: `testAudit`
+  - worker refusals: `blockedBy: "round worker"`
+- `skills status` reports `unavailable: ["codex"]` when the Codex home is unknown.
+- `doctor` warns when `round.trainMax` is set and `round.trainFillMinutes` is 0.
+- Read failures now exit 70 instead of passing silently:
+  - `backlog drift` when its history walk fails
+  - `summary` when KNOWLEDGE, DECISIONS or ARCHIVE cannot be read
+  - an unreadable file-backed item detail
+- A failed local post-merge read-back is now `check-broke` (exit 1), not a pass.
+- Test-lock acquisition can exit 6 after a 30-second queue-guard timeout.
+- With Claude skill roots available and `HOME` unset, all-agent skill commands continue instead of exiting 3.
+- Hook state seeds the nested `orchestratorHandoff` and `guardHandoff` records from the legacy top-level handoff counters, then writes only the nested form. Tools that read the hook state file directly should read the nested records.
+
+### Stats
+
+144 commits, 589 files changed, +17,929 −8,217 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.35.1...v0.36.0
+
 ## v0.35.1 — 2026-11-17
 
 Worker-guard hardening, read errors that no longer vanish, and the round 62 cleanup sweep.
