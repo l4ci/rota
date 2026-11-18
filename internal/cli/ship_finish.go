@@ -30,8 +30,8 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		if len(args) > 1 {
 			return Result{}, Usage("ship finish takes at most one branch")
 		}
-		if c.deps().Getenv("ROTA_SLOT") != "" {
-			return shipBlocked(blockedby.RoundWorker, "ship finish is the maintainer's bookkeeping: a round worker (ROTA_SLOT set) does not run it")
+		if c.WorkerSlot() != "" {
+			return workerRefusal("ship finish is the maintainer's bookkeeping: a round worker (ROTA_SLOT set) does not run it", "")
 		}
 		dir, err := gitDir(c)
 		if err != nil {

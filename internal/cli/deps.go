@@ -294,6 +294,12 @@ func (d *Deps) Toplevel(ctx context.Context) string {
 	return strings.TrimSpace(res.Stdout)
 }
 
+// WorkerSlot is the round slot this process runs as: the ROTA_SLOT the
+// dispatcher exports into a worker's session, empty for the maintainer, the
+// orchestrator and any solo session. Every "am I a round worker" question goes
+// through it, so the rule has one definition.
+func (c *Ctx) WorkerSlot() string { return c.deps().Getenv("ROTA_SLOT") }
+
 // deps is the invocation's dependencies. A Ctx built by hand, without run,
 // gets the real ones.
 func (c *Ctx) deps() *Deps {

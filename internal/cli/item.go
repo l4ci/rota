@@ -963,8 +963,8 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		}
 		if *kind == "relay" {
 			// A relay is the orchestrator's word: a worker (ROTA_SLOT set) never posts one.
-			if c.deps().Getenv("ROTA_SLOT") != "" {
-				return Result{}, Refused("--kind relay is the orchestrator's: a worker slot (ROTA_SLOT set) cannot post one")
+			if c.WorkerSlot() != "" {
+				return workerRefusal("--kind relay is the orchestrator's: a worker slot (ROTA_SLOT set) cannot post one", "")
 			}
 			n := *relayRound
 			if n < 0 {

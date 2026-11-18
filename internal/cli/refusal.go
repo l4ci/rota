@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/verdict"
@@ -12,6 +13,13 @@ import (
 // changed false, with the message and hint on the error.
 func blockedRefusal(d *jsonx.Object, by, msg, hint string, extra ...any) (Result, error) {
 	return Result{Data: blockedData(d, by, extra...)}, Refused("%s", msg).WithHint(hint)
+}
+
+// workerRefusal is the exit-4 refusal of a verb that is not a round worker's
+// to run: blockedBy "round worker", changed false, reason as the message. The
+// one spelling every worker-slot refusal uses.
+func workerRefusal(reason, hint string) (Result, error) {
+	return blockedRefusal(nil, blockedby.RoundWorker, reason, hint)
 }
 
 // blockedRefusalErr is blockedRefusal for an error already built (its exit,
