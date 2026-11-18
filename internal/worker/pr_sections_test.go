@@ -173,3 +173,38 @@ func TestTrainPRSectionsPrecedesOtherChecks(t *testing.T) {
 		t.Fatalf("static section filter must precede provenance: %+v %v", res, err)
 	}
 }
+
+// A member the section prefilter drops lists every record gap the full gate
+// check finds, in the order `rota worker gate` lists them, not only the sections.
+func TestTrainPRSectionsSkipListsEveryGap(t *testing.T) {
+	w, e := sectionTrainWorld(t, []string{completePRSections, "Closes #5\n", completePRSections})
+	reg, err := os.ReadFile(RegistryPath(w.dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := strings.Replace(string(reg), `"name":"w2"`, `"name":"w2","outcome":{"kind":"partial","summary":["a","b","c"]}`, 1)
+	if patched == string(reg) {
+		t.Fatal("registry has no w2 slot to patch")
+	}
+	if err := os.WriteFile(RegistryPath(w.dir), []byte(patched), 0644); err != nil {
+		t.Fatal(err)
+	}
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}})
+	if err != nil || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" {
+		t.Fatalf("w2 must be skipped alone: %+v %v", res, err)
+	}
+	c := res.Culprits[0]
+	if got := gapKinds(c.Gate); strings.Join(got, ",") != GateOutcomeOpen+","+GateAssumptionsMissing {
+		t.Fatalf("culprit gaps = %v, want outcome-open then assumptions-missing", got)
+	}
+	var skip string
+	for _, n := range res.Notes {
+		if strings.HasPrefix(n, "TRAIN-SKIP w2") {
+			skip = n
+		}
+	}
+	if !strings.Contains(skip, "partial") && !strings.Contains(skip, "outcome") || !strings.Contains(skip, "## Assumptions") {
+		t.Errorf("skip note must name every gap: %q", skip)
+	}
+}
