@@ -39,14 +39,14 @@ rota prompts list
 repo: none
 data: {"sections": [View]}, where View is {"name": string, "revision": int, "status": "default"|"unchanged"|"changed"|"removed", "baseline": string, "baselineDigest": string, "default": string, "template": string, "override": string|null, "effective": string, "history": [{"revision": int, "baseline": string, "baselineDigest": string, "override": string|null}]}
 exit: 1 when `.rota/prompts.json` (or `.rota`, or its lock) is malformed, a symlink or holds a stored override that fails template validation
-note: read-only. Lists the catalog sections (`agents.explorer.report`, `agents.implementer.report`, `agents.reasoner.report`) plus any saved section this binary no longer has (`removed`). `revision` 0 is never saved. `baseline` is the expanded built-in text the latest revision was saved against (the current default when never saved); `default` and `template` are the current built-in, expanded and raw; `effective` is what `rota agents write` renders (empty for `removed`). A null `override` records an adoption; such a section follows the default and reports `unchanged` whatever the default became. `changed` means the default moved since an override's baseline.
+note: read-only. Lists the catalog sections (`agents.explorer.report`, `agents.implementer.report`, `agents.reasoner.report`) plus any saved section this binary no longer has (`removed`). `revision` 0 is never saved. `baseline` is the expanded built-in text the latest revision was saved against (the current default when never saved); `default` and `template` are the current built-in, expanded and raw; `effective` is the expanded reporting section (empty for `removed`). Agent instructions wrap that section with the fixed role duty and quotation rule. A null `override` records an adoption; such a section follows the default and reports `unchanged` whatever the default became. `changed` means the default moved since an override's baseline.
 
 ### rota prompts show
 rota prompts show <section>
 repo: none
 data: View (as `prompts list`)
 exit: 2 when the section is neither in the catalog nor saved; 1 as `prompts list`
-note: read-only. A removed section is still shown.
+note: read-only. A removed section is still shown. Deliberately returns a bare View in the standard JSON envelope's `data`; unlike save, adopt and restore, it does not wrap the View in `{section, changed}`. Text labels `effective` as the expanded reporting section.
 
 ### rota prompts save
 rota prompts save <section> --expect <n> --body-file <path|->
