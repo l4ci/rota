@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,13 +33,13 @@ func TestGateClosesEveryBundledIssue(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.missing == nil {
-				if res.Verdict != GateFresh {
+				if res.Verdict != landing.GateFresh {
 					t.Fatalf("verdict %q: %+v", res.Verdict, res)
 				}
 				return
 			}
-			if res.Verdict != GateNotClosing || res.Changed {
-				t.Fatalf("verdict %q, want %s: %+v", res.Verdict, GateNotClosing, res)
+			if res.Verdict != landing.GateNotClosing || res.Changed {
+				t.Fatalf("verdict %q, want %s: %+v", res.Verdict, landing.GateNotClosing, res)
 			}
 			if want := "does not close " + strings.Join(c.missing, ", ") + ","; !strings.Contains(res.Err, want) {
 				t.Errorf("message %q lacks %q", res.Err, want)
@@ -64,7 +65,7 @@ func TestGateClosesSkipsAClosedMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != GateFresh {
+	if res.Verdict != landing.GateFresh {
 		t.Fatalf("verdict %q: %+v", res.Verdict, res)
 	}
 }
@@ -74,9 +75,9 @@ func TestGateClosesAfterBundleLeadPromotion(t *testing.T) {
 		for _, tc := range []struct {
 			name, body, verdict, missing string
 		}{
-			{"remaining only", "Closes #6\nCloses #7\n", GateFresh, ""},
-			{"new lead missing", "Closes #7\n", GateNotClosing, "#6"},
-			{"member missing", "Closes #6\n", GateNotClosing, "#7"},
+			{"remaining only", "Closes #6\nCloses #7\n", landing.GateFresh, ""},
+			{"new lead missing", "Closes #7\n", landing.GateNotClosing, "#6"},
+			{"member missing", "Closes #6\n", landing.GateNotClosing, "#7"},
 		} {
 			t.Run(fmt.Sprintf("queued=%t/%s", queued, tc.name), func(t *testing.T) {
 				w := newWorld(t, ghURL)

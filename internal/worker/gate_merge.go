@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"slices"
@@ -15,23 +16,23 @@ import (
 )
 
 // stepMerge is stage 3: the merge itself, through the forge or locally.
-func (runner gateRun) stepMerge(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (string, GateResult, bool, error) {
+func (runner gateRun) stepMerge(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (string, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
-	finish := func(done bool, err error) (string, GateResult, bool, error) {
+	finish := func(done bool, err error) (string, landing.GateResult, bool, error) {
 		return g.landed, *g.res, done, err
 	}
 
 	if tip := g.o.LandVerifiedTip; tip != "" && strings.TrimSpace(verified) != tip {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — the PR head %s is not the tip %s its train verified; nothing landed", g.o.Slot, strutil.ShortSHA(verified), strutil.ShortSHA(tip)),
+		g.verdict(landing.GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — the PR head %s is not the tip %s its train verified; nothing landed", g.o.Slot, strutil.ShortSHA(verified), strutil.ShortSHA(tip)),
 			"re-run the integration train, then gate the PR again")
 		return finish(true, nil)
 	}
 	if want := g.o.LandVerifiedBase; want != "" {
 		if base, _ := g.git(g.root, "rev-parse", g.baseRef); base != want {
-			g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s since its train verified the tip; nothing landed", g.o.Slot, g.o.Base, strutil.ShortSHA(want), strutil.ShortSHA(base)),
+			g.verdict(landing.GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s since its train verified the tip; nothing landed", g.o.Slot, g.o.Base, strutil.ShortSHA(want), strutil.ShortSHA(base)),
 				"gate the PR again: it verifies the tip on the new base")
 			return finish(true, nil)
 		}
@@ -83,7 +84,7 @@ func (g *gateRun) mergeLocal(dir string) (sha string, done bool) {
 		Failed:   fmt.Sprintf("error: merge of %s into %s failed", g.branch, g.o.Base),
 		Conflict: fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base),
 	})
-	g.verdict(GateMergeFailed, msg, hint)
+	g.verdict(landing.GateMergeFailed, msg, hint)
 	return sha, true
 }
 
@@ -107,7 +108,7 @@ func (g *gateRun) mergeRemote() (done bool) {
 	// merge that reports success and merges nothing.
 	n, _ := strconv.Atoi(g.prNum)
 	if err := land.RequestForge(g.ctx, g.forge, n, g.verified, false); err != nil {
-		g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, tailLines(err.Error(), 20)), "")
+		g.verdict(landing.GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, tailLines(err.Error(), 20)), "")
 		return true
 	}
 	sha, done := g.awaitMerged()
@@ -147,7 +148,7 @@ func (g *gateRun) awaitMerged() (sha string, done bool) {
 		}
 	}
 	if state != "MERGED" {
-		g.verdict(GateNotMerged, fmt.Sprintf("NOT-MERGED %s — PR %s is %s after the merge call; nothing is on %s", g.o.Slot, g.prNum, state, g.o.Base), "")
+		g.verdict(landing.GateNotMerged, fmt.Sprintf("NOT-MERGED %s — PR %s is %s after the merge call; nothing is on %s", g.o.Slot, g.prNum, state, g.o.Base), "")
 		return "", true
 	}
 	src := tracker.ClosingSource{Body: body, Title: title, Branch: head}
@@ -175,7 +176,7 @@ func (g *gateRun) confirmLanded(sha string) (done bool) {
 		return true
 	}
 	if !onBase {
-		g.verdict(GateNotOnBase, fmt.Sprintf("NOT-ON-BASE %s — merge commit %s is not an ancestor of %s (merged into another branch?)", o.Slot, sha, g.baseRef), "")
+		g.verdict(landing.GateNotOnBase, fmt.Sprintf("NOT-ON-BASE %s — merge commit %s is not an ancestor of %s (merged into another branch?)", o.Slot, sha, g.baseRef), "")
 		return true
 	}
 	g.res.Changed = true
@@ -202,7 +203,7 @@ func (g *gateRun) confirmLanded(sha string) (done bool) {
 // base. The merged tree was never verified, and the result says so.
 func (g *gateRun) mergedRemotely(why string) {
 	g.res.VerifySkipped = true
-	g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s; do not re-merge, reconcile %s by hand", g.o.Slot, g.prNum, g.baseRef, why, g.o.Base),
+	g.verdict(landing.GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s; do not re-merge, reconcile %s by hand", g.o.Slot, g.prNum, g.baseRef, why, g.o.Base),
 		fmt.Sprintf("the merged tree was NOT verified: fix the local %s, fast-forward it to %s, then run the full gate on %s", g.o.Base, g.baseRef, g.o.Base))
 }
 

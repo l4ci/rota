@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
@@ -527,7 +528,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		case m.AlreadyMerged:
 		case m.Skip:
 			r.hold(m.Target, strutil.FirstNonEmpty(m.Detail, "did not land through no fault of its own")+"; retried next tick")
-		case m.Verdict == worker.GateRunning:
+		case m.Verdict == landing.GateRunning:
 			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
 			e.audit(r, Action{Action: ActionMerge, Target: m.Target, Detail: m.Detail})
@@ -565,7 +566,7 @@ const heldHeadHint = "; held at PR head; push a new head to retry"
 // verdict. An interaction is the orchestrator's to fix, not a bounce: its why
 // already says what to do, so it carries no push-a-new-head hint.
 func heldItem(target, why string, atHead bool) Item {
-	if v, _, _ := strings.Cut(why, ":"); v == worker.GateInteraction {
+	if v, _, _ := strings.Cut(why, ":"); v == landing.GateInteraction {
 		return Item{Kind: "train-interaction", Target: target, Why: why}
 	}
 	if atHead {
@@ -580,7 +581,7 @@ func heldItem(target, why string, atHead bool) Item {
 // a push, so they are reported for this tick and retried on the next one.
 func failedHeadVerdict(v string) bool {
 	switch v {
-	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests, worker.GateInteraction:
+	case landing.GateStale, landing.GateVerifyFailed, landing.GateVacuousTests, landing.GateInteraction:
 		return true
 	default:
 		return false
@@ -689,11 +690,11 @@ func (e Env) gate(ctx context.Context, target, base string) Merged {
 	if v == "" {
 		v = "gate-error"
 	}
-	return Merged{Target: target, Verdict: v, Hold: worker.ClassifyVerdict(v).Hold, Detail: g.Detail}
+	return Merged{Target: target, Verdict: v, Hold: landing.ClassifyVerdict(v).Hold, Detail: g.Detail}
 }
 
-func excludedIdx(cs []worker.TrainCulprit, target string) int {
-	return slices.IndexFunc(cs, func(c worker.TrainCulprit) bool { return c.Target == target })
+func excludedIdx(cs []landing.TrainCulprit, target string) int {
+	return slices.IndexFunc(cs, func(c landing.TrainCulprit) bool { return c.Target == target })
 }
 
 func (e Env) train(ctx context.Context, targets []string, base string) []Merged {
@@ -720,7 +721,7 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 			m.AlreadyMerged = true
 		case excludedIdx(tr.Excluded, t) >= 0:
 			c := tr.Excluded[excludedIdx(tr.Excluded, t)]
-			m.Verdict, m.Hold, m.Detail = c.Gate.Verdict, worker.ClassifyVerdict(c.Gate.Verdict).Hold, strutil.FirstLine(c.Gate.Err)
+			m.Verdict, m.Hold, m.Detail = c.Gate.Verdict, landing.ClassifyVerdict(c.Gate.Verdict).Hold, strutil.FirstLine(c.Gate.Err)
 		case slices.Contains(tr.Landed, t):
 			m.Landed, m.Detail = true, "train into "+base
 		case v == "base-moved":
@@ -732,10 +733,10 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 		case len(tr.Interaction) > 0 && !slices.Contains(tr.Interaction, t):
 			m.Skip, m.Detail = true, "bystander of an interaction among "+strings.Join(tr.Interaction, ", ")+"; retried without it"
 		case len(tr.Interaction) > 0:
-			m.Verdict, m.Hold = v, worker.ClassifyVerdict(v).Hold
+			m.Verdict, m.Hold = v, landing.ClassifyVerdict(v).Hold
 			m.Detail = "fix on one of: " + strings.Join(tr.Interaction, ", ") + "; bounce neither"
 		default:
-			m.Verdict, m.Hold, m.Detail = v, worker.ClassifyVerdict(v).Hold, tr.Detail
+			m.Verdict, m.Hold, m.Detail = v, landing.ClassifyVerdict(v).Hold, tr.Detail
 		}
 		out = append(out, m)
 	}
@@ -887,7 +888,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 			// A gate or train holds the land lock for the slot assign picked (or
 			// for slots it cannot name): later candidates pick the same slot, so
 			// defer them to the next tick.
-			if errors.As(err, &blk) && blk.By == worker.GateRunning {
+			if errors.As(err, &blk) && blk.By == landing.GateRunning {
 				r.Deferred = "gate running, deferred: " + blk.Msg
 				return nil
 			}

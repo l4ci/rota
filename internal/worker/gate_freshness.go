@@ -3,6 +3,7 @@ package worker
 import (
 	"cmp"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
@@ -10,11 +11,11 @@ import (
 
 // stepFreshness is stage 1. Three-way on the exit code: `&& FRESH || STALE`
 // would call a check that itself errors STALE.
-func (runner gateRun) stepFreshness(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepFreshness(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -45,7 +46,7 @@ func (runner gateRun) stepFreshness(result GateResult, target GateTarget, forged
 		if target.Name != "" {
 			owner = "slot " + target.Name
 		}
-		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
+		g.verdict(landing.GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell %s to `git merge %s`, resolve and re-verify, then re-gate", owner, o.Base))
 		return finish(true, nil)
 	}
@@ -62,12 +63,12 @@ func (runner gateRun) stepFreshness(result GateResult, target GateTarget, forged
 // stepPRMatches checks the PR is the thing that was just verified: open, aimed
 // at the gate's base (a PR stacked on another worker's branch merges THERE, not
 // here), and headed by the pushed commit.
-func (runner gateRun) stepPRMatches(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, viewed *tracker.PRInfo) (string, GateResult, bool, error) {
+func (runner gateRun) stepPRMatches(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, viewed *tracker.PRInfo) (string, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.viewed = viewed
-	finish := func(done bool, err error) (string, GateResult, bool, error) {
+	finish := func(done bool, err error) (string, landing.GateResult, bool, error) {
 		return g.verified, *g.res, done, err
 	}
 
@@ -90,7 +91,7 @@ func (runner gateRun) stepPRMatches(result GateResult, target GateTarget, forged
 		return finish(g.broke(fmt.Sprintf("could not read PR %s from %s", g.prNum, g.provider)))
 	}
 	mismatch := func(msg string) (bool, error) {
-		g.verdict(GatePRMismatch, "error: "+msg, "")
+		g.verdict(landing.GatePRMismatch, "error: "+msg, "")
 		return true, nil
 	}
 	// OPEN, MERGED or CLOSED on both forges.
@@ -117,7 +118,7 @@ func (runner gateRun) stepPRMatches(result GateResult, target GateTarget, forged
 		}
 	}
 	if info.HeadSHA != g.verified {
-		g.verdict(GatePRMismatch,
+		g.verdict(landing.GatePRMismatch,
 			fmt.Sprintf("error: PR %s head is %s, the verified %s is %s — pushed since, or %s has not caught up with the push (read %d times)", g.prNum, info.HeadSHA, g.headRef, g.verified, g.provider, gateHeadTries),
 			fmt.Sprintf("once the PR shows the pushed head, run `rota worker gate %s` again without --request-id: the same id replays this refusal", g.o.Slot))
 		return finish(true, nil)

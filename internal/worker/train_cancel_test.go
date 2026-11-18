@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,8 +85,8 @@ func TestTrainCancelDuringVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a cancelled train is an answer, not an error: %v", err)
 	}
-	if res.Verdict != GateCancelled {
-		t.Fatalf("verdict %q, want %q: %+v", res.Verdict, GateCancelled, res)
+	if res.Verdict != landing.GateCancelled {
+		t.Fatalf("verdict %q, want %q: %+v", res.Verdict, landing.GateCancelled, res)
 	}
 	if len(res.Landed) != 0 || res.Changed || w.onMain("b1.txt") {
 		t.Errorf("a cancel before landing lands nothing: landed %v changed %v", res.Landed, res.Changed)
@@ -136,7 +137,7 @@ func TestTrainCancelWhileQueued(t *testing.T) {
 	defer close(release)
 	<-held
 	ctx, cancel := context.WithCancel(bg)
-	done := make(chan TrainResult, 1)
+	done := make(chan landing.TrainResult, 1)
 	go func() {
 		res, _ := env.Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1"}})
 		done <- res
@@ -145,7 +146,7 @@ func TestTrainCancelWhileQueued(t *testing.T) {
 	cancel()
 	select {
 	case res := <-done:
-		if res.Verdict != GateCancelled || len(res.Landed) != 0 {
+		if res.Verdict != landing.GateCancelled || len(res.Landed) != 0 {
 			t.Errorf("queued cancel: %+v", res)
 		}
 	case <-time.After(5 * time.Second):
@@ -156,11 +157,11 @@ func TestTrainCancelWhileQueued(t *testing.T) {
 // A cancel after some members landed reports exactly those as landed and
 // blames nobody (#2751, AC-4).
 func TestCancelledTrainKeepsLanded(t *testing.T) {
-	res := TrainResult{Base: "main", Verdict: GateMergeFailed, Culprit: "b2", Landed: []string{"b1"}, Changed: true,
-		Members:  []TrainMember{{Target: "b1", Landed: true}, {Target: "b2", Culprit: true}},
-		Culprits: []TrainCulprit{{Target: "b2"}}}
+	res := landing.TrainResult{Base: "main", Verdict: landing.GateMergeFailed, Culprit: "b2", Landed: []string{"b1"}, Changed: true,
+		Members:  []landing.TrainMember{{Target: "b1", Landed: true}, {Target: "b2", Culprit: true}},
+		Culprits: []landing.TrainCulprit{{Target: "b2"}}}
 	got := cancelledTrain(res)
-	if got.Verdict != GateCancelled || got.Culprit != "" || got.Culprits != nil || got.Members[1].Culprit {
+	if got.Verdict != landing.GateCancelled || got.Culprit != "" || got.Culprits != nil || got.Members[1].Culprit {
 		t.Fatalf("%+v", got)
 	}
 	if strings.Join(got.Landed, ",") != "b1" || !got.Members[0].Landed || !got.Changed {
@@ -169,7 +170,7 @@ func TestCancelledTrainKeepsLanded(t *testing.T) {
 	if !strings.Contains(got.Err, "landed 1 of 2 member(s): b1") {
 		t.Errorf("err %q", got.Err)
 	}
-	if m := ClassifyVerdict(GateCancelled); m.Success || m.Refusal || m.Notify || m.Hold {
+	if m := landing.ClassifyVerdict(landing.GateCancelled); m.Success || m.Refusal || m.Notify || m.Hold {
 		t.Errorf("cancelled must be a plain non-pass answer: %+v", m)
 	}
 }
@@ -244,7 +245,7 @@ func TestTrainCancelDuringAloneRun(t *testing.T) {
 	}()
 	began := time.Now()
 	res, err := w.env(false).Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateCancelled || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 {
+	if err != nil || res.Verdict != landing.GateCancelled || res.Culprit != "" || len(res.Interaction) != 0 || len(res.Landed) != 0 {
 		t.Fatalf("a cancelled alone-run is no finding: %+v %v", res, err)
 	}
 	if time.Since(began) > time.Minute {

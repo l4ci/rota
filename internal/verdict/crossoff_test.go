@@ -34,6 +34,8 @@ func TestBlockingGate(t *testing.T) {
 		stale                                bool
 		finding                              string
 	}{
+		"second-opinion PASS":                                {list: []Record{rec(SecondOpinion, Pass, head)}, head: head},
+		"CONCERNS with minor finding":                        {list: []Record{{Kind: ReviewQuality, Verdict: Concerns, Sha: head, Findings: []Finding{{Severity: "minor", Title: "nonblocking"}}}}, head: head},
 		"no records":                                         {head: head},
 		"FAIL at head, cross off":                            {list: []Record{rec(ReviewCross, Fail, head)}, head: head, off: true, blocked: true},
 		"stale cross FAIL, cross off":                        {list: []Record{staleFail}, head: head, off: true, relaxed: true},

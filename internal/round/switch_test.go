@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -172,7 +173,7 @@ func TestSwitchCheckpointsAndRelaunchesOnAnotherAccount(t *testing.T) {
 		}
 	}
 	gate, _ := f.ws.Gate(bg, f.root, worker.GateOpts{Slot: "ben", Base: "main", CheckOnly: true})
-	if gate.Verdict == worker.GateStaleAttempt {
+	if gate.Verdict == landing.GateStaleAttempt {
 		t.Errorf("the gate fences the slot's own checkpoint: %+v", gate)
 	}
 }
@@ -275,7 +276,7 @@ func TestSwitchRefusedWhileAGateRuns(t *testing.T) {
 	status := f.git(t, "status", "--porcelain")
 	holdLandLock(t, f.root, func() {
 		_, err := f.switchSlot(func(o *SwitchOpts) { o.Account = "b" })
-		if by := blockedBy(t, err); by != worker.GateRunning {
+		if by := blockedBy(t, err); by != landing.GateRunning {
 			t.Errorf("blockedBy %q: %v", by, err)
 		}
 	})

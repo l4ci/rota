@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"strings"
 	"testing"
@@ -41,7 +42,7 @@ func TestGateRecordsSubcheckRecovery(t *testing.T) {
 				return subcheckMarker(t, tc.check, tc.first, "ok\n") + "All smoke tests passed.\n", 0
 			}
 			r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if err != nil || r.Verdict != GatePass || calls != 1 {
+			if err != nil || r.Verdict != landing.GatePass || calls != 1 {
 				t.Fatalf("recovered wrapper must pass without rerunning: %+v calls=%d err=%v", r, calls, err)
 			}
 			rows, err := flakeledger.Load(w.dir)
@@ -69,7 +70,7 @@ func TestTrainRecordsSubcheckRecovery(t *testing.T) {
 	}
 	r, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
 	rows, loadErr := flakeledger.Load(w.dir)
-	if err != nil || r.Verdict != GatePass || len(r.Landed) != 2 || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" || (len(r.Flaky) != 1 || r.Flaky[0].Check != "smoke-shard1") {
+	if err != nil || r.Verdict != landing.GatePass || len(r.Landed) != 2 || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" || (len(r.Flaky) != 1 || r.Flaky[0].Check != "smoke-shard1") {
 		t.Fatalf("train must reuse the same sub-check ledger path: %+v calls=%d rows=%+v err=%v load=%v", r, calls, rows, err, loadErr)
 	}
 }
@@ -85,7 +86,7 @@ func TestGateKeepsRealFailureAlongsideSubcheckRecovery(t *testing.T) {
 	}
 	r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	rows, loadErr := flakeledger.Load(w.dir)
-	if err != nil || r.Verdict != GateVerifyFailed || r.Changed || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" {
+	if err != nil || r.Verdict != landing.GateVerifyFailed || r.Changed || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" {
 		t.Fatalf("a recovered shard must not excuse another failed check or retry the wrapper: %+v calls=%d rows=%+v err=%v load=%v", r, calls, rows, err, loadErr)
 	}
 }

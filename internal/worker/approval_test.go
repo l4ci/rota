@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,12 +22,12 @@ type orderedEscalator struct {
 	steps *[]string
 }
 
-func (f *orderedEscalator) Pending(th ApprovalThread) (any, bool, error) {
+func (f *orderedEscalator) Pending(th landing.ApprovalThread) (any, bool, error) {
 	*f.steps = append(*f.steps, "pending "+th.Ref())
 	return f.fakeEscalator.Pending(th)
 }
 
-func (f *orderedEscalator) Send(th ApprovalThread, body string) (any, []string, error) {
+func (f *orderedEscalator) Send(th landing.ApprovalThread, body string) (any, []string, error) {
 	*f.steps = append(*f.steps, "send "+th.Ref())
 	return f.fakeEscalator.Send(th, body)
 }
@@ -48,7 +49,7 @@ func TestGateMergeApprovalSequence(t *testing.T) {
 		},
 		Escalation: &ApprovalEscalation{Esc: esc, Policy: policy, Warn: t.Errorf},
 	}})
-	if res.Verdict != GateApprovalRequired || res.Refusal != ref || err != ref.Err || !res.Refused(err) {
+	if res.Verdict != landing.GateApprovalRequired || res.Refusal != ref || err != ref.Err || !res.Refused(err) {
 		t.Fatalf("approval did not hold the merge: %+v, %v", res, err)
 	}
 	if !reflect.DeepEqual(steps, []string{"clear", "pending #7", "send #7"}) {
@@ -93,15 +94,15 @@ func TestGateMergeApprovalResolvesBeforeAudit(t *testing.T) {
 			switch outcome {
 			case "approved":
 				want = append(want, "audit approve")
-				if err != nil || res.Verdict != GatePass || !res.Changed {
+				if err != nil || res.Verdict != landing.GatePass || !res.Changed {
 					t.Errorf("approved merge: %+v %v", res, err)
 				}
 			case "pending":
-				if res.Refusal == nil || err != res.Refusal.Err || res.Verdict != GateApprovalRequired || res.Changed {
+				if res.Refusal == nil || err != res.Refusal.Err || res.Verdict != landing.GateApprovalRequired || res.Changed {
 					t.Errorf("pending approval: %+v %v", res, err)
 				}
 			case "unavailable":
-				if !errors.Is(err, boom) || res.Refusal != nil || res.Verdict != GateApprovalRequired || res.Changed {
+				if !errors.Is(err, boom) || res.Refusal != nil || res.Verdict != landing.GateApprovalRequired || res.Changed {
 					t.Errorf("unavailable registry: %+v %v", res, err)
 				}
 			}
@@ -135,9 +136,9 @@ func TestGateMergeApprovalSkipsUnusedAdapters(t *testing.T) {
 					return nil, errors.New("unused adapter")
 				},
 			}})
-			want := GatePass
+			want := landing.GatePass
 			if tc.checkOnly {
-				want = GateFresh
+				want = landing.GateFresh
 			}
 			if err != nil || res.Verdict != want {
 				t.Errorf("unused approval blocked merge: %+v %v", res, err)
@@ -149,17 +150,17 @@ func TestGateMergeApprovalSkipsUnusedAdapters(t *testing.T) {
 // fakeEscalator is the in-memory forge seam: it records what is sent.
 type fakeEscalator struct {
 	pending map[string]any // thread ref -> entry
-	sent    []ApprovalThread
+	sent    []landing.ApprovalThread
 	bodies  []string
 	sendErr error
 }
 
-func (f *fakeEscalator) Pending(th ApprovalThread) (any, bool, error) {
+func (f *fakeEscalator) Pending(th landing.ApprovalThread) (any, bool, error) {
 	e, ok := f.pending[th.Ref()]
 	return e, ok, nil
 }
 
-func (f *fakeEscalator) Send(th ApprovalThread, body string) (any, []string, error) {
+func (f *fakeEscalator) Send(th landing.ApprovalThread, body string) (any, []string, error) {
 	if f.sendErr != nil {
 		return nil, nil, f.sendErr
 	}
@@ -175,7 +176,7 @@ func refusalWithData() *exitcode.Refusal {
 }
 
 func TestEscalateApprovalReusesPendingAndWarnsOnFailure(t *testing.T) {
-	th := ApprovalThread{Kind: "pr", Number: 4}
+	th := landing.ApprovalThread{Kind: "pr", Number: 4}
 	var warned []string
 	warn := func(f string, a ...any) { warned = append(warned, f) }
 	esc := &fakeEscalator{pending: map[string]any{"#4": "old"}}
@@ -295,7 +296,7 @@ func (f fakeAnswers) Entry(id string) (ApprovalEntry, bool, error) {
 func (fakeAnswers) Approves(answer string) bool { return answer == "approve" }
 
 func TestMergeApprovalConfirmation(t *testing.T) {
-	th := ApprovalThread{Kind: "pr", Number: 7}
+	th := landing.ApprovalThread{Kind: "pr", Number: 7}
 	answers := fakeAnswers{entries: map[string]ApprovalEntry{
 		"ok":       answeredOn("pr", 7, "approve"),
 		"declined": answeredOn("pr", 7, "hold"),

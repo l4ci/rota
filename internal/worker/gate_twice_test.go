@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"os/exec"
 	"strconv"
@@ -22,7 +23,7 @@ func TestGateWaitedOnLockFindsPRMerged(t *testing.T) {
 	w := newWorld(t, ghURL)
 	env := w.env(false).WithDefaults()
 	type out struct {
-		res GateResult
+		res landing.GateResult
 		err error
 	}
 	done := make(chan out, 1)
@@ -40,10 +41,10 @@ func TestGateWaitedOnLockFindsPRMerged(t *testing.T) {
 	}
 	select {
 	case o := <-done:
-		if o.err != nil || o.res.Verdict != GateAlreadyMerged || o.res.Changed || !o.res.AlreadyMerged {
+		if o.err != nil || o.res.Verdict != landing.GateAlreadyMerged || o.res.Changed || !o.res.AlreadyMerged {
 			t.Fatalf("verdict %q changed=%v err %v: %s", o.res.Verdict, o.res.Changed, o.err, o.res.Err)
 		}
-		if strings.Contains(o.res.Err, "origin") || o.res.Verdict == GateCheckBroke {
+		if strings.Contains(o.res.Err, "origin") || o.res.Verdict == landing.GateCheckBroke {
 			t.Errorf("must not report a missing origin: %q", o.res.Err)
 		}
 	case <-time.After(10 * time.Second):
@@ -69,7 +70,7 @@ func TestGateRefusesWhileAnotherGateRunsTheSamePR(t *testing.T) {
 	lockErr := env.withLandLock(bg, w.dir, "", func(bool) error { // would block a gate that tried the lock
 		held = true
 		res, err := w.gate(false, GateOpts{})
-		if err != nil || res.Verdict != GateRunning || res.Changed {
+		if err != nil || res.Verdict != landing.GateRunning || res.Changed {
 			t.Fatalf("verdict %q err %v: %s", res.Verdict, err, res.Err)
 		}
 		if !strings.Contains(res.Err, strconv.Itoa(other)) || strings.Contains(res.Err, "origin") {
@@ -151,7 +152,7 @@ func TestGateGoneRootInsideLockIsNotAMissingOrigin(t *testing.T) {
 		return git.Exec(ctx, dir, args...)
 	}
 	res, err := env.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateCheckBroke {
+	if err != nil || res.Verdict != landing.GateCheckBroke {
 		t.Fatalf("verdict %q err %v", res.Verdict, err)
 	}
 	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {

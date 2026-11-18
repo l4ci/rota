@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 
@@ -360,7 +361,7 @@ func itemCreateBatch(c *Ctx, root, path string, force bool) (Result, error) {
 				return Result{}, err
 			}
 		}
-		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root, memo: &worker.RoundMemo{}}, ins)
+		res, err := fileBatch(recordingBackend{Backend: be, c: c, root: root, memo: &landing.RoundMemo{}}, ins)
 		if data, ok := res.Data.(*jsonx.Object); ok {
 			warnings, _ := data.Get("warnings")
 			if warnings, ok := warnings.([]string); ok {

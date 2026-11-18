@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,10 +21,10 @@ func integrationPR(t *testing.T, w *world) string {
 	t.Helper()
 	w.forge("head#7", "w1")
 	w.forge("sha#7", w.forgeWord("sha"))
-	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("integration train: %+v %v", res, err)
 	}
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
 		t.Fatal(err)
 	}
 	// PR #9 carries the body rota writes, with no test sections added to it.
@@ -60,7 +61,7 @@ func (w *world) pushFix(file string) string {
 	return strings.TrimSpace(gittest.Run(w.t, w.worker, "rev-parse", "HEAD"))
 }
 
-func (w *world) gateCheck(slot string) (GateResult, error) {
+func (w *world) gateCheck(slot string) (landing.GateResult, error) {
 	return w.env(false).Gate(bg, w.dir, GateOpts{Slot: slot, Base: "main", CheckOnly: true, CheckReviews: true})
 }
 
@@ -88,12 +89,12 @@ func TestIntegrationTipNeedsFixReview(t *testing.T) {
 	fix := w.pushFix("fix.txt")
 	w.pointPR9()
 	res, err := w.gateCheck("9")
-	if err != nil || res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "1 fix commit(s)") {
+	if err != nil || res.Verdict != landing.GateReviewMissing || !strings.Contains(res.Err, "1 fix commit(s)") {
 		t.Fatalf("an unreviewed fix must refuse: %+v %v", res, err)
 	}
 	// A review recorded at an older commit, before the fix, does not cover it.
 	w.record(intBranch, w.forgeWord("sha#8"), verdict.ReviewQuality, verdict.ReviewSpec)
-	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+	if res, _ := w.gateCheck("9"); res.Verdict != landing.GateReviewMissing {
 		t.Fatalf("a review before the fix covered it: %+v", res)
 	}
 	w.record(intBranch, fix, verdict.ReviewQuality, verdict.ReviewSpec)
@@ -110,7 +111,7 @@ func TestIntegrationVerdictBeforeCleanMainMerge(t *testing.T) {
 	// main moves; the rerun merges it on top of the reviewed fix.
 	trainWrite(t, w, "later.txt", "later")
 	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
-	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("rerun: %+v %v", res, err)
 	}
 	w.pointPR9()
@@ -120,7 +121,7 @@ func TestIntegrationVerdictBeforeCleanMainMerge(t *testing.T) {
 	// A fix after that merge does.
 	w.pushFix("fix2.txt")
 	w.pointPR9()
-	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+	if res, _ := w.gateCheck("9"); res.Verdict != landing.GateReviewMissing {
 		t.Fatalf("a later fix slipped through: %+v", res)
 	}
 }
@@ -137,7 +138,7 @@ func intRuns(count string) int {
 	return strings.Count(string(b), "x")
 }
 
-func (w *world) landPR9() (GateResult, error) {
+func (w *world) landPR9() (landing.GateResult, error) {
 	return w.env(false).Gate(bg, w.dir, GateOpts{Slot: "9", Base: "main"})
 }
 
@@ -147,7 +148,7 @@ func TestWorkerGateIntegrationSkipsVerify(t *testing.T) {
 	integrationPR(t, w)
 	before := intRuns(count)
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing: %+v %v", res, err)
 	}
 	if intRuns(count) != before || !strings.Contains(strings.Join(res.Notes, "\n"), "INTEGRATION-VERIFIED") {
@@ -174,7 +175,7 @@ func TestWorkerGateIntegrationReverifiesAfterMainMoved(t *testing.T) {
 	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
 	before := intRuns(count)
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing: %+v %v", res, err)
 	}
 	if intRuns(count) <= before || !strings.Contains(strings.Join(res.Notes, "\n"), "INTEGRATION-REVERIFY") {
@@ -189,7 +190,7 @@ func TestWorkerGateIntegrationRefusesMovedMember(t *testing.T) {
 	trainWrite2(t, w.worker, "more.txt")
 	gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateStale || !strings.Contains(res.Err, "member 8 moved") {
+	if err != nil || res.Verdict != landing.GateStale || !strings.Contains(res.Err, "member 8 moved") {
 		t.Fatalf("a moved member must refuse the landing: %+v %v", res, err)
 	}
 	if w.onMain("work.txt") {
@@ -205,7 +206,7 @@ func TestTrainIntegrationRemergesMovedMember(t *testing.T) {
 	gittest.Run(t, w.worker, "push", "-q", "origin", "w2")
 	w.forge("sha#8", head)
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GatePass || len(res.Members) != 1 || res.Members[0].Target != "8" {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Members) != 1 || res.Members[0].Target != "8" {
 		t.Fatalf("the moved member merges again, alone: %+v %v", res, err)
 	}
 	reg, _ := LoadRegistry(w.dir)
@@ -214,7 +215,7 @@ func TestTrainIntegrationRemergesMovedMember(t *testing.T) {
 		t.Fatalf("record after the re-merge: %+v", rec)
 	}
 	w.pointPR9()
-	if res, err := w.landPR9(); err != nil || res.Verdict != GatePass {
+	if res, err := w.landPR9(); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing after the re-merge: %+v %v", res, err)
 	}
 }
@@ -239,7 +240,7 @@ func TestIntegrationFixReviewNeedsLens(t *testing.T) {
 	fix := w.pushFix("fix.txt")
 	w.pointPR9()
 	w.record(intBranch, fix, verdict.ReviewQuality, verdict.ReviewSpec)
-	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+	if res, _ := w.gateCheck("9"); res.Verdict != landing.GateReviewMissing {
 		t.Fatalf("the core reviews covered a lens-triggering fix: %+v", res)
 	}
 	w.record(intBranch, fix, verdict.LensKind("security"))
@@ -254,7 +255,7 @@ func TestWorkerGateIntegrationVerifiedTipBindsMerge(t *testing.T) {
 	w := integrationWorld(t)
 	integrationPR(t, w)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "9", Base: "main", LandVerified: true, LandVerifiedTip: strings.Repeat("e", 40)})
-	if err != nil || res.Verdict != GateBaseMoved || res.Changed || w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GateBaseMoved || res.Changed || w.onMain("work.txt") {
 		t.Fatalf("a head other than the verified tip landed: %+v %v", res, err)
 	}
 }
@@ -271,7 +272,7 @@ func TestIntegrationExternalMemberIssueFromBody(t *testing.T) {
 	w.forge("body#7", "Closes #5\n"+completePRSections)
 	w.forge("body#8", "Closes #6\n"+completePRSections)
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("integration train of external PRs: %+v %v", res, err)
 	}
 	reg, _ := LoadRegistry(w.dir)
@@ -298,7 +299,7 @@ func TestWorkerGateIntegrationRecoversMergeWithDeletedMemberBranch(t *testing.T)
 	w.forge("base", "main")
 	gittest.Run(t, w.origin, "branch", "-D", "w2")
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateAlreadyMerged {
+	if err != nil || res.Verdict != landing.GateAlreadyMerged {
 		t.Fatalf("a merged PR must recover, not refuse stale: %+v %v", res, err)
 	}
 	if !slices.Equal(res.IntegrationMembers, []string{"5", "6"}) {
@@ -315,11 +316,11 @@ func TestWorkerGateIntegrationRecoversMergeWithDeletedMemberBranch(t *testing.T)
 func TestWorkerGateIntegrationReplaysUnsettledCleanup(t *testing.T) {
 	w := integrationWorld(t)
 	integrationPR(t, w)
-	if res, err := w.landPR9(); err != nil || res.Verdict != GatePass {
+	if res, err := w.landPR9(); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing: %+v %v", res, err)
 	}
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GateAlreadyMerged || !slices.Equal(res.IntegrationMembers, []string{"5", "6"}) {
+	if err != nil || res.Verdict != landing.GateAlreadyMerged || !slices.Equal(res.IntegrationMembers, []string{"5", "6"}) {
 		t.Fatalf("an unsettled landing must replay its members: %+v %v", res, err)
 	}
 	if err := SettleIntegration(w.dir, intBranch); err != nil {
@@ -351,7 +352,7 @@ func TestIntegrationRefsRenewalIsNotAFixCommit(t *testing.T) {
 	// A real fix after the renewal still does.
 	w.pushFix("fix2.txt")
 	w.pointPR9()
-	if res, _ := w.gateCheck("9"); res.Verdict != GateReviewMissing {
+	if res, _ := w.gateCheck("9"); res.Verdict != landing.GateReviewMissing {
 		t.Fatalf("a fix after the renewal slipped through: %+v", res)
 	}
 }
@@ -363,7 +364,7 @@ func TestIntegrationReviewMissingNamesKinds(t *testing.T) {
 	w.pushFix("fix.txt")
 	w.pointPR9()
 	res, err := w.gateCheck("9")
-	if err != nil || res.Verdict != GateReviewMissing {
+	if err != nil || res.Verdict != landing.GateReviewMissing {
 		t.Fatalf("an unreviewed fix must refuse: %+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "needs a recorded review-spec verdict") || strings.Contains(res.Err, "  ") {

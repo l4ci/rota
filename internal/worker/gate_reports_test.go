@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,9 +35,9 @@ func TestGateRecoversPRVerdicts(t *testing.T) {
 		reviewsOnly bool
 		want        string
 	}{
-		{"FAIL blocks", verdict.Fail, false, GateVerdictBlocked},
-		{"PASS satisfies depth", verdict.Pass, false, GateFresh},
-		{"review probe recovers PASS", verdict.Pass, true, GateFresh},
+		{"FAIL blocks", verdict.Fail, false, landing.GateVerdictBlocked},
+		{"PASS satisfies depth", verdict.Pass, false, landing.GateFresh},
+		{"review probe recovers PASS", verdict.Pass, true, landing.GateFresh},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, "7")
@@ -72,8 +73,8 @@ func TestGateRecoversPRVerdictsUnderUmbrellaKey(t *testing.T) {
 		name, v string
 		want    string
 	}{
-		{"FAIL blocks", verdict.Fail, GateVerdictBlocked},
-		{"PASS satisfies depth", verdict.Pass, GateFresh},
+		{"FAIL blocks", verdict.Fail, landing.GateVerdictBlocked},
+		{"PASS satisfies depth", verdict.Pass, landing.GateFresh},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, "7")
@@ -135,8 +136,8 @@ func TestGateObserveReadsWithoutFetchOrRecovery(t *testing.T) {
 	if _, statErr := os.Stat(verdict.Path(w.dir)); !os.IsNotExist(statErr) {
 		t.Errorf("observation wrote the verdict store: %v", statErr)
 	}
-	if res.Verdict != GateReviewMissing {
-		t.Fatalf("local verdicts only: want %s, got %+v", GateReviewMissing, res)
+	if res.Verdict != landing.GateReviewMissing {
+		t.Fatalf("local verdicts only: want %s, got %+v", landing.GateReviewMissing, res)
 	}
 }
 
@@ -156,7 +157,7 @@ func TestRecoveredFailReachesGateBounceAndRelay(t *testing.T) {
 		return &verdictReportForge{fakeForge: &fakeForge{w: w, provider: provider}, notes: notes}, nil
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true, VerdictRepo: "sub"})
-	if res.Verdict != GateVerdictBlocked || err == nil {
+	if res.Verdict != landing.GateVerdictBlocked || err == nil {
 		t.Fatalf("gate must refuse on the recovered FAIL: %+v err=%v", res, err)
 	}
 	store := verdict.Load(w.dir)
@@ -184,7 +185,7 @@ func TestGateRefusesCorruptVerdictStore(t *testing.T) {
 	}
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
 	var ee *exitcode.Error
-	if res.Verdict != GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused || !strings.Contains(err.Error(), "verdict store") {
+	if res.Verdict != landing.GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused || !strings.Contains(err.Error(), "verdict store") {
 		t.Fatalf("a corrupt store must refuse the gate with exit 4: %+v err=%v", res, err)
 	}
 }
@@ -201,7 +202,7 @@ func TestGateReviewDepthRefusesCorruptVerdictStore(t *testing.T) {
 	}
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true, NoVerdict: true})
 	var ee *exitcode.Error
-	if res.Verdict != GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused {
+	if res.Verdict != landing.GateVerdictBlocked || !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused {
 		t.Fatalf("a corrupt store must refuse the review-depth check: %+v err=%v", res, err)
 	}
 }

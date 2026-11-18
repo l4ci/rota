@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
 	"testing"
@@ -80,19 +81,19 @@ func TestCheckCloses(t *testing.T) {
 		notes   int
 	}{
 		{name: "body closes the issue", body: "Closes #5", keys: keys(5)},
-		{name: "body leaves the issue open", body: "Refs #5", keys: keys(5), verdict: GateNotClosing, inErr: []string{"does not close #5", "Closes #5"}},
+		{name: "body leaves the issue open", body: "Refs #5", keys: keys(5), verdict: landing.GateNotClosing, inErr: []string{"does not close #5", "Closes #5"}},
 		{name: "partial-slice label excuses the body", body: "Refs #5", keys: keys(5), labels: map[int][]string{5: partial}, notes: 1},
-		{name: "bundle names every open member", body: "Closes #5", keys: keys(5, 6, 7), verdict: GateNotClosing, inErr: []string{"#6, #7", "the lines"}},
+		{name: "bundle names every open member", body: "Closes #5", keys: keys(5, 6, 7), verdict: landing.GateNotClosing, inErr: []string{"#6, #7", "the lines"}},
 		{name: "closed member left the bundle", body: "Closes #5", keys: keys(5, 6), closed: map[int]bool{6: true}},
 		{name: "no issue, nothing to check", body: "", keys: nil},
 		{name: "forge says it closes a partial-slice issue", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
-			rep: &seamReporter{nums: []int{5}, known: true}, verdict: GateNotClosing, inErr: []string{"slices still to come", "--final-slice"}},
+			rep: &seamReporter{nums: []int{5}, known: true}, verdict: landing.GateNotClosing, inErr: []string{"slices still to come", "--final-slice"}},
 		{name: "final slice may close it", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
 			rep: &seamReporter{nums: []int{5}, known: true}, final: true},
 		{name: "forge lists another issue", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
 			rep: &seamReporter{nums: []int{6}, known: true}},
 		{name: "forge lists a partial-slice parent beyond the slot", body: "Closes #5\nCloses #9", keys: keys(5), labels: map[int][]string{9: partial},
-			rep: &seamReporter{nums: []int{5, 9}, known: true}, verdict: GateNotClosing, inErr: []string{"#9"}},
+			rep: &seamReporter{nums: []int{5, 9}, known: true}, verdict: landing.GateNotClosing, inErr: []string{"#9"}},
 		{name: "forge cannot report: noted once", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
 			rep: &seamReporter{}, notes: 1},
 		{name: "forge errors: noted once", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},

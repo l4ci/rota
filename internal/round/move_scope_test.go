@@ -2,10 +2,10 @@ package round
 
 import (
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/landing"
 	"testing"
 
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // round.scopeOverlap reaches Transfer: the receiver's item clashes with dana's
@@ -53,7 +53,7 @@ func TestTransferRefusedWhileGateHoldsLandLock(t *testing.T) {
 	}
 	holdLandLock(t, f.root, func() {
 		_, err := f.transfer("12", "nia", nil)
-		if by := blockedBy(t, err); by != worker.GateRunning {
+		if by := blockedBy(t, err); by != landing.GateRunning {
 			t.Errorf("lock held: %v", err)
 		}
 		if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {

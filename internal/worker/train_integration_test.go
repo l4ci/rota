@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +36,7 @@ func (w *world) remoteLog(args ...string) string {
 func TestTrainIntegrationPushesBranch(t *testing.T) {
 	w := integrationWorld(t)
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GatePass || res.Integration == nil {
+	if err != nil || res.Verdict != landing.GatePass || res.Integration == nil {
 		t.Fatalf("integration train: %+v %v", res, err)
 	}
 	const branch = "integration/r55-a"
@@ -69,7 +70,7 @@ func TestTrainIntegrationPushesBranch(t *testing.T) {
 
 func TestTrainIntegrationRemergesMain(t *testing.T) {
 	w := integrationWorld(t)
-	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("first run: %+v %v", res, err)
 	}
 	// main moves between two runs.
@@ -77,7 +78,7 @@ func TestTrainIntegrationRemergesMain(t *testing.T) {
 	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
 	main := strings.TrimSpace(gittest.Run(t, w.dir, "rev-parse", "main"))
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("second run: %+v %v", res, err)
 	}
 	const branch = "integration/r55-a"
@@ -120,7 +121,7 @@ func TestTrainIntegrationConflictPushesPrefix(t *testing.T) {
 	clashW2(t, w)
 	const branch = "integration/r55-a"
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Order: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "8,7" {
+	if err != nil || res.Verdict != landing.GateInteraction || res.Culprit != "" || strings.Join(res.Interaction, ",") != "8,7" {
 		t.Fatalf("a conflicting member is an interaction, not a culprit: %+v %v", res, err)
 	}
 	if n := len(strings.Fields(w.remoteLog("--merges", "--first-parent", "--format=%H", branch))); n != 1 {
@@ -146,7 +147,7 @@ func TestTrainIntegrationConflictPushesPrefix(t *testing.T) {
 	gittest.Run(t, w.worker, "commit", "-q", "--no-edit")
 	gittest.Run(t, w.worker, "push", "-q", "origin", "fix:"+branch)
 	res, err = w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("rerun after the resolution: %+v %v", res, err)
 	}
 	reg, _ = LoadRegistry(w.dir)
@@ -161,7 +162,7 @@ func TestTrainIntegrationInteractionKeepsBranch(t *testing.T) {
 	// Each member passes alone; the two together fail.
 	w.setConfig(`{"test":{"full":["! test -f work.txt || ! test -f work2.txt"]}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a"})
-	if err != nil || res.Verdict != GateInteraction || res.Culprit != "" || len(res.Landed) != 0 {
+	if err != nil || res.Verdict != landing.GateInteraction || res.Culprit != "" || len(res.Landed) != 0 {
 		t.Fatalf("interaction: %+v %v", res, err)
 	}
 	const branch = "integration/r55-a"
@@ -192,7 +193,7 @@ func TestTrainIntegrationOnFailStopSkipsDiagnose(t *testing.T) {
 	w.forge("sha#7", w.forgeWord("sha"))
 	var said []string
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", OnFail: OnFailStop, Say: func(s string) { said = append(said, s) }})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Stop == nil {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Stop == nil {
 		t.Fatalf("on-fail stop with --integration: %+v %v", res, err)
 	}
 	if strings.Join(res.Stop.Tests, ",") != "TestWidget" || !strings.Contains(res.Err, "failing tests: TestWidget") {
@@ -219,7 +220,7 @@ func TestTrainIntegrationRedPrintsFailuresBeforeDiagnose(t *testing.T) {
 	w.forge("sha#7", w.forgeWord("sha"))
 	var said []string
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", Say: func(s string) { said = append(said, s) }})
-	if err != nil || res.Verdict != GateVerifyFailed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("red integration train: %+v %v", res, err)
 	}
 	at := func(sub string) int {
@@ -243,7 +244,7 @@ func TestTrainIntegrationNoVerifySkipsConfiguredVerify(t *testing.T) {
 	w.forge("head#7", "w1")
 	w.forge("sha#7", w.forgeWord("sha"))
 	res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Integration: "a", NoVerify: true})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("no-verify integration train: %+v %v", res, err)
 	}
 	if n := intRuns(count); n != 0 {
@@ -255,7 +256,7 @@ func TestTrainIntegrationNoVerifySkipsConfiguredVerify(t *testing.T) {
 	if rec := intRecord(t, w); rec.VerifiedTip != "" || rec.Assembled == "" {
 		t.Fatalf("record: %+v", rec)
 	}
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
 		t.Fatal(err)
 	}
 	reg, _ := LoadRegistry(w.dir)
@@ -263,7 +264,7 @@ func TestTrainIntegrationNoVerifySkipsConfiguredVerify(t *testing.T) {
 	w.forge("body#9", IntegrationPRBody(rec))
 	w.pointPR9()
 	g, err := w.landPR9()
-	if err != nil || g.Verdict != GateVerifyFailed {
+	if err != nil || g.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("the gate landed an unverified tip whose verify is red: %+v %v", g, err)
 	}
 	if intRuns(count) == 0 {

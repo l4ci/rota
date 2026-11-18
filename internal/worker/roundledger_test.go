@@ -3,6 +3,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,8 +239,8 @@ func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 
 func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
-	res := TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
-		Members: []TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
+	res := landing.TrainResult{Verdict: landing.GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
+		Members: []landing.TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
 	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
@@ -248,7 +249,7 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 			verdicts[e.Slot] = e.Verdict()
 		}
 	}
-	if len(es) != 3 || verdicts["b2"] != GateVerifyFailed || verdicts["b3"] != "" {
+	if len(es) != 3 || verdicts["b2"] != landing.GateVerifyFailed || verdicts["b3"] != "" {
 		t.Fatalf("entries %+v, want verify-failed on b2 only", es)
 	}
 }
@@ -290,7 +291,7 @@ func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"w1","branch":"w1","pr":"https://github.com/o/r/pull/1"}`)
 	reads := 0
 	env := fakeLeaseEnv(100)
-	gateLedger(Env{Lease: func() roundlease.Env { reads++; return env }, Now: func() time.Time { return ledgerNow }}, &RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, GateResult{Verdict: GatePass})
+	gateLedger(Env{Lease: func() roundlease.Env { reads++; return env }, Now: func() time.Time { return ledgerNow }}, &landing.RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, landing.GateResult{Verdict: landing.GatePass})
 	if reads != 1 {
 		t.Errorf("gateLedger read the lease %d times, want 1", reads)
 	}
@@ -300,8 +301,8 @@ func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
 func TestGateAndTrainLedgerRowsTakeTheEnvClock(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
-	gateLedger(env, nil, dir, GateTarget{Name: "b1", Branch: "b1"}, GateResult{Verdict: GatePass})
-	trainLedger(env, nil, dir, "", TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Members: []TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
+	gateLedger(env, nil, dir, GateTarget{Name: "b1", Branch: "b1"}, landing.GateResult{Verdict: landing.GatePass})
+	trainLedger(env, nil, dir, "", landing.TrainResult{Verdict: landing.GateVerifyFailed, Culprit: "b2", Members: []landing.TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
 	es, _ := ledger.Load(dir)
 	if len(es) != 4 { // gate, merge, train outcome, train gate
 		t.Fatalf("entries %+v", es)
@@ -368,8 +369,8 @@ func TestLedgerNoteOutsideARepoIsRoundZeroAndQuiet(t *testing.T) {
 // bystander that did not land (#3095).
 func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
-	res := TrainResult{Verdict: GateInteraction, Interaction: []string{"b1", "b3"},
-		Members: []TrainMember{{Target: "b1"}, {Target: "b2"}, {Target: "b3"}}}
+	res := landing.TrainResult{Verdict: landing.GateInteraction, Interaction: []string{"b1", "b3"},
+		Members: []landing.TrainMember{{Target: "b1"}, {Target: "b2"}, {Target: "b3"}}}
 	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
@@ -378,7 +379,7 @@ func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
 			verdicts[e.Slot] = e.Verdict()
 		}
 	}
-	if len(verdicts) != 3 || verdicts["b1"] != GateInteraction || verdicts["b3"] != GateInteraction || verdicts["b2"] != "" {
+	if len(verdicts) != 3 || verdicts["b1"] != landing.GateInteraction || verdicts["b3"] != landing.GateInteraction || verdicts["b2"] != "" {
 		t.Fatalf("verdicts %v, want interaction on b1 and b3 only", verdicts)
 	}
 }

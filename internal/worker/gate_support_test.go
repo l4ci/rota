@@ -3,6 +3,7 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,13 +18,13 @@ func supportComment(author, kind, marker, text string) map[string]string {
 }
 
 // supportGate runs the provenance step over a PR of issue 7 held by slot w1.
-func supportGate(t *testing.T, support bool, body string, comments ...map[string]string) GateResult {
+func supportGate(t *testing.T, support bool, body string, comments ...map[string]string) landing.GateResult {
 	t.Helper()
 	return supportGateWith(t, support, body, nil, comments...)
 }
 
 // supportGateWith is supportGate with a hook on the fake forge's word list.
-func supportGateWith(t *testing.T, support bool, body string, setup func(*world), comments ...map[string]string) GateResult {
+func supportGateWith(t *testing.T, support bool, body string, setup func(*world), comments ...map[string]string) landing.GateResult {
 	t.Helper()
 	w := newWorld(t, ghURL)
 	cfg := `{"issues":{"source":"github"},"test":{"full":["true"]}}`
@@ -54,30 +55,30 @@ const relayCite = "## Approvals\n- use the cache: orchestrator relay round 2\n"
 
 func TestProvenanceAcceptsCommentRelays(t *testing.T) {
 	relay := supportComment("alice", "relay", "<!-- rota:relay round=2 -->", "use the shared cache for the lookup")
-	if res := supportGate(t, true, relayCite, relay); res.Verdict != GateFresh {
+	if res := supportGate(t, true, relayCite, relay); res.Verdict != landing.GateFresh {
 		t.Errorf("a trusted relay comment must satisfy the citation: %s %s", res.Verdict, res.Err)
 	}
 	// Approvals: None needs no relay, with or without comments.
-	if res := supportGate(t, true, "## Approvals\nNone\n", relay); res.Verdict != GateFresh {
+	if res := supportGate(t, true, "## Approvals\nNone\n", relay); res.Verdict != landing.GateFresh {
 		t.Errorf("Approvals: None: %s %s", res.Verdict, res.Err)
 	}
 }
 
 func TestProvenanceIgnoresUntrustedAndMissingRelays(t *testing.T) {
 	mallory := supportComment("mallory", "relay", "<!-- rota:relay round=2 -->", "use the shared cache for the lookup")
-	if res := supportGate(t, true, relayCite, mallory); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, true, relayCite, mallory); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("a non-writer's relay must be ignored: %s", res.Verdict)
 	}
-	if res := supportGate(t, true, relayCite); res.Verdict != GateProvenanceFail || !strings.Contains(res.Err, "round 2") {
+	if res := supportGate(t, true, relayCite); res.Verdict != landing.GateProvenanceFail || !strings.Contains(res.Err, "round 2") {
 		t.Errorf("a relay no comment holds: %s %s", res.Verdict, res.Err)
 	}
 	other := supportComment("alice", "relay", "<!-- rota:relay round=5 -->", "something else")
-	if res := supportGate(t, true, relayCite, other); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, true, relayCite, other); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("another round's relay: %s", res.Verdict)
 	}
 	// Without the support label (or round.support) comments are not read.
 	alice := supportComment("alice", "relay", "<!-- rota:relay round=2 -->", "use the shared cache for the lookup")
-	if res := supportGate(t, false, relayCite, alice); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, false, relayCite, alice); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("not a support PR: %s", res.Verdict)
 	}
 }
@@ -85,14 +86,14 @@ func TestProvenanceIgnoresUntrustedAndMissingRelays(t *testing.T) {
 func TestProvenanceOfferCountsAsApproval(t *testing.T) {
 	offer := supportComment("alice", "feedback", "<!-- rota:support-offer -->", "offered to mac")
 	body := "## Approvals\n- round support offer: main offered #7 to mac, the maintainer's call\n"
-	if res := supportGate(t, true, body, offer); res.Verdict != GateFresh {
+	if res := supportGate(t, true, body, offer); res.Verdict != landing.GateFresh {
 		t.Errorf("a trusted offer comment must satisfy the citation: %s %s", res.Verdict, res.Err)
 	}
-	if res := supportGate(t, true, body); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, true, body); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("no offer comment: %s", res.Verdict)
 	}
 	forged := supportComment("mallory", "feedback", "<!-- rota:support-offer -->", "offered")
-	if res := supportGate(t, true, body, forged); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, true, body, forged); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("a non-writer's offer: %s", res.Verdict)
 	}
 }
@@ -102,7 +103,7 @@ func TestProvenanceOfferCountsAsApproval(t *testing.T) {
 func TestProvenanceIssueReadErrorFallsBackToLocalLog(t *testing.T) {
 	broken := func(w *world) { w.forge("issueErr", "rate limited") }
 	res := supportGateWith(t, true, "## Approvals\nNone\n", broken)
-	if res.Verdict != GateFresh {
+	if res.Verdict != landing.GateFresh {
 		t.Fatalf("a failed issue read must not fail closed: %s %s", res.Verdict, res.Err)
 	}
 	skips := 0
@@ -114,7 +115,7 @@ func TestProvenanceIssueReadErrorFallsBackToLocalLog(t *testing.T) {
 	if skips != 1 {
 		t.Errorf("want one PROVENANCE-SKIP note, got %d in %v", skips, res.Notes)
 	}
-	if res := supportGateWith(t, true, relayCite, broken); res.Verdict != GateProvenanceFail {
+	if res := supportGateWith(t, true, relayCite, broken); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("a relay the local log lacks must still fail: %s %s", res.Verdict, res.Err)
 	}
 }
@@ -122,10 +123,10 @@ func TestProvenanceIssueReadErrorFallsBackToLocalLog(t *testing.T) {
 // #1869 AC-5: the offer citation is enforced on a support PR only.
 func TestProvenanceOfferCiteOnlyOnSupportPR(t *testing.T) {
 	body := "## Approvals\n- maintainer: the support offer verb should post a comment\n"
-	if res := supportGate(t, false, body); res.Verdict != GateFresh {
+	if res := supportGate(t, false, body); res.Verdict != landing.GateFresh {
 		t.Errorf("a non-support PR may mention the support offer: %s %s", res.Verdict, res.Err)
 	}
-	if res := supportGate(t, true, body); res.Verdict != GateProvenanceFail {
+	if res := supportGate(t, true, body); res.Verdict != landing.GateProvenanceFail {
 		t.Errorf("a support PR citing an offer nobody posted: %s", res.Verdict)
 	}
 }
@@ -136,7 +137,7 @@ func TestProvenanceUnverifiableOfferCiteFails(t *testing.T) {
 	broken := func(w *world) { w.forge("issueErr", "rate limited") }
 	body := "## Approvals\n- round support offer: main offered #7 to mac, the maintainer's call\n"
 	res := supportGateWith(t, true, body, broken)
-	if res.Verdict != GateProvenanceFail {
+	if res.Verdict != landing.GateProvenanceFail {
 		t.Fatalf("an unverifiable offer citation must fail: %s %s", res.Verdict, res.Err)
 	}
 	if !strings.Contains(res.Err, "rate limited") {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"io"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestAutopilotReviewProbeLetsPRStateReachGate(t *testing.T) {
 			}, func(n string) (string, error) { return "/fake/" + n, nil })}
 			c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
 			probe, err := workerEnvCtx(c, c.Context()).Gate(c.Context(), dir, worker.GateOpts{Slot: "ben", Base: "main", ReviewsOnly: true})
-			if err != nil || probe.Verdict != worker.GatePRMismatch {
+			if err != nil || probe.Verdict != landing.GatePRMismatch {
 				t.Fatalf("fixture did not reach PR state refusal: %+v %v", probe, err)
 			}
 			if why := reviewVerdictsMissing(c, dir, "ben", "main"); why != "" {

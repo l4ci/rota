@@ -3,6 +3,7 @@ package roundtick
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"time"
 
@@ -153,18 +154,18 @@ func WaitingForReview(gateErr, branch string) string {
 // still waits for required reviews, and whether its state must go straight to
 // the real gate. The caller passes the gate's raw answer. An incomplete probe
 // or a read error cannot confirm readiness.
-func ReviewReadinessOf(r worker.GateResult, err error, slot string) (why string, gateNow bool) {
+func ReviewReadinessOf(r landing.GateResult, err error, slot string) (why string, gateNow bool) {
 	if err != nil {
 		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error()), false
 	}
 	switch r.Verdict {
-	case worker.GateStale, worker.GatePRMismatch, worker.GateAlreadyMerged, worker.GateMergedRemotely:
+	case landing.GateStale, landing.GatePRMismatch, landing.GateAlreadyMerged, landing.GateMergedRemotely:
 		// These describe the branch or PR, not missing review verdicts. The
 		// real gate sends stale work back or handles the PR's current state.
 		return "", true
-	case worker.GateReviewMissing:
+	case landing.GateReviewMissing:
 		return WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot)), false
-	case worker.GateFresh:
+	case landing.GateFresh:
 		return "", false
 	}
 	return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict), false

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestEscalateReceiptIdentitySurvivesReceiptLoss(t *testing.T) {
@@ -97,7 +97,7 @@ func TestApprovalPendingRecoversDelivery(t *testing.T) {
 	defer os.Chdir(old)
 	var stderr bytes.Buffer
 	c := &Ctx{Path: "rota worker gate", Deps: deps, Stderr: &stderr}
-	got, ok, err := (approvalForge{c}).Pending(worker.ApprovalThread{Kind: "pr", Number: 7})
+	got, ok, err := (approvalForge{c}).Pending(landing.ApprovalThread{Kind: "pr", Number: 7})
 	if err != nil || !ok {
 		t.Fatalf("pending: %v %v %v", got, ok, err)
 	}
@@ -111,7 +111,7 @@ func TestApprovalPendingRecoversDelivery(t *testing.T) {
 	if len(h.notes) != 1 {
 		t.Fatalf("adopted delivery notification: %v", h.notes)
 	}
-	if _, _, err := (approvalForge{c}).Pending(worker.ApprovalThread{Kind: "pr", Number: 7}); err != nil {
+	if _, _, err := (approvalForge{c}).Pending(landing.ApprovalThread{Kind: "pr", Number: 7}); err != nil {
 		t.Fatal(err)
 	}
 	if len(h.notes) != 1 {

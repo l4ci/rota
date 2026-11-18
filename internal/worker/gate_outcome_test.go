@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	gateaudit "github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,11 +32,11 @@ func TestGateRefusesAPartialOrFailedOutcome(t *testing.T) {
 		check   bool
 		want    string
 	}{
-		{"partial", false, GateOutcomeOpen},
-		{"failed", false, GateOutcomeOpen},
-		{"partial", true, GateOutcomeOpen},
-		{"done", false, GatePass},
-		{"", false, GatePass},
+		{"partial", false, landing.GateOutcomeOpen},
+		{"failed", false, landing.GateOutcomeOpen},
+		{"partial", true, landing.GateOutcomeOpen},
+		{"done", false, landing.GatePass},
+		{"", false, landing.GatePass},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%s check=%v", c.outcome, c.check), func(t *testing.T) {
@@ -46,7 +47,7 @@ func TestGateRefusesAPartialOrFailedOutcome(t *testing.T) {
 			if err != nil || res.Verdict != c.want {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.want, res)
 			}
-			if c.want != GateOutcomeOpen {
+			if c.want != landing.GateOutcomeOpen {
 				return
 			}
 			if res.Changed || w.onMain("a.txt") {
@@ -79,8 +80,8 @@ func TestGateLandsADoneSlicePROnAPartialSliceIssue(t *testing.T) {
 		outcome string
 		verdict string
 	}{
-		{"done", GatePass},
-		{"partial", GateOutcomeOpen},
+		{"done", landing.GatePass},
+		{"partial", landing.GateOutcomeOpen},
 	} {
 		t.Run(c.outcome, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -153,26 +154,26 @@ func TestGateLiftsAFullyMetPartial(t *testing.T) {
 		want      string
 		wantAudit bool
 	}{
-		{"decision by a writer", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, false, GatePass, true},
-		{"decision by a non-writer", "partial", func(string) []tracker.Comment { return decided("stranger") }, false, false, GateOutcomeOpen, false},
-		{"tracker cannot report access", "partial", func(string) []tracker.Comment { return decided("maintainer") }, true, false, GateOutcomeOpen, false},
-		{"proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "PASS "+h[:7]) }, false, false, GatePass, true},
-		{"proof at an older sha", "partial", func(string) []tracker.Comment { return proven("deadbee", "PASS deadbee") }, false, false, GateOutcomeOpen, false},
-		{"failing proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "FAIL "+h[:7]) }, false, false, GateOutcomeOpen, false},
+		{"decision by a writer", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, false, landing.GatePass, true},
+		{"decision by a non-writer", "partial", func(string) []tracker.Comment { return decided("stranger") }, false, false, landing.GateOutcomeOpen, false},
+		{"tracker cannot report access", "partial", func(string) []tracker.Comment { return decided("maintainer") }, true, false, landing.GateOutcomeOpen, false},
+		{"proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "PASS "+h[:7]) }, false, false, landing.GatePass, true},
+		{"proof at an older sha", "partial", func(string) []tracker.Comment { return proven("deadbee", "PASS deadbee") }, false, false, landing.GateOutcomeOpen, false},
+		{"failing proof at the head", "partial", func(h string) []tracker.Comment { return proven(h[:7], "FAIL "+h[:7]) }, false, false, landing.GateOutcomeOpen, false},
 		{"stale PASS then FAIL at the head", "partial", func(h string) []tracker.Comment {
 			return proven(h[:7], "PASS deadbee", "FAIL "+h[:7])
-		}, false, false, GateOutcomeOpen, false},
+		}, false, false, landing.GateOutcomeOpen, false},
 		{"PASS then FAIL then PASS at the head", "partial", func(h string) []tracker.Comment {
 			return proven(h[:7], "PASS "+h[:7], "FAIL "+h[:7], "PASS "+h[:7])
-		}, false, false, GatePass, true},
-		{"open criterion", "partial", func(string) []tracker.Comment { return nil }, false, false, GateOutcomeOpen, false},
+		}, false, false, landing.GatePass, true},
+		{"open criterion", "partial", func(string) []tracker.Comment { return nil }, false, false, landing.GateOutcomeOpen, false},
 		{"mark on a non-decision comment", "partial", func(string) []tracker.Comment {
 			cs := decided("maintainer")
 			cs[0].Body = "<!-- rota:comment feedback -->\nship it"
 			return cs
-		}, false, false, GateOutcomeOpen, false},
-		{"met but failed", "failed", func(string) []tracker.Comment { return decided("maintainer") }, false, false, GateOutcomeOpen, false},
-		{"audit cannot be written", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, true, GateOutcomeOpen, false},
+		}, false, false, landing.GateOutcomeOpen, false},
+		{"met but failed", "failed", func(string) []tracker.Comment { return decided("maintainer") }, false, false, landing.GateOutcomeOpen, false},
+		{"audit cannot be written", "partial", func(string) []tracker.Comment { return decided("maintainer") }, false, true, landing.GateOutcomeOpen, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)

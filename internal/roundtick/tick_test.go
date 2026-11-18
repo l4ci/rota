@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/landing"
 	"reflect"
 	"slices"
 	"strings"
@@ -62,14 +63,14 @@ func (f *fake) env() Env {
 			if f.gateOut != nil {
 				return f.gateOut(t)
 			}
-			return GateRun{Result: worker.GateResult{Verdict: worker.GatePass}}
+			return GateRun{Result: landing.GateResult{Verdict: landing.GatePass}}
 		},
 		RunTrain: func(_ context.Context, t []string, base string) TrainRun {
 			f.trained = append(f.trained, append([]string{base}, t...))
 			if f.trainOut != nil {
 				return f.trainOut(t)
 			}
-			return TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass}}
+			return TrainRun{Result: landing.TrainResult{Verdict: landing.GatePass}}
 		},
 		Candidates: func(context.Context) ([]round.Candidate, error) { return f.cands, nil },
 		Assign: func(_ context.Context, id string) ([]string, error) {
@@ -221,9 +222,9 @@ func TestFailedGateIsEscalatedAndVerifyFailureHeld(t *testing.T) {
 	f.baseOf = func(t string) string { return "base-" + t } // two gates, not a train
 	f.gateOut = func(t string) GateRun {
 		if t == "ben" {
-			return GateRun{Result: worker.GateResult{Verdict: "verify-failed", Err: "tests red"}}
+			return GateRun{Result: landing.GateResult{Verdict: "verify-failed", Err: "tests red"}}
 		}
-		return GateRun{Result: worker.GateResult{Verdict: "stale", Err: "behind main"}}
+		return GateRun{Result: landing.GateResult{Verdict: "stale", Err: "behind main"}}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -413,7 +414,7 @@ func TestTrainFailureLandsSkipsAndHolds(t *testing.T) {
 		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
 		{Name: "c", State: "done", PR: "#3"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{Members: []worker.TrainMember{{Target: "a", Landed: true}}, Culprit: "b", Verdict: "verify-failed", Err: "red"}}
+		return TrainRun{Result: landing.TrainResult{Members: []landing.TrainMember{{Target: "a", Landed: true}}, Culprit: "b", Verdict: "verify-failed", Err: "red"}}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -432,12 +433,12 @@ func TestTrainExcludedMemberIsGateFailedNotMerged(t *testing.T) {
 	f := &fake{slots: []Slot{
 		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{
-			Verdict: worker.GatePass,
-			Members: []worker.TrainMember{{Target: "a", Landed: true}},
+		return TrainRun{Result: landing.TrainResult{
+			Verdict: landing.GatePass,
+			Members: []landing.TrainMember{{Target: "a", Landed: true}},
 			Landed:  []string{"a"},
-			Culprits: []worker.TrainCulprit{{Target: "b", PR: "#2", BlockedBy: "assumptions-missing",
-				Gate: worker.GateResult{Verdict: "assumptions-missing", Err: "PR body lacks ## Assumptions"}}},
+			Culprits: []landing.TrainCulprit{{Target: "b", PR: "#2", BlockedBy: "assumptions-missing",
+				Gate: landing.GateResult{Verdict: "assumptions-missing", Err: "PR body lacks ## Assumptions"}}},
 		}}
 	}
 	r, err := Run(context.Background(), f.env())
@@ -454,7 +455,7 @@ func TestTrainExcludedMemberIsGateFailedNotMerged(t *testing.T) {
 
 func TestTrainBaseMovedSkipsEveryone(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
-	f.trainOut = func([]string) TrainRun { return TrainRun{Result: worker.TrainResult{Verdict: "base-moved"}} }
+	f.trainOut = func([]string) TrainRun { return TrainRun{Result: landing.TrainResult{Verdict: "base-moved"}} }
 	r, err := Run(context.Background(), f.env())
 	if err != nil || len(r.Did) != 0 || len(r.NeedsYou) != 0 {
 		t.Fatalf("%v %+v", err, r)
@@ -462,9 +463,9 @@ func TestTrainBaseMovedSkipsEveryone(t *testing.T) {
 }
 
 func TestStaleAndProvenanceFailuresAreNotHeld(t *testing.T) {
-	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail, worker.GateBestOfUnpicked} {
+	for _, v := range []string{landing.GateStale, landing.GateProvenanceFail, landing.GateBestOfUnpicked} {
 		f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}}}
-		f.gateOut = func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: v, Err: "x"}} }
+		f.gateOut = func(string) GateRun { return GateRun{Result: landing.GateResult{Verdict: v, Err: "x"}} }
 		r, _ := Run(context.Background(), f.env())
 		if len(r.NeedsYou) != 1 || len(r.Held) != 0 {
 			t.Fatalf("%s: needsYou %+v held %v", v, r.NeedsYou, r.Held)
@@ -501,7 +502,7 @@ func TestBlockedByNoRoundIsAFailureNotARefusal(t *testing.T) {
 }
 
 func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
-	if worker.ClassifyVerdict(worker.GateBestOfUnpicked).Hold || worker.ClassifyVerdict(worker.GateStale).Hold || !worker.ClassifyVerdict(worker.GateNotClosing).Hold {
+	if landing.ClassifyVerdict(landing.GateBestOfUnpicked).Hold || landing.ClassifyVerdict(landing.GateStale).Hold || !landing.ClassifyVerdict(landing.GateNotClosing).Hold {
 		t.Error("only a verdict that needs a person is holdable")
 	}
 }
@@ -717,7 +718,7 @@ func TestGateRunningRefusalDefersTheAssign(t *testing.T) {
 	calls := 0
 	f.assignFn = func(string) ([]string, error) {
 		calls++
-		return nil, &round.BlockedError{By: worker.GateRunning, Msg: "a gate or train holds the land lock for #1900"}
+		return nil, &round.BlockedError{By: landing.GateRunning, Msg: "a gate or train holds the land lock for #1900"}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil || calls != 1 {
@@ -892,8 +893,8 @@ func TestTickTrainInteraction(t *testing.T) {
 		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
 		{Name: "c", State: "done", PR: "#3"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{Verdict: worker.GateInteraction, Interaction: []string{"a", "c"},
-			Members: []worker.TrainMember{{Target: "a"}, {Target: "b"}, {Target: "c"}}, Err: "TRAIN-INTERACTION a, c — red together"}}
+		return TrainRun{Result: landing.TrainResult{Verdict: landing.GateInteraction, Interaction: []string{"a", "c"},
+			Members: []landing.TrainMember{{Target: "a"}, {Target: "b"}, {Target: "c"}}, Err: "TRAIN-INTERACTION a, c — red together"}}
 	}
 	e := f.env()
 	e.Head = func(_ context.Context, target string) (string, error) { return target + ":head", nil }
@@ -922,7 +923,7 @@ func TestTickTrainInteraction(t *testing.T) {
 	// The next tick reads the hold, not a new train, and says the same.
 	e.Held, e.FailedHeads = r.Held, r.FailedHeads
 	f.trainOut = func(ts []string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass, Members: []worker.TrainMember{{Target: ts[0], Landed: true}}}}
+		return TrainRun{Result: landing.TrainResult{Verdict: landing.GatePass, Members: []landing.TrainMember{{Target: ts[0], Landed: true}}}}
 	}
 	r2, err := Run(context.Background(), e)
 	if err != nil {
@@ -937,8 +938,8 @@ func TestTickTrainInteraction(t *testing.T) {
 func TestTickTrainUnreproducedRetriesEveryMember(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{Verdict: worker.GateVerifyFailed, Unreproduced: true,
-			Members: []worker.TrainMember{{Target: "a"}, {Target: "b"}}, Err: "TRAIN-FAIL unreproduced — a flake"}}
+		return TrainRun{Result: landing.TrainResult{Verdict: landing.GateVerifyFailed, Unreproduced: true,
+			Members: []landing.TrainMember{{Target: "a"}, {Target: "b"}}, Err: "TRAIN-FAIL unreproduced — a flake"}}
 	}
 	e := f.env()
 	e.Head = func(_ context.Context, target string) (string, error) { return target + ":head", nil }
@@ -996,11 +997,11 @@ func TestTickNamesWhyItHoldsADueTrain(t *testing.T) {
 		{"support role", func(_ *fake, e *Env) { e.Role = roundcfg.RoleSupport }, map[string]string{"a": "support", "b": "support"}},
 		{"over the cap", func(_ *fake, e *Env) { e.Cap = 1 }, map[string]string{"b": "round.autopilotCap"}},
 		{"base moved", func(f *fake, _ *Env) {
-			f.trainOut = func([]string) TrainRun { return TrainRun{Result: worker.TrainResult{Verdict: "base-moved"}} }
+			f.trainOut = func([]string) TrainRun { return TrainRun{Result: landing.TrainResult{Verdict: "base-moved"}} }
 		}, map[string]string{"a": "base moved", "b": "base moved"}},
 		{"flake", func(f *fake, _ *Env) {
 			f.trainOut = func([]string) TrainRun {
-				return TrainRun{Result: worker.TrainResult{Verdict: "verify-failed", Unreproduced: true}}
+				return TrainRun{Result: landing.TrainResult{Verdict: "verify-failed", Unreproduced: true}}
 			}
 		}, map[string]string{"a": "retrain", "b": "retrain"}},
 	}
@@ -1045,8 +1046,8 @@ func TestObserveReportsTheSameHoldAsExecution(t *testing.T) {
 func TestTickAlreadyMergedPRLogsNoMerge(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{
-			Verdict:       worker.GatePass,
+		return TrainRun{Result: landing.TrainResult{
+			Verdict:       landing.GatePass,
 			AlreadyMerged: []string{"a", "b"},
 		}}
 	}
@@ -1068,9 +1069,9 @@ func TestTickAlreadyMergedPRLogsNoMerge(t *testing.T) {
 func TestTickTrainLogsOnlyOwnLanding(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
 	f.trainOut = func([]string) TrainRun {
-		return TrainRun{Result: worker.TrainResult{
-			Verdict:       worker.GatePass,
-			Members:       []worker.TrainMember{{Target: "b", Landed: true}},
+		return TrainRun{Result: landing.TrainResult{
+			Verdict:       landing.GatePass,
+			Members:       []landing.TrainMember{{Target: "b", Landed: true}},
 			Landed:        []string{"b"},
 			AlreadyMerged: []string{"a"},
 		}}

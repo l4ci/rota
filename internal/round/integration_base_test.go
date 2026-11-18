@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func integrationFixture(t *testing.T) *assignFixture {
 	gittest.Run(t, f.root, "push", "-q", "origin", "int-tmp:refs/heads/integration/r1-a")
 	gittest.Run(t, f.root, "switch", "-q", "main")
 	gittest.Run(t, f.root, "branch", "-q", "-D", "int-tmp")
-	if err := worker.RecordIntegration(f.root, worker.Integration{Name: "a", Branch: "integration/r1-a", Round: 1, Base: "main", Items: []string{"15"}}); err != nil {
+	if err := worker.RecordIntegration(f.root, landing.Integration{Name: "a", Branch: "integration/r1-a", Round: 1, Base: "main", Items: []string{"15"}}); err != nil {
 		t.Fatal(err)
 	}
 	f.be.add("15", "Interaction on integration/r1-a", "M01", false, "## Acceptance\n- [ ] ok\n\nedits a.go")
@@ -103,8 +104,8 @@ func TestReconcileCleanAfterIntegrationLanding(t *testing.T) {
 	if out, err := f.env.Reconcile(bg, f.root, false); err != nil || countKind(out.Drift, PRStale) != 1 {
 		t.Fatalf("baseline: a merged PR held by a slot is drift: %+v %v", out.Drift, err)
 	}
-	rec := worker.Integration{Name: "a", Branch: "integration/r1-a", Round: 1, Base: "main", Landed: true,
-		Members: []worker.IntegrationMember{{Target: "ben", PR: url, Issue: "12"}}}
+	rec := landing.Integration{Name: "a", Branch: "integration/r1-a", Round: 1, Base: "main", Landed: true,
+		Members: []landing.IntegrationMember{{Target: "ben", PR: url, Issue: "12"}}}
 	if err := worker.RecordIntegration(f.root, rec); err != nil {
 		t.Fatal(err)
 	}

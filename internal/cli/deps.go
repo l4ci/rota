@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"io"
 	"os"
 	"os/exec"
@@ -112,7 +113,7 @@ type Deps struct {
 	// TrainPlan previews a train of PRs on a base (the `worker train --plan`
 	// answer) for the train nudge. Nil skips the preview and the nudge stays
 	// as it was; an error also leaves the nudge unchanged.
-	TrainPlan func(c *Ctx, root, base string, prs []string) (*worker.TrainPlan, error)
+	TrainPlan func(c *Ctx, root, base string, prs []string) (*landing.TrainPlan, error)
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
