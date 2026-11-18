@@ -148,7 +148,6 @@ func (u *Umbrella) MilestoneStatus(mid, status string) (bool, error) {
 		if err := mt.EditMilestone(u.ctx(), m.Number, tracker.MilestoneEdit{State: &want}); err != nil {
 			return false, err
 		}
-		changed = true
 	}
 	return changed, nil
 }
