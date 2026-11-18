@@ -98,7 +98,7 @@ func runVersionDrift(c *Ctx) (Result, error) {
 // the pre-rename stamp) of root's merged config with the running binary. Either
 // side empty is "unknown".
 func versionDrift(c *Ctx, root string) (stamped, installed, status string) {
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	stamped = config.StampedVersion(cfg)
 	installed = c.deps().InstalledVersion()
 	status = "unknown"

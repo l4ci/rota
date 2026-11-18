@@ -292,7 +292,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		root := rootOrDir(dir)
-		cfg := c.deps().Config(root)
+		cfg := c.projectConfig(root)
 
 		provider, err := actorForge(c, cfg, dir)
 		if err != nil {

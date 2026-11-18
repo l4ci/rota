@@ -112,7 +112,7 @@ func releaseVersion(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		override, _ := config.Lookup(c.deps().Config(dir), "release.versionFile")
+		override, _ := config.Lookup(c.projectConfig(dir), "release.versionFile")
 		ov, _ := override.(string)
 		file, version, kind, err := release.Detect(dir, ov)
 		if err != nil {
@@ -162,7 +162,7 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 				}
 			}
 		} else {
-			override, _ := config.Lookup(c.deps().Config(dir), "release.versionFile")
+			override, _ := config.Lookup(c.projectConfig(dir), "release.versionFile")
 			ov, _ := override.(string)
 			f, _, k, err := release.Detect(dir, ov)
 			if err != nil {
@@ -216,7 +216,7 @@ func releaseHost(c *Ctx, args []string) (Result, error) {
 	if res, err := c.deps().Repo(dir).Run(c.Context(), "remote", "get-url", "origin"); err == nil && res.ExitCode == 0 {
 		url = strings.TrimRight(res.Stdout, "\n")
 	}
-	provider, err := actorForge(c, c.deps().Config(dir), dir)
+	provider, err := actorForge(c, c.projectConfig(dir), dir)
 	if err != nil {
 		return failData(err), err
 	}
@@ -385,7 +385,7 @@ func releasePendingData(c *Ctx, dir string) (*jsonx.Object, error) {
 		}
 		commits, tagTS = int(n), ts
 	}
-	return release.Pending(c.deps().Config(dir), tag, commits, tagTS, c.deps().Now().Unix()), nil
+	return release.Pending(c.projectConfig(dir), tag, commits, tagTS, c.deps().Now().Unix()), nil
 }
 
 // releaseGitCount runs git and parses its stdout as one integer; any failure is exit 5.

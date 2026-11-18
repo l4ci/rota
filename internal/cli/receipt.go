@@ -374,7 +374,7 @@ func targetHead(c *Ctx, root string, t worker.GateTarget) string {
 	if !t.External || !ok {
 		return ""
 	}
-	fg, err := c.deps().forge(c.Context(), c.deps().Config(root), "", root)
+	fg, err := c.deps().forge(c.Context(), c.projectConfig(root), "", root)
 	if err != nil {
 		return ""
 	}
