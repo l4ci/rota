@@ -5,7 +5,10 @@
 // a new host kind is added here and nowhere else.
 package hostenv
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // Prefixes are matched against the variable name. TMUX has no underscore on
 // purpose: it covers both TMUX and TMUX_PANE.
@@ -25,4 +28,15 @@ func Is(name string) bool {
 func IsKV(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
 	return Is(k)
+}
+
+// Scrub unsets host-session variables from the process environment. The shell
+// harness applies the same prefix rule through the generated prefix file.
+func Scrub() {
+	for _, kv := range os.Environ() {
+		if IsKV(kv) {
+			key, _, _ := strings.Cut(kv, "=")
+			os.Unsetenv(key)
+		}
+	}
 }

@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"strings"
 	"testing"
 

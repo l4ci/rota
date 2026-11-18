@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"github.com/l4ci/rota/internal/jsonx"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"github.com/l4ci/rota/internal/tui"
 	"os"
 	"path/filepath"

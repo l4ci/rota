@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	_ "github.com/l4ci/rota/internal/testiso"
 	"path/filepath"
 	"strings"
 	"testing"
