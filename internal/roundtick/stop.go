@@ -3,6 +3,8 @@ package roundtick
 import (
 	"errors"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/round"
 )
 
 // The stop reasons of the autopilot, defined once. A tick that returns one of
@@ -13,7 +15,7 @@ import (
 var ErrStopped = errors.New("the round is stopped by `rota round wind-down`; the autopilot resumes when wind-down finishes or a wind-down verifies the base green")
 
 // StopVerifyFailed is the stop reason of a red wind-down verify.
-const StopVerifyFailed = "verify-failed"
+const StopVerifyFailed = round.StopVerifyFailed
 
 // ErrBaseRed is ErrStopped after a wind-down verify went red: only a wind-down
 // that verifies the base green resumes the autopilot.
@@ -40,3 +42,20 @@ func StopError(stopped bool, reason string) error {
 	}
 	return ErrStopped
 }
+
+// StopPort is the round.AutopilotStop stored in the autopilot state file.
+type StopPort struct{}
+
+// Load returns the round's stored stop state.
+func (StopPort) Load(commonDir string, round int) (bool, string) {
+	s := LoadState(commonDir, round)
+	return s.Stopped, s.StoppedReason
+}
+
+// Set stops or resumes the round's autopilot.
+func (StopPort) Set(commonDir string, round int, stopped bool, reason string) error {
+	return SetStop(commonDir, round, stopped, reason)
+}
+
+// Clear removes the state of a finished round.
+func (StopPort) Clear(commonDir string) error { return ClearState(commonDir) }

@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -28,7 +29,7 @@ func (d *Deps) baseRoundEnv() round.Env {
 // newRoundEnv builds the base env around w. accounts nil leaves picking off
 // and drops the worker's meters; non-nil turns it on, reading them.
 func newRoundEnv(d *Deps, w worker.Env, accounts *worker.Accounts) round.Env {
-	e := round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(w), Login: d.credentials()}
+	e := round.Env{Stop: roundtick.StopPort{}, Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(w), Login: d.credentials()}
 	e = e.WithAccounts(accounts)
 	if accounts != nil {
 		e.Quotas = d.meterQuotas()

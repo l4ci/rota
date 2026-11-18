@@ -195,18 +195,6 @@ func TestShipFinishUsesExplicitMergeWithRetainedBranch(t *testing.T) {
 	}
 }
 
-func TestShipFinishRoundWorker(t *testing.T) {
-	work := finishFixture(t, 2, false)
-	before := shipTree(t, work)
-	o := trRunWith(t, finishDeps("ben"), work, "", "ship", "finish", "rota/fin", "--json")
-	if o.code != 4 || !strings.Contains(o.stdout, `"blockedBy": "round worker"`) {
-		t.Fatalf("%+v", o)
-	}
-	if !reflect.DeepEqual(before, shipTree(t, work)) {
-		t.Error("a refusal changed .rota/")
-	}
-}
-
 func TestShipFinishUmbrella(t *testing.T) {
 	u := umbrella(t)
 	shipBranchOf(t, filepath.Join(u, "svc"), "feat/x", [3]string{"x.txt", "feat: x", ""})

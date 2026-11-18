@@ -114,7 +114,6 @@
     "./internal/cli/TestRoundSupportReturnReleasesClaimAndPin": "Reads generated or planted files in temporary CLI test projects; source-path hints occur in fixture setup or assertions.",
     "./internal/cli/TestShipFinishAfterMerge": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestShipFinishPRPath": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
-    "./internal/cli/TestShipFinishRoundWorker": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",
     "./internal/cli/TestShipFinishUnproven": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestShipFinishUsesExplicitMergeWithRetainedBranch": "Reads generated Markdown in a temporary test project; does not inspect repository source/docs.",
     "./internal/cli/TestShipUndoItemFromArchive": "Enumerates or snapshots a temporary test project through a local fixture helper; does not scan repository sources.",

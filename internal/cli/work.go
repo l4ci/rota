@@ -55,9 +55,8 @@ func workStart(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		// Refusals first: nothing below runs for a round worker or an umbrella.
-		if c.deps().Getenv("ROTA_SLOT") != "" {
-			return blockedRefusal(nil, blockedby.RoundWorker,
-				"a round worker (ROTA_SLOT set) starts from its assignment, not from work start",
+		if c.WorkerSlot() != "" {
+			return workerRefusal("a round worker (ROTA_SLOT set) starts from its assignment, not from work start",
 				"follow the worker steps in /rota-work")
 		}
 		if repos.Umbrella(root) {

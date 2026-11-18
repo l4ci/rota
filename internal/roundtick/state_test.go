@@ -1,6 +1,9 @@
 package roundtick
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestStateRoundTripAndStop(t *testing.T) {
 	cd := t.TempDir()
@@ -28,5 +31,20 @@ func TestStateRoundTripAndStop(t *testing.T) {
 	ClearState(cd)
 	if got := LoadState(cd, 2); got.Stopped || len(got.Held) != 0 {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// An unwritable common dir surfaces from the StopPort instead of vanishing.
+func TestStopPortReportsUnwritableCommonDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory modes")
+	}
+	cd := t.TempDir()
+	if err := os.Chmod(cd, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(cd, 0o700) })
+	if err := (StopPort{}).Set(cd, 1, true, StopVerifyFailed); err == nil {
+		t.Fatal("want the write failure, got nil")
 	}
 }
