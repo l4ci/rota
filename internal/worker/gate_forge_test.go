@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,7 +28,7 @@ func TestGateLocalForgeMergesDirectlyAndNeverLooksForAPR(t *testing.T) {
 		return nil, nil
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GatePass || !res.Changed || !w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed || !w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if res.PR != "" {
@@ -46,7 +47,7 @@ func TestGateAutoForgeWithNoRemoteIsLocal(t *testing.T) {
 		return nil, nil
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GatePass || !w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GatePass || !w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -57,7 +58,7 @@ func TestGateLocalForgeRefusesARecordedPR(t *testing.T) {
 	w := newWorld(t, "7")
 	w.setConfig(`{"forge":{"provider":"local"},"test":{"full":["true"]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "the forge is local") || w.onMain("work.txt") {
+	if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "the forge is local") || w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -80,7 +81,7 @@ func TestGateFileSourceStillGatesPRsOnTheConfiguredForge(t *testing.T) {
 				return inner(provider, dir, s)
 			}
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if err != nil || res.Verdict != GatePass || !w.onMain("work.txt") {
+			if err != nil || res.Verdict != landing.GatePass || !w.onMain("work.txt") {
 				t.Fatalf("%+v %v", res, err)
 			}
 			if got != c.want {
@@ -103,7 +104,7 @@ func TestGateUnknownOriginRefusesBlockedByForge(t *testing.T) {
 		return nil, nil
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if err != nil || res.Verdict != GateForge || !res.Refused(err) || ClassifyVerdict(res.Verdict).BlockedBy != "forge" ||
+	if err != nil || res.Verdict != landing.GateForge || !res.Refused(err) || landing.ClassifyVerdict(res.Verdict).BlockedBy != "forge" ||
 		!strings.Contains(res.Err, "cannot determine the forge from origin "+odd) || w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -149,8 +150,8 @@ func TestGateClosingCheckReadsTheIssueSource(t *testing.T) {
 		labels  []string
 		verdict string
 	}{
-		{"partial slice on the tracker", []string{PartialSliceLabel}, GatePass},
-		{"no partial slice on the tracker", nil, GateNotClosing},
+		{"partial slice on the tracker", []string{PartialSliceLabel}, landing.GatePass},
+		{"no partial slice on the tracker", nil, landing.GateNotClosing},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -185,10 +186,10 @@ func TestGateClosesByKeyOnAKeyBasedTracker(t *testing.T) {
 		labels                  []string
 		verdict                 string
 	}{
-		{name: "key in the title", title: "PROJ-123 widen the seam", head: "w1", verdict: GatePass},
-		{name: "keyword alone does not close a key", title: "widen the seam", head: "w1", body: "Closes #123\n", verdict: GateNotClosing},
-		{name: "a longer key is another issue", title: "PROJ-1234 widen", head: "w1", verdict: GateNotClosing},
-		{name: "partial slice", title: "widen", head: "w1", labels: []string{PartialSliceLabel}, verdict: GatePass},
+		{name: "key in the title", title: "PROJ-123 widen the seam", head: "w1", verdict: landing.GatePass},
+		{name: "keyword alone does not close a key", title: "widen the seam", head: "w1", body: "Closes #123\n", verdict: landing.GateNotClosing},
+		{name: "a longer key is another issue", title: "PROJ-1234 widen", head: "w1", verdict: landing.GateNotClosing},
+		{name: "partial slice", title: "widen", head: "w1", labels: []string{PartialSliceLabel}, verdict: landing.GatePass},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -208,7 +209,7 @@ func TestGateClosesByKeyOnAKeyBasedTracker(t *testing.T) {
 			if res.Issue != "PROJ-123" {
 				t.Errorf("issue = %q", res.Issue)
 			}
-			if c.verdict == GateNotClosing && !strings.Contains(res.Hint, "PROJ-123") {
+			if c.verdict == landing.GateNotClosing && !strings.Contains(res.Hint, "PROJ-123") {
 				t.Errorf("hint names the key: %q", res.Hint)
 			}
 		})

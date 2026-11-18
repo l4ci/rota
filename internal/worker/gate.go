@@ -65,72 +65,6 @@ import (
 // the maintainer, a relay round cited that was never sent, or no section at all
 // while relays exist is a provenance-fail. Nothing merges on a failed citation.
 
-// Gate verdicts. fresh (with CheckOnly) and pass succeed; the rest are exit 1.
-const (
-	GateFresh          = landing.GateFresh
-	GatePass           = landing.GatePass
-	GateStale          = landing.GateStale
-	GatePRMismatch     = landing.GatePRMismatch
-	GateProvenanceFail = landing.GateProvenanceFail
-	GateNotMerged      = landing.GateNotMerged
-	GateNotOnBase      = landing.GateNotOnBase
-	GateVerifyFailed   = landing.GateVerifyFailed
-	// GateInteraction: a train's red test passes on each member alone but
-	// fails with them merged together (#3095). No member is the culprit.
-	GateInteraction = landing.GateInteraction
-	// GateVacuousTests refuses tests independent of the non-test change.
-	GateVacuousTests   = landing.GateVacuousTests
-	GateMergedRemotely = landing.GateMergedRemotely
-	GateMergeFailed    = landing.GateMergeFailed
-	GateCheckBroke     = landing.GateCheckBroke
-	// GateCancelled: the train was cancelled (rota worker train cancel, SIGINT
-	// or SIGTERM) before it finished. Not a code or test failure.
-	GateCancelled = landing.GateCancelled
-	// GateApprovalRequired: the merge-approval gate (B1) refused before the
-	// merge; the CLI exits 4 with it.
-	GateApprovalRequired = landing.GateApprovalRequired
-	// GateVerdictBlocked: a recorded FAIL verdict (B3) refused before the
-	// merge; the CLI exits 4 with it, blockedBy verdict.
-	GateVerdictBlocked = landing.GateVerdictBlocked
-	// GateNoVerify: test.full is empty, so a merge would land unverified; the
-	// CLI exits 4 with it unless --no-verify was passed. The verdict is also
-	// the refusal's blockedBy key.
-	GateNoVerify = landing.GateNoVerify
-	// GateNotClosing: the PR body has no closing keyword for the slot's issue,
-	// so the merge would leave it open and drifted; the CLI exits 4 with it,
-	// blockedBy closes. An issue labelled PartialSliceLabel is exempt, but a PR
-	// the forge says closes one is refused with the same verdict (FinalSlice).
-	GateNotClosing = landing.GateNotClosing
-	// GateClaimLost fences a holder whose issue was reclaimed elsewhere.
-	GateClaimLost = landing.GateClaimLost
-	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
-	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
-	GateBestOfUnpicked = landing.GateBestOfUnpicked
-	// GateReviewMissing: the review depth ship.review resolves for the branch
-	// needs a recorded verdict the branch lacks; the CLI exits 4 with it,
-	// blockedBy review-missing.
-	GateReviewMissing = landing.GateReviewMissing
-	// GateStaleAttempt: a commit on the PR branch is stamped with an attempt
-	// the slot no longer holds, so a worker whose assignment was reclaimed or
-	// transferred pushed it; the CLI exits 4 with it, blockedBy stale-attempt.
-	GateStaleAttempt = landing.GateStaleAttempt
-	// GateOutcomeOpen: the slot's worker reported a partial or failed outcome
-	// and no relay or transfer has answered it; the CLI exits 4 with it,
-	// blockedBy outcome-open.
-	GateOutcomeOpen = landing.GateOutcomeOpen
-	// GateRunning: another gate for this PR is running or queued, or a NoWait
-	// run yielded to other landing work. The CLI exits 4, blockedBy gate-running,
-	// before this run takes the land lock.
-	GateRunning = landing.GateRunning
-	// GateForge: the origin names no forge and forge.provider names none, so
-	// the gate cannot tell where the PR lives (tracker.ResolveProvider, an
-	// actor); the CLI exits 4 with it, blockedBy forge.
-	GateForge = landing.GateForge
-	// GateAlreadyMerged: the PR merged before this gate checked its head.
-	// A success that changes nothing.
-	GateAlreadyMerged = landing.GateAlreadyMerged
-)
-
 // AttemptTrailer is the commit trailer a worker stamps its attempt id with.
 const AttemptTrailer = "Rota-Attempt"
 
@@ -167,7 +101,7 @@ type GateOpts struct {
 	Prune bool
 	// Round reads the round lease for the gate's ledger entries; the gate makes
 	// one when nil. A caller that writes more entries after the gate shares it.
-	Round *RoundMemo
+	Round *landing.RoundMemo
 	// LandVerified marks a landing step of a merge train (see Train): the
 	// train merged the PRs together and verified that tree once, so this gate
 	// only lands. It does not verify (no NO-VERIFY note either: the train
@@ -186,7 +120,7 @@ type GateOpts struct {
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
 	HoldsLandLock bool
 	// The review-verdict gate (B3) runs after provenance, also under CheckOnly.
-	// It reads the verdict store itself (verdict.Check.BlockGate); a blocking
+	// It reads the verdict store itself (verdict.BlockingGate); a blocking
 	// record stops the gate with verdict verdict-blocked and is returned as is.
 	// NoVerdict is the only way past it, for a run another gate already judged.
 	NoVerdict bool
@@ -215,7 +149,7 @@ type GateOpts struct {
 	// approval-required; the refusal lands in GateResult.Refusal
 	// and its error, or an adapter's own, is returned as is. Nil skips approval.
 	Approval interface {
-		Check(string, func() ([]string, error), func() (ApprovalThread, error)) (*exitcode.Refusal, error)
+		Check(string, func() ([]string, error), func() (landing.ApprovalThread, error)) (*exitcode.Refusal, error)
 	}
 	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
 	// gate runs on the scratch merge after test.full and test.e2e. found is
@@ -236,10 +170,6 @@ type GateOpts struct {
 // skipsVerify says the gate runs no verify tier: --no-verify, or a train's
 // landing step whose tree the train already verified.
 func (o GateOpts) skipsVerify() bool { return o.NoVerify || o.LandVerified }
-
-type GateResult = landing.GateResult
-
-type GateGap = landing.GateGap
 
 // GateTarget is what a gate argument resolves to: a slot, or the queued record
 // of a PR whose slot moved on. Both carry the branch, PR, base and relay log the
@@ -409,10 +339,10 @@ type Issues interface {
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
 // passing gate of a queued PR drops its record. The environment defaults are
 // applied here, once; everything below takes Env as given.
-func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
+func (e Env) Gate(ctx context.Context, root string, o GateOpts) (landing.GateResult, error) {
 	e = e.WithDefaults()
 	if o.Round == nil {
-		o.Round = &RoundMemo{}
+		o.Round = &landing.RoundMemo{}
 	}
 	if o.Observe {
 		o.ReviewsOnly = true
@@ -425,14 +355,14 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		res.Round = o.Round
 		return res, err
 	}
-	var res GateResult
+	var res landing.GateResult
 	if common, key, ok := e.gateRunKey(ctx, root, o.Slot); ok {
 		other, release, err := claimGateRun(e.procs(), common, key)
 		if err != nil {
 			return res, err
 		}
 		if other != 0 {
-			res = GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: GateRunning,
+			res = landing.GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: landing.GateRunning,
 				Err:  fmt.Sprintf("GATE %s refused — another gate for this PR is running or queued (pid %d); nothing landed", o.Slot, other),
 				Hint: fmt.Sprintf("wait for pid %d to finish; if it is gone, remove the stale marker under the repo's rota state dir", other)}
 			return res, nil
@@ -448,7 +378,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	rec, err := e.integrationLanding(root, o)
 	switch {
 	case err != nil:
-		res = GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: GateCheckBroke,
+		res = landing.GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: landing.GateCheckBroke,
 			Err: checkBrokeMessage(o.Slot, "cannot read the integration records: "+err.Error())}
 		return res, nil
 	case rec != nil:
@@ -465,11 +395,11 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		err = land()
 	}
 	if errors.Is(err, errLandingBusy) {
-		res = GateResult{Slot: o.Slot, Base: o.Base, Verdict: GateRunning, Err: err.Error()}
+		res = landing.GateResult{Slot: o.Slot, Base: o.Base, Verdict: landing.GateRunning, Err: err.Error()}
 		err = nil
 	}
 	res.Round = o.Round
-	if rec != nil && err == nil && (res.Verdict == GatePass || res.Verdict == GateAlreadyMerged) {
+	if rec != nil && err == nil && (res.Verdict == landing.GatePass || res.Verdict == landing.GateAlreadyMerged) {
 		res.Notes = append(res.Notes, e.restackDependents(ctx, root, *rec)...)
 	}
 	return res, err
@@ -493,8 +423,8 @@ func (e Env) gateRunKey(ctx context.Context, root, arg string) (common, key stri
 }
 
 // gate reads the registry and the gate input, then runs the step table.
-func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
-	res := GateResult{Slot: o.Slot, Base: o.Base}
+func (e Env) gate(ctx context.Context, root string, o GateOpts) (landing.GateResult, error) {
+	res := landing.GateResult{Slot: o.Slot, Base: o.Base}
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return res, err

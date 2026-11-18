@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,14 +105,14 @@ func TestClaimWorkflowGateReconcileAndDriftAgree(t *testing.T) {
 		Issues: func(string, tracker.Settings) (worker.Issues, error) { return forge, nil },
 	}
 	refused, err := gate.Gate(bg, root, worker.GateOpts{Slot: "ben", Base: "main", CheckOnly: true})
-	if err != nil || refused.Verdict != worker.GateClaimLost {
+	if err != nil || refused.Verdict != landing.GateClaimLost {
 		t.Fatalf("old claim was not fenced: %+v err=%v", refused, err)
 	}
 	if _, err := worker.UpdateSlot(root, "ben", func(s *worker.Slot) { s.Raw().Set("claimId", "ben@47") }); err != nil {
 		t.Fatal(err)
 	}
 	merged, err := gate.Gate(bg, root, worker.GateOpts{Slot: "ben", Base: "main", NoVerify: true})
-	if err != nil || merged.Verdict != worker.GatePass {
+	if err != nil || merged.Verdict != landing.GatePass {
 		t.Fatalf("gate did not merge: %+v err=%v", merged, err)
 	}
 	if got := remote.Issues[0].Labels; !slices.Equal(got, []string{"keep", "in-progress"}) {

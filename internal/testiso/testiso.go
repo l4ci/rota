@@ -20,10 +20,12 @@ package testiso
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/l4ci/rota/internal/hostenv"
 )
 
 func init() {
-	scrubHostEnv()
+	hostenv.Scrub()
 	os.Setenv("GIT_CEILING_DIRECTORIES", os.TempDir())
 	d, err := os.MkdirTemp("", "rota-test-no-global-")
 	if err != nil {

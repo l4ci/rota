@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"testing"
 
 	"github.com/l4ci/rota/internal/flakeledger"
@@ -54,7 +55,7 @@ func TestLandedTrainRetriesFlakyE2E(t *testing.T) {
 	p := trainPlan{in: in, verify: func(dir string) (VerifyResult, error) {
 		return e.RunVerify(bg, in.cfg.Full, dir)
 	}}
-	res := TrainResult{}
+	res := landing.TrainResult{}
 	stop, err := tr.verifyLanded(p, &res)
 	if err != nil || stop || calls != 2 {
 		t.Fatalf("flaky post-landing e2e must recover once: stop=%v calls=%d err=%v res=%+v", stop, calls, err, res)

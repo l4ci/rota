@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/landing"
 	"os/exec"
 	"strings"
 	"testing"
@@ -17,10 +18,10 @@ func stackedWorld(t *testing.T) *world {
 	w := integrationWorld(t)
 	integrationPRFor(t, w, []string{"7"})
 	res, err := w.train(TrainOpts{Targets: []string{"8"}, Integration: "b", Onto: "a"})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("stacked train: %+v %v", res, err)
 	}
-	if err := UpdateIntegration(w.dir, intBranchB, func(it *Integration) { it.PR = "https://github.com/o/r/pull/10" }); err != nil {
+	if err := UpdateIntegration(w.dir, intBranchB, func(it *landing.Integration) { it.PR = "https://github.com/o/r/pull/10" }); err != nil {
 		t.Fatal(err)
 	}
 	return w
@@ -31,10 +32,10 @@ func integrationPRFor(t *testing.T, w *world, targets []string) {
 	t.Helper()
 	w.forge("head#7", "w1")
 	w.forge("sha#7", w.forgeWord("sha"))
-	if res, err := w.train(TrainOpts{Targets: targets, Integration: "a"}); err != nil || res.Verdict != GatePass {
+	if res, err := w.train(TrainOpts{Targets: targets, Integration: "a"}); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("integration train: %+v %v", res, err)
 	}
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) { it.PR = "https://github.com/o/r/pull/9" }); err != nil {
 		t.Fatal(err)
 	}
 	reg, _ := LoadRegistry(w.dir)
@@ -55,7 +56,7 @@ func (w *world) pointPR10() string {
 	return tip
 }
 
-func (w *world) landPR10() (GateResult, error) {
+func (w *world) landPR10() (landing.GateResult, error) {
 	return w.env(false).Gate(bg, w.dir, GateOpts{Slot: "10", Base: "main"})
 }
 
@@ -94,7 +95,7 @@ func TestTrainOntoRefusals(t *testing.T) {
 		}
 	}
 	integrationPRFor(t, w, []string{"7"})
-	if err := UpdateIntegration(w.dir, intBranch, func(it *Integration) { it.Landed = true }); err != nil {
+	if err := UpdateIntegration(w.dir, intBranch, func(it *landing.Integration) { it.Landed = true }); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.train(TrainOpts{Targets: []string{"8"}, Integration: "b", Onto: "a"}); err == nil || !strings.Contains(err.Error(), "already landed") {
@@ -105,7 +106,7 @@ func TestTrainOntoRefusals(t *testing.T) {
 func TestStackedLandingRetargetsAndSkipsVerify(t *testing.T) {
 	w := stackedWorld(t)
 	count := countingFull(t, w)
-	if res, err := w.landPR9(); err != nil || res.Verdict != GatePass {
+	if res, err := w.landPR9(); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing a: %+v %v", res, err)
 	}
 	before := intRuns(count)
@@ -123,7 +124,7 @@ func TestStackedLandingRetargetsAndSkipsVerify(t *testing.T) {
 	}
 	w.pointPR10()
 	res, err := w.landPR10()
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing b: %+v %v", res, err)
 	}
 	if intRuns(count) != before || !strings.Contains(strings.Join(res.Notes, "\n"), "INTEGRATION-VERIFIED") {
@@ -140,13 +141,13 @@ func TestStackedLandingReverifiesWhenMergeChangedTree(t *testing.T) {
 	count := countingFull(t, w)
 	trainWrite(t, w, "later.txt", "later")
 	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
-	if res, err := w.landPR9(); err != nil || res.Verdict != GatePass {
+	if res, err := w.landPR9(); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing a: %+v %v", res, err)
 	}
 	before := intRuns(count)
 	w.pointPR10()
 	res, err := w.landPR10()
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing b: %+v %v", res, err)
 	}
 	if intRuns(count) <= before || !strings.Contains(strings.Join(res.Notes, "\n"), "INTEGRATION-REVERIFY") {
@@ -158,7 +159,7 @@ func TestStackedRefusesWhileBaseIsOpen(t *testing.T) {
 	w := stackedWorld(t)
 	w.pointPR10()
 	res, err := w.landPR10()
-	if err != nil || res.Verdict != GateStale || !strings.Contains(res.Err, intBranch) || !strings.Contains(res.Err, "has not landed") {
+	if err != nil || res.Verdict != landing.GateStale || !strings.Contains(res.Err, intBranch) || !strings.Contains(res.Err, "has not landed") {
 		t.Fatalf("b must wait for a: %+v %v", res, err)
 	}
 	if w.onMain("work2.txt") {
@@ -171,7 +172,7 @@ func TestStackedRefusesWhenBaseClosedUnlanded(t *testing.T) {
 	w.pointPR10()
 	w.forge("state#9", "CLOSED")
 	res, err := w.landPR10()
-	if err != nil || res.Verdict != GateStale || !strings.Contains(res.Err, intBranch) || !strings.Contains(res.Err, "closed without landing") {
+	if err != nil || res.Verdict != landing.GateStale || !strings.Contains(res.Err, intBranch) || !strings.Contains(res.Err, "closed without landing") {
 		t.Fatalf("b must refuse and name a: %+v %v", res, err)
 	}
 	if w.onMain("work2.txt") {
@@ -183,12 +184,12 @@ func TestStackedRetargetRetriesAtLanding(t *testing.T) {
 	w := stackedWorld(t)
 	w.forge("setBaseErr", "forge down")
 	res, err := w.landPR9()
-	if err != nil || res.Verdict != GatePass || !strings.Contains(strings.Join(res.Notes, "\n"), "STACK-RETARGET "+intBranchB+" pending") {
+	if err != nil || res.Verdict != landing.GatePass || !strings.Contains(strings.Join(res.Notes, "\n"), "STACK-RETARGET "+intBranchB+" pending") {
 		t.Fatalf("a landing must survive a retarget failure and say so: %+v %v", res, err)
 	}
 	w.forge("setBaseErr", "")
 	w.pointPR10()
-	if res, err := w.landPR10(); err != nil || res.Verdict != GatePass {
+	if res, err := w.landPR10(); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("landing b retries the retarget: %+v %v", res, err)
 	}
 	if !strings.Contains(w.logText(), "PRSetBase 10 main") {

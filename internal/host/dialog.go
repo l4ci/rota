@@ -5,12 +5,15 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 // This file owns how rota reads a harness startup dialog: the option grammar,
 // the recognition of a dialog on the prompt line (ReadDialog, isDialog) and
-// the keys that accept one at spawn (DialogKeys). A harness prompt wording
-// change is an edit here and a fixture in testdata, nowhere else.
+// the keys that accept one at spawn (DialogKeys). Harness-specific trust option
+// text lives in harness, shared with its recovery hint; captured wording lives
+// in testdata.
 
 // optionRow is one option of a dialog: an optional cursor (❯, or > on a plain
 // terminal), an optional number (Claude Code numbered its options before
@@ -53,7 +56,7 @@ const themeTitle = "Choose the text style"
 var dialogFooter = regexp.MustCompile(`(?i)enter (to )?(confirm|select)|esc (to cancel|not now)`)
 
 // dialogAccept are the options that accept a startup dialog.
-var dialogAccept = []string{"Yes, I trust this folder", "Yes, I accept", "Yes, proceed"}
+var dialogAccept = []string{harness.ClaudeTrustAccept, "Yes, I accept", "Yes, proceed"}
 
 // isOnboardingTheme is Claude Code's first-run theme picker, which a config
 // dir with no profile opens on: its title, or a Dark mode row followed by a

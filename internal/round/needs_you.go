@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"sort"
 	"strings"
 	"time"
@@ -123,7 +124,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 		} else if slot == "" || worker.NormID(g.Issue) != worker.NormID(issue) {
 			return // never attach a previous assignment's refusal to this item
 		}
-		if approvalSeen[key] || g.Kind != ledger.KindGate || g.Verdict() != worker.GateApprovalRequired {
+		if approvalSeen[key] || g.Kind != ledger.KindGate || g.Verdict() != landing.GateApprovalRequired {
 			return
 		}
 		approvalSeen[key] = true

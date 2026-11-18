@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,7 +34,7 @@ func TestTrainVerifySuppliedPlan(t *testing.T) {
 			return VerifyResult{Verified: []string{"full"}}, nil
 		},
 	}
-	verified, result, done, err := tr.verifyStage(p, TrainResult{Members: []TrainMember{{Target: "kit", Branch: "feature"}}})
+	verified, result, done, err := tr.verifyStage(p, landing.TrainResult{Members: []landing.TrainMember{{Target: "kit", Branch: "feature"}}})
 	if err != nil || done || verified.passing != 1 || !slices.Equal(result.Verified, []string{"full"}) || !slices.Equal(result.E2EVerified, []string{"e2e"}) {
 		t.Fatalf("verification of supplied plan: %+v prefix=%d done=%v err=%v", result, verified.passing, done, err)
 	}
@@ -56,11 +57,11 @@ func TestTrainVacuousSuppliedPrefix(t *testing.T) {
 	tr := trainRun{e: Env{Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: TrainOpts{LandGreen: true}}
 	p := trainPlan{tips: []string{base, first, second}, in: gateInput{cfg: ParseGateConfig(decodeCfg(t,
 		`{"test":{"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`))}}
-	answer := TrainResult{Members: []TrainMember{{Target: "first", Culprit: true}, {Target: "second"}}}
+	answer := landing.TrainResult{Members: []landing.TrainMember{{Target: "first", Culprit: true}, {Target: "second"}}}
 	for _, c := range []struct {
 		prefix  int
 		verdict string
-	}{{1, ""}, {2, GateVacuousTests}} {
+	}{{1, ""}, {2, landing.GateVacuousTests}} {
 		_, result, done, err := tr.vacuousStage(p, answer, trainVerified{passing: c.prefix})
 		if err != nil || result.Verdict != c.verdict || done != (c.verdict != "") {
 			t.Fatalf("prefix=%d result=%+v done=%v err=%v", c.prefix, result, done, err)

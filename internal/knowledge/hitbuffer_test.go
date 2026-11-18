@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -393,5 +394,26 @@ func TestPartialFoldRecoveryKeepsDeferredHits(t *testing.T) {
 				t.Fatalf("second recovery: %+v err=%v", res, err)
 			}
 		})
+	}
+}
+
+func TestClaimPreservesLiveBufferOnRenameFailure(t *testing.T) {
+	// The live basename fits the filesystem limit; adding the unique claim
+	// suffix exceeds it. This makes the real rename fail without a test seam.
+	hp := filepath.Join(t.TempDir(), strings.Repeat("h", 240))
+	if err := appendPending(hp, pendingHit{Topic: "Arch", Title: "before", Date: "2026-01-01"}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := claim(hp)
+	var renameErr *os.LinkError
+	if claimed != "" || !errors.As(err, &renameErr) || renameErr.Op != "rename" {
+		t.Fatalf("claim must return the rename failure: claimed=%q err=%T %v", claimed, err, err)
+	}
+	if err := appendPending(hp, pendingHit{Topic: "Arch", Title: "after", Date: "2026-01-01"}); err != nil {
+		t.Fatal(err)
+	}
+	hits, skipped, err := readPending(hp)
+	if err != nil || skipped != 0 || len(hits) != 2 || hits[0].Title != "before" || hits[1].Title != "after" {
+		t.Fatalf("live hits after failed claim: %+v skipped=%d err=%v", hits, skipped, err)
 	}
 }

@@ -182,9 +182,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	}
 	switch {
 	case hc.who.Orchestrator || !anySession:
-		if hc.base != "" {
-			hc.handoff = hook.NotePath(hc.root, hc.base)
-		}
+		hc.handoff = handoffFile(c.deps(), hc.root, hc.cfg)
 	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
 		// A work session pauses to .rota/handoff/<its branch>.md, where
 		// /rota-pause writes it; only the auto guard reads it.
@@ -220,27 +218,10 @@ func hookReadContext(c *Ctx) (hc hookContext, ok bool) {
 	if hc.root != "" {
 		hc.cfg = c.deps().Config(hc.root)
 	}
-	// The registry may live in the main checkout while this call runs in a
-	// worker worktree. Use the already resolved root and common dir for both.
-	if hc.slot != "" && hc.root != "" {
-		root := hc.root
-		for {
-			reg, err := worker.LoadRegistry(root)
-			if err != nil {
-				break
-			}
-			if slot := reg.Slot(hc.slot); slot != nil {
-				if slot.HomeBase() != "" {
-					hc.base = slot.Base()
-				}
-				break
-			}
-			main, ok := c.MainCheckoutOf(hc.commonDir)
-			if !ok || main == root {
-				break
-			}
-			root = main
-		}
+	// Resolve from this payload's snapshot, including a registry in the main
+	// checkout when the session runs in a worker worktree.
+	if hc.slot != "" {
+		_, hc.base, _ = resolveSlotBase(c, hc.root, hc.commonDir, hc.slot)
 	}
 	if hc.base == "" {
 		hc.base = hookBase(c.deps(), hc.cwd, hc.cfg)

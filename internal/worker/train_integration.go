@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"regexp"
 	"slices"
 	"strings"
@@ -123,7 +124,7 @@ func (e Env) WithIntegrationLock(ctx context.Context, root, name string, fn func
 
 // integrationPlan starts the record of the run: the branch named for the
 // round, carrying the earlier record when the branch has one.
-func integrationPlan(reg Registry, o TrainOpts, withPR, targets int) (*Integration, error) {
+func integrationPlan(reg Registry, o TrainOpts, withPR, targets int) (*landing.Integration, error) {
 	if withPR != targets {
 		return nil, fail(exitcode.ExitUsage, "an integration train merges PRs: every member needs an open PR")
 	}
@@ -131,7 +132,7 @@ func integrationPlan(reg Registry, o TrainOpts, withPR, targets int) (*Integrati
 	if !ok {
 		return nil, fail(exitcode.ExitResolution, "no round recorded: an integration branch is named for its round (rota round start)")
 	}
-	it := Integration{Name: o.Integration, Branch: IntegrationBranch(round, o.Integration), Round: round, Base: o.Base}
+	it := landing.Integration{Name: o.Integration, Branch: IntegrationBranch(round, o.Integration), Round: round, Base: o.Base}
 	if o.Onto != "" {
 		it.Onto, it.OntoBase = o.Base, o.ontoBase
 	}
@@ -182,7 +183,7 @@ func (t *trainRun) integrationStart(p *trainPlanning) (string, bool, error) {
 // holds; a member whose head moved since its merge stays and merges again.
 func (t *trainRun) skipIntegrated(p *trainPlanning, start string) {
 	res := &p.res
-	var ms []TrainMember
+	var ms []landing.TrainMember
 	var heads []string
 	for i, m := range res.Members {
 		// An unreadable pin counts as not integrated: the member merges again.
@@ -203,7 +204,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
 	before := p.tips[len(p.tips)-1]
 	if err := land.MergeLocal(run, p.baseSHA, land.SyncSubject(o.Base, it.Branch), land.RecoveryGit(ctx, e.Git, p.scratch)); err != nil {
-		res.Verdict = GateMergeFailed
+		res.Verdict = landing.GateMergeFailed
 		res.Err, res.Hint = land.Classify(err).Refusal(land.Words{
 			Failed:   fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s in the scratch tree failed", o.Base, it.Branch),
 			Conflict: fmt.Sprintf("TRAIN-FAIL integration — merging %s into %s conflicts in: {paths}", o.Base, it.Branch),
@@ -221,7 +222,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	// A plain push: one that is not a fast-forward is refused by the remote,
 	// so a fix pushed to the branch since this run started is never lost.
 	if out, code := e.runGit(ctx, t.root, "push", "-q", p.rem(), tip+":refs/heads/"+it.Branch); code != 0 {
-		res.Verdict = GateBaseMoved
+		res.Verdict = landing.GateBaseMoved
 		res.Err = fmt.Sprintf("BASE-MOVED train — pushing %s to %s/%s failed: %s; nothing landed", strutil.ShortSHA(tip), p.rem(), it.Branch, strings.TrimSpace(out))
 		res.Hint = "re-run the train: it starts from the branch's new tip"
 		return true, nil
@@ -231,7 +232,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		return true, err
 	}
 	for i, m := range res.Members {
-		im := IntegrationMember{Target: m.Target, PR: m.PR, Branch: m.Branch, Head: p.heads[i], Issue: memberIssue(reg, m)}
+		im := landing.IntegrationMember{Target: m.Target, PR: m.PR, Branch: m.Branch, Head: p.heads[i], Issue: memberIssue(reg, m)}
 		if j := memberIndex(it.Members, m.Target); j >= 0 {
 			it.Members[j] = im
 		} else {
@@ -264,7 +265,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 
 // memberIssue is the item a member PR closes: the one its check gate
 // resolved (an external PR's comes from its branch name), else its slot's.
-func memberIssue(reg Registry, m TrainMember) string {
+func memberIssue(reg Registry, m landing.TrainMember) string {
 	if m.ResolvedIssue != "" {
 		return m.ResolvedIssue
 	}
@@ -274,7 +275,7 @@ func memberIssue(reg Registry, m TrainMember) string {
 	return ""
 }
 
-func memberIndex(ms []IntegrationMember, target string) int {
+func memberIndex(ms []landing.IntegrationMember, target string) int {
 	for i, m := range ms {
 		if m.Target == target {
 			return i
@@ -285,7 +286,7 @@ func memberIndex(ms []IntegrationMember, target string) int {
 
 // integrationLand replaces land for an integration train: a verified tip is
 // recorded, and nothing lands on the base.
-func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix trainVerified) (TrainResult, error) {
+func (t *trainRun) integrationLand(p trainPlan, result landing.TrainResult, prefix trainVerified) (landing.TrainResult, error) {
 	res := cloneTrainResult(result)
 	if prefix.passing < len(res.Members) {
 		return res, nil
@@ -295,7 +296,7 @@ func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix train
 	// an empty test.full) checked nothing, so the gate must verify it itself.
 	if len(res.Verified) == 0 {
 		res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATION-UNVERIFIED %s — no test.full command ran; the gate verifies the final tip before it lands", branch))
-	} else if err := UpdateIntegration(t.root, branch, func(it *Integration) {
+	} else if err := UpdateIntegration(t.root, branch, func(it *landing.Integration) {
 		it.VerifiedTip, it.VerifiedBase = p.intTip, p.baseSHA
 	}); err != nil {
 		return res, err
@@ -308,7 +309,7 @@ func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix train
 		res.Integration = &rec
 	}
 	if res.Verdict == "" {
-		res.Verdict = GatePass
+		res.Verdict = landing.GatePass
 	}
 	res.SHA = strutil.ShortSHA(p.intTip)
 	return res, nil
@@ -338,7 +339,7 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 	if done, err := t.assembleIntegration(p); done || err != nil {
 		return done, err
 	}
-	im := IntegrationMember{Target: pending.Target, PR: pending.PR, Branch: pending.Branch, Head: pendingHead, Pending: true, Conflicts: paths}
+	im := landing.IntegrationMember{Target: pending.Target, PR: pending.PR, Branch: pending.Branch, Head: pendingHead, Pending: true, Conflicts: paths}
 	reg, err := LoadRegistry(t.root)
 	if err != nil {
 		return true, err
@@ -355,7 +356,7 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 	rec := *it
 	res.Integration = &rec
 	res.Interaction = append([]string{pending.Target}, t.touching(p, it.Members, pending.Target, paths)...)
-	res.Verdict, res.Culprit = GateInteraction, ""
+	res.Verdict, res.Culprit = landing.GateInteraction, ""
 	res.Err = fmt.Sprintf("TRAIN-INTERACTION %s — %s does not merge onto %s: conflict in %s; the members before it are pushed, nothing is verified or landed",
 		strings.Join(res.Interaction, ", "), pending.Branch, it.Branch, strings.Join(paths, ", "))
 	res.Hint = t.integrationInteractionHint(*it, res.Interaction)
@@ -365,7 +366,7 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 // integrationInteractionHint says where an integration branch's interaction
 // or conflict is fixed: on the branch, through the interaction item the CLI
 // files, never on a member branch, whose review would no longer hold.
-func (t *trainRun) integrationInteractionHint(it Integration, members []string) string {
+func (t *trainRun) integrationInteractionHint(it landing.Integration, members []string) string {
 	return fmt.Sprintf("bounce neither of %s and change no member branch: the fix goes on %s through the interaction item this train files (INTERACTION-ITEM); "+
 		"assign it with `rota round assign <item>` (its slot is cut from %s and its PR targets it), land that PR with `rota worker gate <slot> --base %s`, then re-run `rota worker train %s %s`",
 		strings.Join(members, ", "), it.Branch, it.Branch, it.Branch, strings.Join(t.o.Targets, " "), it.TrainFlags())
@@ -373,7 +374,7 @@ func (t *trainRun) integrationInteractionHint(it Integration, members []string) 
 
 // touching names the merged members whose change touches one of paths, the
 // members a conflicting member collides with.
-func (t *trainRun) touching(p *trainPlanning, ms []IntegrationMember, except string, paths []string) []string {
+func (t *trainRun) touching(p *trainPlanning, ms []landing.IntegrationMember, except string, paths []string) []string {
 	var out []string
 	for _, m := range ms {
 		if m.Target == except || m.Pending {

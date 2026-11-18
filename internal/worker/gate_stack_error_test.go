@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func TestMergeBaseErrorKeepsChain(t *testing.T) {
-	rec := Integration{Branch: "int", OntoBase: "main"}
+	rec := landing.Integration{Branch: "int", OntoBase: "main"}
 	conflict := &land.ConflictError{Out: "CONFLICT (content): Merge conflict in a.go"}
 	cases := []struct {
 		name   string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -30,19 +31,19 @@ type stackRefusal struct{ verdict, msg, hint string }
 // lock. With its base branch landed it moves onto the base (a retry of what the
 // landing of that branch did, or the whole of it when that was skipped); with
 // the base still open or closed unmerged it refuses, naming the base branch.
-func (e Env) settleStack(ctx context.Context, root string, rec Integration) (Integration, []string, *stackRefusal) {
+func (e Env) settleStack(ctx context.Context, root string, rec landing.Integration) (landing.Integration, []string, *stackRefusal) {
 	reg, err := LoadRegistry(root)
 	if err != nil {
-		return rec, nil, &stackRefusal{GateCheckBroke, "cannot read the integration records: " + err.Error(), "gate the PR again"}
+		return rec, nil, &stackRefusal{landing.GateCheckBroke, "cannot read the integration records: " + err.Error(), "gate the PR again"}
 	}
 	under, ok := reg.IntegrationByBranch(rec.Onto)
 	if !ok {
-		return rec, nil, &stackRefusal{GateStale, fmt.Sprintf("its base %s has no record", rec.Onto), "delete the record of " + rec.Branch + " and train it again"}
+		return rec, nil, &stackRefusal{landing.GateStale, fmt.Sprintf("its base %s has no record", rec.Onto), "delete the record of " + rec.Branch + " and train it again"}
 	}
 	if under.Landed {
 		moved, note, err := e.restack(ctx, root, rec)
 		if err != nil {
-			return rec, nil, &stackRefusal{GateStale, fmt.Sprintf("%s landed but %s cannot move onto %s: %s", rec.Onto, rec.Branch, rec.OntoBase, err), "fix that, then gate the PR again"}
+			return rec, nil, &stackRefusal{landing.GateStale, fmt.Sprintf("%s landed but %s cannot move onto %s: %s", rec.Onto, rec.Branch, rec.OntoBase, err), "fix that, then gate the PR again"}
 		}
 		return moved, []string{note}, nil
 	}
@@ -50,13 +51,13 @@ func (e Env) settleStack(ctx context.Context, root string, rec Integration) (Int
 		if in, err := e.GateInput(root); err == nil {
 			if f, _, refusal := e.openForge(ctx, root, under.PR, in.cfg, tracker.ForgeActor); refusal == nil {
 				if info, err := f.PRView(ctx, prNumberOf(under.PR)); err == nil && strings.EqualFold(info.State, "CLOSED") {
-					return rec, nil, &stackRefusal{GateStale, fmt.Sprintf("its base %s was closed without landing (PR %s)", under.Branch, under.PR),
+					return rec, nil, &stackRefusal{landing.GateStale, fmt.Sprintf("its base %s was closed without landing (PR %s)", under.Branch, under.PR),
 						"land " + under.Branch + " some other way and train this branch onto " + rec.OntoBase + ", or drop it"}
 				}
 			}
 		}
 	}
-	return rec, nil, &stackRefusal{GateStale, fmt.Sprintf("it is stacked on %s, which has not landed", under.Branch), "land " + under.Branch + " first: this PR then retargets to " + rec.OntoBase}
+	return rec, nil, &stackRefusal{landing.GateStale, fmt.Sprintf("it is stacked on %s, which has not landed", under.Branch), "land " + under.Branch + " first: this PR then retargets to " + rec.OntoBase}
 }
 
 func prNumberOf(pr string) int {
@@ -69,7 +70,7 @@ func prNumberOf(pr string) int {
 // stack. The verify of the branch stands when that merge left its tree as the
 // verified one. It is safe to run again after a failure: each step is
 // idempotent and the record changes last.
-func (e Env) restack(ctx context.Context, root string, rec Integration) (Integration, string, error) {
+func (e Env) restack(ctx context.Context, root string, rec landing.Integration) (landing.Integration, string, error) {
 	in, err := e.GateInput(root)
 	if err != nil {
 		return rec, "", err
@@ -110,7 +111,7 @@ func (e Env) restack(ctx context.Context, root string, rec Integration) (Integra
 		same = c1 == 0 && c2 == 0 && old == cur
 	}
 	mergesOfBase := e.baseMerges(root, rec, merged, base)
-	err = UpdateIntegration(root, rec.Branch, func(it *Integration) {
+	err = UpdateIntegration(root, rec.Branch, func(it *landing.Integration) {
 		it.Base, it.Onto, it.OntoBase = rec.OntoBase, "", ""
 		it.Assembled = merged
 		for _, c := range mergesOfBase {
@@ -144,7 +145,7 @@ func (e Env) restack(ctx context.Context, root string, rec Integration) (Integra
 // tip that take in the base: a merge whose second parent the base holds. Pushed
 // by this attempt or an earlier one that failed before the record changed, they
 // are rota's own, never fixes for a review. A fix is never a merge of the base.
-func (e Env) baseMerges(root string, rec Integration, merged, base string) []string {
+func (e Env) baseMerges(root string, rec landing.Integration, merged, base string) []string {
 	out, code := e.git(root, "rev-list", "--first-parent", "--merges", "--parents", rec.Assembled+".."+merged)
 	if code != 0 {
 		return []string{merged}
@@ -165,7 +166,7 @@ func (e Env) baseMerges(root string, rec Integration, merged, base string) []str
 
 // refreshStackedBody rewrites the PR body of a branch that left its stack, so it
 // names the base it now lands on. A failure is of no weight: the body is text.
-func (e Env) refreshStackedBody(ctx context.Context, root string, cfg GateConfig, rec Integration) {
+func (e Env) refreshStackedBody(ctx context.Context, root string, cfg GateConfig, rec landing.Integration) {
 	if rec.PR == "" {
 		return
 	}
@@ -183,7 +184,7 @@ func (e Env) refreshStackedBody(ctx context.Context, root string, cfg GateConfig
 // mergeBaseInto merges base into the integration branch's tip in a scratch
 // tree and pushes the result; it answers the new tip (tip itself when the
 // branch already holds base). A plain push: a fix pushed meanwhile is never lost.
-func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec Integration, tip, base string) (string, error) {
+func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec landing.Integration, tip, base string) (string, error) {
 	scratch, cleanup, err := e.scratchTree(ctx, root, tip, "rota-restack-")
 	if err != nil {
 		return "", err
@@ -218,7 +219,7 @@ func (e *chainedError) Unwrap() error { return e.err }
 // mergeBaseError words a failed base merge and keeps the error chain. Only an
 // error that carries a git exit code gets "(exit N)": an error that is not a
 // git exit (ErrUnpinned, a runner failure) is worded without one.
-func mergeBaseError(rec Integration, err error) error {
+func mergeBaseError(rec landing.Integration, err error) error {
 	failed := fmt.Sprintf("merging %s into %s failed", rec.OntoBase, rec.Branch)
 	f := land.Classify(err)
 	if f.Kind == land.FailOther {
@@ -236,7 +237,7 @@ func mergeBaseError(rec Integration, err error) error {
 // failure of the landing that already happened; the dependent's own gate
 // repeats the move. It runs outside the landed branch's locks, under each
 // dependent's own integration lock.
-func (e Env) restackDependents(ctx context.Context, root string, landed Integration) []string {
+func (e Env) restackDependents(ctx context.Context, root string, landed landing.Integration) []string {
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return []string{"STACK-RETARGET not run — cannot read the registry: " + err.Error()}

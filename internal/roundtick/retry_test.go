@@ -3,14 +3,13 @@ package roundtick
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestTickFirstFailedHeadReportExplainsRetry(t *testing.T) {
-	for _, v := range []string{worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests} {
+	for _, v := range []string{landing.GateStale, landing.GateVerifyFailed, landing.GateVacuousTests} {
 		for _, train := range []bool{false, true} {
 			name := "gate"
 			if train {
@@ -21,9 +20,9 @@ func TestTickFirstFailedHeadReportExplainsRetry(t *testing.T) {
 				if train {
 					f.queued = []string{"#11"}
 				}
-				f.gateOut = func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: v}} }
+				f.gateOut = func(string) GateRun { return GateRun{Result: landing.GateResult{Verdict: v}} }
 				f.trainOut = func([]string) TrainRun {
-					return TrainRun{Result: worker.TrainResult{Verdict: v, Culprit: "ben"}}
+					return TrainRun{Result: landing.TrainResult{Verdict: v, Culprit: "ben"}}
 				}
 				e := f.env()
 				e.Head = func(_ context.Context, target string) (string, error) { return target + ":head-a", nil }
@@ -51,7 +50,7 @@ func TestTickFirstFailedHeadReportExplainsRetry(t *testing.T) {
 }
 
 func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
-	for _, v := range []string{worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests} {
+	for _, v := range []string{landing.GateStale, landing.GateVerifyFailed, landing.GateVacuousTests} {
 		for _, train := range []bool{false, true} {
 			name := "gate"
 			if train {
@@ -63,10 +62,10 @@ func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
 					f.queued = []string{"#11"}
 				}
 				f.gateOut = func(string) GateRun {
-					return GateRun{Result: worker.GateResult{Verdict: v}}
+					return GateRun{Result: landing.GateResult{Verdict: v}}
 				}
 				f.trainOut = func([]string) TrainRun {
-					return TrainRun{Result: worker.TrainResult{Verdict: v, Culprit: "ben"}}
+					return TrainRun{Result: landing.TrainResult{Verdict: v, Culprit: "ben"}}
 				}
 				head := "head-a"
 				e := f.env()
@@ -112,10 +111,10 @@ func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
 }
 
 func TestTickTransientRefusalRetriesSameHead(t *testing.T) {
-	for _, v := range []string{worker.GateRunning, worker.GateForge, worker.GateOrder,
-		worker.GateCINotRun, worker.GateVerifyTimeout, worker.GateCheckBroke,
-		worker.GateProvenanceFail, worker.GateMergeFailed, worker.GateCIConfigChanged,
-		worker.GateNoVerify, worker.GateStaleAttempt} {
+	for _, v := range []string{landing.GateRunning, landing.GateForge, landing.GateOrder,
+		landing.GateCINotRun, landing.GateVerifyTimeout, landing.GateCheckBroke,
+		landing.GateProvenanceFail, landing.GateMergeFailed, landing.GateCIConfigChanged,
+		landing.GateNoVerify, landing.GateStaleAttempt} {
 		for _, train := range []bool{false, true} {
 			name := "gate"
 			if train {
@@ -126,8 +125,8 @@ func TestTickTransientRefusalRetriesSameHead(t *testing.T) {
 				if train {
 					f.queued = []string{"#11"}
 				}
-				f.gateOut = func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: v}} }
-				f.trainOut = func([]string) TrainRun { return TrainRun{Result: worker.TrainResult{Verdict: v, Culprit: "ben"}} }
+				f.gateOut = func(string) GateRun { return GateRun{Result: landing.GateResult{Verdict: v}} }
+				f.trainOut = func([]string) TrainRun { return TrainRun{Result: landing.TrainResult{Verdict: v, Culprit: "ben"}} }
 				e := f.env()
 				e.Head = func(_ context.Context, target string) (string, error) { return target + ":head-x", nil }
 				cd := t.TempDir()
@@ -171,7 +170,7 @@ func TestTickUnreadableHeadDoesNotRetry(t *testing.T) {
 }
 
 func TestTickDiscardsPersistedTransientFailures(t *testing.T) {
-	for _, v := range []string{worker.GateRunning, worker.GateForge, worker.GateOrder, worker.GateCINotRun, worker.GateVerifyTimeout} {
+	for _, v := range []string{landing.GateRunning, landing.GateForge, landing.GateOrder, landing.GateCINotRun, landing.GateVerifyTimeout} {
 		t.Run(v, func(t *testing.T) {
 			f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}}}
 			e := f.env()

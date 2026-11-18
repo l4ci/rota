@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"strconv"
 	"strings"
 	"time"
@@ -327,7 +328,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 			delete(notes, r.Name)
 		}
 	}
-	memo := &RoundMemo{}
+	memo := &landing.RoundMemo{}
 	for _, d := range dones {
 		LedgerDoneIn(e, memo, ctx, e.Accounts, root, d)
 	}

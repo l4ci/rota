@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,7 +24,7 @@ import (
 
 // behaviourWorld is a world whose slot w1 holds item 899 with a port block,
 // and whose gate reads body as the item's Try it text.
-func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResult, error)) {
+func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (landing.GateResult, error)) {
 	t.Helper()
 	w := newWorld(t, ghURL)
 	os.Remove(ranMark)
@@ -32,7 +33,7 @@ func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResu
 	w.forge("issueBody", body)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","pr":%q,"task":"899","portBase":20100,"portBlock":100}]}`, ghURL)), 0o644)
-	return w, func(o GateOpts) (GateResult, error) {
+	return w, func(o GateOpts) (landing.GateResult, error) {
 		o.ItemBody = func(issue string) (string, bool, error) {
 			if issue != "899" {
 				return "", false, fmt.Errorf("asked for %q", issue)
@@ -43,7 +44,7 @@ func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResu
 	}
 }
 
-func hasNote(res GateResult, sub string) bool {
+func hasNote(res landing.GateResult, sub string) bool {
 	for _, n := range res.Notes {
 		if strings.Contains(n, sub) {
 			return true
@@ -64,7 +65,7 @@ func behaviourRecord(t *testing.T, w *world) verdict.Record {
 func TestGateBehaviourPassRecordsAndComments(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- test -f work.txt && echo \"port $ROTA_PORT_BASE $ROTA_PORT_BLOCK $ROTA_DB_SUFFIX\"\n  expect: port 20100 100 _w1\n- echo second\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !res.Changed {
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !hasNote(res, "BEHAVIOUR w1 — PASS, 2 Try it step(s) of #899") {
@@ -94,7 +95,7 @@ func TestGateBehaviourPassRecordsAndComments(t *testing.T) {
 func TestGateBehaviourNonZeroExitLandsNothing(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- echo ok\n- echo boom; exit 3\n- echo never\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	for _, want := range []string{"fails Try it step 2 (issue line 4) `echo boom; exit 3`: exit 3; nothing landed", "    boom", "full transcript: .rota/qa-runs/behaviour/"} {
@@ -121,7 +122,7 @@ func TestGateBehaviourNonZeroExitLandsNothing(t *testing.T) {
 func TestGateBehaviourMissingExpectFails(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- echo hello\n  expect: hello\n  expect: goodbye\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, `missing expected line "goodbye"`) {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || !strings.Contains(res.Err, `missing expected line "goodbye"`) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if rec := behaviourRecord(t, w); rec.Verdict != "FAIL" || !strings.Contains(rec.Summary, `missing expected line "goodbye"`) {
@@ -136,7 +137,7 @@ func TestGateBehaviourMissingExpectFails(t *testing.T) {
 func TestGateBehaviourNoSectionSkips(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Acceptance\n\n- [ ] x\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	n := 0
@@ -156,7 +157,7 @@ func TestGateBehaviourNoSectionSkips(t *testing.T) {
 func TestGateBehaviourEmptySectionSkips(t *testing.T) {
 	_, gate := behaviourWorld(t, "## Try it\n\nnothing yet\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "the ## Try it section of #899 lists no steps") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "the ## Try it section of #899 lists no steps") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -164,7 +165,7 @@ func TestGateBehaviourEmptySectionSkips(t *testing.T) {
 func TestGateBehaviourMalformedSectionFails(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- echo a\n  expect:\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Changed ||
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed ||
 		!strings.Contains(res.Err, "the ## Try it section of #899 is malformed:") || !strings.Contains(res.Err, "nothing landed") || res.Hint != "fix the issue body, then re-gate" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -177,7 +178,7 @@ func TestGateBehaviourUnreadableItemBreaksTheCheck(t *testing.T) {
 	w, _ := behaviourWorld(t, "")
 	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 	res, err := w.gate(false, GateOpts{ItemBody: func(string) (string, bool, error) { return "", false, fmt.Errorf("backend down") }})
-	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "#899") || !strings.Contains(res.Err, "backend down") {
+	if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "#899") || !strings.Contains(res.Err, "backend down") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -185,7 +186,7 @@ func TestGateBehaviourUnreadableItemBreaksTheCheck(t *testing.T) {
 func TestGateBehaviourNoIssueSkips(t *testing.T) {
 	w := newWorld(t, ghURL)
 	res, err := w.gate(false, GateOpts{ItemBody: func(string) (string, bool, error) { t.Error("read an item"); return "", false, nil }})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR-SKIP w1 — the gate cannot tell the item") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "BEHAVIOUR-SKIP w1 — the gate cannot tell the item") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -193,7 +194,7 @@ func TestGateBehaviourNoIssueSkips(t *testing.T) {
 func TestGateBehaviourLongTranscriptIsTruncated(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- echo '```'; seq 1 500\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	note := w.forgeWord("note")
@@ -214,7 +215,7 @@ func TestGateBehaviourCommentFailureIsAWarning(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- echo ok\n")
 	w.forge("noteErr", "forge says no")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || len(res.Warnings) != 1 || !strings.HasPrefix(res.Warnings[0], "BEHAVIOUR-COMMENT") {
+	if err != nil || res.Verdict != landing.GatePass || len(res.Warnings) != 1 || !strings.HasPrefix(res.Warnings[0], "BEHAVIOUR-COMMENT") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -264,7 +265,7 @@ func TestGateBehaviourTrustSkips(t *testing.T) {
 				w.forge(k, v)
 			}
 			res, err := gate(GateOpts{})
-			if err != nil || res.Verdict != GatePass || !hasNote(res, tc.want) {
+			if err != nil || res.Verdict != landing.GatePass || !hasNote(res, tc.want) {
 				t.Fatalf("%+v %v\nwant note %q", res, err, tc.want)
 			}
 			if ranMarker(w) || strings.Contains(w.logText(), "AddMRNote") {
@@ -284,7 +285,7 @@ func TestGateBehaviourTrustedAuthorAndEditorRun(t *testing.T) {
 	w, gate := behaviourWorld(t, tryTouch)
 	w.forge("editor", "bob")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !ranMarker(w) {
@@ -313,7 +314,7 @@ func TestGateBehaviourTrustReadFailureBreaksTheCheck(t *testing.T) {
 			w, gate := behaviourWorld(t, tryTouch)
 			w.forge(word, "forge down")
 			res, err := gate(GateOpts{})
-			if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "cannot read who wrote #899 to trust its ## Try it steps") || !strings.Contains(res.Err, "forge down") {
+			if err != nil || res.Verdict != landing.GateCheckBroke || !strings.Contains(res.Err, "cannot read who wrote #899 to trust its ## Try it steps") || !strings.Contains(res.Err, "forge down") {
 				t.Fatalf("%+v %v", res, err)
 			}
 			if ranMarker(w) {
@@ -345,7 +346,7 @@ func TestGateBehaviourSourceWithoutTrustSkips(t *testing.T) {
 	}
 	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return tryTouch, true, nil }}
 	res, err := e.Gate(bg, w.dir, o)
-	if err != nil || res.Verdict != GatePass ||
+	if err != nil || res.Verdict != landing.GatePass ||
 		!hasNote(res, "BEHAVIOUR-SKIP w1 — the jira issue source cannot say whether #899's author is a collaborator, so its Try it steps did not run") {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -358,7 +359,7 @@ func TestGateBehaviourFileSourceRunsUnchecked(t *testing.T) {
 	w, gate := behaviourWorld(t, tryTouch)
 	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if log := w.logText(); strings.Contains(log, "IssueAuthorship") || strings.Contains(log, "CanPush") {
@@ -391,7 +392,7 @@ func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
 		return "hi\n", 0
 	}
 	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
-	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	env := map[string]string{}
@@ -442,7 +443,7 @@ func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
 
 func TestGateBehaviourHomeGoneAfterAFailedStep(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Try it\n\n- touch \"$HOME/mark\"; exit 4\n")
-	if res, err := gate(GateOpts{}); err != nil || res.Verdict != GateVerifyFailed {
+	if res, err := gate(GateOpts{}); err != nil || res.Verdict != landing.GateVerifyFailed {
 		t.Fatalf("%+v %v", res, err)
 	}
 	ents, _ := filepath.Glob(filepath.Join(w.dir, ".rota", "qa-runs", "behaviour", "home-*"))
@@ -465,7 +466,7 @@ func TestGateBehaviourStepSeesNoRealHome(t *testing.T) {
 		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": os.Getenv("PATH"), "HOME": real}[k]
 	}
 	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
-	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -483,7 +484,7 @@ func TestGateBehaviourHomeLeftBehindIsAWarning(t *testing.T) {
 		}
 	})
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass {
+	if err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	found := false
@@ -512,7 +513,7 @@ func TestGateBehaviourMalformedSectionOfAnUntrustedAuthorSkips(t *testing.T) {
 	w.forge("author", "mallory")
 	w.forge("readers", "mallory")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "author mallory of #899 is not a collaborator") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "author mallory of #899 is not a collaborator") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
@@ -523,7 +524,7 @@ func TestGateBehaviourRunsTheVouchedBody(t *testing.T) {
 	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) {
 		return "## Try it\n\n- touch evil.txt\n", true, nil
 	}}
-	if res, err := w.env(false).Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+	if res, err := w.env(false).Gate(bg, w.dir, o); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	tr, _ := os.ReadFile(filepath.Join(w.dir, behaviourRecord(t, w).Transcript))
@@ -535,7 +536,7 @@ func TestGateBehaviourRunsTheVouchedBody(t *testing.T) {
 func TestGateBehaviourNoSectionAsksNoCollaboratorQuestion(t *testing.T) {
 	w, gate := behaviourWorld(t, "## Goal\n\nx\n")
 	res, err := gate(GateOpts{})
-	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR-SKIP w1 — #899 has no ## Try it section; no behaviour run") {
+	if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "BEHAVIOUR-SKIP w1 — #899 has no ## Try it section; no behaviour run") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if strings.Contains(w.logText(), "CanPush") {
@@ -557,7 +558,7 @@ func TestGateBehaviourLocalGateReadsNoForge(t *testing.T) {
 	t.Run("forge source skips", func(t *testing.T) {
 		w := local(t)
 		res, err := w.gate(false, o)
-		if err != nil || res.Verdict != GatePass ||
+		if err != nil || res.Verdict != landing.GatePass ||
 			!hasNote(res, "BEHAVIOUR-SKIP w1 — the gate reads no origin refs (no PR), so it reads no forge for #899's Try it steps") {
 			t.Fatalf("%+v %v", res, err)
 		}
@@ -572,7 +573,7 @@ func TestGateBehaviourLocalGateReadsNoForge(t *testing.T) {
 		w := local(t)
 		w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 		res, err := w.gate(false, o)
-		if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+		if err != nil || res.Verdict != landing.GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
 			t.Fatalf("%+v %v", res, err)
 		}
 	})
@@ -585,7 +586,7 @@ func TestGateBehaviourTruncatedOutputShowsInTheTranscript(t *testing.T) {
 		return "xxxx\n" + outputTruncatedMarker + "\n", 0
 	}
 	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
-	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != landing.GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
 	tr, _ := os.ReadFile(filepath.Join(w.dir, behaviourRecord(t, w).Transcript))

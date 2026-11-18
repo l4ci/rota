@@ -3,10 +3,9 @@ package cli
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestTrainNudgeNamesConflictAndLandableSet(t *testing.T) {
@@ -18,10 +17,10 @@ func TestTrainNudgeNamesConflictAndLandableSet(t *testing.T) {
 	if len(ns) != 1 {
 		t.Fatalf("nudges = %+v, want one", ns)
 	}
-	n := ns[0].withPlan(&worker.TrainPlan{
-		Conflicts: []worker.TrainConflict{{A: "9", B: "10", Paths: []string{"a.go"}}},
+	n := ns[0].withPlan(&landing.TrainPlan{
+		Conflicts: []landing.TrainConflict{{A: "9", B: "10", Paths: []string{"a.go"}}},
 		Landable:  []string{"9", "12"},
-		Blocked:   []worker.TrainBlocked{{Target: "10", By: []string{"9"}}},
+		Blocked:   []landing.TrainBlocked{{Target: "10", By: []string{"9"}}},
 	})
 	if got, want := n.Command(), "rota worker train 9 12 --base main"; got != want {
 		t.Errorf("command = %q, want %q (the conflicting PR must be excluded)", got, want)
@@ -43,7 +42,7 @@ func TestTrainNudgeNamesConflictAndLandableSet(t *testing.T) {
 func TestTrainNudgeWithoutConflictsIsUnchanged(t *testing.T) {
 	ns := trainNudges([]waitingPR{{PR: "#9", Base: "main", Reviewed: true}, {PR: "#10", Base: "main", Reviewed: true}})
 	before := ns[0].Text()
-	got := ns[0].withPlan(&worker.TrainPlan{Landable: []string{"9", "10"}})
+	got := ns[0].withPlan(&landing.TrainPlan{Landable: []string{"9", "10"}})
 	if got.Text() != before || strings.Contains(before, "\n") {
 		t.Errorf("text changed: %q vs %q", got.Text(), before)
 	}
@@ -60,7 +59,7 @@ func TestPlanNudgesFailsOpenAndSkipsLoneBases(t *testing.T) {
 		t.Error("nil hook changed the nudge")
 	}
 	calls := 0
-	c.Deps.TrainPlan = func(*Ctx, string, string, []string) (*worker.TrainPlan, error) {
+	c.Deps.TrainPlan = func(*Ctx, string, string, []string) (*landing.TrainPlan, error) {
 		calls++
 		return nil, errors.New("base not checked out")
 	}

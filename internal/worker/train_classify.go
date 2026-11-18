@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"regexp"
 	"slices"
 	"strings"
@@ -32,7 +33,7 @@ type redClass struct {
 // does not merge without the ones before it).
 //
 // The in-tree retry already caught flakes, so a rerun is not retried.
-func (t *trainRun) classifyRed(p trainPlan, res *TrainResult, k int, failed VerifyResult) (redClass, error) {
+func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, failed VerifyResult) (redClass, error) {
 	if k <= 1 { // the first member alone is the red prefix bisect ran
 		return redClass{}, nil
 	}

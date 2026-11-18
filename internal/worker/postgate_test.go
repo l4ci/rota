@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/landing"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestLandingAdapterEndsLandedItem(t *testing.T) {
 	var released string
 	env := w.env(false).Landing(func(_, issue, slot string) error { released = issue + "@" + slot; return nil })
 	run := env.Run(context.Background(), w.dir, postgate.Request{Gate: &postgate.GateOpts{Slot: "w1", Base: "main"}}).Gate
-	if run.Err != nil || run.BookErr != nil || run.Refused || run.Result.Verdict != GatePass {
+	if run.Err != nil || run.BookErr != nil || run.Refused || run.Result.Verdict != landing.GatePass {
 		t.Fatalf("run: %+v", run)
 	}
 	if _, ok := LoadRegistryTolerant(w.dir).ItemStart("12"); ok {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -22,10 +23,10 @@ import (
 // Anything it cannot tell passes: a slot with no attempt (assigned before the
 // fence), an unstamped commit, an inherited tip that is not an ancestor of the
 // head (a rebase rewrote it) or a log that fails.
-func (runner gateRun) stepAttempt(result GateResult, target GateTarget, refs gateRefsResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepAttempt(result landing.GateResult, target GateTarget, refs gateRefsResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, gateForgeResult{})
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -53,7 +54,7 @@ func (runner gateRun) stepAttempt(result GateResult, target GateTarget, refs gat
 		for _, id := range strings.Fields(stamps) {
 			if id != t.Attempt {
 				g.res.SHA = sha
-				g.verdict(GateStaleAttempt, fmt.Sprintf("GATE %s refused — commit %s on %s was pushed by attempt %s, which the slot no longer holds; nothing landed", g.o.Slot, sha, g.branch, id),
+				g.verdict(landing.GateStaleAttempt, fmt.Sprintf("GATE %s refused — commit %s on %s was pushed by attempt %s, which the slot no longer holds; nothing landed", g.o.Slot, sha, g.branch, id),
 					"the assignment was reclaimed or transferred: the holder's own commits are not affected, so have it check that branch, or reassign the issue")
 				return finish(true, nil)
 			}
@@ -99,9 +100,9 @@ func (g *gateRun) partialLifted(headRef string) (string, bool) {
 // gate. A relay or a transfer is a new brief and clears the outcome; so does the
 // worker's next `worker done`. It reads the slot, so a queued PR and an
 // external one have no outcome, and it runs under CheckOnly too.
-func (runner gateRun) stepOutcome(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepOutcome(result landing.GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -122,16 +123,16 @@ func (runner gateRun) stepOutcome(result GateResult, target GateTarget, forged g
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("AUDIT-FAILED %s — could not record the lifted partial, so it stays refused: %v", g.o.Slot, err))
 		}
 	}
-	g.gap(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
+	g.gap(landing.GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
 		fmt.Sprintf("read the summary (`rota round status`), then relay slot %s to finish the rest or `rota round transfer` it; a later `worker done --outcome done` lifts this", g.o.Slot))
 	return finish(false, nil)
 }
 
 // stepProvenance runs the approvals check.
-func (runner gateRun) stepProvenance(result GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepProvenance(result landing.GateResult, target GateTarget, forged gateForgeResult, headRef string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef = headRef
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -141,7 +142,7 @@ func (runner gateRun) stepProvenance(result GateResult, target GateTarget, forge
 	}
 	if failMsg != "" {
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-		g.gap(GateProvenanceFail, failMsg, provenanceHint)
+		g.gap(landing.GateProvenanceFail, failMsg, provenanceHint)
 	}
 	if v, msg, hint := g.requiredSectionsGap(); v != "" {
 		g.gap(v, msg, hint)
@@ -154,7 +155,7 @@ const provenanceHint = "fix the PR's `## Approvals` lines: cite `orchestrator re
 
 // stepGaps ends the record checks: when any of them found a gap, the gate
 // refuses once, listing every one of them.
-func (runner gateRun) stepGaps(result GateResult, target GateTarget, forged gateForgeResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepGaps(result landing.GateResult, target GateTarget, forged gateForgeResult) (struct{}, landing.GateResult, bool, error) {
 	if len(result.Gaps) == 0 {
 		return struct{}{}, result, false, nil
 	}
@@ -165,7 +166,7 @@ func (runner gateRun) stepGaps(result GateResult, target GateTarget, forged gate
 // refuseGaps sets the refusal from the recorded gaps. Verdict and Hint are the
 // first gap's, so a caller of one gap sees what it always saw; Err appends each
 // further gap with its own hint.
-func refuseGateGaps(r *GateResult) {
+func refuseGateGaps(r *landing.GateResult) {
 	first := r.Gaps[0]
 	r.Verdict, r.Err, r.Hint = first.Verdict, first.Msg, first.Hint
 	if len(r.Gaps) > 1 {
@@ -185,9 +186,9 @@ func refuseGateGaps(r *GateResult) {
 // names its PR, before any fetch, freshness check or bounce. It runs under
 // CheckOnly too, so a train member is refused before anything merges. The
 // refusal clears itself once the orchestrator picks.
-func (runner gateRun) stepBestOf(result GateResult, issue, pr string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepBestOf(result landing.GateResult, issue, pr string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, GateTarget{Issue: issue, PR: pr}, gateForgeResult{})
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -207,7 +208,7 @@ func (runner gateRun) stepBestOf(result GateResult, issue, pr string) (struct{},
 	if rec.Pick != "" {
 		msg = fmt.Sprintf("GATE %s refused — %s is best-of:2 and the pick chose %s; this attempt lost; nothing landed", g.o.Slot, tracker.RefOf(rec.Issue), rec.Pick)
 	}
-	g.verdict(GateBestOfUnpicked, msg, fmt.Sprintf("compare both attempts and run `rota round pick %s --pr <N> --reason-file <f>`", rec.Issue))
+	g.verdict(landing.GateBestOfUnpicked, msg, fmt.Sprintf("compare both attempts and run `rota round pick %s --pr <N> --reason-file <f>`", rec.Issue))
 	return finish(true, nil)
 }
 
@@ -232,11 +233,11 @@ func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
 // A recorded FAIL was already refused by stepVerdict. An unreadable policy,
 // diff or issue is a refusal too: guessing a depth could pass a risk:high
 // branch as light.
-func (runner gateRun) stepReviewDepth(result GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepReviewDepth(result landing.GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult, verified string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -285,7 +286,7 @@ func (runner gateRun) stepReviewDepth(result GateResult, target GateTarget, forg
 	if isInt {
 		store, err := verdict.LoadStrict(g.root)
 		if err != nil {
-			g.res.Verdict = GateVerdictBlocked
+			g.res.Verdict = landing.GateVerdictBlocked
 			return finish(true, err)
 		}
 		list := store.Branch(g.o.VerdictRepo, g.branch)
@@ -335,7 +336,7 @@ func (runner gateRun) stepReviewDepth(result GateResult, target GateTarget, forg
 			return finish(false, nil)
 		}
 		g.res.SHA = strutil.ShortSHA(intHead)
-		g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(need, " and ")),
+		g.verdict(landing.GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(need, " and ")),
 			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it, or loosen ship.review", g.branch))
 		return finish(true, nil)
 	}
@@ -349,7 +350,7 @@ func (runner gateRun) stepReviewDepth(result GateResult, target GateTarget, forg
 	}
 	store, err := verdict.LoadStrict(g.root)
 	if err != nil {
-		g.res.Verdict = GateVerdictBlocked
+		g.res.Verdict = landing.GateVerdictBlocked
 		return finish(true, err)
 	}
 	list := store.Branch(g.o.VerdictRepo, g.branch)
@@ -387,7 +388,7 @@ func (runner gateRun) stepReviewDepth(result GateResult, target GateTarget, forg
 		needs = append(needs, "the review lenses need a recorded "+strings.Join(lensMissing, " and "))
 		hint += fmt.Sprintf("; the review lenses need a reviewer per triggered lens recorded by /rota-review on %s, or a looser review.lenses", g.branch)
 	}
-	g.gap(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
+	g.gap(landing.GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
 	return finish(false, nil)
 }
 
@@ -411,21 +412,24 @@ func (g *gateRun) resolveReview(span string) (ReviewDepth, error) {
 
 // stepVerdict applies the shared gate/tick blocking rule, including stale-cross
 // relaxation. It runs under CheckOnly too, before a train merges anything.
-func (runner gateRun) stepVerdict(result GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepVerdict(result landing.GateResult, target GateTarget, forged gateForgeResult, refs gateRefsResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.headRef, g.baseRef = refs.head, refs.base
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
 	if g.o.NoVerdict {
 		return finish(false, nil)
 	}
-	head, _ := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
+	head, code := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
+	if head = strings.TrimSpace(head); code != 0 || head == "" {
+		return finish(g.broke(fmt.Sprintf("could not resolve gate head %s for verdict checks (exit %d)", g.headRef, code)))
+	}
 	// Loaded here, after the gate recovered the PR's reports into the store.
 	store, err := verdict.LoadStrict(g.root)
 	if err != nil {
-		g.res.Verdict = GateVerdictBlocked
+		g.res.Verdict = landing.GateVerdictBlocked
 		return finish(true, err)
 	}
 	list := store.Branch(g.o.VerdictRepo, g.branch)
@@ -441,19 +445,19 @@ func (runner gateRun) stepVerdict(result GateResult, target GateTarget, forged g
 		}
 	}
 	if err := d.Err(g.branch); err != nil {
-		g.res.Verdict = GateVerdictBlocked
+		g.res.Verdict = landing.GateVerdictBlocked
 		return finish(true, err)
 	}
 	return finish(false, nil)
 }
 
 // stepCheckOnly ends a CheckOnly gate with verdict fresh.
-func (runner gateRun) stepCheckOnly(result GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, GateResult, bool, error) {
+func (runner gateRun) stepCheckOnly(result landing.GateResult, target GateTarget, forged gateForgeResult, remote bool, refs gateRefsResult, verified string) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, forged)
 	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	g.verified = verified
-	finish := func(done bool, err error) (struct{}, GateResult, bool, error) {
+	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
 	}
 
@@ -478,7 +482,7 @@ func (runner gateRun) stepCheckOnly(result GateResult, target GateTarget, forged
 			tier := g.classify(g.baseRef + "..." + head)
 			g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
 		}
-		g.res.Verdict = GateFresh
+		g.res.Verdict = landing.GateFresh
 		return finish(true, nil)
 	}
 	return finish(false, nil)

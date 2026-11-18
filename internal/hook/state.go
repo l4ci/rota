@@ -233,8 +233,8 @@ func Dump(commonDir string, payload Payload, now time.Time) error {
 // in .json, so the session readers never see it.
 const sweepMarker = ".sweep"
 
-// sweep removes state files whose mtime is more than StateTTL old. Lock
-// sidecars stay in place because a refresh or Stop may hold or wait on them.
+// sweep removes state files whose mtime is more than StateTTL old, together
+// with their lock sidecars. Held session locks are skipped.
 // Every refresh and Stop write rewrites the state, so the mtime
 // tracks the last touch and no file is decoded. It runs at most once per
 // sweepEvery: a normal refresh pays one stat. Errors are ignored: it is
@@ -265,7 +265,31 @@ func sweep(dir, keepID string, now time.Time) {
 			continue
 		}
 		if now.Sub(fi.ModTime()) > StateTTL {
-			os.Remove(filepath.Join(dir, name))
+			sweepSession(filepath.Join(dir, name), now)
 		}
+	}
+}
+
+func sweepSession(path string, now time.Time) {
+	lockPath := fsio.LockPath(path)
+	release, ok, err := fsio.TryLock(lockPath)
+	if err != nil || !ok {
+		return
+	}
+	defer release()
+	// A refresh may have completed since the directory scan. Check the
+	// current state while holding its lock before deciding it is expired.
+	fi, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		os.Remove(lockPath)
+		return
+	}
+	if err != nil || now.Sub(fi.ModTime()) <= StateTTL {
+		return
+	}
+	if os.Remove(path) == nil {
+		// This ends the critical section. A waiter on the old inode detects
+		// the removed sidecar and reopens it before writing (fsio.Locked).
+		os.Remove(lockPath)
 	}
 }

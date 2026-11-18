@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,7 +40,7 @@ func TestTrainTier(t *testing.T) {
 	const cfg = `{"test":{"full":["false"],"e2e":["false"],"docs":["true"]}}`
 	w := tierTrainWorld(t, cfg, map[string]string{"b1": "b1.md", "b2": "b2.md"})
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GatePass || res.Tier != "docs" || !slices.Equal(res.Skipped, []string{"test.full", "test.e2e"}) {
+	if err != nil || res.Verdict != landing.GatePass || res.Tier != "docs" || !slices.Equal(res.Skipped, []string{"test.full", "test.e2e"}) {
 		t.Fatalf("docs train: %s tier %q skipped %v err %v\n%s\n%s", res.Verdict, res.Tier, res.Skipped, err, res.Err, strings.Join(res.Notes, "\n"))
 	}
 	if !w.onMain("b1.md") || !w.onMain("b2.md") || !strings.Contains(strings.Join(res.Notes, "\n"), "GATE-TIER train — docs") {
@@ -49,13 +50,13 @@ func TestTrainTier(t *testing.T) {
 	// one code member makes the whole train full
 	w = tierTrainWorld(t, cfg, map[string]string{"b1": "b1.md", "b2": "b2.txt"})
 	res, err = w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateVerifyFailed || res.Tier != "full" || len(res.Skipped) != 0 {
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Tier != "full" || len(res.Skipped) != 0 {
 		t.Fatalf("mixed train ran test.docs: %s tier %q skipped %v err %v", res.Verdict, res.Tier, res.Skipped, err)
 	}
 
 	// an empty test.docs trains exactly as before
 	w = tierTrainWorld(t, `{"test":{"full":["false"]}}`, map[string]string{"b1": "b1.md"})
-	if res, err = w.train(TrainOpts{Targets: []string{"b1"}}); err != nil || res.Verdict != GateVerifyFailed || len(res.Skipped) != 0 {
+	if res, err = w.train(TrainOpts{Targets: []string{"b1"}}); err != nil || res.Verdict != landing.GateVerifyFailed || len(res.Skipped) != 0 {
 		t.Fatalf("empty test.docs: %s skipped %v err %v", res.Verdict, res.Skipped, err)
 	}
 }
@@ -69,7 +70,7 @@ func TestTrainTierPinsTheMergedHeads(t *testing.T) {
 	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"docs":["true"]}}`))
 	run := func(o TrainOpts) trainPlanning {
 		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o}
-		p := trainPlanning{trainPlan: trainPlan{in: gateInput{cfg: cfg}, baseSHA: rev("main"), heads: []string{rev("feat")}}, res: TrainResult{Members: []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}}}
+		p := trainPlanning{trainPlan: trainPlan{in: gateInput{cfg: cfg}, baseSHA: rev("main"), heads: []string{rev("feat")}}, res: landing.TrainResult{Members: []landing.TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}}}
 		return tr.pickTier(p)
 	}
 	if tr := run(TrainOpts{}); tr.res.Tier != "full" || tr.tierCfg != nil {
@@ -107,7 +108,7 @@ func TestTrainTierSumsMemberLines(t *testing.T) {
 		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir}
 		p := trainPlanning{trainPlan: trainPlan{in: gateInput{cfg: cfg}, baseSHA: base, heads: heads[:n]}}
 		for i := 0; i < n; i++ {
-			p.res.Members = append(p.res.Members, TrainMember{Target: "m", Branch: "m", Tier: "small"})
+			p.res.Members = append(p.res.Members, landing.TrainMember{Target: "m", Branch: "m", Tier: "small"})
 		}
 		return tr.pickTier(p)
 	}
