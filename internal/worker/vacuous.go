@@ -200,7 +200,7 @@ func expandTestTemplate(template string, files, packages, names []string) string
 	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template)
 }
 
-func (g *gateOperation) vacuousRun(before, after string) (bool, error) {
+func (g *gateRun) vacuousRun(before, after string) (bool, error) {
 	r, err := g.e.checkVacuous(g.ctx, g.root, before, after, g.in.cfg.vacuous)
 	if err != nil {
 		return g.broke(err.Error())
@@ -222,7 +222,7 @@ func (g *gateOperation) vacuousRun(before, after string) (bool, error) {
 // vacuousStage checks each train member independently of later members and
 // never reuses the full-tier cache. A failure names the owning member.
 func (t *trainRun) vacuousStage(p trainPlan, result TrainResult, prefix trainVerified) (struct{}, TrainResult, bool, error) {
-	result = result.owned()
+	result = cloneTrainResult(result)
 
 	if t.o.NoVerify {
 		return struct{}{}, result, false, nil

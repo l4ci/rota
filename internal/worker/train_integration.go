@@ -265,8 +265,8 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 // memberIssue is the item a member PR closes: the one its check gate
 // resolved (an external PR's comes from its branch name), else its slot's.
 func memberIssue(reg Registry, m TrainMember) string {
-	if m.issue != "" {
-		return m.issue
+	if m.ResolvedIssue != "" {
+		return m.ResolvedIssue
 	}
 	if gt, err := reg.GateTargetAny(m.Target); err == nil {
 		return gt.Issue
@@ -286,7 +286,7 @@ func memberIndex(ms []IntegrationMember, target string) int {
 // integrationLand replaces land for an integration train: a verified tip is
 // recorded, and nothing lands on the base.
 func (t *trainRun) integrationLand(p trainPlan, result TrainResult, prefix trainVerified) (TrainResult, error) {
-	res := result.owned()
+	res := cloneTrainResult(result)
 	if prefix.passing < len(res.Members) {
 		return res, nil
 	}

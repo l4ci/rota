@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,9 +31,9 @@ import (
 // commit, did not finish within test.ciTimeoutMinutes, or would have run a CI
 // definition the merge itself changes.
 const (
-	GateCINotRun        = "ci-not-run"
-	GateVerifyTimeout   = "verify-timeout"
-	GateCIConfigChanged = "ci-config-changed"
+	GateCINotRun        = landing.GateCINotRun
+	GateVerifyTimeout   = landing.GateVerifyTimeout
+	GateCIConfigChanged = landing.GateCIConfigChanged
 )
 
 // ciConfigPaths define a project's CI: GitHub workflows and local actions,

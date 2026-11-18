@@ -1490,10 +1490,10 @@ func TestTrainDiagnosticOnlyPrefixIsNotCulprit(t *testing.T) {
 // onlyIn compares commands when either run names no test (#2753).
 func TestTrainFailureOnlyInCommand(t *testing.T) {
 	orig := TrainFailure{Command: "go test ./...", Tests: []string{"TestA"}}
-	if got := (TrainFailure{Command: "go vet ./..."}).onlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
+	if got := (TrainFailure{Command: "go vet ./..."}).OnlyIn(orig); strings.Join(got, ",") != "go vet ./..." {
 		t.Errorf("different command, no tests: %q", got)
 	}
-	if got := (TrainFailure{Command: "go test ./..."}).onlyIn(orig); len(got) != 0 {
+	if got := (TrainFailure{Command: "go test ./..."}).OnlyIn(orig); len(got) != 0 {
 		t.Errorf("same command, no tests: %q", got)
 	}
 }

@@ -750,7 +750,7 @@ func (r Record) Failing() bool {
 }
 
 // failScope selects which records failingRecords judges. It is private: callers
-// ask for a consumer's rule by name (Blocking, BlockingAtHead, BlockingAnyHead,
+// ask for a consumer's rule by name (Blocking, BlockingAtHead, BlockingGate,
 // RelayFailing, BounceFailing) and never pick flags.
 type failScope struct {
 	// Head, when AtHead is set, limits the set to records at Head. Recovered
@@ -770,7 +770,7 @@ type failScope struct {
 // and a stale record still counts, so only a newer record of the same kind
 // clears it. At a head each of spec and quality is its own latest record at that
 // head. CONCERNS and QA never fail unless Wide finds a blocking finding. Blocking,
-// BlockingAtHead, BlockingAnyHead, the relay and the bounce derive from it.
+// BlockingAtHead, BlockingGate, the relay and the bounce derive from it.
 func failingRecords(list []Record, s failScope) []Record {
 	var cands []Record
 	if s.AtHead {
@@ -838,17 +838,6 @@ func BlockingAtHead(list []Record, head string) (Record, bool) {
 	return Record{}, false
 }
 
-// BlockingAnyHead is the bounce rule without head scoping, the set a nudged
-// merge train keeps out: Blocking, else any review, cross or lens record that
-// is Failing. A record at another commit still counts, and a CONCERNS review
-// with a blocking finding trips it.
-func BlockingAnyHead(list []Record) (Record, bool) {
-	if r, ok := Blocking(list); ok {
-		return r, true
-	}
-	return firstFailing(list, failScope{Wide: true})
-}
-
 // staleCrossFail is true when r is a review-cross FAIL recorded at a commit
 // other than head. An unreadable head ("") proves nothing stale, so it is false
 // then: a relaxation built on it fails closed.
@@ -866,28 +855,63 @@ func dropStaleCross(list []Record, head string) []Record {
 	})
 }
 
-// crossOffRelaxes is the one test for the stale-cross relaxation (#3458): r is
-// a review-cross FAIL at a commit other than head and the caller's crossOff
-// says the PR's depth skips cross because of review:none. crossOff is asked
-// only when r is such a FAIL, since resolving the depth reads the issue; nil
-// reads as false.
-func crossOffRelaxes(r Record, head string, crossOff func() bool) bool {
-	return crossOff != nil && staleCrossFail(r, head) && crossOff()
+// BlockDecision is the shared merge-gate and tick decision. NeedsCrossOff
+// asks the caller to resolve review:none only when a stale cross FAIL is the
+// blocker. Call BlockingGate again with that plain answer; resolution errors
+// remain the caller's responsibility. Relaxed is set only when dropping the
+// stale cross records actually clears the block.
+type BlockDecision struct {
+	Record        Record
+	Blocked       bool
+	Stale         bool
+	Finding       string
+	NeedsCrossOff bool
+	Relaxed       *Record
 }
 
-// BlockingCrossOff is rule (BlockingAnyHead for the train tick) plus the stale-cross
-// relaxation: when a review-cross FAIL at another commit is what blocks and
-// crossOff reports cross review is off, that record is dropped and the rest are
-// judged again. relaxed is the dropped FAIL when the relaxation applied and
-// the PR is no longer blocked by it. Check.BlockGateCrossOff is the same
-// decision for the merge gate.
-func BlockingCrossOff(list []Record, head string, rule func([]Record) (Record, bool), crossOff func() bool) (blocking Record, blocked bool, relaxed *Record) {
-	r, blocked := rule(list)
-	if !blocked || !crossOffRelaxes(r, head, crossOff) {
-		return r, blocked, nil
+// Err translates a decision into the gate's existing typed refusal.
+func (d BlockDecision) Err(branch string) error {
+	if !d.Blocked {
+		return nil
 	}
-	if again, still := rule(dropStaleCross(list, head)); still {
-		return again, true, nil
+	return &BlockedError{Branch: branch, Record: d.Record, Stale: d.Stale, Finding: d.Finding}
+}
+
+// BlockingGate is the one block rule for the merge gate and train tick:
+// effective FAIL verdicts block across heads, while blocking findings and
+// failed items block only at the current head. Recovered reports obey ForHead.
+// CrossOff means cross review is disabled by review:none; only a stale cross
+// FAIL can trigger the relaxation (#3458). Unknown heads fail closed.
+func BlockingGate(list []Record, head string, crossOff bool) BlockDecision {
+	head = strings.TrimSpace(head)
+	list = ForHead(list, head)
+	d := gateBlock(list, head)
+	if !d.Blocked || !staleCrossFail(d.Record, head) {
+		return d
 	}
-	return Record{}, false, &r
+	if !crossOff {
+		d.NeedsCrossOff = true
+		return d
+	}
+	if again := gateBlock(dropStaleCross(list, head), head); again.Blocked {
+		return again
+	}
+	return BlockDecision{Relaxed: &d.Record}
+}
+
+func gateBlock(list []Record, head string) BlockDecision {
+	if r, ok := Blocking(list); ok {
+		return BlockDecision{Record: r, Blocked: true, Stale: !AtHead(r, head)}
+	}
+	if r, ok := BlockingAtHead(list, head); ok {
+		d := BlockDecision{Record: r, Blocked: true}
+		for _, f := range r.Findings {
+			if f.IsBlocking() {
+				d.Finding = f.Title
+				break
+			}
+		}
+		return d
+	}
+	return BlockDecision{}
 }

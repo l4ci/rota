@@ -26,7 +26,9 @@ func gateReportTransport(c *Ctx) func(context.Context, string, postgate.Report) 
 }
 
 func landingEnv(c *Ctx, ctx context.Context, root string) postgate.Env {
-	return postgate.Env{Worker: workerEnvCtx(c, ctx), Report: gateReportTransport(c), Release: releaseLandedSlice(c)}
+	env := workerEnvCtx(c, ctx).Landing(releaseLandedSlice(c))
+	env.Report = gateReportTransport(c)
+	return env
 }
 
 // releaseLandedSlice gives up slot's claim on an issue whose PR landed while
