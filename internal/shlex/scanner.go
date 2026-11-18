@@ -164,8 +164,9 @@ func (sc *Scanner) collectInner(text string) error {
 }
 
 // Substitution consumes `$(...)` at the cursor and records its body; `$((...))`
-// arithmetic is consumed and only the substitutions inside it are recorded.
-// Parentheses inside quotes do not count.
+// arithmetic is consumed and only the substitutions inside it are recorded,
+// unless its body looks like Bash's command-substitution fallback. Parentheses
+// inside quotes do not count.
 func (sc *Scanner) Substitution() error {
 	arith := sc.Peek(2) == '('
 	start := sc.I + 2
@@ -195,12 +196,48 @@ func (sc *Scanner) Substitution() error {
 		return ErrUnbalanced
 	}
 	if arith {
-		if err := sc.collectInner(sc.S[start : j-1]); err != nil {
-			return err
+		body := sc.S[start : j-1]
+		closedArith := j >= 2 && sc.S[j-2:j] == "))"
+		if !closedArith || arithmeticLooksLikeScript(body) {
+			sc.Nested = append(sc.Nested, body)
+		} else {
+			if err := sc.collectInner(body); err != nil {
+				return err
+			}
 		}
 	} else {
 		sc.Nested = append(sc.Nested, sc.S[start:j-1])
 	}
 	sc.I = j
 	return nil
+}
+
+// arithmeticLooksLikeScript catches command-looking text that Bash may treat
+// as its command-substitution fallback when arithmetic parsing fails. Keep
+// ordinary spaced arithmetic such as `1 + 2` and `a * b` out of Nested.
+func arithmeticLooksLikeScript(body string) bool {
+	if strings.ContainsAny(body, ";\n") {
+		return true
+	}
+	body = strings.TrimSpace(body)
+	body = strings.TrimSpace(strings.TrimPrefix(body, "("))
+	body = strings.TrimSpace(strings.TrimSuffix(body, ")"))
+	fields := strings.Fields(body)
+	if len(fields) < 2 {
+		return false
+	}
+	first := fields[0]
+	if first == "" || !isShellNameStart(first[0]) {
+		return false
+	}
+	switch fields[1] {
+	case "+", "-", "*", "/", "%", "**", "<<", ">>", "&", "|", "^", "=", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "?", ":", ",":
+		return false
+	default:
+		return true
+	}
+}
+
+func isShellNameStart(c byte) bool {
+	return c == '_' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
 }

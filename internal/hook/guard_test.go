@@ -422,6 +422,23 @@ func TestParseScriptAlwaysAdvances(t *testing.T) {
 	}
 }
 
+func TestGuardAmbiguousArithmeticFallback(t *testing.T) {
+	cases := []string{
+		"echo $((git -C " + gOther + " reset --hard) )",
+		"echo $((echo hi); git -C " + gOther + " reset --hard)",
+	}
+	for _, line := range cases {
+		if got := Guard(line, guardEnv()); got == "" {
+			t.Errorf("allowed ambiguous arithmetic command substitution %q", line)
+		}
+	}
+	for _, line := range []string{"echo $((1+2))", "echo $((1 + 2))"} {
+		if got := Guard(line, guardEnv()); got != "" {
+			t.Errorf("denied arithmetic expression %q: %s", line, got)
+		}
+	}
+}
+
 // A command substitution runs where its enclosing command runs, so it is judged
 // against the directory in effect at that point of the line (#3730).
 func TestGuardNestedArithmeticAndEscapedBackticks(t *testing.T) {
