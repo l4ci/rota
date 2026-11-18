@@ -260,7 +260,7 @@ func claim(hp string) (string, error) {
 		return "", err
 	}
 	dst := hp + "." + hex.EncodeToString(nonce[:]) + claimedSuffix
-	if err := os.Rename(hp, dst); os.IsNotExist(err) {
+	if err := fsio.MoveFilePreserveMode(hp, dst); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {
 		return "", err

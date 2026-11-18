@@ -256,10 +256,10 @@ func capPerVerb(rs []Entry) []Entry {
 	return out
 }
 
-// Prune drops every receipt: the round is over, so no retry can reach them.
+// Prune drops every receipt. Claim sidecars stay in place: a call may still
+// hold or wait on one while the round winds down.
 func Prune(root string) error {
 	p := path(root)
-	fsio.RemoveSidecars(filepath.Dir(p), filepath.Base(p)+".*")
 	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

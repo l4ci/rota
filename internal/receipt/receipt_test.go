@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 func testStore(t *testing.T) *Store {
@@ -136,14 +138,34 @@ func TestDifferentIDsDoNotWaitOnEachOther(t *testing.T) {
 	<-done
 }
 
-func TestPruneDropsTheFileAndTheClaims(t *testing.T) {
+func TestPruneKeepsActiveClaim(t *testing.T) {
+	s := testStore(t)
+	_, err := s.Do(call("active"), func(Entry) (Entry, bool) {
+		if err := Prune(s.Root); err != nil {
+			t.Fatal(err)
+		}
+		err := fsio.Locked(s.claimPath("active"), 0, func() error { return nil })
+		if !errors.Is(err, fsio.ErrLockTimeout) {
+			t.Errorf("prune let another caller acquire the active claim: %v", err)
+		}
+		return Entry{}, false
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPruneDropsTheFileAndKeepsTheClaims(t *testing.T) {
 	s := testStore(t)
 	s.Do(call("r1"), ran(Entry{Status: Done}))
 	if err := Prune(s.Root); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := filepath.Glob(filepath.Join(s.Root, File+"*")); len(left) != 1 || filepath.Base(left[0]) != "receipts.json.lock" {
-		t.Errorf("only the file's own lock may survive the prune: %v", left)
+	if left, _ := filepath.Glob(filepath.Join(s.Root, File+"*")); len(left) != 2 {
+		t.Errorf("the data and claim sidecars must survive the prune: %v", left)
+	}
+	if _, err := os.Stat(path(s.Root)); !os.IsNotExist(err) {
+		t.Errorf("receipt data must be removed: %v", err)
 	}
 	if err := Prune(s.Root); err != nil {
 		t.Errorf("pruning nothing: %v", err)

@@ -233,8 +233,9 @@ func Dump(commonDir string, payload Payload, now time.Time) error {
 // in .json, so the session readers never see it.
 const sweepMarker = ".sweep"
 
-// sweep removes state files whose mtime is more than StateTTL old, with their
-// lock files. Every refresh and Stop write rewrites the state, so the mtime
+// sweep removes state files whose mtime is more than StateTTL old. Lock
+// sidecars stay in place because a refresh or Stop may hold or wait on them.
+// Every refresh and Stop write rewrites the state, so the mtime
 // tracks the last touch and no file is decoded. It runs at most once per
 // sweepEvery: a normal refresh pays one stat. Errors are ignored: it is
 // housekeeping.
@@ -264,7 +265,7 @@ func sweep(dir, keepID string, now time.Time) {
 			continue
 		}
 		if now.Sub(fi.ModTime()) > StateTTL {
-			fsio.RemoveWithLock(filepath.Join(dir, name))
+			os.Remove(filepath.Join(dir, name))
 		}
 	}
 }
