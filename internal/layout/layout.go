@@ -23,9 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
-	"strconv"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
@@ -39,12 +37,6 @@ const Label = "orchestrator"
 // SplitLabel names the tab that holds the whole split: the CLI, the
 // orchestrator and the workers.
 const SplitLabel = "rota"
-
-// FormatRatio prints a share with at most four decimals: 0.5, 0.3333.
-// Layout's fakes use this to describe the herdr command produced by a move.
-func FormatRatio(f float64) string {
-	return strconv.FormatFloat(math.Round(f*1e4)/1e4, 'f', -1, 64)
-}
 
 // Shares of the split: the left column's width, and the CLI's height in it.
 const (

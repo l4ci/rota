@@ -10,7 +10,6 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -43,7 +42,7 @@ func (r *layoutRig) setTab(pane, tab string) {
 	}
 }
 func (r *layoutRig) SplitInto(_ context.Context, pane, tab, target, dir string, keep float64) error {
-	r.log = append(r.log, fmt.Sprintf("split %s %s %s %s", pane, dir, target, layout.FormatRatio(keep)))
+	r.log = append(r.log, fmt.Sprintf("split %s %s %s %g", pane, dir, target, keep))
 	r.setTab(pane, tab)
 	return nil
 }

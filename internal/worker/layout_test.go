@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/layout"
 )
 
 // gridHost is a fakeHost that also arranges panes, like herdr: a spawn adds
@@ -40,7 +39,7 @@ func (g *gridHost) move(pane, tab string) {
 	}
 }
 func (g *gridHost) SplitInto(_ context.Context, pane, tab, target, dir string, keep float64) error {
-	g.log = append(g.log, fmt.Sprintf("split %s %s %s %s", pane, dir, target, layout.FormatRatio(keep)))
+	g.log = append(g.log, fmt.Sprintf("split %s %s %s %g", pane, dir, target, keep))
 	g.move(pane, tab)
 	return nil
 }
