@@ -702,10 +702,13 @@ It does not keep a list of wrapper programs. For a program it does not know (`fl
 `chroot`, `script -c`, `python -c '…os.system("git …")'`), a later `git` or `gh` word counts as a command and an
 argument with spaces that mentions `git` or `gh` is parsed as a script. Programs that only print or search their
 arguments (`echo`, `printf`, `grep`, `cat`, …) are skipped, except `rg --pre <cmd>`, which runs `<cmd>` and is
-checked like a wrapper. The value of a rota prose flag (`--title`, `--body`, `--summary`, `--reason`, `--gist`,
-`--message`, `--note`, `--text`, `--question`, `--blocked`, `--description`) is text, so mentioning `git push origin main`
-there is fine. Other prose is still refused when it sits in an argument with spaces and mentions `git` or `gh`
-(a flag outside that list, another unknown program): pass long text with `--body-file` or rephrase it. `eval "$(…)"` and `bash -c "$(…)"` build their script at
+checked like a wrapper. Only the bare `rota` command has prose flags (not `./rota`, and not anything after
+a `--`, which runs another program). The value of one (`--title`, `--body`, `--summary`, `--reason`, `--gist`, `--message`, `--note`, `--text`,
+`--question`, `--blocked`, `--description`, as `--flag value` or `--flag=value`) is text, so mentioning
+`git push origin main` there is fine.
+Other prose is still refused when it sits in an argument with spaces and mentions `git` or `gh`
+(a flag outside that list, another unknown program): pass long text with `--body-file` or rephrase it.
+`eval "$(…)"` and `bash -c "$(…)"` build their script at
 run time, so a line with a substitution that mentions `git` or `gh` is refused.
 
 Limits: this is a guardrail against a mistaken agent, not a security boundary. It reads command lines, not
@@ -1111,7 +1114,7 @@ no suite and changes no test. A report with no missing evidence records an audit
 Two opt-in thresholds (0, the default, disables each) make `/rota-work` and `/rota-orchestrate`
 suggest a maintenance round in their reconcile step: `test.audit.maxFullGateSeconds` (the latest
 measured `test.full` after the last audit is slower) and `test.audit.prsBetweenAudits` (that many
-merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. Every item a
+merged PRs since it). `rota test-audit --check` reads only the records and the checkpoint. `rota round start` runs that check and reports it (`data.testAudit`, plus a `test-audit` text line when due); the autopilot tick raises it once per round as a `needs-you` item and does nothing else with it. Every item a
 maintenance round creates carries two rules in its Out of scope: no assertion is dropped without a note
 in the PR body, and stored refs and the pixel tolerance stay untouched.
 

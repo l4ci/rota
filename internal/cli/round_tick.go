@@ -421,6 +421,16 @@ func (w *tickWorld) Review() roundtick.Reviewer {
 	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
 }
 
+// TestAudit reads the recorded test-audit thresholds, read-only: no listing
+// commands, no checkpoint write.
+func (w *tickWorld) TestAudit(context.Context) ([]string, error) {
+	t, err := readTestAuditTelemetry(w.c, w.root, w.c.deps().Config(w.root))
+	if err != nil || !t.SuggestMaintenance {
+		return nil, err
+	}
+	return t.Reasons, nil
+}
+
 // FollowUp wires the follow-up step (#2580) to the forge and the transfer
 // verb. A round with no queued PR asks the forge nothing.
 func (w *tickWorld) FollowUp() roundtick.FollowUpSources {

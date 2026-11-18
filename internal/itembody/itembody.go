@@ -176,6 +176,10 @@ func SetSection(text, name, content string) string {
 	return sec + text[end:]
 }
 
+// lineSuffixRe matches a trailing line position on a path token: :N, :N-M or
+// :N,M (and runs of them), which names a place in the file, not another path.
+var lineSuffixRe = regexp.MustCompile(`(?::\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)+$`)
+
 // BulletPaths reads the paths of each bullet in a section: every backticked
 // token and every bare word. pathLike keeps only entries with a slash or glob;
 // otherwise (a Files section) a bullet with no backticks gives its first word.
@@ -215,7 +219,7 @@ func BulletPaths(section string, pathLike bool) []string {
 			toks = append(toks, strings.Trim(w, ",;()"))
 		}
 		for _, tok := range toks {
-			tok = strings.TrimSpace(tok)
+			tok = lineSuffixRe.ReplaceAllString(strings.TrimSpace(tok), "")
 			if tok == "" || (pathLike && !strings.ContainsAny(tok, "/*")) {
 				continue
 			}

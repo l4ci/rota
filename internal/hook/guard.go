@@ -271,12 +271,19 @@ func (g *guard) opaque(words []string, depth int, sc scope) error {
 	if dataPrograms[prog] {
 		return nil
 	}
+	// The prose exemption covers rota's own flag values only: the bare `rota`
+	// command (not `./rota`, which may be any binary) and not after `--`, where
+	// `rota review probe -- <prog> ...` runs <prog> (#3646).
+	rota := words[0] == "rota"
 	prose := false // the previous word is a rota prose flag awaiting its value
 	for i, w := range words {
 		if g.reason != "" {
 			return nil
 		}
-		if prog == "rota" {
+		if rota && w == "--" {
+			rota, prose = false, false
+		}
+		if rota {
 			if prose {
 				prose = false
 				continue

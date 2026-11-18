@@ -31,6 +31,20 @@ func option(line string) (cursor, numbered bool, text string, ok bool) {
 // highlighted choice sits after the prompt glyph like input would.
 var themeOption = regexp.MustCompile(`^(?:Dark|Light) mode\b|^Auto \(match terminal\)`)
 
+// darkRow and lightRow are the theme picker's two rows, word-bounded so
+// "Dark modern" is not one.
+var (
+	darkRow  = regexp.MustCompile(`^Dark mode\b`)
+	lightRow = regexp.MustCompile(`^Light mode\b`)
+)
+
+// numberedLine is an option line numbered "1." with no cursor: the only
+// numbering the accepter trusts without a cursor. The reader also takes "1)".
+var numberedLine = regexp.MustCompile(`^\s*\d+\.\s+\S`)
+
+// readNumbered is a prompt line that starts like a numbered dialog row.
+var readNumbered = regexp.MustCompile(`^\d+[.)]\s`)
+
 // themeTitle is the theme picker's heading.
 const themeTitle = "Choose the text style"
 
@@ -51,12 +65,12 @@ func isOnboardingTheme(pane string) bool {
 	}
 	dark := false
 	for _, line := range strings.Split(pane, "\n") {
-		_, _, text, ok := option(line)
+		cursor, _, text, ok := option(line)
 		switch {
 		case !ok:
-		case strings.HasPrefix(text, "Dark mode"):
+		case darkRow.MatchString(text):
 			dark = true
-		case dark && strings.HasPrefix(text, "Light mode"):
+		case dark && !cursor && lightRow.MatchString(text):
 			return true
 		}
 	}
@@ -64,8 +78,7 @@ func isOnboardingTheme(pane string) bool {
 }
 
 func isDialog(line, rest string) bool {
-	_, numbered, _, _ := option(line)
-	return themeOption.MatchString(line) || numbered || dialogFooter.MatchString(rest)
+	return themeOption.MatchString(line) || readNumbered.MatchString(line) || dialogFooter.MatchString(rest)
 }
 
 // DialogKeys reads a startup dialog off the pane text. Claude Code can open
@@ -106,7 +119,7 @@ func DialogKeys(pane string) (keys []string, ok bool) {
 	}
 	if opts == nil {
 		for _, b := range blocks {
-			if _, n, _, ok := option(b[0]); ok && n {
+			if numberedLine.MatchString(b[0]) {
 				opts, cursor = b, 0
 				break
 			}

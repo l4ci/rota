@@ -157,6 +157,11 @@ type Env struct {
 	// assignable, then mints. nil means the round has no review. The minted
 	// items are assigned first, within the same cap.
 	Review Reviewer
+	// TestAudit reads the due test-maintenance reasons (the read-only
+	// `rota test-audit --check`). Nil means the round has none. The tick only
+	// reports a due suggestion; it never acts on it, and a failed read raises
+	// nothing.
+	TestAudit func(ctx context.Context) ([]string, error)
 	// ReviewLoop checks a done slot's PR for review input (round.reviewLoop);
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
@@ -324,6 +329,11 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	repaired, drift := inspection.Repaired, inspection.Drift
 	for _, f := range repaired {
 		e.audit(&r, Action{Action: "reconcile", Target: f.String(), Detail: "repaired", Drift: f.Kind})
+	}
+	if e.TestAudit != nil {
+		if reasons, err := e.TestAudit(ctx); err == nil && len(reasons) > 0 {
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "test-audit", Target: "round", Why: "test maintenance is due: " + strings.Join(reasons, "; ")})
+		}
 	}
 	for _, f := range drift {
 		r.NeedsYou = append(r.NeedsYou, Item{Kind: "drift", Target: f.String(), Why: "drift the autopilot does not repair", Drift: f.Kind})
