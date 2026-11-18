@@ -90,7 +90,7 @@ func reviewPrepareWorkspace(c *Ctx, dir, ref string) (path, head string, err err
 	if err != nil {
 		return "", "", err
 	}
-	if err = os.WriteFile(filepath.Join(root, reviewWorkspaceMarker), marker, 0o600); err != nil {
+	if err = fsio.WriteFileAtomicMode(filepath.Join(root, reviewWorkspaceMarker), marker, 0o600); err != nil {
 		return "", "", Unavailable("complete review workspace: %v", err)
 	}
 	return path, head, nil

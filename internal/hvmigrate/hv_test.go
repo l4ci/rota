@@ -232,6 +232,8 @@ func TestRunHvApplyIsCompleteAndIdempotent(t *testing.T) {
 	hvProject(t, dir)
 	root := filepath.Join(home, ".claude", "skills")
 	hvSkillsRoot(t, root)
+	legacyLock := filepath.Join(root, legacyManifest+".lock")
+	write(t, legacyLock, "")
 	write(t, filepath.Join(home, ".claude", "settings.json"), hvSettings)
 	o := hvOpts(t, dir, home)
 	o.Apply = true
@@ -280,6 +282,9 @@ func TestRunHvApplyIsCompleteAndIdempotent(t *testing.T) {
 	}
 	if len(rep.Skills) != 1 || rep.Skills[0].Removed != 1 || len(rep.Skills[0].Kept) != 1 || !rep.Skills[0].Reinstalled {
 		t.Errorf("skills: %+v", rep.Skills)
+	}
+	if _, err := os.Stat(legacyLock); err != nil {
+		t.Errorf("legacy manifest lock must remain: %v", err)
 	}
 	// Settings: rota hook install only adds the prompt hook, which hv never had.
 	v, _ := jsonx.Decode([]byte(read(t, filepath.Join(home, ".claude", "settings.json"))))
