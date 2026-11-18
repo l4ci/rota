@@ -1216,6 +1216,9 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			t.stopTrain(res, p, tier, baseSHA, failed)
 			return true, nil
 		}
+		// The failure is readable now, before the re-run and the diagnosis spend
+		// minutes: an orchestrator can cancel instead of waiting (#3687).
+		t.phase("verify failed: %s", failedSummary(failed))
 		// A red the same tree does not show twice is a flake, not a culprit: re-run
 		// before paying for a bisect (#3647).
 		if done, err := t.rerunRed(p, res, tier, failed); done || err != nil {
@@ -1253,6 +1256,13 @@ func (t *trainRun) verifyStage(p trainPlan, result TrainResult) (trainVerified, 
 			return bisect(tierE2E, e2e, vr, tierE2E)
 		},
 		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded, flaky: &res.Flaky,
+	}
+	// --no-verify on an integration train builds and pushes the branch and runs
+	// no tier, so the order build, look, refs, verify needs no cancel (#3683).
+	// Nothing is recorded as verified: the gate verifies the tip itself.
+	if p.integration != nil && o.NoVerify {
+		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — verify skipped (--no-verify); the gate verifies the final tip before it lands", p.integration.Branch))
+		return v, result, false, nil
 	}
 	ended, err := w.walk(p.verifyCfg(), tierFull)
 	if err != nil {
@@ -1480,6 +1490,15 @@ func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, erro
 	res.Err = fmt.Sprintf("BASE-MOVED train — %s; landed %d of %d member(s): %s", msg, len(res.Landed), len(res.Members), strings.Join(res.Landed, ", "))
 	res.Hint = fmt.Sprintf("landed %d of %d member(s); re-run the train for the rest on the new base", len(res.Landed), len(res.Members))
 	return res, nil
+}
+
+// failedSummary names what a red tier failed: its failing tests when the log
+// shows them, else the failed commands.
+func failedSummary(failed VerifyResult) string {
+	if tests, _ := testledger.FailingTests(failed.Log); len(tests) > 0 {
+		return strings.Join(tests, ", ")
+	}
+	return strings.Join(failed.Failed, "; ")
 }
 
 // diagnoseEstimate is the line printed before a bisect starts: how many runs

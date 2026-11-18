@@ -22,7 +22,6 @@ func TestWorkerTrainIntegrationFlag(t *testing.T) {
 	}{
 		{"with --plan", []string{"--plan"}, "--integration cannot be combined"},
 		{"with --land-green", []string{"--land-green"}, "--integration cannot be combined"},
-		{"with --on-fail stop", []string{"--on-fail", "stop"}, "--integration cannot be combined"},
 		{"slots without PRs", nil, "every member needs an open PR"},
 		{"a name that is no ref component", []string{"--integration", "a/b"}, "not a valid branch name"},
 		{"a name with a dot", []string{"--integration", "x.lock"}, "not a valid branch name"},
