@@ -38,17 +38,16 @@ func (e Env) ClearStaleLease(ctx context.Context, root string) (roundlease.Lease
 	return e.Lease.ClearStale(cd)
 }
 
-// leaseFinding adds the lease-stale drift when the lease's holder is gone.
-func (e Env) leaseFinding(ctx context.Context, root string, rep *Report) {
-	l, st, err := e.ReadLease(ctx, root)
+// leaseFindings derives drift solely from the observed lease.
+func leaseFindings(l roundlease.Lease, st roundlease.State, err error) []Finding {
 	if err != nil || st != roundlease.Stale {
-		return
+		return nil
 	}
 	who := "an unreadable lease file"
 	if l.PID > 0 {
 		who = fmt.Sprintf("pid %d (round %d, started %s)", l.PID, l.Round, l.StartedAt)
 	}
-	rep.add(Finding{Kind: LeaseStale, Detail: "the round lease is held by " + who + ", which is gone; `rota round start` reclaims it, `rota reap` clears it"})
+	return []Finding{{Kind: LeaseStale, Detail: "the round lease is held by " + who + ", which is gone; `rota round start` reclaims it, `rota reap` clears it"}}
 }
 
 // HeldLease reports whether pid is the orchestrator the Env's lease names,

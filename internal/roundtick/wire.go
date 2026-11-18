@@ -31,6 +31,8 @@ type ReadyPR struct {
 // World is every outside seam a tick reads or acts through. The CLI
 // implements its transport adapters; tests fake external boundaries.
 type World interface {
+	// Observing selects inspection reads; NewEnv enforces refusal of all writes.
+	Observing() bool
 	// TolerantRegistry never fails: a tick callback has no error return, and
 	// the tick reconciles strictly. Registry is the strict read.
 	TolerantRegistry() worker.Registry
@@ -71,7 +73,6 @@ type World interface {
 
 // Config is the tick's settings: what the round is set to, not what it reads.
 type Config struct {
-	Observe       bool
 	Settings      roundcfg.Settings
 	MergeApproval string
 	BaseOverride  string
@@ -92,6 +93,9 @@ type wiring struct {
 // closed PR or one whose base moved goes straight to an individual gate
 // instead of waiting for the train to fill.
 func NewEnv(w World, cfg Config) Env {
+	if w.Observing() {
+		w = readOnlyWorld{w: w}
+	}
 	set := cfg.Settings
 	e := Env{
 		AutoBundle: set.AutoBundle, BundleMax: set.BundleMax,
@@ -112,7 +116,7 @@ func NewEnv(w World, cfg Config) Env {
 		if err != nil {
 			return Inspection{}, err
 		}
-		return InspectionOf(out, cfg.Observe), nil
+		return InspectionOf(out, w.Observing()), nil
 	}
 	e.Target = func(target string) (worker.GateTarget, error) {
 		reg, err := w.Registry()
@@ -187,7 +191,7 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit
-	e.Observe = cfg.Observe
+	e.Observe = w.Observing()
 	return e
 }
 
