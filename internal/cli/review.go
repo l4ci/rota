@@ -529,7 +529,7 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	if err != nil {
 		return worker.ReviewDepth{}, "", err
 	}
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	inputs, err := worker.BuildReviewInputs(c.Context(), worker.ReviewInputOptions{
 		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Branch,
 		Span: t.Base + "..." + t.Branch, Git: c.deps().Git, Labels: extra,

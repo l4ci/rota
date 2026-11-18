@@ -72,7 +72,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		plan, err := release.PlanPush(c.Context(), release.PushPorts{
 			Git: releaseGit{c, dir},
 			Forge: func() (release.Forge, error) {
-				cfg := c.deps().Config(dir)
+				cfg := c.projectConfig(dir)
 				provider, err := actorForge(c, cfg, dir)
 				if err != nil {
 					return nil, err
@@ -133,7 +133,7 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := c.deps().Config(dir)
+		cfg := c.projectConfig(dir)
 		provider, err := actorForge(c, cfg, dir)
 		if err != nil {
 			return failData(err), err

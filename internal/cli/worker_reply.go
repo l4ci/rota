@@ -50,7 +50,7 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("slot '%s' has no PR to reply on", slot)
 		}
 		ctx := c.Context()
-		fg, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
+		fg, err := c.deps().forge(ctx, c.projectConfig(root), "", root)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}

@@ -22,6 +22,8 @@ type RoundMetrics struct {
 	AssignToMerged, DoneToMerged     LeadTimeMetric
 	RedTrainRate, BouncesPerMergedPR RatioMetric
 	Flakes                           CountMetric
+	Verifications                    VerificationMetric
+	GateRefusals                     GateRefusals
 }
 
 // RatioMetric carries its measured counts as well as the quotient.
@@ -36,6 +38,8 @@ func (s *Summary) UnavailableMetrics(reason string) {
 	for _, m := range []*LeadTimeMetric{&s.Metrics.AssignToMerged, &s.Metrics.DoneToMerged} {
 		m.Unavailable, m.MedianSeconds, m.P90Seconds = reason, nil, nil
 	}
+	s.Metrics.Verifications.unavailable(reason)
+	s.Metrics.GateRefusals.Unavailable, s.Metrics.GateRefusals.Total, s.Metrics.GateRefusals.ByVerdict = reason, nil, nil
 	for _, m := range []*RatioMetric{&s.Metrics.RedTrainRate, &s.Metrics.BouncesPerMergedPR} {
 		m.Unavailable, m.Numerator, m.Denominator, m.Value = reason, nil, nil, nil
 	}
@@ -91,6 +95,8 @@ func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 	m.AssignToMerged = leadTimes(m.AssignToMerged, a)
 	m.DoneToMerged = leadTimes(m.DoneToMerged, d)
 	m.RedTrainRate = trainRate(entries, round)
+	m.Verifications = verificationMetric(entries, round)
+	m.GateRefusals = gateRefusals(entries, round)
 	bounces := 0
 	for _, e := range entries {
 		if e.Round == round && e.Kind == KindBounce {
@@ -208,6 +214,8 @@ func (m RoundMetrics) object() *jsonx.Object {
 	o.Set("redTrainRate", m.RedTrainRate.object())
 	o.Set("bouncesPerMergedPR", m.BouncesPerMergedPR.object())
 	o.Set("flakes", m.Flakes.object())
+	o.Set("verifications", m.Verifications.object())
+	o.Set("gateRefusals", m.GateRefusals.object())
 	return o
 }
 
@@ -247,5 +255,7 @@ func (m RoundMetrics) text() string {
 	fmt.Fprint(&b, m.RedTrainRate.text("Red-train rate"))
 	fmt.Fprint(&b, m.BouncesPerMergedPR.text("Bounces per merged PR"))
 	fmt.Fprint(&b, m.Flakes.text())
+	fmt.Fprint(&b, m.Verifications.text())
+	fmt.Fprint(&b, m.GateRefusals.text())
 	return b.String()
 }

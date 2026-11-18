@@ -241,7 +241,7 @@ func workIDs(items []*workItem) []string {
 
 // workIsolation is work.isolation: "worktree" or the default "branch".
 func workIsolation(c *Ctx, root string) string {
-	if v, _ := config.Lookup(c.deps().Config(root), "work.isolation"); v == "worktree" {
+	if v, _ := config.Lookup(c.projectConfig(root), "work.isolation"); v == "worktree" {
 		return "worktree"
 	}
 	return "branch"

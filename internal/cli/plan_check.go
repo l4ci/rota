@@ -75,7 +75,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		decLines = append(decLines, fmt.Sprintf("%s: %s", id, first))
 	}
 	r := plan.Check(body, ids, decs)
-	cfg := c.deps().Config(root)
+	cfg := c.projectConfig(root)
 	var lim plan.Limits
 	if lim.MaxTasks, err = config.Int(cfg, "plan.maxTasks", 0, config.MaxInt); err != nil {
 		return Result{}, Failed("%v", err)

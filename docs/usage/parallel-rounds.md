@@ -1483,10 +1483,16 @@ The summary also prints round metrics, with a counting rule on each line:
   rounds without train outcomes show unavailable.
 - **Bounces per merged PR:** all bounce events in the round divided by its distinct
   merged PRs, including bounces on work that did not land.
+- **Full verifications:** the round's `test.full` verification rows: run count, total
+  wall time, red runs, and red runs that passed later with no assign, done, bounce or
+  transfer for the issue between (a red that passed without rework). Cached and CI
+  runs write no rows. A round with none shows unavailable.
+- **Gate refusals:** gate verdicts other than `pass`, counted per verdict from the
+  ledger's gate rows (train members excluded).
 
 Missing or unreadable sources print `unavailable (<reason>)`, never a measured zero.
 JSON puts these under `metrics`: `assignToMerged`, `doneToMerged`, `redTrainRate`,
-`bouncesPerMergedPR`. Each carries `rule` and `unavailable` (null when
+`bouncesPerMergedPR`, `verifications`, `gateRefusals`. Each carries `rule` and `unavailable` (null when
 available); lead times carry `samples`, `medianSeconds` and `p90Seconds`, while ratios
 carry `numerator`, `denominator` and `value`. Unavailable numeric values, including
 `samples` counts, are null.
