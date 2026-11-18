@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1207,4 +1208,19 @@ func TestRunReportsTrainFill(t *testing.T) {
 	if c := statusOf(rep, "train fill"); c.Name != "" {
 		t.Errorf("train fill = %+v, want no line", c)
 	}
+}
+
+// A repo config that could not be checked warns instead of staying silent.
+func TestRepoConfigCheckErrorWarns(t *testing.T) {
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	rep := Run(context.Background(), Input{RepoConfigErr: errors.New("git exploded"), Exec: f.exec, Look: f.look})
+	for _, ch := range rep.Checks {
+		if ch.Name == "repo config" {
+			if ch.Status != Warn || !strings.Contains(ch.Detail, "git exploded") {
+				t.Fatalf("got %+v", ch)
+			}
+			return
+		}
+	}
+	t.Fatal("no repo config check for a failed Check")
 }
