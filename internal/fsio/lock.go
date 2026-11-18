@@ -110,25 +110,6 @@ func lockFileCurrent(f *os.File, path string) (bool, error) {
 	return os.SameFile(opened, current), nil
 }
 
-// RemoveWithLock removes path and its lock sidecar. Use it only where no
-// concurrent locker is expected: removing a held sidecar lets a newcomer
-// acquire another inode before the holder finishes. The acquisition inode
-// check fences waiters on the old file, not an already running callback.
-// A missing sidecar is not an error; the result is path's own Remove error.
-func RemoveWithLock(path string) error {
-	os.Remove(path + lockSuffix)
-	return os.Remove(path)
-}
-
-// RemoveSidecars removes the lock sidecar of every file in dir whose name
-// matches dataPattern (path.Match syntax). Errors are ignored: a sidecar is
-// an empty marker and a missing one is the goal.
-func RemoveSidecars(dir, dataPattern string) {
-	for _, c := range GlobDir(dir, dataPattern+lockSuffix) {
-		os.Remove(c)
-	}
-}
-
 // HeldLockUnder walks root for lock sidecars and returns the first one some
 // process holds, or "" when none is. It creates no file. skip, when non-nil,
 // is asked about every directory and prunes it when it returns true.

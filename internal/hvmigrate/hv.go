@@ -1044,7 +1044,9 @@ func removeLegacyInstall(root string) (removed int, kept []string, err error) {
 		gone = append(gone, p)
 	}
 	skills.PruneEmpty(root, gone)
-	return removed, kept, fsio.RemoveWithLock(mp)
+	// An old helper may still hold or wait on the manifest lock during the
+	// upgrade. Keep its sidecar so newcomers cannot lock a different inode.
+	return removed, kept, os.Remove(mp)
 }
 
 func symlinkedDir(root, p string) bool {

@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -72,6 +73,42 @@ func TestLandLockHolder(t *testing.T) {
 	}
 	if got := env.LandLockHolder(bg, repo); got != "" {
 		t.Errorf("holder after release = %q, want empty", got)
+	}
+}
+
+func TestLandLockHolderPublishesNewFile(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	common, err := rotastatetest.CommonDir(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder := rotastate.File(common, "land") + LandHolderSuffix
+	if err := os.MkdirAll(filepath.Dir(holder), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(holder, []byte("previous"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A reader with the old inode must keep seeing the complete old value.
+	snapshot, err := os.Open(holder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Close()
+	err = env.withLandLock(bg, repo, "next", func(bool) error {
+		var b [16]byte
+		n, err := snapshot.Read(b[:])
+		if err != nil || string(b[:n]) != "previous" {
+			t.Errorf("old holder reader saw %q, %v; want previous", b[:n], err)
+		}
+		if got := env.LandLockHolder(bg, repo); got != "next" {
+			t.Errorf("current holder = %q, want next", got)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

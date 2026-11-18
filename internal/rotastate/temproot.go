@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -134,7 +135,7 @@ func ensureTempRoot(root string) error {
 	if _, err := os.Lstat(ignore); err == nil || !os.IsNotExist(err) {
 		return err
 	}
-	return os.WriteFile(ignore, []byte(selfIgnore), 0o600)
+	return fsio.WriteFileAtomicMode(ignore, []byte(selfIgnore), 0o600)
 }
 
 // Owned reports whether root is a temp root rota made: a real directory (not a

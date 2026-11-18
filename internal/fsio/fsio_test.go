@@ -347,24 +347,6 @@ func TestWriteFileAtomicModeIgnoresUmask(t *testing.T) {
 	}
 }
 
-func TestRemoveWithLockDropsDataAndSidecar(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.json")
-	if err := WriteJSONAtomic(path, map[string]int{"n": 1}); err != nil {
-		t.Fatal(err)
-	}
-	if err := Locked(path, time.Second, func() error { return RemoveWithLock(path) }); err != nil {
-		t.Fatalf("RemoveWithLock under its own lock: %v", err)
-	}
-	for _, p := range []string{path, path + ".lock"} {
-		if _, err := os.Stat(p); !os.IsNotExist(err) {
-			t.Errorf("%s still there (err=%v)", p, err)
-		}
-	}
-	if err := RemoveWithLock(path); !os.IsNotExist(err) {
-		t.Errorf("second remove err = %v, want not-exist", err)
-	}
-}
-
 func TestHeldLockUnder(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "skipme"), 0o777); err != nil {
@@ -417,25 +399,6 @@ func TestSidecarNamingStaysInFsio(t *testing.T) {
 	}
 	if len(bad) > 0 {
 		t.Errorf("sidecar naming outside fsio: %v", bad)
-	}
-}
-
-func TestRemoveSidecars(t *testing.T) {
-	dir := t.TempDir()
-	base := filepath.Join(dir, "r.json")
-	claim := base + ".abc123"
-	other := filepath.Join(dir, "keep.json")
-	for _, p := range []string{claim, other} {
-		if err := Locked(p, time.Second, func() error { return nil }); err != nil {
-			t.Fatal(err)
-		}
-	}
-	RemoveSidecars(dir, "r.json.*")
-	if _, err := os.Stat(claim + ".lock"); !os.IsNotExist(err) {
-		t.Errorf("claim sidecar still there (err=%v)", err)
-	}
-	if _, err := os.Stat(other + ".lock"); err != nil {
-		t.Errorf("unrelated sidecar gone: %v", err)
 	}
 }
 
