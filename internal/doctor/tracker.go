@@ -95,10 +95,10 @@ func (d *runner) forgeLine(r tracker.Resolution) string {
 	return line
 }
 
-// trackerSource is what doctor knows about an HTTP tracker source: the config
+// trackerSource is what doctor reads of an HTTP tracker source from tracker.OwnKinds: the config
 // key naming the project or team, the arguments `rota connect add` needs after
 // --kind, and, for sources whose project or team the key must be able to read,
-// what to check when it cannot. Adding a source is one row.
+// what to check when it cannot.
 type trackerSource struct {
 	key         func(tracker.Settings) string
 	keyName     string // issues.<source>.<key>, as typed to rota config set
@@ -106,25 +106,13 @@ type trackerSource struct {
 	probeHint   string // "" when the source has no team probe
 }
 
-var trackerSources = map[string]trackerSource{
-	config.SourceJira: {
-		key:         func(s tracker.Settings) string { return s.JiraProject },
-		keyName:     "issues.jira.project",
-		connectArgs: " ...",
-	},
-	config.SourceLinear: {
-		key:         func(s tracker.Settings) string { return s.LinearTeam },
-		keyName:     "issues.linear.team",
-		connectArgs: " --token-stdin",
-		probeHint:   "check issues.linear.team against the team's key in Linear, and the API key's access",
-	},
-	config.SourceItsaplan: {
-		key:         func(s tracker.Settings) string { return s.ItsaplanProject },
-		keyName:     "issues.itsaplan.project",
-		connectArgs: " --site <url> --token-stdin",
-		probeHint:   "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access",
-	},
-}
+var trackerSources = func() map[string]trackerSource {
+	m := map[string]trackerSource{}
+	for _, k := range tracker.OwnKinds() {
+		m[k.Source] = trackerSource{key: k.Key, keyName: k.KeyName, connectArgs: k.ConnectArgs, probeHint: k.ProbeHint}
+	}
+	return m
+}()
 
 // TeamProbeApplies is whether the caller should look up the source's team or
 // project through the connection and set Input.TeamProblem: the source has a

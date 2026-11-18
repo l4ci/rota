@@ -476,8 +476,8 @@ type Settings struct {
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.labels.*, issues.connection,
-// issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
+// issues.labels.*, issues.connection and each ownKinds entry's key
+// (issues.jira.project, issues.linear.team, issues.itsaplan.project), with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig, ReadSettings (and the *FromConfig
 // constructors) fail on it instead.
@@ -494,7 +494,11 @@ func SettingsFromConfig(cfg any) Settings {
 	if src, err := config.IssueSource(cfg); err == nil {
 		s.Source = src
 	}
-	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject, "issues.linear.team": &s.LinearTeam, "issues.itsaplan.project": &s.ItsaplanProject} {
+	keys := map[string]*string{"issues.connection": &s.Connection}
+	for _, k := range ownKinds {
+		keys[k.keyName] = k.field(&s)
+	}
+	for key, dst := range keys {
 		if v, ok := config.Lookup(cfg, key); ok && v != nil {
 			*dst = strings.TrimSpace(fmt.Sprint(v))
 		}
