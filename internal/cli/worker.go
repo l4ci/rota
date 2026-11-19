@@ -532,6 +532,20 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		opts.BodyFile = path
+		if *relay && *task == "" && opts.PR == "" {
+			text, err := os.ReadFile(path)
+			if err != nil {
+				return Result{}, err
+			}
+			s := worker.LoadRegistryTolerant(root).Slot(slot)
+			if s != nil && (s.HeldID() != "" || s.PR() != "") {
+				inferred, err := worker.InferRelayPR(worker.LoadRegistryTolerant(root), slot, string(text))
+				if err != nil {
+					return Result{}, Refused("%v", err)
+				}
+				opts.PR = inferred
+			}
+		}
 		ctx, stop := c.workerContext()
 		defer stop()
 		opts, cleanTask, err := assignedTaskDispatch(c, ctx, root, opts)
