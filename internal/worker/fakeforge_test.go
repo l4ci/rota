@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -18,21 +19,127 @@ import (
 
 // fakeForgeModes lists the world.mode values this fake understands. It is the
 // in-process twin of test/fakes/fake_forge.py, which smoke sections 68 and 89
-// drive as a gh/glab CLI; TestForgeModesMatchPythonFake keeps the two lists equal.
+// drive as a gh/glab CLI; TestForgeFakesAgree runs every mode through both and
+// compares what a caller can observe.
 var fakeForgeModes = []string{"ok", "race", "fail", "noop", "elsewhere", "ff", "squash"}
 
-func TestForgeModesMatchPythonFake(t *testing.T) {
-	src, err := os.ReadFile("../../test/fakes/fake_forge.py")
+// mergeOutcome is what a caller can observe of one merge request: the error's
+// kind (not its text), the PR state and head the forge ends on, whether it
+// reports a merge commit, and where the work landed on the origin.
+type mergeOutcome struct {
+	Err          string // "", "pin" or "protected"
+	State        string
+	HeadSHA      string // "" when unchanged from the pinned one
+	MergeSet     bool
+	MainHasWork  bool
+	MainIsMerge  bool // main's tip is a two-parent merge commit
+	StackHasWork bool // the work landed on a branch other than the PR's base
+}
+
+func errKind(msg string) string {
+	switch {
+	case msg == "":
+		return ""
+	case strings.Contains(msg, "does not match the pin"):
+		return "pin"
+	case strings.Contains(msg, "branch protection"):
+		return "protected"
+	}
+	return "other: " + msg
+}
+
+// observeMerge reads the outcome off a world after a merge attempt.
+func observeMerge(w *world, msg, pinned string) mergeOutcome {
+	o := mergeOutcome{Err: errKind(msg), State: w.forgeWord("state"), MergeSet: w.forgeWord("merge") != ""}
+	if sha := w.forgeWord("sha"); sha != pinned {
+		o.HeadSHA = sha
+	}
+	has := func(ref string) bool {
+		out, err := exec.Command("git", "-C", w.origin, "ls-tree", "--name-only", ref).Output()
+		return err == nil && strings.Contains(string(out), "work.txt")
+	}
+	o.MainHasWork = has("main")
+	o.StackHasWork = has("stack")
+	if parents, err := exec.Command("git", "-C", w.origin, "rev-list", "--parents", "-n1", "main").Output(); err == nil {
+		o.MainIsMerge = len(strings.Fields(string(parents))) == 3
+	}
+	return o
+}
+
+// TestForgeFakesAgree runs each FORGE_MODE through the in-process fakeForge and
+// through test/fakes/fake_forge.py (as gh and as glab) on identical worlds, and
+// requires the same observable outcome. A mode one fake does not know, or a
+// merge one accepts and the other refuses, fails here instead of in smoke.
+func TestForgeFakesAgree(t *testing.T) {
+	py, err := filepath.Abs("../../test/fakes/fake_forge.py")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := regexp.MustCompile(`(?m)^MODES = \((.*)\)$`).FindSubmatch(src)
-	if m == nil {
-		t.Fatal("fake_forge.py declares no MODES tuple")
+	type call struct {
+		name, mode string
+		pin        func(sha string) string // "" omits the pin
 	}
-	py := strings.Split(strings.NewReplacer(`"`, "", " ", "").Replace(string(m[1])), ",")
-	if !slices.Equal(py, fakeForgeModes) {
-		t.Fatalf("forge fake modes drifted: python %v, go %v", py, fakeForgeModes)
+	right := func(sha string) string { return sha }
+	var cases []call
+	for _, m := range fakeForgeModes {
+		cases = append(cases, call{"pinned " + m, m, right})
+	}
+	cases = append(cases,
+		call{"missing pin", "ok", func(string) string { return "" }},
+		call{"stale pin", "ok", func(string) string { return strings.Repeat("a", 40) }})
+
+	for _, c := range cases {
+		for _, tool := range []string{"gh", "glab"} {
+			t.Run(tool+"/"+c.name, func(t *testing.T) {
+				// Go side.
+				gw := newWorld(t, ghURL)
+				gw.mode = c.mode
+				gsha := gw.forgeWord("sha")
+				f := &fakeForge{w: gw, provider: tool}
+				var gmsg string
+				if err := f.PRRequestMerge(bg, 7, tracker.MergeOpts{HeadSHA: c.pin(gsha)}); err != nil {
+					gmsg = err.Error()
+				}
+				want := observeMerge(gw, gmsg, gsha)
+
+				// Python side: a fresh, identical world.
+				pw := newWorld(t, ghURL)
+				pw.mode = c.mode
+				psha := pw.forgeWord("sha")
+				args := []string{py, "pr", "merge", "7"}
+				flag := "--match-head-commit"
+				if tool == "glab" {
+					args, flag = []string{py, "mr", "merge", "7"}, "--sha"
+				}
+				if pin := c.pin(psha); pin != "" {
+					args = append(args, flag, pin)
+				}
+				cmd := exec.Command("python3", args...)
+				cmd.Env = append(os.Environ(), "FORGE_TOOL="+tool, "FORGE_DB="+pw.forgeDB, "FORGE_LOG="+pw.log, "FORGE_MODE="+c.mode)
+				out, runErr := cmd.CombinedOutput()
+				pmsg := ""
+				if runErr != nil {
+					pmsg = string(out)
+				}
+				got := observeMerge(pw, pmsg, psha)
+
+				// The pinned sha is the same text on both sides only by construction;
+				// compare shapes, not the random shas.
+				if got != want {
+					t.Errorf("fakes disagree on mode %q, %s\ngo:     %+v\npython: %+v\npython out: %s", c.mode, tool, want, got, out)
+				}
+			})
+		}
+	}
+}
+
+func TestPythonForgeFakeRefusesAnUnknownMode(t *testing.T) {
+	w := newWorld(t, ghURL)
+	cmd := exec.Command("python3", "../../test/fakes/fake_forge.py", "pr", "merge", "7")
+	cmd.Env = append(os.Environ(), "FORGE_TOOL=gh", "FORGE_DB="+w.forgeDB, "FORGE_LOG="+w.log, "FORGE_MODE=nonsense")
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "unknown FORGE_MODE") {
+		t.Fatalf("an unknown mode must be refused; err=%v out=%s", err, out)
 	}
 }
 
