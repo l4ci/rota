@@ -745,7 +745,7 @@ func TestDoneWarnsForGateBodyRefusals(t *testing.T) {
 			body: "Closes #7\n" + fmt.Sprintf(complete, "orchestrator relay round 3")},
 		{name: "body leaves the issue open", slot: oneSlot, body: fmt.Sprintf(complete, "None"), want: []string{"does not close #7"}},
 		{name: "partial-slice closed by keyword", slot: oneSlot, body: "Closes #7\n" + fmt.Sprintf(complete, "None"), labels: partial,
-			want: []string{"slices still to come", "--final-slice " + ghURL}},
+			want: []string{"slices still to come", "--final-slice ben"}},
 		{name: "partial-slice with Refs", slot: oneSlot, body: "Refs #7\n" + fmt.Sprintf(complete, "None"), labels: partial},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

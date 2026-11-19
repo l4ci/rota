@@ -88,7 +88,7 @@ func TestCheckCloses(t *testing.T) {
 		{name: "closed member left the bundle", body: "Closes #5", keys: keys(5, 6), closed: map[int]bool{6: true}},
 		{name: "no issue, nothing to check", body: "", keys: nil},
 		{name: "forge says it closes a partial-slice issue", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
-			rep: &seamReporter{nums: []int{5}, known: true}, verdict: landing.GateNotClosing, inErr: []string{"slices still to come", "--final-slice https://github.com/o/r/pull/12"}},
+			rep: &seamReporter{nums: []int{5}, known: true}, verdict: landing.GateNotClosing, inErr: []string{"slices still to come", "--final-slice w1"}},
 		{name: "final slice may close it", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
 			rep: &seamReporter{nums: []int{5}, known: true}, final: true},
 		{name: "forge lists another issue", body: "Closes #5", keys: keys(5), labels: map[int][]string{5: partial},
