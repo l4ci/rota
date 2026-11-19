@@ -60,3 +60,14 @@ func (d *runner) ports() (Check, bool) {
 	return Check{Name: "ports", Status: Warn, Detail: strings.Join(found, "; "),
 		Hint: "stop that process, or move the range: rota config set round.portBase <port>"}, true
 }
+
+// registry fails on a workers.json that exists but cannot be read or parsed.
+// Such a registry reads as an empty pool, so `rota reap` refuses it; doctor
+// must not pass on the state the cleanup verb refuses.
+func (d *runner) registry() (Check, bool) {
+	err := d.in.RegistryErr
+	if err == nil {
+		return Check{}, false
+	}
+	return fail("registry", err.Error(), "repair or remove .rota/workers.json: an unreadable registry reads as an empty pool, so rota reap refuses it"), true
+}

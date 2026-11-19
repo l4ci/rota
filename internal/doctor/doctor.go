@@ -174,6 +174,11 @@ type Input struct {
 	// adds a warning line in place of the drift.
 	RepoConfigErr error
 
+	// RegistryErr is worker.CheckRegistry over the project's workers.json: nil
+	// for a missing or readable registry. An unreadable one reads as an empty
+	// pool elsewhere, so it fails the registry check, as reap refuses it.
+	RegistryErr error
+
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.
 	StaleBinary *stalebin.Finding
@@ -265,6 +270,7 @@ func (d *runner) checkTable() []checkEntry {
 		{"labels", optional(d.labels), false},
 		{"stale claims", d.staleClaims, false},
 		{"stale milestones", optional(d.staleMilestones), false},
+		{"registry", optional(d.registry), false},
 		{"ports", optional(d.ports), false},
 		{"repo config", optional(d.repoConfig), false},
 		{"stale binary", optional(d.staleBinary), false},

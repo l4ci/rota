@@ -1222,3 +1222,20 @@ func TestRepoConfigCheckErrorWarns(t *testing.T) {
 	}
 	t.Fatal("no repo config check for a failed Check")
 }
+
+// A corrupt workers registry fails doctor, as reap refuses it; a readable or
+// absent one adds no row.
+func TestRegistryCheck(t *testing.T) {
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	rep := Run(context.Background(), Input{RegistryErr: errors.New("workers.json: invalid character"), Exec: f.exec, Look: f.look})
+	c := statusOf(rep, "registry")
+	if c.Status != Fail || !strings.Contains(c.Detail, "invalid character") || c.Hint == "" {
+		t.Fatalf("registry = %+v, want a fail with the error and a hint", c)
+	}
+	if rep.OK() {
+		t.Error("report OK with a corrupt registry")
+	}
+	if c := statusOf(Run(context.Background(), Input{Exec: f.exec, Look: f.look}), "registry"); c.Name != "" {
+		t.Errorf("registry = %+v, want no line for a readable registry", c)
+	}
+}
