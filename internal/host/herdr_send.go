@@ -22,6 +22,10 @@ import (
 // herdr can type the brief and lose the Enter (#89). A brief left on the
 // prompt line is submitted with bounded Enter retries instead of failing.
 func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
+	return classifySend(h.send(ctx, slot, handle, file))
+}
+
+func (h *herdr) send(ctx context.Context, slot, handle, file string) error {
 	text, err := h.d.readBrief(file)
 	if err != nil {
 		return err

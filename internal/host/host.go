@@ -403,8 +403,10 @@ type Host interface {
 	// session remains.
 	Spawn(ctx context.Context, o SpawnOpts) (string, error)
 	// Send submits the file as a prompt and confirms pickup. The error is
-	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrDialogOpen,
-	// or another failure.
+	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrMaybeSubmitted,
+	// ErrDialogOpen or ErrDraftOnPrompt. Every failure carries one of those
+	// classes: each adapter's Send passes its result through classifySend, so a
+	// failure with no stated class reads as ErrMaybeSubmitted.
 	Send(ctx context.Context, slot, handle, file string) error
 	// ReadPane is the one pane read. It returns the recent pane text with soft
 	// wraps joined; "" and a nil error for a slot without a handle or a pane
@@ -448,7 +450,9 @@ func (r refused) Where() string              { return "" }
 func (r refused) Spawn(context.Context, SpawnOpts) (string, error) {
 	return "", r.err()
 }
-func (r refused) Send(context.Context, string, string, string) error { return r.err() }
+func (r refused) Send(context.Context, string, string, string) error {
+	return classifySend(fmt.Errorf("%w: %w", ErrNotSubmitted, r.err())) // nothing was sent
+}
 func (r refused) ReadPane(context.Context, string, string, int) (string, error) {
 	return "", r.err()
 }

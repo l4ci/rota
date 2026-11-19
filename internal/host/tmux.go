@@ -123,7 +123,7 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 // It gives up after 4 attempts. A human draft on the prompt line is waited out
 // and then refused (ErrDraftOnPrompt) with nothing pasted.
 func (t *tmux) Send(ctx context.Context, slot, handle, file string) error {
-	return t.sendFile(ctx, handle, file, "rota-"+slot)
+	return classifySend(t.sendFile(ctx, handle, file, "rota-"+slot))
 }
 
 func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
