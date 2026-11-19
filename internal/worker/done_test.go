@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -713,6 +714,62 @@ func TestDoneLegacyAndInformationalMailKeepAcknowledgementSemantics(t *testing.T
 			res, err := r.done(DoneRequest{})
 			if err != nil || !res.Changed || r.state() != "done" {
 				t.Fatalf("legacy/informational ack did not discharge: %+v %v", res, err)
+			}
+		})
+	}
+}
+
+// doneClosingForge answers the closing references the gate's closing check asks
+// the forge, and is the issue source too (issues.source = forge).
+type doneClosingForge struct {
+	donePRForge
+	*seamIssues
+	nums []int
+}
+
+func (f doneClosingForge) ClosingRefs(context.Context, int) ([]int, bool, error) {
+	return f.nums, true, nil
+}
+
+func TestDoneWarnsForGateBodyRefusals(t *testing.T) {
+	complete := "## Approvals\n%s\n## Rulings\nNone\n## Assumptions\nNone\n"
+	partial := map[int][]string{7: {PartialSliceLabel}}
+	for _, tc := range []struct {
+		name, slot, body string
+		labels           map[int][]string
+		want             []string
+	}{
+		{name: "clean", slot: oneSlot, body: "Closes #7\n" + fmt.Sprintf(complete, "None")},
+		{name: "relay cite never logged", slot: oneSlot, body: "Closes #7\n" + fmt.Sprintf(complete, "orchestrator relay round 3"), want: []string{"provenance", "round 3"}},
+		{name: "logged relay cited", slot: `{"name":"ben","branch":"ben/7-x","task":"7","state":"busy","relays":[{"round":3,"ts":"t","summary":"go"}]}`,
+			body: "Closes #7\n" + fmt.Sprintf(complete, "orchestrator relay round 3")},
+		{name: "body leaves the issue open", slot: oneSlot, body: fmt.Sprintf(complete, "None"), want: []string{"does not close #7"}},
+		{name: "partial-slice closed by keyword", slot: oneSlot, body: "Closes #7\n" + fmt.Sprintf(complete, "None"), labels: partial,
+			want: []string{"slices still to come", "--final-slice " + ghURL}},
+		{name: "partial-slice with Refs", slot: oneSlot, body: "Refs #7\n" + fmt.Sprintf(complete, "None"), labels: partial},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newDoneRig(t, tc.slot, fastCfg)
+			r.pass("7", proof.FastTierCheck)
+			f := doneClosingForge{donePRForge: donePRForge{info: tracker.PRInfo{Body: tc.body, State: "OPEN"}}, seamIssues: &seamIssues{labels: tc.labels}}
+			if strings.Contains(tc.body, "Closes #7") {
+				f.nums = []int{7}
+			}
+			r.forge(f.donePRForge)
+			r.deps.Env.Config = memConfig(t, `{"forge":{"provider":"github"},"issues":{"source":"forge"},"test":{"fast":["go test ./x"]}}`)
+			r.deps.Env.Forge = func(string, string, tracker.Settings) (Forge, error) { return f, nil }
+			res, err := r.done(DoneRequest{})
+			if err != nil || !res.Changed {
+				t.Fatalf("res %+v err %v", res, err)
+			}
+			all := strings.Join(res.Warnings, "\n")
+			for _, w := range tc.want {
+				if !strings.Contains(all, w) {
+					t.Errorf("warnings %q miss %q", all, w)
+				}
+			}
+			if (len(tc.want) == 0) != (len(res.Warnings) == 0) {
+				t.Errorf("warnings %q, want %q", res.Warnings, tc.want)
 			}
 		})
 	}

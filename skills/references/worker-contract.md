@@ -94,7 +94,7 @@ Work only this task, then stop.
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
   `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
   route around a refusal, and Codex workers are not guarded.
-- Commit your own work, open the PR against `<base-branch>` (`/rota-ship` pushes it), then run `rota worker done <slot>` as the last action (add `--outcome`/`--summary-file` as in *Outcome*, and `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree). Never merge.
+- Commit your own work, open the PR against `<base-branch>` (`/rota-ship` pushes it), then run `rota worker done <slot>` as the last action (add `--outcome`/`--summary-file` as in *Outcome*, and `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree). Never merge. `worker done` also warns, once, on every PR-body refusal the gate would raise (missing `## Approvals`/`## Rulings`/`## Assumptions`, Approvals against logged relays, `Closes` and partial-slice): fix them before the train.
 - Outcome. Say how the work ended: `rota worker done <slot> --outcome done|partial|failed
   --summary-file <f>`. The file is exactly three lines: what changed, what was found, what
   remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
