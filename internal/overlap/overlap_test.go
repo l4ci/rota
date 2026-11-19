@@ -45,7 +45,7 @@ func TestFootprintClash(t *testing.T) {
 		{"different files", []string{"a/b.go"}, []string{"a/c.go"}, nil, nil},
 		{"dir over file", []string{"a/"}, []string{"a/b.go"}, []string{"a/b.go"}, []string{"a/"}},
 		{"dir over nested file", []string{"a/"}, []string{"a/b/c.go"}, []string{"a/b/c.go"}, []string{"a/"}},
-		{"same dir", []string{"a/"}, []string{"a/"}, []string{"a/"}, nil},
+		{"same dir", []string{"a/"}, []string{"a/"}, []string{"a/"}, []string{"a/"}},
 		{"dir prefix is not a path prefix", []string{"a/"}, []string{"ab/c.go"}, nil, nil},
 		{"file without slash is not a dir", []string{"a"}, []string{"a/b.go"}, nil, nil},
 		{"glob over file", []string{"internal/new/*.go"}, []string{"internal/new/x.go"}, []string{"internal/new/x.go"}, nil},
@@ -105,7 +105,8 @@ func TestExact(t *testing.T) {
 		want []string
 	}{
 		{"dir over file", []string{"a/"}, []string{"a/b.go"}, nil},
-		{"same dir", []string{"a/"}, []string{"a/"}, []string{"a/"}},
+		{"same dir", []string{"a/"}, []string{"a/"}, nil},
+		{"same dir beside file", []string{"a/", "a/b.go"}, []string{"a/", "a/b.go"}, []string{"a/b.go"}},
 		{"same file", []string{"a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}},
 		{"glob over file", []string{"a/*.go"}, []string{"a/x.go"}, []string{"a/x.go"}},
 		{"file beside dir", []string{"a/", "a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}},
@@ -113,5 +114,16 @@ func TestExact(t *testing.T) {
 		if got := Exact(c.a, c.b); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: Exact(%v, %v) = %v, want %v", c.name, c.a, c.b, got, c.want)
 		}
+	}
+}
+
+// TestDirsIdentical pins that an identical directory entry is a directory
+// overlap: Dirs names it, so the readiness check can warn with a hint.
+func TestDirsIdentical(t *testing.T) {
+	if got := Dirs([]string{"a/"}, []string{"a/"}); !reflect.DeepEqual(got, []string{"a/"}) {
+		t.Errorf("Dirs(same dir) = %v, want [a/]", got)
+	}
+	if got := Dirs([]string{"a/b.go"}, []string{"a/b.go"}); got != nil {
+		t.Errorf("identical file is not a directory clash: %v", got)
 	}
 }

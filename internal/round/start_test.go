@@ -135,6 +135,21 @@ func TestAssessChecks(t *testing.T) {
 	if r, _ = Assess(be, "8", tracked, nil, dirFlight2, false); r.Ready() {
 		t.Errorf("an exact file clash still refuses beside a directory pointer: %+v", r)
 	}
+	// A refusal names only the exact files and carries no directory hint.
+	be.add("10", "dir and file", "", false, "## Files\n- internal/worker/\n- internal/worker/pool.go\n- internal/worker/other.go\n")
+	dirFlight3 := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/", "internal/worker/pool.go", "internal/worker/x.go"}}}
+	r, _ = Assess(be, "10", tracked, nil, dirFlight3, false)
+	d2 := strings.Join(r.Checks[2].Detail, ";")
+	if r.Ready() || !strings.Contains(d2, "internal/worker/pool.go") || strings.Contains(d2, "x.go") || strings.Contains(d2, "other.go") || strings.Contains(d2, "from directory") {
+		t.Errorf("refusal must name only exact files, no directory hint: %q", d2)
+	}
+	// Identical directories warn, naming the directory.
+	be.add("11", "same dir", "", false, "## Files\n- internal/worker/\n")
+	dirFlight4 := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/"}}}
+	r, _ = Assess(be, "11", tracked, nil, dirFlight4, false)
+	if !r.Ready() || !strings.Contains(strings.Join(r.Checks[2].Detail, ";"), "from directory internal/worker/") {
+		t.Errorf("identical directories must warn naming the directory: %+v", r)
+	}
 	if r, _ = Assess(be, "8", tracked, nil, flight, false); len(r.Overlaps[0].Dirs) != 0 {
 		t.Errorf("a file clash is not a directory clash: %+v", r.Overlaps)
 	}

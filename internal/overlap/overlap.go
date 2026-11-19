@@ -96,8 +96,8 @@ func dirCover(x, y string) (dir, covered string, ok bool) {
 // changed-file lists use Both.
 func Paths(a, b []string) []string { return paths(a, b, true) }
 
-// Exact is Paths minus the clashes that come only from a directory entry
-// covering a file: equal paths and glob matches. The readiness check refuses
+// Exact is Paths minus the clashes that come only from a directory entry:
+// one covering a file, or an identical directory. Equal files and glob matches stay. The readiness check refuses
 // on these; a directory-only clash is a vague pointer and only warns.
 func Exact(a, b []string) []string { return paths(a, b, false) }
 
@@ -108,7 +108,10 @@ func paths(a, b []string, withDirs bool) []string {
 		for _, y := range b {
 			y = Clean(y)
 			if x == y {
-				hit[x] = true
+				// An identical directory is a directory overlap: Dirs reports it.
+				if withDirs || !strings.HasSuffix(x, "/") {
+					hit[x] = true
+				}
 			} else if _, covered, ok := dirCover(x, y); ok {
 				if withDirs {
 					hit[covered] = true
@@ -129,9 +132,8 @@ func paths(a, b []string, withDirs bool) []string {
 }
 
 // Dirs lists the directory entries (trailing slash) that made a and b
-// overlap by matching a different path, not an identical directory. A clash
-// that comes from one of these is a vague pointer, not two issues editing the
-// same file.
+// overlap, including an identical directory entry. A clash that comes from
+// one of these is a vague pointer, not two issues editing the same file.
 func Dirs(a, b []string) []string {
 	hit := map[string]bool{}
 	for _, x := range a {
@@ -139,9 +141,10 @@ func Dirs(a, b []string) []string {
 		for _, y := range b {
 			y = Clean(y)
 			if x == y {
-				continue
-			}
-			if dir, _, ok := dirCover(x, y); ok {
+				if strings.HasSuffix(x, "/") {
+					hit[x] = true
+				}
+			} else if dir, _, ok := dirCover(x, y); ok {
 				hit[dir] = true
 			}
 		}
