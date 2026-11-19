@@ -1027,3 +1027,26 @@ func TestWaitDoesNotWakeOnADoneEventTheFlickerCleared(t *testing.T) {
 		t.Fatalf("after the flicker: %+v %v, want a timeout", res, err)
 	}
 }
+
+// #3835: a slot recorded blocked (its event was returned as news) whose pane
+// is working again must read busy in the registry too, or the round digest
+// keeps printing "blocked (needs you)" while `worker poll` says busy.
+func TestWaitRecordsABusyReadOverAStaleBlockedState(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	if err := Update(dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetEvent(EventBlocked, "A or B?", "2026-10-16T12:00:00Z")
+		s.MarkState(StateBlocked, "2026-10-16T12:00:00Z")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.set("w1", "working...\n", "working")
+	e := envWith(watcherHost{h})
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("wait: %+v %v, want a timeout", res, err)
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").State(); !IsBusy(got) {
+		t.Fatalf("stored state = %q, want busy", got)
+	}
+}
