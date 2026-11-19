@@ -96,6 +96,7 @@ case " ${GOFLAGS:-} " in *" -trimpath "*) ;; *) export GOFLAGS="${GOFLAGS:+$GOFL
 . "$REPO/test/lib/isolate.sh"
 ISO_DIR="$GATE_SCRATCH/iso"
 isolate_env "$ISO_DIR"
+unset CLAUDE_CONFIG_DIR # the real config dir (#3838); runner.sh pins its own
 WORKTREES_BEFORE="$GATE_SCRATCH/worktrees"
 worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 PIDS=()
