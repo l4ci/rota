@@ -10,7 +10,7 @@ import (
 // Every host kind's session variables must be absent from a worker sandbox,
 // and unrelated ones kept.
 func TestIsolatedEnvironDropsEveryHostSession(t *testing.T) {
-	in := []string{"HERDR_PANE_ID=p", "TMUX=/s,1,0", "HC_SESSION=x", "ORCA_PANE=y", "KEEP_ME=1", "PATH=/bin"}
+	in := []string{"HERDR_PANE_ID=p", "TMUX=/s,1,0", "HC_SESSION=x", "ORCA_PANE=y", "CLAUDE_CONFIG_DIR=/c", "CODEX_HOME=/x", "KEEP_ME=1", "PATH=/bin"}
 	out, err := IsolatedEnviron(in, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +20,7 @@ func TestIsolatedEnvironDropsEveryHostSession(t *testing.T) {
 		k, _, _ := strings.Cut(kv, "=")
 		kept[k] = true
 	}
-	for _, k := range []string{"HERDR_PANE_ID", "TMUX", "HC_SESSION", "ORCA_PANE"} {
+	for _, k := range []string{"HERDR_PANE_ID", "TMUX", "HC_SESSION", "ORCA_PANE", "CLAUDE_CONFIG_DIR", "CODEX_HOME"} {
 		if kept[k] {
 			t.Errorf("host variable %s survived isolation", k)
 		}

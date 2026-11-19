@@ -11,10 +11,15 @@ import (
 )
 
 // Prefixes are matched against the variable name. TMUX has no underscore on
-// purpose: it covers both TMUX and TMUX_PANE.
-var Prefixes = []string{"HERDR_", "HC_", "ORCA_", "TMUX"}
+// purpose: it covers both TMUX and TMUX_PANE. CLAUDE_CONFIG_DIR and CODEX_HOME
+// are not host sessions but point a process at the developer's real harness
+// config, so they share the list and its three consumers (#3838). HOME stays
+// off it: testiso and the sandboxes pin HOME where it matters, and scrubbing
+// it would break every child that needs one.
+var Prefixes = []string{"HERDR_", "HC_", "ORCA_", "TMUX", "CLAUDE_CONFIG_DIR", "CODEX_HOME"}
 
-// Is reports whether the variable name belongs to a host session.
+// Is reports whether the variable name belongs to a host session or names a
+// harness config dir.
 func Is(name string) bool {
 	for _, p := range Prefixes {
 		if strings.HasPrefix(name, p) {

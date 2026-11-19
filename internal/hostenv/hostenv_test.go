@@ -30,3 +30,21 @@ func TestShellPrefixFileMatchesList(t *testing.T) {
 		t.Fatalf("%s is stale or missing (%v); from the repo root run: go run ./internal/hostenv/gen > test/lib/host-env-prefixes", prefixFile, err)
 	}
 }
+
+// Harness config dirs point at the developer's real claude/codex config; a test
+// process must not inherit them (#3838). HOME stays out: testiso and the
+// sandboxes pin it themselves where it matters.
+func TestScrubDropsHarnessConfigDirs(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "/real/claude")
+	t.Setenv("CODEX_HOME", "/real/codex")
+	t.Setenv("HOME", "/real/home")
+	Scrub()
+	for _, k := range []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME"} {
+		if os.Getenv(k) != "" {
+			t.Errorf("%s survived Scrub", k)
+		}
+	}
+	if os.Getenv("HOME") != "/real/home" {
+		t.Error("Scrub must leave HOME alone")
+	}
+}
