@@ -535,6 +535,10 @@ A statusline command, not a query: it prints nothing of its own, always exits 0 
 
 Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They live in `.rota/verdicts.json`, which `/rota-ship` routes on.
 
+`rota verdict add --help` prints the complete `--body-file` schema and a copyable JSON example. Save only the bare JSON object to the body file, without Markdown fences. Optional line numbers must be positive integers; omit them when unknown. The body verdict, when present, must match `--verdict`.
+
+The submitted verdict is preserved even when findings are present. A `review-quality` record also stores the worse of its verdict and the latest `review-spec` verdict at the same commit as `combined`. When that changes the displayed verdict, text output explains the combination; JSON output includes `combinedWhy` alongside `verdict` and `combined`.
+
 A reviewer block (`review-spec`, `review-quality`, a lens, `second-opinion`) that does not parse, or names another verdict than `--verdict`, exits 2 naming the field; resend the error to the same reviewer session once. The verb counts rejected blocks per branch and kind in `.rota/review/reask.json`, and a second one exits 4 (record nothing, tell the orchestrator); the refusal resets the count for the next dispatched reviewer. `qa`, `behaviour` and `review-cross` are never counted and stay at exit 2.
 
 If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hint instead of overwriting the file: fix or delete the file, then record the verdict again. `rota worker gate` and `ship` refuse with exit 4 too, because an unreadable store would hide a failing verdict. Other read verbs treat an unparseable store as empty. A missing file is empty everywhere.
