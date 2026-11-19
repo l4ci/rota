@@ -329,13 +329,13 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Dirs: dirs, Scopes: scopes, Inferred: inferred})
 		detail := overlapDetail(f.Issue, f.Slot, paths, scopes, inferred)
 		if len(dirs) > 0 {
-			detail += fmt.Sprintf(" [from directory %s: name exact files in the pointers]", strings.Join(git.DisplayPaths(dirs), ", "))
+			detail += fmt.Sprintf(" [from directory %s: warning only; name exact files in the pointers]", strings.Join(git.DisplayPaths(dirs), ", "))
 		}
 		if f.PRFilesErr != "" {
 			detail += fmt.Sprintf(" [open PR's files unavailable (%s): compared the item's footprint and scope]", f.PRFilesErr)
 		}
 		ov.Detail = append(ov.Detail, detail)
-		if !acceptOverlap && (len(paths) > 0 || (scopeBlock && !inferred)) {
+		if !acceptOverlap && (len(overlap.Exact(mine, f.Paths)) > 0 || (scopeBlock && !inferred)) {
 			ov.OK = false
 		}
 	}

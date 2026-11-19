@@ -95,3 +95,23 @@ func TestBothVersusPaths(t *testing.T) {
 		}
 	}
 }
+
+// TestExact pins that a directory entry alone never counts: equal paths and
+// glob matches do.
+func TestExact(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		a, b []string
+		want []string
+	}{
+		{"dir over file", []string{"a/"}, []string{"a/b.go"}, nil},
+		{"same dir", []string{"a/"}, []string{"a/"}, []string{"a/"}},
+		{"same file", []string{"a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}},
+		{"glob over file", []string{"a/*.go"}, []string{"a/x.go"}, []string{"a/x.go"}},
+		{"file beside dir", []string{"a/", "a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}},
+	} {
+		if got := Exact(c.a, c.b); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: Exact(%v, %v) = %v, want %v", c.name, c.a, c.b, got, c.want)
+		}
+	}
+}

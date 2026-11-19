@@ -94,7 +94,14 @@ func dirCover(x, y string) (dir, covered string, ok bool) {
 // matching the other's glob (pathglob.Match: `**` as a whole segment spans
 // any number of directories, unlike Shared's single-level flavour), or a file under the other's directory. For
 // changed-file lists use Both.
-func Paths(a, b []string) []string {
+func Paths(a, b []string) []string { return paths(a, b, true) }
+
+// Exact is Paths minus the clashes that come only from a directory entry
+// covering a file: equal paths and glob matches. The readiness check refuses
+// on these; a directory-only clash is a vague pointer and only warns.
+func Exact(a, b []string) []string { return paths(a, b, false) }
+
+func paths(a, b []string, withDirs bool) []string {
 	hit := map[string]bool{}
 	for _, x := range a {
 		x = Clean(x)
@@ -103,7 +110,9 @@ func Paths(a, b []string) []string {
 			if x == y {
 				hit[x] = true
 			} else if _, covered, ok := dirCover(x, y); ok {
-				hit[covered] = true
+				if withDirs {
+					hit[covered] = true
+				}
 			} else if pathglob.Match(x, y) {
 				hit[y] = true
 			} else if pathglob.Match(y, x) {

@@ -420,7 +420,7 @@ The overlap check cannot see files an issue will create, paths nobody wrote down
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.
 
-A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below it, so it overlaps almost any other issue. The overlap detail then says `from directory src/app/ui/: name exact files in the pointers`, and the JSON overlap lists the directories under `dirs`. Name the files in the issue, or add a file every issue mentions in a footer to `round.sharedPaths`.
+A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below it, so it overlaps almost any other issue. That clash only warns, never refuses: assign proceeds unless an exact file or glob is shared. The overlap detail says `from directory src/app/ui/: warning only; name exact files in the pointers`, and the JSON overlap lists the directories under `dirs`. Name the files in the issue, or add a file every issue mentions in a footer to `round.sharedPaths`.
 
 ## Assigning an issue
 

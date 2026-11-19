@@ -127,9 +127,13 @@ func TestAssessChecks(t *testing.T) {
 	}
 	dirFlight := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/"}}}
 	r, _ = Assess(be, "8", tracked, nil, dirFlight, false)
-	if r.Ready() || len(r.Overlaps) != 1 || !reflect.DeepEqual(r.Overlaps[0].Dirs, []string{"internal/worker/"}) ||
+	if !r.Ready() || len(r.Overlaps) != 1 || !reflect.DeepEqual(r.Overlaps[0].Dirs, []string{"internal/worker/"}) ||
 		!strings.Contains(strings.Join(r.Checks[2].Detail, ";"), "from directory internal/worker/") {
-		t.Errorf("directory pointer must be named as the cause: %+v", r)
+		t.Errorf("directory-only clash must warn, naming the directory, not refuse: %+v", r)
+	}
+	dirFlight2 := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/", "internal/worker/pool.go"}}}
+	if r, _ = Assess(be, "8", tracked, nil, dirFlight2, false); r.Ready() {
+		t.Errorf("an exact file clash still refuses beside a directory pointer: %+v", r)
 	}
 	if r, _ = Assess(be, "8", tracked, nil, flight, false); len(r.Overlaps[0].Dirs) != 0 {
 		t.Errorf("a file clash is not a directory clash: %+v", r.Overlaps)
