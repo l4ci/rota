@@ -346,3 +346,40 @@ func TestWaitRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
 		t.Error("the promoted mark outlived the real done")
 	}
 }
+
+// #3832 AC-1/AC-2: a relay for a queued PR was acted on through the PR's own
+// branch while the slot moved on to another issue. The push to the delivery's
+// target branch is pickup, not the slot's current branch.
+func TestCoreDeliveryClearedByPushToRelayTargetBranch(t *testing.T) {
+	dir, e, h := submittedSlot(t)
+	when := e.Now().Add(-time.Hour)
+	sha := gitIn(t, dir, when, "commit-tree", "main^{tree}", "-p", "main", "-m", "fix")
+	gitIn(t, dir, when, "update-ref", "refs/remotes/origin/w1/a-old", sha)
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetBranch("w1/b-current") // the slot returned to another issue
+		s.o.Set("base", "main")
+		p := corePending(s)
+		p.Set("branch", "w1/a-old") // the relay's target, recorded at send
+		p.Set("remoteTip", "absent")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.Dispatch(bg, dir, relayOpts(t))
+	relayDelivered(t, dir, h)
+}
+
+// The same slot with no push to the target stays blocked.
+func TestCoreDeliveryKeptWithoutPushToRelayTargetBranch(t *testing.T) {
+	dir, e, _ := submittedSlot(t)
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetBranch("w1/b-current")
+		p := corePending(s)
+		p.Set("branch", "w1/a-old")
+		p.Set("remoteTip", "absent")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, dir, relayOpts(t)); err == nil || !strings.Contains(err.Error(), "unresolved delivery (state: submitted)") {
+		t.Fatalf("no push to the target must keep the delivery: %v", err)
+	}
+}
