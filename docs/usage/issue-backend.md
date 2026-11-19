@@ -161,9 +161,14 @@ body stay old/old. If putting them back fails too, the error says so. The
 restored shown text is the visible part of the stored source, not a markdown
 round trip. That also means a rollback reverts any edit a person made in Jira
 to the shown text since rota last stored it, not only one made between rota's
-read and its restore. When the stored body cannot be read, rota changes nothing
-and reports the read error. A comment with no stored body (a person's, or one
-without a marker) is restored from the text Jira lists, which can lose
+read and its restore. When the stored body cannot be read, rota writes no
+stored property and reports the read error. A refused stored-body write is
+not a no-op for the shown text: an edit first changes the shown text, and if the store then fails rota edits
+it back, so the text is edited and rolled back, not untouched. The rollback
+source is the stored body's visible part. When the stored body cannot be read
+for the rollback, or the comment has none (a person's, or one without a
+marker), rota falls back to the text Jira lists. On Jira Cloud that listed
+text is a markdown rendering of the rich body, so the restore can lose
 formatting.
 
 ### Claim lock and state labels
