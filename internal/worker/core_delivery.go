@@ -80,13 +80,25 @@ func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree st
 			return true
 		}
 	}
-	b := s.Branch()
-	if b == "" || worktree == "" {
+	// The delivery's own target branch, recorded at send, counts beside the
+	// slot's current one: a relay for a queued PR is acted on through that PR's
+	// branch even after the slot moved on to another issue (#3832).
+	if worktree == "" {
 		return false
 	}
-	// A push after the delivery moved the remote-tracking ref off the tip saved
-	// with it (or created it): publication, not commit date, is the evidence. A
-	// local commit nobody pushed leaves the ref where it was.
+	own := jsonx.Str(p, "branch")
+	if own != "" && e.branchPushed(ctx, root, s, worktree, p, own, at) {
+		return true
+	}
+	cur := s.Branch()
+	return cur != "" && cur != own && e.branchPushed(ctx, root, s, worktree, p, cur, at)
+}
+
+// branchPushed says branch carries publication evidence for the delivery saved
+// at at: a push moved its remote-tracking ref off the tip saved with it (or
+// created it), not a commit date, since a local commit nobody pushed proves
+// nothing.
+func (e Env) branchPushed(ctx context.Context, root string, s *Slot, worktree string, p *jsonx.Object, b string, at time.Time) bool {
 	if was := jsonx.Str(p, "remoteTip"); was != "" {
 		now := e.remoteTip(ctx, root, worktree, b)
 		return now != "" && now != "absent" && now != was
@@ -215,6 +227,12 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 	if cur := LoadRegistryTolerant(root).Slot(o.Slot); cur != nil {
 		branch = cur.Branch()
 	}
+	// A relay for an explicit queued PR is aimed at that PR's head branch.
+	if t.relayPR != "" {
+		if q := LoadRegistryTolerant(root).QueuedPR(t.relayPR); q != nil && q.Branch != "" {
+			branch = q.Branch
+		}
+	}
 	tip := e.remoteTip(ctx, root, t.worktree, branch)
 	if _, err := UpdateSlot(root, o.Slot, func(s *Slot) {
 		request := coreRequest(t, o)
@@ -232,6 +250,9 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		p.Set("at", stamp.Format(e.Now()))
+		if branch != "" {
+			p.Set("branch", branch)
+		}
 		if tip != "" {
 			p.Set("remoteTip", tip)
 		}
