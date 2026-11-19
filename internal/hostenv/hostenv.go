@@ -11,15 +11,17 @@ import (
 )
 
 // Prefixes are matched against the variable name. TMUX has no underscore on
-// purpose: it covers both TMUX and TMUX_PANE. CLAUDE_CONFIG_DIR and CODEX_HOME
-// are not host sessions but point a process at the developer's real harness
-// config, so they share the list and its three consumers (#3838). HOME stays
-// off it: testiso and the sandboxes pin HOME where it matters, and scrubbing
-// it would break every child that needs one.
-var Prefixes = []string{"HERDR_", "HC_", "ORCA_", "TMUX", "CLAUDE_CONFIG_DIR", "CODEX_HOME"}
+// purpose: it covers both TMUX and TMUX_PANE.
+var Prefixes = []string{"HERDR_", "HC_", "ORCA_", "TMUX"}
 
-// Is reports whether the variable name belongs to a host session or names a
-// harness config dir.
+// ConfigVars are exact names that point a process at the developer's real
+// harness config (#3838). They are not host sessions, so they stay out of
+// Prefixes and the shell prefix file: test/runner.sh pins CLAUDE_CONFIG_DIR to
+// a private dir itself, and isolate_env unsets CODEX_HOME. HOME is not listed:
+// testiso leaves it, and worker and shell sandboxes pin it.
+var ConfigVars = []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME"}
+
+// Is reports whether the variable name belongs to a host session.
 func Is(name string) bool {
 	for _, p := range Prefixes {
 		if strings.HasPrefix(name, p) {
@@ -29,18 +31,29 @@ func Is(name string) bool {
 	return false
 }
 
+// Drop reports whether a test or sandbox process must not inherit the variable:
+// a host session or a harness config dir.
+func Drop(name string) bool {
+	for _, v := range ConfigVars {
+		if name == v {
+			return true
+		}
+	}
+	return Is(name)
+}
+
 // IsKV is Is for a KEY=value entry as os.Environ returns it.
 func IsKV(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
 	return Is(k)
 }
 
-// Scrub unsets host-session variables from the process environment. The shell
+// Scrub unsets host-session and harness-config variables from the process environment. The shell
 // harness applies the same prefix rule through the generated prefix file.
 func Scrub() {
 	for _, kv := range os.Environ() {
-		if IsKV(kv) {
-			key, _, _ := strings.Cut(kv, "=")
+		key, _, _ := strings.Cut(kv, "=")
+		if Drop(key) {
 			os.Unsetenv(key)
 		}
 	}
