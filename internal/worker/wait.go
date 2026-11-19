@@ -288,8 +288,10 @@ wait:
 			}
 			// An unverifiable slot is not news, but the state is the registry's
 			// record of it (`round status`, `round reclaim`): write it, and write
-			// the busy row that ends it.
-			if t := targetOf(targets, r.Name); r.State == StateUnverifiable || (r.State == StateBusy && strings.EqualFold(t.prev, StateUnverifiable)) {
+			// the busy row that ends it. A busy read also ends a recorded blocked
+			// or needs-permission (#3835): the round digest reads the registry,
+			// and would call a working slot blocked until the next `worker poll`.
+			if t := targetOf(targets, r.Name); r.State == StateUnverifiable || (r.State == StateBusy && (strings.EqualFold(t.prev, StateUnverifiable) || IsBlocked(t.prev) || strings.EqualFold(t.prev, StateNeedsPermission))) {
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 					if s.PaneHandle() == t.handle {
 						recordRow(s, r, t, e.Now(), LoadRegistryTolerant(root))
