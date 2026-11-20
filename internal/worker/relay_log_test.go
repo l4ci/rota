@@ -2,14 +2,13 @@ package worker
 
 import (
 	"bytes"
+	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/gittest"
 )
 
 const relayQueuedPR = "https://github.com/o/r/pull/9"
@@ -99,7 +98,7 @@ func relayCited(t *testing.T, dir string) string {
 
 // A relay to a slot that holds an issue is logged where the gate reads it.
 func TestDispatchRelayLoggedForHeldIssue(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e := envWith(tmuxFake())
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
@@ -119,7 +118,7 @@ func TestDispatchRelayLoggedForHeldIssue(t *testing.T) {
 // A relay to a parked slot whose PR waits in review lands on the queued record
 // the gate resolves the PR to, not on the parked slot.
 func TestDispatchRelayLoggedForQueuedPR(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e := envWith(tmuxFake())
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
@@ -145,7 +144,7 @@ func TestDispatchRelayLoggedForQueuedPR(t *testing.T) {
 // A relay with no issue and no queued PR to attach to is refused instead of
 // logging a record the gate never reads.
 func TestDispatchRelayWithoutTargetFails(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e := envWith(tmuxFake())
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
@@ -201,7 +200,7 @@ func TestGateByPRNumberDoesNotInheritRelaysOfAnotherBranchWithTheSameIssue(t *te
 // task. The task dispatch resets the slot's relay log, so it first keeps the
 // log where the gate reads it, by PR.
 func TestRelaySurvivesTheSlotsNextTask(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e := envWith(tmuxFake())
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {

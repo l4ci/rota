@@ -1,6 +1,10 @@
 package worker
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
+)
 
 func TestNothingToVerify(t *testing.T) {
 	for _, tc := range []struct {
@@ -58,7 +62,7 @@ func TestNoVerifyRuleSymmetricInTiers(t *testing.T) {
 
 // The gate's input reads config through Env.Config, not the project's file.
 func TestGateInputDefaultReadsEnvConfig(t *testing.T) {
-	root := newProject(t, `{"test":{"full":["from disk"]}}`)
+	root := gittest.Project(t, `{"test":{"full":["from disk"]}}`)
 	e := Env{Config: memConfig(t, `{"test":{"full":["from memory"]}}`)}.WithDefaults()
 	in, err := e.GateInput(root)
 	if err != nil {

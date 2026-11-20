@@ -11,16 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 )
 
-func newRepo(t *testing.T) string {
-	t.Helper()
-	dir := gittest.TempDir(t)
-	gittest.Init(t, dir, "main")
-	gittest.Commit(t, dir, "first", "a.txt", "a")
-	return dir
-}
-
 func TestRunMapsExitCodeToResult(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	res, err := Repo{Dir: dir}.Run(context.Background(), "rev-parse", "--verify", "-q", "nope")
 	if err != nil || res.ExitCode == 0 {
 		t.Fatalf("got %+v, %v; want non-zero Result and nil error", res, err)
@@ -69,7 +61,7 @@ func TestRunForcesCLocale(t *testing.T) {
 
 func TestQueries(t *testing.T) {
 	ctx := context.Background()
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	r := Repo{Dir: dir}
 
 	if got, ok, err := CommonDirVia(ctx, Exec, r.Dir); err != nil || !ok || got != filepath.Join(dir, ".git") {
@@ -81,7 +73,7 @@ func TestQueries(t *testing.T) {
 	if got, ok, err := r.ShortHead(ctx); err != nil || !ok || len(got) < 4 {
 		t.Fatalf("ShortHead = %q, %v, %v", got, ok, err)
 	}
-	if got, ok, err := r.LastCommitDate(ctx, "a.txt"); err != nil || !ok || len(got) != len("2006-01-02") {
+	if got, ok, err := r.LastCommitDate(ctx, "seed"); err != nil || !ok || len(got) != len("2006-01-02") {
 		t.Fatalf("LastCommitDate = %q, %v, %v", got, ok, err)
 	}
 	if _, ok, _ := r.LastCommitDate(ctx, "missing.txt"); ok {
@@ -96,7 +88,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestCommonDirOfLinkedWorktree(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	wt := filepath.Join(t.TempDir(), "wt")
 	gittest.Run(t, dir, "worktree", "add", "-q", "-b", "side", wt)
 	got, ok, err := CommonDirVia(context.Background(), Exec, wt)
@@ -131,7 +123,7 @@ func TestIsMergeConflict(t *testing.T) {
 
 func TestOutputAndCheck(t *testing.T) {
 	ctx := context.Background()
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	r := Repo{Dir: dir}
 
 	if got, ok, err := r.Output(ctx, "log", "-1", "--format=%s"); err != nil || !ok || got != "first" {

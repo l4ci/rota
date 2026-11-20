@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // setupRecorder is an Env.Shell that records each (dir, command) and exits
@@ -32,7 +33,7 @@ func setupInit(t *testing.T, r *setupRecorder, dir string, slots int) error {
 }
 
 func TestEnvSetupRunsOncePerNewSlotInItsWorktree(t *testing.T) {
-	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
+	b := gittest.Project(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	if err := setupInit(t, r, b, 2); err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ func TestEnvSetupRunsOncePerNewSlotInItsWorktree(t *testing.T) {
 }
 
 func TestEnvSetupEmptyIsNoop(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	r := &setupRecorder{}
 	if err := setupInit(t, r, b, 1); err != nil {
 		t.Fatal(err)
@@ -67,7 +68,7 @@ func TestEnvSetupEmptyIsNoop(t *testing.T) {
 }
 
 func TestEnvSetupRerunsWhenALockfileChanges(t *testing.T) {
-	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
+	b := gittest.Project(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	if err := setupInit(t, r, b, 1); err != nil {
 		t.Fatal(err)
@@ -96,7 +97,7 @@ func TestEnvSetupRerunsWhenALockfileChanges(t *testing.T) {
 }
 
 func TestEnvSetupFailsFastAndStoresNoHash(t *testing.T) {
-	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
+	b := gittest.Project(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{code: 3}
 	err := setupInit(t, r, b, 2)
 	ee, ok := err.(*exitcode.Error)
@@ -126,7 +127,7 @@ func TestEnvSetupFailsFastAndStoresNoHash(t *testing.T) {
 }
 
 func TestEnvSetupRedRerunDropsTheOldHash(t *testing.T) {
-	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
+	b := gittest.Project(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	setupInit(t, r, b, 1)
 	wt := filepath.Join(b, ".worktrees", "w1")

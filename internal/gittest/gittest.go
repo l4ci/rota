@@ -156,6 +156,26 @@ func NewRepo(t testing.TB, branch string) string {
 	return dir
 }
 
+// Project is a symlink-resolved temp git project on main with one seed commit,
+// a gitignored .worktrees/ and an untracked .rota/ holding config as
+// config.json (an empty config leaves .rota/ empty).
+func Project(t testing.TB, config string) string {
+	t.Helper()
+	dir := TempDir(t)
+	Init(t, dir, "main")
+	if err := os.MkdirAll(filepath.Join(dir, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if config != "" {
+		Write(t, dir, ".rota/config.json", config)
+	}
+	Write(t, dir, ".gitignore", ".worktrees/\n")
+	Write(t, dir, "seed.txt", "seed\n")
+	Run(t, dir, "add", ".gitignore", "seed.txt")
+	Run(t, dir, "commit", "-q", "-m", "seed")
+	return dir
+}
+
 // SetIdentity puts Identity (or ident, when given as KEY=value pairs) in the
 // test process's environment, for a TestMain whose code under test commits or
 // merges itself (the gate, ship).

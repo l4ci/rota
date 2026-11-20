@@ -198,12 +198,69 @@ func TestTmuxSpawnTimesOut(t *testing.T) {
 func TestTmuxSpawnWindowFailure(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
 		if a[0] == "new-window" {
-			return Result{ExitCode: 1}
+			return Result{ExitCode: 1, Stderr: "no space\n"}
 		}
 		return Result{}
 	}}
 	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 4})
-	if err == nil || err.Error() != "could not create tmux window rota:w1" {
+	if err == nil || err.Error() != "tmux new-window failed for slot 'w1': no space" {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// A state-changing tmux command that fails reports itself, with its stderr,
+// and never falls through to a boot timeout.
+func TestTmuxSpawnCommandFailures(t *testing.T) {
+	for _, cmd := range []string{"new-session", "new-window", "send-keys"} {
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] {
+			case "has-session":
+				return Result{ExitCode: 1}
+			case cmd:
+				return Result{ExitCode: 1, Stderr: "boom\n"}
+			case "capture-pane":
+				return Result{Stdout: "$ "}
+			}
+			return Result{}
+		}}
+		_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 4})
+		want := "tmux " + cmd + " failed for slot 'w1': boom"
+		if err == nil || err.Error() != want {
+			t.Errorf("%s: err = %v, want %q", cmd, err, want)
+		}
+		if err != nil && strings.Contains(err.Error(), "did not come up") {
+			t.Errorf("%s: reported as boot timeout: %v", cmd, err)
+		}
+	}
+}
+
+// send-keys fails after new-window succeeded: the window exists, so the handle
+// comes back with the error and the caller can record and reap it.
+func TestTmuxSpawnSendKeysFailureReturnsHandle(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "send-keys" {
+			return Result{ExitCode: 1}
+		}
+		return Result{}
+	}}
+	h, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 4})
+	if err == nil || err.Error() != "tmux send-keys failed for slot 'w1'" {
+		t.Errorf("err = %v", err)
+	}
+	if h != "rota:w1" {
+		t.Errorf("handle = %q, want rota:w1", h)
+	}
+}
+
+func TestTmuxEnsureOperatorSendKeysFailure(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "send-keys" {
+			return Result{ExitCode: 1, Stderr: "no pane\n"}
+		}
+		return Result{}
+	}}
+	err := New("tmux", deps(f, nil, &clock{})).(Operator).EnsureOperator(bg, OperatorOpts{Session: "s", Root: "/p", Instruction: "/x", BootTimeout: 4})
+	if err == nil || err.Error() != "tmux send-keys failed for the operator window: no pane" || errors.Is(err, ErrOperatorBoot) {
 		t.Errorf("err = %v", err)
 	}
 }

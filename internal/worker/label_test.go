@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -42,7 +43,7 @@ func TestSlotTitle(t *testing.T) {
 }
 
 func TestDispatchTaskLabelsThePane(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
 	round := 10
@@ -58,7 +59,7 @@ func TestDispatchTaskLabelsThePane(t *testing.T) {
 }
 
 func TestDispatchRelayDoesNotLabel(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
 	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "#514"}); err != nil {
@@ -74,7 +75,7 @@ func TestDispatchRelayDoesNotLabel(t *testing.T) {
 }
 
 func TestPollRelabelsOnAStateChangeOnly(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := newLabelHost()
 	f.panes, f.status = map[string][]string{}, map[string]string{}
@@ -102,7 +103,7 @@ func TestPollRelabelsOnAStateChangeOnly(t *testing.T) {
 }
 
 func TestWaitRelabelsTheReturnedSlot(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
 	f.panes, f.status = map[string][]string{}, map[string]string{}
@@ -121,7 +122,7 @@ func TestWaitRelabelsTheReturnedSlot(t *testing.T) {
 }
 
 func TestClearLabelClearsASlotWithAHandle(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
 	e := envWith(f)
@@ -141,7 +142,7 @@ func TestClearLabelClearsASlotWithAHandle(t *testing.T) {
 }
 
 func TestReapClearsTheLabelBeforeDropping(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
 	e := envWith(f)

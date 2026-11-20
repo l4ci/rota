@@ -153,3 +153,32 @@ func TestRunIgnoresUserGitConfig(t *testing.T) {
 		t.Errorf("signature status = %q, want N (unsigned)", got)
 	}
 }
+
+func TestProjectSeedsRotaAndCommit(t *testing.T) {
+	dir := Project(t, `{"a":1}`)
+	if got := Run(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Errorf("branch = %q, want main", got)
+	}
+	cfg, err := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if err != nil || string(cfg) != `{"a":1}` {
+		t.Errorf("config = %q, %v", cfg, err)
+	}
+	if got := Run(t, dir, "rev-list", "--count", "HEAD"); got != "1" {
+		t.Errorf("commits = %s, want 1", got)
+	}
+	if got := Run(t, dir, "status", "--porcelain", "--ignored=no"); got != "?? .rota/" {
+		t.Errorf("status = %q, want only untracked .rota/", got)
+	}
+	Write(t, dir, ".worktrees/x/f", "1")
+	if got := Run(t, dir, "status", "--porcelain"); strings.Contains(got, ".worktrees") {
+		t.Errorf(".worktrees not ignored: %q", got)
+	}
+}
+
+func TestProjectEmptyConfigLeavesRotaDirEmpty(t *testing.T) {
+	dir := Project(t, "")
+	ents, err := os.ReadDir(filepath.Join(dir, ".rota"))
+	if err != nil || len(ents) != 0 {
+		t.Errorf(".rota = %v, %v; want empty dir", ents, err)
+	}
+}

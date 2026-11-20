@@ -14,7 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/testaudit"
+	"github.com/l4ci/rota/internal/suiteaudit"
 )
 
 func testAuditCommand() *Command {
@@ -78,7 +78,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		}
 		gc := c.deps().workerEnv().GateConfig(root)
 		commands := append(append(append([]string{}, gc.Fast...), gc.Full...), gc.E2E...)
-		inv := testaudit.Inventory(root, files, commands, func(name string) ([]byte, error) {
+		inv := suiteaudit.Inventory(root, files, commands, func(name string) ([]byte, error) {
 			configPath := filepath.Join(root, name)
 			// Search only this repository's installed bins. Never download a runner.
 			dir := filepath.Dir(configPath)
@@ -115,7 +115,7 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 		d.Set("complete", complete)
 		text += "\n" + auditInventoryText(inv)
 		if complete {
-			if err := testaudit.SaveCheckpoint(checkpointPath, started); err != nil {
+			if err := suiteaudit.SaveCheckpoint(checkpointPath, started); err != nil {
 				return Result{Data: d, Text: text}, Unavailable("audit checkpoint not saved: %v", err)
 			}
 			d.Set("checkpointRecorded", true)
@@ -130,13 +130,13 @@ func testAudit(fs *flag.FlagSet) RunFunc {
 // --check` and the `round start` suggestion: recorded thresholds and the
 // checkpoint only, no listing commands and no checkpoint writes. A damaged
 // checkpoint degrades to unavailable evidence; a bad threshold is a usage error.
-func readTestAuditTelemetry(c *Ctx, root string, cfg any) (testaudit.Telemetry, error) {
+func readTestAuditTelemetry(c *Ctx, root string, cfg any) (suiteaudit.Telemetry, error) {
 	common, err := c.CommonDir(root)
 	if err != nil {
-		return testaudit.Telemetry{}, err
+		return suiteaudit.Telemetry{}, err
 	}
 	checkpointPath := rotastate.File(common, "test-audit.json")
-	checkpoint, cerr := testaudit.ReadCheckpoint(checkpointPath)
+	checkpoint, cerr := suiteaudit.ReadCheckpoint(checkpointPath)
 	threshold := func(key string) (int, error) {
 		v, err := config.Value(cfg, key)
 		if err != nil {
@@ -150,18 +150,18 @@ func readTestAuditTelemetry(c *Ctx, root string, cfg any) (testaudit.Telemetry, 
 	}
 	seconds, err := threshold("test.audit.maxFullGateSeconds")
 	if err != nil {
-		return testaudit.Telemetry{}, err
+		return suiteaudit.Telemetry{}, err
 	}
 	prs, err := threshold("test.audit.prsBetweenAudits")
 	if err != nil {
-		return testaudit.Telemetry{}, err
+		return suiteaudit.Telemetry{}, err
 	}
 	// Gate producers use the main checkout for shared round records.
 	recordRoot := root
 	if main, ok := c.MainCheckoutOf(common); ok {
 		recordRoot = main
 	}
-	telemetry := testaudit.ReadTelemetry(recordRoot, checkpoint, seconds, prs)
+	telemetry := suiteaudit.ReadTelemetry(recordRoot, checkpoint, seconds, prs)
 	if cerr != nil {
 		telemetry.Complete = false
 		telemetry.SuggestMaintenance = false
@@ -182,7 +182,7 @@ func auditExcludedPath(p string) bool {
 	}
 	return false
 }
-func auditTelemetryText(r testaudit.Telemetry) string {
+func auditTelemetryText(r suiteaudit.Telemetry) string {
 	var b strings.Builder
 	b.WriteString("Test audit — recorded evidence\n")
 	if r.LastFullGateSeconds != nil {
@@ -217,7 +217,7 @@ func auditTelemetryText(r testaudit.Telemetry) string {
 	b.WriteString("Assess gate shape, browser coverage and unwired suites before proposing cleanup.")
 	return b.String()
 }
-func auditInventoryText(r testaudit.InventoryReport) string {
+func auditInventoryText(r suiteaudit.InventoryReport) string {
 	var b strings.Builder
 	for _, p := range r.Playwright {
 		if p.Error != "" {

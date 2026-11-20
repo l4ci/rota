@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/stamp"
@@ -17,7 +18,7 @@ import (
 // further, so only consumption evidence can free the slot.
 func submittedSlot(t *testing.T) (string, Env, *fakeHost) {
 	t.Helper()
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrSubmitted}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
@@ -285,7 +286,7 @@ func TestRecordRowRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
 // slot onto, not the one it held before. The new task branch is already on the
 // remote and nothing is pushed after the delivery: still refused.
 func TestCoreDispatchSnapshotsTheDispatchedBranchTip(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	sha := gitIn(t, dir, time.Now(), "rev-parse", "main")
 	gitIn(t, dir, time.Now(), "update-ref", "refs/remotes/origin/"+BranchFor("w1", "T1"), sha)

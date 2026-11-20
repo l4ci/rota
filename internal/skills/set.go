@@ -53,8 +53,17 @@ func loadEmbedded() (*Set, error) {
 // directory, as one reference does for another.
 var (
 	refMention  = regexp.MustCompile(`references/([A-Za-z0-9][A-Za-z0-9._-]*\.md)`)
-	bareMention = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9._-]*\.md`)
+	bareMention = regexp.MustCompile(siblingPattern)
+	flatSibling = regexp.MustCompile(`^` + siblingPattern + `$`)
 )
+
+// siblingPattern is a markdown file name with no directory: the one definition
+// of a flat sibling, shared by bareMention and FlatSibling.
+const siblingPattern = `[A-Za-z0-9][A-Za-z0-9._-]*\.md`
+
+// FlatSibling reports whether a link target names a markdown file next to the
+// linking one (a.md), not a path (references/a.md, ../a.md).
+func FlatSibling(target string) bool { return flatSibling.MatchString(target) }
 
 // Load builds a Set from a tree with rota-*/*.md skills and references/*.md.
 func Load(fsys fs.FS) (*Set, error) {

@@ -1,6 +1,10 @@
 package worker
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
+)
 
 // TestClassifyBlockedBeforeRelayIsNotBlocked pins #1096: a relay that answers a
 // ROTA-BLOCKED question lands under that line, which stays in the pane. The
@@ -29,7 +33,7 @@ func TestClassifyBlockedBeforeRelayIsNotBlocked(t *testing.T) {
 // TestDispatchRelayAnswersBlockedSlot pins #1096: a relay to a blocked slot
 // drops the blocked event and marks the slot busy.
 func TestDispatchRelayAnswersBlockedSlot(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)

@@ -3,13 +3,13 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/host"
 )
 
 // operatorHost is a tmux-like fake that can open an operator window.
@@ -25,7 +25,7 @@ func (o *operatorHost) EnsureOperator(_ context.Context, opts host.OperatorOpts)
 }
 
 func TestSessionCheck(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	f := tmuxFake()
 	if st := envWith(f).SessionCheck(bg, dir); !st.Inside || st.Where != "main" {
 		t.Errorf("%+v", st)
@@ -37,7 +37,7 @@ func TestSessionCheck(t *testing.T) {
 }
 
 func TestSessionEnsureInsideNeedsNoHandoff(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	st, err := envWith(tmuxFake()).SessionEnsure(bg, dir, SessionOpts{})
 	if err != nil || !st.Inside || st.HandedOff {
 		t.Errorf("%+v %v", st, err)
@@ -45,7 +45,7 @@ func TestSessionEnsureInsideNeedsNoHandoff(t *testing.T) {
 }
 
 func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	f := &fakeHost{name: "herdr"}
 	_, err := envWith(f).SessionEnsure(bg, dir, SessionOpts{})
 	we, ok := err.(*exitcode.Error)
@@ -58,7 +58,7 @@ func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
 }
 
 func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
-	dir := newProject(t, `{"orchestrator":{"model":"fable"}}`)
+	dir := gittest.Project(t, `{"orchestrator":{"model":"fable"}}`)
 	instr := writeBrief(t, "go\n")
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
 	st, err := (Env{NewHost: func(host.Kind) host.Host { return oh }}).SessionEnsure(bg, dir, SessionOpts{Session: "ops", BodyFile: instr, BootTimeout: 9})
@@ -71,7 +71,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 	}
 	// default session and command
 	oh2 := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
-	dir2 := newProject(t, `{"orchestrator":{"command":"my-claude"}}`)
+	dir2 := gittest.Project(t, `{"orchestrator":{"command":"my-claude"}}`)
 	(Env{NewHost: func(host.Kind) host.Host { return oh2 }}).SessionEnsure(bg, dir2, SessionOpts{})
 	if oh2.opts.Session != "rota" || oh2.opts.Command != "my-claude" || oh2.opts.BootTimeout != 60 {
 		t.Errorf("opts = %+v", oh2.opts)
@@ -79,7 +79,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 }
 
 func TestSessionEnsureFailures(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
 	e := Env{NewHost: func(host.Kind) host.Host { return oh }}
 	_, err := e.SessionEnsure(bg, dir, SessionOpts{BodyFile: "/no/such"})

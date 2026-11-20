@@ -653,12 +653,16 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 		if ok {
 			st.Installed, st.Version, st.Digest, st.Mode = true, m.Version, m.Digest, m.EffectiveMode()
 			st.Current = m.Digest == s.digest
+			// want is the set install would write for this root's mode, so
+			// Status asks classify the same question planRoot does.
+			want := s
 			if st.Mode == ModeStub {
 				if stubErr != nil {
 					return rep, stubErr
 				}
 				st.Current = m.Digest == stub.digest
 				st.Changed = stubChanges(m.Files, stub)
+				want = stub
 			}
 			var paths []string
 			for p := range m.Files {
@@ -666,12 +670,16 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 			}
 			sort.Strings(paths)
 			for _, p := range paths {
-				ps, err := readState(r.Path, p, pathState{Recorded: m.Files[p], Managed: true}, false)
+				ps := pathState{Recorded: m.Files[p], Managed: true}
+				if b, ok := want.files[p]; ok {
+					ps.Want, ps.Wanted = hashBytes(b), true
+				}
+				ps, err := readState(r.Path, p, ps, false)
 				if err != nil {
 					return rep, err
 				}
 				switch classify(ps).Action {
-				case actForget:
+				case actForget, actCreate:
 					st.Missing = append(st.Missing, p)
 				case actKeep:
 					st.Edited = append(st.Edited, p)

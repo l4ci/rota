@@ -1,6 +1,6 @@
-// Package testaudit reports recorded test costs and repository test structure.
+// Package suiteaudit reports recorded test costs and repository test structure.
 // It never runs a test suite; its only execution boundary lists Playwright tests.
-package testaudit
+package suiteaudit
 
 import (
 	"encoding/json"

@@ -1207,3 +1207,30 @@ func TestCoreAdapterSendNeverReadyIsNotSubmitted(t *testing.T) {
 		t.Fatalf("sends = %d, want 0", f.sends)
 	}
 }
+
+// Clear finds the intent through the handle's saved endpoint, not the env of
+// the orchestrator that replaced the one which spawned it.
+func TestCoreAdapterClearSpawnIntentUsesSavedEndpoint(t *testing.T) {
+	h, _ := coreFixture(t)
+	hc := h.(*coreHost)
+	v := coreHandle{Endpoint: "/saved.sock", Core: "fixture-core", Token: "tok", Slot: "dana", Cwd: "/work"}
+	path, e := hc.spawnIntentPath(v.Endpoint, v.Core, v.Slot, v.Cwd)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = hc.d.FS.MkdirAll(filepath.Dir(path), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e = hc.writeSpawnIntent(path, coreSpawnIntent{Token: "tok", Endpoint: v.Endpoint, Core: v.Core, Slot: v.Slot, Cwd: v.Cwd}); e != nil {
+		t.Fatal(e)
+	}
+	if got := hc.d.Getenv(envCoreSocket); got == v.Endpoint {
+		t.Fatalf("env endpoint %q must differ from the saved one", got)
+	}
+	if e = hc.clearSpawnIntent(v); e != nil {
+		t.Fatalf("clear: %v", e)
+	}
+	if _, e = hc.d.FS.ReadFile(path); !errors.Is(e, os.ErrNotExist) {
+		t.Fatalf("intent under saved endpoint not removed: %v", e)
+	}
+}

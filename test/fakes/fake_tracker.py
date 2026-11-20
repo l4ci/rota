@@ -257,9 +257,10 @@ def checkout_pr(p):
 
 
 def check_pin(p, want):
-    """The forges refuse a pinned merge when the head has moved."""
+    """The forges refuse a pinned merge when the head has moved. Same words as fake_forge.py
+    (TestForgeFakesAgree pins them). Unlike fake_forge, an absent pin merges: the named exception."""
     if want and want != p.get("sha"):
-        raise Fail("Head branch was modified. Review the latest changes and try again.")
+        raise Fail("simulated: head commit %s does not match the pin %s" % (p.get("sha"), want))
 
 
 def merge_pr(db, p):
@@ -301,11 +302,8 @@ def gh_pr_cmd(db, args):
         rows.sort(key=lambda p: -p["number"])
         emit([pick(gh_pr(p), fields) for p in rows[:int(one(o, "limit", 30))]])
     elif verb == "view":
-        want = pos[0]
-        hit = [p for p in prs if str(p["number"]) == want.lstrip("#") or p["head"] == want]
-        if not hit:
-            raise Fail("no pull requests found for %s" % want)
-        emit(pick(gh_pr(hit[-1]), fields)) if fields else print("title:\t%s" % hit[-1]["title"])
+        p = find_pr(prs, pos[0])
+        emit(pick(gh_pr(p), fields)) if fields else print("title:\t%s" % p["title"])
     elif verb == "checkout":
         checkout_pr(find_pr(prs, pos[0]))
     elif verb == "merge":
@@ -341,11 +339,7 @@ def gl_mr_cmd(db, args):
         rows.sort(key=lambda p: -p["number"])
         emit([gl_mr(p) for p in rows[:min(int(one(o, "per_page", 30)), 100)]])
     elif verb == "view":
-        want = pos[0]
-        hit = [p for p in prs if str(p["number"]) == want.lstrip("#") or p["head"] == want]
-        if not hit:
-            raise Fail("404 Not Found")
-        emit(gl_mr(hit[-1]))
+        emit(gl_mr(find_pr(prs, pos[0], True)))
     elif verb == "checkout":
         checkout_pr(find_pr(prs, pos[0], True))
     elif verb == "merge":

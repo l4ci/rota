@@ -500,7 +500,8 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 
 // skillsLinks prints the relative link targets of each markdown file through
 // skills.Links, the one definition the install footer and
-// test/validate-skills.py share.
+// test/validate-skills.py share. The JSON also names the flat-sibling subset
+// (skills.FlatSibling), so the validator keeps no link regex of its own.
 func skillsLinks(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
@@ -514,7 +515,13 @@ func skillsLinks(fs *flag.FlagSet) RunFunc {
 				return Result{}, Failed("%v", err)
 			}
 			links := skills.Links(b)
-			files = append(files, jsonx.Obj("file", f, "links", jsonx.Strings(links)))
+			sibs := []string{}
+			for _, l := range links {
+				if skills.FlatSibling(l) {
+					sibs = append(sibs, l)
+				}
+			}
+			files = append(files, jsonx.Obj("file", f, "links", jsonx.Strings(links), "siblings", jsonx.Strings(sibs)))
 			for _, l := range links {
 				if len(args) == 1 {
 					lines = append(lines, l)

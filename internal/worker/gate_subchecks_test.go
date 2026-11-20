@@ -23,6 +23,26 @@ func subcheckMarker(t *testing.T, check, first, retry string) string {
 	return "ROTA-FLAKY " + string(b) + "\n"
 }
 
+// The golden line is also asserted, byte for byte, against the emitter's output
+// by test/gate_retry_test.py, so neither side of the seam can drift alone.
+func TestGateSubchecksParsesGoldenEmitterRecord(t *testing.T) {
+	golden, err := os.ReadFile("../../test/fixtures/rota-flaky.golden")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	entries, err := gateSubchecks(string(golden), "tree", now)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("golden emitter record must parse to one entry: %+v err=%v", entries, err)
+	}
+	f := entries[0]
+	if f.Check != "go:internal/example" || strings.Join(f.Tests, ",") != "TestUnderLoad" ||
+		f.First.ExitCode != 1 || f.First.Output != "--- FAIL: TestUnderLoad (0s)\nFAIL\n" ||
+		f.Retry.ExitCode != 0 || f.Retry.Output != "ok  \texample/pkg\t0.01s\n" || f.Retry.WallSeconds != 0.125 {
+		t.Fatalf("golden record parsed wrong: %+v", f)
+	}
+}
+
 func TestGateRecordsSubcheckRecovery(t *testing.T) {
 	for _, tc := range []struct{ check, first, test string }{
 		{"smoke-shard2", "  FAIL controlled smoke case\n", "smoke-shard2"},

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/testutil/coretest"
@@ -16,7 +17,7 @@ import (
 func TestCoreAdapterPendingCreateCannotEscapePoolCleanup(t *testing.T) {
 	for _, missing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "reconciled", true: "unknown"}[missing], func(t *testing.T) {
-			dir := newProject(t, "{\"round\":{\"dispatch\":\"herdr-core\"}}")
+			dir := gittest.Project(t, "{\"round\":{\"dispatch\":\"herdr-core\"}}")
 			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +63,7 @@ func TestCoreAdapterPendingCreateCannotEscapePoolCleanup(t *testing.T) {
 }
 
 func TestCoreAdapterDispatchAndBusyRelay(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,7 @@ func TestCoreAdapterDispatchAndBusyRelay(t *testing.T) {
 }
 
 func TestCoreAdapterDispatchUnknownRetryRetainsSignedPayload(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +159,7 @@ func TestCoreAdapterRelayRetainedComposer(t *testing.T) {
 			continue
 		}
 		t.Run(capture.Name, func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 				t.Fatal(err)
 			}
@@ -199,7 +200,7 @@ func TestCoreAdapterRelayRetainedComposer(t *testing.T) {
 }
 
 func TestCoreAdapterUnknownTaskCanBeConfirmedAndRetried(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestCoreAdapterUnknownTaskCanBeConfirmedAndRetried(t *testing.T) {
 func TestCoreAdapterSubmittedDeliveryRefusalsAgree(t *testing.T) {
 	for _, prior := range []string{"prepared", "submitted", "unknown"} {
 		t.Run(prior, func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 			if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 				t.Fatal(err)
 			}

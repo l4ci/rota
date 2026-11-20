@@ -2,9 +2,7 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,14 +16,6 @@ const corePendingPrefix = "core-pending:"
 
 type corePendingHandle struct{ Endpoint, Core, Token, Slot, Cwd string }
 
-func (h *coreHost) pendingIntentPath(v corePendingHandle) (string, error) {
-	d, e := h.stateDir()
-	if e != nil {
-		return "", e
-	}
-	sum := sha256.Sum256([]byte(v.Endpoint + "\x00" + v.Core + "\x00" + v.Slot + "\x00" + filepath.Clean(v.Cwd)))
-	return filepath.Join(d, "spawn-"+hex.EncodeToString(sum[:])+".json"), nil
-}
 func (h *coreHost) readPending(s string) (corePendingHandle, coreSpawnIntent, string, error) {
 	var v corePendingHandle
 	var intent coreSpawnIntent
@@ -33,7 +23,7 @@ func (h *coreHost) readPending(s string) (corePendingHandle, coreSpawnIntent, st
 	if !strings.HasPrefix(s, corePendingPrefix) || e != nil || json.Unmarshal(b, &v) != nil || !filepath.IsAbs(v.Endpoint) || !filepath.IsAbs(v.Cwd) || v.Core == "" || v.Token == "" || v.Slot == "" {
 		return v, intent, "", fmt.Errorf("invalid Core pending-creation identity")
 	}
-	path, e := h.pendingIntentPath(v)
+	path, e := h.spawnIntentPath(v.Endpoint, v.Core, v.Slot, v.Cwd)
 	if e != nil {
 		return v, intent, path, e
 	}

@@ -362,7 +362,7 @@ func (h *coreHost) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	if space == "" || strings.Contains(space, "/") {
 		return "", fmt.Errorf("Core caller has no local herdr.space; open an app project terminal")
 	}
-	path, e := h.spawnIntentPath(c.core, o.Slot, o.Cwd)
+	path, e := h.spawnIntentPath(h.d.Getenv(envCoreSocket), c.core, o.Slot, o.Cwd)
 	if e != nil {
 		return "", e
 	}

@@ -13,7 +13,7 @@ import (
 func sharedProject(t *testing.T, setup string) string {
 	t.Helper()
 	cfg := `{"round":{"sharedDirs":["node_modules"]` + setup + `}}`
-	b := newProject(t, cfg)
+	b := gittest.Project(t, cfg)
 	os.WriteFile(filepath.Join(b, ".gitignore"), []byte(".worktrees/\nnode_modules/\n"), 0o644)
 	os.WriteFile(filepath.Join(b, "package-lock.json"), []byte("lock-a\n"), 0o644)
 	gittest.Run(t, b, "add", ".gitignore", "package-lock.json")

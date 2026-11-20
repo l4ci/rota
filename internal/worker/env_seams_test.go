@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -36,7 +37,7 @@ func TestKillSlotCloseFailureHintGoesThroughEnvStderr(t *testing.T) {
 
 // The herdr handoff hint names the cwd Env reports.
 func TestSessionEnsureHerdrHintNamesEnvGetwd(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	e := envWith(&fakeHost{name: "herdr"})
 	e.Getwd = func() (string, error) { return "/fake/cwd", nil }
 	_, err := e.SessionEnsure(bg, dir, SessionOpts{})
