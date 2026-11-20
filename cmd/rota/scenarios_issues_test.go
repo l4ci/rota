@@ -9,7 +9,7 @@ package main
 // commands in a row on the same project (resume after a failure).
 //
 // Safety: the shared TestMain refuses to run unless gh resolves to test/fakes,
-// TestDFakesFirst checks glab too, and every run has its own FAKE_TRACKER_DB
+// TestFakesFirst checks glab too, and every run has its own FAKE_TRACKER_DB
 // under t.TempDir.
 //
 // Where Go departed from the old helpers on purpose:

@@ -9,7 +9,7 @@ package main
 // the shared harness (scn).
 //
 // Safety: the shared TestMain refuses to run unless gh resolves to test/fakes
-// (TestUbFakesFirst checks glab too); every run has its own store directory
+// (TestFakesFirst checks glab too); every run has its own store directory
 // under t.TempDir, and FAKE_TRACKER_DB_DIR wins over the harness-wide
 // FAKE_TRACKER_DB, so no scenario can touch another's store.
 //
