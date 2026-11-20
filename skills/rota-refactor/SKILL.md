@@ -97,7 +97,7 @@ Tag each finding with a **dependency category**, which sets the test approach at
 - **Remote-owned**: a service the project owns across a network boundary. Put a port at the seam; test with an in-memory adapter, and the real one with a contract test.
 - **True external**: a third party the project does not control. Put a port at the seam; mock only at that adapter.
 
-Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
+Before filing a finding, grep for the seam it proposes: one that already exists is no finding. Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
 ### Step 4 — File
 

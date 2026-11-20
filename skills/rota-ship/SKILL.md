@@ -40,7 +40,7 @@ When `--undo` is present, read [`undo-mode.md`](undo-mode.md) and follow it; ter
 Read `.rota/config.json` (`rota config show`):
 
 - `work.mergeStrategy`: `"pr"` or `"direct"`; unset means ask (Step 5)
-- `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size, label and path, and lifts it to `full` on a `Door: one-way` PR or a diff outside the issue's declared files; `true` and `false` still mean `full` and `none`
+- `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size, label and path, and lifts it to `full` on a `Door: one-way` PR or a diff outside the issue's declared files; `true` and `false` still mean `full` and `none`. A plain string fixes the depth for every branch: labels and diff size are ignored, and only the policy object lifts a `risk:high` branch
 - `autonomy.level`: `"off"` (default), `"roundtrip"`, `"auto"` ([`references/autonomy.md`](references/autonomy.md)): whether Step 8.5 nudges or invokes directly, and whether Step 9.7 stops or runs the next item
 
 `ship.secondOpinion`, `ship.qa` and `ship.uat` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`/rota-docs`](../rota-docs/SKILL.md).
