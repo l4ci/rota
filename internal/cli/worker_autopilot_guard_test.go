@@ -1,42 +1,64 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
-// armWatch leaves a live watch marker for pid 4242 under the project.
-func armWatch(t *testing.T, autopilot bool) (*Ctx, string) {
+// armedProject is a worker project with a live watch marker for pid 4242 and
+// the Deps that see that pid alive.
+func armedProject(t *testing.T, autopilot bool) (*Deps, string) {
 	t.Helper()
-	root := orchProject(t, false)
+	dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["true"]}}`)
+	if code, out, errOut := rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main"); code != 0 {
+		t.Fatalf("init: %s %s", out, errOut)
+	}
 	le := roundlease.DefaultEnv()
 	le.Alive = func(p int) bool { return p == 4242 }
 	le.StartTime = func(p int) (uint64, bool) { return 99, p == 4242 }
-	cd, err := rotastatetest.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := roundlease.Arm(le, cd, 4242, time.Minute, autopilot); err != nil {
 		t.Fatal(err)
 	}
-	d := testDeps()
+	d := depsIn(dir)
 	d.LeaseEnv = func() roundlease.Env { return le }
-	return &Ctx{Deps: d}, root
+	return d, dir
 }
 
-func TestRefuseDuringAutopilot(t *testing.T) {
-	c, root := armWatch(t, true)
-	if err := refuseDuringAutopilot(c, root, false); err == nil {
-		t.Error("live autopilot watch: want a refusal")
+func TestWorkerLandingVerbsRefuseDuringAutopilot(t *testing.T) {
+	cases := []struct {
+		name      string
+		args      []string
+		autopilot bool
+		refused   bool
+	}{
+		{"gate", []string{"worker", "gate", "w1", "--base", "main"}, true, true},
+		{"train", []string{"worker", "train", "w1", "--base", "main"}, true, true},
+		{"gate check-only", []string{"worker", "gate", "w1", "--base", "main", "--check-only"}, true, false},
+		{"train plan", []string{"worker", "train", "w1", "--base", "main", "--plan"}, true, false},
+		{"gate override", []string{"worker", "gate", "w1", "--base", "main", "--ignore-autopilot"}, true, false},
+		{"train override", []string{"worker", "train", "w1", "--base", "main", "--ignore-autopilot"}, true, false},
+		{"gate plain watch", []string{"worker", "gate", "w1", "--base", "main"}, false, false},
+		{"train plain watch", []string{"worker", "train", "w1", "--base", "main"}, false, false},
 	}
-	if err := refuseDuringAutopilot(c, root, true); err != nil {
-		t.Errorf("override flag: want no refusal, got %v", err)
-	}
-	c, root = armWatch(t, false)
-	if err := refuseDuringAutopilot(c, root, false); err != nil {
-		t.Errorf("plain watch: want no refusal, got %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, dir := armedProject(t, tc.autopilot)
+			code, out, errOut := rotaInWith(t, d, dir, append([]string{"--json"}, tc.args...)...)
+			got := data(t, out)["blockedBy"] == "autopilot-armed"
+			if got != tc.refused {
+				t.Fatalf("refused=%v want %v: %d %s %s", got, tc.refused, code, out, errOut)
+			}
+			if tc.refused && (code != 4 || !strings.Contains(errOut+out, "plain watch")) {
+				t.Fatalf("want exit 4 with a plain-watch hint: %d %s %s", code, out, errOut)
+			}
+		})
 	}
 }

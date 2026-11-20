@@ -959,20 +959,21 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 // autopilot watch trains reviewed PRs itself, so a manual run races it and ends
 // ALREADY-MERGED with nothing landed. The tick calls prepareGate and
 // prepareTrain directly, never the verbs, so it never meets this guard.
-func refuseDuringAutopilot(c *Ctx, root string, override bool) error {
+func refuseDuringAutopilot(c *Ctx, root string, override bool) (Result, error) {
 	if override {
-		return nil
+		return Result{}, nil
 	}
 	cd, err := c.CommonDir(root)
 	if err != nil {
-		return nil // no common dir, no marker to read
+		return Result{}, nil // no common dir, no marker to read
 	}
 	m, armed := roundlease.Armed(c.deps().LeaseEnv(), cd)
 	if !armed || !m.Autopilot {
-		return nil
+		return Result{}, nil
 	}
-	return Refused("an autopilot watch (pid %d) is armed and lands reviewed PRs itself; a hand-started run races it", m.PID).
-		WithHint("let it land the PR, or restart as a plain watch (rota round watch without --autopilot); --ignore-autopilot overrides")
+	return blockedRefusal(nil, blockedby.AutopilotArmed,
+		fmt.Sprintf("an autopilot watch (pid %d) is armed and lands reviewed PRs itself; a hand-started run races it", m.PID),
+		"let it land the PR, or restart as a plain watch (rota round watch without --autopilot); --ignore-autopilot overrides")
 }
 
 func workerGate(fs *flag.FlagSet) RunFunc {
@@ -1001,8 +1002,8 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !*check {
-			if err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
-				return Result{}, err
+			if res, err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
+				return res, err
 			}
 		}
 		if !*check && !*noAssignCheck {

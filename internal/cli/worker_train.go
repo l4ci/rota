@@ -349,8 +349,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if !*plan {
-			if err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
-				return Result{}, err
+			if res, err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
+				return res, err
 			}
 		}
 		if !*plan && !*noAssignCheck {
