@@ -103,6 +103,12 @@ func backlogScope(c *Ctx) (string, error) {
 // capture target, and a capture with none goes to the sub-repo the working
 // directory is in.
 func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
+	return openBacklogVia(c, root, fileOnly, hint, nil)
+}
+
+// openBacklogVia is openBacklog with the tracker constructor swapped, for a
+// caller that already shares one tracker per directory (doctor's remote scan).
+func openBacklogVia(c *Ctx, root string, fileOnly bool, hint string, via func(context.Context, string) (backlog.Tracker, error)) (backlog.Backend, error) {
 	caps, cfg, err := c.backendMode(root)
 	if err != nil {
 		return nil, err
@@ -121,6 +127,9 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		Warn:        func(msg string) { c.Warn("%s", msg) },
 		NoteLimit:   c.deps().Getenv("ROTA_NOTE_LIMIT"),
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
+			if via != nil {
+				return via(ctx, dir)
+			}
 			tr, err := c.deps().NewTracker(ctx, dir, cfg)
 			if it, ok := tr.(tracker.IssueTracker); ok && err == nil {
 				if note := tracker.AssumedNote(it); note != "" {

@@ -22,9 +22,11 @@ type RemoteScanner struct {
 	NewTracker func(context.Context, string) (Tracker, error)
 	NewForge   func(context.Context) (tracker.Forge, error)
 	RoundEnv   func(context.Context) round.Env
-	Cwd        string
-	Today      func() time.Time
-	Timeout    time.Duration
+	// Board opens the claim board stale-claim detection reads. The cli supplies
+	// the same wiring the round verbs use, so an open error degrades one way;
+	// tracker is the scan's shared per-directory client.
+	Board   func(ctx context.Context, root string, tracker func(context.Context, string) (Tracker, error)) (round.Board, error)
+	Timeout time.Duration
 }
 
 type RemoteScan struct {
@@ -84,14 +86,9 @@ func (s RemoteScanner) staleClaims(ctx context.Context, root string, cfg any, ge
 	env.Forge = scanForge{forge, tr}
 	board := env.Board
 	if board == nil {
-		be, err := backlog.Open(ctx, root, cfg, backlog.Options{Cwd: s.Cwd, Today: s.Today, NewTracker: get})
+		board, err = s.Board(ctx, root, get)
 		if err != nil {
 			return nil, []string{err.Error()}
-		}
-		var ok bool
-		board, ok = round.BoardOf(be)
-		if !ok {
-			return nil, []string{"tracker does not support claims"}
 		}
 	}
 	claims, warnings := env.StaleClaims(ctx, root, board, nil)

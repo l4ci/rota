@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -51,9 +52,21 @@ func remoteFixture(t *testing.T, tr Tracker) (RemoteScanner, any) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	newTracker := func(context.Context, string) (Tracker, error) { return tr, nil }
 	return RemoteScanner{
-		NewTracker: func(context.Context, string) (Tracker, error) { return tr, nil },
-		NewForge:   func(context.Context) (tracker.Forge, error) { return remoteForge{}, nil },
+		NewTracker: newTracker,
+		Board: func(ctx context.Context, root string, _ func(context.Context, string) (Tracker, error)) (round.Board, error) {
+			be, err := backlog.Open(ctx, root, cfg, backlog.Options{NewTracker: newTracker})
+			if err != nil {
+				return nil, err
+			}
+			b, ok := round.BoardOf(be)
+			if !ok {
+				return nil, errors.New("tracker does not support claims")
+			}
+			return b, nil
+		},
+		NewForge: func(context.Context) (tracker.Forge, error) { return remoteForge{}, nil },
 		RoundEnv: func(context.Context) round.Env {
 			return round.Env{Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return remoteNow }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 		},
@@ -237,5 +250,22 @@ func TestRemoteScanLabelCapabilities(t *testing.T) {
 				t.Fatalf("name-only check = %+v", check)
 			}
 		})
+	}
+}
+
+// A board that cannot open costs the stale-claim half only: the warning names
+// the error and the label scan still runs.
+func TestRemoteScanBoardOpenErrorKeepsLabels(t *testing.T) {
+	fake := abandonedIssues()
+	s, cfg := remoteFixture(t, remoteMetadata{&remoteLabels{Fake: fake}})
+	s.Board = func(context.Context, string, func(context.Context, string) (Tracker, error)) (round.Board, error) {
+		return nil, errors.New("board offline")
+	}
+	got := s.Scan(context.Background(), t.TempDir(), cfg)
+	if len(got.StaleClaims) != 0 || !strings.Contains(strings.Join(got.Warnings, "; "), "board offline") {
+		t.Fatalf("claims %+v warnings %v, want none and the board error", got.StaleClaims, got.Warnings)
+	}
+	if got.Labels == nil || got.Labels.Problem != "" || !got.Labels.Used["claimed:mac-ben@3"] {
+		t.Fatalf("labels = %+v, want the scan to survive", got.Labels)
 	}
 }
