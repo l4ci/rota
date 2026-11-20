@@ -24,13 +24,15 @@ type migrationFile struct {
 	create     bool // lock the file even when missing; a planner may set doc and changed to create it
 	doc        *jsonx.Object
 	changed    bool
+	after      func() error // set by a planner: runs under the lock once this file's turn to write comes, changed or not
 }
 
 // migrateLayerFiles is the one lifecycle every migration step runs on: the
 // round-key, accounts, merges, scope and source steps. It holds the files'
 // locks in layer order (a missing file only when it is create), reads every
 // file before planning, and writes the changed documents only after the
-// planner has accepted every one, highest layer first: each file migrates on
+// planner has accepted every one, highest layer first (a file's after hook
+// follows its write, the global autonomy stamp): each file migrates on
 // its own, so a run cut short between two writes is finished by the next, and
 // a step that moves keys down into config.local.json lands them before it
 // deletes them from config.json. Unusable global config is skipped, as Load
@@ -56,8 +58,14 @@ func migrateLayerFiles(files []*migrationFile, apply bool, plan func([]*migratio
 		}
 		if apply {
 			for i := len(files) - 1; i >= 0; i-- {
-				if f := files[i]; f.changed {
+				f := files[i]
+				if f.changed {
 					if err := fsio.WriteJSONAtomic(f.path, f.doc); err != nil {
+						return err
+					}
+				}
+				if f.after != nil {
+					if err := f.after(); err != nil {
 						return err
 					}
 				}

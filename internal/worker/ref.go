@@ -18,19 +18,8 @@ var (
 	reIssueToken = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
 )
 
-// PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
-func PRRefNumber(ref string) (int, bool) {
-	ref = strings.TrimSpace(ref)
-	if p, ok := tracker.ParsePRURL(ref); ok {
-		return p.Number, true
-	}
-	digits := strings.TrimPrefix(strings.TrimSuffix(ref, "/"), "#")
-	if digits == "" || strings.Trim(digits, "0123456789") != "" {
-		return 0, false
-	}
-	n, err := strconv.Atoi(digits)
-	return n, err == nil
-}
+// PRRefNumber reads the PR number from a PR ref (tracker.PRNumber).
+func PRRefNumber(ref string) (int, bool) { return tracker.PRNumber(ref) }
 
 // NormID is the one spelling item IDs are compared and keyed by: trimmed, no
 // leading `#`, upper case. `#12`, ` 12 `, `b07` and `B07` normalise to `12`,
