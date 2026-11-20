@@ -115,16 +115,6 @@ type Ctx struct {
 	// build, so no verb sets Env.HolderPID by hand.
 	holderPID int
 
-	// reviewSkipNoted is set once `round watch` has said its review poll is
-	// skipped (the round config does not load), so the note is not repeated.
-	reviewSkipNoted bool
-	// mergedMarkNoted is set once `round watch` has warned that it could not
-	// write the merged-PR mark to the registry.
-	mergedMarkNoted bool
-	// maintainerWarnings is the last forge pass's warning set. Recovered
-	// warnings may be reported again if they recur, unchanged outages do not spam.
-	maintainerWarnings map[string]bool
-
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
 	dashAt int

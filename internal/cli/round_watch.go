@@ -78,6 +78,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		ts := c.trackStatus("round watch")
 		ok := false
 		defer func() { ts.Finish(ok) }()
+		warned := &watchWarned{}
 		wenv := workerEnvCtx(c, ctx)
 		env := roundwatch.Env{
 			Now: c.deps().Now,
@@ -105,7 +106,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			},
 			OnHeartbeat: func() { _ = worker.ClearPromptSeen(root) },
 			Local:       func() roundwatch.Snapshot { return roundwatch.LocalSnapshot(wenv, root) },
-			Forge:       func(ctx context.Context) roundwatch.Snapshot { return watchForge(ctx, c, root) },
+			Forge:       func(ctx context.Context) roundwatch.Snapshot { return watchForge(ctx, c, root, warned) },
 		}
 		st := roundwatch.NewSeenStore(cd)
 		env.Seen, env.Mark = st.Seen, st.Mark
@@ -134,12 +135,26 @@ func watchWaitOpts(d, settle time.Duration, lines int, unverifiable time.Duratio
 
 func secs(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }
 
+// watchWarned is the warn-once state of one watch loop: which conditions it
+// has already reported, so a poll that sees the same outage again stays quiet.
+type watchWarned struct {
+	// reviewSkipNoted is set once the watch has said its review poll is
+	// skipped (the round config does not load).
+	reviewSkipNoted bool
+	// mergedMarkNoted is set once the watch has warned that it could not
+	// write the merged-PR mark to the registry.
+	mergedMarkNoted bool
+	// maintainerWarnings is the last forge pass's warning set. Recovered
+	// warnings may be reported again if they recur, unchanged outages do not spam.
+	maintainerWarnings map[string]bool
+}
+
 // watchForge asks the forge what the registry cannot know: it records answered
 // escalations (as `round escalate check` does), reads each slot's PR state
 // from `round status` and looks for review input on each done slot's PR (under
 // round.reviewLoop auto it relays that input to the worker instead). A forge that cannot be reached leaves the entries out,
 // which reads as no change.
-func watchForge(ctx context.Context, c *Ctx, root string) roundwatch.Snapshot {
+func watchForge(ctx context.Context, c *Ctx, root string, w *watchWarned) roundwatch.Snapshot {
 	out := roundwatch.Snapshot{}
 	c.deps().freshReads()
 	env := c.deps().escalationEnv()
@@ -166,24 +181,24 @@ func watchForge(ctx context.Context, c *Ctx, root string) roundwatch.Snapshot {
 				merged[r.Name] = r.PRState == "merged"
 			}
 		}
-		if err := markMergedDone(root, merged); err != nil && !c.mergedMarkNoted {
-			c.mergedMarkNoted = true
+		if err := markMergedDone(root, merged); err != nil && !w.mergedMarkNoted {
+			w.mergedMarkNoted = true
 			c.Warn("merged-PR mark skipped: registry write failed: %v", err)
 		}
 		_, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
 		nextWarnings := map[string]bool{}
 		for _, warning := range warnings {
-			if !c.maintainerWarnings[warning] && !nextWarnings[warning] {
+			if !w.maintainerWarnings[warning] && !nextWarnings[warning] {
 				c.Warn("%s", warning)
 			}
 			nextWarnings[warning] = true
 		}
-		c.maintainerWarnings = nextWarnings
+		w.maintainerWarnings = nextWarnings
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {
-		if !c.reviewSkipNoted {
-			c.reviewSkipNoted = true
+		if !w.reviewSkipNoted {
+			w.reviewSkipNoted = true
 			c.Warn("review poll skipped: round config does not load: %v", err)
 		}
 		return out
