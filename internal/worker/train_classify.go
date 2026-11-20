@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gotestout"
 	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/testledger"
 )
 
 // redClass is what classifyRed found out about a red prefix. The zero value
@@ -121,7 +121,7 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 // unreproducedNote names a failed command's tests the way a FLAKY note does,
 // for a red that passed on every rerun.
 func unreproducedNote(cmd, out string) string {
-	tests, _ := testledger.FailingTests(out)
+	tests, _ := gotestout.FailingTests(out)
 	named := strings.Join(tests, ", ")
 	if named == "" {
 		named = "(none named)"
@@ -173,7 +173,7 @@ func testsCommand(out, template string) (string, bool) {
 	if !strings.Contains(template, "{tests}") || strings.Contains(template, "{files}") {
 		return "", false
 	}
-	failing, ok := testledger.FailingTests(out)
+	failing, ok := gotestout.FailingTests(out)
 	if !ok {
 		return "", false
 	}
