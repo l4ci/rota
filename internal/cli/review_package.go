@@ -58,6 +58,9 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		head = strings.TrimSpace(head)
+		if err := reviewRequirePushedHead(c, t.Dir, t.Branch, head); err != nil {
+			return Result{}, err
+		}
 		// An integration branch is reviewed on its fix commits only: --since
 		// defaults to just before the first of them (#3096).
 		if *sinceFlag == "" {
@@ -71,6 +74,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		// the branch forked is fine; only unrelated histories have no merge-base.
 		// --since is a point on the branch, so it must be an ancestor of its tip.
 		var from, logSpan, diffSpan string
+		ownOnly := false
 		if *sinceFlag != "" {
 			if ok, err := reviewIsAncestor(c, t.Dir, *sinceFlag, head); err != nil {
 				return Result{}, err
@@ -80,6 +84,13 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			from = *sinceFlag
 			logSpan = from + ".." + head
 			diffSpan = logSpan
+			// A base merge inside since..head carries the base's changes: diff
+			// only the branch's own non-merge commits then.
+			merges, err := reviewGit(ctx, c.deps(), t.Dir, "rev-list", "--count", "--merges", logSpan)
+			if err != nil {
+				return Result{}, err
+			}
+			ownOnly = strings.TrimSpace(merges) != "0"
 		} else {
 			if _, err := reviewGit(ctx, c.deps(), t.Dir, "merge-base", t.Base, head); err != nil {
 				return Result{}, Resolution("'%s' and base '%s' share no history", t.Branch, t.Base)
@@ -99,19 +110,25 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		stat, err := reviewGit(ctx, c.deps(), t.Dir, "diff", "--stat", diffSpan)
-		if err != nil {
-			return Result{}, err
+		var stat, diff string
+		var files int
+		if ownOnly {
+			if stat, diff, files, err = reviewOwnCommitsDiff(c, t.Dir, logSpan); err != nil {
+				return Result{}, err
+			}
+		} else {
+			if stat, err = reviewGit(ctx, c.deps(), t.Dir, "diff", "--stat", diffSpan); err != nil {
+				return Result{}, err
+			}
+			if diff, err = reviewGit(ctx, c.deps(), t.Dir, "diff", reviewPackageContext, diffSpan); err != nil {
+				return Result{}, err
+			}
+			paths, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, diffSpan)
+			if err != nil {
+				return Result{}, diffErr(err)
+			}
+			files = len(paths)
 		}
-		diff, err := reviewGit(ctx, c.deps(), t.Dir, "diff", reviewPackageContext, diffSpan)
-		if err != nil {
-			return Result{}, err
-		}
-		paths, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, diffSpan)
-		if err != nil {
-			return Result{}, diffErr(err)
-		}
-		files := len(paths)
 
 		var b strings.Builder
 		fmt.Fprintf(&b, "# Review package: %s vs %s\n\n", t.Branch, from)
@@ -128,6 +145,63 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		data := jsonx.Obj("path", path, "files", files, "bytes", b.Len(), "head", head)
 		return Result{Data: data, Text: path}, nil
 	}
+}
+
+// reviewOwnCommitsDiff is the stat, the diff and the changed-file count of the
+// branch's own commits in span: the first-parent, non-merge ones, so what a
+// merge of the base brought in is left out. Each commit's patch follows its
+// "commit <sha> <subject>" line.
+func reviewOwnCommitsDiff(c *Ctx, dir, span string) (stat, diff string, files int, err error) {
+	ctx := c.Context()
+	own := []string{"log", "--first-parent", "--no-merges", "--reverse", "--format=commit %h %s", span}
+	if stat, err = reviewGit(ctx, c.deps(), dir, append(own, "--stat")...); err != nil {
+		return "", "", 0, err
+	}
+	if diff, err = reviewGit(ctx, c.deps(), dir, append(own, reviewPackageContext, "-p")...); err != nil {
+		return "", "", 0, err
+	}
+	names, err := reviewGit(ctx, c.deps(), dir, "log", "--first-parent", "--no-merges", "--format=", "--name-only", span)
+	if err != nil {
+		return "", "", 0, err
+	}
+	seen := map[string]bool{}
+	for _, n := range strings.Split(names, "\n") {
+		if n = strings.TrimSpace(n); n != "" {
+			seen[n] = true
+		}
+	}
+	return stat, diff, len(seen), nil
+}
+
+// reviewRequirePushedHead refuses a branch whose local head differs from
+// origin/<branch>: a reviewer briefed on it reviews commits the PR does not
+// carry, and verdict add refuses that sha only after the review ran. A branch
+// with no origin counterpart passes.
+func reviewRequirePushedHead(c *Ctx, dir, branch, head string) error {
+	ctx := c.Context()
+	ok, err := c.deps().Repo(dir).Verify(ctx, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return gitErr(err)
+	}
+	if !ok {
+		return nil
+	}
+	out, err := reviewGit(ctx, c.deps(), dir, "rev-parse", "--verify", "refs/remotes/origin/"+branch+"^{commit}")
+	if err != nil {
+		return err
+	}
+	tip := strings.TrimSpace(out)
+	if tip == head {
+		return nil
+	}
+	return Resolution("local %s (%s) differs from origin/%s (%s): push the branch, or fetch if origin is ahead, so the review covers the PR head", branch, reviewShort(head), branch, reviewShort(tip))
+}
+
+func reviewShort(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // reviewIsAncestor reports whether ancestor is reachable from ref.
