@@ -354,7 +354,7 @@ func (l *Linear) loadLabels(ctx context.Context) error {
 		}
 		for _, lb := range d.IssueLabels.Nodes {
 			if lb.Team == nil || lb.Team.ID == teamID {
-				key := strings.ToLower(lb.Name)
+				key := labelKey(linearLabelRule, lb.Name)
 				// Team definitions take precedence over workspace labels with the same name.
 				if prior, ok := got[key]; !ok || prior.Team == nil || lb.Team != nil {
 					got[key] = lb
@@ -385,7 +385,7 @@ func (l *Linear) labelIDs(ctx context.Context, names []string, create bool) ([]s
 		defer l.mu.Unlock()
 		var out []string
 		for _, n := range names {
-			if _, ok := l.labels[strings.ToLower(n)]; !ok {
+			if _, ok := l.labels[labelKey(linearLabelRule, n)]; !ok {
 				out = append(out, n)
 			}
 		}
@@ -421,14 +421,14 @@ func (l *Linear) labelIDs(ctx context.Context, names []string, create bool) ([]s
 			return nil, err
 		}
 		l.mu.Lock()
-		l.labels[strings.ToLower(n)] = d.IssueLabelCreate.IssueLabel
+		l.labels[labelKey(linearLabelRule, n)] = d.IssueLabelCreate.IssueLabel
 		l.mu.Unlock()
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	out := make([]string, 0, len(names))
 	for _, n := range names {
-		out = append(out, l.labels[strings.ToLower(n)].ID)
+		out = append(out, l.labels[labelKey(linearLabelRule, n)].ID)
 	}
 	return out, nil
 }

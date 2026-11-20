@@ -31,7 +31,7 @@ func (t *Itsaplan) labelIDs(ctx context.Context, names []string, create bool) ([
 func (t *Itsaplan) labelID(ctx context.Context, name string, create bool) (int, error) {
 	t.mu.Lock()
 	for _, l := range t.meta.Labels {
-		if strings.EqualFold(l.Name, name) {
+		if sameLabelName(itsaplanLabelRule, l.Name, name) {
 			t.mu.Unlock()
 			return l.ID, nil
 		}

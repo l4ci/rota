@@ -472,7 +472,7 @@ func (t *Itsaplan) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 // hasAllLabels reports whether have holds every name in want, ignoring case.
 func hasAllLabels(have, want []string) bool {
 	for _, w := range want {
-		if !slices.ContainsFunc(have, func(h string) bool { return strings.EqualFold(h, w) }) {
+		if !hasLabel(itsaplanLabelRule, have, w) {
 			return false
 		}
 	}
