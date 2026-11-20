@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,7 +235,22 @@ func migrateStaleAutonomy(root string) (am AutonomyMigration, err error) {
 		}
 		return nil
 	})
-	return am, err
+	return am, notObjectRefusal(err)
+}
+
+// notObjectRefusal turns the lifecycle's corrupt-layer error into the typed
+// refusal a set gives for the same file (ErrNotObject, ErrLocalNotObject), so
+// a layer that is not a JSON object is exit 5 here as it is in Set; any other
+// error passes through.
+func notObjectRefusal(err error) error {
+	var cf corruptFile
+	if !errors.As(err, &cf) {
+		return err
+	}
+	if cf.name == "config.local.json" {
+		return ErrLocalNotObject
+	}
+	return ErrNotObject
 }
 
 // raiseProjectStamp raises rota.version in a stale config.json of root to

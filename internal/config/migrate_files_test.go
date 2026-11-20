@@ -329,3 +329,26 @@ func TestMigrateConfigStepList(t *testing.T) {
 		t.Error("migrate config stamped the global")
 	}
 }
+
+// A layer that is not a JSON object is the typed refusal Set gives, not a
+// bare corrupt error (exit 5 through exitmap), and the file stays untouched.
+func TestMigrateStaleAutonomyNonObjectIsTypedRefusal(t *testing.T) {
+	for name, want := range map[string]error{"config.json": ErrNotObject, "config.local.json": ErrLocalNotObject} {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".rota")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("[1]"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := migrateStaleAutonomy(root)
+		if !errors.Is(err, want) {
+			t.Errorf("%s: err = %v, want %v", name, err, want)
+		}
+		if got, _ := os.ReadFile(p); string(got) != "[1]" {
+			t.Errorf("%s rewritten: %s", name, got)
+		}
+	}
+}
