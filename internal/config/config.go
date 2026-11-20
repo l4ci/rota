@@ -108,6 +108,9 @@ func loadLayers(env cfgdir.Env, root string) (merged any, l layers) {
 	return mergeLayers(&l), l
 }
 
+// accountMergeKeys is the set of list keys merged by harness kind.
+var accountMergeKeys = [...]string{RoundAccountsKey, ReviewAccountsKey}
+
 // mergeLayers is the runtime config of l (schema default < global < project <
 // local), after dropping the empty shadows from l.
 func mergeLayers(l *layers) any {
@@ -119,7 +122,10 @@ func mergeLayers(l *layers) any {
 	if l.local != nil {
 		merged = Merge(merged, l.local)
 	}
-	return mergeAccounts(mergeAccounts(merged, l, RoundAccountsKey), l, ReviewAccountsKey)
+	for _, key := range accountMergeKeys {
+		merged = mergeAccounts(merged, l, key)
+	}
+	return merged
 }
 
 // mergeAccounts sets the account list key (round.accounts or review.accounts) of merged to the layers' lists merged by

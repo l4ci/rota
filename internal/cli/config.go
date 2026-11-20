@@ -289,6 +289,11 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			}
 			res, err = config.SetIn(root, args[0], args[1], layer)
 			c.configWritten()
+			if err == nil && layer == config.LayerLocal {
+				if warning := config.LocalListMaskWarning(c.deps().projectsEnv(), root, args[0], res.Value); warning != "" {
+					c.Warn("%s", warning)
+				}
+			}
 		}
 		if err != nil {
 			// A failed set may follow a rewrite that already hit disk (#1524).
