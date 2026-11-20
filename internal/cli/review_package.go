@@ -148,8 +148,16 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 }
 
 // reviewOnlyBaseMerges reports whether span holds merges and every one of them
-// only brings in base: each merge's non-first parents are reachable from base.
+// only brings in base: each merge's non-first parents are reachable from base
+// or from its remote-tracking ref, since a worker merges origin/<base> and the
+// local base is often behind it.
 func reviewOnlyBaseMerges(c *Ctx, dir, base, span string) (bool, error) {
+	bases := []string{base}
+	if ok, err := c.deps().Repo(dir).Verify(c.Context(), "refs/remotes/origin/"+base); err != nil {
+		return false, gitErr(err)
+	} else if ok {
+		bases = append(bases, "refs/remotes/origin/"+base)
+	}
 	out, err := reviewGit(c.Context(), c.deps(), dir, "rev-list", "--merges", "--parents", span)
 	if err != nil {
 		return false, err
@@ -162,8 +170,19 @@ func reviewOnlyBaseMerges(c *Ctx, dir, base, span string) (bool, error) {
 		}
 		any = true
 		for _, p := range f[2:] {
-			if ok, err := reviewIsAncestor(c, dir, p, base); err != nil || !ok {
-				return false, err
+			fromBase := false
+			for _, b := range bases {
+				ok, err := reviewIsAncestor(c, dir, p, b)
+				if err != nil {
+					return false, err
+				}
+				if ok {
+					fromBase = true
+					break
+				}
+			}
+			if !fromBase {
+				return false, nil
 			}
 		}
 	}

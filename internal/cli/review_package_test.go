@@ -145,3 +145,41 @@ func TestReviewPackageSinceKeepsSideBranchMerge(t *testing.T) {
 		t.Errorf("side-branch merge hidden from the package:\n%s", body)
 	}
 }
+
+// The base merged into the branch is origin/main, ahead of a stale local main:
+// it still counts as a base merge and stays out of the package.
+func TestReviewPackageSinceBaseMergeFromRemoteBase(t *testing.T) {
+	repo := newRepo(t, t.TempDir(), "repo", "main")
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	gittest.Run(t, repo, "init", "-q", "--bare", bare)
+	gittest.Run(t, repo, "remote", "add", "origin", bare)
+	gittest.Run(t, repo, "push", "-q", "origin", "main")
+	gittest.Run(t, repo, "checkout", "-q", "-b", "feat/r")
+	write(t, filepath.Join(repo, "own.txt"), "own")
+	gittest.Run(t, repo, "add", "own.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "own work")
+	since := strings.TrimSpace(gittest.Run(t, repo, "rev-parse", "HEAD"))
+	gittest.Run(t, repo, "checkout", "-q", "main")
+	stale := strings.TrimSpace(gittest.Run(t, repo, "rev-parse", "HEAD"))
+	write(t, filepath.Join(repo, "basefile.txt"), "from base")
+	gittest.Run(t, repo, "add", "basefile.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "base moves on")
+	gittest.Run(t, repo, "push", "-q", "origin", "main")
+	gittest.Run(t, repo, "reset", "-q", "--hard", stale) // local main is behind origin/main
+	gittest.Run(t, repo, "checkout", "-q", "feat/r")
+	gittest.Run(t, repo, "merge", "-q", "--no-ff", "-m", "merge origin/main", "origin/main")
+	write(t, filepath.Join(repo, "fix.txt"), "the fix")
+	gittest.Run(t, repo, "add", "fix.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "fix review finding")
+	o := trRun(t, repo, "", "review", "package", "feat/r", "--since", since, "--json")
+	if o.code != 0 {
+		t.Fatalf("package: exit %d %s", o.code, o.stderr)
+	}
+	body, err := os.ReadFile(envelope(t, o.stdout)["data"].(map[string]any)["path"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "fix.txt") || strings.Contains(string(body), "basefile.txt") {
+		t.Errorf("origin/main merge not excluded:\n%s", body)
+	}
+}
