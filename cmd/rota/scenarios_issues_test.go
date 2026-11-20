@@ -134,8 +134,6 @@ func (s dsc) exec(t *testing.T) {
 	frozenCheck(t, rec)
 }
 
-func TestDFakesFirst(t *testing.T) { TestIssueFakesFirst(t) }
-
 func dr(want int, argv ...string) drun {
 	return drun{argv: append([]string{"--json"}, argv...), want: want}
 }

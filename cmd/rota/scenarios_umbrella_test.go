@@ -34,8 +34,6 @@ import (
 	"testing"
 )
 
-func TestUbFakesFirst(t *testing.T) { TestIssueFakesFirst(t) }
-
 // ubRepo is one sub-repo of the fixture umbrella.
 type ubRepo struct {
 	name   string
