@@ -19,9 +19,19 @@ type classifiedSend struct{ err, class error }
 func (e *classifiedSend) Error() string   { return e.err.Error() }
 func (e *classifiedSend) Unwrap() []error { return []error{e.err, e.class} }
 
-// classifySend gives every Send failure a delivery class. A failure that
+// classifySend gives every Send failure a delivery class. Every Host.Send
+// returns through it (TestEverySendReturnsThroughClassifySend holds each
+// adapter to that), so dispatch reads a class by sentinel and never meets an
+// unclassified error. A failure that
 // already states one (not submitted, queued, accepted, dialog, human draft) is
 // left alone; any other failure is wrapped as ErrMaybeSubmitted.
+//
+// Today herdr and tmux return only stated classes: the paths that can fire
+// after text is typed (submitTyped and confirmPickup: ErrNotSubmitted when no
+// pickup was seen, ErrDialogOpen) already say so, and clearDialog, the draft
+// check and the brief read run before anything is typed (ErrDialogOpen,
+// ErrDraftOnPrompt, ErrNotSubmitted). The wrap is for the plain error a future
+// path adds after typing.
 func classifySend(err error) error {
 	for _, known := range []error{nil, ErrNotSubmitted, ErrMaybeSubmitted, ErrQueued, ErrSubmitted, ErrDialogOpen, ErrDraftOnPrompt} {
 		if errors.Is(err, known) {
