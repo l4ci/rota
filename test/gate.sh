@@ -184,7 +184,7 @@ run_go_tests() {
         *) packages+=("$pkg") ;;
       esac
     done <<<"$all_packages"
-    [ "${#packages[@]}" = 0 ] || go test -json -race -timeout 30m -p "$SHARDS" "${packages[@]}"
+    [ "${#packages[@]}" = 0 ] || exec go test -json -race -timeout 30m -p "$SHARDS" "${packages[@]}"
   ) >"$LOGS/go-rest.json" 2>&1 &
   go_pids+=($!); go_logs+=("$LOGS/go-rest.json")
   # Wait for all streams, then concatenate complete lines. Concurrent appends

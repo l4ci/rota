@@ -48,7 +48,7 @@ count = root / (name.replace("/", "_") + ".count")
 n = int(count.read_text()) + 1 if count.exists() else 1
 count.write_text(str(n))
 with (root / "calls").open("a") as f:
-    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), args=sys.argv[2:])) + "\\n")
+    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), ppid=os.getppid(), args=sys.argv[2:])) + "\\n")
 active = root / (name.replace("/", "_") + ".active")
 if n > 1 and list(root.glob("*.active")):
     raise SystemExit("retry overlapped initial checks")
@@ -153,6 +153,9 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual({c["name"] for c in go_calls}, {
             "go:internal/worker", "go:internal/round", "go:internal/cli", "go:internal/example"})
         self.assertEqual(len(go_calls), 4, calls)
+        # stop_checks uses pkill -P on this parent; every Go test process
+        # must be its direct child, including the remaining-packages process.
+        self.assertEqual(len({c["ppid"] for c in go_calls}), 1, go_calls)
         selected = []
         for call in go_calls:
             args = call["args"]

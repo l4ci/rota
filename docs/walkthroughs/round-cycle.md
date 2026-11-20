@@ -88,7 +88,7 @@ At `round.maxBounces` rota stops relaying and escalates on the PR. Do not bounce
 
 ### Gate and merge
 
-Two or more reviewed PRs land together on a [merge train](../usage/parallel-rounds.md#merge-train); a single one goes through `rota worker gate`. Both verify the merged tree before anything lands. A gate takes two to three minutes: start it in the background, review the next PR meanwhile and do not start a second one beside it.
+Two or more reviewed PRs land together on a [merge train](../usage/parallel-rounds.md#merge-train); a single one goes through `rota worker gate`. Both verify the merged tree before anything lands. A gate takes about 10 minutes (median; `rota test-audit` shows current timings): start it in the background, review the next PR meanwhile and do not start a second one beside it.
 
 ### Skip this stage when
 
