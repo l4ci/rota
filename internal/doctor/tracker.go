@@ -193,3 +193,13 @@ func (d *runner) accounts() Check {
 	}
 	return pass("accounts", fmt.Sprintf("%d accounts with credentials", len(d.in.Accounts)))
 }
+
+// configValues fails when a config read made while gathering the input
+// errored. The errors name their key; without this a bad value would skip the
+// check that reads it and doctor would pass. Valid config adds no line.
+func (d *runner) configValues() (Check, bool) {
+	if len(d.in.ConfigErrors) == 0 {
+		return Check{}, false
+	}
+	return fail("config", strings.Join(d.in.ConfigErrors, "; "), "run: rota config show, then rota config set <key> <value> with a valid value"), true
+}
