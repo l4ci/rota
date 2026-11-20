@@ -90,15 +90,26 @@ func TestLabelContractAutoCreateOff(t *testing.T) {
 func TestLabelContractAutoCreateOn(t *testing.T) {
 	ctx := context.Background()
 	for name, mk := range labelFixtures(t) {
-		t.Run(name, func(t *testing.T) {
-			f := mk(t)
-			if err := f.tracker.Edit(ctx, f.key, IssueEdit{AddLabels: []string{"made"}}); err != nil {
-				t.Fatal(err)
-			}
-			is, _ := f.tracker.Get(ctx, f.key, false)
-			if !slices.Contains(is.Labels, "made") {
-				t.Fatalf("labels=%v, want made", is.Labels)
-			}
-		})
+		for _, via := range []string{"AddLabels", "Edit"} {
+			t.Run(name+"/"+via, func(t *testing.T) {
+				f := mk(t)
+				var err error
+				if via == "AddLabels" {
+					err = f.tracker.AddLabels(ctx, f.key, []string{"made"}, true)
+				} else {
+					err = f.tracker.Edit(ctx, f.key, IssueEdit{AddLabels: []string{"made"}})
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				is, err := f.tracker.Get(ctx, f.key, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Contains(is.Labels, "made") {
+					t.Fatalf("labels=%v, want made", is.Labels)
+				}
+			})
+		}
 	}
 }

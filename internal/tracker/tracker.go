@@ -275,7 +275,8 @@ type IssueEdit struct {
 	// NoCreateLabels is issues.autoCreateLabel off: an AddLabels name the
 	// tracker does not know fails with KindNotFound instead of being created.
 	// The zero value creates, as Edit always did. A tracker whose labels are
-	// free text (Jira) has no unknown label and ignores it.
+	// free text (Jira), or that creates a label on first use (GitLab), has no
+	// unknown label and ignores it.
 	NoCreateLabels bool
 }
 
@@ -328,9 +329,9 @@ type IssueTracker interface {
 	// tracker does not know yet does: true creates it, false fails with
 	// KindNotFound and adds nothing. Edit follows the same policy through
 	// IssueEdit.NoCreateLabels (the inverse, so the zero value creates). A
-	// tracker whose labels are free text (Jira) has no unknown label, so it
-	// always creates on use and autoCreate and NoCreateLabels change nothing
-	// there.
+	// tracker whose labels are free text (Jira), or that creates a label on
+	// first use (GitLab), has no unknown label, so it always creates on use
+	// and autoCreate and NoCreateLabels change nothing there.
 	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
 	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
 	// Close closes the issue with reason CloseCompleted (or "") or
