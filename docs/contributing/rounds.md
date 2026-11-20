@@ -179,6 +179,8 @@ HEAD is reachable from `origin/main`. Use `--base <branch>` to check `origin/<br
 A missing base or unpublished HEAD fails without writing `STAMPS`; the check uses the local remote-tracking
 ref and does not fetch. Add a path to `refs:` when the doc starts describing new code.
 
+**At wind-down** the orchestrator restamps as bookkeeping: run `ROTA_DOC_STAMPS=strict bash test/doclint.sh`, fix each drifted doc, run the `--restamp` above and commit `docs/contributing/contract/STAMPS` direct to `main` (drift only WARNs, so stamps go stale silently otherwise). Other round-close bookkeeping (learn bullets, the hit sidecar, after-work doc lines) also goes straight to `main` with `bash test/doclint.sh` when docs changed; a protected base takes a PR merged without review.
+
 ## Review, merge and completion
 
 Before starting a gate or train, pull main and assign every free slot with a ready
@@ -229,6 +231,7 @@ Every slot is its own worktree, so a node, python or rust repo would install or 
   (run `go generate ./internal/config`; `bash test/doclint.sh` fails on drift) and the prose in
   `docs/usage/configuration.md`. Touch only the lines about your key; a sibling may be adding
   another key in the same files.
+- Never edit `docs/contributing/contract/STAMPS` or run `check-doc-stamps.py --restamp` in a PR: the orchestrator restamps on `main` (*Contract doc stamps*). A new contract doc is the one exception: add its line.
 - Stage explicit paths. Commit messages: imperative subject under 72 chars, body says why,
   no `Co-Authored-By` trailer.
 - The PR body carries an `## Approvals` section citing the channel of every decision you

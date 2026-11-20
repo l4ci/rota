@@ -35,7 +35,7 @@ Run `rota config show round.role` first.
 
 ## Step 2 — Scan the Session for Learnings
 
-Capture what would save a future `/rota-work` run from re-discovering it: gotchas, project conventions not obvious from code, constraints and invariants, root causes of hard-won bugs, decisions with rationale, tool quirks.
+Capture what would save a future `/rota-work` run from re-discovering it: gotchas, project conventions not obvious from code, constraints and invariants, root causes of hard-won bugs, decisions with rationale, tool quirks that block you now. A fixable quirk or workaround is an issue (`/rota-capture`; `/rota-bugreport` for rota's own mistakes), not a bullet; write one only while it blocks further work, and name the issue so the bullet goes when it lands.
 
 **Skip:** anything documented in code or README, transient session state, obvious facts, framework-doc restatements, personal preferences.
 

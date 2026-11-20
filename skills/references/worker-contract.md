@@ -88,7 +88,7 @@ Work only this task, then stop.
   merge gate does. A raw `go test` in your shell still has the slot `TMPDIR`: prefix it with
   `TMPDIR=/tmp` (or `env -u TMPDIR`).
 - Docs. Update the public docs in your own PR: `/rota-ship` runs `/rota-docs` after-work (Step 8.6) on your branch and the edit lands in the PR. There is no per-round docs pass. Scaffold and restructure stay the maintainer's: `ROTA-BLOCKED` instead. When a parallel PR edits the same doc page, the train marks yours STALE; merge main, keep both sides and push again.
-- Never edit `docs/contributing/contract/STAMPS` or run `check-doc-stamps.py --restamp`: the orchestrator restamps on `main` after merges. A new contract doc is the one exception: add its line.
+- Run the doc checks your brief or the project's contributing docs name, and leave any generated or orchestrator-owned bookkeeping file they say a PR never edits alone.
 - Stage explicit paths. Never `git add -A` or `git add .`. A `PreToolUse` guard (`rota hook guard`,
   installed by `rota hook install` in project or user scope) refuses these and the other forbidden
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
@@ -108,7 +108,7 @@ Work only this task, then stop.
   `partial-slice` reports `done`: the criteria are those of this PR's slice, and the third
   line names the slices still to come. Use `partial` there only when the PR misses part of
   its own slice. Put the `prBlock` the verb prints
-  first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
+  first in the PR body, above the other sections: done runs after the PR exists, so add it by patching the PR body through the API, which works where `gh pr edit` can fail on a GraphQL error: `gh api -X PATCH repos/{owner}/{repo}/pulls/<pr> -F body=@<f>` (the branch does not change).
 - Acceptance marks (issue backend). After recording PASS proof, before reporting done, follow [`acceptance-marks.md`](acceptance-marks.md): mark each met `AC-n`, and report `--outcome partial` for an unmet one.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
@@ -157,7 +157,7 @@ Work only this task, then stop.
   production change and see it fail, recording the run itself: `rota proof record <ID> --
   <test command>` (it runs the command and writes the row, FAIL on a non-zero exit, so
   it exits 1 on the RED; that is expected), and the PASS row the same way after the
-  change. Record every check through `rota proof record` so a row is measured, not
+  change. It runs from the repo root: name the package path (`go test ./internal/config`, not `./`, which can record a pass that tested nothing) and never pipe the command (the pipe's exit code replaces its own). Record every check through `rota proof record` so a row is measured, not
   typed; `rota proof add` is for docs-only rows with no command. A test that passes before the change
   proves nothing: fix the test. So does one that fails on a build, compile or setup
   error (missing import, typo, undefined symbol): the RED must be a failed assertion. Write tests to `references/test-quality.md`. Docs and skill-only changes have no RED: say

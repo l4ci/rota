@@ -7,6 +7,8 @@ Agents are named people (ben, dana, nia, kit) reused across issues; work goes on
 implement, verify and open a PR; they never merge. The orchestrator assigns issues, relays
 decisions, merges PRs and re-verifies on `main` after every merge.
 
+Repo-only round rules (contract-doc restamp at wind-down, the STAMPS ban for workers, the `gh pr edit` failure and its REST workaround) live in `docs/contributing/rounds.md`, not in the generic skills.
+
 **"You are the orchestrator" is the kickoff trigger: invoke the `rota-orchestrate` skill.**
 Read it and `docs/contributing/rounds.md` (the project brief: gate, repo rules, roster)
 before running or joining a round. A worker reads `skills/references/worker-contract.md`.

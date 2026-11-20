@@ -5,7 +5,7 @@ Read from `SKILL.md` Steps 3 and 4 when the case applies.
 ## Task-shaping rules (Step 3)
 
 - A rename and its incoming-link sweep are one task; derive the file list from `git grep -l "<old-name>"`.
-- A wide rename-style refactor (too many call sites for one window) is planned as expand → migrate in batches → contract, per `references/dependent-items.md`; each step becomes its own task.
+- A wide rename-style refactor (too many call sites for one window) is planned as expand → migrate in batches → contract, per `references/dependent-items.md`; each step becomes its own task. When the rename runs as parallel slices, one sweep PR alone owns the shared code; the other slices own disjoint files and stack on it, never renaming in parallel.
 - Doc deliverables under `docs/` (or `docs.path`) must land in an existing doc home; otherwise raise it as an Open question (umbrella: a sibling `<repo>-docs` is the usual home).
 
 ## Splitting into items and docs check (Step 4)

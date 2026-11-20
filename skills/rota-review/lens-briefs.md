@@ -29,7 +29,7 @@ End it with the calibration rules and verdict block from `reviewer-briefs.md`, u
 
 ## Rubrics
 
-**security.** Command and argument injection (a value reaching a shell or an `exec` argv unquoted, a leading `-` read as a flag). Path traversal and symlink following. File permissions and non-atomic writes of files others read. Secrets in logs, args or output. Token handling. Unsafe parsing of untrusted input. TOCTOU between a check and its use. A new dependency.
+**security.** Command and argument injection (a value reaching a shell or an `exec` argv unquoted, a leading `-` read as a flag). Path traversal and symlink following. File permissions and non-atomic writes of files others read. Secrets in logs, args or output. Token handling. Unsafe parsing of untrusted input. TOCTOU between a check and its use. A new dependency. For a guard, landing, config-write or storage change, mutation-check it: revert the fix (or break the path) in a scratch copy under `.review/` and confirm a test goes red, or reproduce the defect against the base.
 
 **perf.** Complexity on inputs that grow (nested loops over issues, files or records). Subprocess or I/O inside a loop. Unbounded reads or memory. Repeated work a nearby cache already covers. Cliffs only: no tuning advice, no micro-optimisation.
 

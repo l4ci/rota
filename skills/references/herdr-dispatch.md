@@ -28,6 +28,8 @@ rota worker session check     # exit 0 inside herdr, exit 1 outside
 
 Slots keep rota-managed worktrees from `rota worker pool`. herdr's own `worktree create` is not used for slots (rounds provision with `--path .worktrees/<agent>`, the same root), so the pool, the gate and the account verbs work the same on both hosts.
 
+`herdr tab list` and `agent list` show every workspace in one flat list, so another repo's round can show same-named tabs beside yours. rota resolves a slot by the tab id stored in `workers.json`, so there is no cross-talk; close only a tab whose id matches the registry.
+
 Agent names are unique per herdr **server**, not per workspace, so a bare `w1` would collide with another repo's pool. Tab ids are never reused, which makes `rota-<slot>-<tab id>` unique. herdr 0.9.3 accepts only `[a-z][a-z0-9_-]{0,31}`, and workspace ids are mixed case (`w1W`), so when `rota-<slot>-<tab id>` is not a valid name rota uses `rota-<slot>-<hash>`: the slot lowercased (other characters become `-`, cut to 18) and the first 8 hex of the tab id's SHA-1. `herdr agent list` shows the name of each slot's agent.
 
 ## Dispatch
@@ -49,7 +51,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 | 3 | pool, slot, worktree or body file missing, or `--relay` found no running session |
 | 4 | the reset guard found the slot holding work, or `round.commands.claude` carries a resume flag |
 | 5 | host failure, including outside herdr, a wrapper command and an unrecognised startup dialog; also `agent_blocked`: a dialog was already up, nothing was sent; also a human draft on the prompt line (dispatch waited about 4s, then refused, nothing was typed: resend once the draft is submitted or cleared) |
-| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Read the tab (`herdr agent read <name>`) before resending: a stall does not prove the text was lost, and a duplicate brief costs a worker its context |
+| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Read the tab (`herdr agent read <name>`) before resending: a stall does not prove the text was lost (a busy Codex worker often holds the relay queued behind its current turn), and a duplicate brief costs a worker its context |
 
 ## Linked workspaces per slot
 
