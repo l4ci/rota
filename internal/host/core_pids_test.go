@@ -120,3 +120,25 @@ func TestCoreLegacyBarePidRecordedWhenSeenInLiveTree(t *testing.T) {
 		t.Fatal("legacy pid not upgraded with its start time")
 	}
 }
+
+// The spawn-time .pids write can fail after the handle is saved. A later Kill
+// of a finished terminal then has nothing it can prove gone, so it must refuse
+// instead of proving only that the terminal is closed.
+func TestCoreKillRefusesFinishedTerminalWhenPidsFileMissing(t *testing.T) {
+	h, f, c, tab := corePidFixture(t, 77)
+	tab.set(77, true, 100)
+	s := coreSpawn(t, h)
+	v, e := c.owned(s)
+	if e != nil || len(v.PIDs) == 0 {
+		t.Fatalf("handle must carry bare pids: %+v %v", v, e)
+	}
+	st, _ := c.pidStore(v)
+	if e = c.d.FS.Remove(st.path); e != nil {
+		t.Fatal(e)
+	}
+	f.state = "finished"
+	err := h.Kill(context.Background(), "dana", s)
+	if err == nil || !strings.Contains(err.Error(), "without process evidence") {
+		t.Fatalf("kill must fail closed on missing evidence: %v", err)
+	}
+}
