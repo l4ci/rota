@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
@@ -554,5 +555,46 @@ func TestDoctorInputCarriesTheProcessSource(t *testing.T) {
 	in := doctorInput(context.Background(), d)
 	if got := in.Procs.Cwd(91); got != "/p/.worktrees/w1" {
 		t.Errorf("Procs.Cwd(91) = %q, want the fake table's directory", got)
+	}
+}
+
+// A config value that fails to parse must fail doctor with a check naming the
+// key, not skip the check that reads it (#3883). A valid config adds no line.
+func TestDoctorFailsOnUnreadableConfigValue(t *testing.T) {
+	cases := []struct{ name, cfg, key string }{
+		{"valid", `{}`, ""},
+		{"switchOnUsage", `{"orchestrator":{"switchOnUsage":"maybe"}}`, "orchestrator.switchOnUsage"},
+		{"trainMax", `{"round":{"trainMax":"many"}}`, "round.trainMax"},
+		{"trainFillMinutes", `{"round":{"trainFillMinutes":-1}}`, "round.trainFillMinutes"},
+		{"testSlots", `{"test":{"slots":0}}`, "test.slots"},
+		{"role", `{"round":{"role":"boss"}}`, "round.role"},
+		{"minFreeDiskPercent", `{"doctor":{"minFreeDiskPercent":500}}`, "doctor.minFreeDiskPercent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cwd, _ := filepath.EvalSymlinks(t.TempDir())
+			os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
+			os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(tc.cfg), 0o644)
+			d := defaultDeps()
+			d.Getwd = func() (string, error) { return cwd, nil }
+			d.Getenv = func(string) string { return "" }
+			d.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+			rep := doctor.Run(context.Background(), doctorInput(context.Background(), d))
+			var found *doctor.Check
+			for i, ch := range rep.Checks {
+				if ch.Name == "config" {
+					found = &rep.Checks[i]
+				}
+			}
+			if tc.key == "" {
+				if found != nil {
+					t.Fatalf("valid config produced %+v", *found)
+				}
+				return
+			}
+			if found == nil || found.Status != doctor.Fail || !strings.Contains(found.Detail, tc.key) {
+				t.Fatalf("no failed config check naming %s: %+v", tc.key, found)
+			}
+		})
 	}
 }
