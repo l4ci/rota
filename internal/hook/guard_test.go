@@ -377,6 +377,14 @@ func TestGuardForceWithLeaseUpstreamElsewhere(t *testing.T) {
 	}
 }
 
+func TestGuardForceUpstreamIsConfiguredBase(t *testing.T) {
+	env := guardEnv()
+	env.Base = gBranch // the checked-out branch is the configured base
+	if got := Guard("git push --force-with-lease", env); got == "" {
+		t.Error("allowed a refspec-less force push whose upstream is the configured base")
+	}
+}
+
 func TestGuardForceUpstreamReadErrorDenies(t *testing.T) {
 	env := guardEnv()
 	env.Upstream = func(string) (string, error) { return "", errors.New("boom") }
