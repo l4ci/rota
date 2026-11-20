@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"fmt"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/strutil"
 	"regexp"
 	"strconv"
@@ -140,3 +142,34 @@ func IssueFromBranch(name string) string {
 
 // IsUnverifiable: the host could not say whether the session lives.
 func IsUnverifiable(state string) bool { return stateIs(state, LivenessUnverifiable) }
+
+var reRelayPRToken = regexp.MustCompile(`(?i)(?:#|/pull/|/merge_requests/|\bPR\s+)(\d+)`)
+
+// InferRelayPR names the queued PR of slot a relay body is about, "" when it
+// names none. A relay without --pr is logged against the slot's current issue,
+// which is where the gate of a different, queued PR never looks (PROVENANCE-FAIL),
+// so a body naming exactly one queued PR of the slot is logged on that PR. A
+// body naming several is ambiguous: the error asks for --pr.
+func InferRelayPR(reg Registry, slot, body string) (string, error) {
+	named := map[int]string{}
+	for _, m := range reRelayPRToken.FindAllStringSubmatch(body, -1) {
+		n, _ := strconv.Atoi(m[1])
+		for _, o := range reg.queued() {
+			if jsonx.Str(o, "from") != slot {
+				continue
+			}
+			if q, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && q == n {
+				named[n] = jsonx.Str(o, "pr")
+			}
+		}
+	}
+	switch len(named) {
+	case 0:
+		return "", nil
+	case 1:
+		for _, pr := range named {
+			return pr, nil
+		}
+	}
+	return "", fmt.Errorf("the relay names several queued PRs of slot '%s': pass --pr to say which one it is about", slot)
+}

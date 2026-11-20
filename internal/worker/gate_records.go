@@ -151,7 +151,7 @@ func (runner gateRun) stepProvenance(result landing.GateResult, target GateTarge
 }
 
 // provenanceHint is the fix for a provenance-fail gap; the message names the line.
-const provenanceHint = "fix the PR's `## Approvals` lines: cite `orchestrator relay round N` only for a relay logged for that round, never call it the maintainer, or write `settled in brief: <what>`"
+const provenanceHint = "fix the PR's `## Approvals` lines: cite `orchestrator relay round N` only for a relay logged for that round, never call it the maintainer, or write `settled in brief: <what>`. A relay about a queued PR must be logged against it: send it with `rota worker dispatch <slot> --relay --pr <N>`"
 
 // stepGaps ends the record checks: when any of them found a gap, the gate
 // refuses once, listing every one of them.
