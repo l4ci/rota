@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -187,20 +188,30 @@ var riskyKeys = map[string]bool{
 	"core.fsmonitor": true, "core.hookspath": true, "diff.external": true,
 	"core.sshcommand": true, "core.pager": true, "core.askpass": true,
 	"core.editor": true, "gpg.program": true, "credential.helper": true,
-	"user.name": true, "user.email": true,
+	"sequence.editor": true, "user.name": true, "user.email": true,
+}
+
+// riskySub lists the variables that run a program under a <section>.<name>.
+// subsection. The subsection (a driver, tool, format or URL) may itself hold
+// dots, so only the first and last segments of the key are read.
+var riskySub = map[string][]string{
+	"filter":     {"clean", "smudge", "process"},
+	"diff":       {"textconv", "command"},
+	"gpg":        {"program"},
+	"credential": {"helper"},
+	"mergetool":  {"cmd"},
+	"difftool":   {"cmd"},
 }
 
 // risky names the keys of cur that run programs or set identity, sorted:
-// the fixed list, plus filter.<n>.{clean,smudge,process} and diff.<n>.textconv.
+// the fixed list, plus the subsection families in riskySub.
 func risky(cur map[string]string) []string {
 	var out []string
 	for k := range cur {
-		sec, _, _ := strings.Cut(k, ".")
-		_, name, _ := strings.Cut(k, ".")
+		sec, name, _ := strings.Cut(k, ".")
+		sub := strings.LastIndex(name, ".") >= 0
 		last := name[strings.LastIndex(name, ".")+1:]
-		if riskyKeys[k] ||
-			sec == "filter" && (last == "clean" || last == "smudge" || last == "process") ||
-			sec == "diff" && last == "textconv" {
+		if riskyKeys[k] || sub && slices.Contains(riskySub[sec], last) {
 			out = append(out, k)
 		}
 	}
