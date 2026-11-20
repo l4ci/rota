@@ -3,6 +3,7 @@ package design
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/golden"
 	"os"
 	"path/filepath"
@@ -176,5 +177,23 @@ func TestAmendExits(t *testing.T) {
 	Amend(Files(root), "B07", "Goal", "replace", "same")
 	if changed, _ := Amend(Files(root), "B07", "Goal", "replace", "same\n\n"); changed {
 		t.Error("amend with identical result reported changed")
+	}
+}
+
+func TestAddTitleThroughFrontMatterWriter(t *testing.T) {
+	s := Files(t.TempDir())
+	if err := Add(s, "B07", "Fix: the #1 thing", testDay); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Show(s, "B07")
+	if fm, _, _ := frontmatter.Parse(got); frontmatter.Str(fm, "title") != "Fix: the #1 thing" || frontmatter.Str(fm, "status") != "draft" {
+		t.Errorf("title did not round-trip: %#v", fm)
+	}
+	err := Add(s, "B08", "x\nstatus: done", testDay)
+	if exitOf(err) != exitcode.ExitUsage {
+		t.Fatalf("newline title: %v", err)
+	}
+	if _, serr := Show(s, "B08"); serr == nil {
+		t.Error("a refused title still created the design")
 	}
 }

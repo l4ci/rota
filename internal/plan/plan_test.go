@@ -3,6 +3,7 @@ package plan
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -416,5 +417,23 @@ func TestStubHasReliesOnHeading(t *testing.T) {
 		if n := strings.Count(string(got), "\n## Relies on\n"); n != 1 {
 			t.Errorf("%s has %d `## Relies on` headings, want 1:\n%s", key, n, got)
 		}
+	}
+}
+
+func TestAddTitleThroughFrontMatterWriter(t *testing.T) {
+	root := t.TempDir()
+	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "Fix: the #1 thing"}, testDay); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Show(Files(root), "M01-B07")
+	if fm, _, _ := frontmatter.Parse(got); frontmatter.Str(fm, "title") != "Fix: the #1 thing" || frontmatter.Str(fm, "status") != "planned" {
+		t.Errorf("title did not round-trip: %#v", fm)
+	}
+	_, _, err := Add(root, Files(root), AddOpts{Key: "M01-B08", Title: "x\nstatus: done"}, testDay)
+	if exitOf(err) != exitcode.ExitUsage {
+		t.Fatalf("newline title: %v", err)
+	}
+	if _, serr := Show(Files(root), "M01-B08"); serr == nil {
+		t.Error("a refused title still created the plan")
 	}
 }

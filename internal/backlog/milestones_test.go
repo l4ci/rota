@@ -118,7 +118,7 @@ func TestNextMilestoneIDAndAdd(t *testing.T) {
 	if f.Native[len(f.Native)-1].Description != "Sum mary." {
 		t.Errorf("native description = %q", f.Native[len(f.Native)-1].Description)
 	}
-	if want := ms.StubOn("M08", "Title", "Sum  mary.", []string{"M01"}, "2026-10-02"); !strings.HasPrefix(f.Issues[0].Body, want) {
+	if want := mustMsStub("M08", "Title", "Sum  mary.", []string{"M01"}, "2026-10-02"); !strings.HasPrefix(f.Issues[0].Body, want) {
 		t.Errorf("body does not start with the stub:\n%s", f.Issues[0].Body)
 	}
 }
@@ -402,6 +402,31 @@ func TestIssuesMilestoneAddRejectsUnknownKind(t *testing.T) {
 	if len(fake.Issues) != 0 {
 		t.Errorf("nothing may be created: %+v", fake.Issues)
 	}
+}
+
+// A title StubOn refuses must create no native milestone, labels or issue:
+// an orphan native milestone would burn the ID.
+func TestIssuesMilestoneAddRefusedTitleCreatesNothing(t *testing.T) {
+	fake := &trackertest.MS{Fake: &trackertest.Fake{}}
+	b := msIssues(fake)
+	if _, err := b.MilestoneAdd("", "bad\ntitle", "s", nil, ms.KindDelivery, "2026-10-02"); err == nil {
+		t.Fatal("newline title accepted")
+	}
+	if len(fake.Native) != 0 || len(fake.Issues) != 0 {
+		t.Errorf("nothing may be created: native=%+v issues=%+v", fake.Native, fake.Issues)
+	}
+	if id, err := b.NextMilestoneID(); err != nil || id != "M01" {
+		t.Errorf("next id = %q %v, want M01", id, err)
+	}
+}
+
+// mustMsStub is ms.StubOn for fixtures with fixed, valid arguments.
+func mustMsStub(id, title, summary string, depends []string, today string) string {
+	s, err := ms.StubOn(id, title, summary, depends, today)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 func TestNativeStateOf(t *testing.T) {

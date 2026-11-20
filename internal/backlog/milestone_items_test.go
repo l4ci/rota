@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
-	ms "github.com/l4ci/rota/internal/milestone"
 )
 
 func itemsOf(t *testing.T, f *File, id string) string {
@@ -107,7 +106,7 @@ func TestMilestoneItemsSection(t *testing.T) {
 
 func TestSyncFailureAfterWriteIsAWarning(t *testing.T) {
 	// M00.md claims id M07, so syncing M07 fails; it sorts before M01.
-	files := rotaFiles(map[string]string{".rota/milestones/M00.md": ms.StubOn("M07", "Wrong id", "s", nil, "2026-01-02")})
+	files := rotaFiles(map[string]string{".rota/milestones/M00.md": mustMsStub("M07", "Wrong id", "s", nil, "2026-01-02")})
 	f, _ := proj(t, files)
 	var warned []string
 	f.Warn = func(msg string) { warned = append(warned, msg) }

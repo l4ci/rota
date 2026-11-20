@@ -49,7 +49,7 @@ func TestAppendDecision(t *testing.T) {
 }
 
 func TestKindOfAndWithKind(t *testing.T) {
-	stub := StubOn("M01", "Fog", "Find out.", nil, "2026-01-01")
+	stub := mustStub(t, "M01", "Fog", "Find out.", nil, "2026-01-01")
 	if KindOf(stub) != KindDelivery {
 		t.Errorf("a plan with no kind is delivery: %q", KindOf(stub))
 	}
