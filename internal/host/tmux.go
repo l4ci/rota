@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -110,7 +111,11 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		if r.ExitCode == 0 {
 			return nil
 		}
-		return fmt.Errorf("tmux %s failed for slot '%s': %s", cmd, o.Slot, strings.TrimSpace(r.Stderr))
+		msg := fmt.Sprintf("tmux %s failed for slot '%s'", cmd, o.Slot)
+		if e := strings.TrimSpace(r.Stderr); e != "" {
+			msg += ": " + e
+		}
+		return errors.New(msg)
 	}
 	if t.tmux(ctx, "has-session", "-t", o.Session).ExitCode != 0 {
 		if err := slotCmd("new-session", t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Cwd)); err != nil {
@@ -121,7 +126,8 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		return "", err
 	}
 	if err := slotCmd("send-keys", t.tmux(ctx, "send-keys", "-t", handle, launch, "C-m")); err != nil {
-		return "", err
+		// The window exists: hand it back so the caller records and reaps it.
+		return handle, err
 	}
 	if !t.waitReady(ctx, handle, o.BootTimeout) {
 		return handle, fmt.Errorf("slot '%s' session did not come up within %ds", o.Slot, o.BootTimeout)

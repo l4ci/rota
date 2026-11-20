@@ -234,6 +234,24 @@ func TestTmuxSpawnCommandFailures(t *testing.T) {
 	}
 }
 
+// send-keys fails after new-window succeeded: the window exists, so the handle
+// comes back with the error and the caller can record and reap it.
+func TestTmuxSpawnSendKeysFailureReturnsHandle(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "send-keys" {
+			return Result{ExitCode: 1}
+		}
+		return Result{}
+	}}
+	h, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 4})
+	if err == nil || err.Error() != "tmux send-keys failed for slot 'w1'" {
+		t.Errorf("err = %v", err)
+	}
+	if h != "rota:w1" {
+		t.Errorf("handle = %q, want rota:w1", h)
+	}
+}
+
 func TestTmuxEnsureOperatorSendKeysFailure(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
 		if a[0] == "send-keys" {
