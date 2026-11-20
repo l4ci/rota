@@ -4,7 +4,7 @@
 // orchestrator keeps exactly one running, so an orchestrator that is busy
 // talking to the maintainer is still woken when a worker finishes.
 //
-// The watch process leaves a marker next to the round lease. The Stop hook
+// The watch process leaves a marker next to the round lease (roundlease owns it). The Stop hook
 // reads it to refuse an idle orchestrator without one, and the prompt hook
 // shows whether it is armed. Everything here takes its clock, process table
 // and slot source from the caller, so tests need no host, forge or sleep.
@@ -19,68 +19,9 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/pidlive"
-	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-// MarkerFile is the watch marker under <git-common-dir>/rota/.
-const MarkerFile = "round-watch.json"
-
-// Marker is the marker document: who is watching, since when, how often it
-// reports back regardless.
-type Marker struct {
-	PID       int    `json:"pid"`
-	Start     uint64 `json:"start,omitempty"`
-	Host      string `json:"host"`
-	StartedAt string `json:"startedAt"`
-	Heartbeat int    `json:"heartbeatSeconds"`
-}
-
-// MarkerPath is the marker file under a common dir.
-func MarkerPath(commonDir string) string { return rotastate.File(commonDir, MarkerFile) }
-
-// Armed reports the live watch of the repo, if any. A marker whose process is
-// gone, or on another host, is not armed: nothing can be checked about it.
-func Armed(env roundlease.Env, commonDir string) (Marker, bool) {
-	return markerFile(commonDir).ReadLive(func(m Marker) bool { return env.Running(m.Host, m.PID, m.Start) })
-}
-
-// OwnerPID implements pidlive.Record.
-func (m Marker) OwnerPID() int { return m.PID }
-
-func markerFile(commonDir string) pidlive.Marker[Marker] {
-	return pidlive.Marker[Marker]{Path: MarkerPath(commonDir), Codec: pidlive.JSON[Marker]()}
-}
-
-// ArmedError is returned by Arm when another watch is live.
-type ArmedError struct{ Marker Marker }
-
-func (e *ArmedError) Error() string {
-	return fmt.Sprintf("a watch is already armed for this repo (pid %d, since %s)", e.Marker.PID, e.Marker.StartedAt)
-}
-
-// Arm writes the marker for the calling process and returns the function that
-// removes it. Another live watch is an *ArmedError and nothing is written: one
-// watch at a time keeps every wake-up a single event.
-func Arm(env roundlease.Env, commonDir string, pid int, heartbeat time.Duration) (release func(), err error) {
-	file := markerFile(commonDir)
-	m := Marker{PID: pid, StartedAt: stamp.Format(env.Now()), Heartbeat: int(heartbeat.Seconds())}
-	m.Host, m.Start = env.Identity(pid)
-	live := func(m Marker) bool { return env.Running(m.Host, m.PID, m.Start) }
-	cur, held, err := file.Claim(m, live)
-	if err != nil {
-		return nil, err
-	}
-	if held {
-		return nil, &ArmedError{Marker: cur}
-	}
-	// Only our own marker: a successor may have replaced a dead one.
-	return func() { _ = file.Remove(pid) }, nil
-}
 
 // Reasons a watch returns.
 const (

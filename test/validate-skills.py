@@ -242,18 +242,15 @@ _ROTA = None
 
 def rota_bin():
     # The binary is the owner of "what is a relative link" (skills.Links), so the
-    # validator asks it instead of keeping a regex. ROTA_BIN wins; else build one
-    # from this checkout, once.
+    # validator asks it instead of keeping a regex. ROTA_BIN wins; else
+    # scripts/rota-bin.sh builds one from this checkout, once.
     global _ROTA
     if _ROTA is None:
-        _ROTA = os.environ.get("ROTA_BIN") or ""
-        if not _ROTA:
-            repo = Path(__file__).resolve().parent.parent
-            build_dir = tempfile.mkdtemp(prefix="validate-skills-")
-            atexit.register(shutil.rmtree, build_dir, ignore_errors=True)
-            out = os.path.join(build_dir, "rota")
-            subprocess.run(["go", "build", "-o", out, "./cmd/rota"], cwd=repo, check=True)
-            _ROTA = out
+        repo = Path(__file__).resolve().parent.parent
+        build_dir = tempfile.mkdtemp(prefix="validate-skills-")
+        atexit.register(shutil.rmtree, build_dir, ignore_errors=True)
+        _ROTA = subprocess.run([str(repo / "scripts" / "rota-bin.sh"), build_dir],
+                               capture_output=True, text=True, check=True).stdout.strip()
     return _ROTA
 
 

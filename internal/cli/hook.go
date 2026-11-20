@@ -368,7 +368,7 @@ func hookPrompt(c *Ctx, args []string) (Result, error) {
 		}}), nil
 	}
 	activeFreeze := landfreeze.Frozen(c.Context(), c.deps().Git, hc.root)
-	marker, armed := roundwatch.Armed(hc.lease, hc.commonDir)
+	marker, armed := roundlease.Armed(hc.lease, hc.commonDir)
 	interval := roundwatch.DefaultHeartbeat
 	if armed && marker.Heartbeat > 0 {
 		interval = time.Duration(marker.Heartbeat) * time.Second

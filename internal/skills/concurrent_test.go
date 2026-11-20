@@ -123,7 +123,7 @@ func TestTwoProcessInstallUninstall(t *testing.T) {
 	if err != nil || !os.SameFile(before, after) {
 		t.Fatalf("install/uninstall replaced the serialization inode: %v", err)
 	}
-	m, installed := ReadManifest(roots[0].Path)
+	m, installed, _ := ReadManifest(roots[0].Path)
 	if !installed || len(m.Files) != len(s.Paths()) || m.Digest != s.Digest() {
 		t.Fatalf("missing or incomplete manifest: %+v", m)
 	}

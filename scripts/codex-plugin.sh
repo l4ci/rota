@@ -9,15 +9,11 @@ out=${1:?usage: codex-plugin.sh <out-dir>}
 root=$(cd "$(dirname "$0")/.." && pwd)
 dst=$out/plugins/rota
 # The binary owns the skill layout rule (skills.SupportedFile): ROTA_BIN, else
-# build one from this checkout. Refuse anything it rejects, as the binary would
-# not ship it.
-rota=${ROTA_BIN:-}
-if [ -z "$rota" ]; then
-  tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT
-  (cd "$root" && go build -o "$tmp/rota" ./cmd/rota)
-  rota=$tmp/rota
-fi
+# one built from this checkout by rota-bin.sh. Refuse anything it rejects, as
+# the binary would not ship it.
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+rota=$("$root/scripts/rota-bin.sh" "$tmp")
 bad=$("$rota" skills layout "$root/skills")
 if [ -n "$bad" ]; then
   while IFS= read -r f; do echo "codex-plugin: unsupported skill content skills/$f" >&2; done <<<"$bad"

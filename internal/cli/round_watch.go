@@ -63,9 +63,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%v", err)
 		}
 		lenv := c.deps().LeaseEnv()
-		release, err := roundwatch.Arm(lenv, cd, c.deps().PID(), secs(*heartbeat))
+		release, err := roundlease.Arm(lenv, cd, c.deps().PID(), secs(*heartbeat))
 		if err != nil {
-			var ae *roundwatch.ArmedError
+			var ae *roundlease.ArmedError
 			if errors.As(err, &ae) {
 				return Result{}, Refused("%s", ae.Error()).WithHint("one watch is enough: leave it running")
 			}

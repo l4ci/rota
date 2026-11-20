@@ -67,6 +67,7 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 		}
 		// The whole-tree run must pass too: a crash or any issue fails the test.
 		full := exec.Command("python3", abs, "--root", root, "--no-prose")
+		full.Env = rotaEnv(t)
 		if out, err := full.CombinedOutput(); err != nil {
 			t.Fatalf("validator rejects the folded fixture tree: %s", out)
 		}
@@ -132,7 +133,9 @@ func TestValidatorLintsPluginSkills(t *testing.T) {
 	root := t.TempDir()
 	copyTree(t, root, "skills", "plugin")
 	run := func() (string, error) {
-		out, err := exec.Command("python3", abs, "--root", root, "--no-prose").CombinedOutput()
+		cmd := exec.Command("python3", abs, "--root", root, "--no-prose")
+		cmd.Env = rotaEnv(t)
+		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
 	if out, err := run(); err != nil {
