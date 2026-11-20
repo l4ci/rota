@@ -158,7 +158,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 	if e.Home != nil {
 		home, _ = e.Home()
 	}
-	if d := e.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+	if d := harness.OrchestratorAccounts().AmbientAccount(e.Getenv).ConfigDir; d != "" {
 		for _, a := range accts {
 			if a.Dir != "" && usagelimit.SameConfigDirIn(a.Dir, d, home) {
 				return a.Name, d

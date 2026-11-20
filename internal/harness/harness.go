@@ -487,6 +487,11 @@ func LookupAccounts(kind string) (Accounts, bool) {
 // ResolveAccounts falls back to Default for an unknown recorded kind.
 func ResolveAccounts(kind string) Accounts { return resolve(kind) }
 
+// OrchestratorAccounts is the Accounts capability of the default orchestrator
+// harness: the owner of the config-dir variable the orchestrator and its
+// keepalive supervisor read and set, so neither names it.
+func OrchestratorAccounts() Accounts { return resolve(DefaultOrchestrator) }
+
 // LookupPane selects the Pane capability; an empty kind is Default.
 func LookupPane(kind string) (Pane, bool) {
 	h, ok := lookup(kind)
