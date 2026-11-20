@@ -2,7 +2,6 @@ package roundwatch
 
 import (
 	"context"
-	"errors"
 	"github.com/l4ci/rota/internal/git"
 	"os"
 	"reflect"
@@ -24,45 +23,6 @@ func testEnv(now *time.Time, alive map[int]bool) roundlease.Env {
 		StartTime: func(int) (uint64, bool) { return 0, false },
 		Now:       func() time.Time { return *now },
 	}
-}
-
-func TestArmOneAtATime(t *testing.T) {
-	cd := t.TempDir()
-	now := time.Now()
-	env := testEnv(&now, map[int]bool{10: true, 11: true})
-	rel, err := Arm(env, cd, 10, time.Minute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m, ok := Armed(env, cd); !ok || m.PID != 10 || m.Heartbeat != 60 {
-		t.Fatalf("armed %+v %v", m, ok)
-	}
-	var ae *ArmedError
-	if _, err := Arm(env, cd, 11, time.Minute); !errors.As(err, &ae) {
-		t.Fatalf("a second live watch must be refused: %v", err)
-	}
-	rel()
-	if _, ok := Armed(env, cd); ok {
-		t.Fatal("release must remove the marker")
-	}
-	// A marker whose process died is not armed and is replaced.
-	if _, err := Arm(env, cd, 10, time.Minute); err != nil {
-		t.Fatal(err)
-	}
-	env.Alive = func(int) bool { return false }
-	if _, ok := Armed(env, cd); ok {
-		t.Fatal("a dead watch is not armed")
-	}
-	env.Alive = func(pid int) bool { return pid == 11 }
-	rel2, err := Arm(env, cd, 11, time.Minute)
-	if err != nil {
-		t.Fatalf("a dead watch must be replaceable: %v", err)
-	}
-	rel() // the old watch's release must not remove its successor's marker
-	if _, ok := Armed(env, cd); !ok {
-		t.Fatal("a stale release removed the successor's marker")
-	}
-	rel2()
 }
 
 func TestDiff(t *testing.T) {

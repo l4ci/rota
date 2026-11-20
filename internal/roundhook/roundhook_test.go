@@ -9,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -98,7 +97,7 @@ func TestStopBlock(t *testing.T) {
 			alive := map[int]bool{10: true}
 			env := testEnv(&now, alive)
 			if tc.armed {
-				release, err := roundwatch.Arm(env, cd, 10, time.Minute)
+				release, err := roundlease.Arm(env, cd, 10, time.Minute)
 				if err != nil {
 					t.Fatal(err)
 				}
