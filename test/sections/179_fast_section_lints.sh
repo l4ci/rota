@@ -37,4 +37,27 @@ grep -q "71_" <<<"$OUT" || fail "lib.sh must still queue section 71: $OUT"
 OUT=$(fast_plan docs/foo.md)
 if grep -q "plan: section" <<<"$OUT"; then fail "a docs-only change must queue no lint: $OUT"; fi
 
+# #3956: doclint runs these scripts, so a change to one must queue the docs check
+# (validate-skills + doclint). AC-1: the six paths named in the ticket; AC-3: every
+# script test/doclint.sh runs has a fast-tier mapping, read from doclint itself.
+for p in scripts/skills-docs.py scripts/site-sync.py test/lint-verbs.py test/lint-sections.py test/check-doc-stamps.py test/evals/triggers.json; do
+  OUT=$(fast_plan "$p")
+  grep -qx "plan: docs" <<<"$OUT" || fail "$p is run by doclint but fast.sh does not queue docs for it: $OUT"
+done
+# Extract every script doclint runs or sources from its code (comment lines skipped):
+# $TESTDIR/ -> test/, <any repo-root var>/scripts|test/ -> that path. Shell harness
+# files (lib, fast, gate, py-tests, doclint) and rota-bin.sh are infra rows or are only
+# copied into fixtures, so they are not docs triggers.
+DOCLINT_SCRIPTS="$(grep -vE '^[[:space:]]*#' "$TESTDIR/doclint.sh" \
+  | grep -oE '\$\{?(TESTDIR|[A-Z]+)\}?/[A-Za-z0-9_./-]+\.(py|sh)' \
+  | sed -E 's#^\$\{?TESTDIR\}?/#test/#; s#^\$\{?[A-Z]+\}?/##' \
+  | grep -E '^(scripts|test)/' \
+  | grep -vE '^test/(lib|fast|gate|py-tests|doclint)\.sh$|^scripts/rota-bin\.sh$' | sort -u)"
+[ -n "$DOCLINT_SCRIPTS" ] || fail "found no scripts in test/doclint.sh"
+for p in $DOCLINT_SCRIPTS; do
+  [ -e "$REPO/$p" ] || continue
+  OUT=$(fast_plan "$p")
+  grep -qx "plan: docs" <<<"$OUT" || fail "doclint runs $p but fast.sh has no docs mapping for it: $OUT"
+done
+
 pass "every tagged section lint is queued for its trigger paths; dedupe and docs-only cost hold"
