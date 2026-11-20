@@ -39,10 +39,6 @@ type Gates struct {
 	// Fence is the verb's own Command.Fence, copied here for the fence gate.
 	// Never inherited.
 	Fence roundcfg.FenceClass
-	// KeepDispatch keeps the verb's result data on an exit-5 dispatch failure
-	// (blockedBy dispatch): it changed state and must name the unsent slot.
-	// Never inherited.
-	KeepDispatch bool
 }
 
 // gatesFor is the gate policy of the verb the dispatcher resolved: chain runs
@@ -66,7 +62,6 @@ func gatesFor(chain []*Command) Gates {
 	}
 	last := chain[len(chain)-1]
 	g.Fence = last.Fence
-	g.KeepDispatch = last.Gates.KeepDispatch
 	return g
 }
 

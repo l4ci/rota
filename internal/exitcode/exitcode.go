@@ -47,6 +47,10 @@ type Error struct {
 	// Cause is the error this one was translated from, kept so a caller can
 	// still reach its typed detail (a failed saga stage) with errors.As.
 	Cause error
+	// KeepData keeps the verb's result data on an exit-5 failure, which the
+	// dispatcher otherwise drops: the verb changed state and its data names
+	// what it could not finish.
+	KeepData bool
 }
 
 func (e *Error) Error() string { return e.Message }

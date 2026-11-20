@@ -114,6 +114,10 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == blockedby.Dispatch {
 				f.Set("blockedBy", bd.BlockedBy)
 				f.Set("slot", res.Agent)
+				var xe *Error
+				if errors.As(ferr, &xe) {
+					xe.KeepData = true
+				}
 			}
 			return Result{Data: f}, ferr
 		}
