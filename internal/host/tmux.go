@@ -106,13 +106,23 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		}
 		launch = strings.Join(pre, " ") + " " + launch
 	}
+	slotCmd := func(cmd string, r Result) error {
+		if r.ExitCode == 0 {
+			return nil
+		}
+		return fmt.Errorf("tmux %s failed for slot '%s': %s", cmd, o.Slot, strings.TrimSpace(r.Stderr))
+	}
 	if t.tmux(ctx, "has-session", "-t", o.Session).ExitCode != 0 {
-		t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Cwd)
+		if err := slotCmd("new-session", t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Cwd)); err != nil {
+			return "", err
+		}
 	}
-	if r := t.tmux(ctx, "new-window", "-d", "-t", o.Session, "-n", o.Slot, "-c", o.Cwd); r.ExitCode != 0 {
-		return "", fmt.Errorf("could not create tmux window %s", handle)
+	if err := slotCmd("new-window", t.tmux(ctx, "new-window", "-d", "-t", o.Session, "-n", o.Slot, "-c", o.Cwd)); err != nil {
+		return "", err
 	}
-	t.tmux(ctx, "send-keys", "-t", handle, launch, "C-m")
+	if err := slotCmd("send-keys", t.tmux(ctx, "send-keys", "-t", handle, launch, "C-m")); err != nil {
+		return "", err
+	}
 	if !t.waitReady(ctx, handle, o.BootTimeout) {
 		return handle, fmt.Errorf("slot '%s' session did not come up within %ds", o.Slot, o.BootTimeout)
 	}
@@ -319,7 +329,9 @@ func (t *tmux) EnsureOperator(ctx context.Context, o OperatorOpts) error {
 		return ErrOperatorWindow
 	}
 	target := o.Session + ":operator"
-	t.tmux(ctx, "send-keys", "-t", target, o.Command, "C-m")
+	if r := t.tmux(ctx, "send-keys", "-t", target, o.Command, "C-m"); r.ExitCode != 0 {
+		return fmt.Errorf("tmux send-keys failed for the operator window: %s", strings.TrimSpace(r.Stderr))
+	}
 	if o.Instruction == "" {
 		return nil
 	}
