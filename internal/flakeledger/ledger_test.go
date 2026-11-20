@@ -2,6 +2,7 @@ package flakeledger
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -80,5 +81,28 @@ func TestAppendRefusesIncompleteEntryAndLogStaysReadable(t *testing.T) {
 	}
 	if rows, err := Load(root); err != nil || len(rows) != 1 {
 		t.Fatalf("log must still load: rows=%d err=%v", len(rows), err)
+	}
+}
+
+func TestEnsureCreatesEmptyLedgerAndKeepsRows(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Ensure(root); err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := Load(root); err != nil || len(rows) != 0 {
+		t.Fatalf("rows=%v err=%v", rows, err)
+	}
+	e := Entry{Check: "c", Tests: []string{"T"}, Tree: "tree", TS: time.Unix(1, 0), First: Run{ExitCode: 1}}
+	if err := Append(root, e); err != nil {
+		t.Fatal(err)
+	}
+	if err := Ensure(root); err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := Load(root); err != nil || len(rows) != 1 {
+		t.Fatalf("rows=%v err=%v", rows, err)
 	}
 }

@@ -56,6 +56,13 @@ func Append(root string, e Entry) error {
 	return fsio.AppendLine(Path(root), b, 0o644)
 }
 
+// Ensure creates an empty ledger when none exists. A recorder that ran and saw
+// no recovery calls it, so a missing file means "never recorded" and an empty
+// one means "none observed".
+func Ensure(root string) error {
+	return fsio.AppendText(Path(root), "", 0o644)
+}
+
 // Load preserves os.ErrNotExist: a summary must distinguish no observations
 // from missing evidence. Malformed lines are errors, never a lower count.
 func Load(root string) ([]Entry, error) {
