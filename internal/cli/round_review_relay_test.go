@@ -368,7 +368,11 @@ func TestWorkerDispatchReviewCursorPreservesNewestQueuedPR(t *testing.T) {
 	if code, out, errs := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--pr", "9", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
 		t.Fatalf("targeted review relay: %d %s %s", code, out, errs)
 	}
-	if code, out, errs := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 0 {
+	plain := filepath.Join(t.TempDir(), "plain.md")
+	if err := os.WriteFile(plain, []byte("keep going"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errs := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", plain, "--relay"); code != 0 {
 		t.Fatalf("default relay: %d %s %s", code, out, errs)
 	}
 	reg := worker.LoadRegistryTolerant(dir)
