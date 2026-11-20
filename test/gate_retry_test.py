@@ -48,7 +48,7 @@ count = root / (name.replace("/", "_") + ".count")
 n = int(count.read_text()) + 1 if count.exists() else 1
 count.write_text(str(n))
 with (root / "calls").open("a") as f:
-    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), ppid=os.getppid(), args=sys.argv[2:])) + "\\n")
+    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), ppid=os.getppid(), args=sys.argv[2:], sections=os.environ.get("SECTION_LIST"))) + "\\n")
 active = root / (name.replace("/", "_") + ".active")
 if n > 1 and list(root.glob("*.active")):
     raise SystemExit("retry overlapped initial checks")
@@ -95,6 +95,8 @@ elif name.startswith("smoke-"):
             print("  \\033[31mFAIL\\033[0m controlled smoke-shard1")
         if os.environ.get("SMOKE_NO_SUMMARY") != "1":
             print("Smoke assertions failed.")
+        if os.environ.get("FAIL_SECTION"):
+            print("smoke: failed section: " + os.environ["FAIL_SECTION"])
         if os.environ.get("SMOKE_INFRA"):
             print(os.environ["SMOKE_INFRA"])
     elif os.environ.get("OMIT_SUMMARY") != "1":
@@ -123,13 +125,13 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=test", "-c",
                         "user.email=test@example.com", "commit", "-qm", "seed"], check=True)
 
-    def run_gate(self, check, twice=False, smoke_only=False):
+    def run_gate(self, check, twice=False, smoke_only=False, section=""):
         command = ["bash", "test/gate.sh", "--shards", "1"]
         if smoke_only:
             command.append("--smoke-only")
         result = subprocess.run(command,
                                 cwd=self.repo, env=dict(self.env, FAIL_CHECK=check,
-                                FAIL_TWICE=str(int(twice))), text=True,
+                                FAIL_TWICE=str(int(twice)), FAIL_SECTION=section), text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
         return result, calls
@@ -144,6 +146,42 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                                        TMPDIR=str(self.root), ROTA_SMOKE_DIAGNOSTICS=str(self.root / "diagnostics"),
                                        SECTION_LIST="test/sections/01_stub.sh"),
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+
+    def test_section_list_runs_only_those_sections(self):
+        # #3992: SECTION_LIST=<sections> bash test/gate.sh is the one-check
+        # re-run a train runs: no Go, vet or lint check, one smoke run.
+        result = subprocess.run(["bash", "test/gate.sh"], cwd=self.repo,
+                                env=dict(self.env, FAIL_CHECK="", SECTION_LIST="test/sections/01_stub.sh"),
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual([c["name"] for c in calls], ["smoke-shard1"], calls)
+        self.assertEqual(calls[0]["sections"], "test/sections/01_stub.sh")
+
+    def test_section_list_failure_is_not_retried_and_names_the_section(self):
+        result = subprocess.run(["bash", "test/gate.sh"], cwd=self.repo,
+                                env=dict(self.env, FAIL_CHECK="smoke-shard1", FAIL_TWICE="1",
+                                         SECTION_LIST="test/sections/01_stub.sh",
+                                         FAIL_SECTION="test/sections/01_stub.sh"),
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(len(calls), 1, calls)
+        self.assertIn("FAILED-SECTION test/sections/01_stub.sh", result.stdout)
+
+    def test_red_shard_names_its_failed_sections_after_the_retry_line(self):
+        result, calls = self.run_gate("smoke-shard1", twice=True, section="test/sections/01_stub.sh")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        lines = result.stdout.splitlines()
+        retry = lines.index("FAIL smoke-shard1 isolated retry (exit 1)")
+        failed = lines.index("FAIL smoke-shard1 (exit 1)")
+        self.assertLess(retry, failed)
+        self.assertEqual(lines[failed + 1], "FAILED-SECTION test/sections/01_stub.sh")
+
+    def test_real_runner_names_the_failed_section(self):
+        result = self.run_real_section('fail "controlled smoke assertion"\n')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("smoke: failed section: test/sections/01_stub.sh", result.stdout)
 
     def test_big_go_packages_start_alongside_remaining_packages(self):
         self.env["GO_START_BARRIER"] = "1"

@@ -238,11 +238,17 @@ set +e
   set -e
   for f in "${SECTIONS[@]}"; do
     cd "$TMP"
+    printf '%s\n' "${f#"$REPO"/}" > "$ROTA_STAGE/current-section" # names the failed section below (#3992)
     source "$f"
   done
 )
 SECTIONS_RC=$?
 set -e
+# The section the run stopped in, one stable line the gate and the merge train
+# read to re-run that section alone (#3992).
+if [ "$SECTIONS_RC" != 0 ] && [ -s "$ROTA_STAGE/current-section" ]; then
+  printf 'smoke: failed section: %s\n' "$(cat "$ROTA_STAGE/current-section")"
+fi
 
 # Fail conservatively on checkout differences, without attributing them to a
 # section or writing back to the checkout. Each shard keeps its own evidence.

@@ -12,6 +12,9 @@
 #                 that quietly needs another's state fails (shard-safety guard)
 #   --shards N    shard count; default ROTA_SMOKE_SHARDS, else one per
 #                 two cores (nproc/2, 1 to 4)
+#   SECTION_LIST=<section>... bash test/gate.sh  (newline-separated test/sections/*.sh
+#                 paths) runs just those smoke sections in one shard, no other
+#                 check and no retry: the one-check re-run test.rerunCheck names (#3992).
 # Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a dir under the
 #      project temp root, <main checkout>/.rota/tmp, or the system temp dir
 #      outside a rota project, kept only when a check fails); ROTA_GATE_LOCK=<path>
@@ -51,6 +54,17 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# SECTION_LIST narrows the run to those smoke sections (the train's one-check
+# re-run). Taken here and unset: each shard below sets its own list, and no
+# other child may see it.
+CHECK_LIST="" CHECK_SET=0
+if [ "${SECTION_LIST+set}" = set ]; then
+  CHECK_LIST="$SECTION_LIST" CHECK_SET=1
+  SMOKE_ONLY=1
+  SHARDS=1
+  unset SECTION_LIST
+fi
 
 if [ -z "$SHARDS" ]; then
   # Nothing set it: one shard per two cores, at least one, at most four, so a
@@ -221,7 +235,12 @@ if [ "$SMOKE_ONLY" = 0 ]; then
   launch vet go vet ./...
   launch gotest run_go_tests
 fi
-N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
+if [ "$CHECK_SET" = 1 ]; then
+  printf '%s\n' "$CHECK_LIST" >"$LOGS/shard1.list"
+  N=1
+else
+  N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
+fi
 for i in $(seq 1 "$N"); do
   launch "smoke-shard$i" env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$i.list")" bash test/runner.sh
 done
@@ -279,7 +298,10 @@ for idx in "${!PIDS[@]}"; do
   if [ "$rc" = 0 ]; then
     echo "ok   $name"
   else
-    echo "FAIL $name (exit $rc)"; tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'
+    echo "FAIL $name (exit $rc)"
+    # The sections the shard stopped in, one stable line each: a train re-runs them alone (#3992).
+    case "$name" in smoke-*) grep -h '^smoke: failed section: ' "$LOGS/$name.log" | sed 's/^smoke: failed section: /FAILED-SECTION /' ;; esac
+    tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'
     # A shard that dies without a summary line (set -e, SIGPIPE 141, a kill) leaves only the
     # last section header behind; name it so the death is not a bare FAILED (#1242).
     case "$name" in smoke-*)
