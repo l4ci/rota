@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/rotastatetest"
+	"github.com/l4ci/rota/internal/roundlease"
 )
 
 // armedProject is a worker project with a live watch marker for pid 4242 and
