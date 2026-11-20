@@ -244,7 +244,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 			continue
 		}
 		if !floor.IsZero() {
-			at, err := time.Parse(time.RFC3339, is.ClosedAt)
+			at, err := stamp.ParseRFC3339(is.ClosedAt)
 			if err != nil || !at.After(floor) {
 				continue
 			}

@@ -20,6 +20,11 @@ func Format(t time.Time) string { return t.UTC().Format(Layout) }
 // Parse is the time a stamp names, or the error for a value that is not one.
 func Parse(v string) (time.Time, error) { return time.Parse(Layout, v) }
 
+// ParseRFC3339 reads an RFC 3339 time as forges, git and flags write it: any
+// offset, optional fractional seconds. Parse stays the strict reader of
+// registry values, which are UTC and second precision.
+func ParseRFC3339(v string) (time.Time, error) { return time.Parse(time.RFC3339, v) }
+
 // DateLayout is the calendar date, YYYY-MM-DD, as backlog entries, knowledge
 // stamps, plans and changelogs write it.
 const DateLayout = "2006-01-02"

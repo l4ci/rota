@@ -153,3 +153,29 @@ func TestNanoKeepsSubsecondsInUTC(t *testing.T) {
 		t.Error("ParseNano(junk) is not the zero time")
 	}
 }
+
+func TestParseRFC3339(t *testing.T) {
+	utc := time.Date(2026, 10, 2, 12, 5, 9, 0, time.UTC)
+	for _, c := range []struct {
+		in      string
+		want    time.Time
+		wantErr bool
+	}{
+		{"2026-10-02T12:05:09Z", utc, false},
+		{"2026-10-02T14:05:09+02:00", utc, false},
+		{"2026-10-02T07:05:09-05:00", utc, false},
+		{"2026-10-02T12:05:09.250Z", utc.Add(250 * time.Millisecond), false},
+		{"2026-10-02", time.Time{}, true},
+		{"2026-10-02T12:05:09", time.Time{}, true},
+		{"", time.Time{}, true},
+		{"yesterday", time.Time{}, true},
+	} {
+		got, err := ParseRFC3339(c.in)
+		if (err != nil) != c.wantErr || (!c.wantErr && !got.Equal(c.want)) {
+			t.Errorf("ParseRFC3339(%q) = %v, %v; want %v (err %v)", c.in, got, err, c.want, c.wantErr)
+		}
+	}
+	if _, err := Parse("2026-10-02T14:05:09+02:00"); err == nil {
+		t.Error("Parse must stay strict: an offset is not a registry stamp")
+	}
+}

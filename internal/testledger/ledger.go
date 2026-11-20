@@ -102,7 +102,7 @@ func parseExpiry(s string) (time.Time, bool) {
 	if t, err := time.Parse(stamp.DateLayout, s); err == nil {
 		return t.Add(24*time.Hour - time.Nanosecond), true
 	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
+	if t, err := stamp.ParseRFC3339(s); err == nil {
 		return t, true
 	}
 	return time.Time{}, false
