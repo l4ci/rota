@@ -259,3 +259,43 @@ func TestTmpSlotsDirHeldWhileASlotIsRegistered(t *testing.T) {
 		t.Fatalf("with no slot registered: %v", ids(res.Candidates))
 	}
 }
+
+// An entry whose only recent activity sits in an unreadable subtree must be
+// held: entryStat cannot see that mtime, so age is unknown (fail closed).
+func TestTmpUnreadableSubtreeHolds(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	dir := tmpRoot(t, map[string]time.Duration{"run-a": 5 * time.Hour})
+	sub := filepath.Join(dir, "run-a", "locked")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "fresh"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-5 * time.Hour)
+	os.Chtimes(sub, old, old)
+	os.Chtimes(filepath.Join(dir, "run-a"), old, old)
+	if err := os.Chmod(sub, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(sub, 0o755) })
+
+	in := tmpInput(t, dir, nil, nil)
+	res := find(t, in, KindTmp)
+	if len(res.Candidates) != 1 {
+		t.Fatalf("candidates = %v", ids(res.Candidates))
+	}
+	c := res.Candidates[0]
+	if !strings.Contains(c.Held, "unreadable") {
+		t.Fatalf("held = %q, want an unreadable-subtree reason", c.Held)
+	}
+	applied := Apply(bg, in, res.Candidates)
+	if len(applied.Reaped) != 0 {
+		t.Errorf("held entry reaped: %+v", applied)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "run-a", "data")); err != nil {
+		t.Errorf("readable sibling removed: %v", err)
+	}
+}
