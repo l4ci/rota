@@ -34,6 +34,9 @@ func RenderReport(r Record, artifacts []string) string {
 			} else if f.Severity == "info" {
 				disposition = "informational"
 			}
+			if f.Overrides() {
+				disposition += ", overrides " + f.Severity + " default"
+			}
 			fmt.Fprintf(&out, "- **%s** (%s)%s\n", marker.ReportProse(f.Title), disposition, reportLocation(f.File, f.Line))
 			reportDetail(&out, f.Detail)
 			if f.Fix != "" {
