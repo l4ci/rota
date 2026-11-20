@@ -1,8 +1,8 @@
 ---
 subsystem: knowledge-and-map
 summary: project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -19,7 +19,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - internal/extknowledge/read.go:189 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:86
 - internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :55, `WriteIndex` :77, `Slugify` :14
 - internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :176
-- internal/stale/stale.go:68 — `FindReport`: stale entries by kind (`Kinds` at :23: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
+- internal/stale/stale.go:72 — `FindReport`: stale entries by kind (`Kinds` at :26: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
 - internal/frontmatter/frontmatter.go:23 — `Parse`: frontmatter map, list keys and body; `SetField` at :108
 
 ## Key files / dirs
@@ -28,7 +28,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - `internal/topicmatch/` — `topicmatch.go`: heading, read-index and write-index matching; used by `knowledge` (`query.go`, `decisions.go`) and extknowledge read/write
 - `internal/mapqa/` — `mapqa.go`: per-name reads, managed index blocks (`MapIndexBlock`, `QAIndexBlock`, `WriteIndex`), size stats (`Stats`) and stale/cap notes (`StaleNote`, `CapNote`)
 - `internal/stale/` — `stale.go`: `Kinds`, `FindReport`, `TodoSource`
-- `internal/frontmatter/` — `frontmatter.go`: `Parse`, `Str`, `UpdateField`, `SetField`
+- `internal/frontmatter/` — `frontmatter.go`: `Parse`, `Str`, `UpdateField`, `SetField`; `render.go`: `Render` (fields back to a frontmatter block)
 
 ## Stack
 Go 1.22, standard library; markdown and JSON files on disk. `extknowledge` shells out to git through `proc`/`git`. Dates through `stamp.ParseDate`.

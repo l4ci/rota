@@ -87,8 +87,7 @@ Before acting on work that touches a topic listed in `## Project Knowledge`, `##
 
 Hard boundaries live in `.rota/DECISIONS.md`. Consult them before acting on work that touches these topics:
 
-- Architecture
-- Rounds: Orchestration
+- _(no decisions yet — run `/rota-decide` to capture a hard boundary)_
 
 <!-- rota-decisions-end -->
 
@@ -105,13 +104,13 @@ Subsystems live in `.rota/MAP.md` (detail in `.rota/map/<name>.md`). Pull with `
 - **gate-landing** — manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
 - **hooks-guard** — Claude Code hooks: statusline state dump, Stop/prompt context guard, SessionStart handoff, PreToolUse worker guard, settings merge, plugin hooks/ dir
 - **knowledge-and-map** — project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
-- **review-verdicts** — typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules
+- **review-verdicts** — typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, the test-audit report, failing-test-name parsing, golden records, Go test-path rules
 - **round-orchestration** — orchestrator side of a parallel round: lease, drift report, assign, autopilot tick, watch, escalation, ledger, receipts, launcher
 - **skills-packaging** — the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
 - **terminal-hosts** — terminal host abstraction (herdr, herdr-core, tmux, Orca) that runs worker sessions, and the herdr pane layout (split/tabs)
 - **test-infra** — the merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals, test-cost audit and the shared Go test helpers
 - **tracker-issues** — forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers and note chunking, item-body grammar, tracker connections, bug-report log
-- **workers** — worker slots, registry, gate/train/done verbs, agent harness adapters, subagent definitions, keepalive supervisor, usage limits
+- **workers** — worker slots, registry, gate/train/done verbs, agent harness adapters and quota reporters, subagent definitions, keepalive supervisor, usage limits
 <!-- rota-map-end -->
 
 <!-- rota-qa-start -->

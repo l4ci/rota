@@ -1,8 +1,8 @@
 ---
 subsystem: skills-packaging
 summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -13,8 +13,8 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references
-- internal/skills/set.go:38 — `Embedded`: the embedded set; `Load` at :60
-- internal/skills/install.go:262 — `Set.Install`; `Update` at :280, `Uninstall` at :507, `Set.Status` at :616
+- internal/skills/set.go:38 — `Embedded`: the embedded set; `Load` at :69
+- internal/skills/install.go:275 — `Set.Install`; `Update` at :293, `Uninstall` at :527, `Set.Status` at :636
 - internal/skills/get.go:132 — `Set.Serve`: one skill or reference by name (read side)
 - internal/cli/skills.go:21 — `skillsCommands`: the `rota skills` verbs
 - internal/prompts/store.go:85 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8

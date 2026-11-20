@@ -1,8 +1,8 @@
 ---
 subsystem: foundations
 summary: leaf primitives every other package builds on: atomic files, locks and line stores, git and process execution, JSON, timestamps, path globs, bullet lines, liveness and small string helpers
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -12,19 +12,19 @@ The lowest layer of `internal/`. Each package is the one place for its job: writ
 Depends on: each other only. `git` imports `proc`; `pidlive` imports `proc`, `fsio` and `jsonx`; `fsio` imports `jsonx` and `pystr`; `pystr` imports `stamp`; `strutil` imports `pystr`; `bulletfmt` imports `stamp`. `stamp`, `shlex`, `proc`, `jsonx`, `pathglob`, `semver`, `hostenv` and `remoteurl` import no rota package. Used by every other subsystem.
 
 ## Entry points
-- internal/fsio/fsio.go:67 — `WriteFileAtomic`; `WriteJSONAtomic` at :171, `Locked` (sidecar advisory lock) at :219, `UpdateJSON` at :293
-- internal/fsio/lines.go:14 — `AppendLine`; `ReadLines` at :100 (`Lenient`/`Strict` policy) and `RewriteLines` at :123; `ReadJSON[T]` in readjson.go:15
-- internal/git/git.go:50 — `Runner`; `Exec` at :53 runs git, `Repo` (git.go:38) wraps a directory
+- internal/fsio/atomic.go:19 — `WriteFileAtomic`; `WriteJSONAtomic` at writejson.go:14, `UpdateJSON` at writejson.go:49, `Locked` (sidecar advisory lock) at lock.go:40
+- internal/fsio/lines.go:14 — `AppendLine`; `ReadLines` at :100 (`Lenient`/`Strict` policy) and `RewriteLines` at :123; `ReadJSON[T]` in readjson.go:37
+- internal/git/git.go:50 — `Runner`; `Exec` at :54 runs git, `Repo` (git.go:38) wraps a directory
 - internal/proc/proc.go:104 — `Run`: the one external-binary runner (`Cmd` at :51, `Runner` at :101)
 - internal/jsonx/jsonx.go:65 — `Decode` (key order preserved); `Marshal` at :131 matches Python `json.dumps(indent=2)`; `Obj` at :429 and `Strings` at :439 build objects
-- internal/stamp/stamp.go:18 — `Format`: UTC, second precision, trailing `Z`; `Parse` at :21; `Date` at :29 and `ParseDate` at :34 for `DateLayout` dates
+- internal/stamp/stamp.go:18 — `Format`: UTC, second precision, trailing `Z`; `Parse` at :21; `Date` at :34 and `ParseDate` at :39 for `DateLayout` dates
 - internal/pathglob/pathglob.go:54 — `MatchEntry(Flavour, entry, file)`: entry equal to, a directory above, or a glob of the file, read `Recursive` (as `Match`) or `SingleLevel`; `MatchUnder` at :71, `Match` at :84 (`**` as a segment)
 - internal/bulletfmt/bulletfmt.go:56 — `Title`: bold title of a `- **Title** — body` bullet; `Render` at :66
 - internal/pidlive/pidlive.go:71 — `Alive`: signal 0 succeeds and the process is not a zombie
 - internal/shlex/shlex.go:16 — `Split`: Python `shlex.split` POSIX mode
 
 ## Key files / dirs
-- `internal/fsio/` — `fsio.go` (atomic writes, `Locked`, markers, `UpdateJSON`), `lines.go`, `jsonl.go` (`AppendJSONL`, `ReadJSONL`), `readjson.go`, `temp.go`, `globdir.go`, `home.go` (`ExpandHome`), `fsiotest/`, `testdata/`
+- `internal/fsio/` — `atomic.go` (`WriteFileAtomic`), `writejson.go` (`WriteJSONAtomic`, `UpdateJSON`), `lock.go` (`Locked`, sidecar lock), `marker.go`, `lines.go`, `jsonl.go` (`AppendJSONL`, `ReadJSONL`), `readjson.go`, `readtext.go`, `temp.go`, `directory.go`, `symlink.go`, `home.go` (`ExpandHome`), `doc.go`, `fsiotest/`, `testdata/`
 - `internal/git/` — `git.go` (`Repo`, `Base`, `CurrentBranch`, `Dirty`, `CommonDirVia`, `CommitsSince`, `WorktreePath`), `diff.go` (`ChangedPaths`, `ChangedLines`, `RemoteBase`), `worktree.go` (`ParseWorktrees`), `ancestry.go` (`IsAncestorWith`, `AncestryError`)
 - `internal/proc/` — `proc.go` (`DefaultTimeout`, `NoTimeout`, `WaitDelay`), `duplex.go`
 - `internal/jsonx/` — `jsonx.go` ordered `Object`, `Decode`, `Marshal`, `MarshalCompact`, `PyFloat`; `testdata/`
@@ -55,6 +55,6 @@ Go 1.22, standard library only (`os/exec`, `syscall`, `encoding/json`).
 - `go test ./internal/fsio/... ./internal/git/ ./internal/stamp/ ./internal/pidlive/ ./internal/proc/ ./internal/jsonx/ ./internal/shlex/ ./internal/pystr/ ./internal/strutil/ ./internal/pathglob/ ./internal/bulletfmt/`
 
 ## Concerns
-- `jsonx.go` and `fsio.go` byte-compat requirements make small changes affect every state file; the testdata fixtures guard them.
+- `jsonx.go` and the `fsio` writers (`atomic.go`, `writejson.go`, `lock.go`) byte-compat requirements make small changes affect every state file; the testdata fixtures guard them.
 - `pidlive` reads `/proc` and `ps` output (`StartTicks`, `parseProcStat`), so it is platform-sensitive.
 - `pathglob` is shared by several policy packages, so a change to `Match` semantics moves review, scope-drift, lens and knowledge scoping together.

@@ -1,13 +1,13 @@
 ---
 subsystem: gate-landing
 summary: manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
 Everything between "verified commit" and "on base": the manual gates no autonomy level passes alone, the two ways a commit lands (local git, forge), the repo-wide landing freeze, the bounce/park bookkeeping after a gate or train, footprint matching, the ship rules (strategy, PR body, merge, undo) and the release verbs' logic. The CLI owns flags, envelopes and exit codes; these packages decide.
-Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracker-issues (tracker, marker, bugreport via gatereport and landing), backlog-items (backlog, status, blockedby), plus config, fsio, git, jsonx, pathglob, semver, stamp, rotatree, rotastate, worker (ship only), repos, exitcode, exitmap, pystr, strutil. postgate, gatereport and landing do not import worker; worker imports postgate and landing (the round layer sits above this subsystem).
+Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracker-issues (tracker, marker, bugreport via gatereport and landing), backlog-items (backlog, status, blockedby), plus config, fsio, git, jsonx, pathglob, semver, stamp, rotatree, rotastate, worker (ship only), land (ship), repos, exitcode, exitmap, pystr, strutil. postgate, gatereport and landing do not import worker; worker imports postgate and landing (the round layer sits above this subsystem).
 
 ## Entry points
 - internal/gate/gate.go:46 — `Registry`, every manual gate (tag-push, release-publish, merge-approval, ...)
@@ -15,15 +15,15 @@ Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracke
 - internal/gate/gate.go:226 — `NewMergePolicy` (`ship.mergeApproval` none/all/paths)
 - internal/land/land.go:76 — `MergeLocal`, local merge with one abort attempt on failure
 - internal/land/land.go:146 — `MergeForge`, forge merge pinned to the verified head
-- internal/landfreeze/freeze.go:24 — freeze `Record`; `Allows` at :144
+- internal/landfreeze/freeze.go:24 — freeze `Record`; `Allows` at :132
 - internal/postgate/postgate.go:54 — `Gate` (per-item bounce accounting); `Train` at :82; `Book` port at :17
 - internal/landing/verdict.go:77 — `ClassifyVerdict`, the single verdict-to-meaning table
-- internal/ship/merge.go:39 — `MergeBranch`; `MergePR` at :99; undo: `PlanUndo` ship/undo.go:51, `ApplyUndo` :171
-- internal/release/flow.go:157 — `PlanPush`; `Detect` release/version.go:239, `Bump` :314
+- internal/ship/merge.go:39 — `MergeBranch`; `MergePR` at :99; undo: `PlanUndo` internal/ship/undo.go:51, `ApplyUndo` :171
+- internal/release/flow.go:157 — `PlanPush`; `Detect` internal/release/version.go:239, `Bump` :314
 
 ## Key files / dirs
 - internal/gate/ — gate.go: registry, Confirm, Refused, audit log (`.rota/gate-audit.jsonl`, ReadAudit/ReadAuditStrict), MergePolicy
-- internal/land/ — land.go: local and forge landing adapters, ConflictError/MergeError/CleanupError; subject.go (merge/train/sync subjects, IsCycleMerge)
+- internal/land/ — land.go: local and forge landing adapters, ConflictError/MergeError/CleanupError; local.go, classify.go (`Kind`: what a `MergeLocal` error means to a caller); subject.go (merge/train/sync subjects, IsCycleMerge)
 - internal/landfreeze/ — freeze.go: freeze record shared by all worktrees, repair issue/PR clearance
 - internal/landing/ — shared gate/train result vocabulary: types.go (`GateResult`, `TrainResult`, `TrainPlan`, `Integration` and the train failure/stop/conflict/culprit types), verdict.go (`ClassifyVerdict`, `VerdictMeaning`, `Refused`), approval.go (`ApprovalThread`), round.go (`RoundMemo`); imported by postgate, gatereport, worker, round, roundtick and cli; imports only blockedby, exitcode, flakeledger, testledger and tracker
 - internal/postgate/ — postgate.go (`Book` port, `Gate`, `Train`, landed/bounce/park/notify), run.go (`Env`, `GateRun`, `TrainRun`), options.go; imports only exitcode, gatereport, git and landing

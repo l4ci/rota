@@ -1,29 +1,33 @@
 ---
 subsystem: workers
-summary: worker slots, registry, gate/train/done verbs, agent harness adapters, subagent definitions, keepalive supervisor, usage limits
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+summary: worker slots, registry, gate/train/done verbs, agent harness adapters and quota reporters, subagent definitions, keepalive supervisor, usage limits
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
 Standing worker slots (registry, worktrees, accounts, dispatch, merge gate and train, done), the harness seam to Claude/Codex/OpenCode, generated subagent definitions, the keepalive supervisor of the orchestrator, and the usage-limit watcher.
-Depends on: terminal-hosts (host, layout), round-orchestration (roundcfg, roundlease, ledger), hooks-guard (none: keepalive and `hook` share `keepstate` instead), gate-landing (gate, land, landfreeze, overlap), review-verdicts (verdict, proof, flakeledger, testledger), plus config, tracker, git, proc, rotatree/rotastate, fsio, jsonx, stamp, hostenv (foundations).
+Depends on: terminal-hosts (host, layout), round-orchestration (roundcfg, roundlease, ledger), hooks-guard (none: keepalive and `hook` share `keepstate` instead), gate-landing (gate, land, landfreeze, overlap), review-verdicts (verdict, proof, flakeledger, testledger), plus config, tracker, git, proc, rotatree/rotastate, fsio, jsonx, stamp, hostenv (foundations). `harness` also imports tracker-issues (`connections`, `labels`) and backlog-items (`blockedby`).
 
 ## Entry points
 - internal/cli/worker.go:62 — `rota worker` verb tree (pool, adopt, dispatch, inbox, reply, send, poll, session, done, gate, train, account, ...)
-- internal/worker/registry.go:27 — Registry: .rota/workers.json model; `LoadRegistry` :42, `LoadRegistryTolerant` :61, `SlotHolding` :553
+- internal/worker/registry.go:27 — Registry: .rota/workers.json model; `LoadRegistry` :42, `LoadRegistryTolerant` :61, `SlotHolding` :566
+- internal/worker/done_after.go:16 — `doneAfter`: the one rule for "a `worker done` landed after a relay or delivery went out" (event seq when the marker has one, else a strictly later stamp)
+- internal/worker/train_verify.go:16 — `verifyRun`: the train's verify policy (verdict cache `cached` :46, `blame` :100, `forgive` :110, `bisect` :122), built in train.go (#3976)
+- internal/harness/quota.go:15 — `QuotaReporter`: optional per-kind account-capacity facet, `LookupQuotaReporter` at :21; Claude reads the account's own credentials (claude_quota.go, claude_credentials.go `Credentials` :26), Codex through its CLI (codex_quota.go); the scheduling side is `worker.QuotaMeter` in internal/worker/quota.go (usage meter moved behind harness, #3974)
+- internal/harness/harness.go:493 — `OrchestratorAccounts`: the Accounts capability of the default orchestrator harness, read by orchestrate, keepalive and `rota doctor` (#3978)
 - internal/worker/listsection.go:9 — `ListSection[T]`: typed Read/Write/Update of one list section of the registry
 - internal/worker/pool.go:64 — Env.PoolInit: create slot worktrees and register them
-- internal/worker/train.go:292 — Env.Train: verify several PRs together, then land
-- internal/worker/done.go:91 — Done: refuse without a test.fast proof row at HEAD
-- internal/harness/harness.go:302 — HostTraits (what the round's host offers a harness); concern interfaces from :358 Launcher; :520 Orchestrator interface
-- internal/keepalive/keepalive.go:226 — Run: supervise the orchestrator child
-- internal/limits/watcher.go:129 — New: watcher behind `rota limit watch`
+- internal/worker/train.go:139 — Env.Train: verify several PRs together, then land
+- internal/worker/done.go:93 — Done: refuse without a test.fast proof row at HEAD
+- internal/harness/harness.go:306 — HostTraits (what the round's host offers a harness); concern interfaces from :362 Launcher; :529 Orchestrator interface
+- internal/keepalive/keepalive.go:227 — Run: supervise the orchestrator child
+- internal/limits/watcher.go:131 — New: watcher behind `rota limit watch`
 
 ## Key files / dirs
-- internal/worker/ — 85 files (about 22000 non-test lines): registry, pool, dispatch, account*, gate*, train*, done, review loop (reviewloop, reviewdepth, reviewinputs), session, pane, isolate, land lock, verdict, verify tiers, inbox, adopt, bestof, park
-- internal/harness/ — adapters claude.go, codex.go, opencode.go (+ opencode_guard.js), promptsig.go (signed prompts), readiness.go, tiers.go, relay.go, quota.go/codex_quota.go, usage.go, login.go, roundread.go, startup_dialog.go, core_*.go (host-core launch/shell identity)
-- internal/agents/ — renders .claude/agents/rota-<role>.md and .codex/agents/*.toml (agents.go:110 Render); CLI internal/cli/agents.go:15
+- internal/worker/ — 94 files (about 21900 non-test lines): registry, pool, dispatch, account*, gate* (gate.go plus gate_run, gate_verify, gate_merge, gate_freshness, gate_records, gate_resolve, gate_bookkeeping), postgate.go (`Env.Landing`: adapts round execution to the `postgate` ports), train* (train.go, train_verify.go, traincache.go, train_integration.go), done and done_after, review loop (reviewloop, reviewdepth, reviewinputs), session, pane, isolate, land lock, verify tiers, inbox, adopt, bestof, park; the verdict-meaning table moved to `landing`
+- internal/harness/ — adapters claude.go, codex.go, opencode.go (+ opencode_guard.js), promptsig.go (signed prompts), readiness.go, tiers.go, relay.go, quota.go (`QuotaReporter`)/claude_quota.go/claude_credentials.go/codex_quota.go, usage.go, login.go, roundread.go, startup_dialog.go, core_*.go (host-core launch/shell identity)
+- internal/agents/ — renders .claude/agents/rota-<role>.md and .codex/agents/*.toml (agents.go:116 Render); CLI internal/cli/agents.go:15
 - internal/keepalive/ — keepalive.go (supervisor), settings.go, usage.go; the state file, handoff stat and usage handoff marker it shares with the Stop hook live in `internal/keepstate`; CLI internal/cli/keepalive.go:34
 - internal/keepstate/ — state.go (`StatePath`, `ReadState`, `WriteState`), records.go (handoff and usage records), hold.go (`SupervisedHold`); imports fsio, rotastate, roundlease, stamp, so `hook` and `keepalive` read each other's state without a cycle
 - internal/limits/ — limit parse, cooling, account pick, feed from pane output; `limits` list in workers.json; CLI internal/cli/limit.go:34
@@ -45,6 +49,6 @@ Go 1.22; Claude Code, Codex and OpenCode CLIs behind the harness concern interfa
 - bash test/sections/ files 49_worker_dispatch.sh, 91_keepalive.sh, 92_limits.sh, 93_codex_workers.sh, 152_opencode_workers.sh, 111_worker_train.sh (smoke only at integration boundaries)
 
 ## Concerns
-- internal/worker is the largest package (85 files) and mixes registry, gate, train and review concerns; the package comment and several files still describe themselves as a port of the old hv-worker helpers.
+- internal/worker is the largest package (94 files) and mixes registry, gate, train and review concerns; the package comment and several files still describe themselves as a port of the old hv-worker helpers.
 - worker imports about 45 internal packages, including roundcfg, roundlease, ledger and landfreeze, so it sits above the round layer it is also used by.
 - limits imports ledger, host and worker (and `usagelimit` for the shared rules): cross-subsystem coupling; keepalive no longer imports hook.

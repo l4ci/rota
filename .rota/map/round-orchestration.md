@@ -1,8 +1,8 @@
 ---
 subsystem: round-orchestration
 summary: orchestrator side of a parallel round: lease, drift report, assign, autopilot tick, watch, escalation, ledger, receipts, launcher
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -13,24 +13,24 @@ Depends on: workers (worker, harness, limits), terminal-hosts (host, layout), ho
 - internal/cli/round.go:6 — `rota round` verb tree (freeze, wait, watch, start, assign, tick, status, reconcile, wind-down, ...)
 - internal/round/start.go:49 — Env.Start: take the lease, provision roster, list candidates
 - internal/round/assign.go:377 — Env.Assign: readiness check and hand an item to a slot
-- internal/round/round.go:1129 — LocalReport: registry-only report; `Env.Status` at :475 is the full drift report over registry, worktrees, host, forge
-- internal/round/winddown.go:76 — Env.WindDown: end the round, verify, report slot outcomes
-- internal/roundtick/tick.go:295 — Run: one autopilot pass (repair, merge behind gate, assign); `StopVerifyFailed` at internal/roundtick/stop.go:16
-- internal/roundwatch/roundwatch.go:256 — Run: background watcher behind `rota round watch`
-- internal/escalation/escalation.go:215 — Send: question to the human on an issue/PR thread
+- internal/round/round.go:914 — LocalReport: registry-only report; `Env.Status` at :479 is the full drift report over registry, worktrees, host, forge
+- internal/round/winddown.go:94 — Env.WindDown: end the round, verify, report slot outcomes
+- internal/roundtick/tick.go:302 — Run: one autopilot pass (repair, merge behind gate, assign); `StopVerifyFailed` at internal/roundtick/stop.go:18
+- internal/roundwatch/roundwatch.go:197 — Run: background watcher behind `rota round watch`
+- internal/escalation/escalation.go:212 — Send: question to the human on an issue/PR thread
 - internal/orchestrate/orchestrate.go:97 — Env.Resolve: plan for the orchestrator launch (`rota orchestrate`)
 
 ## Key files / dirs
-- internal/round/ — about 52 files: reconcile, assign, start, winddown, lease (re-exports roundlease Read/ClearStale), pick/bestof, slots, needs_you, queue, support, saga, quota, accept/adopt, claims, retarget
+- internal/round/ — about 54 files: reconcile, assign, start, winddown, lease (re-exports roundlease Read/ClearStale), pick/bestof, slots, needs_you, queue, support, saga, quota, accept/adopt, claims, retarget, switch (`rota round switch`: checkpoint a slot and move it to another account or harness), assign_phases, status_findings
 - internal/roundcfg/ — round.* config keys (roundcfg.go:61 Settings, :218 FromConfig), support_fence.go (FenceClass, MayRun, SupportMachine), train.go (merge-train ordering)
-- internal/roundlease/ — per-repo orchestrator lease keyed on the git common dir (lease.go Acquire :207, Read :162, ClearStale :258)
-- internal/roundtick/ — autopilot pass; state.go persists per-round tick state incl. Stopped/StoppedReason (`SetStop` :92); holds.go, review.go, followup.go, targets.go, stop.go (`StopVerifyFailed`), observe.go, readiness.go, adapt.go, wire.go
-- internal/roundwatch/ — watcher, autopilot.go, marker file next to the lease (`Armed`), maintainer snapshot, seen.go; the Stop/prompt-hook digest that read this marker moved out to `internal/roundhook`
-- internal/roundhook/ — `roundhook.go`: the orchestrator-facing one-line digest, exit digest and Stop block (`Digest`, `ExitDigest`, `NeedsWatch`, `StopBlock`) that `rota hook` prints; reads the registry and `roundwatch.Armed` only (also listed in hooks-guard)
+- internal/roundlease/ — per-repo orchestrator lease keyed on the git common dir (lease.go Acquire :207, Read :162, ClearStale :258; marker.go `Armed` :35, the `round watch` marker file)
+- internal/roundtick/ — autopilot pass; state.go persists per-round tick state incl. Stopped/StoppedReason (`SetStop` :92); holds.go, review.go, followup.go, targets.go, stop.go (`StopVerifyFailed`), observe.go, world_observe.go (read-only world for observation), readiness.go, adapt.go, wire.go
+- internal/roundwatch/ — watcher, autopilot.go, maintainer snapshot, seen.go; the watch marker and `Armed` now live in `internal/roundlease/marker.go` (so hooks read them without importing the watcher), and the Stop/prompt-hook digest that reads it is `internal/roundhook`
+- internal/roundhook/ — `roundhook.go`: the orchestrator-facing one-line digest, exit digest and Stop block (`Digest`, `ExitDigest`, `NeedsWatch`, `StopBlock`) that `rota hook` prints; reads the registry and `roundlease.Armed` only (also listed in hooks-guard)
 - internal/orchestrate/ — orchestrator launcher; does not run round start or doctor
 - internal/escalation/ — escalate send|check, answer parsing, options, delivery; record in workers.json `escalations`
-- internal/ledger/ — append-only .rota/ledger.jsonl (ledger.go:125 Append, :138 Load, :265 Trim), recorder.go (Recorder: Note/AppendErr, failure-tolerant appends), summary fold (summary.go:183 Fold), summary_flakes.go, summary_metrics.go, assign.go, session.go
-- internal/receipt/ — per-verb request-id receipts so a retry replays (receipt.go:129 Store.Do); cli wrapper internal/cli/receipt.go:48 `receipted`
+- internal/ledger/ — append-only .rota/ledger.jsonl (ledger.go:100 Append, :113 Load, :214 Trim), recorder.go (Recorder: Note/AppendErr, failure-tolerant appends), summary fold (summary.go:183 Fold), summary_flakes.go, summary_metrics.go, summary_verify.go, detail.go, assign.go, session.go
+- internal/receipt/ — per-verb request-id receipts so a retry replays (receipt.go:129 Store.Do); cli wrapper internal/cli/receipt.go:49 `receipted`
 - CLI glue: internal/cli/round_*.go (tick at round_tick.go:80 `runAutopilotTick`), orchestrate.go, receipt_show.go; each verb's support-fence class is its `Command.Fence` where it is registered (internal/cli/round.go and siblings)
 - skills/rota-orchestrate/ — orchestrator skill and its detail files; skills/references/ is symlinked in
 
@@ -42,7 +42,7 @@ Go 1.22, stdlib only; forge calls through internal/tracker; state in .rota/worke
 - A support machine (roundcfg.SupportMachine) may run only verbs whose fence class permits it; every verb declares its class on `Command.Fence` (an unclassified verb is refused).
 - Everything outside memory (clock, env, runner, forge) is injected via Env structs; tests use fakes.
 - Ledger, receipts, flakes etc. are per-developer gitignored files.
-- Slot lookup by issue goes through `worker.Registry.SlotHolding` (registry.go:553).
+- Slot lookup by issue goes through `worker.Registry.SlotHolding` (registry.go:566).
 
 ## Test commands
 - go test ./internal/round/... ./internal/roundcfg/... ./internal/roundlease/... ./internal/roundtick/... ./internal/roundwatch/... ./internal/roundhook/... ./internal/orchestrate/... ./internal/escalation/... ./internal/ledger/... ./internal/receipt/...
@@ -50,6 +50,6 @@ Go 1.22, stdlib only; forge calls through internal/tracker; state in .rota/worke
 - bash test/sections/ files 81_round_wait.sh, 82_round_status.sh, 85_round_start.sh, 103_orchestrate.sh, 108_round_watch.sh, 114_round_autopilot.sh (via test/smoke.sh only at integration boundaries)
 
 ## Concerns
-- internal/round is large (about 13300 non-test lines, 52 files) and imports worker, harness, host, limits, tracker, landfreeze, overlap.
+- internal/round is large (about 14100 non-test lines, 54 files) and imports worker, harness, host, limits, tracker, landfreeze, overlap.
 - roundtick and cli/round_tick.go both hold autopilot glue (`runAutopilotTick` at cli/round_tick.go:80).
-- ledger imports gate and flakeledger; round_* CLI files number about 32, so the verb layer is as wide as the domain package.
+- ledger imports gate and flakeledger; round_* CLI files number about 33, so the verb layer is as wide as the domain package.

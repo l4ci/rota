@@ -1,8 +1,8 @@
 ---
 subsystem: cli-dispatch
 summary: the rota command dispatcher, exit-code contract, error translation, per-verb gates and support fence, and the terminal UI (bare-rota palette, --ui screens)
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -13,12 +13,12 @@ Depends on (by map file): knowledge-and-map, config-and-setup (config, initproj,
 
 ## Entry points
 - cmd/rota/main.go:11 — `main`: `os.Exit(cli.Main(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))`
-- internal/cli/cli.go:319 — `Main`: builds the tree and default deps, calls `run` (cli.go:330, then `runWithContext` at :345)
-- internal/cli/cli.go:29 — `Command`: tree node (groups are `Subs`, verbs `Verb`); `RunFunc` at :75, `Result` at :80, `Ctx` at :89
+- internal/cli/cli.go:311 — `Main`: builds the tree and default deps, calls `run` (cli.go:322, then `runWithContext` at :337)
+- internal/cli/cli.go:28 — `Command`: tree node (groups are `Subs`, verbs `Verb`); `RunFunc` at :74, `Result` at :79, `Ctx` at :88
 - internal/cli/tree.go:14 — `Tree`: the whole command tree
-- internal/cli/tree_gates.go:12 — `applyGates`: applies `gateDecls` (:34, the per-verb pre-verb gate policies) to the tree; the support-fence class is not here but `Command.Fence` (cli.go:51, a `roundcfg.FenceClass`) declared where each verb is registered
+- internal/cli/tree_gates.go:12 — `applyGates`: applies `gateDecls` (:34, the per-verb pre-verb gate policies) to the tree; the support-fence class is not here but `Command.Fence` (cli.go:50, a `roundcfg.FenceClass`) declared where each verb is registered
 - internal/cli/root.go:17 — `findRoot`: the one project-root lookup in cli (masking on or off)
-- internal/cli/deps.go:45 — `Deps`: the injectable seams (clock, env, git, host, forge) verbs reach through `Ctx`
+- internal/cli/deps.go:46 — `Deps`: the injectable seams (clock, env, git, host, forge) verbs reach through `Ctx`
 - internal/exitcode/exitcode.go:12 — exit-code constants (0, 1, 2, 3, 4, 5, 6, 70, 71, 130); `Error` at :42
 - internal/exitmap/exitmap.go:97 — `Translate`: domain error to exit-coded error, per `Options` (`Class` bit flags at :21, config classes in `exitmap/config.go`)
 - internal/palette/palette.go:139 — `State.Update`: pure key handling for the bare-`rota` menu
@@ -48,5 +48,5 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 - `go vet ./...`
 
 ## Concerns
-- `internal/cli` is the largest package (about 390 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
+- `internal/cli` is the largest package (about 402 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
 - `internal/cli/doctor.go`, `reap.go`, `migrate*.go`, `hook.go` are thin verbs over packages mapped in other files; the logic is not here.

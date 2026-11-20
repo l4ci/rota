@@ -1,8 +1,8 @@
 ---
 subsystem: test-infra
 summary: the merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals, test-cost audit and the shared Go test helpers
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -13,25 +13,25 @@ Depends on (by map file): foundations (`hostenv`, read by `testiso`), cli-dispat
 
 ## Entry points
 - test/gate.sh:1 — full gate: validate-skills, doclint, grep gate, gofmt, `go vet`, `go test -race`, sharded smoke, all concurrent
-- test/fast.sh:1 — maps changed files to the targeted checks (`rota test run fast`)
+- test/fast.sh:40 — `FAST_PATH_MAP`: the one glob-to-check table that maps changed files to the targeted checks (`rota test run fast`; #3956)
 - test/runner.sh:1 — smoke runner: builds a throwaway `.rota/` and sources `test/sections/*.sh` in order (`test/smoke.sh` is a wrapper)
 - test/doclint.sh:1 — repository doc lints, no smoke state
-- internal/testiso/testiso.go:25 — `init`: drops `ROTA_CONFIG_DIR`, points `XDG_CONFIG_HOME` at a missing path, scrubs host-session env by `hostenv.Prefixes` (HERDR_*, HC_*, ORCA_*, TMUX*)
-- internal/testiso/tripwire.go:34 — `NewTripwire`: fake host binaries first on PATH for TestMains; `Check` :70
+- internal/testiso/testiso.go:27 — `init`: drops `ROTA_CONFIG_DIR`, points `XDG_CONFIG_HOME` at a missing path, scrubs host-session env by `hostenv.Prefixes` (HERDR_*, HC_*, ORCA_*, TMUX*)
+- internal/testiso/tripwire.go:22 — `NewTripwire`: fake host binaries first on PATH for TestMains; `Check` :58; the TestMains of cli, host, issues, round, tracker and worker call it instead of carrying their own copy (#3955)
 - internal/gittest/gittest.go:151 — `NewRepo`; `Run` at :61, `Init` at :79, `Commit` at :145
 - test/treescan/main.go:46 — `main`: runs tree-inspecting tests in the fast tier, listed in test/treescan/registry.json
 - cmd/rota/frozen_test.go:169 — `runFrozen`: frozen-output suites against `cmd/rota/testdata/frozen`
 - plugin_test.go:18 — `TestPluginManifest`; root tests also cover the Codex tree and skill alignment
 
 ## Key files / dirs
-- `test/sections/` — numbered `NN_name.sh` smoke sections (160), template in `test/section-template.sh`, helpers in `test/lib.sh`
+- `test/sections/` — numbered `NN_name.sh` smoke sections (161), template in `test/section-template.sh`, helpers in `test/lib.sh`
 - `test/lib/` — `isolate.sh` (env and worktree isolation), `host-env-prefixes` (generated from `hostenv.Prefixes` by `internal/hostenv/gen`), `common.sh`, `forge_state.sh`, `project-tmp.sh`, `gate-lock.sh`, `checkout-guard.py`, `gate-lock-race.py`
 - `test/gate-go.py`, `gate-smoke.py`, `gate-flake.py`, `gate-partition.py`, `shard-weights.txt` — gate parts and shard weights; `gate_retry_test.py`, `runner_leak_test.py`, `fast_tree_scans_test.py` test the harness itself
 - `test/fakes/` — `gh`, `glab`, `tmux`, `herdr`, `codex`, `opencode`, `stub_worker`, `fake_forge.py`, `fake_tracker.py`, `codex_skill_worker.py`, `codex_quota_server.py`
 - `test/e2e/` — `run.sh`, `lib.sh`, `scenarios/*.sh` (6: watcher, dead worker, slow output, usage limit, train bisect, isolation)
 - `test/evals/` — behavioural skill evals (`run.py`, `scenarios/`, `triggers.json`, `baseline/`)
 - `test/validate-skills.py`, `lint-sections.py`, `lint-verbs.py`, `check-doc-stamps.py`, `gofmt.sh`, `grep-gate.sh`, `videos-drift.sh`
-- Root `*_test.go`: `plugin_test.go`, `plugin_hook_test.go`, `codex_plugin_test.go`, `skill_alignment_test.go`, `skill_autonomy_test.go`, `skillfm_test.go`, `layout_test.go`
+- Root `*_test.go`: `plugin_test.go`, `plugin_hook_test.go`, `codex_plugin_test.go`, `site_sync_test.go`, `skill_alignment_test.go`, `skill_autonomy_test.go`, `skillfm_test.go`, `layout_test.go`
 - `internal/testiso/` — blank-import package isolating global config and host env (+ `NestedCheckout`); `internal/gittest/` — shared git fixtures; `internal/rotastatetest/` — real-git `CommonDir` lookup for tests; `internal/testutil/coretest/` — isolated JSON-RPC Core peer (`coretest.New`)
 
 ## Stack
@@ -55,6 +55,6 @@ Bash and Python 3 standard library for the suite; Go 1.22 `testing`. Fakes stand
 - `go test ./internal/testiso/ ./internal/gittest/ ./internal/testutil/... .`
 
 ## Concerns
-- The smoke suite is slow when run whole (160 sections); only the sharded gate is fast.
+- The smoke suite is slow when run whole (161 sections); only the sharded gate is fast.
 - `test/grep-gate.sh` is documented as the final cutover gate for an earlier migration and is not part of smoke.
 - `coretest` and `rotastatetest` import product packages (host, rotastate).

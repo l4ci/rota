@@ -1,8 +1,8 @@
 ---
 subsystem: config-and-setup
 summary: layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -17,11 +17,11 @@ Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, s
 - internal/config/orchestrate.go:30 — `Migrate`: round-key, accounts, merges and scope steps (preview or apply); `Reconcile` at :81, `Diagnose` at :119
 - internal/initproj/init.go:70 — `Init`: seed `.rota/` in a directory
 - internal/projects/projects.go:93 — `Register`: add a project to the machine-wide registry
-- internal/rotatree/rotatree.go:68 — `Dir`, `File` at :71: the in-tree `.rota/` layout; `FindRoot` in root.go:56
-- internal/rotastate/rotastate.go:25 — `CommonDirVia`: git common dir; owns `<git-common-dir>/rota/`
-- internal/rotastate/temproot.go:76 — `FindTempRoot`: the project temp root `<main checkout>/.rota/tmp` (`TempRoot` at :32, `EnclosingTempRoot` :49, `Owned` :143); creates nothing
-- internal/cfgdir/cfgdir.go:41 — `Resolve`: global config dir from an injected `Env` (`Dir` at :62, `DataDir` :73, `StateDir` :87)
-- internal/migrate/migrate.go:110 — `Run`: backlog-file to tracker issues migration
+- internal/rotatree/rotatree.go:70 — `Dir`, `File` at :73: the in-tree `.rota/` layout; `FindRoot` in root.go:56
+- internal/rotastate/rotastate.go:26 — `CommonDirVia`: git common dir; owns `<git-common-dir>/rota/`
+- internal/rotatree/temproot.go:77 — `FindTempRoot`: the project temp root `<main checkout>/.rota/tmp` (`TempRoot` at :33, `EnclosingTempRoot` :50, `Owned` :144); creates nothing
+- internal/cfgdir/cfgdir.go:43 — `Resolve`: global config dir from an injected `Env` (`Dir` at :64, `DataDir` :75, `StateDir` :89)
+- internal/migrate/migrate.go:127 — `Run`: backlog-file to tracker issues migration
 - internal/hvmigrate/hv.go:691 — `RunHv`: the hv-era to rota project migration
 
 ## Key files / dirs
@@ -29,8 +29,8 @@ Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, s
 - `internal/initproj/` — `init.go` (Init, `ErrSeed`), `seed.go`, `blocks.go`, `gitignore.go`, `signals.go`, `umbrella.go`, `check.go` (`Check`, preflight), `testdata/golden`
 - `internal/projects/` — `projects.go` (registry in `$XDG_STATE_HOME/rota`, `Register`, `List`, `Cleanup`, `Remove`), `screen.go`
 - `internal/repos/` — `repos.go` (`Load`, `Rels`, `Paths`, `Realpath` for `.rota/repos.json`), `edit.go`, `umbrella.go`
-- `internal/rotatree/` — `rotatree.go` in-tree path helpers (`Config`, `Workers`, `Status`, ...), `root.go` (`FindRoot`, `AtUmbrellaRoot`, `ErrNoRoot`, `ErrMasked`), `walk.go`
-- `internal/rotastate/` — `rotastate.go` per-checkout runtime dir (`File`, `SessionDir`, `CodexDir`, `OpencodeDir`, `MainCheckout`), `temproot.go` the project temp root (`FindTempRoot`, `TempRoot`, `EnclosingTempRoot`, `Owned`)
+- `internal/rotatree/` — `rotatree.go` in-tree path helpers (`Config`, `Workers`, `Status`, ...), `root.go` (`FindRoot`, `AtUmbrellaRoot`, `ErrNoRoot`, `ErrMasked`), `temproot.go` the project temp root (`FindTempRoot`, `TempRoot`, `EnclosingTempRoot`, `Owned`), `walk.go`
+- `internal/rotastate/` — `rotastate.go` only: the per-checkout runtime dir (`File`, `SessionDir`, `CodexDir`, `OpencodeDir`, `MainCheckout`)
 - `internal/cfgdir/` — `cfgdir.go` only: config, data and state dir lookup over an injected `Env` (`Resolve`, `Dir`, `DataDir`, `StateDir`); imports no rota package, read by `config`, `projects` and the cli
 - `internal/toolver/` — `Detect`, `Newer`: tool versions from manifests, reads files only
 - `internal/update/` — `Check`, `Compare`: install method, latest release; never runs the update
@@ -61,5 +61,5 @@ Go 1.22, standard library; JSON files read and written through `jsonx` and `fsio
 
 ## Concerns
 - `config` no longer imports `projects`: both read the environment through `cfgdir`. `projects` imports `repos` and `tui`.
-- `rotastate.FindTempRoot` and `TempRoot` create nothing; a symlinked or foreign `.rota/tmp` is no root, so callers fall back to the system temp dir.
+- `rotatree.FindTempRoot` and `TempRoot` create nothing; a symlinked or foreign `.rota/tmp` is no root, so callers fall back to the system temp dir.
 - `hvmigrate` imports `hook` and `skills`, so the one-shot migration reaches into two live subsystems.

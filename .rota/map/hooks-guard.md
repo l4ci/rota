@@ -1,8 +1,8 @@
 ---
 subsystem: hooks-guard
 summary: Claude Code hooks: statusline state dump, Stop/prompt context guard, SessionStart handoff, PreToolUse worker guard, settings merge, plugin hooks/ dir
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -10,19 +10,19 @@ Logic behind `rota hook` and `rota statusline`: records session state, makes a l
 Depends on: config, fsio, jsonx, keepstate, knowledge, rotastate, rotatree, shlex, stamp, status (the `internal/hook` package imports no round or worker code; the lease identity check lives in cli).
 
 ## Entry points
-- internal/cli/hook.go:38 — `hookCommands`: `rota hook` verbs (stop, prompt, guard, session-start, install); :32 `statuslineCommands`; `hookGuard` at :381; `hookInstall` at internal/cli/hook_install.go:65
+- internal/cli/hook.go:38 — `hookCommands`: `rota hook` verbs (stop, prompt, guard, session-start, install); :32 `statuslineCommands`; `hookGuard` at :420; `hookInstall` at internal/cli/hook_install.go:65
 - internal/cli/hook_identity.go:19 — `hookIdentify`: is the hook process the orchestrator, from the round lease
 - internal/hook/guard.go:45 — Guard: reason a worker may not run a Bash line, "" if allowed
 - internal/hook/guard_decide.go:35 — DecideGuard: one PreToolUse payload
 - internal/hook/stop.go:34 — DecideStop; internal/hook/contextguard.go:38 DecideGuardPrompt (`DecideGuardStop` :73); internal/hook/prompt.go:23 `DecidePromptDigest`
 - internal/hook/handoff.go:116 — ShouldInject: SessionStart handoff injection
-- internal/hook/settings.go:43 — LoadSettings; :91 SettingsPath (user/project scopes)
+- internal/hook/settings.go:51 — LoadSettings; :112 SettingsPath (user/project scopes)
 - internal/hook/state.go:30 — State: per-session statusline record
 - hooks/hooks.json:1 — plugin SessionStart hook; hooks/session-start.sh:1 version check
 
 ## Key files / dirs
 - internal/hook/ — apply, contextguard, guard, guard_decide, guard_parse, handoff, payload, prompt, recall, settings, state, stop, usage, view
-- internal/roundhook/ — `roundhook.go` only: the orchestrator-facing round view the Stop and prompt hooks print (`Digest`, `ExitDigest`, `NeedsWatch`, `StopBlock`); reads the registry and the `roundwatch.Armed` marker, nothing else of the loop; imports escalation, landfreeze, rotastate, roundlease, roundwatch, worker; called from internal/cli (the watcher loop stays in round-orchestration)
+- internal/roundhook/ — `roundhook.go` only: the orchestrator-facing round view the Stop and prompt hooks print (`Digest`, `ExitDigest`, `NeedsWatch`, `StopBlock`); reads the registry and the `roundlease.Armed` marker, nothing else of the loop; imports escalation, landfreeze, rotastate, roundlease, worker; called from internal/cli (the watcher loop stays in round-orchestration)
 - internal/keepstate/ — records the keepalive supervisor and the Stop hook share (see workers); `hook` imports it
 - hooks/ — hooks.json and session-start.sh (plugin only: points at /rota:rota-install when the binary is missing or version differs)
 - internal/cli/hook.go — verbs; internal/cli/hook_install.go — `hook install`; internal/cli/hook_identity.go — lease-based identity

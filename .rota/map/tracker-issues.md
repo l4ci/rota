@@ -1,8 +1,8 @@
 ---
 subsystem: tracker-issues
 summary: forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers and note chunking, item-body grammar, tracker connections, bug-report log
-touched: 2026-11-17
-last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
+touched: 2026-11-20
+last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
 ---
 
 ## Purpose
@@ -10,20 +10,20 @@ The one place rota talks to a tracker or forge. `tracker` normalizes issues and 
 Depends on: tracker -> cfgdir, config, connections, git, labels, marker, proc, pystr, remoteurl, stamp, strutil; issues -> tracker, marker, git, pystr; connections -> cfgdir, fsio, jsonx, proc; bugreport -> fsio, git, remoteurl, rotastate, rotatree, stamp, strutil. Leaves: labels (no rota imports), itembody (section only), marker (pystr only). Used by backlog-items, review-verdicts.
 
 ## Entry points
-- internal/tracker/tracker.go:285 — `IssueTracker` interface; `Forge` at :374, `Adapter` at :452
-- internal/tracker/tracker.go:552 — `New`; `NewForge` :575, `NewIssueTracker` :590
-- internal/tracker/cli.go:309 — `CLI.Run`, the single place the forge CLI executes; `ResolveProvider` at :162
+- internal/tracker/tracker.go:322 — `IssueTracker` interface; `Forge` at :395, `Adapter` at :480
+- internal/tracker/tracker.go:584 — `New`; `NewForge` :607, `NewIssueTracker` :622
+- internal/tracker/cli.go:290 — `CLI.Run`, the single place the forge CLI executes; `ResolveProvider` at :161
 - internal/issues/issues.go:79 — `Provider`; `Label` :129, `Close` :154, `StillOpen` :202
-- internal/marker/marker.go:24 — `Line`; `ParseNote` :125, `ParseComment` :143; `Parts` internal/marker/note.go:47 (note splitting), `Visible` internal/marker/visible.go:20
+- internal/marker/marker.go:23 — `Line`; `ParseNote` :124, `ParseComment` :142; `Parts` internal/marker/note.go:47 (note splitting), `Visible` internal/marker/visible.go:20
 - internal/labels/registry.go:145 — `Resolve`; `Diff` at internal/labels/diff.go:27
-- internal/connections/connections.go:144 — `Add`; `Load` :109; secrets: `Secrets.Resolve` internal/connections/secrets.go:122
+- internal/connections/connections.go:144 — `Add`; `Load` :109; secrets: `Secrets.Resolve` internal/connections/secrets.go:121
 - internal/bugreport/bugreport.go:79 — `Add`; `Draft` at :447
 
 ## Key files / dirs
-- internal/tracker/ — tracker.go (types, interfaces, factory), cli.go, github.go, gitlab.go, jira.go, linear.go, itsaplan*.go (itsaplan.go, itsaplan_round.go, itsaplan_write.go), rest.go, adf.go (Jira ADF), claims.go, closing.go, comment_state.go, connect.go, merge_close.go, key.go, labels.go, readcache.go, release.go, report.go, prurl.go, noissues.go, no_milestones.go, assumed.go, classify.go (failure cause and `Kind` rules table), kinds.go (own-tracker kinds and `connect add` flags), fieldsblock.go, trust.go (optional trust capabilities: authorship, push rights, current user), testseam_rotatest.go; test fakes in itsaplantest/, jiratest/, lineartest/; fixtures in testdata/
+- internal/tracker/ — tracker.go (types, interfaces, factory), cli.go, github.go, gitlab.go, jira.go, linear.go, itsaplan*.go (itsaplan.go, itsaplan_round.go, itsaplan_write.go), rest.go, adf.go (Jira ADF), claims.go, claim_markers.go (`ClaimReader`), closing.go, comment_state.go, connect.go, merge_close.go, key.go, labels.go, readcache.go, release.go, report.go, prurl.go, noissues.go, no_milestones.go, assumed.go, classify.go (failure cause and `Kind` rules table), kinds.go (own-tracker kinds and `connect add` flags), fieldsblock.go, trust.go (optional trust capabilities: authorship, push rights, current user), testseam_rotatest.go; test fakes in itsaplantest/, jiratest/, lineartest/; fixtures in testdata/
 - internal/issues/ — issues.go (provider, label, close, open-only filter)
 - internal/labels/ — registry.go, diff.go, refpage.go; genref/ is a command rendering the label reference
-- internal/marker/ — marker.go (all marker kinds, writers and parsers), note.go (note splitting), visible.go
+- internal/marker/ — marker.go (all marker kinds, writers and parsers), claims.go (`FoldClaims`: claim comments to a `ClaimState`), note.go (note splitting), visible.go
 - internal/itembody/ — itembody.go (section and entry grammar, `AppendDependsOn`), template.go (per-kind), change.go, tryit.go
 - internal/connections/ — connections.go (`connections.json`), secrets.go, keychain.go, machine.go, check.go
 - internal/bugreport/ — bugreport.go (Record, redaction, Draft)
@@ -47,5 +47,7 @@ Go 1.22, stdlib only. gh/glab through `tracker.CLI`; Jira, Linear and Itsaplan t
 - SECTION_LIST=test/sections/54_tracker_call.sh bash test/runner.sh (also 34_issues, 56_fake_tracker, 57_tracker_adapters, 58_item_notes, 59_item_claim, 145_fake_tracker_failure)
 
 ## Concerns
-- tracker is ~8.8k non-test lines (16.2k with 47 test files); github.go, jira.go and linear.go each run about 950 to 1150 lines.
-- Itsaplan (itsaplan*.go) and `assumed.go` are adapter variants beyond the gh/glab layer the package comment describes.
+- tracker is ~9.2k non-test lines (17.2k with 51 test files); github.go, jira.go and linear.go each run about 1000 to 1150 lines.
+- Itsaplan (itsaplan*.go) are adapter variants beyond the gh/glab layer the package comment describes.
+- `assumedForge` (assumed.go:13, built by `NewIssueTracker` for a forge source whose origin names no forge, `AssumedNote` :31): reads pass through, every write refuses with `UnknownForgeError` (#3972).
+- Label-name matching has one owner: `labelRule` in labels.go (case-folding for GitHub, Linear, Itsaplan; exact for GitLab, Jira) read through `sameLabelName` (:69), `labelKey` (:61) and `hasLabel`; adapters never compare names themselves (#3971). Changing a forge's rule needs a recorded decision. `IssueEdit.NoCreateLabels` (tracker.go:280) is the inverse of `issues.autoCreateLabel`, so the zero value creates (#3973).
