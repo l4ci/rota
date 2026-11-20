@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -41,15 +42,15 @@ func useForge(t *testing.T, f *forge) *Deps {
 		t.Fatalf("gh resolves to %q, not the tripwire", p)
 	}
 	f.found = true
-	x := func(_ context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-		f.calls = append(f.calls, name+" "+strings.Join(args, " "))
-		f.dirs = append(f.dirs, dir)
-		f.stdins = append(f.stdins, string(stdin))
+	x := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		f.calls = append(f.calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
+		f.dirs = append(f.dirs, cmd.Dir)
+		f.stdins = append(f.stdins, string(cmd.Stdin))
 		out, errs, code := "", "", 0
 		if f.answer != nil {
-			out, errs, code = f.answer(name, args)
+			out, errs, code = f.answer(cmd.Name, cmd.Args)
 		}
-		return []byte(out), []byte(errs), code, nil
+		return proc.Result{Stdout: out, Stderr: errs, ExitCode: code}, nil
 	}
 	look := func(name string) (string, error) {
 		if !f.found {
@@ -59,8 +60,7 @@ func useForge(t *testing.T, f *forge) *Deps {
 	}
 	d := testDeps()
 	gitSeam := func(ctx context.Context, dir string, args ...string) (git.Result, error) {
-		out, errs, code, err := x(ctx, dir, "git", args, nil)
-		return git.Result{Stdout: string(out), Stderr: string(errs), ExitCode: code}, err
+		return x(ctx, proc.Cmd{Name: "git", Args: args, Dir: dir})
 	}
 	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), tracker.WithGit(gitSeam), func(c *tracker.CLI) { c.Sleep = func(time.Duration) {} }}
 	return d
@@ -305,9 +305,9 @@ func TestTrackerSuggestUpstream(t *testing.T) {
 // executor in TrackerOptions reaches both.
 func TestDepsTrackersUseTrackerOptions(t *testing.T) {
 	var calls int
-	x := func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+	x := func(context.Context, proc.Cmd) (proc.Result, error) {
 		calls++
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}
 	d := defaultDeps()
 	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, func(n string) (string, error) { return "/fake/" + n, nil })}

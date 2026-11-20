@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -34,8 +35,8 @@ type reviewForge struct {
 	prState string // the PR's state; "" is OPEN
 }
 
-func (f *reviewForge) exec(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-	line := name + " " + strings.Join(args, " ")
+func (f *reviewForge) exec(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+	line := cmd.Name + " " + strings.Join(cmd.Args, " ")
 	f.calls = append(f.calls, line)
 	switch {
 	case strings.HasPrefix(line, "gh pr view 9"):
@@ -43,18 +44,18 @@ func (f *reviewForge) exec(_ context.Context, _ string, name string, args []stri
 		if state == "" {
 			state = "OPEN"
 		}
-		return []byte(`{"headRefName":"nia/577-x","headRefOid":"abc123","baseRefName":"main","state":"` + state + `"}`), nil, 0, nil
+		return proc.Result{Stdout: `{"headRefName":"nia/577-x","headRefOid":"abc123","baseRefName":"main","state":"` + state + `"}`}, nil
 	case strings.Contains(line, "-X POST"):
-		for _, a := range args {
+		for _, a := range cmd.Args {
 			if b, ok := strings.CutPrefix(a, "body="); ok {
 				f.posted = append(f.posted, b)
 			}
 		}
-		return []byte(`{"id":77}`), nil, 0, nil
+		return proc.Result{Stdout: `{"id":77}`}, nil
 	case strings.Contains(line, "issues/comments/77"):
-		return []byte(`{"id":77,"html_url":"https://github.com/o/r/pull/9#issuecomment-77"}`), nil, 0, nil
+		return proc.Result{Stdout: `{"id":77,"html_url":"https://github.com/o/r/pull/9#issuecomment-77"}`}, nil
 	case f.failReads && strings.Contains(line, "issues/9/comments"):
-		return nil, []byte("boom"), 1, nil
+		return proc.Result{Stderr: "boom", ExitCode: 1}, nil
 	case strings.Contains(line, "issues/9/comments"):
 		var rows []string
 		for i, b := range f.comments {
@@ -66,11 +67,11 @@ func (f *reviewForge) exec(_ context.Context, _ string, name string, args []stri
 			}
 			rows = append(rows, `{"id":`+string(rune('1'+i))+`,"body":"`+bj+`","user":{"login":"rev"}`+at+`}`)
 		}
-		return []byte("[" + strings.Join(rows, ",") + "]"), nil, 0, nil
+		return proc.Result{Stdout: "[" + strings.Join(rows, ",") + "]"}, nil
 	case strings.Contains(line, "pulls/9/reviews"), strings.Contains(line, "pulls/9/comments"):
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}
-	return nil, []byte("unexpected call: " + line), 2, nil
+	return proc.Result{Stderr: "unexpected call: " + line, ExitCode: 2}, nil
 }
 
 func useReviewForge(f *reviewForge) *Deps {

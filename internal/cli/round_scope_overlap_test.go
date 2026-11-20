@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -58,52 +59,52 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	labels := map[int][]string{}
 	fx := &scopeFx{root: root, issues: issues}
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-		joined := strings.Join(args, " ")
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		joined := strings.Join(cmd.Args, " ")
 		switch {
-		case len(args) > 3 && args[0] == "api" && args[1] == "-X" && (args[2] == "POST" || args[2] == "DELETE") && strings.Contains(args[3], "/labels"):
+		case len(cmd.Args) > 3 && cmd.Args[0] == "api" && cmd.Args[1] == "-X" && (cmd.Args[2] == "POST" || cmd.Args[2] == "DELETE") && strings.Contains(cmd.Args[3], "/labels"):
 			// Labels change one by one, and the read-back sees them.
 			var n int
-			fmt.Sscanf(args[3], "repos/{owner}/{repo}/issues/%d/labels", &n)
-			if args[2] == "DELETE" {
-				drop := args[3][strings.LastIndex(args[3], "/")+1:]
+			fmt.Sscanf(cmd.Args[3], "repos/{owner}/{repo}/issues/%d/labels", &n)
+			if cmd.Args[2] == "DELETE" {
+				drop := cmd.Args[3][strings.LastIndex(cmd.Args[3], "/")+1:]
 				labels[n] = slices.DeleteFunc(labels[n], func(l string) bool { return l == drop })
 			} else {
 				var in struct{ Labels []string }
-				_ = json.Unmarshal(stdin, &in)
+				_ = json.Unmarshal(cmd.Stdin, &in)
 				labels[n] = append(labels[n], in.Labels...)
 			}
-			return []byte("[]"), nil, 0, nil
-		case len(args) == 3 && args[0] == "api" && strings.HasPrefix(args[1], "repos/{owner}/{repo}/issues/") && !strings.Contains(args[1][len("repos/{owner}/{repo}/issues/"):], "/"):
+			return proc.Result{Stdout: "[]"}, nil
+		case len(cmd.Args) == 3 && cmd.Args[0] == "api" && strings.HasPrefix(cmd.Args[1], "repos/{owner}/{repo}/issues/") && !strings.Contains(cmd.Args[1][len("repos/{owner}/{repo}/issues/"):], "/"):
 			var n int
-			fmt.Sscanf(args[1], "repos/{owner}/{repo}/issues/%d", &n)
+			fmt.Sscanf(cmd.Args[1], "repos/{owner}/{repo}/issues/%d", &n)
 			ls := []string{}
 			for _, l := range labels[n] {
 				ls = append(ls, fmt.Sprintf(`{"name":%q}`, l))
 			}
-			return []byte(fmt.Sprintf(`{"number":%d,"title":"t","body":"","labels":[%s],"state":"open"}`, n, strings.Join(ls, ","))), nil, 0, nil
-		case len(args) > 2 && args[0] == "api" && args[1] == "-X" && args[2] == "POST":
+			return proc.Result{Stdout: fmt.Sprintf(`{"number":%d,"title":"t","body":"","labels":[%s],"state":"open"}`, n, strings.Join(ls, ","))}, nil
+		case len(cmd.Args) > 2 && cmd.Args[0] == "api" && cmd.Args[1] == "-X" && cmd.Args[2] == "POST":
 			// A posted comment is visible to the next read, as on a real forge.
 			var n int
-			fmt.Sscanf(args[3], "repos/{owner}/{repo}/issues/%d/comments", &n)
+			fmt.Sscanf(cmd.Args[3], "repos/{owner}/{repo}/issues/%d/comments", &n)
 			id := len(comments[n]) + 100
-			cm, _ := json.Marshal(map[string]any{"id": id, "body": strings.TrimPrefix(args[5], "body="), "created_at": "2026-01-01T00:00:00Z"})
+			cm, _ := json.Marshal(map[string]any{"id": id, "body": strings.TrimPrefix(cmd.Args[5], "body="), "created_at": "2026-01-01T00:00:00Z"})
 			comments[n] = append(comments[n], string(cm))
-			return []byte(fmt.Sprintf(`{"id":%d}`, id)), nil, 0, nil
-		case len(args) > 1 && args[0] == "api" && strings.HasSuffix(args[1], "/comments") || len(args) > 2 && args[0] == "api" && strings.HasSuffix(args[len(args)-2], "/comments"):
+			return proc.Result{Stdout: fmt.Sprintf(`{"id":%d}`, id)}, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "api" && strings.HasSuffix(cmd.Args[1], "/comments") || len(cmd.Args) > 2 && cmd.Args[0] == "api" && strings.HasSuffix(cmd.Args[len(cmd.Args)-2], "/comments"):
 			var n int
-			for _, a := range args {
+			for _, a := range cmd.Args {
 				fmt.Sscanf(a, "repos/{owner}/{repo}/issues/%d/comments", &n)
 			}
-			return []byte("[" + strings.Join(comments[n], ",") + "]"), nil, 0, nil
-		case len(args) > 1 && args[0] == "issue" && args[1] == "list" && strings.Contains(joined, "--state closed"):
-			return []byte(`[{"number":9,"title":"done","state":"CLOSED","labels":[],"closedAt":"2999-01-01T00:00:00Z"}]`), nil, 0, nil
-		case len(args) > 1 && args[0] == "issue" && args[1] == "list":
-			return []byte("[" + issues["1"] + "," + issues["2"] + "]"), nil, 0, nil
-		case len(args) > 2 && args[0] == "issue" && args[1] == "view":
-			return []byte(issues[args[2]]), nil, 0, nil
+			return proc.Result{Stdout: "[" + strings.Join(comments[n], ",") + "]"}, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "list" && strings.Contains(joined, "--state closed"):
+			return proc.Result{Stdout: `[{"number":9,"title":"done","state":"CLOSED","labels":[],"closedAt":"2999-01-01T00:00:00Z"}]`}, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "list":
+			return proc.Result{Stdout: "[" + issues["1"] + "," + issues["2"] + "]"}, nil
+		case len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view":
+			return proc.Result{Stdout: issues[cmd.Args[2]]}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	// The test process is the orchestrator: a fake process table holds the lease.
 	le := roundlease.DefaultEnv()

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // editRig answers an issue-edit exchange from a mutable REST issue and keeps
@@ -17,19 +19,19 @@ type editRig struct {
 	patchd string
 }
 
-func (r *editRig) exec(_ context.Context, _, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
-	r.stdin = append(r.stdin, string(stdin))
+func (r *editRig) exec(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+	r.calls = append(r.calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
+	r.stdin = append(r.stdin, string(cmd.Stdin))
 	switch {
-	case strings.Contains(strings.Join(args, " "), "milestones"):
-		return []byte(`[{"number":4,"title":"M1","state":"open"}]`), nil, 0, nil
-	case args[0] == "api" && len(args) > 2 && (args[2] == "PATCH" || args[2] == "POST" || args[2] == "DELETE"):
+	case strings.Contains(strings.Join(cmd.Args, " "), "milestones"):
+		return proc.Result{Stdout: `[{"number":4,"title":"M1","state":"open"}]`}, nil
+	case cmd.Args[0] == "api" && len(cmd.Args) > 2 && (cmd.Args[2] == "PATCH" || cmd.Args[2] == "POST" || cmd.Args[2] == "DELETE"):
 		if r.apply {
 			r.issue = r.patchd
 		}
-		return []byte(`{}`), nil, 0, nil
+		return proc.Result{Stdout: `{}`}, nil
 	}
-	return []byte(r.issue), nil, 0, nil
+	return proc.Result{Stdout: r.issue}, nil
 }
 
 func (r *editRig) adapter(t *testing.T) Adapter {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -26,17 +27,17 @@ func TestProofRecordConcurrentKeepsBothRows(t *testing.T) {
 			}
 			var mu sync.Mutex
 			comments := []map[string]any{}
-			execute := func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+			execute := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
 				mu.Lock()
 				defer mu.Unlock()
-				if len(args) > 1 && args[0] == "issue" && args[1] == "view" {
-					return []byte(`{"number":7,"title":"Export","state":"OPEN","labels":[{"name":"type:feature"}]}`), nil, 0, nil
+				if len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" {
+					return proc.Result{Stdout: `{"number":7,"title":"Export","state":"OPEN","labels":[{"name":"type:feature"}]}`}, nil
 				}
-				joined := strings.Join(args, " ")
+				joined := strings.Join(cmd.Args, " ")
 				switch {
 				case strings.Contains(joined, "-X POST"), strings.Contains(joined, "-X PATCH"):
 					body := ""
-					for _, arg := range args {
+					for _, arg := range cmd.Args {
 						if strings.HasPrefix(arg, "body=") {
 							body = strings.TrimPrefix(arg, "body=")
 						}
@@ -46,12 +47,12 @@ func TestProofRecordConcurrentKeepsBothRows(t *testing.T) {
 					} else {
 						comments[0]["body"] = body
 					}
-					return []byte(`{"id":1}`), nil, 0, nil
-				case len(args) > 0 && args[0] == "api" && strings.Contains(joined, "/comments"):
+					return proc.Result{Stdout: `{"id":1}`}, nil
+				case len(cmd.Args) > 0 && cmd.Args[0] == "api" && strings.Contains(joined, "/comments"):
 					out, err := json.Marshal(comments)
-					return out, nil, 0, err
+					return proc.Result{Stdout: string(out)}, err
 				default:
-					return nil, nil, 0, fmt.Errorf("unexpected forge command: %v", args)
+					return proc.Result{}, fmt.Errorf("unexpected forge command: %v", cmd.Args)
 				}
 			}
 			started, release := make(chan struct{}), make(chan struct{})

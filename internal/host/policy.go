@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // This file is where a host kind's policy lives: facts callers used to infer
@@ -165,7 +166,7 @@ func (s ServerProc) Match(comm string) bool {
 type Probe struct {
 	Getenv func(string) string
 	Look   func(name string) (string, bool)
-	Exec   func(ctx context.Context, bin string, args []string) (Result, error)
+	Exec   proc.Runner
 	Dial   func(ctx context.Context, path string) (net.Conn, error)
 	// SupportedHerdr overrides the default version for callers that need a
 	// controlled probe (for example, doctor tests).
@@ -259,7 +260,7 @@ func diagnoseHerdr(p Probe) Health {
 	if !ok {
 		return Health{HealthFail, "herdr not found on PATH", "install herdr " + want + " (https://herdr.dev)"}
 	}
-	r, err := p.Exec(context.Background(), bin, []string{"--version"})
+	r, err := p.Exec(context.Background(), proc.Cmd{Name: bin, Args: []string{"--version"}})
 	out := strings.TrimSpace(r.Stdout + " " + r.Stderr)
 	v, verr := herdrVersion(out, supported)
 	if err != nil || r.ExitCode != 0 || v == "" {
@@ -288,12 +289,13 @@ func diagnoseOrca(p Probe) Health {
 			}
 			return bin, nil
 		},
-		Run: func(ctx context.Context, name string, args []string) (Result, error) {
-			bin, ok := p.Look(name)
+		Run: func(ctx context.Context, c proc.Cmd) (Result, error) {
+			bin, ok := p.Look(c.Name)
 			if !ok {
 				return Result{}, exec.ErrNotFound
 			}
-			r, err := p.Exec(ctx, bin, args)
+			c.Name = bin
+			r, err := p.Exec(ctx, c)
 			statusJSON = r.Stdout
 			return r, err
 		},

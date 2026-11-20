@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Exercise the dispatch exit mapping through the real herdr adapter, with only
@@ -72,9 +73,9 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 						return map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}[k]
 					},
 					Sleep: func(time.Duration) {},
-					Run: func(_ context.Context, name string, args []string) (host.Result, error) {
-						if name == "herdr" && len(args) >= 3 && args[0] == "agent" {
-							switch args[1] {
+					Run: func(_ context.Context, cmd proc.Cmd) (host.Result, error) {
+						if cmd.Name == "herdr" && len(cmd.Args) >= 3 && cmd.Args[0] == "agent" {
+							switch cmd.Args[1] {
 							case "get":
 								return host.Result{Stdout: agent}, nil
 							case "read":
@@ -90,14 +91,14 @@ func TestWorkerDispatchQueuedCodexRelay(t *testing.T) {
 								}
 								return host.Result{Stdout: "OpenAI Codex\n" + preview + "› Ask Codex to do anything\n"}, nil
 							case "prompt":
-								sent = args[3]
+								sent = cmd.Args[3]
 								if captured != "" {
 									return host.Result{ExitCode: 1, Stderr: `{"error":{"code":"agent_prompt_stalled"}}`}, nil
 								}
 								return host.Result{Stdout: agent}, nil
 							}
 						}
-						t.Errorf("unexpected host command: %s %v", name, args)
+						t.Errorf("unexpected host command: %s %v", cmd.Name, cmd.Args)
 						return host.Result{ExitCode: 99}, nil
 					},
 				})

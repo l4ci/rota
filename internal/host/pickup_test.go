@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Exercise the retry policy through the real adapters. The only fakes are the
@@ -116,8 +118,8 @@ func TestPickupOrca(t *testing.T) {
 			c := &clock{}
 			d := f.deps()
 			d.Sleep = c.sleep
-			d.Run = func(ctx context.Context, name string, a []string) (Result, error) {
-				if name == "orca" && len(a) > 1 && a[1] == "read" && f.sends > 0 {
+			d.Run = func(ctx context.Context, cmd proc.Cmd) (Result, error) {
+				if cmd.Name == "orca" && len(cmd.Args) > 1 && cmd.Args[1] == "read" && f.sends > 0 {
 					polls++
 					if want := time.Duration(polls) * time.Second; c.slept != want {
 						t.Errorf("poll at %s, want %s", c.slept, want)
@@ -126,7 +128,7 @@ func TestPickupOrca(t *testing.T) {
 						f.after = "Working (esc to interrupt)\n› "
 					}
 				}
-				return f.run(ctx, name, a)
+				return f.run(ctx, cmd)
 			}
 			var want error
 			if pickupOn == 5 {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -46,22 +47,22 @@ func fillTickFixture(t *testing.T, review string, reviewed, clocked bool) (*Ctx,
 	}
 	write(t, filepath.Join(f.root, ".rota", "workers.json"), `{"round":1,"slots":[{"name":"ben","task":"1","branch":"ben/1-fill","base":"main","state":"done","pr":"#11"`+event+`}]}`)
 	previous := f.deps.trackerExec()
-	f.deps.TrackerOptions = append(f.deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-		if len(args) >= 2 && args[0] == "pr" && (args[1] == "view" || args[1] == "list") {
+	f.deps.TrackerOptions = append(f.deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) >= 2 && cmd.Args[0] == "pr" && (cmd.Args[1] == "view" || cmd.Args[1] == "list") {
 			pr := map[string]any{"number": 11, "headRefName": "ben/1-fill", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "Closes #1\n\nDoor: two-way.", "url": "https://github.com/o/r/pull/11"}
 			var value any = pr
-			if args[1] == "list" {
+			if cmd.Args[1] == "list" {
 				value = []any{pr}
-				for i := 2; i+1 < len(args); i++ {
-					if args[i] == "--head" && args[i+1] != "ben/1-fill" || args[i] == "--state" && args[i+1] != "open" && args[i+1] != "all" {
+				for i := 2; i+1 < len(cmd.Args); i++ {
+					if cmd.Args[i] == "--head" && cmd.Args[i+1] != "ben/1-fill" || cmd.Args[i] == "--state" && cmd.Args[i+1] != "open" && cmd.Args[i+1] != "all" {
 						value = []any{}
 					}
 				}
 			}
 			b, err := json.Marshal(value)
-			return b, nil, 0, err
+			return proc.Result{Stdout: string(b)}, err
 		}
-		return previous(ctx, dir, name, args, stdin)
+		return previous(ctx, cmd)
 	}, func(name string) (string, error) { return "/fake/" + name, nil }))
 	f.deps.Getwd = func() (string, error) { return f.root, nil }
 	f.deps.Getenv = func(string) string { return "" }
@@ -139,17 +140,18 @@ func TestAutopilotTrainFillRejectsQueuedMissingReview(t *testing.T) {
 	head := strings.TrimSpace(r.Stdout)
 	addRegistryRows(t, root, map[string][]map[string]any{"prs": {{"branch": "dana/2-fill", "pr": "#12", "base": "main", "issue": "2"}}})
 	previous := c.deps().trackerExec()
-	c.Deps.TrackerOptions = append(c.Deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+	c.Deps.TrackerOptions = append(c.Deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, cmd proc.Cmd) (proc.Result, error) {
 		pr := map[string]any{"number": 12, "headRefName": "dana/2-fill", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "Closes #2", "url": "https://github.com/o/r/pull/12"}
-		if len(args) >= 3 && args[0] == "pr" && args[1] == "view" && (args[2] == "12" || args[2] == "dana/2-fill") {
+		if len(cmd.Args) >= 3 && cmd.Args[0] == "pr" && cmd.Args[1] == "view" && (cmd.Args[2] == "12" || cmd.Args[2] == "dana/2-fill") {
 			b, err := json.Marshal(pr)
-			return b, nil, 0, err
+			return proc.Result{Stdout: string(b)}, err
 		}
-		b, stderr, code, err := previous(ctx, dir, name, args, stdin)
-		if err == nil && code == 0 && len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
+		res, err := previous(ctx, cmd)
+		b := []byte(res.Stdout)
+		if err == nil && res.ExitCode == 0 && len(cmd.Args) >= 2 && cmd.Args[0] == "pr" && cmd.Args[1] == "list" {
 			include := true
-			for i := 2; i+1 < len(args); i++ {
-				if args[i] == "--head" && args[i+1] != "dana/2-fill" || args[i] == "--state" && args[i+1] != "open" && args[i+1] != "all" {
+			for i := 2; i+1 < len(cmd.Args); i++ {
+				if cmd.Args[i] == "--head" && cmd.Args[i+1] != "dana/2-fill" || cmd.Args[i] == "--state" && cmd.Args[i+1] != "open" && cmd.Args[i+1] != "all" {
 					include = false
 				}
 			}
@@ -162,7 +164,8 @@ func TestAutopilotTrainFillRejectsQueuedMissingReview(t *testing.T) {
 				b, err = json.Marshal(rows)
 			}
 		}
-		return b, stderr, code, err
+		res.Stdout = string(b)
+		return res, err
 	}, func(name string) (string, error) { return "/fake/" + name, nil }))
 	set, err := c.deps().roundSettings(root, roundConfigRequired)
 	if err != nil {

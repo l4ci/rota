@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -36,10 +37,10 @@ func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRi
 			}
 			return "", errors.New("not found")
 		}
-		run := func(_ context.Context, name string, args []string) (host.Result, error) {
-			r.runs = append(r.runs, name+" "+strings.Join(args, " "))
-			if name == "herdr" && r.panes != "" {
-				switch strings.Join(args, " ") {
+		run := func(_ context.Context, cmd proc.Cmd) (host.Result, error) {
+			r.runs = append(r.runs, cmd.Name+" "+strings.Join(cmd.Args, " "))
+			if cmd.Name == "herdr" && r.panes != "" {
+				switch strings.Join(cmd.Args, " ") {
 				case "pane list":
 					return host.Result{Stdout: r.panes}, nil
 				case "tab list":
@@ -48,7 +49,7 @@ func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRi
 					return host.Result{Stdout: `{"result":{"workspaces":[]}}`}, nil
 				}
 			}
-			if name == "herdr" && args[0] == "tab" {
+			if cmd.Name == "herdr" && cmd.Args[0] == "tab" {
 				return host.Result{Stdout: `{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}`}, nil
 			}
 			return host.Result{}, nil

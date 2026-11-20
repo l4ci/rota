@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,20 +76,20 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 			unreadable := false
 			reads := 0
 			sends := 0
-			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Alive: func(pid int) bool { return pid == 123 || pid == 456 }, Tree: func(pid int) []int { return []int{pid, 456} }, Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
-				if name == "git" {
-					return host.ExecRunner(ctx, name, a)
+			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Alive: func(pid int) bool { return pid == 123 || pid == 456 }, Tree: func(pid int) []int { return []int{pid, 456} }, Run: func(ctx context.Context, cmd proc.Cmd) (host.Result, error) {
+				if cmd.Name == "git" {
+					return proc.Run(ctx, cmd)
 				}
-				switch strings.Join(a[:2], " ") {
+				switch strings.Join(cmd.Args[:2], " ") {
 				case "status --json":
 					return host.Result{Stdout: `{"running":true}`}, nil
 				case "terminal create":
-					for i, v := range a {
+					for i, v := range cmd.Args {
 						if v == "--command" {
-							command = a[i+1]
+							command = cmd.Args[i+1]
 						}
 						if v == "--worktree" {
-							cwd = strings.TrimPrefix(a[i+1], "path:")
+							cwd = strings.TrimPrefix(cmd.Args[i+1], "path:")
 						}
 					}
 					if e := seedOrcaAdapterPID(t, ctx, cwd); e != nil {
@@ -97,7 +98,7 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 					b, _ := json.Marshal(map[string]string{"handle": "t1", "title": "rota:w1"})
 					return host.Result{Stdout: string(b)}, nil
 				case "terminal list":
-					branch, err := host.ExecRunner(ctx, "git", []string{"-C", cwd, "symbolic-ref", "--short", "HEAD"})
+					branch, err := proc.Run(ctx, proc.Cmd{Name: "git", Args: []string{"-C", cwd, "symbolic-ref", "--short", "HEAD"}})
 					if err != nil {
 						return host.Result{}, err
 					}
@@ -116,9 +117,9 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 					return host.Result{Stdout: string(b)}, nil
 				case "terminal send":
 					sends++
-					for i, v := range a {
+					for i, v := range cmd.Args {
 						if v == "--text" {
-							sent = a[i+1]
+							sent = cmd.Args[i+1]
 						}
 					}
 					return host.Result{Stdout: `{"stages":["input_accepted","turn_started"],"observation":"supported"}`}, nil
@@ -212,7 +213,7 @@ func TestDispatchNotSubmittedIsRetryOnEveryKind(t *testing.T) {
 // would, while every process liveness/tree observation stays injected.
 func seedOrcaAdapterPID(t *testing.T, ctx context.Context, cwd string) error {
 	t.Helper()
-	metadata, e := host.ExecRunner(ctx, "git", []string{"-C", cwd, "rev-parse", "--absolute-git-dir"})
+	metadata, e := proc.Run(ctx, proc.Cmd{Name: "git", Args: []string{"-C", cwd, "rev-parse", "--absolute-git-dir"}})
 	if e != nil || metadata.ExitCode != 0 {
 		return fmt.Errorf("fixture git metadata: %v %s", e, metadata.Stderr)
 	}
@@ -241,11 +242,11 @@ func TestOrcaPoolReapThroughAdapterAfterAgentExit(t *testing.T) {
 					}
 					return []int{pid}
 				},
-				Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
-					if name == "git" {
-						return host.ExecRunner(ctx, name, a)
+				Run: func(ctx context.Context, cmd proc.Cmd) (host.Result, error) {
+					if cmd.Name == "git" {
+						return proc.Run(ctx, cmd)
 					}
-					switch strings.Join(a[:2], " ") {
+					switch strings.Join(cmd.Args[:2], " ") {
 					case "status --json":
 						return host.Result{Stdout: `{"running":true}`}, nil
 					case "terminal create":

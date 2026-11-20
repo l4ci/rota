@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tracker/itsaplantest"
 	"github.com/l4ci/rota/internal/tracker/jiratest"
@@ -34,15 +35,15 @@ type reply struct {
 }
 
 func (f *forge) env(t *testing.T) Env {
-	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		line := strings.Join(args, " ")
-		f.calls = append(f.calls, name+" "+line)
+	exe := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		line := strings.Join(cmd.Args, " ")
+		f.calls = append(f.calls, cmd.Name+" "+line)
 		for prefix, r := range f.reply {
 			if strings.HasPrefix(line, prefix) {
-				return []byte(r.out), []byte(r.err), r.code, nil
+				return proc.Result{Stdout: r.out, Stderr: r.err, ExitCode: r.code}, nil
 			}
 		}
-		return nil, nil, 0, nil
+		return proc.Result{}, nil
 	}
 	look := func(n string) (string, error) { return "/fake/" + n, nil }
 	gitSeam := func(context.Context, string, ...string) (git.Result, error) {

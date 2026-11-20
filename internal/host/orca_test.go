@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 const orcaEmptyReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› "
@@ -61,9 +62,9 @@ func (f *orcaFake) deps() Deps {
 }
 
 // gitFrom is run as a git.Runner: the call a fake Runner answers for "git".
-func gitFrom(run Runner) git.Runner {
+func gitFrom(run proc.Runner) git.Runner {
 	return func(ctx context.Context, dir string, args ...string) (git.Result, error) {
-		return run(ctx, "git", append([]string{"-C", dir}, args...))
+		return run(ctx, proc.Cmd{Name: "git", Args: append([]string{"-C", dir}, args...)})
 	}
 }
 
@@ -72,18 +73,18 @@ func withGit(d Deps) Deps {
 	d.Git = gitFrom(d.Run)
 	return d
 }
-func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, error) {
+func (f *orcaFake) run(_ context.Context, cmd proc.Cmd) (Result, error) {
 	f.calls++
-	if name == "git" {
+	if cmd.Name == "git" {
 		return Result{Stdout: f.gitBranch + "\n"}, nil
 	}
-	if name != "orca" {
+	if cmd.Name != "orca" {
 		return Result{ExitCode: 1}, nil
 	}
-	if a[0] == "status" {
+	if cmd.Args[0] == "status" {
 		return Result{Stdout: f.status}, nil
 	}
-	switch a[1] {
+	switch cmd.Args[1] {
 	case "create":
 		dir := f.pidDir
 		if dir == "" {
@@ -95,9 +96,9 @@ func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, erro
 				return Result{}, err
 			}
 		}
-		for i, v := range a {
+		for i, v := range cmd.Args {
 			if v == "--command" {
-				f.command = a[i+1]
+				f.command = cmd.Args[i+1]
 			}
 		}
 		return Result{Stdout: `{"handle":"t1","title":"r:ben"}`}, nil
@@ -117,9 +118,9 @@ func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, erro
 		return Result{Stdout: string(b)}, nil
 	case "send":
 		f.sends++
-		for i, v := range a {
+		for i, v := range cmd.Args {
 			if v == "--text" {
-				f.sent = a[i+1]
+				f.sent = cmd.Args[i+1]
 			}
 		}
 		return Result{Stdout: f.receipt}, nil
@@ -310,7 +311,7 @@ func TestOrcaCreateUncertaintyRetainsCleanupHandle(t *testing.T) {
 		t.Run(reply.Stdout+reply.Stderr, func(t *testing.T) {
 			f := newOrcaFake(t)
 			d := f.deps()
-			d.Run = func(ctx context.Context, name string, a []string) (Result, error) {
+			d.Run = func(ctx context.Context, cmd proc.Cmd) (Result, error) {
 				return reply, nil
 			}
 			h, e := New(Orca, d).Spawn(context.Background(), SpawnOpts{Slot: "ben", Session: "r", Cwd: f.cwd, Launch: "codex", BootTimeout: 2})

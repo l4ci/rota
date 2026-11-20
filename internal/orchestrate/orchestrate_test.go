@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // rig is a launcher with every outside call faked: no herdr, tmux or agent
@@ -32,20 +33,20 @@ func newRig(env map[string]string, installed ...string) *rig {
 }
 
 func (r *rig) launcher() Env {
-	run := func(_ context.Context, name string, args []string) (host.Result, error) {
-		r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	run := func(_ context.Context, cmd proc.Cmd) (host.Result, error) {
+		r.calls = append(r.calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
 		switch {
-		case name == "sh":
+		case cmd.Name == "sh":
 			r.serverUp = true
-		case name == "herdr" && len(args) > 3 && args[2] == "status":
+		case cmd.Name == "herdr" && len(cmd.Args) > 3 && cmd.Args[2] == "status":
 			if !r.serverUp {
 				return host.Result{ExitCode: 1}, nil
 			}
-		case name == "herdr" && len(args) > 3 && args[2] == "workspace":
+		case cmd.Name == "herdr" && len(cmd.Args) > 3 && cmd.Args[2] == "workspace":
 			return host.Result{Stdout: `{"result":{"root_pane":{"pane_id":"w1:p1"}}}`}, nil
-		case name == "herdr" && args[0] == "tab":
+		case cmd.Name == "herdr" && cmd.Args[0] == "tab":
 			return host.Result{Stdout: `{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}`}, nil
-		case name == "tmux" && args[0] == "new-window":
+		case cmd.Name == "tmux" && cmd.Args[0] == "new-window":
 			return host.Result{Stdout: "@3\n"}, nil
 		}
 		return host.Result{}, nil

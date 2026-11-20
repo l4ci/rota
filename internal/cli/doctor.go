@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/agents"
 	"github.com/l4ci/rota/internal/cfgdir"
@@ -20,7 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/migrate"
-	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/repoconfig"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -36,9 +34,6 @@ import (
 func doctorCommand() *Command {
 	return &Command{Name: "doctor", Fence: fenceAllowed, Summary: "preflight: git, host, forge, accounts, herdr hook, orchestrator hooks, skills, codex", Verb: noFlags(runDoctor), View: doctorView}
 }
-
-// doctorCallTimeout bounds each tool call, so a hung herdr cannot hang the verb.
-const doctorCallTimeout = 20 * time.Second
 
 func runDoctor(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
@@ -70,7 +65,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 
 // doctorInput gathers the environment through the invocation dependencies.
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Getenv: d.Getenv, Exec: doctorExec(d.Proc), Credentials: d.credentials(), Look: func(name string) (string, bool) {
+	in := doctor.Input{Getenv: d.Getenv, Exec: d.Proc, Credentials: d.credentials(), Look: func(name string) (string, bool) {
 		path, err := d.LookPath(name)
 		return path, err == nil
 	}}
@@ -208,13 +203,6 @@ func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *
 	}
 	rep.Warnings = errStrings(pluginErrs)
 	return &rep
-}
-
-// doctorExec adapts a process runner to doctor.Exec, bounding each call.
-func doctorExec(run proc.Runner) doctor.Exec {
-	return func(ctx context.Context, bin string, args, extraEnv []string, dir string) (doctor.Result, error) {
-		return run(ctx, proc.Cmd{Name: bin, Args: args, Env: extraEnv, Dir: dir, Timeout: doctorCallTimeout})
-	}
 }
 
 // doctorKinds is what each worker harness with a doctor check has configured:

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -63,8 +64,8 @@ func TestWorkerDispatchExplicitPRRefusesBeforeSending(t *testing.T) {
 	for _, state := range []string{"CLOSED", "MERGED", "unlisted"} {
 		t.Run(state, func(t *testing.T) {
 			dir, deps, h, brief := explicitPRSlot(t)
-			deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-				return []byte(`{"state":"` + state + `"}`), nil, 0, nil
+			deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{Stdout: `{"state":"` + state + `"}`}, nil
 			}, func(n string) (string, error) { return "/fake/" + n, nil })}
 			pr := "7"
 			if state == "unlisted" {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -22,14 +23,14 @@ func TestChangeClassify(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "-m", "docs")
 	prs, prCode := `[]`, 0
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 1 && args[0] == "pr" && args[1] == "list" {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 1 && cmd.Args[0] == "pr" && cmd.Args[1] == "list" {
 			if prCode != 0 {
-				return nil, []byte("HTTP 500: server error"), prCode, nil
+				return proc.Result{Stderr: "HTTP 500: server error", ExitCode: prCode}, nil
 			}
-			return []byte(prs), nil, 0, nil
+			return proc.Result{Stdout: prs}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	cfg := func(change string) {
 		write(t, filepath.Join(root, ".rota", "config.json"), `{"forge":{"provider":"github"},"issues":{"source":"github"}`+change+`}`)

@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -47,27 +48,27 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 		{"number": 12, "headRefName": "dana/2-y", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "", "url": "https://github.com/o/r/pull/12"},
 	}
 	previousExec := f.deps.trackerExec()
-	f.deps.TrackerOptions = append(f.deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-		if len(args) >= 3 && args[0] == "pr" && args[1] == "view" {
+	f.deps.TrackerOptions = append(f.deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) >= 3 && cmd.Args[0] == "pr" && cmd.Args[1] == "view" {
 			index := 0
-			switch args[2] {
+			switch cmd.Args[2] {
 			case "11", "ben/1-x":
 			case "12", "dana/2-y":
 				index = 1
 			default:
-				return previousExec(ctx, dir, name, args, stdin)
+				return previousExec(ctx, cmd)
 			}
 			b, err := json.Marshal(prs[index])
-			return b, nil, 0, err
+			return proc.Result{Stdout: string(b)}, err
 		}
-		if len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
+		if len(cmd.Args) >= 2 && cmd.Args[0] == "pr" && cmd.Args[1] == "list" {
 			branch := ""
-			for i := 2; i+1 < len(args); i++ {
-				if args[i] == "--head" {
-					branch = args[i+1]
+			for i := 2; i+1 < len(cmd.Args); i++ {
+				if cmd.Args[i] == "--head" {
+					branch = cmd.Args[i+1]
 				}
-				if args[i] == "--state" && args[i+1] != "open" && args[i+1] != "all" {
-					return []byte("[]"), nil, 0, nil
+				if cmd.Args[i] == "--state" && cmd.Args[i+1] != "open" && cmd.Args[i+1] != "all" {
+					return proc.Result{Stdout: "[]"}, nil
 				}
 			}
 			rows := []map[string]any{}
@@ -77,9 +78,9 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 				}
 			}
 			b, err := json.Marshal(rows)
-			return b, nil, 0, err
+			return proc.Result{Stdout: string(b)}, err
 		}
-		return previousExec(ctx, dir, name, args, stdin)
+		return previousExec(ctx, cmd)
 	}, func(name string) (string, error) { return "/fake/" + name, nil }))
 	for _, branch := range []string{"ben/1-x", "dana/2-y"} {
 		rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Pass, head, verdict.Body{}, time.Now())

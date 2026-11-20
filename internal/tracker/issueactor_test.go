@@ -7,14 +7,15 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // execOrigin answers every git call with origin ("" is no origin remote), and
 // every forge CLI call with nothing.
 func execOrigin(origin string) Option {
 	return func(c *CLI) {
-		WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-			return nil, nil, 0, nil
+		WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{}, nil
 		}, func(n string) (string, error) { return "/fake/" + n, nil })(c)
 		WithGit(originGit(origin))(c)
 	}
