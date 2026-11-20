@@ -14,18 +14,19 @@ const ReasonStopped = "stopped"
 // AutopilotOpts wires a watch to the autopilot tick.
 type AutopilotOpts struct {
 	Tick      func() (roundtick.Result, error)
-	Stopped   func(error) bool // Tick's error means the round is gone
-	TrainFill bool             // a completed merge wakes the orchestrator
-	Poll      time.Duration    // pause after a wake Run reports but the tick does not
+	TrainFill bool          // a completed merge wakes the orchestrator
+	Poll      time.Duration // pause after a wake Run reports but the tick does not
 }
 
 // AutopilotResult is a watch result plus the last tick. TickErr is set when
-// the tick failed; Tick is nil then and after a stop at tick entry. A stop
+// the tick failed; Tick is nil then and after a stop at tick entry. StopErr is
+// the classified stop (roundtick.ErrStopped, ErrBaseRed or ErrNoLease). A stop
 // seen mid-tick keeps the tick (Tick.Stopped is set), so its merges are reported.
 type AutopilotResult struct {
 	Result
 	Tick    *roundtick.Result
 	TickErr error
+	StopErr error // set with ReasonStopped: the tick error, or Tick.Stopped
 }
 
 // RunAutopilot is `round watch --autopilot`: tick first, then wait, tick on
@@ -37,12 +38,12 @@ func RunAutopilot(ctx context.Context, env Env, o Opts, a AutopilotOpts) (Autopi
 		tr, err := a.Tick()
 		left := deadline.Sub(env.Now())
 		switch {
-		case err != nil && a.Stopped != nil && a.Stopped(err):
-			return AutopilotResult{Result: Result{Reason: ReasonStopped}}, nil
+		case err != nil && roundtick.IsStopped(err):
+			return AutopilotResult{Result: Result{Reason: ReasonStopped}, StopErr: err}, nil
 		case err != nil:
 			return AutopilotResult{Result: Result{Reason: ReasonChange}, TickErr: err}, nil
 		case tr.Stopped != nil:
-			return AutopilotResult{Result: Result{Reason: ReasonStopped}, Tick: &tr}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonStopped}, Tick: &tr, StopErr: tr.Stopped}, nil
 		case ctx.Err() != nil:
 			return AutopilotResult{Result: Result{Reason: ReasonInterrupt}, Tick: &tr}, nil
 		case wakes(tr, a.TrainFill):
