@@ -105,6 +105,16 @@ func Running(src Source, pid int, start uint64) bool {
 	return !ok || cur == start
 }
 
+// Signal sends sig to pid only while pid is still the process recorded with
+// start (see Running). A pid that exited or was reused by another process
+// answers syscall.ESRCH without signalling, as a kill of a gone pid does.
+func Signal(src Source, pid int, start uint64, sig syscall.Signal) error {
+	if !Running(src, pid, start) {
+		return syscall.ESRCH
+	}
+	return syscall.Kill(pid, sig)
+}
+
 // StartTicks is the machine's start time of pid.
 func StartTicks(pid int) (uint64, bool) {
 	_, st, ok := Real{}.Stat(pid)

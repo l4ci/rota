@@ -3,8 +3,10 @@ package pidlive
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -175,3 +177,34 @@ func TestRealParentsListsSelf(t *testing.T) {
 }
 
 func (fakeTable) Listeners(context.Context) ([]Listener, bool) { return nil, false }
+
+// A recorded start that no longer matches means the pid was reused: Signal
+// must not touch it (#3898).
+func TestSignalSkipsReusedPid(t *testing.T) {
+	c := exec.Command("sleep", "30")
+	if err := c.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- c.Wait() }()
+	t.Cleanup(func() { c.Process.Kill() })
+	pid := c.Process.Pid
+	src := fakeTable{rows: map[int]Row{pid: {State: "S", Start: 50}}}
+
+	if err := Signal(src, pid, 49, syscall.SIGTERM); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("reused pid: err = %v, want ESRCH", err)
+	}
+	select {
+	case <-exited:
+		t.Fatal("a process with a different start time was signalled")
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err := Signal(src, pid, 50, syscall.SIGTERM); err != nil {
+		t.Fatalf("matching start: %v", err)
+	}
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("matching start was not signalled")
+	}
+}
