@@ -398,7 +398,7 @@ Candidates carry four checks:
 - `template`: every feature, including Cosmetic, has Acceptance and Out of scope headings. Missing headings are named; an assign `--settled-file` brief can supply them. Fresh assignment enforces this check; resuming a slot's own issue or deliberately redoing an existing open PR does not enforce it again. Research and decision items are exempt. Bugs and tasks have no required template sections. This checks presence only, so an empty heading or "nothing noted" counts. Existing items need no migration: add the missing headings to the body or supply them in the brief. `rota item ready` reports the same required headings.
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
-- `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue
+- `overlap`: no shared file or glob with an in-flight slot (a directory-only clash, identical directories included, only warns), from a `## Files` section or the paths the issue
   text names plus the slot's real changes. A `## Touches` section (one bullet per symbol, endpoint,
   schema, migration or config key) adds a scope check: two issues naming the same entry (compared
   exactly, ignoring case and surrounding spaces) clash even in different files, and the overlap is
@@ -420,7 +420,7 @@ The overlap check cannot see files an issue will create, paths nobody wrote down
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.
 
-A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below it, so it overlaps almost any other issue. The overlap detail then says `from directory src/app/ui/: name exact files in the pointers`, and the JSON overlap lists the directories under `dirs`. Name the files in the issue, or add a file every issue mentions in a footer to `round.sharedPaths`.
+A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below it, so it overlaps almost any other issue. That clash only warns, never refuses, and so does an identical directory both issues list: assign proceeds unless an exact file or glob is shared. A refusal names only the exact clashing files. The overlap detail says `from directory src/app/ui/: warning only; name exact files in the pointers`, and the JSON overlap lists the directories under `dirs`. Name the files in the issue, or add a file every issue mentions in a footer to `round.sharedPaths`.
 
 ## Assigning an issue
 
