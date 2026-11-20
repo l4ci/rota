@@ -842,3 +842,33 @@ func TestStatusMatchesUninstallOverUnreadableLink(t *testing.T) {
 		t.Error("status should flag the paths under the link as edited")
 	}
 }
+
+// A file whose bytes equal the shipped bytes but not the recorded hash (a hand
+// copy, or an update interrupted before the manifest write) is adopted by
+// install, so Status must not call it Edited.
+func TestStatusAndInstallAgreeOnAdoptedBytes(t *testing.T) {
+	s := loadFake(t, nil)
+	roots := oneRoot(t)
+	if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
+		t.Fatal(err)
+	}
+	m, _, _ := ReadManifest(roots[0].Path)
+	m.Files["rota-a/SKILL.md"] = hashBytes([]byte("older\n"))
+	if err := writeManifest(roots[0].Path, m); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := s.Status(roots, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rep.Roots[0].Edited; len(got) != 0 {
+		t.Errorf("status reports adopted bytes as edited: %v", got)
+	}
+	res, err := s.Install(roots, Options{Mode: ModeFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := status(t, res, "rota-a/SKILL.md"); got != Unchanged {
+		t.Errorf("install status = %q, want %q", got, Unchanged)
+	}
+}
