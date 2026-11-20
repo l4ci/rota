@@ -10,18 +10,16 @@
 # Mapping: a .go file runs its package; a file under <pkg>/testdata/ (goldens,
 # frozen jsonl) runs <pkg>; an asset in a dir whose .go files //go:embed (e.g.
 # internal/knowledge/skills_block.md) runs that package; skills/ is embedded by
-# the root package (embed.go), so it runs "."; test infra (test/lib, test/fakes,
-# test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
-# files, py_compile on the python ones, and the Python harness tests (test/py-tests.sh).
-# A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
-# (the piped grep -q lint) and section 164 (printf into head), which scan all of
-# them. Each lint section declares its own trigger paths in a `# lint-trigger:`
-# line (#3771); fast.sh reads those tags rather than naming lints here.
+# the root package (embed.go), so it runs ".". Every other path-to-check rule is a
+# row of FAST_PATH_MAP below, the one glob-to-check table (#3956): `infra` (bash -n
+# on the shell files, a parse of the python ones, the Python harness tests), `docs`
+# (validate-skills and doclint, which also run the doclint-only scripts) or
+# `section:<file>` (a smoke section). Each lint section declares its own trigger
+# paths in a `# lint-trigger:` line (#3771); fast.sh reads those tags, not the table.
 # A non-test .go file (or embed asset) in a package also runs every package that
 # imports it in production or tests, transitively (go list -test .Deps), so an
 # internal/fsio change runs dependents and the internal/cli goldens (#1303).
-# A path-to-section table above the loop maps internal/doctor to smoke 83 and
-# host/dispatch to smoke 51; internal/config runs TestFrozenConfig.
+# internal/config runs TestFrozenConfig.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
 # test/sections/120_fast_mapping.sh asserts the mapping through it.
 set -euo pipefail
@@ -36,16 +34,50 @@ src_pkgs=()
 sections=()
 frozen=0
 
-# Explicit path-to-section policy. Keep one path pattern per row so the mapping
-# smoke test can exercise every row independently.
-FAST_SECTION_MAP=(
-  'internal/doctor/*|83_doctor.sh'
-  'internal/host/*|51_herdr_dispatch.sh'
-  'internal/worker/dispatch.go|51_herdr_dispatch.sh'
+# The one glob-to-check table: `glob|check`, one glob per row. check is `infra`,
+# `docs` or `section:<file>`. test/sections/179_fast_section_lints.sh asserts that
+# every script test/doclint.sh runs maps to `docs`.
+FAST_PATH_MAP=(
+  'internal/doctor/*|section:83_doctor.sh'
+  'internal/host/*|section:51_herdr_dispatch.sh'
+  'internal/worker/dispatch.go|section:51_herdr_dispatch.sh'
+  'test/lib/*|infra'
+  'test/fakes/*|infra'
+  'test/e2e/*|infra'
+  'test/runner.sh|infra'
+  'test/lib.sh|infra'
+  'test/gate.sh|infra'
+  'test/gate-*.py|infra'
+  'test/gate-*.txt|infra'
+  'internal/flakeledger/infrastructure-markers.txt|infra'
+  'test/py-tests.*|infra'
+  'test/*_test.py|infra'
+  'test/fast.sh|infra'
+  'test/treescan/*|infra'
+  'skills/*|docs'
+  'docs/*|docs'
+  '*.md|docs'
+  'test/validate-skills.py|docs'
+  'test/doclint.sh|docs'
+  # scripts and data test/doclint.sh runs
+  'scripts/skills-docs.py|docs'
+  'scripts/skilldocs.py|docs'
+  'scripts/site-sync.py|docs'
+  'scripts/fmlite.py|docs'
+  'scripts/videos.py|docs'
+  'scripts/video_catalog.py|docs'
+  'test/lint-verbs.py|docs'
+  'test/lint-sections.py|docs'
+  'test/check-doc-stamps.py|docs'
+  'test/videos-drift.sh|docs'
+  'test/evals/*|docs'
 )
 
+# Test seam for section 120: the section rows as `glob|file`.
 if [ "${FAST_PRINT_SECTION_MAP:-}" = 1 ]; then
-  printf '%s\n' "${FAST_SECTION_MAP[@]}"
+  for mapping in "${FAST_PATH_MAP[@]}"; do
+    case "$mapping" in *'|section:'*) printf '%s\n' "${mapping/|section:/|}" ;; esac
+  done
   exit 0
 fi
 
@@ -103,18 +135,20 @@ for f in "$@"; do
   case "$f" in
     internal/config/*) frozen=1 ;;
   esac
-  for mapping in "${FAST_SECTION_MAP[@]}"; do
-    IFS='|' read -r pattern section <<<"$mapping"
+  for mapping in "${FAST_PATH_MAP[@]}"; do
+    pattern="${mapping%|*}" check="${mapping##*|}"
     case "$f" in
-      $pattern) add_section "$section" ;;
+      $pattern)
+        case "$check" in
+          infra) infra=1 ;;
+          docs) docs=1 ;;
+          section:*) add_section "${check#section:}" ;;
+        esac
+        ;;
     esac
   done
   case "$f" in
-    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate-*.txt|internal/flakeledger/infrastructure-markers.txt|test/py-tests.*|test/*_test.py|test/fast.sh) infra=1 ;;
-    test/treescan/*) infra=1; add_pkg ./test/treescan ;;
-  esac
-  case "$f" in
-    skills/*|docs/*|*.md|test/validate-skills.py|test/doclint.sh) docs=1 ;;
+    test/treescan/*) add_pkg ./test/treescan ;;
   esac
   case "$f" in
     test/sections/*.sh) [ -f "$f" ] && sections+=("$f") ;;
@@ -225,14 +259,21 @@ fi
 
 if [ "$infra" = 1 ]; then
   echo "fast: infra (bash -n, py_compile, py-tests)"
-  for f in test/runner.sh test/lib.sh test/gate.sh test/gate-*.py test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
+  # Syntax-check every tracked file an infra row covers.
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
+    hit=0
+    for mapping in "${FAST_PATH_MAP[@]}"; do
+      case "${mapping##*|}" in infra) ;; *) continue ;; esac
+      case "$f" in ${mapping%|*}) hit=1; break ;; esac
+    done
+    [ "$hit" = 1 ] || continue
     case "$f" in
       *.py) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f" ;;
       *.sh) bash -n "$f" ;;
       *) if head -1 "$f" | grep -q bash; then bash -n "$f"; fi ;;
     esac
-  done
+  done < <(git ls-files test internal/flakeledger)
   bash test/py-tests.sh
 fi
 
