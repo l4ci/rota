@@ -44,7 +44,8 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 		return redClass{}, nil
 	}
 	e, ctx, scratch := t.e, t.ctx, p.scratch
-	cmds, swapped := rerunCommands(failed, p.verifyCfg().rerunTemplate, "", false)
+	cfg := p.verifyCfg()
+	cmds, swapped := rerunCommands(failed, cfg.rerunTemplate, "", cfg.goCheck, false)
 	var confirm []string
 	if swapped { // a -run selection passing alone is no flake until the full command does
 		confirm = failed.Failed
@@ -219,8 +220,8 @@ type rerunPlan struct {
 }
 
 // rerunCommands is the commands of rerunSet.
-func rerunCommands(failed VerifyResult, template, check string, skipRetried bool) (cmds []string, narrowed bool) {
-	r := rerunSet(failed, template, check, skipRetried)
+func rerunCommands(failed VerifyResult, template, check, goCheck string, skipRetried bool) (cmds []string, narrowed bool) {
+	r := rerunSet(failed, template, check, goCheck, skipRetried)
 	return r.cmds, r.narrowed
 }
 
@@ -232,7 +233,7 @@ func rerunCommands(failed VerifyResult, template, check string, skipRetried bool
 // the gate already re-ran in isolation. Without check the gate log is not
 // read and nothing is skipped, but a -run swap still happens and still counts
 // as narrowing, so its pass is confirmed by a full re-run.
-func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rerunPlan {
+func rerunSet(failed VerifyResult, template, check, goCheck string, skipRetried bool) rerunPlan {
 	r := rerunPlan{origin: map[string]string{}}
 	narrowing := check != ""
 	skipRetried = skipRetried && narrowing
@@ -262,7 +263,8 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 		var alone []string
 		whole := false
 		// Go output is command-wide: it supports a -run selection only when
-		// one check is left for it. Two unselectable checks keep the command.
+		// the configured Go check is the only one left for it. Two
+		// unselectable checks keep the command.
 		open := 0
 		for _, ck := range checks {
 			if !(skipRetried && ck.retried) && !(len(ck.ids) > 0 && strings.Contains(check, "{check}")) {
@@ -278,7 +280,7 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 					alone = append(alone, strings.ReplaceAll(check, "{check}", shlex.QuoteAlways(id)))
 				}
 			default:
-				if t, ok := testsCommand(out, template); ok && open == 1 && ck.name == "gotest" {
+				if t, ok := testsCommand(out, template); ok && open == 1 && ck.name == goCheck {
 					add(t)
 					r.narrowed = true
 				} else {
@@ -313,7 +315,7 @@ func (t *trainRun) narrowing(p trainPlan, failed VerifyResult) (narrowPlan, bool
 	if p.onCI || cfg.rerunCheck == "" {
 		return narrowPlan{}, false
 	}
-	r := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, false)
+	r := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, cfg.goCheck, false)
 	return narrowPlan{cmds: r.cmds, full: failed.Failed, origin: r.origin}, r.narrowed && len(r.cmds) > 0
 }
 
