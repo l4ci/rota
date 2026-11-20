@@ -715,3 +715,52 @@ func TestReaskedDecisionPerKind(t *testing.T) {
 		t.Errorf("a new lens is not re-asked: %v", got)
 	}
 }
+
+func TestFindingOverrides(t *testing.T) {
+	yes, no := true, false
+	for _, c := range []struct {
+		name string
+		f    Finding
+		want bool
+	}{
+		{"blocker not blocking", Finding{Severity: "blocker", Blocking: &no}, true},
+		{"major not blocking", Finding{Severity: "major", Blocking: &no}, true},
+		{"minor blocking", Finding{Severity: "minor", Blocking: &yes}, true},
+		{"info blocking", Finding{Severity: "info", Blocking: &yes}, true},
+		{"major agrees", Finding{Severity: "major", Blocking: &yes}, false},
+		{"minor agrees", Finding{Severity: "minor", Blocking: &no}, false},
+		{"legacy no field blocker", Finding{Severity: "blocker"}, false},
+	} {
+		if got := c.f.Overrides(); got != c.want {
+			t.Errorf("%s: Overrides = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// AC-2: a stored record without the field falls back to severity.
+	if !(Finding{Severity: "blocker"}).IsBlocking() || (Finding{Severity: "minor"}).IsBlocking() {
+		t.Error("legacy finding without blocking must fall back to severity")
+	}
+	// AC-1: ParseBody accepts the disagreement.
+	b, err := ParseBody(`{"findings":[{"severity":"blocker","title":"t","blocking":false}]}`)
+	if err != nil || !b.Findings[0].Overrides() || b.Findings[0].IsBlocking() {
+		t.Errorf("ParseBody blocker/blocking:false: %v %+v", err, b.Findings)
+	}
+}
+
+func TestRenderReportNamesOverride(t *testing.T) {
+	no, yes := false, true
+	r := NewRecord(ReviewSpec, Concerns, "abc1234", Body{Findings: []Finding{
+		{Severity: "major", Title: "Waived one", Blocking: &no, Detail: "Pre-existing."},
+		{Severity: "minor", Title: "Forced one", Blocking: &yes},
+		{Severity: "major", Title: "Plain one", Blocking: &yes},
+	}}, recAt)
+	got := RenderReport(r, nil)
+	for _, want := range []string{
+		"**Waived one** (deferred, overrides major default)",
+		"**Forced one** (blocking, overrides minor default)",
+		"**Plain one** (blocking)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("report lacks %q:\n%s", want, got)
+		}
+	}
+}

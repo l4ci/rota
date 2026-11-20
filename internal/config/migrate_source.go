@@ -47,8 +47,8 @@ type SourceMigration struct {
 // Running it on its own output changes nothing.
 func MigrateSource(cfg *jsonx.Object, detect func() string) (*jsonx.Object, SourceMigration) {
 	var m SourceMigration
-	_, hasBackend := lookupPresent(cfg, []string{"backlog", "backend"})
-	_, hasProvider := lookupPresent(cfg, []string{"issues", "provider"})
+	_, hasBackend := Lookup(cfg, "backlog.backend")
+	_, hasProvider := Lookup(cfg, "issues.provider")
 	if !hasBackend && !hasProvider {
 		return cfg, m
 	}
@@ -90,7 +90,7 @@ func MigrateSource(cfg *jsonx.Object, detect func() string) (*jsonx.Object, Sour
 	}
 	for _, k := range LegacyKeys {
 		segs := strings.Split(k, ".")
-		if _, ok := lookupPresent(cfg, segs); !ok {
+		if _, ok := Lookup(cfg, k); !ok {
 			continue
 		}
 		parent, _ := getObject(cfg, segs[0])

@@ -208,6 +208,7 @@ All top-level fields are optional:
     patch is a unified diff for a small mechanical fix.
     line: optional integer >= 1 or omitted when unknown (never zero).
     blocking: optional boolean; blocker/major default to true, minor/info default to false.
+      An explicit value overrides the default; detail must say why.
   items: array of objects; id and verdict are required.
     id: non-empty string. verdict: PASS, CONCERNS or FAIL.
   declined: array of objects; title is required (non-empty string).
@@ -324,6 +325,10 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			why := fmt.Sprintf("recorded %s %s; combined with review-spec %s at the same commit: worse verdict wins", r.Kind, r.Verdict, r.Combined)
 			d.Set("combinedWhy", why)
 			text += " (" + why + ")"
+		}
+		if overrides := blockingOverrides(r.Findings); len(overrides.data) > 0 {
+			d.Set("overrides", overrides.data)
+			text += " (blocking overrides severity default: " + strings.Join(overrides.names, "; ") + ")"
 		}
 		if clearErr != nil {
 			// The record is written; a stale count only makes the next malformed
@@ -469,8 +474,12 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	list := lookupVerdicts(c, t)
 	records := []any{}
 	var lines []string
+	var overrides overrideList
 	for _, r := range verdict.LatestBranchRecords(list) {
 		o := r.Object()
+		ov := blockingOverrides(r.Findings)
+		overrides.data = append(overrides.data, ov.data...)
+		overrides.names = append(overrides.names, ov.names...)
 		o.Set("stale", !verdict.AtHead(r, t.head))
 		records = append(records, o)
 		line := r.Kind + " " + r.Verdict + " @ " + r.Sha
@@ -478,6 +487,9 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 			line += " (" + who + ")"
 		}
 		lines = append(lines, line)
+		for _, n := range ov.names {
+			lines = append(lines, "  override: "+n)
+		}
 	}
 	d := jsonx.NewObject()
 	d.Set("branch", t.branch)
@@ -486,6 +498,9 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	}
 	d.Set("head", t.head)
 	d.Set("records", records)
+	if len(overrides.data) > 0 {
+		d.Set("overrides", overrides.data)
+	}
 	return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 }
 
@@ -810,4 +825,27 @@ func workFixReset(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", cleared > 0)
 		return Result{Data: d, Text: "reset " + key + " (" + strconv.Itoa(cleared) + " cleared)"}, nil
 	}
+}
+
+type overrideList struct {
+	data  []any
+	names []string
+}
+
+// blockingOverrides lists the findings whose explicit blocking flag departs
+// from their severity default, so the add output names each one.
+func blockingOverrides(list []verdict.Finding) overrideList {
+	var o overrideList
+	for _, f := range list {
+		if !f.Overrides() {
+			continue
+		}
+		e := jsonx.NewObject()
+		e.Set("title", f.Title)
+		e.Set("severity", f.Severity)
+		e.Set("blocking", f.IsBlocking())
+		o.data = append(o.data, e)
+		o.names = append(o.names, fmt.Sprintf("%s [%s, blocking=%t]", f.Title, f.Severity, f.IsBlocking()))
+	}
+	return o
 }

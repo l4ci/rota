@@ -85,11 +85,11 @@ func MigrateRoundKeys(doc *jsonx.Object) (*jsonx.Object, []Rename, []Conflict) {
 	var moved []Rename
 	var conflicts []Conflict
 	for _, r := range RoundKeyRenames {
-		ov, ok := lookupPresent(doc, strings.Split(r.Old, "."))
+		ov, ok := Lookup(doc, r.Old)
 		if !ok {
 			continue
 		}
-		if nv, set := lookupPresent(doc, strings.Split(r.New, ".")); set && !sameJSON(ov, nv) {
+		if nv, set := Lookup(doc, r.New); set && !sameJSON(ov, nv) {
 			conflicts = append(conflicts, Conflict{Old: r.Old, New: r.New, OldValue: ov, NewValue: nv})
 			continue
 		}
@@ -100,8 +100,8 @@ func MigrateRoundKeys(doc *jsonx.Object) (*jsonx.Object, []Rename, []Conflict) {
 	}
 	for _, r := range moved {
 		segs := strings.Split(r.Old, ".")
-		ov, _ := lookupPresent(doc, segs)
-		if _, set := lookupPresent(doc, strings.Split(r.New, ".")); !set {
+		ov, _ := Lookup(doc, r.Old)
+		if _, set := Lookup(doc, r.New); !set {
 			doc = fillKey(doc, "", strings.Split(r.New, "."), ov)
 		}
 		work, _ := getObject(doc, segs[0])

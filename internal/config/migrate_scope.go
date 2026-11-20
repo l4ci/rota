@@ -68,7 +68,7 @@ func migrateScopePlan(env cfgdir.Env, project, localFile *migrationFile, keep []
 	if out, _, c := migrateMergesDoc(cfg, below); len(c) == 0 {
 		cfg = out
 	}
-	if h, _ := lookupPresent(cfg, []string{"round", "harnesses"}); len(asList(h)) > 0 {
+	if h, _ := Lookup(cfg, "round.harnesses"); len(asList(h)) > 0 {
 		below = asList(h)
 	}
 	l := layers{global: global, project: cloneObject(cfg)}
