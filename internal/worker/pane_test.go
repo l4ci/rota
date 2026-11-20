@@ -632,3 +632,31 @@ func TestClassifyPermissionQuotedInReplyIsNotNeedsPermission(t *testing.T) {
 		t.Errorf("a real dialog under a reply: %s", st)
 	}
 }
+
+// A logged-out slot gets its own harness's remedy, supplied by the adapter, not
+// the shared classifier (#3977). Every kind that detects a logged-out pane
+// needs a sample here and advice in its PaneVocab.
+func TestClassifyLoggedOutPrintsTheKindsOwnAdvice(t *testing.T) {
+	samples := map[string]string{"claude": "Login expired · Please run /login\n"}
+	for _, kind := range harness.Kinds() {
+		v := harness.ResolvePane(kind).PaneVocab()
+		if v.LoggedOut == "" {
+			continue
+		}
+		pane, ok := samples[kind]
+		if !ok {
+			t.Errorf("%s sets PaneVocab.LoggedOut: add a sample pane", kind)
+			continue
+		}
+		st, ev := ClassifyFor(kind, pane, false, 0, "")
+		if st != StateBlocked {
+			t.Errorf("%s: state %q, want blocked", kind, st)
+		}
+		if v.LoggedOutAdvice == "" || !strings.HasSuffix(ev, v.LoggedOutAdvice) {
+			t.Errorf("%s: evidence %q does not end with its advice %q", kind, ev, v.LoggedOutAdvice)
+		}
+		if kind != harness.Claude && strings.Contains(ev, "CLAUDE_CONFIG_DIR") {
+			t.Errorf("%s: evidence names Claude's env: %q", kind, ev)
+		}
+	}
+}

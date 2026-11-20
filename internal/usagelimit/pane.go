@@ -269,6 +269,7 @@ type Rules struct {
 	Retry, Busy, Waiting, Background, Limits []*regexp.Regexp
 	AuthDead, BadModel                       *regexp.Regexp
 	LoggedOut                                *regexp.Regexp
+	LoggedOutAdvice                          string
 	Gutter                                   bool
 }
 
@@ -301,6 +302,7 @@ func RulesFor(kind string) *Rules {
 		}
 		if v.LoggedOut != "" {
 			r.LoggedOut = regexp.MustCompile(`(?i)` + v.LoggedOut)
+			r.LoggedOutAdvice = v.LoggedOutAdvice
 		}
 		if v.BadModel != "" {
 			r.BadModel = regexp.MustCompile(v.BadModel)

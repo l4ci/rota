@@ -234,7 +234,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	if rules.LoggedOut != nil {
 		if m := rules.LoggedOut.FindString(dialog); m != "" {
-			return StateBlocked, "slot is logged out (\"" + strings.TrimSpace(m) + "\"): its account has no login — set round.accounts with this configDir in .rota/config.local.json, or run rota under the logged-in CLAUDE_CONFIG_DIR"
+			return StateBlocked, "slot is logged out (\"" + strings.TrimSpace(m) + "\"): " + rules.LoggedOutAdvice
 		}
 	}
 	// A dialog for a tier model the provider does not list: the TUI falls back
