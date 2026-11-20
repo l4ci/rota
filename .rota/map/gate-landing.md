@@ -49,5 +49,5 @@ Go, stdlib only. Git and forge access through injected ports (`land.Git`, `ship.
 - SECTION_LIST=test/sections/77_manual_gates.sh bash test/runner.sh (also 08_ship, 35_undo, 14_release, 96_release_order, 104_gate_stale_merge, 107_gate_lock, 131_gate_closes, 172_round_freeze)
 
 ## Concerns
-- ship (about 1640 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
+- ship (about 860 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
 - overlap.Shared and pathglob.Match both answer "entry vs file" with different `**` semantics, chosen by `pathglob.Flavour`.
