@@ -111,6 +111,14 @@ func End(lines []string, i int) int {
 	return end
 }
 
+// EndOffset is End in byte offsets: the offset just past the bullet starting at
+// text[a], its newline included when it has one. It reads through End, so the
+// line and offset forms cannot drift apart.
+func EndOffset(text string, a int) int {
+	lines := strings.Split(text[a:], "\n")
+	return a + LineStart(lines, End(lines, 0))
+}
+
 // stampTail is the final "<!-- … -->" comment of a bullet's first line.
 var stampTail = regexp.MustCompile(`\s*<!--[^>]*-->\s*$`)
 

@@ -6,9 +6,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/stamp"
 )
+
+// RecallTTL is how long an untouched recall receipt lives. It is longer than
+// StateTTL: a session may stay open past the statusline reading's expiry and
+// must not be told the same entry twice. The state sweep removes receipts
+// older than this together with their lock sidecars.
+const RecallTTL = 7 * 24 * time.Hour
+
+// recallDirName is the subdirectory of the session dir that holds receipts.
+const recallDirName = "recall"
+
+// recallReceipt is <session dir>/recall/<session_id>.json: the entries already
+// injected into one session. It is separate from State, which is statusline-only.
+type recallReceipt struct {
+	SessionID       string          `json:"sessionId"`
+	UpdatedAt       string          `json:"updatedAt"`
+	RecalledEntries map[string]bool `json:"recalledEntries,omitempty"`
+}
 
 // RecallRequest supplies the process reads needed for Edit/Write recall.
 // Entries queries the project at cwd for an absolute file path.
@@ -53,14 +71,13 @@ func Recall(commonDir, sessionID string, entries []knowledge.PathEntry, now time
 	if err != nil {
 		return ""
 	}
-	// Recall receipts outlive expiring statusline readings: a session may
-	// remain open after StateTTL. The normal session sweep ignores this dir.
-	p = filepath.Join(filepath.Dir(p), "recall", filepath.Base(p))
+	p = filepath.Join(filepath.Dir(p), recallDirName, filepath.Base(p))
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return ""
 	}
 	var fresh []string
-	err = UpdateState(p, func(st State, _ bool) State {
+	err = fsio.Locked(p, lockWait, func() error {
+		st, _, _ := fsio.ReadJSON[recallReceipt](p)
 		if st.RecalledEntries == nil {
 			st.RecalledEntries = map[string]bool{}
 		}
@@ -72,7 +89,7 @@ func Recall(commonDir, sessionID string, entries []knowledge.PathEntry, now time
 		}
 		st.SessionID = sessionID
 		st.UpdatedAt = stamp.Format(now)
-		return st
+		return fsio.WriteJSONAtomic(p, st)
 	})
 	if err != nil || len(fresh) == 0 {
 		return ""

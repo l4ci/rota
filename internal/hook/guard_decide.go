@@ -49,11 +49,13 @@ func DecideGuard(r GuardRequest) string {
 			return r.Git(dir, "rev-parse", "--show-toplevel")
 		},
 		Upstream: func(dir string) (string, error) {
-			up, err := r.Git(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+			// for-each-ref prints nothing and exits 0 for a branch with no
+			// upstream, so a non-zero exit is a real read failure, not "none".
+			ref, err := r.Git(dir, "symbolic-ref", "--quiet", "HEAD")
 			if err != nil {
-				return "", nil // no upstream is not an error
+				return "", err
 			}
-			return up, nil
+			return r.Git(dir, "for-each-ref", "--format=%(upstream:short)", ref)
 		},
 	})
 }

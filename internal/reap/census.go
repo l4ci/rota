@@ -20,9 +20,10 @@ type Count struct {
 
 // Census is the read-only tally doctor reports of what a run left behind.
 type Census struct {
-	LeakedTemp Count // smoke, gate and review dirs in the system temp dir
-	StaleTmp   Count // project temp root entries `rota reap --kind tmp` lists
-	Prunable   Count // .worktrees/ checkouts git marks prunable
+	LeakedTemp Count    // smoke, gate and review dirs in the system temp dir
+	StaleTmp   Count    // project temp root entries reap lists and does not hold
+	Prunable   Count    // .worktrees/ checkouts git marks prunable
+	Warnings   []string // what reap warns while listing tmp, so doctor can show it
 }
 
 // CensusInput names where to count. Root "" skips the worktree class and an
@@ -30,9 +31,11 @@ type Census struct {
 type CensusInput struct {
 	Root       string
 	SystemTemp string
-	TempRoot   string
-	Git        git.Runner
-	Now        time.Time
+	// Tmp is reap's own input; the tmp class is the candidates `rota reap
+	// --kind tmp` lists that are not held. Nil skips the class.
+	Tmp *Input
+	Git git.Runner
+	Now time.Time
 }
 
 // leakedPrefixes are the system temp dirs a smoke run, a gate run and a
@@ -43,13 +46,32 @@ var leakedPrefixes = []string{"rota-smoke.", "rota-gate-", ReviewWorkspacePrefix
 func TakeCensus(ctx context.Context, in CensusInput) Census {
 	var c Census
 	c.LeakedTemp = leakedTemp(in.SystemTemp, in.Now.Add(-LeftoverAge))
-	if in.TempRoot != "" {
-		c.StaleTmp.N, c.StaleTmp.Size = StaleTmp(in.TempRoot, in.Now)
+	if in.Tmp != nil && in.Tmp.TempRoot != "" {
+		c.StaleTmp, c.Warnings = reclaimableTmp(ctx, *in.Tmp)
 	}
 	if in.Root != "" {
 		c.Prunable.N = prunable(ctx, in.Git, in.Root)
 	}
 	return c
+}
+
+// reclaimableTmp counts the tmp candidates reap lists that its held rules
+// leave free to delete: what `rota reap --kind tmp --apply` would remove.
+// Anything reap warns about (or a Find that fails) comes back as a warning.
+func reclaimableTmp(ctx context.Context, in Input) (c Count, warnings []string) {
+	res, err := Find(ctx, in, []string{KindTmp})
+	if err != nil {
+		return c, []string{"temp root not checked: " + err.Error()}
+	}
+	for _, cd := range res.Candidates {
+		if cd.Held != "" {
+			continue
+		}
+		c.N++
+		size, _, _, _ := entryStat(cd.Path)
+		c.Size += size
+	}
+	return c, res.Warnings
 }
 
 // leakedTemp counts the leakedPrefixes dirs in dir last modified before
