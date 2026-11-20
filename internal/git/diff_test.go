@@ -14,7 +14,7 @@ import (
 
 func branchWithChanges(t *testing.T) string {
 	t.Helper()
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
 	writeFile(t, dir, "b.txt", "1\n2\n3\n")
 	gittest.Run(t, dir, "add", "b.txt")
@@ -50,7 +50,7 @@ func TestChangedPathsAndLines(t *testing.T) {
 // ChangedPaths returns byte-exact repository paths: no display quoting, no
 // trimming, whatever core.quotePath says. The names feed path matching.
 func TestChangedPathsExactNames(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	ctx := context.Background()
 	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
 	names := []string{
@@ -120,7 +120,7 @@ func TestCountLinesSkipsBinary(t *testing.T) {
 }
 
 func TestRemoteBase(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	ctx := context.Background()
 	if got := RemoteBase(ctx, Exec, dir, "main"); got != "main" {
 		t.Fatalf("no remote: got %q", got)
@@ -138,7 +138,7 @@ func TestRemoteBase(t *testing.T) {
 }
 
 func TestExitErrorCarriesStderr(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	_, err := ChangedPaths(context.Background(), Exec, dir, "nope...main")
 	var ee *ExitError
 	if !errors.As(err, &ee) || ee.ExitCode == 0 || !strings.Contains(ee.Stderr, "nope") {
@@ -151,7 +151,7 @@ func TestExitErrorCarriesStderr(t *testing.T) {
 }
 
 func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	ctx := context.Background()
 	repo := Repo{Dir: dir}
 	if p, err := ChangedPaths(ctx, Exec, dir, "main...main"); err != nil || len(p) != 0 {
@@ -161,7 +161,7 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 		t.Fatalf("empty lines: %d, %v", n, err)
 	}
 	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
-	gittest.Run(t, dir, "mv", "a.txt", "renamed.txt")
+	gittest.Run(t, dir, "mv", "seed", "renamed.txt")
 	gittest.Write(t, dir, "img.bin", "a\x00b\x00\x01")
 	gittest.Run(t, dir, "add", "-A")
 	gittest.Run(t, dir, "commit", "-q", "-m", "rename and binary")
@@ -180,7 +180,7 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 }
 
 func TestRemoteBaseSpellings(t *testing.T) {
-	dir := newRepo(t)
+	dir := gittest.NewRepo(t, "main")
 	ctx := context.Background()
 	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/release/1.x", "HEAD")
 	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")

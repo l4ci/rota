@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func TestNodeModulesPointerSymlinkIntoWorktree(t *testing.T) {
@@ -65,7 +67,7 @@ func TestNodeModulesPointerNoNodeModules(t *testing.T) {
 }
 
 func TestPoolReapKeepsTheSlotWhenNodeModulesPointsIn(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	w2 := filepath.Join(b, ".worktrees", "w2")
 	os.MkdirAll(filepath.Join(b, "node_modules"), 0o755)

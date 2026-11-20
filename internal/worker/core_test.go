@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
 func TestCorePoolStartsWithoutInventedTerminalHandle(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,7 @@ func TestCoreDispatchPreservesUncertainDelivery(t *testing.T) {
 // Core's Send ran, then the outcome record could not be saved: delivery is
 // unknown, so dispatch reports the error text (exit 5), never "never picked up".
 func TestCoreOutcomeSaveFailureIsUncertainThroughDispatch(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &fakeHost{receipts: true, name: host.HerdrCore}
 	h.onSend = func() {
@@ -46,7 +47,7 @@ func TestCoreOutcomeSaveFailureIsUncertainThroughDispatch(t *testing.T) {
 }
 
 func TestCoreTaskRetryKeepsOriginalSession(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrDeliveryUnknown}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
@@ -73,7 +74,7 @@ func TestCoreTaskRetryKeepsOriginalSession(t *testing.T) {
 }
 
 func TestCoreDefiniteRetryClearsUnsentAndLogsRelay(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrNotSubmitted}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
@@ -106,7 +107,7 @@ func TestCoreDefiniteRetryClearsUnsentAndLogsRelay(t *testing.T) {
 // #2640: a later message reconciles the unresolved one through the host first,
 // so a pickup the host can now prove frees the slot; until then it refuses.
 func TestCoreNewMessageReconcilesUnresolvedDelivery(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr-core"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr-core"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &fakeHost{receipts: true, name: host.HerdrCore, sendErr: host.ErrSubmitted}
 	rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}

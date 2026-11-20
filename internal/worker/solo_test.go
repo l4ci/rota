@@ -2,11 +2,11 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/host"
 )
 
 // recordHost marks the project's registry as a round on the given host.
@@ -37,7 +37,7 @@ func soloEnv(t *testing.T) Env {
 
 func soloProject(t *testing.T) string {
 	t.Helper()
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	recordHost(t, dir, "solo")
 	return dir
@@ -77,7 +77,7 @@ func TestPaneVerbsRefuseUnderSolo(t *testing.T) {
 }
 
 func TestSoloRefusalIsNilWithoutASoloHost(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	for _, h := range []host.Kind{"", host.Tmux, host.Herdr} {
 		if h != "" {
@@ -103,7 +103,7 @@ func TestRecordedHostOverridesWorkDispatchAndNoneKeepsIt(t *testing.T) {
 		got = append(got, d)
 		return tmuxFake()
 	}
-	dir := newProject(t, `{"round":{"dispatch":"tmux"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"tmux"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e.SessionCheck(bg, dir)
 	recordHost(t, dir, "herdr")
@@ -169,7 +169,7 @@ func TestWaitCarriesTheOutcomeEvidence(t *testing.T) {
 }
 
 func TestIsSoloReadsTheRecordedHost(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	if IsSolo(dir) {
 		t.Error("no registry must not read as solo")
 	}

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"testing"
 )
@@ -16,7 +17,7 @@ func (h *movedHost) CurrentHandle(context.Context, string, string) string    { r
 func (h *movedHost) FollowTab(context.Context, string, string, string) error { return nil }
 
 func TestRelayReportsTheTabItWasDeliveredTo(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := &movedHost{tmuxFake(), ""}
 	e := envWith(h)

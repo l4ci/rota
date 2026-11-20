@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/proc"
@@ -26,7 +27,7 @@ func (h *orcaReapHost) Kill(context.Context, string, string) error { h.killed = 
 func TestOrcaPoolReapProvesSessionGoneBeforeRemovingWorktree(t *testing.T) {
 	for _, fail := range []bool{true, false} {
 		t.Run(map[bool]string{true: "survivor", false: "closed"}[fail], func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"orca"}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"orca"}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			UpdateSlot(dir, "w1", func(s *Slot) { s.SetHandle("orca:recorded") })
 			h := &orcaReapHost{fakeHost: &fakeHost{name: host.Kind("orca")}}
@@ -57,7 +58,7 @@ func TestOrcaPoolReapProvesSessionGoneBeforeRemovingWorktree(t *testing.T) {
 }
 
 func TestOrcaPoolStartsWithoutInventedTerminalHandle(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"orca"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"orca"}}`)
 	if _, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func TestOrcaPoolStartsWithoutInventedTerminalHandle(t *testing.T) {
 func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 	for _, kind := range []string{harness.Claude, harness.Codex} {
 		t.Run(kind, func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			command, sent, cwd := "", "", ""
 			screen := "model: gpt-test\n› "
@@ -185,7 +186,7 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 func TestDispatchPreservesMaybeSubmittedEvidence(t *testing.T) {
 	for _, kind := range []host.Kind{host.Orca, host.Tmux} {
 		for _, detail := range []string{"prompt already submitted: branch changed from ben/2203 to auto-name; disable autoRenameBranchFromWork", "brief has 122881 bytes; limit is 122880 bytes"} {
-			dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			h := &fakeHost{name: kind, sendErr: fmt.Errorf("%w: %s", host.ErrMaybeSubmitted, detail)}
 			_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
@@ -199,7 +200,7 @@ func TestDispatchPreservesMaybeSubmittedEvidence(t *testing.T) {
 // A not-submitted send is safe to resend on any host kind: a retry exit.
 func TestDispatchNotSubmittedIsRetryOnEveryKind(t *testing.T) {
 	for _, kind := range []host.Kind{host.Orca, host.Tmux} {
-		dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
+		dir := gittest.Project(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 		h := &fakeHost{name: kind, sendErr: fmt.Errorf("%w: cannot read brief", host.ErrNotSubmitted)}
 		_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
@@ -227,7 +228,7 @@ func seedOrcaAdapterPID(t *testing.T, ctx context.Context, cwd string) error {
 func TestOrcaPoolReapThroughAdapterAfterAgentExit(t *testing.T) {
 	for _, survivor := range []bool{false, true} {
 		t.Run(map[bool]string{false: "all-gone", true: "orphan-child"}[survivor], func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"orca"}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"orca"}}`)
 			if _, e := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); e != nil {
 				t.Fatal(e)
 			}

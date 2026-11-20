@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 )
@@ -53,7 +54,7 @@ func (r *opencodeRig) env(h host.Host) Env {
 
 func opencodeProject(t *testing.T, cfg string) string {
 	t.Helper()
-	dir := newProject(t, cfg)
+	dir := gittest.Project(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	return dir
 }

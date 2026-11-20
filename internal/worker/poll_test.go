@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/harness"
 	"time"
 )
 
 func pollRegistry(t *testing.T, kind host.Kind) (string, *fakeHost) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := &fakeHost{name: kind, inSession: true, panes: map[string][]string{}, status: map[string]string{}}
 	return dir, f
@@ -162,7 +163,7 @@ func TestPollNotifiesOnTheTransitionOnly(t *testing.T) {
 }
 
 func TestPollHostFailureAndNoRegistry(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	f := tmuxFake()
 	res, err := envWith(f).Poll(bg, dir, PollOpts{})
 	if err != nil || len(res.Slots) != 0 || res.Changed {

@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // DispatchTask is a task dispatch whatever o.Relay says: the entry point, not
 // a flag, picks the pipeline.
 func TestDispatchTaskIgnoresRelayFlag(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	res, err := envWith(tmuxFake()).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", Relay: true})
 	if err != nil {
@@ -22,7 +23,7 @@ func TestDispatchTaskIgnoresRelayFlag(t *testing.T) {
 
 // DispatchRelay needs a running session and nothing else of the task pipeline.
 func TestDispatchRelayNeedsSession(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	_, err := envWith(tmuxFake()).DispatchRelay(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "use 1\n")})
 	if exitOf(err) != exitcode.ExitResolution {
