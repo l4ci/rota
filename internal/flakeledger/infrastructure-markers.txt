@@ -16,3 +16,11 @@ fork/exec
 connection refused
 network is unreachable
 i/o timeout
+ECONNREFUSED
+ERR_CONNECTION_REFUSED
+ETIMEDOUT
+Test timeout of
+error during build
+Build failed with
+Failed to resolve import
+Cannot find module

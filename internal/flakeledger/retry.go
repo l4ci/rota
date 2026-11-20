@@ -21,18 +21,17 @@ var infrastructureMarkers string
 var retryInfrastructure = regexp.MustCompile(`(?im)` + strings.ReplaceAll(strings.TrimSpace(infrastructureMarkers), "\n", "|"))
 
 // RetryEligible reports whether a red check may be rerun once: exit 1, a
-// named assertion failure, not excused by the test ledger (excused) and no
+// named assertion failure (go test, Playwright, Vitest or node --test output), not excused by the test ledger (excused) and no
 // infrastructure signature. It returns the failing tests the entry names. The
 // clean-tree and cancellation checks need the environment and stay with the caller.
 func RetryEligible(exitCode int, output string, excused bool) (tests []string, ok bool) {
 	if exitCode != 1 || excused || retryInfrastructure.MatchString(output) {
 		return nil, false
 	}
-	tests, assertion := gotestout.FailingTests(output)
-	if !assertion {
-		return nil, false
+	if tests, assertion := gotestout.FailingTests(output); assertion {
+		return tests, true
 	}
-	return tests, true
+	return gotestout.JSFailures(output)
 }
 
 // NewEntry builds the recovery record shared by the wrapper retry and the
