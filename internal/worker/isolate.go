@@ -41,7 +41,7 @@ func IsolatedEnviron(environ []string, root string) ([]string, error) {
 	var out []string
 	for _, kv := range environ {
 		k, _, _ := strings.Cut(kv, "=")
-		if drop[k] || hostenv.Is(k) {
+		if drop[k] || hostenv.Drop(k) {
 			continue
 		}
 		out = append(out, kv)
