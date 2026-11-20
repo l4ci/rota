@@ -3,7 +3,6 @@ package knowledge
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -16,7 +15,7 @@ import (
 var pathsField = regexp.MustCompile(`<!-- paths: (.*?) -->`)
 
 // PathField encodes optional path scope without changing the dated bullet
-// format. Patterns use slash-separated path.Match syntax; ** spans directories.
+// format. Patterns follow pathglob.Valid: slash-separated path.Match segments, ** as a whole segment spans directories.
 func PathField(patterns []string) (string, error) {
 	if len(patterns) == 0 {
 		return "", nil
@@ -30,7 +29,7 @@ func PathField(patterns []string) (string, error) {
 				return "", fmt.Errorf("path glob cannot leave its root: %q", p)
 			}
 		}
-		if _, err := path.Match(p, ""); err != nil {
+		if err := pathglob.Valid(p); err != nil {
 			return "", fmt.Errorf("invalid path glob %q: %w", p, err)
 		}
 	}
