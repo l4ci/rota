@@ -54,8 +54,8 @@ func runMain(m *testing.M) int {
 	repoDir = filepath.Clean(filepath.Join(wd, "..", ".."))
 	fakes := filepath.Join(repoDir, "test", "fakes")
 	os.Setenv("PATH", fakes+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if gh, err := exec.LookPath("gh"); err != nil || !strings.HasPrefix(gh, fakes+string(os.PathSeparator)) {
-		fmt.Fprintf(os.Stderr, "gh does not resolve into %s (got %q, %v); refusing to run\n", fakes, gh, err)
+	if err := checkFakesFirst(); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error()+"; refusing to run")
 		return 1
 	}
 	pinDay()
@@ -102,14 +102,22 @@ func runMain(m *testing.M) int {
 	return m.Run()
 }
 
-// TestFakesFirst is the guard: tests must never reach the real gh or glab.
-func TestFakesFirst(t *testing.T) {
+// checkFakesFirst is the guard: gh and glab must resolve into test/fakes, so
+// tests never reach the real forge CLIs.
+func checkFakesFirst() error {
 	fakes := filepath.Join(repoDir, "test", "fakes") + string(os.PathSeparator)
 	for _, tool := range []string{"gh", "glab"} {
 		p, err := exec.LookPath(tool)
 		if err != nil || !strings.HasPrefix(p, fakes) {
-			t.Fatalf("%s resolves to %q (%v), not test/fakes", tool, p, err)
+			return fmt.Errorf("%s resolves to %q (%v), not test/fakes", tool, p, err)
 		}
+	}
+	return nil
+}
+
+func TestFakesFirst(t *testing.T) {
+	if err := checkFakesFirst(); err != nil {
+		t.Fatal(err)
 	}
 }
 
