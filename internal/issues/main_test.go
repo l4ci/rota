@@ -3,32 +3,24 @@ package issues
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/l4ci/rota/internal/testiso"
 )
 
 // TestMain puts tripwire gh and glab first on PATH: every test injects its
 // executor, so any real forge CLI call fails the run.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "issues-tripwire")
+	tw, err := testiso.NewTripwire("issues-tripwire", "gh", "glab")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	hit := filepath.Join(dir, "hit")
-	for _, cli := range []string{"gh", "glab"} {
-		script := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> '%s'\nexit 99\n", hit)
-		if err := os.WriteFile(filepath.Join(dir, cli), []byte(script), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	code := m.Run()
-	if b, err := os.ReadFile(hit); err == nil {
-		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", b)
+	if hit := tw.Check(); hit != "" {
+		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", hit)
 		code = 1
 	}
-	os.RemoveAll(dir)
+	tw.Close()
 	os.Exit(code)
 }

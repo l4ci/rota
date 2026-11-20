@@ -7,7 +7,7 @@ package main
 // frozen record in testdata/frozen (keyed by scenario name).
 //
 // Safety: the shared TestMain refuses to run unless gh resolves to test/fakes
-// (TestIssueFakesFirst checks glab too); every run has its own
+// (TestFakesFirst checks glab too); every run has its own
 // FAKE_TRACKER_DB under t.TempDir.
 //
 // Behaviour rationale worth keeping:
@@ -217,15 +217,6 @@ func (s isc) exec(t *testing.T) {
 		s.check(t, e, db)
 	}
 	frozenCheck(t, frozenRec{Steps: []frozenStep{st}})
-}
-
-func TestIssueFakesFirst(t *testing.T) {
-	for _, tool := range []string{"gh", "glab"} {
-		p, err := exec.LookPath(tool)
-		if err != nil || !strings.HasPrefix(p, filepath.Join(repoDir, "test", "fakes")+string(os.PathSeparator)) {
-			t.Fatalf("%s resolves to %q (%v), not test/fakes", tool, p, err)
-		}
-	}
 }
 
 func suiteItemIssue(t *testing.T) {

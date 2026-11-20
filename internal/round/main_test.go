@@ -6,9 +6,9 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/testiso"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -16,27 +16,18 @@ import (
 // inside herdr and a codex worker's preflight looks codex up on PATH: any test
 // that reaches a real binary fails the whole run instead of running it.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "round-tripwire")
+	tw, err := testiso.NewTripwire("round-tripwire", "codex", "herdr", "tmux")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	hit := filepath.Join(dir, "hit")
-	for _, name := range []string{"codex", "herdr", "tmux"} {
-		script := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> '%s'\nexit 99\n", hit)
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
 	gittest.SetIdentity() // the code under test commits and merges as the process
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	code := m.Run()
-	if b, err := os.ReadFile(hit); err == nil {
-		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a host or codex binary from PATH:\n%s", b)
+	if hit := tw.Check(); hit != "" {
+		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a host or codex binary from PATH:\n%s", hit)
 		code = 1
 	}
-	os.RemoveAll(dir)
+	tw.Close()
 	os.Exit(code)
 }
 
