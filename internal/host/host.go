@@ -4,7 +4,7 @@
 // SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents.
 // Nothing here execs a binary directly:
 // every command goes through Deps.Run, which tests replace with a fake. The
-// default runner (ExecRunner) is the only place that reaches os/exec.
+// default runner (proc.Run) is the only place that reaches os/exec.
 package host
 
 import (
@@ -66,24 +66,19 @@ func (k Kind) Binary() string {
 // Result is what a finished command left behind.
 type Result = proc.Result
 
-// Runner runs a command. A command that ran and exited non-zero is a Result
-// with ExitCode set and a nil error; err means it could not run at all
-// (missing binary).
-type Runner func(ctx context.Context, name string, args []string) (Result, error)
-
 // CallTimeout bounds one host command. The longest legitimate call is
 // `herdr agent start/wait` with a boot timeout, which is a minute by default.
 const CallTimeout = 10 * time.Minute
 
-// ExecRunner is the production Runner.
-func ExecRunner(ctx context.Context, name string, args []string) (Result, error) {
-	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Timeout: CallTimeout})
+// call runs name with args through Deps.Run, bounded by CallTimeout.
+func (d *Deps) call(ctx context.Context, name string, args []string) (Result, error) {
+	return d.Run(ctx, proc.Cmd{Name: name, Args: args, Timeout: CallTimeout})
 }
 
 // Deps is everything a host touches outside its own memory. Tests fill every
 // field with fakes; New fills the zero fields with production values.
 type Deps struct {
-	Run Runner
+	Run proc.Runner
 	// Git runs the git an adapter reads (Orca's worktree branch); nil is git.Exec.
 	Git    git.Runner
 	Getenv func(string) string
@@ -120,7 +115,7 @@ func (d *Deps) fill() {
 		d.Stderr = os.Stderr
 	}
 	if d.Run == nil {
-		d.Run = ExecRunner
+		d.Run = proc.Run
 	}
 	if d.Git == nil {
 		d.Git = git.Exec

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/round"
 	"io"
 	"os"
@@ -40,13 +41,13 @@ func TestRoundOverviewResponsive(t *testing.T) {
 	var once sync.Once
 	d := testDeps()
 	d.IsTerminal = func(any) bool { return true }
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
 		once.Do(func() { close(blocked) })
 		select {
 		case <-release:
-			return []byte("[]"), nil, 0, nil
+			return proc.Result{Stdout: "[]"}, nil
 		case <-ctx.Done():
-			return nil, nil, 1, ctx.Err()
+			return proc.Result{ExitCode: 1}, ctx.Err()
 		}
 	}, func(name string) (string, error) { return "/fake/" + name, nil })}
 	d.RunView = func(_ *Ctx, m tui.Model) error {
@@ -108,17 +109,17 @@ func TestRoundStatusReadsTheForgeOnce(t *testing.T) {
 	var mu sync.Mutex
 	var calls []string
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
 		mu.Lock()
-		calls = append(calls, name+" "+strings.Join(args, " "))
+		calls = append(calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
 		mu.Unlock()
 		switch {
-		case len(args) > 1 && args[0] == "issue" && args[1] == "list" && !strings.Contains(strings.Join(args, " "), "--label"):
-			return []byte(list), nil, 0, nil
-		case len(args) > 1 && args[0] == "issue" && args[1] == "view":
-			return []byte(issues[0]), nil, 0, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "list" && !strings.Contains(strings.Join(cmd.Args, " "), "--label"):
+			return proc.Result{Stdout: list}, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "view":
+			return proc.Result{Stdout: issues[0]}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 
 	if code, out, errOut := rotaInWith(t, deps, root, "--json", "round", "status"); code != 0 {

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // The fixtures in testdata/ are the retired M07 Python adapters recorded
@@ -64,20 +66,20 @@ func replay(t *testing.T, path string) {
 	var calls []recCall
 	var step string
 	var op string
-	x := func(_ context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+	x := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
 		if len(calls) == 0 {
-			t.Fatalf("%s: unexpected call %s %q", step, name, args)
+			t.Fatalf("%s: unexpected call %s %q", step, cmd.Name, cmd.Args)
 		}
 		c := calls[0]
 		calls = calls[1:]
 		want := divergeArgv(rec.Provider, op, c.Argv)
-		if name != c.Name || !reflect.DeepEqual(args, want) {
-			t.Fatalf("%s: call\n got %s %q\nwant %s %q", step, name, args, c.Name, want)
+		if cmd.Name != c.Name || !reflect.DeepEqual(cmd.Args, want) {
+			t.Fatalf("%s: call\n got %s %q\nwant %s %q", step, cmd.Name, cmd.Args, c.Name, want)
 		}
-		if string(stdin) != c.Stdin {
-			t.Fatalf("%s: stdin %q, want %q", step, stdin, c.Stdin)
+		if string(cmd.Stdin) != c.Stdin {
+			t.Fatalf("%s: stdin %q, want %q", step, cmd.Stdin, c.Stdin)
 		}
-		return []byte(c.Stdout), []byte(c.Stderr), c.Code, nil
+		return proc.Result{Stdout: c.Stdout, Stderr: c.Stderr, ExitCode: c.Code}, nil
 	}
 	found := func(string) (string, error) { return "/fake", nil }
 	ctx := context.Background()

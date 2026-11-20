@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 func TestPRCreateUsesExplicitHead(t *testing.T) {
@@ -50,16 +51,16 @@ type scriptedCall struct {
 // and fails the test on any call that is not next in the script.
 func scriptedAdapter(t *testing.T, provider string, calls ...scriptedCall) Adapter {
 	t.Helper()
-	x := func(_ context.Context, _, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+	x := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
 		if len(calls) == 0 {
-			t.Fatalf("unexpected call %s %q", name, args)
+			t.Fatalf("unexpected call %s %q", cmd.Name, cmd.Args)
 		}
 		c := calls[0]
 		calls = calls[1:]
-		if name != c.name || !reflect.DeepEqual(args, c.argv) || string(stdin) != c.stdin {
-			t.Fatalf("call\n got %s %q stdin %q\nwant %s %q stdin %q", name, args, stdin, c.name, c.argv, c.stdin)
+		if cmd.Name != c.name || !reflect.DeepEqual(cmd.Args, c.argv) || string(cmd.Stdin) != c.stdin {
+			t.Fatalf("call\n got %s %q stdin %q\nwant %s %q stdin %q", cmd.Name, cmd.Args, cmd.Stdin, c.name, c.argv, c.stdin)
 		}
-		return []byte(c.stdout), []byte(c.stderr), c.code, nil
+		return proc.Result{Stdout: c.stdout, Stderr: c.stderr, ExitCode: c.code}, nil
 	}
 	a, err := New(context.Background(), Settings{Provider: provider}, "", "",
 		WithExec(x, func(string) (string, error) { return "/fake", nil }))

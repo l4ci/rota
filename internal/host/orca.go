@@ -31,7 +31,7 @@ func (o *orca) Kind() Kind { return Orca }
 func (o *orca) Capabilities() Capabilities { return kindPolicy(Orca, CapabilitiesOf(o)) }
 
 func (o *orca) call(ctx context.Context, args ...string) (string, error) {
-	r, e := o.d.Run(ctx, "orca", args)
+	r, e := o.d.call(ctx, "orca", args)
 	if e != nil {
 		return "", e
 	}

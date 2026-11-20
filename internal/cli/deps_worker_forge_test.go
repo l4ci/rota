@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -13,9 +14,9 @@ import (
 func workerForge(t *testing.T, calls *[]string) *Deps {
 	t.Helper()
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		*calls = append(*calls, name+" "+strings.Join(args, " "))
-		return []byte(`{"headRefName":"dana/7-x","state":"OPEN","title":"t","mergeable":"UNKNOWN"}`), nil, 0, nil
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		*calls = append(*calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
+		return proc.Result{Stdout: `{"headRefName":"dana/7-x","state":"OPEN","title":"t","mergeable":"UNKNOWN"}`}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	if d.ReadCache == nil {
 		t.Fatal("testDeps has no ReadCache: the test would not prove the forge skips it")

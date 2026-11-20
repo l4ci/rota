@@ -19,11 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/remoteurl"
 )
 
-// Exec starts name with args in dir and returns its output and exit code.
-// A nil stdin gives the process an empty one. err is set only when the
-// process could not run at all, or ctx ended it.
-type Exec func(ctx context.Context, dir, name string, args []string, stdin []byte) (stdout, stderr []byte, code int, err error)
-
 // DefaultTimeout bounds one CLI attempt when CLI.Timeout is zero.
 const DefaultTimeout = 2 * time.Minute
 
@@ -45,7 +40,9 @@ type CLI struct {
 	RetryWait time.Duration
 	Timeout   time.Duration // per attempt; 0 is DefaultTimeout
 
-	Exec     Exec
+	// Exec starts the forge CLI; nil is proc.Run. A nil Stdin gives the process
+	// an empty one.
+	Exec     proc.Runner
 	LookPath func(string) (string, error)
 	Sleep    func(time.Duration)
 	// Git runs the git the adapter reads (origin, merge-base); nil is git.Exec.
@@ -75,11 +72,11 @@ func (c *CLI) git() git.Runner {
 	return git.Exec
 }
 
-func (c *CLI) exec() Exec {
+func (c *CLI) exec() proc.Runner {
 	if c.Exec != nil {
 		return c.Exec
 	}
-	return osExec
+	return proc.Run
 }
 
 func (c *CLI) lookPath(name string) (string, error) {
@@ -87,14 +84,6 @@ func (c *CLI) lookPath(name string) (string, error) {
 		return c.LookPath(name)
 	}
 	return exec.LookPath(name)
-}
-
-func osExec(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-	res, err := proc.Run(ctx, proc.Cmd{Name: name, Args: args, Dir: dir, Stdin: stdin})
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
 }
 
 // ForgeKind is who asks which forge a directory uses. It decides one case
@@ -340,10 +329,10 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 	attempt := func() (Result, error) {
 		actx, cancel := context.WithTimeout(ctx, c.timeout())
 		defer cancel()
-		out, errb, code, err := c.exec()(actx, c.Dir, cli, args, data)
+		res, err := c.exec()(actx, proc.Cmd{Name: cli, Args: args, Dir: c.Dir, Stdin: data})
 		switch {
 		case err == nil:
-			return Result{Stdout: out, Stderr: errb, ExitCode: code}, nil
+			return Result{Stdout: []byte(res.Stdout), Stderr: []byte(res.Stderr), ExitCode: res.ExitCode}, nil
 		case ctx.Err() != nil:
 			e := internal("%s: %v", cli, ctx.Err())
 			e.Cause = ctx.Err() // a signal: the dispatcher answers 130, not 70

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 var bg = context.Background()
@@ -438,8 +439,8 @@ func TestLayoutClassification(t *testing.T) {
 // The real herdr host turns the same calls into these exact commands.
 func TestSplitOverTheHerdrHost(t *testing.T) {
 	var calls []string
-	run := func(_ context.Context, name string, args []string) (host.Result, error) {
-		calls = append(calls, name+" "+strings.Join(args, " "))
+	run := func(_ context.Context, cmd proc.Cmd) (host.Result, error) {
+		calls = append(calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
 		return host.Result{}, nil
 	}
 	h := host.New("herdr", host.Deps{Run: run}).(host.Layouter)

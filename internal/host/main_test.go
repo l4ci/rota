@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/testiso"
 )
 
@@ -38,14 +39,14 @@ type fake struct {
 	handler func(name string, args []string) Result
 }
 
-func (f *fake) run(_ context.Context, name string, args []string) (Result, error) {
+func (f *fake) run(_ context.Context, cmd proc.Cmd) (Result, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
-	if name != "herdr" && name != "tmux" {
-		panic("unexpected command " + name)
+	f.calls = append(f.calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
+	if cmd.Name != "herdr" && cmd.Name != "tmux" {
+		panic("unexpected command " + cmd.Name)
 	}
-	return f.handler(name, args), nil
+	return f.handler(cmd.Name, cmd.Args), nil
 }
 
 func (f *fake) log() string { f.mu.Lock(); defer f.mu.Unlock(); return strings.Join(f.calls, "\n") }

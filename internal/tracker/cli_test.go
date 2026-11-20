@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // fakeCLI scripts forge CLI answers and logs every call, like the fake gh in
@@ -31,15 +32,15 @@ func (f *fakeCLI) cli(provider string) *CLI {
 	return &CLI{
 		Provider:  provider,
 		RetryWait: 7 * time.Second,
-		Exec: func(_ context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-			f.calls = append(f.calls, append([]string{name}, args...))
-			f.dirs = append(f.dirs, dir)
-			f.stdins = append(f.stdins, stdin)
+		Exec: func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+			f.calls = append(f.calls, append([]string{cmd.Name}, cmd.Args...))
+			f.dirs = append(f.dirs, cmd.Dir)
+			f.stdins = append(f.stdins, cmd.Stdin)
 			out, errs, code := "[]", "", 0
 			if f.answer != nil {
-				out, errs, code = f.answer(len(f.calls), args)
+				out, errs, code = f.answer(len(f.calls), cmd.Args)
 			}
-			return []byte(out), []byte(errs), code, nil
+			return proc.Result{Stdout: out, Stderr: errs, ExitCode: code}, nil
 		},
 		LookPath: func(string) (string, error) { return "/fake", nil },
 		Sleep:    func(d time.Duration) { f.slept = append(f.slept, d) },
@@ -428,8 +429,8 @@ func TestPagesConcatenates(t *testing.T) {
 func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	origin := func(url string, code int) Option {
 		return func(c *CLI) {
-			WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-				return nil, nil, 0, nil
+			WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{}, nil
 			}, func(string) (string, error) { return "/bin/x", nil })(c)
 			WithGit(func(context.Context, string, ...string) (git.Result, error) {
 				return git.Result{Stdout: url + "\n", ExitCode: code}, nil
@@ -497,9 +498,9 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 func TestForgeIssueTrackerReadsAssumedGitHubAndRefusesWrites(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		calls = append(calls, name+" "+strings.Join(args, " "))
-		return []byte("[]"), nil, 0, nil
+	x := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		calls = append(calls, cmd.Name+" "+strings.Join(cmd.Args, " "))
+		return proc.Result{Stdout: "[]"}, nil
 	}
 	it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }), WithGit(originGit("https://git.example.com/o/r.git")))
 	if err != nil || it.Provider() != "github" {
@@ -580,13 +581,13 @@ func TestRunDoesNotRetryAWriteOnContextFailure(t *testing.T) {
 func TestRunRetriesReadOnceOnAttemptTimeout(t *testing.T) {
 	calls := 0
 	c := &CLI{Provider: "github", Timeout: 20 * time.Millisecond, LookPath: func(string) (string, error) { return "/fake", nil },
-		Exec: func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+		Exec: func(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
 			calls++
 			if calls == 1 {
 				<-ctx.Done()
-				return nil, nil, 0, ctx.Err()
+				return proc.Result{}, ctx.Err()
 			}
-			return []byte("[]"), nil, 0, nil
+			return proc.Result{Stdout: "[]"}, nil
 		}}
 	if _, err := c.Run(context.Background(), []string{"issue", "list"}, nil); err != nil || calls != 2 {
 		t.Fatalf("err=%v calls=%d, want the timed-out read retried once", err, calls)
@@ -600,8 +601,8 @@ func TestRunKeepsCancelCause(t *testing.T) {
 	cancel()
 	f := &fakeCLI{}
 	c := f.cli("github")
-	c.Exec = func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
-		return nil, nil, 0, ctx.Err()
+	c.Exec = func(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
+		return proc.Result{}, ctx.Err()
 	}
 	_, err := c.Run(ctx, []string{"issue", "list"}, nil)
 	if !errors.Is(err, context.Canceled) {

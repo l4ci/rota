@@ -43,7 +43,7 @@ func (t *tmux) Require() error {
 func (t *tmux) InSession() bool { return t.d.Getenv("TMUX") != "" }
 
 func (t *tmux) Where() string {
-	r, err := t.d.Run(context.Background(), "tmux", []string{"display-message", "-p", "#{session_name}"})
+	r, err := t.d.call(context.Background(), "tmux", []string{"display-message", "-p", "#{session_name}"})
 	if err != nil || r.ExitCode != 0 || strings.TrimRight(r.Stdout, "\n") == "" {
 		return "?"
 	}
@@ -51,7 +51,7 @@ func (t *tmux) Where() string {
 }
 
 func (t *tmux) tmux(ctx context.Context, args ...string) Result {
-	r, err := t.d.Run(ctx, "tmux", args)
+	r, err := t.d.call(ctx, "tmux", args)
 	if err != nil {
 		return Result{ExitCode: 127, Stderr: err.Error()}
 	}

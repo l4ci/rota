@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/migrate"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -27,15 +28,15 @@ func issuesRepo(t *testing.T, origin string) string {
 func issuesForge(t *testing.T, deps *Deps, origin string, reply map[string]string) *[]string {
 	t.Helper()
 	var calls []string
-	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		line := strings.Join(args, " ")
-		calls = append(calls, name+" "+line)
+	exe := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		line := strings.Join(cmd.Args, " ")
+		calls = append(calls, cmd.Name+" "+line)
 		for p, out := range reply {
 			if strings.HasPrefix(line, p) {
-				return []byte(out), nil, 0, nil
+				return proc.Result{Stdout: out}, nil
 			}
 		}
-		return nil, nil, 0, nil
+		return proc.Result{}, nil
 	}
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil }), tracker.WithGit(originGit(origin))}
 	return &calls
@@ -258,11 +259,11 @@ func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 		"HTTP 404: Not Found":    ExitResolution,
 		"HTTP 500: server error": ExitUnavailable,
 	} {
-		exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-			if len(args) > 0 && args[0] == "api" {
-				return nil, []byte(stderr), 1, nil
+		exe := func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+			if len(cmd.Args) > 0 && cmd.Args[0] == "api" {
+				return proc.Result{Stderr: stderr, ExitCode: 1}, nil
 			}
-			return nil, nil, 0, nil
+			return proc.Result{}, nil
 		}
 		deps := testDeps()
 		deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil }), tracker.WithGit(originGit("https://github.com/o/r.git"))}

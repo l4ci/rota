@@ -60,10 +60,8 @@ func (r Report) OK() bool {
 // Result is what a finished command left behind.
 type Result = proc.Result
 
-// Exec runs bin (a path Look returned) in dir with extraEnv added to the
-// process environment. A command that ran and exited non-zero is a Result
-// with ExitCode set and a nil error; err means it could not run at all.
-type Exec func(ctx context.Context, bin string, args []string, extraEnv []string, dir string) (Result, error)
+// CallTimeout bounds each tool call, so a hung herdr cannot hang the verb.
+const CallTimeout = 20 * time.Second
 
 // StaleClaim is a remote claim with no recent branch or PR activity.
 type StaleClaim struct {
@@ -174,6 +172,11 @@ type Input struct {
 	// adds a warning line in place of the drift.
 	RepoConfigErr error
 
+	// RegistryErr is worker.CheckRegistry over the project's workers.json: nil
+	// for a missing or readable registry. An unreadable one reads as an empty
+	// pool elsewhere, so it fails the registry check, as reap refuses it.
+	RegistryErr error
+
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.
 	StaleBinary *stalebin.Finding
@@ -203,7 +206,7 @@ type Input struct {
 	// clone (knowledge.external); the zero value, no Path, is the feature off.
 	ExternalKnowledge ExternalKnowledge
 
-	Exec Exec
+	Exec proc.Runner
 	// Look resolves a tool name, or a path with a slash, to an executable path, or
 	// false when it is not found. It is the only filesystem and PATH read for tools.
 	Look func(name string) (string, bool)
@@ -265,6 +268,7 @@ func (d *runner) checkTable() []checkEntry {
 		{"labels", optional(d.labels), false},
 		{"stale claims", d.staleClaims, false},
 		{"stale milestones", optional(d.staleMilestones), false},
+		{"registry", optional(d.registry), false},
 		{"ports", optional(d.ports), false},
 		{"repo config", optional(d.repoConfig), false},
 		{"stale binary", optional(d.staleBinary), false},

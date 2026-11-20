@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
@@ -448,11 +449,11 @@ func TestWaitingPRsStaleCrossFailFollowsTheGate(t *testing.T) {
 	}})
 	labels := map[string]string{"1": `{"name":"size:Major"},{"name":"review:none"}`, "2": `{"name":"size:Major"}`, "3": `{"name":"size:Major"}`}
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" {
-			return []byte(`{"number":` + args[2] + `,"title":"t","state":"OPEN","labels":[` + labels[args[2]] + `]}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" {
+			return proc.Result{Stdout: `{"number":` + cmd.Args[2] + `,"title":"t","state":"OPEN","labels":[` + labels[cmd.Args[2]] + `]}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	got := waitingPRs(&Ctx{Deps: deps, ctx: context.Background()}, dir)
 	ready := map[string]bool{}

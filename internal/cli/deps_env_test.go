@@ -276,8 +276,8 @@ func TestDoctorAccountsUseDepsClock(t *testing.T) {
 			in := doctorInput(context.Background(), d)
 			// only the accounts check matters: no host env, no tool lookups.
 			in.OrchestratorConfigDir = ""
-			in.Exec = func(context.Context, string, []string, []string, string) (doctor.Result, error) {
-				return doctor.Result{}, nil
+			in.Exec = func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{}, nil
 			}
 			in.Look = func(string) (string, bool) { return "", false }
 			in.Accounts = []config.Account{{Kind: config.KindClaude, Name: "a", Dir: dir}}

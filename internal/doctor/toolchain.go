@@ -2,14 +2,35 @@ package doctor
 
 import (
 	"context"
+	"os/exec"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // run runs a looked-up tool; ok is false when it could not run at all.
 func (d *runner) run(bin string, args []string, env []string) (Result, bool) {
-	r, err := d.in.Exec(d.ctx, bin, args, env, d.in.Dir)
+	r, err := d.exec(d.ctx, bin, args, env)
 	return r, err == nil
+}
+
+// exec runs bin (a path Look returned) in the input's dir through the injected
+// runner, with env added to the process environment and the call bounded by
+// CallTimeout.
+func (d *runner) exec(ctx context.Context, bin string, args, env []string) (Result, error) {
+	return d.in.Exec(ctx, proc.Cmd{Name: bin, Args: args, Env: env, Dir: d.in.Dir, Timeout: CallTimeout})
+}
+
+// lookedUp runs c.Name, resolved with Look, through the injected runner under
+// CallTimeout: the runner of the tracker and git owners doctor drives. A name
+// Look misses is exec.ErrNotFound, as for the real runner.
+func (d *runner) lookedUp(ctx context.Context, c proc.Cmd) (Result, error) {
+	bin, ok := d.in.Look(c.Name)
+	if !ok {
+		return Result{}, exec.ErrNotFound
+	}
+	c.Name, c.Timeout = bin, CallTimeout
+	return d.in.Exec(ctx, c)
 }
 
 func (d *runner) git() Check {
@@ -50,8 +71,9 @@ func (d *runner) host() Check {
 			Dial:           d.in.Dial,
 			Look:           d.in.Look,
 			SupportedHerdr: d.in.SupportedHerdr,
-			Exec: func(_ context.Context, bin string, args []string) (host.Result, error) {
-				return d.in.Exec(d.ctx, bin, args, nil, d.in.Dir)
+			Exec: func(ctx context.Context, c proc.Cmd) (host.Result, error) {
+				c.Dir, c.Timeout = d.in.Dir, CallTimeout
+				return d.in.Exec(ctx, c)
 			},
 		})
 		switch h.Status {
