@@ -347,7 +347,7 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 				Config: worker.ParseGateConfig(cfg), Root: root, Dir: root, Branch: branch,
 				Span: base + "..." + branch, Git: c.deps().Git,
 				Issues: func() (worker.ReviewIssues, error) {
-					return c.deps().issuesOrNone(c.Context(), cfg, root)
+					return c.deps().issuesOrNone(c.Context(), cfg, root, cachedReads)
 				},
 			})
 			if err != nil {

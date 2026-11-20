@@ -134,15 +134,21 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if fill, err := roundcfg.TrainFillFromConfig(cfg); err == nil {
 		in.TrainMax, in.TrainFillMinutes = fill.Max, fill.Minutes
+	} else {
+		in.ConfigErrors = append(in.ConfigErrors, err.Error())
 	}
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
 		in.SmokeShards, in.SmokeShardsSource = worker.SmokeShards(d.Getenv("ROTA_SMOKE_SHARDS"), runtime.NumCPU())
+	} else {
+		in.ConfigErrors = append(in.ConfigErrors, err.Error())
 	}
 	// A support machine writes only the gitignored .codex files, so the tracked
 	// ones are not its drift and `rota agents write` could not fix them.
 	var keep func(string) bool
-	if role, err := roundcfg.MachineRole(cfg); err == nil && role == roundcfg.RoleSupport {
+	if role, err := roundcfg.MachineRole(cfg); err != nil {
+		in.ConfigErrors = append(in.ConfigErrors, err.Error())
+	} else if role == roundcfg.RoleSupport {
 		keep = agents.Untracked
 	}
 	in.AgentProblems = agents.ProblemsOnly(root, cfg, keep)
@@ -160,6 +166,8 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	d.doctorDiskInput(ctx, &in, cfg, root)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
+	} else {
+		in.ConfigErrors = append(in.ConfigErrors, err.Error())
 	}
 	in.DefaultConfigDir = skills.ClaudeDir(d.Getenv, in.Home)
 	return in

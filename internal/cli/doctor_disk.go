@@ -45,9 +45,14 @@ func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot s
 
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent) and the leftovers scan doctor runs when the
-// volume is under it. A non-numeric threshold falls back to the default.
+// volume is under it. An unreadable threshold is recorded in in.ConfigErrors
+// and the default stands for the disk check.
 func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string) {
-	min := config.IntOr(cfg, "doctor.minFreeDiskPercent", 0, 100)
+	min, err := config.Int(cfg, "doctor.minFreeDiskPercent", 0, 100)
+	if err != nil {
+		in.ConfigErrors = append(in.ConfigErrors, err.Error())
+		min = config.IntOr(cfg, "doctor.minFreeDiskPercent", 0, 100)
+	}
 	in.MinFreeDiskPercent = min
 	dir := root
 	if dir == "" {

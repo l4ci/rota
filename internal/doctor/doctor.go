@@ -105,6 +105,9 @@ type Input struct {
 	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
 	OrchestratorConfigDir string
 	SwitchOnUsage         bool // orchestrator.switchOnUsage (D4)
+	// ConfigErrors are the config reads that failed while the input was
+	// gathered (a value that does not parse); each fails the config check.
+	ConfigErrors []string
 	// Kinds is what each worker harness with a check of its own (Doctor) has
 	// configured, by kind.
 	Kinds map[string]KindInput
@@ -246,6 +249,7 @@ func (d *runner) checkTable() []checkEntry {
 		{"jq", always(d.jq), false},
 		{"host", always(d.host), false},
 		{"tracker", always(d.tracker), false},
+		{"config", optional(d.configValues), false},
 		{"accounts", always(d.accounts), false},
 		{"hook", always(d.hook), false},
 		{"statusline", always(d.statusline), false},

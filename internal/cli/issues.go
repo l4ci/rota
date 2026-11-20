@@ -35,6 +35,11 @@ func issuesCommands() []*Command {
 	}
 }
 
+// issuesVerbReads: the issues verbs read an upstream issue and then write to it
+// (comment, label, close) or check its state right after, so a cached read
+// would hand back the state from before their own write.
+var issuesVerbReads = uncachedReads("an issues verb reads an upstream issue, writes to it and may read it again")
+
 // issuesScope is the project root, the issues config and the directory the
 // forge CLI runs in (scope S): --repo's sub-repo, else the registered
 // sub-repo the working directory is in, else the root.
@@ -57,7 +62,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.NewEnv(c.projectConfig(root), c.deps().trackerBase(), c.deps().IssuesForge)
+	env = issues.NewEnv(c.projectConfig(root), c.deps().trackerOptions(issuesVerbReads), c.deps().IssuesForge)
 	return
 }
 
@@ -213,7 +218,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.NewEnv(cfg, c.deps().trackerBase(), c.deps().IssuesForge)
+			env := issues.NewEnv(cfg, c.deps().trackerOptions(issuesVerbReads), c.deps().IssuesForge)
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {

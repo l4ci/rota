@@ -22,7 +22,7 @@ func TestForgeAndIssuesPassesTheTrustCheckThrough(t *testing.T) {
 		deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
 			return proc.Result{Stdout: "[]"}, nil
 		}, func(n string) (string, error) { return "/fake/" + n, nil })}
-		f, err := deps.forgeAndIssues(context.Background(), config.Load(cfgdir.OSEnv(), root), root)
+		f, err := deps.forgeAndIssues(context.Background(), config.Load(cfgdir.OSEnv(), root), root, cachedReads)
 		if err != nil {
 			t.Fatalf("%s: %v", source, err)
 		}

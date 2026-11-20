@@ -122,8 +122,9 @@ type Deps struct {
 	// a test uses it for a key-based tracker.
 	IssuesForge func(ctx context.Context, provider, dir string) (issues.Forge, error)
 
-	// ReadCache is shared by every forge adapter this invocation builds, so
-	// the same read is made once. Nil turns it off.
+	// ReadCache is the invocation's read cache. An adapter built under
+	// cachedReads shares it, so the same read is made once; one built under
+	// uncachedReads(why) never sees it. Nil turns the cache off everywhere.
 	ReadCache *tracker.ReadCache
 
 	NewTracker     func(ctx context.Context, root string, cfg any) (backlog.Tracker, error)
@@ -254,9 +255,9 @@ func defaultDeps() *Deps {
 			return nil, err
 		}
 		if tracker.MigratesToOwnTracker(s.Source) {
-			return tracker.NewIssueTracker(ctx, s, s.Source, root, d.trackerOptions()...)
+			return tracker.NewIssueTracker(ctx, s, s.Source, root, d.trackerOptions(cachedReads)...)
 		}
-		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
+		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions(cachedReads)...)
 	}
 	d.RoundEnv = func(ctx context.Context, root string, o RoundOpts) round.Env {
 		return buildRoundEnv(ctx, root, d, true, o.Worker, o.Accounts)
@@ -400,7 +401,7 @@ func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 		// the gate's issue source gets the TrackerOptions too (a jira or
 		// linear test points its connection at a fake site).
 		e.Issues = func(dir string, s tracker.Settings) (worker.Issues, error) {
-			it, err := tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerOptions()...)
+			it, err := tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerOptions(cachedReads)...)
 			if err != nil {
 				return nil, err
 			}
@@ -408,19 +409,16 @@ func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 		}
 	}
 	if e.IssueComments == nil {
-		// The bounce store reads its count back after writing it, so it skips
-		// the read cache, as the gate's forge does.
 		e.IssueComments = func(dir string, s tracker.Settings) (worker.IssueComments, error) {
-			return tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerBase()...)
+			return tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerOptions(uncachedReads(
+				"the bounce store reads its count back after writing it"))...)
 		}
 	}
 	if e.Forge == nil {
-		// and so does its forge, but only the executor swap: never the read
-		// cache. The gate re-reads the forge in loops that need a fresh answer
-		// each time (PRMergeable retries, CommitChecks polls, PRView after a
-		// push), and nothing in a gate run calls freshReads.
 		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
-			return tracker.NewForge(issueCtx, s, provider, dir, d.trackerBase()...)
+			return tracker.NewForge(issueCtx, s, provider, dir, d.trackerOptions(uncachedReads(
+				"the gate re-reads the forge in loops that need a fresh answer each time "+
+					"(PRMergeable retries, CommitChecks polls, PRView after a push), and nothing in a gate run calls freshReads"))...)
 		}
 	}
 	return e
@@ -453,33 +451,23 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 // forge is the one place a verb builds its forge (pull requests, checks,
 // releases): settings from cfg, forge.provider resolution (a local forge is
 // tracker.ErrLocalForge) and the TrackerOptions a test swaps the executor
-// through. The worker verbs build theirs in workerEnv, with the same
-// TrackerOptions but no read cache.
+// through. Reads are cachedReads; a reader that must see fresh state builds
+// through forgeAndIssues or trackerOptions with uncachedReads(why).
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
-	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
-}
-
-// forgeWith is forge under the given options instead of trackerOptions.
-func forgeWith(ctx context.Context, cfg any, provider, dir string, opts []tracker.Option) (tracker.Forge, error) {
-	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, opts...)
+	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions(cachedReads)...)
 }
 
 // issueTracker is the one place a verb builds its issue tracker: issues.source
-// from cfg (file is tracker.ErrNoIssueTracker), with the same TrackerOptions.
+// from cfg (file is tracker.ErrNoIssueTracker), with cachedReads.
 func (d *Deps) issueTracker(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
-	return tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, d.trackerOptions()...)
+	return tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, d.trackerOptions(cachedReads)...)
 }
 
 // issuesOrNone is issueTracker with the file source answered by
 // tracker.NoIssues, for a verb that reads issues when there are any and works
-// without. Any other failure is returned.
-func (d *Deps) issuesOrNone(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
-	return issuesOrNoneWith(ctx, cfg, dir, d.trackerOptions())
-}
-
-// issuesOrNoneWith is issuesOrNone under the given options.
-func issuesOrNoneWith(ctx context.Context, cfg any, dir string, opts []tracker.Option) (tracker.IssueTracker, error) {
-	it, err := tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, opts...)
+// without. Any other failure is returned. Reads follow reads.
+func (d *Deps) issuesOrNone(ctx context.Context, cfg any, dir string, reads ReadPolicy) (tracker.IssueTracker, error) {
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, d.trackerOptions(reads)...)
 	if errors.Is(err, tracker.ErrNoIssueTracker) {
 		return tracker.NewNoIssues(), nil
 	}
@@ -522,23 +510,13 @@ func (t trustedSides) CanPush(ctx context.Context, login string) (bool, error) {
 // forgeAndIssues builds both seams for a consumer that needs them. A forge
 // failure (a local forge included) fails it; the file source's issue side is
 // tracker.NoIssues. The result is a tracker.IssueTrust exactly when the issue
-// side is.
-func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
-	return d.sides(ctx, cfg, dir, d.trackerOptions())
-}
-
-// uncachedForgeAndIssues is forgeAndIssues without the invocation's read
-// cache, for a reader that must see what changed since its last read.
-func (d *Deps) uncachedForgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
-	return d.sides(ctx, cfg, dir, d.trackerBase())
-}
-
-func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Option) (forgeIssues, error) {
-	f, err := forgeWith(ctx, cfg, "", dir, opts)
+// side is. Reads follow reads.
+func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string, reads ReadPolicy) (forgeIssues, error) {
+	f, err := tracker.NewForgeFromConfig(ctx, cfg, "", dir, d.trackerOptions(reads)...)
 	if err != nil {
 		return nil, err
 	}
-	it, err := issuesOrNoneWith(ctx, cfg, dir, opts)
+	it, err := d.issuesOrNone(ctx, cfg, dir, reads)
 	if err != nil {
 		return nil, err
 	}
@@ -553,7 +531,7 @@ func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Op
 // verb that reads the origin through tracker.ResolveProvider.
 func (d *Deps) trackerExec() proc.Runner {
 	cl := &tracker.CLI{}
-	for _, o := range d.trackerOptions() {
+	for _, o := range d.trackerOptions(noForgeReads) {
 		o(cl)
 	}
 	return cl.Exec
@@ -564,7 +542,7 @@ func (d *Deps) trackerExec() proc.Runner {
 // tracker.ResolveProvider.
 func (d *Deps) trackerGit() git.Runner {
 	cl := &tracker.CLI{}
-	for _, o := range d.trackerOptions() {
+	for _, o := range d.trackerOptions(noForgeReads) {
 		o(cl)
 	}
 	return cl.Git
@@ -579,18 +557,46 @@ func (d *Deps) freshReads() {
 	}
 }
 
-// trackerBase is TrackerOptions plus the machine the default connection lookup
-// reads: Deps' own env and keychain. A test's WithConnections still wins.
-func (d *Deps) trackerBase() []tracker.Option {
-	return append([]tracker.Option{tracker.WithMachine(d.projectsEnv(), d.Keychain), tracker.WithGit(d.Git)}, d.TrackerOptions...)
+// ReadPolicy is the one explicit choice of whether a forge or tracker read
+// may be served from the invocation's ReadCache. Build it with cachedReads or
+// uncachedReads(why); the zero value is refused so no site picks by accident.
+type ReadPolicy struct {
+	set      bool
+	uncached bool
+	why      string
 }
 
-// trackerOptions is trackerBase plus the invocation's read cache.
-func (d *Deps) trackerOptions() []tracker.Option {
-	if d.ReadCache == nil {
-		return d.trackerBase()
+// cachedReads shares the invocation's ReadCache: the same read is made once.
+// It is right for a reader that tolerates a read made earlier in the process.
+var cachedReads = ReadPolicy{set: true}
+
+// uncachedReads never sees the ReadCache. why is required and states what the
+// site would get wrong from a cached answer, so a reader can tell a deliberate
+// uncached call from a forgotten one.
+func uncachedReads(why string) ReadPolicy {
+	if why == "" {
+		panic("cli: uncachedReads needs a reason")
 	}
-	return append(d.trackerBase(), tracker.WithReadCache(d.ReadCache))
+	return ReadPolicy{set: true, uncached: true, why: why}
+}
+
+// noForgeReads is for a caller that applies the options only to read the
+// executor or git seam out of them, so no forge read is ever made.
+var noForgeReads = uncachedReads("the options are applied only to read the executor and git seam; no forge read is made")
+
+// trackerOptions is the options every forge and tracker adapter is built with:
+// the machine the default connection lookup reads (Deps' own env and keychain),
+// the git seam, and TrackerOptions (a test's WithConnections still wins), plus
+// the invocation's ReadCache when reads is cachedReads.
+func (d *Deps) trackerOptions(reads ReadPolicy) []tracker.Option {
+	if !reads.set {
+		panic("cli: trackerOptions needs a ReadPolicy: cachedReads or uncachedReads(why)")
+	}
+	opts := append([]tracker.Option{tracker.WithMachine(d.projectsEnv(), d.Keychain), tracker.WithGit(d.Git)}, d.TrackerOptions...)
+	if reads.uncached || d.ReadCache == nil {
+		return opts
+	}
+	return append(opts, tracker.WithReadCache(d.ReadCache))
 }
 
 // actorForge is the provider an actor verb (ship pr, release) acts on in
