@@ -325,6 +325,10 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			d.Set("combinedWhy", why)
 			text += " (" + why + ")"
 		}
+		if overrides := blockingOverrides(r.Findings); len(overrides.data) > 0 {
+			d.Set("overrides", overrides.data)
+			text += " (blocking overrides severity default: " + strings.Join(overrides.names, "; ") + ")"
+		}
 		if clearErr != nil {
 			// The record is written; a stale count only makes the next malformed
 			// block of this kind a refusal sooner.
@@ -810,4 +814,27 @@ func workFixReset(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", cleared > 0)
 		return Result{Data: d, Text: "reset " + key + " (" + strconv.Itoa(cleared) + " cleared)"}, nil
 	}
+}
+
+type overrideList struct {
+	data  []any
+	names []string
+}
+
+// blockingOverrides lists the findings whose explicit blocking flag departs
+// from their severity default, so the add output names each one.
+func blockingOverrides(list []verdict.Finding) overrideList {
+	var o overrideList
+	for _, f := range list {
+		if !f.Overrides() {
+			continue
+		}
+		e := jsonx.NewObject()
+		e.Set("title", f.Title)
+		e.Set("severity", f.Severity)
+		e.Set("blocking", f.IsBlocking())
+		o.data = append(o.data, e)
+		o.names = append(o.names, fmt.Sprintf("%s [%s, blocking=%t]", f.Title, f.Severity, f.IsBlocking()))
+	}
+	return o
 }

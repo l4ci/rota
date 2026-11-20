@@ -165,6 +165,13 @@ func (f Finding) IsBlocking() bool {
 	return SeverityBlocks(f.Severity)
 }
 
+// Overrides reports whether f carries an explicit blocking flag that differs
+// from its severity default (a major that does not block, a minor that does).
+// A record stored without the flag never overrides.
+func (f Finding) Overrides() bool {
+	return f.Blocking != nil && *f.Blocking != SeverityBlocks(f.Severity)
+}
+
 // IsDeferred reports whether f is filed as an item instead of relayed: it does
 // not block and is more than an info note.
 func (f Finding) IsDeferred() bool { return !f.IsBlocking() && f.Severity != "info" }

@@ -346,3 +346,26 @@ func TestWorkerGateRefusesBlockingFindingUnderConcerns(t *testing.T) {
 		t.Error("the cleared branch did not merge")
 	}
 }
+
+// AC-1: a finding whose blocking flag disagrees with its severity default is
+// accepted, and the add output names it.
+func TestVerdictAddNamesOverrides(t *testing.T) {
+	dir := verdictRepo(t)
+	body := writeBody(t, t.TempDir(), mixedFindings)
+	code, out, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--json")
+	if code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	got, _ := data(t, out)["overrides"].([]any)
+	if len(got) != 2 {
+		t.Fatalf("overrides = %v, want forced and waived", got)
+	}
+	first := got[0].(map[string]any)
+	if first["title"] != "forced" || first["severity"] != "minor" || first["blocking"] != true {
+		t.Errorf("first override = %v", first)
+	}
+	_, text, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body)
+	if !strings.Contains(text, "waived") || !strings.Contains(text, "overrides") {
+		t.Errorf("add text does not name the override: %s", text)
+	}
+}
