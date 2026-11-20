@@ -255,3 +255,19 @@ func TestTrainCancelDuringAloneRun(t *testing.T) {
 		t.Errorf("nobody is blamed: %+v", c.f.Culprits)
 	}
 }
+
+// A repository path holding glob syntax still lists its live trains: the
+// marker directory is read as a directory, not parsed as a pattern (#3897).
+func TestTrainRunsUnderBracketedRepo(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "re[po]*?")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, root, "init", "-q", "-b", "main")
+	env := Env{}.WithDefaults()
+	writeTrainRun(t, env, root, "req-live", os.Getpid())
+	runs, err := env.TrainRuns(bg, root)
+	if err != nil || len(runs) != 1 || runs[0].RequestID != "req-live" {
+		t.Fatalf("live trains under a bracketed repo: %+v %v", runs, err)
+	}
+}

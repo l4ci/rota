@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -76,10 +77,7 @@ func RunMilestones(st ms.Store, apply bool) ([]MilestoneChange, error) {
 // caller decides they are stale: no verb reads them while milestones live on
 // the tracker.
 func StaleMilestoneFiles(root string) ([]string, error) {
-	files, err := filepath.Glob(filepath.Join(rotatree.File(root, rotatree.MilestonesDir), "*.md"))
-	if err != nil {
-		return nil, err
-	}
+	files := fsio.GlobDir(rotatree.File(root, rotatree.MilestonesDir), "*.md")
 	names := []string{}
 	for _, f := range files {
 		names = append(names, filepath.Base(f))

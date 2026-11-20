@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // Tokens are the token totals of one session.
@@ -117,7 +119,7 @@ func ClaudeUsage(path string) (Tokens, []string, error) {
 	}
 	// The subagent transcripts are listed whatever the usage says, so a row
 	// whose tokens read unavailable still names them.
-	subs, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents", "agent-*.jsonl"))
+	subs := fsio.GlobDir(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents"), "agent-*.jsonl")
 	if !found {
 		return Tokens{}, subs, errors.New("no usage in " + path)
 	}

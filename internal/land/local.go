@@ -70,7 +70,7 @@ func LandLocal(p LocalPorts, o LocalRequest) (string, error) {
 	head := o.Head
 	if head == "" && o.Branch != "" {
 		var err error
-		head, err = localOut(p.Git, "rev-parse "+o.Branch, "rev-parse", "--verify", "-q", o.Branch+"^{commit}")
+		head, err = GitOut(p.Git, "rev-parse "+o.Branch, "rev-parse", "--verify", "-q", o.Branch+"^{commit}")
 		if err != nil {
 			return "", err
 		}
@@ -89,7 +89,7 @@ func LandLocal(p LocalPorts, o LocalRequest) (string, error) {
 		}
 	}
 	if o.Checkout != "" {
-		if _, err := localOut(p.Git, "checkout "+o.Checkout, "checkout", "-q", o.Checkout); err != nil {
+		if _, err := GitOut(p.Git, "checkout "+o.Checkout, "checkout", "-q", o.Checkout); err != nil {
 			return "", err
 		}
 	}
@@ -107,7 +107,7 @@ func LandLocal(p LocalPorts, o LocalRequest) (string, error) {
 	if o.ShortSHA {
 		readArgs = []string{"log", "-1", "--format=%h"}
 	}
-	sha, err := localOut(p.Git, strings.Join(readArgs, " "), readArgs...)
+	sha, err := GitOut(p.Git, strings.Join(readArgs, " "), readArgs...)
 	if err != nil || sha == "" {
 		if err == nil {
 			err = &GitError{Msg: "git " + strings.Join(readArgs, " ") + ": empty commit ID"}
@@ -120,7 +120,7 @@ func LandLocal(p LocalPorts, o LocalRequest) (string, error) {
 		if o.ShortSHA {
 			recoveryArgs = []string{"rev-parse", "--short", base}
 		}
-		read, readErr := localOut(recover, strings.Join(recoveryArgs, " "), recoveryArgs...)
+		read, readErr := GitOut(recover, strings.Join(recoveryArgs, " "), recoveryArgs...)
 		if readErr != nil {
 			err = errors.Join(err, readErr)
 		} else if read != "" {
@@ -131,21 +131,24 @@ func LandLocal(p LocalPorts, o LocalRequest) (string, error) {
 		return "", postMerge("", err)
 	}
 	if o.DeleteBranch {
-		current, err := localOut(p.Git, "rev-parse "+o.Branch, "rev-parse", "--verify", "-q", o.Branch+"^{commit}")
+		current, err := GitOut(p.Git, "rev-parse "+o.Branch, "rev-parse", "--verify", "-q", o.Branch+"^{commit}")
 		if err != nil {
 			return sha, postMerge(sha, err)
 		}
 		if current != head {
 			return sha, &BranchMovedError{Branch: o.Branch, Base: o.Base, Pinned: head, Tip: current, MergeSHA: sha}
 		}
-		if _, err := localOut(p.Git, "branch -d "+o.Branch, "branch", "-d", o.Branch); err != nil {
+		if _, err := GitOut(p.Git, "branch -d "+o.Branch, "branch", "-d", o.Branch); err != nil {
 			return sha, postMerge(sha, err)
 		}
 	}
 	return sha, nil
 }
 
-func localOut(run Git, label string, args ...string) (string, error) {
+// GitOut runs git through run and returns stdout without trailing newlines.
+// A non-zero exit is a *GitError naming label and the first stderr line; a
+// runner error is returned as is.
+func GitOut(run Git, label string, args ...string) (string, error) {
 	res, err := run(args...)
 	if err == nil && res.ExitCode != 0 {
 		err = &GitError{Msg: fmt.Sprintf("git %s: %s", label, strutil.FirstLine(res.Stderr))}
