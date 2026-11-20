@@ -1018,7 +1018,7 @@ func (g *guard) forceUpstream(c gitCall) error {
 	if _, after, ok := strings.Cut(up, "/"); ok {
 		name = after
 	}
-	if name == "main" || name == "master" || name != cur || cur != own {
+	if g.isBase(name) || name != cur || cur != own {
 		g.deny("force-push to upstream %s: a worker may force only its own branch (%s)", up, own)
 	}
 	return nil
