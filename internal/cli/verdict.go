@@ -195,6 +195,34 @@ func checkVerdict(kind, v string) error {
 	return nil
 }
 
+// verdictBodySchema is shared by add's help and the generated reviewer brief.
+const verdictBodySchema = `Body schema:
+One bare JSON object, no Markdown fences or surrounding prose; unknown fields are rejected.
+All top-level fields are optional:
+  verdict: string, PASS, CONCERNS, FAIL or INFRA-FAIL; must match --verdict when present.
+    INFRA-FAIL is accepted only for --kind qa.
+  summary: string.
+  findings: array of objects; severity and title are required.
+    severity: blocker, major, minor or info. title: non-empty string.
+    file, detail, fix, patch: optional strings. fix states the expected behaviour;
+    patch is a unified diff for a small mechanical fix.
+    line: optional integer >= 1 or omitted when unknown (never zero).
+    blocking: optional boolean; blocker/major default to true, minor/info default to false.
+  items: array of objects; id and verdict are required.
+    id: non-empty string. verdict: PASS, CONCERNS or FAIL.
+  declined: array of objects; title is required (non-empty string).
+    file, detail: optional strings. line: optional integer >= 1 or omitted.
+    Declined entries do not affect the verdict.
+
+Example (replace sample values and remove unused entries):
+{
+  "verdict": "PASS",
+  "summary": "<one line>",
+  "findings": [{"severity": "minor", "title": "<what>", "file": "<path>", "line": 1, "detail": "<evidence>", "fix": "<expected behaviour>", "patch": "<unified diff>", "blocking": false}],
+  "items": [{"id": "<ID>", "verdict": "PASS"}],
+  "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 1, "detail": "<why not>"}]
+}`
+
 func verdictAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "review-spec, review-quality, review-cross, review-security, review-perf, review-ux, second-opinion, qa, behaviour or look (the maintainer's approval of an integration branch's looks)")
 	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour and look take PASS or FAIL)")
@@ -205,6 +233,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 	model := fs.String("model", "", "the reviewer's model (required for review-cross)")
 	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>, or the local branch when it is not pushed")
 	body := bodyFlag(fs)
+	fs.Lookup("body-file").Usage = "JSON file (`-` for stdin); omit for an empty body\n\n" + verdictBodySchema
 	return func(c *Ctx, args []string) (Result, error) {
 		if *kind == "" {
 			return Result{}, Usage("--kind is required")
@@ -290,6 +319,11 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		text := r.Verdict
 		if r.Combined != "" {
 			text = r.Combined
+		}
+		if r.Combined != "" && r.Combined != r.Verdict {
+			why := fmt.Sprintf("recorded %s %s; combined with review-spec %s at the same commit: worse verdict wins", r.Kind, r.Verdict, r.Combined)
+			d.Set("combinedWhy", why)
+			text += " (" + why + ")"
 		}
 		if clearErr != nil {
 			// The record is written; a stale count only makes the next malformed

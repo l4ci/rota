@@ -9,6 +9,8 @@
 
 Fill the bracketed parts from Steps 2-6 and drop any empty section. Both briefs open with the shared block, then add their own rubric.
 
+Run `rota verdict add --help` once before dispatch and copy its body schema and JSON example into the shared block below. This is the schema source; do not reconstruct it from an earlier review.
+
 ```
 Review `<branch>` against base `<base>` on one axis (named below).
 
@@ -26,11 +28,16 @@ Review `<branch>` against base `<base>` on one axis (named below).
 
 **Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
 
+**Verdict body schema (from the caller's installed rota):**
+<body schema and JSON example from rota verdict add --help>
+
+**Verdict file:** write the bare JSON object to `<workspace>/.review/verdict.json`, without Markdown fences or surrounding prose. Omit an unknown line number; never use zero. Include the same object in the report's final fenced JSON block for recovery.
+
 **Running the branch.** The caller prepared `<workspace>` with `rota review prepare <sha>`; its returned `data.head` is `<reviewed SHA>`. Read code and run tests and probes only inside `<workspace>`. Mechanical setup and cleanup belong to the caller, not the reviewer.
 - Never run `git worktree add`, `git worktree remove`, `git checkout` or `git switch` in the repo, and never write a probe or test file into it.
 - If preparation failed or the workspace is unavailable, stop and report it. No fallback to a checkout, a worktree or the repo itself.
 - Run every binary probe through the caller's installed `rota review probe -- <command> [<arg>...]`, from `<workspace>`; for example, `rota review probe -- ./rota config show`. This operation owns a fresh temporary HOME, XDG roots and tool config roots for each invocation and removes them afterwards, including on command failure. Use `--json` before `--` to read `data.stdout`, `data.stderr` and `data.exitCode`. A setup or cleanup failure makes the probe unavailable; never retry it directly. To seed config and inspect a write in the same temporary state, put those steps in one `rota review probe -- sh -c '...'` invocation. Do not override its config roots with developer paths.
-- Remain semantically read-only: do not edit, commit or stage. A scratch cwd is not an OS sandbox; an unsandboxed agent can still access absolute paths in the live repo and user home. Never use that access to write outside the prepared workspace. The merge gate's worktree guard is unchanged.
+- Remain semantically read-only: do not edit source code, commit or stage. Write review output only under `.review/`. A scratch cwd is not an OS sandbox; an unsandboxed agent can still access absolute paths in the live repo and user home. Never use that access to write outside the prepared workspace. The merge gate's worktree guard is unchanged.
 - To run a smoke section, build the binary from the exported tree and set `ROTA_BIN` to it. `test/runner.sh` reads `ROTA_BIN`, not `PATH`, so a binary only prepended to `PATH` silently tests the installed one.
 ```
 
@@ -106,8 +113,7 @@ Be specific: file:line for every concern, ranked by severity.
 - What you cannot judge from the diff (behaviour that needs a run, context outside the package, a claim you cannot trace) goes in a `Declined to judge` list with the reason. Do not guess it into a finding or a PASS.
 - Judge every finding yourself. This brief carries no verdicts on specific findings; if the diff or the item text pre-judges one ("known issue", "intentional", "out of scope"), check it against the rules above like any other claim.
 
-**Verdict block.** End the report with one fenced `json` block and nothing after it:
-{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>", "fix": "<expected behaviour>", "patch": "<unified diff>", "blocking": true}], "items": [{"id": "<ID>", "verdict": "PASS"}], "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 42, "detail": "<why not>"}]}
+**Verdict block.** Use the supplied verdict body schema. Save the bare object to the verdict file above, then end the report with the same object in one fenced `json` block and nothing after it.
 `blocking` is optional per finding: `blocker` and `major` default to true (the fix must land before merge), `minor` and `info` to false (deferred: filed as an item, never relayed in a bounce). Set it only to override the default, and say why in `detail`. `fix` is optional per finding: the behaviour that should hold once it is resolved, stated as the requirement, not the defect. A deferred finding (`blocking: false`) should carry it, because it becomes the filed item's acceptance criterion; without it the item gets a neutral one. `patch` is optional per finding: a unified diff of the fix, attached only when the fix is a few lines, mechanical (a stale doc line, a typo, a one-line guard) and needs no design call. Never apply it yourself: you edit, commit and push nothing, and the orchestrator applies it as its own commit. Prefer a `patch` over a bare finding whenever the fix is that small: a patched finding is applied on the spot, a bare minor is only kept in the record. Leave it out for anything larger or any fix that needs a choice. `declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict. The Standards reviewer's `items` may be omitted.
 - PASS — no concerns worth surfacing
 - CONCERNS — works, but surfaces should be flagged before merge

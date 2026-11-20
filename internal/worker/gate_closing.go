@@ -183,7 +183,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 	refs := refList(leaks)
 	return stepOutcome{Verdict: landing.GateNotClosing,
 		Msg:  fmt.Sprintf("GATE %s refused — the forge says %s closes %s, a %s issue with slices still to come; nothing landed", in.Slot, in.PR, refs, PartialSliceLabel),
-		Hint: fmt.Sprintf("drop the closing keyword for %s from the PR body (use `Refs`), or pass --final-slice if this is the last slice", refs)}
+		Hint: fmt.Sprintf("drop the closing keyword for %s from the PR body (use `Refs`), or, if this is the last slice, pass --final-slice (train: `--final-slice %s`)", refs, in.Slot)}
 }
 
 // claimInput is what the claim fence reads: the claim the slot holds on each

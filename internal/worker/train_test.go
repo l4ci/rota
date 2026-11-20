@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -1018,6 +1019,30 @@ func TestTrainFinalSliceExemptsOnlyTheNamedMember(t *testing.T) {
 			res, err := w.train(TrainOpts{Targets: c.targets, FinalSlice: c.final})
 			if err != nil || res.Verdict != landing.GateNotClosing || res.Culprit != c.culprit || res.Changed {
 				t.Fatalf("verdict %q culprit %q (want %q), changed %v: %v", res.Verdict, res.Culprit, c.culprit, res.Changed, err)
+			}
+		})
+	}
+}
+
+// The refusal's hint names the word the train was given for the culprit, so
+// copying `--final-slice <word>` into the re-run exempts that member.
+func TestTrainFinalSliceHintExemptsTheCulpritWhenCopied(t *testing.T) {
+	hintWord := regexp.MustCompile("--final-slice ([^` ]+)`")
+	for _, targets := range [][]string{{"#7", "#8"}, {"w1", "w2"}} {
+		t.Run(strings.Join(targets, ","), func(t *testing.T) {
+			w := slicePRTrain(t)
+			res, err := w.train(TrainOpts{Targets: targets})
+			if err != nil || res.Verdict != landing.GateNotClosing || res.Culprit != targets[0] {
+				t.Fatalf("verdict %q culprit %q: %v", res.Verdict, res.Culprit, err)
+			}
+			m := hintWord.FindStringSubmatch(res.Hint)
+			if m == nil {
+				t.Fatalf("no --final-slice word in hint %q", res.Hint)
+			}
+			w = slicePRTrain(t)
+			res, err = w.train(TrainOpts{Targets: targets, FinalSlice: []string{m[1]}})
+			if err != nil || res.Culprit == targets[0] {
+				t.Fatalf("copied --final-slice %q did not exempt %s: culprit %q, hint %q: %v", m[1], targets[0], res.Culprit, res.Hint, err)
 			}
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -12,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // DoneRequest is `rota worker done` with its flags parsed. Root is the nearest
@@ -182,41 +184,86 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 }
 
 // donePRSections is advisory: no open PR or an unreadable forge leaves the
-// gate to check it later.
+// gate to check it later. It runs the PR-body refusals the gate would raise
+// (required sections, Approvals against the relay log, closing keyword and
+// partial-slice rules) so a worker fixes them once, before the train.
 func donePRSections(env Env, req DoneRequest, dp DoneDeps, sl *Slot, res *DoneResult) {
-	body, pr, ok := donePRBody(env, req.Root, sl)
+	pr, ok := donePRView(env, req.Root, sl)
 	if !ok {
 		return
 	}
+	body := pr.Body
 	found := prSectionHeadings(body)
 	_, approvals := approvalsSection(body)
 	found["## approvals"] = approvals
 	for _, heading := range []string{"## Approvals", "## Rulings", "## Assumptions"} {
 		if !found[strings.ToLower(heading)] {
-			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", pr, heading))
+			doneWarning(dp, res, fmt.Sprintf("PR %s is missing %s; add the section (None is allowed) before review", pr.URL, heading))
 		}
+	}
+	if approvals {
+		if msg := CheckApprovals(body, sl.Relays()); msg != "" {
+			doneWarning(dp, res, fmt.Sprintf("PR %s would fail the gate's provenance check: %s", pr.URL, msg))
+		}
+	}
+	doneClosesWarning(env, req, dp, sl, pr, res)
+}
+
+// doneClosesWarning runs the gate's closing check on the PR. The partial-slice
+// rule needs the forge's closing references: a forge or tracker that cannot be
+// opened leaves the check to the gate, like the other advisory reads.
+func doneClosesWarning(env Env, req DoneRequest, dp DoneDeps, sl *Slot, pr donePR, res *DoneResult) {
+	lead, ok := tracker.ParseKey(HeldID(sl.Task(), sl.Branch(), sl.Name()))
+	if !ok {
+		return
+	}
+	keys := []tracker.IssueKey{lead}
+	for _, id := range sl.Bundle() {
+		if k, ok := tracker.ParseKey(id); ok && !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	cfg := env.GateConfig(req.Root)
+	forge, provider, refusal := env.openForge(env.Ctx, req.Root, pr.URL, cfg, tracker.ForgeReader)
+	if refusal != nil {
+		return
+	}
+	issues, err := env.issueSide(forge, provider, req.Root, cfg.Tracker)
+	if err != nil || issues == nil {
+		return
+	}
+	out := checkCloses(env.Ctx, closesInput{Slot: sl.Name(), PR: pr.URL, Keys: keys, Issues: issues, Forge: forge,
+		Source: tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}})
+	switch {
+	case out.Verdict != "":
+		doneWarning(dp, res, fmt.Sprintf("%s; %s", out.Msg, out.Hint))
+	case out.Broke != "":
+		doneWarning(dp, res, "closing check could not run: "+out.Broke)
 	}
 }
 
-// donePRBody also handles the normal first done, before the poll records the
+// donePR is the open PR as done reads it.
+type donePR struct{ URL, Title, Branch, Body string }
+
+// donePRView also handles the normal first done, before the poll records the
 // PR URL from ROTA-DONE or adopts it by branch. Discovery does not adopt it.
-func donePRBody(env Env, root string, sl *Slot) (body, pr string, ok bool) {
+func donePRView(env Env, root string, sl *Slot) (donePR, bool) {
 	if sl.PR() != "" {
 		info, known := env.prInfoKnown(env.Ctx, root, sl)
-		return info.Body, sl.PR(), known && strings.EqualFold(info.State, "OPEN")
+		return donePR{URL: sl.PR(), Title: info.Title, Branch: info.Head, Body: info.Body}, known && strings.EqualFold(info.State, "OPEN")
 	}
 	if sl.Branch() == "" {
-		return "", "", false
+		return donePR{}, false
 	}
 	prs, known := env.openPRs(env.Ctx, root)
 	if known {
 		for _, p := range prs {
 			if p.Branch == sl.Branch() {
-				return p.Body, p.URL, true
+				return donePR{URL: p.URL, Title: p.Title, Branch: p.Branch, Body: p.Body}, true
 			}
 		}
 	}
-	return "", "", false
+	return donePR{}, false
 }
 
 func doneWarning(dp DoneDeps, res *DoneResult, message string) {

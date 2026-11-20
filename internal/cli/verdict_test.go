@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -28,6 +29,116 @@ func writeBody(t *testing.T, dir, text string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func TestVerdictAddHelpBodySchema(t *testing.T) {
+	code, out, errs := rotaIn(t, t.TempDir(), "verdict", "add", "--help")
+	if code != 0 {
+		t.Fatalf("help: exit %d: %s", code, errs)
+	}
+	for _, rule := range []string{
+		"bare JSON object", "no Markdown fences", "unknown fields",
+		"PASS, CONCERNS, FAIL or INFRA-FAIL", "must match --verdict",
+		"blocker, major, minor or info", "integer >= 1 or omitted",
+		"All top-level fields are optional", "severity and title are required",
+		"id and verdict are required", "title is required",
+		"blocker/major default to true", "minor/info default to false",
+	} {
+		if !strings.Contains(out, rule) {
+			t.Errorf("help missing body rule %q", rule)
+		}
+	}
+	start := strings.Index(out, "\n{")
+	if start < 0 {
+		t.Fatalf("help has no copyable JSON example: %s", out)
+	}
+	var example map[string]json.RawMessage
+	dec := json.NewDecoder(strings.NewReader(out[start:]))
+	if err := dec.Decode(&example); err != nil {
+		t.Fatalf("help example: %v", err)
+	}
+	raw, err := json.Marshal(example)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := verdict.ParseBody(string(raw))
+	if err != nil {
+		t.Fatalf("help example is not accepted: %v", err)
+	}
+	if b.Verdict != "PASS" || b.Summary == "" || len(b.Findings) != 1 || len(b.Items) != 1 || len(b.Declined) != 1 {
+		t.Fatalf("help example omits body fields: %s", raw)
+	}
+	f := b.Findings[0]
+	if f.Severity != "minor" || f.Title == "" || f.File == "" || f.Line != 1 || f.Detail == "" || f.Fix == "" || f.Patch == "" || f.Blocking == nil || *f.Blocking {
+		t.Fatalf("help example omits finding fields: %+v", f)
+	}
+	if b.Items[0].ID == "" || b.Items[0].Verdict != "PASS" || b.Declined[0].Title == "" || b.Declined[0].File == "" || b.Declined[0].Line != 1 || b.Declined[0].Detail == "" {
+		t.Fatalf("help example omits item or declined fields: %s", raw)
+	}
+}
+
+func TestVerdictAddExplainsCombined(t *testing.T) {
+	for _, tc := range []struct {
+		name, spec, quality, combined string
+		stale                         bool
+	}{
+		{"spec concerns", "CONCERNS", "PASS", "CONCERNS", false},
+		{"spec failure", "FAIL", "PASS", "FAIL", false},
+		{"equal verdicts", "PASS", "PASS", "PASS", false},
+		{"quality concerns", "PASS", "CONCERNS", "CONCERNS", false},
+		{"stale spec", "CONCERNS", "PASS", "PASS", true},
+		{"minor finding alone", "", "PASS", "PASS", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := verdictRepo(t)
+			if tc.spec != "" {
+				code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", tc.spec)
+				if code != 0 {
+					t.Fatalf("spec: exit %d: %s", code, errs)
+				}
+			}
+			if tc.stale {
+				gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "new head")
+			}
+			body := writeBody(t, dir, `{"findings":[{"severity":"minor","title":"nit"}]}`)
+			args := []string{"verdict", "add", "--kind", "review-quality", "--verdict", tc.quality, "--body-file", body}
+			code, out, errs := rotaIn(t, dir, append(args, "--json")...)
+			if code != 0 {
+				t.Fatalf("quality: exit %d: %s", code, errs)
+			}
+			d := data(t, out)
+			if d["verdict"] != tc.quality || d["combined"] != tc.combined {
+				t.Fatalf("submitted verdict must be preserved: %v", d)
+			}
+			wantNote := ""
+			if tc.combined != tc.quality {
+				wantNote = "recorded review-quality " + tc.quality + "; combined with review-spec " + tc.spec + " at the same commit: worse verdict wins"
+				if d["combinedWhy"] != wantNote {
+					t.Errorf("combinedWhy = %v, want %q", d["combinedWhy"], wantNote)
+				}
+			} else if _, ok := d["combinedWhy"]; ok {
+				t.Errorf("unchanged verdict has a combination explanation: %v", d)
+			}
+			code, out, errs = rotaIn(t, dir, args...)
+			wantText := tc.combined
+			if wantNote != "" {
+				wantText += " (" + wantNote + ")"
+			}
+			if code != 0 || !strings.HasPrefix(out, wantText) || !strings.HasSuffix(strings.TrimSpace(out), " -> report") {
+				t.Errorf("text: exit %d, %q, stderr %q; want prefix %q and report route", code, out, errs, wantText)
+			}
+			if wantNote == "" && strings.Contains(out, "combined with review-spec") {
+				t.Errorf("unchanged text has a combination explanation: %q", out)
+			}
+			_, out, _ = rotaIn(t, dir, "verdict", "show", "--json")
+			for _, record := range data(t, out)["records"].([]any) {
+				r := record.(map[string]any)
+				if r["kind"] == "review-quality" && (r["verdict"] != tc.quality || r["combined"] != tc.combined) {
+					t.Errorf("stored quality verdict changed: %v", r)
+				}
+			}
+		})
+	}
 }
 
 func TestVerdictAddValidates(t *testing.T) {
