@@ -345,8 +345,7 @@ func (w *tickWorld) Root() string { return w.root }
 // Stop re-reads the stored stop value: state is the snapshot taken at tick
 // entry, and a wind-down can set the flag after it.
 func (w *tickWorld) Stop() (bool, string) {
-	s := roundtick.LoadState(w.commonDir, w.round)
-	return s.Stopped, s.StoppedReason
+	return w.renv.Stop.Load(w.commonDir, w.round)
 }
 
 func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate.Env, postgate.Request, error) {
