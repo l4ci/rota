@@ -53,11 +53,16 @@ func HeldClaimsIn(ctx context.Context, tr ClaimReader, key IssueKey, comments []
 
 // openClaims is the claim ids with no later release, in claim order.
 func openClaims(comments []Comment) []string {
-	bodies := make([]string, 0, len(comments))
+	return marker.FoldClaims(ClaimComments(comments)).Held
+}
+
+// ClaimComments adapts tracker comments for marker.FoldClaims.
+func ClaimComments(comments []Comment) []marker.ClaimComment {
+	out := make([]marker.ClaimComment, 0, len(comments))
 	for _, c := range comments {
-		bodies = append(bodies, c.Body)
+		out = append(out, marker.ClaimComment{Body: c.Body, At: c.CreatedAt})
 	}
-	return marker.OpenClaims(bodies)
+	return out
 }
 
 // ClaimsOf is the claim surface of tr, which every tracker has: its own

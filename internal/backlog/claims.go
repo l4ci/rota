@@ -14,21 +14,17 @@ import (
 func ReclaimedBranchClaim(comments []tracker.Comment, agent string, held []string) bool {
 	claimed := map[string]bool{}
 	released := false
-	for _, comment := range comments {
-		verb, id, ok := marker.ParseClaim(comment.Body)
-		if !ok {
-			continue
-		}
-		holder, _, _ := strings.Cut(id, "@")
+	for _, ev := range marker.FoldClaims(tracker.ClaimComments(comments)).Events {
+		holder, _, _ := strings.Cut(ev.ID, "@")
 		if holder == agent && agent != "" {
-			if verb == marker.KindClaim {
-				claimed[id] = true
+			if ev.Verb == marker.KindClaim {
+				claimed[ev.ID] = true
 			}
-			if verb == marker.KindRelease && claimed[id] {
-				delete(claimed, id)
+			if ev.Verb == marker.KindRelease && claimed[ev.ID] {
+				delete(claimed, ev.ID)
 				released = true
 			}
-		} else if verb == marker.KindClaim && released && slices.Contains(held, id) {
+		} else if ev.Verb == marker.KindClaim && released && slices.Contains(held, ev.ID) {
 			return true
 		}
 	}

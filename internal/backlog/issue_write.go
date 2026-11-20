@@ -969,45 +969,15 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	if title == "" {
 		title = "(untitled)"
 	}
-	var claimedAt map[string]time.Time
-	for _, c := range comments {
-		verb, id, ok := marker.ParseClaim(c.Body)
-		if !ok {
-			continue
-		}
-		if verb == marker.KindClaim {
-			if claimedAt == nil {
-				claimedAt = map[string]time.Time{}
-			}
-			if _, exists := claimedAt[id]; !exists {
-				claimedAt[id] = c.CreatedAt
-			}
-		} else {
-			delete(claimedAt, id)
-		}
-	}
-	var handReleased []string
-	for _, c := range comments {
-		verb, id, ok := marker.ParseClaim(c.Body)
-		if !ok {
-			continue
-		}
-		handReleased = slices.DeleteFunc(handReleased, func(h string) bool { return h == id })
-		// ClaimStore claims are plain comments: an open claim supersedes an
-		// older hand release without carrying a claim marker of its own.
-		if verb == marker.KindRelease && marker.IsHandRelease(c.Body, id) && !slices.Contains(held, id) {
-			handReleased = append(handReleased, id)
-		}
-	}
-	// Only a claim the tracker holds has an age: a stray marker comment on a
-	// claim-store tracker is not claim state.
-	maps.DeleteFunc(claimedAt, func(id string, _ time.Time) bool { return !slices.Contains(held, id) })
-	// Unknown timestamps carry no activity evidence and keep legacy output stable.
-	for id, at := range claimedAt {
-		if at.IsZero() {
-			delete(claimedAt, id)
-		}
-	}
+	fold := marker.FoldClaims(tracker.ClaimComments(comments))
+	// Only a claim the tracker holds has an age or can be handed back: a stray
+	// marker comment on a claim-store tracker is not claim state. Unknown
+	// timestamps carry no activity evidence and keep legacy output stable.
+	claimedAt := fold.ClaimedAt
+	maps.DeleteFunc(claimedAt, func(id string, at time.Time) bool { return at.IsZero() || !slices.Contains(held, id) })
+	// ClaimStore claims are plain comments: an open claim supersedes an
+	// older hand release without carrying a claim marker of its own.
+	handReleased := slices.DeleteFunc(fold.HandReleased, func(id string) bool { return slices.Contains(held, id) })
 	st := &Status{ClaimedAt: claimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
