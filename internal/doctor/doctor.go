@@ -198,6 +198,9 @@ type Input struct {
 	TestSlots         int
 	SmokeShards       int
 	SmokeShardsSource string
+	// RoundRosterSize counts the configured round roster; 0 means missing
+	// or unreadable round settings, so testLock makes no roster comparison.
+	RoundRosterSize int
 
 	// Slots are the live worker slots with a reserved port block; empty skips
 	// the ports check. Procs lists the listeners and answers a process's

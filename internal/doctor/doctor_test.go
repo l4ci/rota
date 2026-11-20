@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"errors"
+	"fmt"
 	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
@@ -22,6 +23,48 @@ import (
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
 )
+
+func TestTestLockRosterTable(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		slots, roster int
+		status, hint  string
+	}{
+		{"no project", 0, 0, "", ""},
+		{"missing round", 1, 0, Pass, ""},
+		{"single slot", 1, 1, Pass, ""},
+		{"two slots serialized", 1, 2, Warn, "rota config set --global test.slots <n>"},
+		{"five slots serialized", 1, 5, Warn, "rota config set --global test.slots <n>"},
+		{"width two", 2, 5, Pass, ""},
+		{"width three", 3, 2, Pass, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{}
+			rep := Run(context.Background(), Input{
+				Exec: f.exec, Look: f.look,
+				TestSlots: tc.slots, RoundRosterSize: tc.roster,
+				SmokeShards: 4, SmokeShardsSource: "default for 8 cores",
+			})
+			c := statusOf(rep, "test")
+			if c.Status != tc.status || c.Hint != tc.hint {
+				t.Fatalf("test check = %+v; want status %q, hint %q", c, tc.status, tc.hint)
+			}
+			if tc.status == "" {
+				if c.Name != "" {
+					t.Errorf("unexpected test check: %+v", c)
+				}
+				return
+			}
+			want := fmt.Sprintf("test lock width %d; smoke shards 4 (default for 8 cores)", tc.slots)
+			if !strings.Contains(c.Detail, want) {
+				t.Errorf("detail = %q, want %q", c.Detail, want)
+			}
+			if tc.status == Warn && !strings.Contains(c.Detail, fmt.Sprintf("round roster has %d slots", tc.roster)) {
+				t.Errorf("warning does not explain roster size: %q", c.Detail)
+			}
+		})
+	}
+}
 
 func fixture(t *testing.T, name string) string {
 	t.Helper()

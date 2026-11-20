@@ -104,7 +104,13 @@ func (d *runner) testLock() (Check, bool) {
 	if d.in.TestSlots <= 0 {
 		return Check{}, false
 	}
-	return pass("test", fmt.Sprintf("test lock width %d; smoke shards %d (%s)", d.in.TestSlots, d.in.SmokeShards, d.in.SmokeShardsSource)), true
+	c := pass("test", fmt.Sprintf("test lock width %d; smoke shards %d (%s)", d.in.TestSlots, d.in.SmokeShards, d.in.SmokeShardsSource))
+	if d.in.TestSlots == 1 && d.in.RoundRosterSize >= 2 {
+		c.Status = Warn
+		c.Detail += fmt.Sprintf("; round roster has %d slots: worker proofs and the gate share one test slot", d.in.RoundRosterSize)
+		c.Hint = "rota config set --global test.slots <n>"
+	}
+	return c, true
 }
 
 func (d *runner) stateDir() (Check, bool) {
