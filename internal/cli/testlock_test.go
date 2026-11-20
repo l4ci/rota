@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gotestout"
 )
 
 func needNice(t *testing.T) {
@@ -30,6 +32,19 @@ func TestTestLockRunsTheCommandAndPassesItsExit(t *testing.T) {
 	}
 	if o := trRun(t, root, "", "test", "lock"); o.code != 2 {
 		t.Errorf("no command: exit %d, want 2", o.code)
+	}
+}
+
+// The gate's flake retry reads the verb's combined output, so the line the verb
+// adds after a failed child must stay one gotestout skips (#3891).
+func TestTestLockFailureStaysRecognisedAsGoTestOutput(t *testing.T) {
+	root := tierProject(t, `{}`)
+	o := trRun(t, root, "", "test", "lock", "--", "sh", "-c", `printf -- '--- FAIL: TestAdds (0.00s)\nFAIL\nFAIL\texample.com/x\t0.01s\n'; exit 1`)
+	if o.code != 1 {
+		t.Fatalf("exit %d, want the child's 1\n%s%s", o.code, o.stdout, o.stderr)
+	}
+	if names, ok := gotestout.FailingTests(o.stdout + o.stderr); !ok || len(names) != 1 || names[0] != "TestAdds" {
+		t.Errorf("combined output not recognised: %v %v\n%s%s", names, ok, o.stdout, o.stderr)
 	}
 }
 

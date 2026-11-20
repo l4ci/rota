@@ -1085,10 +1085,13 @@ with `data.changed` true, and you fix forward with a new PR. With `test.fullWher
 checks the merge result first and nothing lands when it fails.
 
 For local verification, the gate and train retry a configured command once when its output
-identifies Go assertion failures (`--- FAIL: <test>` followed by a final `FAIL` summary).
+identifies assertion failures. Recognised runners: `go test` (`--- FAIL: <test>` followed by a final `FAIL` summary),
+Playwright's list reporter (numbered `N) <title>` failures plus an `N failed` line), Vitest (` FAIL  <file> > <name>` plus a
+`Tests  N failed` line) and `node --test` (TAP `not ok N - <name>` or spec `✖ <name>`, plus a `fail N` count).
+A command wrapped in `rota test lock --` is classified like the bare command.
 The retry runs sequentially in the same directory at the same clean tree. A pass stays green and
 adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red.
-Build, setup, panic, infrastructure, timeout, signal and unknown failures are not retried.
+Build, setup, panic, infrastructure (connection refused, `ECONNREFUSED`, a Playwright `Test timeout of`, a bundler build error), timeout, signal and unknown failures are not retried.
 The known-red exclusion ledger keeps its existing behavior and is checked before retrying.
 
 Each recovery appends the command, failing test names, tree, PR references, round, timestamp

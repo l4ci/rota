@@ -24,6 +24,13 @@ func TestRetryEligible(t *testing.T) {
 		{"no assertion summary stays red", 1, "boom\n", false, false, nil},
 		{"infrastructure signature stays red", 1, assertionFail + "fatal error: out of memory\n", false, false, nil},
 		{"timeout stays red", 1, assertionFail + "panic: test timed out after 10m\n", false, false, nil},
+		{"vitest failure retries", 1, " FAIL  a.test.ts > adds\nAssertionError: x\n Tests  1 failed | 3 passed (4)\n", false, true, []string{"a.test.ts > adds"}},
+		{"playwright failure retries", 1, "\n  1) [d] › a.spec.ts:1:1 › adds\n\n    Timeout: 5000ms\n\n  1 failed\n  2 passed (1s)\n", false, true, []string{"[d] › a.spec.ts:1:1 › adds"}},
+		{"node test failure retries", 1, "not ok 1 - adds\n# fail 1\n", false, true, []string{"adds"}},
+		{"wrapped go failure retries", 1, assertionFail + "rota test lock: sh exited 1\n", false, true, []string{"TestA"}},
+		{"js failure with a connection refusal stays red", 1, " FAIL  a.test.ts > adds\nError: connect ECONNREFUSED 127.0.0.1:3000\n Tests  1 failed (1)\n", false, false, nil},
+		{"js failure with a test timeout stays red", 1, "\n  1) [d] › a.spec.ts:1:1 › adds\n\n    Test timeout of 30000ms exceeded.\n\n  1 failed\n", false, false, nil},
+		{"js failure with a build failure stays red", 1, " FAIL  a.test.ts > adds\nerror during build:\n Tests  1 failed (1)\n", false, false, nil},
 		{"build failure stays red", 1, assertionFail + "FAIL\texample.com/q [build failed]\n", false, false, nil},
 	}
 	for _, c := range cases {
