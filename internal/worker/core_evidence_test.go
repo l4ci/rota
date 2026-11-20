@@ -63,15 +63,35 @@ func TestCoreDeliveryClearedByLaterDoneEvent(t *testing.T) {
 	}
 }
 
-// A done event from before the delivery says nothing about it.
+// A done event from before a delivery saved without an event seq says nothing
+// about it (the stamp fallback).
 func TestCoreDeliveryKeptByEarlierDoneEvent(t *testing.T) {
 	dir, e, _ := submittedSlot(t)
 	earlier := stamp.Format(e.Now().Add(-time.Hour))
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "", earlier) }); err != nil {
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		corePending(s).Delete("eventSeq")
+		s.SetEvent(EventDone, "", earlier)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Dispatch(bg, dir, relayOpts(t)); err == nil || !strings.Contains(err.Error(), "unresolved delivery (state: submitted)") {
 		t.Fatalf("an earlier done event must not clear the delivery: %v", err)
+	}
+}
+
+// A done event sent after the delivery clears it even when its stamp shares
+// the delivery's second: the delivery records the slot's event seq.
+func TestCoreDeliveryClearedBySameSecondDoneEvent(t *testing.T) {
+	dir, e, h := submittedSlot(t)
+	at := jsonx.Str(corePending(LoadRegistryTolerant(dir).Slot("w1")), "at")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "", at) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, dir, relayOpts(t)); err != nil {
+		t.Logf("relay err: %v", err)
+	}
+	if !strings.Contains(h.sent, "answer once") {
+		t.Errorf("same-second done after the delivery not accepted; last send %q", h.sent)
 	}
 }
 

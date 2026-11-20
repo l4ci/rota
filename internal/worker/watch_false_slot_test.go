@@ -266,34 +266,6 @@ func TestClassifyCodexBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
 	}
 }
 
-// #1026: a done event stamped in the same second as the relay, but sent before
-// it, is the earlier turn's: only an event newer than the relay passes.
-func TestDoneEventAfterRelayIgnoresSameSecondStaleEvent(t *testing.T) {
-	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
-	now := stamp.Format(time.Now())
-	after := func() (ok bool) {
-		if _, err := UpdateSlot(dir, "w1", func(s *Slot) { ok = doneEventAfterRelay(slotTarget(s)) }); err != nil {
-			t.Fatal(err)
-		}
-		return ok
-	}
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
-		s.SetEvent(EventDone, "", now)
-		s.SetRelayPending(1, now)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if after() {
-		t.Fatal("same-second done event sent before the relay passed the gate")
-	}
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "", now) }); err != nil {
-		t.Fatal(err)
-	}
-	if !after() {
-		t.Fatal("same-second done event sent after the relay was refused")
-	}
-}
-
 // #1156: a footer that counts the session's own background shells or monitors
 // is busy on a still pane, with evidence that does not carry the count.
 func TestClassifyClaudeBackgroundTasksAreBusy(t *testing.T) {
