@@ -64,7 +64,10 @@ to change a learning's field. Decisions keep their existing skill write flow.
 
 Globs use slash-separated paths relative to the project root, or the registered
 repo root for repo-local knowledge. `*`, `?` and character classes match within a
-path segment; a `**` segment spans zero or more directories. No scope means topic
+path segment; a `**` segment spans zero or more directories. A glob with no leading `/`, no
+braces, no empty segment (one trailing `/` for a directory is fine) and no `**` embedded in a
+segment is valid; `knowledge add` refuses any other (exit 2), so list each brace alternative as its
+own `--path`. No scope means topic
 consult only. Deprecated learnings and retired or superseded decisions are skipped.
 External knowledge has no project path scope. Re-run `rota hook install` to update
 an older Bash-only installation; `rota hook uninstall` removes the marked hook.
