@@ -155,7 +155,7 @@ func TestInstallIdempotentAndManifest(t *testing.T) {
 	if st := status(t, res, "rota-a/SKILL.md"); st != Created {
 		t.Errorf("first install: %s", st)
 	}
-	m, ok := ReadManifest(roots[0].Path)
+	m, ok, _ := ReadManifest(roots[0].Path)
 	if !ok || m.Schema != ManifestSchema || m.Version != "5.0.0" || m.Digest != s.Digest() || m.Agent != Claude || len(m.Files) != len(s.Paths()) {
 		t.Errorf("manifest %+v", m)
 	}
@@ -179,7 +179,7 @@ func TestEditedAndUnmanagedKeptUnlessOverwrite(t *testing.T) {
 	os.WriteFile(edited, []byte("mine\n"), 0o644)
 	os.Remove(filepath.Join(root, "rota-b", "SKILL.md"))
 	// Unmanaged: a file on disk that the manifest never listed.
-	m, _ := ReadManifest(root)
+	m, _, _ := ReadManifest(root)
 	delete(m.Files, "rota-a/extra.md")
 	writeManifest(root, m)
 	os.WriteFile(filepath.Join(root, "rota-a", "extra.md"), []byte("theirs\n"), 0o644)
@@ -280,7 +280,7 @@ func TestUpdateRefreshesOnlyInstalledRoots(t *testing.T) {
 	if HasManifest(roots[1].Path) {
 		t.Error("update created the codex root")
 	}
-	if m, _ := ReadManifest(roots[0].Path); m.Version != "2" || m.Digest != s2.Digest() {
+	if m, _, _ := ReadManifest(roots[0].Path); m.Version != "2" || m.Digest != s2.Digest() {
 		t.Errorf("manifest %+v", m)
 	}
 }
@@ -333,7 +333,7 @@ func TestUninstall(t *testing.T) {
 	if !r.Installed || len(r.Kept) != 1 || r.Kept[0] != "rota-a/SKILL.md" || len(r.Removed) != len(s.Paths())-1 {
 		t.Fatalf("%+v", r)
 	}
-	m, ok := ReadManifest(root)
+	m, ok, _ := ReadManifest(root)
 	if !ok || len(m.Files) != 1 {
 		t.Errorf("manifest should keep only the edited path: %+v", m)
 	}
@@ -441,13 +441,13 @@ func TestManifestTraversalIgnored(t *testing.T) {
 	s.Install(roots, Options{Mode: ModeFull})
 	outside := filepath.Join(filepath.Dir(root), "victim.txt")
 	os.WriteFile(outside, []byte("keep\n"), 0o644)
-	m, _ := ReadManifest(root)
+	m, _, _ := ReadManifest(root)
 	h := hashBytes([]byte("keep\n"))
 	for _, k := range []string{"../victim.txt", "rota-a/../../victim.txt", "/etc/passwd", "other/x.md", "rota-a"} {
 		m.Files[k] = h
 	}
 	writeManifest(root, m)
-	if got, _ := ReadManifest(root); len(got.Files) != len(s.Paths()) {
+	if got, _, _ := ReadManifest(root); len(got.Files) != len(s.Paths()) {
 		t.Errorf("unsafe keys survived: %d files", len(got.Files))
 	}
 	if _, err := s.Install(roots, Options{Mode: ModeFull, Overwrite: true}); err != nil {
@@ -606,7 +606,7 @@ func TestInstallDefaultsToStub(t *testing.T) {
 	if txt := skillText(t, stub[0], "rota-a/SKILL.md"); !isStub(txt) {
 		t.Errorf("default install wrote full text: %q", txt)
 	}
-	if m, _ := ReadManifest(stub[0].Path); m.Mode != ModeStub {
+	if m, _, _ := ReadManifest(stub[0].Path); m.Mode != ModeStub {
 		t.Errorf("manifest mode %q, want stub", m.Mode)
 	}
 	if _, err := os.Stat(filepath.Join(stub[0].Path, "rota-a", "extra.md")); err == nil {
@@ -618,7 +618,7 @@ func TestInstallDefaultsToStub(t *testing.T) {
 	if txt := skillText(t, full[0], "rota-a/SKILL.md"); isStub(txt) {
 		t.Errorf("full install wrote a stub: %q", txt)
 	}
-	if m, _ := ReadManifest(full[0].Path); m.Mode != ModeFull {
+	if m, _, _ := ReadManifest(full[0].Path); m.Mode != ModeFull {
 		t.Errorf("manifest mode %q, want full", m.Mode)
 	}
 }
@@ -635,14 +635,14 @@ func TestUpdateKeepsRecordedMode(t *testing.T) {
 		t.Error("update changed a root's mode")
 	}
 	for r, want := range map[Root]string{stub: ModeStub, full: ModeFull} {
-		if m, _ := ReadManifest(r.Path); m.Mode != want {
+		if m, _, _ := ReadManifest(r.Path); m.Mode != want {
 			t.Errorf("%s: manifest mode %q, want %q", r.Path, m.Mode, want)
 		}
 	}
 	if _, err := s.Update([]Root{full}, Options{Mode: ModeStub}); err != nil {
 		t.Fatal(err)
 	}
-	if m, _ := ReadManifest(full.Path); m.Mode != ModeStub || !isStub(skillText(t, full, "rota-a/SKILL.md")) {
+	if m, _, _ := ReadManifest(full.Path); m.Mode != ModeStub || !isStub(skillText(t, full, "rota-a/SKILL.md")) {
 		t.Errorf("explicit mode did not switch the root: %+v", m)
 	}
 }
@@ -659,7 +659,7 @@ func TestLegacyManifestIsFull(t *testing.T) {
 	delete(raw, "mode")
 	legacy, _ := json.Marshal(raw)
 	os.WriteFile(filepath.Join(r.Path, ManifestName), legacy, 0o644)
-	if m, ok := ReadManifest(r.Path); !ok || m.Mode != "" {
+	if m, ok, _ := ReadManifest(r.Path); !ok || m.Mode != "" {
 		t.Fatalf("legacy manifest: %+v %v", m, ok)
 	}
 	if _, err := s.Update([]Root{r}, Options{}); err != nil {

@@ -157,12 +157,25 @@ type Manifest struct {
 
 func manifestPath(root string) string { return filepath.Join(root, ManifestName) }
 
-// ReadManifest loads a root's manifest; ok is false when there is none, or it
-// does not parse (every file is then unmanaged, which keeps all of them).
-func ReadManifest(root string) (m Manifest, ok bool) {
-	m, found, err := fsio.ReadJSON[Manifest](manifestPath(root))
-	if err != nil || !found || m.Schema != ManifestSchema {
-		return Manifest{}, false
+// ErrCorruptManifest marks a manifest that exists but cannot be trusted: it
+// does not parse or records another schema. It is not absence: callers that
+// act on what the manifest lists must refuse instead of treating it as empty.
+var ErrCorruptManifest = errors.New("skills manifest is corrupt")
+
+// ReadManifest loads a root's manifest. found is false with no error when
+// there is none; a manifest that exists but does not parse, or records another
+// schema, is an error wrapping ErrCorruptManifest (an unreadable file is
+// returned as is). Which of those a caller can tolerate is its own call.
+func ReadManifest(root string) (m Manifest, found bool, err error) {
+	m, found, err = fsio.ReadJSON[Manifest](manifestPath(root))
+	if errors.Is(err, fsio.ErrUnreadable) {
+		return Manifest{}, false, fmt.Errorf("%w: %v", ErrCorruptManifest, err)
+	}
+	if err != nil || !found {
+		return Manifest{}, false, err
+	}
+	if m.Schema != ManifestSchema {
+		return Manifest{}, false, fmt.Errorf("%w: %s: schema %d, want %d", ErrCorruptManifest, manifestPath(root), m.Schema, ManifestSchema)
 	}
 	files := map[string]string{}
 	for k, h := range m.Files {
@@ -172,7 +185,7 @@ func ReadManifest(root string) (m Manifest, ok bool) {
 		}
 	}
 	m.Files = files
-	return m, true
+	return m, true, nil
 }
 
 // unsafe is whether a directory between root and the file p is a symlink, so
@@ -283,9 +296,14 @@ func (s *Set) Update(roots []Root, o Options) ([]RootResult, error) {
 		if !HasManifest(r.Path) {
 			continue
 		}
+		// Refuse a corrupt manifest whatever the mode: Update only refreshes
+		// what rota recorded, and a manifest it cannot read records nothing.
+		m, _, err := ReadManifest(r.Path)
+		if err != nil {
+			return out, fmt.Errorf("%s: %w", r.Path, err)
+		}
 		mode := o.Mode
 		if mode == "" {
-			m, _ := ReadManifest(r.Path)
 			mode = m.EffectiveMode()
 		}
 		res, err := s.installRoot(r, o, mode)
@@ -315,7 +333,9 @@ func (full *Set) installRoot(r Root, o Options, mode string) (RootResult, error)
 	}
 	res := RootResult{Root: r, Version: o.Version, Digest: s.digest, Mode: mode}
 	err := fsio.Locked(manifestPath(r.Path), fsio.LockTimeout, func() error {
-		old, hadManifest := ReadManifest(r.Path)
+		// Install repairs a corrupt manifest: it reads as absent here, and
+		// the rewrite replaces it. Update and Uninstall refuse it first.
+		old, hadManifest, _ := ReadManifest(r.Path)
 		if !hadManifest {
 			old = Manifest{Files: map[string]string{}}
 		}
@@ -514,9 +534,9 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 		}
 		res.Installed = true
 		err := fsio.Locked(manifestPath(r.Path), fsio.LockTimeout, func() error {
-			m, ok := ReadManifest(r.Path)
-			if !ok {
-				m = Manifest{Schema: ManifestSchema, Agent: r.Agent, Files: map[string]string{}}
+			m, _, err := ReadManifest(r.Path)
+			if err != nil {
+				return err
 			}
 			var paths []string
 			for p := range m.Files {
@@ -626,7 +646,11 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 			rep.Roots = append(rep.Roots, st)
 			continue
 		}
-		if m, ok := ReadManifest(r.Path); ok {
+		m, ok, err := ReadManifest(r.Path)
+		if err != nil {
+			return rep, fmt.Errorf("%s: %w", r.Path, err)
+		}
+		if ok {
 			st.Installed, st.Version, st.Digest, st.Mode = true, m.Version, m.Digest, m.EffectiveMode()
 			st.Current = m.Digest == s.digest
 			if st.Mode == ModeStub {
