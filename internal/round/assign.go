@@ -20,7 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -515,105 +514,20 @@ func (o AssignOpts) checkFlags(set roundcfg.Settings) (tier, reason string, err 
 
 // planAssign makes every refusal assign can make before it marks anything and
 // fills res as far as it got. stop reports a plan that ends without marks: a
-// readiness check (--check-only) or a best-of preflight.
+// readiness check (--check-only) or a best-of preflight. Each phase lives in
+// its own function (assign_phases.go) and returns its refusals.
 func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, bo *bestOfRun, tier, reason string, res *Assigned) (run assignRun, stop bool, err error) {
 	set := e.Round
 	id := it.ID
 
-	// 1. This process holds the round's lease.
-	if err := e.requireLease(ctx, root, o); err != nil {
-		return run, false, err
-	}
-	if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *it); why != "" {
-		return run, false, blocked(blockedby.Site, "%s", why)
-	}
-
-	// 2. The slot: the named one, else the first idle roster slot, else the
-	// first whose PR can be queued. queue marks a slot that holds another
-	// issue but is done with a PR: it is parked right before the claim, so a
-	// refusal on the way moves nothing.
-	reg, err := worker.LoadRegistry(root)
+	// 1-2. The lease, the slot and how it takes the issue.
+	reg, slot, resuming, queue, err := e.placeSlot(ctx, root, be, o, it, res)
 	if err != nil {
 		return run, false, err
 	}
-	var slot *worker.Slot
-	resuming, queue := false, false
-	if o.Agent != "" {
-		slot = reg.Slot(o.Agent)
-		if slot == nil {
-			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
-		}
-		if err := checkActive(reg, set, o.Agent, slot.Holds(id), false); err != nil {
-			return run, false, err
-		}
-		if why := e.SlotLoginProblem(slot); why != "" && !(e.placesAccounts(root) && !slot.Holds(id)) {
-			return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
-		}
-	} else {
-		picked, skipped, unresolved := e.pickSlots(ctx, root, reg, set, worker.NormID(id), 1)
-		if len(skipped) > 0 {
-			res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
-		}
-		if len(unresolved) > 0 {
-			res.Warnings = append(res.Warnings, "skipped slots with an unresolved delivery: "+strings.Join(unresolved, "; "))
-		}
-		if len(picked) == 0 {
-			if len(unresolved) > 0 && len(skipped) == 0 {
-				return run, false, blocked(blockedby.NoFreeSlot, "every free roster slot has an unresolved Core delivery: %s; to start a fresh session on one, run rota round assign %s --agent <slot>", strings.Join(unresolved, "; "), id)
-			}
-			if len(skipped) > 0 {
-				return run, false, blocked(blockedby.NoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
-			}
-			active, _ := Members(reg, set)
-			var missing []string
-			for _, n := range active {
-				if reg.Slot(n) == nil {
-					missing = append(missing, n)
-				}
-			}
-			if len(missing) > 0 {
-				msg := "round slot(s) not provisioned (a reaped slot is gone): " + strings.Join(missing, ", ") + "; run rota round start"
-				if len(missing) < len(active) {
-					msg += "; the other slots are busy"
-				}
-				return run, false, blocked(blockedby.NoFreeSlot, "%s", msg)
-			}
-			return run, false, blocked(blockedby.NoFreeSlot, "every roster slot is busy")
-		}
-		slot = picked[0]
-		// A holder resumes without the usable() gate in pickSlots: refuse it
-		// like the explicit --agent path rather than re-dispatch into a login prompt.
-		if slot.Holds(id) {
-			if why := e.SlotLoginProblem(slot); why != "" {
-				return run, false, blocked(blockedby.NoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
-			}
-		}
-	}
 	agent := slot.Name()
-	res.Agent = agent
-	// Only a gate or train on this slot's branch blocks it; other slots stay
-	// assignable while it verifies in its scratch tree (#2639). A file-backend
-	// claim writes tracked .rota/ files on the base checkout the gate lands
-	// on, so without a forge every slot still counts as touched.
-	var touched []string
-	if be.Capabilities().Forge {
-		touched = []string{agent}
-	}
-	if err := e.refuseWhileGateRuns(ctx, root, "assign", touched...); err != nil {
-		return run, false, err
-	}
-	if h := worker.HeldID(slot.Task(), slot.Branch(), agent); h != "" {
-		if h != worker.NormID(id) {
-			e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
-			ok, why := e.parkable(ctx, root, be, slot)
-			if !ok {
-				return run, false, blocked(blockedby.SlotBusy, "%s", busyMsg(agent, h, why))
-			}
-			queue = true
-		} else {
-			resuming = true
-		}
-	}
+
+	// 3. The bundle.
 	res.Branch = worker.BranchName(agent, id, it.Title)
 	members, err := e.bundleMembers(be, o, it, slot, resuming, reg)
 	if err != nil {
@@ -640,108 +554,22 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, err
 	}
 
-	if q := inReview(reg, id, bo); q != nil && !resuming {
-		return run, false, blocked(blockedby.Claimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
-	}
-
-	if o.ReclaimStale != "" {
-		if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
-			return run, false, err
-		}
-	}
-	hasOpenPR := false
-	if !resuming {
-		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
-		openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
-		if err != nil && !o.AcceptOpenPR {
-			return run, false, err
-		}
-		// A redo of an open PR awaits the assigned worker's own done.
-		hasOpenPR = err == nil && openPR[it.IssueKey()].Number != 0
-		if o.AcceptOpenPR {
-			for _, item := range append([]*backlog.Item{it}, members...) {
-				pr := openPR[item.IssueKey()]
-				if worker.RoundBranch(pr.Branch) && !strings.HasPrefix(pr.Branch, agent+"/") {
-					return run, false, blocked(blockedby.OpenPR, "%s has open PR #%d on %s, owned by another agent: rota round transfer %s --to %s picks it up", item.ID, pr.Number, pr.Branch, item.ID, agent)
-				}
-			}
-			openPR = nil
-		}
-		if n := openPR[it.IssueKey()].Number; n != 0 {
-			return run, false, blocked(blockedby.OpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
-		}
-		for _, m := range members {
-			if n := openPR[m.IssueKey()].Number; n != 0 {
-				return run, false, blocked(blockedby.OpenPR, "bundle member %s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", m.ID, n)
-			}
-		}
-	}
-
-	// Cross-milestone ties need a maintainer decision even when a closed
-	// dependency would otherwise pass the readiness check.
-	if !o.AcceptCrossMilestone && !resuming {
-		cross := crossMilestones{root: root, be: be}
-		for _, item := range append([]*backlog.Item{it}, members...) {
-			flags, err := cross.check(*item)
-			if err != nil {
-				return run, false, err
-			}
-			if len(flags) > 0 {
-				return run, false, blocked(blockedby.CrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", item.ID, strings.Join(flags, "; "))
-			}
-		}
-	}
-
-	// 4. Readiness.
-	decisions := o.SettledAnswers
-	tracked := e.trackedFiles(ctx, root)
-	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
-	// The bundle never overlaps itself: what its own slot holds of it (on a
-	// resume) is not another slot's work.
-	own := map[string]bool{worker.NormID(id): true}
-	for _, m := range res.Bundle {
-		own[m] = true
-	}
-	inFlight = slices.DeleteFunc(inFlight, func(x InFlight) bool { return own[worker.NormID(x.Issue)] })
-	assess := func(id string) (Readiness, error) {
-		r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.BlockScopeOverlap)
-		if resuming || (o.AcceptOpenPR && hasOpenPR) {
-			// Template requirements gate new work, not work already held or
-			// deliberately restarted from an existing PR. Other checks still run.
-			for i := range r.Checks {
-				if r.Checks[i].Name == CheckTemplate {
-					r.Checks[i].OK, r.Checks[i].Detail = true, []string{}
-				}
-			}
-		}
-		return r, err
-	}
-	r, err := assess(id)
+	hasOpenPR, err := e.checkClaims(ctx, root, be, o, agent, it, members, reg, bo, resuming)
 	if err != nil {
 		return run, false, err
 	}
-	res.Readiness = r
-	for _, m := range members {
-		mr, err := assess(m.ID)
-		if err != nil {
-			return run, false, err
-		}
-		res.Members = append(res.Members, mr)
+
+	// 4. Readiness.
+	r, memberReadiness, err := e.assessReadiness(ctx, root, be, o, it, members, resuming, hasOpenPR)
+	res.Readiness, res.Members = r, memberReadiness
+	if err != nil {
+		return run, false, err
 	}
 	if o.CheckOnly {
 		return run, true, nil
 	}
-	if !r.Ready() {
-		blk := blocked(notReadyBy(r), "%s is not ready: %s", id, failedChecks(r))
-		blk.Readiness = &r
+	if blk := readinessRefusal(r, memberReadiness); blk != nil {
 		return run, false, blk
-	}
-	for i, mr := range res.Members {
-		if !mr.Ready() {
-			blk := blocked(notReadyBy(mr), "bundle member %s is not ready: %s", mr.ID, failedChecks(mr))
-			blk.Readiness = &res.Members[i]
-			return run, false, blk
-		}
 	}
 
 	// round.batch: a slot resuming its own issue adds nothing to the open count.
@@ -768,47 +596,27 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	if briefWarn != "" {
 		res.Warnings = append(res.Warnings, briefWarn)
 	}
-
 	decisionContext := slot.BriefDecisionContext()
 	if !resuming || len(o.DecisionTopics) > 0 {
-		decisionContext, err = decisionBriefContext(root, o.DecisionTopics)
-		if err != nil {
+		if decisionContext, err = decisionBriefContext(root, o.DecisionTopics); err != nil {
 			return run, false, err
 		}
 	}
-
 	if bo != nil && bo.preflight {
 		return run, true, nil
 	}
 
-	// 6. A support branch starts from the main the main machine last pushed.
-	from := ""
-	// An interaction item is fixed on its integration branch, ahead of any milestone.
-	msBase, warn := integrationBase(root, it), ""
-	if msBase == "" {
-		if msBase, warn, err = e.milestoneBase(ctx, root, be, it); err != nil {
-			return run, false, err
-		}
-	}
-	if warn != "" {
-		res.Warnings = append(res.Warnings, warn)
-	}
-	switch {
-	case set.Role == roundcfg.RoleSupport:
-		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming, strutil.FirstNonEmpty(msBase, slot.Base())); err != nil {
-			return run, false, err
-		}
-	case msBase != "":
-		// An issue of an active milestone is cut from the milestone branch.
-		if from, err = e.fetchBase(ctx, root, msBase); err != nil {
-			return run, false, err
-		}
+	// 6. Where the branch starts.
+	from, msBase, warns, err := e.startPoint(ctx, root, be, it, slot, res.Branch, resuming)
+	res.Warnings = append(res.Warnings, warns...)
+	if err != nil {
+		return run, false, err
 	}
 
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, decisionContext: decisionContext, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), placement: pf.Placement, openPR: hasOpenPR}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: o.SettledAnswers, brief: brief, decisionContext: decisionContext, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), placement: pf.Placement, openPR: hasOpenPR}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
