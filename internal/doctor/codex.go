@@ -70,7 +70,7 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 		return fail(name, plan.Binary+" not found on PATH, but "+in.AccountsKey+" has "+plan.Binary+" accounts: "+homeNames(homes), plan.InstallHint)
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
-		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)
+		r, err := d.exec(ctx, bin, args, env)
 		return harness.Result{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode}, err
 	}}
 	home := ""

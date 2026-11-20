@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
@@ -331,11 +332,11 @@ func TestGateHeadsExternalPRReadsTheForge(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"forge":{"provider":"github"}}`), 0o644)
 	sha := "feedface00000000000000000000000000000001"
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "pr" && args[1] == "view" && args[2] == "99" {
-			return []byte(`{"headRefName":"fix/forward","headRefOid":"` + sha + `","baseRefName":"main","state":"OPEN"}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "pr" && cmd.Args[1] == "view" && cmd.Args[2] == "99" {
+			return proc.Result{Stdout: `{"headRefName":"fix/forward","headRefOid":"` + sha + `","baseRefName":"main","state":"OPEN"}`}, nil
 		}
-		return nil, []byte("unexpected " + strings.Join(args, " ")), 1, nil
+		return proc.Result{Stderr: "unexpected " + strings.Join(cmd.Args, " "), ExitCode: 1}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	if got := gateHeads(&Ctx{Deps: deps}, dir, []string{"#99"}); got[0] != "head:#99="+sha {
 		t.Errorf("got %v, want the forge's head %s", got, sha)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // scripted is an executor that answers by argv; it is safe for concurrent use.
@@ -22,20 +23,20 @@ type scripted struct {
 	answer func(name string, args []string) (string, string, int)
 }
 
-func (s *scripted) exec(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-	line := name + " " + strings.Join(args, " ")
+func (s *scripted) exec(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+	line := cmd.Name + " " + strings.Join(cmd.Args, " ")
 	s.mu.Lock()
 	s.calls = append(s.calls, line)
 	s.mu.Unlock()
-	out, errs, code := s.answer(name, args)
-	return []byte(out), []byte(errs), code, nil
+	out, errs, code := s.answer(cmd.Name, cmd.Args)
+	return proc.Result{Stdout: out, Stderr: errs, ExitCode: code}, nil
 }
 
 // git is the git seam: the same script and call log, for the git calls an
 // adapter makes outside its forge CLI.
 func (s *scripted) git(_ context.Context, _ string, args ...string) (git.Result, error) {
-	out, errs, code, _ := s.exec(context.Background(), "", "git", args, nil)
-	return git.Result{Stdout: string(out), Stderr: string(errs), ExitCode: code}, nil
+	res, _ := s.exec(context.Background(), proc.Cmd{Name: "git", Args: args})
+	return res, nil
 }
 
 func newAdapter(t *testing.T, provider string, s *scripted) Adapter {
@@ -92,9 +93,9 @@ func TestNotFound(t *testing.T) {
 }
 
 func TestAttemptTimeout(t *testing.T) {
-	block := func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+	block := func(ctx context.Context, _ proc.Cmd) (proc.Result, error) {
 		<-ctx.Done()
-		return nil, nil, 0, ctx.Err()
+		return proc.Result{}, ctx.Err()
 	}
 	c := &CLI{Provider: "github", Timeout: 20 * time.Millisecond, Exec: block,
 		LookPath: func(string) (string, error) { return "/fake", nil }}
@@ -114,25 +115,13 @@ func TestAttemptTimeout(t *testing.T) {
 	}
 }
 
-// TestDefaultExecTimeoutKillsProcess runs a real process (a shell, never gh)
-// through the default executor.
-func TestDefaultExecTimeoutKillsProcess(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	start := time.Now()
-	_, _, _, err := osExec(ctx, "", "sh", []string{"-c", "sleep 30"}, nil)
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 10*time.Second {
-		t.Fatalf("err %v after %v", err, time.Since(start))
-	}
-}
-
 func TestRetryWaitIsCancellable(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &CLI{Provider: "github", RetryWait: time.Hour,
 		LookPath: func(string) (string, error) { return "/fake", nil },
-		Exec: func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+		Exec: func(context.Context, proc.Cmd) (proc.Result, error) {
 			cancel()
-			return nil, []byte("API rate limit exceeded"), 1, nil
+			return proc.Result{Stderr: "API rate limit exceeded", ExitCode: 1}, nil
 		}}
 	done := make(chan error, 1)
 	go func() { _, err := c.Run(ctx, []string{"issue", "list"}, nil); done <- err }()
@@ -148,8 +137,8 @@ func TestRetryWaitIsCancellable(t *testing.T) {
 
 func TestExecStartFailureIsInternal(t *testing.T) {
 	c := &CLI{Provider: "github", LookPath: func(string) (string, error) { return "/fake", nil },
-		Exec: func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-			return nil, nil, 0, &os.PathError{Op: "chdir", Path: "/nope", Err: os.ErrNotExist}
+		Exec: func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{}, &os.PathError{Op: "chdir", Path: "/nope", Err: os.ErrNotExist}
 		}}
 	_, err := c.Run(context.Background(), []string{"issue", "list"}, nil)
 	if !IsKind(err, KindInternal) || KindInternal.Exit() != 70 {

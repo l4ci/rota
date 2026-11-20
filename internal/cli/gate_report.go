@@ -49,7 +49,7 @@ func releaseLandedSlice(c *Ctx) func(root, issue, slot string) error {
 		if err != nil || it.Closed || !slices.Contains(it.Labels, labels.PartialSlice) {
 			return nil
 		}
-		tr, ok := raw.(backlog.ItemTracker)
+		tr, ok := backlog.ItemTrackerFor(raw)
 		if !ok {
 			return nil
 		}

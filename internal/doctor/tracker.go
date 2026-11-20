@@ -1,7 +1,6 @@
 package doctor
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -39,38 +38,10 @@ func (d *runner) connection() (Check, bool) {
 	return fail("connection", c.Detail, c.Hint), true
 }
 
-// trackerExec adapts the injected Exec and Look to the tracker's, so the
-// tracker owners (OriginURL, CLI) run through doctor's test seam.
-func (d *runner) trackerExec() tracker.Exec {
-	return func(ctx context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		bin, ok := d.in.Look(name)
-		if !ok {
-			return nil, nil, 0, exec.ErrNotFound
-		}
-		r, err := d.in.Exec(ctx, bin, args, nil, dir)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		return []byte(r.Stdout), []byte(r.Stderr), r.ExitCode, nil
-	}
-}
-
-// gitRunner adapts the injected Exec and Look to a git.Runner, so the origin
-// read runs through doctor's test seam.
-func (d *runner) gitRunner() git.Runner {
-	return func(ctx context.Context, dir string, args ...string) (git.Result, error) {
-		bin, ok := d.in.Look("git")
-		if !ok {
-			return git.Result{}, git.ErrNoGit
-		}
-		return d.in.Exec(ctx, bin, args, []string{"LC_ALL=C", "LANGUAGE=C"}, dir)
-	}
-}
-
 // resolveForge is the forge doctor resolves, as a reader
 // (tracker.ResolveProvider): an origin naming no forge is an assumed github.
 func (d *runner) resolveForge() tracker.Resolution {
-	r, _ := tracker.ResolveProvider(d.ctx, tracker.ForgeReader, "", d.in.Tracker.Provider, d.in.Dir, d.gitRunner())
+	r, _ := tracker.ResolveProvider(d.ctx, tracker.ForgeReader, "", d.in.Tracker.Provider, d.in.Dir, git.Via(d.lookedUp))
 	return r
 }
 
@@ -167,7 +138,7 @@ func (d *runner) tracker() Check {
 	if _, ok := d.in.Look(cli); !ok {
 		return fail("tracker", cli+" not found on PATH", "install "+cli)
 	}
-	c := &tracker.CLI{Provider: f, Dir: d.in.Dir, Exec: d.trackerExec(), LookPath: func(n string) (string, error) {
+	c := &tracker.CLI{Provider: f, Dir: d.in.Dir, Exec: d.lookedUp, LookPath: func(n string) (string, error) {
 		if bin, ok := d.in.Look(n); ok {
 			return bin, nil
 		}

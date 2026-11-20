@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // ── fakes ───────────────────────────────────────────────────────────────────
@@ -612,24 +613,24 @@ func TestRelaySummary(t *testing.T) {
 // fakeBinRunner runs test/fakes/herdr and test/fakes/tmux by absolute path
 // with their state dirs. It refuses anything else, so even a bug here cannot
 // reach a real herdr or tmux.
-func fakeBinRunner(t *testing.T, herdrDir, tmuxDir string) host.Runner {
+func fakeBinRunner(t *testing.T, herdrDir, tmuxDir string) proc.Runner {
 	t.Helper()
 	fakes, err := filepath.Abs("../../test/fakes")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return func(ctx context.Context, name string, args []string) (host.Result, error) {
-		var cmd *exec.Cmd
-		switch name {
+	return func(ctx context.Context, cmd proc.Cmd) (host.Result, error) {
+		var ec *exec.Cmd
+		switch cmd.Name {
 		case "herdr", "tmux":
-			cmd = exec.CommandContext(ctx, filepath.Join(fakes, name), args...)
-			cmd.Env = append(os.Environ(), "FAKE_HERDR="+herdrDir, "FAKE_TMUX="+tmuxDir)
+			ec = exec.CommandContext(ctx, filepath.Join(fakes, cmd.Name), cmd.Args...)
+			ec.Env = append(os.Environ(), "FAKE_HERDR="+herdrDir, "FAKE_TMUX="+tmuxDir)
 		default:
-			t.Fatalf("fakeBinRunner: refusing to run %q", name)
+			t.Fatalf("fakeBinRunner: refusing to run %q", cmd.Name)
 		}
 		var out, errb strings.Builder
-		cmd.Stdout, cmd.Stderr = &out, &errb
-		err := cmd.Run()
+		ec.Stdout, ec.Stderr = &out, &errb
+		err := ec.Run()
 		r := host.Result{Stdout: out.String(), Stderr: errb.String()}
 		if ee, ok := err.(*exec.ExitError); ok {
 			r.ExitCode = ee.ExitCode()
@@ -639,7 +640,7 @@ func fakeBinRunner(t *testing.T, herdrDir, tmuxDir string) host.Runner {
 	}
 }
 
-func hostDeps(run host.Runner, env map[string]string) host.Deps {
+func hostDeps(run proc.Runner, env map[string]string) host.Deps {
 	return host.Deps{
 		Run: run, Getenv: func(k string) string { return env[k] }, Sleep: func(time.Duration) {},
 		LookPath: func(n string) (string, error) { return "/fake/" + n, nil }, KillWait: 2,

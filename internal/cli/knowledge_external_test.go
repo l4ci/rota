@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/proc"
 	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -42,12 +42,12 @@ func TestKnowledgeExternalPRUsesCloneForge(t *testing.T) {
 			d.Proc = func(context.Context, proc.Cmd) (proc.Result, error) {
 				return proc.Result{ExitCode: 1, Stderr: "PR creation bypassed the forge"}, nil
 			}
-			d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-				if dir != clone {
-					t.Fatalf("forge ran in %q, want knowledge clone %q", dir, clone)
+			d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, cmd proc.Cmd) (proc.Result, error) {
+				if cmd.Dir != clone {
+					t.Fatalf("forge ran in %q, want knowledge clone %q", cmd.Dir, clone)
 				}
-				r, err := proc.Run(ctx, proc.Cmd{Name: name, Dir: dir, Args: args, Stdin: stdin})
-				return []byte(r.Stdout), []byte(r.Stderr), r.ExitCode, err
+				r, err := proc.Run(ctx, proc.Cmd{Name: cmd.Name, Dir: cmd.Dir, Args: cmd.Args, Stdin: cmd.Stdin})
+				return proc.Result{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode}, err
 			}, nil), tracker.WithGit(func(context.Context, string, ...string) (git.Result, error) {
 				// Keep git transfers local; only forge detection sees the hosted origin.
 				return git.Result{Stdout: "https://" + tc.provider + ".com/fake/repo.git\n"}, nil

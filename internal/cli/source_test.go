@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -30,8 +31,8 @@ func originGit(origin string) git.Runner {
 
 func originDeps(origin string) *Deps {
 	d := testDeps()
-	d.TrackerOptions = []tracker.Option{tracker.WithGit(originGit(origin)), tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-		return nil, nil, 1, nil
+	d.TrackerOptions = []tracker.Option{tracker.WithGit(originGit(origin)), tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{ExitCode: 1}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	return d
 }

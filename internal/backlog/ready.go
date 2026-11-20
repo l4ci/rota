@@ -83,7 +83,7 @@ func trackerHasNote(t ItemTracker, ref string) (bool, error) {
 // .rota/designs and .rota/plans files. A backend that can show neither has
 // none. A tracker note that cannot be read returns its error.
 func HasNote(be Backend, ref string) (bool, error) {
-	if t, ok := be.(ItemTracker); ok {
+	if t, ok := ItemTrackerFor(be); ok {
 		return trackerHasNote(t, ref)
 	}
 	if nf, ok := be.(noteFiler); ok {

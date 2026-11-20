@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -37,8 +38,8 @@ func TestAutopilotReviewProbeLetsPRStateReachGate(t *testing.T) {
 			deps := testDeps()
 			// An open PR targeting another base is also an identity refusal,
 			// not evidence that the head is waiting for review.
-			deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-				return []byte(fmt.Sprintf(`{"state":%q,"headRefName":%q,"baseRefName":"other"}`, state, branch)), nil, 0, nil
+			deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{Stdout: fmt.Sprintf(`{"state":%q,"headRefName":%q,"baseRefName":"other"}`, state, branch)}, nil
 			}, func(n string) (string, error) { return "/fake/" + n, nil })}
 			c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
 			probe, err := workerEnvCtx(c, c.Context()).Gate(c.Context(), dir, worker.GateOpts{Slot: "ben", Base: "main", ReviewsOnly: true})

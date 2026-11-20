@@ -5,7 +5,6 @@ package marker
 
 import (
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -315,26 +314,6 @@ func SideOf(body string) string {
 }
 
 var supportReturnRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-return -->(?:\n|\z)`)
-
-// OpenClaims returns claim ids with no later release, in claim order.
-// Repeated claims keep their place; a released id can claim again at the end.
-func OpenClaims(bodies []string) []string {
-	var held []string
-	for _, body := range bodies {
-		verb, id, ok := ParseClaim(body)
-		if !ok {
-			continue
-		}
-		if verb == KindClaim {
-			if !slices.Contains(held, id) {
-				held = append(held, id)
-			}
-		} else if i := slices.Index(held, id); i >= 0 {
-			held = append(held[:i], held[i+1:]...)
-		}
-	}
-	return held
-}
 
 // ReportProse keeps producer prose from introducing a sibling file section or
 // a second report marker in a rendered report.

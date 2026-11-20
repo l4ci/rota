@@ -1,9 +1,11 @@
 package marker
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLine(t *testing.T) {
@@ -211,19 +213,42 @@ func TestSideOf(t *testing.T) {
 	}
 }
 
-func TestOpenClaims(t *testing.T) {
+func TestFoldClaims(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := func(n int) time.Time { return t0.Add(time.Duration(n) * time.Hour) }
+	type cm = ClaimComment
 	for _, c := range []struct {
-		name         string
-		bodies, want []string
+		name     string
+		comments []cm
+		held     []string
+		claimed  map[string]time.Time
+		hand     []string
 	}{
-		{name: "none", bodies: []string{"plain comment", "<!-- rota:release absent@1 -->"}},
-		{name: "ordered unique", bodies: []string{"<!-- rota:claim ben@3 -->", "<!-- rota:claim dana@5 -->", "<!-- rota:claim ben@3 -->"}, want: []string{"ben@3", "dana@5"}},
-		{name: "release and reclaim", bodies: []string{"<!-- hv:claim ben@3 -->", "<!-- rota:claim dana@5 -->", "<!-- hv:release ben@3 -->", "<!-- rota:claim ben@3 -->"}, want: []string{"dana@5", "ben@3"}},
-		{name: "released", bodies: []string{"<!-- rota:claim ben@3 -->", "<!-- rota:release ben@3 -->"}},
+		{name: "none", comments: []cm{{Body: "plain comment"}, {Body: "<!-- rota:release absent@1 -->"}}},
+		{name: "ordered unique", comments: []cm{{"<!-- rota:claim ben@3 -->", at(1)}, {"<!-- rota:claim dana@5 -->", at(2)}, {"<!-- rota:claim ben@3 -->", at(3)}},
+			held: []string{"ben@3", "dana@5"}, claimed: map[string]time.Time{"ben@3": at(1), "dana@5": at(2)}},
+		{name: "release and reclaim", comments: []cm{{"<!-- hv:claim ben@3 -->", at(1)}, {"<!-- rota:claim dana@5 -->", at(2)}, {"<!-- hv:release ben@3 -->", at(3)}, {"<!-- rota:claim ben@3 -->", at(4)}},
+			held: []string{"dana@5", "ben@3"}, claimed: map[string]time.Time{"dana@5": at(2), "ben@3": at(4)}},
+		{name: "released", comments: []cm{{"<!-- rota:claim ben@3 -->", at(1)}, {"<!-- rota:release ben@3 -->", at(2)}}},
+		{name: "hand release", comments: []cm{{"<!-- rota:claim ben@3 -->", at(1)}, {HandRelease("ben@3"), at(2)}}, hand: []string{"ben@3"}},
+		{name: "hand release then reclaim", comments: []cm{{"<!-- rota:claim ben@3 -->", at(1)}, {HandRelease("ben@3"), at(2)}, {"<!-- rota:claim ben@3 -->", at(3)}},
+			held: []string{"ben@3"}, claimed: map[string]time.Time{"ben@3": at(3)}},
+		{name: "hand release then plain release", comments: []cm{{HandRelease("ben@3"), at(1)}, {"<!-- rota:release ben@3 -->", at(2)}}},
+		{name: "hand release of another id kept", comments: []cm{{HandRelease("ben@3"), at(1)}, {"<!-- rota:claim dana@5 -->", at(2)}},
+			held: []string{"dana@5"}, claimed: map[string]time.Time{"dana@5": at(2)}, hand: []string{"ben@3"}},
+		{name: "zero time kept", comments: []cm{{Body: "<!-- rota:claim ben@3 -->"}},
+			held: []string{"ben@3"}, claimed: map[string]time.Time{"ben@3": {}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := OpenClaims(c.bodies); !slices.Equal(got, c.want) {
-				t.Fatalf("claims %v, want %v", got, c.want)
+			got := FoldClaims(c.comments)
+			if !slices.Equal(got.Held, c.held) {
+				t.Errorf("held %v, want %v", got.Held, c.held)
+			}
+			if !maps.Equal(got.ClaimedAt, c.claimed) {
+				t.Errorf("claimedAt %v, want %v", got.ClaimedAt, c.claimed)
+			}
+			if !slices.Equal(got.HandReleased, c.hand) {
+				t.Errorf("handReleased %v, want %v", got.HandReleased, c.hand)
 			}
 		})
 	}

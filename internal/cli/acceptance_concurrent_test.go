@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -51,15 +52,15 @@ func TestPlanPassConcurrentKeepsMarks(t *testing.T) {
 				d := testDeps()
 				d.Getwd = func() (string, error) { return dir, nil }
 				d.Getenv = func(string) string { return "" }
-				d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-					joined := strings.Join(args, " ")
+				d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+					joined := strings.Join(cmd.Args, " ")
 					switch {
-					case len(args) > 1 && args[0] == "issue" && args[1] == "view":
+					case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "view":
 						out, err := json.Marshal(map[string]any{"number": 7, "title": "Export", "state": "OPEN", "body": "## Acceptance\n- [ ] AC-1: first\n- [ ] AC-2: second\n- [ ] AC-3: third\n", "labels": []map[string]string{{"name": "type:feature"}}})
-						return out, nil, 0, err
+						return proc.Result{Stdout: string(out)}, err
 					case strings.Contains(joined, "-X PATCH"):
 						body := ""
-						for _, arg := range args {
+						for _, arg := range cmd.Args {
 							if strings.HasPrefix(arg, "body=") {
 								body = strings.TrimPrefix(arg, "body=")
 							}
@@ -67,14 +68,14 @@ func TestPlanPassConcurrentKeepsMarks(t *testing.T) {
 						if !second {
 							patchOnce.Do(func() { close(patchStarted) })
 							if err := wait(secondRead); err != nil {
-								return nil, nil, 0, err
+								return proc.Result{}, err
 							}
 						}
 						mu.Lock()
 						note = body
 						mu.Unlock()
-						return []byte(`{"id":2}`), nil, 0, nil
-					case len(args) > 0 && args[0] == "api" && strings.Contains(joined, "/comments"):
+						return proc.Result{Stdout: `{"id":2}`}, nil
+					case len(cmd.Args) > 0 && cmd.Args[0] == "api" && strings.Contains(joined, "/comments"):
 						reads++
 						mu.Lock()
 						out, err := json.Marshal([]map[string]any{
@@ -87,9 +88,9 @@ func TestPlanPassConcurrentKeepsMarks(t *testing.T) {
 								close(secondRead)
 							})
 						}
-						return out, nil, 0, err
+						return proc.Result{Stdout: string(out)}, err
 					default:
-						return nil, nil, 0, fmt.Errorf("unexpected forge command: %v", args)
+						return proc.Result{}, fmt.Errorf("unexpected forge command: %v", cmd.Args)
 					}
 				}, func(n string) (string, error) { return "/fake/" + n, nil })}
 				return &Ctx{Deps: d, Stderr: io.Discard, ctx: ctx}

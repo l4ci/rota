@@ -63,11 +63,7 @@ func TestBackendBehavior(t *testing.T) {
 				t.Errorf("Get unknown: %v", err)
 			}
 
-			wf, err := WorkflowOf(be)
-			if err != nil {
-				t.Fatal(err)
-			}
-			won, holder, err := wf.Claim(id, "ben@1")
+			won, holder, err := be.Claim(id, "ben@1")
 			if err != nil || !won || holder != "ben@1" {
 				t.Fatalf("Claim = %v, %q, %v", won, holder, err)
 			}

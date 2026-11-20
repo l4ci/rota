@@ -42,14 +42,14 @@ type fake struct {
 
 func (f *fake) look(name string) (string, bool) { return "/fake/" + name, f.have[name] }
 
-func (f *fake) exec(_ context.Context, bin string, args []string, env []string, _ string) (Result, error) {
-	tool := filepath.Base(bin)
-	for _, e := range env {
+func (f *fake) exec(_ context.Context, c proc.Cmd) (Result, error) {
+	tool := filepath.Base(c.Name)
+	for _, e := range c.Env {
 		if v, ok := strings.CutPrefix(e, "CLAUDE_CONFIG_DIR="); ok {
 			f.envs = append(f.envs, v)
 		}
 	}
-	if r, ok := f.reply[tool+" "+strings.Join(args, " ")]; ok {
+	if r, ok := f.reply[tool+" "+strings.Join(c.Args, " ")]; ok {
 		return r, nil
 	}
 	return Result{ExitCode: 1}, nil
@@ -510,15 +510,15 @@ type codexFake struct {
 	homes []string
 }
 
-func (f *codexFake) exec(ctx context.Context, bin string, args []string, env []string, dir string) (Result, error) {
+func (f *codexFake) exec(ctx context.Context, c proc.Cmd) (Result, error) {
 	h := "-"
-	for _, e := range env {
+	for _, e := range c.Env {
 		if v, ok := strings.CutPrefix(e, "CODEX_HOME="); ok {
 			h = v
 		}
 	}
-	f.homes = append(f.homes, filepath.Base(bin)+" "+strings.Join(args, " ")+" @ "+h)
-	return f.fake.exec(ctx, bin, args, env, dir)
+	f.homes = append(f.homes, filepath.Base(c.Name)+" "+strings.Join(c.Args, " ")+" @ "+h)
+	return f.fake.exec(ctx, c)
 }
 
 // The version runs under the first account's home, and every configured
@@ -1221,4 +1221,21 @@ func TestRepoConfigCheckErrorWarns(t *testing.T) {
 		}
 	}
 	t.Fatal("no repo config check for a failed Check")
+}
+
+// A corrupt workers registry fails doctor, as reap refuses it; a readable or
+// absent one adds no row.
+func TestRegistryCheck(t *testing.T) {
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	rep := Run(context.Background(), Input{RegistryErr: errors.New("workers.json: invalid character"), Exec: f.exec, Look: f.look})
+	c := statusOf(rep, "registry")
+	if c.Status != Fail || !strings.Contains(c.Detail, "invalid character") || c.Hint == "" {
+		t.Fatalf("registry = %+v, want a fail with the error and a hint", c)
+	}
+	if rep.OK() {
+		t.Error("report OK with a corrupt registry")
+	}
+	if c := statusOf(Run(context.Background(), Input{Exec: f.exec, Look: f.look}), "registry"); c.Name != "" {
+		t.Errorf("registry = %+v, want no line for a readable registry", c)
+	}
 }

@@ -551,7 +551,7 @@ func (d *Deps) sides(ctx context.Context, cfg any, dir string, opts []tracker.Op
 
 // trackerExec is the executor TrackerOptions install (nil: the real one), for a
 // verb that reads the origin through tracker.ResolveProvider.
-func (d *Deps) trackerExec() tracker.Exec {
+func (d *Deps) trackerExec() proc.Runner {
 	cl := &tracker.CLI{}
 	for _, o := range d.trackerOptions() {
 		o(cl)

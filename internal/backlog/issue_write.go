@@ -194,8 +194,10 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 		return CreateResult{}, err
 	}
 	if strings.Contains(full, "{ID}") {
-		body := strings.ReplaceAll(full, "{ID}", KeyTag(letter, n))
-		if err := tr.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
+		if _, err := b.editBody(tr, n, full, func(d *BodyDoc) (bool, error) {
+			d.SetRaw(strings.ReplaceAll(full, "{ID}", KeyTag(letter, n)))
+			return true, nil
+		}); err != nil {
 			return CreateResult{}, err
 		}
 	}
@@ -259,28 +261,29 @@ func (b *Issues) SetField(ref, field, value string) (bool, error) {
 		return true, nil
 	}
 	name := strings.ToUpper(field[:1]) + field[1:]
-	text, block, order := ParseFieldsBlock(is.Body)
 	value = oneLine(value)
-	if block[name] == value {
-		return false, nil
-	}
-	values := map[string]string{}
-	var names []string
-	for _, k := range order {
-		if k == name && value == "" {
-			continue
+	return b.editBody(tr, n, is.Body, func(d *BodyDoc) (bool, error) {
+		if d.Fields[name] == value {
+			return false, nil
 		}
-		names = append(names, k)
-		values[k] = block[k]
-	}
-	if value != "" {
-		if _, had := values[name]; !had {
-			names = append(names, name)
+		values := map[string]string{}
+		var names []string
+		for _, k := range d.Order {
+			if k == name && value == "" {
+				continue
+			}
+			names = append(names, k)
+			values[k] = d.Fields[k]
 		}
-		values[name] = value
-	}
-	body := RenderFieldsBlock(text, names, values)
-	return true, tr.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body})
+		if value != "" {
+			if _, had := values[name]; !had {
+				names = append(names, name)
+			}
+			values[name] = value
+		}
+		d.Order, d.Fields = names, values
+		return true, nil
+	})
 }
 
 // ---- complete / reopen -----------------------------------------------------
@@ -863,13 +866,10 @@ func (b *Issues) SetBody(ref, body string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if is.Body == body {
-		return false, nil
-	}
-	if err := tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return b.editBody(tr, is.Key, is.Body, func(d *BodyDoc) (bool, error) {
+		d.SetRaw(body)
+		return true, nil
+	})
 }
 
 // SectionEditor is a backend that can replace or add one "## <name>" section
@@ -905,21 +905,13 @@ func (b *Issues) SetSection(ref, name, content string) (bool, error) {
 	if is.State != "open" {
 		return false, refused(blockedby.ClosedItem, ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
-	old := strings.ReplaceAll(is.Body, "\r\n", "\n")
-	text, _, _ := marker.SplitFields(old)
-	rest := strings.TrimLeft(old[len(text):], "\n")
-	text = itembody.SetSection(text, name, strings.ReplaceAll(content, "\r\n", "\n"))
-	if strings.EqualFold(name, "acceptance") {
-		text, _ = acceptance.Number(text)
-	}
-	body := marker.JoinFields(text, rest)
-	if is.Body == body {
-		return false, nil
-	}
-	if err := tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return b.editBody(tr, is.Key, is.Body, func(d *BodyDoc) (bool, error) {
+		d.Text = itembody.SetSection(d.Text, name, strings.ReplaceAll(content, "\r\n", "\n"))
+		if strings.EqualFold(name, "acceptance") {
+			d.Text, _ = acceptance.Number(d.Text)
+		}
+		return true, nil
+	})
 }
 
 // Status is the read-back of one issue and its comments (IssueBackend.status).
@@ -977,45 +969,15 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	if title == "" {
 		title = "(untitled)"
 	}
-	var claimedAt map[string]time.Time
-	for _, c := range comments {
-		verb, id, ok := marker.ParseClaim(c.Body)
-		if !ok {
-			continue
-		}
-		if verb == marker.KindClaim {
-			if claimedAt == nil {
-				claimedAt = map[string]time.Time{}
-			}
-			if _, exists := claimedAt[id]; !exists {
-				claimedAt[id] = c.CreatedAt
-			}
-		} else {
-			delete(claimedAt, id)
-		}
-	}
-	var handReleased []string
-	for _, c := range comments {
-		verb, id, ok := marker.ParseClaim(c.Body)
-		if !ok {
-			continue
-		}
-		handReleased = slices.DeleteFunc(handReleased, func(h string) bool { return h == id })
-		// ClaimStore claims are plain comments: an open claim supersedes an
-		// older hand release without carrying a claim marker of its own.
-		if verb == marker.KindRelease && marker.IsHandRelease(c.Body, id) && !slices.Contains(held, id) {
-			handReleased = append(handReleased, id)
-		}
-	}
-	// Only a claim the tracker holds has an age: a stray marker comment on a
-	// claim-store tracker is not claim state.
-	maps.DeleteFunc(claimedAt, func(id string, _ time.Time) bool { return !slices.Contains(held, id) })
-	// Unknown timestamps carry no activity evidence and keep legacy output stable.
-	for id, at := range claimedAt {
-		if at.IsZero() {
-			delete(claimedAt, id)
-		}
-	}
+	fold := marker.FoldClaims(tracker.ClaimComments(comments))
+	// Only a claim the tracker holds has an age or can be handed back: a stray
+	// marker comment on a claim-store tracker is not claim state. Unknown
+	// timestamps carry no activity evidence and keep legacy output stable.
+	claimedAt := fold.ClaimedAt
+	maps.DeleteFunc(claimedAt, func(id string, at time.Time) bool { return at.IsZero() || !slices.Contains(held, id) })
+	// ClaimStore claims are plain comments: an open claim supersedes an
+	// older hand release without carrying a claim marker of its own.
+	handReleased := slices.DeleteFunc(fold.HandReleased, func(id string) bool { return slices.Contains(held, id) })
 	st := &Status{ClaimedAt: claimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
@@ -1044,7 +1006,9 @@ func (b *Issues) SetDetail(ref, text string) error {
 	if is.State != "open" {
 		return refused(blockedby.ClosedItem, ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
-	_, block, order := ParseFieldsBlock(is.Body)
-	body := RenderFieldsBlock(strings.Trim(text, "\n"), order, block)
-	return tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+	_, err = b.editBody(tr, is.Key, is.Body, func(d *BodyDoc) (bool, error) {
+		d.Text = strings.Trim(text, "\n")
+		return true, nil
+	})
+	return err
 }

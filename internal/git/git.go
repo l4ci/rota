@@ -46,12 +46,21 @@ type Result = proc.Result
 // Runner runs git with args in dir. A non-zero exit is a Result, not an error;
 // err is ErrNoGit when git is missing, or the context's error. It is the
 // injection point for every layer that runs git: tests fake it, production
-// passes Exec.
+// passes Exec. A Runner owns the git policy (the C locale, the git timeout and
+// ErrNoGit), so it keeps this signature rather than taking a proc.Cmd.
 type Runner func(ctx context.Context, dir string, args ...string) (Result, error)
 
 // Exec is the production Runner.
 func Exec(ctx context.Context, dir string, args ...string) (Result, error) {
 	return via(proc.Run, ctx, dir, args...)
+}
+
+// Via is a Runner that runs git through run, with the policy every git call
+// shares: for a layer whose injected process runner also fakes git.
+func Via(run proc.Runner) Runner {
+	return func(ctx context.Context, dir string, args ...string) (Result, error) {
+		return via(run, ctx, dir, args...)
+	}
 }
 
 // via runs git through a process runner with the policy every git call shares:

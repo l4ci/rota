@@ -92,7 +92,7 @@ func AgentName(slot, handle string) string {
 }
 
 func (h *herdr) herdr(ctx context.Context, args ...string) Result {
-	r, err := h.d.Run(ctx, "herdr", args)
+	r, err := h.d.call(ctx, "herdr", args)
 	if err != nil {
 		return Result{ExitCode: 127, Stderr: err.Error()}
 	}

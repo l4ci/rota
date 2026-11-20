@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -26,26 +27,26 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 	prBranch := "nia/6-x"
 	var issueLabels []map[string]string
 	extraIssues := map[string]map[string]any{}
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		line := strings.Join(args, " ")
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		line := strings.Join(cmd.Args, " ")
 		switch {
 		case strings.HasPrefix(line, "pr list"):
 			b, _ := json.Marshal([]map[string]any{{"number": 7, "title": "t", "headRefName": prBranch, "url": prURL, "body": prBody}})
-			return b, nil, 0, nil
+			return proc.Result{Stdout: string(b)}, nil
 		case strings.HasPrefix(line, "pr view"):
 			b, _ := json.Marshal(map[string]any{"headRefName": prBranch, "headRefOid": headSHA, "baseRefName": "main", "state": "OPEN", "title": "t", "body": prBody})
-			return b, nil, 0, nil
+			return proc.Result{Stdout: string(b)}, nil
 		case strings.HasPrefix(line, "api graphql"):
-			return []byte(`{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[]}}}}}`), nil, 0, nil
+			return proc.Result{Stdout: `{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[]}}}}}`}, nil
 		case strings.HasPrefix(line, "issue view"):
-			if is, ok := extraIssues[args[2]]; ok {
+			if is, ok := extraIssues[cmd.Args[2]]; ok {
 				b, _ := json.Marshal(is)
-				return b, nil, 0, nil
+				return proc.Result{Stdout: string(b)}, nil
 			}
 			b, _ := json.Marshal(map[string]any{"number": 6, "title": "t", "state": "OPEN", "body": issueBody, "labels": issueLabels})
-			return b, nil, 0, nil
+			return proc.Result{Stdout: string(b)}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")

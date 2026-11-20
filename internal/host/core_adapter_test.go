@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/proc"
 	_ "github.com/l4ci/rota/internal/testiso"
 	"io"
 	"net"
@@ -26,7 +27,7 @@ func coreFixture(t *testing.T) (Host, *coreFake) {
 	f := &coreFake{screen: "› \n", styled: "\x18\x1b[H\x1b[2J› \x1b[1;3H\x1b[?9001l", cols: 100, rows: 30, status: "idle", pid: 42, core: "fixture-core", state: "live", events: make(chan map[string]any, 8), labels: map[string]string{"herdr.space": "s1", "herdr.tab": "parent-tab"}}
 	t.Cleanup(func() { close(f.events) })
 	dir := t.TempDir()
-	d := Deps{Run: func(context.Context, string, []string) (Result, error) {
+	d := Deps{Run: func(context.Context, proc.Cmd) (Result, error) {
 		return Result{}, fmt.Errorf("unexpected executable")
 	}, Getenv: func(k string) string {
 		return map[string]string{"HC_TERMINAL_SOCKET": "/fixture.sock", "HC_TERMINAL_ID": "t1", "ROTA_CORE_STATE_DIR": dir, "PATH": "/fixture/codex/bin:/usr/bin", "TERM": "xterm-256color"}[k]
