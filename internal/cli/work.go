@@ -253,10 +253,7 @@ func workClaims(be backlog.Backend, items []*workItem, branch string) (changed b
 	if !be.Capabilities().ClaimWrites {
 		return false, nil
 	}
-	wf, err := backlog.WorkflowOf(be)
-	if err != nil {
-		return false, err
-	}
+	wf := backlog.Workflow(be)
 	tr, _ := backlog.ItemTrackerFor(be)
 	for _, it := range items {
 		if it.missing, err = readyReasons(be, it.id); err != nil {

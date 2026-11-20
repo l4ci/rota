@@ -13,6 +13,9 @@ import (
 
 // Backend is the read side of a backlog, whichever store holds it.
 type Backend interface {
+	// Workflow is universal: every backend claims and sets state (file mode as
+	// no-ops), so callers use it directly and never look it up.
+	Workflow
 	// Name is "file" or "issues". For display and config only: callers branch on
 	// Capabilities, never on the name.
 	Name() string
@@ -85,8 +88,8 @@ type Capabilities struct {
 	// Umbrella: items span several sub-repos, each Row names its owner.
 	Umbrella bool
 	// ItemStatus: Status and the durable notes read and write the tracker.
-	// False: the backend does not implement ItemTracker, so a caller that
-	// wants a status or a note checks this or asserts ItemTracker.
+	// False: the backend does not implement ItemTracker, so a caller
+	// that wants a status or a note goes through ItemTrackerFor.
 	ItemStatus bool
 	// The flags below each promise one optional interface: a backend sets the
 	// flag exactly when it implements the interface (TestCapabilitiesMatchInterfaces).
@@ -175,21 +178,11 @@ func CapabilitiesForSource(source string) Capabilities {
 	return capabilitiesFor(kindIssues)
 }
 
-// WorkflowOf is the backend's claim and state verbs. Both backends have them;
-// the error is for a backend that does not.
-func WorkflowOf(be Backend) (Workflow, error) {
-	wf, ok := be.(Workflow)
-	if !ok {
-		return nil, ErrWrongBackend
-	}
-	return wf, nil
-}
-
-// ItemTrackerOf is the backend's status and note verbs. File mode has none: the
+// ItemTrackerOf is ItemTrackerFor for the verbs that refuse without it. File mode has none: the
 // error is the issue-only refusal (exit 4, backend) for the verb named by what,
 // with hint saying where file mode keeps that state.
 func ItemTrackerOf(be Backend, what, hint string) (ItemTracker, error) {
-	it, ok := be.(ItemTracker)
+	it, ok := ItemTrackerFor(be)
 	if !ok {
 		return nil, fileIssueOnly(what, hint)
 	}
@@ -205,8 +198,9 @@ type RefactorCounter interface {
 
 // RefactorOf resolves the backend's counter; ok is false when it has none.
 func RefactorOf(be Backend) (RefactorCounter, bool) {
-	rc, ok := be.(RefactorCounter)
-	return rc, ok
+	// No capability flag: adding one is out of scope, and the counter is the
+	// file backend's alone, so the interface itself is the declaration.
+	return Optional[RefactorCounter](be, func(Capabilities) bool { return true })
 }
 
 // FileOps are the verbs only the file backend has. Callers reach them with
