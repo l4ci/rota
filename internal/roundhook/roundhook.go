@@ -1,7 +1,7 @@
 // Package roundhook is the orchestrator-facing view of a round that the Stop
 // and prompt hooks read: the one-line digest, the exit digest and the Stop
-// block. The watcher loop and its marker live in roundwatch; this package
-// reads that marker (roundwatch.Armed) and the registry, nothing else of the
+// block. The watcher loop lives in roundwatch and its marker beside the lease; this package
+// reads that marker (roundlease.Armed) and the registry, nothing else of the
 // loop.
 package roundhook
 
@@ -14,7 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -144,7 +143,7 @@ func StopBlock(we worker.Env, env roundlease.Env, root, commonDir string) (reaso
 	if !need {
 		return "", false
 	}
-	if _, armed := roundwatch.Armed(env, commonDir); armed {
+	if _, armed := roundlease.Armed(env, commonDir); armed {
 		return "", false
 	}
 	reason = "No `rota round watch` is running, and workers are active: nothing would wake you when one finishes. " +
