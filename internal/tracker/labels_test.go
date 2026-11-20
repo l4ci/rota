@@ -3,7 +3,6 @@ package tracker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -269,20 +268,23 @@ func TestAssumedForgeLabelsReadOnly(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
 		return `[{"name":"existing","description":"Present","color":"AABBCC"}]`, "", 0
 	}}
-	a := assumedForge{IssueTracker: newAdapter(t, "github", s), r: Resolution{Origin: "https://unknown.example/o/r"}}
-	manager, ok := any(a).(LabelManager)
-	if !ok {
-		t.Fatal("assumed forge must expose label reads with its write fence")
+	a, err := newAssumedForge(newAdapter(t, "github", s), Resolution{Origin: "https://unknown.example/o/r"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	got, err := manager.ListLabels(context.Background())
+	if _, ok := any(a).(LabelManager); ok {
+		t.Fatal("assumed forge must not claim label metadata writes")
+	}
+	lister, ok := any(a).(LabelLister)
+	if !ok {
+		t.Fatal("assumed forge must still list label definitions")
+	}
+	got, err := lister.ListLabels(context.Background())
 	if err != nil || !slices.Equal(got, []Label{{Name: "existing", Description: "Present", Color: "aabbcc"}}) {
 		t.Fatalf("ListLabels = %+v, %v", got, err)
 	}
-	if err := manager.UpsertLabel(context.Background(), Label{Name: "new"}); !errors.Is(err, ErrUnknownForge) || len(s.calls) != 1 {
-		t.Fatalf("assumed forge metadata write crossed fence: %v, %q", err, s.calls)
-	}
-	if _, err := (assumedForge{IssueTracker: NewNoIssues()}).ListLabels(context.Background()); err == nil {
-		t.Fatal("unsupported label listing must fail")
+	if len(s.calls) != 1 {
+		t.Fatalf("calls = %q", s.calls)
 	}
 }
 

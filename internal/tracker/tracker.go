@@ -281,18 +281,42 @@ type MilestoneEdit struct {
 	State       *string // open | closed
 }
 
-// IssueTracker is the issue side of the seam: where issues, their comments,
-// labels and milestones live (issues.source). GitHub, GitLab, Jira and
-// Linear implement it. Issues are named by IssueKey; PR numbers stay ints.
-type IssueTracker interface {
+// IssueReader is the read half of IssueTracker: every method here leaves the
+// forge as it found it. IssueTracker embeds it, so a method added to
+// IssueTracker directly is a write by definition; assumedForge holds only an
+// IssueReader and refuses everything else.
+type IssueReader interface {
 	Provider() string
 	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
 	// installed and logged in.
 	CheckAuth(ctx context.Context) error
 
-	Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error)
 	Get(ctx context.Context, key IssueKey, withComments bool) (Issue, error)
 	List(ctx context.Context, f ListFilter) ([]Issue, error)
+	Comments(ctx context.Context, key IssueKey) ([]Comment, error)
+	// CommentURL is the web URL of comment id on the issue; it costs one call.
+	CommentURL(ctx context.Context, key IssueKey, commentID string) (string, error)
+
+	// FindMilestone returns the title of the milestone whose leading token is
+	// rotaID, preferring open ones; ok is false when none matches.
+	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
+	// ClosesIssue reports whether a PR (its body, title and head branch in c)
+	// closes issue key by this tracker's convention: GitHub and GitLab read a
+	// closing keyword (`Closes #N`) in the body; a key-based tracker reads the
+	// key in the branch or the PR title.
+	ClosesIssue(key IssueKey, c ClosingSource) bool
+	// Milestones lists by state "open", "closed" or "all" (or "").
+	Milestones(ctx context.Context, state string) ([]Milestone, error)
+	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
+}
+
+// IssueTracker is the issue side of the seam: where issues, their comments,
+// labels and milestones live (issues.source). GitHub, GitLab, Jira and
+// Linear implement it. Issues are named by IssueKey; PR numbers stay ints.
+type IssueTracker interface {
+	IssueReader
+
+	Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error)
 	Edit(ctx context.Context, key IssueKey, e IssueEdit) error
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
 	// AddLabels adds labels to the issue. autoCreate decides what a label the
@@ -317,26 +341,12 @@ type IssueTracker interface {
 	Reopen(ctx context.Context, key IssueKey) error
 	AssignSelf(ctx context.Context, key IssueKey) error
 
-	Comments(ctx context.Context, key IssueKey) ([]Comment, error)
 	AddComment(ctx context.Context, key IssueKey, body string) (string, error)
 	EditComment(ctx context.Context, key IssueKey, commentID, body string) error
 	DeleteComment(ctx context.Context, key IssueKey, commentID string) error
-	// CommentURL is the web URL of comment id on the issue; it costs one call.
-	CommentURL(ctx context.Context, key IssueKey, commentID string) (string, error)
 
-	// FindMilestone returns the title of the milestone whose leading token is
-	// rotaID, preferring open ones; ok is false when none matches.
-	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
-	// ClosesIssue reports whether a PR (its body, title and head branch in c)
-	// closes issue key by this tracker's convention: GitHub and GitLab read a
-	// closing keyword (`Closes #N`) in the body; a key-based tracker reads the
-	// key in the branch or the PR title.
-	ClosesIssue(key IssueKey, c ClosingSource) bool
-	// Milestones lists by state "open", "closed" or "all" (or "").
-	Milestones(ctx context.Context, state string) ([]Milestone, error)
 	CreateMilestone(ctx context.Context, title, description string) (int, error)
 	EditMilestone(ctx context.Context, number int, e MilestoneEdit) error
-	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
 }
 
 // ClaimStore is an issue tracker that keeps claims out of comment markers:
@@ -632,7 +642,7 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 			return nil, err
 		}
 		if r.How == HowAssumed {
-			return assumedForge{IssueTracker: a, r: r}, nil
+			return newAssumedForge(a, r)
 		}
 		return a, nil
 	case config.SourceGitHub, config.SourceGitLab:
