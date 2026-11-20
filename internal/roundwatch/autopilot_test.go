@@ -50,19 +50,18 @@ func TestAutopilotWakesOnAMergeOnlyUnderTrainFill(t *testing.T) {
 func TestAutopilotStopsAndFailsAsTypedResults(t *testing.T) {
 	fc := &fakeClock{now: time.Unix(0, 0)}
 	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, empty)
-	gone := errors.New("lease gone")
+	gone := roundtick.ErrNoLease
 	run := func(err error) AutopilotResult {
 		res, rerr := RunAutopilot(context.Background(), env, Opts{Heartbeat: time.Minute, Poll: time.Minute}, AutopilotOpts{
-			Tick:    func() (roundtick.Result, error) { return roundtick.Result{}, err },
-			Stopped: func(e error) bool { return e == gone },
-			Poll:    time.Minute,
+			Tick: func() (roundtick.Result, error) { return roundtick.Result{}, err },
+			Poll: time.Minute,
 		})
 		if rerr != nil {
 			t.Fatal(rerr)
 		}
 		return res
 	}
-	if res := run(gone); res.Reason != ReasonStopped || res.Tick != nil {
+	if res := run(gone); res.Reason != ReasonStopped || res.Tick != nil || !errors.Is(res.StopErr, roundtick.ErrNoLease) {
 		t.Fatalf("stop: %+v", res)
 	}
 	boom := errors.New("boom")
@@ -86,6 +85,9 @@ func TestAutopilotStopsOnAMidTickStop(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !errors.Is(res.StopErr, roundtick.ErrStopped) {
+		t.Fatalf("StopErr = %v, want ErrStopped", res.StopErr)
 	}
 	if res.Reason != ReasonStopped || res.Tick == nil || len(res.Tick.Did) != 1 || ticks != 1 {
 		t.Fatalf("mid-tick stop: reason %q tick %+v after %d ticks", res.Reason, res.Tick, ticks)
