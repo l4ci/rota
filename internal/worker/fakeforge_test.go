@@ -473,3 +473,70 @@ func (f *fakeForge) CanPush(_ context.Context, login string) (bool, error) {
 }
 
 var _ tracker.IssueTrust = (*fakeForge)(nil)
+
+// TestTrackerFakeMergeAgreesWithForgeFake runs the pin scenarios through
+// test/fakes/fake_tracker.py (the shim sections 56 and 89 reach through `gh`
+// and `glab`) and through fake_forge.py: same error kind either way.
+// The named exception: an absent pin merges on the tracker fake and is
+// refused by the forge fake, which models a forge that requires the pin.
+func TestTrackerFakeMergeAgreesWithForgeFake(t *testing.T) {
+	forgePy, _ := filepath.Abs("../../test/fakes/fake_forge.py")
+	trackerPy, _ := filepath.Abs("../../test/fakes/fake_tracker.py")
+	stale := strings.Repeat("a", 40)
+	for _, tool := range []string{"gh", "glab"} {
+		for _, pin := range []string{"right", "stale"} {
+			t.Run(tool+"/"+pin, func(t *testing.T) {
+				db := filepath.Join(t.TempDir(), "t.json")
+				run := func(args ...string) (string, error) {
+					cmd := exec.Command("python3", append([]string{"-c", "import sys; sys.path.insert(0, sys.argv[1]); sys.argv = sys.argv[1:]; import fake_tracker; sys.exit(fake_tracker.main())", filepath.Dir(trackerPy), tool}, args...)...)
+					cmd.Env = append(os.Environ(), "FAKE_TRACKER_DB="+db)
+					out, err := cmd.CombinedOutput()
+					return string(out), err
+				}
+				create := []string{"pr", "create", "--title", "t", "--head", "w1"}
+				view := []string{"pr", "view", "1", "--json", "headRefOid"}
+				merge, flag := []string{"pr", "merge", "1"}, "--match-head-commit"
+				if tool == "glab" {
+					create = []string{"mr", "create", "--title", "t", "--source-branch", "w1"}
+					view = []string{"mr", "view", "1", "--output", "json"}
+					merge, flag = []string{"mr", "merge", "1"}, "--sha"
+				}
+				if out, err := run(create...); err != nil {
+					t.Fatalf("create: %v\n%s", err, out)
+				}
+				out, err := run(view...)
+				if err != nil {
+					t.Fatalf("view: %v\n%s", err, out)
+				}
+				pinned := shaRe.FindString(out)
+				if pin == "stale" {
+					pinned = stale
+				}
+				tkind := ""
+				if tout, terr := run(append(merge, flag, pinned)...); terr != nil {
+					tkind = errKind(tout)
+				}
+
+				w := newWorld(t, ghURL)
+				fpin := w.forgeWord("sha")
+				if pin == "stale" {
+					fpin = stale
+				}
+				args := []string{forgePy, "pr", "merge", "7", flag, fpin}
+				if tool == "glab" {
+					args[1] = "mr"
+				}
+				cmd := exec.Command("python3", args...)
+				cmd.Env = append(os.Environ(), "FORGE_TOOL="+tool, "FORGE_DB="+w.forgeDB, "FORGE_LOG="+w.log, "FORGE_MODE=ok")
+				fout, ferr := cmd.CombinedOutput()
+				fkind := ""
+				if ferr != nil {
+					fkind = errKind(string(fout))
+				}
+				if tkind != fkind {
+					t.Errorf("pin %s on %s: tracker fake err %q, forge fake err %q\nforge out: %s", pin, tool, tkind, fkind, fout)
+				}
+			})
+		}
+	}
+}
