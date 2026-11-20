@@ -97,25 +97,13 @@ func Save(path string, r *Record) error {
 
 func issueID(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "#") }
 
-// prID is the one PR-reference grammar: a PR URL, or a positive number with at
-// most one "#" and then one "!" prefix. It returns "" for anything else.
+// prID is the PR number of a ref in the one grammar (tracker.PRNumber), as
+// text; "" for anything else.
 func prID(s string) string {
-	s = strings.TrimSpace(s)
-	if ref, ok := tracker.ParsePRURL(s); ok {
-		if ref.Number <= 0 {
-			return ""
-		}
-		return strconv.Itoa(ref.Number)
+	if n, ok := tracker.PRNumber(s); ok {
+		return strconv.Itoa(n)
 	}
-	s = strings.TrimPrefix(strings.TrimPrefix(s, "#"), "!")
-	if !positiveID(s) {
-		return ""
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return ""
-	}
-	return strconv.Itoa(n)
+	return ""
 }
 
 func samePR(a, b string) bool {

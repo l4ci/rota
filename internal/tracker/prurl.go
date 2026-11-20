@@ -36,17 +36,36 @@ func ParsePRURL(s string) (PRRef, bool) {
 	return PRRef{Provider: provider, Repo: m[1], Number: n}, true
 }
 
-// rePRRefNumber is a PR ref as a person types or stores it: `77`, `#77` or a
-// PR/MR URL (`/pull/77`, GitLab `/merge_requests/77`).
-var rePRRefNumber = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
+// rePRRefDigits is a bare PR ref as a person types or stores it: `77`, `#77` or
+// GitLab's `!77`, with at most one prefix and an optional single trailing `/`.
+var rePRRefDigits = regexp.MustCompile(`^[#!]?(\d+)/?$`)
 
 // PRRefNumber is the one reader of a PR ref's number, as the digits written
-// (so `007` stays `007`). ok is false for a ref with no number. Verdict
+// (so `007` stays `007`). A ref is a bare number in rePRRefDigits' forms or a
+// full http(s) PR/MR URL (ParsePRURL); anything else, such as `12/foo`,
+// `x/pull/12` or `#https://...`, has no number. ok is false then. Verdict
 // follow-up dedupe and round's Related parse both call it, so they agree.
 func PRRefNumber(ref string) (string, bool) {
-	m := rePRRefNumber.FindStringSubmatch(strings.TrimSpace(ref))
-	if m == nil {
+	ref = strings.TrimSpace(ref)
+	if m := rePRRefDigits.FindStringSubmatch(ref); m != nil {
+		return m[1], true
+	}
+	if _, ok := ParsePRURL(ref); !ok {
 		return "", false
 	}
-	return m[1], true
+	return rePRURL.FindStringSubmatch(ref)[3], true
+}
+
+// PRNumber is PRRefNumber as a positive int: the one grammar for naming a PR.
+// ok is false for a ref with no number, a zero number or one that overflows.
+func PRNumber(ref string) (int, bool) {
+	d, ok := PRRefNumber(ref)
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(d)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }

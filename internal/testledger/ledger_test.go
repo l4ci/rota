@@ -80,9 +80,8 @@ func TestExcuses(t *testing.T) {
 	if _, ok := (Ledger{}).Excuses("--- FAIL: TestFlaky (0.00s)\nFAIL\n", now); ok {
 		t.Error("an empty ledger excuses nothing")
 	}
-	for _, out := range []string{"", "something broke\n", "--- FAIL: TestFlaky (0s)\nFAIL\tpkg [build failed]\n", "--- FAIL: TestFlaky (0s)\npanic: boom\n", "--- FAIL: TestFlaky (0s)\nFAIL\tpkg\t0.01s\n# pkg\nvet: unused variable\n"} {
-		if _, ok := l.Excuses(out, now); ok {
-			t.Errorf("output with an unnamed failure must not be excused: %q", out)
-		}
+	// An unexcusable run (here a build failure) is never excused, whatever the ledger holds.
+	if _, ok := l.Excuses("--- FAIL: TestFlaky (0s)\nFAIL\tpkg [build failed]\n", now); ok {
+		t.Error("output the parser rejects must not be excused")
 	}
 }

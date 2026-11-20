@@ -7,7 +7,7 @@ last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
 
 ## Purpose
 Everything between "verified commit" and "on base": the manual gates no autonomy level passes alone, the two ways a commit lands (local git, forge), the repo-wide landing freeze, the bounce/park bookkeeping after a gate or train, footprint matching, the ship rules (strategy, PR body, merge, undo) and the release verbs' logic. The CLI owns flags, envelopes and exit codes; these packages decide.
-Depends on: review-verdicts (proof), tracker-issues (tracker, marker, bugreport via gatereport), backlog-items (backlog, status, blockedby), plus config, fsio, git, jsonx, pathglob, semver, stamp, rotatree, rotastate, worker, repos, exitcode, exitmap, pystr, strutil.
+Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracker-issues (tracker, marker, bugreport via gatereport and landing), backlog-items (backlog, status, blockedby), plus config, fsio, git, jsonx, pathglob, semver, stamp, rotatree, rotastate, worker (ship only), repos, exitcode, exitmap, pystr, strutil. postgate, gatereport and landing do not import worker; worker imports postgate and landing (the round layer sits above this subsystem).
 
 ## Entry points
 - internal/gate/gate.go:46 — `Registry`, every manual gate (tag-push, release-publish, merge-approval, ...)
@@ -16,16 +16,18 @@ Depends on: review-verdicts (proof), tracker-issues (tracker, marker, bugreport 
 - internal/land/land.go:76 — `MergeLocal`, local merge with one abort attempt on failure
 - internal/land/land.go:146 — `MergeForge`, forge merge pinned to the verified head
 - internal/landfreeze/freeze.go:24 — freeze `Record`; `Allows` at :144
-- internal/postgate/postgate.go:83 — `Gate` (per-item bounce accounting); `Train` at :111
-- internal/ship/merge.go:62 — `MergeBranch`; `MergePR` at :168; undo: `PlanUndo` ship/undo.go:51, `ApplyUndo` :171
+- internal/postgate/postgate.go:54 — `Gate` (per-item bounce accounting); `Train` at :82; `Book` port at :17
+- internal/landing/verdict.go:77 — `ClassifyVerdict`, the single verdict-to-meaning table
+- internal/ship/merge.go:39 — `MergeBranch`; `MergePR` at :99; undo: `PlanUndo` ship/undo.go:51, `ApplyUndo` :171
 - internal/release/flow.go:157 — `PlanPush`; `Detect` release/version.go:239, `Bump` :314
 
 ## Key files / dirs
 - internal/gate/ — gate.go: registry, Confirm, Refused, audit log (`.rota/gate-audit.jsonl`, ReadAudit/ReadAuditStrict), MergePolicy
 - internal/land/ — land.go: local and forge landing adapters, ConflictError/MergeError/CleanupError; subject.go (merge/train/sync subjects, IsCycleMerge)
 - internal/landfreeze/ — freeze.go: freeze record shared by all worktrees, repair issue/PR clearance
-- internal/postgate/ — postgate.go (`Book`, `WorkerBook`, `Gate`, `Train`, landed/bounce/park/notify), run.go (`Env`, `GateRun`, `TrainRun`)
-- internal/gatereport/ — report.go (`RenderReport`: the gate report text and its bug-report marker; imports worker, marker, bugreport; used by postgate)
+- internal/landing/ — shared gate/train result vocabulary: types.go (`GateResult`, `TrainResult`, `TrainPlan`, `Integration` and the train failure/stop/conflict/culprit types), verdict.go (`ClassifyVerdict`, `VerdictMeaning`, `Refused`), approval.go (`ApprovalThread`), round.go (`RoundMemo`); imported by postgate, gatereport, worker, round, roundtick and cli; imports only blockedby, exitcode, flakeledger, testledger and tracker
+- internal/postgate/ — postgate.go (`Book` port, `Gate`, `Train`, landed/bounce/park/notify), run.go (`Env`, `GateRun`, `TrainRun`), options.go; imports only exitcode, gatereport, git and landing
+- internal/gatereport/ — report.go (`RenderReport`: the gate report text and its bug-report marker; imports bugreport, landing, marker; used by postgate)
 - internal/overlap/ — overlap.go: Clean, Shared, Filter, Both, Paths, Dirs; `Clean` delegates to internal/pathglob, `Shared` to `pathglob.MatchEntry` with the `SingleLevel` flavour
 - internal/ship/ — body.go (PR body), closes.go, merge.go, pr.go, refusal.go, restore.go, strategy.go, undo.go, worktree.go (ClearWorktree), git.go
 - internal/release/ — changelog.go, flow.go (push/publish plans), host.go, notes.go, pending.go (release nudge), version.go (version-file registry, semver bump via `internal/semver`)
@@ -43,10 +45,9 @@ Go, stdlib only. Git and forge access through injected ports (`land.Git`, `ship.
 - Invariants: `ship.Strategy` owns the landing rule (tracker backlog: pr; local forge: direct); `ship` resets only in `ApplyUndo`.
 
 ## Test commands
-- go test ./internal/gate/... ./internal/land/... ./internal/landfreeze/... ./internal/postgate/... ./internal/gatereport/... ./internal/overlap/... ./internal/ship/... ./internal/release/...
+- go test ./internal/gate/... ./internal/land/... ./internal/landfreeze/... ./internal/landing/... ./internal/postgate/... ./internal/gatereport/... ./internal/overlap/... ./internal/ship/... ./internal/release/...
 - SECTION_LIST=test/sections/77_manual_gates.sh bash test/runner.sh (also 08_ship, 35_undo, 14_release, 96_release_order, 104_gate_stale_merge, 107_gate_lock, 131_gate_closes, 172_round_freeze)
 
 ## Concerns
-- ship (about 930 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
-- postgate imports worker (and gatereport, which imports marker and bugreport), so it depends on the round layer.
+- ship (about 860 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
 - overlap.Shared and pathglob.Match both answer "entry vs file" with different `**` semantics, chosen by `pathglob.Flavour`.

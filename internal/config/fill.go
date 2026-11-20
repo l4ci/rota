@@ -81,11 +81,23 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 	if err != nil {
 		return nil, sm, rm, err
 	}
-	// config.json runs through the same lifecycle as the migration steps: lock
-	// (created when missing), read, plan, write only when the plan changed it.
-	target := &migrationFile{name: "config.json", path: configPath(root), layer: layerProject, create: true}
-	err = migrateLayerFiles([]*migrationFile{target}, true, func(files []*migrationFile) error {
-		target := files[0]
+	// Fill's own writes run through the same lifecycle as the migration steps:
+	// every layer locked in order (config.json created when missing), read,
+	// planned, and written only where the plan changed it, which includes the
+	// autonomy rewrite of config.local.json and the global config.
+	files := layerFiles(root, globalConfigDir(env), false)
+	var target, local, global *migrationFile
+	for _, f := range files {
+		switch f.layer {
+		case layerProject:
+			target, f.create = f, true
+		case layerLocal:
+			local = f
+		case layerGlobal:
+			global = f
+		}
+	}
+	err = migrateLayerFiles(files, true, func([]*migrationFile) error {
 		cfg := target.doc
 		if cfg == nil {
 			cfg = jsonx.NewObject()
@@ -95,8 +107,8 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 		cfg, migrated := migrateLegacyVersion(cfg)
 		cfg, copied, moved := migrateLegacyVerify(cfg)
 		cfg, sm = MigrateSource(cfg, detect)
-		global := globalLayer(env)
-		local := fsio.LoadJSON(localPath(root), nil)
+		globalVals := globalLayer(env)
+		localVals := fsio.LoadJSON(localPath(root), nil)
 		// A corrupt global may hold keys we cannot see: writing defaults now
 		// would pin them over the repaired global, so fill none of them.
 		globalBroken := GlobalError(env) != nil
@@ -105,16 +117,16 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 				filled = append(filled, k.Name)
 				continue
 			}
-			if !k.Required || globalBroken || requiredKeyPresent(k.Name, cfg, global, local) {
+			if !k.Required || globalBroken || requiredKeyPresent(k.Name, cfg, globalVals, localVals) {
 				continue
 			}
 			cfg = fillKey(cfg, "", strings.Split(k.Name, "."), Default(k))
 			filled = append(filled, k.Name)
 		}
 		stripped := stripRemoved(cfg)
-		localRewrote, err := migrateAutonomyLocal(root, stale)
-		if err != nil {
-			return err
+		localRewrote := planAutonomyLocal(local, stale)
+		if global != nil {
+			planAutonomyGlobal(global, globalConfigDir(env))
 		}
 		var rewrote bool
 		cfg, rewrote = migrateAutonomy(cfg, stale, localRewrote)
@@ -125,9 +137,6 @@ func FillDetect(env cfgdir.Env, root string, detect func() string) ([]string, So
 		return nil
 	})
 	if err != nil {
-		return nil, sm, rm, err
-	}
-	if _, err := migrateAutonomyGlobal(env); err != nil {
 		return nil, sm, rm, err
 	}
 	return filled, sm, rm, nil

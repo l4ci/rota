@@ -211,3 +211,52 @@ func TestLegacyRowsAreReadAndSeedTheSidecar(t *testing.T) {
 		t.Errorf("detail file changed:\n%s", after)
 	}
 }
+
+// A value holding the field separator is refused, so every stored row reads back whole.
+func TestAddRefusesTheSeparatorAndRowsRoundTrip(t *testing.T) {
+	st := flat(t)
+	for _, o := range []AddOpts{{"a · b", "PASS", "e", "abc1234"}, {"c", "PASS", "e", "a · b"}} {
+		if _, _, err := Add(st, "B07", proofDay, o); exitOf(err) != 2 {
+			t.Errorf("Add(%+v) = %v, want exit 2", o, err)
+		}
+	}
+	want, _, err := Add(st, "B07", proofDay, AddOpts{"go test ./x -run 'a|b'", "PASS", "exit=0 targeted=true", "abc1234def"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Evidence is the row's last field: a separator inside it still reads back whole.
+	ev, _, err := Add(st, "B07", proofDay, AddOpts{"c", "PASS", "x · y", "abc1234"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _, err := Show(st, "B07")
+	if err != nil || len(rows) != 2 || rows[1] != ev {
+		t.Fatalf("evidence round trip = %+v %v", rows, err)
+	}
+	rows = rows[:1]
+	if len(rows) != 1 || rows[0] != want {
+		t.Fatalf("Show = %+v %v; want [%+v]", rows, err, want)
+	}
+	if !Proves(rows, "abc1234def", want.Check) {
+		t.Error("Proves does not see the round-tripped PASS")
+	}
+}
+
+// Mark and parseRows read a short row the same way: padded, so a four-field PASS
+// row is seen by both and Mark gives it the evidence it lacks.
+func TestMarkAndParseRowsAgreeOnAShortRow(t *testing.T) {
+	const short = "- 2026-01-01 · go test ./x · PASS · abc1234def5678"
+	s := &memStore{content: "## Proof\n\n" + short + "\n"}
+	rows, _ := parseRows(s.content)
+	if len(rows) != 1 || !Proves(rows, "abc1234", "go test ./x") {
+		t.Fatalf("parseRows = %+v; want the padded PASS row", rows)
+	}
+	found, err := Mark(s, "1", "abc1234", "go test ./x", "targeted")
+	if err != nil || !found {
+		t.Fatalf("Mark = %v, %v; want found", found, err)
+	}
+	rows, _ = parseRows(s.content)
+	if len(rows) != 1 || rows[0].Sha != "abc1234def5678" || rows[0].Evidence != "targeted" {
+		t.Errorf("after Mark rows = %+v; want sha kept and evidence targeted", rows)
+	}
+}

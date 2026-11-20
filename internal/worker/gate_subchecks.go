@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/flakeledger"
-	"github.com/l4ci/rota/internal/testledger"
+	"github.com/l4ci/rota/internal/gotestout"
 )
 
 // subcheckPrefix opens the ROTA-FLAKY handoff, the one place it is described.
@@ -43,7 +43,7 @@ func gateSubchecks(output, tree string, now time.Time) ([]flakeledger.Entry, err
 			wire.RetryExit == nil || *wire.RetryExit != 0 || wire.FirstOutput == nil || wire.RetryOutput == nil || wire.RetrySeconds < 0 {
 			return nil, fmt.Errorf("invalid gate sub-check recovery record")
 		}
-		tests, _ := testledger.FailingTests(*wire.FirstOutput)
+		tests, _ := gotestout.FailingTests(*wire.FirstOutput)
 		if len(tests) == 0 {
 			tests = []string{wire.Check}
 		}

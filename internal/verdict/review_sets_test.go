@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -69,5 +70,28 @@ func TestReviewKindLoopsStayInVerdict(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The relay rule reads the non-core remainders by name. Core kinds lead each
+// set, and each remainder is its set minus the core kinds, so a lens or cross
+// kind is never lost or a core kind mistaken for one.
+func TestNonCoreKindSetsAreSetsMinusCore(t *testing.T) {
+	for name, c := range map[string]struct{ full, rest []string }{
+		"bounce":    {bounceReviewKinds, relayNonCoreKinds},
+		"readiness": {readinessReviewKinds, relayNonCoreReadinessKinds},
+	} {
+		if len(c.full) < len(coreReviewKinds) || !slices.Equal(c.full[:len(coreReviewKinds)], coreReviewKinds) {
+			t.Fatalf("%s: core kinds %v must lead %v", name, coreReviewKinds, c.full)
+		}
+		want := slices.DeleteFunc(slices.Clone(c.full), IsCoreReview)
+		if !slices.Equal(c.rest, want) {
+			t.Fatalf("%s: non-core = %v, want %v", name, c.rest, want)
+		}
+		for _, k := range LensKinds {
+			if !slices.Contains(c.rest, k) {
+				t.Fatalf("%s: lens %q missing from relay set", name, k)
+			}
+		}
 	}
 }
