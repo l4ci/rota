@@ -26,8 +26,8 @@ type Workflow interface {
 // ItemTracker is the part of a backlog that reads an item back from its
 // tracker: the status and the durable notes. Only the issue backends implement
 // it; the file backend keeps that state in BACKLOG.md, status.json and the
-// detail file, so it does not satisfy this interface and a caller branches on
-// the assertion (or Capabilities.ItemStatus).
+// detail file, so it does not satisfy this interface and a caller goes through
+// ItemTrackerFor (Capabilities.ItemStatus).
 type ItemTracker interface {
 	// Status is the read-back of the item.
 	Status(ref string) (*Status, error)

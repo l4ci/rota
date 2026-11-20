@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -43,33 +44,33 @@ func (f *fakeThread) remove(id string) {
 	}
 }
 
-func (f *fakeThread) exec(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-	line := name + " " + strings.Join(args, " ")
+func (f *fakeThread) exec(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+	line := cmd.Name + " " + strings.Join(cmd.Args, " ")
 	f.calls = append(f.calls, line)
 	if f.notFound {
-		return nil, []byte("HTTP 404: Not Found"), 1, nil
+		return proc.Result{Stderr: "HTTP 404: Not Found", ExitCode: 1}, nil
 	}
 	post := strings.Contains(line, "-X POST")
 	switch {
 	case strings.HasPrefix(line, "gh issue view "): // the gate reads the item for its Try it steps (#899)
-		return []byte(`{"number":7,"title":"t","body":"no steps","state":"OPEN"}`), nil, 0, nil
+		return proc.Result{Stdout: `{"number":7,"title":"t","body":"no steps","state":"OPEN"}`}, nil
 	case post:
 		var body string
-		for _, a := range args {
+		for _, a := range cmd.Args {
 			if strings.HasPrefix(a, "body=") {
 				body = strings.TrimPrefix(a, "body=")
 			}
 		}
 		id := f.add(body)
-		return []byte(`{"id":` + id + `}`), nil, 0, nil
-	case strings.Contains(line, "/comments/") && name == "gh":
+		return proc.Result{Stdout: `{"id":` + id + `}`}, nil
+	case strings.Contains(line, "/comments/") && cmd.Name == "gh":
 		id := strings.Fields(line[strings.LastIndex(line, "/")+1:])[0]
-		return []byte(`{"id":` + id + `,"html_url":"https://github.com/o/r/issues/7#issuecomment-` + id + `"}`), nil, 0, nil
-	case name == "glab" && strings.Contains(line, " view "):
-		return []byte(`{"web_url":"https://gitlab.com/o/r/-/merge_requests/7"}`), nil, 0, nil
+		return proc.Result{Stdout: `{"id":` + id + `,"html_url":"https://github.com/o/r/issues/7#issuecomment-` + id + `"}`}, nil
+	case cmd.Name == "glab" && strings.Contains(line, " view "):
+		return proc.Result{Stdout: `{"web_url":"https://gitlab.com/o/r/-/merge_requests/7"}`}, nil
 	case strings.Contains(line, "/comments") || strings.Contains(line, "/notes"):
 		if f.failRead != nil {
-			return nil, []byte(f.failRead.Error()), 1, nil
+			return proc.Result{Stderr: f.failRead.Error(), ExitCode: 1}, nil
 		}
 		rows := []map[string]any{}
 		for _, c := range f.comments {
@@ -77,9 +78,9 @@ func (f *fakeThread) exec(_ context.Context, _ string, name string, args []strin
 			rows = append(rows, r)
 		}
 		b, _ := json.Marshal(rows)
-		return b, nil, 0, nil
+		return proc.Result{Stdout: string(b)}, nil
 	}
-	return nil, []byte("unexpected call: " + line), 2, nil
+	return proc.Result{Stderr: "unexpected call: " + line, ExitCode: 2}, nil
 }
 
 func (f *fakeThread) reads() int {

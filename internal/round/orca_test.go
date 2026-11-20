@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
@@ -76,15 +77,15 @@ func TestOrcaForceReclaimUsesAdapterRetainedProcessProof(t *testing.T) {
 					}
 					return []int{pid}
 				},
-				Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
-					if name == "git" {
-						return host.ExecRunner(ctx, name, a)
+				Run: func(ctx context.Context, cmd proc.Cmd) (host.Result, error) {
+					if cmd.Name == "git" {
+						return proc.Run(ctx, cmd)
 					}
-					switch strings.Join(a[:2], " ") {
+					switch strings.Join(cmd.Args[:2], " ") {
 					case "status --json":
 						return host.Result{Stdout: `{"running":true}`}, nil
 					case "terminal create":
-						metadata, e := host.ExecRunner(ctx, "git", []string{"-C", cwd, "rev-parse", "--absolute-git-dir"})
+						metadata, e := proc.Run(ctx, proc.Cmd{Name: "git", Args: []string{"-C", cwd, "rev-parse", "--absolute-git-dir"}})
 						if e != nil || metadata.ExitCode != 0 {
 							return host.Result{}, fmt.Errorf("fixture git metadata: %v %s", e, metadata.Stderr)
 						}

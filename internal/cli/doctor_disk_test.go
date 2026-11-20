@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
 )
@@ -106,8 +107,8 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 			rep := doctor.Run(context.Background(), doctor.Input{
 				Disk: in.Disk, CacheDisk: in.CacheDisk, MinFreeDiskPercent: in.MinFreeDiskPercent,
 				ScanLeftovers: in.ScanLeftovers,
-				Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
-					return doctor.Result{}, nil
+				Exec: func(context.Context, proc.Cmd) (proc.Result, error) {
+					return proc.Result{}, nil
 				},
 				Look: func(string) (string, bool) { return "", false },
 			})

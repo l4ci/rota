@@ -353,9 +353,11 @@ func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (D
 		// suggesting the brief was never sent.
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", slot, sendErr))
 	default:
+		// host.Send classifies every failure (host/sendclass.go), so this is
+		// ErrNotSubmitted; a Host double that returns a plain error keeps its cause.
 		cause := ""
 		if !errors.Is(sendErr, host.ErrNotSubmitted) {
-			cause = fmt.Sprintf(" (%v)", sendErr) // an unclassified failure keeps its cause
+			cause = fmt.Sprintf(" (%v)", sendErr)
 		}
 		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief%s — inspect the session before resending", slot, cause))
 	}

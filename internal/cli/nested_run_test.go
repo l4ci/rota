@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -46,9 +47,9 @@ func TestNestedRunKeepsOuterCacheAndContext(t *testing.T) {
 // first one's cache would not reach the forge.
 func TestPaletteEntriesStartFromFreshReads(t *testing.T) {
 	forgeCalls := 0
-	exec := func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+	exec := func(context.Context, proc.Cmd) (proc.Result, error) {
 		forgeCalls++
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}
 	var caches []*tracker.ReadCache
 	root := &Command{Name: "rota", Subs: []*Command{{Name: "probe", Verb: func(*flag.FlagSet) RunFunc {

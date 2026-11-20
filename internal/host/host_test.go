@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 var bg = context.Background()
@@ -2019,5 +2020,19 @@ func TestHerdrCodexSendAcknowledgesFastCompletion(t *testing.T) {
 				t.Fatalf("acknowledged prompt: %v", err)
 			}
 		})
+	}
+}
+
+func TestCallBoundsEveryHostCommandByCallTimeout(t *testing.T) {
+	var got proc.Cmd
+	d := Deps{Run: func(_ context.Context, c proc.Cmd) (Result, error) {
+		got = c
+		return Result{}, nil
+	}}
+	if _, err := d.call(context.Background(), "herdr", []string{"ping"}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "herdr" || len(got.Args) != 1 || got.Args[0] != "ping" || got.Timeout != CallTimeout {
+		t.Fatalf("cmd = %+v, want herdr ping with Timeout %s", got, CallTimeout)
 	}
 }

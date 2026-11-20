@@ -100,7 +100,7 @@ func (h *herdr) StartSession(ctx context.Context, name string, o TabOpts) (bool,
 	}
 	// The shell backgrounds the server and returns, so Run does not block on it.
 	start := shlex.Join([]string{"nohup", "herdr", "--session", name, "server"}) + " >/dev/null 2>&1 &"
-	if r, err := h.d.Run(ctx, "sh", []string{"-c", start}); err != nil || r.ExitCode != 0 {
+	if r, err := h.d.call(ctx, "sh", []string{"-c", start}); err != nil || r.ExitCode != 0 {
 		return false, fmt.Errorf("cannot start herdr server for session %s", name)
 	}
 	up := false

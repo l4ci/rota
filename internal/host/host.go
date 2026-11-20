@@ -4,7 +4,7 @@
 // SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents.
 // Nothing here execs a binary directly:
 // every command goes through Deps.Run, which tests replace with a fake. The
-// default runner (ExecRunner) is the only place that reaches os/exec.
+// default runner (proc.Run) is the only place that reaches os/exec.
 package host
 
 import (
@@ -66,24 +66,19 @@ func (k Kind) Binary() string {
 // Result is what a finished command left behind.
 type Result = proc.Result
 
-// Runner runs a command. A command that ran and exited non-zero is a Result
-// with ExitCode set and a nil error; err means it could not run at all
-// (missing binary).
-type Runner func(ctx context.Context, name string, args []string) (Result, error)
-
 // CallTimeout bounds one host command. The longest legitimate call is
 // `herdr agent start/wait` with a boot timeout, which is a minute by default.
 const CallTimeout = 10 * time.Minute
 
-// ExecRunner is the production Runner.
-func ExecRunner(ctx context.Context, name string, args []string) (Result, error) {
-	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Timeout: CallTimeout})
+// call runs name with args through Deps.Run, bounded by CallTimeout.
+func (d *Deps) call(ctx context.Context, name string, args []string) (Result, error) {
+	return d.Run(ctx, proc.Cmd{Name: name, Args: args, Timeout: CallTimeout})
 }
 
 // Deps is everything a host touches outside its own memory. Tests fill every
 // field with fakes; New fills the zero fields with production values.
 type Deps struct {
-	Run Runner
+	Run proc.Runner
 	// Git runs the git an adapter reads (Orca's worktree branch); nil is git.Exec.
 	Git    git.Runner
 	Getenv func(string) string
@@ -120,7 +115,7 @@ func (d *Deps) fill() {
 		d.Stderr = os.Stderr
 	}
 	if d.Run == nil {
-		d.Run = ExecRunner
+		d.Run = proc.Run
 	}
 	if d.Git == nil {
 		d.Git = git.Exec
@@ -403,8 +398,10 @@ type Host interface {
 	// session remains.
 	Spawn(ctx context.Context, o SpawnOpts) (string, error)
 	// Send submits the file as a prompt and confirms pickup. The error is
-	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrDialogOpen,
-	// or another failure.
+	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrMaybeSubmitted,
+	// ErrDialogOpen or ErrDraftOnPrompt. Every failure carries one of those
+	// classes: each adapter's Send passes its result through classifySend, so a
+	// failure with no stated class reads as ErrMaybeSubmitted.
 	Send(ctx context.Context, slot, handle, file string) error
 	// ReadPane is the one pane read. It returns the recent pane text with soft
 	// wraps joined; "" and a nil error for a slot without a handle or a pane
@@ -448,7 +445,9 @@ func (r refused) Where() string              { return "" }
 func (r refused) Spawn(context.Context, SpawnOpts) (string, error) {
 	return "", r.err()
 }
-func (r refused) Send(context.Context, string, string, string) error { return r.err() }
+func (r refused) Send(context.Context, string, string, string) error {
+	return classifySend(fmt.Errorf("%w: %w", ErrNotSubmitted, r.err())) // nothing was sent
+}
 func (r refused) ReadPane(context.Context, string, string, int) (string, error) {
 	return "", r.err()
 }

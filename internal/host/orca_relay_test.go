@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 const orcaRelayReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› A changing placeholder"
@@ -61,7 +63,7 @@ func TestOrcaRelayMarker(t *testing.T) {
 		}
 		return ""
 	}
-	h := New(Orca, Deps{Getenv: getenv, Run: func(context.Context, string, []string) (Result, error) {
+	h := New(Orca, Deps{Getenv: getenv, Run: func(context.Context, proc.Cmd) (Result, error) {
 		t.Fatal("ambient marker must avoid terminal current/show probes")
 		return Result{}, nil
 	}})
@@ -73,17 +75,17 @@ func TestOrcaRelayCreateCapturesBranchAndHandle(t *testing.T) {
 	cwd := orcaWorktree(t)
 	gitBeforeCreate := false
 	created := false
-	h := New(Orca, withGit(Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, name string, a []string) (Result, error) {
-		if name == "git" {
-			if strings.Join(a, " ") != "-C "+cwd+" symbolic-ref --quiet --short HEAD" {
-				t.Fatalf("unexpected branch probe: %v", a)
+	h := New(Orca, withGit(Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, cmd proc.Cmd) (Result, error) {
+		if cmd.Name == "git" {
+			if strings.Join(cmd.Args, " ") != "-C "+cwd+" symbolic-ref --quiet --short HEAD" {
+				t.Fatalf("unexpected branch probe: %v", cmd.Args)
 			}
 			if !created {
 				gitBeforeCreate = true
 			}
 			return Result{Stdout: "ben/2203-orca\n"}, nil
 		}
-		if a[1] == "create" {
+		if cmd.Args[1] == "create" {
 			created = true
 			files, _ := filepath.Glob(filepath.Join(cwd, ".git", "rota-orca", "agent-*.pid"))
 			for _, file := range files {
@@ -93,7 +95,7 @@ func TestOrcaRelayCreateCapturesBranchAndHandle(t *testing.T) {
 			}
 			return Result{Stdout: `{"handle":"native-1","title":"r:ben","tabId":"tab-1"}`}, nil
 		}
-		if a[1] == "read" {
+		if cmd.Args[1] == "read" {
 			b, _ := json.Marshal(map[string]string{"screen": orcaRelayReady})
 			return Result{Stdout: string(b)}, nil
 		}
@@ -132,11 +134,11 @@ func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "brief")
 			os.WriteFile(file, []byte("do work"), 0600)
 			sends := 0
-			h := New(Orca, withGit(Deps{Sleep: func(time.Duration) {}, Run: func(_ context.Context, name string, a []string) (Result, error) {
-				if name == "git" {
+			h := New(Orca, withGit(Deps{Sleep: func(time.Duration) {}, Run: func(_ context.Context, cmd proc.Cmd) (Result, error) {
+				if cmd.Name == "git" {
 					return Result{Stdout: tc.gitBranch + "\n"}, nil
 				}
-				switch a[1] {
+				switch cmd.Args[1] {
 				case "read":
 					screen := "model: gpt-5.3-codex\n› Ask Codex to do anything"
 					if tc.name == "fallback renamed" && sends > 0 {
@@ -170,8 +172,8 @@ func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
 	handle := orcaRelayHandle(t)
 	meta, _ := decodeOrca(handle)
-	h := New(Orca, Deps{Run: func(_ context.Context, _ string, a []string) (Result, error) {
-		if a[1] == "list" {
+	h := New(Orca, Deps{Run: func(_ context.Context, cmd proc.Cmd) (Result, error) {
+		if cmd.Args[1] == "list" {
 			b, _ := json.Marshal(map[string]any{"terminals": []map[string]string{{"handle": "native-1", "worktreePath": meta.Cwd, "title": "shell changed title", "branch": "ben/2203-orca"}}})
 			return Result{Stdout: string(b)}, nil
 		}
@@ -183,11 +185,11 @@ func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
 	}
 	// A different terminal with the original title cannot be adopted or closed.
 	closed := false
-	h = New(Orca, Deps{Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, _ string, a []string) (Result, error) {
-		if a[1] == "close" {
+	h = New(Orca, Deps{Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, cmd proc.Cmd) (Result, error) {
+		if cmd.Args[1] == "close" {
 			closed = true
 		}
-		if a[1] == "list" {
+		if cmd.Args[1] == "list" {
 			b, _ := json.Marshal(map[string]any{"terminals": []map[string]string{{"handle": "different", "worktreePath": meta.Cwd, "title": meta.Title, "branch": "ben/2203-orca"}}})
 			return Result{Stdout: string(b)}, nil
 		}
@@ -206,7 +208,7 @@ func TestOrcaRelayPortableBriefLimit(t *testing.T) {
 	text := strings.Repeat("ö", 61441)
 	os.WriteFile(file, []byte(text), 0600)
 	calls := 0
-	h := New(Orca, Deps{Run: func(context.Context, string, []string) (Result, error) {
+	h := New(Orca, Deps{Run: func(context.Context, proc.Cmd) (Result, error) {
 		calls++
 		return Result{Stdout: `{"screen":"Ask Codex to do anything\n› "}`}, nil
 	}})
@@ -233,27 +235,27 @@ func TestOrcaRelayCurrentPaneAny(t *testing.T) {
 func TestOrcaRelayNativePaneOperations(t *testing.T) {
 	calls := 0
 	sent := false
-	h := New(Orca, Deps{Run: func(_ context.Context, name string, a []string) (Result, error) {
+	h := New(Orca, Deps{Run: func(_ context.Context, cmd proc.Cmd) (Result, error) {
 		calls++
-		if name != "orca" {
-			t.Fatalf("native pane invoked %s", name)
+		if cmd.Name != "orca" {
+			t.Fatalf("native pane invoked %s", cmd.Name)
 		}
-		if len(a) < 4 || a[3] != "native-here" {
-			t.Fatalf("wrong native target: %v", a)
+		if len(cmd.Args) < 4 || cmd.Args[3] != "native-here" {
+			t.Fatalf("wrong native target: %v", cmd.Args)
 		}
-		switch a[1] {
+		switch cmd.Args[1] {
 		case "read":
 			return Result{Stdout: `{"screen":"one\ntwo\nthree"}`}, nil
 		case "send":
 			sent = true
-			for _, v := range a {
+			for _, v := range cmd.Args {
 				if v == "--wait-submit" {
 					t.Fatal("native pane send waits for pickup")
 				}
 			}
 			return Result{Stdout: `{}`}, nil
 		}
-		t.Fatalf("unexpected operation: %v", a)
+		t.Fatalf("unexpected operation: %v", cmd.Args)
 		return Result{}, nil
 	}})
 	p := h.Capabilities().PaneHost

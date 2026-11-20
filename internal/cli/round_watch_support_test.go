@@ -118,7 +118,8 @@ func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Run
 			Round: roundcfg.Settings{Support: "mac", Role: role}}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
-	return func() roundwatch.Snapshot { return watchForge(context.Background(), c, root) }
+	warned := &watchWarned{}
+	return func() roundwatch.Snapshot { return watchForge(context.Background(), c, root, warned) }
 }
 
 func supportKeys(m roundwatch.Snapshot) roundwatch.Snapshot {
@@ -361,7 +362,7 @@ func TestWatchSupportOffWithoutRoundSupport(t *testing.T) {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
-	if k := supportKeys(watchForge(context.Background(), c, root)); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 || f.merges != 0 {
+	if k := supportKeys(watchForge(context.Background(), c, root, &watchWarned{})); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 || f.merges != 0 {
 		t.Fatalf("keys %v gets %v lists %v", k, f.gets, f.lists)
 	}
 }

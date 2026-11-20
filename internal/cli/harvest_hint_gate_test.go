@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -34,8 +35,8 @@ func harvestLandProject(t *testing.T, learn ...string) (string, *Deps) {
 	t.Helper()
 	dir := workerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}, "ship":{"review":"none"},"test":{"full":["true"]}}`)
 	deps := trustedDeps(t, issueFixture(), harvestTrust{})
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-		return []byte("[]"), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	inner := deps.WorkerEnv
 	deps.WorkerEnv = func() worker.Env {

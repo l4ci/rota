@@ -355,14 +355,18 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		}
 		changed = true
 	}
-	text, block, order := ParseFieldsBlock(is.Body)
-	if newText, _ := frontmatter.UpdateField(text, "status", status); newText != text {
-		body := RenderFieldsBlock(newText, order, block)
-		if err := mt.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
-			return false, err
+	wrote, err := b.editBody(mt, n, is.Body, func(d *BodyDoc) (bool, error) {
+		newText, _ := frontmatter.UpdateField(d.Text, "status", status)
+		if newText == d.Text {
+			return false, nil
 		}
-		changed = true
+		d.Text = newText
+		return true, nil
+	})
+	if err != nil {
+		return false, err
 	}
+	changed = changed || wrote
 	want := nativeStateOf(status)
 	wantClosed := want == "closed"
 	reason := tracker.CloseCompleted
@@ -424,20 +428,24 @@ func (b *Issues) MilestonePut(mid, text string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	old, block, order := ParseFieldsBlock(is.Body)
-	_, children, _ := ms.SplitChildren(old)
-	if _, has := fm["depends"]; has {
-		if _, ok := block["Depends"]; !ok {
-			order = append(order, "Depends")
+	var newBody string
+	_, err = b.editBody(mt, is.Key, is.Body, func(d *BodyDoc) (bool, error) {
+		_, children, _ := ms.SplitChildren(d.Text)
+		if _, has := fm["depends"]; has {
+			if _, ok := d.Fields["Depends"]; !ok {
+				d.Order = append(d.Order, "Depends")
+			}
+			d.Fields["Depends"] = strings.Join(ms.DependsOf(fm), ", ")
 		}
-		block["Depends"] = strings.Join(ms.DependsOf(fm), ", ")
-	}
-	text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
-	body := RenderFieldsBlock(ms.JoinChildren(text, children), order, block)
-	if err := mt.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
+		text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
+		d.Text = ms.JoinChildren(text, children)
+		newBody = RenderFieldsBlock(d.Text, d.Order, d.Fields)
+		return true, nil
+	})
+	if err != nil {
 		return false, err
 	}
-	return milestonePlanText(is.Body) != milestonePlanText(body), nil
+	return milestonePlanText(is.Body) != milestonePlanText(newBody), nil
 }
 
 // ChildSync is the outcome of SyncMilestoneChildren: whether the tracking
@@ -480,8 +488,7 @@ func (b *Issues) SyncMilestoneChildren(mid string) (ChildSync, error) {
 	for i, c := range kids {
 		refs[i] = ms.ChildRef{Ref: c.Key.Ref(), Title: c.Title}
 	}
-	text, block, order := ParseFieldsBlock(is.Body)
-	plan, old, _ := ms.SplitChildren(text)
+	plan, old, _ := ms.SplitChildren(textOf(is.Body))
 	section := ms.RenderChildren(refs)
 	r := ChildSync{Count: len(refs)}
 	was := ms.ChildRefs(old)
@@ -498,9 +505,12 @@ func (b *Issues) SyncMilestoneChildren(mid string) (ChildSync, error) {
 	if section == old {
 		return r, nil
 	}
-	body := RenderFieldsBlock(ms.JoinChildren(plan, section), order, block)
 	r.Changed = true
-	return r, tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+	_, err = b.editBody(tr, is.Key, is.Body, func(d *BodyDoc) (bool, error) {
+		d.Text = ms.JoinChildren(plan, section)
+		return true, nil
+	})
+	return r, err
 }
 
 // syncChildrenOf refreshes the child lists of the milestones named by the

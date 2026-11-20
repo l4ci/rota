@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -696,12 +697,12 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	reads := 0
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" && cmd.Args[2] == "6" {
 			reads++
-			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[{"name":"risk:high"}]}`), nil, 0, nil
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","labels":[{"name":"risk:high"}]}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	policy := func(labels string) {
 		write(t, filepath.Join(root, ".rota", "config.json"),
@@ -721,11 +722,11 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	}
 	// an unreadable issue fails the verb: a guessed depth could pass risk:high as light
 	failing := testDeps()
-	failing.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 1 && args[0] == "issue" && args[1] == "view" {
-			return nil, []byte("HTTP 500: server error"), 1, nil
+	failing.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" {
+			return proc.Result{Stderr: "HTTP 500: server error", ExitCode: 1}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	o := trRunWith(t, failing, root, "", "review", "depth", "nia/6-small", "--json")
 	if o.code == 0 || !strings.Contains(o.stdout+o.stderr, "could not read #6 for its labels") {
@@ -747,11 +748,11 @@ func TestReviewDepthScopeDrift(t *testing.T) {
 	gittest.Run(t, root, "add", "x.txt")
 	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
-			return []byte(`{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- y.txt\n"}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" && cmd.Args[2] == "6" {
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- y.txt\n"}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	run := func(policy string) map[string]any {
 		write(t, filepath.Join(root, ".rota", "config.json"),
@@ -779,18 +780,18 @@ func TestReviewDepthReadsTheDoorLineOfThePR(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	prs, prCode, issueReads := `[]`, 0, 0
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
 		switch {
-		case len(args) > 1 && args[0] == "pr" && args[1] == "list":
+		case len(cmd.Args) > 1 && cmd.Args[0] == "pr" && cmd.Args[1] == "list":
 			if prCode != 0 {
-				return nil, []byte("HTTP 500: server error"), prCode, nil
+				return proc.Result{Stderr: "HTTP 500: server error", ExitCode: prCode}, nil
 			}
-			return []byte(prs), nil, 0, nil
-		case len(args) > 2 && args[0] == "issue" && args[1] == "view":
+			return proc.Result{Stdout: prs}, nil
+		case len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view":
 			issueReads++
-			return []byte(`{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- x.txt\n"}`), nil, 0, nil
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- x.txt\n"}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	policy := func(p string) {
 		write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "github"}, "issues": {"source": "github"},"ship":{"review":`+p+`}}`)
@@ -883,11 +884,11 @@ func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	labels := ""
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
-			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" && cmd.Args[2] == "6" {
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "round": {"harnesses": ["claude", "codex"]}}`)
@@ -923,11 +924,11 @@ func TestReviewDepthListsLenses(t *testing.T) {
 	gittest.Run(t, root, "commit", "-q", "-m", "small change")
 	labels := ""
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
-			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" && cmd.Args[2] == "6" {
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "review": {"lenses": {"security": {"paths": ["x.txt"]}, "ux": {"labels": ["ux"]}}}}`)
@@ -975,11 +976,11 @@ func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
 			return host.Result{ExitCode: 1}, nil
 		}}
 	}
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
-			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[{"name":"size:Major"}]}`), nil, 0, nil
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 2 && cmd.Args[0] == "issue" && cmd.Args[1] == "view" && cmd.Args[2] == "6" {
+			return proc.Result{Stdout: `{"number":6,"title":"t","state":"OPEN","labels":[{"name":"size:Major"}]}`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "round": {"harnesses": ["claude", "codex"]}, "review": {"accounts": [{"kind": "codex", "name": "rev", "dir": "/home/rev"}]}}`)

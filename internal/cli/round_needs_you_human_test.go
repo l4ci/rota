@@ -95,9 +95,10 @@ func TestWatchMaintainerWarningsOnlyOnChange(t *testing.T) {
 	}
 	var stderr bytes.Buffer
 	c := &Ctx{Deps: deps, Stderr: &stderr, ctx: context.Background()}
+	warned := &watchWarned{}
 	for _, next := range []string{"outage-one", "outage-one", "outage-two", "outage-two", "", "outage-one"} {
 		state = next
-		watchForge(context.Background(), c, root)
+		watchForge(context.Background(), c, root, warned)
 	}
 	if got := strings.Count(stderr.String(), "maintainer digest forge unavailable:"); got != 3 {
 		t.Fatalf("warn once per transition, got %d:\n%s", got, stderr.String())

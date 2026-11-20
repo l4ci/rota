@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 func TestResolve(t *testing.T) {
@@ -127,7 +129,7 @@ func TestHerdrPaneCallers(t *testing.T) {
 								}
 								return "", errors.New("not found")
 							},
-							Run: func(context.Context, string, []string) (Result, error) {
+							Run: func(context.Context, proc.Cmd) (Result, error) {
 								t.Fatal("pane detection must not run commands")
 								return Result{}, nil
 							},

@@ -24,11 +24,7 @@ func itemFlow(c *Ctx, ref string) (backlog.Backend, backlog.Workflow, string, st
 	if err != nil {
 		return nil, nil, "", "", err
 	}
-	wf, err := backlog.WorkflowOf(be)
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	return be, wf, id, typ, nil
+	return be, be, id, typ, nil
 }
 
 // itemTrack is itemFlow for the verbs that read the item back from its

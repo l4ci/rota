@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/worker"
@@ -55,28 +56,28 @@ func newPerfRig(t *testing.T) *perfRig {
 	list := "[" + strings.Join(issues, ",") + "]"
 	d := testDeps()
 	d.IsTerminal = func(any) bool { return true }
-	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		joined := strings.Join(args, " ")
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, cmd proc.Cmd) (proc.Result, error) {
+		joined := strings.Join(cmd.Args, " ")
 		r.mu.Lock()
-		r.calls = append(r.calls, name+" "+joined)
+		r.calls = append(r.calls, cmd.Name+" "+joined)
 		r.mu.Unlock()
 		if r.failIf != nil && r.failIf(joined) {
-			return nil, []byte("boom"), 1, nil
+			return proc.Result{Stderr: "boom", ExitCode: 1}, nil
 		}
 		select {
 		case <-time.After(perfLatency):
 		case <-ctx.Done():
-			return nil, nil, 1, ctx.Err()
+			return proc.Result{ExitCode: 1}, ctx.Err()
 		}
 		switch {
-		case len(args) > 1 && args[0] == "issue" && args[1] == "list" && !strings.Contains(joined, "--label"):
-			return []byte(list), nil, 0, nil
-		case len(args) > 1 && args[0] == "issue" && args[1] == "view":
-			return []byte(issues[0]), nil, 0, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "list" && !strings.Contains(joined, "--label"):
+			return proc.Result{Stdout: list}, nil
+		case len(cmd.Args) > 1 && cmd.Args[0] == "issue" && cmd.Args[1] == "view":
+			return proc.Result{Stdout: issues[0]}, nil
 		case strings.Contains(joined, "issues/12/comments"):
-			return []byte(`[{"id":1,"body":"<!-- rota:claim mac-ben -->\nClaimed by mac-ben","user":{"login":"x"},"created_at":"2026-01-01T00:00:00Z"}]`), nil, 0, nil
+			return proc.Result{Stdout: `[{"id":1,"body":"<!-- rota:claim mac-ben -->\nClaimed by mac-ben","user":{"login":"x"},"created_at":"2026-01-01T00:00:00Z"}]`}, nil
 		}
-		return []byte("[]"), nil, 0, nil
+		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	r.deps = d
 	return r

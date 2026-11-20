@@ -24,6 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -695,7 +696,7 @@ type Option func(*CLI)
 
 // WithExec routes every process the adapter starts through x, and resolves
 // the CLI binary with lookPath.
-func WithExec(x Exec, lookPath func(string) (string, error)) Option {
+func WithExec(x proc.Runner, lookPath func(string) (string, error)) Option {
 	return func(c *CLI) { c.Exec, c.LookPath = x, lookPath }
 }
 

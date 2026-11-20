@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -18,8 +19,8 @@ func TestForgeAndIssuesPassesTheTrustCheckThrough(t *testing.T) {
 		root := gitRepo(t)
 		write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "github"}, "issues": {"source": "`+source+`"}}`)
 		deps := testDeps()
-		deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
-			return []byte("[]"), nil, 0, nil
+		deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{Stdout: "[]"}, nil
 		}, func(n string) (string, error) { return "/fake/" + n, nil })}
 		f, err := deps.forgeAndIssues(context.Background(), config.Load(cfgdir.OSEnv(), root), root)
 		if err != nil {

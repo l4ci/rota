@@ -15,13 +15,3 @@ func TestFileHasNoRefusedWorkflowVerbs(t *testing.T) {
 		}
 	}
 }
-
-// ItemStatus is the flag form of "implements ItemTracker".
-func TestItemStatusMatchesItemTracker(t *testing.T) {
-	for name, be := range map[string]Backend{"file": &File{}, "issues": &Issues{}} {
-		_, isTracker := be.(ItemTracker)
-		if isTracker != be.Capabilities().ItemStatus {
-			t.Errorf("%s: ItemTracker %v, ItemStatus %v", name, isTracker, be.Capabilities().ItemStatus)
-		}
-	}
-}

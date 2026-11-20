@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -220,9 +221,9 @@ func TestLayoutSkipsRoundsWithoutLayoutSupport(t *testing.T) {
 					return host.New(k, host.Deps{
 						Getenv:   func(string) string { return "" },
 						LookPath: func(name string) (string, error) { return "/fake/" + name, nil },
-						Run: func(_ context.Context, name string, args []string) (host.Result, error) {
-							if name == "herdr" {
-								switch strings.Join(args, " ") {
+						Run: func(_ context.Context, cmd proc.Cmd) (host.Result, error) {
+							if cmd.Name == "herdr" {
+								switch strings.Join(cmd.Args, " ") {
 								case "pane list":
 									paneLists++
 									return host.Result{Stdout: `{"result":{"panes":[]}}`}, nil
