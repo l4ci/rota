@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastatetest"
@@ -51,4 +54,49 @@ func checkWatchHeartbeatExit(t *testing.T, tick *roundtick.Result) Result {
 		}
 	}
 	return res
+}
+
+// A roster change mid-watch ends the autopilot with config-changed before the
+// next tick can assign to a retired slot (#4010).
+func TestAutopilotWatchExitsWhenRosterChanges(t *testing.T) {
+	c, root, tick := fillTickFixture(t, `"light"`, true, true)
+	tick()
+	cd, err := rotastatetest.CommonDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := c.deps().Now()
+	c.deps().Now = func() time.Time { return now }
+	lenv := c.deps().LeaseEnv()
+	lenv.Now = func() time.Time { return now }
+	set, err := c.deps().roundSettings(root, roundConfigRequired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(root, ".rota", "config.json")
+	cfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := roundwatch.Env{
+		Now:   func() time.Time { return now },
+		Local: func() roundwatch.Snapshot { return roundwatch.Snapshot{} },
+		Wait: func(_ context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
+			now = now.Add(d)
+			// the maintainer retires slots mid-watch
+			next := strings.Replace(string(cfg), `"round":{`, `"round":{"roster":["ben"],`, 1)
+			if err := os.WriteFile(cfgPath, []byte(next), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return nil, nil
+		},
+		Sleep: func(_ context.Context, d time.Duration) { now = now.Add(d) },
+	}
+	res, err := autopilotWatch(c, context.Background(), env, roundwatch.Opts{Heartbeat: 10 * time.Minute, Poll: time.Minute}, set, root, cd, lenv, "", scopePID, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Text, "config-changed") || !strings.Contains(res.Text, "round.roster") {
+		t.Fatalf("watch must exit naming config-changed: %s", res.Text)
+	}
 }
