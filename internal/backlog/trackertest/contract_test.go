@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
@@ -206,5 +208,33 @@ func TestFakesAgree(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestUnknownLabelEditIsANamedDivergence pins the one place the fakes differ on
+// an unknown label. The CLI `gh issue edit --add-label` refuses a label the repo
+// lacks; the adapter never sends it (it PATCHes over REST, which creates the
+// label), so through issueAPI both fakes accept and the "rest label write"
+// scenario above keeps them equal. The refusal is reachable only by calling the
+// Python gh directly: asserted here so neither side moves unseen.
+func TestUnknownLabelEditIsANamedDivergence(t *testing.T) {
+	ctx := context.Background()
+	py := pyFake(t)
+	n := must[tracker.IssueKey](t)(py.Create(ctx, "t", "b", nil, ""))
+
+	// Python CLI: refuses, naming the missing label.
+	out, err := exec.Command("gh", "issue", "edit", n.String(), "--add-label", "nope").CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "'nope' not found") {
+		t.Fatalf("gh issue edit with an unknown label must fail naming it; err=%v out=%s", err, out)
+	}
+	if got := get(t, ctx, py, n); len(got.Labels) != 0 {
+		t.Fatalf("a refused edit must leave the issue unlabelled: %+v", got)
+	}
+
+	// Go Fake (adapter surface): accepts, like the REST write the adapter uses.
+	fake := goFake(t)
+	fn := must[tracker.IssueKey](t)(fake.Create(ctx, "t", "b", nil, ""))
+	if err := fake.Edit(ctx, fn, tracker.IssueEdit{AddLabels: []string{"nope"}}); err != nil {
+		t.Fatalf("Fake.Edit models the REST write and must accept an unknown label: %v", err)
 	}
 }

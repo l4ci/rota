@@ -2,7 +2,7 @@
 """Fake gh and glab for the worker gate: one PR (gh) or MR (glab) over a real bare origin.
 
 Smoke sections 68 and 89 drive this script; internal/worker/fakeforge_test.go is its
-in-process twin, and TestForgeModesMatchPythonFake pins both to the MODES tuple below.
+in-process twin, and TestForgeFakesAgree runs every mode of the MODES tuple below through both.
 Env: FORGE_TOOL (gh|glab), FORGE_DB (json state file), FORGE_LOG (argv log), FORGE_MODE
 (one of MODES).
 Merging clones FORGE_DB's origin into a temp dir and pushes there, so it needs git only.
@@ -28,6 +28,7 @@ def merge():
     pin = args[args.index(flag) + 1] if flag in args else None
     if mode == "race":
         db["sha"] = "f" * 40  # someone pushed after the gate's check
+        save()  # the push outlives this call, as it does on a real forge
     if pin != db["sha"]:
         print("simulated: head commit %s does not match the pin %s" % (db["sha"], pin), file=sys.stderr); sys.exit(1)
     if mode == "fail":
