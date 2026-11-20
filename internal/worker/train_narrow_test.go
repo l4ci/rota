@@ -271,6 +271,7 @@ func TestRerunCommandsReadsTheGateLog(t *testing.T) {
 		{"a non-smoke check runs alone through the template", "FAIL lint (exit 1)\nFAILED-CHECK lint:style\n", "lint-one {check}", false, []string{"lint-one 'lint:style'"}, true},
 		{"a retried log changes nothing without the key", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", "", true, []string{"bash test/gate.sh"}, false},
 		{"lint and Go both unselectable keep the full command", "FAIL lint (exit 1)\nFAIL gotest (exit 1)\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
+		{"a lone unselectable lint check never gets a Go -run command", "FAIL lint (exit 1)\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
 		{"output that is no gate log keeps the old rule", "boom\n", check, true, []string{"bash test/gate.sh"}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -291,5 +292,16 @@ func TestTrainGoNarrowedPassButRedFullRerunIsNotFlakyWithoutTheKey(t *testing.T)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 	if err != nil || res.Unreproduced || len(res.Flaky) != 0 || res.Verdict == landing.GatePass || len(res.Landed) != 0 {
 		t.Fatalf("a deterministic full failure is no flake: %+v %v", res, err)
+	}
+}
+
+// Lint broken by b1 and Go by b3: the lint failure is known, so b1 is blamed.
+func TestTrainLintFailureIsNotHiddenByASelectableGoFailure(t *testing.T) {
+	cmd := "if test -f b1.txt; then printf 'FAIL lint (exit 1)\\n'; fi; if test -f b3.txt; then " + goFail("TestX", "ex.com/p") + "; fi; test ! -f b1.txt"
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q,"rerunCheck":"true {check}"}}`, cmd, "true {packages} {tests}"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Culprit != "b1" {
+		t.Fatalf("want b1 blamed for lint: %+v %v", res, err)
 	}
 }

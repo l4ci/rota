@@ -229,8 +229,9 @@ func rerunCommands(failed VerifyResult, template, check string, skipRetried bool
 // its output names them, else the command itself. With check (test.rerunCheck)
 // set it narrows further (#3992): each id the gate log reported runs alone
 // through check, every swap counts as narrowing, and skipRetried drops checks
-// the gate already re-ran in isolation. Without check nothing is narrowed or
-// skipped, whatever the log says.
+// the gate already re-ran in isolation. Without check the gate log is not
+// read and nothing is skipped, but a -run swap still happens and still counts
+// as narrowing, so its pass is confirmed by a full re-run.
 func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rerunPlan {
 	r := rerunPlan{origin: map[string]string{}}
 	narrowing := check != ""
@@ -277,7 +278,7 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 					alone = append(alone, strings.ReplaceAll(check, "{check}", shlex.QuoteAlways(id)))
 				}
 			default:
-				if t, ok := testsCommand(out, template); ok && open == 1 {
+				if t, ok := testsCommand(out, template); ok && open == 1 && ck.name == "gotest" {
 					add(t)
 					r.narrowed = true
 				} else {

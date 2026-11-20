@@ -1187,7 +1187,7 @@ With `test.rerunCheck` set, a red check runs alone: the key holds a one-check co
 
 - **The re-run** runs only those checks, and is skipped when a failed check was already retried red (`RERUN-SKIPPED` note): that check is still red, so the train is no flake whatever the rest does. A narrowed run that passes is no flake until one full re-run of the failed commands is green too; red there is an interaction or ordering bug and goes on to the bisect.
 - **The bisect** runs only the failing checks at each prefix. After it names the culprit, one full run of the members that would land checks them. If that run is red, the bisect starts over on the full tier with the new failure as its subject, so the second failure is attributed to its member and the first failure stays as `Original` evidence.
-- **Nothing narrows** when the key is unset (retried logs change nothing then), when the log reports no id and names no Go test, or on a CI train; those keep the full re-run and the full prefixes.
+- **Only the key narrows ids and bisect steps.** With it unset, retried logs change nothing and only the Go `-run` swap remains, confirmed by a full re-run. A Go `-run` swap also needs every unselected red check to be the Go one. A log with no id and no named Go test, or a CI train, keeps the full re-run and the full prefixes.
 
 Nothing lands unless you pass `--land-green`, which lands the members before the culprit (or before the member the bisect stopped on, for an interaction), and only a
 prefix whose own verify ran green: a prefix that went red only during diagnosis never lands.
