@@ -790,9 +790,9 @@ func failingRecords(list []Record, s failScope) []Record {
 		if r, ok := EffectiveReview(list); ok {
 			cands = append(cands, r)
 		}
-		kinds := bounceReviewKinds[len(coreReviewKinds):]
+		kinds := relayNonCoreKinds
 		if s.SecondOpinion {
-			kinds = readinessReviewKinds[len(coreReviewKinds):]
+			kinds = relayNonCoreReadinessKinds
 		}
 		cands = append(cands, latestRecords(list, kinds)...)
 	}

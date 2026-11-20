@@ -8,7 +8,17 @@ var (
 	coreReviewKinds      = []string{ReviewSpec, ReviewQuality}
 	bounceReviewKinds    = append(append(slices.Clone(coreReviewKinds), ReviewCross), LensKinds...)
 	readinessReviewKinds = append(slices.Clone(bounceReviewKinds), SecondOpinion)
+
+	// The cross-and-lens remainders the relay rule reads across heads, where the
+	// effective review stands in for the core kinds. Named by IsCoreReview, so
+	// no caller slices a set by length.
+	relayNonCoreKinds          = nonCore(bounceReviewKinds)
+	relayNonCoreReadinessKinds = nonCore(readinessReviewKinds)
 )
+
+func nonCore(kinds []string) []string {
+	return slices.DeleteFunc(slices.Clone(kinds), IsCoreReview)
+}
 
 // IsCoreReview reports whether kind is one of the core reviews (spec, quality).
 func IsCoreReview(kind string) bool { return slices.Contains(coreReviewKinds, kind) }
