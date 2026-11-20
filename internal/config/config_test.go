@@ -85,14 +85,35 @@ func TestMergeDoesNotMutateInputs(t *testing.T) {
 	}
 }
 
-func TestLookup(t *testing.T) {
-	cfg, _ := jsonx.Decode([]byte(`{"work": {"mergeStrategy": "pr"}, "x": 1}`))
-	if v, ok := Lookup(cfg, "work.mergeStrategy"); !ok || v != "pr" {
-		t.Fatalf("got %v %v", v, ok)
+func TestWalkKey(t *testing.T) {
+	cfg, _ := jsonx.Decode([]byte(`{"work": {"mergeStrategy": "pr", "nil": null}, "x": 1, "n": null}`))
+	cases := []struct {
+		key                         string
+		want                        any
+		wantPresent, wantNullAbsent bool
+	}{
+		{"work.mergeStrategy", "pr", true, true},
+		{"work.missing", nil, false, false},
+		{"nope", nil, false, false},
+		{"x.y", nil, false, false},
+		{"work.nil", nil, true, false},
+		{"n", nil, true, false},
+		{"n.deeper", nil, false, false},
 	}
-	for _, k := range []string{"work.missing", "x.y", "nope"} {
-		if _, ok := Lookup(cfg, k); ok {
-			t.Errorf("Lookup(%q) should miss", k)
+	for _, c := range cases {
+		v, ok := walkKey(cfg, c.key, nullPresent)
+		if ok != c.wantPresent || v != c.want {
+			t.Errorf("nullPresent %q = %v,%v want %v,%v", c.key, v, ok, c.want, c.wantPresent)
+		}
+		if lv, lok := Lookup(cfg, c.key); lok != ok || lv != v {
+			t.Errorf("Lookup %q diverges from nullPresent", c.key)
+		}
+		v, ok = walkKey(cfg, c.key, nullAbsent)
+		if ok != c.wantNullAbsent || v != c.want {
+			t.Errorf("nullAbsent %q = %v,%v want %v,%v", c.key, v, ok, c.want, c.wantNullAbsent)
+		}
+		if wv, wok := walk(cfg, c.key); wok != ok || wv != v {
+			t.Errorf("walk %q diverges from nullAbsent", c.key)
 		}
 	}
 }

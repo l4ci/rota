@@ -4,7 +4,6 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/cfgdir"
@@ -13,7 +12,7 @@ import (
 // mergeVal reads the dotted path out of a JSON body.
 func mergeVal(t *testing.T, body, path string) (any, bool) {
 	t.Helper()
-	return lookupPresent(decodeCfg(t, body), strings.Split(path, "."))
+	return Lookup(decodeCfg(t, body), path)
 }
 
 func (r acctRig) val(t *testing.T, file, path string) (any, bool) {

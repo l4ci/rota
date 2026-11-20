@@ -193,19 +193,35 @@ func Merge(base, override any) any {
 	return out
 }
 
-// Lookup walks a dotted key ("work.mergeStrategy") through nested objects.
-func Lookup(cfg any, dotted string) (any, bool) {
+// nullPolicy says how a JSON null at a dotted-key segment reads.
+type nullPolicy int
+
+const (
+	// nullPresent: null is a value; the key exists and holds nil.
+	nullPresent nullPolicy = iota
+	// nullAbsent: null is the same as a missing key (Python's _walk).
+	nullAbsent
+)
+
+// walkKey walks a dotted key ("work.mergeStrategy") through nested objects.
+// A missing key or a non-object parent is absent; nulls follow policy.
+func walkKey(cfg any, dotted string, policy nullPolicy) (any, bool) {
 	cur := cfg
-	for _, part := range strings.Split(dotted, ".") {
+	for _, seg := range strings.Split(dotted, ".") {
 		obj, ok := cur.(*jsonx.Object)
 		if !ok {
 			return nil, false
 		}
-		if cur, ok = obj.Get(part); !ok {
+		if cur, ok = obj.Get(seg); !ok || (policy == nullAbsent && cur == nil) {
 			return nil, false
 		}
 	}
 	return cur, true
+}
+
+// Lookup walks a dotted key; a JSON null counts as present.
+func Lookup(cfg any, dotted string) (any, bool) {
+	return walkKey(cfg, dotted, nullPresent)
 }
 
 // mergeByKind is lists merged by account kind, lowest layer first: a list

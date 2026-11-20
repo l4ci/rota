@@ -70,13 +70,13 @@ func migrateMergesDoc(doc *jsonx.Object, below []any) (*jsonx.Object, []string, 
 	var sets []set
 	var drops []string
 	for _, mv := range mergeMoves {
-		old, ok := lookupPresent(doc, strings.Split(mv.Old, "."))
+		old, ok := Lookup(doc, mv.Old)
 		if !ok {
 			continue
 		}
 		from = append(from, mv.Old)
 		drops = append(drops, mv.Old)
-		cur, has := lookupPresent(doc, strings.Split(mv.New, "."))
+		cur, has := Lookup(doc, mv.New)
 		switch {
 		case !has:
 			sets = append(sets, set{mv.New, old})
@@ -84,17 +84,17 @@ func migrateMergesDoc(doc *jsonx.Object, below []any) (*jsonx.Object, []string, 
 			conflicts = append(conflicts, MergeConflict{Old: mv.Old, New: mv.New})
 		}
 	}
-	if old, ok := lookupPresent(doc, strings.Split(mergeIssuesLabel, ".")); ok {
+	if old, ok := Lookup(doc, mergeIssuesLabel); ok {
 		from = append(from, mergeIssuesLabel)
 		drops = append(drops, mergeIssuesLabel)
-		if _, has := lookupPresent(doc, []string{"issues", "labels", "inProgress"}); !has {
+		if _, has := Lookup(doc, "issues.labels.inProgress"); !has {
 			sets = append(sets, set{"issues.labels.inProgress", old})
 		}
 	}
-	if kind, ok := lookupPresent(doc, strings.Split(mergeWorkerKind, ".")); ok {
+	if kind, ok := Lookup(doc, mergeWorkerKind); ok {
 		from = append(from, mergeWorkerKind)
 		drops = append(drops, mergeWorkerKind)
-		own, _ := lookupPresent(doc, []string{"round", "harnesses"})
+		own, _ := Lookup(doc, "round.harnesses")
 		list, _ := own.([]any)
 		switch {
 		case len(list) == 0:
@@ -168,7 +168,7 @@ func migrateMergesPlan(files []*migrationFile, m *MergesMigration) error {
 				f.doc, f.changed = out, true
 				m.Changes = append(m.Changes, MergeChange{File: f.name, From: from})
 			}
-			if h, _ := lookupPresent(f.doc, []string{"round", "harnesses"}); len(asList(h)) > 0 {
+			if h, _ := Lookup(f.doc, "round.harnesses"); len(asList(h)) > 0 {
 				below = asList(h)
 			}
 			return c

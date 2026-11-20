@@ -248,7 +248,7 @@ func stripRemoved(cfg *jsonx.Object) []string {
 			continue
 		}
 		segs := strings.Split(k, ".")
-		if _, ok := lookupPresent(cfg, segs); !ok {
+		if _, ok := Lookup(cfg, k); !ok {
 			continue
 		}
 		deletePath(cfg, segs)

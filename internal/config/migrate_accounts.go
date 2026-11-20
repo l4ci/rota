@@ -57,7 +57,7 @@ func (e *AccountConflictError) Error() string {
 func migrateAccountsDoc(doc *jsonx.Object) (*jsonx.Object, []string, []AccountConflict) {
 	var from []string
 	var own []Account
-	raw, present := lookupPresent(doc, []string{"round", "accounts"})
+	raw, present := Lookup(doc, "round.accounts")
 	if present {
 		own = accountEntries(raw)
 		if list, _ := raw.([]any); legacyAccountShape(list) {
@@ -65,7 +65,7 @@ func migrateAccountsDoc(doc *jsonx.Object) (*jsonx.Object, []string, []AccountCo
 		}
 	}
 	for _, o := range oldAccountKeys {
-		v, ok := lookupPresent(doc, strings.Split(o.Key, "."))
+		v, ok := Lookup(doc, o.Key)
 		if !ok {
 			continue
 		}

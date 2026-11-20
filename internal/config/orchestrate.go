@@ -234,7 +234,7 @@ func Removed(root string) []string {
 			continue
 		}
 		for _, k := range RemovedKeys {
-			if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+			if _, ok := Lookup(doc, k); ok {
 				out = append(out, k+f.mark)
 			}
 		}
@@ -256,7 +256,7 @@ func Legacy(root string) []string {
 		return out
 	}
 	for _, k := range LegacyKeys {
-		if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+		if _, ok := Lookup(doc, k); ok {
 			out = append(out, k)
 		}
 	}
