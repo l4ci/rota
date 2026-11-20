@@ -353,7 +353,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 		return RenameResult{}, notFound("bullet titled '%s' not found under '## %s' in %s", title, from, km)
 	}
 	bStart := tm[0]
-	bEnd := bulletEnd(srcBody, bStart)
+	bEnd := bulletfmt.EndOffset(srcBody, bStart)
 	block := strings.TrimRight(srcBody[bStart:bEnd], "\n")
 	// The collapse of blank lines around the removed bullet is bulletfmt's, as
 	// in Remove; the target section is then read from the shortened text.
@@ -388,7 +388,7 @@ type ReplaceResult struct {
 
 // Replace swaps every occurrence of old for new inside the one bullet under
 // "## topic" in scope's KNOWLEDGE.md that contains old (case-sensitive). A
-// bullet is its "- " line plus indented continuations (see bulletEnd), so
+// bullet is its "- " line plus indented continuations (see bulletfmt.End), so
 // wrapped bullets match as a whole and prose after them is never touched. It refuses with ErrMultiMatch when old sits in more
 // than one bullet and returns ErrNotFound when it sits in none. When the edit
 // changes the bullet's bold title, the tier entry is re-keyed to the new one.
@@ -465,7 +465,7 @@ type RemoveResult struct{ File string }
 
 // Remove deletes the bullet titled title under "## topic" in scope's
 // KNOWLEDGE.md and its tier entry. A bullet is its "- " line plus indented
-// continuations (see bulletEnd); the last bullet of a section keeps the blank
+// continuations (see bulletfmt.End); the last bullet of a section keeps the blank
 // line that separates it from the next heading. It returns ErrNotFound when the topic or
 // the bullet is missing, leaving both files untouched.
 func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
@@ -516,7 +516,7 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		if _, err := s.FoldHits(scope); err != nil {
 			return err
 		}
-		next := bulletfmt.DeleteSpan(content, a, st+bulletEnd(body, hit[0]))
+		next := bulletfmt.DeleteSpan(content, a, st+bulletfmt.EndOffset(body, hit[0]))
 		if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 			return err
 		}

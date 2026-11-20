@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/pathglob"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -91,7 +92,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 		for _, topic := range section.Topics(content) {
 			for _, loc := range bulletStart.FindAllStringSubmatchIndex(topic.Body, -1) {
 				title := topic.Body[loc[2]:loc[3]]
-				block := strings.TrimSpace(topic.Body[loc[0]:bulletEnd(topic.Body, loc[0])])
+				block := strings.TrimSpace(topic.Body[loc[0]:bulletfmt.EndOffset(topic.Body, loc[0])])
 				if !scopedMatch(block, relative) {
 					continue
 				}
