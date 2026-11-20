@@ -41,6 +41,9 @@ type Options struct {
 	// FeedPage caps the items one feed page holds, below the api's 100, so a
 	// test can make a feed span pages. 0 is no cap.
 	FeedPage int
+	// FeedCreatedAt replaces every feed item's createdAt, so a test can serve
+	// a value the client cannot read. "" keeps the generated times.
+	FeedCreatedAt string
 }
 
 // Issue seeds one issue. Labels are names (created in the project when new);
@@ -321,8 +324,12 @@ func (s *Server) feed(w http.ResponseWriter, q url.Values, id string, isFeed boo
 	}
 	var items []obj
 	for i, c := range s.issues[num-1].comments {
+		at := fmt.Sprintf("2026-01-01T00:%02d:00.000Z", i)
+		if s.o.FeedCreatedAt != "" {
+			at = s.o.FeedCreatedAt
+		}
 		items = append(items, obj{"id": c.id, "issueId": num, "kind": "comment", "body": c.body, "actorName": "Rota",
-			"createdAt": fmt.Sprintf("2026-01-01T00:%02d:00.000Z", i)})
+			"createdAt": at})
 	}
 	if q.Get("order") != "asc" {
 		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {

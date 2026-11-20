@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -405,7 +405,10 @@ func (t *Itsaplan) Comments(ctx context.Context, key IssueKey) ([]Comment, error
 		}
 		for _, it := range page.Items {
 			c := Comment{ID: strconv.Itoa(it.ID), Body: it.Body, Author: it.ActorName}
-			c.CreatedAt, _ = time.Parse(time.RFC3339, it.CreatedAt)
+			var perr error
+			if c.CreatedAt, perr = stamp.ParseRFC3339(it.CreatedAt); perr != nil {
+				return "", fmt.Errorf("itsaplan comment %d: createdAt %q: %w", it.ID, it.CreatedAt, perr)
+			}
 			out = append(out, c)
 		}
 		if next := strings.TrimSpace(string(page.NextCursor)); next != "null" {

@@ -25,8 +25,10 @@ const (
 type Env struct {
 	Getenv func(string) string
 	Home   func() (string, error)
-	// TempDirs supplies the OS temporary directories. Nil uses TMPDIR and
-	// the standard Unix/macOS locations; tests can supply their own OS roots.
+	// TempDirs supplies the OS temporary roots for projects.Temporary. This
+	// package never reads it, and the nil default (TMPDIR, /tmp and the macOS
+	// /var/folders roots) lives in projects.Temporary; a supplied list replaces
+	// that default whole.
 	TempDirs func() []string
 }
 

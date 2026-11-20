@@ -302,3 +302,12 @@ func TestItsaplanDoesNotFollowRedirectToAnotherHost(t *testing.T) {
 		t.Errorf("the API key reached another host: %q", leaked)
 	}
 }
+
+// A createdAt the client cannot read is an error, not a silent zero time.
+func TestItsaplanCommentsRejectMalformedCreatedAt(t *testing.T) {
+	it, s := fakeItsaplan(t, itsaplantest.Options{FeedCreatedAt: "not-a-time"})
+	k := s.Add(itsaplantest.Issue{Title: "talk", Comments: []string{"one"}})
+	if _, err := it.Comments(context.Background(), IssueKey(k)); err == nil || !strings.Contains(err.Error(), "createdAt") {
+		t.Fatalf("Comments error = %v, want one naming createdAt", err)
+	}
+}

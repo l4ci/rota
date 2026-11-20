@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
@@ -140,6 +141,23 @@ func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
 	return c.withHolder(d.RoundEnv(ctx, root, RoundOpts{Worker: workerEnvCtx(c, ctx), Accounts: d.WorkerAccounts()}))
 }
 
+// claimBoard is the one place the backlog's claim side is opened, for the
+// round verbs and doctor alike. A nil board with a nil error means file mode,
+// which has no claims; via, when set, supplies the trackers.
+func claimBoard(c *Ctx, root string, via func(context.Context, string) (backlog.Tracker, error)) (round.Board, error) {
+	if caps, _, err := c.backendMode(root); err != nil || !caps.IssueIDs {
+		return nil, nil
+	}
+	be, err := openBacklogVia(c, root, false, "", via)
+	if err != nil {
+		return nil, err
+	}
+	if b, ok := round.BoardOf(be); ok {
+		return b, nil
+	}
+	return nil, nil
+}
+
 // withBoard gives the env the backlog's claim side, which claim-mismatch drift
 // reads. File mode has no claims, and a backlog that cannot be opened is a
 // warning: the other drift kinds still report.
@@ -147,17 +165,12 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	if env.Board != nil {
 		return env
 	}
-	if caps, _, err := c.backendMode(root); err != nil || !caps.IssueIDs {
-		return env
-	}
-	be, err := openBacklog(c, root, false, "")
+	b, err := claimBoard(c, root, nil)
 	if err != nil {
 		c.Warn("claim check skipped: %v", err)
 		return env
 	}
-	if b, ok := round.BoardOf(be); ok {
-		env.Board = b
-	}
+	env.Board = b
 	return env
 }
 

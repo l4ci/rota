@@ -508,7 +508,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if !*relay {
 				return Result{}, Usage("--review-through needs --relay")
 			}
-			t, err := time.Parse(time.RFC3339, *through)
+			t, err := stamp.ParseRFC3339(*through)
 			if err != nil {
 				return Result{}, Usage("--review-through must be an RFC 3339 time, such as 2026-10-25T08:30:00Z")
 			}

@@ -136,6 +136,20 @@ func TestTemporaryUsesOSTempRootsAndDirectoryBoundaries(t *testing.T) {
 	}
 }
 
+func TestTemporarySuppliedTempDirsReplaceTheNilDefault(t *testing.T) {
+	env := fakeEnv(map[string]string{"TMPDIR": "/custom-temp"}, "/home")
+	env.TempDirs = func() []string { return []string{"/os-roots"} }
+	for path, want := range map[string]bool{
+		"/os-roots/repo":    true,
+		"/tmp/repo":         false,
+		"/custom-temp/repo": false,
+	} {
+		if got := Temporary(env, path); got != want {
+			t.Errorf("Temporary(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
 func TestTemporaryResolvesProjectAndTempRootSymlinks(t *testing.T) {
 	x, env := isolate(t)
 	temp, live := filepath.Join(x, "temp"), filepath.Join(x, "live")
