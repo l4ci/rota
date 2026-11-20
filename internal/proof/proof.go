@@ -33,6 +33,25 @@ type Store interface {
 	Read(id string) (content string, ok bool, err error)
 }
 
+// formatRow is the one writer of the row grammar: the "- " line for r.
+func formatRow(r Row) string {
+	return "- " + strings.Join([]string{r.Date, r.Check, r.Result, r.Sha, r.Evidence}, sep)
+}
+
+// parseRow is the one reader of the row grammar: the Row on a "- " line. A short
+// row is padded with empty fields; fields is how many the line really had.
+func parseRow(line string) (r Row, fields int) {
+	p := strings.SplitN(strings.TrimPrefix(line, "- "), sep, 5)
+	fields = len(p)
+	for len(p) < 5 {
+		p = append(p, "")
+	}
+	return Row{p[0], p[1], p[2], p[3], p[4]}, fields
+}
+
+// sameRow is row identity: everything but the date.
+func sameRow(a, b Row) bool { a.Date, b.Date = "", ""; return a == b }
+
 func one(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // AddOpts are Add's arguments. Sha is the commit the check ran against, which
@@ -54,12 +73,15 @@ func Add(s Store, id string, today time.Time, o AddOpts) (row Row, changed bool,
 	if sha == "" {
 		sha = "-"
 	}
+	for _, v := range []string{check, sha} {
+		if strings.Contains(v, sep) {
+			return row, false, exitcode.Errf(exitcode.ExitUsage, "--check and --sha must not contain %q: it separates the row's fields", sep)
+		}
+	}
 	row = Row{stamp.Date(today), check, o.Result, sha, evidence}
-	line := "- " + strings.Join([]string{row.Date, row.Check, row.Result, row.Sha, row.Evidence}, sep)
-	key := strings.SplitN(line, sep, 2)[1]
 
 	err = s.Update(id, func(content string) (string, bool, error) {
-		updated, ch := withRow(content, line, key)
+		updated, ch := withRow(content, row)
 		changed = ch
 		return updated, ch, nil
 	})
@@ -69,12 +91,16 @@ func Add(s Store, id string, today time.Time, o AddOpts) (row Row, changed bool,
 	return row, changed, nil
 }
 
-// withRow adds line to content's "## Proof" section, or starts the section;
-// changed is false when a row with the same key is already there.
-func withRow(content, line, key string) (updated string, changed bool) {
+// withRow adds row to content's "## Proof" section, or starts the section;
+// changed is false when an identical row (date aside) is already there.
+func withRow(content string, row Row) (updated string, changed bool) {
+	line := formatRow(row)
 	if s, e, ok := section.Find(content, "Proof"); ok {
 		for _, l := range strings.Split(content[s:e], "\n") {
-			if strings.HasPrefix(l, "- ") && strings.Contains(l, sep) && strings.SplitN(l, sep, 2)[1] == key {
+			if !strings.HasPrefix(l, "- ") || !strings.Contains(l, sep) {
+				continue
+			}
+			if have, _ := parseRow(l); sameRow(have, row) {
 				return content, false
 			}
 		}
@@ -124,11 +150,8 @@ func CountRows(content string) int { return len(rowLines(content)) }
 func parseRows(content string) (rows []Row, lines []string) {
 	rows, lines = []Row{}, []string{}
 	for _, l := range rowLines(content) {
-		p := strings.SplitN(l[2:], sep, 5)
-		for len(p) < 5 {
-			p = append(p, "")
-		}
-		rows = append(rows, Row{p[0], p[1], p[2], p[3], p[4]})
+		r, _ := parseRow(l)
+		rows = append(rows, r)
 		lines = append(lines, l)
 	}
 	return
@@ -177,17 +200,21 @@ func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
 		rows := rowLines(content)
 		for i := len(rows) - 1; i >= 0; i-- {
 			l := rows[i]
-			p := strings.SplitN(l[2:], sep, 5)
-			if len(p) < 5 || p[2] != "PASS" || !speaksFor(p[3], p[1], sha, check) {
+			r, fields := parseRow(l)
+			if r.Result != "PASS" || !speaksFor(r.Sha, r.Check, sha, check) {
 				continue
 			}
 			found = true
-			if strings.Contains(" "+p[4]+" ", " "+mark+" ") {
+			if strings.Contains(" "+r.Evidence+" ", " "+mark+" ") {
 				return content, false, nil
+			}
+			add := " " + mark
+			if fields < 5 { // a short row has no evidence yet: the mark becomes it
+				add = sep + mark
 			}
 			s, e, _ := section.Find(content, "Proof")
 			at := s + strings.LastIndex(content[s:e], l) + len(l)
-			return content[:at] + " " + mark + content[at:], true, nil
+			return content[:at] + add + content[at:], true, nil
 		}
 		return content, false, nil
 	})
