@@ -80,3 +80,28 @@ func TestPathEntriesDelimiterIdentitiesRemainDistinct(t *testing.T) {
 		t.Fatalf("distinct learnings share recall identity: %+v", entries)
 	}
 }
+
+// PathField must reject every glob pathglob.Valid rejects, so a stored scope
+// cannot be accepted at write time and then never match.
+func TestPathFieldRejectsWhatPathglobRejects(t *testing.T) {
+	for _, bad := range []string{
+		"docs/**x",   // ** inside a segment
+		"a/**b/c",    // ** inside a segment
+		"{a,b}/*.go", // braces
+		"docs//x.go", // empty segment
+	} {
+		if _, err := PathField([]string{bad}); err == nil {
+			t.Errorf("PathField(%q) accepted a glob pathglob.Valid rejects", bad)
+		}
+	}
+	for _, bad := range []string{"a\\b", "x-->y", "/abs", "", "../x", "["} {
+		if _, err := PathField([]string{bad}); err == nil {
+			t.Errorf("PathField(%q) must stay rejected", bad)
+		}
+	}
+	for _, ok := range []string{"docs/", "internal/**/*.go", "**", "cmd/?.[ch]"} {
+		if _, err := PathField([]string{ok}); err != nil {
+			t.Errorf("PathField(%q): %v", ok, err)
+		}
+	}
+}

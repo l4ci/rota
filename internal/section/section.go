@@ -110,24 +110,40 @@ func Append(content, name, addition string) string {
 // next "## " heading or EOF, whitespace untouched.
 type Topic struct{ Name, Body string }
 
-// Topics lists every "## Name" heading in document order, like
-// re.split(r"^(## .+)$", MULTILINE): a heading is a line that starts with
-// "## " and has at least one more character. Text before the first heading is
-// dropped.
-func Topics(content string) []Topic {
-	type head struct{ start, end int } // heading line [start, end), without its "\n"
-	var heads []head
-	for pos := 0; pos < len(content); {
-		lineEnd, next := len(content), len(content)
+// TopicSpan is one "## Name" section as 0-based line indexes: the lines
+// [From, To) of content split on "\n", heading included. To is the line count
+// for the last topic.
+type TopicSpan struct {
+	Name     string
+	From, To int
+}
+
+// topicHead is one heading line: its 0-based line index and byte range
+// [start, end), without the line's "\n".
+type topicHead struct{ line, start, end int }
+
+// topicHeads is the one heading rule, like re.split(r"^(## .+)$", MULTILINE):
+// a heading is a line that starts with "## " and has at least one more
+// character. lines is the line count of content split on "\n".
+func topicHeads(content string) (heads []topicHead, lines int) {
+	for pos := 0; pos <= len(content); lines++ {
+		lineEnd, next := len(content), len(content)+1
 		if eol := strings.IndexByte(content[pos:], '\n'); eol >= 0 {
 			lineEnd = pos + eol
 			next = lineEnd + 1
 		}
 		if lineEnd-pos > 3 && content[pos:pos+3] == "## " {
-			heads = append(heads, head{pos, lineEnd})
+			heads = append(heads, topicHead{lines, pos, lineEnd})
 		}
 		pos = next
 	}
+	return heads, lines
+}
+
+// Topics lists every "## Name" heading in document order. Text before the
+// first heading is dropped.
+func Topics(content string) []Topic {
+	heads, _ := topicHeads(content)
 	out := make([]Topic, 0, len(heads))
 	for i, h := range heads {
 		bodyEnd := len(content)
@@ -138,6 +154,21 @@ func Topics(content string) []Topic {
 			Name: pystr.Strip(content[h.start+3 : h.end]),
 			Body: content[h.end:bodyEnd],
 		})
+	}
+	return out
+}
+
+// TopicSpans lists the same headings as Topics, as line spans, for callers that
+// need line positions (git blame).
+func TopicSpans(content string) []TopicSpan {
+	heads, lines := topicHeads(content)
+	out := make([]TopicSpan, 0, len(heads))
+	for i, h := range heads {
+		to := lines
+		if i+1 < len(heads) {
+			to = heads[i+1].line
+		}
+		out = append(out, TopicSpan{Name: pystr.Strip(content[h.start+3 : h.end]), From: h.line, To: to})
 	}
 	return out
 }

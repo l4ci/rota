@@ -3,12 +3,12 @@ package knowledge
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/pathglob"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -16,7 +16,7 @@ import (
 var pathsField = regexp.MustCompile(`<!-- paths: (.*?) -->`)
 
 // PathField encodes optional path scope without changing the dated bullet
-// format. Patterns use slash-separated path.Match syntax; ** spans directories.
+// format. Patterns follow pathglob.Valid: slash-separated path.Match segments, ** as a whole segment spans directories.
 func PathField(patterns []string) (string, error) {
 	if len(patterns) == 0 {
 		return "", nil
@@ -30,7 +30,7 @@ func PathField(patterns []string) (string, error) {
 				return "", fmt.Errorf("path glob cannot leave its root: %q", p)
 			}
 		}
-		if _, err := path.Match(p, ""); err != nil {
+		if err := pathglob.Valid(p); err != nil {
 			return "", fmt.Errorf("invalid path glob %q: %w", p, err)
 		}
 	}
@@ -91,7 +91,7 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 		for _, topic := range section.Topics(content) {
 			for _, loc := range bulletStart.FindAllStringSubmatchIndex(topic.Body, -1) {
 				title := topic.Body[loc[2]:loc[3]]
-				block := strings.TrimSpace(topic.Body[loc[0]:bulletEnd(topic.Body, loc[0])])
+				block := strings.TrimSpace(topic.Body[loc[0]:bulletfmt.EndOffset(topic.Body, loc[0])])
 				if !scopedMatch(block, relative) {
 					continue
 				}

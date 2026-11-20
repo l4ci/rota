@@ -1,12 +1,10 @@
 package ship
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Git is the one git call the ship rules need. A non-zero exit is a Result;
@@ -28,11 +26,7 @@ func out(g Git, args ...string) (string, error) {
 // outAs is out with the command text the error names, for calls whose
 // message shows the subject rather than every flag.
 func outAs(g Git, label string, args ...string) (string, error) {
-	res, err := g.Run(args...)
-	if err == nil && res.ExitCode != 0 {
-		err = &GitError{Msg: fmt.Sprintf("git %s: %s", label, strutil.FirstLine(res.Stderr))}
-	}
-	return line(res.Stdout), err
+	return land.GitOut(g.Run, label, args...)
 }
 
 func line(s string) string { return strings.TrimRight(s, "\n") }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,32 +46,69 @@ func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
 		return git.Result{Stdout: porcelain}, nil
 	}
 
-	got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, TempRoot: tempRoot, Git: run, Now: now})
+	got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, Git: run, Now: now})
 	if got.LeakedTemp.N != 3 || got.LeakedTemp.Size != 3*1024 {
 		t.Errorf("LeakedTemp = %+v, want 3 dirs, 3072 bytes", got.LeakedTemp)
-	}
-	if got.StaleTmp.N != 1 || got.StaleTmp.Size != 1024 {
-		t.Errorf("StaleTmp = %+v, want 1 entry, 1024 bytes", got.StaleTmp)
 	}
 	if got.Prunable.N != 1 {
 		t.Errorf("Prunable = %+v, want 1", got.Prunable)
 	}
-	// reap lists the same checkouts, and the same tmp entries before age.
-	// The round always supplies a report; a nil one now fails closed.
-	res, err := Find(context.Background(), Input{Root: root, Base: "main", Git: run, TempRoot: tempRoot, Report: &round.Report{}}, []string{KindTmp, KindWorktree})
+	// reap lists the same checkouts. The round always supplies a report; a nil one now fails closed.
+	res, err := Find(context.Background(), Input{Root: root, Base: "main", Git: run, Report: &round.Report{}}, []string{KindWorktree})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var tmp, wt int
+	if len(res.Candidates) != got.Prunable.N {
+		t.Errorf("reap listed %d worktrees; want %d", len(res.Candidates), got.Prunable.N)
+	}
+}
+
+// A held entry (a live process uses it) is listed by reap but not reclaimable,
+// so the census must not count it; a skipped root surfaces reap's warning.
+func TestTakeCensusTmpAppliesReapHeldRules(t *testing.T) {
+	now := time.Now()
+	tempRoot, root := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempRoot, rotatree.IgnoreFile), []byte("*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"free", "busy"} {
+		p := filepath.Join(tempRoot, n)
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(filepath.Join(p, "f"), make([]byte, 1024), 0o644)
+		ts := now.Add(-3 * time.Hour)
+		os.Chtimes(filepath.Join(p, "f"), ts, ts)
+		os.Chtimes(p, ts, ts)
+	}
+	run := func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: "worktree " + root + "\n"}, nil
+	}
+	in := Input{Root: root, Base: "main", Git: run, Report: &round.Report{}, TempRoot: tempRoot,
+		ProcessUses: func() ([]ProcUse, error) {
+			return []ProcUse{{PID: 7, Paths: []string{filepath.Join(tempRoot, "busy", "f")}}}, nil
+		}}
+	got := TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run, Now: now})
+	if got.StaleTmp.N != 1 || got.StaleTmp.Size != 1024 {
+		t.Errorf("StaleTmp = %+v, want only the unheld entry (1, 1024)", got.StaleTmp)
+	}
+	res, err := Find(context.Background(), in, []string{KindTmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	free := 0
 	for _, c := range res.Candidates {
-		switch c.Kind {
-		case KindTmp:
-			tmp++
-		case KindWorktree:
-			wt++
+		if c.Held == "" {
+			free++
 		}
 	}
-	if tmp != 2 || wt != got.Prunable.N {
-		t.Errorf("reap listed tmp=%d worktree=%d; want 2 (one stale) and %d", tmp, wt, got.Prunable.N)
+	if free != got.StaleTmp.N {
+		t.Errorf("census counts %d, reap lists %d unheld", got.StaleTmp.N, free)
+	}
+
+	in.TempRoot = t.TempDir() // no rota .gitignore: reap skips it with a warning
+	got = TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run, Now: now})
+	if got.StaleTmp.N != 0 || len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "not a temp root") {
+		t.Errorf("unowned root: StaleTmp=%+v warnings=%q", got.StaleTmp, got.Warnings)
 	}
 }

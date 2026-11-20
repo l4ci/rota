@@ -385,6 +385,15 @@ func TestGuardForceUpstreamIsConfiguredBase(t *testing.T) {
 	}
 }
 
+func TestGuardForceUpstreamReadErrorDenies(t *testing.T) {
+	env := guardEnv()
+	env.Upstream = func(string) (string, error) { return "", errors.New("boom") }
+	got := Guard("git push --force-with-lease", env)
+	if !strings.Contains(got, "upstream") {
+		t.Errorf("force push with unreadable upstream: %q", got)
+	}
+}
+
 func TestGuardFailsClosedOnGit(t *testing.T) {
 	env := guardEnv()
 	env.Branch = func(string) (string, error) { return "", errors.New("detached") }

@@ -28,15 +28,16 @@ func statDisk(dir string) *doctor.Disk {
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // reap.TakeCensus does the counting, so the numbers match `rota reap`. It only
 // runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, run git.Runner, root, temp, tempRoot string, now time.Time) []string {
-	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, TempRoot: tempRoot, Git: run, Now: now})
+func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, tmp *reap.Input, now time.Time) []string {
+	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, Tmp: tmp, Git: run, Now: now})
 	var out []string
 	if c.LeakedTemp.N > 0 {
 		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size))))
 	}
 	if c.StaleTmp.N > 0 {
-		out = append(out, fmt.Sprintf("%d entries older than 1h under %s (%s); preview with `rota reap --kind tmp`, `--apply` to remove", c.StaleTmp.N, tempRoot, strutil.HumanBytes(uint64(c.StaleTmp.Size))))
+		out = append(out, fmt.Sprintf("%d entries under %s (%s) that `rota reap --kind tmp --apply` would remove; preview with `rota reap --kind tmp`", c.StaleTmp.N, tmp.TempRoot, strutil.HumanBytes(uint64(c.StaleTmp.Size))))
 	}
+	out = append(out, c.Warnings...)
 	if c.Prunable.N > 0 {
 		out = append(out, fmt.Sprintf("%d stale scratch worktrees (run: git worktree prune; rota reap lists the rest)", c.Prunable.N))
 	}
@@ -63,11 +64,29 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 		in.CacheDisk = d.DiskUsage(cache)
 	}
 	now := d.Now()
-	var tempRoot string
-	if root != "" {
-		tempRoot, _ = rotatree.FindTempRoot(ctx, d.Git, root)
+	in.ScanLeftovers = func() []string {
+		tmp, warn := d.reapTmpInput(ctx, root)
+		return append(doctorLeftovers(ctx, d.Git, root, d.TempDir(), tmp, now), warn...)
 	}
-	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), tempRoot, now) }
+}
+
+// reapTmpInput is the reap input `rota reap --kind tmp` lists with, so doctor
+// counts through the same held rules. Nil when there is no project or temp
+// root; warn says why the round status could not be read.
+func (d *Deps) reapTmpInput(ctx context.Context, root string) (in *reap.Input, warn []string) {
+	if root == "" {
+		return nil, nil
+	}
+	tempRoot, _ := rotatree.FindTempRoot(ctx, d.Git, root)
+	if tempRoot == "" {
+		return nil, nil
+	}
+	env, ops := d.ReapEnv(ctx, root)
+	rep, err := env.Status(ctx, root)
+	if err != nil {
+		return nil, []string{"temp root not checked: " + err.Error()}
+	}
+	return &reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Host: ops, TempRoot: tempRoot, ProcessUses: d.ProcessUses}, nil
 }
 
 // goCacheDir is where the Go build cache lives: $GOCACHE, else go-build under

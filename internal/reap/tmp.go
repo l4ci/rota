@@ -170,19 +170,6 @@ func ListTmp(root string) (ents []TmpEntry, warning string) {
 	return ents, ""
 }
 
-// StaleTmp is how many ListTmp entries sat untouched past tmpMinAge at now,
-// and their total size: the count doctor reports for `rota reap --kind tmp`.
-func StaleTmp(root string, now time.Time) (n int, size int64) {
-	ents, _ := ListTmp(root)
-	for _, e := range ents {
-		if e.Newest.Before(now.Add(-tmpMinAge)) {
-			n++
-			size += e.Size
-		}
-	}
-	return n, size
-}
-
 func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 	ents, warning := ListTmp(s.in.TempRoot)
 	if warning != "" {

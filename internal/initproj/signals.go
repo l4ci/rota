@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -89,7 +90,7 @@ var ciTestRun = regexp.MustCompile(`^\s*-?\s*(?:run:\s*)?((?:go test|npm test|np
 
 // ciTest is the first test command a CI file runs, with file:line as evidence.
 func ciTest(dir string) (cmd, evidence string, ok bool) {
-	files, _ := filepath.Glob(filepath.Join(dir, ".github", "workflows", "*.y*ml"))
+	files := fsio.GlobDir(filepath.Join(dir, ".github", "workflows"), "*.y*ml")
 	files = append(files, filepath.Join(dir, ".gitlab-ci.yml"))
 	for _, f := range files {
 		fh, err := os.Open(f)

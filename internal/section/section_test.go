@@ -40,6 +40,27 @@ func TestTopics(t *testing.T) {
 	}
 }
 
+func TestTopicSpans(t *testing.T) {
+	content := "pre\n## A\nx\n##\n## \n##  B \ny\n## C"
+	want := []TopicSpan{{"A", 1, 5}, {"B", 5, 7}, {"C", 7, 8}}
+	got := TopicSpans(content)
+	if len(got) != len(want) {
+		t.Fatalf("spans = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("span %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	// same headings, same order as Topics
+	tp := Topics(content)
+	for i := range tp {
+		if tp[i].Name != got[i].Name {
+			t.Errorf("topic %d name %q vs span %q", i, tp[i].Name, got[i].Name)
+		}
+	}
+}
+
 func TestReplaceAppendsMissingSection(t *testing.T) {
 	got := Replace("## A\nx\n", "B", "\n- y\n")
 	if got != "## A\nx\n\n## B\n\n- y\n" {

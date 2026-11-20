@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/stamp"
@@ -124,7 +124,7 @@ func (e Env) TrainRuns(ctx context.Context, root string) ([]TrainRun, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths, _ := filepath.Glob(rotastate.File(common, trainRunPrefix+"*.json"))
+	paths := fsio.GlobDir(rotastate.Dir(common), trainRunPrefix+"*.json")
 	var out []TrainRun
 	for _, p := range paths {
 		if run, ok := e.readTrainRun(p); ok {
