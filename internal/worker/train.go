@@ -930,13 +930,12 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 	result = cloneTrainResult(result)
 	v := trainVerified{passing: len(result.Members)}
 
-	e, ctx, o, res, scratch, tips, heads := t.e, t.ctx, t.o, &result, p.scratch, p.tips, p.heads
-	cache, baseSHA := t.cache, p.baseSHA
+	e, ctx, o, res, scratch := t.e, t.ctx, t.o, &result, p.scratch
+	baseSHA := p.baseSHA
 	if p.syncSHA != "" { // the verified tree includes the sync merge
 		baseSHA = p.syncSHA
 	}
 	n := len(res.Members)
-	passing := n
 	v.passing = n
 	// A local run that cannot start is an error, as before; a CI push or
 	// forge read that fails is CHECK-BROKE, since nothing has landed.
@@ -946,69 +945,22 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 		}
 		return true, err
 	}
-	var lastVerify time.Duration // the last full-tree verify, the diagnose estimate's unit
-	// cached answers a verify of the base plus its first k members from the
-	// cache when the same tier ran on the same base and heads before.
-	cached := func(tier string, run func() (VerifyResult, error)) func(int) (VerifyResult, error) {
-		return func(k int) (VerifyResult, error) {
-			key := trainKey(tier, baseSHA, heads[:k])
-			if p.integration != nil { // the start is the branch's tip, the last tip carries the base merge
-				key = trainKey(tier, p.tipOf(k), nil)
-			}
-			if v, ok := cache.get(key); ok {
-				res.CacheHits = append(res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
-				return VerifyResult{Cached: true, Verified: v.Verified}, nil
-			}
-			diagnosing := k != n
-			if diagnosing {
-				t.phase("diagnose %s: base + %d member(s), tip %s", tier, k, tipAt(tips, k))
-			} else {
-				t.phase("verify %s: base + %d member(s), tip %s", tier, k, tipAt(tips, k))
-			}
-			began := time.Now()
-			r, err := run()
-			if diagnosing {
-				res.DiagnoseTime += time.Since(began)
-			} else {
-				res.VerifyTime += time.Since(began)
-				lastVerify = time.Since(began)
-			}
-			if err == nil && ctx.Err() != nil && !r.OK() {
-				// A command the cancel stopped is no finding: keep its log, run no
-				// bisect, flake record or cache write on it.
-				res.Log = r.LogPath
-				return r, ctx.Err()
-			}
-			if err == nil {
-				prs := []string{}
-				for _, m := range res.Members[:k] {
-					if m.PR != "" {
-						prs = append(prs, m.PR)
-					}
-				}
-				e.recordVerification(t.root, o.Round, tier, GateTarget{}, prs, r)
-				err = e.recordFlakes(t.root, o.Round, prs, r)
-				// Prefix verifies run inside bisect, outside the tier walk.
-				if k != n {
-					for _, f := range r.Flaky {
-						res.Flaky = append(res.Flaky, f)
-						res.Notes = append(res.Notes, flakeNote(f))
-					}
-				}
-			}
-			if err == nil {
-				cache.put(key, r)
-			}
-			return r, err
-		}
+	vr := &verifyRun{
+		res: res, cache: t.cache, ctx: ctx, baseSHA: baseSHA, heads: p.heads, tips: p.tips, n: n,
+		phase: t.phase, passing: n, onFailStop: o.OnFail == OnFailStop,
+		record: func(tier string, prs []string, r VerifyResult) error {
+			e.recordVerification(t.root, o.Round, tier, GateTarget{}, prs, r)
+			return e.recordFlakes(t.root, o.Round, prs, r)
+		},
+		stop:  func(tier string, failed VerifyResult) { t.stopTrain(res, p, tier, baseSHA, failed) },
+		rerun: func(tier string, failed VerifyResult) (bool, error) { return t.rerunRed(p, res, tier, failed) },
+		bisectTrain: func(tier string, run func(int) (VerifyResult, error), failed VerifyResult) (int, bool, error) {
+			classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed) }
+			return e.bisectTrain(scratch, res, p.tips, tier, run, classify, failed, o.LandGreen)
+		},
 	}
-	// blame remembers the member the bisect named, to recognise it as flaky later.
-	blame := func(tier string) {
-		for i, m := range res.Members {
-			if m.Culprit && res.Verdict == landing.GateVerifyFailed {
-				cache.blame(m.Branch, heads[i], trainKey(tier, baseSHA, heads[:i+1]))
-			}
-		}
+	if p.integration != nil {
+		vr.tipOf = p.tipOf
 	}
 	fullTierName := tierFull
 	if p.tierRan != "" {
@@ -1017,34 +969,8 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 	if p.onCI {
 		fullTierName = tierFull + "@ci"
 	}
-	full := cached(fullTierName, func() (VerifyResult, error) { return p.verify(scratch) })
-	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, p.in.cfg.E2E, scratch, p.in.ledger) })
-	// bisect names the culprit of a red tier; it reports whether the train ends.
-	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
-		if res.Original == nil {
-			orig := failureOf(tier, failed, n, tipAt(tips, n))
-			res.Original = &orig
-		}
-		if o.OnFail == OnFailStop {
-			t.stopTrain(res, p, tier, baseSHA, failed)
-			return true, nil
-		}
-		// The failure is readable now, before the re-run and the diagnosis spend
-		// minutes: an orchestrator can cancel instead of waiting (#3687).
-		t.phase("verify failed: %s", failedSummary(failed))
-		// A red the same tree does not show twice is a flake, not a culprit: re-run
-		// before paying for a bisect (#3647).
-		if done, err := t.rerunRed(p, res, tier, failed); done || err != nil {
-			return done, err
-		}
-		t.phase("%s", diagnoseEstimate(n, lastVerify))
-		classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed) }
-		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, classify, failed, o.LandGreen)
-		if ctx.Err() == nil {
-			blame(key)
-		}
-		return stop, err
-	}
+	full := vr.cached(fullTierName, func() (VerifyResult, error) { return p.verify(scratch) })
+	e2e := vr.cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, p.in.cfg.E2E, scratch, p.in.ledger) })
 	// 4b. E2E: the most expensive tier runs once, on the train result, after
 	// test.full passed. A red e2e bisects the same way a red full does.
 	w := &tierWalk{
@@ -1055,18 +981,18 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 			}
 			return e2e(n)
 		},
-		stop: func(vr VerifyResult) bool {
-			r, done := trainStopped(*res, vr)
+		stop: func(r VerifyResult) bool {
+			rr, done := trainStopped(*res, r)
 			if done {
-				result = r
+				result = rr
 			}
 			return done
 		},
-		red: func(tier string, vr VerifyResult) (bool, error) {
+		red: func(tier string, r VerifyResult) (bool, error) {
 			if tier == tierFull {
-				return bisect(tierFull, full, vr, fullTierName)
+				return vr.bisect(tierFull, full, r, fullTierName)
 			}
-			return bisect(tierE2E, e2e, vr, tierE2E)
+			return vr.bisect(tierE2E, e2e, r, tierE2E)
 		},
 		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded, flaky: &res.Flaky,
 	}
@@ -1092,19 +1018,14 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 
 	// A member earlier named culprit that this verified train carries was flaky:
 	// the failure did not reproduce on a different combination.
-	if passing == n && !w.fullEmpty {
-		for i, m := range res.Members {
-			if cache.forgive(m.Branch, heads[i]) {
-				res.Transient = append(res.Transient, m.Target)
-				res.Notes = append(res.Notes, fmt.Sprintf("TRANSIENT %s — named culprit by an earlier train, but this train with it passes verification; treated as flaky, not blamed again", m.Target))
-			}
-		}
+	if vr.passing == n && !w.fullEmpty {
+		vr.forgive()
 	}
 
-	if !green && passing > 0 && len(p.verifyCfg().E2E) > 0 {
-		res.Notes = append(res.Notes, noE2ENote(passing))
+	if !green && vr.passing > 0 && len(p.verifyCfg().E2E) > 0 {
+		res.Notes = append(res.Notes, noE2ENote(vr.passing))
 	}
-	v.passing = passing
+	v.passing = vr.passing
 	return v, result, false, nil
 }
 
