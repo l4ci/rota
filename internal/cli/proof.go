@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -96,35 +98,67 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		code := run.code
-		result := "PASS"
-		if code != 0 {
-			result = "FAIL"
-		}
-		row, changed, err := proof.Add(st, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: proofSha(c, root, "")})
-		if err != nil {
-			return failAny(err)
-		}
-		d := typedData(w.ID, w.Type, nil)
-		d.Set("check", row.Check)
-		d.Set("result", row.Result)
-		d.Set("sha", row.Sha)
-		d.Set("evidence", row.Evidence)
-		d.Set("exitCode", code)
-		d.Set("niced", run.niced)
-		d.Set("changed", changed)
-		d.Set("cwd", run.cwd)
-		text := row.Result + ": " + row.Check + "\ncwd: " + run.cwd
-		if code != 0 {
-			d.Set("outputTail", run.tail())
-			if t := run.tail(); t != "" {
-				text += "\n" + t
-			}
-			return Result{Data: d, Text: text}, Failed("%s (exit %d)", command, code)
-		}
-		res := Result{Data: d, Text: text}
-		return res, nil
+		return finishProofRecord(c, ctx, root, st, w, command, run)
 	}
+}
+
+// finishProofRecord saves the measured run as a proof row and builds the
+// verb's answer. The command has already run, so a failed save must not lose
+// its outcome.
+func finishProofRecord(c *Ctx, ctx context.Context, root string, st proof.Store, w *who, command string, run proofRun) (Result, error) {
+	code := run.code
+	result := "PASS"
+	if code != 0 {
+		result = "FAIL"
+	}
+	// A FAIL keeps its full output: the row holds only a hash, and the tail
+	// printed below is 20 lines.
+	logPath := ""
+	if code != 0 {
+		var logErr error
+		if logPath, logErr = writeProofLog(c, ctx, root, run.out); logErr != nil {
+			fmt.Fprintf(c.Stderr, "proof record: no log written: %v\n", logErr)
+		}
+	}
+	row, changed, err := proof.Add(st, w.ID, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: proofSha(c, root, "")})
+	if err != nil {
+		// The command already ran: say how it ended so it is not rerun blind.
+		msg := fmt.Sprintf("%s ran (%s, exit %d) but its proof row was not saved: %v", command, result, code, err)
+		d := typedData(w.ID, w.Type, nil)
+		d.Set("check", command)
+		d.Set("result", result)
+		d.Set("exitCode", code)
+		d.Set("saved", false)
+		text := ""
+		if logPath != "" {
+			d.Set("logPath", logPath)
+			msg += "; log: " + logPath
+			text = "log: " + logPath
+		}
+		return Result{Data: d, Text: text}, Unavailable("%s", msg)
+	}
+	d := typedData(w.ID, w.Type, nil)
+	d.Set("check", row.Check)
+	d.Set("result", row.Result)
+	d.Set("sha", row.Sha)
+	d.Set("evidence", row.Evidence)
+	d.Set("exitCode", code)
+	d.Set("niced", run.niced)
+	d.Set("changed", changed)
+	d.Set("cwd", run.cwd)
+	text := row.Result + ": " + row.Check + "\ncwd: " + run.cwd
+	if code != 0 {
+		if logPath != "" {
+			d.Set("logPath", logPath)
+			text += "\nlog: " + logPath
+		}
+		d.Set("outputTail", run.tail())
+		if t := run.tail(); t != "" {
+			text += "\n" + t
+		}
+		return Result{Data: d, Text: text}, Failed("%s (exit %d)", command, code)
+	}
+	return Result{Data: d, Text: text}, nil
 }
 
 func proofShow(fs *flag.FlagSet) RunFunc {
@@ -209,6 +243,27 @@ type proofRun struct {
 	code     int
 	niced    bool
 	targeted bool
+}
+
+// writeProofLog saves a failing command's full output under the project temp
+// root and returns the path.
+func writeProofLog(c *Ctx, ctx context.Context, root, out string) (string, error) {
+	dir, ok, err := rotatree.TempRootVia(ctx, c.deps().workerEnvFor(ctx).Git, root)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", errors.New("no project temp root")
+	}
+	f, err := os.CreateTemp(dir, "proof-record-*.log")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(out); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // outputTailLines caps the failing-proof output tail.
