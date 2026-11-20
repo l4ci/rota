@@ -152,9 +152,9 @@ func (e Env) CancelTrain(ctx context.Context, root, id string, wait time.Duratio
 	if !ok {
 		return TrainRun{}, ErrTrainNotRunning
 	}
-	if err := syscall.Kill(run.PID, syscall.SIGTERM); err != nil {
+	if err := pidlive.Signal(e.procs(), run.PID, run.Start, syscall.SIGTERM); err != nil {
 		if errors.Is(err, syscall.ESRCH) {
-			return run, nil // it exited between the read and the signal
+			return run, nil // it exited, or its pid was reused, between the read and the signal
 		}
 		return run, fmt.Errorf("signal train pid %d: %w", run.PID, err)
 	}
