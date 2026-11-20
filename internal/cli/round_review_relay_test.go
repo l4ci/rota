@@ -123,30 +123,30 @@ func TestWatchForgeReportsReviewInputOnADoneSlot(t *testing.T) {
 	deps := useReviewForge(f)
 	c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
 	key := roundwatch.ReviewKey("nia")
-	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev https://github.com/o/r/pull/9" {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[key]; got != "1 from rev https://github.com/o/r/pull/9" {
 		t.Fatalf("review key %q", got)
 	}
 	// Polling again reports the same thing: nothing consumed the batch.
-	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev https://github.com/o/r/pull/9" {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[key]; got != "1 from rev https://github.com/o/r/pull/9" {
 		t.Fatalf("second poll %q", got)
 	}
 	// The worker's own reply and a consumed cursor are not review input.
 	f.comments = []string{"Fixed in abc.\n<!-- rota:worker-reply nia -->"}
-	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
+	if got, ok := watchForge(context.Background(), c, dir, &watchWarned{})[key]; ok {
 		t.Fatalf("worker's own reply reported as review: %q", got)
 	}
 	f.comments = []string{"please rename x"}
 	if err := worker.Update(dir, func(d *worker.Doc) { d.Slot("nia").SetReviewSeen("2026-10-08T10:00:00Z#n1") }); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
+	if got, ok := watchForge(context.Background(), c, dir, &watchWarned{})[key]; ok {
 		t.Fatalf("consumed batch reported again: %q", got)
 	}
 	// A busy slot is not polled.
 	if err := worker.Update(dir, func(d *worker.Doc) { d.Slot("nia").SetReviewSeen(""); _ = d.Slot("nia").MarkState("busy", "") }); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
+	if got, ok := watchForge(context.Background(), c, dir, &watchWarned{})[key]; ok {
 		t.Fatalf("busy slot polled: %q", got)
 	}
 }
@@ -197,10 +197,16 @@ func TestWatchForgeSurfacesABadRoundConfig(t *testing.T) {
 	if _, err := roundcfg.FromConfig(config.Load(cfgdir.OSEnv(), dir)); err == nil {
 		t.Skip("config still loads")
 	}
-	watchForge(context.Background(), c, dir)
-	watchForge(context.Background(), c, dir)
+	warned := &watchWarned{}
+	watchForge(context.Background(), c, dir, warned)
+	watchForge(context.Background(), c, dir, warned)
 	if n := strings.Count(errBuf.String(), "review poll skipped"); n != 1 {
 		t.Fatalf("want one stderr note, got %d: %q", n, errBuf.String())
+	}
+	// The once-flag belongs to the watch's own state, not to Ctx: a fresh state notes again.
+	watchForge(context.Background(), c, dir, &watchWarned{})
+	if n := strings.Count(errBuf.String(), "review poll skipped"); n != 2 {
+		t.Fatalf("a fresh watch state must note again, got %d: %q", n, errBuf.String())
 	}
 }
 
@@ -312,7 +318,7 @@ func TestWorkerDispatchRelayConsumesWhatItCarried(t *testing.T) {
 	f := &reviewForge{comments: []string{"please rename x"}} // dated 10:00:00
 	c, dir, brief := relaySlot(t, f)
 	key := roundwatch.ReviewKey("w1")
-	if got := watchForge(context.Background(), c, dir)[key]; got == "" {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[key]; got == "" {
 		t.Fatal("setup: the comment should be pending")
 	}
 	// A second comment lands after the orchestrator's read (10:00:30) and before the relay.
@@ -321,12 +327,12 @@ func TestWorkerDispatchRelayConsumesWhatItCarried(t *testing.T) {
 		t.Fatalf("relay: %d %s", code, errOut)
 	}
 	handBack(t, dir) // the worker reworks and hands the PR back
-	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[key]; got != "1 from rev "+prURL {
 		t.Fatalf("only the later comment is pending: %q", got)
 	}
 	// With the later comment gone, nothing is pending: the relayed one was consumed.
 	f.comments = f.comments[:1]
-	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
+	if got, ok := watchForge(context.Background(), c, dir, &watchWarned{})[key]; ok {
 		t.Fatalf("relayed batch reported again: %q", got)
 	}
 }
@@ -392,7 +398,7 @@ func TestWorkerDispatchRelayWithoutFlagLeavesTheCursor(t *testing.T) {
 		t.Fatalf("relay: %d %s", code, errOut)
 	}
 	handBack(t, dir)
-	if got := watchForge(context.Background(), c, dir)[roundwatch.ReviewKey("w1")]; got == "" {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[roundwatch.ReviewKey("w1")]; got == "" {
 		t.Fatal("a plain relay consumed the review input")
 	}
 }
@@ -417,7 +423,7 @@ func TestWorkerDispatchReviewThroughLeavesUndatedInputPending(t *testing.T) {
 		t.Fatalf("relay: %d %s", code, errOut)
 	}
 	handBack(t, dir)
-	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
+	if got := watchForge(context.Background(), c, dir, &watchWarned{})[key]; got != "1 from rev "+prURL {
 		t.Fatalf("undated input consumed: %q", got)
 	}
 	if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got != "" {
@@ -463,7 +469,7 @@ func TestWorkerDispatchReviewThroughIgnoresTheRelayText(t *testing.T) {
 				t.Fatalf("slot did not receive relay body %q: %q", body, h.calls)
 			}
 			handBack(t, dir)
-			if got, ok := watchForge(context.Background(), c, dir)[roundwatch.ReviewKey("w1")]; ok {
+			if got, ok := watchForge(context.Background(), c, dir, &watchWarned{})[roundwatch.ReviewKey("w1")]; ok {
 				t.Errorf("batch still pending: %q", got)
 			}
 			if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got == "" {
