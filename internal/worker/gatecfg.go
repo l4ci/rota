@@ -37,6 +37,8 @@ type GateConfig struct {
 	// rerunCheck is test.rerunCheck: the command that runs one failing
 	// check ({check}) alone, so a train re-runs and bisects it narrowed (#3992).
 	rerunCheck string
+	// goCheck is test.goCheck: the gate check whose Go failures can select -run.
+	goCheck string
 	// Full is test.full, or the deprecated refactor.verifyCommands while a
 	// config still holds only that. Fast and E2E are test.fast and test.e2e.
 	Full, Fast, E2E []string
@@ -127,6 +129,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.RefsPattern, c.refsErr = parseRefsPattern(cfg)
 	c.rerunTemplate = config.String(cfg, "test.vacuousCommand")
 	c.rerunCheck = config.String(cfg, "test.rerunCheck")
+	c.goCheck = config.String(cfg, "test.goCheck")
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)

@@ -227,6 +227,37 @@ func TestTrainNarrowsGoOnlyFailures(t *testing.T) {
 	}
 }
 
+// #4002: named Go checks use the configured name, with gotest as the default.
+func TestTrainNarrowsNamedGoCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name, configured string
+	}{
+		{"gotest", ""},
+		{"unit", `,"goCheck":"unit"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			full, narrow := filepath.Join(dir, "full"), filepath.Join(dir, "narrow")
+			// The wrapper exits 2 so the generic assertion retry does not
+			// duplicate its check markers; exercise the train's rerun itself.
+			cmd := fmt.Sprintf("echo full >> %s; if test -f b2.txt; then printf 'FAIL %s (exit 1)\\n'; (%s); exit 2; fi", full, tc.name, goFail("TestX", "ex.com/p"))
+			w := trainWorld(t, cmd, "b1", "b2", "b3")
+			w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q,"rerunCheck":"true {check}"%s}}`,
+				cmd, "echo {packages} {tests} >> "+narrow+"; ! test -f b2.txt", tc.configured))
+			res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+			if err != nil || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
+				t.Fatalf("want b2 blamed and b1 landed: %+v %v", res, err)
+			}
+			if got := lines(t, full); len(got) != 2 {
+				t.Errorf("full runs = %d, want 2 (train, remaining members): %v", len(got), got)
+			}
+			if got := lines(t, narrow); len(got) < 3 {
+				t.Errorf("narrowed Go runs = %v, want rerun and bisect selections", got)
+			}
+		})
+	}
+}
+
 // AC-6: without the key a retried log changes nothing: the full re-run stays.
 func TestTrainWithoutRerunCheckIgnoresARetriedLog(t *testing.T) {
 	nw := newNarrowWorld(t, redSection("test -f b2.txt", true), nil)
@@ -272,12 +303,39 @@ func TestRerunCommandsReadsTheGateLog(t *testing.T) {
 		{"a retried log changes nothing without the key", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", "", true, []string{"bash test/gate.sh"}, false},
 		{"lint and Go both unselectable keep the full command", "FAIL lint (exit 1)\nFAIL gotest (exit 1)\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
 		{"a lone unselectable lint check never gets a Go -run command", "FAIL lint (exit 1)\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
+		{"selectable Go does not hide unselectable lint", "FAIL lint (exit 1)\nFAIL gotest (exit 1)\nFAILED-CHECK gotest\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
 		{"output that is no gate log keeps the old rule", "boom\n", check, true, []string{"bash test/gate.sh"}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got, narrowed := rerunCommands(log(c.log), template, c.check, c.skipRetried)
+			got, narrowed := rerunCommands(log(c.log), template, c.check, ParseGateConfig(nil).goCheck, c.skipRetried)
 			if strings.Join(got, "|") != strings.Join(c.want, "|") || narrowed != c.narrowed {
 				t.Errorf("rerunCommands = %q narrowed=%v, want %q narrowed=%v", got, narrowed, c.want, c.narrowed)
+			}
+		})
+	}
+}
+
+func TestRerunCommandsConfiguredGoCheck(t *testing.T) {
+	const goOutput = "--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\nFAIL\n"
+	const full = "project-gate"
+	const goCommand = "go test -count=1 'ex.com/p' -run '^(TestX)$'"
+	for _, tc := range []struct {
+		name, goCheck, log string
+		want               []string
+	}{
+		{"configured Go check", "unit", "FAIL unit (exit 1)\n" + goOutput, []string{goCommand}},
+		{"different check keeps full command", "unit", "FAIL gotest (exit 1)\n" + goOutput, []string{full}},
+		{"empty name keeps full command", "", "FAIL unit (exit 1)\n" + goOutput, []string{full}},
+		{"missing Go evidence keeps full command", "unit", "FAIL unit (exit 1)\nFAIL\n", []string{full}},
+		{"unselected lint keeps full command", "unit", "FAIL lint (exit 1)\nFAIL unit (exit 1)\nFAILED-CHECK unit\n" + goOutput, []string{full}},
+		{"selected lint permits Go selection", "unit", "FAIL lint (exit 1)\nFAILED-CHECK lint\nFAIL unit (exit 1)\n" + goOutput, []string{goCommand, "check-one 'lint'"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			failed := VerifyResult{Failed: []string{full}, Log: "== " + full + "\n" + tc.log}
+			cfg := ParseGateConfig(parseCfg(fmt.Sprintf(`{"test":{"goCheck":%q}}`, tc.goCheck)))
+			got, _ := rerunCommands(failed, "go test -count=1 {packages} -run {tests}", "check-one {check}", cfg.goCheck, false)
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Errorf("rerunCommands = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -297,9 +355,10 @@ func TestTrainGoNarrowedPassButRedFullRerunIsNotFlakyWithoutTheKey(t *testing.T)
 
 // Lint broken by b1 and Go by b3: the lint failure is known, so b1 is blamed.
 func TestTrainLintFailureIsNotHiddenByASelectableGoFailure(t *testing.T) {
-	cmd := "if test -f b1.txt; then printf 'FAIL lint (exit 1)\\n'; fi; if test -f b3.txt; then " + goFail("TestX", "ex.com/p") + "; fi; test ! -f b1.txt"
+	cmd := "if test -f b1.txt; then printf 'FAIL lint (exit 1)\\n'; fi; if test -f b3.txt; then printf 'FAIL gotest (exit 1)\\nFAILED-CHECK gotest\\n'; (" + goFail("TestX", "ex.com/p") + "); exit 2; fi; test ! -f b1.txt"
 	w := trainWorld(t, cmd, "b1", "b2", "b3")
-	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q,"rerunCheck":"true {check}"}}`, cmd, "true {packages} {tests}"))
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q,"rerunCheck":%q}}`, cmd,
+		"! test -f b3.txt # {packages} {tests}", "test {check} = gotest && ! test -f b3.txt"))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 	if err != nil || res.Culprit != "b1" {
 		t.Fatalf("want b1 blamed for lint: %+v %v", res, err)

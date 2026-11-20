@@ -1269,7 +1269,7 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 	}
 	tree := e.cleanVerifyTree(ctx, scratch)
 	cfg := p.verifyCfg()
-	plan := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, true)
+	plan := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, cfg.goCheck, true)
 	cmds := plan.cmds
 	if len(cmds) == 0 || plan.skipped {
 		res.Notes = append(res.Notes, "RERUN-SKIPPED — a failed check was already re-run in isolation and stayed red; no third run, and no flake verdict for this train")
