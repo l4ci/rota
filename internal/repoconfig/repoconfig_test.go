@@ -129,3 +129,38 @@ func TestNotARepoSharesRotastateError(t *testing.T) {
 		t.Fatalf("Check outside a repo = %v, want rotastate.ErrNotRepo", err)
 	}
 }
+
+func TestRiskyCoversProgramRunningKeyFamilies(t *testing.T) {
+	risky := []string{
+		"credential.https://example.com.helper", "gpg.ssh.program", "gpg.x509.program",
+		"diff.myd.command", "sequence.editor", "mergetool.kdiff.cmd", "difftool.vim.cmd",
+	}
+	benign := []string{"core.autocrlf", "gpg.format", "diff.myd.binary", "mergetool.kdiff.path", "credential.https://example.com.username"}
+	dir := newRepo(t)
+	valid := map[string]string{"core.autocrlf": "false", "gpg.format": "openpgp", "diff.myd.binary": "true"}
+	for _, k := range append(append([]string{}, risky...), benign...) {
+		v := "v"
+		if x, ok := valid[k]; ok {
+			v = x
+		}
+		gittest.Run(t, dir, "config", "--local", k, v)
+	}
+	d, err := Check(context.Background(), runner, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, k := range d.Risky {
+		got[k] = true
+	}
+	for _, k := range risky {
+		if !got[k] {
+			t.Errorf("risky %q lacks %q", d.Risky, k)
+		}
+	}
+	for _, k := range benign {
+		if got[k] {
+			t.Errorf("risky wrongly lists %q", k)
+		}
+	}
+}
