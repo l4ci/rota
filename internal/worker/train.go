@@ -955,7 +955,10 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 		stop:  func(tier string, failed VerifyResult) { t.stopTrain(res, p, tier, baseSHA, failed) },
 		rerun: func(tier string, failed VerifyResult) (bool, error) { return t.rerunRed(p, res, tier, failed) },
 		bisectTrain: func(tier string, run func(int) (VerifyResult, error), failed VerifyResult) (int, bool, error) {
-			classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed) }
+			if np, ok := t.narrowing(p, failed); ok {
+				return t.bisectNarrowed(p, res, tier, run, failed, np)
+			}
+			classify := func(k int, failed VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, failed, nil) }
 			return e.bisectTrain(scratch, res, p.tips, tier, run, classify, failed, o.LandGreen)
 		},
 	}
@@ -1265,10 +1268,20 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 		return false, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[len(res.Members)])
 	}
 	tree := e.cleanVerifyTree(ctx, scratch)
-	cmds := rerunCommands(failed, p.verifyCfg().rerunTemplate)
+	cfg := p.verifyCfg()
+	plan := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, true)
+	cmds := plan.cmds
+	if len(cmds) == 0 || plan.skipped {
+		res.Notes = append(res.Notes, "RERUN-SKIPPED — a failed check was already re-run in isolation and stayed red; no third run, and no flake verdict for this train")
+		return false, nil
+	}
+	var confirm []string
+	if plan.narrowed {
+		confirm = failed.Failed
+	}
 	t.phase("rerun %s: the red tree once before any bisect, %d command(s)", tier, len(cmds))
 	began := time.Now()
-	red, err := t.rerunIn(scratch, cmds)
+	red, err := t.rerunConfirmed(scratch, cmds, confirm)
 	elapsed := time.Since(began)
 	res.DiagnoseTime += elapsed
 	if err != nil || red {
@@ -1284,6 +1297,11 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 	for _, c := range failed.Failed {
 		out := logSection(failed.Log, c)
 		tests, _ := gotestout.FailingTests(out)
+		if len(tests) == 0 { // a smoke section is no Go test: the ledger still needs a name
+			for _, ck := range gateChecks(out) {
+				tests = append(tests, ck.ids...)
+			}
+		}
 		entry := flakeledger.NewEntry(c, tests, tree, e.Now(),
 			flakeledger.Run{Output: out, ExitCode: 1},
 			flakeledger.Run{ExitCode: 0, WallSeconds: elapsed.Seconds()})

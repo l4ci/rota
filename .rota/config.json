@@ -42,7 +42,8 @@
     ],
     "small": [
       "bash test/fast.sh {files}"
-    ]
+    ],
+    "rerunCheck": "SECTION_LIST={check} bash test/gate.sh"
   },
   "round": {
     "sharedPaths": [

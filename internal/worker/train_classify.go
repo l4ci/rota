@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gotestout"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // redClass is what classifyRed found out about a red prefix. The zero value
@@ -34,7 +35,7 @@ type redClass struct {
 // does not merge without the ones before it).
 //
 // The in-tree retry already caught flakes, so a rerun is not retried.
-func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, failed VerifyResult) (redClass, error) {
+func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, failed VerifyResult, narrow *narrowPlan) (redClass, error) {
 	if k <= 1 { // the first member alone is the red prefix bisect ran
 		return redClass{}, nil
 	}
@@ -43,7 +44,14 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 		return redClass{}, nil
 	}
 	e, ctx, scratch := t.e, t.ctx, p.scratch
-	cmds := rerunCommands(failed, p.verifyCfg().rerunTemplate)
+	cmds, swapped := rerunCommands(failed, p.verifyCfg().rerunTemplate, "", false)
+	var confirm []string
+	if swapped { // a -run selection passing alone is no flake until the full command does
+		confirm = failed.Failed
+	}
+	if narrow != nil {
+		cmds, confirm = narrow.cmds, narrow.full
+	}
 	began := time.Now()
 	defer func() {
 		res.DiagnoseTime += time.Since(began)
@@ -95,12 +103,20 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 	}
 	// No pair is red: the red needs three or more members, or does not
 	// reproduce. With one earlier member the pair was the red prefix itself.
-	if last > 1 {
+	// A narrowed pass proves less, so the pair run (the whole prefix when
+	// last is 1) is confirmed by the full commands too.
+	if last > 1 || confirm != nil {
 		if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k]); code != 0 {
 			return redClass{}, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[k])
 		}
 		t.phase("classify: base + %d member(s), %d command(s)", k, len(cmds))
-		red, err := t.rerunIn(scratch, cmds)
+		var red bool
+		var err error
+		if last > 1 {
+			red, err = t.rerunConfirmed(scratch, cmds, confirm)
+		} else {
+			red, err = t.rerunIn(scratch, confirm)
+		}
 		if err != nil {
 			return redClass{}, err
 		}
@@ -150,22 +166,233 @@ func (t *trainRun) rerunIn(dir string, cmds []string) (bool, error) {
 // failPackage matches go test's per-package FAIL line: "FAIL\t<pkg>\t0.01s".
 var failPackage = regexp.MustCompile(`(?m)^FAIL\t(\S+)\t`)
 
-// rerunCommands is what an alone-run executes for the failed run: per failed
-// command, the template with only its failing tests when its output names
-// them (and their packages when the template needs those), else the command
-// itself.
-func rerunCommands(failed VerifyResult, template string) []string {
-	var out []string
-	for _, c := range failed.Failed {
-		cmd := c
-		if t, ok := testsCommand(logSection(failed.Log, c), template); ok {
-			cmd = t
-		}
-		if !slices.Contains(out, cmd) {
-			out = append(out, cmd)
+// gateCheck is one red check in a gate log. The log contract a project's gate
+// keeps (test/gate.sh does): "FAIL <check> (exit N)" per red check, and right
+// under it "RETRIED-CHECK <check>" when the gate re-ran that check alone and it
+// stayed red, and one "FAILED-CHECK <id>" per piece of it that test.rerunCheck
+// can run alone ({check} is the id).
+type gateCheck struct {
+	name    string
+	retried bool
+	ids     []string
+}
+
+var (
+	gateFailedLine = regexp.MustCompile(`^FAIL (\S+) \(exit \d+\)`)
+	gateOtherRed   = regexp.MustCompile(`^FAIL (?:leak:|worktree guard|\S+ \(no pass line\))`)
+	gateRetriedRed = regexp.MustCompile(`^RETRIED-CHECK (\S+)$`)
+	gateIDRed      = regexp.MustCompile(`^FAILED-CHECK (\S+)$`)
+)
+
+// gateChecks reads the red checks out of one command's output; nil when it is
+// no such log.
+func gateChecks(out string) []gateCheck {
+	var checks []gateCheck
+	for _, line := range strings.Split(out, "\n") {
+		if m := gateFailedLine.FindStringSubmatch(line); m != nil {
+			checks = append(checks, gateCheck{name: m[1]})
+		} else if gateOtherRed.MatchString(line) {
+			checks = append(checks, gateCheck{name: "other"})
+		} else if len(checks) > 0 {
+			last := &checks[len(checks)-1]
+			if m := gateRetriedRed.FindStringSubmatch(line); m != nil && m[1] == last.name {
+				last.retried = true
+			} else if m := gateIDRed.FindStringSubmatch(line); m != nil {
+				last.ids = append(last.ids, m[1])
+			}
 		}
 	}
-	return out
+	return checks
+}
+
+// rerunPlan is what an alone-run executes for a failed run.
+type rerunPlan struct {
+	cmds []string
+	// origin maps each command to the failed command it stands for.
+	origin map[string]string
+	// narrowed: a command was swapped for a smaller one, so a pass proves less
+	// than the failed command would.
+	narrowed bool
+	// skipped: a check the gate already re-ran alone and found red again was
+	// left out. It is still red: nothing the rest does may call the train a flake.
+	skipped bool
+}
+
+// rerunCommands is the commands of rerunSet.
+func rerunCommands(failed VerifyResult, template, check string, skipRetried bool) (cmds []string, narrowed bool) {
+	r := rerunSet(failed, template, check, skipRetried)
+	return r.cmds, r.narrowed
+}
+
+// rerunSet is what an alone-run executes for the failed run: per failed
+// command, the test.vacuousCommand template with only its failing tests when
+// its output names them, else the command itself. With check (test.rerunCheck)
+// set it narrows further (#3992): each id the gate log reported runs alone
+// through check, every swap counts as narrowing, and skipRetried drops checks
+// the gate already re-ran in isolation. Without check the gate log is not
+// read and nothing is skipped, but a -run swap still happens and still counts
+// as narrowing, so its pass is confirmed by a full re-run.
+func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rerunPlan {
+	r := rerunPlan{origin: map[string]string{}}
+	narrowing := check != ""
+	skipRetried = skipRetried && narrowing
+	var from string
+	add := func(c string) {
+		if !slices.Contains(r.cmds, c) {
+			r.cmds = append(r.cmds, c)
+			r.origin[c] = from
+		}
+	}
+	tests := func(out, c string) {
+		if t, ok := testsCommand(out, template); ok {
+			add(t)
+			r.narrowed = true // a swapped command proves less, key or no key
+		} else {
+			add(c)
+		}
+	}
+	for _, c := range failed.Failed {
+		from = c
+		out := logSection(failed.Log, c)
+		checks := gateChecks(out)
+		if !narrowing || len(checks) == 0 {
+			tests(out, c)
+			continue
+		}
+		var alone []string
+		whole := false
+		// Go output is command-wide: it supports a -run selection only when
+		// one check is left for it. Two unselectable checks keep the command.
+		open := 0
+		for _, ck := range checks {
+			if !(skipRetried && ck.retried) && !(len(ck.ids) > 0 && strings.Contains(check, "{check}")) {
+				open++
+			}
+		}
+		for _, ck := range checks {
+			switch {
+			case skipRetried && ck.retried:
+				r.skipped = true
+			case len(ck.ids) > 0 && strings.Contains(check, "{check}"):
+				for _, id := range ck.ids {
+					alone = append(alone, strings.ReplaceAll(check, "{check}", shlex.QuoteAlways(id)))
+				}
+			default:
+				if t, ok := testsCommand(out, template); ok && open == 1 && ck.name == "gotest" {
+					add(t)
+					r.narrowed = true
+				} else {
+					whole = true
+				}
+			}
+		}
+		if whole {
+			add(c)
+			continue
+		}
+		for _, a := range alone {
+			add(a)
+			r.narrowed = true
+		}
+	}
+	return r
+}
+
+// narrowPlan is a narrowed diagnosis: cmds are the checks that failed, run
+// alone; full are the commands of the failed run, which a green narrowed run
+// must still pass before it counts for more than a diagnostic.
+type narrowPlan struct {
+	cmds, full []string
+	origin     map[string]string // narrowed command -> the failed command it stands for
+}
+
+// narrowing reports how a red tier narrows to its failing checks, ok false
+// when test.rerunCheck is unset, the tier runs on CI or nothing narrows.
+func (t *trainRun) narrowing(p trainPlan, failed VerifyResult) (narrowPlan, bool) {
+	cfg := p.verifyCfg()
+	if p.onCI || cfg.rerunCheck == "" {
+		return narrowPlan{}, false
+	}
+	r := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, false)
+	return narrowPlan{cmds: r.cmds, full: failed.Failed, origin: r.origin}, r.narrowed && len(r.cmds) > 0
+}
+
+// rerunConfirmed runs cmds in dir and reports whether any failed. When full is
+// set, cmds were narrowed to single checks: a green is then confirmed by one
+// run of the full commands, because a check that passes alone and fails with
+// the rest is an interaction or an ordering bug, not a flake (#3992).
+func (t *trainRun) rerunConfirmed(dir string, cmds, full []string) (bool, error) {
+	red, err := t.rerunIn(dir, cmds)
+	if err != nil || red || full == nil {
+		return red, err
+	}
+	t.phase("rerun: the narrowed check passed; one full re-run before calling it a flake")
+	return t.rerunIn(dir, full)
+}
+
+// bisectNarrowed is bisectTrain with each prefix run narrowed to the failing
+// checks, then one full run of the members that may land. A second failure in
+// another check shows only there: the bisect then restarts on the full tier,
+// so it is reported and attributed the way an unnarrowed bisect would (#3992).
+func (t *trainRun) bisectNarrowed(p trainPlan, res *landing.TrainResult, tier string, run func(int) (VerifyResult, error), failed VerifyResult, np narrowPlan) (int, bool, error) {
+	e, ctx, scratch := t.e, t.ctx, p.scratch
+	narrow := func(k int) (VerifyResult, error) {
+		t.phase("diagnose %s: base + %d member(s), %d failing command(s) only", tier, k, len(np.cmds))
+		began := time.Now()
+		r, err := e.runGateVerify(ctx, np.cmds, scratch, p.in.ledger)
+		res.DiagnoseTime += time.Since(began)
+		if err == nil && ctx.Err() != nil && !r.OK() {
+			res.Log = r.LogPath
+			return r, ctx.Err()
+		}
+		// A narrowed run fails as the command it narrowed, so the bisect
+		// sees the original failure and not a new one.
+		var failedAs []string
+		for _, c := range r.Failed {
+			if o := np.origin[c]; o != "" && !slices.Contains(failedAs, o) {
+				failedAs = append(failedAs, o)
+			}
+		}
+		if len(failedAs) > 0 {
+			r.Failed = failedAs
+		}
+		if err == nil {
+			for _, f := range r.Flaky {
+				res.Flaky = append(res.Flaky, f)
+				res.Notes = append(res.Notes, flakeNote(f))
+			}
+		}
+		return r, err
+	}
+	classify := func(k int, f VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, f, &np) }
+	snap := cloneTrainResult(*res)
+	passing, stop, err := e.bisectTrain(scratch, res, p.tips, tier, narrow, classify, failed, t.o.LandGreen)
+	if err != nil || stop || passing == 0 {
+		return passing, stop, err
+	}
+	if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[passing]); code != 0 {
+		return 0, true, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[passing])
+	}
+	r, err := run(passing)
+	if err != nil {
+		return 0, true, err
+	}
+	if r.OK() {
+		return passing, false, nil
+	}
+	t.phase("the full %s run of the first %d member(s) fails where the narrowed one passed; bisecting the full tier", tier, passing)
+	// The new failure is what this bisect attributes. Original keeps the first
+	// failure's evidence, but would mark the new one diagnostic-only, so it
+	// steps aside for the walk and returns after.
+	spent, orig := res.DiagnoseTime, snap.Original
+	*res = snap
+	res.DiagnoseTime, res.Original = spent, nil
+	plain := func(k int, f VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, f, nil) }
+	passing, stop, err = e.bisectTrain(scratch, res, p.tips, tier, run, plain, r, t.o.LandGreen)
+	if orig != nil {
+		res.Original = orig
+	}
+	return passing, stop, err
 }
 
 // testsCommand expands template for the tests a command's output names.
