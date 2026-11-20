@@ -11,6 +11,7 @@ package keepalive
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/keepstate"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
@@ -103,7 +104,7 @@ type Switch struct {
 	Threshold int
 	// HoldFallback is how long a hold lasts when the marker has no reset time.
 	HoldFallback time.Duration
-	// ConfigDir is the child's CLAUDE_CONFIG_DIR as inherited and Account its
+	// ConfigDir is the child's config dir as inherited and Account its
 	// name in round.accounts, empty when it has none.
 	ConfigDir string
 	Account   string
@@ -355,7 +356,7 @@ func (r *run) runChild(argv []string, runStarted time.Time) (reason string, caus
 	r.save()
 	childEnv := []string{roundlease.HolderPIDEnv + "=" + strconv.Itoa(r.env.Holder.PID)}
 	if r.st.Switches > 0 {
-		childEnv = append(childEnv, "CLAUDE_CONFIG_DIR="+r.curDir)
+		childEnv = append(childEnv, harness.ResolveAccounts(harness.Claude).AccountEnv(harness.Account{ConfigDir: r.curDir})...)
 	}
 	child, err := r.env.Spawn(argv, childEnv)
 	if err != nil {
