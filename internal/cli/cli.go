@@ -18,7 +18,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
@@ -118,8 +117,6 @@ type Ctx struct {
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
 	dashAt int
-	// keepDispatch is the resolved verb's Gates.KeepDispatch.
-	keepDispatch bool
 	// verbArgs is what followed the verb words, global flags removed: what
 	// the bug log records.
 	verbArgs []string
@@ -464,7 +461,6 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 	}
 	physicalCwd(c)
 	gates := gatesFor(chain)
-	c.keepDispatch = gates.KeepDispatch
 	if res, err := runGates(c, gates); err != nil {
 		return failWith(c, stdout, err, res)
 	}
@@ -562,17 +558,12 @@ func ok(c *Ctx, stdout io.Writer, res Result) int {
 
 func fail(c *Ctx, stdout io.Writer, err error) int { return failWith(c, stdout, err, Result{}) }
 
-// failWith keeps failure data on exit 1 and 4, plus round assign's explicit
-// exit-5 dispatch result: it changed state and must name the unsent slot.
+// failWith keeps failure data on exit 1 and 4, plus any error that sets
+// KeepData (round assign's exit-5 dispatch: it changed state and must name the
+// unsent slot).
 func failWith(c *Ctx, stdout io.Writer, err error, res Result) int {
 	e := asError(err)
-	keepDispatch := false
-	if e.Exit == ExitUnavailable && c.keepDispatch {
-		if d, ok := res.Data.(*jsonx.Object); ok {
-			keepDispatch = jsonx.Str(d, "blockedBy") == blockedby.Dispatch
-		}
-	}
-	if e.Exit != ExitFailed && e.Exit != ExitRefused && e.Exit != ExitInterrupted && !keepDispatch {
+	if e.Exit != ExitFailed && e.Exit != ExitRefused && e.Exit != ExitInterrupted && !e.KeepData {
 		res = Result{}
 	}
 	if !c.JSON && res.Text != "" {

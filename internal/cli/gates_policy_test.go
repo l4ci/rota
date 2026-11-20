@@ -250,31 +250,27 @@ func gatesAt(root *Command, path string) Gates {
 	return gatesFor(chain)
 }
 
-// The dispatcher hands the nodes it resolved to the gate lookup, so a verb that
-// is renamed keeps the policy declared on it, the exit-5 dispatch exception
-// included: no verb path is compared anywhere.
-func TestGatesFollowTheNodeNotItsName(t *testing.T) {
-	assign := &Command{Name: "assign", Verb: func(*flag.FlagSet) RunFunc {
+// failWith keeps a verb's result data on exit 5 only when the returned error
+// says so (Error.KeepData); no verb path and no data key is compared.
+func TestFailWithKeepsExit5DataOnlyWhenTheErrorSaysSo(t *testing.T) {
+	var keep bool
+	verb := &Command{Name: "assign", Verb: func(*flag.FlagSet) RunFunc {
 		return func(*Ctx, []string) (Result, error) {
 			d := jsonx.NewObject()
 			d.Set("blockedBy", blockedby.Dispatch)
-			return Result{Data: d}, &Error{Exit: ExitUnavailable, Message: "dispatch failed"}
+			return Result{Data: d}, &Error{Exit: ExitUnavailable, Message: "dispatch failed", KeepData: keep}
 		}
-	}, Fence: fenceAllowed, Gates: Gates{KeepDispatch: true}}
-	root := &Command{Name: "rota", Subs: []*Command{{Name: "round", Subs: []*Command{assign}}}}
-	for _, name := range []string{"assign", "renamed"} {
-		assign.Name = name
+	}, Fence: fenceAllowed}
+	root := &Command{Name: "rota", Subs: []*Command{{Name: "round", Subs: []*Command{verb}}}}
+	for _, tc := range []struct {
+		keep bool
+		name string
+	}{{true, "assign"}, {true, "renamed"}, {false, "assign"}} {
+		keep, verb.Name = tc.keep, tc.name
 		var out, errb bytes.Buffer
-		code := run(root, testDeps(), []string{"--json", "round", name}, strings.NewReader(""), &out, &errb)
-		if code != ExitUnavailable || !strings.Contains(out.String(), `"blockedBy"`) {
-			t.Errorf("%s: exit %d, stdout %q: dispatch data not kept", name, code, out.String())
+		code := run(root, testDeps(), []string{"--json", "round", tc.name}, strings.NewReader(""), &out, &errb)
+		if got := strings.Contains(out.String(), `"blockedBy"`); code != ExitUnavailable || got != tc.keep {
+			t.Errorf("keep=%v %s: exit %d, stdout %q", tc.keep, tc.name, code, out.String())
 		}
-	}
-	// A verb that does not declare it loses its data on exit 5.
-	assign.Gates = Gates{}
-	var out, errb bytes.Buffer
-	run(root, testDeps(), []string{"--json", "round", "renamed"}, strings.NewReader(""), &out, &errb)
-	if strings.Contains(out.String(), `"blockedBy"`) {
-		t.Errorf("undeclared verb kept dispatch data: %q", out.String())
 	}
 }
