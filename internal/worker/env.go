@@ -227,7 +227,7 @@ func (e Env) WithDefaults() Env {
 }
 
 // machineOption points a default-built tracker at this machine's connections,
-// as cli's trackerBase does for the production Env.
+// as cli's trackerOptions(uncachedReads) does for the production Env.
 func machineOption() tracker.Option {
 	return tracker.WithMachine(cfgdir.OSEnv(), func() connections.Store {
 		return connections.OSKeychain(proc.Run, runtime.GOOS)

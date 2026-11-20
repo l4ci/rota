@@ -57,7 +57,7 @@ func trCall(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
-		cl, err := tracker.NewCLI(ctx, s, *provider, dir, c.deps().trackerBase()...)
+		cl, err := tracker.NewCLI(ctx, s, *provider, dir, c.deps().trackerOptions(uncachedReads("tracker call passes an arbitrary CLI call through, writes included, so it is never served from a cache"))...)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
@@ -150,7 +150,7 @@ func upstreamCLI(c *Ctx, manual string) (*tracker.CLI, error) {
 	if err != nil {
 		return nil, trackerErr(err).WithHint(manual)
 	}
-	cl, err := tracker.NewCLI(ctx, s, "github", "", c.deps().trackerBase()...)
+	cl, err := tracker.NewCLI(ctx, s, "github", "", c.deps().trackerOptions(uncachedReads("the upstream CLI files and edits rota issues, so a read after a write must see the write"))...)
 	if err != nil {
 		return nil, trackerErr(err).WithHint(manual)
 	}
@@ -179,7 +179,7 @@ func upstreamRepoName(c *Ctx) string {
 func (d *Deps) originProvider(ctx context.Context, dir string) func() string {
 	return func() string {
 		cl := &tracker.CLI{}
-		for _, o := range d.trackerOptions() {
+		for _, o := range d.trackerOptions(noForgeReads) {
 			o(cl)
 		}
 		of := func(dir string) string {
