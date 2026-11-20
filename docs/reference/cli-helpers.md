@@ -600,7 +600,7 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota release bump (--level patch\|minor\|major \| --to <X.Y.Z>) [--file <path>] [--kind <kind>]` | write the next version into the version file |
 | `rota release host` | print the hosting kind of origin |
 | `rota release notes --from commits [--since <ref>]` | release notes from commits |
-| `rota release changelog <X.Y.Z> --body-file <path\|-> [--path <file>]` | add a release section to the changelog |
+| `rota release changelog <X.Y.Z> --body-file <path\|-> [--path <file>]` | add a release section to the changelog; refuses (exit 3) a leftover `## Unreleased` section: fold it into the notes and delete it first |
 | `rota release pending` | how much has landed since the last release tag |
 | `rota release milestone-check <MNN>` | list the open issues that block a milestone release, then one informational `check:` line from `rota milestone check` (`data.check`) |
 | `rota release close-milestone <MNN> --release <X.Y.Z>` | close out a released milestone |

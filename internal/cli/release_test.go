@@ -650,6 +650,21 @@ func TestReleaseChangelogExits(t *testing.T) {
 	}
 }
 
+func TestReleaseChangelogRefusesUnreleased(t *testing.T) {
+	orig := "# Changelog\n\n## Unreleased\n\n- stale\n\n## v1.0.0 — 2020-01-01\n\nold\n"
+	dir := releaseProject(t, map[string]string{"notes.md": "- x\n", "CHANGELOG.md": orig})
+	o := trRun(t, dir, "", "release", "changelog", "1.1.0", "--body-file", "notes.md", "--json")
+	if o.code != 3 {
+		t.Fatalf("exit %d, want 3: %s", o.code, o.stdout+o.stderr)
+	}
+	if !strings.Contains(o.stdout+o.stderr, "Unreleased") {
+		t.Errorf("message does not name the section: %s %s", o.stdout, o.stderr)
+	}
+	if got := releaseTree(t, dir)["CHANGELOG.md"]; got != orig {
+		t.Errorf("changelog written: %q", got)
+	}
+}
+
 // releaseTagRepo makes a repo whose tag v1.0.0 sits daysAgo days back, with n commits after it.
 func releaseTagRepo(t *testing.T, daysAgo, n int) string {
 	t.Helper()
