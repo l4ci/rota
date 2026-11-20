@@ -22,19 +22,26 @@ var tmpMinAge = LeftoverAge
 
 // entryStat sizes the tree at path (regular files only) and finds its newest
 // mtime. It uses Lstat semantics: a symlink counts as itself and is never
-// followed. Unreadable parts are skipped; ok is false when path itself is gone.
-func entryStat(path string) (size int64, newest time.Time, ok bool) {
+// followed. A part it cannot read adds no mtime, so walkErr reports the first
+// such error: the entry's age is then unknown. ok is false when path itself is gone.
+func entryStat(path string) (size int64, newest time.Time, walkErr error, ok bool) {
 	fi, err := os.Lstat(path)
 	if err != nil {
-		return 0, time.Time{}, false
+		return 0, time.Time{}, nil, false
 	}
 	newest = fi.ModTime()
 	filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if walkErr == nil {
+				walkErr = err
+			}
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
+			if walkErr == nil {
+				walkErr = err
+			}
 			return nil
 		}
 		if info.ModTime().After(newest) {
@@ -45,7 +52,7 @@ func entryStat(path string) (size int64, newest time.Time, ok bool) {
 		}
 		return nil
 	})
-	return size, newest, true
+	return size, newest, walkErr, true
 }
 
 // HumanAge renders d coarsely: minutes under an hour, hours under two days,
@@ -68,8 +75,12 @@ func tmpName(name string) bool {
 
 // heldTmp returns "" when nothing owns the entry at path, else why it is held.
 // Anything it cannot prove is held. uses and usesErr are one read of the
-// process table (readUses).
-func (s *state) heldTmp(path string, newest time.Time, uses []ProcUse, usesErr error) string {
+// process table (readUses); walkErr is entryStat's, an unreadable part whose
+// mtime newest does not cover.
+func (s *state) heldTmp(path string, newest time.Time, walkErr error, uses []ProcUse, usesErr error) string {
+	if walkErr != nil {
+		return "cannot prove its age, a subtree is unreadable: " + walkErr.Error()
+	}
 	if age := time.Since(newest); age < tmpMinAge {
 		return fmt.Sprintf("younger than %s (a run may still own it)", HumanAge(tmpMinAge))
 	}
@@ -121,6 +132,7 @@ type TmpEntry struct {
 	Name, Path string
 	Size       int64
 	Newest     time.Time
+	WalkErr    error // first unreadable part of the tree; Newest is then a lower bound
 }
 
 // ListTmp is reap's one rule for which entries of the project temp root are
@@ -148,11 +160,11 @@ func ListTmp(root string) (ents []TmpEntry, warning string) {
 			continue
 		}
 		path := filepath.Join(root, e.Name())
-		size, newest, ok := entryStat(path)
+		size, newest, walkErr, ok := entryStat(path)
 		if !ok {
 			continue
 		}
-		ents = append(ents, TmpEntry{Name: e.Name(), Path: path, Size: size, Newest: newest})
+		ents = append(ents, TmpEntry{Name: e.Name(), Path: path, Size: size, Newest: newest, WalkErr: walkErr})
 	}
 	sort.Slice(ents, func(i, j int) bool { return ents[i].Name < ents[j].Name })
 	return ents, ""
@@ -184,7 +196,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 	for _, e := range ents {
 		out = append(out, Candidate{ID: KindTmp + ":" + e.Name, Kind: KindTmp, Name: e.Name, Path: e.Path,
 			Reason: fmt.Sprintf("%s, last touched %s ago", strutil.HumanBytes(uint64(e.Size)), HumanAge(time.Since(e.Newest))),
-			Held:   s.heldTmp(e.Path, e.Newest, uses, usesErr)})
+			Held:   s.heldTmp(e.Path, e.Newest, e.WalkErr, uses, usesErr)})
 	}
 	return out, nil
 }
@@ -194,12 +206,12 @@ func removeTmp(_ context.Context, s *state, c Candidate) error {
 		return fmt.Errorf("%q is not an entry of the project temp root", c.Name)
 	}
 	path := filepath.Join(s.in.TempRoot, c.Name)
-	_, newest, ok := entryStat(path)
+	_, newest, walkErr, ok := entryStat(path)
 	if !ok {
 		return fmt.Errorf("%s is gone", c.Name)
 	}
 	uses, usesErr := s.readUses()
-	if h := s.heldTmp(path, newest, uses, usesErr); h != "" {
+	if h := s.heldTmp(path, newest, walkErr, uses, usesErr); h != "" {
 		return fmt.Errorf("%s: %s; left alone", c.Name, h)
 	}
 	return os.RemoveAll(path)
