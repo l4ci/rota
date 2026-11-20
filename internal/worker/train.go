@@ -8,11 +8,11 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gotestout"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/strutil"
-	"github.com/l4ci/rota/internal/testledger"
 	"math/bits"
 	"os"
 	"slices"
@@ -264,7 +264,7 @@ func tipAt(tips []string, k int) string {
 // failureOf describes one failed verify run of the tree with members merged.
 func failureOf(tier string, vr VerifyResult, members int, tip string) landing.TrainFailure {
 	f := landing.TrainFailure{Tier: tier, Command: strings.Join(vr.Failed, "; "), Members: members, Tip: tip}
-	f.Tests, _ = testledger.FailingTests(vr.Log)
+	f.Tests, _ = gotestout.FailingTests(vr.Log)
 	return f
 }
 
@@ -1310,7 +1310,7 @@ func (e Env) trainMoved(res landing.TrainResult, culprit, msg string) (landing.T
 // failedSummary names what a red tier failed: its failing tests when the log
 // shows them, else the failed commands.
 func failedSummary(failed VerifyResult) string {
-	if tests, _ := testledger.FailingTests(failed.Log); len(tests) > 0 {
+	if tests, _ := gotestout.FailingTests(failed.Log); len(tests) > 0 {
 		return strings.Join(tests, ", ")
 	}
 	return strings.Join(failed.Failed, "; ")
@@ -1362,7 +1362,7 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 	var entries []flakeledger.Entry
 	for _, c := range failed.Failed {
 		out := logSection(failed.Log, c)
-		tests, _ := testledger.FailingTests(out)
+		tests, _ := gotestout.FailingTests(out)
 		entry := flakeledger.NewEntry(c, tests, tree, e.Now(),
 			flakeledger.Run{Output: out, ExitCode: 1},
 			flakeledger.Run{ExitCode: 0, WallSeconds: elapsed.Seconds()})
@@ -1384,7 +1384,7 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 // runs, no member is blamed, and the answer carries the evidence in res.Stop.
 func (t *trainRun) stopTrain(res *landing.TrainResult, p trainPlan, tier, baseSHA string, failed VerifyResult) {
 	st := &landing.TrainStop{Tier: tier, Command: strings.Join(failed.Failed, "; "), Scratch: p.scratch, Base: baseSHA}
-	st.Tests, _ = testledger.FailingTests(failed.Log)
+	st.Tests, _ = gotestout.FailingTests(failed.Log)
 	for i, m := range res.Members {
 		st.Members = append(st.Members, landing.TrainStopMember{Target: m.Target, SHA: p.heads[i]})
 	}

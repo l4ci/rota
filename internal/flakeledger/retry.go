@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/testledger"
+	"github.com/l4ci/rota/internal/gotestout"
 )
 
 // infrastructureMarkers lists one regexp alternative per line. It is the single
@@ -28,7 +28,7 @@ func RetryEligible(exitCode int, output string, excused bool) (tests []string, o
 	if exitCode != 1 || excused || retryInfrastructure.MatchString(output) {
 		return nil, false
 	}
-	tests, assertion := testledger.FailingTests(output)
+	tests, assertion := gotestout.FailingTests(output)
 	if !assertion {
 		return nil, false
 	}
