@@ -1,24 +1,10 @@
 {
-  "models": {
-    "orchestrator": "opus",
-    "worker": "sonnet"
-  },
-  "work": {
-    "isolation": "branch",
-    "mergeStrategy": "direct"
-  },
-  "refactor": {
-    "confirmBeforeExecute": true
-  },
   "learn": {
     "verify": true,
     "promoteThreshold": 3
   },
   "ship": {
-    "review": "light",
-    "secondOpinion": false,
-    "secondOpinionRunner": "subagent",
-    "qa": false
+    "review": "light"
   },
   "autonomy": {
     "level": "auto"
@@ -33,10 +19,6 @@
   },
   "git": {
     "baseBranch": ""
-  },
-  "qa": {
-    "gate": "advisory",
-    "afterWork": false
   },
   "issues": {
     "source": "github"
@@ -63,11 +45,6 @@
     ]
   },
   "round": {
-    "dispatch": "subagent",
-    "slots": 3,
-    "workerCommand": "",
-    "accounts": [],
-    "operatorCommand": "",
     "sharedPaths": [
       "docs/contributing/market-review-2026-10.md"
     ],
@@ -168,5 +145,9 @@
       "**/testdata/**",
       "test/lib/**"
     ]
+  },
+  "work": {
+    "isolation": "branch",
+    "mergeStrategy": "direct"
   }
 }
