@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/mapqa"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stamp"
 )
 
@@ -110,35 +111,14 @@ func findKnowledge(repo git.Repo, root string, days int, today time.Time) ([]Ent
 		return nil, nil
 	}
 	var out []Entry
-	for _, t := range topicSpans(text) {
-		d, ok := latestDate(dates, t.from, t.to)
+	for _, t := range section.TopicSpans(text) {
+		d, ok := latestDate(dates, t.From, t.To)
 		if !ok || !isStale(d, today, days) {
 			continue
 		}
-		out = append(out, Entry{t.name, fmtDate(d)})
+		out = append(out, Entry{t.Name, fmtDate(d)})
 	}
 	return out, nil
-}
-
-// topicSpan is one "## " topic of a file: its name and the 0-based lines
-// [from, to) it spans, heading included. The heading rule is section.Topics'.
-type topicSpan struct {
-	name     string
-	from, to int
-}
-
-func topicSpans(text string) []topicSpan {
-	lines := strings.Split(text, "\n")
-	var out []topicSpan
-	for i, l := range lines {
-		if len(l) > 3 && strings.HasPrefix(l, "## ") {
-			if n := len(out); n > 0 {
-				out[n-1].to = i
-			}
-			out = append(out, topicSpan{name: pystr.Strip(l[3:]), from: i, to: len(lines)})
-		}
-	}
-	return out
 }
 
 // lineDates is the day of the commit that last changed each line of the file
