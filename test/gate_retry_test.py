@@ -167,16 +167,15 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(len(calls), 1, calls)
-        self.assertIn("FAILED-SECTION test/sections/01_stub.sh", result.stdout)
+        self.assertIn("FAILED-CHECK test/sections/01_stub.sh", result.stdout)
 
     def test_red_shard_names_its_failed_sections_after_the_retry_line(self):
         result, calls = self.run_gate("smoke-shard1", twice=True, section="test/sections/01_stub.sh")
         self.assertEqual(result.returncode, 1, result.stdout)
         lines = result.stdout.splitlines()
-        retry = lines.index("FAIL smoke-shard1 isolated retry (exit 1)")
         failed = lines.index("FAIL smoke-shard1 (exit 1)")
-        self.assertLess(retry, failed)
-        self.assertEqual(lines[failed + 1], "FAILED-SECTION test/sections/01_stub.sh")
+        self.assertEqual(lines[failed + 1], "RETRIED-CHECK smoke-shard1")
+        self.assertEqual(lines[failed + 2], "FAILED-CHECK test/sections/01_stub.sh")
 
     def test_real_runner_names_the_failed_section(self):
         result = self.run_real_section('fail "controlled smoke assertion"\n')

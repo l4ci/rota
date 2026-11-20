@@ -258,9 +258,10 @@ fail=0
 for idx in "${!PIDS[@]}"; do
   name="${NAMES[$idx]}"
   rc="${RCS[$idx]}"
+  retried_red=0 # the isolated retry ran and stayed red: printed as RETRIED-CHECK (#3992)
   if [ "$name" = gotest ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
      python3 "$REPO/test/gate-go.py" failed "$LOGS/gotest.json" >"$LOGS/go-failed.list" && go_retry_budget; then
-    go_failed=0
+    go_failed=0 go_broke=0
     pkg_idx=0
     module="$(awk '$1 == "module" {print $2}' "$REPO/go.mod")"
     while IFS= read -r pkg; do
@@ -275,8 +276,9 @@ for idx in "${!PIDS[@]}"; do
         go test -race -timeout 30m -count=1 "$pkg"
       retry_rc=$?
       [ "$retry_rc" = 0 ] || go_failed=1
-      [ "$retry_rc" != 2 ] || break  # tree changed: stop retrying
+      [ "$retry_rc" != 2 ] || { go_broke=1; break; }  # tree changed: stop retrying
     done <"$LOGS/go-failed.list"
+    [ "$go_failed" = 0 ] || [ "$go_broke" = 1 ] || retried_red=1
     [ "$go_failed" = 0 ] && continue
   fi
   case "$name" in smoke-*)
@@ -288,10 +290,11 @@ for idx in "${!PIDS[@]}"; do
     if [ "$SMOKE_ONLY" = 0 ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
        python3 "$REPO/test/gate-smoke.py" "$LOGS/$name.log"; then
       shard="${name#smoke-shard}"
-      if retry_once "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" 'All smoke tests passed\.' \
-         env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh; then
-        continue
-      fi
+      retry_once "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" 'All smoke tests passed\.' \
+         env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh
+      retry_rc=$?
+      [ "$retry_rc" != 0 ] || continue
+      [ "$retry_rc" != 1 ] || retried_red=1
     fi
     ;;
   esac
@@ -300,7 +303,8 @@ for idx in "${!PIDS[@]}"; do
   else
     echo "FAIL $name (exit $rc)"
     # The sections the shard stopped in, one stable line each: a train re-runs them alone (#3992).
-    case "$name" in smoke-*) grep -h '^smoke: failed section: ' "$LOGS/$name.log" | sed 's/^smoke: failed section: /FAILED-SECTION /' ;; esac
+    [ "$retried_red" = 0 ] || echo "RETRIED-CHECK $name"
+    case "$name" in smoke-*) grep -h '^smoke: failed section: ' "$LOGS/$name.log" | sed 's/^smoke: failed section: /FAILED-CHECK /' ;; esac
     tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'
     # A shard that dies without a summary line (set -e, SIGPIPE 141, a kill) leaves only the
     # last section header behind; name it so the death is not a bare FAILED (#1242).

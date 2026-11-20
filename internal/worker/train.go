@@ -1269,13 +1269,14 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 	}
 	tree := e.cleanVerifyTree(ctx, scratch)
 	cfg := p.verifyCfg()
-	cmds, narrowed := rerunCommands(failed, cfg.rerunTemplate, cfg.rerunCheck, true)
-	if len(cmds) == 0 {
-		res.Notes = append(res.Notes, "RERUN-SKIPPED — test/gate.sh already re-ran every failed check in isolation and each stayed red; no third run")
+	plan := rerunSet(failed, cfg.rerunTemplate, cfg.rerunCheck, true)
+	cmds := plan.cmds
+	if len(cmds) == 0 || plan.skipped {
+		res.Notes = append(res.Notes, "RERUN-SKIPPED — a failed check was already re-run in isolation and stayed red; no third run, and no flake verdict for this train")
 		return false, nil
 	}
 	var confirm []string
-	if narrowed {
+	if plan.narrowed {
 		confirm = failed.Failed
 	}
 	t.phase("rerun %s: the red tree once before any bisect, %d command(s)", tier, len(cmds))
@@ -1298,7 +1299,7 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 		tests, _ := gotestout.FailingTests(out)
 		if len(tests) == 0 { // a smoke section is no Go test: the ledger still needs a name
 			for _, ck := range gateChecks(out) {
-				tests = append(tests, ck.sections...)
+				tests = append(tests, ck.ids...)
 			}
 		}
 		entry := flakeledger.NewEntry(c, tests, tree, e.Now(),

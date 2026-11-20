@@ -42,14 +42,14 @@ func newNarrowWorld(t *testing.T, gate func(full string) string, check func(narr
 
 // redSection is a fake gate that fails section 28 while red holds on the
 // merged tree, printing what test/gate.sh prints; retried adds the gate's own
-// isolated-retry line.
+// RETRIED-CHECK line.
 func redSection(red string, retried bool) func(string) string {
 	retry := ""
 	if retried {
-		retry = `printf 'FAIL smoke-shard1 isolated retry (exit 1)\n'; `
+		retry = `RETRIED-CHECK smoke-shard1\n`
 	}
 	return func(full string) string {
-		return fmt.Sprintf(`echo full >> %s; if %s; then %sprintf 'FAIL smoke-shard1 (exit 1)\nFAILED-SECTION %s\n'; exit 1; fi`, full, red, retry, narrowSection)
+		return fmt.Sprintf(`echo full >> %s; if %s; then printf 'FAIL smoke-shard1 (exit 1)\n%sFAILED-CHECK %s\n'; exit 1; fi`, full, red, retry, narrowSection)
 	}
 }
 
@@ -156,24 +156,89 @@ func TestTrainNarrowedPassButRedFullRerunIsNotFlaky(t *testing.T) {
 	}
 }
 
-// AC-4: a different failure that shows only in the full run of the members
-// that would land is reported, and they do not land.
-func TestTrainSecondFailureInTheFullPrefixIsReported(t *testing.T) {
-	// Section 28 fails once b3 is merged. The doclint check fails with b2
+// AC-4: a different failure from another command that shows only in the full
+// run of the members that would land is attributed to its member.
+func TestTrainSecondFailureInTheFullPrefixIsAttributed(t *testing.T) {
+	dir := t.TempDir()
+	full, narrow := filepath.Join(dir, "full"), filepath.Join(dir, "narrow")
+	// The smoke gate fails once b3 is merged. The lint command fails with b2
 	// merged and b3 not: only the full run of b1+b2 shows it.
-	gate := func(full string) string {
-		return fmt.Sprintf(`echo full >> %s; if test -f b3.txt; then printf 'FAIL smoke-shard1 isolated retry (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-SECTION %s\n'; exit 1; fi; if test -f b2.txt; then printf 'FAIL doclint (exit 1)\n'; exit 1; fi`, full, narrowSection)
+	smoke := fmt.Sprintf(`echo full >> %s; if test -f b3.txt; then printf 'FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK %s\n'; exit 1; fi`, full, narrowSection)
+	lint := `if test -f b2.txt && ! test -f b3.txt; then echo lint failed; exit 1; fi`
+	w := trainWorld(t, smoke, "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q,%q],"rerunCheck":%q}}`, smoke, lint, "echo {check} >> "+narrow+"; ! test -f b3.txt"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Verdict != landing.GateVerifyFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
+		t.Fatalf("want the lint failure attributed to b2, b1 landed: %+v %v", res, err)
 	}
-	nw := newNarrowWorld(t, gate, failsWhen("test -f b3.txt"))
-	res, err := nw.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
-	if err != nil || res.Verdict != landing.GateVerifyFailed {
+	if res.Original == nil || !strings.Contains(res.Original.Command, "smoke-shard1") {
+		t.Errorf("the first failure's evidence is gone: %+v", res.Original)
+	}
+}
+
+// AC-7: a two-member train has no separate red prefix, so the full confirmation
+// must not be skipped there.
+func TestTrainTwoMemberNarrowedPassButRedFullIsAnInteraction(t *testing.T) {
+	gate := func(full string) string {
+		return fmt.Sprintf(`echo full >> %s; if test -f b2.txt; then printf 'FAIL smoke-shard1 (exit 1)\nFAILED-CHECK %s\n'; exit 1; fi`, full, narrowSection)
+	}
+	dir := t.TempDir()
+	narrow := filepath.Join(dir, "narrow")
+	w := trainWorld(t, gate(filepath.Join(dir, "full")), "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"rerunCheck":%q}}`, gate(filepath.Join(dir, "full")), "echo {check} >> "+narrow))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Unreproduced || len(res.Flaky) != 0 || res.Verdict != landing.GateInteraction {
+		t.Fatalf("want an interaction, not a flake: %+v %v", res, err)
+	}
+}
+
+// A check the gate already retried red stays red when another failed command
+// recovers: the train is no flake.
+func TestTrainRetriedRedCheckBesideARecoveringCommandIsNoFlake(t *testing.T) {
+	dir := t.TempDir()
+	seen, narrow := filepath.Join(dir, "seen"), filepath.Join(dir, "narrow")
+	smoke := fmt.Sprintf(`if test -f b2.txt; then printf 'FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK %s\n'; exit 1; fi`, narrowSection)
+	other := fmt.Sprintf(`if test -f b2.txt && ! test -f %s; then touch %s; echo recovers; exit 1; fi`, seen, seen)
+	w := trainWorld(t, smoke, "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q,%q],"rerunCheck":%q}}`, smoke, other, "echo {check} >> "+narrow+"; ! test -f b2.txt"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Unreproduced || len(res.Flaky) != 0 || res.Culprit != "b2" {
+		t.Fatalf("the retried-red smoke gate is deterministic: %+v %v", res, err)
+	}
+}
+
+// AC-2, AC-7, AC-8: a Go-only failure narrows through the -run template too.
+func TestTrainNarrowsGoOnlyFailures(t *testing.T) {
+	dir := t.TempDir()
+	full, narrow := filepath.Join(dir, "full"), filepath.Join(dir, "narrow")
+	cmd := fmt.Sprintf("echo full >> %s; if test -f b2.txt; then %s; fi", full, goFail("TestX", "ex.com/p"))
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q,"rerunCheck":"true {check}"}}`,
+		cmd, "echo {packages} {tests} >> "+narrow+"; ! test -f b2.txt"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if strings.Join(res.Landed, ",") != "b1" {
-		t.Errorf("only b1 passes the full gate, landed %v", res.Landed)
+	if got := lines(t, full); len(got) != 3 {
+		t.Errorf("full runs = %d, want 3 (the train and its in-tree retry, then the members that land): %v", len(got), got)
 	}
-	if !strings.Contains(res.Err+strings.Join(res.Notes, "\n"), "doclint") {
-		t.Errorf("the second failure is not reported: err %q notes %q", res.Err, res.Notes)
+	if got := lines(t, narrow); len(got) < 3 {
+		t.Errorf("narrowed Go runs = %v", got)
+	}
+}
+
+// AC-6: without the key a retried log changes nothing: the full re-run stays.
+func TestTrainWithoutRerunCheckIgnoresARetriedLog(t *testing.T) {
+	nw := newNarrowWorld(t, redSection("test -f b2.txt", true), nil)
+	res, err := nw.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Culprit != "b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got := lines(t, nw.full); len(got) < 3 {
+		t.Errorf("full runs = %d, want the train, the full re-run and the bisect: %v", len(got), got)
+	}
+	if trainHasNote(res, "RERUN-SKIPPED") {
+		t.Errorf("the re-run was skipped without the key: %q", res.Notes)
 	}
 }
 
@@ -189,20 +254,22 @@ func TestRerunCommandsReadsTheGateLog(t *testing.T) {
 		want             []string
 		narrowed         bool
 	}{
-		{"a red section runs alone", "FAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\nFAILED-SECTION test/sections/30_b.sh\n", check, false,
+		{"a red section runs alone", "FAIL smoke-shard1 (exit 1)\nFAILED-CHECK test/sections/28_a.sh\nFAILED-CHECK test/sections/30_b.sh\n", check, false,
 			[]string{"SECTION_LIST='test/sections/28_a.sh' bash test/gate.sh", "SECTION_LIST='test/sections/30_b.sh' bash test/gate.sh"}, true},
-		{"no key keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\n", "", false, []string{"bash test/gate.sh"}, false},
-		{"a template without {check} keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\n", "bash test/gate.sh", false, []string{"bash test/gate.sh"}, false},
+		{"no key keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-CHECK test/sections/28_a.sh\n", "", false, []string{"bash test/gate.sh"}, false},
+		{"a template without {check} keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-CHECK test/sections/28_a.sh\n", "bash test/gate.sh", false, []string{"bash test/gate.sh"}, false},
 		{"a shard that named no section keeps the full command", "FAIL smoke-shard1 (exit 1)\n", check, false, []string{"bash test/gate.sh"}, false},
-		{"another red check keeps the full command", "FAIL doclint (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\n", check, false, []string{"bash test/gate.sh"}, false},
-		{"a leak keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\nFAIL leak: checks left temp entries\n", check, false, []string{"bash test/gate.sh"}, false},
-		{"a retried shard is skipped by the train re-run", "FAIL smoke-shard1 isolated retry (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\n", check, true, nil, false},
-		{"a retried shard still narrows a bisect step", "FAIL smoke-shard1 isolated retry (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\n", check, false,
+		{"another red check keeps the full command", "FAIL doclint (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-CHECK test/sections/28_a.sh\n", check, false, []string{"bash test/gate.sh"}, false},
+		{"a leak keeps the full command", "FAIL smoke-shard1 (exit 1)\nFAILED-CHECK test/sections/28_a.sh\nFAIL leak: checks left temp entries\n", check, false, []string{"bash test/gate.sh"}, false},
+		{"a retried shard is skipped by the train re-run", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", check, true, nil, false},
+		{"a retried shard still narrows a bisect step", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", check, false,
 			[]string{"SECTION_LIST='test/sections/28_a.sh' bash test/gate.sh"}, true},
-		{"a retried shard does not hide an unretried one", "FAIL smoke-shard1 isolated retry (exit 1)\nFAIL smoke-shard1 (exit 1)\nFAILED-SECTION test/sections/28_a.sh\nFAIL smoke-shard2 (exit 1)\nFAILED-SECTION test/sections/40_c.sh\n", check, true,
+		{"a retried shard does not hide an unretried one", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\nFAIL smoke-shard2 (exit 1)\nFAILED-CHECK test/sections/40_c.sh\n", check, true,
 			[]string{"SECTION_LIST='test/sections/40_c.sh' bash test/gate.sh"}, true},
 		{"a Go package past the retry budget is not retried", "gate: skipping Go retries (4 failed packages; limit 3)\nFAIL gotest (exit 1)\n", check, true, []string{"bash test/gate.sh"}, false},
-		{"a Go package retried red is skipped", "FAIL go:internal/x isolated retry (exit 1)\nFAIL gotest (exit 1)\n", check, true, nil, false},
+		{"a Go package retried red is skipped", "FAIL gotest (exit 1)\nRETRIED-CHECK gotest\n", check, true, nil, false},
+		{"a non-smoke check runs alone through the template", "FAIL lint (exit 1)\nFAILED-CHECK lint:style\n", "lint-one {check}", false, []string{"lint-one 'lint:style'"}, true},
+		{"a retried log changes nothing without the key", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", "", true, []string{"bash test/gate.sh"}, false},
 		{"output that is no gate log keeps the old rule", "boom\n", check, true, []string{"bash test/gate.sh"}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
