@@ -73,6 +73,9 @@ type Settings struct {
 	// BlockScopeOverlap is round.scopeOverlap == block: a clash on declared
 	// scopes fails the overlap check like a shared path. Warn (default) only reports.
 	BlockScopeOverlap bool
+	// SmokeDir is test.smokeSectionsDir: the repo-relative directory of numbered
+	// smoke section files a round reserves from; empty reserves nothing.
+	SmokeDir string
 	// Tier is the default tier; Models maps kind -> tier -> model name for
 	// every kind with a model (shipped defaults count; a kind whose tiers are
 	// all set empty is absent). Tiered is the kinds the project opted into:
@@ -242,6 +245,7 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	s.Brief = config.String(cfg, config.RoundBriefKey)
+	s.SmokeDir = strings.Trim(strings.TrimSpace(config.String(cfg, config.TestSmokeSectionsDirKey)), "/")
 	if _, err = sharedPaths(cfg); err != nil {
 		return s, err
 	}

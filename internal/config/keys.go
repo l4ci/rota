@@ -34,6 +34,7 @@ const (
 	ReviewAccountsKey                = "review.accounts"
 	RoundScopeKey                    = "round.scope"
 	RoundRosterKey                   = "round.roster"
+	TestSmokeSectionsDirKey          = "test.smokeSectionsDir"
 	RoundBriefKey                    = "round.brief"
 	RoundSharedPathsKey              = "round.sharedPaths"
 	RoundScopeOverlapKey             = "round.scopeOverlap"
@@ -230,6 +231,7 @@ var Keys = []Key{
 	k("test.refsPattern", ScopeProject, "", false, TypeString, "Regular expression matching the repo-relative paths of reference files. rota worker refs refuses, committing nothing, when test.refs changes any other file. Required when test.refs is set."),
 	k("test.vacuousCommand", ScopeProject, "go test -json -count=1 {packages} -run {tests}", false, TypeString, "Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names."),
 	k("test.rerunCheck", ScopeProject, "", false, TypeString, "Command that runs one failing check alone, with {check} for the check (a smoke section path). A red train re-runs and bisects only that check, then runs the full tier once on the members that land. Empty keeps the full re-run."),
+	k(TestSmokeSectionsDirKey, ScopeProject, "", false, TypeString, "Repo-relative directory of numbered smoke section files (NN_name.sh). rota round assign reserves the next free number there for an issue that mentions a smoke section or the directory, and tells the worker. Empty reserves nothing."),
 	k("test.goCheck", ScopeProject, "gotest", false, TypeString, "Go check name in FAIL <check> (exit N) gate log lines. With test.rerunCheck set, this check can narrow through test.vacuousCommand to failing Go tests when no other failed check is left unselected."),
 	bounded(k("test.ciTimeoutMinutes", ScopeProject, num("60"), false, TypeInt, "How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run."), 1, 1440),
 	k("test.ciChecks", ScopeProject, []any{}, false, TypeList, "Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names."),

@@ -116,7 +116,7 @@ type Assigned struct {
 	// Placement is the account and harness the worker was put on, with the
 	// headroom behind the pick; nil when the project has no pool to balance.
 	Placement *Placement
-	// SmokeSection is the test/sections number reserved for the worker, 0 for none.
+	// SmokeSection is the smoke section number reserved for the worker, 0 for none.
 	SmokeSection int
 	Warnings     []string
 	// Bundle is the member issues the slot holds beside ID, in the order given;
@@ -614,7 +614,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, err
 	}
 
-	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
+	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.SmokeDir, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
 		pick: pf.Pick, decision: pf.Decision, decisions: o.SettledAnswers, brief: brief, decisionContext: decisionContext, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), placement: pf.Placement, openPR: hasOpenPR}, false, nil
@@ -861,7 +861,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, decisionContext: run.decisionContext, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Review: IsReviewTitle(it.Title), Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Review: IsReviewTitle(it.Title), Smoke: res.SmokeSection, SmokeDir: set.SmokeDir, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

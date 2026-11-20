@@ -266,6 +266,8 @@ type tierBrief struct {
 	Review bool
 	// Smoke is the reserved smoke section number, 0 for none.
 	Smoke int
+	// SmokeDir is the directory the number is for (test.smokeSectionsDir).
+	SmokeDir string
 	// Attempt is the id of this assignment; the worker passes it back as
 	// --attempt on `rota worker done` and `rota round report`.
 	Attempt string
@@ -307,7 +309,7 @@ func (t tierBrief) text() string {
 		fmt.Fprintf(&b, "Model tiers for your own subagents (%s): %s. Follow the tier rule in the contract.\n", t.Kind, strings.Join(rows, ", "))
 	}
 	if t.Smoke != 0 {
-		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (test/sections/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, t.Smoke)
+		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (%s/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, strings.TrimSuffix(t.SmokeDir, "/"), t.Smoke)
 	}
 	if t.Attempt != "" {
 		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and, in solo rounds only, to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more. End every commit message with the trailer `Rota-Attempt: %s` (`git commit --trailer \"Rota-Attempt: %s\"`): the merge gate refuses a PR with a commit stamped by an attempt you no longer hold.\n", t.Attempt, t.Attempt, t.Attempt, t.Attempt)
