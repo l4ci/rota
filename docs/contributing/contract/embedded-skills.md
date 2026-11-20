@@ -100,9 +100,9 @@ note: read-only. Lists what `skills.Load` ships from a source `skills/` tree, as
 ### rota skills links
 rota skills links <file>...
 repo: none
-data: `{"files": [{"file": string, "links": []string}]}`, one entry per argument in order
+data: `{"files": [{"file": string, "links": []string, "siblings": []string}]}`, one entry per argument in order
 exit: 1 when a file cannot be read; 2 with no file
-note: read-only. The one definition of a relative link in a skill body (`skills.Links`): code spans and fenced blocks hold none, URLs, absolute paths and bare anchors are skipped, an anchor or query is cut off and duplicates drop. The `skills get` footer and `test/validate-skills.py` both take their links from it. The install closure is a documented superset: it also installs a reference a skill only names in prose (`references/x.md` outside a link), so a reference cited without a link still ships. Text mode prints one target per line, prefixed `<file>` and a tab when several files are given.
+note: read-only. The one definition of a relative link in a skill body (`skills.Links`): code spans and fenced blocks hold none, URLs, absolute paths and bare anchors are skipped, an anchor or query is cut off and duplicates drop. `siblings` is the subset that names a flat markdown file beside the linker (`skills.FlatSibling`, the same pattern as the install closure's bare mention), so the validator keeps no link regex. The `skills get` footer and `test/validate-skills.py` both take their links from it. The install closure is a documented superset: it also installs a reference a skill only names in prose (`references/x.md` outside a link), so a reference cited without a link still ships. Text mode prints one target per line, prefixed `<file>` and a tab when several files are given.
 
 ### rota skills uninstall
 rota skills uninstall [--scope user|project] [--agent claude|codex|all] [--overwrite]

@@ -258,17 +258,14 @@ def skill_links(*paths):
     """Map each markdown path to its relative link targets, via `rota skills links`."""
     out = subprocess.run([rota_bin(), "skills", "links", "--json", *map(str, paths)],
                          capture_output=True, text=True, check=True).stdout
-    return {f["file"]: f["links"] for f in json.loads(out)["data"]["files"]}
-
-
-SIBLING = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*\.md')
+    return {f["file"]: f for f in json.loads(out)["data"]["files"]}
 
 
 def check_references(path, text, issues):
     # Skills cite references/<x>.md; `rota skills install` copies each cited file
     # next to the skill, so in the source tree the link resolves against the
     # skills/references/ dir.
-    for target in skill_links(path)[str(path)]:
+    for target in skill_links(path)[str(path)]["links"]:
         if not target.startswith("references/") or not target.endswith(".md"):
             continue
         resolved = (Path(path).parent.parent / target).resolve()
@@ -284,8 +281,9 @@ def check_skill_files(path, text, issues):
     sibs = sorted(s for s in folder.glob("*.md") if s.name != "SKILL.md")
     links = skill_links(path, *sibs)
     linked = set()
-    for target in links[str(path)]:
-        if SIBLING.fullmatch(target):
+    siblings = set(links[str(path)]["siblings"])
+    for target in links[str(path)]["links"]:
+        if target in siblings:
             linked.add(target)
             if not (folder / target).is_file():
                 issues.append(f"{path}: broken sibling link '{target}'")
@@ -299,7 +297,7 @@ def check_skill_files(path, text, issues):
         if len(lines) > REF_TOC_LINES and "## Contents" not in lines[:15]:
             issues.append(f"{sib.as_posix()}: {len(lines)} lines with no '## Contents' section in its first 15 lines")
         others = {s.name for s in sibs if s != sib}
-        for target in links[str(sib)]:
+        for target in links[str(sib)]["links"]:
             if target in others:
                 issues.append(f"{sib.as_posix()}: links sibling '{target}'; extracted files do not link each other")
 

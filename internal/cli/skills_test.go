@@ -573,6 +573,10 @@ func TestSkillsLinks(t *testing.T) {
 	if l, _ := files[1].(map[string]any)["links"].([]any); len(l) != 0 {
 		t.Errorf("empty.md links = %v", l)
 	}
+	// siblings: the flat-sibling subset, decided by the binary (skills.FlatSibling).
+	if fmt.Sprint(first["siblings"]) != "[a.md]" {
+		t.Errorf("SKILL.md siblings = %v", first["siblings"])
+	}
 	for _, args := range [][]string{{"skills", "links"}, {"skills", "links", "missing.md"}} {
 		if code, _, _ = skillsRun(t, home, work, args...); code == 0 {
 			t.Errorf("%v exited 0", args)
