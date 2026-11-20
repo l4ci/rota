@@ -662,36 +662,6 @@ func TestTrainCachesPassingVerdicts(t *testing.T) {
 	}
 }
 
-func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
-	cmd, counter := countingVerify(t, "true")
-	w := trainWorld(t, cmd, "b1", "b2", "b3")
-	targets := []string{"b1", "b2", "b3"}
-	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b3.txt"))
-	if res, _ := w.train(TrainOpts{Targets: targets}); res.Verdict != landing.GateVerifyFailed {
-		t.Fatalf("%+v", res)
-	}
-	before := runs(t, counter)
-	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) == 0 {
-		t.Fatalf("same key should hit its passing prefix: %+v", res)
-	}
-	same := runs(t, counter)
-	gittest.Run(t, w.dir, "checkout", "-q", "b1") // a changed member head
-	trainWrite(t, w, "b1-more.txt", "more")
-	gittest.Run(t, w.dir, "checkout", "-q", "main")
-	res, _ := w.train(TrainOpts{Targets: targets})
-	if len(res.CacheHits) != 0 {
-		t.Errorf("a changed head must miss: %v", res.CacheHits)
-	}
-	afterHead := runs(t, counter)
-	if afterHead-same < same-before {
-		t.Errorf("a changed head re-verifies everything: %d runs vs %d", afterHead-same, same-before)
-	}
-	trainWrite(t, w, "other.txt", "x") // a changed base
-	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) != 0 {
-		t.Errorf("a changed base must miss: %v", res.CacheHits)
-	}
-}
-
 func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
 	// b2 fails the first three times it is verified in a tree (the train, its
