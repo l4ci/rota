@@ -91,3 +91,20 @@ func readOf(s harness.QuotaSnapshot) func(context.Context, harness.QuotaReporter
 		return s
 	}
 }
+
+// A round.accounts entry with no configDir reads the kind's default home
+// (~/.claude), as before the quota seam: when it is cooling it is not picked,
+// instead of metering unknown and being taken as a fallback.
+func TestConfigDirlessAccountIsMeteredNotUnknown(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	later := now.Add(time.Hour)
+	env := Env{Config: memConfig(t, `{"round":{"accounts":[{"name":"bare"},{"name":"spent","configDir":"/a/spent"}]}}`), Now: func() time.Time { return now }, Home: func() (string, error) { return "/home/u", nil }, Getenv: func(string) string { return "" }}
+	acc := &Accounts{Env: env, Login: loggedIn(), Read: quotaFake(map[string]float64{"bare": 100, "spent": 100}, &later)}
+	ms := acc.Meters(bg, "unused")
+	if len(ms) != 2 || ms[0].Name != "bare" || ms[0].Verdict != usagelimit.VerdictCooling {
+		t.Fatalf("meters = %+v, want bare read as cooling", ms)
+	}
+	if got, ok := acc.Pick(bg, "unused", nil); ok {
+		t.Errorf("Pick = %q, true; want no pick while every account is cooling", got)
+	}
+}

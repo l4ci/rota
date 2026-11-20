@@ -454,3 +454,17 @@ func TestClaudeReadQuotaAmbientDefaultsToTheUsersClaudeDir(t *testing.T) {
 		t.Errorf("ambient = %+v", s)
 	}
 }
+
+// A request cancelled by rota's own context is not the server failing: it
+// writes no backoff into the cache dir shared with Claude Code and the herdr mod.
+func TestUsageCancelledRequestWritesNoBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	f, cfg, _ := usageRig(t, func(*http.Request) (*http.Response, error) {
+		cancel()
+		return nil, context.Canceled
+	})
+	f.defaultFetch(ctx, "a", cfg)
+	if _, err := os.Stat(f.usageCachePath(cfg) + ".backoff"); !os.IsNotExist(err) {
+		t.Errorf("backoff written for a cancelled read: %v", err)
+	}
+}

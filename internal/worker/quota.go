@@ -261,6 +261,8 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 			case matches > 1:
 				reason = "configured account name is ambiguous"
 				req.Account = harness.Account{}
+			case req.Account.Home == "" && hz.UsageMeter():
+				// A kind with a built-in meter reads its default home (~/.claude).
 			case req.Account.Home == "":
 				reason = "named account home missing"
 			case !filepath.IsAbs(req.Account.Home):
@@ -277,7 +279,7 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 	if len(jobs) == 0 {
 		return rows
 	}
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	var readers sync.WaitGroup
 	defer func() { cancel(); readers.Wait() }()
 	type result struct {
@@ -304,7 +306,14 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 				if ctx.Err() != nil {
 					return
 				}
-				snapshot := read(ctx, job.reporter, job.req, opts)
+				// Each read has its own budget, as each fetch had before the
+				// seam: one slow account does not shorten another's.
+				jctx, jcancel := context.WithTimeout(ctx, 12*time.Second)
+				snapshot := read(jctx, job.reporter, job.req, opts)
+				if jctx.Err() != nil && ctx.Err() == nil {
+					snapshot = harness.QuotaSnapshot{Status: "unavailable", Reason: "quota report timed out or canceled", Source: "not-read", IdentityStatus: "unavailable", Windows: []harness.QuotaWindow{}}
+				}
+				jcancel()
 				snapshot.Kind = job.kind
 				snapshot.Name = job.req.Name
 				snapshot.Ambient = job.req.Ambient

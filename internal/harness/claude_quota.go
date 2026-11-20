@@ -304,6 +304,10 @@ func (f *claudeFetch) fetchUsage(ctx context.Context, configDir string) (*jsonx.
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	resp, err := client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			// Our own deadline or cancel is not the server failing: no backoff.
+			return nil, "usage read canceled"
+		}
 		return f.failed(cache, "", reasonUnreachable)
 	}
 	defer resp.Body.Close()

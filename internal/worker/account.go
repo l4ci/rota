@@ -113,7 +113,19 @@ func (a *Accounts) Meters(ctx context.Context, root string) []usagelimit.Meter {
 // Claude quota reporter (Quotas), so a failed read is an unknown meter.
 func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.Account) []usagelimit.Meter {
 	kinds := meterKinds()
-	list := a.Configured(root)
+	e := a.Env.WithDefaults()
+	cfg := e.Config(root)
+	home, _ := e.Home()
+	var list []acct
+	for _, k := range kinds {
+		hz, ok := harness.LookupAccounts(k)
+		if !ok {
+			continue
+		}
+		for _, en := range hz.Accounts(harness.ConfigFor(cfg, k)).In(home).Entries {
+			list = append(list, acct{en.Name, en.Dir})
+		}
+	}
 	configured := len(list)
 	var extras []config.Account
 	for _, x := range extra {
