@@ -21,19 +21,21 @@ import (
 // fixtures cross that one seam with a good and a bad tree and check that every
 // packaging path ships or rejects the same files.
 
-// rotaBin builds the binary once; the validator and the Codex builder take it
-// through ROTA_BIN instead of each building their own.
+// rotaBin builds the binary once through scripts/rota-bin.sh; the validator
+// and the Codex builder take it through ROTA_BIN instead of each building their own.
 var rotaBin = sync.OnceValues(func() (string, error) {
 	dir, err := os.MkdirTemp("", "layout-rota-")
 	if err != nil {
 		return "", err
 	}
 	layoutCleanup = append(layoutCleanup, dir)
-	bin := filepath.Join(dir, "rota")
-	if out, err := exec.Command("go", "build", "-o", bin, "./cmd/rota").CombinedOutput(); err != nil {
-		return "", fmt.Errorf("go build: %v\n%s", err, out)
+	cmd := exec.Command("bash", "scripts/rota-bin.sh", dir)
+	cmd.Env = append(os.Environ(), "ROTA_BIN=")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("rota-bin.sh: %v", err)
 	}
-	return bin, nil
+	return strings.TrimSpace(string(out)), nil
 })
 
 var layoutCleanup []string
@@ -83,6 +85,14 @@ func layoutFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	put(t, root, "scripts/codex-plugin.sh", string(src))
+	helper, err := os.ReadFile("scripts/rota-bin.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "scripts/rota-bin.sh", string(helper))
+	if err := os.Chmod(filepath.Join(root, "scripts/rota-bin.sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	put(t, root, "plugins/rota/.codex-plugin/plugin.json", "{}\n")
 	return root
 }
@@ -297,4 +307,30 @@ func TestSkillLayoutSymlinkedFileRejected(t *testing.T) {
 	if v.codexErr == "" {
 		t.Errorf("Codex builder shipped a symlinked file: %v", v.codex)
 	}
+}
+
+// scripts/rota-bin.sh is the one place that resolves the binary: ROTA_BIN wins
+// untouched, else it builds ./cmd/rota into the directory the caller names.
+func TestRotaBinHelper(t *testing.T) {
+	t.Run("ROTA_BIN wins", func(t *testing.T) {
+		cmd := exec.Command("bash", "scripts/rota-bin.sh", t.TempDir())
+		cmd.Env = append(os.Environ(), "ROTA_BIN=/nonexistent/rota")
+		out, err := cmd.Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != "/nonexistent/rota" {
+			t.Errorf("got %q, %v; want ROTA_BIN echoed without building", got, err)
+		}
+	})
+	t.Run("builds into the given dir", func(t *testing.T) {
+		dir := t.TempDir()
+		cmd := exec.Command("bash", "scripts/rota-bin.sh", dir)
+		cmd.Env = append(os.Environ(), "ROTA_BIN=")
+		out, err := cmd.Output()
+		want := filepath.Join(dir, "rota")
+		if got := strings.TrimSpace(string(out)); err != nil || got != want {
+			t.Fatalf("got %q, %v; want %q", got, err, want)
+		}
+		if _, err := os.Stat(want); err != nil {
+			t.Errorf("binary not built: %v", err)
+		}
+	})
 }
