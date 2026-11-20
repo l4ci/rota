@@ -165,9 +165,13 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 		return refuse(diverged)
 	}
 	if _, code := e.git(worktree, sw...); code != 0 {
-		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not switch %s to %s in %s", worktree, newBranch, base))
+		verb := "could not switch to"
+		if sw[len(sw)-1] == base {
+			verb = "could not cut"
+		}
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("%s %s from %s in %s", verb, newBranch, base, worktree))
 	}
-	if len(sw) > 0 && sw[len(sw)-1] != base {
+	if sw[len(sw)-1] != base {
 		// A reused branch keeps its work: pin its upstream when origin has it (best effort).
 		if name, rerr := e.Remote(root); rerr == nil {
 			if _, code := e.git(root, "rev-parse", "--verify", "--quiet", "refs/remotes/"+name+"/"+newBranch+"^{commit}"); code == 0 {
