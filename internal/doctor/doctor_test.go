@@ -418,6 +418,39 @@ func TestCodexCheckResolvedHost(t *testing.T) {
 	}
 }
 
+func TestCodexCheckHerdrMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		host   host.Kind
+		home   Home
+		status string
+		detail string
+		hint   string
+	}{
+		{"herdr host, no binary, named home", host.Herdr, Home{"ben", "/h/ben"}, Fail,
+			"herdr not on PATH", "install herdr (see host)"},
+		{"herdr host, no binary, default home stays advisory", host.Herdr, Home{}, Pass,
+			"herdr not on PATH", ""},
+		{"tmux host needs no herdr", host.Tmux, Home{"ben", "/h/ben"}, Pass,
+			"homes checked: ben", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &codexFake{fake: fake{
+				have: map[string]bool{"codex": true},
+				reply: map[string]Result{
+					"codex --version":    {Stdout: "codex-cli 0.159.2\n"},
+					"codex login status": {},
+				},
+			}}
+			in := Input{RoundHost: tc.host, Kinds: codexIn([]Home{tc.home}, false), Exec: f.exec, Look: f.look}
+			c := statusOf(Run(context.Background(), in), "codex")
+			if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) || c.Hint != tc.hint {
+				t.Fatalf("%+v, want %s %q hint %q", c, tc.status, tc.detail, tc.hint)
+			}
+		})
+	}
+}
+
 func TestCodexCheck(t *testing.T) {
 	// the claude fixtures carry a codex line of their own, so build these here
 	codexCur := "claude: current (v10)\ncodex: current (v8) (/x)\n"
