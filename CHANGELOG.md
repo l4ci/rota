@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.36.1 — 2026-11-20
+
+Safer worker and host handling, stricter doctor checks, and a large round of internal cleanup.
+
+## Fixed
+
+- **Doctor fails on bad state.** `rota doctor` now fails on config values that do not parse and on a corrupt workers registry, instead of passing over them. It also fails the Codex line when herdr is missing on a herdr host.
+- **Overlap checks name files.** `rota round assign` refuses on an exact file clash; two issues that share only a directory now warn instead (unless `round.scopeOverlap` is `block`). Refusals list the clashing files.
+- **Process cleanup fails closed.** Core kill refuses when it has no process evidence, train runs are signalled only while their start time still matches, and Core and Orca share one process-evidence store.
+- **Worker sends and relays.**
+  - tmux reports session and send-keys failures at launch, and returns the window handle so it can be reaped.
+  - Orca no longer treats a leftover brief on the prompt as a human draft.
+  - A relay is logged against the queued PR its body names.
+  - `worker done` reports every PR-body refusal the gate would raise.
+- **Usage meter.**
+  - The Claude usage fetch now sits behind the harness quota seam.
+  - An account with no `configDir` is still metered from `~/.claude`.
+  - Each read keeps its own time budget, and a read rota cancels itself writes no backoff into the shared cache.
+- **Trackers.** Label names are matched by one rule per tracker. `issues.autoCreateLabel` is honoured on Linear and It's a Plan edits. An unknown forge is read-only and refuses every write.
+- **Environment.** `CLAUDE_CONFIG_DIR` and `CODEX_HOME` are scrubbed from test and worker environments and kept out of the shell prefix file.
+- **Skills.** `skills update`, `status` and `uninstall` refuse a corrupt manifest (exit 5) instead of reading it as absent; `skills install` still repairs it.
+
+## Changed
+
+- Verdict output names a finding's blocking override, and `--help` explains verdict bodies and combined results.
+- The fast test tier reads one path-to-check table, so doclint's own scripts now queue the docs check.
+
+## Contract changes
+
+- JSON: `skills links` adds `data.files[].siblings`; `verdict add` adds `combinedWhy` and `overrides`, and `verdict show` adds `overrides` (`title`, `severity`, `blocking`).
+- PR references share one grammar: `!N` is accepted; forms like `12/foo`, `12?x` and scheme-less PR URLs are refused.
+- Stricter input (exit 2): knowledge `--path` scopes with braces, empty segments or an embedded `**`; item titles that cannot round-trip through front matter (multiline, padded, bracket-wrapped); proof check or sha values containing ` · `.
+- `rota doctor` exits 1 on the new failures above. A relay whose body names several queued PRs exits 4 until `--pr` picks one. Setting a local `autonomy.level` exits 5 when the project config is not an object.
+- Recall receipts keep only `sessionId`, `updatedAt` and `recalledEntries`, and expire after seven days.
+
+## Internal
+
+About 70 refactors from the round-63 and round-64 architecture reviews:
+- one owner each for PR references, proof rows, item front matter, issue-body edits and go test output parsing
+- `planAssign` split into named phases
+- the train's verify and bisect pulled into a testable seam
+- temp-root ownership moved to `rotatree`
+- test fakes unified across Go and Python
+
+The project map, knowledge base and config were refreshed after round 64.
+
+## Stats
+
+102 commits, 433 files changed, +9268 −4441 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.36.0...v0.36.1
+
 ## v0.36.0 — 2026-11-18
 
 A safer merge gate and worker guard, `rota round switch`, and a large cleanup of round, gate and tracker internals.
