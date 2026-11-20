@@ -16,7 +16,7 @@ func itemsProject(t *testing.T) string {
 	if err := os.MkdirAll(detailPath(root, "M01")[:strings.LastIndex(detailPath(root, "M01"), "/")], 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(detailPath(root, "M01"), []byte(StubOn("M01", "One", "s", nil, "2026-01-01")), 0o644); err != nil {
+	if err := os.WriteFile(detailPath(root, "M01"), []byte(mustStub(t, "M01", "One", "s", nil, "2026-01-01")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -101,4 +101,13 @@ func TestSyncItemsWithReadsUnderLock(t *testing.T) {
 	if !errors.Is(lockErr, fsio.ErrLockTimeout) {
 		t.Fatalf("items callback ran outside the milestone lock: %v", lockErr)
 	}
+}
+
+func mustStub(t *testing.T, id, title, summary string, depends []string, today string) string {
+	t.Helper()
+	s, err := StubOn(id, title, summary, depends, today)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }

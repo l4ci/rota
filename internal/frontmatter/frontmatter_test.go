@@ -79,3 +79,40 @@ func TestUpdateFieldEmptyValueKeepsNextKey(t *testing.T) {
 		t.Fatalf("populated: ok=%v got %q", ok, got)
 	}
 }
+
+func TestRenderRoundTrips(t *testing.T) {
+	for _, title := range []string{"plain", "a: b", "#hash", "x --- y", "tail: [z]"} {
+		out, err := Render([]Field{{"id", "A1"}, {"title", title}, {"depends", []string{"M01", "M02"}}})
+		if err != nil {
+			t.Fatalf("%q: %v", title, err)
+		}
+		fm, order, _ := Parse(out + "\nbody\n")
+		if Str(fm, "title") != title || Str(fm, "id") != "A1" || !reflect.DeepEqual(fm["depends"], []string{"M01", "M02"}) {
+			t.Errorf("%q: fm = %#v", title, fm)
+		}
+		if !reflect.DeepEqual(order, []string{"id", "title", "depends"}) {
+			t.Errorf("%q: order = %v", title, order)
+		}
+	}
+}
+
+func TestRenderRefusesUnsafeValues(t *testing.T) {
+	for _, title := range []string{"a\nstatus: done", "a\r\nb", "[a, b]", " lead", "trail "} {
+		if out, err := Render([]Field{{"title", title}}); err == nil {
+			t.Errorf("%q rendered as %q, want a refusal", title, out)
+		}
+	}
+	if _, err := Render([]Field{{"bad key", "v"}}); err == nil {
+		t.Error("key with a space accepted")
+	}
+	if _, err := Render([]Field{{"k", []string{"a, b"}}}); err == nil {
+		t.Error("list item with a comma accepted")
+	}
+}
+
+func TestRenderSkipsEmptyOptional(t *testing.T) {
+	out, err := Render([]Field{{"a", "1"}, {"repo", Optional("")}, {"b", Optional("2")}})
+	if err != nil || out != "---\na: 1\nb: 2\n---\n" {
+		t.Fatalf("got %q, %v", out, err)
+	}
+}

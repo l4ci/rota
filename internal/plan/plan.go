@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/stamp"
@@ -164,25 +165,17 @@ func extras(root string, s Store, o AddOpts, r Ref) (design, repo string, err er
 }
 
 // stub is the starter text of a plan.
-func stub(key, milestone, unit, unitKind, repo, design, title string, today func() time.Time) string {
-	repoLine, designLine := "", ""
-	if repo != "" {
-		repoLine = "repo: " + repo + "\n"
+func stub(key, milestone, unit, unitKind, repo, design, title string, today func() time.Time) (string, error) {
+	head, err := frontmatter.Render([]frontmatter.Field{
+		{Key: "key", Value: key}, {Key: "milestone", Value: milestone}, {Key: "unit", Value: unit}, {Key: "unitKind", Value: unitKind},
+		{Key: "repo", Value: frontmatter.Optional(repo)}, {Key: "design", Value: frontmatter.Optional(design)},
+		{Key: "title", Value: title}, {Key: "status", Value: "planned"}, {Key: "created", Value: stamp.Date(today())},
+	})
+	if err != nil {
+		return "", exitcode.Errf(exitcode.ExitUsage, "%v", err)
 	}
-	if design != "" {
-		designLine = "design: " + design + "\n"
-	}
-	return fmt.Sprintf(`---
-key: %[1]s
-milestone: %[2]s
-unit: %[3]s
-unitKind: %[4]s
-%[5]s%[6]stitle: %[7]s
-status: planned
-created: %[8]s
----
-
-# %[1]s — %[7]s
+	return head + fmt.Sprintf(`
+# %[1]s — %[2]s
 
 ## Goal
 
@@ -210,7 +203,7 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Relies on
 
 - _(KNOWLEDGE <Topic>: **<title>**, or DECISIONS <title>: each entry the plan depends on; none if neither)_
-`, key, milestone, unit, unitKind, repoLine, designLine, title, stamp.Date(today()))
+`, key, title), nil
 }
 
 // Add creates a plan and returns its key and kind ("slice"|"item"). root is
@@ -224,12 +217,22 @@ func Add(root string, s Store, o AddOpts, today func() time.Time) (key, unitKind
 	if err != nil {
 		return "", "", err
 	}
-	key, err = s.Create(r, func(unit string) string {
+	render := func(unit string) (string, error) {
 		k := r.Milestone + "-" + unit
 		if r.Milestone == "" { // milestone-free: the key is the item ref as given
 			k = o.Key
 		}
 		return stub(k, r.Milestone, unit, r.Kind(), repo, design, o.Title, today)
+	}
+	// A refusal depends on the title, repo and design, never on the unit, so one
+	// probe before the store takes its lock settles it; Create's render then
+	// cannot fail.
+	if _, err = render("S00"); err != nil {
+		return "", "", err
+	}
+	key, err = s.Create(r, func(unit string) string {
+		text, _ := render(unit)
+		return text
 	})
 	if err != nil {
 		return "", "", err

@@ -225,7 +225,11 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, kind
 	if _, err := mt.CreateMilestone(b.ctx(), native, oneLine(summary)); err != nil {
 		return "", err
 	}
-	body := RenderFieldsBlock(ms.WithKind(ms.StubOn(mid, title, summary, depends, today), kind),
+	stub, err := ms.StubOn(mid, title, summary, depends, today)
+	if err != nil {
+		return "", err
+	}
+	body := RenderFieldsBlock(ms.WithKind(stub, kind),
 		[]string{"Depends"}, map[string]string{"Depends": strings.Join(depends, ", ")})
 	if _, err := mt.Create(b.ctx(), native, body, labels, native); err != nil {
 		return "", err

@@ -66,6 +66,11 @@ func add(run gitx.Runner, root, gitDir, path, name, question, repo string, today
 	if _, serr := os.Stat(path); serr == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, ".rota/spikes/%s.md already exists", name)
 	}
+	// Render before any branch exists, so a refused value leaves nothing behind.
+	head, err := frontmatter.Render([]frontmatter.Field{{Key: "name", Value: name}, {Key: "branch", Value: branch}, {Key: "repo", Value: frontmatter.Optional(repo)}, {Key: "status", Value: "open"}, {Key: "created", Value: stamp.Date(today())}})
+	if err != nil {
+		return "", exitcode.Errf(exitcode.ExitUsage, "%v", err)
+	}
 	repo0 := gitx.Repo{Dir: gitDir, Runner: run}
 	ctx := context.Background()
 	if repo0.Check(ctx, "rev-parse", "--git-dir") != nil {
@@ -87,17 +92,7 @@ func add(run gitx.Runner, root, gitDir, path, name, question, repo string, today
 	if err = repo0.Check(ctx, "branch", branch); err != nil {
 		return "", exitcode.Errf(exitcode.ExitUnavailable, "git branch %s failed: %v", branch, err)
 	}
-	repoLine := ""
-	if repo != "" {
-		repoLine = "repo: " + repo + "\n"
-	}
-	body := fmt.Sprintf(`---
-name: %s
-branch: %s
-%sstatus: open
-created: %s
----
-
+	body := head + fmt.Sprintf(`
 # spike/%s
 
 ## Question
@@ -119,7 +114,7 @@ _(viable / not viable / depends-on-X)_
 ## Recommended approach
 
 _(if viable, the shape of the real implementation — write only at /rota-spike done)_
-`, name, branch, repoLine, stamp.Date(today()), name, question)
+`, name, question)
 	if err = os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return
 	}

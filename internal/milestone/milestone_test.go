@@ -3,6 +3,7 @@ package milestone
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/pystr"
 	"os"
@@ -437,5 +438,26 @@ func TestShippedSummaryUsesStoreClosedItems(t *testing.T) {
 	}
 	if got := read(t, filepath.Join(root, ".rota/milestones/M02.md")); strings.Contains(got, "### Closed items\n\n- B1") {
 		t.Errorf("nil ClosedItems read the Items section:\n%s", got)
+	}
+}
+
+func TestStubOnThroughFrontMatterWriter(t *testing.T) {
+	got, err := StubOn("M01", "Fog: the #1 risk", "s", []string{"M00"}, "2026-01-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm, _, _ := frontmatter.Parse(got)
+	if frontmatter.Str(fm, "title") != "Fog: the #1 risk" || !reflect.DeepEqual(fm["depends"], []string{"M00"}) {
+		t.Errorf("did not round-trip: %#v", fm)
+	}
+	if _, err := StubOn("M01", "x\nstatus: shipped", "s", nil, "2026-01-01"); err == nil {
+		t.Error("newline title accepted")
+	}
+	root := t.TempDir()
+	if _, err := addFile(root, "x\nstatus: shipped", "s", nil, KindDelivery, "2026-01-01"); err == nil {
+		t.Fatal("addFile accepted a newline title")
+	}
+	if id, err := addFile(root, "ok", "s", nil, KindDelivery, "2026-01-01"); err != nil || id != "M01" {
+		t.Errorf("refused title burned an ID: %q %v", id, err)
 	}
 }

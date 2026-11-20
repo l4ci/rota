@@ -1,12 +1,11 @@
 package cli
 
 import (
+	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	ms "github.com/l4ci/rota/internal/milestone"
 )
 
 // gistProject is a file-mode project with milestone M01, a research item B02
@@ -22,7 +21,7 @@ func gistProject(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(rota, "milestones"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(rota, "milestones", "M01.md"), []byte(ms.StubOn("M01", "Fog", "Find out.", nil, "2026-01-02")), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(rota, "milestones", "M01.md"), []byte(mustMsStub("M01", "Fog", "Find out.", nil, "2026-01-02")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -58,4 +57,13 @@ func TestItemCompleteGist(t *testing.T) {
 			t.Fatalf("code=%d %s", code, stderr)
 		}
 	})
+}
+
+// mustMsStub is ms.StubOn for fixtures with fixed, valid arguments.
+func mustMsStub(id, title, summary string, depends []string, today string) string {
+	s, err := ms.StubOn(id, title, summary, depends, today)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }

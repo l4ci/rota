@@ -108,16 +108,31 @@ func Day(now func() time.Time) string {
 
 // StubOn is the starter text of a milestone detail file (milestone_stub); the
 // issue-mode tracking issue body shares it. today is the created date.
-func StubOn(id, title, summary string, depends []string, today string) string {
-	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
+func StubOn(id, title, summary string, depends []string, today string) (string, error) {
+	head, err := frontmatter.Render([]frontmatter.Field{{Key: "id", Value: id}, {Key: "title", Value: title}, {Key: "status", Value: "planned"}, {Key: "depends", Value: nonNil(depends)}, {Key: "created", Value: today}})
+	if err != nil {
+		return "", exitcode.Errf(exitcode.ExitUsage, "%v", err)
+	}
+	return head + "\n" +
 		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Capabilities\n\n- _(one contract per bullet: a verb, endpoint, schema or config key, tagged (new), (modified) or (removed))_\n\n" +
 		"## Acceptance\n\n- [ ] _(define what shipped looks like)_\n\n" +
 		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
-		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
+		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n", nil
+}
+
+func nonNil(l []string) []string {
+	if l == nil {
+		return []string{}
+	}
+	return l
 }
 
 func addFile(root, title, summary string, deps []string, kind, today string) (string, error) {
 	if err := CheckKind(kind); err != nil {
+		return "", err
+	}
+	// Render once before the counter moves, so a refused title burns no ID.
+	if _, err := StubOn("M00", title, summary, deps, today); err != nil {
 		return "", err
 	}
 	id, err := counter.Next(root, "milestones")
@@ -128,7 +143,11 @@ func addFile(root, title, summary string, deps []string, kind, today string) (st
 	if err := os.MkdirAll(filepath.Dir(detail), 0o777); err != nil {
 		return "", err
 	}
-	if err := fsio.WriteFileAtomic(detail, []byte(WithKind(StubOn(id, title, summary, deps, today), kind))); err != nil {
+	stub, err := StubOn(id, title, summary, deps, today)
+	if err != nil {
+		return "", err
+	}
+	if err := fsio.WriteFileAtomic(detail, []byte(WithKind(stub, kind))); err != nil {
 		return "", err
 	}
 	overview := "—"

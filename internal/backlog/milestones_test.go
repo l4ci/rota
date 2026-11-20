@@ -118,7 +118,7 @@ func TestNextMilestoneIDAndAdd(t *testing.T) {
 	if f.Native[len(f.Native)-1].Description != "Sum mary." {
 		t.Errorf("native description = %q", f.Native[len(f.Native)-1].Description)
 	}
-	if want := ms.StubOn("M08", "Title", "Sum  mary.", []string{"M01"}, "2026-10-02"); !strings.HasPrefix(f.Issues[0].Body, want) {
+	if want := mustMsStub("M08", "Title", "Sum  mary.", []string{"M01"}, "2026-10-02"); !strings.HasPrefix(f.Issues[0].Body, want) {
 		t.Errorf("body does not start with the stub:\n%s", f.Issues[0].Body)
 	}
 }

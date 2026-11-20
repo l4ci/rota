@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -39,7 +40,11 @@ func Add(s Store, id, title string, today func() time.Time) error {
 	if err := s.CheckID(id); err != nil {
 		return err
 	}
-	return s.Create(id, stubText(normID(id), title, stamp.Date(today())))
+	text, err := stubText(normID(id), title, stamp.Date(today()))
+	if err != nil {
+		return err
+	}
+	return s.Create(id, text)
 }
 
 func verbs(s Store) artifact.Verbs {
@@ -67,8 +72,12 @@ func normID(id string) string {
 }
 
 // stubText is the starter text of a design.
-func stubText(id, title, date string) string {
-	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: draft\ncreated: " + date + "\n---\n\n# " + id + " — " + title + `
+func stubText(id, title, date string) (string, error) {
+	head, err := frontmatter.Render([]frontmatter.Field{{Key: "id", Value: id}, {Key: "title", Value: title}, {Key: "status", Value: "draft"}, {Key: "created", Value: date}})
+	if err != nil {
+		return "", exitcode.Errf(exitcode.ExitUsage, "%v", err)
+	}
+	return head + "\n# " + id + " — " + title + `
 
 ## Goal
 
@@ -89,7 +98,7 @@ _(unresolved questions to answer before /rota-plan or during execution)_
 ## Assumptions
 
 _(named assumptions made implicit by the chosen design)_
-`
+`, nil
 }
 
 // Amend replaces or appends to the body of "## <heading>" in a design: trailing

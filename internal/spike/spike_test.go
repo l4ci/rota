@@ -300,3 +300,13 @@ func TestAddAndListThroughFake(t *testing.T) {
 		t.Errorf("calls = %s", got)
 	}
 }
+
+func TestAddRepoThroughFrontMatterWriter(t *testing.T) {
+	root := repo(t)
+	if _, err := Add(nil, root, root, "sse", "q", "bad\nstatus: done", testDay); err == nil {
+		t.Fatal("newline repo accepted")
+	}
+	if _, err := os.Stat(file(root, "sse")); err == nil {
+		t.Error("a refused value still wrote the spike")
+	}
+}
