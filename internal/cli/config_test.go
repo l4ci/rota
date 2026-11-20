@@ -121,6 +121,104 @@ func TestConfigSetListRequiresJSON(t *testing.T) {
 	}
 }
 
+func TestConfigSetLocalListWarnsAboutGlobalMask(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ROTA_CONFIG_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	globalPath := filepath.Join(home, ".config", "rota", "config.json")
+	global := `{"test":{"fast":["global-check"]}}` + "\n"
+	write(t, globalPath, global)
+	for _, mode := range []string{"text", "json"} {
+		t.Run(mode, func(t *testing.T) {
+			root := trackerProject(t, "{}\n")
+			localPath := filepath.Join(root, ".rota", "config.local.json")
+			args := []string{"config", "set", "--local", "test.fast", `["local-check"]`}
+			var code int
+			var stderr string
+			if mode == "json" {
+				var env map[string]any
+				code, env, stderr = rotaRun(t, append([]string{"--json", "-C", root}, args...)...)
+				warnings, _ := env["warnings"].([]any)
+				if len(warnings) != 1 {
+					t.Errorf("warnings = %v, want a global masking warning", env["warnings"])
+				} else {
+					for _, want := range []string{"test.fast", localPath, globalPath, "replaces"} {
+						if !strings.Contains(warnings[0].(string), want) {
+							t.Errorf("JSON warning missing %q: %v", want, warnings)
+						}
+					}
+				}
+			} else {
+				code, _, stderr = rotaIn(t, root, args...)
+			}
+			if code != ExitOK {
+				t.Fatalf("local set: exit %d, stderr=%s", code, stderr)
+			}
+			for _, want := range []string{"warning:", "test.fast", localPath, globalPath, "replaces"} {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr missing %q: %s", want, stderr)
+				}
+			}
+			body, err := os.ReadFile(localPath)
+			if err != nil || !strings.Contains(string(body), `"local-check"`) {
+				t.Errorf("local write: body=%s, err=%v", body, err)
+			}
+			if body, err := os.ReadFile(globalPath); err != nil || string(body) != global {
+				t.Errorf("global changed: body=%s, err=%v", body, err)
+			}
+		})
+	}
+}
+
+func TestConfigSetListMaskWarningBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name, global, key, value, flag string
+		wantWarning                    bool
+		wantExit                       int
+	}{
+		{name: "non-list", global: `{"docs":{"path":"global-docs"}}`, key: "docs.path", value: "local-docs", flag: "--local"},
+		{name: "absent-key", global: `{}`, key: "round.roster", value: `["sam"]`, flag: "--local"},
+		{name: "empty-list", global: `{"test":{"fast":[]}}`, key: "test.fast", value: `["local-check"]`, flag: "--local"},
+		{name: "null", global: `{"test":{"fast":null}}`, key: "test.fast", value: `["local-check"]`, flag: "--local"},
+		{name: "missing-file", key: "test.fast", value: `["local-check"]`, flag: "--local"},
+		{name: "corrupt-global", global: `{oops`, key: "test.fast", value: `["local-check"]`, flag: "--local"},
+		{name: "project-write", global: `{"test":{"fast":["global-check"]}}`, key: "test.fast", value: `["project-check"]`, flag: "--project"},
+		{name: "global-write", global: `{"test":{"fast":["global-check"]}}`, key: "test.fast", value: `["new-global-check"]`, flag: "--global"},
+		{name: "empty-local-list", global: `{"test":{"fast":["global-check"]}}`, key: "test.fast", value: `[]`, flag: "--local", wantWarning: true},
+		{name: "machine-routed", global: `{"round":{"harnesses":["claude"]}}`, key: "round.harnesses", value: `["codex"]`, wantWarning: true},
+		{name: "account-list", global: `{"round":{"accounts":[{"kind":"claude","name":"global","dir":"/global"}]}}`, key: "round.accounts", value: `[{"kind":"codex","name":"local","dir":"/local"}]`, flag: "--local"},
+		{name: "review-account-list", global: `{"review":{"accounts":[{"kind":"claude","name":"global","dir":"/global"}]}}`, key: "review.accounts", value: `[{"kind":"codex","name":"local","dir":"/local"}]`, flag: "--local"},
+		{name: "empty-account-list", global: `{"round":{"accounts":[{"kind":"claude","name":"global","dir":"/global"}]}}`, key: "round.accounts", value: `[]`},
+		{name: "invalid-value", global: `{"test":{"fast":["global-check"]}}`, key: "test.fast", value: `42`, flag: "--local", wantExit: ExitUsage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("ROTA_CONFIG_DIR", dir)
+			if tc.global != "" {
+				write(t, filepath.Join(dir, "config.json"), tc.global+"\n")
+			}
+			root := trackerProject(t, "{}\n")
+			args := []string{"--json", "-C", root, "config", "set"}
+			if tc.flag != "" {
+				args = append(args, tc.flag)
+			}
+			args = append(args, tc.key, tc.value)
+			code, env, stderr := rotaRun(t, args...)
+			if code != tc.wantExit {
+				t.Fatalf("exit %d, want %d: %s", code, tc.wantExit, stderr)
+			}
+			warnings, _ := env["warnings"].([]any)
+			if got := len(warnings) > 0; got != tc.wantWarning {
+				t.Errorf("warnings = %v, want masking warning %v; stderr=%s", warnings, tc.wantWarning, stderr)
+			}
+			if tc.wantWarning && !strings.Contains(fmt.Sprint(warnings), "replaces the entire list") {
+				t.Errorf("missing masking explanation: %v", warnings)
+			}
+		})
+	}
+}
+
 func TestConfigSetRejectsMismatchedTypes(t *testing.T) {
 	for _, tc := range []struct{ key, raw, expected string }{
 		{"test.full", `{}`, "list"},

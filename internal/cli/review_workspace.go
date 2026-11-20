@@ -31,6 +31,18 @@ func reviewPrepare(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// A local branch name is a PR branch: refuse one whose head is not on origin.
+	if isBranch, err := c.deps().Repo(dir).Verify(c.Context(), "refs/heads/"+args[0]); err != nil {
+		return Result{}, gitErr(err)
+	} else if isBranch {
+		tip, err := reviewGit(c.Context(), c.deps(), dir, "rev-parse", "--verify", "refs/heads/"+args[0]+"^{commit}")
+		if err != nil {
+			return Result{}, err
+		}
+		if err := reviewRequirePushedHead(c, dir, args[0], strings.TrimSpace(tip)); err != nil {
+			return Result{}, err
+		}
+	}
 	path, head, err := reviewPrepareWorkspace(c, dir, args[0])
 	if err != nil {
 		return Result{}, err

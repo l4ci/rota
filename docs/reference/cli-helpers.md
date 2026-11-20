@@ -575,8 +575,8 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota review scope [<branch>]` | commits, files, item IDs and origin entries of a branch |
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
-| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path (`data.head` is the branch sha it diffed, the sha to pass `verdict add --sha`); `--since` packages only the commits after a sha |
-| `rota review prepare <commit>` | prepare a disposable archive tree at the resolved SHA; returns `data.path` and `data.head`, creates `.review/` for caller inputs, and refuses incomplete setup without a checkout fallback |
+| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path (`data.head` is the branch sha it diffed, the sha to pass `verdict add --sha`); `--since` packages only the branch's own commits after a sha (a merge of the base inside the range is left out); refuses (Resolution) a local head that differs from `origin/<branch>` |
+| `rota review prepare <commit>` | prepare a disposable archive tree at the resolved SHA; returns `data.path` and `data.head`, creates `.review/` for caller inputs, and refuses incomplete setup without a checkout fallback; a local branch name whose head differs from `origin/<branch>` is refused (push or fetch first) |
 | `rota review cleanup <workspace>` | validate ownership and remove only the prepared workspace; report cleanup failures without widening removal |
 | `rota review depth [<branch>] [--labels <a,b>]` | review depth `ship.review` picks for a branch (`full`, `light`, `none`) from its diff size, change tier and the labels given, and why |
 | `rota review queue` | open issues waiting for review |
@@ -600,7 +600,7 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota release bump (--level patch\|minor\|major \| --to <X.Y.Z>) [--file <path>] [--kind <kind>]` | write the next version into the version file |
 | `rota release host` | print the hosting kind of origin |
 | `rota release notes --from commits [--since <ref>]` | release notes from commits |
-| `rota release changelog <X.Y.Z> --body-file <path\|-> [--path <file>]` | add a release section to the changelog |
+| `rota release changelog <X.Y.Z> --body-file <path\|-> [--path <file>]` | add a release section to the changelog; refuses (exit 3) a leftover `## Unreleased` section: fold it into the notes and delete it first |
 | `rota release pending` | how much has landed since the last release tag |
 | `rota release milestone-check <MNN>` | list the open issues that block a milestone release, then one informational `check:` line from `rota milestone check` (`data.check`) |
 | `rota release close-milestone <MNN> --release <X.Y.Z>` | close out a released milestone |
