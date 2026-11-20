@@ -74,7 +74,7 @@ func (g *GitLab) norm(d glIssue) Issue {
 	if d.State == "closed" {
 		is.State, is.StateReason = "closed", CloseCompleted
 		for _, l := range d.Labels {
-			if l == g.NotPlannedLabel {
+			if sameLabelName(gitlabLabelRule, l, g.NotPlannedLabel) {
 				is.StateReason = CloseNotPlanned
 			}
 		}

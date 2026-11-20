@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,7 +81,7 @@ func (gc *ghCache) openMatching(scope string, labels []string) ([]Issue, bool) {
 next:
 	for _, is := range all {
 		for _, want := range labels {
-			if !slices.ContainsFunc(is.Labels, func(l string) bool { return strings.EqualFold(l, want) }) {
+			if !hasLabel(githubLabelRule, is.Labels, want) {
 				continue next
 			}
 		}
@@ -510,17 +509,14 @@ func (r restIssue) verify(number int, e IssueEdit) error {
 		miss = append(miss, "body")
 	}
 	// GitHub label names are case-insensitive.
-	have := map[string]bool{}
-	for _, l := range r.labelNames() {
-		have[strings.ToLower(l)] = true
-	}
+	have := r.labelNames()
 	for _, l := range e.AddLabels {
-		if !have[strings.ToLower(l)] {
+		if !hasLabel(githubLabelRule, have, l) {
 			miss = append(miss, "label "+l)
 		}
 	}
 	for _, l := range e.RemoveLabels {
-		if have[strings.ToLower(l)] {
+		if hasLabel(githubLabelRule, have, l) {
 			miss = append(miss, "label "+l+" still set")
 		}
 	}

@@ -260,7 +260,7 @@ func (j *Jira) norm(d jiraIssue) Issue {
 	}
 	if f.Status.StatusCategory.Key == "done" {
 		is.State, is.ClosedAt, is.StateReason = "closed", f.ResolutionDate, CloseCompleted
-		if slices.Contains(f.Labels, j.notPlanned) {
+		if hasLabel(jiraLabelRule, f.Labels, j.notPlanned) {
 			is.StateReason = CloseNotPlanned
 		}
 	}
