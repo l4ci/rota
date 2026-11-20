@@ -8,6 +8,8 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 )
 
+const herdrInstallHint = "install herdr (see host)"
+
 // KindInput is what one worker harness has configured.
 type KindInput struct {
 	// AccountsKey is the config key of the kind's accounts (Harness.Accounts).
@@ -99,10 +101,27 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 	if len(homes) == 0 {
 		return pass(name, head+tiers)
 	}
-	herdr, _, _ := d.herdrBinary()
+	herdr, applies, haveHerdr := d.herdrBinary()
+	if !haveHerdr {
+		herdr = ""
+	}
 	var bad, notes []string
 	var hint string
+	// On a herdr host the integration check cannot run without the binary:
+	// say so once, rather than pass a line that skipped it.
+	missing := applies && !haveHerdr && plan.IntegrationFix != ""
 	for _, h := range homes {
+		if missing {
+			msg, fix := h.label()+": herdr not on PATH, integration not checked", herdrInstallHint
+			if h.Slot == "" {
+				notes = append(notes, msg+" (see host)")
+			} else {
+				bad = append(bad, msg)
+				if hint == "" {
+					hint = fix
+				}
+			}
+		}
 		found := plan.Home(d.ctx, p, bin, herdr, harness.Home(h))
 		// A home's login problem reads before its integration problem.
 		for _, want := range []harness.Code{harness.NotLoggedIn, harness.IntegrationStale, harness.IntegrationUnrunnable} {
