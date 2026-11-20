@@ -208,6 +208,7 @@ All top-level fields are optional:
     patch is a unified diff for a small mechanical fix.
     line: optional integer >= 1 or omitted when unknown (never zero).
     blocking: optional boolean; blocker/major default to true, minor/info default to false.
+      An explicit value overrides the default; detail must say why.
   items: array of objects; id and verdict are required.
     id: non-empty string. verdict: PASS, CONCERNS or FAIL.
   declined: array of objects; title is required (non-empty string).
@@ -473,8 +474,12 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	list := lookupVerdicts(c, t)
 	records := []any{}
 	var lines []string
+	var overrides overrideList
 	for _, r := range verdict.LatestBranchRecords(list) {
 		o := r.Object()
+		ov := blockingOverrides(r.Findings)
+		overrides.data = append(overrides.data, ov.data...)
+		overrides.names = append(overrides.names, ov.names...)
 		o.Set("stale", !verdict.AtHead(r, t.head))
 		records = append(records, o)
 		line := r.Kind + " " + r.Verdict + " @ " + r.Sha
@@ -482,6 +487,9 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 			line += " (" + who + ")"
 		}
 		lines = append(lines, line)
+		for _, n := range ov.names {
+			lines = append(lines, "  override: "+n)
+		}
 	}
 	d := jsonx.NewObject()
 	d.Set("branch", t.branch)
@@ -490,6 +498,9 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	}
 	d.Set("head", t.head)
 	d.Set("records", records)
+	if len(overrides.data) > 0 {
+		d.Set("overrides", overrides.data)
+	}
 	return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 }
 

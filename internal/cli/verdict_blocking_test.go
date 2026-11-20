@@ -369,3 +369,28 @@ func TestVerdictAddNamesOverrides(t *testing.T) {
 		t.Errorf("add text does not name the override: %s", text)
 	}
 }
+
+// AC-1: show names each override too, in --json and in text.
+func TestVerdictShowNamesOverrides(t *testing.T) {
+	dir := verdictRepo(t)
+	body := writeBody(t, t.TempDir(), mixedFindings)
+	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body); code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	code, out, errOut := rotaIn(t, dir, "verdict", "show", "--json")
+	if code != 0 {
+		t.Fatalf("show: %d %s", code, errOut)
+	}
+	got, _ := data(t, out)["overrides"].([]any)
+	if len(got) != 2 {
+		t.Fatalf("overrides = %v, want forced and waived", got)
+	}
+	first := got[0].(map[string]any)
+	if first["title"] != "forced" || first["severity"] != "minor" || first["blocking"] != true {
+		t.Errorf("first override = %v", first)
+	}
+	_, text, _ := rotaIn(t, dir, "verdict", "show")
+	if !strings.Contains(text, "override: forced [minor, blocking=true]") || !strings.Contains(text, "override: waived") {
+		t.Errorf("show text does not name each override: %s", text)
+	}
+}
