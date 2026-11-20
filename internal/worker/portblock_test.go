@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func portBases(t *testing.T, root string) map[string]int {
@@ -17,7 +19,7 @@ func portBases(t *testing.T, root string) map[string]int {
 }
 
 func TestPoolInitReservesDistinctPortBlocks(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	if _, err := goInit(t, b, InitOpts{Slots: 3, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +38,7 @@ func TestPoolInitReservesDistinctPortBlocks(t *testing.T) {
 }
 
 func TestPortBlockHonoursConfig(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	e := Env{Config: memConfig(t, `{"round":{"portBase":30000,"portBlock":50}}`)}
 	if _, err := e.PoolInit(bg, b, InitOpts{Slots: 2, Base: "main"}, &Accounts{}); err != nil {
 		t.Fatal(err)
@@ -48,7 +50,7 @@ func TestPortBlockHonoursConfig(t *testing.T) {
 }
 
 func TestReapReleasesPortBlock(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
 	if _, err := (Env{}).Reap(b, []string{"w2"}, false); err != nil {
 		t.Fatal(err)
@@ -61,7 +63,7 @@ func TestReapReleasesPortBlock(t *testing.T) {
 }
 
 func TestEnsurePortBaseNeverSharesALiveBlock(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	// A slot registered without a block (adopted, or from before this field).
 	if err := registerSlot(b, "late", "late/x", filepath.Join(b, ".worktrees", "late"), "main", "", ""); err != nil {
@@ -90,7 +92,7 @@ func TestSlotEnv(t *testing.T) {
 func TestEnvSetupSeesSlotVariables(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "env.txt")
 	cmd := `printf '%s %s %s %s;' "$ROTA_SLOT" "$ROTA_PORT_BASE" "$ROTA_PORT_BLOCK" "$ROTA_DB_SUFFIX" >> ` + out
-	b := newProject(t, `{"round":{"envSetup":`+jsonString(cmd)+`}}`)
+	b := gittest.Project(t, `{"round":{"envSetup":`+jsonString(cmd)+`}}`)
 	if _, err := goInit(t, b, InitOpts{Slots: 2, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +103,7 @@ func TestEnvSetupSeesSlotVariables(t *testing.T) {
 }
 
 func TestEnsurePortBaseNeverOverlapsAfterConfigChange(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"}) // 20000-20099, 20100-20199
 	for i, c := range []struct{ base, block, want int }{
 		{20050, 100, 20200}, // portBase moved into a live block
@@ -119,7 +121,7 @@ func TestEnsurePortBaseNeverOverlapsAfterConfigChange(t *testing.T) {
 }
 
 func TestEnsurePortBaseRefusesPastPortMax(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	if err := registerSlot(b, "far", "far/x", filepath.Join(b, ".worktrees", "far"), "main", "", ""); err != nil {
 		t.Fatal(err)

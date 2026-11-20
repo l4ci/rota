@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // A harness switch (claude to codex) spawns a session whose input comes up
 // late: the host reports it still booting. The brief waits for it (#3165).
 func TestDispatchTaskWaitsForLateSessionInput(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
 	h.statusSeq = map[string][]string{"w1": {"working", "unknown", "working", "idle"}}
@@ -38,7 +39,7 @@ func TestDispatchTaskWaitsForLateSessionInput(t *testing.T) {
 // herdr reports a booted, idle session it cannot classify as "unknown" for
 // good: the brief must not wait out the boot timeout on it.
 func TestDispatchTaskSendsWhenUnknownStatusButPaneBooted(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
 	h.status = map[string]string{"w1": "unknown"}
@@ -55,7 +56,7 @@ func TestDispatchTaskSendsWhenUnknownStatusButPaneBooted(t *testing.T) {
 // A status the host cannot classify from the start (the dry-round fake herdr)
 // never blocks the brief, even with a pane that shows no prompt.
 func TestDispatchTaskSendsWhenStatusStaysUnknownFromStart(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
 	h.status = map[string]string{"w1": "unknown"}
@@ -70,7 +71,7 @@ func TestDispatchTaskSendsWhenStatusStaysUnknownFromStart(t *testing.T) {
 // A session still booting at the boot timeout fails the dispatch stage, with
 // nothing sent, so the receipt's replay delivers it later.
 func TestDispatchTaskFailsWhenSessionNeverAcceptsInput(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
 	h.status = map[string]string{"w1": "working"}
@@ -88,7 +89,7 @@ func TestDispatchTaskFailsWhenSessionNeverAcceptsInput(t *testing.T) {
 
 // A host with no native state has nothing to wait on.
 func TestDispatchTaskSendsAtOnceWithoutNativeState(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
 	if _, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"}); err != nil {

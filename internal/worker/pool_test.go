@@ -2,13 +2,12 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/golden"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/golden"
 )
 
 // Fixture goldens: the Go port runs on a freshly built project and must leave
@@ -23,7 +22,7 @@ func goInit(t *testing.T, dir string, o InitOpts) (InitResult, error) {
 func TestPoolInit(t *testing.T) {
 	for name, cfg := range map[string]string{"tmux": `{}`, "herdr": `{"round":{"dispatch":"herdr"}}`} {
 		t.Run(name, func(t *testing.T) {
-			b := newProject(t, cfg)
+			b := gittest.Project(t, cfg)
 			got := map[string]string{}
 			res, err := goInit(t, b, InitOpts{Slots: 3, Base: "main", Session: "s1"})
 			if err != nil {
@@ -49,7 +48,7 @@ func TestPoolInit(t *testing.T) {
 }
 
 func TestPoolInitDefaultsToCurrentBranchAndHv(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	res, err := goInit(t, b, InitOpts{Slots: 1})
 	if err != nil || res.Base != "main" || res.Session != "rota" {
 		t.Fatalf("%+v %v", res, err)
@@ -58,7 +57,7 @@ func TestPoolInitDefaultsToCurrentBranchAndHv(t *testing.T) {
 }
 
 func TestPoolInitErrors(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	_, err := goInit(t, dir, InitOpts{Slots: 1, Base: "nope"})
 	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "base branch 'nope' does not exist") {
 		t.Errorf("missing base: %v", err)
@@ -72,7 +71,7 @@ func TestPoolInitErrors(t *testing.T) {
 
 func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 	cfg := `{"round":{"dispatch":"herdr"}}`
-	b := newProject(t, cfg)
+	b := gittest.Project(t, cfg)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	// slot 1 had a live tab recorded; slot 2 is an unmigrated pre-herdr registry
 	raw, _ := os.ReadFile(RegistryPath(b))
@@ -87,7 +86,7 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 }
 
 func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	gittest.Run(t, filepath.Join(b, ".worktrees", "w1"), "switch", "-q", "-c", "rota-worker/w1-t9")
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
@@ -99,7 +98,7 @@ func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 
 // #79: a slot registered at a legacy path stays there; a foreign repo is refused.
 func TestPoolInitLegacySlotStays(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	legacy := filepath.Join(b, ".claude", "worktrees", "rota-worker", "w1")
 	gittest.Run(t, b, "worktree", "add", "-q", "-b", "rota-worker/w1", legacy, "main")
 	reg := `{"session":"rota","slots":[{"name":"w1","branch":"rota-worker/w1","worktree":"` + legacy + `","base":"main","handle":"rota:w1","state":"idle","task":null,"pr":null,"relays":[],"configDir":null}]}`
@@ -118,7 +117,7 @@ func TestPoolInitLegacySlotStays(t *testing.T) {
 }
 
 func TestPoolInitRefusesForeignRepoWorktree(t *testing.T) {
-	b, foreignB := newProject(t, `{}`), newProject(t, `{}`)
+	b, foreignB := gittest.Project(t, `{}`), gittest.Project(t, `{}`)
 	reg := `{"session":"rota","slots":[{"name":"w1","branch":"main","worktree":"` + foreignB + `","base":"main","handle":null,"state":"idle","task":null,"pr":null,"relays":[],"configDir":null}]}`
 	os.WriteFile(RegistryPath(b), []byte(reg), 0o644)
 	before, _ := os.ReadFile(RegistryPath(b))
@@ -134,7 +133,7 @@ func TestPoolInitRefusesForeignRepoWorktree(t *testing.T) {
 }
 
 func TestPoolInitWarnsWhenWorktreesNotIgnored(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	os.WriteFile(filepath.Join(dir, ".gitignore"), nil, 0o644)
 	res, err := goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], ".worktrees/ is not gitignored") {
@@ -147,7 +146,7 @@ func TestPoolInitWarnsWhenWorktreesNotIgnored(t *testing.T) {
 // own .git), so debris from an interrupted reap is adopted, not cleared. The
 // golden pins what the retired helper did; changing it is a behaviour change.
 func TestPoolInitTreatsAPlainDirInsideTheProjectAsHealthy(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	os.MkdirAll(filepath.Join(b, ".worktrees", "w1"), 0o755)
 	os.WriteFile(filepath.Join(b, ".worktrees", "w1", "junk"), []byte("x"), 0o644)
 	if _, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"}); err != nil {
@@ -157,7 +156,7 @@ func TestPoolInitTreatsAPlainDirInsideTheProjectAsHealthy(t *testing.T) {
 }
 
 func TestPoolReap(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	got := map[string]string{}
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
 
@@ -182,7 +181,7 @@ func TestPoolReap(t *testing.T) {
 }
 
 func TestPoolReapWithoutRegistryIsANoop(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	reaped, err := Env{}.Reap(dir, []string{"w1"}, false)
 	if err != nil || len(reaped) != 0 {
 		t.Errorf("%v %v", reaped, err)
@@ -193,7 +192,7 @@ func TestPoolReapWithoutRegistryIsANoop(t *testing.T) {
 }
 
 func TestPoolListDropsNullFields(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	session, round, slots, _ := PoolList(dir)
 	if session != "rota" || round != nil || len(slots) != 1 {
@@ -212,14 +211,14 @@ func TestPoolListDropsNullFields(t *testing.T) {
 	if _, ok := slots[0].Get("relays"); !ok {
 		t.Error("relays must stay (an empty array)")
 	}
-	dir2 := newProject(t, `{}`)
+	dir2 := gittest.Project(t, `{}`)
 	if s, _, sl, _ := PoolList(dir2); s != nil || len(sl) != 0 {
 		t.Errorf("no registry: %v %v", s, sl)
 	}
 }
 
 func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") }); err != nil {
 		t.Fatal(err)
@@ -253,7 +252,7 @@ func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
 // A worktree git will not remove stays on disk: its slot must stay registered
 // and the verb must say so, not drop the only record of it (#579).
 func TestPoolReapKeepsTheSlotWhenTheWorktreeStays(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	gittest.Run(t, b, "worktree", "lock", filepath.Join(b, ".worktrees", "w2"))
 
@@ -271,7 +270,7 @@ func TestPoolReapKeepsTheSlotWhenTheWorktreeStays(t *testing.T) {
 }
 
 func TestPoolReapRefusesACorruptRegistry(t *testing.T) {
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	os.WriteFile(RegistryPath(b), []byte(`{"slots": [`), 0o644)
 	reaped, err := Env{}.Reap(b, nil, true)

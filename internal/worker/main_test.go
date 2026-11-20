@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,21 +47,6 @@ func sh(t *testing.T, dir string, name string, args ...string) string {
 		t.Fatalf("%s %v in %s: %v\n%s", name, args, dir, err, out)
 	}
 	return strings.TrimSpace(string(out))
-}
-
-// newProject makes a git project with one commit on main, a gitignored
-// .worktrees/ and the given .rota/config.json. The path is symlink-resolved.
-func newProject(t *testing.T, config string) string {
-	t.Helper()
-	dir := gittest.TempDir(t)
-	gittest.Init(t, dir, "main")
-	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".worktrees/\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(config), 0o644)
-	gittest.Run(t, dir, "add", ".gitignore", "seed.txt")
-	gittest.Run(t, dir, "commit", "-q", "-m", "seed")
-	return dir
 }
 
 // registry returns workers.json with the project path replaced by ROOT, so a

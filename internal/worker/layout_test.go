@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -71,7 +72,7 @@ func (g *gridHost) Spawn(ctx context.Context, o host.SpawnOpts) (string, error) 
 
 func gridRig(t *testing.T, layoutMode string) (string, *gridHost, Env) {
 	t.Helper()
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	if layoutMode != "" {
 		if err := Update(dir, func(d *Doc) { d.SetLayout(layoutMode) }); err != nil {

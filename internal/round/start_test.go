@@ -225,17 +225,17 @@ func TestCandidatesPerScope(t *testing.T) {
 func TestCandidatesReadOverlapAgainstSlotChanges(t *testing.T) {
 	root := newRepo(t, map[string]string{"ben": "ben/7-pool"})
 	// ben has uncommitted work on a tracked file the issue text never names.
-	if err := os.WriteFile(filepath.Join(root, "seed"), []byte("y"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "seed.txt"), []byte("y"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(root, ".worktrees", "ben")
-	if err := os.WriteFile(filepath.Join(wt, "seed"), []byte("changed"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(wt, "seed.txt"), []byte("changed"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	milestoneDoc(t, root, "M01", "active")
 	be := &fakeRemote{}
 	be.add("7", "ben's issue", "M01", false, "")
-	be.add("8", "wants the seed file", "M01", false, "edits seed")
+	be.add("8", "wants the seed file", "M01", false, "edits seed.txt")
 	writeRegistry(t, root, slot(root, "ben", "ben/7-pool", nil))
 	cs, err := (Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}).Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
 	if err != nil {

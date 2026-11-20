@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func homeAt(h string) func() (string, error) { return func() (string, error) { return h, nil } }
@@ -11,7 +13,7 @@ func homeAt(h string) func() (string, error) { return func() (string, error) { r
 // round.accounts dir "~/..." is expanded before it is cached on the slot
 // and before it reaches the pane's CLAUDE_CONFIG_DIR (#1777).
 func TestAccountAssignCachesTheExpandedConfigDir(t *testing.T) {
-	dir := newProject(t, `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-personal"}]}}`)
+	dir := gittest.Project(t, `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-personal"}]}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	acc := &Accounts{Env: Env{Home: homeAt("/home/u"), Getenv: func(string) string { return t.TempDir() }}}
 	if _, _, err := acc.Assign(bg, dir, "w1", "a"); err != nil {
@@ -34,7 +36,7 @@ func TestAccountAssignCachesTheExpandedConfigDir(t *testing.T) {
 // A slot cached with an unexpanded path by an older rota still launches under
 // the expanded one.
 func TestDispatchExpandsACachedTildeConfigDir(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccountFor("", "a", "~/.claude-personal") })
 	f := tmuxFake()
@@ -50,7 +52,7 @@ func TestDispatchExpandsACachedTildeConfigDir(t *testing.T) {
 
 // a codex entry of round.accounts with dir "~/.codex" reaches CODEX_HOME expanded (#1757).
 func TestDispatchCodexAccountExpandsATildeHome(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"a","dir":"~/.codex"}]}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"a","dir":"~/.codex"}]}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true, installed: true}
 	f := herdrFake()

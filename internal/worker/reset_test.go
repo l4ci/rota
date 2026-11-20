@@ -5,20 +5,19 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/golden"
-	"github.com/l4ci/rota/internal/tracker"
 )
 
 // slotProject builds a project with one initialised slot.
 func slotProject(t *testing.T) string {
 	t.Helper()
-	b := newProject(t, `{}`)
+	b := gittest.Project(t, `{}`)
 	if _, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +152,7 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 }
 
 func TestResetResolutionFailures(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	exit := func(err error) int {
 		if we, ok := err.(*exitcode.Error); ok {
 			return we.Exit
