@@ -189,7 +189,7 @@ func (t *Itsaplan) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		}
 	}
 	if len(uniq(e.AddLabels)) > 0 {
-		if err := t.AddLabels(ctx, key, e.AddLabels, true); err != nil {
+		if err := t.AddLabels(ctx, key, e.AddLabels, !e.NoCreateLabels); err != nil {
 			return err
 		}
 	}

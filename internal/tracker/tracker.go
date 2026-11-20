@@ -272,6 +272,11 @@ type IssueEdit struct {
 	RemoveLabels    []string
 	Milestone       string
 	RemoveMilestone bool
+	// NoCreateLabels is issues.autoCreateLabel off: an AddLabels name the
+	// tracker does not know fails with KindNotFound instead of being created.
+	// The zero value creates, as Edit always did. A tracker whose labels are
+	// free text (Jira) has no unknown label and ignores it.
+	NoCreateLabels bool
 }
 
 // MilestoneEdit renames, re-describes or opens/closes a native milestone.
@@ -321,8 +326,11 @@ type IssueTracker interface {
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
 	// AddLabels adds labels to the issue. autoCreate decides what a label the
 	// tracker does not know yet does: true creates it, false fails with
-	// KindNotFound. A tracker whose labels are free text (Jira) has no unknown
-	// label, so it always creates on use and autoCreate changes nothing there.
+	// KindNotFound and adds nothing. Edit follows the same policy through
+	// IssueEdit.NoCreateLabels (the inverse, so the zero value creates). A
+	// tracker whose labels are free text (Jira) has no unknown label, so it
+	// always creates on use and autoCreate and NoCreateLabels change nothing
+	// there.
 	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
 	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
 	// Close closes the issue with reason CloseCompleted (or "") or
@@ -926,7 +934,7 @@ func (b *base) addLabels(ctx context.Context, a Adapter, key IssueKey, labels []
 	if err := a.EnsureLabels(ctx, labels, autoCreate); err != nil {
 		return err
 	}
-	return a.Edit(ctx, key, IssueEdit{AddLabels: labels})
+	return a.Edit(ctx, key, IssueEdit{AddLabels: labels, NoCreateLabels: !autoCreate})
 }
 
 func (b *base) removeLabels(ctx context.Context, a Adapter, key IssueKey, labels []string) error {

@@ -682,7 +682,7 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		text, fields = fieldsProperty(*e.Body)
 		in["description"] = text
 	}
-	add, err := l.labelIDs(ctx, e.AddLabels, true)
+	add, err := l.labelIDs(ctx, e.AddLabels, !e.NoCreateLabels)
 	if err != nil {
 		return err
 	}
@@ -752,12 +752,7 @@ func (l *Linear) AddLabels(ctx context.Context, key IssueKey, labels []string, a
 	if len(uniq(labels)) == 0 {
 		return nil
 	}
-	if !autoCreate {
-		if _, err := l.labelIDs(ctx, labels, false); err != nil {
-			return err
-		}
-	}
-	return l.Edit(ctx, key, IssueEdit{AddLabels: labels})
+	return l.Edit(ctx, key, IssueEdit{AddLabels: labels, NoCreateLabels: !autoCreate})
 }
 
 func (l *Linear) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
