@@ -13,11 +13,11 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references
-- internal/skills/set.go:37 — `Embedded`: the embedded set; `Load` at :59
-- internal/skills/install.go:261 — `Set.Install`; `Update` at :279, `Uninstall` at :506, `Set.Status` at :612
+- internal/skills/set.go:38 — `Embedded`: the embedded set; `Load` at :60
+- internal/skills/install.go:262 — `Set.Install`; `Update` at :280, `Uninstall` at :507, `Set.Status` at :616
 - internal/skills/get.go:132 — `Set.Serve`: one skill or reference by name (read side)
 - internal/cli/skills.go:21 — `skillsCommands`: the `rota skills` verbs
-- internal/prompts/store.go:82 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8
+- internal/prompts/store.go:85 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8
 - scripts/skills-docs.py:108 — `main`: regenerate the marked blocks from `docs/skills/*.md` (`--check` writes nothing)
 - scripts/site-sync.py:342 — `main`: generate the site's docs pages, nav and skill data
 - scripts/codex-plugin.sh:1 — builds `<out>/plugins/rota` with references copied as real files
