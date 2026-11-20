@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"github.com/l4ci/rota/internal/prompts"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -127,7 +129,13 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			NewTracker: func(ctx context.Context, dir string) (doctor.Tracker, error) { return d.NewTracker(ctx, dir, cfg) },
 			NewForge:   func(ctx context.Context) (tracker.Forge, error) { return d.forge(ctx, cfg, "", root) },
 			RoundEnv:   func(ctx context.Context) round.Env { return d.RoundEnvLocal(ctx, root) },
-			Cwd:        in.Dir, Today: d.Today,
+			Board: func(ctx context.Context, root string, tr func(context.Context, string) (doctor.Tracker, error)) (round.Board, error) {
+				b, err := claimBoard(&Ctx{Deps: d, ctx: ctx, Stderr: io.Discard}, root, tr)
+				if err == nil && b == nil {
+					err = errors.New("tracker does not support claims")
+				}
+				return b, err
+			},
 		}.Scan(ctx, root, cfg)
 		in.StaleClaims, in.StaleClaimWarnings, in.Labels = scan.StaleClaims, scan.Warnings, scan.Labels
 	}
