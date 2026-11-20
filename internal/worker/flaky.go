@@ -87,6 +87,9 @@ func (e Env) runE2E(ctx context.Context, cmds []string, dir string, led testledg
 }
 
 func (e Env) recordFlakes(root string, round *landing.RoundMemo, prs []string, vr VerifyResult) error {
+	if err := flakeledger.Ensure(root); err != nil {
+		return fmt.Errorf("flake ledger not written: %w", err)
+	}
 	for _, f := range vr.Flaky {
 		f.PRs = append([]string{}, prs...)
 		f.Round = round.Round(e, root)

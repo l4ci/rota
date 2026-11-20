@@ -305,3 +305,50 @@ func TestTrainRetryReportsDurationAndTests(t *testing.T) {
 		t.Fatalf("duration not persisted: %+v %v", rows, err)
 	}
 }
+
+// A gate.sh sub-check recovery (ROTA-FLAKY line, wrapper exit 0) must land in
+// the main checkout's flakes.jsonl, not in the scratch tree the gate verified in (#3994).
+func TestGateSubcheckRecoveryLandsInMainCheckoutLedger(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setPRBody("Closes #7")
+	w.setConfig(`{"test":{"full":["check"]}}`)
+	e := w.env(false)
+	var verifiedIn string
+	line := `ROTA-FLAKY {"check":"smoke-shard2","firstExit":1,"retryExit":0,"firstOutput":"--- FAIL: TestUnderLoad (0s)\nFAIL\n","retryOutput":"ok\n","retrySeconds":1.5}`
+	e.Shell = func(_ context.Context, dir, _ string) (string, int) {
+		verifiedIn = dir
+		return line + "\nFLAKY smoke-shard2 (failed once, passed isolated retry)\n", 0
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != landing.GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if verifiedIn == "" || verifiedIn == w.dir {
+		t.Fatalf("expected a scratch verify dir, got %q", verifiedIn)
+	}
+	if _, err := os.Stat(flakeledger.Path(verifiedIn)); err == nil {
+		t.Fatal("flake row written under the scratch tree")
+	}
+	rows, err := flakeledger.Load(w.dir)
+	if err != nil || len(rows) != 1 || rows[0].Check != "smoke-shard2" {
+		t.Fatalf("main checkout rows=%+v err=%v", rows, err)
+	}
+}
+
+// A verified gate with no recoveries still proves the recorder ran: the ledger
+// exists and is empty, so test-audit reads "none observed", not "unavailable" (#3994).
+func TestCleanGateLeavesEmptyFlakeLedger(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setPRBody("Closes #7")
+	w.setConfig(`{"test":{"full":["check"]}}`)
+	e := w.env(false)
+	e.Shell = func(context.Context, string, string) (string, int) { return "ok\n", 0 }
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != landing.GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	rows, err := flakeledger.Load(w.dir)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("want an existing empty ledger, rows=%+v err=%v", rows, err)
+	}
+}
