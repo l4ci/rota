@@ -174,3 +174,21 @@ func TestStampFieldsAndIsDate(t *testing.T) {
 		t.Fatal("IsDate must accept only YYYY-MM-DD")
 	}
 }
+
+func TestEndOffsetAgreesWithEnd(t *testing.T) {
+	for _, text := range []string{
+		"- **A** — x\n  more\n\tand more\n\n  after blank\n- **B**\nprose\n",
+		"- **A** — x\n  more",
+		"- **A** — x\n",
+		"- **A** — x",
+	} {
+		lines := strings.Split(text, "\n")
+		for i := range lines {
+			a := LineStart(lines, i)
+			want := LineStart(lines, End(lines, i))
+			if got := EndOffset(text, a); got != want {
+				t.Errorf("EndOffset(%q, %d) = %d, want %d", text, a, got, want)
+			}
+		}
+	}
+}

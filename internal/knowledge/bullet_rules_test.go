@@ -135,3 +135,22 @@ func TestHitRefusesCaseTwins(t *testing.T) {
 		t.Error("a refused hit was buffered")
 	}
 }
+
+// A multi-line bullet crosses the one extent rule (bulletfmt) through Replace
+// and Remove: both take the wrapped line and leave the prose after it.
+func TestMultiLineBulletExtentForReplaceAndRemove(t *testing.T) {
+	const in = "## A\n\n- **One** a\n  wrapped tail\n\nprose\n- **Two** b\n"
+	s, km := rulesStore(t, in)
+	if _, err := s.Replace("", "A", "tail", "end"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readKM(t, km), "## A\n\n- **One** a\n  wrapped end\n\nprose\n- **Two** b\n"; got != want {
+		t.Errorf("Replace: got %q want %q", got, want)
+	}
+	if _, err := s.Remove("", "A", "One"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readKM(t, km), "## A\n\nprose\n- **Two** b\n"; got != want {
+		t.Errorf("Remove: got %q want %q", got, want)
+	}
+}
