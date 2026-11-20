@@ -1,12 +1,12 @@
 ---
 subsystem: review-verdicts
-summary: typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules
+summary: typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, the test-audit report, golden records, Go test-path rules
 touched: 2026-11-17
 last_mapped_commit: feae867b58d0ea7ed33556ef145f85dc41dc03e8
 ---
 
 ## Purpose
-The evidence side of shipping. `verdict` records review, qa, ship and debug verdicts through a verb (no report-last-line parsing) and routes verdict to next step; `change` puts a branch's diff in a tier and `reviewpolicy` resolves the review depth and lens hits from `config.ReviewPolicy` and the text around the diff, so the gate and review do only the work a change needs; `proof` keeps verification rows on items; `acceptance` parses `## Acceptance` criteria (AC-n ids), marks and coverage; `testledger` is the sanctioned exclusion list of known-red tests; `flakeledger` logs retry recoveries; `golden` pins Go output to approved records; `gopath` says which Go paths are test files.
+The evidence side of shipping. `verdict` records review, qa, ship and debug verdicts through a verb (no report-last-line parsing) and routes verdict to next step; `change` puts a branch's diff in a tier and `reviewpolicy` resolves the review depth and lens hits from `config.ReviewPolicy` and the text around the diff, so the gate and review do only the work a change needs; `proof` keeps verification rows on items; `acceptance` parses `## Acceptance` criteria (AC-n ids), marks and coverage; `testledger` is the sanctioned exclusion list of known-red tests; `flakeledger` logs retry recoveries; `suiteaudit` backs `rota test-audit` (recorded test costs, checkpoint, test placement inventory); `golden` pins Go output to approved records; `gopath` says which Go paths are test files.
 Depends on: backlog-items (backlog, artifact, section, only `followup` imports backlog), tracker-issues (marker, tracker, itembody), plus acceptance, config, exitcode, fsio, git, gopath, jsonx, pathglob, pystr, rotatree, shlex, stamp, strutil. Used by gate-landing (ship, gate) and cli, worker (changetier, reviewdepth, gate), round.
 
 ## Entry points
@@ -18,6 +18,7 @@ Depends on: backlog-items (backlog, artifact, section, only `followup` imports b
 - internal/reviewpolicy/reviewpolicy.go:70 — `Decide`, review depth; `MatchLenses` at :202
 - internal/proof/proof.go:45 — `Add`; `Proves` at :167, `Mark` at :175
 - internal/acceptance/acceptance.go:88 — `Parse`; `Coverage` at :203
+- internal/suiteaudit/inventory.go:64 — `Inventory`: test placement report; `ReadTelemetry` report.go:98 (recorded test costs); CLI internal/cli/testaudit.go:20 `rota test-audit`
 - internal/testledger/ledger.go:172 — `Ledger.Excuses`; `Load` at :63, `FailingTests` :154
 
 ## Key files / dirs
@@ -27,6 +28,7 @@ Depends on: backlog-items (backlog, artifact, section, only `followup` imports b
 - internal/proof/ — proof.go (Row, Store), files.go (sidecar), notes.go (issue-mode `proof` note), command.go (`{files}` command expansion), testdata/
 - internal/acceptance/ — acceptance.go (pure grammar, no I/O)
 - internal/testledger/ — ledger.go (`.rota/test-ledger.json`)
+- internal/suiteaudit/ — report.go (checkpoint, telemetry), inventory.go (test placement, Playwright parsing)
 - internal/flakeledger/ — ledger.go (`.rota/flakes.jsonl`, `Rank`; writes via `fsio.AppendLine`, reads via `fsio.ReadLines`), retry.go, infrastructure-markers.txt
 - internal/followup/ — followup.go (`FileFollowUps`: files deferred review findings as one backlog item; imports acceptance, backlog, verdict, tracker; called by `rota verdict add --file-deferred` in internal/cli/verdict.go)
 - internal/golden/ — golden.go, testdata/; records live in `testdata/golden/<test>.json` of each using package
@@ -45,7 +47,7 @@ Go 1.22, stdlib only. Verdict store is a jsonx file (`rotatree.Verdicts`), gitig
 - Invariants: golden fails when the test's inputs differ from the recorded inputs; `-update-golden` rewrites outputs only after the test passes.
 
 ## Test commands
-- go test ./internal/verdict/... ./internal/followup/... ./internal/change/... ./internal/reviewpolicy/... ./internal/proof/... ./internal/acceptance/... ./internal/testledger/... ./internal/flakeledger/... ./internal/golden/... ./internal/gopath/...
+- go test ./internal/verdict/... ./internal/followup/... ./internal/change/... ./internal/reviewpolicy/... ./internal/proof/... ./internal/acceptance/... ./internal/testledger/... ./internal/flakeledger/... ./internal/suiteaudit/... ./internal/golden/... ./internal/gopath/...
 - go test ./internal/<pkg> -update-golden (accept changed golden records; read the diff)
 - SECTION_LIST=test/sections/78_verdicts.sh bash test/runner.sh (also 52_proof, 119_proof_record, 122_acceptance_ids, 124_test_ledger, 86_merge_approval)
 
