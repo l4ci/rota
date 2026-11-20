@@ -674,7 +674,7 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 			return false, err
 		}
 	}
-	return true, b.Tracker.Edit(b.ctx(), is.Key, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop})
+	return true, b.Tracker.Edit(b.ctx(), is.Key, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop, NoCreateLabels: !b.AutoCreate()})
 }
 
 // Claim takes the item: it posts a claim marker (on a tracker with a claim
