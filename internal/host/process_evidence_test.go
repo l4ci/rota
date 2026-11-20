@@ -142,20 +142,11 @@ func TestProcessEvidenceUnreadableObservationPreservesKnownIncarnation(t *testin
 	}
 }
 
-func TestProcessEvidenceLegacyCompatibility(t *testing.T) {
-	procs, legacy, err := decodeProcessEvidence([]byte(`[3, {"pid":4,"start":9}, {"pid":5}]`))
-	if err != nil || !reflect.DeepEqual(procs, processEvidence{{4, 9}, {PID: 5}}) || !reflect.DeepEqual(legacy, []int{3}) {
-		t.Fatalf("procs=%v legacy=%v err=%v", procs, legacy, err)
-	}
-	for _, bad := range []string{`{"pid":1}`, `["x"]`} {
-		if _, _, err := decodeProcessEvidence([]byte(bad)); err == nil {
-			t.Fatalf("accepted invalid evidence: %s", bad)
-		}
-	}
+func TestProcessEvidenceLegacyStaysUnknown(t *testing.T) {
 	d, p := evidenceFixture()
 	p.set(3, true, 999)
 	d.Tree = func(int) []int { return []int{3, 789} }
-	ev := unknownProcesses(legacy).refresh(d)
+	ev := unknownProcesses([]int{3}).refresh(d)
 	if want := (processEvidence{{PID: 3}}); !reflect.DeepEqual(ev, want) {
 		t.Fatalf("legacy evidence acquired current incarnation/descendants: %v", ev)
 	}

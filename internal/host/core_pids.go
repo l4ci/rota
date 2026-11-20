@@ -1,25 +1,25 @@
 package host
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"time"
 )
 
-func (h *coreHost) readCorePIDs(path string) (procs processEvidence, legacy []int, err error) {
-	b, err := h.d.FS.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil, nil
+func (h *coreHost) pidStore(v coreHandle) (evidenceStore, error) {
+	p, e := h.recordPath(v)
+	if e != nil {
+		return evidenceStore{}, e
 	}
+	return evidenceStore{fs: h.d.FS, path: p + ".pids"}, nil
+}
+
+// readCorePIDs loads recorded incarnations. Legacy bare pids (no start time)
+// are returned apart: Core trusts them only through the live terminal's tree.
+func readCorePIDs(s evidenceStore) (procs processEvidence, legacy []int, err error) {
+	f, err := s.Load()
 	if err != nil {
-		return nil, nil, err
-	}
-	if procs, legacy, err = decodeProcessEvidence(b); err != nil {
 		return nil, nil, fmt.Errorf("Core process evidence corrupt")
 	}
-	return procs, legacy, nil
+	return f.Procs, f.Legacy, nil
 }
 
 // coreEvidence is what a kill must prove gone.
@@ -31,8 +31,11 @@ type coreEvidence struct {
 // killEvidence gathers the recorded incarnations plus the live terminal's tree.
 // Legacy bare pids (the handle's and the old file's) count only through the tree.
 func (h *coreHost) killEvidence(v coreHandle, t coreTerminal) (coreEvidence, error) {
-	p, _ := h.recordPath(v)
-	stored, legacy, e := h.readCorePIDs(p + ".pids")
+	s, e := h.pidStore(v)
+	if e != nil {
+		return coreEvidence{}, e
+	}
+	stored, legacy, e := readCorePIDs(s)
 	if e != nil {
 		return coreEvidence{}, e
 	}
@@ -52,18 +55,15 @@ func (h *coreHost) killEvidence(v coreHandle, t coreTerminal) (coreEvidence, err
 // exits. Entries that are dead or whose pid now has a different start time are
 // dropped, which keeps a long-lived slot's list bounded to live processes.
 func (h *coreHost) rememberPIDs(v coreHandle, observed []int) error {
-	p, e := h.recordPath(v)
+	s, e := h.pidStore(v)
 	if e != nil {
 		return e
 	}
-	p += ".pids"
-	return h.d.FS.Locked(p, 30*time.Second, func() error {
-		stored, _, e := h.readCorePIDs(p)
+	return s.Locked(func() error {
+		stored, _, e := readCorePIDs(s)
 		if e != nil {
 			return e
 		}
-		procs := stored.retain(h.d, observed)
-		b, _ := json.Marshal(procs)
-		return h.d.FS.WriteFileAtomic(p, b)
+		return s.Save(stored.retain(h.d, observed))
 	})
 }

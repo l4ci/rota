@@ -81,7 +81,7 @@ func TestOrcaRecoveryLegacyEvidenceDoesNotAdoptCurrentProcesses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var record orcaProcessRecord
+	var record evidenceRecord
 	if err := json.Unmarshal(raw, &record); err != nil || record.Processes == nil {
 		t.Fatalf("migrated legacy proof: %s, %v", raw, err)
 	}
