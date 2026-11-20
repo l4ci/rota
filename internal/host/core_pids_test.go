@@ -22,8 +22,8 @@ func readProcs(t *testing.T, c *coreHost, s string) processEvidence {
 	if e != nil {
 		t.Fatal(e)
 	}
-	p, _ := c.recordPath(v)
-	procs, _, e := c.readCorePIDs(p + ".pids")
+	st, _ := c.pidStore(v)
+	procs, _, e := readCorePIDs(st)
 	if e != nil {
 		t.Fatal(e)
 	}
