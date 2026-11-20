@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -85,17 +86,25 @@ func (e Env) selectSlot(ctx context.Context, root string, reg worker.Registry, o
 // it, queue when it holds another issue but is done with a PR (it is parked
 // right before the claim, so a refusal on the way moves nothing).
 func (e Env) slotDisposition(ctx context.Context, root string, be Board, o AssignOpts, slot *worker.Slot, id string) (resuming, queue bool, err error) {
-	agent := slot.Name()
-	h := worker.HeldID(slot.Task(), slot.Branch(), agent)
-	if h == "" {
+	held := worker.HeldID(slot.Task(), slot.Branch(), slot.Name())
+	return disposition(held, id, slot.Name(), func() (bool, string) {
+		e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
+		return e.parkable(ctx, root, be, slot)
+	})
+}
+
+// disposition is slotDisposition on plain inputs: held is the issue the slot
+// holds ("" for none), parkable says whether a slot holding another issue is
+// done with its PR (and why not), asked only then.
+func disposition(held, id, agent string, parkable func() (bool, string)) (resuming, queue bool, err error) {
+	if held == "" {
 		return false, false, nil
 	}
-	if h == worker.NormID(id) {
+	if held == worker.NormID(id) {
 		return true, false, nil
 	}
-	e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
-	if ok, why := e.parkable(ctx, root, be, slot); !ok {
-		return false, false, blocked(blockedby.SlotBusy, "%s", busyMsg(agent, h, why))
+	if ok, why := parkable(); !ok {
+		return false, false, blocked(blockedby.SlotBusy, "%s", busyMsg(agent, held, why))
 	}
 	return false, true, nil
 }
@@ -109,16 +118,15 @@ func openPRRefusal(id string, n int, member bool) *BlockedError {
 	return blocked(blockedby.OpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
 }
 
-// checkOpenPRs refuses an issue or bundle member an open PR heads. hasOpenPR
+// openPRClaims refuses an issue or bundle member an open PR heads. openPR is
+// the open PRs by issue and listErr why they could not be listed. hasOpenPR
 // reports a redo of the lead's open PR, which awaits the assigned worker's own done.
-func (e Env) checkOpenPRs(ctx context.Context, be Board, o AssignOpts, agent string, it *backlog.Item, members []*backlog.Item, bo *bestOfRun) (hasOpenPR bool, err error) {
-	// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
-	openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
-	if err != nil && !o.AcceptOpenPR {
-		return false, err
+func openPRClaims(openPR map[tracker.IssueKey]tracker.PR, listErr error, acceptOpenPR bool, agent string, it *backlog.Item, members []*backlog.Item) (hasOpenPR bool, err error) {
+	if listErr != nil && !acceptOpenPR {
+		return false, listErr
 	}
-	hasOpenPR = err == nil && openPR[it.IssueKey()].Number != 0
-	if o.AcceptOpenPR {
+	hasOpenPR = listErr == nil && openPR[it.IssueKey()].Number != 0
+	if acceptOpenPR {
 		for _, item := range append([]*backlog.Item{it}, members...) {
 			pr := openPR[item.IssueKey()]
 			if worker.RoundBranch(pr.Branch) && !strings.HasPrefix(pr.Branch, agent+"/") {
@@ -140,9 +148,9 @@ func (e Env) checkOpenPRs(ctx context.Context, be Board, o AssignOpts, agent str
 
 // checkCrossMilestone refuses ties across milestones: they need a maintainer
 // decision even when a closed dependency would otherwise pass readiness.
-func checkCrossMilestone(cross crossMilestones, items []*backlog.Item) error {
+func checkCrossMilestone(check func(backlog.Item) ([]string, error), items []*backlog.Item) error {
 	for _, item := range items {
-		flags, err := cross.check(*item)
+		flags, err := check(*item)
 		if err != nil {
 			return err
 		}
@@ -181,29 +189,37 @@ func readinessRefusal(lead Readiness, members []Readiness) *BlockedError {
 	return nil
 }
 
+// readinessIn is what assessReadiness reads: the facts planAssign gathered
+// once, with assess standing for AssessScoped against the board.
+type readinessIn struct {
+	lead     *backlog.Item
+	members  []*backlog.Item
+	inFlight []InFlight // the work in flight on every slot, the bundle's own included
+	// waiveTemplate passes the template check: a resume or a deliberate redo.
+	waiveTemplate bool
+	assess        func(id string, inFlight []InFlight) (Readiness, error)
+}
+
 // assessReadiness assesses the lead and each bundle member against the board
 // and the work in flight. The bundle never overlaps itself: what its own slot
 // holds of it (on a resume) is not another slot's work.
-func (e Env) assessReadiness(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, members []*backlog.Item, resuming, hasOpenPR bool) (lead Readiness, bundle []Readiness, err error) {
-	set := e.Round
-	tracked := e.trackedFiles(ctx, root)
-	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
-	own := map[string]bool{worker.NormID(it.ID): true}
-	for _, m := range members {
+func assessReadiness(in readinessIn) (lead Readiness, bundle []Readiness, err error) {
+	own := map[string]bool{worker.NormID(in.lead.ID): true}
+	for _, m := range in.members {
 		own[worker.NormID(m.ID)] = true
 	}
-	inFlight = slices.DeleteFunc(inFlight, func(x InFlight) bool { return own[worker.NormID(x.Issue)] })
+	inFlight := slices.DeleteFunc(slices.Clone(in.inFlight), func(x InFlight) bool { return own[worker.NormID(x.Issue)] })
 	assess := func(id string) (Readiness, error) {
-		r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, o.SettledAnswers, set.BlockScopeOverlap)
-		if resuming || (o.AcceptOpenPR && hasOpenPR) {
+		r, err := in.assess(id, inFlight)
+		if in.waiveTemplate {
 			waiveTemplate(&r)
 		}
 		return r, err
 	}
-	if lead, err = assess(it.ID); err != nil {
+	if lead, err = assess(in.lead.ID); err != nil {
 		return lead, nil, err
 	}
-	for _, m := range members {
+	for _, m := range in.members {
 		mr, err := assess(m.ID)
 		if err != nil {
 			return lead, nil, err
@@ -213,15 +229,41 @@ func (e Env) assessReadiness(ctx context.Context, root string, be Board, o Assig
 	return lead, bundle, nil
 }
 
+// readinessFor gathers the readiness facts from the board and runs assessReadiness.
+func (e Env) readinessFor(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, members []*backlog.Item, resuming, hasOpenPR bool) (Readiness, []Readiness, error) {
+	set := e.Round
+	tracked := e.trackedFiles(ctx, root)
+	return assessReadiness(readinessIn{
+		lead: it, members: members,
+		inFlight:      e.InFlightItems(ctx, root, be, tracked, set.SharedPaths),
+		waiveTemplate: resuming || (o.AcceptOpenPR && hasOpenPR),
+		assess: func(id string, inFlight []InFlight) (Readiness, error) {
+			return AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, o.SettledAnswers, set.BlockScopeOverlap)
+		},
+	})
+}
+
+// startIn is what startPoint reads. The closures are the lookups it makes
+// only on the branch that needs them.
+type startIn struct {
+	support     bool   // round.role is support
+	integration string // the item's integration branch, "" for none
+	slotBase    string
+	resuming    bool
+	milestone   func() (base, warning string, err error)
+	freshBase   func(target string) (string, error)
+	fetchBase   func(base string) (string, error)
+}
+
 // startPoint is the branch the issue targets (base) and the start point the
 // worker's branch is cut from (from; "" for the slot's base). A support branch
 // starts from the main the main machine last pushed.
-func (e Env) startPoint(ctx context.Context, root string, be Board, it *backlog.Item, slot *worker.Slot, branch string, resuming bool) (from, base string, warns []string, err error) {
+func startPoint(in startIn) (from, base string, warns []string, err error) {
 	// An interaction item is fixed on its integration branch, ahead of any milestone.
-	base = integrationBase(root, it)
+	base = in.integration
 	if base == "" {
 		var warn string
-		if base, warn, err = e.milestoneBase(ctx, root, be, it); err != nil {
+		if base, warn, err = in.milestone(); err != nil {
 			return "", "", nil, err
 		}
 		if warn != "" {
@@ -229,81 +271,142 @@ func (e Env) startPoint(ctx context.Context, root string, be Board, it *backlog.
 		}
 	}
 	switch {
-	case e.Round.Role == roundcfg.RoleSupport:
-		from, err = e.freshBase(ctx, root, slot, branch, resuming, strutil.FirstNonEmpty(base, slot.Base()))
+	case in.support:
+		from, err = in.freshBase(strutil.FirstNonEmpty(base, in.slotBase))
 	case base != "":
 		// An issue of an active milestone is cut from the milestone branch.
-		from, err = e.fetchBase(ctx, root, base)
+		from, err = in.fetchBase(base)
 	}
 	return from, base, warns, err
 }
 
+// startPointFor gathers the start-point inputs and runs startPoint.
+func (e Env) startPointFor(ctx context.Context, root string, be Board, it *backlog.Item, slot *worker.Slot, branch string, resuming bool) (from, base string, warns []string, err error) {
+	return startPoint(startIn{
+		support:     e.Round.Role == roundcfg.RoleSupport,
+		integration: integrationBase(root, it),
+		slotBase:    slot.Base(),
+		resuming:    resuming,
+		milestone:   func() (string, string, error) { return e.milestoneBase(ctx, root, be, it) },
+		freshBase: func(target string) (string, error) {
+			return e.freshBase(ctx, root, slot, branch, resuming, target)
+		},
+		fetchBase: func(base string) (string, error) { return e.fetchBase(ctx, root, base) },
+	})
+}
+
+// placement is where an issue goes: the registry, the slot that takes it and how.
+type placement struct {
+	reg      worker.Registry
+	slot     *worker.Slot
+	resuming bool // the slot already holds the issue
+	queue    bool // the slot holds another issue but is done with a PR
+}
+
+// gateTouched is the slots a running gate or train blocks for an assignment.
+// Only a gate on this slot's branch blocks it; other slots stay assignable
+// while it verifies in its scratch tree (#2639). A file-backend claim writes
+// tracked .rota/ files on the base checkout the gate lands on, so without a
+// forge every slot still counts as touched (nil).
+func gateTouched(forge bool, agent string) []string {
+	if forge {
+		return []string{agent}
+	}
+	return nil
+}
+
 // placeSlot checks the lease and the item's site, then picks the slot and how
 // it takes the issue (see slotDisposition). It fills res.Agent and warnings.
-func (e Env) placeSlot(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, res *Assigned) (reg worker.Registry, slot *worker.Slot, resuming, queue bool, err error) {
+func (e Env) placeSlot(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, res *Assigned) (placement, error) {
 	set := e.Round
 	id := it.ID
 	// 1. This process holds the round's lease.
 	if err := e.requireLease(ctx, root, o); err != nil {
-		return reg, slot, false, false, err
+		return placement{}, err
 	}
 	if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *it); why != "" {
-		return reg, slot, false, false, blocked(blockedby.Site, "%s", why)
+		return placement{}, blocked(blockedby.Site, "%s", why)
 	}
 
 	// 2. The slot and how it takes the issue.
-	reg, err = worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return reg, slot, false, false, err
+		return placement{}, err
 	}
-	var warns []string
-	slot, warns, err = e.selectSlot(ctx, root, reg, o, id)
+	slot, warns, err := e.selectSlot(ctx, root, reg, o, id)
 	res.Warnings = append(res.Warnings, warns...)
 	if err != nil {
-		return reg, slot, false, false, err
+		return placement{}, err
 	}
 	agent := slot.Name()
 	res.Agent = agent
-	// Only a gate or train on this slot's branch blocks it; other slots stay
-	// assignable while it verifies in its scratch tree (#2639). A file-backend
-	// claim writes tracked .rota/ files on the base checkout the gate lands
-	// on, so without a forge every slot still counts as touched.
-	var touched []string
-	if be.Capabilities().Forge {
-		touched = []string{agent}
+	if err := e.refuseWhileGateRuns(ctx, root, "assign", gateTouched(be.Capabilities().Forge, agent)...); err != nil {
+		return placement{}, err
 	}
-	if err := e.refuseWhileGateRuns(ctx, root, "assign", touched...); err != nil {
-		return reg, slot, false, false, err
-	}
-	resuming, queue, err = e.slotDisposition(ctx, root, be, o, slot, id)
+	resuming, queue, err := e.slotDisposition(ctx, root, be, o, slot, id)
 	if err != nil {
-		return reg, slot, false, false, err
+		return placement{}, err
 	}
-
-	return reg, slot, resuming, queue, nil
+	return placement{reg: reg, slot: slot, resuming: resuming, queue: queue}, nil
 }
 
-// checkClaims refuses an issue another claim already covers: a PR in review,
+// claimIn is what claimsRefusal reads. The closures are the lookups it makes
+// only when its earlier checks pass, so a refusal never pays for a later one.
+type claimIn struct {
+	agent        string
+	lead         *backlog.Item
+	members      []*backlog.Item
+	queued       *worker.QueuedPR // the lead's PR in review on another slot, nil for none
+	resuming     bool
+	reclaimStale string
+	staleClaim   func() error
+	acceptOpenPR bool
+	openPRs      func() (map[tracker.IssueKey]tracker.PR, error)
+	acceptCross  bool
+	crossCheck   func(backlog.Item) ([]string, error)
+}
+
+// claimsRefusal refuses an issue another claim already covers: a PR in review,
 // a stale claim to reclaim, an open PR, or a tie across milestones. hasOpenPR
-// is as in checkOpenPRs.
-func (e Env) checkClaims(ctx context.Context, root string, be Board, o AssignOpts, agent string, it *backlog.Item, members []*backlog.Item, reg worker.Registry, bo *bestOfRun, resuming bool) (hasOpenPR bool, err error) {
-	if q := inReview(reg, it.ID, bo); q != nil && !resuming {
+// is as in openPRClaims.
+func claimsRefusal(in claimIn) (hasOpenPR bool, err error) {
+	it := in.lead
+	if q := in.queued; q != nil && !in.resuming {
 		return false, blocked(blockedby.Claimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", it.ID, q.PR, q.From, it.ID)
 	}
-	if o.ReclaimStale != "" {
-		if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
+	if in.reclaimStale != "" {
+		if err := in.staleClaim(); err != nil {
 			return false, err
 		}
 	}
-	if !resuming {
-		if hasOpenPR, err = e.checkOpenPRs(ctx, be, o, agent, it, members, bo); err != nil {
+	if !in.resuming {
+		openPR, listErr := in.openPRs()
+		if hasOpenPR, err = openPRClaims(openPR, listErr, in.acceptOpenPR, in.agent, it, in.members); err != nil {
 			return false, err
 		}
 	}
-	if !o.AcceptCrossMilestone && !resuming {
-		if err := checkCrossMilestone(crossMilestones{root: root, be: be}, append([]*backlog.Item{it}, members...)); err != nil {
+	if !in.acceptCross && !in.resuming {
+		if err := checkCrossMilestone(in.crossCheck, append([]*backlog.Item{it}, in.members...)); err != nil {
 			return false, err
 		}
 	}
 	return hasOpenPR, nil
+}
+
+// checkClaims gathers the claim inputs from the board and runs claimsRefusal.
+func (e Env) checkClaims(ctx context.Context, root string, be Board, o AssignOpts, agent string, it *backlog.Item, members []*backlog.Item, reg worker.Registry, bo *bestOfRun, resuming bool) (hasOpenPR bool, err error) {
+	cross := &crossMilestones{root: root, be: be}
+	return claimsRefusal(claimIn{
+		agent: agent, lead: it, members: members, resuming: resuming,
+		queued:       inReview(reg, it.ID, bo),
+		reclaimStale: o.ReclaimStale,
+		staleClaim:   func() error { return e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale) },
+		acceptOpenPR: o.AcceptOpenPR,
+		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
+		openPRs: func() (map[tracker.IssueKey]tracker.PR, error) {
+			return e.openPRIssuesExcept(ctx, be, bo.otherBranch())
+		},
+		acceptCross: o.AcceptCrossMilestone,
+		crossCheck:  cross.check,
+	})
 }

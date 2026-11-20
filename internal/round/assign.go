@@ -521,10 +521,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	id := it.ID
 
 	// 1-2. The lease, the slot and how it takes the issue.
-	reg, slot, resuming, queue, err := e.placeSlot(ctx, root, be, o, it, res)
+	pl, err := e.placeSlot(ctx, root, be, o, it, res)
 	if err != nil {
 		return run, false, err
 	}
+	reg, slot, resuming, queue := pl.reg, pl.slot, pl.resuming, pl.queue
 	agent := slot.Name()
 
 	// 3. The bundle.
@@ -560,7 +561,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	// 4. Readiness.
-	r, memberReadiness, err := e.assessReadiness(ctx, root, be, o, it, members, resuming, hasOpenPR)
+	r, memberReadiness, err := e.readinessFor(ctx, root, be, o, it, members, resuming, hasOpenPR)
 	res.Readiness, res.Members = r, memberReadiness
 	if err != nil {
 		return run, false, err
@@ -607,7 +608,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	// 6. Where the branch starts.
-	from, msBase, warns, err := e.startPoint(ctx, root, be, it, slot, res.Branch, resuming)
+	from, msBase, warns, err := e.startPointFor(ctx, root, be, it, slot, res.Branch, resuming)
 	res.Warnings = append(res.Warnings, warns...)
 	if err != nil {
 		return run, false, err
