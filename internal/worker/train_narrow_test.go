@@ -270,6 +270,7 @@ func TestRerunCommandsReadsTheGateLog(t *testing.T) {
 		{"a Go package retried red is skipped", "FAIL gotest (exit 1)\nRETRIED-CHECK gotest\n", check, true, nil, false},
 		{"a non-smoke check runs alone through the template", "FAIL lint (exit 1)\nFAILED-CHECK lint:style\n", "lint-one {check}", false, []string{"lint-one 'lint:style'"}, true},
 		{"a retried log changes nothing without the key", "FAIL smoke-shard1 (exit 1)\nRETRIED-CHECK smoke-shard1\nFAILED-CHECK test/sections/28_a.sh\n", "", true, []string{"bash test/gate.sh"}, false},
+		{"lint and Go both unselectable keep the full command", "FAIL lint (exit 1)\nFAIL gotest (exit 1)\n--- FAIL: TestX (0.00s)\nFAIL\tex.com/p\t0.01s\n", check, false, []string{"bash test/gate.sh"}, false},
 		{"output that is no gate log keeps the old rule", "boom\n", check, true, []string{"bash test/gate.sh"}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -278,5 +279,17 @@ func TestRerunCommandsReadsTheGateLog(t *testing.T) {
 				t.Errorf("rerunCommands = %q narrowed=%v, want %q narrowed=%v", got, narrowed, c.want, c.narrowed)
 			}
 		})
+	}
+}
+
+// AC-7, decision 2: a Go -run selection that passes is no flake until the full
+// command does, with test.rerunCheck unset too.
+func TestTrainGoNarrowedPassButRedFullRerunIsNotFlakyWithoutTheKey(t *testing.T) {
+	cmd := "if test -f b2.txt; then " + goFail("TestOrder", "ex.com/p") + "; fi"
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"vacuousCommand":%q}}`, cmd, "true {packages} {tests}"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Unreproduced || len(res.Flaky) != 0 || res.Verdict == landing.GatePass || len(res.Landed) != 0 {
+		t.Fatalf("a deterministic full failure is no flake: %+v %v", res, err)
 	}
 }

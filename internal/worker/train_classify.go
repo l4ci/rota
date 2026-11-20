@@ -44,8 +44,11 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 		return redClass{}, nil
 	}
 	e, ctx, scratch := t.e, t.ctx, p.scratch
-	cmds, _ := rerunCommands(failed, p.verifyCfg().rerunTemplate, "", false)
+	cmds, swapped := rerunCommands(failed, p.verifyCfg().rerunTemplate, "", false)
 	var confirm []string
+	if swapped { // a -run selection passing alone is no flake until the full command does
+		confirm = failed.Failed
+	}
 	if narrow != nil {
 		cmds, confirm = narrow.cmds, narrow.full
 	}
@@ -242,7 +245,7 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 	tests := func(out, c string) {
 		if t, ok := testsCommand(out, template); ok {
 			add(t)
-			r.narrowed = r.narrowed || narrowing
+			r.narrowed = true // a swapped command proves less, key or no key
 		} else {
 			add(c)
 		}
@@ -257,6 +260,14 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 		}
 		var alone []string
 		whole := false
+		// Go output is command-wide: it supports a -run selection only when
+		// one check is left for it. Two unselectable checks keep the command.
+		open := 0
+		for _, ck := range checks {
+			if !(skipRetried && ck.retried) && !(len(ck.ids) > 0 && strings.Contains(check, "{check}")) {
+				open++
+			}
+		}
 		for _, ck := range checks {
 			switch {
 			case skipRetried && ck.retried:
@@ -266,7 +277,7 @@ func rerunSet(failed VerifyResult, template, check string, skipRetried bool) rer
 					alone = append(alone, strings.ReplaceAll(check, "{check}", shlex.QuoteAlways(id)))
 				}
 			default:
-				if t, ok := testsCommand(out, template); ok {
+				if t, ok := testsCommand(out, template); ok && open == 1 {
 					add(t)
 					r.narrowed = true
 				} else {
