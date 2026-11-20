@@ -157,8 +157,27 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 		return res, nil
 	}
 
-	if _, code := e.git(worktree, "switch", "-q", "-C", newBranch, base); code != 0 {
-		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not cut %s from %s in %s", newBranch, base, worktree))
+	sw, diverged, err := e.taskBranchSwitch(root, newBranch, base)
+	if err != nil {
+		return res, err
+	}
+	if diverged != "" {
+		return refuse(diverged)
+	}
+	if _, code := e.git(worktree, sw...); code != 0 {
+		verb := "could not switch to"
+		if sw[len(sw)-1] == base {
+			verb = "could not cut"
+		}
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("%s %s from %s in %s", verb, newBranch, base, worktree))
+	}
+	if sw[len(sw)-1] != base {
+		// A reused branch keeps its work: pin its upstream when origin has it (best effort).
+		if name, rerr := e.Remote(root); rerr == nil {
+			if _, code := e.git(root, "rev-parse", "--verify", "--quiet", "refs/remotes/"+name+"/"+newBranch+"^{commit}"); code == 0 {
+				e.git(root, "branch", "-q", "--set-upstream-to="+name+"/"+newBranch, newBranch)
+			}
+		}
 	}
 	// The old per-task branch was proved merged above; drop it so they don't pile up.
 	if strings.HasPrefix(oldBranch, "rota-worker/") && oldBranch != newBranch {
@@ -188,6 +207,66 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	res.Branch, res.Changed = newBranch, true
 	res.SHA, _ = e.git(root, "rev-parse", "--short", base)
 	return res, nil
+}
+
+// taskBranchSwitch picks the `git switch` that puts the slot on newBranch
+// without losing work (#3797): a branch that already exists (a reclaimed
+// worker pushed it, or a local copy is ahead of the base) is reused at its
+// furthest tip, and only a missing one is cut from base. A local branch and its
+// origin copy that diverged are refused: diverged carries the message.
+func (e Env) taskBranchSwitch(root, newBranch, base string) (args []string, diverged string, err error) {
+	cut := []string{"switch", "-q", "-C", newBranch, base}
+	name, rerr := e.Remote(root)
+	if rerr != nil {
+		return nil, "", fail(exitcode.ExitRefused, rerr.Error())
+	}
+	remoteRef := name + "/" + newBranch
+	rev := func(ref string) string {
+		out, code := e.git(root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+		if code != 0 {
+			return ""
+		}
+		return out
+	}
+	// Like resetBase: refresh only a remote-tracking ref that is already known
+	// (a push, even from this repo, creates it); a failed refresh keeps the old tip.
+	if rev("refs/remotes/"+remoteRef) != "" {
+		e.git(root, "fetch", "-q", name, "--", "refs/heads/"+newBranch+":refs/remotes/"+remoteRef)
+	}
+	local, remote := rev("refs/heads/"+newBranch), rev("refs/remotes/"+remoteRef)
+	anc := func(a, b string) (bool, error) {
+		ok, aerr := e.isAncestor(root, a, b)
+		if aerr != nil {
+			return false, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with %s before resetting onto it", a, b))
+		}
+		return ok, nil
+	}
+	switch {
+	case local == "" && remote == "":
+		return cut, "", nil
+	case local == "":
+		return []string{"switch", "-q", "--no-track", "-c", newBranch, remoteRef}, "", nil
+	case remote == "" || local == remote:
+		merged, aerr := anc(local, base)
+		if aerr != nil {
+			return nil, "", aerr
+		}
+		if merged && remote == "" {
+			return cut, "", nil // nothing on it the base lacks
+		}
+		return []string{"switch", "-q", newBranch}, "", nil
+	}
+	if ahead, aerr := anc(remote, local); aerr != nil {
+		return nil, "", aerr
+	} else if ahead {
+		return []string{"switch", "-q", newBranch}, "", nil
+	}
+	if behind, aerr := anc(local, remote); aerr != nil {
+		return nil, "", aerr
+	} else if behind {
+		return []string{"switch", "-q", "-C", newBranch, remoteRef}, "", nil
+	}
+	return nil, fmt.Sprintf("REFUSED %s — local %s and %s diverged: merge or reset one onto the other by hand before assigning the issue", newBranch, newBranch, remoteRef), nil
 }
 
 // resetBase refreshes a tracked base before judging the slot's commits. A
