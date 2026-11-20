@@ -46,7 +46,7 @@ func AutonomyPending(env cfgdir.Env, root string) AutonomyMigration {
 	stale := autonomyStale(cfg)
 	localAP := false
 	if local != nil {
-		_, localAP = lookupPresent(local, []string{"round", "autopilot"})
+		_, localAP = Lookup(local, "round.autopilot")
 	}
 	gdir := globalConfigDir(env)
 	global := (*jsonx.Object)(nil)
