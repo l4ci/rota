@@ -260,6 +260,8 @@ fi
 if [ "$infra" = 1 ]; then
   echo "fast: infra (bash -n, py_compile, py-tests)"
   # Syntax-check every tracked file an infra row covers.
+  infra_files="$(git ls-files --cached --others --exclude-standard test internal/flakeledger)"
+  [ -n "$infra_files" ] || { echo "fast: infra check found no files under test/ or internal/flakeledger" >&2; exit 1; }
   while IFS= read -r f; do
     [ -f "$f" ] || continue
     hit=0
@@ -273,7 +275,7 @@ if [ "$infra" = 1 ]; then
       *.sh) bash -n "$f" ;;
       *) if head -1 "$f" | grep -q bash; then bash -n "$f"; fi ;;
     esac
-  done < <(git ls-files test internal/flakeledger)
+  done <<<"$infra_files"
   bash test/py-tests.sh
 fi
 

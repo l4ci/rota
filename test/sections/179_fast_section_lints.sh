@@ -44,7 +44,15 @@ for p in scripts/skills-docs.py scripts/site-sync.py test/lint-verbs.py test/lin
   OUT=$(fast_plan "$p")
   grep -qx "plan: docs" <<<"$OUT" || fail "$p is run by doclint but fast.sh does not queue docs for it: $OUT"
 done
-DOCLINT_SCRIPTS="$(grep -oE '(scripts|test)/[A-Za-z0-9_-]+\.py|test/evals/[A-Za-z0-9_.-]+' "$TESTDIR/doclint.sh" | sort -u)"
+# Extract every script doclint runs or sources from its code (comment lines skipped):
+# $TESTDIR/ -> test/, <any repo-root var>/scripts|test/ -> that path. Shell harness
+# files (lib, fast, gate, py-tests, doclint) and rota-bin.sh are infra rows or are only
+# copied into fixtures, so they are not docs triggers.
+DOCLINT_SCRIPTS="$(grep -vE '^[[:space:]]*#' "$TESTDIR/doclint.sh" \
+  | grep -oE '\$\{?(TESTDIR|[A-Z]+)\}?/[A-Za-z0-9_./-]+\.(py|sh)' \
+  | sed -E 's#^\$\{?TESTDIR\}?/#test/#; s#^\$\{?[A-Z]+\}?/##' \
+  | grep -E '^(scripts|test)/' \
+  | grep -vE '^test/(lib|fast|gate|py-tests|doclint)\.sh$|^scripts/rota-bin\.sh$' | sort -u)"
 [ -n "$DOCLINT_SCRIPTS" ] || fail "found no scripts in test/doclint.sh"
 for p in $DOCLINT_SCRIPTS; do
   [ -e "$REPO/$p" ] || continue
