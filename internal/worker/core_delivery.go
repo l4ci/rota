@@ -114,7 +114,7 @@ func (e Env) branchPushed(ctx context.Context, root string, s *Slot, worktree st
 	if code != 0 {
 		return false
 	}
-	ct, err := time.Parse(time.RFC3339, strings.TrimSpace(out))
+	ct, err := stamp.ParseRFC3339(strings.TrimSpace(out))
 	return err == nil && ct.After(at)
 }
 

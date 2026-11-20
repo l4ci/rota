@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/update"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -88,7 +89,7 @@ func invocationDeps() *Deps {
 func envClock(getenv func(string) string) (now, today func() time.Time, holder func() int, err error) {
 	now = time.Now
 	if v := getenv("ROTA_TEST_NOW"); v != "" {
-		if t, perr := time.Parse(time.RFC3339, v); perr == nil {
+		if t, perr := stamp.ParseRFC3339(v); perr == nil {
 			now = func() time.Time { return t }
 		}
 	}
