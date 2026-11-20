@@ -7,7 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/reap"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
@@ -75,7 +75,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
 		}
 		in.ProcessUses = c.deps().ProcessUses
-		in.TempRoot, _ = rotastate.FindTempRoot(ctx, c.deps().Git, root)
+		in.TempRoot, _ = rotatree.FindTempRoot(ctx, c.deps().Git, root)
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

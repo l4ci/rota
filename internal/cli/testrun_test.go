@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
@@ -171,7 +171,7 @@ func slotTmpProject(t *testing.T, cfg string) (root, slotTmp string) {
 // slotTmpIn makes root's slot temp dir and points TMPDIR at it.
 func slotTmpIn(t *testing.T, root string) (slotTmp string) {
 	t.Helper()
-	tr, ok, err := rotastate.TempRootVia(context.Background(), git.Exec, root)
+	tr, ok, err := rotatree.TempRootVia(context.Background(), git.Exec, root)
 	if err != nil || !ok {
 		t.Fatalf("temp root: %v %v", ok, err)
 	}

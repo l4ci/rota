@@ -10,7 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -198,7 +198,7 @@ func changedFiles(c *Ctx, root, base string) ([]string, error) {
 // systemTmpEnviron drops a worker slot's TMPDIR from environ (#3317): see
 // worker.SystemTmpEnviron. Outside a rota project environ is unchanged.
 func systemTmpEnviron(ctx context.Context, c *Ctx, root string, environ []string) ([]string, error) {
-	tr, ok, err := rotastate.TempRootVia(ctx, c.deps().workerEnvFor(ctx).Git, root)
+	tr, ok, err := rotatree.TempRootVia(ctx, c.deps().workerEnvFor(ctx).Git, root)
 	if err != nil || !ok {
 		return environ, err
 	}

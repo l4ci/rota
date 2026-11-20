@@ -2,7 +2,8 @@
 // runtime state: it resolves the git common dir (symlink-safe, so every
 // worktree of a repository and every spelling of its path agree) and owns the
 // <git-common-dir>/rota/ layout. Packages ask it for a path and keep only the
-// name of their own file.
+// name of their own file. The in-tree .rota/ layout, the project temp root
+// included, is rotatree's.
 package rotastate
 
 import (

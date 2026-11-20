@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 const reviewWorkspacePrefix = reap.ReviewWorkspacePrefix
@@ -157,7 +157,7 @@ func reviewCleanupRoots(c *Ctx) ([]string, error) {
 	if err != nil {
 		return roots, nil
 	}
-	if root, ok := rotastate.TempRoot(cd); ok {
+	if root, ok := rotatree.TempRoot(cd); ok {
 		if real, err := filepath.EvalSymlinks(root); err == nil {
 			roots = append(roots, real)
 		}

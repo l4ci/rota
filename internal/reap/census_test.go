@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 )
 
@@ -33,7 +33,7 @@ func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
 	mk(sys, ReviewWorkspacePrefix+"old", 3*time.Hour)
 	mk(sys, "rota-smoke.fresh", 10*time.Minute)
 	mk(sys, "unrelated", 3*time.Hour)
-	if err := os.WriteFile(filepath.Join(tempRoot, rotastate.IgnoreFile), []byte("*\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tempRoot, rotatree.IgnoreFile), []byte("*\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	mk(tempRoot, "old-a", 3*time.Hour)

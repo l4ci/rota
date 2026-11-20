@@ -11,7 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/reap"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -65,7 +65,7 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 	now := d.Now()
 	var tempRoot string
 	if root != "" {
-		tempRoot, _ = rotastate.FindTempRoot(ctx, d.Git, root)
+		tempRoot, _ = rotatree.FindTempRoot(ctx, d.Git, root)
 	}
 	in.ScanLeftovers = func() []string { return doctorLeftovers(ctx, d.Git, root, d.TempDir(), tempRoot, now) }
 }

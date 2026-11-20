@@ -1,5 +1,5 @@
 # The project temp root for the test harness (#2499), sourced by test/gate.sh.
-# It mirrors rotastate.TempRoot: <main checkout>/.rota/tmp of the repository
+# It mirrors rotatree.TempRoot: <main checkout>/.rota/tmp of the repository
 # that holds <dir>, so a gate run from a scratch worktree keeps its logs beside
 # the orchestrator's. A bare repository, a checkout without .rota/, or a
 # symlinked .rota/ or .rota/tmp has no project root.

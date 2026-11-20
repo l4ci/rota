@@ -1,4 +1,4 @@
-package rotastate
+package rotatree
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package rotastate
+package rotatree
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // IgnoreFile is the temp root's own .gitignore, never temp data itself.
@@ -31,11 +31,11 @@ const selfIgnore = "*\n"
 // would steer workspaces, and the cleanup and reap anchored on the root, out
 // of the project.
 func TempRoot(commonDir string) (string, bool) {
-	main, ok := MainCheckout(commonDir)
-	if !ok || !realDir(rotatree.Dir(main)) {
+	main, ok := rotastate.MainCheckout(commonDir)
+	if !ok || !realDir(Dir(main)) {
 		return "", false
 	}
-	root := rotatree.File(main, rotatree.TmpDir)
+	root := File(main, TmpDir)
 	if _, err := os.Lstat(root); err == nil && !realDir(root) {
 		return "", false
 	}
@@ -45,7 +45,7 @@ func TempRoot(commonDir string) (string, bool) {
 // EnclosingTempRoot is the project temp root that holds dir (dir itself or an
 // ancestor), found by path: a review tree prepared there is fenced from git by
 // its own empty repository, so git cannot name the project, and the walk up
-// stops at the nearest .rota/tmp (rotatree.IsTempRoot) as rota's root walks do.
+// stops at the nearest .rota/tmp (IsTempRoot) as rota's root walks do.
 // ok is false when that nearest one is no root rota owns under a real .rota/.
 func EnclosingTempRoot(dir string) (string, bool) {
 	abs, err := filepath.Abs(dir)
@@ -56,7 +56,7 @@ func EnclosingTempRoot(dir string) (string, bool) {
 		abs = real
 	}
 	for d := abs; ; {
-		if rotatree.IsTempRoot(d) {
+		if IsTempRoot(d) {
 			if realDir(filepath.Dir(d)) && Owned(d) {
 				return d, true
 			}
@@ -75,7 +75,7 @@ func EnclosingTempRoot(dir string) (string, bool) {
 // can use it where TempRootVia would make the directory. ok is false outside
 // a repository or rota project.
 func FindTempRoot(ctx context.Context, run git.Runner, dir string) (string, bool) {
-	cd, err := CommonDirVia(ctx, run, dir)
+	cd, err := rotastate.CommonDirVia(ctx, run, dir)
 	if err != nil {
 		return "", false
 	}
@@ -87,8 +87,8 @@ func FindTempRoot(ctx context.Context, run git.Runner, dir string) (string, bool
 // as an exact parent. ok is false with a nil error outside a repository or
 // rota project; err is a failure to create the root.
 func TempRootVia(ctx context.Context, run git.Runner, dir string) (string, bool, error) {
-	cd, err := CommonDirVia(ctx, run, dir)
-	if errors.Is(err, ErrNotRepo) {
+	cd, err := rotastate.CommonDirVia(ctx, run, dir)
+	if errors.Is(err, rotastate.ErrNotRepo) {
 		return "", false, nil
 	}
 	if err != nil {

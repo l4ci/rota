@@ -1,7 +1,9 @@
 // Package rotatree is the one place that knows the in-tree .rota/ layout of a
 // project: the directory name and the names of the files and directories
-// under it. Packages ask it for a path instead of joining ".rota" themselves.
-// The per-checkout runtime state under the git common dir is rotastate's.
+// under it, including the project temp root <main checkout>/.rota/tmp (its
+// path, the enclosing-root walk and the ownership check live in temproot.go).
+// Packages ask it for a path instead of joining ".rota" themselves. The
+// per-checkout runtime state under the git common dir is rotastate's.
 package rotatree
 
 import (
