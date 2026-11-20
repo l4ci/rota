@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -34,7 +35,7 @@ func countCalls(calls []string, call string) int {
 }
 
 func TestDispatchRecordsTheTurnBaselineBeforeSending(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	h := turnHost{f, map[string]host.Turn{"w1": {Status: "idle", StateSeq: 40}}}
@@ -78,7 +79,7 @@ func TestDispatchRecordsTheTurnBaselineBeforeSending(t *testing.T) {
 }
 
 func TestDispatchOnAHostWithoutTurnsRecordsNoBaseline(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	if _, err := envWith(tmuxFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"}); err != nil {
 		t.Fatal(err)

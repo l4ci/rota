@@ -1,4 +1,4 @@
-package testaudit
+package suiteaudit
 
 import (
 	"os"

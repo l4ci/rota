@@ -3,12 +3,10 @@ package host
 // Kill with process evidence.
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (o *orca) Kill(ctx context.Context, slot, handle string) error {
@@ -100,19 +98,12 @@ const (
 // updates so a polling process cannot discard descendants saved by cleanup.
 func (o *orca) processes(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
 	var evidence processEvidence
-	err := o.d.FS.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
+	err := evidenceStore{fs: o.d.FS, path: h.PIDFile + ".tree"}.Locked(func() error {
 		var err error
 		evidence, err = o.processesLocked(h, mode)
 		return err
 	})
 	return evidence, err
-}
-
-// orcaProcessRecord distinguishes a proved empty modern tree from an invalid
-// empty legacy list. Ownership metadata remains in Orca's separate identity file.
-type orcaProcessRecord struct {
-	Version   int              `json:"version"`
-	Processes *processEvidence `json:"processes"`
 }
 
 func (o *orca) processesLocked(h orcaHandle, mode orcaEvidenceMode) (processEvidence, error) {
@@ -125,30 +116,21 @@ func (o *orca) processesLocked(h orcaHandle, mode orcaEvidenceMode) (processEvid
 		return nil, fmt.Errorf("missing Orca PID proof")
 	}
 	var evidence processEvidence
-	treeFile := h.PIDFile + ".tree"
-	if raw, e := o.d.FS.ReadFile(treeFile); e == nil {
-		if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
-			var record orcaProcessRecord
-			if json.Unmarshal(raw, &record) != nil || record.Version != 1 || record.Processes == nil {
-				return nil, fmt.Errorf("unreadable Orca tree proof")
-			}
-			evidence = *record.Processes
-		} else {
-			stored, legacy, err := decodeProcessEvidence(raw)
-			if err != nil || len(stored)+len(legacy) == 0 {
-				return nil, fmt.Errorf("unreadable Orca tree proof")
-			}
-			// Old Orca numbers remain unknown, conservative blockers. Never
-			// upgrade them from, or expand the tree of, today's process table.
-			evidence = append(stored, unknownProcesses(legacy)...)
+	store := evidenceStore{fs: o.d.FS, path: h.PIDFile + ".tree"}
+	f, e := store.Load()
+	if e != nil {
+		if errors.Is(e, errEvidenceCorrupt) {
+			return nil, fmt.Errorf("unreadable Orca tree proof")
 		}
-		for _, p := range evidence {
-			if p.PID <= 0 {
-				return nil, fmt.Errorf("invalid Orca tree proof")
-			}
-		}
-	} else if !os.IsNotExist(e) {
 		return nil, e
+	}
+	if f.Found {
+		if f.Bare && len(f.Procs)+len(f.Legacy) == 0 {
+			return nil, fmt.Errorf("unreadable Orca tree proof")
+		}
+		// Old Orca numbers remain unknown, conservative blockers. Never
+		// upgrade them from, or expand the tree of, today's process table.
+		evidence = append(f.Procs, unknownProcesses(f.Legacy)...)
 	} else if mode != orcaBootEvidence || !o.d.Alive(pid) {
 		return nil, fmt.Errorf("missing Orca retained process-tree proof; inspect the slot processes before retrying cleanup")
 	} else {
@@ -158,8 +140,7 @@ func (o *orca) processesLocked(h orcaHandle, mode orcaEvidenceMode) (processEvid
 	}
 	if mode != orcaReadEvidence {
 		evidence = evidence.refresh(o.d)
-		raw, _ := json.Marshal(orcaProcessRecord{Version: 1, Processes: &evidence})
-		if e := o.d.FS.WriteFileAtomic(treeFile, raw); e != nil {
+		if e := store.Save(evidence); e != nil {
 			return nil, e
 		}
 	}

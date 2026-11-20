@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/proc"
 )
 
 // ── fakes ───────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ func exitOf(err error) int {
 // ── dispatch ────────────────────────────────────────────────────────────────
 
 func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000}}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := tmuxFake()
 	round := 3
@@ -172,7 +172,7 @@ func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
 }
 
 func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000,"portBlock":200}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000,"portBlock":200}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	// The config shrinks after w1 was allocated: the env keeps the width w1 holds.
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000,"portBlock":100}}`), 0o644); err != nil {
@@ -190,7 +190,7 @@ func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
 }
 
 func TestDispatchTaskRecreatesTheSession(t *testing.T) {
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude --model haiku"}}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude --model haiku"}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	round := 3
@@ -223,7 +223,7 @@ func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 }
 
 func TestDispatchDefaultLaunchCommand(t *testing.T) {
-	dir := newProject(t, `{"round":{"tiers":{"claude":{"standard":"opus"}}}}`)
+	dir := gittest.Project(t, `{"round":{"tiers":{"claude":{"standard":"opus"}}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"}); err != nil {
@@ -232,7 +232,7 @@ func TestDispatchDefaultLaunchCommand(t *testing.T) {
 	if f.spawnOpts.Launch != "claude --model opus --dangerously-skip-permissions" {
 		t.Errorf("launch = %q", f.spawnOpts.Launch)
 	}
-	dir2 := newProject(t, `{}`)
+	dir2 := gittest.Project(t, `{}`)
 	goInit(t, dir2, InitOpts{Slots: 1, Base: "main"})
 	f2 := tmuxFake()
 	envWith(f2).Dispatch(bg, dir2, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"})
@@ -242,7 +242,7 @@ func TestDispatchDefaultLaunchCommand(t *testing.T) {
 }
 
 func TestDispatchDoesNotSignTwiceAndDefaultsRound(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	signed := "<rota-relay round=\"1\" from=\"orchestrator\">\nbody line\n</rota-relay>\n"
@@ -265,7 +265,7 @@ func TestDispatchDoesNotSignTwiceAndDefaultsRound(t *testing.T) {
 
 func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
 	cfg := `{"round":{"accounts":[{"name":"a","configDir":"/acct/a"}]}}`
-	dir := newProject(t, cfg)
+	dir := gittest.Project(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	(&Accounts{Env: Env{Getenv: func(string) string { return t.TempDir() }}}).Assign(bg, dir, "w1", "a")
 	f := tmuxFake()
@@ -276,7 +276,7 @@ func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
 }
 
 func TestDispatchInheritsTheOrchestratorConfigDirWithoutAccounts(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
@@ -311,7 +311,7 @@ func TestConfigDirMismatch(t *testing.T) {
 }
 
 func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
@@ -362,7 +362,7 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 		"human draft: certainly not sent":             {host.ErrDraftOnPrompt, exitcode.ExitUnavailable, 0},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := newProject(t, `{}`)
+			dir := gittest.Project(t, `{}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			f := tmuxFake()
 			e := envWith(f)
@@ -393,7 +393,7 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 		{&host.DialogError{First: "We recommend compacting earlier"}, exitcode.ExitUnavailable, "has a dialog open (We recommend compacting earlier) and refused input"},
 		{host.ErrDraftOnPrompt, exitcode.ExitUnavailable, "has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared"},
 	} {
-		dir := newProject(t, `{}`)
+		dir := gittest.Project(t, `{}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 		f := tmuxFake()
 		f.sendErr = tc.err
@@ -410,7 +410,7 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 }
 
 func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: true}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true})
@@ -423,7 +423,7 @@ func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
 }
 
 func TestDispatchHerdrOutsideAPaneIsUnavailable(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: false}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
@@ -436,7 +436,7 @@ func TestDispatchHerdrOutsideAPaneIsUnavailable(t *testing.T) {
 }
 
 func TestDispatchHostMissingIsUnavailable(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	f.requireErr = fmt.Errorf("tmux is not installed")
@@ -447,7 +447,7 @@ func TestDispatchHostMissingIsUnavailable(t *testing.T) {
 }
 
 func TestDispatchResolutionFailures(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	f := tmuxFake()
 	e := envWith(f)
 	brief := writeBrief(t, "t")
@@ -481,7 +481,7 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 		`{"round":{"commands":{"claude":"claude --resume=x"}}}`: {exitcode.ExitRefused, "contains '--resume=x'"},
 		`{"round":{"commands":{"claude":"claude \"oops"}}}`:     {exitcode.ExitUsage, "cannot be parsed (unbalanced quote?)"},
 	} {
-		dir := newProject(t, cfg)
+		dir := gittest.Project(t, cfg)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 		f := tmuxFake()
 		_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
@@ -493,7 +493,7 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 		}
 	}
 	// a relay does not launch anything, so the command is not judged
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude -c"}}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude -c"}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
@@ -507,7 +507,7 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 
 // #38: a slot that still holds work is refused BEFORE its session is killed.
 func TestDispatchRefusesASlotHoldingWorkBeforeKilling(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	os.WriteFile(filepath.Join(dir, ".worktrees", "w1", "wip.txt"), []byte("x"), 0o644)
 	f := tmuxFake()
@@ -525,7 +525,7 @@ func TestDispatchRefusesASlotHoldingWorkBeforeKilling(t *testing.T) {
 
 // #38: the old session must be provably gone before a new one is spawned.
 func TestDispatchDoesNotSpawnBesideASessionThatWillNotClose(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	f.killErr = fmt.Errorf("slot 'w1' previous session is still running (window rota:w1); not spawning a second one")
@@ -542,7 +542,7 @@ func TestDispatchDoesNotSpawnBesideASessionThatWillNotClose(t *testing.T) {
 }
 
 func TestDispatchSpawnFailureClearsTheDeadHandle(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	f.spawnErr = fmt.Errorf("slot 'w1' session did not come up within 60s")
@@ -559,7 +559,7 @@ func TestDispatchSpawnFailureClearsTheDeadHandle(t *testing.T) {
 // answered) leaves a running session: its handle is recorded, and the replay
 // reaps it before spawning, so no orphan tab outlives the retry (#1791).
 func TestDispatchSpawnFailureWithOpenTabIsRecordedAndReapedOnReplay(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	f.spawnErr, f.spawnTab = fmt.Errorf("slot 'w1' is stuck on an unrecognised startup dialog in tab w9:t7"), "w9:t7"
@@ -581,7 +581,7 @@ func TestDispatchSpawnFailureWithOpenTabIsRecordedAndReapedOnReplay(t *testing.T
 }
 
 func TestDispatchSameTaskRetryKeepsWork(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
@@ -658,13 +658,13 @@ func TestDispatchRefusalsCarryFailureData(t *testing.T) {
 		bd, _ := we.Data.(BlockData)
 		return bd
 	}
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude -c"}}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude -c"}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	_, err := envWith(tmuxFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
 	if bd := data(err); bd != (BlockData{BlockedBy: "resume flag"}) {
 		t.Errorf("resume flag: %+v", bd)
 	}
-	dir = newProject(t, `{}`)
+	dir = gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	os.WriteFile(filepath.Join(dir, ".worktrees", "w1", "wip.txt"), []byte("x"), 0o644)
 	_, err = envWith(tmuxFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T2"})
@@ -691,7 +691,7 @@ func (r *resubHost) SubmitPending(_ context.Context, slot, _, _ string) (bool, e
 // A stalled send marks the slot; the relay that resends submits what is on the
 // prompt line instead of typing the brief again (#89).
 func TestDispatchRelayResendSubmitsUnsentBrief(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &resubHost{fakeHost: tmuxFake(), pending: true}
 	e := envWith(f)
@@ -735,7 +735,7 @@ func TestDispatchRelayResendSubmitsUnsentBrief(t *testing.T) {
 // #207: a task dispatch closes the shell pane an exited worker left behind
 // before it kills the recorded tab, wherever a layout split moved that pane.
 func TestDispatchSweepsLeftoverShellPanesBeforeKill(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &sweepHost{tmuxFake()}
 	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"}); err != nil {
@@ -754,7 +754,7 @@ func (r *resubHost) Capabilities() host.Capabilities { return host.CapabilitiesO
 // With no round recorded and a bare environment, a pane verb drives tmux, as
 // it did when host.New fell back to it; it must not reach the refusing host.
 func TestPaneVerbsReadBareEnvAsTmux(t *testing.T) {
-	root := newProject(t, `{}`)
+	root := gittest.Project(t, `{}`)
 	var kinds []host.Kind
 	e := envWith(tmuxFake())
 	e.NewHost = func(k host.Kind) host.Host {
@@ -774,7 +774,7 @@ func TestPaneVerbsReadBareEnvAsTmux(t *testing.T) {
 // Each slot's session gets its own TMPDIR under the project temp root (#3164),
 // so two workers writing the same file name never meet.
 func TestDispatchTaskGivesEachSlotItsOwnTmpdir(t *testing.T) {
-	dir := newProject(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000}}`)
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"claude --model haiku"},"portBase":31000}}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {

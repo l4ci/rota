@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/host"
 )
@@ -54,7 +55,7 @@ func newRig(t *testing.T, kind string) *hostRig {
 	if kind == "herdr" {
 		cfg = `{"round":{"dispatch":"herdr","herdrGroupSlots":false}}`
 	}
-	r := &hostRig{kind: kind, herdrDir: t.TempDir(), tmuxDir: t.TempDir(), root: newProject(t, cfg)}
+	r := &hostRig{kind: kind, herdrDir: t.TempDir(), tmuxDir: t.TempDir(), root: gittest.Project(t, cfg)}
 	os.WriteFile(filepath.Join(r.tmuxDir, "pane"), []byte("? for shortcuts\n"), 0o644)
 	r.hostEnv = map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}
 	run := fakeBinRunner(t, r.herdrDir, r.tmuxDir)

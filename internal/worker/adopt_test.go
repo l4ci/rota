@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func TestDispatchRefusesExternal(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 		t.Fatal(err)
@@ -64,7 +65,7 @@ func TestPollSkipsExternal(t *testing.T) {
 }
 
 func TestSoloWaitIgnoresExternal(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 		t.Fatal(err)
@@ -83,7 +84,7 @@ func TestSoloWaitIgnoresExternal(t *testing.T) {
 }
 
 func TestRegisterExternalChecksUniquenessUnderTheLock(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +107,7 @@ func TestRegisterExternalChecksUniquenessUnderTheLock(t *testing.T) {
 // A slot holding `12` conflicts with an adoption whose task is spelled `#12`.
 func TestRegisterExternalConflictsAcrossIDSpellings(t *testing.T) {
 	for _, task := range []string{"#12", " 12 "} {
-		dir := newProject(t, `{}`)
+		dir := gittest.Project(t, `{}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 		if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 			t.Fatal(err)

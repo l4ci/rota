@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -36,7 +37,7 @@ func TestResolveHostCrossesTheSeam(t *testing.T) {
 			if c.dispatch != "" {
 				cfg = `{"round":{"dispatch":"` + c.dispatch + `"}}`
 			}
-			dir := newProject(t, cfg)
+			dir := gittest.Project(t, cfg)
 			if c.registry != "" {
 				goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 				recordHost(t, dir, c.registry)

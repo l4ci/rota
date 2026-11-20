@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/host"
 )
 
 // codexHelp is the `codex --help` the rig prints: every flag the default
@@ -92,7 +92,7 @@ func (r *codexRig) ran(prefix string) int {
 
 func codexProject(t *testing.T) (dir, home string) {
 	t.Helper()
-	dir = newProject(t, `{"round":{"dispatch":"herdr"}}`)
+	dir = gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	return dir, filepath.Join(dir, ".git", "rota", "codex", "w1")
 }
@@ -142,7 +142,7 @@ const codexAcctCfg = `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","
 // Configured accounts are spread over the codex slots, the slot keeps its own
 // while it is configured, and login is checked in the account's home.
 func TestCodexPreflightAccounts(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 3, Base: "main"})
 	rig := &codexRig{loggedIn: true, installed: true}
 	e := rig.env(tmuxFake())
@@ -180,7 +180,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 }
 
 func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{installed: true}
 	e := rig.env(tmuxFake())
@@ -243,7 +243,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 }
 
 func TestCodexPreflightNeedsHerdr(t *testing.T) {
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	_, err := preflightKind(rig.env(tmuxFake()), dir, harness.Codex, "w1", "")
@@ -333,7 +333,7 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			dir := newProject(t, c.cfg)
+			dir := gittest.Project(t, c.cfg)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			kind := c.kind
 			if kind == "" {
@@ -378,7 +378,7 @@ func TestDispatchCodexCustomCommandProbesItsFlags(t *testing.T) {
 		"unlisted flag":     {cmd: "codex --dangerously-bypass-hook-trust --made-up=1", by: "codex flags"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"herdr","commands":{"codex":"`+c.cmd+`"}}}`)
+			dir := gittest.Project(t, `{"round":{"dispatch":"herdr","commands":{"codex":"`+c.cmd+`"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			_, err := preflightKind((&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()), dir, harness.Codex, "w1", "")
 			if c.by == "" {
@@ -491,7 +491,7 @@ func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
 }
 
 func TestDispatchCodexNeedsTheHookTrustFlag(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr","commands":{"codex":"codex --yolo"}}}`)
+	dir := gittest.Project(t, `{"round":{"dispatch":"herdr","commands":{"codex":"codex --yolo"}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
@@ -522,7 +522,7 @@ func TestDispatchClaudePayloadIsNotSigned(t *testing.T) {
 // A configured account reaches the pane as its CODEX_HOME and is recorded on
 // the slot; the prompt key stays in the slot's own state dir.
 func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
-	dir := newProject(t, codexAcctCfg)
+	dir := gittest.Project(t, codexAcctCfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true, installed: true}
 	f := herdrFake()

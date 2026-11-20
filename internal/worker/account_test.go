@@ -5,6 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
@@ -12,11 +17,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/l4ci/rota/internal/golden"
-	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/proc"
 )
 
 const acctConfig = `{"round":{"accounts":[
@@ -67,7 +67,7 @@ func goMeters(t *testing.T, dir, usage string) []usagelimit.Meter {
 }
 
 func TestAccountListMeters(t *testing.T) {
-	dir, usage := newProject(t, acctConfig), usageDir(t)
+	dir, usage := gittest.Project(t, acctConfig), usageDir(t)
 	got := goMeters(t, dir, usage)
 	rows := make([]map[string]any, 0, len(got))
 	for _, m := range got {
@@ -101,7 +101,7 @@ func TestAccountListMeters(t *testing.T) {
 }
 
 func TestAccountListWithoutAccounts(t *testing.T) {
-	if got := goMeters(t, newProject(t, `{}`), ""); len(got) != 0 {
+	if got := goMeters(t, gittest.Project(t, `{}`), ""); len(got) != 0 {
 		t.Errorf("%v", got)
 	}
 }
@@ -178,7 +178,7 @@ func TestAccountPickSkipsAccountWithoutLogin(t *testing.T) {
 		os.WriteFile(filepath.Join(d, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600)
 	}
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
-	dir := newProject(t, cfg)
+	dir := gittest.Project(t, cfg)
 	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
 	name, ok := acc.Pick(bg, dir, nil)
 	if !ok || name != "beta" {
@@ -190,7 +190,7 @@ func TestAccountPickSkipsAccountWithoutLogin(t *testing.T) {
 }
 
 func TestAccountAssign(t *testing.T) {
-	b := newProject(t, acctConfig)
+	b := gittest.Project(t, acctConfig)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	got := map[string]string{} // workers.json after each assign
 	usage := usageDir(t)
@@ -234,7 +234,7 @@ func TestAccountAssign(t *testing.T) {
 	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
-	_, _, err = acc.Assign(bg, newProject(t, acctConfig), "w1", "alpha")
+	_, _, err = acc.Assign(bg, gittest.Project(t, acctConfig), "w1", "alpha")
 	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
 		t.Errorf("no registry: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestAccountAssign(t *testing.T) {
 
 func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 	cfg := `{"round":{"accounts":[{"name":"beta","configDir":"/acct/beta"}]}}`
-	dir := newProject(t, cfg)
+	dir := gittest.Project(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
@@ -259,7 +259,7 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 // pool init spreads slots across accounts by headroom, resetting the
 // exclusion list when accounts run out.
 func TestPoolInitSpreadsAccounts(t *testing.T) {
-	b := newProject(t, acctConfig)
+	b := gittest.Project(t, acctConfig)
 	usage := usageDir(t)
 	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
@@ -458,7 +458,7 @@ func TestAccountNoPickReasonNamesLoginlessAccounts(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	empty := t.TempDir()
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
-	dir := newProject(t, cfg)
+	dir := gittest.Project(t, cfg)
 	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
 	if _, ok := acc.Pick(bg, dir, nil); ok {
 		t.Fatal("Pick found an account without any login")
@@ -481,7 +481,7 @@ func TestAccountAssignAllLoginlessNamesLogin(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	empty := t.TempDir()
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
-	b := newProject(t, cfg)
+	b := gittest.Project(t, cfg)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
 	_, _, err := acc.Assign(bg, b, "w1", "")
@@ -510,7 +510,7 @@ func TestAccountsLoginReadsWithEnvClock(t *testing.T) {
 // codex slot it still writes the Claude keys (account+configDir) and leaves the
 // codex home key alone, as it did before SetAccountFor existed.
 func TestAccountAssignOnACodexSlotWritesTheClaudeKeys(t *testing.T) {
-	b := newProject(t, acctConfig)
+	b := gittest.Project(t, acctConfig)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.Raw().Set("kind", "codex") }); err != nil {
 		t.Fatal(err)

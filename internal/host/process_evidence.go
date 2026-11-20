@@ -1,7 +1,5 @@
 package host
 
-import "encoding/json"
-
 // processIdentity records an incarnation, not ownership of a numeric PID.
 // An unknown start (at observation or at cleanup) stays fail-closed while alive.
 type processIdentity struct {
@@ -98,29 +96,6 @@ func (ev processEvidence) aliveDeps(d Deps) Deps {
 		return false
 	}
 	return probe
-}
-
-// decodeProcessEvidence keeps legacy bare PIDs separate: they have no
-// historical start time. Adapters choose their established compatibility rule
-// explicitly, rather than identifying an old number from today's process table.
-func decodeProcessEvidence(b []byte) (procs processEvidence, legacy []int, err error) {
-	var raw []json.RawMessage
-	if err = json.Unmarshal(b, &raw); err != nil {
-		return nil, nil, err
-	}
-	for _, r := range raw {
-		var n int
-		if json.Unmarshal(r, &n) == nil {
-			legacy = append(legacy, n)
-			continue
-		}
-		var p processIdentity
-		if err = json.Unmarshal(r, &p); err != nil {
-			return nil, nil, err
-		}
-		procs = append(procs, p)
-	}
-	return procs, legacy, nil
 }
 
 // unknownProcesses preserves legacy Orca's conservative blocker semantics,

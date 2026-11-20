@@ -27,16 +27,7 @@ var bg = context.Background()
 // (name -> branch); a branch with "+" suffix in the map value gets a commit.
 func newRepo(t *testing.T, branches map[string]string, ahead ...string) string {
 	t.Helper()
-	root := gittest.TempDir(t)
-	gittest.Init(t, root, "main")
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "seed"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gittest.Run(t, root, "add", "seed")
-	gittest.Run(t, root, "commit", "-q", "-m", "seed")
+	root := gittest.Project(t, "")
 	for name, br := range branches {
 		wt := filepath.Join(root, ".worktrees", name)
 		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, wt, "main")

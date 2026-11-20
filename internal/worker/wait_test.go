@@ -6,17 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 )
 
 // waitHost is a host whose panes and native status the test steers. With
@@ -122,7 +121,7 @@ func withHandles(t *testing.T, dir string, handles map[string]string) {
 
 func waitProject(t *testing.T, slots int, handles map[string]string) string {
 	t.Helper()
-	dir := newProject(t, `{}`)
+	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: slots, Base: "main"})
 	withHandles(t, dir, handles)
 	return dir
