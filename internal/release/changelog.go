@@ -11,10 +11,16 @@ import (
 // ErrSectionExists: the changelog already has a section for the version.
 var ErrSectionExists = errors.New("changelog already has a section for this version")
 
+// ErrUnreleased: the changelog still holds a `## Unreleased` section, whose
+// entries the new release section would leave behind to ship again.
+var ErrUnreleased = errors.New("changelog has an Unreleased section")
+
 var (
-	h1Re    = regexp.MustCompile(`^#\s+\S`)
-	h1Line  = regexp.MustCompile(`(?m)^#\s+\S`)
-	blankRe = regexp.MustCompile(`(?m)^[ \t]*\n`)
+	h1Re   = regexp.MustCompile(`^#\s+\S`)
+	h1Line = regexp.MustCompile(`(?m)^#\s+\S`)
+	// unreleasedRe: a `## Unreleased` heading, any case, at the line start.
+	unreleasedRe = regexp.MustCompile(`(?mi)^## unreleased\b`)
+	blankRe      = regexp.MustCompile(`(?m)^[ \t]*\n`)
 )
 
 // UpdateChangelog is the body of hv-release-update-changelog: it returns the
@@ -27,6 +33,9 @@ func UpdateChangelog(content string, exists bool, version, today, notes string) 
 	}
 	if regexp.MustCompile(`(?m)^## v` + regexp.QuoteMeta(version) + `\b`).MatchString(content) {
 		return "", ErrSectionExists
+	}
+	if unreleasedRe.MatchString(content) {
+		return "", ErrUnreleased
 	}
 	stripped := strings.TrimLeft(content, "\n")
 	if !h1Re.MatchString(stripped) {

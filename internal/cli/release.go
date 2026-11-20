@@ -34,7 +34,7 @@ func releaseCommands() *Command {
 		{Name: "bump", Fence: fenceRefused, Summary: "write the next version into the version file", Repo: true, Verb: releaseBump},
 		{Name: "host", Fence: fenceAllowed, Summary: "print the hosting kind of origin", Repo: true, Verb: noFlags(releaseHost)},
 		{Name: "notes", Fence: fenceAllowed, Summary: "release notes from commits", Repo: true, Verb: releaseNotes},
-		{Name: "changelog", Fence: fenceRefused, Summary: "add a release section to the changelog", Repo: true, Verb: releaseChangelog},
+		{Name: "changelog", Fence: fenceRefused, Summary: "add a release section to the changelog (refuses a leftover ## Unreleased: fold it into the notes and delete it first)", Repo: true, Verb: releaseChangelog},
 		{Name: "pending", Fence: fenceAllowed, Summary: "how much has landed since the last release tag", Repo: true, Verb: noFlags(releasePending)},
 		{Name: "milestone-check", Fence: fenceAllowed, Summary: "list the open issues that block a milestone release", Repo: true, Verb: noFlags(releaseMilestoneCheck)},
 		{Name: "close-milestone", Fence: fenceRefused, Summary: "close out a released milestone", Repo: true, Verb: releaseCloseMilestone},
@@ -327,6 +327,9 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		out, err := release.UpdateChangelog(existing, rerr == nil, version, stamp.Date(c.deps().Today()), notes)
 		if errors.Is(err, release.ErrSectionExists) {
 			return blockedRefusal(nil, blockedby.Exists, fmt.Sprintf("%s already has a section for v%s", *path, version), "")
+		}
+		if errors.Is(err, release.ErrUnreleased) {
+			return Result{}, Resolution("%s has a ## Unreleased section: fold its entries into the notes, delete the section, then rerun", *path)
 		}
 		if err != nil {
 			return Result{}, err
