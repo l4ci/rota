@@ -208,6 +208,10 @@ type PaneVocab struct {
 	// LoggedOut is the pane text of a session that is not logged in: the slot
 	// can do nothing until a human fixes its account. The pane is BLOCKED.
 	LoggedOut string
+	// LoggedOutAdvice is the remedy the BLOCKED evidence prints after the
+	// matched text: what a human does for this kind's account. Required when
+	// LoggedOut is set, so the shared classifier names no kind's env var.
+	LoggedOutAdvice string
 	// BadModel is the dialog for a tier model the provider refuses; group 1 is
 	// the model id. The pane is BLOCKED.
 	BadModel string
