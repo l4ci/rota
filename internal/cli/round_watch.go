@@ -324,14 +324,38 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 	return Result{Data: d, Text: strings.Join(text, "\n")}
 }
 
+// errRosterChanged ends a running autopilot whose armed roster no longer
+// matches the config: a tick would assign to a slot the maintainer retired.
+var errRosterChanged = errors.New("config-changed: round.roster differs from the value this watch armed with; re-arm `rota round watch --autopilot`")
+
+// rosterChanged reads the config afresh and returns errRosterChanged when
+// round.roster differs from the armed settings. Only the roster is watched
+// (#4010); a config that no longer loads keeps the armed settings.
+func rosterChanged(c *Ctx, root string, armed roundcfg.Settings) error {
+	c.deps().freshReads()
+	cur, err := c.deps().roundSettings(root, roundConfigUsage)
+	if err != nil || slices.Equal(cur.Roster, armed.Roster) {
+		return nil
+	}
+	return errRosterChanged
+}
+
 // autopilotWatch is `round watch --autopilot`: the loop and its wake rule live
 // in roundwatch.RunAutopilot; this passes the tick and renders the result. The
 // watch is the autopilot's heartbeat, so a round running it still has its
 // watch armed.
 func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundwatch.Opts, set roundcfg.Settings, root, cd string, lenv roundlease.Env, base string, pid int, poll time.Duration) (Result, error) {
 	c.ctx = ctx
+	// RunAutopilot drops the failure of its closing tick, so keep the roster
+	// refusal here: a watch that ends on a heartbeat must still say why.
+	var rosterErr error
 	res, err := roundwatch.RunAutopilot(ctx, env, opts, roundwatch.AutopilotOpts{
-		Tick:      func() (roundtick.Result, error) { return runAutopilotTick(c, root, set, base, pid, false) },
+		Tick: func() (roundtick.Result, error) {
+			if rosterErr = rosterChanged(c, root, set); rosterErr != nil {
+				return roundtick.Result{}, rosterErr
+			}
+			return runAutopilotTick(c, root, set, base, pid, false)
+		},
 		TrainFill: set.TrainFill.Enabled(),
 		Poll:      poll,
 	})
@@ -344,6 +368,8 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 		note = res.StopErr.Error()
 	case res.Reason == roundwatch.ReasonStopped:
 		note = "no round lease: the round wound down or the lease was lost"
+	case rosterErr != nil:
+		note = rosterErr.Error()
 	case res.TickErr != nil:
 		note = "tick failed: " + res.TickErr.Error()
 	}
