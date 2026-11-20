@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The full merge gate, run concurrently: validate-skills, the doc lints
-# (test/doclint.sh), the Python harness tests (test/py-tests.sh), the grep gate (test/grep-gate.sh), gofmt, go vet, go test -race and the smoke suite split into N shards, all at once (#82). One serial gate
-# is several times slower; this takes about 2-3 minutes.
+# (test/doclint.sh), the Python harness tests (test/py-tests.sh), the grep gate (test/grep-gate.sh), gofmt, go vet, go test -race and the smoke suite split into N shards, all at once (#82).
+# Use `rota test-audit` for current gate timings
+# (measured median about 10 minutes).
 # Failed Go packages and smoke shards retry once after all initial checks exit.
 #
 # Usage: bash test/gate.sh [--smoke-only] [--random] [--shards N]
@@ -164,8 +165,37 @@ retry_once() {
 # Keep the JSON side channel for package selection, while ordinary failure
 # logs retain go test's human assertion lines.
 run_go_tests() {
-  local rc=0
-  go test -json -race -timeout 30m -p "$SHARDS" ./... >"$LOGS/gotest.json" 2>&1 || rc=$?
+  local rc=0 job_rc p pkg module
+  local go_pids=() go_logs=()
+  # These packages set the critical path. Give each its own process before
+  # discovering the rest, rather than letting it queue behind smaller tests.
+  for pkg in worker round cli; do
+    go test -json -race -timeout 30m -p 1 "./internal/$pkg" >"$LOGS/go-$pkg.json" 2>&1 &
+    go_pids+=($!); go_logs+=("$LOGS/go-$pkg.json")
+  done
+  (
+    local all_packages packages=()
+    module="$(awk '$1 == "module" {print $2}' "$REPO/go.mod")"
+    all_packages="$(go list ./...)" || exit 2
+    while IFS= read -r pkg; do
+      case "$pkg" in
+        "$module/internal/worker"|"$module/internal/round"|"$module/internal/cli") ;;
+        "") ;;
+        *) packages+=("$pkg") ;;
+      esac
+    done <<<"$all_packages"
+    [ "${#packages[@]}" = 0 ] || go test -json -race -timeout 30m -p "$SHARDS" "${packages[@]}"
+  ) >"$LOGS/go-rest.json" 2>&1 &
+  go_pids+=($!); go_logs+=("$LOGS/go-rest.json")
+  # Wait for all streams, then concatenate complete lines. Concurrent appends
+  # to one JSON file could corrupt events and hide a failed package.
+  for p in "${go_pids[@]}"; do
+    job_rc=0; wait "$p" || job_rc=$?
+    if [ "$job_rc" -gt 1 ]; then rc=2
+    elif [ "$job_rc" = 1 ] && [ "$rc" = 0 ]; then rc=1
+    fi
+  done
+  cat "${go_logs[@]}" >"$LOGS/gotest.json" || return 2
   python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.json" || return 2
   return "$rc"
 }
