@@ -28,14 +28,12 @@ const lockWait = 2 * time.Second
 
 // State is <git-common-dir>/rota/session/<session_id>.json. D2 and D3 read it.
 type State struct {
-	// Recall receipts live in session/recall, outside the reading TTL sweep.
-	RecalledEntries map[string]bool `json:"recalledEntries,omitempty"`
-	SessionID       string          `json:"sessionId"`
-	Cwd             string          `json:"cwd"`
-	UpdatedAt       string          `json:"updatedAt"`
-	ContextPct      *float64        `json:"contextPct,omitempty"`
-	RateLimits      json.RawMessage `json:"rateLimits,omitempty"`
-	Raw             json.RawMessage `json:"raw"`
+	SessionID  string          `json:"sessionId"`
+	Cwd        string          `json:"cwd"`
+	UpdatedAt  string          `json:"updatedAt"`
+	ContextPct *float64        `json:"contextPct,omitempty"`
+	RateLimits json.RawMessage `json:"rateLimits,omitempty"`
+	Raw        json.RawMessage `json:"raw"`
 
 	// Each Stop rule owns its handoff budget, preserved across refreshes.
 	OrchestratorHandoff HandoffState `json:"orchestratorHandoff"`
@@ -233,8 +231,8 @@ func Dump(commonDir string, payload Payload, now time.Time) error {
 // in .json, so the session readers never see it.
 const sweepMarker = ".sweep"
 
-// sweep removes state files whose mtime is more than StateTTL old, together
-// with their lock sidecars. Held session locks are skipped.
+// sweep removes state files whose mtime is more than StateTTL old, and recall
+// receipts more than RecallTTL old, together with their lock sidecars. Held session locks are skipped.
 // Every refresh and Stop write rewrites the state, so the mtime
 // tracks the last touch and no file is decoded. It runs at most once per
 // sweepEvery: a normal refresh pays one stat. Errors are ignored: it is
@@ -251,6 +249,13 @@ func sweep(dir, keepID string, now time.Time) {
 		return
 	}
 	os.Chtimes(marker, now, now)
+	sweepDir(dir, keepID, StateTTL, now)
+	sweepDir(filepath.Join(dir, recallDirName), keepID, RecallTTL, now)
+}
+
+// sweepDir removes the .json files of dir untouched for more than ttl, except
+// keepID's.
+func sweepDir(dir, keepID string, ttl time.Duration, now time.Time) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -264,13 +269,13 @@ func sweep(dir, keepID string, now time.Time) {
 		if err != nil {
 			continue
 		}
-		if now.Sub(fi.ModTime()) > StateTTL {
-			sweepSession(filepath.Join(dir, name), now)
+		if now.Sub(fi.ModTime()) > ttl {
+			sweepSession(filepath.Join(dir, name), ttl, now)
 		}
 	}
 }
 
-func sweepSession(path string, now time.Time) {
+func sweepSession(path string, ttl time.Duration, now time.Time) {
 	lockPath := fsio.LockPath(path)
 	release, ok, err := fsio.TryLock(lockPath)
 	if err != nil || !ok {
@@ -284,7 +289,7 @@ func sweepSession(path string, now time.Time) {
 		os.Remove(lockPath)
 		return
 	}
-	if err != nil || now.Sub(fi.ModTime()) <= StateTTL {
+	if err != nil || now.Sub(fi.ModTime()) <= ttl {
 		return
 	}
 	if os.Remove(path) == nil {

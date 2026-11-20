@@ -2,13 +2,16 @@ package hook
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 func TestDecideRecall(t *testing.T) {
@@ -111,5 +114,41 @@ func TestRecallClaimsConcurrentEntriesAndPreservesRefresh(t *testing.T) {
 	}
 	if got := Recall(dir, "../bad", entry, now); got != "" {
 		t.Fatalf("invalid session injected: %s", got)
+	}
+}
+
+func TestSweepRemovesExpiredRecallReceiptsAndKeepsLive(t *testing.T) {
+	cd := t.TempDir()
+	t0 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	entry := []knowledge.PathEntry{{ID: "one", Text: "guidance"}}
+	for _, id := range []string{"old", "live"} {
+		if Recall(cd, id, entry, t0) == "" {
+			t.Fatalf("recall %s wrote no receipt", id)
+		}
+	}
+	recallDir := filepath.Join(rotastate.SessionDir(cd), "recall")
+	age := func(id string, at time.Time) {
+		t.Helper()
+		if err := os.Chtimes(filepath.Join(recallDir, id+".json"), at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := t0.Add(RecallTTL + time.Hour)
+	age("old", t0)
+	age("live", now.Add(-time.Hour))
+	if err := Dump(cd, mustPayload(t, []byte(`{"session_id":"cur"}`)), now); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"old.json", "old.json.lock"} {
+		if _, err := os.Stat(filepath.Join(recallDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("%s survived the sweep: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(recallDir, "live.json")); err != nil {
+		t.Fatalf("live receipt removed: %v", err)
+	}
+	// Receipts are not statusline state.
+	if _, ok := reflect.TypeOf(State{}).FieldByName("RecalledEntries"); ok {
+		t.Fatal("State still carries RecalledEntries")
 	}
 }
