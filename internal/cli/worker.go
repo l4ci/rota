@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
+	"github.com/l4ci/rota/internal/roundlease"
 	"os"
 	"os/signal"
 	"strconv"
@@ -954,6 +955,26 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	return run
 }
 
+// refuseDuringAutopilot is the guard of a hand-started landing: a live
+// autopilot watch trains reviewed PRs itself, so a manual run races it and ends
+// ALREADY-MERGED with nothing landed. The tick calls prepareGate and
+// prepareTrain directly, never the verbs, so it never meets this guard.
+func refuseDuringAutopilot(c *Ctx, root string, override bool) error {
+	if override {
+		return nil
+	}
+	cd, err := c.CommonDir(root)
+	if err != nil {
+		return nil // no common dir, no marker to read
+	}
+	m, armed := roundlease.Armed(c.deps().LeaseEnv(), cd)
+	if !armed || !m.Autopilot {
+		return nil
+	}
+	return Refused("an autopilot watch (pid %d) is armed and lands reviewed PRs itself; a hand-started run races it", m.PID).
+		WithHint("let it land the PR, or restart as a plain watch (rota round watch without --autopilot); --ignore-autopilot overrides")
+}
+
 func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
@@ -961,6 +982,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	prune := fs.Bool("prune", false, "when an adopted slot's PR merges, also delete its worktree and branch")
 	final := fs.Bool("final-slice", false, "this PR is the last slice of a partial-slice issue and may close it")
+	ignoreAutopilot := fs.Bool("ignore-autopilot", false, "land by hand although an autopilot watch is armed")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -977,6 +999,11 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		root, err := c.Root()
 		if err != nil {
 			return Result{}, err
+		}
+		if !*check {
+			if err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
+				return Result{}, err
+			}
 		}
 		if !*check && !*noAssignCheck {
 			warnAssignFirst(c, root)

@@ -25,6 +25,9 @@ type Marker struct {
 	Host      string `json:"host"`
 	StartedAt string `json:"startedAt"`
 	Heartbeat int    `json:"heartbeatSeconds"`
+	// Autopilot is set when the watch runs the round tick (--autopilot), which
+	// trains reviewed PRs itself; a plain watch leaves it false.
+	Autopilot bool `json:"autopilot,omitempty"`
 }
 
 // MarkerPath is the marker file under a common dir.
@@ -53,9 +56,9 @@ func (e *ArmedError) Error() string {
 // Arm writes the marker for the calling process and returns the function that
 // removes it. Another live watch is an *ArmedError and nothing is written: one
 // watch at a time keeps every wake-up a single event.
-func Arm(env Env, commonDir string, pid int, heartbeat time.Duration) (release func(), err error) {
+func Arm(env Env, commonDir string, pid int, heartbeat time.Duration, autopilot bool) (release func(), err error) {
 	file := markerFile(commonDir)
-	m := Marker{PID: pid, StartedAt: stamp.Format(env.Now()), Heartbeat: int(heartbeat.Seconds())}
+	m := Marker{PID: pid, StartedAt: stamp.Format(env.Now()), Heartbeat: int(heartbeat.Seconds()), Autopilot: autopilot}
 	m.Host, m.Start = env.Identity(pid)
 	live := func(m Marker) bool { return env.Running(m.Host, m.PID, m.Start) }
 	cur, held, err := file.Claim(m, live)

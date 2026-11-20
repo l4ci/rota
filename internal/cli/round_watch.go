@@ -63,7 +63,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%v", err)
 		}
 		lenv := c.deps().LeaseEnv()
-		release, err := roundlease.Arm(lenv, cd, c.deps().PID(), secs(*heartbeat))
+		release, err := roundlease.Arm(lenv, cd, c.deps().PID(), secs(*heartbeat), *autopilot)
 		if err != nil {
 			var ae *roundlease.ArmedError
 			if errors.As(err, &ae) {
