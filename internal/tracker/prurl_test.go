@@ -66,6 +66,13 @@ func TestPRRefNumber(t *testing.T) {
 		{"omar/58-x", "", false},
 		{"https://github.com/o/r/pull/", "", false},
 		{"https://github.com/o/r/issues/77", "", false},
+		{"12/foo", "", false},
+		{"12?x", "", false},
+		{"#12#x", "", false},
+		{"x/pull/12", "", false},
+		{"github.com/o/r/pull/12", "", false},
+		{"ftp://h/o/r/pull/12", "", false},
+		{"#https://github.com/o/r/pull/12", "", false},
 	} {
 		got, ok := PRRefNumber(c.in)
 		if got != c.want || ok != c.ok {
