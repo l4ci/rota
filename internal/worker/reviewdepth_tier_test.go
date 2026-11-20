@@ -111,3 +111,29 @@ func TestResolveReviewDepthTier(t *testing.T) {
 
 // testDocsPaths mirrors the change.docsPaths default in internal/config/keys.go.
 var testDocsPaths = []string{"*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"}
+
+// #3927: a one-way Door line raises the depth with tiers on (the tier and the
+// policy share the fact) and with tiers off, and the PR body is read once.
+func TestResolveReviewDepthDoorOnce(t *testing.T) {
+	light, _ := config.ParseReviewPolicy("light")
+	for name, chg := range map[string]change.Policy{
+		"tiers on":  {DocsPaths: testDocsPaths},
+		"tiers off": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			reads := 0
+			src := ReviewSources{Policy: light, Change: chg, Git: git.Exec, Dir: tierRepo(t, "README.md"), Span: "main...feat",
+				PRBody: func() (string, error) { reads++; return "Door: one-way. Blast radius: x.", nil }}
+			got, err := ResolveReviewDepth(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Depth != config.DepthFull || got.Signal != reviewpolicy.SignalDoor {
+				t.Fatalf("depth = %s, %s", got.Depth, got.Signal)
+			}
+			if reads != 1 {
+				t.Fatalf("PR body read %d times, want 1", reads)
+			}
+		})
+	}
+}

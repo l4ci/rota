@@ -115,23 +115,17 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	// The body stays unknown until an issue read fills it: "" must never stand
 	// for "unread" in the policy (#3555).
 	in := reviewpolicy.Input{Changed: changed, Files: files, Labels: slices.Clone(s.Labels), IssueBodyUnknown: true}
-	// The PR body is read at most once, for the tier's Door line and the policy's.
-	prRead := false
-	var prBody string
-	var prErr error
-	readPR := s.PRBody
-	if readPR != nil {
-		readPR = func() (string, error) {
-			if !prRead {
-				prRead = true
-				prBody, prErr = s.PRBody()
-			}
-			return prBody, prErr
-		}
+	// The PR body is read and parsed at most once, for the tier's Door line and
+	// the policy's (#3927).
+	doorRead := false
+	readDoor := DoorLine(s.PRBody)
+	if readDoor != nil {
+		once := readDoor
+		readDoor = func() (bool, error) { doorRead = true; return once() }
 	}
 	var tier change.Result
 	if s.ChangeErr != nil || len(s.Change.DocsPaths) > 0 || len(s.Change.RiskyPaths) > 0 || s.Change.SmallBelow > 0 {
-		tier = ClassifyChange(ctx, ChangeSources{Policy: s.Change, PolicyErr: s.ChangeErr, Git: s.Git, Dir: s.Dir, Span: s.Span, PRBody: readPR})
+		tier = ClassifyChange(ctx, ChangeSources{Policy: s.Change, PolicyErr: s.ChangeErr, Git: s.Git, Dir: s.Dir, Span: s.Span, Door: readDoor})
 		in.Tier, in.Risky = tier.Tier, tier.Risky
 	}
 	needsIssue := s.Policy.NeedsIssue()
@@ -188,13 +182,13 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	}
 	// A body read only for the tier failed closed there (tier full); only the
 	// policy's own need for the Door line makes an unreadable body an error.
-	if readPR != nil && (s.Policy.MayBeBelowFull() || prRead) {
-		body, err := readPR()
+	if readDoor != nil && (s.Policy.MayBeBelowFull() || doorRead) {
+		door, err := readDoor()
 		if err != nil && !tracker.IsCLIMissing(err) && s.Policy.MayBeBelowFull() {
 			return ReviewDepth{}, &ReviewDepthError{"pr", fmt.Sprintf("could not read the PR body for its Door line to pick the review depth: %v", err), err}
 		}
 		if err == nil {
-			in.PRBody = body
+			in.Door = door
 		}
 	}
 	out := ReviewDepth{Decision: decide(in), Changed: changed, Labels: in.Labels, Tier: tier}
