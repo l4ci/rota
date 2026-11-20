@@ -31,14 +31,15 @@ const (
 
 // Input is everything a depth is resolved from. Changed is the diff's
 // changed-line count (negative: unknown). Files are the changed paths (nil:
-// unknown). PRBody is the PR description ("" when there is no PR yet).
+// unknown). Door is a one-way Door line in the PR body, read once by the caller
+// (worker.DoorLine).
 // IssueBody is the body of the branch's issue ("" when there is none). Tier
 // is the change tier of the diff ("" when tiers do not apply).
 type Input struct {
 	Changed   int
 	Labels    []string
 	Files     []string
-	PRBody    string
+	Door      bool
 	IssueBody string
 	// IssueBodyUnknown: the issue body was never read (no issue source, no
 	// issue key), so "" in IssueBody means unread, not "declares no files".
@@ -89,8 +90,8 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 			best = Decision{Depth: d, Signal: signal, Why: why}
 		}
 	}
-	if config.DoorOneWay(in.PRBody) {
-		raise(config.DepthFull, SignalDoor, "PR body says Door: one-way")
+	if in.Door {
+		raise(config.DepthFull, SignalDoor, change.DoorReason)
 	}
 	if in.Risky {
 		raise(config.DepthFull, SignalRisky, "diff touches change.riskyPaths")

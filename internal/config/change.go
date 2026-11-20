@@ -116,7 +116,11 @@ func changeProblems(cfg any) []string {
 }
 
 // DoorOneWay reports whether a PR body carries a "Door: one-way" line: the one
-// definition review depth and the change tier share.
+// definition review depth and the change tier share. The owner of the rule is
+// worker.DoorLine: it parses the body once per decision and hands the bool to
+// change.Classify (tier full) and reviewpolicy.Decide (depth full), which stay
+// separate because a full tier does not imply a full depth and Decide runs with
+// no tier when tiers are off (#3927). Call DoorOneWay nowhere else.
 var doorOneWay = regexp.MustCompile(`(?mi)^[ \t]*Door:[ \t]*one-way\b`)
 
 func DoorOneWay(body string) bool { return doorOneWay.MatchString(body) }

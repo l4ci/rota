@@ -57,6 +57,10 @@ type Policy struct {
 	SmallPaths []string
 }
 
+// DoorReason is why a one-way Door line raises the tier here and the depth in
+// reviewpolicy.Decide.
+const DoorReason = "PR body says Door: one-way"
+
 // Input is the diff the policy classifies. Files lists every changed path,
 // both names of a rename. Lines is the changed-line count. Door is a
 // "Door: one-way" line in the PR body.
@@ -86,7 +90,7 @@ func Classify(in Input, p Policy) Result {
 		return Result{Tier: TierFull, Reason: why, Files: files, Lines: in.Lines}
 	}
 	if in.Door {
-		return full(nil, "PR body says Door: one-way")
+		return full(nil, DoorReason)
 	}
 	if risky := matching(in.Files, p.RiskyPaths, true); len(risky) > 0 {
 		r := full(risky, "matches change.riskyPaths: "+list(risky))

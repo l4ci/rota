@@ -22,6 +22,28 @@ type ChangeSources struct {
 	Span      string // base...head
 	// PRBody reads the PR description for its Door line; nil when there is no PR.
 	PRBody func() (string, error)
+	// Door, when set, is the already-read Door line and replaces PRBody (#3927).
+	Door func() (bool, error)
+}
+
+// DoorLine turns a PR-body reader into the Door fact: the one place a body is
+// parsed for "Door: one-way". It memoizes, so the tier and the depth of one
+// decision share a single read and parse. nil in, nil out (no PR).
+func DoorLine(read func() (string, error)) func() (bool, error) {
+	if read == nil {
+		return nil
+	}
+	var done, door bool
+	var err error
+	return func() (bool, error) {
+		if !done {
+			done = true
+			var body string
+			body, err = read()
+			door = config.DoorOneWay(body)
+		}
+		return door, err
+	}
 }
 
 // ClassifyChange reads the diff and the PR body and puts the change in a tier.
@@ -49,13 +71,17 @@ func ClassifyChange(ctx context.Context, s ChangeSources) change.Result {
 	in := change.Input{Files: files, Lines: lines}
 	res := change.Classify(in, s.Policy)
 	// Only a Door line can lift a cheaper tier, so a full one skips the read.
-	if res.Tier == change.TierFull || s.PRBody == nil {
+	readDoor := s.Door
+	if readDoor == nil {
+		readDoor = DoorLine(s.PRBody)
+	}
+	if res.Tier == change.TierFull || readDoor == nil {
 		return res
 	}
-	body, err := s.PRBody()
+	door, err := readDoor()
 	if err != nil && !tracker.IsCLIMissing(err) {
 		return full(lines, fmt.Sprintf("could not read the PR body for its Door line: %v", err))
 	}
-	in.Door = config.DoorOneWay(body)
+	in.Door = door
 	return change.Classify(in, s.Policy)
 }
