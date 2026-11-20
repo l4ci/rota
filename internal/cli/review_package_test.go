@@ -123,3 +123,25 @@ func TestReviewPackageNoRemoteUnchanged(t *testing.T) {
 		t.Fatalf("no remote: exit %d %s", o.code, o.stderr)
 	}
 }
+
+// A merge of a side branch (not the base) keeps its content in the package.
+func TestReviewPackageSinceKeepsSideBranchMerge(t *testing.T) {
+	repo, since := reviewMergedBranch(t)
+	gittest.Run(t, repo, "checkout", "-q", "-b", "side", since)
+	write(t, filepath.Join(repo, "side.txt"), "side work")
+	gittest.Run(t, repo, "add", "side.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "side work")
+	gittest.Run(t, repo, "checkout", "-q", "feat/m")
+	gittest.Run(t, repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+	o := trRun(t, repo, "", "review", "package", "feat/m", "--since", since, "--json")
+	if o.code != 0 {
+		t.Fatalf("package: exit %d %s", o.code, o.stderr)
+	}
+	body, err := os.ReadFile(envelope(t, o.stdout)["data"].(map[string]any)["path"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "side.txt") {
+		t.Errorf("side-branch merge hidden from the package:\n%s", body)
+	}
+}

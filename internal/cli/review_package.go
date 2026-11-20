@@ -86,11 +86,11 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			diffSpan = logSpan
 			// A base merge inside since..head carries the base's changes: diff
 			// only the branch's own non-merge commits then.
-			merges, err := reviewGit(ctx, c.deps(), t.Dir, "rev-list", "--count", "--merges", logSpan)
-			if err != nil {
+			// Any other merge (a side branch) keeps the full diff, so nothing
+			// the reviewer should see is dropped.
+			if ownOnly, err = reviewOnlyBaseMerges(c, t.Dir, t.Base, logSpan); err != nil {
 				return Result{}, err
 			}
-			ownOnly = strings.TrimSpace(merges) != "0"
 		} else {
 			if _, err := reviewGit(ctx, c.deps(), t.Dir, "merge-base", t.Base, head); err != nil {
 				return Result{}, Resolution("'%s' and base '%s' share no history", t.Branch, t.Base)
@@ -147,20 +147,43 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 	}
 }
 
+// reviewOnlyBaseMerges reports whether span holds merges and every one of them
+// only brings in base: each merge's non-first parents are reachable from base.
+func reviewOnlyBaseMerges(c *Ctx, dir, base, span string) (bool, error) {
+	out, err := reviewGit(c.Context(), c.deps(), dir, "rev-list", "--merges", "--parents", span)
+	if err != nil {
+		return false, err
+	}
+	any := false
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		any = true
+		for _, p := range f[2:] {
+			if ok, err := reviewIsAncestor(c, dir, p, base); err != nil || !ok {
+				return false, err
+			}
+		}
+	}
+	return any, nil
+}
+
 // reviewOwnCommitsDiff is the stat, the diff and the changed-file count of the
-// branch's own commits in span: the first-parent, non-merge ones, so what a
-// merge of the base brought in is left out. Each commit's patch follows its
+// branch's own commits in span: the first-parent chain, so what a merge of the
+// base brought in is left out; a merge shows only its conflict resolution. Each commit's patch follows its
 // "commit <sha> <subject>" line.
 func reviewOwnCommitsDiff(c *Ctx, dir, span string) (stat, diff string, files int, err error) {
 	ctx := c.Context()
-	own := []string{"log", "--first-parent", "--no-merges", "--reverse", "--format=commit %h %s", span}
+	own := []string{"log", "--first-parent", "--diff-merges=remerge", "--reverse", "--format=commit %h %s", span}
 	if stat, err = reviewGit(ctx, c.deps(), dir, append(own, "--stat")...); err != nil {
 		return "", "", 0, err
 	}
 	if diff, err = reviewGit(ctx, c.deps(), dir, append(own, reviewPackageContext, "-p")...); err != nil {
 		return "", "", 0, err
 	}
-	names, err := reviewGit(ctx, c.deps(), dir, "log", "--first-parent", "--no-merges", "--format=", "--name-only", span)
+	names, err := reviewGit(ctx, c.deps(), dir, "log", "--first-parent", "--diff-merges=remerge", "--format=", "--name-only", span)
 	if err != nil {
 		return "", "", 0, err
 	}
