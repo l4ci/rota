@@ -432,7 +432,7 @@ Example for a Python project using ruff + pytest:
 }
 ```
 
-Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`ROTA_SMOKE_SHARDS`](#smoke-shards) shards, the sharded gate takes about 2 to 3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
+Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together, with smoke split into [`ROTA_SMOKE_SHARDS`](#smoke-shards) shards. The sharded gate takes about 10 minutes (median; `rota test-audit` shows current timings). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
@@ -477,7 +477,7 @@ CI runs the definition in the pushed tree, so a merge that changes it would choo
 
 - GitLab: pipelines run on branch pushes unless `workflow:rules` exclude them. Make sure `rota/ci/` branches are allowed.
 
-Trade-off: a CI queue can be slower than a 2-3 minute local gate. `ci` saves local or VPS CPU and avoids running the suite twice.
+Trade-off: a CI queue can be slower than a local gate, which takes about 10 minutes (median; `rota test-audit` shows current timings). `ci` saves local or VPS CPU and avoids running the suite twice.
 
 Not covered: the `rota round wind-down` base re-verify and `rota test run full` still run `test.full` locally. Tuning, in seconds: `ROTA_CI_POLL` (default 20), `ROTA_CI_START_WAIT` (300), `ROTA_CI_TIMEOUT` (overrides the config timeout).
 

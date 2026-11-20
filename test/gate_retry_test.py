@@ -36,17 +36,32 @@ root = pathlib.Path(os.environ["CONTROL"])
 name = sys.argv[1]
 if name == "go" and sys.argv[2] == "vet":
     name = "vet"
+elif name == "go" and sys.argv[2] == "list":
+    if os.environ.get("GO_LIST_FAIL"):
+        raise SystemExit("controlled package discovery failure")
+    print("github.com/l4ci/rota/internal/worker\\ngithub.com/l4ci/rota/internal/round\\ngithub.com/l4ci/rota/internal/cli\\ngithub.com/l4ci/rota/internal/example")
+    raise SystemExit(0)
 elif name == "go":
-    name = "go:internal/example"
+    package = sys.argv[-1].removeprefix("./").removeprefix("github.com/l4ci/rota/")
+    name = "go:" + package if package in ("internal/worker", "internal/round", "internal/cli") else "go:internal/example"
 count = root / (name.replace("/", "_") + ".count")
 n = int(count.read_text()) + 1 if count.exists() else 1
 count.write_text(str(n))
 with (root / "calls").open("a") as f:
-    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), args=sys.argv[2:])) + "\\n")
+    f.write(json.dumps(dict(name=name, n=n, cwd=os.getcwd(), ppid=os.getppid(), args=sys.argv[2:])) + "\\n")
 active = root / (name.replace("/", "_") + ".active")
 if n > 1 and list(root.glob("*.active")):
     raise SystemExit("retry overlapped initial checks")
 active.touch()
+if name.startswith("go:") and os.environ.get("GO_START_BARRIER"):
+    (root / (name.replace("/", "_") + ".started")).touch()
+    expected = {"go:internal_worker.started", "go:internal_round.started", "go:internal_cli.started", "go:internal_example.started"}
+    deadline = time.monotonic() + 2
+    while not expected <= {p.name for p in root.glob("*.started")} and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if not expected <= {p.name for p in root.glob("*.started")}:
+        active.unlink()
+        raise SystemExit("big packages did not start alongside remaining packages")
 # Keep a later initial check alive after the failing check exits, so the
 # isolation assertion cannot pass merely because every stub finished quickly.
 slow = (name == "smoke-shard1" and os.environ.get("FAIL_CHECK") == "go:internal/example") or (name == "go:internal/example" and os.environ.get("FAIL_CHECK") == "smoke-shard1")
@@ -57,8 +72,8 @@ failed = name == mode and (n == 1 or os.environ.get("FAIL_TWICE") == "1")
 if failed and os.environ.get("DIRTY_ON_FAIL") == "1":
     pathlib.Path("go.mod").write_text("module changed\\n")
 if name.startswith("go:"):
-    pkg = "github.com/l4ci/rota/internal/example"
-    if failed and sys.argv[-1] == "./..." and os.environ.get("GO_FAIL_PACKAGES"):
+    pkg = "github.com/l4ci/rota/" + name.removeprefix("go:")
+    if failed and "-json" in sys.argv and os.environ.get("GO_FAIL_PACKAGES"):
         for i in range(1, int(os.environ["GO_FAIL_PACKAGES"]) + 1):
             package = pkg + str(i)
             print(json.dumps(dict(Action="output", Package=package, Output="--- FAIL: TestUnderLoad (0s)\\nFAIL\\n")))
@@ -68,7 +83,7 @@ if name.startswith("go:"):
         print(json.dumps(dict(Action="output", Package=pkg, Output="panic: test timed out after 30m")))
     if failed and os.environ.get("GO_INFRA"):
         print(json.dumps(dict(Action="output", Package=pkg, Output=os.environ["GO_INFRA"])))
-    output = "--- FAIL: TestUnderLoad (0s)\\nFAIL\\n" if failed else "ok example/pkg\\n"
+    output = "--- FAIL: TestUnderLoad (0s)\\nFAIL\\t" + pkg + "\\n" if failed else "ok " + pkg + "\\n"
     if "-json" in sys.argv:
         print(json.dumps(dict(Action="output", Package=pkg, Output=output)))
         print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
@@ -129,6 +144,41 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                                        TMPDIR=str(self.root), ROTA_SMOKE_DIAGNOSTICS=str(self.root / "diagnostics"),
                                        SECTION_LIST="test/sections/01_stub.sh"),
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+
+    def test_big_go_packages_start_alongside_remaining_packages(self):
+        self.env["GO_START_BARRIER"] = "1"
+        result, calls = self.run_gate("")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        go_calls = [c for c in calls if c["name"].startswith("go:")]
+        self.assertEqual({c["name"] for c in go_calls}, {
+            "go:internal/worker", "go:internal/round", "go:internal/cli", "go:internal/example"})
+        self.assertEqual(len(go_calls), 4, calls)
+        # stop_checks uses pkill -P on this parent; every Go test process
+        # must be its direct child, including the remaining-packages process.
+        self.assertEqual(len({c["ppid"] for c in go_calls}), 1, go_calls)
+        selected = []
+        for call in go_calls:
+            args = call["args"]
+            self.assertIn("-race", args)
+            self.assertEqual(args[args.index("-timeout") + 1], "30m")
+            selected.extend(arg for arg in args if arg.startswith(("./", "github.com/")))
+        self.assertCountEqual(selected, [
+            "./internal/worker", "./internal/round", "./internal/cli",
+            "github.com/l4ci/rota/internal/example"])
+
+    def test_dedicated_go_failure_names_package_and_stays_red(self):
+        result, calls = self.run_gate("go:internal/worker", twice=True)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAIL go:internal/worker isolated retry", result.stdout)
+        self.assertIn("FAIL\tgithub.com/l4ci/rota/internal/worker", result.stdout)
+        self.assertEqual(len([c for c in calls if c["name"] == "go:internal/worker"]), 2)
+
+    def test_go_discovery_failure_stays_red(self):
+        self.env["GO_LIST_FAIL"] = "1"
+        result, calls = self.run_gate("")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("controlled package discovery failure", result.stdout)
+        self.assertNotIn("FLAKY", result.stdout)
 
     def test_real_runner_reports_assertion_summary_after_guards(self):
         result = self.run_real_section('fail "controlled smoke assertion"\n')
@@ -345,7 +395,7 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual(len(records), 1, result.stdout)
         self.assertEqual(records[0]["check"], "go:internal/example")
         self.assertIn("TestUnderLoad", records[0]["firstOutput"])
-        self.assertIn("ok example/pkg", records[0]["retryOutput"])
+        self.assertIn("ok github.com/l4ci/rota/internal/example", records[0]["retryOutput"])
 
     def test_partition_deals_every_section_once_heaviest_first(self):
         for name, weight in (("01_a.sh", 1), ("02_b.sh", 9), ("03_c.sh", 1)):
