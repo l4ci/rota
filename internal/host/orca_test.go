@@ -365,3 +365,22 @@ func TestOrcaCloseFailureNeverProvesGone(t *testing.T) {
 		t.Fatalf("failed close was not preserved: %v", err)
 	}
 }
+
+// A pane still holding the tail of a previous brief is rota's own leftover,
+// not a human draft: Orca accepts it like herdr and tmux do (#3948).
+func TestOrcaSendAcceptsLeftoverBriefOnPrompt(t *testing.T) {
+	f := newOrcaFake(t)
+	f.screens = []string{orcaEmptyReady + "do work"}
+	f.after = "Working… esc to interrupt\n› "
+	f.receipt = "{}"
+	e := New(Orca, f.deps()).Send(context.Background(), "ben", f.handle(t), orcaBrief(t, "do work"))
+	if errors.Is(e, ErrDraftOnPrompt) {
+		t.Fatalf("leftover brief read as a human draft: %v", e)
+	}
+	if e != nil {
+		t.Fatal(e)
+	}
+	if f.sends != 1 {
+		t.Fatalf("sent %d times want 1", f.sends)
+	}
+}

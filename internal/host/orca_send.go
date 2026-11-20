@@ -60,7 +60,9 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 		latest = p
 		return stripDim(p)
 	}
-	if waitNoDraft(&o.d, read, "") != "" {
+	// The brief is passed so a leftover of it is not read as a human draft,
+	// the same as herdr and tmux.
+	if waitNoDraft(&o.d, read, text) != "" {
 		return ErrDraftOnPrompt
 	}
 	if readErr != nil {

@@ -65,7 +65,7 @@ func (e Env) CoreConsumed(ctx context.Context, root string, s *Slot) bool {
 }
 
 // coreConsumed is the consumption evidence for a saved delivery: a done event
-// stamped after it (worker done), or a commit on the slot's remote-tracking
+// sent after it (worker done, see doneAfter), or a commit on the slot's remote-tracking
 // branch, past its base, dated after it. A ROTA-DONE line the poll records
 // clears the delivery itself (recordRow). No pane text is read here, and an
 // unpushed local commit proves nothing. A delivery without a stamp (saved by an
@@ -75,10 +75,8 @@ func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree st
 	if err != nil {
 		return false
 	}
-	if ev := s.Event(); ev != nil && ev.Kind == EventDone {
-		if ts, err := stamp.Parse(ev.TS); err == nil && ts.After(at) {
-			return true
-		}
+	if doneAfter(s.Event(), deliverySeq(p), at) {
+		return true
 	}
 	// The delivery's own target branch, recorded at send, counts beside the
 	// slot's current one: a relay for a queued PR is acted on through that PR's
@@ -92,6 +90,17 @@ func (e Env) coreConsumed(ctx context.Context, root string, s *Slot, worktree st
 	}
 	cur := s.Branch()
 	return cur != "" && cur != own && e.branchPushed(ctx, root, s, worktree, p, cur, at)
+}
+
+// deliverySeq is the slot's event id when the delivery was saved; -1 for a
+// delivery saved before it was recorded.
+func deliverySeq(p *jsonx.Object) int {
+	v, ok := p.Get("eventSeq")
+	if !ok {
+		return -1
+	}
+	n, _ := jsonx.Int(v)
+	return n
 }
 
 // branchPushed says branch carries publication evidence for the delivery saved
@@ -250,6 +259,7 @@ func (e Env) sendTracked(ctx context.Context, root string, o DispatchOpts, t *di
 		p.Set("payload", payload)
 		p.Set("state", "prepared")
 		p.Set("at", stamp.Format(e.Now()))
+		p.Set("eventSeq", s.eventSeq())
 		if branch != "" {
 			p.Set("branch", branch)
 		}
