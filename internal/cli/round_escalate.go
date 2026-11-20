@@ -21,9 +21,8 @@ import (
 func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
 		cfg := c.deps().Config(root)
-		// Delivery reconciliation must see comments accepted since an earlier read,
-		// including within a single watch pass. Do not inherit the invocation cache.
-		return c.deps().uncachedForgeAndIssues(ctx, cfg, root)
+		return c.deps().forgeAndIssues(ctx, cfg, root, uncachedReads(
+			"delivery reconciliation must see comments accepted since an earlier read, including within a single watch pass"))
 	}
 }
 

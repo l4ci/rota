@@ -85,7 +85,7 @@ func buildRoundEnv(ctx context.Context, root string, d *Deps, withForge bool, w 
 	if !withForge {
 		return e
 	}
-	f, err := d.forgeAndIssues(ctx, cfg, root)
+	f, err := d.forgeAndIssues(ctx, cfg, root, cachedReads)
 	if err != nil {
 		e.ForgeErr = err.Error()
 	} else {

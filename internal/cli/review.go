@@ -534,7 +534,7 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Branch,
 		Span: t.Base + "..." + t.Branch, Git: c.deps().Git, Labels: extra,
 		Issues: func() (worker.ReviewIssues, error) {
-			return c.deps().issuesOrNone(c.Context(), cfg, root)
+			return c.deps().issuesOrNone(c.Context(), cfg, root, cachedReads)
 		},
 		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", root) },
 		// The preview meters the reviewer accounts, so it names the account

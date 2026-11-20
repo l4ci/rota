@@ -34,7 +34,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		return proc.Result{Stdout: "[]"}, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	deps.RoundEnv = func(ctx context.Context, root string, _ RoundOpts) round.Env {
-		f, err := deps.forgeAndIssues(ctx, config.Load(cfgdir.OSEnv(), root), root)
+		f, err := deps.forgeAndIssues(ctx, config.Load(cfgdir.OSEnv(), root), root, cachedReads)
 		if err != nil {
 			t.Fatal(err)
 		}
