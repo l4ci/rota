@@ -50,14 +50,14 @@ func FailingTests(output string) (names []string, ok bool) {
 }
 
 var (
-	// playwrightFail is a list-reporter failure heading: `  1) [project] › file:1:1 › title`.
-	playwrightFail    = regexp.MustCompile(`(?m)^\s*\d+\) (\S.*?)\s*$`)
+	// playwrightFail is a list-reporter failure heading: `  1) [project] › file:1:1 › title ────`; the separator run is not part of the name.
+	playwrightFail    = regexp.MustCompile(`(?m)^\s*\d+\) (\S.*?)[\s─]*$`)
 	playwrightSummary = regexp.MustCompile(`(?m)^\s*[1-9]\d* failed\s*$`)
 	// vitestFail is ` FAIL  file > name`; the summary is `Tests  1 failed | 3 passed`.
 	vitestFail    = regexp.MustCompile(`(?m)^\s*FAIL\s+(\S.*?)\s*$`)
 	vitestSummary = regexp.MustCompile(`(?m)^\s*Tests\s+[1-9]\d* failed`)
 	// nodeFail covers node --test's TAP (`not ok 1 - name`) and spec (`✖ name (1ms)`)
-	// reporters; the summary is `# fail 1` or `ℹ fail 1`.
+	// reporters (the spec reporter's `✖ failing tests:` header is not a test); the summary is `# fail 1` or `ℹ fail 1`.
 	nodeFail    = regexp.MustCompile(`(?m)^\s*(?:not ok \d+ - (\S.*?)|✖ (\S.*?)(?: \(\d[\d.]*ms\))?)\s*$`)
 	nodeSummary = regexp.MustCompile(`(?m)^(?:#|ℹ) fail [1-9]\d*\s*$`)
 )
@@ -76,7 +76,7 @@ func JSFailures(output string) (names []string, ok bool) {
 		}
 		for _, m := range re.FindAllStringSubmatch(output, -1) {
 			for _, n := range m[1:] {
-				if n != "" && !seen[n] {
+				if n != "" && n != "failing tests:" && !seen[n] {
 					seen[n] = true
 					names = append(names, n)
 				}
