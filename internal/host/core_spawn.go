@@ -19,12 +19,15 @@ type coreSpawnIntent struct {
 	Env                                              []string
 }
 
-func (h *coreHost) spawnIntentPath(core, slot, cwd string) (string, error) {
+// spawnIntentPath is the one owner of the intent file key. Callers pass the
+// endpoint the intent was saved under (the current env for a new spawn, the
+// handle's own for a replacement orchestrator).
+func (h *coreHost) spawnIntentPath(endpoint, core, slot, cwd string) (string, error) {
 	d, e := h.stateDir()
 	if e != nil {
 		return "", e
 	}
-	sum := sha256.Sum256([]byte(h.d.Getenv(envCoreSocket) + "\x00" + core + "\x00" + slot + "\x00" + filepath.Clean(cwd)))
+	sum := sha256.Sum256([]byte(endpoint + "\x00" + core + "\x00" + slot + "\x00" + filepath.Clean(cwd)))
 	return filepath.Join(d, "spawn-"+hex.EncodeToString(sum[:])+".json"), nil
 }
 func (h *coreHost) writeSpawnIntent(path string, v coreSpawnIntent) error {
@@ -118,17 +121,11 @@ func (h *coreHost) spawnTerminal(ctx context.Context, c *coreConn, parent coreTe
 	return intent, terminal, nil
 }
 func (h *coreHost) clearSpawnIntent(v coreHandle) error {
-	path, e := h.spawnIntentPath(v.Core, v.Slot, v.Cwd)
-	if e != nil {
-		return e
-	}
 	// Use the saved endpoint rather than the replacement orchestrator's env.
-	d, e := h.stateDir()
+	path, e := h.spawnIntentPath(v.Endpoint, v.Core, v.Slot, v.Cwd)
 	if e != nil {
 		return e
 	}
-	sum := sha256.Sum256([]byte(v.Endpoint + "\x00" + v.Core + "\x00" + v.Slot + "\x00" + filepath.Clean(v.Cwd)))
-	path = filepath.Join(d, "spawn-"+hex.EncodeToString(sum[:])+".json")
 	return h.d.FS.Locked(path, 30*time.Second, func() error {
 		b, e := h.d.FS.ReadFile(path)
 		if errors.Is(e, os.ErrNotExist) {
