@@ -327,15 +327,23 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		inferred := len(scopes) > 0 && (myScopeSrc == SourceInferred || f.ScopeSource == SourceInferred)
 		dirs := overlap.Dirs(mine, f.Paths)
 		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Dirs: dirs, Scopes: scopes, Inferred: inferred})
-		detail := overlapDetail(f.Issue, f.Slot, paths, scopes, inferred)
-		if len(dirs) > 0 {
-			detail += fmt.Sprintf(" [from directory %s: name exact files in the pointers]", strings.Join(git.DisplayPaths(dirs), ", "))
+		exact := overlap.Exact(mine, f.Paths)
+		refuses := !acceptOverlap && (len(exact) > 0 || (scopeBlock && !inferred))
+		// A refusal names only the exact clashing files; directory-only
+		// clashes are a warning note and never appear beside a refusal.
+		shown := paths
+		if refuses {
+			shown = exact
+		}
+		detail := overlapDetail(f.Issue, f.Slot, shown, scopes, inferred)
+		if len(dirs) > 0 && !refuses {
+			detail += fmt.Sprintf(" [from directory %s: warning only; name exact files in the pointers]", strings.Join(git.DisplayPaths(dirs), ", "))
 		}
 		if f.PRFilesErr != "" {
 			detail += fmt.Sprintf(" [open PR's files unavailable (%s): compared the item's footprint and scope]", f.PRFilesErr)
 		}
 		ov.Detail = append(ov.Detail, detail)
-		if !acceptOverlap && (len(paths) > 0 || (scopeBlock && !inferred)) {
+		if refuses {
 			ov.OK = false
 		}
 	}
