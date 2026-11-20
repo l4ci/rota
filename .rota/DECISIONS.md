@@ -25,6 +25,8 @@ KNOWLEDGE.md uses a hybrid umbrella+sub-repo model; DECISIONS.md stays permanent
 - DECISIONS.md remaining at the umbrella root in its current single-file form, regardless of how many sub-repos exist.
 - Future learnings captured at either scope based on relevance (auto-resolve from cwd inside a sub-repo; ask at umbrella root).
 
+*Status.* Retired 2026-11-20. Maintainer lifted it: written for the hv-era layout (.hv/, /hv-learn, hv-* helpers) that no longer exists
+
 <!-- 2026-05-16 -->
 
 ## Rounds: Orchestration
@@ -44,5 +46,7 @@ rota never pins Codex or Claude CLI versions; it checks the flags a launch line 
 - Probing `codex --help` / `claude --help` for the flags the launch line uses, and refusing when one is missing (exit 4, blockedBy: codex flags).
 - Extra Codex homes when the user sets `work.codexAccounts`.
 - Doctor reporting the installed versions for information.
+
+*Status.* Retired 2026-11-20. Maintainer lifted it: the version-check and codex account keys it names are gone (folded into round.accounts); no longer a boundary to keep
 
 <!-- 2026-10-07 -->
