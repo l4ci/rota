@@ -36,9 +36,10 @@ func ParsePRURL(s string) (PRRef, bool) {
 	return PRRef{Provider: provider, Repo: m[1], Number: n}, true
 }
 
-// rePRRefNumber is a PR ref as a person types or stores it: `77`, `#77` or a
-// PR/MR URL (`/pull/77`, GitLab `/merge_requests/77`).
-var rePRRefNumber = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
+// rePRRefNumber is a PR ref as a person types or stores it: `77`, `#77`, GitLab's
+// `!77` or a PR/MR URL (`/pull/77`, `/merge_requests/77`), each with an optional
+// trailing `/`. At most one prefix; the URL path is case-insensitive.
+var rePRRefNumber = regexp.MustCompile(`(?i)^(?:[#!]|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
 
 // PRRefNumber is the one reader of a PR ref's number, as the digits written
 // (so `007` stays `007`). ok is false for a ref with no number. Verdict
@@ -49,4 +50,18 @@ func PRRefNumber(ref string) (string, bool) {
 		return "", false
 	}
 	return m[1], true
+}
+
+// PRNumber is PRRefNumber as a positive int: the one grammar for naming a PR.
+// ok is false for a ref with no number, a zero number or one that overflows.
+func PRNumber(ref string) (int, bool) {
+	d, ok := PRRefNumber(ref)
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(d)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }

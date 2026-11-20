@@ -44,7 +44,17 @@ func TestPRRefNumber(t *testing.T) {
 		{"77", "77", true},
 		{"  77 ", "77", true},
 		{"#77", "77", true},
+		{"!77", "77", true},
+		{"77/", "77", true},
+		{"#77/", "77", true},
+		{"!77/", "77", true},
+		{"##77", "", false},
+		{"!!77", "", false},
+		{"#!77", "", false},
+		{"+77", "", false},
+		{"-77", "", false},
 		{"007", "007", true},
+		{"HTTPS://GitHub.com/o/r/PULL/77", "77", true},
 		{"https://github.com/o/r/pull/77", "77", true},
 		{"https://github.com/o/r/pull/77/files", "77", true},
 		{"https://gitlab.com/g/r/-/merge_requests/77", "77", true},
@@ -60,6 +70,30 @@ func TestPRRefNumber(t *testing.T) {
 		got, ok := PRRefNumber(c.in)
 		if got != c.want || ok != c.ok {
 			t.Errorf("PRRefNumber(%q) = %q, %v; want %q, %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestPRNumber(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want int
+		ok   bool
+	}{
+		{"77", 77, true},
+		{"!77", 77, true},
+		{"#77/", 77, true},
+		{"007", 7, true},
+		{"https://github.com/o/r/pull/77", 77, true},
+		{"0", 0, false},
+		{"https://github.com/o/r/pull/0", 0, false},
+		{"omar/58", 0, false},
+		{"", 0, false},
+		{"99999999999999999999", 0, false},
+	} {
+		got, ok := PRNumber(c.in)
+		if got != c.want || ok != c.ok {
+			t.Errorf("PRNumber(%q) = %d, %v; want %d, %v", c.in, got, ok, c.want, c.ok)
 		}
 	}
 }

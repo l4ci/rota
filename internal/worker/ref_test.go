@@ -29,30 +29,6 @@ func TestSlotHeldID(t *testing.T) {
 	}
 }
 
-func TestPRRefNumber(t *testing.T) {
-	for in, want := range map[string]int{"https://github.com/o/r/pull/9": 9, "#12": 12, "7": 7, "https://gitlab.com/o/r/-/merge_requests/3": 3, "omar/58": 0, "omar/58-x": 0} {
-		if n, _ := PRRefNumber(in); n != want {
-			t.Errorf("PRRefNumber(%q) = %d, want %d", in, n, want)
-		}
-	}
-}
-
-func TestPRRefNumberShapes(t *testing.T) {
-	for in, want := range map[string]int{
-		"12/": 12, "#12/": 12, " 12 ": 12,
-		"https://github.com/o/r/pull/9/files":      9,
-		"https://github.com/o/r/pull/9?x=1":        9,
-		"https://github.com/o/r/pull/9#discussion": 9,
-		"HTTPS://GitHub.com/o/r/PULL/9":            9,
-		"#+5":                                      0, "+5": 0, "-5": 0, "#": 0, "": 0, "1x": 0, "//": 0,
-	} {
-		n, ok := PRRefNumber(in)
-		if n != want || ok != (want != 0) {
-			t.Errorf("PRRefNumber(%q) = %d,%v, want %d", in, n, ok, want)
-		}
-	}
-}
-
 func TestBranchIssue(t *testing.T) {
 	if n, ok := BranchIssue("nia/288-x"); !ok || n != tracker.NumKey(288) {
 		t.Errorf("BranchIssue = %s,%v", n, ok)
