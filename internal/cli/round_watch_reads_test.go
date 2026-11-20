@@ -41,7 +41,9 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "solo", Forge: f}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
-	pass := func() string { return watchForge(context.Background(), c, root)[roundwatch.PRStateKey("dana")] }
+	pass := func() string {
+		return watchForge(context.Background(), c, root, &watchWarned{})[roundwatch.PRStateKey("dana")]
+	}
 	if got := pass(); !strings.EqualFold(got, "open") {
 		t.Fatalf("first pass: PR state %q", got)
 	}
