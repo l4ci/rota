@@ -16,7 +16,8 @@ carries a hint: the one command or edit that fixes it.
 
 **Exit codes.** `0` when every check passes, skips or warns. `1` when any check fails; `--json` still prints
 the full result, so a caller reads `data.ok`. A missing tool is a failed check, not an error, so doctor
-never exits 5.
+never exits 5. These also fail the run: a config value that does not parse (`config`) and a `.rota/workers.json` that exists but
+cannot be read or parsed (`registry`): both fail the run instead of passing on state other verbs refuse.
 
 | Check | Looks at | Skips when |
 |---|---|---|
@@ -35,7 +36,9 @@ never exits 5.
 | `state dir` | the state dir that holds the project registry (`projects.json`) | never |
 | `external knowledge` | the path in `knowledge.external` is a git clone with a remote and a `rota-knowledge.json`. Fails when the path is missing, not a git repository or has no remote; warns when the policy file is missing (writes then default to push). See [External knowledge](external-knowledge.md) | nothing to report: the line appears only when `knowledge.external` is set |
 | `labels` | tracker label definitions against the [label registry](../reference/labels.md), including configured names and project extras. Warns about missing or undescribed labels; hint `rota labels sync` previews changes | no issue backend; an unavailable or name-only tracker (Jira, It's a Plan) reports `skip` with its reason. Shares a five-second limit with the stale-claim scan |
-| `codex` | `codex` runs, the default Codex home (or each `codex` account in `round.accounts`) logged in, herdr integration per home when the resolved round host is herdr | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
+| `config` | every config value read while gathering doctor's input parses; the line names each key that did not. Fails with the hint `run: rota config show`, then `rota config set <key> <value>` with a valid value | nothing to report: the line appears only on failure, like `ports` and `disk` |
+| `registry` | `.rota/workers.json`, when it exists, reads and parses. An unreadable registry reads as an empty pool, so `rota reap` refuses it; the hint says to repair or remove the file | nothing to report: the line appears only on failure, like `ports` and `disk` |
+| `codex` | `codex` runs, the default Codex home (or each `codex` account in `round.accounts`) logged in, herdr integration per home when the resolved round host is herdr. Also fails when herdr is not on `PATH` on a herdr host and a `codex` account is configured: the integration cannot be checked, so the line says so and hints to install herdr. The default home only gets a note | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
 
 The `codex` integration check uses the same resolved host as worker preflight: a recorded round host takes precedence over `round.dispatch`, and automatic detection applies when dispatch is unset or `subagent`. A configured account's missing login or required integration fails the check; the default home's readiness problems remain advisory.
 
