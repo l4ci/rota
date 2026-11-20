@@ -2,6 +2,7 @@ package worker
 
 import (
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -114,7 +115,10 @@ func ChoosePool(entries []PoolEntry, current *PoolRef, margin int) (PoolChoice, 
 // 0-100 scale as Claude's: headroom is 100 minus the highest used percent over
 // every window the snapshot reports. No readable window (or an unavailable
 // snapshot) is unknown, never 0. A window at 100% with a reset still ahead
-// makes the account cooling.
+// makes the account cooling. Only a window whose status is available or
+// partial counts: Claude marks a spent weekly window under live extra usage
+// "extra-usage", which neither constrains nor parks the account. FiveHour and
+// SevenDay carry the used percent of the 300- and 10080-minute windows.
 func QuotaMeter(s harness.QuotaSnapshot, now time.Time) usagelimit.Meter {
 	m := usagelimit.Meter{Name: s.Name, ConfigDir: s.Home, Verdict: usagelimit.VerdictUnknown, Reason: s.Reason}
 	if s.Status == "unavailable" {
@@ -122,6 +126,16 @@ func QuotaMeter(s harness.QuotaSnapshot, now time.Time) usagelimit.Meter {
 	}
 	worst := -1.0
 	for _, w := range s.Windows {
+		// The 5-hour and weekly readings are shown whatever the window's status.
+		if w.UsedPercent != nil && w.DurationMins != nil {
+			u := *w.UsedPercent
+			switch *w.DurationMins {
+			case 300:
+				m.FiveHour = &u
+			case 7 * 24 * 60:
+				m.SevenDay = &u
+			}
+		}
 		// A stale window's reset already passed: its reading no longer says anything.
 		if w.UsedPercent == nil || w.Status != "available" && w.Status != "partial" {
 			continue
@@ -144,4 +158,10 @@ func QuotaMeter(s harness.QuotaSnapshot, now time.Time) usagelimit.Meter {
 	h := roundTenth(math.Max(0, 100-worst))
 	m.Headroom = &h
 	return m
+}
+
+// roundTenth is Python's round(x, 1): correct rounding of the exact binary value.
+func roundTenth(x float64) float64 {
+	r, _ := strconv.ParseFloat(strconv.FormatFloat(x, 'f', 1, 64), 64)
+	return r
 }

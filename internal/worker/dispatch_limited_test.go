@@ -1,9 +1,7 @@
 package worker
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -27,11 +25,8 @@ func limitedDispatch(t *testing.T, pct int) (error, *fakeHost) {
 	h := tmuxFake()
 	e := envWith(h)
 	e.Config = func(string) any { return cfg }
-	reset := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
-	e.Accounts = &Accounts{Env: e, Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-		v, _ := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":1},"seven_day":{"utilization":%d,"resets_at":%q}}`, pct, reset)))
-		return v.(*jsonx.Object), ""
-	}}
+	reset := time.Now().Add(24 * time.Hour).UTC()
+	e.Accounts = &Accounts{Env: e, Read: readOf(claudeSnapshot(1, float64(pct), &reset))}
 	_, err = e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"})
 	return err, h
 }

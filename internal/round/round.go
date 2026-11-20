@@ -25,6 +25,7 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/limits"
@@ -134,7 +135,7 @@ type Env struct {
 	// Login reads a slot account's Claude login for the no-login check
 	// (SlotLoginProblem). The zero value reads credentials files only, never the
 	// macOS Keychain; baseRoundEnv sets the system one.
-	Login worker.Credentials
+	Login harness.Credentials
 	// AccountPicking turns the delivery's account step on: keep the slot's own
 	// round.accounts account while it has headroom, else pick. Off is the zero
 	// value; WithAccounts is the one way to turn it on, so a verb opts in by

@@ -334,9 +334,9 @@ func (d *Deps) resolvePaneHost(root string, cfg any) host.Kind {
 	return worker.ResolvePaneHost(root, worker.ParseHostConfig(cfg), d.Getenv, d.LookPath)
 }
 
-// credentials is worker.SystemCredentials with the home and clock read off Deps.
-func (d *Deps) credentials() worker.Credentials {
-	return worker.SystemCredentials(d.Proc, d.UserHomeDir, d.Now)
+// credentials is harness.SystemCredentials with the home and clock read off Deps.
+func (d *Deps) credentials() harness.Credentials {
+	return harness.SystemCredentials(d.Proc, d.UserHomeDir, d.Now)
 }
 
 // homeOf reads a home seam; "" when it has none or fails.

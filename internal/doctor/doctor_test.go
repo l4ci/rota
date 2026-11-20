@@ -21,7 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 func fixture(t *testing.T, name string) string {
@@ -1011,7 +1010,7 @@ func TestAccountsKeychainThroughInjectedRunner(t *testing.T) {
 	dir := t.TempDir()
 	var asked []string
 	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: dir}},
-		Credentials: worker.Credentials{GOOS: "darwin", Run: func(_ context.Context, c proc.Cmd) (proc.Result, error) {
+		Credentials: harness.Credentials{GOOS: "darwin", Run: func(_ context.Context, c proc.Cmd) (proc.Result, error) {
 			asked = append(asked, c.Name)
 			return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"kc"}}`}, nil
 		}}}

@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,7 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -30,6 +28,10 @@ const poolCfg = `{"round":{"dispatch":"herdr","harnesses":["claude","codex"],"ac
 type poolRig struct {
 	used  map[string]float64
 	reads atomic.Int32
+	// skew moves the clock the readers and the env share. A reading is reused
+	// for five minutes, so a test that changes used after a first read moves
+	// the clock past that to see the change.
+	skew time.Duration
 }
 
 func (f *assignFixture) pool(t *testing.T, cfg string, used map[string]float64) *poolRig {
@@ -39,26 +41,23 @@ func (f *assignFixture) pool(t *testing.T, cfg string, used map[string]float64) 
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	r := &poolRig{used: used}
-	now := func() time.Time { return quotaNow }
+	now := func() time.Time { return quotaNow.Add(r.skew) }
 	withNow(&f.env, now)
 	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: now},
-		Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+		Login: harness.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 			return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
 		}},
-		Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
-			u, ok := r.used[name]
+		Read: func(_ context.Context, _ harness.QuotaReporter, req harness.QuotaRequest, _ harness.QuotaOptions) harness.QuotaSnapshot {
+			u, ok := r.used[req.Name]
 			if !ok {
-				return nil, "fake: unreadable"
+				return unreadable
 			}
-			reset := "null"
+			var reset *time.Time
 			if u >= 100 {
-				reset = `"` + quotaNow.Add(time.Hour).Format(time.RFC3339) + `"`
+				at := quotaNow.Add(time.Hour)
+				reset = &at
 			}
-			v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":%g,"resets_at":%s}}`, u, reset)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return v.(*jsonx.Object), ""
+			return fiveHourOf(u, reset)
 		}})
 	f.env.Quotas = &worker.Quotas{Env: worker.Env{Config: diskConfig, Now: now, Home: func() (string, error) { return "/home/x", nil }},
 		Options: harness.QuotaOptions{Now: now},
@@ -317,9 +316,9 @@ func TestTransferKeepsItsQuotaRefusal(t *testing.T) {
 	f.set, f.env.Round = set, set
 	withNow(&f.env, func() time.Time { return quotaNow })
 	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
-		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-			v, _ := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, quotaNow.Add(time.Hour).Format(time.RFC3339))))
-			return v.(*jsonx.Object), ""
+		Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
+			reset := quotaNow.Add(time.Hour)
+			return fiveHourOf(100, &reset)
 		}})
 	_, err = f.transfer("12", "dana", func(o *TransferOpts) { o.Kind = harness.Claude })
 	if by := blockedBy(t, err); by != blockedby.Quota {
@@ -411,7 +410,7 @@ func TestPlaceModelNamedByNoTierIsRefused(t *testing.T) {
 func TestAmbientPlacementClearsTheSlotAccount(t *testing.T) {
 	f := newAssignFixture(t)
 	f.pool(t, `{"round":{"dispatch":"herdr","harnesses":["claude","codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`, map[string]float64{})
-	f.env.Login = worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+	f.env.Login = harness.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
 	}}
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "old", "/old/dir") })

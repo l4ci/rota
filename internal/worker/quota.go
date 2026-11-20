@@ -144,7 +144,7 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 	home, _ := e.Home()
 	refs := []QuotaAccount{}
 	for _, kind := range harness.Kinds() {
-		if _, ok := harness.LookupQuotaReporter(kind); !ok {
+		if !displayOnly(kind) {
 			continue
 		}
 		hz, ok := harness.LookupAccounts(kind)
@@ -168,7 +168,24 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 func (q *Quotas) ForAccounts(ctx context.Context, root string, refs []QuotaAccount) []harness.QuotaSnapshot {
 	e := q.Env.WithDefaults()
 	home, _ := e.Home()
-	return q.collect(ctx, e, e.Config(root), home, refs, nil)
+	shown := make([]QuotaAccount, 0, len(refs))
+	for _, ref := range refs {
+		if displayOnly(ref.Kind) {
+			shown = append(shown, ref)
+		}
+	}
+	return q.collect(ctx, e, e.Config(root), home, shown, nil)
+}
+
+// displayOnly reports whether the kind's quota is listed for display: it has a
+// reporter and no built-in scheduling meter. Claude's usage is already shown as
+// a meter row, so listing it again would double its row and its read.
+func displayOnly(kind string) bool {
+	if _, ok := harness.LookupQuotaReporter(kind); !ok {
+		return false
+	}
+	hz, ok := harness.LookupAccounts(kind)
+	return ok && !hz.UsageMeter()
 }
 
 type quotaJob struct {
@@ -195,6 +212,9 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 	}
 	if opts.UserHome == "" {
 		opts.UserHome = home
+	}
+	if opts.Getenv == nil {
+		opts.Getenv = e.Getenv
 	}
 	rows := []harness.QuotaSnapshot{}
 	jobs := []quotaJob{}

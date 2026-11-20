@@ -11,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/tracker"
@@ -503,10 +502,7 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 
 	d := testDeps()
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
-			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
-			return v.(*jsonx.Object), ""
-		}}
+		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Read: claudeReading(40, nil, 10)}
 	}
 	if code, out, errOut := rotaInWith(t, d, wt, "worker", "done", "ben", "--base", "main", "--json"); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errOut)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
@@ -21,7 +22,6 @@ import (
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // Check statuses.
@@ -101,7 +101,7 @@ type Input struct {
 	TeamProblem   string
 	Accounts      []config.Account
 	// Credentials reads each account's login; the zero value reads files only.
-	Credentials worker.Credentials
+	Credentials harness.Credentials
 	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
 	OrchestratorConfigDir string
 	SwitchOnUsage         bool // orchestrator.switchOnUsage (D4)
