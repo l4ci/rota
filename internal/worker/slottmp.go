@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // SlotsTmpDir is the entry of the project temp root that holds every slot's
@@ -28,7 +28,7 @@ func SlotTmpDir(tempRoot, slot string) string {
 // session. It returns nothing outside a rota project (no temp root), where the
 // session keeps the harness's own temp dir.
 func (e Env) slotTmpEnv(ctx context.Context, root, slot string) ([]string, error) {
-	tr, ok, err := rotastate.TempRootVia(ctx, e.Git, root)
+	tr, ok, err := rotatree.TempRootVia(ctx, e.Git, root)
 	if err != nil || !ok {
 		return nil, err
 	}

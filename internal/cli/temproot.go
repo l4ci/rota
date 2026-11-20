@@ -3,7 +3,7 @@ package cli
 import (
 	"path/filepath"
 
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // tempRootFor is where rota makes its own temp workspaces for work in dir: the
@@ -12,10 +12,10 @@ import (
 // cleanup can anchor on either as an exact parent. A dir inside a project temp
 // root (a prepared review tree, fenced from git) resolves to that root.
 func (c *Ctx) tempRootFor(dir string) (root string, project bool, err error) {
-	if root, ok := rotastate.EnclosingTempRoot(dir); ok {
+	if root, ok := rotatree.EnclosingTempRoot(dir); ok {
 		return root, true, nil
 	}
-	root, project, err = rotastate.TempRootVia(c.Context(), c.deps().Git, dir)
+	root, project, err = rotatree.TempRootVia(c.Context(), c.deps().Git, dir)
 	if err != nil || project {
 		return root, project, err
 	}

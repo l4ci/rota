@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -70,7 +70,7 @@ func HumanAge(d time.Duration) string {
 // tmpName reports whether name is a direct child of the temp root reap may
 // touch: not empty, not a path, not the root's own .gitignore.
 func tmpName(name string) bool {
-	return name != "" && name != "." && name != ".." && name != rotastate.IgnoreFile && filepath.Base(name) == name
+	return name != "" && name != "." && name != ".." && name != rotatree.IgnoreFile && filepath.Base(name) == name
 }
 
 // heldTmp returns "" when nothing owns the entry at path, else why it is held.
@@ -142,7 +142,7 @@ func ListTmp(root string) (ents []TmpEntry, warning string) {
 	if root == "" {
 		return nil, ""
 	}
-	if !rotastate.Owned(root) {
+	if !rotatree.Owned(root) {
 		if _, err := os.Lstat(root); err == nil {
 			warning = fmt.Sprintf("%s is not a temp root rota made (a symlink, or no rota .gitignore); tmp candidates skipped", root)
 		}
@@ -202,7 +202,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 }
 
 func removeTmp(_ context.Context, s *state, c Candidate) error {
-	if s.in.TempRoot == "" || !rotastate.Owned(s.in.TempRoot) || !tmpName(c.Name) {
+	if s.in.TempRoot == "" || !rotatree.Owned(s.in.TempRoot) || !tmpName(c.Name) {
 		return fmt.Errorf("%q is not an entry of the project temp root", c.Name)
 	}
 	path := filepath.Join(s.in.TempRoot, c.Name)
