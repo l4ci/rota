@@ -1,0 +1,222 @@
+---
+name: rota-work
+description: Use when backlog items already exist and need implementation ("implement 42", "build these", or "implement [B07]" on the file backend), or with no argument to reconcile active work and pick the next item. A parallel round with standing workers is /rota-orchestrate, not this skill; an item not yet captured goes through /rota-capture first.
+---
+
+# rota-work
+
+Main-session-driven implementation with per-task verification and commits. Subagents use the current harness's dispatch interface to write files (`references/subagent-dispatch.md`); the main session commits.
+
+**Rounds are not this skill** (standing workers, merge gate, relays: `/rota-orchestrate` and the `rota round` verbs). If `round.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
+
+## Configuration
+
+Read `.rota/config.json`:
+
+- `orchestrator.model`: main session model: planning and verification (Claude default `opus`)
+- `round.tiers.claude.standard`: the `standard` tier: implementation subagents (Claude default `sonnet`; Codex uses `round.tiers.codex.standard` or its harness default)
+- `work.isolation`: `"branch"` (default) or `"worktree"`
+- `work.mergeStrategy`: `"direct"` (default) or `"pr"`
+
+## Flow
+
+Copy this checklist and track your progress:
+
+```
+- [ ] Step 1 — Start
+- [ ] Step 2 — Clarify Ambiguous Briefs (only when needed)
+- [ ] Step 2.5 — Detect Knowledge-vs-Correction Contradictions
+- [ ] Step 3 — Name the Branch
+- [ ] Step 4 — Plan Tasks
+- [ ] Step 4.5 — Umbrella Pre-Flight
+- [ ] Step 5 — Create Branch or Worktree
+- [ ] Step 6 — Dispatch Subagents
+- [ ] Step 7 — Verify Each Completion
+- [ ] Step 7.5 — Commit per Task (main session)
+- [ ] Step 8 — Sequential Waves
+- [ ] Step 8.5 — Sweep Tool-Generated Siblings
+- [ ] Step 9 — Close the Items
+- [ ] Step 10 — Merge or PR
+- [ ] Step 11 — Update Status and Report
+- [ ] Step 12 — After-Work QA
+- [ ] Step 13 — After the Cycle
+```
+
+## No-Argument Mode (reconcile, suggest, then work)
+
+With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and follow it: it reconciles active streams, prints a Round line when a round is in flight or an item failed its gate, suggests one item and continues into Step 1.
+
+## Preview Mode (`--preview <target>`)
+
+`--preview <target>` (flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure in [`references/work-preview.md`](references/work-preview.md); context per [`references/context-load-protocol.md`](references/context-load-protocol.md) and [`references/knowledge-consult.md`](references/knowledge-consult.md).
+
+## Step 1 — Start
+
+```bash
+rota work start --json <ID>[,<ID>...] [--branch <name>]
+```
+
+One call guards the tree (sweeping tool siblings and the target's fresh design/plan file into `chore:` commits), names the branch `rota/<id>-<slug>`, creates it or its worktree per `work.isolation`, registers it, and on a tracker claims each item. A rerun changes nothing.
+
+- `items[].claim` `dropped`: another worker holds it; drop it. `ready: false`: warn with `missing`. Tracker: load each item per *Resuming an item* in `references/issue-mode.md`; a `changes-requested` item follows *Handling review feedback* in `references/worker-contract.md`.
+- Exit 1 (`data.dirty`, or no commit yet: [`sibling-sweep.md`](sibling-sweep.md)) or 3: surface and stop. Exit 4 `exists`: rerun with `--branch`; `claimed`: stop; `umbrella`, `round worker`, or a brief with no ID: the step-by-step path in [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md).
+
+The main session stays at the repo root; subagents `cd` into `data.worktree` (when set) and use absolute paths.
+
+## Step 2 — Clarify Ambiguous Briefs (only when needed)
+
+Only when the brief is too thin to plan concrete tasks (scope hits 2+ incompatible areas, a requirement could yield opposite implementations, captured items imply different orderings), ask one batch of 1-3 questions before touching code. Otherwise proceed. Don't ask to confirm understanding, for preferences inferable from `KNOWLEDGE.md` or the codebase, or for style inside an agreed scope.
+
+Each question gets a short `header`, options that map to concrete plans with the likeliest marked `(Recommended)`. Allow multiple selections for conflicting items. Use the host question interface or numbered prose (`references/authoring-conventions.md`). On ambiguity, default to Recommended and state it in the dispatch brief.
+
+## Step 2.5 — Detect Knowledge-vs-Correction Contradictions
+
+When Step 2 produced a non-Recommended answer that pushes back on a stated assumption, read [`contradictions.md`](contradictions.md). Skip silently otherwise.
+
+## Step 3 — Name the Branch
+
+Done in Step 1. When items carry `Repos:` (umbrella mode) or the backend is issues, read [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md) at each step it names.
+
+## Step 4 — Plan Tasks
+
+**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists; a plan that fails `rota plan check` stops the run before dispatch; the check is skipped on the file backend and for plans with no `Serves:` line (see that file).
+
+**Planning level.** With no stored plan, apply [`references/planning-dial.md`](references/planning-dial.md) and state the level in one line to the user. Level 1 (pointers) decomposes ad hoc as below, unchanged. Level 2 or higher: under `autonomy.level: off`, stop and offer `/rota-brainstorm`, `/rota-spike` or `/rota-plan` first; proceed ad hoc only if the user says so. Under `roundtrip` or `auto` ([`references/autonomy.md`](references/autonomy.md)) do not stop: run the step the dial names (level 2: `/rota-brainstorm`, then `/rota-plan`; level 3: `/rota-spike`, then `/rota-plan`; level 4: `/rota-plan` with its critic) by reading and following its instructions, approve the design or plan yourself, state the call in one line, then continue to the work. A round worker (branch `<agent>/<issue>-<slug>`) does not stop: the issue's acceptance criteria are its spec, so it states the level and proceeds, and escalates with `ROTA-BLOCKED` only for an open product question. A stored plan already carries its level; skip this.
+
+1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too; call out drift from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (one-line nudge; never blocks).
+
+   > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit.
+
+2. Identify tasks from the loaded plan, preserving its key and task numbers; only decompose ad hoc when no plan exists. Include files, what changes and acceptance criteria.
+3. **Resuming** (a branch with commits past the base): apply the resume rule in [`references/task-ledger.md`](references/task-ledger.md) to those tasks, skip committed task IDs and plan only the unfinished tasks. Do not silently re-decompose or renumber a saved plan.
+4. **Absorb file collisions** before grouping: any two tasks whose modified-file sets intersect, and shared-symbol changes that disjoint file sets hide. Rules and the rename check in [`references/work-wave-planning.md`](references/work-wave-planning.md).
+5. Group into dependency waves: wave 1 is independent files (parallel); wave 2+ depends on earlier output.
+
+## Step 4.5 — Umbrella Pre-Flight
+
+Skip when `rota repo umbrella` exits 1 (single-repo). When it exits 0, read [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md), *Step 4.5*, and carry the resolved repo set into Steps 5 and 10.
+
+## Step 5 — Create Branch or Worktree
+
+Done in Step 1. Umbrella: *Step 5* in `umbrella-and-issue-mode.md`.
+
+## Step 6 — Dispatch Subagents
+
+Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. In a plan with two or more tasks, T1 (the tracer) is its own first wave: dispatch and verify it alone (Step 7) before any other task starts. Subagents write files and never stage or commit (no `.git/index` races). Fill the brief from [`dispatch-brief.md`](dispatch-brief.md). Umbrella: read *Step 6* in `umbrella-and-issue-mode.md`.
+
+## Step 7 — Verify Each Completion
+
+Verify silently. Trust the diff, not the subagent's narrative.
+
+1. `git status --porcelain`, then `git diff` for the files the subagent reported.
+2. Read the modified files: do they match the brief?
+3. Structural checks: grep for expected patterns, no regressions.
+4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the subagent's set get a fix-up dispatch before staging.
+5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
+6. When `test.fast` is set, run `rota test run fast`; a FAIL is a FAIL. Use it as the PASS proof `--check`.
+
+**PASS** → `rota debug work-fix pass <ID> --task <N>` (clears that task's attempt count), then move on. **FAIL** → `rota debug work-fix attempt <ID> --task <N>` before each fix dispatch, then dispatch a fix agent and re-verify. Exit 4 (`iron law`) is the cap: three fix attempts on that task since its last PASS, and the count survives sessions. Dispatch no fourth fix, print the failing proof rows and name `/rota-debug <ID>` as the next step; only a human resets it (`rota debug work-fix reset <ID> --task <N> --reason "<why>"`, a manual gate: only after explicit user approval, with `--confirm --confirm-note "<their answer>"`). Skip the counter for a task that resolves no item. Commit (Step 7.5) only on PASS.
+
+**Tracer stop.** When the plan's T1 (the tracer) fails its Verify, or its RED run does not turn green, dispatch no later task and report the failure to the user. Do not build on it. One-task plans have no tracer.
+
+**Record proof** (facts about what ran, not acceptance). Per task:
+
+- **PASS:** one row per item the task resolves, run through the verb so the row is measured: `rota proof record <ID> -- <verify command or grep>` (exit 0 writes PASS, non-zero writes FAIL and exits 1). Never type a PASS you did not run.
+- **Persistent FAIL:** `rota proof record` already wrote the FAIL row.
+- **Behavior task** (skip the RED half when `rota config show work.tdd` is `false`; PASS rows stay): run the new test through `rota proof record <ID> -- <test command>` before the change (the FAIL row is the RED; the verb exits 1, expected), then again after for the PASS row. A subagent that reports no RED gets a fix dispatch (a FAIL above). So does one whose RED evidence is a build, compile or setup failure (`undefined:`, `cannot find`, `no such file`, `command not found`, import or syntax error): the test must fail on an assertion, so the fix agent repairs the test until it does.
+- **Docs or skill-only task:** no RED, and no command to run. Use `rota proof add` with `no test seam: docs/skill change` in the row's `--check`.
+- **Acceptance marks (issue backend):** when the backlog backend is issues, read [`references/acceptance-marks.md`](references/acceptance-marks.md) after recording PASS proof.
+- **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
+
+Issue mode keeps the rows in the item's proof note.
+
+## Step 7.5 — Commit per Task (main session)
+
+One commit per task, sequential, in dispatch order, staging only that task's files:
+
+```bash
+git add <task-N-files>
+git commit -m "<suggested-message-from-task-N-brief>" -m "Task: <key>/<N>"
+```
+
+- **Context guard.** When a prompt carries a line recommending `/rota-pause` (`work.contextGuard`, the context is at the handoff threshold), run `/rota-pause` once this commit is done, between tasks, never mid-task. A Stop block asking for the same (`auto`) means the same.
+- Every task commit ends with the `Task: <key>/<N>` trailer ([`references/task-ledger.md`](references/task-ledger.md)); a resumed session skips finished tasks by it.
+- Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`.
+- Use the brief's suggested message verbatim, unless a FAIL→re-dispatch loop changed what landed.
+- **Same-file carve-out.** Two parallel subagents editing different ranges of one file get ONE commit naming both task IDs; granularity lives in the message.
+- Worktree isolation: commit against the worktree's index (`git -C <worktree-path>`). Umbrella: *Step 7.5* in `umbrella-and-issue-mode.md`.
+
+
+## Step 8 — Sequential Waves
+
+Wait for wave 1 to complete, verify and commit (Step 7.5), then dispatch wave 2 with updated context.
+
+## Step 8.5 — Sweep Tool-Generated Siblings
+
+When the toolchain left untracked siblings after the task commits, sweep them per [`sibling-sweep.md`](sibling-sweep.md), *Step 8.5*. Otherwise skip.
+
+## Step 9 — Close the Items
+
+**Issue backend:** skip; the issue closes when its PR merges (`umbrella-and-issue-mode.md`, *Step 9*).
+
+**File backend:** follow [`file-backend-close.md`](file-backend-close.md) per resolved item: it tombstones the item's plan, runs `rota item complete <ID> --commit <commit-hash>` (the only write to the backlog), then commits `.rota/BACKLOG.md` and the removed plan by name.
+
+## Step 10 — Merge or PR
+
+`rota ship strategy` picks `rota ship merge` (`direct`, also when `unset`) or `rota ship pr` (`pr`). It reads `work.mergeStrategy`, except that a local forge (no origin remote, or `forge.provider: local`) is always `direct` and issues on a tracker are always `pr`. Don't ask. Invocations (umbrella `--repo`, exit-4 verdict, merge-approval handling) are in `rota-ship` Steps 6a/6b. Opening a PR is a manual gate. Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](references/autonomy.md)), hand the branch to `/rota-ship` instead of merging here, so the chain gets its review: run Step 12 first when it is on, then dispatch `/rota-ship` by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question. It runs the review `ship.review` sets and merges or opens the PR (the PR gate still asks); its Steps 7 to 9.7 replace Steps 11 and 13 here. The issue backend forces the PR path: read *Step 10* in `umbrella-and-issue-mode.md` and `references/issue-mode.md`.
+
+## Step 11 — Update Status and Report
+
+```bash
+rota status rm <branch>                  # umbrella: add --repo <repo>
+```
+
+Umbrella: see *Step 11* in `umbrella-and-issue-mode.md`. Then one compact summary, no plan recap or verification list: `Done — merged <branch> into main.`, one `- #<n> <title> — <what changed>` line per item, `Commit: <sha>`.
+
+## Step 12 — After-Work QA
+
+When `rota config show qa.afterWork` is `true`, read [`after-work-qa.md`](after-work-qa.md). `false` (default) → skip silently.
+
+## Step 13 — After the Cycle
+
+One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-learn` to save what this cycle taught; `/rota-decide`, `/rota-docs` and `/rota-refactor` are there when you want them."* Never auto-invoke any of them. If the cycle touched files in a `.rota/map/<name>.md` entry's `Key files / dirs`, bump its `touched:` and run `rota map index`.
+
+## Gates: Thought → Reality
+
+| Thought | Reality |
+|---|---|
+| "The subagent said it passed." | Step 7 trusts the diff: `git status`, `git diff` and the read files, never the subagent's narrative. |
+| "The check is obvious, skip the proof row." | `rota item complete` exits 4 without one. An unproven item stays open and is surfaced. |
+| "The new test passes, that's enough." | A test that never failed may not test the change. A behavior task needs a RED run first, recorded as a FAIL row, then the PASS row. |
+| "Pass `--no-proof`, the code is fine." | Never on your own. The row records what ran; the flag records that nothing did. |
+| "A subagent disputing its brief is noise." | A dispute is a FAIL on the plan. Fix the plan, then re-dispatch. |
+| "Open the PR now, the user wants it shipped." | Opening a PR is a manual gate whatever `autonomy.level` says ([`references/autonomy.md`](references/autonomy.md); Step 10, `/rota-ship` Step 6a). |
+| "Run the full smoke after each task." | Per-task checks stay structural. The full suite runs in `/rota-ship` and `/rota-review`. |
+
+## Key Principles
+
+- **No noise.** Report results, not process.
+- **The main session owns `.rota/` state** (`status.json`, backlog via `rota item` verbs).
+- **Never work directly on main.**
+
+## References
+
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): canonical K+D query pattern and hit-register rule.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load (Preview Mode).
+- [`references/work-preview.md`](references/work-preview.md): `--preview` procedure.
+- [`references/task-ledger.md`](references/task-ledger.md): `Task:` trailer and resume rule.
+- [`references/work-wave-planning.md`](references/work-wave-planning.md): file collisions, brief-writing rules, verifying a completion.
+- [`references/isolation-patterns.md`](references/isolation-patterns.md): branch, worktree and umbrella layouts.
+- [`references/issue-mode.md`](references/issue-mode.md): issue backend: claim, proof note, PR path.
+- [`references/umbrella-mode.md`](references/umbrella-mode.md): umbrella registry and `Repos:` semantics.
+- [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md): when the Step 13 learn nudge fires.
+- [`references/worker-contract.md`](references/worker-contract.md): round-worker rules and review-feedback handling.
+- [`plan-artifact.md`](plan-artifact.md): Step 4 backend keys, saved tasks and resume identity for item and slice plans.
+- [`no-argument-mode.md`](no-argument-mode.md): reconcile, suggest, then work.
+- [`sibling-sweep.md`](sibling-sweep.md): the sibling list and the Step 8.5 sweep.
+- [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
+- [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md): umbrella and issue-backend branches of Steps 3–11.
+- [`dispatch-brief.md`](dispatch-brief.md): Step 6 brief template.
+- [`references/acceptance-marks.md`](references/acceptance-marks.md): Step 7 acceptance marks on the issue backend.
+- [`file-backend-close.md`](file-backend-close.md): Step 9 on the file backend.
+- [`after-work-qa.md`](after-work-qa.md): Step 12.
