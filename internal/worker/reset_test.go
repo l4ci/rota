@@ -481,3 +481,80 @@ func TestResetRefusalNamesRoundStartInARound(t *testing.T) {
 		t.Errorf("round refusal names pool init: %s", we.Message)
 	}
 }
+
+// taskBranchProject is a slot project with a bare origin holding main.
+func taskBranchProject(t *testing.T) (b, origin string) {
+	t.Helper()
+	b = slotProject(t)
+	origin = gittest.TempDir(t)
+	gittest.Run(t, origin, "init", "-q", "--bare")
+	gittest.Run(t, b, "remote", "add", "origin", origin)
+	gittest.Run(t, b, "push", "-q", "origin", "main")
+	return b, origin
+}
+
+const taskBranch = "ag/7-fix"
+
+func TestResetReusesATaskBranchPushedToOrigin(t *testing.T) {
+	b, _ := taskBranchProject(t)
+	gittest.Run(t, b, "switch", "-q", "-c", taskBranch, "main")
+	commitIn(t, b, "earlier.txt")
+	gittest.Run(t, b, "push", "-q", "origin", taskBranch)
+	gittest.Run(t, b, "switch", "-q", "main")
+	gittest.Run(t, b, "branch", "-q", "-D", taskBranch)
+	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(wt(b), "earlier.txt")); err != nil {
+		t.Errorf("earlier commit missing: %v", err)
+	}
+	if got := gittest.Run(t, wt(b), "rev-parse", "--abbrev-ref", taskBranch+"@{upstream}"); got != "origin/"+taskBranch {
+		t.Errorf("upstream = %q", got)
+	}
+}
+
+func TestResetKeepsALocalOnlyTaskBranchAheadOfTheBase(t *testing.T) {
+	b, _ := taskBranchProject(t)
+	gittest.Run(t, b, "switch", "-q", "-c", taskBranch, "main")
+	commitIn(t, b, "local.txt")
+	tip := gittest.Run(t, b, "rev-parse", taskBranch)
+	gittest.Run(t, b, "switch", "-q", "main")
+	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := gittest.Run(t, b, "rev-parse", taskBranch); got != tip {
+		t.Errorf("branch moved to %s, want %s", got, tip)
+	}
+	if got := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD"); got != taskBranch {
+		t.Errorf("worktree on %s", got)
+	}
+}
+
+func TestResetRefusesADivergedTaskBranch(t *testing.T) {
+	b, _ := taskBranchProject(t)
+	gittest.Run(t, b, "switch", "-q", "-c", taskBranch, "main")
+	commitIn(t, b, "pushed.txt")
+	gittest.Run(t, b, "push", "-q", "origin", taskBranch)
+	gittest.Run(t, b, "reset", "-q", "--hard", "main")
+	commitIn(t, b, "other.txt")
+	tip := gittest.Run(t, b, "rev-parse", taskBranch)
+	gittest.Run(t, b, "switch", "-q", "main")
+	_, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false)
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, taskBranch) {
+		t.Fatalf("err = %v", err)
+	}
+	if got := gittest.Run(t, b, "rev-parse", taskBranch); got != tip {
+		t.Errorf("branch was reset to %s", got)
+	}
+}
+
+func TestResetStillCutsAMissingTaskBranchFromTheBase(t *testing.T) {
+	b, _ := taskBranchProject(t)
+	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := gittest.Run(t, wt(b), "rev-parse", "HEAD"), gittest.Run(t, b, "rev-parse", "main"); got != want {
+		t.Errorf("HEAD = %s, want base %s", got, want)
+	}
+}
