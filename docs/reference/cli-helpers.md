@@ -37,7 +37,7 @@ See [parallel rounds](../usage/parallel-rounds.md) and [unattended rounds](../us
 - **Project root.** Verbs walk up from the working directory to the nearest
   `.rota/`. Verbs such as `rota init` (with `check` and `umbrella`), `rota setup`, `rota projects`, `rota version`,
   `rota update`, `rota doctor` and `rota skills` run without one.
-- **PR references.** <a id="pr-references"></a>Wherever a verb takes a PR (`rota worker gate`, `rota worker train`, `rota worker dispatch --pr`, `rota round report --pr`, `rota verdict add --pr`), the reference is a number (`12`), `#12`, GitLab's `!12` or a full `http(s)` PR/MR URL (`/pull/12`, `/merge_requests/12`). At most one prefix and one trailing `/` are read. Anything else has no number and is refused: `12/foo`, `12?x`, `#https://…` and a scheme-less URL such as `github.com/o/r/pull/12`. One grammar (`tracker.PRNumber`) serves every verb.
+- **PR references.** <a id="pr-references"></a>Wherever a verb takes a PR (`rota worker gate`, `rota worker train`, `rota worker dispatch --pr`, `rota verdict add --pr`), the reference is a number (`12`), `#12`, GitLab's `!12` or a full `http(s)` PR/MR URL (`/pull/12`, `/merge_requests/12`). At most one prefix and one trailing `/` are read. Anything else has no number and is refused: `12/foo`, `12?x`, `#https://…` and a scheme-less URL such as `github.com/o/r/pull/12`. One grammar (`tracker.PRNumber`) serves these verbs. `rota round report --pr` is narrower: a number, `#12` or a URL, and `!12` exits 2.
 - **Idempotent writes.** A mutating verb reports `changed: true|false`. A no-op
   is exit 0.
 
@@ -288,7 +288,7 @@ errors. Document stat or removal errors from `plan rm`, `design rm` and
 
 | Usage | What it does |
 |---|---|
-| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b] [--milestone <M01> [--slice]]` | create a plan stub (issue mode: `<#N>` or `<B7>` item key, milestone optional); `--slice` with `--milestone` drops the key and mints the next `S<NN>` one |
+| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b] [--milestone <M01> [--slice]]` | create a plan stub (issue mode: `<#N>` or `<B7>` item key, milestone optional); refuses (exit 2, nothing written) a title that front matter could not read back, as `design add` does; `--slice` with `--milestone` drops the key and mints the next `S<NN>` one |
 | `rota plan list [--milestone M01]` | list plans |
 | `rota plan show <key>` | print a plan |
 | `rota plan put <key> --body-file <path\|->` | replace a plan's text |
@@ -414,7 +414,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round status [--ui]` | list the round's slots with host, PR and drift; `--ui` opens the read-only overview screen, see [the status screen](../usage/parallel-rounds.md#the-status-screen); a bundled slot shows as `1559 (+#1563, +#1564)` |
 | `rota round summary [--round <n>]` | the round's issues, slots and accounts: wall time, lead times, red-train rate, bounces per merged PR, flake recoveries and quota share |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds, including parking slots whose PR merged |
-| `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>] [--attempt <id>]` | record a solo worker's result (`--pr` is a [PR reference](#pr-references)) (exit 4 on a stale `--attempt`): state and PR (or, for a review item, the issues it filed) |
+| `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>] [--attempt <id>]` | record a solo worker's result: state and PR (or, for a review item, the issues it filed); `--pr` takes a number, `#N` or a URL (not `!N`, so narrower than a [PR reference](#pr-references)); exit 4 on a stale `--attempt` |
 | `rota round escalate send <number|key> [--pr] [--slot <name>] --title <text> --body-file <path\|-> --options <text>… --recommend <n> [--cost-if-wrong <text>] [--timeout <seconds>]` | ask the human on an issue or PR thread; exit 4 without at least two `--options` and a `--recommend` |
 | `rota round escalate check [<id>…]` | look for the human's answers; a bare `ok`, `yes` or option number resolves to that option |
 | `rota round return <slot> --reason <text> [--note-file <path\|->] [--holder-pid <n>]` | a worker hands its issue back: park, comment, release |

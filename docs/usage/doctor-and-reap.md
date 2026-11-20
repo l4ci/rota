@@ -16,7 +16,7 @@ carries a hint: the one command or edit that fixes it.
 
 **Exit codes.** `0` when every check passes, skips or warns. `1` when any check fails; `--json` still prints
 the full result, so a caller reads `data.ok`. A missing tool is a failed check, not an error, so doctor
-never exits 5. So do a config value that does not parse (`config`) and a `.rota/workers.json` that exists but
+never exits 5. These also fail the run: a config value that does not parse (`config`) and a `.rota/workers.json` that exists but
 cannot be read or parsed (`registry`): both fail the run instead of passing on state other verbs refuse.
 
 | Check | Looks at | Skips when |
