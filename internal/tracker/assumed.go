@@ -3,12 +3,27 @@ package tracker
 import "context"
 
 // assumedForge is the issue tracker of issues.source forge on an origin that
-// names no forge: ResolveProvider's reader answer, github. Reads go through;
-// every write is the actor's refusal, an *UnknownForgeError, before the CLI
-// runs, so nothing lands on a forge rota only guessed.
+// names no forge: ResolveProvider's reader answer, github. It holds only the
+// IssueReader half of the adapter, so the wrapped adapter's writes are out of
+// reach; every IssueTracker write is the actor's refusal, an
+// *UnknownForgeError, before the CLI runs, so nothing lands on a forge rota
+// only guessed. A write method added to IssueTracker stops assumedForge
+// satisfying it, which fails the build at newAssumedForge until it is refused
+// here.
 type assumedForge struct {
-	IssueTracker
-	r Resolution
+	IssueReader
+	labels LabelLister
+	r      Resolution
+}
+
+// newAssumedForge wraps adapter a, which must list labels (github does), as the
+// read-only view. It is a LabelLister but never a LabelManager.
+func newAssumedForge(a IssueTracker, r Resolution) (IssueTracker, error) {
+	labels, ok := a.(LabelLister)
+	if !ok {
+		return nil, Unavailable("the assumed forge adapter %s cannot list label definitions", a.Provider())
+	}
+	return assumedForge{IssueReader: a, labels: labels, r: r}, nil
 }
 
 // AssumedNote is the line a verb prints when it reads it on an assumed github
@@ -23,13 +38,8 @@ func AssumedNote(it IssueTracker) string {
 func (a assumedForge) refuse() error { return &UnknownForgeError{Origin: a.r.Origin} }
 
 func (a assumedForge) ListLabels(ctx context.Context) ([]Label, error) {
-	if lister, ok := a.IssueTracker.(LabelLister); ok {
-		return lister.ListLabels(ctx)
-	}
-	return nil, failed("the assumed forge does not support listing label definitions")
+	return a.labels.ListLabels(ctx)
 }
-
-func (a assumedForge) UpsertLabel(context.Context, Label) error { return a.refuse() }
 
 func (a assumedForge) Create(context.Context, string, string, []string, string) (IssueKey, error) {
 	return "", a.refuse()
