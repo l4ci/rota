@@ -12,8 +12,10 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
 `.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), the grep gate (`bash test/grep-gate.sh`), the gofmt check (`bash test/gofmt.sh`, the same `gofmt -l` CI runs), `go vet ./...`, `go test -race -timeout 30m ./...`
-and the smoke suite in shards (`ROTA_SMOKE_SHARDS`, default one per two cores, 1 to 4), all at once. The sharded gate takes about 2–3 minutes;
-running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
+and the smoke suite in shards (`ROTA_SMOKE_SHARDS`, default one per two cores, 1 to 4), all at once.
+The Go tests start `internal/worker`, `internal/round` and `internal/cli` in separate processes alongside the remaining packages, so the largest packages do not wait for a package slot.
+The measured gate median is about 10 minutes; use `rota test-audit` for current timings.
+The gate takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. After all initial checks finish, an eligible failed Go package or smoke shard
 runs once more, alone, on the same clean tree. More than three failed Go packages skip all
 package retries. Go retries bypass the test cache; smoke retries use the original shard's
