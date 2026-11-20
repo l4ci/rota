@@ -517,7 +517,7 @@ func TestDoctorTestLine(t *testing.T) {
 		return c["test"]
 	}
 	c := line()
-	if c == nil || c["status"] != "pass" || !strings.Contains(c["detail"].(string), "test lock width 1; smoke shards ") {
+	if c == nil || c["status"] != "warn" || !strings.Contains(c["detail"].(string), "test lock width 1; smoke shards ") {
 		t.Fatalf("default: %v", c)
 	}
 	rotaInWith(t, d, dir, "config", "set", "test.slots", "3")
@@ -530,6 +530,45 @@ func TestDoctorTestLine(t *testing.T) {
 	}
 	if c := line(); !strings.Contains(c["detail"].(string), "width 3; smoke shards 2 (ROTA_SMOKE_SHARDS)") {
 		t.Errorf("configured: %v", c)
+	}
+}
+
+func TestDoctorTestLockRosterConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, cfg, status string
+	}{
+		{"missing round", `{}`, "pass"},
+		{"missing roster", `{"round":{"slots":2}}`, "pass"},
+		{"one slot", `{"round":{"roster":["ann"]}}`, "pass"},
+		{"two slots", `{"round":{"roster":["ann","bo"]}}`, "warn"},
+		{"five slots", `{"round":{"roster":["ann","bo","cy","di","ed"]}}`, "warn"},
+		{"width two", `{"round":{"roster":["ann","bo"]},"test":{"slots":2}}`, "pass"},
+		{"width three", `{"round":{"roster":["ann","bo"]},"test":{"slots":3}}`, "pass"},
+		{"invalid round", `{"round":{"roster":["ann","bo"],"scope":"invalid"}}`, "pass"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(dir, ".rota"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(tc.cfg), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			code, out, _ := rotaInWith(t, d, dir, "doctor", "--json")
+			_, checks := doctorData(t, out)
+			c := checks["test"]
+			t.Logf("test check: %v", c)
+			if code != 0 || c == nil || c["status"] != tc.status {
+				t.Fatalf("exit %d, test check %v; want %s", code, c, tc.status)
+			}
+			if tc.status == "warn" && c["hint"] != "rota config set --global test.slots <n>" {
+				t.Errorf("hint = %v", c["hint"])
+			}
+		})
 	}
 }
 
