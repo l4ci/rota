@@ -324,7 +324,7 @@ errors. Document stat or removal errors from `plan rm`, `design rm` and
 | Usage | What it does |
 |---|---|
 | `rota proof add <ID> --check <text> --result <PASS\|FAIL> --evidence <text> [--sha <commit>]` | append a proof row; a `--check` or `--sha` that contains ` · ` (the row's field separator) exits 2 |
-| `rota proof record <ID> [--base <ref>] -- <cmd>...` | run the command and append a proof row measured, not typed: PASS for exit 0, FAIL otherwise; exits 0 or 1 to match; a command text (the row's check) that contains ` · ` exits 2, as for `proof add`; prints a `cwd:` line (`data.cwd`) and, on FAIL, the last 20 lines of the command's output (`data.outputTail`) |
+| `rota proof record <ID> [--base <ref>] -- <cmd>...` | run the command and append a proof row measured, not typed: PASS for exit 0, FAIL otherwise; exits 0 or 1 to match; a command text (the row's check) that contains ` · ` exits 2, as for `proof add`; prints a `cwd:` line (`data.cwd`) and, on FAIL, the last 20 lines of the command's output (`data.outputTail`) and `log: <path>` (`data.logPath`), the full output under the project temp root; a PASS writes no log; when the row cannot be saved it exits 5 and the message still names the command's exit code (and the log path on FAIL) |
 | `rota proof show <ID> [--count]` | list an item's proof rows |
 
 ## `rota debug`

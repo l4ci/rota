@@ -151,6 +151,13 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	} else {
 		in.ConfigErrors = append(in.ConfigErrors, err.Error())
 	}
+	// Round settings supply a default roster even without round config. Only
+	// compare an explicitly configured roster, and tolerate invalid settings.
+	if roster, present := config.Lookup(cfg, config.RoundRosterKey); present && roster != nil {
+		if settings, ok := d.tolerantRoundSettings(root); ok {
+			in.RoundRosterSize = len(settings.Roster)
+		}
+	}
 	// A support machine writes only the gitignored .codex files, so the tracked
 	// ones are not its drift and `rota agents write` could not fix them.
 	var keep func(string) bool
