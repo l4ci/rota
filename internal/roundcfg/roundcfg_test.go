@@ -219,6 +219,17 @@ func TestAutopilotKeys(t *testing.T) {
 	}
 }
 
+func TestSmokeSectionsDir(t *testing.T) {
+	s, err := Load(project(t, `{"test":{"smokeSectionsDir":" test/sections/ "}}`))
+	if err != nil || s.SmokeDir != "test/sections" {
+		t.Fatalf("set: %q %v", s.SmokeDir, err)
+	}
+	s, err = Load(project(t, `{}`))
+	if err != nil || s.SmokeDir != "" {
+		t.Fatalf("unset: %q %v", s.SmokeDir, err)
+	}
+}
+
 func TestBatchKey(t *testing.T) {
 	s, err := Load(project(t, `{}`))
 	if err != nil || s.Batch != 0 {

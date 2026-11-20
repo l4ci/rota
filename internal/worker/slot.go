@@ -484,7 +484,7 @@ func (s *Slot) SetLaunch(kind, source, model string) {
 // Binding is what ties a slot to an issue.
 type Binding struct {
 	Task, ClaimID, Kind, KindSource, Tier, Model, TierReason string
-	// SmokeSection is the reserved test/sections number, 0 for none.
+	// SmokeSection is the reserved smoke section number (test.smokeSectionsDir), 0 for none.
 	SmokeSection int
 	// Attempt is the id of this assignment, "" for none.
 	Attempt string
