@@ -111,7 +111,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			in.Accounts = append(in.Accounts, a)
 		}
 	}
-	in.OrchestratorConfigDir = harness.ResolveAccounts(harness.Claude).AmbientAccount(d.Getenv).ConfigDir
+	in.OrchestratorConfigDir = harness.OrchestratorAccounts().AmbientAccount(d.Getenv).ConfigDir
 	in.ProjectRoot = root
 	if name := in.Tracker.Connection; name != "" {
 		in.Connection = doctorConnection(ctx, d, name)

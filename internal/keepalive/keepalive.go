@@ -356,7 +356,7 @@ func (r *run) runChild(argv []string, runStarted time.Time) (reason string, caus
 	r.save()
 	childEnv := []string{roundlease.HolderPIDEnv + "=" + strconv.Itoa(r.env.Holder.PID)}
 	if r.st.Switches > 0 {
-		childEnv = append(childEnv, harness.ResolveAccounts(harness.Claude).AccountEnv(harness.Account{ConfigDir: r.curDir})...)
+		childEnv = append(childEnv, harness.OrchestratorAccounts().AccountEnv(harness.Account{ConfigDir: r.curDir})...)
 	}
 	child, err := r.env.Spawn(argv, childEnv)
 	if err != nil {
