@@ -55,7 +55,9 @@
       "kit",
       "sam"
     ],
-    "architectureEvery": 30
+    "architectureEvery": 30,
+    "trainMax": 4,
+    "trainFillMinutes": 15
   },
   "release": {
     "versionFile": "VERSION"
