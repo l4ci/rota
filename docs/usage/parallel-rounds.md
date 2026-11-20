@@ -843,7 +843,7 @@ The issue keeps its claim and in-progress label: it is still taken, just not by 
 whose worker is busy, blocked or has uncommitted files is never taken.
 
 - **See it**: `rota round status` lists each PR in review (`review` in JSON).
-- **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, or the PR URL). A pass drops it from the list, and so does
+- **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, `'!<N>'` or the full PR URL; `12/foo`, `12?x` and a scheme-less URL are refused, see [PR references](../reference/cli-helpers.md#pr-references)). A pass drops it from the list, and so does
   a gate that left the PR merged with a red verify of the landed tree (`merged-remotely` included). A merged PR never stays under `review`.
   `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
   habitual slot gate never merges the slot's next branch.
@@ -1167,7 +1167,7 @@ The train orders the members to cut conflicts: PRs that share no path with anoth
 
 Gates and trains on one repository queue on a single lock (`<git-common-dir>/rota/land.lock`), held from the scratch worktree through landing. A second gate or train waits instead of running beside the first, so neither sees the other's scratch worktree and neither lands inside the other's verify-to-land window. `--check-only` takes no lock.
 
-`rota worker gate <PR number> --base <branch>` and `rota worker train <PR>... --base <branch>` also accept PRs that no slot or review record owns (an orchestrator fix-forward PR, a PR after wind-down), reading their branches from the forge. They run the same freshness, provenance, approval, verify and land steps. The closes check takes the issue from the branch name and skips a branch that names none.
+`rota worker gate <PR number> --base <branch>` and `rota worker train <PR>... --base <branch>` (a PR is a number, `#N`, `!N` or a URL: [PR references](../reference/cli-helpers.md#pr-references)) also accept PRs that no slot or review record owns (an orchestrator fix-forward PR, a PR after wind-down), reading their branches from the forge. They run the same freshness, provenance, approval, verify and land steps. The closes check takes the issue from the branch name and skips a branch that names none.
 
 With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/train` and waits for CI instead of running `test.full` here (`test.e2e` still runs here, after CI is green); bisect pushes each prefix the same way, one CI run per step. `test.ciChecks` names the checks that must pass and must not be empty. If a listed check never appears or CI does not finish in time the verdict is `ci-not-run` or `verify-timeout`, and nothing lands; a member that changes the CI definition stops it as `ci-config-changed`. See [running the full tier on CI](configuration.md#running-the-full-tier-on-ci).
 
