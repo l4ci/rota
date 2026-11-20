@@ -399,6 +399,22 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../skills/rota-refactor.md) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification: the gate and the train refuse to merge (exit 4, `blockedBy: no-verify`) unless `test.e2e` is set or you pass `--no-verify`, which merges and reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
 
+### Train rerun selection
+
+`test.rerunCheck` holds a command that runs one failed check alone, using
+`{check}` for the id reported by the gate. `test.goCheck` names the Go check in
+the gate's `FAIL <check> (exit N)` lines; it defaults to `gotest`. For a gate that
+calls its Go check `unit`, set:
+
+```sh
+rota config set test.goCheck unit
+```
+
+With `test.rerunCheck` set, that check can use `test.vacuousCommand` to select
+the failing Go tests when no other failed check is left unselected. An unknown
+check name or missing Go test names keeps the full command. See
+[train diagnosis](parallel-rounds.md) for the log markers and full-run confirmation.
+
 ### The exclusion ledger
 
 A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file you create by hand when the first entry is needed (a missing file or `[]` means no exclusions):
