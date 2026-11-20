@@ -69,18 +69,9 @@ func (e Env) gateRelayCapture(ctx context.Context, h host.Host, t *pollTarget, s
 }
 
 // doneEventAfterRelay: the slot's standing event is a `worker done` sent after
-// the pending relay went out. The event's seq decides it, since stamps have
-// second precision and a stale done can share the relay's second; a relay
-// recorded before the seq existed falls back to the stamp.
+// the pending relay went out (see doneAfter).
 func doneEventAfterRelay(t pollTarget) bool {
-	if t.ev == nil || t.ev.Kind != EventDone {
-		return false
-	}
-	if t.relayEvSeq >= 0 {
-		return t.ev.Seq > t.relayEvSeq
-	}
-	ts, err := stamp.Parse(t.ev.TS)
-	return err == nil && !ts.Before(t.relaySentAt)
+	return doneAfter(t.ev, t.relayEvSeq, t.relaySentAt)
 }
 
 // relayFallbackWindow is how long an unseen relay holds a slot busy when
