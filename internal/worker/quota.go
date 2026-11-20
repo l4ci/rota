@@ -144,7 +144,7 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 	home, _ := e.Home()
 	refs := []QuotaAccount{}
 	for _, kind := range harness.Kinds() {
-		if _, ok := harness.LookupQuotaReporter(kind); !ok {
+		if !displayOnly(kind) {
 			continue
 		}
 		hz, ok := harness.LookupAccounts(kind)
@@ -168,7 +168,24 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 func (q *Quotas) ForAccounts(ctx context.Context, root string, refs []QuotaAccount) []harness.QuotaSnapshot {
 	e := q.Env.WithDefaults()
 	home, _ := e.Home()
-	return q.collect(ctx, e, e.Config(root), home, refs, nil)
+	shown := make([]QuotaAccount, 0, len(refs))
+	for _, ref := range refs {
+		if displayOnly(ref.Kind) {
+			shown = append(shown, ref)
+		}
+	}
+	return q.collect(ctx, e, e.Config(root), home, shown, nil)
+}
+
+// displayOnly reports whether the kind's quota is listed for display: it has a
+// reporter and no built-in scheduling meter. Claude's usage is already shown as
+// a meter row, so listing it again would double its row and its read.
+func displayOnly(kind string) bool {
+	if _, ok := harness.LookupQuotaReporter(kind); !ok {
+		return false
+	}
+	hz, ok := harness.LookupAccounts(kind)
+	return ok && !hz.UsageMeter()
 }
 
 type quotaJob struct {
@@ -195,6 +212,9 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 	}
 	if opts.UserHome == "" {
 		opts.UserHome = home
+	}
+	if opts.Getenv == nil {
+		opts.Getenv = e.Getenv
 	}
 	rows := []harness.QuotaSnapshot{}
 	jobs := []quotaJob{}
@@ -241,6 +261,8 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 			case matches > 1:
 				reason = "configured account name is ambiguous"
 				req.Account = harness.Account{}
+			case req.Account.Home == "" && hz.UsageMeter():
+				// A kind with a built-in meter reads its default home (~/.claude).
 			case req.Account.Home == "":
 				reason = "named account home missing"
 			case !filepath.IsAbs(req.Account.Home):
@@ -257,7 +279,7 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 	if len(jobs) == 0 {
 		return rows
 	}
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	ctx, cancel := context.WithCancel(ctx)
 	var readers sync.WaitGroup
 	defer func() { cancel(); readers.Wait() }()
 	type result struct {
@@ -284,7 +306,14 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 				if ctx.Err() != nil {
 					return
 				}
-				snapshot := read(ctx, job.reporter, job.req, opts)
+				// Each read has its own budget, as each fetch had before the
+				// seam: one slow account does not shorten another's.
+				jctx, jcancel := context.WithTimeout(ctx, 12*time.Second)
+				snapshot := read(jctx, job.reporter, job.req, opts)
+				if jctx.Err() != nil && ctx.Err() == nil {
+					snapshot = harness.QuotaSnapshot{Status: "unavailable", Reason: "quota report timed out or canceled", Source: "not-read", IdentityStatus: "unavailable", Windows: []harness.QuotaWindow{}}
+				}
+				jcancel()
 				snapshot.Kind = job.kind
 				snapshot.Name = job.req.Name
 				snapshot.Ambient = job.req.Ambient

@@ -4,7 +4,7 @@ import "context"
 
 // LoginProber is the optional facet of a kind whose accounts log in outside
 // round.accounts' config dirs (Codex): it says why the home has no usable
-// login, "" when it has one. Claude's logins are read by worker.Credentials.
+// login, "" when it has one. Claude's logins are read by harness.Credentials.
 type LoginProber interface {
 	LoginProblem(ctx context.Context, p Probe, home string) string
 }

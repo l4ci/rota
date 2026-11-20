@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"github.com/l4ci/rota/internal/config"
 	"path/filepath"
 	"testing"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -29,13 +27,7 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 	}
 	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	renv := round.Env{Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Now: func() time.Time { return now }},
-		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-			v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, now.Add(time.Hour).Format(time.RFC3339))))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return v.(*jsonx.Object), ""
-		}}})}
+		Read: claudeReading(100, func() *time.Time { r := now.Add(time.Hour); return &r }(), 0)}})}
 	assigned := 0
 	r, err := roundtick.Run(context.Background(), roundtick.Env{
 		Cap:       1,

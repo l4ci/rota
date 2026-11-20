@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gittest"
@@ -58,7 +59,7 @@ func newSwitchFx(t *testing.T, used map[string]float64, mod ...func(*AssignOpts)
 	f.wire(func(w *worker.Env) {
 		w.NewHost = func(host.Kind) host.Host { return &orderHost{hostFake: f.host, log: &f.log} }
 	})
-	f.pool(t, switchCfg, f.used)
+	rig := f.pool(t, switchCfg, f.used)
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) {
 		o.Kind = harness.Claude
 		for _, m := range mod {
@@ -71,6 +72,7 @@ func newSwitchFx(t *testing.T, used map[string]float64, mod ...func(*AssignOpts)
 		t.Fatalf("ben starts on %q, want a", s.AccountFor(""))
 	}
 	clear(f.used)
+	rig.skew = 10 * time.Minute // past the reuse of the readings the assignment took
 	for k, v := range used {
 		f.used[k] = v
 	}

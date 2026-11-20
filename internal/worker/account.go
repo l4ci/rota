@@ -1,115 +1,56 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/stamp"
-	"github.com/l4ci/rota/internal/usagelimit"
-	"io"
-	"math"
-	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 	"slices"
-	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/connections"
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/usagelimit"
 )
 
-// Account usage headroom and slot assignment use per-account readings.
-//
-// Each slot can run under its own CLAUDE_CONFIG_DIR, which carries its own
-// OAuth credentials, so "how much headroom does this account have" is a
-// per-config-dir question. Three sources, tried in order, each degrading
-// honestly rather than guessing:
-//  1. The OAuth usage endpoint, authenticated with the account's own
-//     credentials, behind the status-line cache Claude Code and the herdr
-//     limits mod share (5 minutes) and a backoff after a failed request.
-//     Works with NO session running, which is what makes
-//     pre-dispatch balancing possible.
-//  2. A fixture payload (ROTA_ACCOUNT_USAGE_DIR) for offline tests.
-//  3. `unknown`, which callers treat as "rotate", never as "free" and never
-//     as "exhausted".
-//
-// Three distinctions the caller must not collapse: five_hour and seven_day are
-// SEPARATE windows with staggered resets; `utilization: 0` with `resets_at:
-// null` means nothing spent, which is not the same as no data; and seven_day
-// at 100% does NOT make an account unusable when extra_usage is enabled and
-// spend_limit_reached is false.
-//
-// This code NEVER refreshes or writes credentials: an expired token reports
-// `unknown`. Refreshing would mutate state a live Claude Code session owns.
-
-const usageURL = "https://api.anthropic.com/api/oauth/usage"
-
-// Fetcher returns the usage payload for an account, or a reason it has none.
-type Fetcher func(ctx context.Context, name, configDir string) (payload *jsonx.Object, reason string)
+// Account choice is policy over per-account readings. Each slot can run under
+// its own CLAUDE_CONFIG_DIR, so "how much headroom does this account have" is
+// a per-config-dir question; the reading itself (the OAuth usage endpoint, its
+// cache and backoff, the credentials, the offline fixture) lives behind the
+// harness.QuotaReporter seam, read through Quotas. An unreadable account is
+// `unknown`, which callers treat as "rotate", never as "free" and never as
+// "exhausted".
 
 // Accounts reads and assigns accounts. Its clock and environment come from Env
 // (Env.WithDefaults), the same source as the worker env that holds it.
 type Accounts struct {
 	Env Env
-	// Fetch defaults to the fixture dir or the OAuth endpoint.
-	Fetch Fetcher
-	// HTTP is the client for the usage endpoint; nil means a 5s-timeout client.
-	HTTP *http.Client
 	// Login reads each account's credentials; the zero value reads files only.
-	Login Credentials
-	// CacheDir holds the usage cache Claude Code's status line and the herdr
-	// limits mod share; "" means /tmp/claude.
-	CacheDir string
-	// ownedByMe reports whether a file belongs to the current user; nil means
-	// the real check. /tmp/claude is shared and world-writable, so a cache or
-	// backoff another user planted is never trusted.
-	ownedByMe func(os.FileInfo) bool
+	Login harness.Credentials
+	// Options carries the reader's remaining seams (HTTP client, cache dir,
+	// file-owner check); Env and Login fill the rest.
+	Options harness.QuotaOptions
+	// Read replaces the quota reporter call (tests); nil reads for real.
+	Read func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot
+
+	mu sync.Mutex
+	q  *Quotas
 }
 
-func (a *Accounts) mine(st os.FileInfo) bool {
-	if a.ownedByMe != nil {
-		return a.ownedByMe(st)
+// quotas is the reader behind Meters, built on first use so its short-lived
+// readings are shared by every call of this Accounts.
+func (a *Accounts) quotas() *Quotas {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.q == nil {
+		opts := a.Options
+		opts.Login = a.Login
+		a.q = &Quotas{Env: a.Env, Options: opts, Read: a.Read}
 	}
-	sys, ok := st.Sys().(*syscall.Stat_t)
-	return ok && int(sys.Uid) == os.Getuid()
+	return a.q
 }
-
-// usageCacheDir is the directory of the shared usage cache.
-const usageCacheDir = "/tmp/claude"
-
-// usageCachePath is the status-line usage cache of the account whose config
-// dir is configDir: statusline-usage.json for ~/.claude, else the file
-// suffixed with the first 8 hex chars of sha256(dir), the name Claude Code
-// and the herdr mod both use.
-func (a *Accounts) usageCachePath(configDir string) string {
-	dir := a.CacheDir
-	if dir == "" {
-		dir = usageCacheDir
-	}
-	d := a.expand(configDir)
-	suffix := ""
-	if d != a.expand("") {
-		sum := sha256.Sum256([]byte(d))
-		suffix = "-" + hex.EncodeToString(sum[:])[:8]
-	}
-	return filepath.Join(dir, "statusline-usage"+suffix+".json")
-}
-
-func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
-
-func (a *Accounts) getenv(k string) string { return a.Env.WithDefaults().Getenv(k) }
 
 // home is the home dir Env reports; "" when it has none, which leaves a
 // leading ~/ unexpanded.
@@ -125,13 +66,14 @@ func (a *Accounts) expand(d string) string { return usagelimit.ExpandConfigDirIn
 func (a *Accounts) same(x, y string) bool { return a.expand(x) == a.expand(y) }
 
 // login is Login with Env's home and clock unless Login names its own.
-func (a *Accounts) login() Credentials {
+func (a *Accounts) login() harness.Credentials {
 	c := a.Login
+	e := a.Env.WithDefaults()
 	if c.Home == nil {
-		c.Home = a.Env.WithDefaults().Home
+		c.Home = e.Home
 	}
 	if c.Now == nil {
-		c.Now = a.now
+		c.Now = func() time.Time { return e.Now().UTC() }
 	}
 	return c
 }
@@ -167,441 +109,71 @@ func (a *Accounts) Meters(ctx context.Context, root string) []usagelimit.Meter {
 
 // MetersWith is Meters that also reads the Claude entries of extra (such as
 // review.accounts, #3315) that round.accounts does not already list by name.
+// Rows come in round.accounts order, then the extras. Each is read through the
+// Claude quota reporter (Quotas), so a failed read is an unknown meter.
 func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.Account) []usagelimit.Meter {
-	fetch := a.Fetch
-	if fetch == nil {
-		fetch = a.defaultFetch
-	}
-	var rows []usagelimit.Meter
-	list := a.Configured(root)
-	for _, x := range extra {
-		if x.Kind != config.KindClaude || x.Name == "" || slices.ContainsFunc(list, func(c acct) bool { return c.name == x.Name }) {
+	kinds := meterKinds()
+	e := a.Env.WithDefaults()
+	cfg := e.Config(root)
+	home, _ := e.Home()
+	var list []acct
+	for _, k := range kinds {
+		hz, ok := harness.LookupAccounts(k)
+		if !ok {
 			continue
 		}
-		dir := x.Dir
-		if dir != "" {
-			dir = a.expand(dir)
+		for _, en := range hz.Accounts(harness.ConfigFor(cfg, k)).In(home).Entries {
+			list = append(list, acct{en.Name, en.Dir})
 		}
-		list = append(list, acct{x.Name, dir})
 	}
+	configured := len(list)
+	var extras []config.Account
+	for _, x := range extra {
+		if !slices.Contains(kinds, x.Kind) || x.Name == "" || slices.ContainsFunc(list, func(c acct) bool { return c.name == x.Name }) {
+			continue
+		}
+		extras = append(extras, x)
+		list = append(list, acct{x.Name, ""})
+	}
+	// Without configured accounts the reader would add the ambient login; this
+	// meters named accounts only.
+	if configured == 0 {
+		kinds = nil
+	}
+	read := a.quotas().MetersWith(ctx, root, kinds, extras)
+	var rows []usagelimit.Meter
 	for _, ac := range list {
 		if ac.name == "" {
 			continue
 		}
-		payload, why := fetch(ctx, ac.name, ac.configDir)
-		if payload == nil {
-			rows = append(rows, usagelimit.Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: usagelimit.VerdictUnknown, Reason: why})
-			continue
+		m, ok := meterOf(read, ac.name)
+		if !ok {
+			m = usagelimit.Meter{Name: ac.name, Verdict: usagelimit.VerdictUnknown, Reason: "account not read"}
 		}
-		rows = append(rows, a.classify(ac, payload))
+		rows = append(rows, m)
 	}
 	return rows
 }
 
-func (a *Accounts) classify(ac acct, payload *jsonx.Object) usagelimit.Meter {
-	five, fiveReset := window(payload, "five_hour")
-	seven, sevenReset := window(payload, "seven_day")
-	extra, _ := payload.Get("extra_usage")
-	eo, _ := extra.(*jsonx.Object)
-	extraLive := false
-	if eo != nil {
-		en, _ := eo.Get("is_enabled")
-		lim, _ := eo.Get("spend_limit_reached")
-		extraLive = jsonx.Truthy(en) && !jsonx.Truthy(lim)
-	}
-	m := usagelimit.Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: usagelimit.VerdictFree, FiveHour: five, SevenDay: seven}
-	var binding []float64
-	for _, w := range []struct {
-		label string
-		util  *float64
-		reset *time.Time
-	}{{"five_hour", five, fiveReset}, {"seven_day", seven, sevenReset}} {
-		if w.util == nil {
-			continue
-		}
-		// Weekly exhaustion with extra usage still live neither parks the
-		// account nor constrains it, so the window is discounted from
-		// headroom too. The 5-hour window has no such escape hatch.
-		if w.label == "seven_day" && *w.util >= 100 && extraLive {
-			continue
-		}
-		binding = append(binding, *w.util)
-		if *w.util < 100 {
-			continue
-		}
-		// A window is only cooling if it is spent AND names a FUTURE reset: a
-		// spent window with no resets_at is not actionable, and treating it as
-		// cooling would park the slot forever.
-		if w.reset == nil || !w.reset.After(a.now()) {
-			continue
-		}
-		m.Verdict = usagelimit.VerdictCooling
-		if m.ResetsAt == nil || w.reset.After(*m.ResetsAt) {
-			r := *w.reset
-			m.ResetsAt = &r
+// meterKinds are the harness kinds whose usage is a built-in scheduling meter
+// (Claude's): the accounts Meters reads.
+func meterKinds() []string {
+	var out []string
+	for _, k := range harness.Kinds() {
+		if hz, ok := harness.LookupAccounts(k); ok && hz.UsageMeter() {
+			out = append(out, k)
 		}
 	}
-	if len(binding) > 0 {
-		mx := binding[0]
-		for _, b := range binding {
-			mx = math.Max(mx, b)
-		}
-		h := roundTenth(100 - mx)
-		m.Headroom = &h
-	}
-	return m
+	return out
 }
 
-// roundTenth is Python's round(x, 1): correct rounding of the exact binary value.
-func roundTenth(x float64) float64 {
-	r, _ := strconv.ParseFloat(strconv.FormatFloat(x, 'f', 1, 64), 64)
-	return r
-}
-
-func window(p *jsonx.Object, key string) (*float64, *time.Time) {
-	v, _ := p.Get(key)
-	w, _ := v.(*jsonx.Object)
-	if w == nil {
-		return nil, nil
-	}
-	var util *float64
-	if u, ok := w.Get("utilization"); ok {
-		if n, ok := u.(json.Number); ok {
-			// Outside 0..100 is a bad cache, not headroom: leave it unknown.
-			if f, err := n.Float64(); err == nil && f >= 0 && f <= 100 {
-				util = &f
-			}
+func meterOf(read map[QuotaAccount]usagelimit.Meter, name string) (usagelimit.Meter, bool) {
+	for _, k := range meterKinds() {
+		if m, ok := read[QuotaAccount{k, name}]; ok {
+			return m, true
 		}
 	}
-	r, _ := w.Get("resets_at")
-	return util, parseReset(r)
-}
-
-func parseReset(v any) *time.Time {
-	s, ok := v.(string)
-	if !ok || s == "" {
-		return nil
-	}
-	return stamp.ParseISO(s)
-}
-
-// defaultFetch reads ROTA_ACCOUNT_USAGE_DIR/<name>.json when set, else the OAuth
-// usage endpoint with the account's own access token.
-func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*jsonx.Object, string) {
-	if dir := a.getenv("ROTA_ACCOUNT_USAGE_DIR"); dir != "" {
-		b, err := os.ReadFile(filepath.Join(dir, name+".json"))
-		if err != nil {
-			return nil, "no fixture"
-		}
-		v, err := jsonx.Decode(b)
-		o, ok := v.(*jsonx.Object)
-		if err != nil || !ok {
-			return nil, "bad fixture"
-		}
-		return o, ""
-	}
-	return a.fetchUsage(ctx, configDir)
-}
-
-// usageMaxAge is how long the shared usage cache counts as fresh.
-const usageMaxAge = 5 * time.Minute
-
-// defaultBackoff is the wait after a failed request without a Retry-After;
-// maxBackoff caps a wait when it is read, never when it is written, so the
-// file keeps what the server said.
-const (
-	defaultBackoff = 300 * time.Second
-	maxBackoff     = time.Hour
-)
-
-// backoffOf reads a wait in seconds as written: the default for anything
-// unusable. It does not cap; backoffLeft does.
-func backoffOf(s string) time.Duration {
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil || n <= 0 || n > math.MaxInt32 {
-		return defaultBackoff
-	}
-	return time.Duration(n) * time.Second
-}
-
-// reasonSkew is how far apart our backoff and its .reason sidecar may be
-// written; a backoff rewritten later (by the herdr mod) orphans the reason.
-const reasonSkew = 2 * time.Second
-
-// openOwned opens path without following a symlink and returns its bytes and
-// mtime, both taken from the one open file. A file that is not a regular file
-// of the current user reads as absent: /tmp/claude is shared and world-writable.
-func (a *Accounts) openOwned(path string) ([]byte, time.Time, bool) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, time.Time{}, false
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || !st.Mode().IsRegular() || !a.mine(st) {
-		return nil, time.Time{}, false
-	}
-	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
-	if err != nil {
-		return nil, time.Time{}, false
-	}
-	return b, st.ModTime(), true
-}
-
-// fetchUsage reads the usage of the account behind configDir. A cache under
-// five minutes old answers without a request; a backoff left by a failed
-// request (ours or the herdr mod's) holds further requests until it passes.
-func (a *Accounts) fetchUsage(ctx context.Context, configDir string) (*jsonx.Object, string) {
-	cache := a.usageCachePath(configDir)
-	if b, mt, ok := a.openOwned(cache); ok && a.now().Sub(mt) < usageMaxAge {
-		if o := parseUsage(b); o != nil {
-			return o, ""
-		}
-	}
-	if left, why := a.backoffLeft(cache); left > 0 {
-		return nil, why
-	}
-	token, why := a.token(configDir)
-	if token == "" {
-		return nil, why
-	}
-	client := a.HTTP
-	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usageURL, nil)
-	if err != nil {
-		return nil, "usage endpoint unreachable"
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
-	resp, err := client.Do(req)
-	if err != nil {
-		return a.failed(cache, "", reasonUnreachable)
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		retryAfter := resp.Header.Get("Retry-After")
-		switch resp.StatusCode {
-		case http.StatusTooManyRequests:
-			return a.failed(cache, retryAfter, reasonRateLimited)
-		case http.StatusUnauthorized, http.StatusForbidden:
-			return a.failed(cache, retryAfter, "login expired")
-		}
-		return a.failed(cache, retryAfter, fmt.Sprintf("usage endpoint returned %d", resp.StatusCode))
-	}
-	o := parseUsage(b)
-	if o == nil {
-		v, err := jsonx.Decode(b)
-		if _, isObj := v.(*jsonx.Object); err != nil || !isObj {
-			return a.failed(cache, "", reasonUnreachable)
-		}
-		return a.failed(cache, "", "unexpected payload")
-	}
-	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
-	if fsio.WriteFileAtomic(cache, append(bytes.TrimSpace(b), '\n')) == nil {
-		_ = os.Remove(cache + ".backoff")
-		_ = os.Remove(cache + ".reason")
-	}
-	return o, ""
-}
-
-// reasonRateLimited and reasonUnreachable are stored reasons whose text is
-// rebuilt on read: the first with the time left, the second as its message.
-const (
-	reasonRateLimited = "rate limited"
-	reasonUnreachable = "usage endpoint unreachable"
-)
-
-// failed records a failed request the way the herdr mod does: a backoff file
-// holding the Retry-After as given, else 300 seconds. The reason goes in a
-// sidecar the mod ignores, so a held backoff can still say what went wrong.
-// It returns the message for this call.
-func (a *Accounts) failed(cache, retryAfter, reason string) (*jsonx.Object, string) {
-	wait := backoffOf(retryAfter)
-	_ = os.MkdirAll(filepath.Dir(cache), 0o755)
-	_ = fsio.WriteFileAtomic(cache+".reason", []byte(reason+"\n"))
-	_ = fsio.WriteFileAtomic(cache+".backoff", []byte(strconv.Itoa(int(wait/time.Second))+"\n"))
-	return nil, heldMessage(reason, min(wait, maxBackoff))
-}
-
-func heldMessage(reason string, left time.Duration) string {
-	if reason == reasonRateLimited {
-		return fmt.Sprintf("rate limited (retry in %ds)", int((left+time.Second-1)/time.Second))
-	}
-	return reason
-}
-
-// backoffLeft is how much of the wait recorded beside cache remains (the
-// backoff file holds the wait in seconds, capped at an hour, and its mtime is
-// when the wait began) and why. The reason is the one rota recorded; a
-// backoff rota did not write gets a neutral message.
-func (a *Accounts) backoffLeft(cache string) (time.Duration, string) {
-	b, mt, ok := a.openOwned(cache + ".backoff")
-	if !ok {
-		return 0, ""
-	}
-	left := min(backoffOf(string(b)), maxBackoff) - a.now().Sub(mt)
-	if left <= 0 {
-		return 0, ""
-	}
-	if rb, rmt, ok := a.openOwned(cache + ".reason"); ok {
-		if d := rmt.Sub(mt); d > -reasonSkew && d < reasonSkew {
-			if reason := strings.TrimSpace(string(rb)); reason != "" {
-				return left, heldMessage(reason, left)
-			}
-		}
-	}
-	return left, fmt.Sprintf("backing off after a failed request (retry in %ds)", int((left+time.Second-1)/time.Second))
-}
-
-func parseUsage(b []byte) *jsonx.Object {
-	v, err := jsonx.Decode(b)
-	o, _ := v.(*jsonx.Object)
-	if err != nil || o == nil {
-		return nil
-	}
-	if _, has := o.Get("five_hour"); !has {
-		return nil
-	}
-	return o
-}
-
-// Credentials reads an account's login. GOOS and Run are the platform seams:
-// on darwin the login Keychain is consulted through Run (the one `security`
-// read, connections.SecurityRead), elsewhere never. The zero value reads files
-// only. Now is the clock the expiry check reads; nil means none, so no token
-// reads as expired.
-type Credentials struct {
-	GOOS string
-	Run  proc.Runner
-	Now  func() time.Time
-	// Home is whose ~/.claude is the unsuffixed Keychain service; nil means
-	// none is. SystemCredentials takes it from its caller; nothing defaults it.
-	Home func() (string, error)
-}
-
-// SystemCredentials is Credentials on this machine, running tools through run,
-// reading the home through home and the time through now.
-func SystemCredentials(run proc.Runner, home func() (string, error), now func() time.Time) Credentials {
-	return Credentials{GOOS: runtime.GOOS, Run: run, Home: home, Now: now}
-}
-
-// Problem reports why the account whose config dir is dir (already expanded)
-// has no usable credentials: no file (or, on macOS, Keychain entry),
-// unreadable, or no access token. "" means usable. An expired token is not a
-// problem: Claude Code refreshes it itself, and this code never does. The clock
-// only decides whether an expired file yields to the Keychain first; with a nil
-// Now (the zero time) nothing is expired, so the file is read as is.
-func (c Credentials) Problem(dir string) string {
-	var now time.Time
-	if c.Now != nil {
-		now = c.Now()
-	}
-	_, _, why := c.read(dir, now)
-	return why
-}
-
-const keychainBase = "Claude Code-credentials"
-
-// keychainService is the generic-password service name Claude Code files the
-// OAuth credentials under for config dir dir (already expanded): the default
-// ~/.claude has no suffix, any other dir carries the first 8 hex chars of
-// sha256(dir).
-func keychainService(dir, home string) string {
-	if home != "" && dir == filepath.Join(home, ".claude") {
-		return keychainBase
-	}
-	sum := sha256.Sum256([]byte(dir))
-	return keychainBase + "-" + hex.EncodeToString(sum[:])[:8]
-}
-
-// readCredentials returns the OAuth blob, access token and a reason when there
-// is none. The file comes first. On darwin the login Keychain is consulted only
-// when the file is missing, unusable or expired: Claude Code moved its
-// credentials there, so a leftover file can be stale while the Keychain entry
-// is current. Without a usable Keychain entry the file's own result stands.
-func (c Credentials) read(dir string, now time.Time) (*jsonx.Object, string, string) {
-	oauth, tok, why := readCredentialsFile(dir)
-	if why == "" && !expired(oauth, now) {
-		return oauth, tok, ""
-	}
-	if c.GOOS == "darwin" && c.Run != nil {
-		home := ""
-		if c.Home != nil {
-			home, _ = c.Home()
-		}
-		b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir, home), "")
-		if err == nil && ok {
-			if o, t, w := parseCredentials([]byte(b)); w == "" {
-				return o, t, ""
-			}
-		}
-		if why == "no credentials file" {
-			why = "no credentials file or Keychain entry"
-			if err != nil {
-				why = "no credentials file, Keychain unavailable: " + err.Error()
-			}
-		}
-	}
-	return oauth, tok, why
-}
-
-func readCredentialsFile(dir string) (*jsonx.Object, string, string) {
-	b, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, "", "no credentials file"
-		}
-		return nil, "", "unreadable credentials"
-	}
-	return parseCredentials(b)
-}
-
-// expired reports whether the blob's expiresAt is at or before now.
-func expired(oauth *jsonx.Object, now time.Time) bool {
-	exp, ok := oauth.Get("expiresAt")
-	if !ok || !jsonx.Truthy(exp) {
-		return false
-	}
-	n, ok := exp.(json.Number)
-	if !ok {
-		return false
-	}
-	ms, err := n.Int64()
-	return err == nil && !time.UnixMilli(ms).After(now)
-}
-
-func parseCredentials(b []byte) (*jsonx.Object, string, string) {
-	v, err := jsonx.Decode(b)
-	blob, ok := v.(*jsonx.Object)
-	if err != nil || !ok {
-		return nil, "", "unreadable credentials"
-	}
-	ov, _ := blob.Get("claudeAiOauth")
-	oauth, _ := ov.(*jsonx.Object)
-	if oauth == nil {
-		return nil, "", "no access token"
-	}
-	tok := jsonx.Str(oauth, "accessToken")
-	if tok == "" {
-		return nil, "", "no access token"
-	}
-	return oauth, tok, ""
-}
-
-// token reads the access token without refreshing it.
-func (a *Accounts) token(configDir string) (string, string) {
-	oauth, tok, why := a.login().read(a.expand(configDir), a.now())
-	if why != "" {
-		return "", why
-	}
-	if expired(oauth, a.now()) {
-		return "", "token expired"
-	}
-	return tok, ""
+	return usagelimit.Meter{}, false
 }
 
 // Pick returns the account with the most headroom, skipping cooling and

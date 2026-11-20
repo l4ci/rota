@@ -185,10 +185,9 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var seen any
-	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
+	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Read: func(ctx context.Context, _ harness.QuotaReporter, _ harness.QuotaRequest, _ harness.QuotaOptions) harness.QuotaSnapshot {
 		seen = ctx.Value(ctxKey{})
-		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":25,"resets_at":null},"seven_day":{"utilization":5,"resets_at":null}}`))
-		return v.(*jsonx.Object), ""
+		return fiveHourOf(25, nil)
 	}})
 	ctx := context.WithValue(bg, ctxKey{}, "caller")
 	if _, err := f.env.ReportSlot(ctx, f.root, ReportOpts{Slot: "ben", State: "done", PR: "https://github.com/o/r/pull/9"}); err != nil {

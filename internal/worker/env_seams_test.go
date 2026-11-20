@@ -55,13 +55,3 @@ func TestAccountsExpandHomeFromEnv(t *testing.T) {
 		t.Errorf("AccountOf = %q, want x", got)
 	}
 }
-
-// The Keychain service name treats Credentials.Home's ~/.claude as the
-// default login: no suffix.
-func TestCredentialsHomeSeamPicksDefaultKeychainService(t *testing.T) {
-	kc, _ := fakeKeychain("darwin", map[string]string{"Claude Code-credentials": `{"claudeAiOauth":{"accessToken":"kc"}}`})
-	kc.Home = func() (string, error) { return "/fake/home", nil }
-	if got := kc.Problem("/fake/home/.claude"); got != "" {
-		t.Errorf("Problem = %q, want usable through the default service", got)
-	}
-}

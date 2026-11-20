@@ -19,10 +19,10 @@ import (
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // TestFakeGitReachesWorkerAndRoundEnv pins the one Git source: a faked
@@ -170,7 +170,7 @@ func TestCredentialReadsUseDepsClock(t *testing.T) {
 	d := testDeps()
 	pinNow(d, "2031-05-06T07:08:09Z")
 	want := d.Now()
-	for name, c := range map[string]worker.Credentials{
+	for name, c := range map[string]harness.Credentials{
 		"credentials":   d.credentials(),
 		"round env":     d.baseRoundEnv().Login,
 		"worker accts":  d.WorkerAccounts().Login,

@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
@@ -26,16 +25,12 @@ func (f *assignFixture) meters(t *testing.T, spent map[string]bool) {
 	t.Helper()
 	withNow(&f.env, func() time.Time { return quotaNow })
 	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
-		Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
-			util, reset := 10, "null"
-			if spent[name] {
-				util, reset = 100, `"`+quotaNow.Add(time.Hour).Format(time.RFC3339)+`"`
+		Read: func(_ context.Context, _ harness.QuotaReporter, req harness.QuotaRequest, _ harness.QuotaOptions) harness.QuotaSnapshot {
+			if spent[req.Name] {
+				reset := quotaNow.Add(time.Hour)
+				return fiveHourOf(100, &reset)
 			}
-			v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":%d,"resets_at":%s}}`, util, reset)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return v.(*jsonx.Object), ""
+			return fiveHourOf(10, nil)
 		}})
 }
 

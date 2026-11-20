@@ -149,8 +149,8 @@ func TestSlotLoginProblemReadsThroughEnvLogin(t *testing.T) {
 	root := t.TempDir()
 	writeRegistry(t, root, slot(root, "ben", "park/ben", func(o *jsonx.Object) { o.Set("configDir", dir) }))
 	s := worker.LoadRegistryTolerant(root).Slot("ben")
-	keychain := func(blob string) worker.Credentials {
-		return worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+	keychain := func(blob string) harness.Credentials {
+		return harness.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 			if blob == "" {
 				return proc.Result{ExitCode: 44}, nil
 			}

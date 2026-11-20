@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -100,7 +101,9 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 		t.Errorf("accounts configured = %v, want only the injected account a", got)
 	}
 	// Pick only passes the login check when ~/.claude-a expands against home.
-	acc.Fetch = func(context.Context, string, string) (*jsonx.Object, string) { return nil, "no usage" }
+	acc.Read = func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
+		return harness.QuotaSnapshot{Status: "unavailable", Reason: "no usage"}
+	}
 	if name, ok := acc.Pick(context.Background(), root, nil); !ok || name != "a" {
 		t.Errorf("Pick = %q, %v; want a (the ~/ configDir resolved to %s/.claude-a)", name, ok, home)
 	}

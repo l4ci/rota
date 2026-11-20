@@ -3,10 +3,10 @@ package round
 import (
 	"context"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/strutil"
 	"time"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
@@ -125,12 +125,9 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 		}
 		withNow(&f.env, func() time.Time { return quotaNow })
 		f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
-			Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
-				v, err := jsonx.Decode([]byte(`{"five_hour":{"utilization":100,"resets_at":"` + quotaNow.Add(time.Hour).Format(time.RFC3339) + `"}}`))
-				if err != nil {
-					t.Fatal(err)
-				}
-				return v.(*jsonx.Object), ""
+			Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
+				reset := quotaNow.Add(time.Hour)
+				return fiveHourOf(100, &reset)
 			}})
 		_, err := f.transfer("12", "dana", nil)
 		if by := blockedBy(t, err); by != blockedby.Quota {

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
@@ -268,10 +269,9 @@ func TestFillBurnFromLedger(t *testing.T) {
 	fetches := 0
 	d := testDeps()
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
+		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Read: func(ctx context.Context, r harness.QuotaReporter, req harness.QuotaRequest, o harness.QuotaOptions) harness.QuotaSnapshot {
 			fetches++
-			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
-			return v.(*jsonx.Object), ""
+			return claudeReading(40, nil, 10)(ctx, r, req, o)
 		}}
 	}
 	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "nia", Issue: "14"}, {Name: "kit", Issue: "15"}, {Name: "ada"}}

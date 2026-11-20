@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
@@ -957,9 +956,9 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	fetched := 0
-	f.env = f.env.WithAccounts(&worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+	f.env = f.env.WithAccounts(&worker.Accounts{Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
 		fetched++
-		return nil, "fake: no network in tests"
+		return unreadable
 	}})
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
 	if err != nil || !res.Dispatched || res.Account != "" || slices.ContainsFunc(f.host.env, func(e string) bool { return strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") }) || fetched != 0 {
@@ -1258,9 +1257,9 @@ func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
 			f := newAssignFixture(t)
 			f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
 			f.host.name = "herdr"
-			acc := &worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-				return nil, "fake: no network in tests"
-			}, Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+			acc := &worker.Accounts{Env: worker.Env{Config: diskConfig}, Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
+				return unreadable
+			}, Login: harness.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 				return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
 			}}}
 			if tc.picking {
@@ -1474,14 +1473,22 @@ func TestStatusSkipsLoginCheckForDrainingSlot(t *testing.T) {
 	}
 }
 
-// usageFor is a usage payload whose weekly window is at pct and resets in a day.
-func usageFor(t *testing.T, pct int, resets time.Time) *jsonx.Object {
-	t.Helper()
-	v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":1},"seven_day":{"utilization":%d,"resets_at":%q}}`, pct, resets.UTC().Format(time.RFC3339))))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return v.(*jsonx.Object)
+// unreadable is a reading that failed: the account's meter is unknown.
+var unreadable = harness.QuotaSnapshot{Status: "unavailable", Reason: "fake: unreadable"}
+
+// windowOf is one available window of mins minutes at used percent.
+func windowOf(mins int, used float64, resets *time.Time) harness.QuotaWindow {
+	return harness.QuotaWindow{DurationMins: &mins, UsedPercent: &used, ResetsAt: resets, Status: "available"}
+}
+
+// fiveHourOf is a Claude reading with only its 5-hour window, resetting at resets.
+func fiveHourOf(used float64, resets *time.Time) harness.QuotaSnapshot {
+	return harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{windowOf(300, used, resets)}}
+}
+
+// usageFor is a Claude reading whose weekly window sits at pct and resets at resets.
+func usageFor(pct int, resets time.Time) harness.QuotaSnapshot {
+	return harness.QuotaSnapshot{Status: "available", Windows: []harness.QuotaWindow{windowOf(300, 1, nil), windowOf(10080, float64(pct), &resets)}}
 }
 
 // limitedFixture is an assign fixture whose round.accounts a and b read their
@@ -1492,9 +1499,9 @@ func limitedFixture(t *testing.T, pct map[string]int) *assignFixture {
 	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere/a"},{"name":"b","configDir":"/nowhere/b"}]}}`)
 	f.host.name = "herdr"
 	reset := time.Now().Add(24 * time.Hour)
-	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
-		return usageFor(t, pct[name], reset), ""
-	}, Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Read: func(_ context.Context, _ harness.QuotaReporter, req harness.QuotaRequest, _ harness.QuotaOptions) harness.QuotaSnapshot {
+		return usageFor(pct[req.Name], reset)
+	}, Login: harness.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
 	}}})
 	return f

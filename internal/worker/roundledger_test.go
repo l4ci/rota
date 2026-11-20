@@ -138,10 +138,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	acc := &Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":35,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
-		return v.(*jsonx.Object), ""
-	}}
+	acc := &Accounts{Read: readOf(claudeSnapshot(35, 10, nil))}
 	row := PollRow{Name: "ben", State: StateDone, Evidence: "https://github.com/o/r/pull/9"}
 	var dones []ledger.Entry
 	for i := 0; i < 2; i++ { // the second pass sees the slot already done
@@ -184,10 +181,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 	f.panes["w1"] = []string{"x\n", "x\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
 	f.panes["w2"] = []string{"a\n", "a\n"}
 	e := envWith(f)
-	e.Accounts = &Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
-		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":35,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
-		return v.(*jsonx.Object), ""
-	}}
+	e.Accounts = &Accounts{Read: readOf(claudeSnapshot(35, 10, nil))}
 	for i := 0; i < 2; i++ {
 		if _, err := e.Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
 			t.Fatal(err)
