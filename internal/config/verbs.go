@@ -230,6 +230,30 @@ func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
 	})
 }
 
+// LocalListMaskWarning describes a local list replacing a non-empty global
+// list. It is advisory: an unavailable global config must not fail a local set.
+func LocalListMaskWarning(env cfgdir.Env, root, key string, value any) string {
+	k, ok := SchemaKey(key)
+	if !ok || k.Type != TypeList {
+		return ""
+	}
+	if slices.Contains(accountMergeKeys[:], key) || (k.EmptyUnset && len(asList(value)) == 0) {
+		return ""
+	}
+	dir, err := cfgdir.Dir(env)
+	if err != nil {
+		return ""
+	}
+	vals, err := LoadGlobal(dir)
+	if err != nil {
+		return ""
+	}
+	if list, ok := vals[key].([]any); ok && len(list) > 0 {
+		return fmt.Sprintf("%s in %s replaces the entire list from %s; lists are not merged", key, localPath(root), GlobalPath(dir))
+	}
+	return ""
+}
+
 // isBlank is whether the file at path exists and holds only whitespace: a
 // touched file, which reads as {} where a file that does not parse is refused.
 func isBlank(path string) bool {
