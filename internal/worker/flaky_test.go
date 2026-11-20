@@ -63,8 +63,8 @@ func TestGateRetryEligibility(t *testing.T) {
 			if err != nil || res.Verdict != landing.GateVerifyFailed || res.Changed || calls != tc.calls || strings.Contains(strings.Join(res.Notes, "\n"), "FLAKY") {
 				t.Fatalf("%+v calls=%d err=%v", res, calls, err)
 			}
-			if _, err := os.Stat(flakeledger.Path(w.dir)); !os.IsNotExist(err) {
-				t.Fatalf("a failure wrote a flake: %v", err)
+			if rows, err := flakeledger.Load(w.dir); err != nil || len(rows) != 0 {
+				t.Fatalf("a failure wrote a flake: rows=%v err=%v", rows, err)
 			}
 		})
 	}
