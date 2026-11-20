@@ -38,19 +38,7 @@ var (
 // walk is Python's _walk: a missing key, a non-object parent or a JSON null
 // at any segment counts as absent.
 func walk(cfg any, dotted string) (any, bool) {
-	cur := cfg
-	for _, seg := range strings.Split(dotted, ".") {
-		obj, ok := cur.(*jsonx.Object)
-		if !ok {
-			return nil, false
-		}
-		v, ok := obj.Get(seg)
-		if !ok || v == nil {
-			return nil, false
-		}
-		cur = v
-	}
-	return cur, true
+	return walkKey(cfg, dotted, nullAbsent)
 }
 
 // requiredKeyPresent checks the supplying layers independently: a non-null

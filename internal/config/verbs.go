@@ -294,7 +294,7 @@ func setAt(path string, notObject error, key, raw string, update func(string, an
 		if err != nil {
 			return nil, err
 		}
-		res.Previous, res.HadPrevious = lookupPresent(cfg, segs)
+		res.Previous, res.HadPrevious = Lookup(cfg, key)
 		putIn(cfg, segs, value)
 		after, err := jsonx.Marshal(cfg)
 		if err != nil {
@@ -372,7 +372,7 @@ func unsetAt(path string, notObject error, key string, strict bool) (removed boo
 	if cur == nil {
 		return false, nil
 	}
-	if _, ok := lookupPresent(cur, segs); !ok {
+	if _, ok := Lookup(cur, key); !ok {
 		return false, nil
 	}
 	err = update(path, jsonx.NewObject(), func(doc any) (any, error) {
@@ -548,19 +548,4 @@ func getObject(o *jsonx.Object, key string) (*jsonx.Object, bool) {
 	v, _ := o.Get(key)
 	obj, ok := v.(*jsonx.Object)
 	return obj, ok
-}
-
-// lookupPresent walks segs through objects; null counts as present.
-func lookupPresent(cfg *jsonx.Object, segs []string) (any, bool) {
-	cur := any(cfg)
-	for _, s := range segs {
-		obj, ok := cur.(*jsonx.Object)
-		if !ok {
-			return nil, false
-		}
-		if cur, ok = obj.Get(s); !ok {
-			return nil, false
-		}
-	}
-	return cur, true
 }
