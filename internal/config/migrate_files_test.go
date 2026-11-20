@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // Exercise the file lifecycle through both public migration interfaces, with
@@ -237,5 +240,115 @@ func TestRefusalLeavesEveryFileUntouched(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The autonomy step's stale check runs under the global config's lock, as the
+// lifecycle runs it: a set that stamps the global while the step waits for the
+// lock leaves its deliberate auto alone, and the step stamps nothing over it.
+func TestAutonomyGlobalStepRechecksStampUnderLock(t *testing.T) {
+	gdir := t.TempDir()
+	gpath := GlobalPath(gdir)
+	if err := os.WriteFile(gpath, []byte(`{"autonomy": {"level": "auto"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files := layerFiles(project(t, `{}`, ""), gdir, false)
+	done := make(chan error, 1)
+	err := fsio.Locked(gpath, fsio.LockTimeout, func() error {
+		go func() {
+			done <- migrateLayerFiles(files, true, func([]*migrationFile) error {
+				planAutonomyGlobal(files[0], gdir)
+				return nil
+			})
+		}()
+		time.Sleep(100 * time.Millisecond) // the step is now queued on the lock
+		return fsio.WriteFileAtomic(globalStampPath(gdir), []byte(AutonomyLevelsSince+"\n"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(gpath); !strings.Contains(string(b), `"auto"`) {
+		t.Errorf("a concurrently stamped global auto was rewritten: %s", b)
+	}
+}
+
+// With a stale stamp the same step rewrites the auto and stamps the global,
+// the stamp landing after the document.
+func TestAutonomyGlobalStepRewritesAndStamps(t *testing.T) {
+	gdir := t.TempDir()
+	gpath := GlobalPath(gdir)
+	os.WriteFile(gpath, []byte(`{"autonomy": {"level": "auto"}}`), 0o644)
+	files := layerFiles(project(t, `{}`, ""), gdir, false)
+	if err := migrateLayerFiles(files, false, func([]*migrationFile) error {
+		planAutonomyGlobal(files[0], gdir)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(gpath); !strings.Contains(string(b), `"auto"`) || globalStale(gdir) == false {
+		t.Fatalf("a preview wrote: %s, stale=%v", b, globalStale(gdir))
+	}
+	if err := migrateLayerFiles(files, true, func([]*migrationFile) error {
+		planAutonomyGlobal(files[0], gdir)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(gpath); !strings.Contains(string(b), `"roundtrip"`) || globalStale(gdir) {
+		t.Fatalf("global not rewritten and stamped: %s, stale=%v", b, globalStale(gdir))
+	}
+}
+
+// `rota migrate config` runs the round, accounts, merges and scope steps and
+// nothing else. The autonomy rewrite and its stamp belong to `config fill`,
+// whose once-guard they are, so a stale auto survives a migrate untouched.
+func TestMigrateConfigStepList(t *testing.T) {
+	var got []string
+	mt := reflect.TypeOf(Migration{})
+	for i := 0; i < mt.NumField(); i++ {
+		got = append(got, mt.Field(i).Name)
+	}
+	if want := []string{"Round", "Accounts", "Merges", "Scope"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("migrate config steps = %v, want %v", got, want)
+	}
+	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "auto"}}`)
+	gdir := t.TempDir()
+	os.WriteFile(GlobalPath(gdir), []byte(`{"autonomy": {"level": "auto"}}`), 0o644)
+	before := []string{read(t, root), readLocal(t, root), string(readFileOr(GlobalPath(gdir)))}
+	if _, err := Migrate(dirEnv(t, gdir), root, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	after := []string{read(t, root), readLocal(t, root), string(readFileOr(GlobalPath(gdir)))}
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("migrate config ran the autonomy step:\nbefore %q\nafter  %q", before, after)
+	}
+	if _, err := os.Stat(globalStampPath(gdir)); err == nil {
+		t.Error("migrate config stamped the global")
+	}
+}
+
+// A layer that is not a JSON object is the typed refusal Set gives, not a
+// bare corrupt error (exit 5 through exitmap), and the file stays untouched.
+func TestMigrateStaleAutonomyNonObjectIsTypedRefusal(t *testing.T) {
+	for name, want := range map[string]error{"config.json": ErrNotObject, "config.local.json": ErrLocalNotObject} {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".rota")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("[1]"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := migrateStaleAutonomy(root)
+		if !errors.Is(err, want) {
+			t.Errorf("%s: err = %v, want %v", name, err, want)
+		}
+		if got, _ := os.ReadFile(p); string(got) != "[1]" {
+			t.Errorf("%s rewritten: %s", name, got)
+		}
 	}
 }

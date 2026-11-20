@@ -331,14 +331,17 @@ func TestConfigSetAndSaveGlobalSayAutoRewrite(t *testing.T) {
 	}
 }
 
-// #1552: a set that fails after the migration rewrote an old auto still warns
-// the rewrite line, once, on stderr (#1524). config.json.lock is a directory,
-// so the set's own write fails after config.local.json was already rewritten.
-func TestConfigSetWarnsRewriteOnFailedSet(t *testing.T) {
+// #1552: the autonomy migration runs as one lifecycle that locks every layer
+// before it rewrites any, so a set whose lock fails (config.json.lock is a
+// directory) fails before config.local.json is rewritten and warns no rewrite
+// line: nothing changed, so nothing is reported. The report on a failure after
+// a rewrite is covered by TestAutonomySetErrorKeepsMigration (#1524).
+func TestConfigSetLockFailureRewritesNothing(t *testing.T) {
 	t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
 	root := trackerProject(t, `{"rota": {"version": "0.20.0"}}`+"\n")
 	rota := filepath.Join(root, ".rota")
-	write(t, filepath.Join(rota, "config.local.json"), `{"autonomy": {"level": "auto"}}`+"\n")
+	local := `{"autonomy": {"level": "auto"}}` + "\n"
+	write(t, filepath.Join(rota, "config.local.json"), local)
 	if err := os.Mkdir(filepath.Join(rota, "config.json.lock"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -346,9 +349,11 @@ func TestConfigSetWarnsRewriteOnFailedSet(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("set succeeded, want a failure: %q", out)
 	}
-	const line = "rewrote: autonomy.level auto -> roundtrip in config.local.json"
-	if n := strings.Count(errOut, line); n != 1 {
-		t.Errorf("rewrite line warned %d times, want once: stdout %q stderr %q", n, out, errOut)
+	if got, _ := os.ReadFile(filepath.Join(rota, "config.local.json")); string(got) != local {
+		t.Errorf("config.local.json rewritten despite the failed lock: %s", got)
+	}
+	if strings.Contains(errOut, "rewrote:") {
+		t.Errorf("a failed set reported a rewrite that never happened: %q", errOut)
 	}
 }
 
