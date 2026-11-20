@@ -278,6 +278,21 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertIn("Smoke assertions failed.", record["firstOutput"])
         self.assertIn("All smoke tests passed.", record["retryOutput"])
 
+    def test_emitter_output_matches_the_shared_golden_record(self):
+        # internal/worker/gate_subchecks_test.go parses this same file, so a
+        # format change on either side of the Python/Go seam fails a test.
+        source = Path(__file__).resolve().parent
+        logs = self.root / "golden"
+        logs.mkdir()
+        (logs / "first").write_text("--- FAIL: TestUnderLoad (0s)\nFAIL\n")
+        (logs / "retry").write_text("ok  \texample/pkg\t0.01s\n")
+        (logs / "seconds").write_text("0.125\n")
+        result = subprocess.run(
+            ["python3", str(source / "gate-flake.py"), "go:internal/example",
+             str(logs / "first"), str(logs / "retry"), str(logs / "seconds")],
+            capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout, (source / "fixtures/rota-flaky.golden").read_text())
+
     def test_incomplete_smoke_success_is_not_retried(self):
         self.env["OMIT_SUMMARY"] = "1"
         result, calls = self.run_gate("")

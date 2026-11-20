@@ -1,0 +1,1 @@
+ROTA-FLAKY {"check": "go:internal/example", "firstExit": 1, "retryExit": 0, "firstOutput": "--- FAIL: TestUnderLoad (0s)\nFAIL\n", "retryOutput": "ok  \texample/pkg\t0.01s\n", "retrySeconds": 0.125}
