@@ -152,7 +152,7 @@ func checkPlan(parent string, plan *SplitPlan) ([]planSub, error) {
 		}
 		slugs[slug] = name
 		hook := strings.TrimSpace(s.Hook)
-		if err := checkLine("hook", hook); err != nil {
+		if err := bulletfmt.CheckLine("hook", hook); err != nil {
 			return nil, err
 		}
 		if hook == "" {

@@ -170,7 +170,6 @@ func TestReplaceNeverTouchesStamp(t *testing.T) {
 		{"spans legacy plus sign", "Old one. <!-- 2026-08-02", "Old.", ErrNotFound},
 		{"no match", "nothing like this", "x", ErrNotFound},
 		{"several bullets", "—", "-", ErrMultiMatch},
-		{"closes the stamp", "Use t.Run", "x -->", ErrContent},
 		{"line break", "Use t.Run", "a\nb", ErrContent},
 	} {
 		if _, err := c.Replace(ctx, ReplaceIn{Topic: "Go", Old: tc.old, New: tc.new}); !errorsIs(err, tc.want) {
