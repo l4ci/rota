@@ -73,17 +73,23 @@ type fileParts struct {
 func parseParts(body string, readme bool) fileParts {
 	var p fileParts
 	lines := strings.Split(body, "\n")
+	spans := bulletfmt.Spans(lines)
+	next := 0
 	for i := 0; i < len(lines); i++ {
 		l := lines[i]
+		if next < len(spans) && spans[next].Start == i {
+			sp := spans[next]
+			next++
+			if readme && isSubIndexLine(l) {
+				p.subIndex = append(p.subIndex, l)
+				continue
+			}
+			p.units = append(p.units, unit{title: sp.Title, text: strings.Join(lines[sp.Start:sp.End], "\n")})
+			i = sp.End - 1
+			continue
+		}
 		switch {
 		case strings.TrimSpace(l) == "":
-		case strings.HasPrefix(l, "- ") && readme && isSubIndexLine(l):
-			p.subIndex = append(p.subIndex, l)
-		case strings.HasPrefix(l, "- "):
-			end := bulletfmt.End(lines, i)
-			title, _ := bulletfmt.Title(l)
-			p.units = append(p.units, unit{title: title, text: strings.Join(lines[i:end], "\n")})
-			i = end - 1
 		case p.heading == "" && strings.HasPrefix(l, "# "):
 			p.heading = l
 		default:

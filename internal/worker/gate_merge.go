@@ -3,7 +3,6 @@ package worker
 import (
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landing"
@@ -61,7 +60,7 @@ func (runner gateRun) stepMerge(result landing.GateResult, target GateTarget, fo
 // gate checkout, or a scratch tree. done is true when it ends the gate with a
 // verdict.
 func (g *gateRun) mergeLocal(dir string) (sha string, done bool) {
-	run := func(args ...string) (git.Result, error) { return g.e.Git(g.ctx, dir, args...) }
+	run := g.e.Git.In(g.ctx, dir)
 	base := g.o.Base
 	if dir != g.root {
 		base = "scratch tree"
