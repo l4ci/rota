@@ -97,7 +97,7 @@ func TestStopBlock(t *testing.T) {
 			alive := map[int]bool{10: true}
 			env := testEnv(&now, alive)
 			if tc.armed {
-				release, err := roundlease.Arm(env, cd, 10, time.Minute)
+				release, err := roundlease.Arm(env, cd, 10, time.Minute, false)
 				if err != nil {
 					t.Fatal(err)
 				}

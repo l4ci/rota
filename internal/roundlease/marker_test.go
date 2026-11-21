@@ -9,7 +9,7 @@ import (
 func TestArmOneAtATime(t *testing.T) {
 	cd := t.TempDir()
 	env := fakeEnv("h", procs{10: 0, 11: 0})
-	rel, err := Arm(env, cd, 10, time.Minute)
+	rel, err := Arm(env, cd, 10, time.Minute, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func TestArmOneAtATime(t *testing.T) {
 		t.Fatalf("armed %+v %v", m, ok)
 	}
 	var ae *ArmedError
-	if _, err := Arm(env, cd, 11, time.Minute); !errors.As(err, &ae) {
+	if _, err := Arm(env, cd, 11, time.Minute, false); !errors.As(err, &ae) {
 		t.Fatalf("a second live watch must be refused: %v", err)
 	}
 	rel()
@@ -25,7 +25,7 @@ func TestArmOneAtATime(t *testing.T) {
 		t.Fatal("release must remove the marker")
 	}
 	// A marker whose process died is not armed and is replaced.
-	if _, err := Arm(env, cd, 10, time.Minute); err != nil {
+	if _, err := Arm(env, cd, 10, time.Minute, false); err != nil {
 		t.Fatal(err)
 	}
 	env.Alive = func(int) bool { return false }
@@ -33,7 +33,7 @@ func TestArmOneAtATime(t *testing.T) {
 		t.Fatal("a dead watch is not armed")
 	}
 	env.Alive = func(pid int) bool { return pid == 11 }
-	rel2, err := Arm(env, cd, 11, time.Minute)
+	rel2, err := Arm(env, cd, 11, time.Minute, false)
 	if err != nil {
 		t.Fatalf("a dead watch must be replaceable: %v", err)
 	}

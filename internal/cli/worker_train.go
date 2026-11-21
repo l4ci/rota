@@ -310,6 +310,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	plan := fs.Bool("plan", false, "preview the train: map member conflicts and name the largest conflict-free subset; runs no tests, pushes nothing")
 	var final stringList
 	fs.Var(&final, "final-slice", "a train member (slot or PR) that is the last slice of a partial-slice issue and may close it; repeatable")
+	ignoreAutopilot := fs.Bool("ignore-autopilot", false, "land by hand although an autopilot watch is armed")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
@@ -345,6 +346,11 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				}
 				seenTok[t] = true
 				override = append(override, t)
+			}
+		}
+		if !*plan {
+			if res, err := refuseDuringAutopilot(c, root, *ignoreAutopilot); err != nil {
+				return res, err
 			}
 		}
 		if !*plan && !*noAssignCheck {
