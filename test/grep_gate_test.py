@@ -42,19 +42,19 @@ class GrepGateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_old_product_name_fails(self):
-        self.add("docs/page.md", "use hv-skills here\n")
+        self.add("docs/page.md", "use hv" "-skills here\n")
         result = self.run_gate()
         self.assertEqual(result.returncode, 1)
         self.assertIn("docs/page.md", result.stderr)
 
     def test_old_binary_name_fails(self):
-        self.add("docs/page.md", "run /hv-work now\n")
+        self.add("docs/page.md", "run /hv" "-work now\n")
         result = self.run_gate()
         self.assertEqual(result.returncode, 1)
         self.assertIn("old binary name hv", result.stderr)
 
     def test_excluded_path_passes(self):
-        self.add("CHANGELOG.md", "renamed from hv-skills; /hv-work\n")
+        self.add("CHANGELOG.md", "renamed from hv" "-skills; /hv" "-work\n")
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stderr)
 

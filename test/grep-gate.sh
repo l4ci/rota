@@ -10,7 +10,8 @@
 # no longer matches a hit is dead: delete it. test/grep_gate_test.py covers a
 # hit, an excluded path and a clean tree.
 # Usage: bash test/grep-gate.sh   (ROTA_BIN overrides the binary it builds;
-# GREP_GATE_REPO points the tree scan at another repo, for the harness test)
+# GREP_GATE_REPO points the tree scan at another repo, for the harness test;
+# it also moves the init smoke there, so it needs ROTA_BIN set)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
