@@ -110,66 +110,50 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			}
 			o.skipped = herr.Error()
 		default:
-			workers := worker.LiveWorkers(ctx, h, reg)
 			cli := cliPane(c, root, reg, panes)
-			var st layout.State
-			var ok bool
-			var a worker.Arranged
 			if mode == "" {
-				st, ok = layout.Find(panes, root, layout.Label, cli, workers)
-			} else {
-				var err error
-				a, err = worker.ArrangeRound(ctx, caps, worker.ParseHostConfig(c.deps().Config(root)), root, mode, cli, reg)
-				st, ok = a.State, a.Found
-				if err != nil {
-					var cfgErr worker.ConfigError
-					if errors.As(err, &cfgErr) {
-						return Result{}, Resolution("%s: %v", o.name, err)
+				st, ok := worker.ShowRound(ctx, h, panes, root, cli, reg)
+				if !ok {
+					if !explicit {
+						continue
 					}
-					if a.RecordErr != nil {
-						c.Warn("%s: could not remember the slot workspaces: %v", o.name, a.RecordErr)
-					}
-					return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
+					o.skipped = "no orchestrator pane open in herdr"
+					break
 				}
+				o.st, o.before, o.after = st, st.Layout(), st.Layout()
+				break
 			}
-			if !ok {
+			a, err := worker.ArrangeRound(ctx, caps, worker.ParseHostConfig(c.deps().Config(root)), root, mode, cli, reg)
+			if err != nil {
+				var cfgErr worker.ConfigError
+				if errors.As(err, &cfgErr) {
+					return Result{}, Resolution("%s: %v", o.name, err)
+				}
+				if a.RecordErr != nil {
+					c.Warn("%s: could not remember the slot workspaces: %v", o.name, a.RecordErr)
+				}
+				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
+			}
+			if !a.Found {
 				if !explicit {
 					continue
 				}
 				o.skipped = "no orchestrator pane open in herdr"
 				break
 			}
-			o.st, o.before, o.after = st, st.Layout(), st.Layout()
-			if mode == "" {
-				break
-			}
 			r := a.Result
+			o.st, o.before, o.after, o.moves = a.State, a.Before, r.After, r.Moves
 			if a.RecordErr != nil {
 				c.Warn("%s: could not remember the slot workspaces: %v", o.name, a.RecordErr)
 			}
-			o.after, o.moves = r.After, r.Moves
 			for _, slot := range r.Unlinked {
 				c.Warn("herdr cannot link workspaces; slot %s stays a tab", slot)
 			}
-			if err := worker.Update(root, func(d *worker.Doc) {
-				d.SetLayout(mode)
-				if mode == layout.Split && st.CLI != nil {
-					d.SetCLIPane(st.CLI.ID)
-				}
-			}); err != nil {
-				c.Warn("%s: could not remember the layout: %v", o.name, err)
+			if a.LayoutErr != nil {
+				c.Warn("%s: could not remember the layout: %v", o.name, a.LayoutErr)
 			}
 			if mode == layout.Split && r.Moves > 0 && a.Grouped {
 				o.note = "slots leave their linked workspaces until `rota layout tabs`"
-			}
-			if r.Moves > 0 {
-				// Report where the panes are now, not where they were. A pane that
-				// changed workspace has a new id: find each slot's again.
-				if now, err := h.LayoutPanes(ctx); err == nil {
-					if st, ok := layout.Find(now, root, layout.Label, cli, worker.LiveWorkers(ctx, h, reg)); ok {
-						o.st = st
-					}
-				}
 			}
 		}
 		outs = append(outs, o)
