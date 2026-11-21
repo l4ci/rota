@@ -188,7 +188,14 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 // wording (PaneVocab) is read on top of the shared rules, on that kind's panes
 // only.
 func ClassifyFor(kind, text string, moved bool, lines int, native string) (state, evidence string) {
-	rules := usagelimit.RulesFor(kind)
+	p, _ := harness.LookupPane(kind)
+	return ClassifyPane(p, text, moved, lines, native)
+}
+
+// ClassifyPane is ClassifyFor for the Pane that wrote the text; nil reads with
+// no harness vocabulary.
+func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native string) (state, evidence string) {
+	rules := harness.RulesOf(p)
 	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines { // [-0:] is the whole list in Python
 		all = all[len(all)-lines:]
@@ -198,7 +205,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// orchestrator blocks (#883), and only the harness's own dialog counts,
 	// not text the worker quotes (#1212): usagelimit.Detect decides. tail is
 	// already scoped to lines, so no further scope is passed.
-	hit, limited := usagelimit.Detect(kind, tail, usagelimit.Scope{})
+	hit, limited := usagelimit.DetectPane(p, tail, usagelimit.Scope{})
 	own, dialog := hit.Own, hit.Dialog
 
 	// Sentinels win over everything, including movement: a worker that printed

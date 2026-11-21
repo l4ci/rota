@@ -145,3 +145,22 @@ func TestDetect(t *testing.T) {
 		t.Errorf("dialog not returned without a limit: ok=%v %q", ok, h.Dialog)
 	}
 }
+
+type testPane struct{ v harness.PaneVocab }
+
+func (testPane) Kind() string   { return "test" }
+func (testPane) RawPaste() bool { return false }
+func (testPane) PromptAcknowledgement() harness.PromptAcknowledgement {
+	return harness.PromptAcknowledgement{}
+}
+func (p testPane) PaneVocab() harness.PaneVocab { return p.v }
+
+func TestDetectPaneReadsAnUnregisteredAdapter(t *testing.T) {
+	p := testPane{harness.PaneVocab{Limits: []string{`beans exhausted`}}}
+	if _, ok := DetectPane(p, "beans exhausted\n", Scope{}); !ok {
+		t.Error("adapter's own limit phrase not detected")
+	}
+	if _, ok := DetectPane(nil, "beans exhausted\n", Scope{}); ok {
+		t.Error("nil pane detected another adapter's phrase")
+	}
+}
