@@ -376,6 +376,28 @@ func ParseDone(line string) (Done, bool) {
 	return d, true
 }
 
+// doneHit is one done line found by scanDone: its raw span in the text
+// (line end excludes the newline, so CRLF and indentation stay inside the
+// span) and the parse of the stripped line.
+type doneHit struct {
+	Start, End int
+	Done
+}
+
+// scanDone is the one reader of done lines. It walks text line by line,
+// strips each line, and returns the ones ParseDone accepts in order.
+func scanDone(text string) []doneHit {
+	var out []doneHit
+	pos := 0
+	for _, raw := range strings.Split(text, "\n") {
+		if d, ok := ParseDone(pystr.Strip(raw)); ok {
+			out = append(out, doneHit{Start: pos, End: pos + len(raw), Done: d})
+		}
+		pos += len(raw) + 1
+	}
+	return out
+}
+
 // ClosureReasons are the reasons a done line can carry (CLOSURE_REASONS).
 var ClosureReasons = []string{"done", "handed-off", "blocked", "dropped"}
 
