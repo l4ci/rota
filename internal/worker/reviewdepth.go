@@ -128,10 +128,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		tier = ClassifyChange(ctx, ChangeSources{Policy: s.Change, PolicyErr: s.ChangeErr, Git: s.Git, Dir: s.Dir, Span: s.Span, Door: readDoor})
 		in.Tier, in.Risky = tier.Tier, tier.Risky
 	}
-	needsIssue := s.Policy.NeedsIssue()
-	if in.Tier == change.TierDocs {
-		needsIssue = len(s.Policy.Labels) > 0 // no drift to read the issue for
-	}
+	needsIssue := reviewpolicy.NeedsIssue(s.Policy, in.Tier)
 	decide := func(in reviewpolicy.Input) reviewpolicy.Decision { return reviewpolicy.Decide(s.Policy, in) }
 	// Each issue's own labels decide its cross requirement, as they do its
 	// depth: one issue's review:none must not skip another's.
