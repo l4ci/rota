@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"sync"
 	"syscall"
 )
@@ -25,26 +24,9 @@ var ErrOutputLimit = errors.New("process stdout limit exceeded")
 // Completing talk always closes the pipes, kills the child (and its group when
 // requested), and reaps it. A successful protocol need not wait for child exit.
 func Duplex(ctx context.Context, c Cmd, talk func(io.Reader, io.Writer) error) error {
-	switch {
-	case c.Timeout == 0:
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultTimeout)
-		defer cancel()
-	case c.Timeout > 0:
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
-		defer cancel()
-	}
-	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
-	cmd.Dir = c.Dir
-	if c.Environ != nil {
-		cmd.Env = c.Environ
-	} else if len(c.Env) > 0 {
-		cmd.Env = append(os.Environ(), c.Env...)
-	}
-	if c.Group {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	}
+	ctx, cancel := withTimeout(ctx, c)
+	defer cancel()
+	cmd := newCmd(ctx, c)
 	cmd.WaitDelay = WaitDelay
 	// A nil Stderr goes directly to the null device, without a copy goroutine
 	// that a surviving descendant could keep blocked.
