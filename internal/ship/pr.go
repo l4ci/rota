@@ -2,8 +2,6 @@ package ship
 
 import (
 	"context"
-	"regexp"
-	"strconv"
 
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -43,8 +41,6 @@ type PR struct {
 	Number        int
 }
 
-var numberRe = regexp.MustCompile(`(\p{Nd}+)/?$`)
-
 // OpenPR pushes the branch and opens the PR. The Closes lines and the verdict
 // gate come before the push, so a bad item ID or a blocked branch leaves
 // nothing pushed.
@@ -82,8 +78,8 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 		return PR{}, err
 	}
 	pr := PR{URL: url, Provider: p.Forge.Provider()}
-	if m := numberRe.FindStringSubmatch(url); m != nil {
-		pr.Number, _ = strconv.Atoi(m[1])
+	if ref, ok := tracker.ParsePRURL(url); ok {
+		pr.Number = ref.Number
 	}
 	return pr, nil
 }
