@@ -357,10 +357,11 @@ func releasePending(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	data, err := releasePendingData(c, dir)
+	p, err := releasePendingState(c, dir)
 	if err != nil {
 		return Result{}, err
 	}
+	data := p.JSON()
 	text, err := jsonx.MarshalCompact(data)
 	if err != nil {
 		return Result{}, err
@@ -368,9 +369,9 @@ func releasePending(c *Ctx, args []string) (Result, error) {
 	return Result{Data: data, Text: string(text)}, nil
 }
 
-// releasePendingData is the nudge state of the checkout in dir: the tag, the
+// releasePendingState is the nudge state of the checkout in dir: the tag, the
 // commits and days since it, and whether a release is due.
-func releasePendingData(c *Ctx, dir string) (*jsonx.Object, error) {
+func releasePendingState(c *Ctx, dir string) (release.PendingState, error) {
 	ctx, r := c.Context(), c.deps().Repo(dir)
 	tag, commits, tagTS := "", 0, int64(0)
 	// describe failing (no tag, not a repo, no git) means no tag yet.
@@ -380,11 +381,11 @@ func releasePendingData(c *Ctx, dir string) (*jsonx.Object, error) {
 	if tag != "" {
 		n, err := releaseGitCount(ctx, r, "rev-list", tag+"..HEAD", "--count")
 		if err != nil {
-			return nil, err
+			return release.PendingState{}, err
 		}
 		ts, err := releaseGitCount(ctx, r, "log", "-1", "--format=%ct", tag)
 		if err != nil {
-			return nil, err
+			return release.PendingState{}, err
 		}
 		commits, tagTS = int(n), ts
 	}

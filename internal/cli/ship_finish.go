@@ -259,22 +259,15 @@ func finishRelease(c *Ctx, dir string, done bool) (*jsonx.Object, error) {
 	o := jsonx.NewObject()
 	action, reason, msg := "skip", finishedReason, ""
 	if done {
-		p, err := releasePendingData(c, dir)
+		p, err := releasePendingState(c, dir)
 		if err != nil {
 			return nil, err
 		}
-		nudge, _ := p.Get("shouldNudge")
-		tag, _ := p.Get("lastTag")
-		m, _ := p.Get("message")
-		why, _ := p.Get("reason")
-		if n, _ := nudge.(bool); n && tag != "" {
-			action, msg = "fire", fmt.Sprint(m)
-			reason = fmt.Sprint(why)
-		} else {
-			reason = fmt.Sprint(why)
-			if reason == "" {
-				reason = "no release due"
-			}
+		reason = p.Reason
+		if p.ShouldNudge && p.LastTag != "" {
+			action, msg = "fire", p.Message
+		} else if reason == "" {
+			reason = "no release due"
 		}
 	}
 	o.Set("action", action)

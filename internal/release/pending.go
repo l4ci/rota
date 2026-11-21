@@ -33,20 +33,33 @@ func threshold(cfg any, key string, def int64) (out any, n *big.Int) {
 	return def, big.NewInt(def)
 }
 
-// Pending is hv-release-pending's JSON: the nudge state for lastTag with
+// PendingState is the nudge state Pending computes. ThresholdCommits and
+// ThresholdDays hold the configured value as the old JSON printed it (an
+// integer, json.Number or bool).
+type PendingState struct {
+	LastTag          string
+	Commits          int
+	Days             int64
+	ThresholdCommits any
+	ThresholdDays    any
+	ShouldNudge      bool
+	Reason           string
+	Message          string
+}
+
+// JSON renders the state as `rota release pending` prints it.
+func (p PendingState) JSON() *jsonx.Object {
+	return jsonx.Obj("lastTag", p.LastTag, "commits", p.Commits, "days", p.Days,
+		"thresholdCommits", p.ThresholdCommits, "thresholdDays", p.ThresholdDays,
+		"shouldNudge", p.ShouldNudge, "reason", p.Reason, "message", p.Message)
+}
+
+// Pending is hv-release-pending's state: the nudge state for lastTag with
 // commits since it, tagTS the tag's commit time and now the clock (Unix
 // seconds). An empty lastTag means the repo has no tag yet.
-func Pending(cfg any, lastTag string, commits int, tagTS, now int64) *jsonx.Object {
-	o := jsonx.NewObject()
+func Pending(cfg any, lastTag string, commits int, tagTS, now int64) PendingState {
 	if lastTag == "" {
-		for _, kv := range []struct {
-			k string
-			v any
-		}{{"lastTag", ""}, {"commits", 0}, {"days", 0}, {"thresholdCommits", 10}, {"thresholdDays", 14},
-			{"shouldNudge", false}, {"reason", "no-tag"}, {"message", ""}} {
-			o.Set(kv.k, kv.v)
-		}
-		return o
+		return PendingState{ThresholdCommits: int64(10), ThresholdDays: int64(14), Reason: "no-tag"}
 	}
 	outC, thrC := threshold(cfg, "nudgeAfterCommits", 10)
 	outD, thrD := threshold(cfg, "nudgeAfterDays", 14)
@@ -54,24 +67,16 @@ func Pending(cfg any, lastTag string, commits int, tagTS, now int64) *jsonx.Obje
 	if now > tagTS {
 		days = (now - tagTS) / 86400
 	}
-	nudge, reason, message := false, "", ""
+	p := PendingState{LastTag: lastTag, Commits: commits, Days: days, ThresholdCommits: outC, ThresholdDays: outD}
 	if commits > 0 {
 		switch {
 		case big.NewInt(int64(commits)).Cmp(thrC) >= 0:
-			nudge, reason = true, "commits"
-			message = fmt.Sprintf("%d commits since %s; consider /rota-release.", commits, lastTag)
+			p.ShouldNudge, p.Reason = true, "commits"
+			p.Message = fmt.Sprintf("%d commits since %s; consider /rota-release.", commits, lastTag)
 		case big.NewInt(days).Cmp(thrD) >= 0:
-			nudge, reason = true, "days"
-			message = fmt.Sprintf("%d commits and %d days since %s; consider /rota-release.", commits, days, lastTag)
+			p.ShouldNudge, p.Reason = true, "days"
+			p.Message = fmt.Sprintf("%d commits and %d days since %s; consider /rota-release.", commits, days, lastTag)
 		}
 	}
-	o.Set("lastTag", lastTag)
-	o.Set("commits", commits)
-	o.Set("days", days)
-	o.Set("thresholdCommits", outC)
-	o.Set("thresholdDays", outD)
-	o.Set("shouldNudge", nudge)
-	o.Set("reason", reason)
-	o.Set("message", message)
-	return o
+	return p
 }
