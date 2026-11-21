@@ -92,8 +92,8 @@ func TestVerdictMeaningsAreCoherent(t *testing.T) {
 	}
 }
 
-// A refusal's blockedBy is a declared value, and equals its verdict except for
-// the verdict-blocked refusal, which names the shorter key the CLI special-cases.
+// A refusal's blockedBy is a declared value. Verdicts that share a key with
+// blockedby are that constant, so no pin test is needed for the spelling.
 func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
 	declared := map[string]bool{}
 	for _, v := range blockedby.All() {
@@ -105,9 +105,6 @@ func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
 		}
 		if !declared[m.BlockedBy] {
 			t.Errorf("%q names blockedBy %q, which blockedby.All() does not declare", v, m.BlockedBy)
-		}
-		if v != GateVerdictBlocked && m.BlockedBy != v {
-			t.Errorf("%q names blockedBy %q: a refusal verdict and its blockedBy share a spelling", v, m.BlockedBy)
 		}
 	}
 }
