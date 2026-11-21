@@ -31,8 +31,8 @@ var fmKind = regexp.MustCompile(`(?m)^kind:[ \t]*(\S+)`)
 
 // KindOf is the kind in the plan's frontmatter; a plan with none is delivery.
 func KindOf(text string) string {
-	if m := fmBlock.FindStringSubmatch(text); m != nil {
-		if k := fmKind.FindStringSubmatch(m[1]); k != nil {
+	if block, _, ok := fmBlock(text); ok {
+		if k := fmKind.FindStringSubmatch(block); k != nil {
 			return k[1]
 		}
 	}
@@ -46,8 +46,8 @@ func WithKind(text, kind string) string {
 	if kind != KindDecision {
 		return text
 	}
-	if m := fmBlock.FindStringSubmatchIndex(text); m != nil {
-		text = text[:m[3]] + "\nkind: " + KindDecision + text[m[3]:]
+	if _, end, ok := fmBlock(text); ok {
+		text = text[:end] + "\nkind: " + KindDecision + text[end:]
 	}
 	return strings.TrimRight(text, "\n") + "\n\n## " + DecisionsSection + "\n\n_(none yet: each closed decision item adds one line)_\n\n" +
 		"## Not yet specified\n\n_(the fog: what no decision covers yet)_\n"
