@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -82,24 +81,18 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	ctx := c.Context()
 	c.holderPID = pid
 	renv := accountedRoundEnv(c, ctx, root)
-	lease, held, err := renv.HeldLease(ctx, root)
+	lease, cd, held, err := renv.HeldLeaseDir(ctx, root)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
 	if !held {
 		return roundtick.Result{}, roundtick.ErrNoLease
 	}
-	cd, err := c.CommonDir(root)
-	if err != nil {
-		return roundtick.Result{}, Resolution("%v", err)
-	}
 	policy, err := mergePolicy(c)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
 	renv = withBoard(c, root, renv)
-	state := roundtick.LoadState(cd, lease.Round)
-
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		_, ferr := backlogFail(err)
@@ -109,26 +102,13 @@ func runAutopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride s
 	if !ok {
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
-	if observe {
-		renv = renv.ReadOnly()
-	}
-	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state, commonDir: cd, round: lease.Round}
-	var world roundtick.World = w
-	if observe {
-		world = inspectingWorld{w}
-	}
-	e := roundtick.NewEnv(world, roundtick.Config{Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
-	state.Apply(&e)
-	r, err := roundtick.Run(ctx, e)
-	if err != nil {
-		return r, err
-	}
-	if !observe {
-		if err := roundtick.SaveState(cd, lease.Round, r); err != nil {
-			c.Warn("autopilot state not saved: %v", err)
-		}
-	}
-	return r, nil
+	return roundtick.RunPass(ctx, roundtick.Pass{
+		CommonDir: cd, Round: lease.Round, Observe: observe,
+		Config: roundtick.Config{Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride},
+		World: func(st roundtick.State, observe bool) roundtick.World {
+			return &tickWorld{c: c, root: root, set: set, renv: renv.Inspecting(observe), be: be, board: board, state: st, commonDir: cd, round: lease.Round, observe: observe}
+		},
+	})
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
@@ -297,12 +277,6 @@ func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string
 	return r.renv.MintReview(ctx, r.root, r.board, a, r.renv.CurrentRound(ctx, r.root))
 }
 
-// placementLine is the warning a tick prints when an assign moved a slot to
-// another account.
-func placementLine(id string, p *round.Placement) string {
-	return fmt.Sprintf("moved\t%s: %s", tracker.RefOf(id), p)
-}
-
 // tickWorld is the CLI's side of a tick: every seam roundtick.NewEnv wires,
 // answered by the real registry, forge and verbs.
 type tickWorld struct {
@@ -316,9 +290,12 @@ type tickWorld struct {
 	// commonDir and round locate the stored stop value Stop re-reads.
 	commonDir string
 	round     int
+	// observe selects the no-write variants of the reads that otherwise
+	// cache or repair state; roundtick.NewEnv refuses every write.
+	observe bool
 }
 
-func (w *tickWorld) Observing() bool { return false }
+func (w *tickWorld) Observing() bool { return w.observe }
 
 func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegistryTolerant(w.root) }
 func (w *tickWorld) Registry() (worker.Registry, error) { return worker.LoadRegistry(w.root) }
@@ -337,6 +314,9 @@ func (w *tickWorld) Waiting() []roundtick.ReadyPR {
 }
 
 func (w *tickWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
+	if w.observe {
+		return w.renv.InspectReconcile(ctx, w.root)
+	}
 	return w.renv.Reconcile(ctx, w.root, true)
 }
 
@@ -363,10 +343,7 @@ func (w *tickWorld) Landing(ctx context.Context, req postgate.Request) (postgate
 // world asks the gate for its no-write variant (no fetch, no verdict-report
 // recovery).
 func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
-	return w.reviewReadiness(slot, base, false)
-}
-
-func (w *tickWorld) reviewReadiness(slot, base string, observe bool) (string, bool) {
+	observe := w.observe
 	ctx, stop := w.c.workerContext()
 	defer stop()
 	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, VerdictRepo: shipVerdict(w.c, w.root, w.root).Repo, ItemBody: lazyItemBody(w.c, w.root)})
@@ -374,7 +351,9 @@ func (w *tickWorld) reviewReadiness(slot, base string, observe bool) (string, bo
 }
 
 func (w *tickWorld) ReviewLoop(slot string) roundtick.ReviewOutcome {
-	return roundtick.ReviewStep(w.c.Context(), reviewSources(w.c, w.root, w.set, slot))
+	src := reviewSources(w.c, w.root, w.set, slot)
+	src.Observe = w.observe
+	return roundtick.ReviewStep(w.c.Context(), src)
 }
 
 func (w *tickWorld) Capped(ctx context.Context) string {
@@ -401,25 +380,15 @@ func (w *tickWorld) AssignBundle(ctx context.Context, lead string, members []str
 }
 
 func (w *tickWorld) assign(ctx context.Context, o round.AssignOpts) (round.Assigned, error) {
-	id := o.ID
-	res, err := w.renv.Assign(ctx, w.root, w.board, o)
-	for _, warn := range res.Warnings {
-		w.c.Warn("%s", warn)
-	}
-	if err != nil {
-		return res, err
-	}
-	for _, o := range res.Overlaps {
-		w.c.Warn("%s %s", tracker.RefOf(id), o.String())
-	}
-	if p := res.Placement; p != nil && !p.Kept && !p.Fresh {
-		w.c.Warn("%s", placementLine(id, p))
-	}
-	return res, nil
+	return w.renv.Assign(ctx, w.root, w.board, o)
 }
 
 func (w *tickWorld) Review() roundtick.Reviewer {
-	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
+	r := reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
+	if w.observe {
+		return inspectingReviewer{r}
+	}
+	return r
 }
 
 // TestAudit reads the recorded test-audit thresholds, read-only: no listing
@@ -433,38 +402,27 @@ func (w *tickWorld) TestAudit(context.Context) ([]string, error) {
 }
 
 // FollowUp wires the follow-up step (#2580) to the forge and the transfer
-// verb. A round with no queued PR asks the forge nothing.
+// verb; roundtick owns what it does with them.
 func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
-	return roundtick.FollowUpSources{
-		Auto:    w.set.ReviewLoop == roundcfg.ReviewLoopAuto,
-		Size:    w.set.FollowupReserve,
-		Reserve: func() []string { return round.Reserve(w.TolerantRegistry(), w.set) },
-		List: func(ctx context.Context) ([]roundtick.FollowUp, error) {
-			if len(w.TolerantRegistry().PRs()) == 0 {
-				return nil, nil
-			}
+	return roundtick.NewFollowUpSources(roundtick.FollowUpPorts{
+		Settings: w.set,
+		Registry: w.TolerantRegistry,
+		Forge: func(ctx context.Context) (round.ReviewForge, error) {
 			fg, err := w.c.deps().forge(ctx, w.c.deps().Config(w.root), "", w.root)
 			if err != nil {
 				return nil, trackerErr(err)
 			}
-			list, warns, err := w.renv.FollowUps(ctx, w.root, fg)
-			for _, warn := range warns {
-				w.c.Warn("%s", warn)
-			}
-			var out []roundtick.FollowUp
-			for _, u := range list {
-				out = append(out, roundtick.FollowUp{Issue: u.Issue, PR: u.PR, Who: strings.Join(u.Humans, ", "), Item: u})
-			}
-			return out, err
+			return fg, nil
 		},
-		Start: func(ctx context.Context, f roundtick.FollowUp, slot string, reserve bool) error {
-			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f.Item, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
-			for _, warn := range res.Warnings {
-				w.c.Warn("%s", warn)
-			}
-			return err
+		List: func(ctx context.Context, fg round.ReviewForge) ([]round.FollowUp, []string, error) {
+			return w.renv.FollowUps(ctx, w.root, fg)
 		},
-	}
+		Start: func(ctx context.Context, f round.FollowUp, slot string, reserve bool) ([]string, error) {
+			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
+			return res.Warnings, err
+		},
+		Warn: func(m string) { w.c.Warn("%s", m) },
+	})
 }
 
 func (w *tickWorld) Audit(a roundtick.Action) {

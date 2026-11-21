@@ -1,9 +1,11 @@
 package roundtick
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -57,4 +59,23 @@ func AssignedAgents(res round.Assigned) []string {
 		return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}
 	}
 	return []string{res.Agent}
+}
+
+// PlacementLine is the warning a tick prints when an assign moved a slot to
+// another account.
+func PlacementLine(id string, p *round.Placement) string {
+	return fmt.Sprintf("moved\t%s: %s", tracker.RefOf(id), p)
+}
+
+// AssignNotes is what a successful assign of id tells the operator beyond its
+// result: each overlap, then where it placed the slot when that moved it.
+func AssignNotes(id string, res round.Assigned) []string {
+	var out []string
+	for _, o := range res.Overlaps {
+		out = append(out, tracker.RefOf(id)+" "+o.String())
+	}
+	if p := res.Placement; p != nil && !p.Kept && !p.Fresh {
+		out = append(out, PlacementLine(id, p))
+	}
+	return out
 }

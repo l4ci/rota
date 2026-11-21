@@ -50,6 +50,15 @@ func (e Env) ReadOnly() Env {
 	return e
 }
 
+// Inspecting is ReadOnly when observe is set and e unchanged otherwise, so a
+// caller states the mode once instead of branching on it.
+func (e Env) Inspecting(observe bool) Env {
+	if observe {
+		return e.ReadOnly()
+	}
+	return e
+}
+
 func (e Env) reconcile(ctx context.Context, root string, apply, propose bool) (Outcome, error) {
 	rep, err := e.Status(ctx, root)
 	if err != nil {

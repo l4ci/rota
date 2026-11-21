@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -124,5 +125,51 @@ func TestAutopilotReadinessReadsTheSubRepoKey(t *testing.T) {
 	}
 	if why := reviewVerdictsMissing(c, dir, "ben", "main"); why != "" {
 		t.Fatalf("readiness ignored the sub-repo key: %s", why)
+	}
+}
+
+// An observing world asks the gate for its no-write variant: no fetch. The
+// applying world fetches, which is the positive control.
+func TestTickWorldReviewReadinessObserveSkipsFetch(t *testing.T) {
+	for _, observe := range []bool{false, true} {
+		const branch = "ben/2185-x"
+		dir := nudgeProject(t, []string{branch}, nil)
+		remote := t.TempDir()
+		gittest.Run(t, remote, "init", "--bare", "-q")
+		gittest.Run(t, dir, "remote", "add", "origin", remote)
+		gittest.Run(t, dir, "push", "-q", "origin", "main", branch)
+		write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"},"ship":{"review":"full"}}`)
+		addRegistryRows(t, dir, map[string][]map[string]any{
+			"slots": {{"name": "ben", "state": "done", "branch": branch, "pr": "#11", "task": "2185"}},
+		})
+		deps := testDeps()
+		deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{Stdout: fmt.Sprintf(`{"state":"OPEN","headRefName":%q,"baseRefName":"main"}`, branch)}, nil
+		}, func(n string) (string, error) { return "/fake/" + n, nil })}
+		real, fetches := deps.Git, 0
+		deps.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+			if len(args) > 0 && args[0] == "fetch" {
+				fetches++
+			}
+			return real(ctx, d, args...)
+		}
+		c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
+		(&tickWorld{c: c, root: dir, observe: observe}).ReviewReadiness("ben", "main")
+		if want := !observe; (fetches > 0) != want {
+			t.Errorf("observe=%v: fetches=%d, want fetch=%v", observe, fetches, want)
+		}
+	}
+}
+
+// An observing world's reviewer reads architecture facts without seeding the
+// review timestamp; the applying reviewer is the positive control.
+func TestTickWorldReviewObserveIsInspecting(t *testing.T) {
+	w := &tickWorld{observe: true}
+	if _, ok := w.Review().(inspectingReviewer); !ok {
+		t.Fatalf("observing world's Review() is %T, want inspectingReviewer", w.Review())
+	}
+	w.observe = false
+	if _, ok := w.Review().(reviewAdapter); !ok {
+		t.Fatalf("applying world's Review() is %T, want reviewAdapter", w.Review())
 	}
 }

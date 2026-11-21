@@ -49,9 +49,9 @@ func TestRoundTickObserveReconcileDoesNotRepair(t *testing.T) {
 				t.Fatal(err)
 			}
 			ctx := context.Background()
-			w := &tickWorld{root: f.root, renv: f.deps.roundEnv(ctx, f.root)}
+			w := &tickWorld{root: f.root, renv: f.deps.roundEnv(ctx, f.root), observe: true}
 			if mode == "adapter" {
-				out, err := (inspectingWorld{w}).Reconcile(ctx)
+				out, err := w.Reconcile(ctx)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -81,6 +81,7 @@ func TestRoundTickObserveReconcileDoesNotRepair(t *testing.T) {
 			}
 			// Positive control: the same drift really does reach the applying
 			// adapter when execution is requested.
+			w.observe = false
 			applied, err := w.Reconcile(ctx)
 			if err != nil {
 				t.Fatal(err)
@@ -104,8 +105,8 @@ func TestRoundTickObserveReviewLoopDoesNotRelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &tickWorld{c: c, root: root, set: roundcfg.Settings{ReviewLoop: roundcfg.ReviewLoopAuto, MaxBounces: 3}}
-	got := (inspectingWorld{w}).ReviewLoop("nia")
+	w := &tickWorld{c: c, root: root, set: roundcfg.Settings{ReviewLoop: roundcfg.ReviewLoopAuto, MaxBounces: 3}, observe: true}
+	got := w.ReviewLoop("nia")
 	if !got.Proposed || got.Relayed || got.Detail != "1 from rev "+prURL {
 		t.Errorf("observation must report pending input as a proposal: %+v", got)
 	}
