@@ -41,12 +41,16 @@ func gateVerdictConsts(t *testing.T) map[string]string {
 					if !strings.HasPrefix(n.Name, "Gate") || i >= len(vs.Values) {
 						continue
 					}
-					lit, ok := vs.Values[i].(*ast.BasicLit)
-					if !ok || lit.Kind != token.STRING {
-						continue
+					switch x := vs.Values[i].(type) {
+					case *ast.BasicLit:
+						if x.Kind == token.STRING {
+							found[n.Name], _ = strconv.Unquote(x.Value)
+						}
+					case *ast.SelectorExpr: // = blockedby.X: the shared spelling
+						if v, ok := blockedByConsts(t)[x.Sel.Name]; ok {
+							found[n.Name] = v
+						}
 					}
-					v, _ := strconv.Unquote(lit.Value)
-					found[n.Name] = v
 				}
 			}
 		}
@@ -129,4 +133,29 @@ func TestStaleAndProvenanceFailAreNotifyOnly(t *testing.T) {
 			t.Errorf("%q must be notify-only: %+v", v, m)
 		}
 	}
+}
+
+// blockedByConsts maps each string constant of the blockedby package to its value.
+func blockedByConsts(t *testing.T) map[string]string {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), "../blockedby/blockedby.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs := spec.(*ast.ValueSpec)
+			for i, n := range vs.Names {
+				if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					out[n.Name], _ = strconv.Unquote(lit.Value)
+				}
+			}
+		}
+	}
+	return out
 }
