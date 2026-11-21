@@ -635,12 +635,14 @@ func (f *File) Reopen(ref string) (bool, error) {
 // findDoneIn finds the Done line of id in text: its offsets (line end
 // excludes the newline) and the parse.
 func findDoneIn(text, id string) (start, end int, d Done, ok bool) {
-	pos := 0
-	for _, raw := range strings.Split(text, "\n") {
-		if p, pok := ParseDone(raw); pok && p.ID == id {
-			return pos, pos + len(raw), p, true
+	for _, l := range scanDone(text) {
+		if l.ID == id {
+			end := l.End
+			if strings.HasPrefix(text[end:], "\r\n") {
+				end++ // the span keeps the CR, so callers cut one "\n" after it
+			}
+			return l.Start, end, l.Done, true
 		}
-		pos += len(raw) + 1
 	}
 	return 0, 0, Done{}, false
 }
@@ -701,10 +703,10 @@ func CycleIDs(root string, hashes map[string]bool) []string {
 		if err != nil {
 			continue
 		}
-		for _, l := range pystr.Splitlines(text) {
-			if d, ok := ParseDone(l); ok && d.ID != "" && hashes[d.Hash] && !seen[d.ID] {
-				seen[d.ID] = true
-				ids = append(ids, d.ID)
+		for _, l := range scanDone(text) {
+			if l.ID != "" && hashes[l.Hash] && !seen[l.ID] {
+				seen[l.ID] = true
+				ids = append(ids, l.ID)
 			}
 		}
 	}

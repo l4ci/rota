@@ -48,8 +48,10 @@ func (f *File) Archive(days int, today time.Time) (moved int, err error) {
 			return nil
 		}
 		var kept []string
-		for _, line := range pystr.Splitlines(content[start:end]) {
-			if d, ok := ParseDone(line); ok {
+		for _, l := range scanLines(content[start:end]) {
+			line := l.Raw
+			if l.IsDone {
+				d := l.Done
 				t, perr := time.Parse(stamp.DateLayout, asciiDigits(d.Date))
 				if perr != nil || t.Year() < 1 {
 					return fmt.Errorf("%w: %s", ErrBadDate, d.Date)

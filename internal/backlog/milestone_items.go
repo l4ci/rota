@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	ms "github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/pystr"
 )
 
 // milestoneItems is the open items tagged with mid, in backlog order, as the
@@ -28,9 +27,9 @@ func milestoneItems(rows []Row, mid string) []ms.ItemRef {
 // reason. Ids in seen are skipped, and added to it.
 func closedMilestoneItems(text, mid string, seen map[string]bool) []ms.ItemRef {
 	var refs []ms.ItemRef
-	for _, raw := range pystr.Splitlines(text) {
-		d, ok := ParseDone(pystr.Strip(raw))
-		if !ok || d.ID == "" || seen[d.ID] {
+	for _, l := range scanDone(text) {
+		d := l.Done
+		if d.ID == "" || seen[d.ID] {
 			continue
 		}
 		fields := ParseFields(d.Inner)
