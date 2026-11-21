@@ -219,7 +219,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 		defer signal.Stop(sigs)
 
-		handoffPath := handoffFile(c.deps(), root, cfg)
+		handoffPath := hook.ResolveHandoff(orchestratorFacts(c.deps(), root, cfg))
 		if handoffPath == "" {
 			c.Warn("%s: the orchestrator handoff is not watched", noHandoffBaseMsg(cfg))
 		}
