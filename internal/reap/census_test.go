@@ -30,8 +30,8 @@ func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
 		os.Chtimes(p, ts, ts)
 	}
 	mk(sys, "rota-smoke.old", 3*time.Hour)
-	mk(sys, "rota-gate-old", 3*time.Hour)
-	mk(sys, ReviewWorkspacePrefix+"old", 3*time.Hour)
+	mk(sys, "rota-gate-tmp.old", 3*time.Hour)
+	mk(sys, ReviewWorkspacePrefix+"1001", 3*time.Hour)
 	mk(sys, "rota-smoke.fresh", 10*time.Minute)
 	mk(sys, "unrelated", 3*time.Hour)
 	if err := os.WriteFile(filepath.Join(tempRoot, rotatree.IgnoreFile), []byte("*\n"), 0o600); err != nil {
@@ -115,5 +115,23 @@ func TestTakeCensusTmpAppliesReapHeldRules(t *testing.T) {
 	got = TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run})
 	if got.StaleTmp.N != 0 || len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "not a temp root") {
 		t.Errorf("unowned root: StaleTmp=%+v warnings=%q", got.StaleTmp, got.Warnings)
+	}
+}
+
+// The census's ProcessUses is authoritative for the systmp class even when Tmp
+// carries none; with neither, every dir is held.
+func TestTakeCensusSysTmpProcessUsesIsAuthoritative(t *testing.T) {
+	sys := sysTemp(t, map[string]time.Duration{"rota-smoke.old": 3 * time.Hour})
+	root := t.TempDir()
+	run := func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: "worktree " + root + "\n\n"}, nil
+	}
+	tmp := Input{Root: root, Base: "main", Git: run, Report: &round.Report{}}
+	free := func() ([]ProcUse, error) { return nil, nil }
+	if got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, Tmp: &tmp, ProcessUses: free, Git: run}); got.LeakedTemp.N != 1 {
+		t.Errorf("census reader ignored when Tmp has none: %+v", got.LeakedTemp)
+	}
+	if got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, Tmp: &tmp, Git: run}); got.LeakedTemp.N != 0 {
+		t.Errorf("no reader anywhere must hold every dir: %+v", got.LeakedTemp)
 	}
 }

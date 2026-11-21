@@ -30,7 +30,8 @@ type CensusInput struct {
 	// --kind tmp` lists that are not held. Nil skips the class.
 	Tmp *Input
 	// ProcessUses is the process table reader the systmp class proves no live
-	// process uses a dir with, when Tmp does not supply one.
+	// process uses a dir with. When set it is authoritative, Tmp's own is
+	// ignored for that class; when nil, Tmp's is used (nil there holds every dir).
 	ProcessUses func() ([]ProcUse, error)
 	Git         git.Runner
 }
@@ -88,6 +89,9 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 		ri = *in.Tmp
 	}
 	ri.SystemTemp = in.SystemTemp
+	if in.ProcessUses != nil {
+		ri.ProcessUses = in.ProcessUses
+	}
 	if in.Root == "" || ri.Git == nil {
 		s := &state{in: ri, live: newOwnership(nil, "", "", nil)}
 		cands, _ := findSysTmp(ctx, s)

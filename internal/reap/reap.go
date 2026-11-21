@@ -138,7 +138,7 @@ const ReviewWorkspacePrefix = "rota-review-"
 // and test/gate.sh create; a test pins the scripts to them.
 const (
 	SmokePrefix = "rota-smoke."
-	GatePrefix  = "rota-gate-"
+	GatePrefix  = "rota-gate-tmp."
 )
 
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched

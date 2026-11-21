@@ -13,24 +13,27 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 )
 
-// sysTmpPrefixes are the system temp dirs a smoke run, a gate run and a
-// review workspace leave behind. The one Go source for them: test/runner.sh and
-// test/gate.sh create theirs by literal, and a test pins those to these.
-var sysTmpPrefixes = []string{SmokePrefix, GatePrefix, ReviewWorkspacePrefix}
+// The system temp dirs a smoke run (SmokePrefix + mktemp suffix), a gate run
+// (GatePrefix + mktemp suffix) and a review workspace (ReviewWorkspacePrefix +
+// os.MkdirTemp's digits) leave behind. The one Go source for them: test/runner.sh
+// and test/gate.sh create theirs by literal, and a test pins those to these.
 
 // sysTmpUID is the uid whose dirs reap may touch. A var only so a test can
 // stand in another user.
 var sysTmpUID = os.Getuid
 
 // sysTmpName reports whether name is a direct child of the system temp dir
-// that carries a leaked-run prefix.
+// named as a run creates it, not merely sharing a prefix with another tool's dir.
 func sysTmpName(name string) bool {
 	if filepath.Base(name) != name || name == "." || name == ".." {
 		return false
 	}
-	for _, p := range sysTmpPrefixes {
-		if strings.HasPrefix(name, p) {
-			return true
+	if rest, ok := strings.CutPrefix(name, ReviewWorkspacePrefix); ok {
+		return rest != "" && strings.Trim(rest, "0123456789") == ""
+	}
+	for _, p := range []string{SmokePrefix, GatePrefix} {
+		if rest, ok := strings.CutPrefix(name, p); ok {
+			return rest != ""
 		}
 	}
 	return false

@@ -40,7 +40,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 				age  time.Duration
 			}{
 				{"rota-smoke.old", 3 * time.Hour}, {"rota-gate-logs-old", 3 * time.Hour},
-				{"rota-review-old", 3 * time.Hour}, {"rota-gate-old", 3 * time.Hour}, {"rota-review-fresh", 0},
+				{"rota-review-1001", 3 * time.Hour}, {"rota-gate-tmp.old", 3 * time.Hour}, {"rota-review-3003", 0},
 				{"rota-smoke.fresh", 0}, {"tmp.other", 3 * time.Hour}, {"other", 3 * time.Hour},
 			} {
 				p := filepath.Join(temp, entry.name)
@@ -102,7 +102,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 			} else if in.CacheDisk == nil || in.CacheDisk.Path != cachePath {
 				t.Fatalf("cache disk = %+v, want %s", in.CacheDisk, cachePath)
 			}
-			want := "4 leaked temp dirs under " + temp + " (8.0 KiB) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`"
+			want := "3 leaked temp dirs under " + temp + " (6.0 KiB) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`"
 			got := in.ScanLeftovers()
 			if len(got) != 1 || got[0] != want {
 				t.Fatalf("leftovers = %q, want %q", got, want)
