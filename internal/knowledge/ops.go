@@ -282,6 +282,25 @@ func selectBullet(body, title, topic, km string) (bulletfmt.Bullet, error) {
 	return all[hits[0]], nil
 }
 
+// storedTitle resolves a typed bullet title to the title the file stores, so a
+// case-variant reaches the sidecar record. A file or section it cannot read
+// leaves the typed title for renameLocked to report.
+func storedTitle(km, topic, title string) (string, error) {
+	content, err := ReadFile(km)
+	if err != nil {
+		return "", err
+	}
+	st, en, ok := section.Find(content, topic)
+	if !ok {
+		return title, nil
+	}
+	hit, err := selectBullet(content[st:en], title, topic, km)
+	if err != nil {
+		return "", err
+	}
+	return hit.Title, nil
+}
+
 // RenameTopic renames the "## from" heading to "## to" and re-keys the
 // sidecar entries (topic mode, title empty), or moves the single bullet
 // titled title from one topic to the other and re-keys its entry (bullet
@@ -304,6 +323,12 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 	}
 	var res RenameResult
 	err = lockFiles([]string{km}, func() (err error) {
+		// The sidecar is keyed by the stored title, not the typed one.
+		if mode == "bullet" {
+			if title, err = storedTitle(km, from, title); err != nil {
+				return err
+			}
+		}
 		if err := s.preflightTier(scope, func(sc *Sidecar) error {
 			if title == "" {
 				_, err := sc.RekeyTopic(from, to)
@@ -395,7 +420,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return RenameResult{}, err
 	}
-	if err := rekey(func(sc *Sidecar) (bool, error) { return sc.Rekey(from, title, to) }); err != nil {
+	if err := rekey(func(sc *Sidecar) (bool, error) { return sc.Rekey(from, hit.Title, to) }); err != nil {
 		return RenameResult{}, err
 	}
 	return RenameResult{Mode: mode, Changed: true}, nil

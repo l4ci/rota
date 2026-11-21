@@ -49,3 +49,30 @@ func TestBulletVerbsResolveTitlesAlike(t *testing.T) {
 		}
 	}
 }
+
+// A case-variant title moves the bullet and its tier record: the sidecar is
+// keyed by the stored title, not the typed one.
+func TestRenameBulletCaseVariantKeepsTierRecord(t *testing.T) {
+	s := lockedStore(t)
+	km, _ := s.KnowledgePath("")
+	if err := os.WriteFile(km, []byte("## A\n\n- **MixedCase** x\n\n## B\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.TierSet("", "A", "MixedCase", Deprecated); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RenameTopic("", "A", "B", "mixedCASE"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := s.TierList("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Topic+"/"+e.Title+"="+e.Tier)
+	}
+	if len(got) != 1 || got[0] != "B/MixedCase="+Deprecated {
+		t.Fatalf("tier records = %v, want [B/MixedCase=%s]", got, Deprecated)
+	}
+}
