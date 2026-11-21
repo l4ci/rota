@@ -11,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
@@ -202,7 +201,7 @@ func (t *trainRun) skipIntegrated(p *trainPlanning, start string) {
 func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	e, ctx, o, res, it := t.e, t.ctx, t.o, &p.res, p.integration
 	merges := append([]string{}, p.tips[1:]...)
-	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
+	run := e.Git.In(ctx, p.scratch)
 	before := p.tips[len(p.tips)-1]
 	tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, p.scratch)},
 		land.LocalRequest{Head: p.baseSHA, Base: "scratch tree", Message: land.SyncSubject(o.Base, it.Branch)})

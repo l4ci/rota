@@ -7,7 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -186,7 +185,7 @@ func (e Env) mergeBaseInto(ctx context.Context, root, rem string, rec landing.In
 		return "", err
 	}
 	defer cleanup()
-	run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
+	run := e.Git.In(ctx, scratch)
 	merged, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
 		land.LocalRequest{Head: base, Base: "scratch tree", Message: land.SyncSubject(rec.OntoBase, rec.Branch)})
 	if err != nil {
