@@ -211,7 +211,8 @@ func (t *Itsaplan) EnsureLabels(ctx context.Context, names []string, autoCreate 
 // AddLabels uses the bulk route, which only adds and ignores a label the issue
 // already has, so two writers adding at once keep both labels.
 func (t *Itsaplan) AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error {
-	if len(uniq(labels)) == 0 {
+	labels, ok := labelNames(labels)
+	if !ok {
 		return nil
 	}
 	ids, err := t.labelIDs(ctx, labels, autoCreate)
@@ -236,12 +237,13 @@ const itsaplanLabelTries = 2
 // in the moment between the read and the write is still lost; AddLabels, which
 // uses the bulk route, never loses one.
 func (t *Itsaplan) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
-	if len(uniq(labels)) == 0 {
+	labels, ok := labelNames(labels)
+	if !ok {
 		return nil
 	}
 	// a label no one made is on no issue: only the names that exist are removed
 	var drop []int
-	for _, n := range uniq(labels) {
+	for _, n := range labels {
 		ids, err := t.labelIDs(ctx, []string{n}, false)
 		if IsKind(err, KindNotFound) {
 			continue

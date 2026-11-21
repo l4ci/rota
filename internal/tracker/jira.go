@@ -428,17 +428,11 @@ func (j *Jira) EnsureLabels(_ context.Context, names []string, _ bool) error {
 }
 
 func (j *Jira) AddLabels(ctx context.Context, key IssueKey, labels []string, _ bool) error {
-	if len(uniq(labels)) == 0 {
-		return nil
-	}
-	return j.Edit(ctx, key, IssueEdit{AddLabels: labels})
+	return editLabels(ctx, j.Edit, key, IssueEdit{AddLabels: labels})
 }
 
 func (j *Jira) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
-	if len(uniq(labels)) == 0 {
-		return nil
-	}
-	return j.Edit(ctx, key, IssueEdit{RemoveLabels: labels})
+	return editLabels(ctx, j.Edit, key, IssueEdit{RemoveLabels: labels})
 }
 
 // jqlQuote is a JQL string literal.
