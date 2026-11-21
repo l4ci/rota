@@ -57,17 +57,28 @@ func UniversalNewlines(s string) string {
 // Splitlines is str.splitlines(): it splits at \n, \r, \r\n, \v, \f,
 // U+001C to U+001E, U+0085, U+2028 and U+2029 and drops the terminators.
 func Splitlines(s string) []string {
-	var out []string
+	spans := SplitlinesSpans(s)
+	out := make([]string, 0, len(spans))
+	for _, sp := range spans {
+		out = append(out, s[sp[0]:sp[1]])
+	}
+	return out
+}
+
+// SplitlinesSpans is Splitlines as [start,end) byte offsets into s, the end
+// excluding the terminator. A nil result means no lines.
+func SplitlinesSpans(s string) [][2]int {
+	var out [][2]int
 	start, i := 0, 0
 	for i < len(s) {
 		r, n := utf8.DecodeRuneInString(s[i:])
 		switch r {
 		case '\n', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
-			out = append(out, s[start:i])
+			out = append(out, [2]int{start, i})
 			i += n
 			start = i
 		case '\r':
-			out = append(out, s[start:i])
+			out = append(out, [2]int{start, i})
 			i++
 			if i < len(s) && s[i] == '\n' {
 				i++
@@ -78,7 +89,7 @@ func Splitlines(s string) []string {
 		}
 	}
 	if start < len(s) {
-		out = append(out, s[start:])
+		out = append(out, [2]int{start, len(s)})
 	}
 	return out
 }

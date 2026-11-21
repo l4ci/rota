@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -15,6 +16,8 @@ func TestDoneLineReadersAgreeOnFraming(t *testing.T) {
 		"lf":       line + "\n",
 		"crlf":     line + "\r\n",
 		"indented": "  " + line + "\n",
+		"after-cr": "junk\r" + line + "\n",
+		"after-ls": "junk\u2028" + line + "\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			text := "# Completed\n" + framed
@@ -33,6 +36,10 @@ func TestDoneLineReadersAgreeOnFraming(t *testing.T) {
 			}
 			if got := CycleIDs(root, map[string]bool{"abc1234": true}); !slices.Equal(got, []string{"B07"}) {
 				t.Errorf("CycleIDs = %v", got)
+			}
+			f := fileBackend(t, "## Completed\n"+framed)
+			if moved, err := f.Archive(0, day(t, "2027-01-01")); err != nil || moved != 1 {
+				t.Errorf("Archive = %d, %v", moved, err)
 			}
 			refs := closedMilestoneItems(text, "M01", map[string]bool{})
 			if len(refs) != 1 || refs[0].ID != "B07" {
@@ -54,5 +61,14 @@ func TestFindDoneInOffsetsAreRaw(t *testing.T) {
 	}
 	if text[start:end] != b {
 		t.Errorf("span %q, want %q", text[start:end], b)
+	}
+}
+
+// A CRLF done line is cut whole: the CR goes with its LF.
+func TestFindDoneInSpansCRLF(t *testing.T) {
+	text := "a\n- ~~**[B02] [P1] B.** x~~ Done 2026-01-02 [`bbb2222`]\r\nz\n"
+	start, end, _, ok := findDoneIn(text, "B02")
+	if !ok || strings.HasPrefix(text[end:], "\r") || text[:start]+text[end+1:] != "a\nz\n" {
+		t.Errorf("start=%d end=%d ok=%v", start, end, ok)
 	}
 }

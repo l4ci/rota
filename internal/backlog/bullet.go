@@ -376,24 +376,43 @@ func ParseDone(line string) (Done, bool) {
 	return d, true
 }
 
-// doneHit is one done line found by scanDone: its raw span in the text
-// (line end excludes the newline, so CRLF and indentation stay inside the
-// span) and the parse of the stripped line.
+// scannedLine is one line of a text read by scanLines: its raw span (the end
+// excludes the terminator, so CRLF and indentation stay inside the span) and,
+// when the stripped line is a done line, its parse.
+type scannedLine struct {
+	Start, End int
+	Raw        string
+	Done       Done
+	IsDone     bool
+}
+
+// scanLines is the one line walk over done-line text: it splits with
+// pystr.Splitlines, strips each line and parses it with ParseDone. Every line
+// comes back, in order, so a caller that rewrites the text keeps the others.
+func scanLines(text string) []scannedLine {
+	spans := pystr.SplitlinesSpans(text)
+	out := make([]scannedLine, 0, len(spans))
+	for _, sp := range spans {
+		raw := text[sp[0]:sp[1]]
+		d, ok := ParseDone(pystr.Strip(raw))
+		out = append(out, scannedLine{Start: sp[0], End: sp[1], Raw: raw, Done: d, IsDone: ok})
+	}
+	return out
+}
+
+// doneHit is one done line found by scanDone.
 type doneHit struct {
 	Start, End int
 	Done
 }
 
-// scanDone is the one reader of done lines. It walks text line by line,
-// strips each line, and returns the ones ParseDone accepts in order.
+// scanDone is the done lines of text, in order, with their raw spans.
 func scanDone(text string) []doneHit {
 	var out []doneHit
-	pos := 0
-	for _, raw := range strings.Split(text, "\n") {
-		if d, ok := ParseDone(pystr.Strip(raw)); ok {
-			out = append(out, doneHit{Start: pos, End: pos + len(raw), Done: d})
+	for _, l := range scanLines(text) {
+		if l.IsDone {
+			out = append(out, doneHit{Start: l.Start, End: l.End, Done: l.Done})
 		}
-		pos += len(raw) + 1
 	}
 	return out
 }

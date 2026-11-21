@@ -637,7 +637,11 @@ func (f *File) Reopen(ref string) (bool, error) {
 func findDoneIn(text, id string) (start, end int, d Done, ok bool) {
 	for _, l := range scanDone(text) {
 		if l.ID == id {
-			return l.Start, l.End, l.Done, true
+			end := l.End
+			if strings.HasPrefix(text[end:], "\r\n") {
+				end++ // the span keeps the CR, so callers cut one "\n" after it
+			}
+			return l.Start, end, l.Done, true
 		}
 	}
 	return 0, 0, Done{}, false
