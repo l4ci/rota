@@ -292,3 +292,18 @@ func TestExtractSymbols(t *testing.T) {
 		t.Errorf("cap: %d symbols", len(got))
 	}
 }
+
+func TestOpenBulletSpansAbsWhenBodyRepeatsEarlier(t *testing.T) {
+	bullet := "- **[B01] [P1] Title.** desc"
+	body := "\n" + bullet + "\n"
+	content := "## Notes" + body + "\n## " + OpenSections[0] + body
+	want := strings.LastIndex(content, bullet)
+
+	spans := openBulletSpans(content)
+	if len(spans) != 1 {
+		t.Fatalf("got %d spans, want 1", len(spans))
+	}
+	if spans[0].Abs != want {
+		t.Fatalf("Abs = %d, want %d", spans[0].Abs, want)
+	}
+}

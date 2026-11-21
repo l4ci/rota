@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
@@ -590,7 +591,7 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 	var best *Issue
 	for i := range all {
 		is := all[i]
-		id, _, ok := parseMSTitle(is.Title)
+		id, _, ok := ms.ParseTitle(is.Title)
 		if !slices.Contains(is.Labels, config.Label(u.Cfg, "milestoneTracker")) || !ok || id != mid {
 			continue
 		}

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
@@ -45,8 +44,6 @@ var MilestoneStatuses = labels.MilestoneStatuses()
 const msStatusPrefix = labels.StatusPrefix
 
 var (
-	msTitleRe   = regexp.MustCompile(`\A(` + ms.TokenPattern + `)`)
-	msRestRe    = regexp.MustCompile(`\A[` + pystr.SpaceClass + `]*[\x{2014}\x{2013}-][` + pystr.SpaceClass + `]*(.*)`)
 	sliceUnitRe = regexp.MustCompile(`\Aplan:(S\p{Nd}+)\z`)
 )
 
@@ -60,27 +57,6 @@ func (b *Issues) milestoneTracker() (MilestoneTracker, error) {
 	return capability[MilestoneTracker](b, noMilestoneSupport)
 }
 
-// parseMSTitle splits "M02 — Sharing" into "M02" and "Sharing". The ID must
-// not run into a word character; rest is "" when the title has no dash part
-// (_MS_TITLE_RE).
-func parseMSTitle(title string) (id, rest string, ok bool) {
-	t := pystr.Strip(title)
-	loc := msTitleRe.FindStringSubmatchIndex(t)
-	if loc == nil {
-		return "", "", false
-	}
-	end := loc[3]
-	if end < len(t) {
-		if r, _ := utf8.DecodeRuneInString(t[end:]); pystr.IsWord(r) {
-			return "", "", false
-		}
-	}
-	if m := msRestRe.FindStringSubmatch(t[end:]); m != nil {
-		rest = m[1]
-	}
-	return t[:end], rest, true
-}
-
 // selectNativeMilestone prefers the issue's assigned title, otherwise the first
 // milestone with mid's parsed ID, with non-closed milestones before closed ones.
 // Equal-state matches keep the tracker's order.
@@ -92,7 +68,7 @@ func selectNativeMilestone(found []tracker.Milestone, mid, assignedTitle string)
 	}
 	var best *tracker.Milestone
 	for i := range found {
-		id, _, ok := parseMSTitle(found[i].Title)
+		id, _, ok := ms.ParseTitle(found[i].Title)
 		if !ok || id != mid {
 			continue
 		}
@@ -116,7 +92,7 @@ func nativeStateOf(status string) string {
 func highestMilestoneNumber(found []tracker.Milestone) int {
 	highest := 0
 	for _, nm := range found {
-		if id, _, ok := parseMSTitle(nm.Title); ok {
+		if id, _, ok := ms.ParseTitle(nm.Title); ok {
 			if n, err := Atoi(id[1:]); err == nil {
 				highest = max(highest, n)
 			}
@@ -141,7 +117,7 @@ func (b *Issues) trackingIssues() (map[string]Issue, error) {
 	groups := map[string][]Issue{}
 	var order []string
 	for _, is := range list {
-		if id, _, ok := parseMSTitle(is.Title); ok {
+		if id, _, ok := ms.ParseTitle(is.Title); ok {
 			if _, seen := groups[id]; !seen {
 				order = append(order, id)
 			}
@@ -223,7 +199,7 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, kind
 	if err != nil {
 		return "", err
 	}
-	native := mid + " — " + title
+	native := ms.Title(mid, title)
 	labels := []string{config.Label(b.Cfg, "milestoneTracker"), msStatusPrefix + "planned"}
 	if err := mt.EnsureLabels(b.ctx(), labels, b.AutoCreate()); err != nil {
 		return "", err
@@ -270,7 +246,7 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 	for _, id := range ids {
 		is := all[id]
 		_, block, _ := ParseFieldsBlock(is.Body)
-		_, rest, _ := parseMSTitle(is.Title)
+		_, rest, _ := ms.ParseTitle(is.Title)
 		title := rest
 		if title == "" {
 			title = is.Title
@@ -522,7 +498,7 @@ func (b *Issues) syncChildrenOf(titles ...string) {
 	}
 	seen := map[string]bool{}
 	for _, t := range titles {
-		mid, _, ok := parseMSTitle(t)
+		mid, _, ok := ms.ParseTitle(t)
 		if !ok || seen[mid] {
 			continue
 		}

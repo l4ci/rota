@@ -129,7 +129,7 @@ func StubOn(id, title, summary string, depends []string, today string) (string, 
 		return "", exitcode.Errf(exitcode.ExitUsage, "%v", err)
 	}
 	return head + "\n" +
-		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Capabilities\n\n- _(one contract per bullet: a verb, endpoint, schema or config key, tagged (new), (modified) or (removed))_\n\n" +
+		"# " + Title(id, title) + "\n\n## Goal\n\n" + summary + "\n\n## Capabilities\n\n- _(one contract per bullet: a verb, endpoint, schema or config key, tagged (new), (modified) or (removed))_\n\n" +
 		"## Acceptance\n\n- [ ] _(define what shipped looks like)_\n\n" +
 		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
 		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n", nil
@@ -169,7 +169,7 @@ func addFile(root, title, summary string, deps []string, kind, today string) (st
 	if len(deps) > 0 {
 		overview = strings.Join(deps, ", ")
 	}
-	entry := fmt.Sprintf("\n### %s — %s\n\n**Status:** planned · **Depends:** %s\n\n%s\n\n[Full plan: `.rota/milestones/%s.md`]\n", id, title, overview, summary, id)
+	entry := fmt.Sprintf("\n### %s\n\n**Status:** planned · **Depends:** %s\n\n%s\n\n[Full plan: `.rota/milestones/%s.md`]\n", Title(id, title), overview, summary, id)
 	ms := overviewPath(root)
 	err = fsio.Locked(ms, fsio.LockTimeout, func() error {
 		content, rerr := fsio.ReadText(ms)
@@ -355,7 +355,7 @@ func fileHistory(ms string) bool {
 // updateStatusLine is the retired Python update_milestone_status_line: the first
 // "### <id> — <title>\n\n**Status:** <status>" gets the new status.
 func updateStatusLine(content, id, status string) string {
-	re := regexp.MustCompile(`(### ` + regexp.QuoteMeta(id) + ` — [^\n]+\n\n\*\*Status:\*\* )(?:planned|active|shipped|archived)`)
+	re := regexp.MustCompile(`(### ` + regexp.QuoteMeta(id+titleSep) + `[^\n]+\n\n\*\*Status:\*\* )(?:planned|active|shipped|archived)`)
 	loc := re.FindStringSubmatchIndex(content)
 	if loc == nil {
 		return content
