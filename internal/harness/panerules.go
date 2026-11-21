@@ -17,16 +17,17 @@ type PaneRules struct {
 	Gutter                                   bool
 }
 
-// registeredRules are the registered adapters' rules, compiled on first use.
-var registeredRules = sync.OnceValue(func() map[string]*PaneRules {
-	m := map[string]*PaneRules{}
+// registeredRules compile each registered adapter's rules on first use, so a
+// bad pattern breaks only its own kind.
+var registeredRules = func() map[string]func() *PaneRules {
+	m := map[string]func() *PaneRules{}
 	for _, k := range kinds {
 		if h, ok := lookup(k); ok {
-			m[k] = CompilePaneRules(h.PaneVocab())
+			m[k] = sync.OnceValue(func() *PaneRules { return CompilePaneRules(h.PaneVocab()) })
 		}
 	}
 	return m
-})
+}()
 
 // RulesOf is the compiled vocabulary of p. A nil Pane (a kind that is not a
 // worker harness) has no rules.
@@ -35,8 +36,8 @@ func RulesOf(p Pane) *PaneRules {
 		return &PaneRules{}
 	}
 	if a, ok := p.(adapter); ok {
-		if r, ok := registeredRules()[a.Kind()]; ok {
-			return r
+		if r, ok := registeredRules[a.Kind()]; ok {
+			return r()
 		}
 	}
 	return CompilePaneRules(p.PaneVocab())
