@@ -849,14 +849,18 @@ func GroupSlots(cfg HostConfig, caps host.Capabilities) (bool, error) {
 	return cfg.GroupSlots && caps.CanGroup(), cfg.GroupErr
 }
 
-// Arranged is what ArrangeRound did. RecordErr is a failure to remember the
-// slots' workspaces afterwards: the panes moved, so it is a warning.
+// Arranged is what ArrangeRound did. State is where the panes are after the
+// moves; Before is the layout they started in. RecordErr is a failure to
+// remember the slots' workspaces and LayoutErr one to remember the layout mode
+// and CLI pane: the panes moved, so both are warnings.
 type Arranged struct {
 	State     layout.State
+	Before    string // layout name before any move
 	Result    layout.Result
 	Found     bool
 	Grouped   bool // slots live in linked workspaces (round.herdrGroupSlots on a host that can group)
 	RecordErr error
+	LayoutErr error
 }
 
 // ConfigError is a round setting ArrangeRound could not read; nothing moved.
@@ -865,12 +869,21 @@ type ConfigError struct{ Err error }
 func (e ConfigError) Error() string { return e.Err.Error() }
 func (e ConfigError) Unwrap() error { return e.Err }
 
-// ArrangeRound puts root's live workers into mode and remembers where the
-// linked slots ended up. It is the one place that decides grouping: `rota
-// layout` and the re-split after a spawn both come through it. A bad
-// round.herdrGroupSlots fails before any pane moves. The workspaces are
-// recorded even after a failed move, since slots that moved before the
-// failure must not keep stale ids.
+// ShowRound is where root's panes are now, without moving any: the read-only
+// twin of ArrangeRound, so both find the round's panes the same way. panes is a
+// snapshot the caller already took.
+func ShowRound(ctx context.Context, l host.Layouter, panes []host.LayoutPane, root, cli string, reg Registry) (layout.State, bool) {
+	return layout.Find(panes, root, layout.Label, cli, LiveWorkers(ctx, l, reg))
+}
+
+// ArrangeRound puts root's live workers into mode, remembers where the linked
+// slots ended up and records the layout mode (and, for a split, the CLI pane)
+// on the round. It returns the post-move state. It is the one place that
+// decides grouping: `rota layout` and the re-split after a spawn both come
+// through it. A bad round.herdrGroupSlots fails before any pane moves. The
+// workspaces are recorded even after a failed move, since slots that moved
+// before the failure must not keep stale ids; the layout is recorded only
+// after a clean one.
 func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry) (Arranged, error) {
 	l := caps.Layouter
 	if l == nil {
@@ -885,26 +898,40 @@ func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, r
 		linked = caps.LinkedLayouter
 	}
 	a := Arranged{Grouped: group}
-	a.State, a.Result, a.Found, err = layout.Arrange(ctx, l, linked, root, mode, cli, LiveWorkers(ctx, l, reg))
-	if group && a.Found {
-		a.RecordErr = RecordWorkspaces(ctx, l, root, cli)
+	var before layout.State
+	before, a.Result, a.Found, err = layout.Arrange(ctx, l, linked, root, mode, cli, LiveWorkers(ctx, l, reg))
+	a.State, a.Before = before, before.Layout()
+	if !a.Found {
+		return a, err
+	}
+	// A pane that changed workspace has a new id: look again for where each
+	// slot is now, once, for the report and for the workspaces to record.
+	if panes, perr := l.LayoutPanes(ctx); perr == nil {
+		if st, ok := ShowRound(ctx, l, panes, root, cli, reg); ok {
+			a.State = st
+			if group {
+				a.RecordErr = recordWorkspaces(root, st)
+			}
+		}
+	} else if group {
+		a.RecordErr = perr
+	}
+	if err == nil {
+		a.LayoutErr = Update(root, func(d *Doc) {
+			d.SetLayout(mode)
+			if mode == layout.Split && a.State.CLI != nil {
+				d.SetCLIPane(a.State.CLI.ID)
+			}
+		})
 	}
 	return a, err
 }
 
-// RecordWorkspaces stores each live slot's linked workspace as herdr has it
-// now: "" for a slot whose pane is in the orchestrator's workspace, which is
-// where a layout split leaves it once herdr closed the linked one. Callers
-// call it for a grouped round only.
-func RecordWorkspaces(ctx context.Context, l host.Layouter, root, cli string) error {
-	panes, err := l.LayoutPanes(ctx)
-	if err != nil {
-		return err
-	}
-	st, ok := layout.Find(panes, root, layout.Label, cli, LiveWorkers(ctx, l, LoadRegistryTolerant(root)))
-	if !ok {
-		return nil
-	}
+// recordWorkspaces stores each live slot's linked workspace as st has it: ""
+// for a slot whose pane is in the orchestrator's workspace, which is where a
+// layout split leaves it once herdr closed the linked one. Called for a
+// grouped round only.
+func recordWorkspaces(root string, st layout.State) error {
 	linked := layout.Linked(st)
 	return UpdateSlots(root, func(s *Slot) {
 		if ws, ok := linked[s.Name()]; ok {

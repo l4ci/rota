@@ -15,14 +15,21 @@ import (
 type arrangeFake struct {
 	root, worktree string
 	log            []string
+	moved          map[string]string // pane -> tab it was moved to
 }
 
 func (f *arrangeFake) PaneOf(context.Context, string, string) string { return "p1" }
 func (f *arrangeFake) LayoutPanes(context.Context) ([]host.LayoutPane, error) {
-	return []host.LayoutPane{
+	panes := []host.LayoutPane{
 		{ID: "p0", Tab: "T", Workspace: "W", TabLabel: layout.SplitLabel, Cwd: f.root, Agent: "claude"},
 		{ID: "p1", Tab: "T", Workspace: "W", Cwd: f.worktree, Agent: "claude"},
-	}, nil
+	}
+	for i := range panes {
+		if tab, ok := f.moved[panes[i].ID]; ok {
+			panes[i].Tab = tab
+		}
+	}
+	return panes, nil
 }
 func (f *arrangeFake) PaneRects(context.Context, string) (map[string]host.Rect, error) {
 	return nil, nil
@@ -32,6 +39,10 @@ func (f *arrangeFake) SplitInto(context.Context, string, string, string, string,
 }
 func (f *arrangeFake) ToNewTab(_ context.Context, pane, _ string) error {
 	f.log = append(f.log, "ToNewTab "+pane)
+	if f.moved == nil {
+		f.moved = map[string]string{}
+	}
+	f.moved[pane] = "T-" + pane
 	return nil
 }
 func (f *arrangeFake) RenameTab(context.Context, string, string) error  { return nil }
@@ -94,5 +105,58 @@ func TestArrangeRoundDecidesGroupingFromCapabilities(t *testing.T) {
 	}
 	if _, err := ArrangeRound(bg, host.Capabilities{}, HostConfig{}, "", layout.Tabs, "", Registry{}); err == nil {
 		t.Error("a host with no Layouter must be refused")
+	}
+}
+
+// ArrangeRound owns the bookkeeping around a move: it returns where the panes
+// are after it, and records the layout mode on the round.
+func TestArrangeRoundReturnsPostMoveStateAndRecordsLayout(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	reg, err := LoadRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &arrangeFake{root: dir, worktree: reg.Slots()[0].Worktree()}
+	cfg := ParseHostConfig(nil)
+
+	a, err := ArrangeRound(bg, f.caps(false), cfg, dir, layout.Tabs, "", reg)
+	if err != nil || !a.Found {
+		t.Fatalf("found=%v err=%v", a.Found, err)
+	}
+	if a.Before != layout.Split {
+		t.Errorf("Before = %q, want the split it started in", a.Before)
+	}
+	if len(a.State.Workers) != 1 || a.State.Workers[0].Tab != "T-p1" {
+		t.Errorf("State = %+v, want w1 in its new tab T-p1 (post-move)", a.State.Workers)
+	}
+	if a.LayoutErr != nil {
+		t.Errorf("LayoutErr = %v", a.LayoutErr)
+	}
+	if got := LoadRegistryTolerant(dir).Layout(); got != "" {
+		t.Errorf("tabs recorded layout %q, want the default", got)
+	}
+
+	a, err = ArrangeRound(bg, f.caps(false), cfg, dir, layout.Split, "", reg)
+	if err != nil || !a.Found {
+		t.Fatalf("split: found=%v err=%v", a.Found, err)
+	}
+	if got := LoadRegistryTolerant(dir).Layout(); got != layout.Split {
+		t.Errorf("split recorded layout %q", got)
+	}
+}
+
+func TestArrangeRoundRecordsNothingWhenNoOrchestratorIsFound(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	reg, err := LoadRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &arrangeFake{root: t.TempDir(), worktree: reg.Slots()[0].Worktree()}
+	a, err := ArrangeRound(bg, f.caps(false), ParseHostConfig(nil), dir, layout.Split, "", reg)
+	if err != nil || a.Found {
+		t.Fatalf("found=%v err=%v", a.Found, err)
+	}
+	if got := LoadRegistryTolerant(dir).Layout(); got != "" {
+		t.Errorf("layout %q recorded with nothing arranged", got)
 	}
 }
