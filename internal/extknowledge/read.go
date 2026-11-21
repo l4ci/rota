@@ -104,11 +104,11 @@ func (c Clone) scan() ([]Topic, []string, error) {
 				for i := range t.Subtopics {
 					st := &t.Subtopics[i]
 					if sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File))); err == nil {
-						st.Bullets = len(bulletLines(string(sb)))
+						st.Bullets = bulletCount(string(sb))
 					}
 				}
 			} else {
-				t.Bullets = len(bulletLines(string(body)))
+				t.Bullets = bulletCount(string(body))
 			}
 		}
 		if t.Split && t.Stray == "" {
@@ -144,15 +144,9 @@ func subtopics(parent Topic, readme string) (out []Topic, bad []string) {
 	return out, bad
 }
 
-// bulletLines are the "- " lines of a topic file.
-func bulletLines(body string) []string {
-	var out []string
-	for _, l := range strings.Split(body, "\n") {
-		if strings.HasPrefix(l, "- ") {
-			out = append(out, l)
-		}
-	}
-	return out
+// bulletCount is the number of bullets of a topic file.
+func bulletCount(body string) int {
+	return len(bulletfmt.Spans(strings.Split(body, "\n")))
 }
 
 // resolve maps a requested topic to the index entries it names for a read;

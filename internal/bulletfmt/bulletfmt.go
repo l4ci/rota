@@ -131,6 +131,17 @@ func HasTitle(lines []string, title string) bool {
 	return false
 }
 
+// HasSpanTitle is HasTitle over the spans of Spans.
+func HasSpanTitle(spans []Span, title string) bool {
+	lower := strings.ToLower(title)
+	for _, sp := range spans {
+		if sp.Title != "" && strings.ToLower(sp.Title) == lower {
+			return true
+		}
+	}
+	return false
+}
+
 // SelectTitle is the one title-selection rule both knowledge stores apply:
 // it returns the indexes of titles equal to want, ignoring case and
 // surrounding whitespace. An empty entry (a bullet with no bold title) never
@@ -161,6 +172,34 @@ func End(lines []string, i int) int {
 		end++
 	}
 	return end
+}
+
+// Span is one bullet of a topic file in line indexes: lines[Start:End] is its
+// "- " line plus the indented lines that continue it. Title is the bold title,
+// empty when the line has none.
+type Span struct {
+	Start, End int
+	Title      string
+}
+
+// Spans lists, in order, every bullet of lines: each "- " line with its
+// continuation. It is the one walker over bullet extent, so a reader that
+// parses, counts, splits or inserts agrees with every other on where a bullet
+// starts and ends. A "- " line inside a continuation is not possible (it is
+// indented), so the spans never overlap.
+func Spans(lines []string) []Span {
+	var out []Span
+	for i := 0; i < len(lines); {
+		if !strings.HasPrefix(lines[i], "- ") {
+			i++
+			continue
+		}
+		end := End(lines, i)
+		title, _ := Title(lines[i])
+		out = append(out, Span{Start: i, End: end, Title: title})
+		i = end
+	}
+	return out
 }
 
 // EndOffset is End in byte offsets: the offset just past the bullet starting at
