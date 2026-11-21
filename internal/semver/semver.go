@@ -1,5 +1,5 @@
 // Package semver is the one place rota parses and orders release versions.
-// Callers pick a rule by name: Lenient never rejects, Strict accepts only a
+// Callers pick a rule by name: lenient never rejects, Strict accepts only a
 // three-part core. The rules differ on purpose; a version string orders the
 // same under one rule wherever it is compared.
 package semver
@@ -16,11 +16,11 @@ type Version struct{ parts [3]*big.Int }
 
 var digits = regexp.MustCompile(`[0-9]+`)
 
-// Lenient reads the first three digit runs of s as major, minor and patch,
+// lenient reads the first three digit runs of s as major, minor and patch,
 // zero padded, so it never fails: "dev" is 0.0.0, "2" is 2.0.0 and
 // "v1.2.3-rc1" is 1.2.3. It is for comparing a stamped binary against a
 // published release, where either side may be a build label.
-func Lenient(s string) Version {
+func lenient(s string) Version {
 	var v Version
 	runs := digits.FindAllString(s, 3)
 	for i := range v.parts {
@@ -67,8 +67,8 @@ func (v Version) Compare(o Version) int {
 	return 0
 }
 
-// CompareLenient orders two strings under the Lenient rule.
-func CompareLenient(a, b string) int { return Lenient(a).Compare(Lenient(b)) }
+// CompareLenient orders two strings under the lenient rule.
+func CompareLenient(a, b string) int { return lenient(a).Compare(lenient(b)) }
 
 // Before reports whether v sorts before min under the Strict rule. A v that
 // does not parse is before everything; min must parse, and a min that does
