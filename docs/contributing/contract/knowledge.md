@@ -128,11 +128,11 @@ note: removes the one bullet with that bold title (matched case-insensitively, a
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
 repo: scoped (scope S). The old helper applied `--repo` to the tier sidecar only and always edited the umbrella `.rota/KNOWLEDGE.md`. The contract requires both the heading edit and the sidecar re-key to use S.
 data: {"from": string, "to": string, "title"?: string, "mode": "topic"|"bullet", "changed": bool}
-exit: 2 when `--from` or `--to` is missing; 3 when topic X is not found, when bullet T is not found, or (bullet mode) when topic Y does not exist; 4 when (topic mode) topic Y already exists
+exit: 2 when `--from` or `--to` is missing; 3 when topic X is not found, when bullet T is not found, or (bullet mode) when topic Y does not exist; 4 when (topic mode) topic Y already exists, or (bullet mode) several bullets share the title up to case (`blockedBy: ambiguous`, nothing is written)
 old: hv-knowledge-rename-topic [--repo <name>] --from <X> --to <Y> [--title <T>]    (same flags)
 shim: `mode` is `bullet` iff `--title` was passed; `changed` is false only for `--from` equal to `--to` (the old helper printed nothing).
 note: the shim cannot honor the contract's file scope, so `--repo <sub-repo>` runs sidecar-only until the port, and smoke must not assert sub-repo file edits for this verb before then.
-note: one verb keeps both modes, selected by `--title`, instead of splitting out a `move-bullet` verb. With `--title` the moved unit is the bullet's `- ` line plus indented continuations; prose after it stays in the source topic (it used to travel with the bullet up to the next sibling).
+note: one verb keeps both modes, selected by `--title`, instead of splitting out a `move-bullet` verb. With `--title` the moved unit is the bullet's `- ` line plus indented continuations; prose after it stays in the source topic (it used to travel with the bullet up to the next sibling). With `--title` the bullet matches case-insensitively, as for `rm`, and the tier entry is re-keyed by the bullet's stored title.
 
 ### rota knowledge harvest
 rota knowledge harvest [--round <n>] [--mark <commentId>]
