@@ -88,7 +88,7 @@ func Frozen(ctx context.Context, run git.Runner, root string) bool {
 	if err != nil {
 		return !errors.Is(err, rotastate.ErrNotRepo)
 	}
-	return r.Frozen()
+	return r.frozen()
 }
 
 func Save(path string, r *Record) error {
@@ -125,12 +125,71 @@ func (r *Record) Binds(base string) bool {
 	return r != nil && r.Active && r.Base == base
 }
 
-// Frozen reports whether any freeze is active, whatever its base.
-func (r *Record) Frozen() bool { return r != nil && r.Active }
+// frozen reports whether any freeze is active, whatever its base.
+func (r *Record) frozen() bool { return r != nil && r.Active }
 
-// Allows grants an exception only to the explicitly designated repair.
-func (r *Record) Allows(issue, pr string) bool {
-	return r == nil || !r.Active || (r.RepairIssue != "" && issueID(issue) == issueID(r.RepairIssue)) || (r.RepairPR != "" && samePR(pr, r.RepairPR))
+// allows grants an exception only to the explicitly designated repair.
+func (r *Record) allows(issue, pr string) bool {
+	return !r.frozen() || (r.RepairIssue != "" && issueID(issue) == issueID(r.RepairIssue)) || (r.RepairPR != "" && samePR(pr, r.RepairPR))
+}
+
+// Subject is what a landing or assignment asks to do while a freeze may hold.
+type Subject struct {
+	// Base is the branch the work lands on. An empty Base never binds, so it
+	// refuses under an active freeze (fail closed) unless AnyBase is set.
+	Base string
+	// AnyBase skips the base check: round assign resolves the item's base only
+	// after the claim, so it admits by repair designation alone.
+	AnyBase bool
+	// Issue and PR name the work; either may be "".
+	Issue, PR string
+	// Queue judges the base alone, for a train's queue-wide refusal before any
+	// member is resolved. Issue and PR are ignored.
+	Queue bool
+}
+
+// Decision is the freeze's answer to a Subject. Line and Hint are set when
+// Admit is false.
+type Decision struct {
+	Admit bool
+	// Frozen is true when a freeze is active (or unreadable); Admit may still
+	// be true for the designated repair. A train skips member checks without it.
+	Frozen bool
+	// Unreadable marks a refusal caused by an unreadable record.
+	Unreadable bool
+	Line, Hint string
+}
+
+const (
+	baseHint   = "repairs must target the frozen base"
+	repairHint = "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery"
+)
+
+// Decide is the one admission rule every caller shares: no active freeze
+// admits; an unreadable record refuses; a known base other than the frozen one
+// refuses; otherwise only the designated repair (by issue or PR) is admitted.
+// Assign sets AnyBase, so it admits by repair designation alone: the item's
+// base is resolved only after the claim, and a freeze blocks every unrelated
+// assignment whatever branch it targets.
+func Decide(ctx context.Context, run git.Runner, root string, s Subject) Decision {
+	r, err := Load(ctx, run, root)
+	if err != nil {
+		return Decision{Frozen: true, Unreadable: true, Line: UnreadableLine(err), Hint: ClearHint}
+	}
+	return r.decide(s)
+}
+
+func (r *Record) decide(s Subject) Decision {
+	if !r.frozen() {
+		return Decision{Admit: true}
+	}
+	if !s.AnyBase && !r.Binds(s.Base) {
+		return Decision{Frozen: true, Line: r.Line(), Hint: baseHint}
+	}
+	if s.Queue || r.allows(s.Issue, s.PR) {
+		return Decision{Admit: true, Frozen: true}
+	}
+	return Decision{Frozen: true, Line: r.Line(), Hint: repairHint}
 }
 
 // Line is safe to include in a single-line prompt digest, including when a

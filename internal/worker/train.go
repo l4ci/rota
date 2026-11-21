@@ -404,37 +404,35 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result landing.TrainResult, 
 	}
 
 	// Freeze is a queue-wide refusal, before static sections can prune members.
-	frozen, err := landfreeze.Load(ctx, e.Git, root)
-	if err != nil {
-		res.Verdict, res.Err, res.Hint = landing.GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint
+	q := landfreeze.Decide(ctx, e.Git, root, landfreeze.Subject{Base: o.Base, Queue: true})
+	if !q.Admit {
+		res.Verdict, res.Err, res.Hint = landing.GateFreeze, q.Line, q.Hint
 		return p.trainPlan, p.res, true, nil
 	}
-	if frozen.Frozen() {
-		if !frozen.Binds(o.Base) {
-			res.Verdict, res.Err, res.Hint = landing.GateFreeze, frozen.Line(), "repairs must target the frozen base"
-			return p.trainPlan, p.res, true, nil
+	for _, tg := range o.Targets {
+		if !q.Frozen {
+			break
 		}
-		for _, tg := range o.Targets {
-			gt, err := reg.GateTargetAny(tg)
+		gt, err := reg.GateTargetAny(tg)
+		if err != nil {
+			return p.trainPlan, p.res, true, err
+		}
+		d := landfreeze.Decide(ctx, e.Git, root, landfreeze.Subject{Base: o.Base, Issue: gt.Issue, PR: gt.PR})
+		if d.Admit {
+			continue
+		}
+		// A PR outside the registry derives its repair issue from its head branch.
+		if gt.External {
+			gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, NoVerdict: true, in: &in})
 			if err != nil {
 				return p.trainPlan, p.res, true, err
 			}
-			if frozen.Allows(gt.Issue, gt.PR) {
+			if gr.Verdict != landing.GateFreeze {
 				continue
 			}
-			// A PR outside the registry derives its repair issue from its head branch.
-			if gt.External {
-				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, PRBase: o.ontoBase, CheckOnly: true, NoVerdict: true, in: &in})
-				if err != nil {
-					return p.trainPlan, p.res, true, err
-				}
-				if gr.Verdict != landing.GateFreeze {
-					continue
-				}
-			}
-			res.Verdict, res.Err, res.Hint = landing.GateFreeze, frozen.Line(), "designate the repair with rota round freeze before landing or assigning"
-			return p.trainPlan, p.res, true, nil
 		}
+		res.Verdict, res.Err, res.Hint = landing.GateFreeze, d.Line, d.Hint
+		return p.trainPlan, p.res, true, nil
 	}
 
 	// 1. Pre-filter static PR sections, then check the remaining members.
