@@ -75,6 +75,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
 		}
 		in.ProcessUses = c.deps().ProcessUses
+		in.SystemTemp = c.deps().TempDir()
 		in.TempRoot, _ = rotatree.FindTempRoot(ctx, c.deps().Git, root)
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {

@@ -2,11 +2,6 @@ package reap
 
 import (
 	"context"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/git"
 )
@@ -20,7 +15,7 @@ type Count struct {
 
 // Census is the read-only tally doctor reports of what a run left behind.
 type Census struct {
-	LeakedTemp Count    // smoke, gate and review dirs in the system temp dir
+	LeakedTemp Count    // systmp candidates reap lists and does not hold
 	StaleTmp   Count    // project temp root entries reap lists and does not hold
 	Prunable   Count    // .worktrees/ checkouts git marks prunable
 	Warnings   []string // what reap warns while listing tmp, so doctor can show it
@@ -34,20 +29,24 @@ type CensusInput struct {
 	// Tmp is reap's own input; the tmp class is the candidates `rota reap
 	// --kind tmp` lists that are not held. Nil skips the class.
 	Tmp *Input
-	Git git.Runner
-	Now time.Time
+	// ProcessUses is the process table reader the systmp class proves no live
+	// process uses a dir with, when Tmp does not supply one.
+	ProcessUses func() ([]ProcUse, error)
+	Git         git.Runner
 }
-
-// leakedPrefixes are the system temp dirs a smoke run, a gate run and a
-// review workspace leave behind.
-var leakedPrefixes = []string{"rota-smoke.", "rota-gate-", ReviewWorkspacePrefix}
 
 // TakeCensus counts each class by the rule reap lists it with.
 func TakeCensus(ctx context.Context, in CensusInput) Census {
 	var c Census
-	c.LeakedTemp = leakedTemp(in.SystemTemp, in.Now.Add(-LeftoverAge))
+	if in.SystemTemp != "" {
+		var warn []string
+		c.LeakedTemp, warn = reclaimableSysTmp(ctx, in)
+		c.Warnings = append(c.Warnings, warn...)
+	}
 	if in.Tmp != nil && in.Tmp.TempRoot != "" {
-		c.StaleTmp, c.Warnings = reclaimableTmp(ctx, *in.Tmp)
+		var warn []string
+		c.StaleTmp, warn = reclaimableTmp(ctx, *in.Tmp)
+		c.Warnings = append(c.Warnings, warn...)
 	}
 	if in.Root != "" {
 		c.Prunable.N = prunable(ctx, in.Git, in.Root)
@@ -63,7 +62,12 @@ func reclaimableTmp(ctx context.Context, in Input) (c Count, warnings []string) 
 	if err != nil {
 		return c, []string{"temp root not checked: " + err.Error()}
 	}
-	for _, cd := range res.Candidates {
+	return unheld(res.Candidates), res.Warnings
+}
+
+// unheld counts the candidates reap's held rules leave free to delete.
+func unheld(cands []Candidate) (c Count) {
+	for _, cd := range cands {
 		if cd.Held != "" {
 			continue
 		}
@@ -71,46 +75,29 @@ func reclaimableTmp(ctx context.Context, in Input) (c Count, warnings []string) 
 		size, _, _, _ := entryStat(cd.Path)
 		c.Size += size
 	}
-	return c, res.Warnings
-}
-
-// leakedTemp counts the leakedPrefixes dirs in dir last modified before
-// cutoff, and their total size.
-func leakedTemp(dir string, cutoff time.Time) (c Count) {
-	if dir == "" {
-		return c
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return c
-	}
-	for _, e := range entries {
-		if !e.IsDir() || !hasAnyPrefix(e.Name(), leakedPrefixes) {
-			continue
-		}
-		if fi, err := e.Info(); err != nil || !fi.ModTime().Before(cutoff) {
-			continue
-		}
-		c.N++
-		filepath.WalkDir(filepath.Join(dir, e.Name()), func(_ string, d fs.DirEntry, err error) error {
-			if err == nil && !d.IsDir() {
-				if fi, err := d.Info(); err == nil {
-					c.Size += fi.Size()
-				}
-			}
-			return nil
-		})
-	}
 	return c
 }
 
-func hasAnyPrefix(name string, prefixes []string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(name, p) {
-			return true
-		}
+// reclaimableSysTmp counts the systmp candidates reap lists that its held
+// rules leave free to delete: what `rota reap --kind systmp --apply` would
+// remove. With a project it runs through Find, so a git worktree or host agent
+// under a dir holds it; without one the process table alone proves it free.
+func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
+	ri := Input{Root: in.Root, Git: in.Git, ProcessUses: in.ProcessUses}
+	if in.Tmp != nil {
+		ri = *in.Tmp
 	}
-	return false
+	ri.SystemTemp = in.SystemTemp
+	if in.Root == "" || ri.Git == nil {
+		s := &state{in: ri, live: newOwnership(nil, "", "", nil)}
+		cands, _ := findSysTmp(ctx, s)
+		return unheld(cands), s.warnings
+	}
+	res, err := Find(ctx, ri, []string{KindSysTmp})
+	if err != nil {
+		return Count{}, []string{"system temp dir not checked: " + err.Error()}
+	}
+	return unheld(res.Candidates), res.Warnings
 }
 
 // prunable counts the .worktrees/ checkouts git marks prunable: the ones

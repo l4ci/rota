@@ -52,10 +52,12 @@ const (
 	KindSkillCache = "skillcache"
 	// KindTmp is an entry under the project temp root (<main checkout>/.rota/tmp).
 	KindTmp = "tmp"
+	// KindSysTmp is a smoke, gate or review dir a run leaked in the system temp dir.
+	KindSysTmp = "systmp"
 )
 
 // Kinds lists every kind, in the order candidates are found and removed.
-var Kinds = []string{KindWorktree, KindBranch, KindTab, KindLease, KindSkillCache, KindTmp}
+var Kinds = []string{KindWorktree, KindBranch, KindTab, KindLease, KindSkillCache, KindTmp, KindSysTmp}
 
 // Candidate is something to reap. Held, when set, says why it must not be.
 type Candidate struct {
@@ -115,6 +117,9 @@ type Input struct {
 	// TempRoot is the project temp root; each direct child but .gitignore is a
 	// candidate. Empty finds none.
 	TempRoot string
+	// SystemTemp is the OS temp dir; its leaked rota-smoke./rota-gate-/
+	// rota-review- children are the systmp candidates. Empty finds none.
+	SystemTemp string
 	// ProcessUses lists the paths each live process uses (ReadProcUses). Nil
 	// or an error holds every tmp candidate: nothing can prove no process uses
 	// it. It is read afresh before each tmp removal.
@@ -128,6 +133,13 @@ const LeftoverAge = time.Hour
 
 // ReviewWorkspacePrefix names the dirs `rota review prepare` makes in the system temp dir.
 const ReviewWorkspacePrefix = "rota-review-"
+
+// SmokePrefix and GatePrefix are the system temp dir prefixes test/runner.sh
+// and test/gate.sh create; a test pins the scripts to them.
+const (
+	SmokePrefix = "rota-smoke."
+	GatePrefix  = "rota-gate-"
+)
 
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
 // before its `rota skills get` extraction counts as killed.
@@ -175,6 +187,7 @@ var finders = []finder{
 	{KindLease, findLeases, removeLease},
 	{KindSkillCache, findSkillCache, removeSkillCache},
 	{KindTmp, findTmp, removeTmp},
+	{KindSysTmp, findSysTmp, removeSysTmp},
 }
 
 // findLeases lists the round lease when its holder is gone. A live, foreign

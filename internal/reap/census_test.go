@@ -14,7 +14,7 @@ import (
 )
 
 func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
-	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now()
 	sys, tempRoot, root := t.TempDir(), t.TempDir(), t.TempDir()
 	mk := func(parent, name string, age time.Duration) {
 		p := filepath.Join(parent, name)
@@ -46,9 +46,14 @@ func TestTakeCensusCountsEachClassLikeReapLists(t *testing.T) {
 		return git.Result{Stdout: porcelain}, nil
 	}
 
-	got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, Git: run, Now: now})
+	got := TakeCensus(context.Background(), CensusInput{Root: root, SystemTemp: sys, ProcessUses: func() ([]ProcUse, error) { return nil, nil }, Git: run})
 	if got.LeakedTemp.N != 3 || got.LeakedTemp.Size != 3*1024 {
 		t.Errorf("LeakedTemp = %+v, want 3 dirs, 3072 bytes", got.LeakedTemp)
+	}
+	// No project: the process table alone proves a dir free, so a census with
+	// no reader holds every dir, as reap does.
+	if bare := TakeCensus(context.Background(), CensusInput{SystemTemp: sys, Git: run}); bare.LeakedTemp.N != 0 {
+		t.Errorf("no process table: LeakedTemp = %+v, want every dir held", bare.LeakedTemp)
 	}
 	if got.Prunable.N != 1 {
 		t.Errorf("Prunable = %+v, want 1", got.Prunable)
@@ -88,7 +93,7 @@ func TestTakeCensusTmpAppliesReapHeldRules(t *testing.T) {
 		ProcessUses: func() ([]ProcUse, error) {
 			return []ProcUse{{PID: 7, Paths: []string{filepath.Join(tempRoot, "busy", "f")}}}, nil
 		}}
-	got := TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run, Now: now})
+	got := TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run})
 	if got.StaleTmp.N != 1 || got.StaleTmp.Size != 1024 {
 		t.Errorf("StaleTmp = %+v, want only the unheld entry (1, 1024)", got.StaleTmp)
 	}
@@ -107,7 +112,7 @@ func TestTakeCensusTmpAppliesReapHeldRules(t *testing.T) {
 	}
 
 	in.TempRoot = t.TempDir() // no rota .gitignore: reap skips it with a warning
-	got = TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run, Now: now})
+	got = TakeCensus(context.Background(), CensusInput{Root: root, Tmp: &in, Git: run})
 	if got.StaleTmp.N != 0 || len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "not a temp root") {
 		t.Errorf("unowned root: StaleTmp=%+v warnings=%q", got.StaleTmp, got.Warnings)
 	}

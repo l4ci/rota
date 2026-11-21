@@ -34,7 +34,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			temp, cache := t.TempDir(), t.TempDir()
-			now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+			now := time.Now()
 			for _, entry := range []struct {
 				name string
 				age  time.Duration
@@ -51,6 +51,9 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 					t.Fatal(err)
 				}
 				age := now.Add(-entry.age)
+				if err := os.Chtimes(filepath.Join(p, "f"), age, age); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.Chtimes(p, age, age); err != nil {
 					t.Fatal(err)
 				}
@@ -85,7 +88,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 				}
 				return cache, nil
 			}
-			d.Now = func() time.Time { return now }
+			d.ProcessUses = func() ([]reap.ProcUse, error) { return nil, nil }
 			d.DiskUsage = fixedDisk(1000, 100000)
 			d.Git = func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
 			in := doctorInput(context.Background(), d)
@@ -99,7 +102,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 			} else if in.CacheDisk == nil || in.CacheDisk.Path != cachePath {
 				t.Fatalf("cache disk = %+v, want %s", in.CacheDisk, cachePath)
 			}
-			want := "4 leaked temp dirs under " + temp + " (8.0 KiB); safe to delete once no run is active"
+			want := "4 leaked temp dirs under " + temp + " (8.0 KiB) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`"
 			got := in.ScanLeftovers()
 			if len(got) != 1 || got[0] != want {
 				t.Fatalf("leftovers = %q, want %q", got, want)
@@ -189,15 +192,15 @@ func TestDoctorLeftoversListsStaleProjectTempEntries(t *testing.T) {
 	in := reapInput(root, tempRoot, "worktree "+root+"\n")
 	in.ProcessUses = func() ([]reap.ProcUse, error) { return nil, nil }
 	want := "2 entries under " + tempRoot + " (2.0 KiB) that `rota reap --kind tmp --apply` would remove; preview with `rota reap --kind tmp`"
-	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, now)
+	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil)
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("leftovers = %q, want [%q]", got, want)
 	}
-	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), nil, now); len(got) != 0 {
+	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), nil, nil); len(got) != 0 {
 		t.Fatalf("no temp root: leftovers = %q", got)
 	}
 	in.TempRoot = filepath.Join(tempRoot, "absent")
-	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, now); len(got) != 0 {
+	if got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil); len(got) != 0 {
 		t.Fatalf("missing temp root was created or listed: %q", got)
 	}
 }
@@ -232,7 +235,7 @@ func TestDoctorAndReapAgreeOnAnUnownedTempRoot(t *testing.T) {
 	ageTree(t, old, now.Add(-3*time.Hour))
 	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
 	in := reapInput(t.TempDir(), tempRoot, "worktree /nowhere\n")
-	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, now)
+	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil)
 	if len(got) != 1 || !strings.Contains(got[0], "not a temp root") || strings.Contains(got[0], "entries under") {
 		t.Errorf("doctor counted an unowned root or dropped reap's warning: %q", got)
 	}
@@ -256,7 +259,7 @@ func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
 		return git.Result{Stdout: porcelain}, nil
 	}
 	counted := 0
-	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), nil, time.Now()); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
+	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), nil, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
 		counted = 1
 	}
 	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
@@ -288,7 +291,7 @@ func TestDoctorLeftoversSkipsHeldTmpEntries(t *testing.T) {
 		return []reap.ProcUse{{PID: 7, Paths: []string{filepath.Join(tempRoot, "busy")}}}, nil
 	}
 	run := func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 1}, nil }
-	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, now)
+	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil)
 	if len(got) != 1 || !strings.HasPrefix(got[0], "1 entries under ") {
 		t.Fatalf("leftovers = %q, want one line counting only the unheld entry", got)
 	}
