@@ -157,3 +157,36 @@ func ReadOrchestratorNote(path string, consume bool) (note *OrchestratorNote, wa
 	}
 	return out, warn
 }
+
+// HandoffRole picks which handoff rule applies to a session. The zero value is
+// no role: an unset Role resolves to no path.
+type HandoffRole int
+
+const (
+	// RoleOrchestrator files its note under the base branch.
+	RoleOrchestrator HandoffRole = iota + 1
+	// RoleWorkSession files its note under its own checked-out branch.
+	RoleWorkSession
+)
+
+// HandoffFacts are the inputs the handoff path rule reads. The caller reads
+// git and config; this package owns what they mean.
+type HandoffFacts struct {
+	Role   HandoffRole
+	Root   string
+	Branch string // checked-out branch; "" on a detached HEAD
+	Base   string // resolved base branch; "" when none resolves
+}
+
+// ResolveHandoff is the absolute handoff note path for the session, or "" when
+// the facts name no branch, so a caller reads no note rather than one filed
+// under a guessed name.
+func ResolveHandoff(f HandoffFacts) string {
+	switch f.Role {
+	case RoleOrchestrator:
+		return NotePath(f.Root, f.Base)
+	case RoleWorkSession:
+		return NotePath(f.Root, f.Branch)
+	}
+	return ""
+}

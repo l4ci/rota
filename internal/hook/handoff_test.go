@@ -3,6 +3,7 @@ package hook
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,5 +57,27 @@ func TestNoteConsumeArchivesTheBodyAlreadyRead(t *testing.T) {
 	}
 	if _, err := n.Consume(); err == nil {
 		t.Fatal("second consume must fail")
+	}
+}
+
+func TestResolveHandoff(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "proj")
+	cases := map[string]struct {
+		f    HandoffFacts
+		want string
+	}{
+		"orchestrator uses base":       {HandoffFacts{Role: RoleOrchestrator, Root: root, Branch: "feat", Base: "main"}, NotePath(root, "main")},
+		"orchestrator without base":    {HandoffFacts{Role: RoleOrchestrator, Root: root, Branch: "feat"}, ""},
+		"work session uses own branch": {HandoffFacts{Role: RoleWorkSession, Root: root, Branch: "feat", Base: "main"}, NotePath(root, "feat")},
+		"unset role":                   {HandoffFacts{Root: root, Branch: "feat", Base: "main"}, ""},
+		"work session detached HEAD":   {HandoffFacts{Role: RoleWorkSession, Root: root, Base: "main"}, ""},
+	}
+	for name, c := range cases {
+		if got := ResolveHandoff(c.f); got != c.want {
+			t.Errorf("%s: got %q, want %q", name, got, c.want)
+		}
+	}
+	if got := ResolveHandoff(HandoffFacts{Role: RoleWorkSession, Root: root, Branch: "feat"}); !strings.HasSuffix(got, filepath.Join(".rota", "handoff", "feat.md")) {
+		t.Errorf("work session path = %q", got)
 	}
 }

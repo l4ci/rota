@@ -25,7 +25,7 @@ func TestReviewScaffoldingNoBaseDoesNotAssumeMain(t *testing.T) {
 	}
 }
 
-func TestHandoffFileUnresolvedBaseHasNoPath(t *testing.T) {
+func TestOrchestratorFactsUnresolvedBaseIsEmpty(t *testing.T) {
 	for name, cfg := range map[string]string{
 		"configured missing": `{"git":{"baseBranch":"gone"}}`,
 		"no base":            `{}`,
@@ -34,10 +34,10 @@ func TestHandoffFileUnresolvedBaseHasNoPath(t *testing.T) {
 		gittest.Init(t, dir, "work")
 		gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 		os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
-		cfgPath := filepath.Join(dir, ".rota", "config.json")
-		os.WriteFile(cfgPath, []byte(cfg), 0o644)
-		if got := handoffFile(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), dir)); got != "" {
-			t.Errorf("%s: handoffFile = %q; want empty, not a main.md fallback", name, got)
+		os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644)
+		f := orchestratorFacts(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), dir))
+		if f.Base != "" {
+			t.Errorf("%s: Base = %q; want empty, not a main fallback", name, f.Base)
 		}
 	}
 }
