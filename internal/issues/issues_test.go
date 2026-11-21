@@ -156,7 +156,7 @@ func TestLabelGitLab(t *testing.T) {
 }
 
 // TestInvalidConfigIsNotDefaulted: an invalid issues.source or forge.provider
-// fails Provider and the verbs built on it with ValidateConfig's error instead
+// fails the verbs built on it with ValidateConfig's error instead
 // of resolving as the default.
 func TestInvalidConfigIsNotDefaulted(t *testing.T) {
 	ctx := context.Background()
@@ -168,9 +168,6 @@ func TestInvalidConfigIsNotDefaulted(t *testing.T) {
 		f := &forge{origin: gh}
 		env := f.env(t)
 		env.Config = cfg
-		if _, err := Provider(ctx, env, tracker.ForgeActor, ""); !tracker.IsKind(err, tracker.KindInternal) {
-			t.Errorf("%s: Provider err = %v, want KindInternal", raw, err)
-		}
 		if _, err := Label(ctx, env, "", tracker.NumKey(99), "x", true, false); !tracker.IsKind(err, tracker.KindInternal) {
 			t.Errorf("%s: Label err = %v, want KindInternal", raw, err)
 		}

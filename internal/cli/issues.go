@@ -121,7 +121,11 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r, err := issues.Provider(c.Context(), env, tracker.ForgeReader, dir)
+		s, err := tracker.ReadSettings(env.Config)
+		if err != nil {
+			return Result{}, trackerErr(err)
+		}
+		r, err := tracker.ResolveIssueForge(c.Context(), s, dir, env.Opts...)
 		if tracker.IsKind(err, tracker.KindInternal) { // a corrupt config; a reader otherwise never fails
 			return Result{}, trackerErr(err)
 		}
