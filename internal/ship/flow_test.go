@@ -112,6 +112,26 @@ func TestOpenPR(t *testing.T) {
 	}
 }
 
+// OpenPR reads the number through tracker's one PR-URL grammar: a query
+// string does not change it, and a URL with no PR number leaves 0.
+func TestOpenPRNumberFromURL(t *testing.T) {
+	for url, want := range map[string]int{
+		"https://github.com/o/r/pull/12?x=7": 12,
+		"https://github.com/o/r/pull/12/":    12,
+		"https://example.test/not-a-pr":      0,
+		"":                                   0,
+	} {
+		g := &fakeGit{out: map[string]string{"worktree list --porcelain": "", "push -u origin feat": ""}}
+		pr, err := OpenPR(context.Background(), prPorts(g, &fakeForge{url: url}), PRRequest{Branch: "feat", Title: "T"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pr.Number != want {
+			t.Errorf("url %q: Number = %d, want %d", url, pr.Number, want)
+		}
+	}
+}
+
 // A blocked branch or a bad item stops OpenPR before anything is pushed.
 func TestOpenPRStopsBeforePush(t *testing.T) {
 	boom := errors.New("boom")
