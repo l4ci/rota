@@ -563,14 +563,13 @@ func TestBulletContentIsRejected(t *testing.T) {
 	for _, in := range []AddIn{
 		{Topic: "Go", Title: "a*b", Body: "b"},
 		{Topic: "Go", Title: "t\nx", Body: "b"},
-		{Topic: "Go", Title: "t", Body: "x --> y"},
 		{Topic: "Go", Title: "t", Body: "l1\nl2"},
 	} {
 		if _, err := c.Add(ctx, in); !errorsIs(err, ErrContent) {
 			t.Fatalf("add %+v: err = %v", in, err)
 		}
 	}
-	for _, text := range []string{"x --> y", "a\nb"} {
+	for _, text := range []string{"a\nb"} {
 		if _, err := c.Amend(ctx, AmendIn{Topic: "Go", Fragment: "Table tests", Text: text}); !errorsIs(err, ErrContent) {
 			t.Fatalf("amend %q: err = %v", text, err)
 		}

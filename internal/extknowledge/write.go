@@ -45,18 +45,6 @@ func (p *plan) set(rel, content string) {
 	p.files[rel] = content
 }
 
-// checkLine refuses text that would break the one-line bullet format: a line
-// break splits the bullet, "-->" closes its date stamp early.
-func checkLine(what, s string) error {
-	if strings.ContainsAny(s, "\r\n") {
-		return fmt.Errorf("%w: %s must be a single line", ErrContent, what)
-	}
-	if strings.Contains(s, "-->") {
-		return fmt.Errorf("%w: %s must not contain %q", ErrContent, what, "-->")
-	}
-	return nil
-}
-
 // topicFile resolves a topic name to its index entry and the topic file's
 // content, the one path every write that touches an existing bullet goes
 // through. An unknown topic (or a base without an index) is ErrNotFound; an
@@ -85,7 +73,7 @@ func (c Clone) topicFile(name string) (Topic, []byte, error) {
 // bullet whose title already exists (case-insensitive) is a no-op.
 func (c Clone) Add(ctx context.Context, in AddIn) (res WriteResult, err error) {
 	for _, f := range []struct{ what, s string }{{"title", in.Title}, {"body", strings.TrimRight(in.Body, "\r\n")}, {"topic", in.Topic}, {"hook", in.Hook}, {"source", in.Source}} {
-		if err := checkLine(f.what, f.s); err != nil {
+		if err := bulletfmt.CheckLine(f.what, f.s); err != nil {
 			return WriteResult{}, err
 		}
 	}
@@ -287,7 +275,7 @@ func insertBullet(body, bullet string) string {
 // (case-sensitive): it appends text before the date stamp and rewrites the
 // stamp's date and seen: list, then lands it by policy.
 func (c Clone) Amend(ctx context.Context, in AmendIn) (res WriteResult, err error) {
-	if err := checkLine("text", strings.TrimRight(in.Text, "\r\n")); err != nil {
+	if err := bulletfmt.CheckLine("text", strings.TrimRight(in.Text, "\r\n")); err != nil {
 		return WriteResult{}, err
 	}
 	if in.Text == "" && in.Date == "" && in.Seen == nil {

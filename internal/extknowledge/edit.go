@@ -84,7 +84,7 @@ func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 // that holds in.Old, then lands it. The stamp is not searched or changed, so
 // an Old that touches it matches nothing. Old equal to New is no change.
 func (c Clone) Replace(ctx context.Context, in ReplaceIn) (res WriteResult, err error) {
-	if err := checkLine("replacement", in.New); err != nil {
+	if err := bulletfmt.CheckLine("replacement", in.New); err != nil {
 		return WriteResult{}, err
 	}
 	err = c.mutate(ctx, func() error {
@@ -107,8 +107,8 @@ func (c Clone) replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 	}
 	end := bulletfmt.End(e.lines, hit)
 	edited := bulletfmt.ReplaceIn(e.lines[hit:end], in.Old, in.New)
-	if !strings.HasPrefix(edited[0], "- ") {
-		return WriteResult{}, fmt.Errorf("%w: the replacement would remove the bullet marker", ErrContent)
+	if err := bulletfmt.CheckMarker(edited[0]); err != nil {
+		return WriteResult{}, err
 	}
 	if strings.Join(edited, "\n") == strings.Join(e.lines[hit:end], "\n") {
 		pol, err := c.Policy()

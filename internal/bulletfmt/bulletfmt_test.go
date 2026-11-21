@@ -1,6 +1,7 @@
 package bulletfmt
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -189,6 +190,38 @@ func TestEndOffsetAgreesWithEnd(t *testing.T) {
 			if got := EndOffset(text, a); got != want {
 				t.Errorf("EndOffset(%q, %d) = %d, want %d", text, a, got, want)
 			}
+		}
+	}
+}
+
+func TestCheckLine(t *testing.T) {
+	for _, tc := range []struct {
+		name, in string
+		bad      bool
+	}{
+		{"plain", "one line", false},
+		{"empty", "", false},
+		{"newline", "a\nb", true},
+		{"carriage return", "a\rb", true},
+		{"stamp closer", "x -->", true},
+	} {
+		err := CheckLine("text", tc.in)
+		if tc.bad && !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: err = %v, want ErrInvalid", tc.name, err)
+		}
+		if !tc.bad && err != nil {
+			t.Errorf("%s: err = %v, want nil", tc.name, err)
+		}
+	}
+}
+
+func TestCheckMarker(t *testing.T) {
+	if err := CheckMarker("- **T** — b"); err != nil {
+		t.Errorf("marked line: %v", err)
+	}
+	for _, in := range []string{"**T** — b", "", "-**T**"} {
+		if err := CheckMarker(in); !errors.Is(err, ErrInvalid) {
+			t.Errorf("CheckMarker(%q) = %v, want ErrInvalid", in, err)
 		}
 	}
 }

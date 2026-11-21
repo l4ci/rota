@@ -77,6 +77,9 @@ func (s Store) Add(scope, topic, title, body, date, sha string, paths ...string)
 	if err := bulletfmt.CheckDate(date); err != nil {
 		return AddResult{}, err
 	}
+	if err := bulletfmt.CheckLine("body", strings.TrimRight(body, "\r\n")); err != nil {
+		return AddResult{}, err
+	}
 	field, err := PathField(paths)
 	if err != nil {
 		return AddResult{}, err
@@ -186,6 +189,9 @@ func (s Store) Amend(scope string, explicit bool, topic, fragment, text string) 
 		}
 	}
 
+	if err := bulletfmt.CheckLine("text", strings.TrimRight(text, "\r\n")); err != nil {
+		return "", false, err
+	}
 	var (
 		file    string
 		changed bool
@@ -394,6 +400,9 @@ type ReplaceResult struct {
 // changes the bullet's bold title, the tier entry is re-keyed to the new one.
 // old == new is a no-op.
 func (s Store) Replace(scope, topic, old, new string) (ReplaceResult, error) {
+	if err := bulletfmt.CheckLine("replacement", new); err != nil {
+		return ReplaceResult{}, err
+	}
 	km, err := s.KnowledgePath(scope)
 	if err != nil {
 		return ReplaceResult{}, err
@@ -431,6 +440,9 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 	h := hits[0]
 	end := bulletfmt.End(lines, h)
 	edited := bulletfmt.ReplaceIn(lines[h:end], old, new)
+	if err := bulletfmt.CheckMarker(edited[0]); err != nil {
+		return res, err
+	}
 	oldTitle, _ := bulletfmt.Title(lines[h])
 	newTitle, _ := bulletfmt.Title(edited[0])
 	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {

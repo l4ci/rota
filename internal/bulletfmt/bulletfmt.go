@@ -39,6 +39,29 @@ func CheckTitle(title string) error {
 	return nil
 }
 
+// CheckLine refuses text that would break the one-line bullet format: a line
+// break splits the bullet, "-->" closes its stamp early. what names the field
+// in the error. Both stores' write paths call it on body, amend and
+// replacement text.
+func CheckLine(what, s string) error {
+	if strings.ContainsAny(s, "\r\n") {
+		return fmt.Errorf("%w: %s must be a single line", ErrInvalid, what)
+	}
+	if strings.Contains(s, "-->") {
+		return fmt.Errorf("%w: %s must not contain %q", ErrInvalid, what, "-->")
+	}
+	return nil
+}
+
+// CheckMarker refuses an edited bullet whose first line no longer starts with
+// the "- " marker: a replacement that ate it would turn the bullet into prose.
+func CheckMarker(first string) error {
+	if !strings.HasPrefix(first, "- ") {
+		return fmt.Errorf("%w: the replacement would remove the bullet marker", ErrInvalid)
+	}
+	return nil
+}
+
 // CheckDate refuses a stamp date that is not a real YYYY-MM-DD; "" is allowed
 // and means "today" to the caller.
 func CheckDate(date string) error {
