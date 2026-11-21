@@ -532,7 +532,8 @@ func TestPaletteVerbPanicsOnUnknownVerb(t *testing.T) {
 	t.Fatal("paletteVerb accepted a verb path that is not in the tree")
 }
 
-// Every shipped entry resolves against the real tree, in and out of $HOME.
+// Every shipped entry resolves against the real tree, including the layout
+// toggle, whose verb path is checked even when no live host shows the entry.
 func TestPaletteEntriesBuildAgainstTree(t *testing.T) {
 	c := &Ctx{Deps: testDeps(), Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
 	if n := len(paletteEntries(c, &paletteOutcome{})); n == 0 {
