@@ -185,8 +185,8 @@ func TestEndOffsetAgreesWithEnd(t *testing.T) {
 	} {
 		lines := strings.Split(text, "\n")
 		for i := range lines {
-			a := LineStart(lines, i)
-			want := LineStart(lines, End(lines, i))
+			a := lineStart(lines, i)
+			want := lineStart(lines, End(lines, i))
 			if got := EndOffset(text, a); got != want {
 				t.Errorf("EndOffset(%q, %d) = %d, want %d", text, a, got, want)
 			}

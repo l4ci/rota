@@ -147,9 +147,9 @@ func SelectTitle(titles []string, want string) []int {
 	return hits
 }
 
-// Continues reports whether a line continues the bullet above it: it is
+// continues reports whether a line continues the bullet above it: it is
 // indented. A blank line or unindented prose does not.
-func Continues(line string) bool {
+func continues(line string) bool {
 	return line != "" && (line[0] == ' ' || line[0] == '\t')
 }
 
@@ -157,7 +157,7 @@ func Continues(line string) bool {
 // the indented lines that continue it.
 func End(lines []string, i int) int {
 	end := i + 1
-	for end < len(lines) && Continues(lines[end]) {
+	for end < len(lines) && continues(lines[end]) {
 		end++
 	}
 	return end
@@ -168,7 +168,7 @@ func End(lines []string, i int) int {
 // line and offset forms cannot drift apart.
 func EndOffset(text string, a int) int {
 	lines := strings.Split(text[a:], "\n")
-	return a + LineStart(lines, End(lines, 0))
+	return a + lineStart(lines, End(lines, 0))
 }
 
 // stampTail is the final "<!-- … -->" comment of a bullet's first line.
@@ -232,7 +232,7 @@ func Parse(line string) Parts {
 // contains fragment, case-sensitively.
 //
 //   - A bullet starts at a column-0 "- " line. An indented "- " line is a
-//     continuation of the bullet above it (see Continues), never a bullet.
+//     continuation of the bullet above it (see continues), never a bullet.
 //   - A bullet's text is its first line without the stamp, plus its
 //     continuation lines, so wrapped bullets match as a whole. The stamp is
 //     never searched.
@@ -271,9 +271,9 @@ func ReplaceIn(block []string, old, new string) []string {
 	return out
 }
 
-// LineStart is the offset of lines[i] in strings.Join(lines, "\n"); an i past
+// lineStart is the offset of lines[i] in strings.Join(lines, "\n"); an i past
 // the last line gives the length of that text.
-func LineStart(lines []string, i int) int {
+func lineStart(lines []string, i int) int {
 	off := 0
 	for k := 0; k < i && k < len(lines); k++ {
 		off += len(lines[k]) + 1
@@ -299,5 +299,5 @@ func DeleteSpan(text string, a, b int) string {
 // collapsing blanks as DeleteSpan does, and returns the remaining lines.
 func DeleteBullet(lines []string, i int) []string {
 	text := strings.Join(lines, "\n")
-	return strings.Split(DeleteSpan(text, LineStart(lines, i), LineStart(lines, End(lines, i))), "\n")
+	return strings.Split(DeleteSpan(text, lineStart(lines, i), lineStart(lines, End(lines, i))), "\n")
 }

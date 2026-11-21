@@ -21,8 +21,8 @@ var Prefixes = []string{"HERDR_", "HC_", "ORCA_", "TMUX"}
 // testiso leaves it, and worker and shell sandboxes pin it.
 var ConfigVars = []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME"}
 
-// Is reports whether the variable name belongs to a host session.
-func Is(name string) bool {
+// is reports whether the variable name belongs to a host session.
+func is(name string) bool {
 	for _, p := range Prefixes {
 		if strings.HasPrefix(name, p) {
 			return true
@@ -39,13 +39,13 @@ func Drop(name string) bool {
 			return true
 		}
 	}
-	return Is(name)
+	return is(name)
 }
 
-// IsKV is Is for a KEY=value entry as os.Environ returns it.
+// IsKV is is for a KEY=value entry as os.Environ returns it.
 func IsKV(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
-	return Is(k)
+	return is(k)
 }
 
 // Scrub unsets host-session and harness-config variables from the process environment. The shell
