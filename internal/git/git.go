@@ -50,6 +50,16 @@ type Result = proc.Result
 // ErrNoGit), so it keeps this signature rather than taking a proc.Cmd.
 type Runner func(ctx context.Context, dir string, args ...string) (Result, error)
 
+// Bound is a Runner with its context and directory fixed: git run in one tree.
+// It is the shape the landing code (internal/land) and the worker closures
+// share, so a test fakes one signature.
+type Bound func(args ...string) (Result, error)
+
+// In binds r to ctx and dir.
+func (r Runner) In(ctx context.Context, dir string) Bound {
+	return func(args ...string) (Result, error) { return r(ctx, dir, args...) }
+}
+
 // Exec is the production Runner.
 func Exec(ctx context.Context, dir string, args ...string) (Result, error) {
 	return via(proc.Run, ctx, dir, args...)

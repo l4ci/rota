@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gotestout"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/shlex"
@@ -68,7 +67,7 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 		labels := []string{}
 		for _, i := range members {
 			m := res.Members[i]
-			run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
+			run := e.Git.In(ctx, scratch)
 			if _, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
 				land.LocalRequest{Head: p.heads[i], Base: "scratch tree", Message: land.TrainSubject(m.Branch, t.o.Base)}); err != nil {
 				if errors.As(err, new(*land.PostMergeError)) {
