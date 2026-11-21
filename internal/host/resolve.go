@@ -79,35 +79,35 @@ type Launch struct {
 func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(string) (string, error)) (Launch, error) {
 	d := Deps{Getenv: getenv, LookPath: lookPath}
 	d.fill()
-	if coreContext(d) || dispatch == HerdrCore {
+	named, namedOK := specOf(dispatch)
+	if coreContext(d) || (namedOK && named.runtimeBound) {
 		if d.Getenv(envCoreTerm) == "" || d.Getenv(envCoreSocket) == "" {
 			return Launch{}, fmt.Errorf("herdr-core needs %s and %s from an app project terminal; refusing disconnected runtime", envCoreTerm, envCoreSocket)
 		}
-		if dispatch != "" && dispatch != HerdrCore && dispatch != "subagent" {
+		if dispatch != "" && dispatch != "subagent" && !(namedOK && named.runtimeBound) {
 			return Launch{}, fmt.Errorf("round.dispatch=%s conflicts with this herdr-core terminal; use herdr-core or automatic detection", dispatch)
 		}
 		return Launch{Kind: HerdrCore}, nil
 	}
-	herdr, tmux := New(Herdr, d), New(Tmux, d)
-	switch {
-	case herdr.InSession() && herdr.Require() == nil:
-		return Launch{Kind: Herdr}, nil
-	case tmux.InSession():
-		return Launch{Kind: Tmux}, nil
-	case dispatch == Orca:
-		d.fill()
-		if _, err := d.LookPath(Orca.Binary()); err != nil {
-			return Launch{}, fmt.Errorf("round.dispatch=orca but orca is not installed")
+	installed := func(s kindSpec) bool {
+		_, err := d.LookPath(s.binary)
+		return err == nil
+	}
+	for _, s := range kindSpecs {
+		if s.autoLaunch && New(s.kind, d).InSession() && (!s.inPaneNeedsBinary || installed(s)) {
+			return Launch{Kind: s.kind}, nil
 		}
-		return Launch{Kind: Orca}, nil
-	case dispatch == Herdr && herdr.Require() != nil:
-		return Launch{}, fmt.Errorf("round.dispatch=herdr but herdr is not installed")
-	case dispatch == Tmux && tmux.Require() != nil:
-		return Launch{}, fmt.Errorf("round.dispatch=tmux but tmux is not installed")
-	case dispatch != Tmux && herdr.Require() == nil:
-		return Launch{Kind: Herdr, NewSession: true}, nil
-	case tmux.Require() == nil:
-		return Launch{Kind: Tmux, NewSession: true}, nil
+	}
+	if namedOK && named.binary != "" {
+		if !installed(named) {
+			return Launch{}, fmt.Errorf("round.dispatch=%s but %s is not installed", dispatch, named.binary)
+		}
+		return Launch{Kind: named.kind, NewSession: named.autoLaunch}, nil
+	}
+	for _, s := range kindSpecs {
+		if s.autoLaunch && installed(s) {
+			return Launch{Kind: s.kind, NewSession: true}, nil
+		}
 	}
 	return Launch{Kind: Solo}, nil
 }

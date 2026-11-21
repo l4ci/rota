@@ -46,7 +46,7 @@ const (
 // anything else (including "subagent" and "") the zero Kind.
 func KindOf(s string) Kind {
 	k := Kind(s)
-	if _, ok := specOf(k); ok || k == Solo {
+	if knownKind(k) {
 		return k
 	}
 	return ""

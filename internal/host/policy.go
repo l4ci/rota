@@ -22,8 +22,9 @@ import (
 //   - host.go: Kind constant and KindOf.
 //   - policy.go: one kindSpecs entry (binary, pane env, pickup policy, build,
 //     policy overlay). Everything below reads it; no other switch on Kind.
-//   - resolve.go: ResolveLaunch's in-session and outside-session selection
-//     rules (cross-kind precedence, so not in the descriptor).
+//   - launch preference: the autoLaunch and inPaneNeedsBinary fields. A kind
+//     with autoLaunch is picked outside any pane, in table order; ResolveLaunch
+//     walks the table and holds no per-kind case.
 //   - panes.go: CurrentPaneAny, if the host supports detection without a kind.
 //   - internal/config/keys.go: round.dispatch choices; internal/config/schema.go:
 //     setup help for that choice. Regenerate the config reference and update
@@ -38,6 +39,18 @@ type kindSpec struct {
 	binary  string // executable; "" when the kind has none
 	paneEnv string // env var naming the pane a process runs in; "" for none
 	pickup  pickupPolicy
+	// autoLaunch: a launcher with no pane and no explicit round.dispatch starts
+	// a session of this kind when its binary is installed. The first such kind
+	// in table order wins, and it is also checked first for a launcher already
+	// in one of its panes.
+	autoLaunch bool
+	// inPaneNeedsBinary: being in this kind's pane only counts when its binary
+	// is on PATH.
+	inPaneNeedsBinary bool
+	// runtimeBound: the kind is a connected runtime named by terminal markers,
+	// not an installed binary; a launch that finds its markers or names it must
+	// have the whole runtime (the herdr-core context rule).
+	runtimeBound bool
 	// build returns the adapter. It never reads d's defaults; New fills them.
 	build func(d Deps) Host
 	// policy overlays the kind's fields that no optional interface carries.
@@ -56,11 +69,13 @@ var PaneKinds []Kind
 func init() {
 	kindSpecs = []kindSpec{
 		{
-			kind:    Herdr,
-			binary:  "herdr",
-			paneEnv: envHerdrPane,
-			pickup:  pickupPolicy{attempts: 3, probeFirst: true, probeTimeout: 10 * time.Second},
-			build:   func(d Deps) Host { return &herdr{d: d, noted: new(atomic.Bool)} },
+			kind:              Herdr,
+			binary:            "herdr",
+			paneEnv:           envHerdrPane,
+			pickup:            pickupPolicy{attempts: 3, probeFirst: true, probeTimeout: 10 * time.Second},
+			autoLaunch:        true,
+			inPaneNeedsBinary: true,
+			build:             func(d Deps) Host { return &herdr{d: d, noted: new(atomic.Bool)} },
 			policy: func(c Capabilities) Capabilities {
 				c.InSessionRule = &InSessionRule{Pane: "herdr pane", Env: envHerdrEnv + "=1"}
 				c.LaunchKindBound = true
@@ -75,9 +90,10 @@ func init() {
 			},
 		},
 		{
-			kind:    HerdrCore,
-			paneEnv: envCoreTerm,
-			build:   func(d Deps) Host { return &coreHost{d: d} },
+			kind:         HerdrCore,
+			paneEnv:      envCoreTerm,
+			runtimeBound: true,
+			build:        func(d Deps) Host { return &coreHost{d: d} },
 			policy: func(c Capabilities) Capabilities {
 				c.NoNominalHandle = true
 				c.InPlace = true
@@ -89,11 +105,12 @@ func init() {
 			},
 		},
 		{
-			kind:    Tmux,
-			binary:  "tmux",
-			paneEnv: envTmuxPane,
-			pickup:  pickupPolicy{attempts: 4, beforeNudge: time.Second, beforeProbe: 2 * time.Second},
-			build:   func(d Deps) Host { return &tmux{d: d} },
+			kind:       Tmux,
+			binary:     "tmux",
+			paneEnv:    envTmuxPane,
+			pickup:     pickupPolicy{attempts: 4, beforeNudge: time.Second, beforeProbe: 2 * time.Second},
+			autoLaunch: true,
+			build:      func(d Deps) Host { return &tmux{d: d} },
 			policy: func(c Capabilities) Capabilities {
 				c.Server = ServerProc{Comm: Tmux.Binary(), Renames: true}
 				// -A attaches when the session exists; its command is then ignored.
@@ -207,6 +224,12 @@ const (
 	envHerdrWorkspace = "HERDR_WORKSPACE_ID"
 	envHerdrEnv       = "HERDR_ENV"
 )
+
+// knownKind: k is a pane kind or Solo, the one kind with no row.
+func knownKind(k Kind) bool {
+	_, ok := specOf(k)
+	return ok || k == Solo
+}
 
 // paneEnv is the env var naming the current pane under k, "" for Solo and
 // unknown kinds (no pane to name).
