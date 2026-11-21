@@ -25,7 +25,7 @@ func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(
 func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
 func TestTestLockWaitsAndSaysSo(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
 	holderDone := make(chan error, 1)
@@ -78,7 +78,7 @@ func TestTestLockWaitsAndSaysSo(t *testing.T) {
 }
 
 func TestTestLockWidthAllowsConcurrentHolders(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
 	holderDone, secondDone := make(chan error, 1), make(chan error, 1)
@@ -108,7 +108,7 @@ func TestTestLockWidthAllowsConcurrentHolders(t *testing.T) {
 }
 
 func TestTestLockWaiterStopsWithContext(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
 	holderDone := make(chan error, 1)
@@ -148,7 +148,7 @@ func waitersWait(t *testing.T, env Env, repo string, name string, order *[]strin
 }
 
 func TestTestLockServesWaitersInArrivalOrder(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
 	holderDone := make(chan error, 1)
@@ -188,7 +188,7 @@ func TestTestLockServesWaitersInArrivalOrder(t *testing.T) {
 }
 
 func TestTestLockDropsKilledWaiterTicket(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
 	holderDone := make(chan error, 1)
@@ -233,7 +233,7 @@ func TestTestLockDropsKilledWaiterTicket(t *testing.T) {
 // A waiter that died before leave() leaves its ticket file behind with no flock
 // on it. The next waiter must treat that ticket as stale, drop it and run.
 func TestTestLockRunsPastStaleTicket(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	common, err := rotastate.CommonDirVia(bg, env.Git, repo)
 	if err != nil {

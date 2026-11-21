@@ -179,7 +179,7 @@ func TestCandidatesPerScope(t *testing.T) {
 	be.add("14", "untagged", "", false, "")
 	be.add("15", "closed in M01", "M01", true, "")
 	writeRegistry(t, root, slot(root, "ben", "ben/11-held", nil))
-	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Config: worker.NoConfig})}
 	get := func(o CandidateOpts) []string {
 		t.Helper()
 		cs, err := e.Candidates(bg, root, be, o)
@@ -237,7 +237,7 @@ func TestCandidatesReadOverlapAgainstSlotChanges(t *testing.T) {
 	be.add("7", "ben's issue", "M01", false, "")
 	be.add("8", "wants the seed file", "M01", false, "edits seed.txt")
 	writeRegistry(t, root, slot(root, "ben", "ben/7-pool", nil))
-	cs, err := (Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}).Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	cs, err := (Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Config: worker.NoConfig})}).Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
 	if err != nil {
 		t.Fatal(err)
 	}

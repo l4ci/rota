@@ -54,7 +54,7 @@ func fakeLeaseEnv(alive ...int) roundlease.Env {
 func TestLedgerRoundIsTheHeldLease(t *testing.T) {
 	dir, cd := t.TempDir(), t.TempDir()
 	env := fakeLeaseEnv(100)
-	le := Env{Lease: func() roundlease.Env { return env }, Git: func(context.Context, string, ...string) (git.Result, error) {
+	le := Env{Config: diskConfig, Lease: func() roundlease.Env { return env }, Git: func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{Stdout: cd}, nil
 	}}
 	if n := LedgerRound(le, dir); n != 0 {
@@ -83,7 +83,7 @@ func TestLedgerRoundIsTheHeldLease(t *testing.T) {
 
 func TestLedgerNoteFillsSlotFromRegistry(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","account":"work"}`)
-	env := Env{Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12", Detail: ledger.BounceDetail(1)})
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12", Slot: "ben"})
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "99"})
@@ -108,7 +108,7 @@ func TestLedgerNoteReportsAWriteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	(Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}).Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"}) // must not panic or fail the verb
+	(Env{Config: diskConfig, Stderr: &out, Now: func() time.Time { return ledgerNow }}).Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"}) // must not panic or fail the verb
 	if !strings.Contains(out.String(), ledger.Path(dir)) || strings.Count(out.String(), "\n") != 1 {
 		t.Errorf("stderr = %q, want one line naming %s", out, ledger.Path(dir))
 	}
@@ -121,7 +121,7 @@ func TestLedgerNoteSurvivesACorruptRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	env := Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Stderr: &out, Now: func() time.Time { return ledgerNow }}
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindBounce, Issue: "12"})
 	if err := env.Ledger().AppendErr(dir, ledger.Entry{Kind: ledger.KindGate, Issue: "12"}); err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	acc := &Accounts{Read: readOf(claudeSnapshot(35, 10, nil))}
+	acc := &Accounts{Env: Env{Config: diskConfig}, Read: readOf(claudeSnapshot(35, 10, nil))}
 	row := PollRow{Name: "ben", State: StateDone, Evidence: "https://github.com/o/r/pull/9"}
 	var dones []ledger.Entry
 	for i := 0; i < 2; i++ { // the second pass sees the slot already done
@@ -157,7 +157,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	if len(dones) != 1 {
 		t.Fatalf("%d done transitions, want 1", len(dones))
 	}
-	LedgerDone(Env{Now: func() time.Time { return ledgerNow }}, context.Background(), acc, dir, dones[0])
+	LedgerDone(Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}, context.Background(), acc, dir, dones[0])
 	es, _ := ledger.Load(dir)
 	if len(es) != 1 || es[0].Kind != ledger.KindDone || es[0].Slot != "ben" || es[0].Issue != "12" || es[0].PR != row.Evidence {
 		t.Fatalf("entries %+v", es)
@@ -181,7 +181,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 	f.panes["w1"] = []string{"x\n", "x\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
 	f.panes["w2"] = []string{"a\n", "a\n"}
 	e := envWith(f)
-	e.Accounts = &Accounts{Read: readOf(claudeSnapshot(35, 10, nil))}
+	e.Accounts = &Accounts{Env: Env{Config: diskConfig}, Read: readOf(claudeSnapshot(35, 10, nil))}
 	for i := 0; i < 2; i++ {
 		if _, err := e.Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
 			t.Fatal(err)
@@ -200,7 +200,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 // holds the bounced PR instead of landing on the first slot holding the issue.
 func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude"},{"name":"dana","task":"12","kind":"claude"}`)
-	if _, err := recordBounceVia(Env{}, dir, "12", "dana", "h1"); err != nil {
+	if _, err := recordBounceVia(Env{Config: diskConfig}, dir, "12", "dana", "h1"); err != nil {
 		t.Fatal(err)
 	}
 	es, _ := ledger.Load(dir)
@@ -214,7 +214,7 @@ func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 // folds it into the issue's own row instead of listing a pseudo-slot.
 func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
-	env := Env{Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
 	if _, err := recordBounceVia(env, dir, "12", "", "h1"); err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
 	res := landing.TrainResult{Verdict: landing.GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
 		Members: []landing.TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
-	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
+	trainLedger(Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
@@ -254,7 +254,7 @@ func TestLedgerRoundSaysWhenTheLeaseCannotBeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	n := LedgerRound(Env{Stderr: &out, Git: func(context.Context, string, ...string) (git.Result, error) {
+	n := LedgerRound(Env{Config: diskConfig, Stderr: &out, Git: func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{Stdout: cd}, nil
 	}}, dir)
 	if n != 0 || !strings.Contains(out.String(), "round lease") || strings.Count(out.String(), "\n") != 1 {
@@ -271,7 +271,7 @@ func TestLedgerRoundHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var out bytes.Buffer
-	env := Env{Ctx: ctx, Stderr: &out, Lease: func() roundlease.Env { return lease },
+	env := Env{Config: diskConfig, Ctx: ctx, Stderr: &out, Lease: func() roundlease.Env { return lease },
 		Git: func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
 			return git.Result{Stdout: common}, ctx.Err()
 		}}
@@ -285,7 +285,7 @@ func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"w1","branch":"w1","pr":"https://github.com/o/r/pull/1"}`)
 	reads := 0
 	env := fakeLeaseEnv(100)
-	gateLedger(Env{Lease: func() roundlease.Env { reads++; return env }, Now: func() time.Time { return ledgerNow }}, &landing.RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, landing.GateResult{Verdict: landing.GatePass})
+	gateLedger(Env{Config: diskConfig, Lease: func() roundlease.Env { reads++; return env }, Now: func() time.Time { return ledgerNow }}, &landing.RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, landing.GateResult{Verdict: landing.GatePass})
 	if reads != 1 {
 		t.Errorf("gateLedger read the lease %d times, want 1", reads)
 	}
@@ -294,7 +294,7 @@ func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
 // Gate and train rows take the env's clock: none reads the wall clock.
 func TestGateAndTrainLedgerRowsTakeTheEnvClock(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"}`)
-	env := Env{Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}
 	gateLedger(env, nil, dir, GateTarget{Name: "b1", Branch: "b1"}, landing.GateResult{Verdict: landing.GatePass})
 	trainLedger(env, nil, dir, "", landing.TrainResult{Verdict: landing.GateVerifyFailed, Culprit: "b2", Members: []landing.TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
 	es, _ := ledger.Load(dir)
@@ -319,7 +319,7 @@ func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
 	}
 	for _, tc := range cases {
 		dir := ledgerProject(t, tc.slot)
-		env := Env{Now: func() time.Time { return ledgerNow }}
+		env := Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}
 		// The missing-field fallback.
 		env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindDone, Issue: "12"})
 		// Pane-observed completion.
@@ -351,7 +351,7 @@ func TestLedgerCompletionRecordsTheHarnessAccount(t *testing.T) {
 func TestLedgerNoteOutsideARepoIsRoundZeroAndQuiet(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
-	env := Env{Stderr: &out, Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Stderr: &out, Now: func() time.Time { return ledgerNow }}
 	env.Ledger().Note(dir, ledger.Entry{Kind: ledger.KindCreate, Issue: "5"})
 	es, _ := ledger.Load(dir)
 	if len(es) != 1 || es[0].Round != 0 || out.Len() != 0 {
@@ -365,7 +365,7 @@ func TestTrainLedgerStampsTheInteractionOnItsMembersOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
 	res := landing.TrainResult{Verdict: landing.GateInteraction, Interaction: []string{"b1", "b3"},
 		Members: []landing.TrainMember{{Target: "b1"}, {Target: "b2"}, {Target: "b3"}}}
-	trainLedger(Env{Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
+	trainLedger(Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}, nil, dir, "", res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
@@ -391,7 +391,7 @@ func TestLedgerDoneRecordsTheReportedSession(t *testing.T) {
 	if err := ledger.RecordSession(cd, ledger.Session{Slot: "ben", ID: "sid-9", Transcript: tr, UpdatedAt: ledgerNow}); err != nil {
 		t.Fatal(err)
 	}
-	env := Env{Now: func() time.Time { return ledgerNow }}
+	env := Env{Config: diskConfig, Now: func() time.Time { return ledgerNow }}
 	LedgerDone(env, context.Background(), nil, dir, ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"})
 	os.Remove(tr)
 	LedgerDone(env, context.Background(), nil, dir, ledger.Entry{Issue: "12", Slot: "ben", Harness: "claude"})
@@ -441,7 +441,7 @@ func TestLedgerSessionAtCopiesOnlyUnderTheConfigKey(t *testing.T) {
 // When the git common dir cannot be read the row says unavailable instead of
 // dropping the session keys.
 func TestLedgerSessionSaysUnavailableWhenTheCommonDirIsUnreadable(t *testing.T) {
-	env := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+	env := Env{Config: diskConfig, Git: func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{ExitCode: 128}, nil
 	}}
 	d := jsonx.NewObject()

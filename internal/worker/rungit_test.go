@@ -18,7 +18,7 @@ func TestRunGitErrKeepsTypedError(t *testing.T) {
 		"cancelled": context.Canceled,
 	} {
 		t.Run(name, func(t *testing.T) {
-			e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+			e := Env{Config: diskConfig, Git: func(context.Context, string, ...string) (git.Result, error) {
 				return git.Result{}, want
 			}}
 			out, code, err := e.runGitErr(cancelled, "", "status")
@@ -30,7 +30,7 @@ func TestRunGitErrKeepsTypedError(t *testing.T) {
 			}
 		})
 	}
-	e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+	e := Env{Config: diskConfig, Git: func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{Stdout: "x\n", ExitCode: 128}, nil
 	}}
 	if out, code, err := e.runGitErr(context.Background(), "", "status"); err != nil || out != "x" || code != 128 {

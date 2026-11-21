@@ -35,7 +35,7 @@ func commitIn(t *testing.T, dir, file string) {
 
 func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 	b := slotProject(t)
-	res, err := Env{}.Reset(b, "w1", "T-7/Fix Me", false)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T-7/Fix Me", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 func TestResetCheckOnlyChangesNothing(t *testing.T) {
 	b := slotProject(t)
 	before := registry(t, b)
-	res, err := Env{}.Reset(b, "w1", "T1", true)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T1", true)
 	if err != nil || !res.Clean || res.Changed || res.Branch != "" || res.SHA != "" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -71,7 +71,7 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 	b := slotProject(t)
 	os.WriteFile(filepath.Join(wt(b), "untracked.txt"), []byte("x"), 0o644)
 	before := registry(t, b)
-	res, err := Env{}.Reset(b, "w1", "T2", false)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T2", false)
 	we, ok := err.(*exitcode.Error)
 	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — uncommitted changes") {
 		t.Fatalf("err = %v", err)
@@ -89,7 +89,7 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 	}
 	mustEqual(t, "registry", before, registry(t, b))
 	// the same refusal is exit 1 under --check-only
-	_, err = Env{}.Reset(b, "w1", "T2", true)
+	_, err = Env{Config: diskConfig}.Reset(b, "w1", "T2", true)
 	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitFailed {
 		t.Errorf("--check-only err = %v", err)
 	}
@@ -98,7 +98,7 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 func TestResetRefusesUnmergedCommits(t *testing.T) {
 	b := slotProject(t)
 	commitIn(t, wt(b), "work.txt")
-	res, err := Env{}.Reset(b, "w1", "T3", false)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T3", false)
 	we, ok := err.(*exitcode.Error)
 	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — 1 commit(s) not on main") {
 		t.Fatalf("err = %v", err)
@@ -119,7 +119,7 @@ func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 	commitIn(t, wt(b), "work.txt")
 	sha := gittest.Run(t, wt(b), "rev-parse", "HEAD")
 	gittest.Run(t, b, "cherry-pick", sha)
-	res, err := Env{}.Reset(b, "w1", "", true)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "", true)
 	if err != nil || !res.Clean {
 		t.Errorf("%+v %v", res, err)
 	}
@@ -127,7 +127,7 @@ func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 
 func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 	b := slotProject(t)
-	if _, err := (Env{}).Reset(b, "w1", "T4", false); err != nil {
+	if _, err := (Env{Config: diskConfig}).Reset(b, "w1", "T4", false); err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(wt(b), "wip.txt"), []byte("wip"), 0o644)
@@ -135,7 +135,7 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 	raw, _ := os.ReadFile(RegistryPath(b))
 	os.WriteFile(RegistryPath(b), []byte(strings.Replace(string(raw), `"task": null`, `"task": "T4"`, 1)), 0o644)
 	before := registry(t, b)
-	res, err := Env{}.Reset(b, "w1", "T4", false)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T4", false)
 	if err != nil || !res.Retained || res.Changed || res.Clean || res.Branch != "rota-worker/w1-t4" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -146,7 +146,7 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 		t.Error("the WIP was dropped")
 	}
 	// a DIFFERENT task on the same dirty slot is still refused
-	if _, err := (Env{}).Reset(b, "w1", "T5", false); err == nil {
+	if _, err := (Env{Config: diskConfig}).Reset(b, "w1", "T5", false); err == nil {
 		t.Error("a new task must not inherit the last task's WIP")
 	}
 }
@@ -159,20 +159,20 @@ func TestResetResolutionFailures(t *testing.T) {
 		}
 		return -1
 	}
-	_, err := Env{}.Reset(dir, "w1", "", false)
+	_, err := Env{Config: diskConfig}.Reset(dir, "w1", "", false)
 	if exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
 		t.Errorf("no registry: %v", err)
 	}
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	if _, err = (Env{}).Reset(dir, "w9", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
+	if _, err = (Env{Config: diskConfig}).Reset(dir, "w9", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
 	gittest.Run(t, dir, "branch", "-m", "main", "trunk")
-	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "base 'main' does not exist") {
+	if _, err = (Env{Config: diskConfig}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "base 'main' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
 	os.RemoveAll(wt(dir))
-	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "worktree missing") {
+	if _, err = (Env{Config: diskConfig}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "worktree missing") {
 		t.Errorf("missing worktree: %v", err)
 	}
 }
@@ -207,7 +207,7 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 		b := slotProject(t)
 		commitIn(t, wt(b), "unpushed.txt")
 		before := registry(t, b)
-		e := Env{Git: func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		e := Env{Config: diskConfig, Git: func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 			if len(args) > 0 && args[0] == failing {
 				return git.Result{Stderr: "fatal: boom", ExitCode: 128}, nil
 			}
@@ -229,7 +229,7 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 		}
 	}
 	// a git that cannot run at all (code 127) is the same
-	e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+	e := Env{Config: diskConfig, Git: func(context.Context, string, ...string) (git.Result, error) {
 		return git.Result{}, os.ErrNotExist
 	}}
 	b := slotProject(t)
@@ -263,7 +263,7 @@ func TestResetUnmergedEntriesAreSevenCharSHAAndSubject(t *testing.T) {
 	b := slotProject(t)
 	gittest.Run(t, b, "config", "core.abbrev", "12")
 	commitIn(t, wt(b), "work.txt")
-	res, err := Env{}.Reset(b, "w1", "T1", true)
+	res, err := Env{Config: diskConfig}.Reset(b, "w1", "T1", true)
 	if err == nil || len(res.Unmerged) != 1 {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -280,7 +280,7 @@ func TestResetToRefusesAnExternalSlot(t *testing.T) {
 	}
 	before := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD")
 	for _, check := range []bool{true, false} {
-		_, err := Env{}.ResetTo(b, "w1", "", "park/w1", check)
+		_, err := Env{Config: diskConfig}.ResetTo(b, "w1", "", "park/w1", check)
 		var we *exitcode.Error
 		if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 			t.Fatalf("check=%v: want exit 4, got %v", check, err)
@@ -304,7 +304,7 @@ func TestResetParksADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	e := Env{}
+	e := Env{Config: diskConfig}
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return stateForge{state: "MERGED"}, nil }
 	realGit := git.Exec
 	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
@@ -348,7 +348,7 @@ func TestResetKeepsASlotReboundDuringTheLookup(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	e := Env{}
+	e := Env{Config: diskConfig}
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) {
 		return rebindForge{rebind: func() {
 			if _, err := UpdateSlot(b, "w1", func(s *Slot) {
@@ -389,7 +389,7 @@ func (f headForge) PRView(context.Context, int) (tracker.PRInfo, error) {
 }
 
 func mergedPREnv(state, head string) Env {
-	e := Env{}
+	e := Env{Config: diskConfig}
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return headForge{state: state, head: head}, nil }
 	realGit := git.Exec
 	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
@@ -467,7 +467,7 @@ func TestResetRefusalNamesRoundStartInARound(t *testing.T) {
 	if err := os.WriteFile(RegistryPath(b), []byte(patched), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = Env{}.Reset(b, "w1", "T2", false)
+	_, err = Env{Config: diskConfig}.Reset(b, "w1", "T2", false)
 	we, ok := err.(*exitcode.Error)
 	if !ok {
 		t.Fatalf("err = %v", err)
@@ -502,7 +502,7 @@ func TestResetReusesATaskBranchPushedToOrigin(t *testing.T) {
 	gittest.Run(t, b, "push", "-q", "origin", taskBranch)
 	gittest.Run(t, b, "switch", "-q", "main")
 	gittest.Run(t, b, "branch", "-q", "-D", taskBranch)
-	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+	if _, err := (Env{Config: diskConfig}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(wt(b), "earlier.txt")); err != nil {
@@ -519,7 +519,7 @@ func TestResetKeepsALocalOnlyTaskBranchAheadOfTheBase(t *testing.T) {
 	commitIn(t, b, "local.txt")
 	tip := gittest.Run(t, b, "rev-parse", taskBranch)
 	gittest.Run(t, b, "switch", "-q", "main")
-	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+	if _, err := (Env{Config: diskConfig}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := gittest.Run(t, b, "rev-parse", taskBranch); got != tip {
@@ -539,7 +539,7 @@ func TestResetRefusesADivergedTaskBranch(t *testing.T) {
 	commitIn(t, b, "other.txt")
 	tip := gittest.Run(t, b, "rev-parse", taskBranch)
 	gittest.Run(t, b, "switch", "-q", "main")
-	_, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false)
+	_, err := (Env{Config: diskConfig}).ResetTo(b, "w1", "7", taskBranch, false)
 	we, ok := err.(*exitcode.Error)
 	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, taskBranch) {
 		t.Fatalf("err = %v", err)
@@ -551,7 +551,7 @@ func TestResetRefusesADivergedTaskBranch(t *testing.T) {
 
 func TestResetStillCutsAMissingTaskBranchFromTheBase(t *testing.T) {
 	b, _ := taskBranchProject(t)
-	if _, err := (Env{}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
+	if _, err := (Env{Config: diskConfig}).ResetTo(b, "w1", "7", taskBranch, false); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := gittest.Run(t, wt(b), "rev-parse", "HEAD"), gittest.Run(t, b, "rev-parse", "main"); got != want {

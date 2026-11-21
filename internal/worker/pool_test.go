@@ -16,7 +16,7 @@ import (
 
 func goInit(t *testing.T, dir string, o InitOpts) (InitResult, error) {
 	t.Helper()
-	return Env{}.PoolInit(bg, dir, o, &Accounts{})
+	return Env{Config: diskConfig}.PoolInit(bg, dir, o, &Accounts{Env: Env{Config: diskConfig}})
 }
 
 func TestPoolInit(t *testing.T) {
@@ -160,7 +160,7 @@ func TestPoolReap(t *testing.T) {
 	got := map[string]string{}
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
 
-	reaped, err := Env{}.Reap(b, []string{"w2", "nope"}, false)
+	reaped, err := Env{Config: diskConfig}.Reap(b, []string{"w2", "nope"}, false)
 	if err != nil || len(reaped) != 1 || reaped[0] != "w2" {
 		t.Fatalf("reaped = %v, %v", reaped, err)
 	}
@@ -172,7 +172,7 @@ func TestPoolReap(t *testing.T) {
 		t.Errorf("branch survived: %s", out)
 	}
 
-	reaped, _ = Env{}.Reap(b, nil, true)
+	reaped, _ = Env{Config: diskConfig}.Reap(b, nil, true)
 	if len(reaped) != 2 {
 		t.Errorf("reaped = %v", reaped)
 	}
@@ -182,7 +182,7 @@ func TestPoolReap(t *testing.T) {
 
 func TestPoolReapWithoutRegistryIsANoop(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
-	reaped, err := Env{}.Reap(dir, []string{"w1"}, false)
+	reaped, err := Env{Config: diskConfig}.Reap(dir, []string{"w1"}, false)
 	if err != nil || len(reaped) != 0 {
 		t.Errorf("%v %v", reaped, err)
 	}
@@ -225,7 +225,7 @@ func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
 	}
 	branch := LoadRegistryTolerant(b).Slot("w1").Branch()
 	for _, all := range []bool{false, true} {
-		reaped, err := Env{}.Reap(b, []string{"w1"}, all)
+		reaped, err := Env{Config: diskConfig}.Reap(b, []string{"w1"}, all)
 		if err != nil || len(reaped) != 1 || reaped[0] != "w1" {
 			t.Fatalf("all=%v reaped = %v, %v", all, reaped, err)
 		}
@@ -256,7 +256,7 @@ func TestPoolReapKeepsTheSlotWhenTheWorktreeStays(t *testing.T) {
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	gittest.Run(t, b, "worktree", "lock", filepath.Join(b, ".worktrees", "w2"))
 
-	reaped, err := Env{}.Reap(b, []string{"w1", "w2"}, false)
+	reaped, err := Env{Config: diskConfig}.Reap(b, []string{"w1", "w2"}, false)
 	if err == nil || !strings.Contains(err.Error(), "w2") {
 		t.Fatalf("want an error naming w2, got %v (reaped %v)", err, reaped)
 	}
@@ -273,7 +273,7 @@ func TestPoolReapRefusesACorruptRegistry(t *testing.T) {
 	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	os.WriteFile(RegistryPath(b), []byte(`{"slots": [`), 0o644)
-	reaped, err := Env{}.Reap(b, nil, true)
+	reaped, err := Env{Config: diskConfig}.Reap(b, nil, true)
 	if err == nil || len(reaped) != 0 {
 		t.Fatalf("want a refusal, got %v %v", reaped, err)
 	}

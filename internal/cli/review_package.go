@@ -279,7 +279,7 @@ func integrationSince(c *Ctx, dir, branch, head string) (string, bool, error) {
 	if !ok || rec.Landed {
 		return "", false, nil
 	}
-	since, err := worker.Env{}.WithDefaults().ReviewSince(dir, rec, head)
+	since, err := c.deps().workerEnv().WithDefaults().ReviewSince(dir, rec, head)
 	if err != nil {
 		return "", false, Resolution("%v", err)
 	}

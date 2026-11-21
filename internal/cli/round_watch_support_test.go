@@ -114,7 +114,7 @@ func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Run
 	}
 	deps := testDeps()
 	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: g, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel,
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: g, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel,
 			Round: roundcfg.Settings{Support: "mac", Role: role}}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
@@ -359,7 +359,7 @@ func TestWatchSupportOffWithoutRoundSupport(t *testing.T) {
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues":{"source":"github"}}`)
 	deps := testDeps()
 	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel}
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
 	if k := supportKeys(watchForge(context.Background(), c, root, &watchWarned{})); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 || f.merges != 0 {

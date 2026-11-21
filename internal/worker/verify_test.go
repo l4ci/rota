@@ -23,7 +23,7 @@ func verifyCfg(t *testing.T, cmds string) GateConfig {
 
 func TestVerifyReportsPassedFailedAndLog(t *testing.T) {
 	root := t.TempDir()
-	res, err := Env{}.Verify(context.Background(), verifyCfg(t, `["echo one"," ","false","echo two"]`), root, root)
+	res, err := Env{Config: diskConfig}.Verify(context.Background(), verifyCfg(t, `["echo one"," ","false","echo two"]`), root, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestVerifyReportsPassedFailedAndLog(t *testing.T) {
 func TestVerifyPassRemovesLogAndNoCommandsIsFlagged(t *testing.T) {
 	root := t.TempDir()
 	tmp := t.TempDir()
-	e := Env{
+	e := Env{Config: diskConfig,
 		Getenv: func(key string) string {
 			if key == "TMPDIR" {
 				return tmp
@@ -79,7 +79,7 @@ func TestVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	res, err := Env{}.Verify(ctx, verifyCfg(t, `["sleep 30; sleep 30"]`), root, root)
+	res, err := Env{Config: diskConfig}.Verify(ctx, verifyCfg(t, `["sleep 30; sleep 30"]`), root, root)
 	if err != nil || res.OK() || time.Since(start) > 10*time.Second {
 		t.Errorf("cancel must stop the verify: %+v %v after %v", res, err, time.Since(start))
 	}
@@ -90,7 +90,7 @@ func TestVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 func TestVerifyRunsThroughTheShellSeam(t *testing.T) {
 	root := t.TempDir()
 	var seen []string
-	e := Env{Shell: func(_ context.Context, dir, c string) (string, int) { seen = append(seen, dir+":"+c); return "", 0 }}
+	e := Env{Config: diskConfig, Shell: func(_ context.Context, dir, c string) (string, int) { seen = append(seen, dir+":"+c); return "", 0 }}
 	if res, _ := e.Verify(context.Background(), verifyCfg(t, `["a","b"]`), root, "/work"); !res.OK() || len(seen) != 2 || seen[0] != "/work:a" {
 		t.Errorf("Shell seam not used: %v %+v", seen, res)
 	}
@@ -148,7 +148,7 @@ func TestVerifyCommandsAtWarnsOnceForLegacyKey(t *testing.T) {
 func TestVerifyWarnsThroughEnvStderr(t *testing.T) {
 	root := t.TempDir()
 	var buf strings.Builder
-	e := Env{Stderr: &buf, Shell: func(context.Context, string, string) (string, int) { return "", 0 }}
+	e := Env{Config: diskConfig, Stderr: &buf, Shell: func(context.Context, string, string) (string, int) { return "", 0 }}
 	cfg := gateCfg(t, `{"refactor":{"verifyCommands":["echo old"]}}`)
 	for i := 0; i < 2; i++ {
 		if _, err := e.Verify(context.Background(), cfg, root, root); err != nil {

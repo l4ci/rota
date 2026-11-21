@@ -194,8 +194,6 @@ func defaultDeps() *Deps {
 		PID:              os.Getpid,
 		LookPath:         exec.LookPath,
 		DiskUsage:        statDisk,
-		WorkerEnv:        func() worker.Env { return worker.Env{} },
-		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		Host:             func(kind host.Kind) host.Host { return host.New(kind, host.Deps{}) },
 		InstalledVersion: installedVersion,
 		Environ:          os.Environ,
@@ -215,6 +213,10 @@ func defaultDeps() *Deps {
 	}
 	d.TrainPlan = planTrainNudge
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
+	// The defaults carry the disk loader themselves, so a direct caller of the
+	// hook never sees a nil Config.
+	d.WorkerEnv = func() worker.Env { return worker.Env{Config: d.Config} }
+	d.EscalationEnv = func() escalation.Env { return escalation.Env{Config: d.Config} }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = tracker.ConnectionTesters()
 	// The lease reads the same clock as the worker env, so pinning Deps.Now

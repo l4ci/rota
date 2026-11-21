@@ -342,7 +342,7 @@ func TestWaitingPRsLeavesOutABouncedPR(t *testing.T) {
 		"prs":   {{"issue": "2", "branch": "b/2-y", "pr": "#12", "base": "main"}},
 	})
 	for _, issue := range []string{"1", "2"} {
-		if _, err := recordBounceVia(worker.Env{}, dir, issue, "", head); err != nil {
+		if _, err := recordBounceVia(worker.Env{Config: worker.NoConfig}, dir, issue, "", head); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -370,7 +370,7 @@ func TestWaitingPRsReviewedByHead(t *testing.T) {
 		"push clears the bounce": {
 			reviewed: []string{"a/1-x"},
 			setup: func(t *testing.T, dir string) {
-				if _, err := recordBounceVia(worker.Env{}, dir, "1", "", oldSha); err != nil {
+				if _, err := recordBounceVia(worker.Env{Config: worker.NoConfig}, dir, "1", "", oldSha); err != nil {
 					t.Fatal(err)
 				}
 			},

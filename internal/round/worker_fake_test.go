@@ -55,7 +55,7 @@ func (s stubWorker) WithAccounts(a *worker.Accounts) Worker {
 // stubbed is e's Worker as a stubWorker, wrapping it when it is not one yet.
 func stubbed(e *Env) stubWorker {
 	if e.Worker == nil {
-		e.Worker = wk(worker.Env{})
+		e.Worker = wk(worker.Env{Config: worker.NoConfig})
 	}
 	if s, ok := e.Worker.(stubWorker); ok {
 		return s

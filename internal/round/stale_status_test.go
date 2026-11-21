@@ -34,7 +34,7 @@ func TestStatusReportsStaleClaim(t *testing.T) {
 				}
 				return originalGit(ctx, dir, args...)
 			}
-			e.Worker = wk(worker.Env{Now: func() time.Time { return now }})
+			e.Worker = wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }})
 			e.Round.ClaimStaleMinutes = 240
 			if tc.local {
 				writeRegistry(t, root, slot(root, "mac-ben", "mac-ben/7-old", func(o *jsonx.Object) { o.Set("task", "7"); o.Set("claimId", "mac-ben@3") }))

@@ -14,7 +14,7 @@ func TestWithDefaultsIssuesResolvesMachineConnections(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
-	e := Env{}.WithDefaults()
+	e := Env{Config: diskConfig}.WithDefaults()
 	_, err := e.Issues(t.TempDir(), tracker.Settings{
 		Source: config.SourceJira, Connection: "work", JiraProject: "ROTA",
 	})

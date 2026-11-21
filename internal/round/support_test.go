@@ -441,7 +441,7 @@ func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
 	}
 	be.claims = map[string]string{"2": "mac-ben", "3": "main-kit"}
 	be.gone = map[string]bool{}
-	e := Env{SupportLabel: label, Worker: wk(worker.Env{})}
+	e := Env{SupportLabel: label, Worker: wk(worker.Env{Config: worker.NoConfig})}
 	got, err := e.SupportQueue(bg, be, "mac")
 	if err != nil {
 		t.Fatal(err)

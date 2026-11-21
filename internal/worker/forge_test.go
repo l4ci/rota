@@ -10,7 +10,7 @@ import (
 )
 
 func TestOpenForgeReaderRequiresRemote(t *testing.T) {
-	e := Env{
+	e := Env{Config: diskConfig,
 		Git:   func(context.Context, string, ...string) (git.Result, error) { return git.Result{ExitCode: 2}, nil },
 		Forge: func(string, string, tracker.Settings) (Forge, error) { return stateForge{}, nil },
 	}.WithDefaults()
@@ -36,7 +36,7 @@ func TestOpenForgeRefusals(t *testing.T) {
 		{name: "construction", provider: "gitlab", forgeErr: constructionErr, wantErr: constructionErr, reason: forgeOpenConstruction},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			e := Env{
+			e := Env{Config: diskConfig,
 				Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{Stdout: c.origin}, nil },
 				Forge: func(string, string, tracker.Settings) (Forge, error) {
 					if c.forgeErr == nil {
@@ -71,7 +71,7 @@ func TestOpenForgeSelection(t *testing.T) {
 			root := t.TempDir()
 			cfg := GateConfig{Tracker: tracker.Settings{Provider: c.provider, Source: "file"}, Remote: c.remote}
 			wantForge := &fakeForge{}
-			e := Env{
+			e := Env{Config: diskConfig,
 				Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 					if c.remote != "" && len(args) == 3 && args[0] == "remote" && args[2] != c.remote {
 						t.Fatalf("remote lookup = %v; want %s", args, c.remote)
@@ -99,7 +99,7 @@ func TestOpenForgeSelection(t *testing.T) {
 // A canceled remote probe says nothing about a recorded PR. Keep the wait
 // deadline's unknown answer when the shared opener uses the caller's context.
 func TestPRInfoKnownCanceledRemoteProbe(t *testing.T) {
-	e := Env{
+	e := Env{Config: diskConfig,
 		Git: func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
 			if err := ctx.Err(); err != nil {
 				return git.Result{}, err

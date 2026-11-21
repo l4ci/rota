@@ -28,7 +28,7 @@ func TestGateRemoteStage(t *testing.T) {
 		{name: "failed process", err: errors.New("chdir: no such file or directory"), message: "could not run git"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+			e := Env{Config: diskConfig, Git: func(context.Context, string, ...string) (git.Result, error) {
 				return git.Result{ExitCode: c.exit}, c.err
 			}}
 			run := gateRun{e: e, ctx: bg, root: t.TempDir(), o: GateOpts{Slot: "w1", Base: "main"}}
@@ -83,7 +83,7 @@ func TestGatePRMatchesSuppliedHead(t *testing.T) {
 	dir := gittest.NewRepo(t, "main")
 	gittest.Commit(t, dir, "head", "work.txt", "work")
 	head := gittest.Run(t, dir, "rev-parse", "HEAD")
-	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
+	run := gateRun{e: Env{Config: diskConfig, Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
 	for _, c := range []struct{ name, branch, base, verdict string }{
 		{"matching", "kit/5-second", "main", ""},
 		{"another branch", "kit/6-other", "main", landing.GatePRMismatch},
@@ -113,7 +113,7 @@ func TestGateReferenceStage(t *testing.T) {
 	gittest.Run(t, dir, "checkout", "-q", "-b", "worker")
 	gittest.Commit(t, dir, "worker", "worker.txt", "worker")
 	head := gittest.Run(t, dir, "rev-parse", "HEAD")
-	run := gateRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "worker", Base: "main"}}
+	run := gateRun{e: Env{Config: diskConfig, Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "worker", Base: "main"}}
 	answer := landing.GateResult{Slot: "worker", Base: "main"}
 	out, result, done, err := run.stepRefs(answer, "worker", false)
 	if err != nil || done || result.Verdict != "" {
@@ -127,7 +127,7 @@ func TestGateReferenceStage(t *testing.T) {
 // A successful merge followed by a failed read-back has already changed base.
 // It must not look like a successful gate or invite another merge attempt.
 func TestGateLocalStageReadbackFailure(t *testing.T) {
-	e := Env{Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+	e := Env{Config: diskConfig, Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 		if args[0] == "rev-parse" {
 			return git.Result{ExitCode: 128, Stderr: "cannot read landed commit"}, nil
 		}

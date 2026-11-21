@@ -117,10 +117,12 @@ type Env struct {
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
 	// Config returns the merged project config every worker verb reads (dispatch,
-	// pool init, preflight, account meters, the operator command, the gate); nil
-	// loads .rota/config.json. It is the one disk read of config in this package:
-	// tests hand it an in-memory config. Harness adapters receive a typed
-	// harness.ConfigFor view at their call boundary.
+	// pool init, preflight, account meters, the operator command, the gate). It is
+	// required: WithDefaults panics on nil rather than fall back to defaults. The
+	// disk loader is cli's Deps.Config, which every production Env carries; this
+	// package reads no config file itself. A test hands an in-memory config, a
+	// disk reader, or NoConfig for the schema defaults. Harness
+	// adapters receive a typed harness.ConfigFor view at their call boundary.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the
 	// account's headroom when a pane reports done. Nil records none.
@@ -134,9 +136,11 @@ type Env struct {
 	Registry func(root string) Registry
 }
 
-// defaultConfig is the Config of an Env that sets none: no config, the schema
-// defaults. cli's Deps fills Env.Config; worker tests swap in a disk reader.
-var defaultConfig = func(string) any { return nil }
+// NoConfig is the Config of an Env that wants the schema defaults: no config
+// at all. It is a named choice (a test hands it in); an Env that sets no Config
+// is refused by WithDefaults, so a production Env cannot silently ignore the
+// project's config.
+func NoConfig(string) any { return nil }
 
 // procs is the process table: the injected one, else this machine's.
 func (e Env) procs() pidlive.Source {
@@ -188,7 +192,7 @@ func (e Env) WithDefaults() Env {
 		}
 	}
 	if e.Config == nil {
-		e.Config = defaultConfig
+		panic("worker.Env: Config is required: set it to cli's Deps.Config (the disk loader), or worker.NoConfig for the schema defaults")
 	}
 	if e.Issues == nil {
 		e.Issues = func(dir string, s tracker.Settings) (Issues, error) {
