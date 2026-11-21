@@ -21,7 +21,7 @@ func TestGateVerdictRequiresResolvedHead(t *testing.T) {
 		{name: "failed lookup with output", out: "abcdef0", code: 128},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := Env{Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+			e := Env{Config: diskConfig, Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 				if strings.Join(args, " ") != "rev-parse --short feature" {
 					t.Fatalf("unexpected git call: %v", args)
 				}

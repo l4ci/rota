@@ -138,7 +138,7 @@ func TestClearLabelClearsASlotWithAHandle(t *testing.T) {
 	if got := strings.Join(f.titles, ","); got != "w1=" {
 		t.Errorf("titles = %q", got)
 	}
-	Env{}.ClearLabel(bg, dir, "w1") // zero Env: real host default, slot unknown to it, no panic
+	Env{Config: diskConfig}.ClearLabel(bg, dir, "w1") // zero Env: real host default, slot unknown to it, no panic
 }
 
 func TestReapClearsTheLabelBeforeDropping(t *testing.T) {

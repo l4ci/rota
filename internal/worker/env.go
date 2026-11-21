@@ -118,9 +118,10 @@ type Env struct {
 	LookPath func(string) (string, error)
 	// Config returns the merged project config every worker verb reads (dispatch,
 	// pool init, preflight, account meters, the operator command, the gate); nil
-	// loads .rota/config.json. It is the one disk read of config in this package:
-	// tests hand it an in-memory config. Harness adapters receive a typed
-	// harness.ConfigFor view at their call boundary.
+	// means no config at all (schema defaults), never the disk: the disk loader
+	// is cli's Deps.Config, which every production Env carries. This package
+	// reads no config file itself; tests hand it an in-memory config. Harness
+	// adapters receive a typed harness.ConfigFor view at their call boundary.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the
 	// account's headroom when a pane reports done. Nil records none.
@@ -134,9 +135,10 @@ type Env struct {
 	Registry func(root string) Registry
 }
 
-// defaultConfig is the Config of an Env that sets none: no config, the schema
-// defaults. cli's Deps fills Env.Config; worker tests swap in a disk reader.
-var defaultConfig = func(string) any { return nil }
+// noConfig is the Config of an Env that sets none: no config, so every reader
+// sees the schema defaults. Production Envs never take it: cli's Deps fills
+// Env.Config with the disk loader, and tests that need a config hand one in.
+func noConfig(string) any { return nil }
 
 // procs is the process table: the injected one, else this machine's.
 func (e Env) procs() pidlive.Source {
@@ -188,7 +190,7 @@ func (e Env) WithDefaults() Env {
 		}
 	}
 	if e.Config == nil {
-		e.Config = defaultConfig
+		e.Config = noConfig
 	}
 	if e.Issues == nil {
 		e.Issues = func(dir string, s tracker.Settings) (Issues, error) {

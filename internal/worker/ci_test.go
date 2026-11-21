@@ -22,7 +22,8 @@ const ciCfg = `{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test"]
 // ciEnv is w.env with the CI waits ended on the first poll.
 func (w *world) ciEnv() Env {
 	return Env{
-		Sleep: func(time.Duration) {},
+		Config: diskConfig,
+		Sleep:  func(time.Duration) {},
 		Getenv: func(k string) string {
 			return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "ROTA_CI_POLL": "0", "ROTA_CI_START_WAIT": "0", "ROTA_CI_TIMEOUT": "0"}[k]
 		},

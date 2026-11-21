@@ -54,7 +54,7 @@ func usageDir(t *testing.T) string {
 
 func goMeters(t *testing.T, dir, usage string) []usagelimit.Meter {
 	t.Helper()
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Config: diskConfig, Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
@@ -174,7 +174,7 @@ func TestAccountPickSkipsAccountWithoutLogin(t *testing.T) {
 	}
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
 	dir := gittest.Project(t, cfg)
-	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	acc := &Accounts{Env: Env{Config: diskConfig, Getenv: func(string) string { return empty }}}
 	name, ok := acc.Pick(bg, dir, nil)
 	if !ok || name != "beta" {
 		t.Errorf("Pick = %q, %v; want beta (alpha has no login)", name, ok)
@@ -189,7 +189,7 @@ func TestAccountAssign(t *testing.T) {
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	got := map[string]string{} // workers.json after each assign
 	usage := usageDir(t)
-	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Config: diskConfig, Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
@@ -239,7 +239,7 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 	cfg := `{"round":{"accounts":[{"name":"beta","configDir":"/acct/beta"}]}}`
 	dir := gittest.Project(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Config: diskConfig, Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usageDir(t)
 		}
@@ -256,13 +256,13 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 func TestPoolInitSpreadsAccounts(t *testing.T) {
 	b := gittest.Project(t, acctConfig)
 	usage := usageDir(t)
-	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Config: diskConfig, Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
 	}}}
-	if _, err := (Env{}).PoolInit(bg, b, InitOpts{Slots: 5, Base: "main"}, acc); err != nil {
+	if _, err := (Env{Config: diskConfig}).PoolInit(bg, b, InitOpts{Slots: 5, Base: "main"}, acc); err != nil {
 		t.Fatal(err)
 	}
 	golden.Check(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "argv": "init --slots 5 --base main"}, map[string]string{"workers.json": registry(t, b)})
@@ -285,7 +285,7 @@ func TestAccountNoPickReasonNamesLoginlessAccounts(t *testing.T) {
 	empty := t.TempDir()
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
 	dir := gittest.Project(t, cfg)
-	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	acc := &Accounts{Env: Env{Config: diskConfig, Getenv: func(string) string { return empty }}}
 	if _, ok := acc.Pick(bg, dir, nil); ok {
 		t.Fatal("Pick found an account without any login")
 	}
@@ -309,7 +309,7 @@ func TestAccountAssignAllLoginlessNamesLogin(t *testing.T) {
 	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
 	b := gittest.Project(t, cfg)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
-	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	acc := &Accounts{Env: Env{Config: diskConfig, Getenv: func(string) string { return empty }}}
 	_, _, err := acc.Assign(bg, b, "w1", "")
 	if err == nil {
 		t.Fatal("Assign with no login anywhere succeeded")
@@ -330,7 +330,7 @@ func TestAccountsLoginReadsWithEnvClock(t *testing.T) {
 		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"kc"}}` + "\n"}, nil
 	}}
 	later := time.UnixMilli(2000000000000).Add(time.Hour)
-	acc := &Accounts{Login: kc, Env: Env{Now: func() time.Time { return later }}}
+	acc := &Accounts{Login: kc, Env: Env{Config: diskConfig, Now: func() time.Time { return later }}}
 	if why := acc.login().Problem(dir); why != "" || reads != 1 {
 		t.Errorf("Problem = %q after %d Keychain reads, want usable through one read", why, reads)
 	}
@@ -346,7 +346,7 @@ func TestAccountAssignOnACodexSlotWritesTheClaudeKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	usage := usageDir(t)
-	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Config: diskConfig, Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}

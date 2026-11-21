@@ -17,7 +17,7 @@ import (
 // worker registry, forge, config file, or earlier planning call in this test.
 func TestTrainVerifySuppliedPlan(t *testing.T) {
 	dir := t.TempDir()
-	e := Env{Shell: func(_ context.Context, where, command string) (string, int) {
+	e := Env{Config: diskConfig, Shell: func(_ context.Context, where, command string) (string, int) {
 		if where != dir || command != "e2e" {
 			t.Fatalf("unexpected verify %q in %q", command, where)
 		}
@@ -54,7 +54,7 @@ func TestTrainVacuousSuppliedPrefix(t *testing.T) {
 	gittest.Run(t, dir, "add", "work.test")
 	gittest.Commit(t, dir, "second", "second.txt", "second")
 	second := gittest.Run(t, dir, "rev-parse", "HEAD")
-	tr := trainRun{e: Env{Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: TrainOpts{LandGreen: true}}
+	tr := trainRun{e: Env{Config: diskConfig, Git: git.Exec}.WithDefaults(), ctx: bg, root: dir, o: TrainOpts{LandGreen: true}}
 	p := trainPlan{tips: []string{base, first, second}, in: gateInput{cfg: ParseGateConfig(decodeCfg(t,
 		`{"test":{"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`))}}
 	answer := landing.TrainResult{Members: []landing.TrainMember{{Target: "first", Culprit: true}, {Target: "second"}}}

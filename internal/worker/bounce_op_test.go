@@ -8,7 +8,7 @@ import (
 func registryStore(t *testing.T) (BounceStore, string) {
 	t.Helper()
 	root := bounceRoot(t, `{"issues":{"source":"github"}}`)
-	st, err := Env{}.BounceStore(root)
+	st, err := Env{Config: diskConfig}.BounceStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

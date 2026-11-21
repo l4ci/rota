@@ -52,7 +52,7 @@ func TestPortBlockHonoursConfig(t *testing.T) {
 func TestReapReleasesPortBlock(t *testing.T) {
 	b := gittest.Project(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
-	if _, err := (Env{}).Reap(b, []string{"w2"}, false); err != nil {
+	if _, err := (Env{Config: diskConfig}).Reap(b, []string{"w2"}, false); err != nil {
 		t.Fatal(err)
 	}
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})

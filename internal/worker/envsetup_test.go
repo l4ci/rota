@@ -28,7 +28,7 @@ func (r *setupRecorder) shell(_ context.Context, dir, command string) (string, i
 
 func setupInit(t *testing.T, r *setupRecorder, dir string, slots int) error {
 	t.Helper()
-	_, err := Env{Shell: r.shell}.PoolInit(bg, dir, InitOpts{Slots: slots, Base: "main"}, &Accounts{})
+	_, err := Env{Config: diskConfig, Shell: r.shell}.PoolInit(bg, dir, InitOpts{Slots: slots, Base: "main"}, &Accounts{})
 	return err
 }
 

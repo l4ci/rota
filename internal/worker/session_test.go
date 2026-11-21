@@ -61,7 +61,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 	dir := gittest.Project(t, `{"orchestrator":{"model":"fable"}}`)
 	instr := writeBrief(t, "go\n")
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
-	st, err := (Env{NewHost: func(host.Kind) host.Host { return oh }}).SessionEnsure(bg, dir, SessionOpts{Session: "ops", BodyFile: instr, BootTimeout: 9})
+	st, err := (Env{Config: diskConfig, NewHost: func(host.Kind) host.Host { return oh }}).SessionEnsure(bg, dir, SessionOpts{Session: "ops", BodyFile: instr, BootTimeout: 9})
 	if err != nil || !st.HandedOff || st.Session != "ops" {
 		t.Fatalf("%+v %v", st, err)
 	}
@@ -72,7 +72,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 	// default session and command
 	oh2 := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
 	dir2 := gittest.Project(t, `{"orchestrator":{"command":"my-claude"}}`)
-	(Env{NewHost: func(host.Kind) host.Host { return oh2 }}).SessionEnsure(bg, dir2, SessionOpts{})
+	(Env{Config: diskConfig, NewHost: func(host.Kind) host.Host { return oh2 }}).SessionEnsure(bg, dir2, SessionOpts{})
 	if oh2.opts.Session != "rota" || oh2.opts.Command != "my-claude" || oh2.opts.BootTimeout != 60 {
 		t.Errorf("opts = %+v", oh2.opts)
 	}
@@ -81,7 +81,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 func TestSessionEnsureFailures(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
-	e := Env{NewHost: func(host.Kind) host.Host { return oh }}
+	e := Env{Config: diskConfig, NewHost: func(host.Kind) host.Host { return oh }}
 	_, err := e.SessionEnsure(bg, dir, SessionOpts{BodyFile: "/no/such"})
 	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "instruction file not found") {
 		t.Errorf("missing body: %v", err)

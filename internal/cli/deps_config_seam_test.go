@@ -74,3 +74,20 @@ func TestShipStrategyReadsInMemoryConfig(t *testing.T) {
 
 // diskConfig reads the .rota/config.json a test wrote, as the real Deps.Config does.
 func diskConfig(root string) any { return config.Load(cfgdir.OSEnv(), root) }
+
+// The production Deps hands every worker Env the disk config loader, so a
+// worker verb reads .rota/config.json in production as it does in tests.
+func TestProductionWorkerEnvReadsDiskConfig(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"git":{"remote":"from-disk"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	env := defaultDeps().workerEnv().WithDefaults()
+	if got, err := config.GitRemote(env.Config(root)); err != nil || got != "from-disk" {
+		t.Fatalf("worker Env git.remote = %q, %v; want from-disk read from .rota/config.json", got, err)
+	}
+}

@@ -143,8 +143,9 @@ func (w *world) forgeWord(key string) string {
 // env builds the Go Env around a fake Forge over the world's bare origin.
 func (w *world) env(brokenMergeBase bool) Env {
 	return Env{
-		Lease: w.lease,
-		Sleep: func(time.Duration) {},
+		Config: diskConfig,
+		Lease:  w.lease,
+		Sleep:  func(time.Duration) {},
 		Getenv: func(k string) string {
 			return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": os.Getenv("PATH"), "HOME": os.Getenv("HOME")}[k]
 		},
@@ -710,17 +711,17 @@ func TestBounceCount(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for want := 1; want <= 3; want++ {
-		if n, err := recordBounceVia(Env{}, root, "31", "", ""); err != nil || n != want {
+		if n, err := recordBounceVia(Env{Config: diskConfig}, root, "31", "", ""); err != nil || n != want {
 			t.Fatalf("bounce %d: got %d, %v", want, n, err)
 		}
 	}
-	if n, _ := recordBounceVia(Env{}, root, "32", "", ""); n != 1 {
+	if n, _ := recordBounceVia(Env{Config: diskConfig}, root, "32", "", ""); n != 1 {
 		t.Errorf("counts are per item, got %d for another", n)
 	}
 	if err := ClearBounces(root, "31"); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := recordBounceVia(Env{}, root, "31", "", ""); n != 1 {
+	if n, _ := recordBounceVia(Env{Config: diskConfig}, root, "31", "", ""); n != 1 {
 		t.Errorf("cleared count restarts, got %d", n)
 	}
 }
@@ -737,7 +738,7 @@ func TestRecordBounceCappedConcurrentNeverExceedsMax(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			n, _, c, err := recordBounceCappedVia(Env{}, nil, root, "31", "", fmt.Sprintf("head%d", i), max)
+			n, _, c, err := recordBounceCappedVia(Env{Config: diskConfig}, nil, root, "31", "", fmt.Sprintf("head%d", i), max)
 			if err != nil || n > max {
 				t.Errorf("caller %d: n=%d err=%v", i, n, err)
 			}
@@ -755,10 +756,10 @@ func TestRecordBounceCappedConcurrentNeverExceedsMax(t *testing.T) {
 	if n := LoadRegistryTolerant(root).Bounces("31"); n != max {
 		t.Errorf("registry holds %d bounces, want %d", n, max)
 	}
-	if n, _, c, _ := recordBounceCappedVia(Env{}, nil, root, "31", "", "late", max); !c || n != max {
+	if n, _, c, _ := recordBounceCappedVia(Env{Config: diskConfig}, nil, root, "31", "", "late", max); !c || n != max {
 		t.Errorf("at the cap: n=%d capped=%v", n, c)
 	}
-	if n, _, c, _ := recordBounceCappedVia(Env{}, nil, root, "31", "", "late", 0); c || n != max+1 {
+	if n, _, c, _ := recordBounceCappedVia(Env{Config: diskConfig}, nil, root, "31", "", "late", 0); c || n != max+1 {
 		t.Errorf("cap 0 is off: n=%d capped=%v", n, c)
 	}
 }
@@ -767,11 +768,11 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for i := 0; i < 3; i++ {
-		if n, _ := recordBounceVia(Env{}, root, "31", "", "aaa"); n != 1 {
+		if n, _ := recordBounceVia(Env{Config: diskConfig}, root, "31", "", "aaa"); n != 1 {
 			t.Fatalf("same head re-gated: got %d, want 1", n)
 		}
 	}
-	if n, _ := recordBounceVia(Env{}, root, "31", "", "bbb"); n != 2 {
+	if n, _ := recordBounceVia(Env{Config: diskConfig}, root, "31", "", "bbb"); n != 2 {
 		t.Errorf("new head counts, got %d", n)
 	}
 }

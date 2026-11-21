@@ -13,7 +13,7 @@ import (
 // ancestryEnv answers every git call with exit 0 and stdout "sha", except the
 // ancestry query, which exits with code.
 func ancestryEnv(code int) Env {
-	return Env{Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+	return Env{Config: diskConfig, Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 		if len(args) > 1 && args[0] == "merge-base" && args[1] == "--is-ancestor" {
 			return git.Result{ExitCode: code, Stderr: "fatal: bad ref"}, nil
 		}
