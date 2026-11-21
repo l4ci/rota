@@ -65,6 +65,28 @@ func TestFreezeLineSanitizesAndBoundsFields(t *testing.T) {
 	}
 }
 
+func TestRecordBinds(t *testing.T) {
+	cases := []struct {
+		name string
+		r    *Record
+		base string
+		want bool
+	}{
+		{"nil record", nil, "main", false},
+		{"active same base", &Record{Active: true, Base: "main"}, "main", true},
+		{"active other base", &Record{Active: true, Base: "main"}, "release", false},
+		{"inactive same base", &Record{Active: false, Base: "main"}, "main", false},
+		{"inactive other base", &Record{Active: false, Base: "main"}, "release", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.r.Binds(tc.base); got != tc.want {
+				t.Fatalf("Binds(%q) = %v, want %v", tc.base, got, tc.want)
+			}
+		})
+	}
+}
+
 // ValidateRepair and the samePR match must agree on what a PR reference is.
 func TestRepairPRValidateAndMatchAgree(t *testing.T) {
 	const url = "https://github.com/o/r/pull/12"
@@ -174,6 +196,9 @@ func freezeRunner(t *testing.T, body string) git.Runner {
 func TestDecide(t *testing.T) {
 	const sha = `"sha":"0123456789012345678901234567890123456789"`
 	active := `{"active":true,"base":"main",` + sha + `,"repairIssue":"13","repairPR":"https://github.com/o/r/pull/7"}`
+	active2 := func(repairPR string) string {
+		return `{"active":true,"base":"main",` + sha + `,"repairPR":"` + repairPR + `"}`
+	}
 	for _, tc := range []struct {
 		name, body string
 		s          Subject
@@ -189,8 +214,15 @@ func TestDecide(t *testing.T) {
 		{"repair PR by URL", active, Subject{Base: "main", PR: "7"}, true, false, ""},
 		{"same-number PR of another repo", active, Subject{Base: "main", PR: "https://github.com/other/repo/pull/7"}, false, false, repairHint},
 		{"repair on another base", active, Subject{Base: "release", Issue: "13"}, false, false, baseHint},
-		{"assign ignores base", active, Subject{Issue: "13"}, true, false, ""},
-		{"assign refuses unrelated", active, Subject{Issue: "12"}, false, false, repairHint},
+		{"assign ignores base", active, Subject{AnyBase: true, Issue: "13"}, true, false, ""},
+		{"empty base refuses repair", active, Subject{Issue: "13"}, false, false, baseHint},
+		{"empty base on no freeze admits", "", Subject{Issue: "13"}, true, false, ""},
+		{"repair PR zero-padded", active2("007"), Subject{Base: "main", PR: "https://github.com/o/r/pull/7"}, true, false, ""},
+		{"repair PR with hash", active2("#7"), Subject{Base: "main", PR: "https://github.com/o/r/pull/7"}, true, false, ""},
+		{"repair PR URL with query", active2("https://github.com/o/r/pull/7?diff=split"), Subject{Base: "main", PR: "https://github.com/o/r/pull/7"}, true, false, ""},
+		{"repair PR other repo URL", active2("https://github.com/other/repo/pull/7"), Subject{Base: "main", PR: "https://github.com/o/r/pull/7"}, false, false, repairHint},
+		{"repair PR other number", active2("7"), Subject{Base: "main", PR: "https://github.com/o/r/pull/8"}, false, false, repairHint},
+		{"assign refuses unrelated", active, Subject{AnyBase: true, Issue: "12"}, false, false, repairHint},
 		{"queue on frozen base", active, Subject{Base: "main", Queue: true}, true, false, ""},
 		{"queue on other base", active, Subject{Base: "release", Queue: true}, false, false, baseHint},
 	} {

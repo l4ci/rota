@@ -135,9 +135,12 @@ func (r *Record) allows(issue, pr string) bool {
 
 // Subject is what a landing or assignment asks to do while a freeze may hold.
 type Subject struct {
-	// Base is the branch the work lands on. "" means the base is not known yet
-	// (round assign resolves it after the claim), so the base is not judged.
+	// Base is the branch the work lands on. An empty Base never binds, so it
+	// refuses under an active freeze (fail closed) unless AnyBase is set.
 	Base string
+	// AnyBase skips the base check: round assign resolves the item's base only
+	// after the claim, so it admits by repair designation alone.
+	AnyBase bool
 	// Issue and PR name the work; either may be "".
 	Issue, PR string
 	// Queue judges the base alone, for a train's queue-wide refusal before any
@@ -165,7 +168,7 @@ const (
 // Decide is the one admission rule every caller shares: no active freeze
 // admits; an unreadable record refuses; a known base other than the frozen one
 // refuses; otherwise only the designated repair (by issue or PR) is admitted.
-// Assign passes no Base, so it admits by repair designation alone: the item's
+// Assign sets AnyBase, so it admits by repair designation alone: the item's
 // base is resolved only after the claim, and a freeze blocks every unrelated
 // assignment whatever branch it targets.
 func Decide(ctx context.Context, run git.Runner, root string, s Subject) Decision {
@@ -180,7 +183,7 @@ func (r *Record) decide(s Subject) Decision {
 	if !r.frozen() {
 		return Decision{Admit: true}
 	}
-	if s.Base != "" && !r.Binds(s.Base) {
+	if !s.AnyBase && !r.Binds(s.Base) {
 		return Decision{Frozen: true, Line: r.Line(), Hint: baseHint}
 	}
 	if s.Queue || r.allows(s.Issue, s.PR) {
