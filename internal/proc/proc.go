@@ -180,13 +180,7 @@ func start(cmd *exec.Cmd, onStart func(p *os.Process)) error {
 
 // detach starts c without ctx or a timeout and reaps it in the background.
 func detach(c Cmd) (Result, error) {
-	cmd := exec.Command(c.Name, c.Args...)
-	cmd.Dir = c.Dir
-	if c.Environ != nil {
-		cmd.Env = c.Environ
-	} else if len(c.Env) > 0 {
-		cmd.Env = append(os.Environ(), c.Env...)
-	}
+	cmd := newCmd(nil, c)
 	if c.Stdio != nil {
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdio.In, c.Stdio.Out, c.Stdio.Err
 	}

@@ -2,8 +2,10 @@ package proc
 
 import (
 	"context"
+	"io"
 	"os"
 	"slices"
+	"syscall"
 	"testing"
 )
 
@@ -45,5 +47,35 @@ func TestNewCmdEnvAndGroupRules(t *testing.T) {
 				t.Errorf("Setpgid = %v, want %v", got, tc.wantGroup)
 			}
 		})
+	}
+}
+
+func TestDetachBuildsThroughNewCmd(t *testing.T) {
+	dir := t.TempDir()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	var pid, pgid int
+	_, err = Run(context.Background(), Cmd{
+		Name: "sh", Args: []string{"-c", "pwd; echo $PROC_D"},
+		Dir: dir, Env: []string{"PROC_D=detached"}, Group: true, Detach: true,
+		Stdio: &Stdio{Out: w},
+		OnStart: func(p *os.Process) {
+			pid = p.Pid
+			pgid, _ = syscall.Getpgid(p.Pid)
+		},
+	})
+	w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pgid != pid {
+		t.Errorf("detached Group command: pgid = %d, want its own group %d", pgid, pid)
+	}
+	out, _ := io.ReadAll(r)
+	if want := dir + "\ndetached\n"; string(out) != want {
+		t.Errorf("Dir/Env not applied: output %q, want %q", out, want)
 	}
 }
