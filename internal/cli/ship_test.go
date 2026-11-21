@@ -211,7 +211,7 @@ func TestShipBodyIssueMode(t *testing.T) {
 	shipBranchOf(t, work, "feat/t",
 		[3]string{"a.txt", "feat: export [F07]", ""},
 		[3]string{"b.txt", "fix: crash [B09]", "Refs [F99]"})
-	deps := useForge(t, shipPRForge("https://x.test/pr/5"))
+	deps := useForge(t, shipPRForge("https://x.test/pull/5"))
 	deps.NewTracker = withTracker(t, issueFixture()).NewTracker
 
 	o := trRunWith(t, deps, work, "", "ship", "body", "feat/t")
@@ -475,7 +475,7 @@ func TestShipPRIssueMode(t *testing.T) {
 			cfg := `{"forge": {"provider": "` + prov + `"}, "issues": {"source": "` + prov + `"}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/i", [3]string{"i.txt", "work", ""})
-			f := shipPRForge("https://x.test/pr/5")
+			f := shipPRForge("https://x.test/pull/5")
 			deps := useForge(t, f)
 			deps.NewTracker = withTracker(t, issueFixture()).NewTracker
 
