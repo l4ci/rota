@@ -158,12 +158,13 @@ func ReadOrchestratorNote(path string, consume bool) (note *OrchestratorNote, wa
 	return out, warn
 }
 
-// HandoffRole picks which handoff rule applies to a session.
+// HandoffRole picks which handoff rule applies to a session. The zero value is
+// no role: an unset Role resolves to no path.
 type HandoffRole int
 
 const (
 	// RoleOrchestrator files its note under the base branch.
-	RoleOrchestrator HandoffRole = iota
+	RoleOrchestrator HandoffRole = iota + 1
 	// RoleWorkSession files its note under its own checked-out branch.
 	RoleWorkSession
 )

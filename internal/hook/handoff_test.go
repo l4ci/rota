@@ -69,6 +69,7 @@ func TestResolveHandoff(t *testing.T) {
 		"orchestrator uses base":       {HandoffFacts{Role: RoleOrchestrator, Root: root, Branch: "feat", Base: "main"}, NotePath(root, "main")},
 		"orchestrator without base":    {HandoffFacts{Role: RoleOrchestrator, Root: root, Branch: "feat"}, ""},
 		"work session uses own branch": {HandoffFacts{Role: RoleWorkSession, Root: root, Branch: "feat", Base: "main"}, NotePath(root, "feat")},
+		"unset role":                   {HandoffFacts{Root: root, Branch: "feat", Base: "main"}, ""},
 		"work session detached HEAD":   {HandoffFacts{Role: RoleWorkSession, Root: root, Base: "main"}, ""},
 	}
 	for name, c := range cases {
