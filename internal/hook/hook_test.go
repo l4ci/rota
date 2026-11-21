@@ -532,3 +532,34 @@ func TestSweepSessionSidecars(t *testing.T) {
 		})
 	}
 }
+
+func TestIsOursOwnership(t *testing.T) {
+	cases := []struct {
+		kind EntryKind
+		cmd  string
+		want bool
+	}{
+		{StatusLineEntry, "rota statusline dump", true},
+		{StatusLineEntry, "rota statusline dump --then 'x'", true},
+		{StatusLineEntry, "rota statusline dumpling", false},
+		{StatusLineEntry, "echo 'rota statusline dump'", false},
+		{HookEntry, "rota hook stop # rota-hook", true},
+		{HookEntry, "~/bin/rota hook guard # rota-hook", true},
+		{HookEntry, "other-tool --note '# rota-hook'", false},
+		{HookEntry, "echo hi # rota-hook", false},
+		{HookEntry, "rota hook stop # rota-hook-extra", false},
+		{HookEntry, "mine.sh", false},
+	}
+	for _, c := range cases {
+		if got := IsOurs(c.kind, c.cmd); got != c.want {
+			t.Errorf("IsOurs(%d, %q) = %v, want %v", c.kind, c.cmd, got, c.want)
+		}
+	}
+}
+
+func TestUninstallKeepsForeignHookQuotingMarker(t *testing.T) {
+	o := parse(t, `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"other --note '# rota-hook'"}]}]}}`)
+	if got := Uninstall(o); len(got) != 0 {
+		t.Fatalf("removed foreign hook: %v", got)
+	}
+}
