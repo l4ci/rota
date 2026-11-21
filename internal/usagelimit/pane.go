@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/pystr"
@@ -33,7 +32,11 @@ func LimitRegex() string {
 // kind's own (PaneVocab.Limits; "" has none). An "Approaching" warning matches
 // the phrases but is not a limit, so it is skipped here and nowhere else.
 func FindLimit(kind, text string) (start, end int, ok bool) {
-	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), RulesFor(kind).Limits...) {
+	return findLimit(RulesFor(kind), text)
+}
+
+func findLimit(rules *Rules, text string) (start, end int, ok bool) {
+	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), rules.Limits...) {
 		for _, loc := range re.FindAllStringIndex(text, -1) {
 			if strings.Contains(strings.ToLower(text[loc[0]:loc[1]]), "approaching") {
 				continue
@@ -252,9 +255,11 @@ var reSpinner = regexp.MustCompile(`^\s*[✻✶✽✢✳·*]\s+\S.*…`)
 // StripRelays is text without the echoed orchestrator blocks, the way
 // lastSentinel skips them: a limit phrase a brief or relay quotes is the
 // orchestrator's, not the session's. kind picks the gutter reading.
-func StripRelays(kind, text string) string {
+func StripRelays(kind, text string) string { return stripRelays(RulesFor(kind), text) }
+
+func stripRelays(rules *Rules, text string) string {
 	lines := pystr.Splitlines(text)
-	mask := RelayMask(lines, RulesFor(kind).Gutter, true)
+	mask := RelayMask(lines, rules.Gutter, true)
 	kept := lines[:0:0]
 	for i, l := range lines {
 		if !mask[i] {
@@ -264,54 +269,19 @@ func StripRelays(kind, text string) string {
 	return strings.Join(kept, "\n")
 }
 
-// Rules are a kind's PaneVocab compiled.
-type Rules struct {
-	Retry, Busy, Waiting, Background, Limits []*regexp.Regexp
-	AuthDead, BadModel                       *regexp.Regexp
-	LoggedOut                                *regexp.Regexp
-	LoggedOutAdvice                          string
-	Gutter                                   bool
+// Rules are a Pane's PaneVocab compiled; the harness owns and caches them.
+type Rules = harness.PaneRules
+
+// paneOf is the Pane of a kind; nil for a kind that is not a worker harness.
+// "" is the default harness.
+func paneOf(kind string) harness.Pane {
+	p, _ := harness.LookupPane(kind)
+	return p
 }
 
-var (
-	paneRulesMu    sync.Mutex
-	paneRulesCache = map[string]*Rules{}
-)
-
-// RulesFor is the compiled vocabulary of a kind. The harness resolves an
-// unset kind to its default; a kind that is not a worker harness has no rules.
-func RulesFor(kind string) *Rules {
-	h, known := harness.LookupPane(kind)
-	if known {
-		kind = h.Kind()
-	}
-	paneRulesMu.Lock()
-	defer paneRulesMu.Unlock()
-	if r, ok := paneRulesCache[kind]; ok {
-		return r
-	}
-	r := &Rules{}
-	if known {
-		v := h.PaneVocab()
-		r.Retry, r.Busy = CompileAll(`(?i)`, v.Retry), CompileAll(`(?i)`, v.Busy)
-		r.Waiting = CompileAll(`(?i)`, v.Waiting)
-		r.Background = CompileAll(`(?i)`, v.Background)
-		r.Limits = CompileAll(`(?i)`, v.Limits)
-		if v.AuthDead != "" {
-			r.AuthDead = regexp.MustCompile(`(?i)` + v.AuthDead)
-		}
-		if v.LoggedOut != "" {
-			r.LoggedOut = regexp.MustCompile(`(?i)` + v.LoggedOut)
-			r.LoggedOutAdvice = v.LoggedOutAdvice
-		}
-		if v.BadModel != "" {
-			r.BadModel = regexp.MustCompile(v.BadModel)
-		}
-		r.Gutter = v.Gutter
-	}
-	paneRulesCache[kind] = r
-	return r
-}
+// RulesFor is the compiled vocabulary of a kind, for callers that hold only
+// the kind string. A kind that is not a worker harness has no rules.
+func RulesFor(kind string) *Rules { return harness.RulesOf(paneOf(kind)) }
 
 // AnyMatch reports whether any pattern matches s.
 func AnyMatch(res []*regexp.Regexp, s string) bool {
@@ -360,7 +330,12 @@ type Hit struct {
 // Detect is the one chain that decides what a usage limit is: scope the pane,
 // strip echoed relays, keep the harness's dialog region, find the limit
 // phrase. The worker classifier and the limits watcher both call it.
-func Detect(kind, text string, sc Scope) (Hit, bool) {
+func Detect(kind, text string, sc Scope) (Hit, bool) { return DetectPane(paneOf(kind), text, sc) }
+
+// DetectPane is Detect for the Pane that wrote the text, so a caller holding
+// an adapter (or a test one) need not name a registered kind.
+func DetectPane(p harness.Pane, text string, sc Scope) (Hit, bool) {
+	rules := harness.RulesOf(p)
 	if re := promptRe(sc.Prompt); re != nil {
 		if locs := re.FindAllStringIndex(text, -1); len(locs) > 0 {
 			text = text[locs[len(locs)-1][1]:]
@@ -374,10 +349,10 @@ func Detect(kind, text string, sc Scope) (Hit, bool) {
 		text = strings.Join(lines, "\n")
 	}
 	var h Hit
-	h.Own = StripRelays(kind, text)
-	h.Dialog = DialogFor(kind, h.Own)
+	h.Own = stripRelays(rules, text)
+	h.Dialog = DialogRegion(h.Own, rules.Busy)
 	var ok bool
-	if h.Start, h.End, ok = FindLimit(kind, h.Dialog); !ok {
+	if h.Start, h.End, ok = findLimit(rules, h.Dialog); !ok {
 		return h, false
 	}
 	d := h.Dialog

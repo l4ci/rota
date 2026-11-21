@@ -660,3 +660,27 @@ func TestClassifyLoggedOutPrintsTheKindsOwnAdvice(t *testing.T) {
 		}
 	}
 }
+
+// fakePane is a Pane no harness registers: classification must read its
+// vocabulary without a kind.
+type fakePane struct{ v harness.PaneVocab }
+
+func (fakePane) Kind() string   { return "fake" }
+func (fakePane) RawPaste() bool { return false }
+func (fakePane) PromptAcknowledgement() harness.PromptAcknowledgement {
+	return harness.PromptAcknowledgement{}
+}
+func (f fakePane) PaneVocab() harness.PaneVocab { return f.v }
+
+func TestClassifyPaneReadsAnUnregisteredAdapter(t *testing.T) {
+	p := fakePane{harness.PaneVocab{Busy: []string{`crunching beans`}, Limits: []string{`beans exhausted`}}}
+	if st, _ := ClassifyPane(p, "crunching beans\n", false, 0, ""); st != StateBusy {
+		t.Errorf("busy vocab: state = %q, want %q", st, StateBusy)
+	}
+	if st, _ := ClassifyPane(p, "beans exhausted\n", false, 0, ""); st != StateLimited {
+		t.Errorf("limit vocab: state = %q, want %q", st, StateLimited)
+	}
+	if st, _ := ClassifyPane(nil, "crunching beans\n", false, 0, ""); st == StateBusy {
+		t.Errorf("nil pane read another adapter's vocabulary")
+	}
+}
