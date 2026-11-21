@@ -813,7 +813,7 @@ func arrangeNew(ctx context.Context, h host.Host, root string, cfg HostConfig) s
 	if l == nil || reg.Layout() != layout.Split {
 		return ""
 	}
-	a, err := ArrangeRound(ctx, h.Capabilities(), cfg, root, layout.Split, reg.CLIPane(), reg)
+	a, err := arrangeRound(ctx, h.Capabilities(), cfg, root, layout.Split, reg.CLIPane(), reg, false)
 	if err == nil {
 		err = a.RecordErr
 	}
@@ -885,6 +885,13 @@ func ShowRound(ctx context.Context, l host.Layouter, panes []host.LayoutPane, ro
 // before the failure must not keep stale ids; the layout is recorded only
 // after a clean one.
 func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry) (Arranged, error) {
+	return arrangeRound(ctx, caps, cfg, root, mode, cli, reg, true)
+}
+
+// arrangeRound is ArrangeRound; recordLayout false leaves the round's layout
+// mode and CLI pane alone, for the re-split after a spawn, which only
+// re-applies what is already recorded.
+func arrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry, recordLayout bool) (Arranged, error) {
 	l := caps.Layouter
 	if l == nil {
 		return Arranged{}, fmt.Errorf("host cannot arrange panes")
@@ -907,7 +914,8 @@ func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, r
 	// A pane that changed workspace has a new id: look again for where each
 	// slot is now, once, for the report and for the workspaces to record.
 	if panes, perr := l.LayoutPanes(ctx); perr == nil {
-		if st, ok := ShowRound(ctx, l, panes, root, cli, reg); ok {
+		// Reload the registry: a slot assigned during the arrange has a pane now.
+		if st, ok := ShowRound(ctx, l, panes, root, cli, LoadRegistryTolerant(root)); ok {
 			a.State = st
 			if group {
 				a.RecordErr = recordWorkspaces(root, st)
@@ -916,7 +924,7 @@ func ArrangeRound(ctx context.Context, caps host.Capabilities, cfg HostConfig, r
 	} else if group {
 		a.RecordErr = perr
 	}
-	if err == nil {
+	if err == nil && recordLayout {
 		a.LayoutErr = Update(root, func(d *Doc) {
 			d.SetLayout(mode)
 			if mode == layout.Split && a.State.CLI != nil {
