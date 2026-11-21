@@ -129,13 +129,6 @@ func isDigits(s string) bool {
 	return true
 }
 
-func (sc *scanner) peek(n int) byte {
-	if sc.I+n < len(sc.S) {
-		return sc.S[sc.I+n]
-	}
-	return 0
-}
-
 // ampersandIsRedirect: `2>&1`, `>&2` and `&>file` are redirections, not
 // command separators.
 func (sc *scanner) ampersandIsRedirect() bool {
