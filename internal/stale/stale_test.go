@@ -205,7 +205,7 @@ func TestFindUnknownKind(t *testing.T) {
 // Stats (map views) and FindReport date a map file with an unparseable touched alike.
 func TestFindMapAgreesWithMapStatsOnUnparseableTouched(t *testing.T) {
 	root := project(t, map[string]string{".rota/map/g.md": "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n"})
-	st := mapqa.Stats(root)
+	st := mapqa.Stats(git.Repo{Dir: root}, root)
 	got, err := FindReport(git.Repo{Dir: root}, root, "map", 0, date(t, "2999-01-01"), nil)
 	if err != nil || len(st) != 1 || len(got.Entries) != 1 || st[0].Touched == "" || got.Entries[0].Date != st[0].Touched {
 		t.Errorf("FindReport = %v (%v), Stats = %+v", got, err, st)

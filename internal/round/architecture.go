@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
@@ -296,7 +297,7 @@ func reviewAreas(root string, set roundcfg.Settings) []string {
 		return set.ArchitectureAreas
 	}
 	var out []string
-	for _, s := range mapqa.Stats(root) {
+	for _, s := range mapqa.Stats(git.Repo{Dir: root}, root) {
 		out = append(out, s.Name)
 	}
 	if len(out) == 0 {
