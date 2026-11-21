@@ -26,18 +26,33 @@ import (
 // Statuses are the legal milestone states, in ROTA_MILESTONE_STATUSES order.
 var Statuses = []string{"planned", "active", "shipped", "archived"}
 
-// fmBlock and fmID are private on purpose. Put's id check mirrors
-// the retired Python milestone_put exactly: a `---` block at the very start (LF or
-// CRLF), then the first `id:` line inside it, taken as typed. The shared
-// frontmatter parser keeps the last of a repeated key and trims values, so it
-// could accept a text the old helper refused; it is not used here.
+// fmID is private on purpose. Put's id check mirrors the retired Python
+// milestone_put: the first `id:` line inside the front matter block, taken as
+// typed. The block is located by frontmatter.Fence, the one fence rule; the
+// shared parser keeps the last of a repeated key and trims values, so it could
+// accept a text the old helper refused and is not used for the id.
 var (
 	idRe        = regexp.MustCompile(`\A` + Pattern + `\z`)
 	milestoneID = regexp.MustCompile(TokenPattern)
 	leadingID   = regexp.MustCompile(`\A` + TokenPattern)
-	fmBlock     = regexp.MustCompile(`(?s)\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\z)`)
 	fmID        = regexp.MustCompile(`(?m)^id:[ \t]*(\S+)`)
 )
+
+// fmBlock locates the front matter of text through frontmatter.Fence. It returns
+// the lines between the fences without the last line break, and the offset where
+// that break starts (where a new line is appended). ok is false when there is no
+// closed block or it holds no lines.
+func fmBlock(text string) (block string, end int, ok bool) {
+	bs, be, _, found := frontmatter.Fence(text)
+	if !found || be == bs {
+		return "", 0, false
+	}
+	end = be - 1
+	if end > bs && text[end-1] == '\r' {
+		end--
+	}
+	return text[bs:end], end, true
+}
 
 // The milestone ID grammar lives here; every other package consumes it.
 // Digits are Unicode decimal digits (\p{Nd}), like the item-ID grammar.
@@ -230,8 +245,8 @@ func Put(root, id, text string) (changed bool, err error) {
 		return false, notFound(id).WithHint("rota milestone add --title <text> --summary <text>")
 	}
 	var got string
-	if m := fmBlock.FindStringSubmatch(text); m != nil {
-		if im := fmID.FindStringSubmatch(m[1]); im != nil {
+	if block, _, ok := fmBlock(text); ok {
+		if im := fmID.FindStringSubmatch(block); im != nil {
 			got = im[1]
 		}
 	}

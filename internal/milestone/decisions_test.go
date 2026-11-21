@@ -69,3 +69,25 @@ func TestKindOfAndWithKind(t *testing.T) {
 		t.Errorf("a decision plan takes the first line:\n%s", got)
 	}
 }
+
+// A `--- ` opener and an NBSP after the closing fence are front matter to
+// frontmatter.Fence and fmlite, so milestone must read them the same way.
+func TestMilestoneReadsFenceLikeFrontmatter(t *testing.T) {
+	for name, text := range map[string]string{
+		"trailing-space opener": "--- \nid: M01\nkind: decision\n---\nbody\n",
+		"nbsp closer":           "---\nid: M01\nkind: decision\n--- \nbody\n",
+		"crlf":                  "---\r\nid: M01\r\nkind: decision\r\n---\r\nbody\r\n",
+	} {
+		if got := KindOf(text); got != KindDecision {
+			t.Errorf("%s: KindOf = %q, want decision", name, got)
+		}
+		if got := KindOf(WithKind(text, KindDecision)); got != KindDecision {
+			t.Errorf("%s: WithKind lost the kind: %q", name, got)
+		}
+	}
+	root := project(t)
+	add(root, "A", "a", "", testDay)
+	if _, err := Put(root, "M01", "--- \nid: M01\nstatus: planned\n---\nbody\n"); err != nil {
+		t.Errorf("Put refused a trailing-space opener: %v", err)
+	}
+}
