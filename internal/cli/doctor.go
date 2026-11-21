@@ -237,7 +237,7 @@ func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 		if h.Doctor().Check == "" {
 			continue
 		}
-		accts := harness.ResolveAccounts(k).Accounts(harness.ConfigFor(cfg, k)).In(home)
+		accts := harness.AccountsFor(cfg, k, home)
 		in := doctor.KindInput{AccountsKey: accts.Key}
 		for _, a := range accts.Entries {
 			if a.Name != "" {

@@ -154,7 +154,7 @@ func (e Env) PreflightAs(ctx context.Context, root, slot string, lp LaunchPlan, 
 			current = s.AccountFor(h.Kind())
 		}
 		home, _ := e.Home()
-		for _, a := range accounts.Accounts(harness.ConfigFor(e.Config(root), h.Kind())).In(home).Entries {
+		for _, a := range harness.AccountsFor(e.Config(root), h.Kind(), home).Entries {
 			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {

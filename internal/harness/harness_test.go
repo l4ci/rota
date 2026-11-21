@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -281,5 +282,31 @@ func TestWorkerKindEnumIsKinds(t *testing.T) {
 func TestAccountKindsAreKinds(t *testing.T) {
 	if !slices.Equal(config.AccountKinds, Kinds()) {
 		t.Errorf("config.AccountKinds %v, want %v", config.AccountKinds, Kinds())
+	}
+}
+
+func TestAccountsFor(t *testing.T) {
+	cfg := cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"c","dir":"~/c"},{"kind":"codex","name":"x","dir":"/abs/x"}]}}`)
+	for _, c := range []struct {
+		name, kind string
+		raw        any
+		want       []AccountEntry
+	}{
+		{"pool expands ~ against home", Claude, cfg, []AccountEntry{{Name: "c", Dir: "/home/u/c"}}},
+		{"pool of another kind", Codex, cfg, []AccountEntry{{Name: "x", Dir: "/abs/x"}}},
+		{"kind without a configured pool", OpenCode, cfg, nil},
+		{"no config at all", Claude, cfgOf(t, ""), nil},
+		{"accounts of one kind keep config order", Claude, cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"b","dir":"/b"},{"kind":"claude","name":"a","dir":"/a"},{"kind":"claude","name":"c","dir":"~/c"}]}}`),
+			[]AccountEntry{{Name: "b", Dir: "/b"}, {Name: "a", Dir: "/a"}, {Name: "c", Dir: "/home/u/c"}}},
+		{"review.accounts stay out of the round list", Claude, cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"w","dir":"/w"}]},"review":{"accounts":[{"kind":"claude","name":"r","dir":"/r"}]}}`),
+			[]AccountEntry{{Name: "w", Dir: "/w"}}},
+	} {
+		got := AccountsFor(c.raw, c.kind, "/home/u")
+		if len(got.Entries) != len(c.want) || (len(c.want) > 0 && !reflect.DeepEqual(got.Entries, c.want)) {
+			t.Errorf("%s: entries %+v want %+v", c.name, got.Entries, c.want)
+		}
+		if got.Key != config.RoundAccountsKey {
+			t.Errorf("%s: key %q want %q", c.name, got.Key, config.RoundAccountsKey)
+		}
 	}
 }

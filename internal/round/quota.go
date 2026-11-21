@@ -72,7 +72,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 // loggedPool reads the accounts of a kind with no usage meter through the
 // limits the watcher logged.
 func (e Env) loggedPool(root string, h harness.Accounts) (p pool, configured bool) {
-	logins := h.Accounts(harness.ConfigFor(e.Worker.Config(root), h.Kind())).Entries
+	logins := harness.AccountsFor(e.Worker.Config(root), h.Kind(), "").Entries
 	cooling := limits.Cooling(limits.Load(root), h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
@@ -94,7 +94,7 @@ func (e Env) poolOf(ctx context.Context, root string, h harness.Accounts) (pool,
 
 // poolKey is the config key of the kind's accounts.
 func (e Env) poolKey(root string, h harness.Accounts) string {
-	return h.Accounts(harness.ConfigFor(e.Worker.Config(root), h.Kind())).Key
+	return harness.AccountsFor(e.Worker.Config(root), h.Kind(), "").Key
 }
 
 // Headroom says why a worker of the harness kind has no account to run under,

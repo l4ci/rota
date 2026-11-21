@@ -118,7 +118,7 @@ func (e Env) pickWorker(ctx context.Context, root string, in workerPickIn) (Plac
 	for _, kind := range in.Kinds {
 		hz := harness.ResolveAccounts(kind)
 		kind = hz.Kind()
-		list := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
+		list := harness.AccountsFor(cfg, kind, home).Entries
 		entries = append(entries, e.poolEntries(ctx, ms, kind, list, in.Set, len(entries), load)...)
 	}
 
@@ -249,7 +249,7 @@ func noAccount(entries []worker.PoolEntry, restriction string, cfg any) error {
 			if pe.Meter.ResetsAt != nil {
 				resets = append(resets, *pe.Meter.ResetsAt)
 			}
-			keys[harness.ResolveAccounts(pe.Kind).Accounts(harness.ConfigFor(cfg, pe.Kind)).Key] = true
+			keys[harness.AccountsFor(cfg, pe.Kind, "").Key] = true
 		case pe.Skip != "":
 			other = append(other, pe.Kind+" "+accountLabel(pe.Name)+": "+pe.Skip)
 		}

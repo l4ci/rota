@@ -33,7 +33,7 @@ func (e Env) CrossPools(ctx context.Context, root string) (worker.CrossPools, er
 	}
 	for _, kind := range mainKinds {
 		hz := harness.ResolveAccounts(kind)
-		list := hz.Accounts(harness.ConfigFor(cfg, hz.Kind())).In(home).Entries
+		list := harness.AccountsFor(cfg, hz.Kind(), home).Entries
 		out.Main = append(out.Main, e.poolEntries(ctx, ms, hz.Kind(), list, set, len(out.Main), nil)...)
 	}
 	return out, nil
