@@ -11,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -158,9 +157,9 @@ func sectionBody(content, name string) string {
 // doneIDs is the IDs of the done lines in text, in order.
 func doneIDs(text string) []string {
 	var ids []string
-	for _, raw := range pystr.Splitlines(text) {
-		if d, ok := ParseDone(pystr.Strip(raw)); ok && d.ID != "" {
-			ids = append(ids, d.ID)
+	for _, l := range scanDone(text) {
+		if l.ID != "" {
+			ids = append(ids, l.ID)
 		}
 	}
 	return ids
