@@ -694,7 +694,7 @@ func (t *trainRun) syncBase(p *trainPlanning) (bool, error) {
 	if code != 0 {
 		return trainBrokeResult(res, fmt.Sprintf("git rev-parse %s exited %d", from, code))
 	}
-	run := func(args ...string) (git.Result, error) { return e.Git(ctx, p.scratch, args...) }
+	run := e.Git.In(ctx, p.scratch)
 	tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, p.scratch)},
 		land.LocalRequest{Head: sha, Base: "scratch tree", Message: land.SyncSubject(o.SyncBase, o.Base)})
 	if err != nil {
@@ -1187,7 +1187,7 @@ func (e Env) mergeTrain(ctx context.Context, scratch, base string, ms []landing.
 	tips = make([]string, len(ms)+1)
 	tips[0], _ = e.git(scratch, "rev-parse", "HEAD")
 	for i, m := range ms {
-		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
+		run := e.Git.In(ctx, scratch)
 		tip, err := land.LandLocal(land.LocalPorts{Git: run, Recover: land.RecoveryGit(ctx, e.Git, scratch)},
 			land.LocalRequest{Head: heads[i], Base: "scratch tree", Message: land.TrainSubject(m.Branch, base)})
 		if err != nil {

@@ -20,7 +20,7 @@ import (
 var ErrUnpinned = errors.New("land: no commit to pin the merge to")
 
 // Git runs git in the tree being merged into.
-type Git func(args ...string) (git.Result, error)
+type Git = git.Bound
 
 // ConflictError is a local merge that conflicted. Aborted reports whether
 // git confirmed the abort succeeded.
