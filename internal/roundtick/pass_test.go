@@ -199,3 +199,18 @@ func TestFollowUpSourcesForgeErrorFailsTheList(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+// A world that disagrees with Pass.Observe is refused before any read or write,
+// whichever way it disagrees.
+func TestRunPassRefusesAWorldInTheWrongMode(t *testing.T) {
+	for _, observe := range []bool{true, false} {
+		p, w, cd := passFixture(t, observe)
+		p.World = func(State, bool) World { w.observing = !observe; return w }
+		if _, err := RunPass(context.Background(), p); !errors.Is(err, ErrObserveMismatch) {
+			t.Fatalf("observe=%v: err %v", observe, err)
+		}
+		if _, err := os.Stat(statePath(cd)); err == nil {
+			t.Fatalf("observe=%v: a refused pass saved state", observe)
+		}
+	}
+}

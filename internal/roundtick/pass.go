@@ -2,8 +2,13 @@ package roundtick
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
+
+// ErrObserveMismatch is a world built in a different mode than Pass.Observe
+// asked for. The pass refuses to run it rather than act in the wrong mode.
+var ErrObserveMismatch = errors.New("roundtick: the world's observe mode differs from the pass's")
 
 // Pass is one autopilot pass: where its memory lives and how to reach the
 // world. Observe is stated once here; the world and the saving both follow it.
@@ -26,6 +31,9 @@ type Pass struct {
 func RunPass(ctx context.Context, p Pass) (Result, error) {
 	state := LoadState(p.CommonDir, p.Round)
 	w := p.World(state, p.Observe)
+	if w.Observing() != p.Observe {
+		return Result{}, ErrObserveMismatch
+	}
 	e := NewEnv(w, p.Config)
 	state.Apply(&e)
 	r, err := Run(ctx, e)
