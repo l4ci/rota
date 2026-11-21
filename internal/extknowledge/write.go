@@ -120,7 +120,7 @@ func (c Clone) add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if body == "" {
 			body = "# " + t.Name + "\n\n"
 		}
-		if bulletfmt.HasTitle(bulletLines(body), in.Title) {
+		if bulletfmt.HasSpanTitle(bulletfmt.Spans(strings.Split(body, "\n")), in.Title) {
 			return WriteResult{Policy: pol}, nil
 		}
 		if t.Split {
@@ -230,13 +230,7 @@ func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err 
 // insertBulletBelowSubIndex puts bullet above the first bullet of a split
 // topic's README that is not a sub-index line, or at its end.
 func insertBulletBelowSubIndex(body, bullet string) string {
-	lines := strings.Split(body, "\n")
-	for i, l := range lines {
-		if strings.HasPrefix(l, "- ") && !isSubIndexLine(l) {
-			return strings.Join(append(lines[:i:i], append([]string{bullet}, lines[i:]...)...), "\n")
-		}
-	}
-	return strings.TrimRight(body, "\n") + "\n\n" + bullet + "\n"
+	return insertBulletAt(body, bullet, func(line string) bool { return !isSubIndexLine(line) })
 }
 
 // insertSubIndex adds a sub-index line after the last one of a split topic's
@@ -252,20 +246,25 @@ func insertSubIndex(body, line string) string {
 	if last >= 0 {
 		return strings.Join(append(lines[:last+1:last+1], append([]string{line}, lines[last+1:]...)...), "\n")
 	}
-	for i, l := range lines {
-		if strings.HasPrefix(l, "- ") {
-			return strings.Join(append(lines[:i:i], append([]string{line, ""}, lines[i:]...)...), "\n")
-		}
+	if spans := bulletfmt.Spans(lines); len(spans) > 0 {
+		i := spans[0].Start
+		return strings.Join(append(lines[:i:i], append([]string{line, ""}, lines[i:]...)...), "\n")
 	}
 	return strings.TrimRight(body, "\n") + "\n\n" + line + "\n"
 }
 
 // insertBullet puts bullet above the first bullet of body, or at its end.
 func insertBullet(body, bullet string) string {
+	return insertBulletAt(body, bullet, func(string) bool { return true })
+}
+
+// insertBulletAt puts bullet above the first bullet of body that take accepts,
+// or at its end.
+func insertBulletAt(body, bullet string, take func(line string) bool) string {
 	lines := strings.Split(body, "\n")
-	for i, l := range lines {
-		if strings.HasPrefix(l, "- ") {
-			return strings.Join(append(lines[:i:i], append([]string{bullet}, lines[i:]...)...), "\n")
+	for _, sp := range bulletfmt.Spans(lines) {
+		if take(lines[sp.Start]) {
+			return strings.Join(append(lines[:sp.Start:sp.Start], append([]string{bullet}, lines[sp.Start:]...)...), "\n")
 		}
 	}
 	return strings.TrimRight(body, "\n") + "\n\n" + bullet + "\n"
