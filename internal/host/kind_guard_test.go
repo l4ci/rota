@@ -106,9 +106,50 @@ func kindValue(t *testing.T, name string) string {
 	return ""
 }
 
-// TestNoKindSwitchOutsideTable fails on a switch or a map literal keyed by a
-// Kind constant anywhere in internal/host except policy.go, where the table
-// lives. Tests are exempt.
+// kindBranches lists the branches on a Kind constant in f: a case clause, a map
+// literal key, or a == / != comparison on either side.
+func kindBranches(p string, f *ast.File, consts map[string]bool) []string {
+	isKind := func(e ast.Expr) (string, bool) {
+		id, ok := e.(*ast.Ident)
+		return id.String(), ok && consts[id.Name]
+	}
+	var bad []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.CaseClause:
+			for _, e := range x.List {
+				if name, ok := isKind(e); ok {
+					bad = append(bad, p+": case "+name)
+				}
+			}
+		case *ast.BinaryExpr:
+			if x.Op != token.EQL && x.Op != token.NEQ {
+				break
+			}
+			for _, e := range []ast.Expr{x.X, x.Y} {
+				if name, ok := isKind(e); ok {
+					bad = append(bad, p+": "+x.Op.String()+" "+name)
+				}
+			}
+		case *ast.CompositeLit:
+			if _, isMap := x.Type.(*ast.MapType); isMap {
+				for _, el := range x.Elts {
+					if kv, ok := el.(*ast.KeyValueExpr); ok {
+						if name, ok := isKind(kv.Key); ok {
+							bad = append(bad, p+": map key "+name)
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	return bad
+}
+
+// TestNoKindSwitchOutsideTable fails on a switch, a map literal keyed by a
+// Kind constant or a ==/!= comparison against one anywhere in internal/host
+// except policy.go, where the table lives. Tests are exempt.
 func TestNoKindSwitchOutsideTable(t *testing.T) {
 	consts := kindConstNames(t)
 	var bad []string
@@ -116,30 +157,39 @@ func TestNoKindSwitchOutsideTable(t *testing.T) {
 		if filepath.Base(p) == "policy.go" {
 			continue
 		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.CaseClause:
-				for _, e := range x.List {
-					if id, ok := e.(*ast.Ident); ok && consts[id.Name] {
-						bad = append(bad, p+": case "+id.Name)
-					}
-				}
-			case *ast.CompositeLit:
-				if _, isMap := x.Type.(*ast.MapType); isMap {
-					for _, el := range x.Elts {
-						if kv, ok := el.(*ast.KeyValueExpr); ok {
-							if id, ok := kv.Key.(*ast.Ident); ok && consts[id.Name] {
-								bad = append(bad, p+": map key "+id.Name)
-							}
-						}
-					}
-				}
-			}
-			return true
-		})
+		bad = append(bad, kindBranches(p, f, consts)...)
 	}
 	if len(bad) > 0 {
 		t.Fatalf("branch on Kind outside the kindSpecs table (policy.go): %s", strings.Join(bad, "; "))
+	}
+}
+
+// The guard sees each way to branch on a Kind, and only those.
+func TestKindBranchesSeesEveryForm(t *testing.T) {
+	consts := map[string]bool{"Tmux": true}
+	cases := []struct {
+		name, body string
+		want       int
+	}{
+		{"case", "switch k { case Tmux: }", 1},
+		{"map key", "_ = map[Kind]int{Tmux: 1}", 1},
+		{"equal", "_ = k == Tmux", 1},
+		{"not equal", "_ = k != Tmux", 1},
+		{"constant on the left", "_ = Tmux == k", 1},
+		{"other operator", "_ = k < Tmux", 0},
+		{"not a Kind constant", "_ = k == other", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			src := "package host\nfunc f(k, other Kind) {\n" + c.body + "\n}\n"
+			f, err := parser.ParseFile(token.NewFileSet(), "x.go", src, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := kindBranches("x.go", f, consts); len(got) != c.want {
+				t.Errorf("kindBranches = %v, want %d", got, c.want)
+			}
+		})
 	}
 }
 

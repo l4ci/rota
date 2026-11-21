@@ -1,7 +1,11 @@
 package frontmatter
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -114,5 +118,81 @@ func TestRenderSkipsEmptyOptional(t *testing.T) {
 	out, err := Render([]Field{{"a", "1"}, {"repo", Optional("")}, {"b", Optional("2")}})
 	if err != nil || out != "---\na: 1\nb: 2\n---\n" {
 		t.Fatalf("got %q, %v", out, err)
+	}
+}
+
+// The shared fixtures in test/fixtures/frontmatter pin every SKILL.md reader to
+// one fence rule. Parse reads a flat subset, so it is held to the fence (found
+// or not) and to the plain name/description of the fixtures that carry them.
+func TestParseFixturesShareFenceRule(t *testing.T) {
+	cases, err := filepath.Glob("../../test/fixtures/frontmatter/*.md")
+	if err != nil || len(cases) == 0 {
+		t.Fatalf("no fixtures: %v", err)
+	}
+	for _, md := range cases {
+		name := strings.TrimSuffix(filepath.Base(md), ".md")
+		raw, err := os.ReadFile(md)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantRaw, err := os.ReadFile(strings.TrimSuffix(md, ".md") + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want struct {
+			Structural  bool
+			Name        string
+			Description any
+		}
+		if err := json.Unmarshal(wantRaw, &want); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		t.Run(name, func(t *testing.T) {
+			fm, _, _ := Parse(string(raw))
+			if want.Structural {
+				if fm != nil {
+					t.Fatalf("Parse found front matter %v, want none", fm)
+				}
+				return
+			}
+			if fm == nil {
+				t.Fatal("Parse found no front matter")
+			}
+			if want.Name != "" && Str(fm, "name") != want.Name {
+				t.Errorf("name = %q, want %q", Str(fm, "name"), want.Name)
+			}
+			if want.Description == any("d") && Str(fm, "description") != "d" {
+				t.Errorf("description = %q, want d", Str(fm, "description"))
+			}
+		})
+	}
+}
+
+func TestFence(t *testing.T) {
+	for _, tc := range []struct {
+		name, in    string
+		block, body string
+		ok          bool
+	}{
+		{"lf", "---\na: b\n---\nbody", "a: b\n", "body", true},
+		{"crlf", "---\r\na: b\r\n---\r\nbody", "a: b\r\n", "body", true},
+		{"trailing space opening", "--- \na: b\n---\n", "a: b\n", "", true},
+		{"nbsp closing", "---\na: b\n--- \nx", "a: b\n", "x", true},
+		{"closing at eof", "---\na: b\n---", "a: b\n", "", true},
+		{"empty block", "---\n---\nx", "", "x", true},
+		{"unclosed", "---\na: b\n", "", "", false},
+		{"opening only", "---", "", "", false},
+		{"not first line", "x\n---\na: b\n---\n", "", "", false},
+		{"dashes with text", "---x\na: b\n---\n", "", "", false},
+		{"leading space", " ---\na: b\n---\n", "", "", false},
+	} {
+		bs, be, bo, ok := Fence(tc.in)
+		if ok != tc.ok {
+			t.Errorf("%s: ok = %v, want %v", tc.name, ok, tc.ok)
+			continue
+		}
+		if ok && (tc.in[bs:be] != tc.block || tc.in[bo:] != tc.body) {
+			t.Errorf("%s: block %q body %q, want %q %q", tc.name, tc.in[bs:be], tc.in[bo:], tc.block, tc.body)
+		}
 	}
 }

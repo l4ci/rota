@@ -42,6 +42,58 @@ type FollowUpSources struct {
 	Start func(ctx context.Context, f FollowUp, slot string, reserve bool) error
 }
 
+// FollowUpPorts are the outside reads and writes the follow-up sources are
+// built from: the registry, the forge and the transfer verb, each behind one
+// function.
+type FollowUpPorts struct {
+	Settings roundcfg.Settings
+	// Registry is the tolerant registry read.
+	Registry func() worker.Registry
+	// Forge opens the review forge; it is asked only when a PR is queued.
+	Forge func(ctx context.Context) (round.ReviewForge, error)
+	// List reads the follow-ups through the forge, with the warnings it raised.
+	List func(ctx context.Context, f round.ReviewForge) ([]round.FollowUp, []string, error)
+	// Start continues one follow-up in slot and returns the warnings it raised.
+	Start func(ctx context.Context, f round.FollowUp, slot string, reserve bool) ([]string, error)
+	Warn  func(string)
+}
+
+// NewFollowUpSources assembles the follow-up step (#2580) from its ports. A
+// round with no queued PR asks the forge nothing; the people who asked are
+// joined into Who; the reserve slots follow the settings.
+func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
+	return FollowUpSources{
+		Auto:    p.Settings.ReviewLoop == roundcfg.ReviewLoopAuto,
+		Size:    p.Settings.FollowupReserve,
+		Reserve: func() []string { return round.Reserve(p.Registry(), p.Settings) },
+		List: func(ctx context.Context) ([]FollowUp, error) {
+			if len(p.Registry().PRs()) == 0 {
+				return nil, nil
+			}
+			fg, err := p.Forge(ctx)
+			if err != nil {
+				return nil, err
+			}
+			list, warns, err := p.List(ctx, fg)
+			for _, warn := range warns {
+				p.Warn(warn)
+			}
+			var out []FollowUp
+			for _, u := range list {
+				out = append(out, FollowUp{Issue: u.Issue, PR: u.PR, Who: strings.Join(u.Humans, ", "), Item: u})
+			}
+			return out, err
+		},
+		Start: func(ctx context.Context, f FollowUp, slot string, reserve bool) error {
+			warns, err := p.Start(ctx, f.Item, slot, reserve)
+			for _, warn := range warns {
+				p.Warn(warn)
+			}
+			return err
+		},
+	}
+}
+
 // followUps starts the waiting follow-ups before any backlog work and returns
 // how many it started, which the assign step's cap counts. Each takes the first
 // idle active slot, else the first free reserve slot. One that cannot start

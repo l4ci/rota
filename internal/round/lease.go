@@ -53,10 +53,17 @@ func leaseFindings(l roundlease.Lease, st roundlease.State, err error) []Finding
 // HeldLease reports whether pid is the orchestrator the Env's lease names,
 // keyed off the repo at root.
 func (e Env) HeldLease(ctx context.Context, root string) (roundlease.Lease, bool, error) {
+	l, _, held, err := e.HeldLeaseDir(ctx, root)
+	return l, held, err
+}
+
+// HeldLeaseDir is HeldLease that also returns the git common dir it resolved,
+// so a caller that needs it does not resolve it a second time.
+func (e Env) HeldLeaseDir(ctx context.Context, root string) (roundlease.Lease, string, bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
-		return roundlease.Lease{}, false, err
+		return roundlease.Lease{}, "", false, err
 	}
 	l, _, held, err := e.Lease.Holds(cd, e.HolderPID, e.getenv())
-	return l, held, err
+	return l, cd, held, err
 }

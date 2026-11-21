@@ -483,7 +483,7 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	if it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("git@github.com:o/r.git", 0)); err != nil || it.Provider() != "github" {
 		t.Errorf("forge source, github origin: %v, %v", it, err)
 	}
-	if _, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("", 2)); !IsKind(err, KindUnavailable) {
+	if _, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("", 2)); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "issues.source is forge, but the forge of /repo is local (no origin remote): there is no tracker to read") {
 		t.Errorf("forge source, no remote: %v", err)
 	}
 	// a file backlog with a github forge still has a forge.

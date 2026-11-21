@@ -623,48 +623,28 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	if source == "" {
 		source = s.Source
 	}
-	provider := source
-	if k, ok := ownKindFor(source); ok {
-		return k.build(ctx, newCLI(s, dir, opts...).restDeps(), s)
-	}
-	switch source {
-	case config.SourceFile, "":
-		return nil, ErrNoIssueTracker
-	case config.SourceIssues:
-		provider = config.ForgeAuto
-	case config.SourceForge:
-		// The issues live on dir's own forge: the repo's forge resolution
-		// (forge.provider, else its origin) names the tracker.
-		// It resolves as a ForgeReader: an origin naming no forge reads as
-		// github, and every write refuses as an actor would (assumedForge).
-		c := newCLI(s, dir, opts...)
-		r, err := c.resolveForge(ctx, ForgeReader, config.ForgeAuto, s.Provider)
-		if err != nil {
-			return nil, err
-		}
-		if r.Provider == config.ForgeLocal {
-			return nil, Unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
-		}
-		c.Provider = r.Provider
-		a, err := adapterFor(c, s)
-		if err != nil {
-			return nil, err
-		}
-		if r.How == HowAssumed {
-			return newAssumedForge(a, r)
-		}
-		return a, nil
-	case config.SourceGitHub, config.SourceGitLab:
-	default:
-		return nil, Unavailable("unknown issues.source %q", source)
-	}
 	c := newCLI(s, dir, opts...)
-	p, err := c.resolveIssues(ctx, provider, s.Provider)
+	r, err := c.resolveIssueSource(ctx, s, source, useTracker)
 	if err != nil {
 		return nil, err
 	}
-	c.Provider = p
-	return adapterFor(c, s)
+	if r.own != nil {
+		return r.own.build(ctx, c.restDeps(), s)
+	}
+	if r.Provider == config.ForgeLocal {
+		return nil, Unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
+	}
+	c.Provider = r.Provider
+	a, err := adapterFor(c, s)
+	if err != nil {
+		return nil, err
+	}
+	// An origin naming no forge reads as github, and every write refuses as an
+	// actor would (assumedForge).
+	if r.How == HowAssumed {
+		return newAssumedForge(a, r.Resolution)
+	}
+	return a, nil
 }
 
 func dirLabel(dir string) string {
@@ -1010,20 +990,19 @@ type IssueActor struct {
 	build  func(context.Context) (IssueTracker, error)
 }
 
-// ResolveIssueActor decides the tracker for issues.source in dir: a source in
-// ownKinds names its own tracker, github and gitlab name the forge
-// outright, any other source takes dir's forge as ForgeActor resolves it. A
+// ResolveIssueActor decides the tracker for issues.source in dir by the
+// resolver every source rule lives in (resolveIssueSource, as an actor). A
 // local forge is ErrNoIssueActor. The adapter kind is recorded here, not
 // re-derived from Source.
 func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Option) (IssueActor, error) {
-	if k, ok := ownKindFor(s.Source); ok {
+	r, err := newCLI(s, dir, opts...).resolveIssueSource(ctx, s, s.Source, useActor)
+	if err != nil {
+		return IssueActor{}, err
+	}
+	if k := r.own; k != nil {
 		return IssueActor{Source: s.Source, build: func(ctx context.Context) (IssueTracker, error) {
 			return k.build(ctx, newCLI(s, dir, opts...).restDeps(), s)
 		}}, nil
-	}
-	r, err := IssueProvider(ctx, s, ForgeActor, dir, opts...)
-	if err != nil {
-		return IssueActor{}, err
 	}
 	if r.Provider == ProviderLocal {
 		return IssueActor{}, ErrNoIssueActor
@@ -1031,16 +1010,6 @@ func ResolveIssueActor(ctx context.Context, s Settings, dir string, opts ...Opti
 	return IssueActor{Source: r.Provider, build: func(ctx context.Context) (IssueTracker, error) {
 		return New(ctx, s, r.Provider, dir, opts...)
 	}}, nil
-}
-
-// IssueProvider is the forge provider of the issues in dir: an issues.source
-// of github or gitlab names it outright, any other takes dir's forge as kind
-// resolves it, which can be the local forge.
-func IssueProvider(ctx context.Context, s Settings, kind ForgeKind, dir string, opts ...Option) (Resolution, error) {
-	if s.Source == config.SourceGitHub || s.Source == config.SourceGitLab {
-		return Resolution{Provider: s.Source, How: HowConfig}, nil
-	}
-	return newCLI(s, dir, opts...).resolveForge(ctx, kind, "", s.Provider)
 }
 
 // Adapter builds the tracker ResolveIssueActor chose; the zero IssueActor

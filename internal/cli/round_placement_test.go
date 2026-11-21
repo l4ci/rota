@@ -47,15 +47,6 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 	}
 }
 
-// The tick says where an assign moved a slot, and how far ahead the account was.
-func TestTickPlacementLine(t *testing.T) {
-	gap, head := 60.0, 80.0
-	got := placementLine("12", &round.Placement{Kind: "codex", Account: "c1", Headroom: &head, Gap: &gap, Margin: 20})
-	if want := "moved\t#12: c1 (codex, headroom 80%) moved, best is 60 points ahead (margin 20)"; got != want {
-		t.Errorf("line %q, want %q", got, want)
-	}
-}
-
 // One quota reader serves every env of the process, so the Codex readings it
 // caches outlive a single autopilot tick.
 func TestRoundEnvsShareTheQuotaCache(t *testing.T) {

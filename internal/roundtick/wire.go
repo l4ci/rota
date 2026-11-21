@@ -176,23 +176,33 @@ func NewEnv(w World, cfg Config) Env {
 	// The follow-up list is a read; observation never calls its Start.
 	e.FollowUp = w.FollowUp()
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
-		res, err := w.Assign(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		return AssignedAgents(res), nil
+		return k.assigned(id)(w.Assign(ctx, id))
 	}
 	e.AssignBundle = func(ctx context.Context, lead string, members []string) ([]string, error) {
-		res, err := w.AssignBundle(ctx, lead, members)
-		if err != nil {
-			return nil, err
-		}
-		return AssignedAgents(res), nil
+		return k.assigned(lead)(w.AssignBundle(ctx, lead, members))
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit
 	e.Observe = w.Observing()
 	return e
+}
+
+// assigned turns an assign's result into the slots it took. Its warnings are
+// said even when the assign failed; its overlaps and placement only when it
+// went through.
+func (k *wiring) assigned(id string) func(round.Assigned, error) ([]string, error) {
+	return func(res round.Assigned, err error) ([]string, error) {
+		for _, warn := range res.Warnings {
+			k.w.Warn(warn)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, note := range AssignNotes(id, res) {
+			k.w.Warn(note)
+		}
+		return AssignedAgents(res), nil
+	}
 }
 
 // lookup finds a target's reviewed PR. The waiting list is read once.
