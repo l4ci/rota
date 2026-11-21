@@ -126,7 +126,7 @@ func TestStats(t *testing.T) {
 	write(t, root, ".rota/map/two.md", "---\nsubsystem: two\ntouched: 2026-02-03\n---\nno entry points\n")
 	write(t, root, ".rota/map/skip.md", "---\nsummary: no subsystem\n---\n")
 
-	got := Stats(root)
+	got := Stats(git.Repo{Dir: root}, root)
 	if len(got) != 2 {
 		t.Fatalf("Stats = %+v, want 2 rows", got)
 	}
@@ -140,7 +140,7 @@ func TestStats(t *testing.T) {
 }
 
 func TestStatsEmpty(t *testing.T) {
-	got := Stats(t.TempDir())
+	got := Stats(git.Repo{}, t.TempDir())
 	if got == nil || len(got) != 0 {
 		t.Errorf("Stats = %#v, want empty non-nil", got)
 	}
@@ -150,7 +150,7 @@ func TestStatsTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\n---\nbody\n")
 	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
-	got := Stats(root)
+	got := Stats(git.Repo{Dir: root}, root)
 	if len(got) != 1 || got[0].Touched != want || want == "" {
 		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
 	}
@@ -176,7 +176,7 @@ func TestStatsUnparseableTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n")
 	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
-	got := Stats(root)
+	got := Stats(git.Repo{Dir: root}, root)
 	if len(got) != 1 || got[0].Touched != want || want == "" {
 		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
 	}
@@ -225,7 +225,7 @@ func TestStatsCommitsBehind(t *testing.T) {
 	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: 0123456789abcdef0123456789abcdef01234567\n---\nbody\n")
 
 	got := map[string]*int{}
-	for _, s := range Stats(root) {
+	for _, s := range Stats(git.Repo{Dir: root}, root) {
 		got[s.Name] = s.CommitsBehind
 	}
 	if got["fresh"] == nil || *got["fresh"] != 0 {
@@ -267,23 +267,43 @@ func TestStaleCommits(t *testing.T) {
 	}
 }
 
-// A git that cannot run is an error on the row, not a rewritten branch; a sha
-// git does not know stays a plain nil count with no error.
-func TestStatsCommitsBehindSurfacesGitFailure(t *testing.T) {
-	root := gittest.NewRepo(t, "main")
-	sha := gittest.Run(t, root, "rev-parse", "HEAD")
+// Stats asks the injected repo, never real git: the touch date and the commit
+// count come from the runner; a git that cannot run is an error on the row, not
+// a rewritten branch, and a sha git does not know stays a nil count.
+func TestStatsReadsThroughTheInjectedRepo(t *testing.T) {
+	root := t.TempDir()
+	sha := "0123456789abcdef0123456789abcdef01234567"
 	write(t, root, ".rota/map/old.md", "---\nsubsystem: old\nlast_mapped_commit: "+sha+"\n---\nbody\n")
-	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: 0123456789abcdef0123456789abcdef01234567\n---\nbody\n")
-	if got := Stats(root); len(got) != 2 || got[0].CommitsBehindErr != nil || got[1].CommitsBehindErr != nil {
-		t.Fatalf("healthy git: %+v", got)
+	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: ffffffffffffffffffffffffffffffffffffffff\n---\nbody\n")
+	runner := func(fail error) git.Repo {
+		return git.Repo{Dir: root, Runner: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+			switch {
+			case fail != nil:
+				return git.Result{}, fail
+			case args[0] == "log":
+				return git.Result{Stdout: "2024-03-05\n"}, nil
+			case strings.Contains(strings.Join(args, " "), sha):
+				return git.Result{Stdout: "7\n"}, nil
+			}
+			return git.Result{ExitCode: 128}, nil // unknown commit
+		}}
 	}
-	t.Setenv("PATH", t.TempDir())
-	byName := map[string]Subsystem{}
-	for _, s := range Stats(root) {
-		byName[s.Name] = s
+	byName := func(repo git.Repo) map[string]Subsystem {
+		m := map[string]Subsystem{}
+		for _, s := range Stats(repo, root) {
+			m[s.Name] = s
+		}
+		return m
 	}
-	if byName["old"].CommitsBehind != nil || byName["old"].CommitsBehindErr == nil {
-		t.Errorf("old = %+v, want nil count and an error", byName["old"])
+	got := byName(runner(nil))
+	if o := got["old"]; o.Touched != "2024-03-05" || o.CommitsBehind == nil || *o.CommitsBehind != 7 || o.CommitsBehindErr != nil {
+		t.Errorf("old = %+v, want touched 2024-03-05, 7 behind", o)
+	}
+	if g := got["gone"]; g.CommitsBehind != nil || g.CommitsBehindErr != nil {
+		t.Errorf("gone = %+v, want nil count and no error", g)
+	}
+	if o := byName(runner(git.ErrNoGit))["old"]; o.CommitsBehind != nil || o.CommitsBehindErr == nil {
+		t.Errorf("old with broken git = %+v, want nil count and an error", o)
 	}
 }
 

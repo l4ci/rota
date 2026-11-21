@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
 	"strings"
@@ -137,7 +138,7 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		subs := mapqa.Stats(st.Root)
+		subs := mapqa.Stats(git.Repo{Dir: st.Root}, st.Root)
 		for _, s := range subs {
 			if s.CommitsBehindErr != nil {
 				return Result{}, fmt.Errorf("map %s: counting commits behind HEAD: %w", s.Name, s.CommitsBehindErr)

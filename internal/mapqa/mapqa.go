@@ -95,11 +95,6 @@ func CommitDate(repo git.Repo, rel string) (time.Time, bool) {
 	return pystr.ParseDate(out)
 }
 
-// Touched is TouchedIn for the real git repo at root.
-func (e Entry) Touched(root string) (time.Time, bool) {
-	return e.TouchedIn(git.Repo{Dir: root}, root)
-}
-
 // TouchedIn is the effective touch date of e: its `touched:` frontmatter when
 // that parses as a date, else the date of the file's last commit in repo (the
 // file's path taken relative to root); ok is false when neither gives one.
@@ -173,7 +168,7 @@ var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
 
 // Stats measures every map file: size, last touch, and how many of its
 // "Entry points" references no longer resolve to a line of a file.
-func Stats(root string) []Subsystem {
+func Stats(repo git.Repo, root string) []Subsystem {
 	out := []Subsystem{}
 	for _, e := range Entries(root) {
 		fi, err := os.Stat(e.Path)
@@ -181,7 +176,7 @@ func Stats(root string) []Subsystem {
 			continue
 		}
 		touched := ""
-		if d, ok := e.Touched(root); ok {
+		if d, ok := e.TouchedIn(repo, root); ok {
 			touched = stamp.Date(d)
 		}
 		refs := entryRe.FindAllStringSubmatch(section.Body(e.Body, "Entry points"), -1)
@@ -191,7 +186,7 @@ func Stats(root string) []Subsystem {
 				broken++
 			}
 		}
-		n, nerr := commitsBehind(root, frontmatter.Str(e.FM, "last_mapped_commit"))
+		n, nerr := commitsBehind(repo, frontmatter.Str(e.FM, "last_mapped_commit"))
 		out = append(out, Subsystem{Name: e.Name, Bytes: fi.Size(), Touched: touched, EntryPoints: len(refs), BrokenRefs: broken, CommitsBehind: n, CommitsBehindErr: nerr})
 	}
 	return out
@@ -202,11 +197,11 @@ var shaRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
 // commitsBehind counts the commits past sha; nil when sha is empty, not a hash
 // or not in this history (a rewritten branch), so the subsystem is skipped. A
 // git that cannot run is the error, never a nil count.
-func commitsBehind(root, sha string) (*int, error) {
+func commitsBehind(repo git.Repo, sha string) (*int, error) {
 	if !shaRe.MatchString(sha) {
 		return nil, nil
 	}
-	n, ok, err := git.Repo{Dir: root}.CommitsSince(context.Background(), sha)
+	n, ok, err := repo.CommitsSince(context.Background(), sha)
 	if err != nil {
 		return nil, err
 	}
