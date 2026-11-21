@@ -204,21 +204,48 @@ func StatusLine(o *jsonx.Object) (entry any, command string, ok bool) {
 	return v, command, true
 }
 
-// IsOurStatusLine reports whether a statusLine command invokes rota's dump,
-// plain or with arguments such as the generated --then wrapper. The dump must
-// be the command word itself: a longer subcommand name ("dumpling") or the
-// text inside another command's argument ("echo 'rota statusline dump'") is
-// not. It owns recognition for install, uninstall and doctor.
-func IsOurStatusLine(command string) bool {
-	rest, ok := strings.CutPrefix(strings.TrimSpace(command), StatuslineCmd)
-	if !ok {
-		return false
+// EntryKind names the settings entry a command belongs to.
+type EntryKind int
+
+const (
+	// StatusLineEntry is a statusLine command.
+	StatusLineEntry EntryKind = iota
+	// HookEntry is a command inside a hooks group.
+	HookEntry
+)
+
+// IsOurs is the one ownership rule for install, uninstall and doctor: does
+// this command belong to rota. Both kinds require rota to be the command word
+// itself, so text inside another command's argument ("echo 'rota statusline
+// dump'", "other --note '# rota-hook'") is never ours.
+//
+// A statusLine is `rota statusline dump`, plain or with arguments such as the
+// generated --then wrapper; a longer subcommand ("dumpling") is not it. A hook
+// is `[path/]rota hook <event> # rota-hook`: the marker must be the trailing
+// comment, and the command word may carry a path because existing installs
+// were written that way.
+func IsOurs(kind EntryKind, command string) bool {
+	command = strings.TrimSpace(command)
+	switch kind {
+	case StatusLineEntry:
+		rest, ok := strings.CutPrefix(command, StatuslineCmd)
+		return ok && (rest == "" || rest[0] == ' ' || rest[0] == '\t')
+	case HookEntry:
+		head, ok := strings.CutSuffix(command, Marker)
+		if !ok || head == "" || (head[len(head)-1] != ' ' && head[len(head)-1] != '\t') {
+			return false
+		}
+		word, _, _ := strings.Cut(strings.TrimSpace(head), " ")
+		return word == "rota" || strings.HasSuffix(word, "/rota")
 	}
-	return rest == "" || rest[0] == ' ' || rest[0] == '	'
+	return false
 }
 
-// HasMarker reports whether a hook command carries the rota marker.
-func HasMarker(command string) bool { return strings.Contains(command, Marker) }
+// IsOurStatusLine reports whether a statusLine command is rota's dump.
+func IsOurStatusLine(command string) bool { return IsOurs(StatusLineEntry, command) }
+
+// HasMarker reports whether a hook command is one rota wrote.
+func HasMarker(command string) bool { return IsOurs(HookEntry, command) }
 
 // EventGuard is the event the worker guard (`rota hook guard`) runs on.
 const EventGuard = eventPreTool

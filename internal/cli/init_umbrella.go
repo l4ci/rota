@@ -66,8 +66,8 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 		}
 		enabled := false
 		if len(res.Registered) > 0 {
-			if cur, _ := config.Lookup(c.deps().Config(root), "umbrella.enabled"); cur != true {
-				_, err := config.Set(root, "umbrella.enabled", "true")
+			if cur, _ := config.Lookup(c.deps().Config(root), config.UmbrellaEnabledKey); cur != true {
+				_, err := config.Set(root, config.UmbrellaEnabledKey, "true")
 				c.configWritten()
 				if err != nil {
 					return Result{}, err

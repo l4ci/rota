@@ -23,10 +23,12 @@ const (
 	TypeObject Type = "object"
 )
 
-// Round config key names are shared by the schema and its callers.
+// Config key names are shared by the schema and its callers.
 // Keep the names here so callers do not silently drift from the keys table.
 const (
 	GitRemoteKey                     = "git.remote"
+	IssuesSourceKey                  = "issues.source"
+	UmbrellaEnabledKey               = "umbrella.enabled"
 	RoundDispatchKey                 = "round.dispatch"
 	RoundSlotsKey                    = "round.slots"
 	RoundCommandsKey                 = "round.commands"
@@ -198,7 +200,7 @@ var Keys = []Key{
 	k("docs.afterWork", ScopeTaste, false, false, TypeBool, "Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes."),
 	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it.")),
 	k(GitRemoteKey, ScopeProject, "origin", false, TypeString, "Git remote round workers fetch from and push to: worker done, gate and train compare branches against it, and the worker contract names it. Set it when origin is not the remote that holds the PRs."),
-	projectOwned(k("umbrella.enabled", ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
+	projectOwned(k(UmbrellaEnabledKey, ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
 	projectOwned(k(VersionKey, ScopeProject, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand.")),
 	k("issues.labels.inProgress", ScopeProject, labels.InProgress, false, TypeString, "Tracker label for an item a worker holds."),
 	k("issues.labels.needsReview", ScopeProject, labels.NeedsReview, false, TypeString, "Tracker label for an item whose work awaits review."),
@@ -244,7 +246,7 @@ var Keys = []Key{
 	bounded(k("change.smallBelow", ScopeProject, num("0"), false, TypeInt, "A code diff with fewer changed lines than this, and every file covered by change.smallPaths, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off."), 0, math.MaxInt),
 	// #797: where issues live and where code lands, split. They replace
 	// backlog.backend and issues.provider (migrated by rota migrate source).
-	k("issues.source", ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
+	k(IssuesSourceKey, ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
 	k("forge.provider", ScopeProject, "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
 	k("ship.mergeApproval", ScopeProject, "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", ScopeProject, []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths. ** matches any number of directories."),
