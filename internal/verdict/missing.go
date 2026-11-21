@@ -2,6 +2,7 @@ package verdict
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/tracker"
@@ -24,9 +25,9 @@ func reviewKinds(d config.ReviewDepth, hasSpec bool) []string {
 	return nil
 }
 
-// MissingReviews is the review kinds depth needs that have does not hold: the
+// missingReviews is the review kinds depth needs that have does not hold: the
 // one owner of the missing-review-verdicts rule.
-func MissingReviews(depth config.ReviewDepth, hasSpec bool, have []string) []string {
+func missingReviews(depth config.ReviewDepth, hasSpec bool, have []string) []string {
 	var missing []string
 	for _, k := range reviewKinds(depth, hasSpec) {
 		if !slices.Contains(have, k) {
@@ -40,7 +41,7 @@ func MissingReviews(depth config.ReviewDepth, hasSpec bool, have []string) []str
 // verdicts recorded at head already satisfy.
 func CoveredDepth(have []string, hasSpec bool) config.ReviewDepth {
 	for _, d := range []config.ReviewDepth{config.DepthFull, config.DepthLight} {
-		if len(MissingReviews(d, hasSpec, have)) == 0 {
+		if len(missingReviews(d, hasSpec, have)) == 0 {
 			return d
 		}
 	}
@@ -59,4 +60,72 @@ func HasSpec(issue string) bool {
 // unknown covered depth ("") never counts as a rise.
 func DepthRose(covered, required config.ReviewDepth) bool {
 	return covered != "" && required.Outranks(covered)
+}
+
+// LensNeed is one triggered review lens: its verdict kind and why it fired.
+type LensNeed struct{ Kind, Why string }
+
+// Need is what a review depth asks for at a head: the core kinds, an optional
+// cross-harness review and each triggered lens. Cross and Lenses are empty
+// for a caller that only asks about the core kinds.
+type Need struct {
+	Depth   config.ReviewDepth
+	HasSpec bool
+	// Cross says the depth needs a review-cross verdict; CrossAccept says which
+	// harnesses' records satisfy it (nil accepts any).
+	Cross       bool
+	CrossAccept func(harness string) bool
+	Lenses      []LensNeed
+}
+
+// Coverage is what the records at a head satisfy of a Need. Core, Cross and
+// Lenses name what is still missing; a depth of none asks for nothing, so no
+// cross review or lens is ever missing there.
+type Coverage struct {
+	Core   []string
+	Cross  bool
+	Lenses []string
+}
+
+// Covered reports that nothing is missing.
+func (c Coverage) Covered() bool { return len(c.Core) == 0 && !c.Cross && len(c.Lenses) == 0 }
+
+// CoverageAt answers "what does n still need at head" from list: the one owner
+// of the covered/missing rule the gate, the cli and the integration check share.
+// With a nil list it names everything n asks for.
+func CoverageAt(list []Record, head string, n Need) Coverage {
+	head = strings.TrimSpace(head)
+	cov := Coverage{Core: missingReviews(n.Depth, n.HasSpec, Recorded(list, head))}
+	if n.Depth == config.DepthNone {
+		return cov
+	}
+	if n.Cross {
+		accept := n.CrossAccept
+		if accept == nil {
+			accept = func(string) bool { return true }
+		}
+		_, ok := CrossAtBy(list, head, accept)
+		cov.Cross = !ok
+	}
+	for _, l := range n.Lenses {
+		if _, ok := LensAt(list, l.Kind, head); !ok {
+			cov.Lenses = append(cov.Lenses, l.Kind)
+		}
+	}
+	return cov
+}
+
+// Kinds lists every verdict kind n asks for, in the order the refusal names them.
+func (n Need) Kinds() []string {
+	kinds := reviewKinds(n.Depth, n.HasSpec)
+	if n.Depth == config.DepthNone {
+		return kinds
+	}
+	if n.Cross {
+		kinds = append(kinds, ReviewCross)
+	}
+	for _, l := range n.Lenses {
+		kinds = append(kinds, l.Kind)
+	}
+	return kinds
 }

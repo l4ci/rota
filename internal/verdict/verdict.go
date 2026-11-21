@@ -906,6 +906,22 @@ func BlockingGate(list []Record, head string, crossOff bool) BlockDecision {
 	return BlockDecision{Relaxed: &d.Record}
 }
 
+// BlockingGateResolving is BlockingGate with the cross-off answer resolved
+// lazily: crossOff runs only when a stale cross FAIL makes it matter, and its
+// error is returned for the caller to refuse on. A nil crossOff leaves the
+// decision with NeedsCrossOff set. The one owner of the relaxation protocol.
+func BlockingGateResolving(list []Record, head string, crossOff func() (bool, error)) (BlockDecision, error) {
+	d := BlockingGate(list, head, false)
+	if !d.NeedsCrossOff || crossOff == nil {
+		return d, nil
+	}
+	off, err := crossOff()
+	if err != nil {
+		return d, err
+	}
+	return BlockingGate(list, head, off), nil
+}
+
 func gateBlock(list []Record, head string) BlockDecision {
 	if r, ok := Blocking(list); ok {
 		return BlockDecision{Record: r, Blocked: true, Stale: !AtHead(r, head)}

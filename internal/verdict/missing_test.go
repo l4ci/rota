@@ -7,33 +7,52 @@ import (
 	"github.com/l4ci/rota/internal/config"
 )
 
-func TestMissingReviews(t *testing.T) {
+func TestCoverageAt(t *testing.T) {
+	const head, old = "bbbbbbb1234", "aaaaaaa1234"
+	rec := func(kind, sha, harness string) Record {
+		return Record{Kind: kind, Verdict: Pass, Sha: sha, Harness: harness, Model: "m"}
+	}
+	onlyA := func(h string) bool { return h == "hx-a" }
+	lens := []LensNeed{{Kind: LensKind("security"), Why: "touches auth"}}
 	spec, qual := ReviewSpec, ReviewQuality
 	for _, c := range []struct {
-		name    string
-		depth   config.ReviewDepth
-		hasSpec bool
-		have    []string
-		want    []string
+		name   string
+		need   Need
+		list   []Record
+		core   []string
+		cross  bool
+		lenses []string
+		kinds  []string
 	}{
-		{"full spec none", config.DepthFull, true, nil, []string{spec, qual}},
-		{"full nospec none", config.DepthFull, false, nil, []string{spec, qual}},
-		{"full spec only spec", config.DepthFull, true, []string{spec}, []string{qual}},
-		{"full only quality", config.DepthFull, false, []string{qual}, []string{spec}},
-		{"full both", config.DepthFull, true, []string{spec, qual}, nil},
-		{"light spec none", config.DepthLight, true, nil, []string{spec}},
-		{"light spec has quality", config.DepthLight, true, []string{qual}, []string{spec}},
-		{"light spec has spec", config.DepthLight, true, []string{spec}, nil},
-		{"light nospec none", config.DepthLight, false, nil, []string{qual}},
-		{"light nospec has spec", config.DepthLight, false, []string{spec}, []string{qual}},
-		{"light nospec has quality", config.DepthLight, false, []string{qual}, nil},
-		{"none", config.DepthNone, true, nil, nil},
-		{"unknown depth", config.ReviewDepth("bogus"), true, nil, nil},
-		{"extra kinds ignored", config.DepthLight, true, []string{ReviewCross, spec}, nil},
+		{"full spec none", Need{Depth: config.DepthFull, HasSpec: true}, nil, []string{spec, qual}, false, nil, []string{spec, qual}},
+		{"full only quality", Need{Depth: config.DepthFull}, []Record{rec(qual, head, "")}, []string{spec}, false, nil, []string{spec, qual}},
+		{"full both", Need{Depth: config.DepthFull, HasSpec: true}, []Record{rec(spec, head, ""), rec(qual, head, "")}, nil, false, nil, []string{spec, qual}},
+		{"light spec", Need{Depth: config.DepthLight, HasSpec: true}, nil, []string{spec}, false, nil, []string{spec}},
+		{"light nospec has spec", Need{Depth: config.DepthLight}, []Record{rec(spec, head, "")}, []string{qual}, false, nil, []string{qual}},
+		{"stale core record", Need{Depth: config.DepthLight, HasSpec: true}, []Record{rec(spec, old, "")}, []string{spec}, false, nil, []string{spec}},
+		{"none asks nothing", Need{Depth: config.DepthNone, Cross: true, CrossAccept: onlyA, Lenses: lens}, nil, nil, false, nil, nil},
+		{"unknown depth", Need{Depth: config.ReviewDepth("bogus"), HasSpec: true}, nil, nil, false, nil, nil},
+		{"cross missing", Need{Depth: config.DepthLight, HasSpec: true, Cross: true, CrossAccept: onlyA}, []Record{rec(spec, head, "")}, nil, true, nil, []string{spec, ReviewCross}},
+		{"cross from other harness", Need{Depth: config.DepthLight, HasSpec: true, Cross: true, CrossAccept: onlyA}, []Record{rec(spec, head, ""), rec(ReviewCross, head, "hx-b")}, nil, true, nil, []string{spec, ReviewCross}},
+		{"cross satisfied", Need{Depth: config.DepthLight, HasSpec: true, Cross: true, CrossAccept: onlyA}, []Record{rec(spec, head, ""), rec(ReviewCross, head, "hx-a")}, nil, false, nil, []string{spec, ReviewCross}},
+		{"cross FAIL covers nothing", Need{Depth: config.DepthLight, HasSpec: true, Cross: true, CrossAccept: onlyA}, []Record{rec(spec, head, ""), {Kind: ReviewCross, Verdict: Fail, Sha: head, Harness: "hx-a", Model: "m"}}, nil, true, nil, []string{spec, ReviewCross}},
+		{"cross nil accept takes any", Need{Depth: config.DepthLight, HasSpec: true, Cross: true}, []Record{rec(spec, head, ""), rec(ReviewCross, head, "hx-z")}, nil, false, nil, []string{spec, ReviewCross}},
+		{"lens missing", Need{Depth: config.DepthLight, HasSpec: true, Lenses: lens}, []Record{rec(spec, head, "")}, nil, false, []string{LensKind("security")}, []string{spec, LensKind("security")}},
+		{"lens stale", Need{Depth: config.DepthLight, HasSpec: true, Lenses: lens}, []Record{rec(spec, head, ""), rec(LensKind("security"), old, "")}, nil, false, []string{LensKind("security")}, []string{spec, LensKind("security")}},
+		{"lens recorded", Need{Depth: config.DepthLight, HasSpec: true, Lenses: lens}, []Record{rec(spec, head, ""), rec(LensKind("security"), head, "")}, nil, false, nil, []string{spec, LensKind("security")}},
 	} {
-		if got := MissingReviews(c.depth, c.hasSpec, c.have); !slices.Equal(got, c.want) {
-			t.Errorf("%s: MissingReviews(%s, %v, %v) = %v, want %v", c.name, c.depth, c.hasSpec, c.have, got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			got := CoverageAt(c.list, head, c.need)
+			if !slices.Equal(got.Core, c.core) || got.Cross != c.cross || !slices.Equal(got.Lenses, c.lenses) {
+				t.Errorf("CoverageAt = %+v, want core %v cross %v lenses %v", got, c.core, c.cross, c.lenses)
+			}
+			if want := len(c.core) == 0 && !c.cross && len(c.lenses) == 0; got.Covered() != want {
+				t.Errorf("Covered() = %v, want %v", got.Covered(), want)
+			}
+			if k := c.need.Kinds(); !slices.Equal(k, c.kinds) {
+				t.Errorf("Kinds() = %v, want %v", k, c.kinds)
+			}
+		})
 	}
 }
 

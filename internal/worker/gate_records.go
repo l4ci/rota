@@ -221,10 +221,18 @@ func refList(keys []tracker.IssueKey) string {
 	return strings.Join(refs, ", ")
 }
 
-// NeedsCross reports whether a branch at depth needs a review-cross verdict:
-// its cross requirement names a harness and the depth reviews anything.
-func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
-	return res.Cross != "" && res.Cross != CrossNone && depth != config.DepthNone
+// ReviewNeed is what depth asks for under this resolution: the core kinds, the
+// cross-harness review when its requirement names a harness, and each lens.
+func (r ReviewDepth) ReviewNeed(depth config.ReviewDepth) verdict.Need {
+	n := verdict.Need{
+		Depth: depth, HasSpec: r.HasSpec,
+		Cross:       r.Cross != "" && r.Cross != CrossNone,
+		CrossAccept: r.CrossSatisfiedBy,
+	}
+	for _, l := range r.Lenses {
+		n.Lenses = append(n.Lenses, verdict.LensNeed{Kind: verdict.LensKind(l.Name), Why: l.Why})
+	}
+	return n
 }
 
 // stepReviewDepth applies ship.review: it resolves the depth for this branch
@@ -295,35 +303,17 @@ func (runner gateRun) stepReviewDepth(result landing.GateResult, target GateTarg
 		// and none of them blocking: the bounce rule the head gets otherwise,
 		// applied where the review was recorded, since rota's later merges move
 		// the head past it.
+		need := res.ReviewNeed(depth)
 		covered := func(sha string) bool {
 			if _, bad := verdict.BlockingAtHead(list, sha); bad {
 				return false
 			}
-			if len(verdict.MissingReviews(depth, res.HasSpec, verdict.Recorded(list, sha))) > 0 {
-				return false
-			}
-			if NeedsCross(res, depth) {
-				if _, ok := verdict.CrossAtBy(list, sha, res.CrossSatisfiedBy); !ok {
-					return false
-				}
-			}
-			for _, l := range res.Lenses {
-				if _, ok := verdict.LensAt(list, verdict.LensKind(l.Name), sha); !ok {
-					return false
-				}
-			}
-			return true
+			return verdict.CoverageAt(list, sha, need).Covered()
 		}
 		// What a covering review needs, named once for the refusal. Nothing
 		// at depth none (no cross review, no lens): the fixes need no verdict.
-		need := verdict.MissingReviews(depth, res.HasSpec, nil)
-		if NeedsCross(res, depth) {
-			need = append(need, verdict.ReviewCross)
-		}
-		for _, l := range res.Lenses {
-			need = append(need, verdict.LensKind(l.Name))
-		}
-		if len(need) == 0 {
+		kinds := need.Kinds()
+		if len(kinds) == 0 {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("INTEGRATION-REVIEW %s — review depth %s (%s); the fix commits need no verdict", g.branch, depth, why))
 			return finish(false, nil)
 		}
@@ -336,7 +326,7 @@ func (runner gateRun) stepReviewDepth(result landing.GateResult, target GateTarg
 			return finish(false, nil)
 		}
 		g.res.SHA = strutil.ShortSHA(intHead)
-		g.verdict(landing.GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(need, " and ")),
+		g.verdict(landing.GateReviewMissing, fmt.Sprintf("GATE %s refused — %s: review depth %s (%s) needs a recorded %s verdict covering them; nothing landed", g.o.Slot, note, depth, why, strings.Join(kinds, " and ")),
 			fmt.Sprintf("run `rota review package %s` (it starts at the first fix) and /rota-review on it, or loosen ship.review", g.branch))
 		return finish(true, nil)
 	}
@@ -354,20 +344,17 @@ func (runner gateRun) stepReviewDepth(result landing.GateResult, target GateTarg
 		return finish(true, err)
 	}
 	list := store.Branch(g.o.VerdictRepo, g.branch)
-	have := verdict.Recorded(list, strings.TrimSpace(head))
-	missing := verdict.MissingReviews(depth, res.HasSpec, have)
+	cov := verdict.CoverageAt(list, head, res.ReviewNeed(depth))
+	missing := cov.Core
 	// A depth of none reviews nothing, so it asks for no cross review either.
 	crossMissing := ""
-	if NeedsCross(res, depth) {
-		if _, ok := verdict.CrossAtBy(list, strings.TrimSpace(head), res.CrossSatisfiedBy); !ok {
-			crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
-		}
+	if cov.Cross {
+		crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
 	}
 	// Each triggered lens needs its own record at head (depth none triggers none).
 	var lensMissing []string
 	for _, l := range res.Lenses {
-		kind := verdict.LensKind(l.Name)
-		if _, ok := verdict.LensAt(list, kind, strings.TrimSpace(head)); !ok {
+		if kind := verdict.LensKind(l.Name); slices.Contains(cov.Lenses, kind) {
 			lensMissing = append(lensMissing, fmt.Sprintf("%s verdict (%s)", kind, l.Why))
 		}
 	}
@@ -433,16 +420,20 @@ func (runner gateRun) stepVerdict(result landing.GateResult, target GateTarget, 
 		return finish(true, err)
 	}
 	list := store.Branch(g.o.VerdictRepo, g.branch)
-	d := verdict.BlockingGate(list, head, false)
-	if d.NeedsCrossOff {
+	var crossWhy string
+	d, err := verdict.BlockingGateResolving(list, head, func() (bool, error) {
 		depth, err := g.resolveReview(g.baseRef + "..." + g.headRef)
 		if err != nil {
-			return finish(g.broke(err.Error()))
+			return false, err
 		}
-		d = verdict.BlockingGate(list, head, depth.CrossOffByLabel())
-		if d.Relaxed != nil {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, d.Relaxed.Sha, head, depth.CrossWhy))
-		}
+		crossWhy = depth.CrossWhy
+		return depth.CrossOffByLabel(), nil
+	})
+	if err != nil {
+		return finish(g.broke(err.Error()))
+	}
+	if d.Relaxed != nil {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — ignored the stale review-cross FAIL recorded at %s (head %s): cross review is off (%s)", g.o.Slot, d.Relaxed.Sha, head, crossWhy))
 	}
 	if err := d.Err(g.branch); err != nil {
 		g.res.Verdict = landing.GateVerdictBlocked
